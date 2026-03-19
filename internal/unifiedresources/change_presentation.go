@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 )
 
 // ChangePresentation captures the canonical human-readable components for a
@@ -110,7 +112,7 @@ func FormatResourceChangeSummary(change ResourceChange) string {
 
 	ago := "recently"
 	if !change.ObservedAt.IsZero() {
-		ago = formatDuration(time.Since(change.ObservedAt).Truncate(time.Minute))
+		ago = utils.FormatDuration(time.Since(change.ObservedAt).Truncate(time.Minute))
 	}
 	return summary + fmt.Sprintf(" (%s ago)", ago)
 }

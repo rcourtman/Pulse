@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 )
 
 // RelationshipPresentation captures the canonical human-readable fragments for
@@ -96,10 +98,10 @@ func FormatResourceGraphContext(resource *Resource, limit int) string {
 			parts = append(parts, fmt.Sprintf("confidence %s", presentation.Confidence))
 		}
 		if !rel.ObservedAt.IsZero() {
-			parts = append(parts, fmt.Sprintf("observed %s ago", formatDuration(time.Since(rel.ObservedAt).Truncate(time.Minute))))
+			parts = append(parts, fmt.Sprintf("observed %s ago", utils.FormatDuration(time.Since(rel.ObservedAt).Truncate(time.Minute))))
 		}
 		if !rel.LastSeenAt.IsZero() {
-			parts = append(parts, fmt.Sprintf("last seen %s ago", formatDuration(time.Since(rel.LastSeenAt).Truncate(time.Minute))))
+			parts = append(parts, fmt.Sprintf("last seen %s ago", utils.FormatDuration(time.Since(rel.LastSeenAt).Truncate(time.Minute))))
 		}
 		if presentation.HasMetadata {
 			parts = append(parts, "metadata present")
@@ -111,22 +113,4 @@ func FormatResourceGraphContext(resource *Resource, limit int) string {
 		return ""
 	}
 	return "\n\n### Resource Graph\n" + strings.Join(lines, "\n")
-}
-
-func formatDuration(d time.Duration) string {
-	if d < time.Minute {
-		return "seconds"
-	}
-	if d < time.Hour {
-		mins := int(d.Minutes())
-		if mins == 1 {
-			return "1 minute"
-		}
-		return fmt.Sprintf("%d minutes", mins)
-	}
-	hours := int(d.Hours())
-	if hours == 1 {
-		return "1 hour"
-	}
-	return fmt.Sprintf("%d hours", hours)
 }

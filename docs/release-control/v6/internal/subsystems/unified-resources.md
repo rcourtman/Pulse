@@ -127,6 +127,10 @@ The same surfaces now also render recent changes through the shared
 `frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx`
 card, so canonical timeline wording and ordering stay governed by one
 frontend feed instead of separate page-local loops.
+The canonical unified-resource change and relationship presenters now also
+share the same elapsed-time wording utility, so `observed`, `last seen`, and
+`ago` fragments stay consistent without each formatter maintaining its own
+"time ago" implementation.
 The change emitter now also classifies canonical restart changes for Docker
 and Kubernetes resources when restart counters increase or uptime resets, so
 the timeline can distinguish restarts from generic state transitions instead

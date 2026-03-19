@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 )
 
 // ChangeTypeLabel returns the canonical human-readable label for a detected
@@ -67,7 +69,7 @@ func FormatRecentChangesContext(changes []Change, includeResourcePrefix bool, he
 			entry = fmt.Sprintf("%s: %s", scope, entry)
 		}
 		ago := time.Since(change.DetectedAt).Truncate(time.Minute)
-		lines = append(lines, fmt.Sprintf("- %s (%s ago)", entry, formatDuration(ago)))
+		lines = append(lines, fmt.Sprintf("- %s (%s ago)", entry, utils.FormatDuration(ago)))
 	}
 	return strings.Join(lines, "\n")
 }

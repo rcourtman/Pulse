@@ -414,26 +414,6 @@ func generateChangeID() string {
 	return time.Now().Format("20060102150405") + "-" + intToString(int(count%1000))
 }
 
-func formatDuration(d time.Duration) string {
-	if d < time.Minute {
-		return "just now"
-	}
-	if d < time.Hour {
-		return formatUnit(int(d.Minutes()), "minute")
-	}
-	if d < 24*time.Hour {
-		return formatUnit(int(d.Hours()), "hour")
-	}
-	return formatUnit(int(d.Hours()/24), "day")
-}
-
-func formatUnit(n int, unit string) string {
-	if n == 1 {
-		return "1 " + unit
-	}
-	return intToString(n) + " " + unit + "s"
-}
-
 func formatBytes(bytes int64) string {
 	const (
 		KB = 1024

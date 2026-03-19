@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 )
 
 // Additional tests to improve coverage
@@ -346,9 +348,9 @@ func TestFormatDuration(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		result := formatDuration(tt.input)
+		result := utils.FormatDuration(tt.input)
 		if result != tt.expected {
-			t.Errorf("formatDuration(%v) = %q, want %q", tt.input, result, tt.expected)
+			t.Errorf("FormatDuration(%v) = %q, want %q", tt.input, result, tt.expected)
 		}
 	}
 }

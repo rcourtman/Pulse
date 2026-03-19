@@ -419,6 +419,22 @@ func TestIntelligenceRecentChangesUseCanonicalSummaryFormatter(t *testing.T) {
 	}
 }
 
+func TestResourcePresentationsUseSharedDurationHelper(t *testing.T) {
+	requiredFiles := []string{
+		"change_presentation.go",
+		"relationship_presentation.go",
+	}
+	for _, name := range requiredFiles {
+		data, err := os.ReadFile(filepath.Join(name))
+		if err != nil {
+			t.Fatalf("failed to read %s: %v", name, err)
+		}
+		if !strings.Contains(string(data), "utils.FormatDuration(") {
+			t.Fatalf("%s must use the shared utils.FormatDuration helper", name)
+		}
+	}
+}
+
 func TestResourceFacetCountsAreCanonicalResourceFields(t *testing.T) {
 	typesData, err := os.ReadFile(filepath.Join("types.go"))
 	if err != nil {
