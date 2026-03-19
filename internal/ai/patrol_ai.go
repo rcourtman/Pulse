@@ -1692,13 +1692,12 @@ func (p *PatrolService) loadCanonicalRecentChanges(scopedSet map[string]bool, si
 }
 
 func patrolRecentChangeFromUnified(change unifiedresources.ResourceChange) memory.Change {
-	presentation := unifiedresources.DescribeChange(change)
 	return memory.Change{
 		ResourceID:   strings.TrimSpace(change.ResourceID),
 		ResourceName: strings.TrimSpace(change.ResourceID),
-		ChangeType:   memory.ChangeType(presentation.KindLabel),
+		ChangeType:   memory.ChangeType(unifiedresources.ChangeKindLabel(change.Kind)),
 		DetectedAt:   patrolRecentChangeDetectedAt(change),
-		Description:  patrolFormatCanonicalRecentChangeDescription(presentation),
+		Description:  unifiedresources.FormatResourceChangeSummary(change),
 	}
 }
 
@@ -1710,53 +1709,6 @@ func patrolRecentChangeDetectedAt(change unifiedresources.ResourceChange) time.T
 		return *change.OccurredAt
 	}
 	return time.Now()
-}
-
-func patrolFormatCanonicalRecentChangeDescription(presentation unifiedresources.ChangePresentation) string {
-	parts := []string{presentation.KindLabel}
-
-	if from, to := strings.TrimSpace(presentation.From), strings.TrimSpace(presentation.To); from != "" || to != "" {
-		switch {
-		case from != "" && to != "":
-			parts = append(parts, fmt.Sprintf("%s -> %s", from, to))
-		case from != "":
-			parts = append(parts, fmt.Sprintf("from %s", from))
-		default:
-			parts = append(parts, fmt.Sprintf("to %s", to))
-		}
-	}
-
-	if sourceType := strings.TrimSpace(presentation.SourceType); sourceType != "" {
-		if sourceAdapter := strings.TrimSpace(presentation.SourceAdapter); sourceAdapter != "" {
-			parts = append(parts, fmt.Sprintf("source: %s via %s", sourceType, sourceAdapter))
-		} else {
-			parts = append(parts, fmt.Sprintf("source: %s", sourceType))
-		}
-	} else if sourceAdapter := strings.TrimSpace(presentation.SourceAdapter); sourceAdapter != "" {
-		parts = append(parts, fmt.Sprintf("source: %s", sourceAdapter))
-	}
-
-	if actor := strings.TrimSpace(presentation.Actor); actor != "" {
-		parts = append(parts, fmt.Sprintf("actor: %s", actor))
-	}
-
-	if reason := strings.TrimSpace(presentation.Reason); reason != "" {
-		parts = append(parts, reason)
-	}
-
-	if len(presentation.RelatedResources) > 0 {
-		related := make([]string, 0, len(presentation.RelatedResources))
-		for _, resourceID := range presentation.RelatedResources {
-			if trimmed := strings.TrimSpace(resourceID); trimmed != "" {
-				related = append(related, trimmed)
-			}
-		}
-		if len(related) > 0 {
-			parts = append(parts, fmt.Sprintf("related: %s", strings.Join(related, ", ")))
-		}
-	}
-
-	return strings.Join(parts, "; ")
 }
 
 // seedResourceInventory builds the node, guest, docker, storage, ceph, and PBS sections.

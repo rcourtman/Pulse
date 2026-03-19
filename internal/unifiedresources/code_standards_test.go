@@ -352,6 +352,7 @@ func TestResourceChangePresentationUsesCanonicalLabels(t *testing.T) {
 	requiredSnippets := []string{
 		"func ChangeKindLabel(kind ChangeKind) string",
 		"func DescribeChange(change ResourceChange) ChangePresentation",
+		"func FormatResourceChangeSummary(change ResourceChange) string",
 		"KindLabel: ChangeKindLabel(change.Kind)",
 		"presentation.SourceType = strings.TrimSpace(string(change.SourceType))",
 		"presentation.SourceAdapter = strings.TrimSpace(string(change.SourceAdapter))",
@@ -373,6 +374,7 @@ func TestResourceGraphContextUsesCanonicalRelationshipPresentation(t *testing.T)
 		"func (s *Service) buildResourceGraphContext(resourceID string) string",
 		"if graphContext := s.buildResourceGraphContext(resourceID); graphContext != \"\" {",
 		"unifiedresources.FormatResourceGraphContext(resource, 3)",
+		"unifiedresources.FormatResourceChangeSummary(change)",
 		"type canonicalResourceGetter interface {",
 		"correlationDetector.FormatForContext(resourceID)",
 	}
@@ -392,10 +394,28 @@ func TestPatrolSeedCorrelationContextUsesCanonicalSummaryFormatter(t *testing.T)
 	requiredSnippets := []string{
 		"# Known Resource Correlations",
 		"correlation.FormatCorrelationSummary(c)",
+		"unifiedresources.FormatResourceChangeSummary(change)",
 	}
 	for _, snippet := range requiredSnippets {
 		if !strings.Contains(source, snippet) {
 			t.Fatalf("internal/ai/patrol_ai.go must pin canonical correlation presentation snippet %q", snippet)
+		}
+	}
+}
+
+func TestIntelligenceRecentChangesUseCanonicalSummaryFormatter(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "ai", "intelligence.go"))
+	if err != nil {
+		t.Fatalf("failed to read intelligence.go: %v", err)
+	}
+	source := string(data)
+	requiredSnippets := []string{
+		"unifiedresources.FormatResourceChangeSummary(change)",
+		"formatCanonicalRecentChangesContext(recent, includeResourcePrefix)",
+	}
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(source, snippet) {
+			t.Fatalf("internal/ai/intelligence.go must pin canonical recent-change snippet %q", snippet)
 		}
 	}
 }

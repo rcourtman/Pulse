@@ -1,6 +1,10 @@
 package unifiedresources
 
-import "testing"
+import (
+	"strings"
+	"testing"
+	"time"
+)
 
 func TestChangeKindLabel(t *testing.T) {
 	cases := map[ChangeKind]string{
@@ -57,5 +61,34 @@ func TestDescribeChange(t *testing.T) {
 	}
 	if len(presentation.RelatedResources) != 2 || presentation.RelatedResources[0] != "related-1" || presentation.RelatedResources[1] != "related-2" {
 		t.Fatalf("unexpected related resources: %#v", presentation.RelatedResources)
+	}
+}
+
+func TestFormatResourceChangeSummary(t *testing.T) {
+	change := ResourceChange{
+		Kind:             ChangeRestart,
+		From:             "running",
+		To:               "restarting",
+		SourceType:       SourcePlatformEvent,
+		SourceAdapter:    AdapterProxmox,
+		Actor:            "agent:oncall-helper",
+		Reason:           "Routine restart requested",
+		RelatedResources: []string{"node-1"},
+		ObservedAt:       time.Now().Add(-2 * time.Hour),
+	}
+
+	summary := FormatResourceChangeSummary(change)
+	for _, want := range []string{
+		"**Restart**",
+		"running → restarting",
+		"platform_event/proxmox_adapter",
+		"actor agent:oncall-helper",
+		"Routine restart requested",
+		"related: node-1",
+		"2 hours ago",
+	} {
+		if !strings.Contains(summary, want) {
+			t.Fatalf("expected summary %q to contain %q", summary, want)
+		}
 	}
 }

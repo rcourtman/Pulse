@@ -97,6 +97,10 @@ kind, source type, source adapter, actor, reason, and related-resource
 fragments from `internal/unifiedresources/change_presentation.go`, so the
 semantic mapping lives with the resource model instead of being duplicated in
 lane-local prompt helpers.
+That same change-presentation helper now also owns the one-line
+`FormatResourceChangeSummary` used by AI runtime recent-change sections and
+Patrol seed context, so the change wording itself stays canonical before any
+section-specific headings are applied.
 The backend AI and Patrol graph context renderers now derive their canonical
 relationship labels, direction, provenance, freshness, and metadata flags
 from `internal/unifiedresources/relationship_presentation.go`, so the graph

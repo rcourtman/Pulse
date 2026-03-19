@@ -4587,7 +4587,7 @@ func (s *Service) buildRecentResourceChangesContext(resourceID string) string {
 				if len(changeInfo) >= 3 {
 					break
 				}
-				changeInfo = append(changeInfo, formatResourceChangeContext(change))
+				changeInfo = append(changeInfo, unifiedresources.FormatResourceChangeSummary(change))
 			}
 			if len(changeInfo) > 0 {
 				return "\n\n### Recent Changes\n" + strings.Join(changeInfo, "\n")
@@ -4653,55 +4653,12 @@ func (s *Service) buildResourceGraphContext(resourceID string) string {
 	return unifiedresources.FormatResourceGraphContext(resource, 3)
 }
 
-// truncateString truncates a string to maxLen characters
+// truncateString truncates a string to maxLen characters.
 func truncateString(s string, maxLen int) string {
 	if len(s) <= maxLen {
 		return s
 	}
 	return s[:maxLen-3] + "..."
-}
-
-func formatResourceChangeContext(change unifiedresources.ResourceChange) string {
-	presentation := unifiedresources.DescribeChange(change)
-	summary := fmt.Sprintf("**%s**", presentation.KindLabel)
-
-	if from, to := strings.TrimSpace(presentation.From), strings.TrimSpace(presentation.To); from != "" || to != "" {
-		if from == "" {
-			summary += fmt.Sprintf(" → %s", to)
-		} else if to == "" {
-			summary += fmt.Sprintf(" %s →", from)
-		} else {
-			summary += fmt.Sprintf(" %s → %s", from, to)
-		}
-	}
-
-	provenance := make([]string, 0, 2)
-	if sourceType := strings.TrimSpace(presentation.SourceType); sourceType != "" {
-		provenance = append(provenance, sourceType)
-	}
-	if sourceAdapter := strings.TrimSpace(presentation.SourceAdapter); sourceAdapter != "" {
-		provenance = append(provenance, sourceAdapter)
-	}
-	if len(provenance) > 0 {
-		summary += fmt.Sprintf(" [%s]", strings.Join(provenance, "/"))
-	}
-
-	if actor := strings.TrimSpace(presentation.Actor); actor != "" {
-		summary += fmt.Sprintf("; actor %s", actor)
-	}
-	if reason := strings.TrimSpace(presentation.Reason); reason != "" {
-		summary += fmt.Sprintf("; %s", reason)
-	}
-	if len(presentation.RelatedResources) > 0 {
-		summary += fmt.Sprintf("; related: %s", strings.Join(presentation.RelatedResources, ", "))
-	}
-
-	ago := "recently"
-	if !change.ObservedAt.IsZero() {
-		ago = formatDuration(time.Since(change.ObservedAt).Truncate(time.Minute))
-	}
-	summary += fmt.Sprintf(" (%s ago)", ago)
-	return summary
 }
 
 // buildEnrichedResourceContext adds historical intelligence to regular AI chat

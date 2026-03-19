@@ -439,9 +439,9 @@ func TestSeedPrecomputeIntelligenceState_UsesCanonicalResourceTimeline(t *testin
 		t.Fatalf("expected canonical resource ID res-1, got %q", change.ResourceID)
 	}
 	for _, part := range []string{
-		"Config update",
-		"source: pulse_diff via agent:ops-helper",
-		"actor: agent:ops-helper",
+		"**Config update**",
+		"[pulse_diff/agent:ops-helper]",
+		"; actor agent:ops-helper",
 		"related: related-1",
 	} {
 		if !strings.Contains(change.Description, part) {
@@ -469,10 +469,10 @@ func TestPatrolRecentChangeFromUnified_UsesCanonicalChangePresentation(t *testin
 	if !strings.Contains(memoryChange.Description, "Metric anomaly") {
 		t.Fatalf("expected canonical description to contain label, got %q", memoryChange.Description)
 	}
-	if !strings.Contains(memoryChange.Description, "source: pulse_diff via agent:ops-helper") {
+	if !strings.Contains(memoryChange.Description, "[pulse_diff/agent:ops-helper]") {
 		t.Fatalf("expected canonical description to contain provenance, got %q", memoryChange.Description)
 	}
-	if !strings.Contains(memoryChange.Description, "actor: agent:ops-helper") {
+	if !strings.Contains(memoryChange.Description, "; actor agent:ops-helper") {
 		t.Fatalf("expected canonical description to contain actor, got %q", memoryChange.Description)
 	}
 	if !strings.Contains(memoryChange.Description, "related: related-1") {

@@ -550,7 +550,7 @@ func formatCanonicalRecentChangesContext(changes []unifiedresources.ResourceChan
 
 	lines := []string{heading, "What changed recently:"}
 	for _, change := range changes {
-		entry := formatResourceChangeContext(change)
+		entry := unifiedresources.FormatResourceChangeSummary(change)
 		if includeResourcePrefix {
 			if resourceID := strings.TrimSpace(change.ResourceID); resourceID != "" {
 				entry = fmt.Sprintf("%s: %s", resourceID, entry)

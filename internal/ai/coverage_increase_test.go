@@ -324,6 +324,17 @@ func TestService_BuildEnrichedResourceContext(t *testing.T) {
 	s.resourceExportStoreOrgID = s.orgID
 	s.mu.Unlock()
 
+	recentCtx := s.buildRecentResourceChangesContext("res1")
+	if !strings.Contains(recentCtx, "Restart") {
+		t.Fatalf("expected canonical recent change summary to include restart label, got %q", recentCtx)
+	}
+	if !strings.Contains(recentCtx, "platform_event/proxmox_adapter") {
+		t.Fatalf("expected canonical recent change summary to include shared provenance, got %q", recentCtx)
+	}
+	if !strings.Contains(recentCtx, "Routine restart requested") {
+		t.Fatalf("expected canonical recent change summary to include reason, got %q", recentCtx)
+	}
+
 	ctx = s.buildEnrichedResourceContext("res1", "node", metrics)
 	t.Logf("Enriched context (canonical changes): %s", ctx)
 
