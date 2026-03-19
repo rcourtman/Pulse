@@ -163,8 +163,8 @@ describe('ResourceDetailDrawer service cards', () => {
     const pmgSupportContext = within(getByTestId('pmg-support-context'));
     expect(pmgSupportContext.getByText('Nodes')).toBeInTheDocument();
     expect(pmgSupportContext.getByText('Updated')).toBeInTheDocument();
-    expect(getByText('Queue detail')).toBeInTheDocument();
-    expect(getByText('Mail detail')).toBeInTheDocument();
+    expect(getByText('Queue detail').closest('summary')?.textContent).toBe('Queue detail');
+    expect(getByText('Mail detail').closest('summary')?.textContent).toBe('Mail detail');
     expect(getByRole('link', { name: /open pmg thresholds/i })).toHaveAttribute(
       'href',
       '/alerts/thresholds/mail-gateway',

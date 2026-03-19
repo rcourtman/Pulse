@@ -424,8 +424,8 @@ describe('ResourceDetailDrawer change history section', () => {
     const supportContext = within(screen.getByTestId('pmg-support-context'));
     expect(supportContext.getByText('Nodes')).toBeInTheDocument();
     expect(supportContext.getByText('Updated')).toBeInTheDocument();
-    expect(screen.getByText('Queue detail')).toBeInTheDocument();
-    expect(screen.getByText('Mail detail')).toBeInTheDocument();
+    expect(screen.getByText('Queue detail').closest('summary')?.textContent).toBe('Queue detail');
+    expect(screen.getByText('Mail detail').closest('summary')?.textContent).toBe('Mail detail');
   });
 
   it('filters timeline entries by kind and source type', async () => {

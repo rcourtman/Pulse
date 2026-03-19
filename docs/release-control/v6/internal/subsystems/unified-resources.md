@@ -307,6 +307,9 @@ first read stays on mail-flow state instead of cluster metadata.
 That support context also owns PMG freshness metadata now, so `Updated` does
 not compete with queue and mail breakdown entries inside the mail-detail
 accordion.
+Those PMG queue and mail-detail accordions render as simple key/value rows
+without entry-count badges or multi-column mini-dashboard layout, so the opened
+state stays readable and scan-first.
 The Docker service card now follows the same rule: its opened state uses
 compact labels (`Docker runtime`, `Updates`, `Checked`, `Show actions`,
 `Check now`, `Update all`) and short queued/confirm feedback so action

@@ -1505,39 +1505,37 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                                   </div>
                                 </Show>
                                 <details class="rounded border border-rose-200 bg-surface px-2 py-1.5 dark:border-rose-700">
-                                  <summary class="flex cursor-pointer list-none items-center justify-between text-[10px] font-medium text-muted">
-                                    <span>Queue detail</span>
-                                    <span class="text-muted">{pmgVisibleQueueBreakdown().length}</span>
+                                  <summary class="cursor-pointer list-none text-[10px] font-medium text-muted">
+                                    Queue detail
                                   </summary>
-                                  <div class="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 border-t border-rose-200 pt-2 text-[10px] dark:border-rose-700">
+                                  <div class="mt-2 space-y-1.5 border-t border-rose-200 pt-2 text-[10px] dark:border-rose-700">
                                     <For each={pmgVisibleQueueBreakdown()}>
                                       {(entry) => (
-                                        <span class="text-muted">
-                                          {entry.label}:{' '}
+                                        <div class="flex items-center justify-between gap-2 text-muted">
+                                          <span>{entry.label}</span>
                                           <span
                                             class={`font-medium ${entry.warn ? 'text-amber-600 dark:text-amber-400' : 'text-base-content'}`}
                                           >
                                             {formatInteger(entry.value)}
                                           </span>
-                                        </span>
+                                        </div>
                                       )}
                                     </For>
                                   </div>
                                 </details>
                                 <details class="rounded border border-rose-200 bg-surface px-2 py-1.5 dark:border-rose-700">
-                                  <summary class="flex cursor-pointer list-none items-center justify-between text-[10px] font-medium text-muted">
-                                    <span>Mail detail</span>
-                                    <span class="text-muted">{pmgVisibleMailBreakdown().length}</span>
+                                  <summary class="cursor-pointer list-none text-[10px] font-medium text-muted">
+                                    Mail detail
                                   </summary>
-                                  <div class="mt-2 grid grid-cols-3 gap-x-3 gap-y-1 border-t border-rose-200 pt-2 text-[10px] dark:border-rose-700">
+                                  <div class="mt-2 space-y-1.5 border-t border-rose-200 pt-2 text-[10px] dark:border-rose-700">
                                     <For each={pmgVisibleMailBreakdown()}>
                                       {(entry) => (
-                                        <span class="text-muted">
-                                          {entry.label}:{' '}
+                                        <div class="flex items-center justify-between gap-2 text-muted">
+                                          <span>{entry.label}</span>
                                           <span class="font-medium text-base-content">
                                             {formatInteger(entry.value)}
                                           </span>
-                                        </span>
+                                        </div>
                                       )}
                                     </For>
                                   </div>
