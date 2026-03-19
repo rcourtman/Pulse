@@ -37,7 +37,7 @@ export interface RemovedKubernetesCluster {
   removedAt: number;
 }
 
-async function deleteManagedResource<T extends object>(
+async function deleteResource<T extends object>(
   url: string,
   parseErrorMessage: string,
 ): Promise<T> {
@@ -54,7 +54,7 @@ async function deleteManagedResource<T extends object>(
   );
 }
 
-async function runIdempotentManagedMutation(url: string): Promise<void> {
+async function runIdempotentResourceMutation(url: string): Promise<void> {
   const response = await apiFetch(url, {
     method: 'PUT',
   });
@@ -62,7 +62,7 @@ async function runIdempotentManagedMutation(url: string): Promise<void> {
   await assertAPIResponseOKOrAllowedStatus(response, 404, `Failed with status ${response.status}`);
 }
 
-async function setManagedResourceDisplayName(
+async function setResourceDisplayName(
   url: string,
   displayName: string,
   missingMessage: string,
@@ -83,7 +83,7 @@ async function setManagedResourceDisplayName(
   );
 }
 
-async function runManagedResourceAction(url: string): Promise<void> {
+async function runResourceAction(url: string): Promise<void> {
   const response = await apiFetch(url, {
     method: 'POST',
   });
@@ -91,14 +91,14 @@ async function runManagedResourceAction(url: string): Promise<void> {
   await assertAPIResponseOK(response, `Failed with status ${response.status}`);
 }
 
-type ManagedResourceCommandInit = Omit<RequestInit, 'headers'> & {
+type ResourceCommandInit = Omit<RequestInit, 'headers'> & {
   headers?: Record<string, string>;
 };
 
-async function triggerManagedResourceCommand<T extends { success?: boolean }>(
+async function triggerResourceCommand<T extends { success?: boolean }>(
   url: string,
   parseErrorMessage: string,
-  init?: ManagedResourceCommandInit,
+  init?: ResourceCommandInit,
 ): Promise<T> {
   const response = await apiFetch(url, {
     method: 'POST',
@@ -142,7 +142,7 @@ export class MonitoringAPI {
     const query = params.toString();
     const url = `${this.baseUrl}/agents/docker/runtimes/${encodeURIComponent(agentId)}${query ? `?${query}` : ''}`;
 
-    return deleteManagedResource<DeleteDockerRuntimeResponse>(
+    return deleteResource<DeleteDockerRuntimeResponse>(
       url,
       'Failed to parse delete container runtime response',
     );
@@ -150,17 +150,17 @@ export class MonitoringAPI {
 
   static async unhideDockerRuntime(agentId: string): Promise<void> {
     const url = `${this.baseUrl}/agents/docker/runtimes/${encodeURIComponent(agentId)}/unhide`;
-    await runIdempotentManagedMutation(url);
+    await runIdempotentResourceMutation(url);
   }
 
   static async markDockerRuntimePendingUninstall(agentId: string): Promise<void> {
     const url = `${this.baseUrl}/agents/docker/runtimes/${encodeURIComponent(agentId)}/pending-uninstall`;
-    await runIdempotentManagedMutation(url);
+    await runIdempotentResourceMutation(url);
   }
 
   static async setDockerRuntimeDisplayName(agentId: string, displayName: string): Promise<void> {
     const url = `${this.baseUrl}/agents/docker/runtimes/${encodeURIComponent(agentId)}/display-name`;
-    await setManagedResourceDisplayName(
+    await setResourceDisplayName(
       url,
       displayName,
       'Container runtime not found',
@@ -169,14 +169,14 @@ export class MonitoringAPI {
 
   static async allowDockerRuntimeReenroll(agentId: string): Promise<void> {
     const url = `${this.baseUrl}/agents/docker/runtimes/${encodeURIComponent(agentId)}/allow-reenroll`;
-    await runManagedResourceAction(url);
+    await runResourceAction(url);
   }
 
   static async deleteKubernetesCluster(
     clusterId: string,
   ): Promise<DeleteKubernetesClusterResponse> {
     const url = `${this.baseUrl}/agents/kubernetes/clusters/${encodeURIComponent(clusterId)}`;
-    return deleteManagedResource<DeleteKubernetesClusterResponse>(
+    return deleteResource<DeleteKubernetesClusterResponse>(
       url,
       'Failed to parse delete kubernetes cluster response',
     );
@@ -184,12 +184,12 @@ export class MonitoringAPI {
 
   static async unhideKubernetesCluster(clusterId: string): Promise<void> {
     const url = `${this.baseUrl}/agents/kubernetes/clusters/${encodeURIComponent(clusterId)}/unhide`;
-    await runIdempotentManagedMutation(url);
+    await runIdempotentResourceMutation(url);
   }
 
   static async markKubernetesClusterPendingUninstall(clusterId: string): Promise<void> {
     const url = `${this.baseUrl}/agents/kubernetes/clusters/${encodeURIComponent(clusterId)}/pending-uninstall`;
-    await runIdempotentManagedMutation(url);
+    await runIdempotentResourceMutation(url);
   }
 
   static async setKubernetesClusterDisplayName(
@@ -197,7 +197,7 @@ export class MonitoringAPI {
     displayName: string,
   ): Promise<void> {
     const url = `${this.baseUrl}/agents/kubernetes/clusters/${encodeURIComponent(clusterId)}/display-name`;
-    await setManagedResourceDisplayName(
+    await setResourceDisplayName(
       url,
       displayName,
       'Kubernetes cluster not found',
@@ -206,7 +206,7 @@ export class MonitoringAPI {
 
   static async allowKubernetesClusterReenroll(clusterId: string): Promise<void> {
     const url = `${this.baseUrl}/agents/kubernetes/clusters/${encodeURIComponent(clusterId)}/allow-reenroll`;
-    await runManagedResourceAction(url);
+    await runResourceAction(url);
   }
 
   static async deleteAgent(agentId: string): Promise<void> {
@@ -233,7 +233,7 @@ export class MonitoringAPI {
     }
 
     const url = `${this.baseUrl}/agents/agent/${encodeURIComponent(agentId)}/allow-reenroll`;
-    await runManagedResourceAction(url);
+    await runResourceAction(url);
   }
 
   static async updateAgentConfig(
@@ -321,7 +321,7 @@ export class MonitoringAPI {
     containerName: string,
   ): Promise<UpdateDockerContainerResponse> {
     const url = `${this.baseUrl}/agents/docker/containers/update`;
-    return triggerManagedResourceCommand<UpdateDockerContainerResponse>(
+    return triggerResourceCommand<UpdateDockerContainerResponse>(
       url,
       'Failed to parse update container response',
       {
@@ -340,7 +340,7 @@ export class MonitoringAPI {
     agentId: string,
   ): Promise<{ success: boolean; commandId?: string }> {
     const url = `${this.baseUrl}/agents/docker/runtimes/${encodeURIComponent(agentId)}/check-updates`;
-    return triggerManagedResourceCommand<{ success: boolean; commandId?: string }>(
+    return triggerResourceCommand<{ success: boolean; commandId?: string }>(
       url,
       'Failed to parse check updates response',
     );
@@ -353,7 +353,7 @@ export class MonitoringAPI {
     agentId: string,
   ): Promise<{ success: boolean; commandId?: string }> {
     const url = `${this.baseUrl}/agents/docker/runtimes/${encodeURIComponent(agentId)}/update-all`;
-    return triggerManagedResourceCommand<{ success: boolean; commandId?: string }>(
+    return triggerResourceCommand<{ success: boolean; commandId?: string }>(
       url,
       'Failed to parse update all response',
     );

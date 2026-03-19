@@ -35,7 +35,8 @@ Own canonical runtime payload shapes between backend and frontend.
 12. `frontend-modern/src/api/license.ts`
 13. `frontend-modern/src/api/monitoredSystemLedger.ts`
 14. `frontend-modern/src/api/resources.ts`
-15. `internal/api/monitored_system_ledger.go`
+15. `frontend-modern/src/api/monitoring.ts`
+16. `internal/api/monitored_system_ledger.go`
 
 ## Shared Boundaries
 
@@ -1169,16 +1170,19 @@ Monitoring delete and idempotent mutate clients must now also route `404`/`204`
 success cases through shared allowed-status helpers in
 `frontend-modern/src/api/responseUtils.ts` instead of open-coding local
 status-branch stacks in each method.
-The docker-runtime and kubernetes-cluster managed-resource clients in
+The docker-runtime and kubernetes-cluster resource clients in
 `frontend-modern/src/api/monitoring.ts` must now also route shared delete,
 allowed-missing mutation, and display-name transport mechanics through
-canonical local helpers in that file rather than duplicating the same
-fetch-and-assert stacks across runtime and cluster variants.
-The same monitoring managed-resource clients must now also route shared
-no-body `POST` actions and success-envelope command triggers through canonical
-local helpers in `frontend-modern/src/api/monitoring.ts` rather than
-duplicating identical `POST` transport logic across reenroll and runtime
+canonical resource-oriented helpers in that file rather than duplicating the
+same fetch-and-assert stacks across runtime and cluster variants.
+The same monitoring resource clients must now also route shared no-body
+`POST` actions and success-envelope command triggers through canonical
+resource-oriented helpers in `frontend-modern/src/api/monitoring.ts` rather
+than duplicating identical `POST` transport logic across reenroll and runtime
 command endpoints.
+Those helpers must stay named and structured in resource terms rather than
+reintroducing managed-resource terminology, so the monitoring transport layer
+matches the canonical resource model exposed elsewhere in v6.
 Those monitoring command helpers must also preserve the canonical frontend
 fetch-options contract: governed callers pass string-keyed headers only, and
 empty-body success responses normalize through the shared success-envelope

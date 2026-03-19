@@ -116,11 +116,11 @@ describe('API error-status guardrails', () => {
     expect(monitoringSource).toContain('parseOptionalAPIResponseOrAllowedStatus(');
     expect(monitoringSource).toContain('parseOptionalSuccessAPIResponse<');
     expect(monitoringSource).toContain('parseOptionalAPIResponseOrNull<AgentLookupResponse>(');
-    expect(monitoringSource).toContain('async function deleteManagedResource<');
-    expect(monitoringSource).toContain('async function runIdempotentManagedMutation(url: string)');
-    expect(monitoringSource).toContain('async function setManagedResourceDisplayName(');
-    expect(monitoringSource).toContain('async function runManagedResourceAction(url: string)');
-    expect(monitoringSource).toContain('async function triggerManagedResourceCommand<');
+    expect(monitoringSource).toContain('async function deleteResource<');
+    expect(monitoringSource).toContain('async function runIdempotentResourceMutation(url: string)');
+    expect(monitoringSource).toContain('async function setResourceDisplayName(');
+    expect(monitoringSource).toContain('async function runResourceAction(url: string)');
+    expect(monitoringSource).toContain('async function triggerResourceCommand<');
     expect(monitoringSource).toContain('assertAPIResponseOK(response,');
     expect(monitoringSource).toContain('assertAPIResponseOKOrAllowedStatus(response, 404,');
     expect(monitoringSource).toContain('assertAPIResponseOKOrThrowStatus(');
@@ -147,10 +147,10 @@ describe('API error-status guardrails', () => {
         [],
     ).toHaveLength(1);
     expect(
-      monitoringSource.match(/return triggerManagedResourceCommand</g) ?? [],
+      monitoringSource.match(/return triggerResourceCommand</g) ?? [],
     ).toHaveLength(3);
     expect(
-      monitoringSource.match(/await runManagedResourceAction\(url\);/g) ?? [],
+      monitoringSource.match(/await runResourceAction\(url\);/g) ?? [],
     ).toHaveLength(3);
     expect(
       monitoringSource.match(/parseOptionalSuccessAPIResponse</g) ?? [],
