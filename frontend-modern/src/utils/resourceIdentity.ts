@@ -10,6 +10,7 @@ import {
   getActionableAgentIdFromResource,
   getActionableDockerRuntimeIdFromResource,
   getActionableKubernetesClusterIdFromResource,
+  getPreferredResourceClusterName,
   getPreferredResourceKubernetesContext,
   getPlatformAgentRecord,
   getPlatformDataRecord,
@@ -19,23 +20,6 @@ import { asTrimmedString } from '@/utils/stringUtils';
 export type ResourceIdentityRow = {
   label: string;
   value: string;
-};
-
-type ResourceClusterNameLike = {
-  name?: string | null;
-  clusterId?: string | null;
-  platformData?: {
-    kubernetes?: {
-      clusterName?: string | null;
-      context?: string | null;
-      clusterId?: string | null;
-    } | null;
-  } | null;
-  kubernetes?: {
-    clusterName?: string | null;
-    context?: string | null;
-    clusterId?: string | null;
-  } | null;
 };
 
 type APINormalizedIdentityResource = {
@@ -320,20 +304,7 @@ export const getPreferredResourceHostname = (resource: Resource): string | undef
 };
 
 export { getPreferredResourceKubernetesContext };
-
-export const getPreferredResourceClusterName = (
-  resource: ResourceClusterNameLike,
-): string | undefined =>
-  (() => {
-    const kubernetes = resource.kubernetes || resource.platformData?.kubernetes;
-    return (
-      asTrimmedString(kubernetes?.clusterName) ||
-      asTrimmedString(kubernetes?.context) ||
-      asTrimmedString(kubernetes?.clusterId) ||
-      asTrimmedString(resource.clusterId) ||
-      asTrimmedString(resource.name)
-    );
-  })();
+export { getPreferredResourceClusterName };
 
 export const getPreferredResourceDisplayName = (resource: Resource): string =>
   requiresGovernedResourceDisplay(resource.policy)

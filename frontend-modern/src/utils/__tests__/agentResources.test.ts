@@ -6,6 +6,7 @@ import {
   getActionableKubernetesClusterIdFromResource,
   getExplicitAgentIdFromResource,
   getMetricsChartKeyCandidatesFromResource,
+  getPreferredResourceClusterName,
   hasDockerWorkloadsScope,
   hasAgentFacet,
   isAgentFacetInfrastructureResource,
@@ -144,6 +145,31 @@ describe('agentResources', () => {
         }),
       ),
     ).toBe('cluster-a');
+  });
+
+  it('resolves preferred kubernetes cluster names from the shared helper', () => {
+    expect(
+      getPreferredResourceClusterName(
+        makeResource({
+          type: 'k8s-cluster',
+          kubernetes: {
+            clusterName: 'cluster-a',
+            context: 'cluster-context',
+            clusterId: 'cluster-a-id',
+          },
+          name: 'fallback-name',
+        }),
+      ),
+    ).toBe('cluster-a');
+
+    expect(
+      getPreferredResourceClusterName(
+        makeResource({
+          type: 'k8s-cluster',
+          name: 'cluster-by-name',
+        }),
+      ),
+    ).toBe('cluster-by-name');
   });
 
   it('detects docker workloads scope from explicit docker facets instead of source lists', () => {

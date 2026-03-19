@@ -121,6 +121,11 @@ export const getPreferredResourceKubernetesContext = (
   );
 };
 
+export const getPreferredResourceClusterName = (
+  resource: KubernetesContextLike,
+): string | undefined =>
+  getPreferredResourceKubernetesContext(resource) || asTrimmedString(resource.name);
+
 export const getMetricsChartKeyCandidatesFromResource = (resource: Resource): string[] => {
   const candidates = [
     asTrimmedString(resource.metricsTarget?.resourceId),
