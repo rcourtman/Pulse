@@ -85,6 +85,7 @@ import patrolFormatSource from '@/utils/patrolFormat.ts?raw';
 import aiFindingPresentationSource from '@/utils/aiFindingPresentation.ts?raw';
 import chatIdentifiersSource from '@/utils/chatIdentifiers.ts?raw';
 import resourceIdentitySource from '@/utils/resourceIdentity.ts?raw';
+import stringUtilsSource from '@/utils/stringUtils.ts?raw';
 import diskListSource from '@/components/Storage/DiskList.tsx?raw';
 import useDiskListModelSource from '@/components/Storage/useDiskListModel.ts?raw';
 import diskDetailSource from '@/components/Storage/DiskDetail.tsx?raw';
@@ -1945,6 +1946,14 @@ describe('frontend resource type boundaries', () => {
     expect(infrastructureSummarySource).toContain('getNormalizedIdentityLookupVariants');
     expect(infrastructureSummaryTableSource).toContain('getNormalizedIdentityLookupVariants');
     expect(resourceIdentitySource).toContain('getNormalizedIdentityLookupVariants');
+    expect(stringUtilsSource).toContain('export const asTrimmedString');
+    expect(resourceIdentitySource).not.toContain('const asTrimmedString = (value: unknown): string | undefined => {');
+    expect(infrastructureSummarySource).not.toContain(
+      'const asTrimmedString = (value: unknown): string | null => {',
+    );
+    expect(infrastructureSummaryTableSource).not.toContain(
+      'const asTrimmedString = (value: unknown): string | undefined => {',
+    );
     expect(useUnifiedResourcesSource).not.toContain('normalizeResourcePolicyAISafeSummary(');
     expect(useUnifiedResourcesSource).not.toContain('normalizeResourcePolicy(');
     expect(useUnifiedResourcesSource).not.toContain('const resolvePolicySensitivity =');

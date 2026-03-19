@@ -4,6 +4,7 @@ import { canonicalizeMetricsHistoryTargetType } from '@/api/charts';
 import { readAPIErrorMessage } from '@/api/responseUtils';
 import { apiFetch, getOrgID } from '@/utils/apiClient';
 import { normalizeOrgScope } from '@/utils/orgScope';
+import { asTrimmedString } from '@/utils/stringUtils';
 import { getGlobalWebSocketStore } from '@/stores/websocket-global';
 import type {
   Resource,
@@ -420,12 +421,6 @@ const resolveStatus = (status?: string): ResourceStatus => {
   if (normalized === 'warning' || normalized === 'degraded') return 'degraded';
   if (normalized === 'paused') return 'paused';
   return 'unknown';
-};
-
-const asTrimmedString = (value: unknown): string | undefined => {
-  if (typeof value !== 'string') return undefined;
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : undefined;
 };
 
 const resolveType = (value?: string): ResourceType => {

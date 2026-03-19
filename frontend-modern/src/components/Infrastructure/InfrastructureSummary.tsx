@@ -25,6 +25,7 @@ import {
   getResourceIdentityAliases,
   getNormalizedIdentityLookupVariants,
 } from '@/utils/resourceIdentity';
+import { asTrimmedString } from '@/utils/stringUtils';
 import { getOrgID } from '@/utils/apiClient';
 import { normalizeOrgScope } from '@/utils/orgScope';
 import { eventBus } from '@/stores/events';
@@ -41,15 +42,10 @@ const getNormalizedResourceIdentifiers = (resource: Resource): Set<string> =>
     ),
   ]);
 
-const asTrimmedString = (value: unknown): string | null => {
-  if (typeof value !== 'string') return null;
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
-};
-
 const getLinkedNodeIdFromResource = (resource: Resource): string | null =>
   asTrimmedString(getPlatformDataRecord(resource)?.linkedNodeId) ||
-  asTrimmedString(getPlatformAgentRecord(resource)?.linkedNodeId);
+  asTrimmedString(getPlatformAgentRecord(resource)?.linkedNodeId) ||
+  null;
 
 // Format bytes/sec to human-readable rate
 const formatRate = (bytesPerSec: number): string => {

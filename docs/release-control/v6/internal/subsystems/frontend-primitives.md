@@ -96,6 +96,9 @@ identity lookup helper from `frontend-modern/src/utils/resourceIdentity.ts`
 so dotted hostnames and alias variants stay consistent between the shared
 table, drawer, and detail views instead of each component carrying its own
 identifier-variant logic.
+Those same surfaces also share the trimmed-string helper from
+`frontend-modern/src/utils/stringUtils.ts` so shared components do not keep
+their own copy of the same whitespace-trimming identity logic.
 
 General settings segmented selectors for theme preference and temperature unit
 must now also route through the shared `FilterButtonGroup` primitive instead of

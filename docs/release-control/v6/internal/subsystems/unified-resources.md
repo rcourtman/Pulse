@@ -430,6 +430,10 @@ lookup helper for these matches, so dotted hostnames such as
 `tower.example.local` collapse to the same canonical lookup variants as the
 resource table and resource graph surfaces instead of each view inventing its
 own comparison rule.
+The same identity surfaces also share the trimmed-string helper from
+`frontend-modern/src/utils/stringUtils.ts` so resource-id, hostname, and
+linked-node normalization keep the same fail-closed whitespace trimming rules
+instead of reimplementing ad hoc local string cleanups.
 The same governed lookup boundary now also owns policy-aware resolved context:
 downstream consumers that need routing plus canonical policy metadata must use
 the unified-resource resolution context instead of rescanning typed views or

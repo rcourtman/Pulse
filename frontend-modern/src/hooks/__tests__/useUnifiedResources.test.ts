@@ -3,6 +3,7 @@ import { createStore, reconcile, type SetStoreFunction } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { State } from '@/types/api';
 import useUnifiedResourcesSource from '../useUnifiedResources.ts?raw';
+import stringUtilsSource from '@/utils/stringUtils.ts?raw';
 
 type UseUnifiedResourcesModule = typeof import('@/hooks/useUnifiedResources');
 
@@ -908,5 +909,10 @@ describe('useUnifiedResources', () => {
     expect(useUnifiedResourcesSource).toContain('normalizeOrgScope(getOrgID())');
     expect(useUnifiedResourcesSource).not.toContain('const DEFAULT_ORG_SCOPE = \'default\'');
     expect(useUnifiedResourcesSource).not.toContain('const normalizeOrgScope =');
+    expect(useUnifiedResourcesSource).toContain('asTrimmedString');
+    expect(useUnifiedResourcesSource).not.toContain(
+      'const asTrimmedString = (value: unknown): string | undefined => {',
+    );
+    expect(stringUtilsSource).toContain('export const asTrimmedString');
   });
 });

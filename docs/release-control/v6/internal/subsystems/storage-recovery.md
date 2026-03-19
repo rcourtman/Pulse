@@ -730,7 +730,10 @@ their own sensitivity or routing guesses in page-local presentation code. The
 shared `frontend-modern/src/hooks/useUnifiedResources.ts` decode path now
 trusts the backend canonical metadata directly instead of re-normalizing it
 locally, so storage and recovery views see the same policy posture the API
-publishes. That same boundary now also owns the backend facet-bundle route for capability,
-relationship, and timeline history reads, so storage and recovery surfaces
-must continue to consume the shared bundle rather than issuing separate local
-resource-detail fetches.
+publishes. The same hook and the resource-identity helpers it depends on now
+share the canonical trimmed-string utility instead of each surface rebuilding
+its own whitespace cleanup, so storage and recovery identity checks stay
+aligned with the other resource-graph consumers. That same boundary now also
+owns the backend facet-bundle route for capability, relationship, and timeline
+history reads, so storage and recovery surfaces must continue to consume the
+shared bundle rather than issuing separate local resource-detail fetches.

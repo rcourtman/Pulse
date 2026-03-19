@@ -98,7 +98,9 @@ const makeAgent = (overrides: Partial<Agent> = {}): Agent => ({
 describe('InfrastructureSummaryTable', () => {
   it('uses the shared normalized identity lookup helper', () => {
     expect(resourceIdentitySource).toContain('getNormalizedIdentityLookupVariants');
-    expect(resourceIdentitySource).not.toContain('const dedupeTrimmedValues = (values: Array<string | undefined>): string[] => {');
+    expect(resourceIdentitySource).not.toContain(
+      'const asTrimmedString = (value: unknown): string | undefined => {',
+    );
   });
 
   it('uses linked agent ids for agent-backed node metric keys', () => {

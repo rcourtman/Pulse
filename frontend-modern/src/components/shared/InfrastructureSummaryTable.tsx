@@ -28,6 +28,7 @@ import {
   getAgentLikeIdentityAliases,
   getNormalizedIdentityLookupVariants,
 } from '@/utils/resourceIdentity';
+import { asTrimmedString } from '@/utils/stringUtils';
 
 // Lazy load InfrastructureDetailsDrawer to avoid circular dependencies and reduce bundle size
 const InfrastructureDetailsDrawer = lazy(() =>
@@ -36,12 +37,6 @@ const InfrastructureDetailsDrawer = lazy(() =>
 
 const asRecord = (value: unknown): Record<string, unknown> | undefined =>
   value && typeof value === 'object' ? (value as Record<string, unknown>) : undefined;
-
-const asTrimmedString = (value: unknown): string | undefined => {
-  if (typeof value !== 'string') return undefined;
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : undefined;
-};
 
 const getAgentLinkedNodeId = (agent: Agent): string | undefined => {
   const agentRecord = agent as unknown as Record<string, unknown>;

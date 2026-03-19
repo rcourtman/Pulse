@@ -1,16 +1,11 @@
 import { canonicalizeFrontendResourceType } from '@/utils/resourceTypeCompat';
+import { asTrimmedString } from '@/utils/stringUtils';
 
 type DiscoveryTargetLike = {
   resourceType?: string;
   resourceId?: string;
   agentId?: string;
 } | null;
-
-const asTrimmedString = (value: unknown): string | undefined => {
-  if (typeof value !== 'string') return undefined;
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : undefined;
-};
 
 const normalizeDiscoveryResourceType = (resourceType: unknown): string | undefined => {
   return asTrimmedString(resourceType)?.toLowerCase();

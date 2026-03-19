@@ -4,6 +4,7 @@ import {
   isAgentDiscoveryResourceType,
   isAppContainerDiscoveryResourceType,
 } from '@/utils/discoveryTarget';
+import { asTrimmedString } from '@/utils/stringUtils';
 
 const AGENT_FACET_INFRASTRUCTURE_TYPES = new Set<ResourceType>(['agent', 'pbs', 'pmg', 'truenas']);
 const AGENT_PROFILE_ASSIGNABLE_TYPES = new Set<ResourceType>([
@@ -17,12 +18,6 @@ const AGENT_PROFILE_ASSIGNABLE_TYPES = new Set<ResourceType>([
 
 const asRecord = (value: unknown): Record<string, unknown> | undefined =>
   value && typeof value === 'object' ? (value as Record<string, unknown>) : undefined;
-
-const asTrimmedString = (value: unknown): string | undefined => {
-  if (typeof value !== 'string') return undefined;
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : undefined;
-};
 
 export const getPlatformDataRecord = (resource: Resource): Record<string, unknown> | undefined =>
   resource.platformData ? (resource.platformData as Record<string, unknown>) : undefined;

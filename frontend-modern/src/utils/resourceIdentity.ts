@@ -8,6 +8,7 @@ import {
   getPlatformAgentRecord,
   getPlatformDataRecord,
 } from '@/utils/agentResources';
+import { asTrimmedString } from '@/utils/stringUtils';
 
 export type ResourceIdentityRow = {
   label: string;
@@ -33,12 +34,6 @@ type NamedEntity = {
   displayName?: string;
   hostname?: string;
   name?: string;
-};
-
-const asTrimmedString = (value: unknown): string | undefined => {
-  if (typeof value !== 'string') return undefined;
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : undefined;
 };
 
 const dedupeTrimmedValues = (values: Array<string | undefined>): string[] => {
