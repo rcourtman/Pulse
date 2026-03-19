@@ -146,7 +146,8 @@ broader surfaced case is proven.
 - Resource change intelligence: retained as hidden backend
   foundations in the current L6/L13 overlap, while the surfaced lane stays
   deferred until the cross-resource investigation case is proven.
-- Policy-aware data governance: promoted from the current L6/L14 overlap.
+- Policy-aware data governance: the next surfaced target after RC stabilization,
+  promoted from the current L6/L14 overlap.
 - Action governance and auditability: promoted from the current L6/L14 trust
   surfaces and adjacent approvals work.
 - Fleet governance and rollout control: promoted from the current L16 floor.
