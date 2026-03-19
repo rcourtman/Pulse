@@ -4,8 +4,11 @@ import type { WorkloadGuest } from '@/types/workloads';
 import { formatBytes, formatUptime } from '@/utils/format';
 import { DiskList } from './DiskList';
 import { DiscoveryTab } from '../Discovery/DiscoveryTab';
-import type { ResourceType as DiscoveryResourceType } from '@/types/discovery';
-import { resolveWorkloadType } from '@/utils/workloads';
+import {
+  getDiscoveryResourceTypeForWorkload,
+  getWebInterfaceTargetLabelForWorkload,
+  resolveWorkloadType,
+} from '@/utils/workloads';
 import { buildInfrastructureHrefForWorkload } from './infrastructureLink';
 import { WebInterfaceUrlField } from '@/components/shared/WebInterfaceUrlField';
 import { getDiscoveryLoadingState } from '@/utils/discoveryPresentation';
@@ -101,27 +104,11 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
   const switchTab = (tab: 'overview' | 'discovery') => {
     setActiveTab(tab);
   };
-
-  // Get discovery resource type for the guest
-  const discoveryResourceType = (): DiscoveryResourceType => {
-    const type = resolveWorkloadType(props.guest);
-    if (type === 'vm') return 'vm';
-    if (type === 'app-container') return 'app-container';
-    if (type === 'pod') return 'pod';
-    return 'system-container';
-  };
   const discoveryAgentId = () => {
     return getDiscoveryHostIdForWorkload(props.guest);
   };
   const discoveryResourceId = () => {
     return getDiscoveryResourceIdForWorkload(props.guest);
-  };
-
-  const urlTargetLabel = () => {
-    const type = resolveWorkloadType(props.guest);
-    if (type === 'app-container') return 'container';
-    if (type === 'pod') return 'workload';
-    return 'workload';
   };
   return (
     <div class="space-y-3">
@@ -402,7 +389,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
           <WebInterfaceUrlField
             metadataKind="guest"
             metadataId={guestId()}
-            targetLabel={urlTargetLabel()}
+            targetLabel={getWebInterfaceTargetLabelForWorkload(props.guest)}
             customUrl={props.customUrl}
             onCustomUrlChange={(url) => props.onCustomUrlChange?.(guestId(), url)}
           />
@@ -425,7 +412,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
           }
         >
           <DiscoveryTab
-            resourceType={discoveryResourceType()}
+            resourceType={getDiscoveryResourceTypeForWorkload(props.guest)}
             agentId={discoveryAgentId()}
             resourceId={discoveryResourceId()}
             hostname={props.guest.name}

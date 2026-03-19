@@ -1,4 +1,5 @@
 import type { WorkloadGuest, WorkloadType } from '@/types/workloads';
+import type { ResourceType as DiscoveryResourceType } from '@/types/discovery';
 import type { MetricResourceKind } from '@/utils/metricsKeys';
 import { canonicalizeFrontendResourceType } from '@/utils/resourceTypeCompat';
 
@@ -76,3 +77,12 @@ export const getCanonicalWorkloadId = (
   }
   return guest.id;
 };
+
+export const getDiscoveryResourceTypeForWorkload = (
+  guest: Pick<WorkloadGuest, 'workloadType' | 'type'>,
+): DiscoveryResourceType => resolveWorkloadType(guest) as DiscoveryResourceType;
+
+export const getWebInterfaceTargetLabelForWorkload = (
+  guest: Pick<WorkloadGuest, 'workloadType' | 'type'>,
+): 'container' | 'workload' =>
+  resolveWorkloadType(guest) === 'app-container' ? 'container' : 'workload';

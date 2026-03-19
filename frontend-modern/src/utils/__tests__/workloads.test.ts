@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
   canonicalizeWorkloadFilterType,
+  getDiscoveryResourceTypeForWorkload,
   resolveWorkloadType,
   resolveWorkloadTypeFromString,
   getWorkloadMetricsKind,
   getCanonicalWorkloadId,
+  getWebInterfaceTargetLabelForWorkload,
 } from '@/utils/workloads';
 import type { WorkloadGuest } from '@/types/workloads';
 
@@ -199,5 +201,39 @@ describe('getCanonicalWorkloadId', () => {
   it('returns id when node is missing', () => {
     const guest = { id: 'test', type: 'vm', instance: 'homelab', node: '', vmid: 100 };
     expect(getCanonicalWorkloadId(guest)).toBe('test');
+  });
+});
+
+describe('getDiscoveryResourceTypeForWorkload', () => {
+  it('returns the canonical discovery resource type for VM workloads', () => {
+    const guest = { workloadType: 'vm' as const, type: 'vm' };
+    expect(getDiscoveryResourceTypeForWorkload(guest)).toBe('vm');
+  });
+
+  it('returns the canonical discovery resource type for app-container workloads', () => {
+    const guest = { workloadType: 'app-container' as const, type: 'docker' };
+    expect(getDiscoveryResourceTypeForWorkload(guest)).toBe('app-container');
+  });
+
+  it('returns the canonical discovery resource type for pod workloads', () => {
+    const guest = { workloadType: 'pod' as const, type: 'k8s' };
+    expect(getDiscoveryResourceTypeForWorkload(guest)).toBe('pod');
+  });
+});
+
+describe('getWebInterfaceTargetLabelForWorkload', () => {
+  it('labels app-container workloads as container', () => {
+    const guest = { workloadType: 'app-container' as const, type: 'docker' };
+    expect(getWebInterfaceTargetLabelForWorkload(guest)).toBe('container');
+  });
+
+  it('labels pod workloads as workload', () => {
+    const guest = { workloadType: 'pod' as const, type: 'pod' };
+    expect(getWebInterfaceTargetLabelForWorkload(guest)).toBe('workload');
+  });
+
+  it('labels vm workloads as workload', () => {
+    const guest = { workloadType: 'vm' as const, type: 'qemu' };
+    expect(getWebInterfaceTargetLabelForWorkload(guest)).toBe('workload');
   });
 });
