@@ -307,6 +307,10 @@ The governed query-fact and resource-context paths must also use the shared
 unified-resource policy helpers for the `aiSafeSummary` decision and
 redaction predicates, so the same local-only and redaction rules are applied
 consistently instead of being reimplemented in chat-local helpers.
+The frontend unified-resource hook also normalizes `aiSafeSummary` through
+the shared policy normalization helper, so the canonical trimmed summary
+value stays aligned with the same resource-policy boundary that governs
+policy-aware routing and redaction.
 The resource-intelligence payload used by the resource drawer also carries
 the same canonical policy posture snapshot, so the detail surface can show
 governed posture context without inventing a second posture contract.

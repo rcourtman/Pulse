@@ -70,6 +70,7 @@ import resourceChangePresentationSource from '@/utils/resourceChangePresentation
 import resourceRelationshipPresentationSource from '@/utils/resourceRelationshipPresentation.ts?raw';
 import resourceCorrelationPresentationSource from '@/utils/resourceCorrelationPresentation.ts?raw';
 import confidencePresentationSource from '@/utils/confidencePresentation.ts?raw';
+import resourcePolicyNormalizationSource from '@/utils/resourcePolicyNormalization.ts?raw';
 import diskListSource from '@/components/Storage/DiskList.tsx?raw';
 import useDiskListModelSource from '@/components/Storage/useDiskListModel.ts?raw';
 import diskDetailSource from '@/components/Storage/DiskDetail.tsx?raw';
@@ -1860,6 +1861,10 @@ describe('frontend resource type boundaries', () => {
     expect(resourceRelationshipPresentationSource).toContain('formatConfidencePercentage');
     expect(resourceCorrelationPresentationSource).toContain('formatConfidencePercentage');
     expect(confidencePresentationSource).toContain('formatConfidencePercentage');
+    expect(useUnifiedResourcesSource).toContain('normalizeResourcePolicyAISafeSummary(');
+    expect(resourcePolicyNormalizationSource).toContain(
+      'normalizeResourcePolicyAISafeSummary',
+    );
     expect(useUnifiedResourcesSource).toContain('normalizeResourcePolicy(');
     expect(useUnifiedResourcesSource).not.toContain('const resolvePolicySensitivity =');
     expect(useUnifiedResourcesSource).not.toContain('const resolvePolicyRoutingScope =');

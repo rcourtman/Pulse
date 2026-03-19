@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  normalizeResourcePolicyAISafeSummary,
   normalizeResourcePolicy,
   normalizeResourcePolicyRedactionHints,
   normalizeResourcePolicyRoutingScope,
@@ -41,5 +42,11 @@ describe('resourcePolicyNormalization', () => {
     expect(normalizeResourcePolicyRoutingScope('')).toBeUndefined();
     expect(normalizeResourcePolicyRedactionHints([])).toBeUndefined();
     expect(normalizeResourcePolicy({ sensitivity: 'internal' })).toBeUndefined();
+  });
+
+  it('normalizes aiSafeSummary to a trimmed string', () => {
+    expect(normalizeResourcePolicyAISafeSummary('  safe summary  ')).toBe('safe summary');
+    expect(normalizeResourcePolicyAISafeSummary('   ')).toBeUndefined();
+    expect(normalizeResourcePolicyAISafeSummary(undefined)).toBeUndefined();
   });
 });

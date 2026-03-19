@@ -65,6 +65,12 @@ export const normalizeResourcePolicyRedactionHints = (
   return hints.length > 0 ? hints : undefined;
 };
 
+export const normalizeResourcePolicyAISafeSummary = (value?: unknown): string | undefined => {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : undefined;
+};
+
 export const normalizeResourcePolicy = (policy?: {
   sensitivity?: unknown;
   routing?: {

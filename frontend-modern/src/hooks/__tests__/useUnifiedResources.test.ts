@@ -280,7 +280,7 @@ describe('useUnifiedResources', () => {
                 redact: ['HOSTNAME', ' ip-address ', 'Platform-ID', 'ALIAS'],
               },
             },
-            aiSafeSummary: 'resource summary safe for remote AI use',
+            aiSafeSummary: '   resource summary safe for remote AI use   ',
           },
         ],
       }),

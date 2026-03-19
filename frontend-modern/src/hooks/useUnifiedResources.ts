@@ -22,7 +22,10 @@ import { logger } from '@/utils/logger';
 import { eventBus } from '@/stores/events';
 import { canonicalDiscoveryResourceType } from '@/utils/discoveryTarget';
 import { getPreferredNormalizedPlatformId } from '@/utils/resourceIdentity';
-import { normalizeResourcePolicy } from '@/utils/resourcePolicyNormalization';
+import {
+  normalizeResourcePolicy,
+  normalizeResourcePolicyAISafeSummary,
+} from '@/utils/resourcePolicyNormalization';
 import {
   resolvePlatformTypeFromSources,
   resolveSourceTypeFromSources,
@@ -563,7 +566,7 @@ const toResource = (v2: APIResource): Resource => {
 
   const metricsTarget = resolveMetricsTarget(v2.type, v2.metricsTarget);
   const policy = normalizeResourcePolicy(v2.policy);
-  const aiSafeSummary = asTrimmedString(v2.aiSafeSummary);
+  const aiSafeSummary = normalizeResourcePolicyAISafeSummary(v2.aiSafeSummary);
 
   return {
     id: v2.id,

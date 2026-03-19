@@ -264,6 +264,10 @@ that route through `frontend-modern/src/hooks/useUnifiedResources.ts` must
 preserve canonical `policy` and `aiSafeSummary` fields so storage-bearing
 resources do not silently lose their routing or redaction posture when they
 cross from unified-resource ownership into storage or recovery presentation.
+That same decode path also trims `aiSafeSummary` through the shared policy
+normalizer, so storage and recovery surfaces keep the canonical summary text
+aligned with the policy-aware resource contract instead of reformatting it
+locally.
 That same decode path now delegates policy string and redaction normalization
 to `frontend-modern/src/utils/resourcePolicyNormalization.ts`, so storage and
 recovery surfaces do not reimplement sensitivity, routing, or redaction
