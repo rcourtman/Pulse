@@ -98,12 +98,9 @@ import {
   getTrialStartErrorMessage,
   getTrialTryAgainLaterMessage,
 } from '@/utils/upgradePresentation';
-import { buildInfrastructurePath } from '@/routing/resourceLinks';
-
-const buildInfrastructureResourceHref = (resourceId: string): string | null => {
-  const trimmed = resourceId.trim();
-  return trimmed ? buildInfrastructurePath({ resource: trimmed }) : null;
-};
+import {
+  buildInfrastructureResourceHref,
+} from '@/routing/resourceLinks';
 type PatrolTab = 'findings' | 'history';
 
 export function AIIntelligence() {
@@ -1335,14 +1332,12 @@ export function AIIntelligence() {
                     </div>
 
                     <Show when={(aiIntelligenceStore.correlations?.correlations?.length ?? 0) > 0}>
-                      <ResourceGraphSummary
-                        title="Learned correlations"
-                        correlations={aiIntelligenceStore.correlations?.correlations ?? []}
-                        summaryText={`${correlationTotal()} total`}
-                        buildResourceHref={(resourceId) =>
-                          buildInfrastructurePath({ resource: resourceId })
-                        }
-                      />
+                    <ResourceGraphSummary
+                      title="Learned correlations"
+                      correlations={aiIntelligenceStore.correlations?.correlations ?? []}
+                      summaryText={`${correlationTotal()} total`}
+                      buildResourceHref={buildInfrastructureResourceHref}
+                    />
                     </Show>
 
                     <ResourcePolicySummary posture={policyPosture()} title="Data Governance" />

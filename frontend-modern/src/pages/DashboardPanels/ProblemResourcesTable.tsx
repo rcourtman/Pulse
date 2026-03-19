@@ -13,7 +13,7 @@ import type { ProblemResource } from '@/hooks/useDashboardOverview';
 import { isInfrastructure, isStorage } from '@/types/resource';
 import {
   INFRASTRUCTURE_PATH,
-  buildInfrastructurePath,
+  buildInfrastructureResourceHref,
   buildWorkloadsPath,
   buildStoragePath,
 } from '@/routing/resourceLinks';
@@ -29,7 +29,7 @@ interface ProblemResourcesTableProps {
 
 function resourceLink(pr: ProblemResource): string {
   if (isInfrastructure(pr.resource)) {
-    return buildInfrastructurePath({ resource: pr.resource.id });
+    return buildInfrastructureResourceHref(pr.resource.id) ?? INFRASTRUCTURE_PATH;
   }
   if (isStorage(pr.resource)) {
     return buildStoragePath();

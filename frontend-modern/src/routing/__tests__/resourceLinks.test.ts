@@ -4,6 +4,7 @@ import {
   RECOVERY_QUERY_PARAMS,
   buildRecoveryPath,
   buildInfrastructurePath,
+  buildInfrastructureResourceHref,
   buildStoragePath,
   buildWorkloadsPath,
   parseRecoveryLinkSearch,
@@ -83,6 +84,13 @@ describe('resource link routing contract', () => {
       query: 'archive',
       resource: '',
     });
+  });
+
+  it('builds canonical infrastructure resource links', () => {
+    expect(buildInfrastructureResourceHref(' resource-123 ')).toBe(
+      '/infrastructure?resource=resource-123',
+    );
+    expect(buildInfrastructureResourceHref('')).toBeNull();
   });
 
   it('builds and parses storage query params', () => {

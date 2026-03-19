@@ -38,6 +38,10 @@ describe('ProblemResourcesTable', () => {
   it('renders overflow footer with Infrastructure, Workloads, and Storage links when 8+ problems', () => {
     render(() => <ProblemResourcesTable problems={makeProblems(8)} />);
 
+    const resourceLink = screen.getByText('Resource 0');
+    expect(resourceLink.tagName).toBe('A');
+    expect(resourceLink.getAttribute('href')).toBe('/infrastructure?resource=res-0');
+
     const infraLink = screen.getByText('Infrastructure');
     expect(infraLink.tagName).toBe('A');
     expect(infraLink.getAttribute('href')).toBe('/infrastructure');

@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-li
 import { createSignal } from 'solid-js';
 
 import { AIIntelligence } from '../AIIntelligence';
+import { buildInfrastructureResourceHref } from '@/routing/resourceLinks';
 
 const { findingsPanelState, runHistoryState, intelligenceState } = vi.hoisted(() => ({
   findingsPanelState: {
@@ -434,7 +435,10 @@ describe('AIIntelligence entitlement gating', () => {
     const storage1Link = screen.getByRole('link', {
       name: 'Open source resource Storage 1 in Infrastructure',
     });
-    expect(storage2Link).toHaveAttribute('href', '/infrastructure?resource=storage-2');
+    expect(storage2Link).toHaveAttribute(
+      'href',
+      buildInfrastructureResourceHref('storage-2') ?? '',
+    );
     expect(screen.getByRole('link', { name: 'Open target resource VM 200 in Infrastructure' }))
       .toHaveAttribute('href', '/infrastructure?resource=vm-200');
     expect(screen.getByRole('link', { name: 'Open target resource VM 100 in Infrastructure' }))

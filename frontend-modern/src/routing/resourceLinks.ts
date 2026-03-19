@@ -161,6 +161,11 @@ export const buildInfrastructurePath = (options: InfrastructureLinkOptions = {})
   return serialized ? `${INFRASTRUCTURE_PATH}?${serialized}` : INFRASTRUCTURE_PATH;
 };
 
+export const buildInfrastructureResourceHref = (resourceId: string): string | null => {
+  const trimmed = resourceId.trim();
+  return trimmed ? buildInfrastructurePath({ resource: trimmed }) : null;
+};
+
 export const parseStorageLinkSearch = (search: string) => {
   const params = new URLSearchParams(search);
   return {

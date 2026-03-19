@@ -269,6 +269,11 @@ Relationship cards in that drawer also surface `lastSeenAt` freshness and
 optional metadata blocks, and timeline cards surface change metadata when it
 is present, so the graph history view preserves the richer provenance already
 carried by the unified-resource model instead of flattening those fields away.
+The same Infrastructure resource-only links now also resolve through the
+shared `frontend-modern/src/routing/resourceLinks.ts` helper from the Patrol
+page, resource drawer, and problem-resource dashboard panels, so the canonical
+resource-filter path construction stays owned by the routing boundary rather
+than being duplicated per surface.
 The same timeline and facet-bundle reads now also accept governed `kind` and
 `sourceType` filters, plus a governed `sourceAdapter` filter for adapter-level
 provenance drill-down, so history can narrow by canonical change class and

@@ -45,7 +45,6 @@ import { SwarmServicesDrawer } from '@/components/Docker/SwarmServicesDrawer';
 import { WebInterfaceUrlField } from '@/components/shared/WebInterfaceUrlField';
 import { getServiceHealthPresentation } from '@/utils/serviceHealthPresentation';
 import { ResourceAPI } from '@/api/resources';
-import { buildInfrastructurePath } from '@/routing/resourceLinks';
 import {
   getResourcePolicyBadges,
   getResourcePolicyRedactionLabels,
@@ -58,6 +57,7 @@ import { ResourceChangeSummary } from './ResourceChangeSummary';
 import { ResourceFacetSummary } from './ResourceFacetSummary';
 import { ResourcePolicySummary } from './ResourcePolicySummary';
 import type { ResourceIntelligence } from '@/types/aiIntelligence';
+import { buildInfrastructureResourceHref } from '@/routing/resourceLinks';
 
 interface ResourceDetailDrawerProps {
   resource: Resource;
@@ -77,11 +77,6 @@ import {
   ALIAS_COLLAPSE_THRESHOLD,
   formatSourceType,
 } from './resourceDetailMappers';
-
-const buildInfrastructureResourceHref = (resourceId: string): string | null => {
-  const trimmed = resourceId.trim();
-  return trimmed ? buildInfrastructurePath({ resource: trimmed }) : null;
-};
 
 const hasMetadataEntries = (value?: Record<string, unknown> | null): boolean =>
   Boolean(value && Object.keys(value).length > 0);
