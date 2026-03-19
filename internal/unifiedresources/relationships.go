@@ -13,7 +13,7 @@ const (
 	RelOwnedBy   RelationshipType = "owned_by"   // e.g., pod owned_by deployment
 )
 
-// ResourceRelationship represents a typed graph edge between two unified resources.
+// ResourceRelationship represents a typed relationship edge between two unified resources.
 type ResourceRelationship struct {
 	SourceID   string           `json:"sourceId"`
 	TargetID   string           `json:"targetId"`

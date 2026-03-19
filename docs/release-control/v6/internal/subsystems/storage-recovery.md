@@ -142,10 +142,11 @@ That same shared facet bundle now also carries grouped
 `recentChangeSourceAdapters` counts by canonical source adapter, so storage
 and recovery surfaces can separate Docker, Proxmox, TrueNAS, and ops-helper
 provenance without inferring integration origin from the loaded slice.
-Those same resource timeline records also preserve `relatedResources` graph
-context for non-relationship changes, so storage and recovery views can still
-link neighboring resources when the timeline entry is a restart, anomaly, or
-config update rather than only when the edge itself changes.
+Those same resource timeline records also preserve `relatedResources`
+relationship context for non-relationship changes, so storage and recovery
+views can still link neighboring resources when the timeline entry is a
+restart, anomaly, or config update rather than only when the edge itself
+changes.
 Those unified audit list endpoints also clamp oversized `limit` requests to
 the governed maximum, so adjacent recovery and storage workflows do not turn
 bounded history reads into unbounded collection scans.

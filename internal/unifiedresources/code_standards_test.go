@@ -665,6 +665,23 @@ func TestResourceRelationshipContextUsesCanonicalRelationshipPresentation(t *tes
 	}
 }
 
+func TestResourceRelationshipModelUsesCanonicalEdgeComment(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("relationships.go"))
+	if err != nil {
+		t.Fatalf("failed to read relationships.go: %v", err)
+	}
+	source := string(data)
+	requiredSnippets := []string{
+		"// ResourceRelationship represents a typed relationship edge between two unified resources.",
+		"type ResourceRelationship struct {",
+	}
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(source, snippet) {
+			t.Fatalf("internal/unifiedresources/relationships.go must pin canonical relationship edge snippet %q", snippet)
+		}
+	}
+}
+
 func TestPatrolSeedCorrelationContextUsesCanonicalSummaryFormatter(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join("..", "ai", "patrol_ai.go"))
 	if err != nil {

@@ -146,7 +146,7 @@ canonical metadata pass instead of consumer-local attach wrappers.
 Those history reads now also accept governed `kind`, `sourceType`, and
 `sourceAdapter` query filters, and the backend store owns the corresponding
 filtered counts, so the timeline contract can narrow by change class and
-adapter provenance without inventing a frontend-only slice of the graph.
+adapter provenance without inventing a frontend-only relationship slice.
 The same facet bundle contract now also returns grouped `recentChangeKinds`
 counts by canonical `ChangeKind`, so the shared drawer and summary chips can
 show the distribution of restarts, anomalies, state transitions, and other
@@ -173,8 +173,8 @@ Incident-driven anomaly entries are also a first-class contract now:
 instead of being flattened into generic status churn.
 For relationship changes, the `from` and `to` fields now summarize the actual
 edge(s) rather than only the parent pointer, so the API contract keeps the
-graph transition legible even before the frontend expands the related-resource
-chips.
+relationship transition legible even before the frontend expands the
+related-resource chips.
 The same relationship and change presenters now also own the state, restart,
 incident, and config summary fragments that feed those timeline values, so the
 API surface preserves the canonical wording before the frontend renders it.
@@ -221,7 +221,7 @@ surface stays bounded even when callers ask for arbitrarily large history
 pages.
 Those relationship and timeline payloads now also carry `lastSeenAt` freshness
 and optional metadata through the same owned contract, so the drawer can
-preserve provenance without inventing a separate graph-detail schema.
+preserve provenance without inventing a separate relationship-detail schema.
 Relationship-change timeline entries now also use the canonical relationship
 summary helper for their compact `from` and `to` wording, so the API keeps the
 human-readable edge label aligned with the unified-resource relationship

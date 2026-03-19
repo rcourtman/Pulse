@@ -105,7 +105,7 @@ cross-resource context the detail drawer can surface later instead of
 collapsing state, restart, anomaly, or config changes down to resource-only
 hints.
 Those same relationship changes now summarize the actual edge(s) in `from` and
-`to`, so the canonical timeline keeps the graph transition readable without
+`to`, so the canonical timeline keeps the relationship transition readable without
 needing the drawer to reconstruct an edge summary from raw endpoints.
 The backend AI and Patrol context renderers now derive their canonical change
 kind, source type, source adapter, actor, reason, and related-resource
@@ -154,7 +154,7 @@ relationship summary used by resource change records, so change `from` and
 reconstructing a separate type-token summary in the emitter.
 The same AI resource-intelligence payload now also carries canonical
 correlation evidence from the shared detector, so the drawer can show learned
-edge patterns alongside the dependency graph without rebuilding correlation
+edge patterns alongside the dependency relationships without rebuilding correlation
 reasoning from raw events. The Patrol intelligence page now also renders that
 correlation evidence through the shared
 `frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx`
@@ -210,7 +210,7 @@ falling back to a consumer-local scan.
 The frontend now also consumes those facet reads through
 `frontend-modern/src/api/resources.ts` and the dedicated resource detail
 drawer, which keeps the presentation surface aligned with the governed API
-contract instead of rebuilding the graph and timeline inline.
+contract instead of rebuilding the relationship and timeline inline.
 The shared `ResourceFacetSummary` consumer now omits capability and
 relationship badges from the default table/detail surface entirely, while the
 backend contract keeps capability and relationship data on the owned resource
@@ -222,7 +222,7 @@ before they are fully populated.
 The same facet bundle now also returns grouped recent-change counts by
 canonical change kind, so the detail drawer can surface the distribution of
 state transitions, restarts, config updates, and anomalies without
-recomputing timeline history in the browser, while broader graph or
+recomputing timeline history in the browser, while broader relationship or
 capability facets stay available behind the same contract for non-default
 consumers that can prove they are populated and justified.
 That same facet bundle now also returns grouped recent-change provenance
@@ -525,8 +525,8 @@ IP-summary rendering for AI resource context, so topology labels and address
 lists stay aligned with the same redaction vocabulary instead of being
 formatted in AI-local helpers.
 The AI correlation root-cause engine also consumes the canonical unified-
-resource relationship model directly, so graph reasoning and relationship
-scoring stay on the same owned edge vocabulary instead of keeping a separate
+resource relationship model directly, so relationship reasoning and scoring
+stay on the same owned edge vocabulary instead of keeping a separate
 AI-local relationship struct.
 Those helpers now own the canonical redaction-hint order and count-to-label
 projection, so the AI summary and any other backend policy posture surface do
@@ -535,17 +535,18 @@ They also own the canonical sensitivity and routing order used to format
 policy-posture count summaries with human-readable labels, so the AI summary
 and frontend policy card both read the same presentation sequence from the
 shared resource model.
-Canonical resources now carry first-class graph-expansion fields:
-`Capabilities` (bounded action definitions with approval levels),
-`Relationships` (typed inter-resource links with direction and confidence),
-and `RecentChanges` (typed change timeline entries with source, confidence,
-and related-resource references). These fields are defined in
+Canonical resources now carry first-class relationship, capability, and
+timeline fields: `Capabilities` (bounded action definitions with approval
+levels), `Relationships` (typed inter-resource links with direction and
+confidence), and `RecentChanges` (typed change timeline entries with source,
+confidence, and related-resource references). These fields are defined in
 `capabilities.go`, `relationships.go`, `changes.go`, `privacy.go`, and
-`actions.go`. The backend keeps those graph fields for AI and correlation use,
+`actions.go`. The backend keeps those fields for AI and correlation use,
 while the frontend consumer stays timeline-first and only preserves the
-recent-change slice plus facet counts it actually renders. The store now also owns a
-`resource_changes` persistence table with `RecordChange` and `GetRecentChanges`
-methods so change history is queryable by canonical ID and time window.
+recent-change slice plus facet counts it actually renders. The store now also
+owns a `resource_changes` persistence table with `RecordChange` and
+`GetRecentChanges` methods so change history is queryable by canonical ID and
+time window.
 The shared change presentation helper also owns the canonical kind, source
 type, and source adapter labels for those timeline entries, so summary cards
 and drawer history surfaces both read the same badge vocabulary instead of

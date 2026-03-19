@@ -188,8 +188,8 @@ shared memory change presentation helper so the same heading, scope prefix, and
 change-type labels are reused instead of being rebuilt ad hoc in AI-local code.
 The AI correlation root-cause engine also consumes the canonical unified-
 resource relationship model directly, so cross-resource reasoning stays aligned
-with the same graph edges that back the resource API instead of maintaining a
-parallel relationship vocabulary inside AI correlation.
+with the same relationship edges that back the resource API instead of
+maintaining a parallel relationship vocabulary inside AI correlation.
 The canonical relationship-summary helper also feeds resource change records,
 so AI timeline prompts read the same relationship wording and edge labels that
 the unified-resource contract emits instead of building another summary shape

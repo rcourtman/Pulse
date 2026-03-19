@@ -112,7 +112,7 @@ func TestCanonicalizeLegacyResourceTypeAlias(t *testing.T) {
 	}
 }
 
-func TestResourceGraphFieldsDefaultToNil(t *testing.T) {
+func TestResourceRelationshipFieldsDefaultToNil(t *testing.T) {
 	r := Resource{}
 	if r.Capabilities != nil {
 		t.Error("Capabilities should default to nil")
