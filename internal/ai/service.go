@@ -4512,8 +4512,8 @@ func (s *Service) buildIncidentContext(resourceID, alertIdentifier string) strin
 		if recentChanges := s.buildRecentResourceChangesContext(resourceID); recentChanges != "" {
 			sections = append(sections, recentChanges)
 		}
-		if graphContext := s.buildResourceGraphContext(resourceID); graphContext != "" {
-			sections = append(sections, graphContext)
+		if relationshipContext := s.buildResourceRelationshipContext(resourceID); relationshipContext != "" {
+			sections = append(sections, relationshipContext)
 		}
 	}
 
@@ -4614,7 +4614,7 @@ type canonicalResourceGetter interface {
 	Get(id string) (*unifiedresources.Resource, bool)
 }
 
-func (s *Service) buildResourceGraphContext(resourceID string) string {
+func (s *Service) buildResourceRelationshipContext(resourceID string) string {
 	resourceID = strings.TrimSpace(resourceID)
 	if resourceID == "" {
 		return ""
@@ -4637,7 +4637,7 @@ func (s *Service) buildResourceGraphContext(resourceID string) string {
 	if !ok || resource == nil {
 		return ""
 	}
-	return unifiedresources.FormatResourceGraphContext(resource, 3)
+	return unifiedresources.FormatResourceRelationshipContext(resource, 3)
 }
 
 // truncateString truncates a string to maxLen characters.
@@ -4823,8 +4823,8 @@ func (s *Service) buildEnrichedResourceContext(resourceID, _ string, currentMetr
 	}
 
 	// Get canonical relationship context from unified resources.
-	if graphContext := s.buildResourceGraphContext(resourceID); graphContext != "" {
-		sections = append(sections, graphContext)
+	if relationshipContext := s.buildResourceRelationshipContext(resourceID); relationshipContext != "" {
+		sections = append(sections, relationshipContext)
 	}
 
 	// Get shared correlation context for learned related resources.

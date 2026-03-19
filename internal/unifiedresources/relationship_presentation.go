@@ -68,9 +68,9 @@ func DescribeRelationship(rel ResourceRelationship) RelationshipPresentation {
 	return presentation
 }
 
-// FormatResourceGraphContext returns the canonical AI prompt section for a
+// FormatResourceRelationshipContext returns the canonical AI prompt section for a
 // resource's learned relationships.
-func FormatResourceGraphContext(resource *Resource, limit int) string {
+func FormatResourceRelationshipContext(resource *Resource, limit int) string {
 	if resource == nil || limit <= 0 || len(resource.Relationships) == 0 {
 		return ""
 	}
@@ -112,5 +112,5 @@ func FormatResourceGraphContext(resource *Resource, limit int) string {
 	if len(lines) == 0 {
 		return ""
 	}
-	return "\n\n### Resource Graph\n" + strings.Join(lines, "\n")
+	return "\n\n### Resource Relationships\n" + strings.Join(lines, "\n")
 }

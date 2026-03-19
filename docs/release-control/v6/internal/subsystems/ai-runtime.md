@@ -258,9 +258,9 @@ section from unified-resource relationships, so relationship wording and edge
 provenance stay aligned with the same shared resource model instead of being
 reconstructed from the drawer or prompt helpers.
 That relationship section is now rendered by the shared
-`internal/unifiedresources.FormatResourceGraphContext` helper, so the service
-layer only resolves the canonical resource and does not rebuild the section
-format locally.
+`internal/unifiedresources.FormatResourceRelationshipContext` helper, so the
+service layer only resolves the canonical resource and does not rebuild the
+section format locally.
 The canonical recent-change sentence formatting also lives in
 `internal/unifiedresources.FormatResourceChangeSummary`, so AI runtime prompt
 sections and Patrol seed context reuse the same change wording instead of

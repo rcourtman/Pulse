@@ -70,7 +70,7 @@ func TestResourceRelationshipSummary(t *testing.T) {
 	}
 }
 
-func TestFormatResourceGraphContext(t *testing.T) {
+func TestFormatResourceRelationshipContext(t *testing.T) {
 	resource := &Resource{
 		Relationships: []ResourceRelationship{
 			{
@@ -92,21 +92,21 @@ func TestFormatResourceGraphContext(t *testing.T) {
 		},
 	}
 
-	ctx := FormatResourceGraphContext(resource, 1)
+	ctx := FormatResourceRelationshipContext(resource, 1)
 	if ctx == "" {
-		t.Fatal("expected graph context")
+		t.Fatal("expected relationship context")
 	}
-	if want := "### Resource Graph"; !contains(ctx, want) {
-		t.Fatalf("expected %q in graph context, got %q", want, ctx)
+	if want := "### Resource Relationships"; !contains(ctx, want) {
+		t.Fatalf("expected %q in relationship context, got %q", want, ctx)
 	}
 	if !contains(ctx, "Runs on") {
 		t.Fatalf("expected canonical relationship label, got %q", ctx)
 	}
 	if !contains(ctx, "discoverer docker_adapter") {
-		t.Fatalf("expected provenance in graph context, got %q", ctx)
+		t.Fatalf("expected provenance in relationship context, got %q", ctx)
 	}
 	if contains(ctx, "Depends on") {
-		t.Fatalf("expected graph limit to truncate entries, got %q", ctx)
+		t.Fatalf("expected relationship limit to truncate entries, got %q", ctx)
 	}
 }
 

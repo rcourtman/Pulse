@@ -100,9 +100,9 @@ relationship section from unified-resource relationships, so edge labels,
 directionality, and provenance stay aligned with the shared relationship model
 instead of being reconstructed locally.
 That relationship section is now rendered by the shared
-`internal/unifiedresources.FormatResourceGraphContext` helper, so the Patrol
-runtime only resolves the canonical relationship context rather than formatting the
-relationship section itself.
+`internal/unifiedresources.FormatResourceRelationshipContext` helper, so the
+Patrol runtime only resolves the canonical relationship context rather than
+formatting the relationship section itself.
 Patrol-owned correlation context now also comes through the shared AI
 intelligence facade before reaching the detector, so the learned correlation
 surface is routed through the same canonical AI ownership boundary as recent

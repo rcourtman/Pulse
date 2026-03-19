@@ -144,9 +144,10 @@ from `internal/unifiedresources/relationship_presentation.go`, so the correlatio
 semantics live with the resource model instead of being duplicated in prompt
 helpers or drawer-specific markdown.
 That same resource model now also owns the canonical
-`FormatResourceGraphContext` helper, so service-layer callers only resolve the
-resource and hand the model the relationship list instead of rebuilding the
-relationship section header, ordering, or freshness wording locally.
+`FormatResourceRelationshipContext` helper, so service-layer callers only
+resolve the resource and hand the model the relationship list instead of
+rebuilding the relationship section header, ordering, or freshness wording
+locally.
 The same shared relationship presenter also owns the compact change-timeline
 relationship summary used by resource change records, so change `from` and
 `to` values stay aligned with the canonical relationship labels instead of

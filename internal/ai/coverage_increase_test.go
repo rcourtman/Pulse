@@ -534,19 +534,19 @@ func TestService_BuildRelationshipContext_UsesCanonicalReadState(t *testing.T) {
 	})
 	ps.SetCorrelationDetector(corr)
 
-	graphContext := s.buildResourceGraphContext(resourceID)
-	if !strings.Contains(graphContext, "### Resource Graph") {
-		t.Fatalf("expected canonical relationship context to include graph heading, got %q", graphContext)
+	relationshipContext := s.buildResourceRelationshipContext(resourceID)
+	if !strings.Contains(relationshipContext, "### Resource Relationships") {
+		t.Fatalf("expected canonical relationship context to include relationship heading, got %q", relationshipContext)
 	}
-	if !strings.Contains(graphContext, "Runs on") {
-		t.Fatalf("expected canonical relationship context to include relationship label, got %q", graphContext)
+	if !strings.Contains(relationshipContext, "Runs on") {
+		t.Fatalf("expected canonical relationship context to include relationship label, got %q", relationshipContext)
 	}
-	if !strings.Contains(graphContext, "metadata present") {
-		t.Fatalf("expected canonical relationship context to include shared metadata marker, got %q", graphContext)
+	if !strings.Contains(relationshipContext, "metadata present") {
+		t.Fatalf("expected canonical relationship context to include shared metadata marker, got %q", relationshipContext)
 	}
 
 	resourceCtx := s.buildEnrichedResourceContext(resourceID, "", nil)
-	if !strings.Contains(resourceCtx, "Resource Graph") {
+	if !strings.Contains(resourceCtx, "Resource Relationships") {
 		t.Fatalf("expected enriched resource context to include relationship section, got %q", resourceCtx)
 	}
 	if !strings.Contains(resourceCtx, "Runs on") {
@@ -566,7 +566,7 @@ func TestService_BuildRelationshipContext_UsesCanonicalReadState(t *testing.T) {
 	}
 
 	incidentCtx := s.buildIncidentContext(resourceID, "")
-	if !strings.Contains(incidentCtx, "Resource Graph") {
+	if !strings.Contains(incidentCtx, "Resource Relationships") {
 		t.Fatalf("expected incident context to include relationship section, got %q", incidentCtx)
 	}
 	if !strings.Contains(incidentCtx, "Runs on") {

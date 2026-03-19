@@ -643,24 +643,24 @@ func TestResourceChangePresentationUsesCanonicalLabels(t *testing.T) {
 	}
 }
 
-func TestResourceGraphContextUsesCanonicalRelationshipPresentation(t *testing.T) {
+func TestResourceRelationshipContextUsesCanonicalRelationshipPresentation(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join("..", "ai", "service.go"))
 	if err != nil {
 		t.Fatalf("failed to read service.go: %v", err)
 	}
 	source := string(data)
 	requiredSnippets := []string{
-		"func (s *Service) buildResourceGraphContext(resourceID string) string",
-		"if graphContext := s.buildResourceGraphContext(resourceID); graphContext != \"\" {",
+		"func (s *Service) buildResourceRelationshipContext(resourceID string) string",
+		"if relationshipContext := s.buildResourceRelationshipContext(resourceID); relationshipContext != \"\" {",
 		"Get canonical relationship context from unified resources.",
-		"unifiedresources.FormatResourceGraphContext(resource, 3)",
+		"unifiedresources.FormatResourceRelationshipContext(resource, 3)",
 		"unifiedresources.FormatResourceRecentChangesContext(changes, false, \"###\")",
 		"type canonicalResourceGetter interface {",
 		"intel.FormatCorrelationsContext(resourceID)",
 	}
 	for _, snippet := range requiredSnippets {
 		if !strings.Contains(source, snippet) {
-			t.Fatalf("internal/ai/service.go must pin canonical resource graph presentation snippet %q", snippet)
+			t.Fatalf("internal/ai/service.go must pin canonical relationship presentation snippet %q", snippet)
 		}
 	}
 }
