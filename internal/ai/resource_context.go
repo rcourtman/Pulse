@@ -126,14 +126,14 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 			sensitivityParts := make([]string, 0, len(unifiedresources.ResourceSensitivityOrder))
 			for _, sensitivity := range unifiedresources.ResourceSensitivityOrder {
 				sensitivityParts = append(sensitivityParts, fmt.Sprintf("%d %s",
-					sensitivityCounts[sensitivity], sensitivity))
+					sensitivityCounts[sensitivity], unifiedresources.ResourceSensitivityLabel(sensitivity)))
 			}
 			sections = append(sections, fmt.Sprintf("- Sensitivity: %s", strings.Join(sensitivityParts, ", ")))
 
 			routingParts := make([]string, 0, len(unifiedresources.ResourceRoutingScopeOrder))
 			for _, scope := range unifiedresources.ResourceRoutingScopeOrder {
 				routingParts = append(routingParts, fmt.Sprintf("%d %s",
-					routingCounts[scope], scope))
+					routingCounts[scope], unifiedresources.ResourceRoutingScopeLabel(scope)))
 			}
 			sections = append(sections, fmt.Sprintf("- Routing: %s", strings.Join(routingParts, ", ")))
 			sections = append(sections, fmt.Sprintf("- Local-only resources: %d", localOnlyCount))
