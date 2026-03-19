@@ -541,12 +541,14 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
   const workloadsHref = createMemo(() => buildWorkloadsHref(props.resource));
   const headerIdentity = createMemo(() => getPrimaryResourceIdentity(props.resource));
   const relatedLinks = createMemo(() => {
-    const links: Array<{ href: string; label: string; ariaLabel: string }> = [];
+    const links: Array<{ href: string; label: string; compactLabel: string; ariaLabel: string }> =
+      [];
     const workloads = workloadsHref();
     if (workloads) {
       links.push({
         href: workloads,
         label: 'Open in Workloads',
+        compactLabel: 'Workloads',
         ariaLabel: `Open related workloads for ${displayName()}`,
       });
     }
@@ -714,20 +716,6 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                 )}
               </For>
             </Show>
-            <For each={kubernetesCapabilityBadges()}>
-              {(badge) => (
-                <span class={badge.classes} title={badge.title}>
-                  {badge.label}
-                </span>
-              )}
-            </For>
-            <For each={policyBadges()}>
-              {(badge) => (
-                <span class={badge.className} title={badge.title}>
-                  {badge.label}
-                </span>
-              )}
-            </For>
           </div>
         </div>
 
@@ -749,22 +737,6 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
           </button>
         </Show>
       </div>
-
-      <Show when={relatedLinks().length > 0}>
-        <div class="flex items-center justify-end gap-2">
-          <For each={relatedLinks()}>
-            {(link) => (
-              <a
-                href={link.href}
-                aria-label={link.ariaLabel}
-                class="inline-flex items-center rounded border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-200 dark:hover:bg-blue-900"
-              >
-                {link.label}
-              </a>
-            )}
-          </For>
-        </div>
-      </Show>
 
       <div class="flex items-center gap-6 border-b border-border px-1 mb-1">
         <For each={tabs()}>
@@ -883,6 +855,38 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                   >
                     {props.resource.platformId}
                   </span>
+                </div>
+              </Show>
+              <Show when={kubernetesCapabilityBadges().length > 0}>
+                <div class="flex flex-col gap-1">
+                  <span class="text-muted">Platform signals</span>
+                  <div class="flex flex-wrap gap-1">
+                    <For each={kubernetesCapabilityBadges()}>
+                      {(badge) => (
+                        <span class={badge.classes} title={badge.title}>
+                          {badge.label}
+                        </span>
+                      )}
+                    </For>
+                  </div>
+                </div>
+              </Show>
+              <Show when={relatedLinks().length > 0}>
+                <div class="flex flex-col gap-1 pt-1">
+                  <span class="text-muted">Quick links</span>
+                  <div class="flex flex-wrap gap-2">
+                    <For each={relatedLinks()}>
+                      {(link) => (
+                        <a
+                          href={link.href}
+                          aria-label={link.ariaLabel}
+                          class="inline-flex items-center rounded border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-200 dark:hover:bg-blue-900"
+                        >
+                          {link.compactLabel}
+                        </a>
+                      )}
+                    </For>
+                  </div>
                 </div>
               </Show>
             </div>

@@ -245,6 +245,10 @@ That same overview now keeps AI intelligence and data-governance details
 inside a collapsed `Investigation context` disclosure, so runtime status and
 identity stay primary while secondary AI and policy signals remain available
 without competing with the first-screen monitoring story.
+The drawer header now stays focused on canonical identity and source/type
+badges only, while workload/service drill-down links and Kubernetes platform
+signals live with the runtime card, so the top strip does not compete with
+the resource name, status, or primary identity line.
 The same facet bundle now also returns grouped recent-change counts by
 canonical change kind, so the detail drawer can surface the distribution of
 state transitions, restarts, config updates, and anomalies without

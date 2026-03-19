@@ -90,6 +90,7 @@ describe('ResourceDetailDrawer kubernetes capabilities', () => {
       <ResourceDetailDrawer resource={buildKubernetesResource()} />
     ));
 
+    expect(getByText('Platform signals')).toBeInTheDocument();
     expect(getByText('K8s Node CPU/Memory')).toBeInTheDocument();
     expect(getByText('Node Telemetry (Agent)')).toBeInTheDocument();
     expect(getByText('Pod CPU/Memory')).toBeInTheDocument();

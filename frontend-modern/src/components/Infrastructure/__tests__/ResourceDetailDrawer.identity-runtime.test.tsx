@@ -114,13 +114,17 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
       },
     });
 
-    const { getByText } = render(() => <ResourceDetailDrawer resource={resource} />);
+    const { getByRole, getByText } = render(() => <ResourceDetailDrawer resource={resource} />);
 
     expect(getByText('Runtime')).toBeInTheDocument();
     expect(getByText('Sources')).toBeInTheDocument();
     expect(getByText('2/2 healthy')).toBeInTheDocument();
     expect(getByText('Mode')).toBeInTheDocument();
     expect(getByText('Hybrid')).toBeInTheDocument();
+    expect(getByText('Quick links')).toBeInTheDocument();
+    expect(getByRole('link', { name: 'Open related workloads for host-1' })).toHaveTextContent(
+      'Workloads',
+    );
   });
 
   it('falls back to source list summary when per-source health is unavailable', () => {

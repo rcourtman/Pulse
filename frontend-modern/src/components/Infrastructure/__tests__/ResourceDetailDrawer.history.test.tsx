@@ -194,6 +194,7 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(screen.getAllByText('Pulse diff 2')).toHaveLength(1);
     expect(screen.getAllByText('Docker adapter 2')).toHaveLength(1);
     expect(screen.getAllByText('Proxmox adapter 1')).toHaveLength(1);
+    expect(screen.queryByText('Quick links')).toBeNull();
     expect(screen.getByText('Investigation context')).toBeInTheDocument();
     expect(screen.queryByText('Storage 1 alias')).toBeNull();
     expect(screen.queryByText('VM Child')).toBeNull();
