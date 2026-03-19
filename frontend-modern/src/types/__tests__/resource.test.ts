@@ -108,6 +108,33 @@ describe('Resource Helper Functions', () => {
       (resource as any).displayName = undefined;
       expect(getDisplayName(resource)).toBe('machine-1');
     });
+
+    it('returns the safe label for governed resources', () => {
+      const resource = createResource({
+        name: 'secret-vm-1',
+        displayName: 'secret-vm-1',
+        policy: {
+          sensitivity: 'restricted',
+          routing: { scope: 'local-only', redact: ['hostname'] },
+        },
+        aiSafeSummary: 'Production VM',
+      } as Partial<Resource>);
+
+      expect(getDisplayName(resource)).toBe('Production VM');
+    });
+
+    it('falls back to the redacted policy label when the safe summary is missing', () => {
+      const resource = createResource({
+        name: 'secret-vm-1',
+        displayName: 'secret-vm-1',
+        policy: {
+          sensitivity: 'restricted',
+          routing: { scope: 'local-only', redact: ['hostname'] },
+        },
+      } as Partial<Resource>);
+
+      expect(getDisplayName(resource)).toBe('redacted by policy');
+    });
   });
 
   describe('getCpuPercent', () => {

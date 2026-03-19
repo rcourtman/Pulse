@@ -281,6 +281,9 @@ The shared frontend resource identity helper now inherits the same policy-aware
 display contract, so other infrastructure surfaces that ask for the preferred
 resource label no longer need to re-encode the governed summary boundary by
 hand.
+The generic frontend `getDisplayName` helper in `types/resource.ts` now
+follows that same policy-aware boundary as well, so settings quick-picks and
+other shared resource selectors do not keep a second raw-name fallback fork.
 That same contract also owns the canonical resource display-name fallback, so
 name-or-ID presentation stays consistent between the unified AI adapter, the
 AI resource context, and the connected-infrastructure / monitored-system

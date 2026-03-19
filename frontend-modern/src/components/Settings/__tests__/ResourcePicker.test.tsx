@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
-import type { Resource } from '@/types/resource';
+import { getDisplayName as getResourceDisplayName, type Resource } from '@/types/resource';
 import { ResourcePicker, type SelectedResource } from '../ResourcePicker';
 
 let mockResources: Resource[] = [];
@@ -11,8 +11,7 @@ vi.mock('@/hooks/useResources', () => ({
   useResources: () => ({
     resources: () => mockResources,
   }),
-  getDisplayName: (resource: { displayName?: string; name?: string; id: string }) =>
-    resource.displayName || resource.name || resource.id,
+  getDisplayName: (resource: Resource) => getResourceDisplayName(resource),
 }));
 
 vi.mock('@/utils/toast', () => ({
@@ -81,6 +80,28 @@ describe('ResourcePicker', () => {
     expect(await screen.findByText('Node One')).toBeInTheDocument();
     expect(screen.getByText('Alpha VM')).toBeInTheDocument();
     expect(screen.queryByText('TrueNAS')).not.toBeInTheDocument();
+  });
+
+  it('renders governed resources with the safe display label', async () => {
+    mockResources = [
+      makeResource({
+        id: 'vm-2',
+        type: 'vm',
+        name: 'secret-vm-2',
+        displayName: 'secret-vm-2',
+        policy: {
+          sensitivity: 'restricted',
+          routing: { scope: 'local-only', redact: ['hostname'] },
+        },
+        aiSafeSummary: 'Production VM',
+        status: 'running',
+      }),
+    ];
+
+    renderPicker();
+
+    expect(await screen.findByText('Production VM')).toBeInTheDocument();
+    expect(screen.queryByText('secret-vm-2')).not.toBeInTheDocument();
   });
 
   it('applies type filter buttons', async () => {

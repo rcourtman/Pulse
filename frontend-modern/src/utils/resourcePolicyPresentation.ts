@@ -5,6 +5,7 @@ import type {
   ResourceRoutingScope,
   ResourceSensitivity,
 } from '@/types/resource';
+import { requiresGovernedResourceDisplay } from '@/types/resource';
 import type { IntelligencePolicyPostureSummary } from '@/types/aiIntelligence';
 
 type PolicyBadgePresentation = {
@@ -118,11 +119,6 @@ export const getResourceRedactionHintLabel = (hint?: ResourceRedactionHint): str
 
 export const getResourcePolicyRedactionLabels = (policy?: ResourcePolicy): string[] =>
   (policy?.routing.redact ?? []).map((hint) => getResourceRedactionHintLabel(hint));
-
-export const requiresGovernedResourceDisplay = (policy?: ResourcePolicy | null): boolean => {
-  if (!policy) return false;
-  return policy.routing.scope === 'local-only' || (policy.routing.redact?.length ?? 0) > 0;
-};
 
 const buildCountSummaries = <T extends string>(
   counts: Partial<Record<T, number>> | undefined,

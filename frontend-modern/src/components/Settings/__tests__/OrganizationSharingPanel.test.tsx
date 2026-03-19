@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
-import type { Resource } from '@/types/resource';
+import { getDisplayName as getResourceDisplayName, type Resource } from '@/types/resource';
 import { OrganizationSharingPanel } from '../OrganizationSharingPanel';
 import organizationSharingPanelSource from '../OrganizationSharingPanel.tsx?raw';
 
@@ -36,8 +36,7 @@ vi.mock('@/hooks/useResources', () => ({
   useResources: () => ({
     resources: () => mockResources,
   }),
-  getDisplayName: (resource: { displayName?: string; name?: string; id: string }) =>
-    resource.displayName || resource.name || resource.id,
+  getDisplayName: (resource: Resource) => getResourceDisplayName(resource),
 }));
 
 vi.mock('@/stores/license', () => ({
@@ -264,6 +263,43 @@ describe('OrganizationSharingPanel', () => {
         resourceType: 'vm',
         resourceId: 'vm-100',
         resourceName: 'Alpha VM',
+        accessRole: 'viewer',
+      });
+    });
+  });
+
+  it('uses the governed resource label in quick-pick share payloads', async () => {
+    mockResources = [
+      makeResource({
+        id: 'vm-200',
+        name: 'secret-vm-200',
+        displayName: 'secret-vm-200',
+        policy: {
+          sensitivity: 'restricted',
+          routing: { scope: 'local-only', redact: ['hostname'] },
+        },
+        aiSafeSummary: 'Production VM',
+      }),
+    ];
+
+    renderPanel();
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Create Share' })).toBeInTheDocument();
+    });
+
+    fireEvent.change(screen.getByLabelText('Quick Pick Resource'), {
+      target: { value: 'vm::vm-200' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Create Share' }));
+
+    await waitFor(() => {
+      expect(createShareMock).toHaveBeenCalledWith('org-a', {
+        targetOrgId: 'org-b',
+        resourceType: 'vm',
+        resourceId: 'vm-200',
+        resourceName: 'Production VM',
         accessRole: 'viewer',
       });
     });

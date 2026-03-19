@@ -102,3 +102,6 @@ settings surfaces. The organization settings panels now also normalize org
 scope through `frontend-modern/src/utils/orgScope.ts` instead of carrying
 their own `getOrgID() || 'default'` fallbacks, so access, overview, and
 sharing views stay aligned with the shared multi-tenant org context contract.
+The organization sharing surface now also sources resource quick-pick labels
+from the shared policy-aware resource display helper, so governed resources do
+not fall back to raw names inside share creation.

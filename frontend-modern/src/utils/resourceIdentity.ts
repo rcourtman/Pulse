@@ -1,10 +1,11 @@
 import type { Agent, Node } from '@/types/api';
-import type { Resource, ResourceCanonicalIdentity } from '@/types/resource';
-import type { NodeConfig } from '@/types/nodes';
 import {
-  getResourcePolicyDisplayLabel,
   requiresGovernedResourceDisplay,
-} from '@/utils/resourcePolicyPresentation';
+  type Resource,
+  type ResourceCanonicalIdentity,
+} from '@/types/resource';
+import type { NodeConfig } from '@/types/nodes';
+import { getResourcePolicyDisplayLabel } from '@/utils/resourcePolicyPresentation';
 import {
   getActionableAgentIdFromResource,
   getActionableDockerRuntimeIdFromResource,

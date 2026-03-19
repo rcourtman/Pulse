@@ -136,6 +136,11 @@ export interface ResourcePolicy {
   routing: ResourceRoutingPolicy;
 }
 
+export const requiresGovernedResourceDisplay = (policy?: ResourcePolicy | null): boolean => {
+  if (!policy) return false;
+  return policy.routing.scope === 'local-only' || (policy.routing.redact?.length ?? 0) > 0;
+};
+
 export type ResourceApprovalLevel = 'none' | 'dry_run_only' | 'admin' | 'mfa';
 export type ResourceChangeConfidence = 'high' | 'medium' | 'low';
 export type ResourceChangeKind =
@@ -500,6 +505,9 @@ export interface ResourceFilter {
  * Helper to get effective display name
  */
 export function getDisplayName(r: Resource): string {
+  if (requiresGovernedResourceDisplay(r.policy)) {
+    return r.aiSafeSummary?.trim() || 'redacted by policy';
+  }
   return r.displayName || r.name;
 }
 
