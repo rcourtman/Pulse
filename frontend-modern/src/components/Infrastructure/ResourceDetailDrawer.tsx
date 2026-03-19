@@ -152,6 +152,26 @@ const SupportDisclosure: Component<SupportDisclosureProps> = (props) => {
   );
 };
 
+const TabAvailabilityNotice: Component<{ message: string }> = (props) => (
+  <div class="rounded border border-dashed border-border bg-surface-hover p-4 text-sm text-muted">
+    {props.message}
+  </div>
+);
+
+type SpecializedDrawerTab = 'mail' | 'namespaces' | 'deployments' | 'swarm';
+
+export const getSpecializedTabAvailabilityMessage = (tab: SpecializedDrawerTab): string => {
+  switch (tab) {
+    case 'mail':
+      return 'PMG resources only.';
+    case 'namespaces':
+    case 'deployments':
+      return 'Kubernetes clusters only.';
+    case 'swarm':
+      return 'Docker runtimes with Swarm only.';
+  }
+};
+
 const timelineKindOptions: Array<{ label: string; value: ResourceChangeKind | '' }> = [
   { label: 'All kinds', value: '' },
   ...RESOURCE_CHANGE_KIND_ORDER.map((kind) => ({
@@ -2019,11 +2039,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
         <Show when={activeTab() === 'mail'}>
           <Show
             when={props.resource.type === 'pmg'}
-            fallback={
-              <div class="rounded border border-dashed border-border bg-surface-hover p-4 text-sm text-muted">
-                Mail details are only available for PMG resources.
-              </div>
-            }
+            fallback={<TabAvailabilityNotice message={getSpecializedTabAvailabilityMessage('mail')} />}
           >
             <PMGInstanceDrawer
               resourceId={props.resource.id}
@@ -2043,9 +2059,9 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
           <Show
             when={props.resource.type === 'k8s-cluster'}
             fallback={
-              <div class="rounded border border-dashed border-border bg-surface-hover p-4 text-sm text-muted">
-                Namespaces are only available for Kubernetes cluster resources.
-              </div>
+              <TabAvailabilityNotice
+                message={getSpecializedTabAvailabilityMessage('namespaces')}
+              />
             }
           >
             <K8sNamespacesDrawer
@@ -2069,9 +2085,9 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
           <Show
             when={props.resource.type === 'k8s-cluster'}
             fallback={
-              <div class="rounded border border-dashed border-border bg-surface-hover p-4 text-sm text-muted">
-                Deployments are only available for Kubernetes cluster resources.
-              </div>
+              <TabAvailabilityNotice
+                message={getSpecializedTabAvailabilityMessage('deployments')}
+              />
             }
           >
             <K8sDeploymentsDrawer
@@ -2089,9 +2105,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
           <Show
             when={props.resource.type === 'docker-host' && dockerSwarmClusterKey()}
             fallback={
-              <div class="rounded border border-dashed border-border bg-surface-hover p-4 text-sm text-muted">
-                Swarm details are only available for Docker runtimes reporting Swarm metadata.
-              </div>
+              <TabAvailabilityNotice message={getSpecializedTabAvailabilityMessage('swarm')} />
             }
           >
             <SwarmServicesDrawer cluster={dockerSwarmClusterKey()} swarm={dockerSwarmInfo()} />

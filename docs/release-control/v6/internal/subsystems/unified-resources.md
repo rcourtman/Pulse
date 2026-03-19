@@ -294,6 +294,10 @@ When `Service details` is expanded, each service card remains summary-first and
 pushes heavier breakdowns or update controls behind one more service-local
 reveal, so the opened state still scans as current state before deeper
 operations.
+Unsupported secondary tabs now also use the same terse availability notices
+(`PMG resources only.`, `Kubernetes clusters only.`, `Docker runtimes with
+Swarm only.`) instead of explanatory sentences, so mismatch fallback state
+stays readable without turning support surfaces into inline documentation.
 The same facet bundle now also returns grouped recent-change counts by
 canonical change kind, so the detail drawer can surface the distribution of
 state transitions, restarts, config updates, and anomalies without

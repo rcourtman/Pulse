@@ -2,7 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, waitFor } from '@solidjs/testing-library';
 
 import type { Resource } from '@/types/resource';
-import { ResourceDetailDrawer } from '@/components/Infrastructure/ResourceDetailDrawer';
+import {
+  ResourceDetailDrawer,
+  getSpecializedTabAvailabilityMessage,
+} from '@/components/Infrastructure/ResourceDetailDrawer';
 
 const wsState = vi.hoisted(() => ({ pmg: [] as any[] }));
 const reconnectSpy = vi.hoisted(() => vi.fn());
@@ -146,6 +149,17 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     await waitFor(() => {
       expect(queryByTestId('discovery-tab')).toBeInTheDocument();
     });
+  });
+
+  it('uses terse availability notices for specialized tabs', () => {
+    expect(getSpecializedTabAvailabilityMessage('mail')).toBe('PMG resources only.');
+    expect(getSpecializedTabAvailabilityMessage('namespaces')).toBe('Kubernetes clusters only.');
+    expect(getSpecializedTabAvailabilityMessage('deployments')).toBe(
+      'Kubernetes clusters only.',
+    );
+    expect(getSpecializedTabAvailabilityMessage('swarm')).toBe(
+      'Docker runtimes with Swarm only.',
+    );
   });
 
   it('keeps host detail cards behind a secondary overview disclosure', async () => {

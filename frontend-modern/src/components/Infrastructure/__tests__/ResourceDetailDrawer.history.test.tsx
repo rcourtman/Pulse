@@ -190,7 +190,18 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(screen.queryByText('Host details')).toBeNull();
     expect(screen.queryByText('Service details')).toBeNull();
     expect(screen.queryByText('Supporting context')).toBeNull();
-    expect(screen.queryByText('No identity metadata yet.')).toBeNull();
+    expect(screen.queryByText('Mail details are only available for PMG resources.')).toBeNull();
+    expect(
+      screen.queryByText('Namespaces are only available for Kubernetes cluster resources.'),
+    ).toBeNull();
+    expect(
+      screen.queryByText('Deployments are only available for Kubernetes cluster resources.'),
+    ).toBeNull();
+    expect(
+      screen.queryByText(
+        'Swarm details are only available for Docker runtimes reporting Swarm metadata.',
+      ),
+    ).toBeNull();
     expect(screen.getByText('Discovery context')).toBeInTheDocument();
     expect(
       screen.queryByText('Supporting metadata only. The web interface path above stays primary.'),
