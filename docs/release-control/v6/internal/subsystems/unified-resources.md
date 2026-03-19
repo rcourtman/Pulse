@@ -128,16 +128,13 @@ The patrol-local memory conversion helpers also live in
 the Patrol memory fallback both translate through the same adapter boundary
 instead of carrying duplicate mapping code.
 The canonical policy-posture aggregate now also lives in
-`internal/unifiedresources/policy_posture.go`, so AI summaries and resource
-context share the same sensitivity, routing, and redaction counts from the
-resource model instead of rebuilding governance posture in AI-local code.
-The same policy presenter now also owns the `Allowed`/`Blocked` routing
-decision label shown in the resource detail drawer, so routing-state wording
-stays canonical with the rest of the policy surface instead of being
-rendered inline by the drawer.
-That same helper also owns the drawer's `Cloud Summary` routing row, so the
-detail view no longer reconstructs the row structure or decision label
-locally.
+`internal/unifiedresources/policy_posture.go`, so AI summaries and policy-aware
+prompt context share the same sensitivity, routing, and redaction counts from
+the resource model instead of rebuilding governance posture in AI-local code.
+The same policy presenter now also owns the routing-scope labels used across
+AI-facing policy surfaces, while the resource detail drawer stays on
+per-resource policy lines instead of reconstructing a separate
+`Allowed`/`Blocked` row or `Cloud Summary` decision row locally.
 The shared routing policy itself now stays intentionally minimal: it carries
 only the routing scope and the redaction hints derived from canonical
 sensitivity, and the cloud-summary decision is derived from that scope
