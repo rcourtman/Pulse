@@ -32,10 +32,12 @@ import {
   getAlertResourceTableResetFactoryDefaultsLabel,
   getAlertResourceTableRevertToDefaultsLabel,
 } from '@/utils/alertResourceTablePresentation';
+import { getPreferredResourceDisplayName } from '@/utils/resourceIdentity';
 import {
   ALERT_BULK_EDIT_CLEAR_LABEL,
   getAlertBulkEditOpenLabel,
 } from '@/utils/alertBulkEditPresentation';
+import type { Resource as UnifiedResource, ResourcePolicy } from '@/types/resource';
 
 const COLUMN_TOOLTIP_LOOKUP: Record<string, string> = {
   'cpu %': 'Percent CPU utilization allowed before an alert fires.',
@@ -87,6 +89,8 @@ export interface Resource {
   id: string;
   name: string;
   displayName?: string;
+  policy?: ResourcePolicy;
+  aiSafeSummary?: string;
   rawName?: string;
   node?: string;
   instance?: string;
@@ -451,13 +455,7 @@ export function ResourceTable(props: ResourceTableProps) {
   };
 
   const getResourceLabel = (resource: Resource): string => {
-    return (
-      resource.displayName ||
-      resource.name ||
-      resource.rawName ||
-      resource.clusterName ||
-      resource.id
-    );
+    return getPreferredResourceDisplayName(resource as unknown as UnifiedResource);
   };
 
   const MetricValueWithHeat = (metricProps: {

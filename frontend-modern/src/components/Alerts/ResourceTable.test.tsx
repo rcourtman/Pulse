@@ -192,6 +192,28 @@ describe('ResourceTable', () => {
       expect(screen.getByText('my-vm-100')).toBeInTheDocument();
     });
 
+    it('uses the governed label for policy-aware resources', () => {
+      const props = makeProps({
+        resources: [
+          makeResource({
+            id: 'vm-1',
+            name: 'secret-vm-1',
+            rawName: 'secret-vm-1',
+            policy: {
+              sensitivity: 'restricted',
+              routing: { scope: 'local-only', redact: ['hostname'] },
+            },
+            aiSafeSummary: 'Production VM',
+          }),
+        ],
+      });
+      render(() => <ResourceTable {...props} />);
+
+      expect(screen.getByText('Production VM')).toBeInTheDocument();
+      expect(screen.getByLabelText('Edit thresholds for Production VM')).toBeInTheDocument();
+      expect(screen.queryByText('secret-vm-1')).not.toBeInTheDocument();
+    });
+
     it('renders multiple resources', () => {
       const props = makeProps({
         resources: [

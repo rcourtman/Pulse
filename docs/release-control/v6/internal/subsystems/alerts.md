@@ -103,6 +103,10 @@ presentation now also route through
 `frontend-modern/src/utils/alertIncidentPresentation.ts` instead of remaining
 duplicated inline across the alerts page and overview timeline surfaces.
 
+Alert resource tables now route resource labels and row action labels through
+the shared policy-aware resource identity helper so governed resources do not
+fall back to raw names inside the alerts surface.
+
 Alert incident timeline event cards now route through
 `frontend-modern/src/components/Alerts/IncidentTimelineEventCard.tsx`,
 while their meta-row, heading, detail, command, and output typography still
