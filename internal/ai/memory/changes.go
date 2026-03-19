@@ -333,16 +333,7 @@ func (d *ChangeDetector) GetRecentChanges(limit int, since time.Time) []Change {
 // GetChangesSummary returns a formatted summary of recent changes for AI context
 func (d *ChangeDetector) GetChangesSummary(since time.Time, maxChanges int) string {
 	changes := d.GetRecentChanges(maxChanges, since)
-	if len(changes) == 0 {
-		return ""
-	}
-
-	var result string
-	for _, c := range changes {
-		ago := time.Since(c.DetectedAt)
-		result += "- " + c.Description + " (" + formatDuration(ago) + " ago)\n"
-	}
-	return result
+	return FormatRecentChangesContext(changes, false, "##")
 }
 
 // trimChanges removes old changes beyond maxChanges

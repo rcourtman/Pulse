@@ -85,6 +85,9 @@ When that detector fallback is used, the Patrol runtime must render recent
 changes through the shared memory presentation helper so the same heading,
 resource prefixing, and change labels are reused across the Patrol and AI
 fallback paths.
+`memory.ChangeDetector.GetChangesSummary` now also delegates to that shared
+helper, so the detector-owned summary API and the Patrol fallback prompt path
+stay aligned on the same markdown shape.
 Those same Patrol-owned prompt contexts now also surface a canonical
 resource-graph section from unified-resource relationships, so edge labels,
 directionality, and provenance stay aligned with the shared graph model

@@ -105,8 +105,9 @@ func TestChangeDetector_GetChangesSummary(t *testing.T) {
 	since := time.Now().Add(-1 * time.Hour)
 	summary := d.GetChangesSummary(since, 5)
 
-	if summary == "" {
-		t.Error("Expected non-empty summary")
+	want := FormatRecentChangesContext(d.GetRecentChanges(5, since), false, "##")
+	if summary != want {
+		t.Fatalf("expected shared recent-changes formatter, got %q want %q", summary, want)
 	}
 }
 

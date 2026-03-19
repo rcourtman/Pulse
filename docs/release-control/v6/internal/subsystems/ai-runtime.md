@@ -159,6 +159,10 @@ The same runtime boundary now also owns durable action execution auditing.
 startup, and the write-action tool paths under `internal/ai/tools/` persist
 append-only action lifecycle and action audit records through that shared
 store instead of leaving command execution state in memory-only tool helpers.
+The patrol-local `memory.ChangeDetector.GetChangesSummary` path now also
+delegates to the shared memory recent-change presentation helper, so any
+future fallback summary entry point inherits the same heading, resource
+prefixing, and change-type labels without re-implementing the markdown shape.
 Those unified-resource action and export audit records are now also exposed
 through the enterprise audit read surface so operators can inspect the
 execution trail without reaching into storage internals.
