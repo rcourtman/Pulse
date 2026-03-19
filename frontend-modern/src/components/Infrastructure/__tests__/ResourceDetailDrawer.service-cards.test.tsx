@@ -76,11 +76,12 @@ describe('ResourceDetailDrawer service cards', () => {
     fireEvent.click(getByRole('button', { name: 'Show service details' }));
     expect(getByText('PBS Service')).toBeInTheDocument();
     expect(getAllByText('pbs-main.local').length).toBeGreaterThan(0);
-    expect(getByText('Backup summary')).toBeInTheDocument();
+    expect(queryByText('Backup summary')).toBeNull();
     expect(queryByText('Job breakdown')).toBeNull();
-    fireEvent.click(getByRole('button', { name: 'Show job detail' }));
+    expect(queryByText('Show job detail')).toBeNull();
+    fireEvent.click(getByRole('button', { name: 'Show jobs' }));
     expect(getByText('Datastores')).toBeInTheDocument();
-    expect(getByText('Total Jobs')).toBeInTheDocument();
+    expect(getByText('Jobs')).toBeInTheDocument();
     expect(getByText('Job breakdown')).toBeInTheDocument();
     expect(getByRole('link', { name: /open pbs backups/i })).toHaveAttribute(
       'href',
@@ -124,11 +125,12 @@ describe('ResourceDetailDrawer service cards', () => {
       expect(getByText('Mail Gateway')).toBeInTheDocument();
     });
     expect(getAllByText('pmg-main.local').length).toBeGreaterThan(0);
-    expect(getByText('Mail flow summary')).toBeInTheDocument();
+    expect(queryByText('Mail flow summary')).toBeNull();
     expect(queryByText('Queue breakdown')).toBeNull();
     expect(queryByText('Mail processing')).toBeNull();
-    fireEvent.click(getByRole('button', { name: 'Show mail flow detail' }));
-    expect(getByText('Queue Total')).toBeInTheDocument();
+    expect(queryByText('Show mail flow detail')).toBeNull();
+    fireEvent.click(getByRole('button', { name: 'Show mail flow' }));
+    expect(getByText('Queue')).toBeInTheDocument();
     expect(getByText('Backlog')).toBeInTheDocument();
     expect(getByText('Queue breakdown')).toBeInTheDocument();
     expect(getByText('Mail processing')).toBeInTheDocument();

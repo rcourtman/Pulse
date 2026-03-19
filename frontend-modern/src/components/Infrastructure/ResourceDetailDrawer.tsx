@@ -696,16 +696,6 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
 
     return null;
   });
-  const pbsServiceSummary = createMemo(() => {
-    const pbs = pbsData();
-    if (!pbs) return null;
-    return `${formatInteger(pbs.datastoreCount)} datastores · ${formatInteger(pbsJobTotal())} jobs`;
-  });
-  const pmgServiceSummary = createMemo(() => {
-    const pmg = pmgData();
-    if (!pmg) return null;
-    return `${formatInteger(pmg.nodeCount)} node${pmg.nodeCount === 1 ? '' : 's'} · ${formatInteger(pmg.queueTotal)} queue total · ${formatInteger(pmgQueueBacklog())} backlog`;
-  });
   const workloadsHref = createMemo(() => buildWorkloadsHref(props.resource));
   const headerIdentity = createMemo(() => getPrimaryResourceIdentity(props.resource));
   const relatedLinks = createMemo(() => {
@@ -1385,14 +1375,6 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                                 </span>
                               </div>
                             </Show>
-                            <Show when={pbsServiceSummary()}>
-                              <div class="rounded border border-indigo-200 bg-surface px-2 py-1.5 text-[10px] dark:border-indigo-700">
-                                <div class="text-muted">Backup summary</div>
-                                <div class="mt-1 font-medium text-base-content">
-                                  {pbsServiceSummary()}
-                                </div>
-                              </div>
-                            </Show>
                             <Show when={showPbsJobDetail()}>
                               <div class="space-y-1.5 border-t border-indigo-200 pt-2 dark:border-indigo-700">
                                 <div class="grid grid-cols-2 gap-2">
@@ -1403,7 +1385,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                                     </div>
                                   </div>
                                   <div class="rounded border border-indigo-200 bg-surface px-2 py-1.5 dark:border-indigo-700">
-                                    <div class="text-[10px] text-muted">Total Jobs</div>
+                                    <div class="text-[10px] text-muted">Jobs</div>
                                     <div class="text-sm font-semibold text-base-content">
                                       {formatInteger(pbsJobTotal())}
                                     </div>
@@ -1434,7 +1416,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                               onClick={() => setShowPbsJobDetail((value) => !value)}
                               class="inline-flex items-center rounded-md border border-indigo-200 bg-surface px-2.5 py-1 text-[10px] font-medium text-indigo-700 transition-colors hover:bg-base dark:border-indigo-700 dark:text-indigo-300"
                             >
-                              {showPbsJobDetail() ? 'Hide job detail' : 'Show job detail'}
+                              {showPbsJobDetail() ? 'Hide jobs' : 'Show jobs'}
                             </button>
                           </div>
                         </div>
@@ -1482,14 +1464,6 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                                 </span>
                               </div>
                             </Show>
-                            <Show when={pmgServiceSummary()}>
-                              <div class="rounded border border-rose-200 bg-surface px-2 py-1.5 text-[10px] dark:border-rose-700">
-                                <div class="text-muted">Mail flow summary</div>
-                                <div class="mt-1 font-medium text-base-content">
-                                  {pmgServiceSummary()}
-                                </div>
-                              </div>
-                            </Show>
                             <Show when={showPmgMailFlowDetail()}>
                               <div class="space-y-1.5 border-t border-rose-200 pt-2 dark:border-rose-700">
                                 <div class="grid grid-cols-3 gap-2">
@@ -1500,7 +1474,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                                     </div>
                                   </div>
                                   <div class="rounded border border-rose-200 bg-surface px-2 py-1.5 dark:border-rose-700">
-                                    <div class="text-[10px] text-muted">Queue Total</div>
+                                    <div class="text-[10px] text-muted">Queue</div>
                                     <div
                                       class={`text-sm font-semibold ${pmgQueueBacklog() > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-base-content'}`}
                                     >
@@ -1567,7 +1541,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                               onClick={() => setShowPmgMailFlowDetail((value) => !value)}
                               class="inline-flex items-center rounded-md border border-rose-200 bg-surface px-2.5 py-1 text-[10px] font-medium text-rose-700 transition-colors hover:bg-base dark:border-rose-700 dark:text-rose-300"
                             >
-                              {showPmgMailFlowDetail() ? 'Hide mail flow detail' : 'Show mail flow detail'}
+                              {showPmgMailFlowDetail() ? 'Hide mail flow' : 'Show mail flow'}
                             </button>
                           </div>
                         </div>

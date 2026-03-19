@@ -294,6 +294,11 @@ When `Service details` is expanded, each service card remains summary-first and
 pushes heavier breakdowns or update controls behind one more service-local
 reveal, so the opened state still scans as current state before deeper
 operations.
+That same ownership rule now keeps the service-summary sentence in the
+`Service details` disclosure header instead of repeating a second summary box
+inside PBS or PMG cards, and the service-local reveal labels stay terse
+(`Show jobs`, `Show mail flow`, `Jobs`, `Queue`) so opened cards read like
+current state instead of descriptive chrome.
 Unsupported secondary tabs now also use the same terse availability notices
 (`PMG resources only.`, `Kubernetes clusters only.`, `Docker runtimes with
 Swarm only.`) instead of explanatory sentences, so mismatch fallback state
