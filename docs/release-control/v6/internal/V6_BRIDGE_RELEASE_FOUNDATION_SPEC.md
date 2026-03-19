@@ -5,8 +5,10 @@ Status: ACTIVE
 
 ## Intent
 
-Pulse v6 is the bridge release from "monitoring product growing sideways" to
-"resource + policy + control platform."
+Pulse v6 has a bridge-release direction from "monitoring product growing
+sideways" toward "resource + policy + control platform," but the current
+stabilization target stays on the monitoring-and-alerting RC floor until that
+direction is proven.
 
 It is not a universal agent sandbox.
 It is not the full private operational broker.
@@ -14,9 +16,10 @@ It must, however, land the primitives that make the right direction
 irreversible: Pulse becomes the infrastructure-specific context, policy, and
 action plane that sandboxed agents can use.
 
-The product sentence for v6 is:
+The future bridge-release product sentence is:
 
-Pulse v6 becomes resource-centric, policy-aware, and action-ready.
+Pulse v6 becomes resource-centric, policy-aware, and action-ready once the
+broader surfaced case is proven.
 
 ## Required Outcomes
 
