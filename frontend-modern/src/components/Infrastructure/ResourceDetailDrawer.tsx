@@ -135,7 +135,6 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
     | 'namespaces'
     | 'deployments'
     | 'swarm'
-    | 'history'
     | 'discovery'
     | 'debug';
   const [activeTab, setActiveTab] = createSignal<DrawerTab>('overview');
@@ -599,7 +598,6 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
       ...(props.resource.type === 'docker-host' && dockerSwarmClusterKey()
         ? [{ id: 'swarm' as DrawerTab, label: 'Swarm' }]
         : []),
-      { id: 'history' as DrawerTab, label: 'History' },
       { id: 'discovery' as DrawerTab, label: 'Discovery' },
     ];
     if (debugEnabled()) {
@@ -883,7 +881,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
               </Show>
               <Show when={resourceTimelineCount() > 0}>
                 <div class="flex flex-col gap-1">
-                  <span class="text-muted">Timeline</span>
+                  <span class="text-muted">Recent activity</span>
                   <ResourceFacetSummary
                     recentChanges={resourceTimeline()}
                     counts={resourceFacetCounts()}
@@ -1430,144 +1428,134 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
             </div>
           )}
         </Show>
-      </div>
 
-      {/* History Tab */}
-      <div
-        data-testid="resource-history-tab"
-        class={activeTab() === 'history' ? '' : 'hidden'}
-        style={{ 'overflow-anchor': 'none' }}
-      >
-        <div class="space-y-3">
-          <div class="rounded border border-border bg-surface p-3">
-            <div class="flex items-center justify-between gap-3">
+        <div
+          data-testid="resource-change-history-section"
+          class="mt-3 rounded border border-border bg-surface p-3"
+        >
+          <div class="flex items-center justify-between gap-3">
+            <div>
               <div class="text-[11px] font-medium uppercase tracking-wide text-base-content">
-                Resource History
+                Change history
               </div>
-              <div class="text-right text-[10px] text-muted">
-                <div>
-                  {timelineFacetRequest()
-                    ? timelineFacets.loading
-                      ? 'Refreshing filtered history...'
-                      : 'Filtered history loaded'
-                    : resourceFacets.loading
-                      ? 'Refreshing history...'
-                      : 'History loaded'}
-                </div>
-                <Show when={hasTimelineFilters()}>
-                  <div class="mt-0.5 text-blue-700 dark:text-blue-300">History filters active</div>
-                </Show>
+              <div class="mt-1 text-[10px] text-muted">
+                Filterable event history for this resource.
               </div>
             </div>
-
-            <div class="mt-3 grid gap-2 sm:grid-cols-2">
-              <label class="space-y-1 text-[10px]">
-                <span class="text-muted">Change kind</span>
-                <select
-                  class="w-full rounded border border-border bg-base px-2 py-1 text-[11px] text-base-content"
-                  value={timelineKindFilter()}
-                  onChange={(event) =>
-                    setTimelineKindFilter(
-                      (event.currentTarget.value || '') as ResourceChangeKind | '',
-                    )
-                  }
-                >
-                  <For each={timelineKindOptions}>
-                    {(option) => <option value={option.value}>{option.label}</option>}
-                  </For>
-                </select>
-              </label>
-              <label class="space-y-1 text-[10px]">
-                <span class="text-muted">Source type</span>
-                <select
-                  class="w-full rounded border border-border bg-base px-2 py-1 text-[11px] text-base-content"
-                  value={timelineSourceTypeFilter()}
-                  onChange={(event) =>
-                    setTimelineSourceTypeFilter(
-                      (event.currentTarget.value || '') as ResourceChangeSourceType | '',
-                    )
-                  }
-                >
-                  <For each={timelineSourceTypeOptions}>
-                    {(option) => <option value={option.value}>{option.label}</option>}
-                  </For>
-                </select>
-              </label>
-              <label class="space-y-1 text-[10px]">
-                <span class="text-muted">Source adapter</span>
-                <select
-                  class="w-full rounded border border-border bg-base px-2 py-1 text-[11px] text-base-content"
-                  value={timelineSourceAdapterFilter()}
-                  onChange={(event) =>
-                    setTimelineSourceAdapterFilter(
-                      (event.currentTarget.value || '') as ResourceChangeSourceAdapter | '',
-                    )
-                  }
-                >
-                  <For each={timelineSourceAdapterOptions}>
-                    {(option) => <option value={option.value}>{option.label}</option>}
-                  </For>
-                </select>
-              </label>
+            <div class="text-right text-[10px] text-muted">
+              <div>
+                {timelineFacetRequest()
+                  ? timelineFacets.loading
+                    ? 'Refreshing filtered changes...'
+                    : 'Filtered changes loaded'
+                  : resourceFacets.loading
+                    ? 'Refreshing changes...'
+                    : 'Changes loaded'}
+              </div>
+              <Show when={hasTimelineFilters()}>
+                <div class="mt-0.5 text-blue-700 dark:text-blue-300">Change filters active</div>
+              </Show>
             </div>
-
-            <Show when={hasTimelineFilters()}>
-              <div class="mt-2 flex justify-end">
-                <button
-                  type="button"
-                  class="rounded-md border border-border bg-surface-hover px-2.5 py-1 text-[10px] font-semibold text-base-content hover:bg-surface"
-                  onClick={() => {
-                    setTimelineKindFilter('');
-                    setTimelineSourceTypeFilter('');
-                    setTimelineSourceAdapterFilter('');
-                  }}
-                >
-                  Clear filters
-                </button>
-              </div>
-            </Show>
-
-            <Show when={facetBundleError()}>
-              <div class="mt-2 rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-[10px] text-amber-700 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-200">
-                <div class="flex items-start justify-between gap-2">
-                  <span>{facetBundleError()}</span>
-                  <button
-                    type="button"
-                    class="shrink-0 font-medium text-amber-700 underline dark:text-amber-200"
-                    onClick={() => refetchHistoryFacets()}
-                  >
-                    Retry
-                  </button>
-                </div>
-              </div>
-            </Show>
-
-            <div class="mt-3 flex flex-wrap gap-2">
-              <div class="rounded border border-border bg-surface-hover px-2 py-1.5">
-                <div class="text-[10px] text-muted">Timeline Events</div>
-                <div class="text-sm font-semibold text-base-content">{historyTimelineCount()}</div>
-              </div>
-            </div>
-            <Show when={historyTimelineCount() > 0}>
-              <div class="mt-2 flex flex-col gap-1">
-                <span class="text-muted">Timeline summary</span>
-                <ResourceFacetSummary
-                  recentChanges={historyTimeline()}
-                  counts={historyFacetCounts()}
-                />
-              </div>
-            </Show>
           </div>
 
-          <div class="rounded border border-border bg-surface p-3">
+          <div class="mt-3 grid gap-2 sm:grid-cols-2">
+            <label class="space-y-1 text-[10px]">
+              <span class="text-muted">Change kind</span>
+              <select
+                class="w-full rounded border border-border bg-base px-2 py-1 text-[11px] text-base-content"
+                value={timelineKindFilter()}
+                onChange={(event) =>
+                  setTimelineKindFilter(
+                    (event.currentTarget.value || '') as ResourceChangeKind | '',
+                  )
+                }
+              >
+                <For each={timelineKindOptions}>
+                  {(option) => <option value={option.value}>{option.label}</option>}
+                </For>
+              </select>
+            </label>
+            <label class="space-y-1 text-[10px]">
+              <span class="text-muted">Source type</span>
+              <select
+                class="w-full rounded border border-border bg-base px-2 py-1 text-[11px] text-base-content"
+                value={timelineSourceTypeFilter()}
+                onChange={(event) =>
+                  setTimelineSourceTypeFilter(
+                    (event.currentTarget.value || '') as ResourceChangeSourceType | '',
+                  )
+                }
+              >
+                <For each={timelineSourceTypeOptions}>
+                  {(option) => <option value={option.value}>{option.label}</option>}
+                </For>
+              </select>
+            </label>
+            <label class="space-y-1 text-[10px]">
+              <span class="text-muted">Source adapter</span>
+              <select
+                class="w-full rounded border border-border bg-base px-2 py-1 text-[11px] text-base-content"
+                value={timelineSourceAdapterFilter()}
+                onChange={(event) =>
+                  setTimelineSourceAdapterFilter(
+                    (event.currentTarget.value || '') as ResourceChangeSourceAdapter | '',
+                  )
+                }
+              >
+                <For each={timelineSourceAdapterOptions}>
+                  {(option) => <option value={option.value}>{option.label}</option>}
+                </For>
+              </select>
+            </label>
+          </div>
+
+          <Show when={hasTimelineFilters()}>
+            <div class="mt-2 flex justify-end">
+              <button
+                type="button"
+                class="rounded-md border border-border bg-surface-hover px-2.5 py-1 text-[10px] font-semibold text-base-content hover:bg-surface"
+                onClick={() => {
+                  setTimelineKindFilter('');
+                  setTimelineSourceTypeFilter('');
+                  setTimelineSourceAdapterFilter('');
+                }}
+              >
+                Clear filters
+              </button>
+            </div>
+          </Show>
+
+          <Show when={facetBundleError()}>
+            <div class="mt-2 rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-[10px] text-amber-700 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-200">
+              <div class="flex items-start justify-between gap-2">
+                <span>{facetBundleError()}</span>
+                <button
+                  type="button"
+                  class="shrink-0 font-medium text-amber-700 underline dark:text-amber-200"
+                  onClick={() => refetchHistoryFacets()}
+                >
+                  Retry
+                </button>
+              </div>
+            </div>
+          </Show>
+
+          <div class="mt-3 flex flex-wrap gap-2">
+            <div class="rounded border border-border bg-surface-hover px-2 py-1.5">
+              <div class="text-[10px] text-muted">Events</div>
+              <div class="text-sm font-semibold text-base-content">{historyTimelineCount()}</div>
+            </div>
+          </div>
+
+          <div class="mt-3 rounded border border-border bg-surface p-3">
             <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
-              Timeline
+              Event log
             </div>
             <Show
               when={sortedResourceTimeline().length > 0}
               fallback={
                 <div class="rounded border border-dashed border-border bg-surface-hover px-2 py-2 text-[10px] text-muted">
-                  No timeline records are available for this resource yet.
+                  No event records are available for this resource yet.
                 </div>
               }
             >

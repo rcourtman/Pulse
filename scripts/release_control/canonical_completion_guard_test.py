@@ -499,6 +499,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     "allow_same_subsystem_tests": False,
                     "test_prefixes": [],
                     "exact_files": [
+                        "frontend-modern/src/components/Infrastructure/__tests__/ResourceDetailDrawer.history.test.tsx",
                         "frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx",
                         "frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.workloads-link.test.tsx",
                         "frontend-modern/src/components/Infrastructure/__tests__/infrastructureSelectors.test.ts",

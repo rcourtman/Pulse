@@ -43,6 +43,8 @@ cross-source deduplication.
 21. `internal/unifiedresources/relationships.go`
 22. `internal/unifiedresources/privacy.go`
 23. `internal/unifiedresources/actions.go`
+24. `frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx`
+25. `frontend-modern/src/components/Infrastructure/ResourceFacetSummary.tsx`
 
 ## Shared Boundaries
 
@@ -68,6 +70,7 @@ assembly branch.
 4. Add metrics-target normalization or synthetic metrics support through `internal/unifiedresources/metrics_targets.go` and `internal/unifiedresources/metrics.go`
 5. Add platform registry, resolution, or host-dedup behavior through `internal/unifiedresources/registry.go`, `internal/unifiedresources/resolve.go`, `internal/unifiedresources/resolved_host_set.go`, `internal/unifiedresources/snapshot_source_filter.go`, `internal/unifiedresources/store.go`, `internal/unifiedresources/kubernetes_capabilities.go`, and `internal/unifiedresources/pbs_rollups.go`
 6. Add canonical governed name-resolution or policy-aware resource lookup behavior through `internal/unifiedresources/resolve.go` and `internal/unifiedresources/resolve_context.go`
+7. Add or change resource drawer timeline/facet presentation through `frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx`, `frontend-modern/src/components/Infrastructure/ResourceFacetSummary.tsx`, `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts`, and the governed `internal/api/resources.go` facet/timeline contract together
 
 ## Forbidden Paths
 
@@ -233,6 +236,11 @@ That keeps the proven monitoring UX centered on factual timeline
 investigation while the richer facet payloads remain available as backend and
 AI-facing foundations instead of being presented as first-class product facts
 before they are fully populated.
+The resource drawer now also keeps change history embedded inside `Overview`
+instead of surfacing a peer `History` tab, so resource investigation stays on
+one coherent runtime surface: the overview card carries the compact recent
+activity summary, while the embedded change-history section owns filters and
+the event log without duplicating a second timeline-summary card.
 The same facet bundle now also returns grouped recent-change counts by
 canonical change kind, so the detail drawer can surface the distribution of
 state transitions, restarts, config updates, and anomalies without

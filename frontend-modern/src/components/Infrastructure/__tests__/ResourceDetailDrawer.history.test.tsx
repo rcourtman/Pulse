@@ -93,8 +93,8 @@ const baseResource = (overrides: Partial<Resource>): Resource => ({
   ...overrides,
 });
 
-describe('ResourceDetailDrawer history tab', () => {
-  it('surfaces compact timeline summary chips in the overview and history cards', async () => {
+describe('ResourceDetailDrawer change history section', () => {
+  it('keeps compact timeline summary chips in overview while showing one embedded change history section', async () => {
     facetBundleMock.getFacetBundle.mockResolvedValueOnce({
       capabilities: [
         {
@@ -183,14 +183,17 @@ describe('ResourceDetailDrawer history tab', () => {
       />
     ));
 
-    await screen.findByText('History loaded');
-    expect(screen.getAllByText('Timeline 3')).toHaveLength(2);
-    expect(screen.getAllByText('Restart 2')).toHaveLength(2);
-    expect(screen.getAllByText('Anomaly 1')).toHaveLength(2);
-    expect(screen.getAllByText('Platform event 1')).toHaveLength(2);
-    expect(screen.getAllByText('Pulse diff 2')).toHaveLength(2);
-    expect(screen.getAllByText('Docker adapter 2')).toHaveLength(2);
-    expect(screen.getAllByText('Proxmox adapter 1')).toHaveLength(2);
+    await screen.findByText('Changes loaded');
+    expect(screen.getByText('Change history')).toBeInTheDocument();
+    expect(screen.getByText('Recent activity')).toBeInTheDocument();
+    expect(screen.getByText('Events')).toBeInTheDocument();
+    expect(screen.getAllByText('Timeline 3')).toHaveLength(1);
+    expect(screen.getAllByText('Restart 2')).toHaveLength(1);
+    expect(screen.getAllByText('Anomaly 1')).toHaveLength(1);
+    expect(screen.getAllByText('Platform event 1')).toHaveLength(1);
+    expect(screen.getAllByText('Pulse diff 2')).toHaveLength(1);
+    expect(screen.getAllByText('Docker adapter 2')).toHaveLength(1);
+    expect(screen.getAllByText('Proxmox adapter 1')).toHaveLength(1);
     expect(screen.getByText('Storage 1 alias')).toBeInTheDocument();
     expect(screen.getByText('VM Child')).toBeInTheDocument();
     expect(screen.queryByText('Capabilities 1')).toBeNull();
@@ -286,19 +289,13 @@ describe('ResourceDetailDrawer history tab', () => {
       />
     ));
 
-    fireEvent.click(screen.getByRole('button', { name: 'History' }));
-
-    await screen.findByText('Resource History');
-    const historyPanel = screen.getByTestId('resource-history-tab');
+    await screen.findByText('Change history');
+    const historyPanel = screen.getByTestId('resource-change-history-section');
     const panel = within(historyPanel);
-    expect(await panel.findByText('History loaded')).toBeInTheDocument();
+    expect(await panel.findByText('Changes loaded')).toBeInTheDocument();
     expect(panel.getByText('Routine restart requested')).toBeInTheDocument();
-    expect(panel.getByText('Timeline Events')).toBeInTheDocument();
-    expect(panel.getByText('Timeline summary')).toBeInTheDocument();
-    expect(panel.getByText('Timeline')).toBeInTheDocument();
-    expect(panel.getByText('Timeline 3')).toBeInTheDocument();
-    expect(panel.getByText('Docker adapter 1')).toBeInTheDocument();
-    expect(panel.getByText('Proxmox adapter 2')).toBeInTheDocument();
+    expect(panel.getByText('Events')).toBeInTheDocument();
+    expect(panel.getByText('Event log')).toBeInTheDocument();
     expect(
       panel.getByRole('link', { name: 'Open related resource PVE Node 1 in Infrastructure' }),
     ).toHaveAttribute('href', '/infrastructure?resource=node%3Apve-1');
@@ -428,12 +425,10 @@ describe('ResourceDetailDrawer history tab', () => {
 
     render(() => <ResourceDetailDrawer resource={resource} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'History' }));
-
-    await screen.findByText('Resource History');
-    const historyPanel = screen.getByTestId('resource-history-tab');
+    await screen.findByText('Change history');
+    const historyPanel = screen.getByTestId('resource-change-history-section');
     const panel = within(historyPanel);
-    expect(await panel.findByText('History loaded')).toBeInTheDocument();
+    expect(await panel.findByText('Changes loaded')).toBeInTheDocument();
     expect(panel.getByText('CPU spike detected')).toBeInTheDocument();
 
     fireEvent.change(panel.getByLabelText('Change kind'), {
@@ -443,7 +438,7 @@ describe('ResourceDetailDrawer history tab', () => {
       target: { value: 'platform_event' },
     });
 
-    expect(await panel.findByText('Filtered history loaded')).toBeInTheDocument();
+    expect(await panel.findByText('Filtered changes loaded')).toBeInTheDocument();
     expect(await panel.findByText('Routine restart requested')).toBeInTheDocument();
     expect(panel.queryByText('CPU spike detected')).toBeNull();
   });
@@ -575,19 +570,17 @@ describe('ResourceDetailDrawer history tab', () => {
 
     render(() => <ResourceDetailDrawer resource={resource} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'History' }));
-
-    await screen.findByText('Resource History');
-    const historyPanel = screen.getByTestId('resource-history-tab');
+    await screen.findByText('Change history');
+    const historyPanel = screen.getByTestId('resource-change-history-section');
     const panel = within(historyPanel);
-    expect(await panel.findByText('History loaded')).toBeInTheDocument();
+    expect(await panel.findByText('Changes loaded')).toBeInTheDocument();
     expect(panel.getByText('CPU spike detected')).toBeInTheDocument();
 
     fireEvent.change(panel.getByLabelText('Source adapter'), {
       target: { value: 'docker_adapter' },
     });
 
-    expect(await panel.findByText('Filtered history loaded')).toBeInTheDocument();
+    expect(await panel.findByText('Filtered changes loaded')).toBeInTheDocument();
     expect(await panel.findByText('CPU spike detected')).toBeInTheDocument();
     expect(panel.queryByText('Routine restart requested')).toBeNull();
   });

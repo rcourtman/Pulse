@@ -1,0 +1,2630 @@
+{
+  "version": 12,
+  "shared_ownerships": [
+    {
+      "path": "frontend-modern/src/api/agentProfiles.ts",
+      "rationale": "the agent profiles frontend client is both an agent lifecycle control surface and a canonical API payload contract boundary",
+      "subsystems": [
+        "agent-lifecycle",
+        "api-contracts"
+      ]
+    },
+    {
+      "path": "frontend-modern/src/api/ai.ts",
+      "rationale": "the AI frontend client is both an AI runtime control surface and a canonical API payload contract boundary",
+      "subsystems": [
+        "ai-runtime",
+        "api-contracts"
+      ]
+    },
+    {
+      "path": "frontend-modern/src/api/nodes.ts",
+      "rationale": "the shared Proxmox node client is both an agent lifecycle setup/install control surface and a canonical API payload contract boundary",
+      "subsystems": [
+        "agent-lifecycle",
+        "api-contracts"
+      ]
+    },
+    {
+      "path": "frontend-modern/src/api/notifications.ts",
+      "rationale": "the notifications frontend client is both a notification delivery control surface and a canonical API payload contract boundary",
+      "subsystems": [
+        "api-contracts",
+        "notifications"
+      ]
+    },
+    {
+      "path": "frontend-modern/src/api/patrol.ts",
+      "rationale": "the Patrol frontend client is both an AI runtime control surface and a canonical API payload contract boundary",
+      "subsystems": [
+        "ai-runtime",
+        "api-contracts"
+      ]
+    },
+    {
+      "path": "frontend-modern/src/api/security.ts",
+      "rationale": "the security frontend client is both a security/privacy control surface and a canonical API payload contract boundary",
+      "subsystems": [
+        "api-contracts",
+        "security-privacy"
+      ]
+    },
+    {
+      "path": "frontend-modern/src/api/updates.ts",
+      "rationale": "the updates frontend client is both a deployment-installability control surface and a canonical API payload contract boundary",
+      "subsystems": [
+        "api-contracts",
+        "deployment-installability"
+      ]
+    },
+    {
+      "path": "frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts",
+      "rationale": "the infrastructure selector pipeline is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary",
+      "subsystems": [
+        "performance-and-scalability",
+        "unified-resources"
+      ]
+    },
+    {
+      "path": "frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts",
+      "rationale": "resource detail mappers are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary",
+      "subsystems": [
+        "performance-and-scalability",
+        "unified-resources"
+      ]
+    },
+    {
+      "path": "frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx",
+      "rationale": "the unified resource table is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary",
+      "subsystems": [
+        "performance-and-scalability",
+        "unified-resources"
+      ]
+    },
+    {
+      "path": "frontend-modern/src/components/Settings/APITokenManager.tsx",
+      "rationale": "the API token settings surface is both a security/privacy control surface and a canonical API payload contract boundary",
+      "subsystems": [
+        "api-contracts",
+        "security-privacy"
+      ]
+    },
+    {
+      "path": "frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx",
+      "rationale": "the general settings privacy panel is both a security/privacy control surface and a canonical settings-shell presentation boundary",
+      "subsystems": [
+        "frontend-primitives",
+        "security-privacy"
+      ]
+    },
+    {
+      "path": "frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx",
+      "rationale": "the infrastructure operations controller is both an agent fleet lifecycle control surface and an API token, lookup, assignment, and reporting/install contract boundary",
+      "subsystems": [
+        "agent-lifecycle",
+        "api-contracts"
+      ]
+    },
+    {
+      "path": "frontend-modern/src/components/Settings/SecurityAuthPanel.tsx",
+      "rationale": "the authentication settings surface is both a security/privacy control surface and a canonical settings-shell presentation boundary",
+      "subsystems": [
+        "frontend-primitives",
+        "security-privacy"
+      ]
+    },
+    {
+      "path": "frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx",
+      "rationale": "the security overview settings surface is both a security/privacy control surface and a canonical settings-shell presentation boundary",
+      "subsystems": [
+        "frontend-primitives",
+        "security-privacy"
+      ]
+    },
+    {
+      "path": "frontend-modern/src/components/Settings/UnifiedAgents.tsx",
+      "rationale": "the UnifiedAgents module is a compatibility shim for the canonical infrastructure operations controller and remains on the same shared agent lifecycle and API contract boundary while the old module path exists",
+      "subsystems": [
+        "agent-lifecycle",
+        "api-contracts"
+      ]
+    },
+    {
+      "path": "frontend-modern/src/utils/agentInstallCommand.ts",
+      "rationale": "the shared frontend install-command helper is both an agent lifecycle control surface and a canonical API/install transport contract boundary",
+      "subsystems": [
+        "agent-lifecycle",
+        "api-contracts"
+      ]
+    },
+    {
+      "path": "internal/api/agent_install_command_shared.go",
+      "rationale": "agent install command assembly is both an agent lifecycle control surface and a canonical API payload contract boundary",
+      "subsystems": [
+        "agent-lifecycle",
+        "api-contracts"
+      ]
+    },
+    {
+      "path": "internal/api/ai_handler.go",
+      "rationale": "Pulse Assistant handlers are both an AI runtime control surface and a canonical API payload contract boundary",
+      "subsystems": [
+        "ai-runtime",
+        "api-contracts"
+      ]
+    },
+    {
+      "path": "internal/api/ai_handlers.go",
+      "rationale": "AI settings and remediation handlers are both an AI runtime control surface and a canonical API payload contract boundary",
+      "subsystems": [
+        "ai-runtime",
+        "api-contracts"
+      ]
+    },
+    {
+      "path": "internal/api/ai_intelligence_handlers.go",
+      "rationale": "AI intelligence handlers are both an AI runtime control surface and a canonical API payload contract boundary",
+      "subsystems": [
+        "ai-runtime",
+        "api-contracts"
+      ]
+    },
+    {
+      "path": "internal/api/config_setup_handlers.go",
+      "rationale": "auto-register and setup handlers are both an agent lifecycle control surface and a canonical API payload contract boundary",
+      "subsystems": [
+        "agent-lifecycle",
+        "api-contracts"
+      ]
+    },
+    {
+      "path": "internal/api/licensing_bridge.go",
+      "rationale": "commercial licensing bridge handlers carry both API payload contract and cloud-paid entitlement boundary ownership",
+      "subsystems": [
+        "api-contracts",
+        "cloud-paid"
+      ]
+    },
+    {
+      "path": "internal/api/licensing_handlers.go",
+      "rationale": "commercial licensing handlers carry both API payload contract and cloud-paid entitlement boundary ownership",
+      "subsystems": [
+        "api-contracts",
+        "cloud-paid"
+      ]
+    },
+    {
+      "path": "internal/api/notifications.go",
+      "rationale": "notification handlers are both a notification delivery control surface and a canonical API payload contract boundary",
+      "subsystems": [
+        "api-contracts",
+        "notifications"
+      ]
+    },
+    {
+      "path": "internal/api/payments_webhook_handlers.go",
+      "rationale": "commercial payment webhook handlers carry both API payload contract and cloud-paid billing boundary ownership",
+      "subsystems": [
+        "api-contracts",
+        "cloud-paid"
+      ]
+    },
+    {
+      "path": "internal/api/public_signup_handlers.go",
+      "rationale": "hosted signup handlers carry both API payload contract and cloud-paid hosted provisioning boundary ownership",
+      "subsystems": [
+        "api-contracts",
+        "cloud-paid"
+      ]
+    },
+    {
+      "path": "internal/api/resources.go",
+      "rationale": "the unified resource endpoint is both a backend payload contract surface and a unified-resource runtime boundary",
+      "subsystems": [
+        "api-contracts",
+        "unified-resources"
+      ]
+    },
+    {
+      "path": "internal/api/security.go",
+      "rationale": "the security handlers are both a security/privacy control surface and a canonical API payload contract boundary",
+      "subsystems": [
+        "api-contracts",
+        "security-privacy"
+      ]
+    },
+    {
+      "path": "internal/api/security_tokens.go",
+      "rationale": "the security token handlers are both a security/privacy control surface and a canonical API payload contract boundary",
+      "subsystems": [
+        "api-contracts",
+        "security-privacy"
+      ]
+    },
+    {
+      "path": "internal/api/slo.go",
+      "rationale": "the SLO endpoint is both an API contract surface and a protected performance hot-path boundary",
+      "subsystems": [
+        "api-contracts",
+        "performance-and-scalability"
+      ]
+    },
+    {
+      "path": "internal/api/system_settings.go",
+      "rationale": "the system settings telemetry and auth controls are both a security/privacy control surface and a canonical API payload contract boundary",
+      "subsystems": [
+        "api-contracts",
+        "security-privacy"
+      ]
+    },
+    {
+      "path": "internal/api/unified_agent.go",
+      "rationale": "unified agent download and installer handlers are both an agent lifecycle control surface and a canonical API payload contract boundary",
+      "subsystems": [
+        "agent-lifecycle",
+        "api-contracts"
+      ]
+    },
+    {
+      "path": "internal/api/updates.go",
+      "rationale": "update handlers are both a deployment-installability control surface and a canonical API payload contract boundary",
+      "subsystems": [
+        "api-contracts",
+        "deployment-installability"
+      ]
+    },
+    {
+      "path": "scripts/install.ps1",
+      "rationale": "the Windows installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary",
+      "subsystems": [
+        "agent-lifecycle",
+        "deployment-installability"
+      ]
+    },
+    {
+      "path": "scripts/install.sh",
+      "rationale": "the shell installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary",
+      "subsystems": [
+        "agent-lifecycle",
+        "deployment-installability"
+      ]
+    }
+  ],
+  "subsystems": [
+    {
+      "id": "agent-lifecycle",
+      "lane": "L16",
+      "contract": "docs/release-control/v6/internal/subsystems/agent-lifecycle.md",
+      "owned_prefixes": [
+        "internal/agentupdate/",
+        "internal/hostagent/"
+      ],
+      "owned_files": [
+        "frontend-modern/src/api/agentProfiles.ts",
+        "frontend-modern/src/api/nodes.ts",
+        "frontend-modern/src/components/Infrastructure/deploy/ResultsStep.tsx",
+        "frontend-modern/src/components/Settings/AgentProfilesPanel.tsx",
+        "frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx",
+        "frontend-modern/src/components/Settings/NodeModal.tsx",
+        "frontend-modern/src/components/Settings/UnifiedAgents.tsx",
+        "frontend-modern/src/components/SetupWizard/SetupCompletionPanel.tsx",
+        "frontend-modern/src/utils/agentInstallCommand.ts",
+        "frontend-modern/src/utils/agentProfilesPresentation.ts",
+        "internal/api/agent_install_command_shared.go",
+        "internal/api/config_setup_handlers.go",
+        "internal/api/unified_agent.go",
+        "scripts/install.ps1",
+        "scripts/install.sh"
+      ],
+      "verification": {
+        "allow_same_subsystem_tests": false,
+        "test_prefixes": [],
+        "exact_files": [],
+        "require_explicit_path_policy_coverage": true,
+        "path_policies": [
+          {
+            "id": "agent-install-api-surface",
+            "label": "agent install and registration API proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/api/agent_install_command_shared.go",
+              "internal/api/config_setup_handlers.go",
+              "internal/api/unified_agent.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/api/agent_install_command_shared_test.go",
+              "internal/api/config_handlers_auto_register_test.go",
+              "internal/api/config_handlers_canonical_auto_register_test.go",
+              "internal/api/contract_test.go",
+              "internal/api/hosted_agent_install_command_test.go",
+              "internal/api/unified_agent_more_test.go",
+              "internal/api/unified_agent_test.go"
+            ]
+          },
+          {
+            "id": "agent-update-runtime",
+            "label": "agent update runtime proof",
+            "match_prefixes": [
+              "internal/agentupdate/"
+            ],
+            "match_files": [],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/agentupdate/coverage_test.go",
+              "internal/agentupdate/update_hostagent_integration_test.go",
+              "internal/agentupdate/update_http_test.go"
+            ]
+          },
+          {
+            "id": "proxmox-unified-agent-setup-runtime",
+            "label": "proxmox unified agent setup runtime proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/hostagent/proxmox_setup.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/hostagent/proxmox_setup_network_coverage_test.go",
+              "internal/hostagent/proxmox_setup_test.go"
+            ]
+          },
+          {
+            "id": "unified-agent-runtime",
+            "label": "unified agent runtime proof",
+            "match_prefixes": [
+              "internal/hostagent/"
+            ],
+            "match_files": [],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/agentupdate/coverage_test.go",
+              "internal/hostagent/agent_metrics_test.go",
+              "internal/hostagent/agent_new_test.go",
+              "internal/hostagent/send_report_test.go"
+            ]
+          },
+      {
+        "id": "unified-agent-installer-runtime",
+        "label": "unified agent installer runtime proof",
+        "match_prefixes": [],
+        "match_files": [
+          "scripts/install.sh"
+        ],
+        "allow_same_subsystem_tests": false,
+        "test_prefixes": [],
+        "exact_files": [
+          "scripts/installtests/install_sh_test.go"
+        ]
+      },
+      {
+        "id": "windows-agent-installer-runtime",
+        "label": "windows agent installer lifecycle proof",
+        "match_prefixes": [],
+        "match_files": [
+          "scripts/install.ps1"
+        ],
+        "allow_same_subsystem_tests": false,
+        "test_prefixes": [],
+        "exact_files": [
+          "scripts/installtests/install_ps1_test.go"
+        ]
+      },
+          {
+            "id": "agent-profiles-surface",
+            "label": "agent profile management proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/api/agentProfiles.ts",
+              "frontend-modern/src/components/Settings/AgentProfilesPanel.tsx",
+              "frontend-modern/src/utils/agentProfilesPresentation.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/api/__tests__/agentProfiles.test.ts",
+              "frontend-modern/src/components/Settings/__tests__/AgentProfilesPanel.test.tsx",
+              "frontend-modern/src/components/Settings/__tests__/monitoredSystemModelGuardrails.test.ts",
+              "frontend-modern/src/utils/__tests__/agentProfilesPresentation.test.ts"
+            ]
+          },
+          {
+            "id": "frontend-install-command-helper",
+            "label": "frontend install command helper proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/utils/agentInstallCommand.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/utils/__tests__/agentInstallCommand.test.ts"
+            ]
+          },
+          {
+            "id": "proxmox-lifecycle-client-surface",
+            "label": "proxmox lifecycle API client proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/api/nodes.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/api/__tests__/nodes.test.ts"
+            ]
+          },
+          {
+        "id": "node-setup-settings-surface",
+        "label": "node setup/install command proof",
+        "match_prefixes": [],
+        "match_files": [
+          "frontend-modern/src/components/Settings/NodeModal.tsx"
+              ],
+              "allow_same_subsystem_tests": false,
+              "test_prefixes": [],
+        "exact_files": [
+          "frontend-modern/src/components/Settings/__tests__/NodeModal.guardrails.test.ts"
+        ]
+      },
+      {
+        "id": "setup-completion-install-surface",
+        "label": "setup completion install handoff proof",
+        "match_prefixes": [],
+        "match_files": [
+          "frontend-modern/src/components/SetupWizard/SetupCompletionPanel.tsx"
+        ],
+        "allow_same_subsystem_tests": false,
+        "test_prefixes": [],
+        "exact_files": [
+          "frontend-modern/src/components/SetupWizard/__tests__/SetupCompletionPanel.guardrails.test.ts"
+        ]
+      },
+      {
+        "id": "deploy-fallback-install-surface",
+        "label": "deploy fallback install command proof",
+        "match_prefixes": [],
+        "match_files": [
+          "frontend-modern/src/components/Infrastructure/deploy/ResultsStep.tsx"
+        ],
+        "allow_same_subsystem_tests": false,
+        "test_prefixes": [],
+        "exact_files": [
+          "frontend-modern/src/components/Infrastructure/__tests__/DeployStepComponents.test.tsx"
+        ]
+      },
+      {
+            "id": "unified-agent-settings-surface",
+            "label": "unified agent settings lifecycle proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx",
+              "frontend-modern/src/components/Settings/UnifiedAgents.tsx"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/api/__tests__/agentProfiles.test.ts",
+              "frontend-modern/src/api/__tests__/monitoring.test.ts",
+              "frontend-modern/src/components/Settings/__tests__/UnifiedAgents.test.tsx"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "ai-runtime",
+      "lane": "L6",
+      "contract": "docs/release-control/v6/internal/subsystems/ai-runtime.md",
+      "owned_prefixes": [
+        "internal/ai/"
+      ],
+      "owned_files": [
+        "frontend-modern/src/api/ai.ts",
+        "frontend-modern/src/api/patrol.ts",
+        "internal/api/ai_handler.go",
+        "internal/api/ai_handlers.go",
+        "internal/api/ai_intelligence_handlers.go"
+      ],
+      "verification": {
+        "allow_same_subsystem_tests": false,
+        "test_prefixes": [],
+        "exact_files": [],
+        "require_explicit_path_policy_coverage": true,
+        "path_policies": [
+          {
+            "id": "ai-api-surface",
+            "label": "AI transport and handler proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/api/ai.ts",
+              "frontend-modern/src/api/patrol.ts",
+              "internal/api/ai_handler.go",
+              "internal/api/ai_handlers.go",
+              "internal/api/ai_intelligence_handlers.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [
+              "frontend-modern/src/api/__tests__/"
+            ],
+            "exact_files": [
+              "internal/api/ai_handler_test.go",
+              "internal/api/ai_handlers_test.go",
+              "internal/api/ai_intelligence_handlers_test.go"
+            ]
+          },
+          {
+            "id": "ai-runtime-engine",
+            "label": "AI runtime engine proof",
+            "match_prefixes": [
+              "internal/ai/"
+            ],
+            "match_files": [],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [
+              "internal/ai/"
+            ],
+            "exact_files": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "alerts",
+      "lane": "L6",
+      "contract": "docs/release-control/v6/internal/subsystems/alerts.md",
+      "owned_prefixes": [
+        "frontend-modern/src/components/Alerts/",
+        "frontend-modern/src/features/alerts/",
+        "internal/alerts/"
+      ],
+      "owned_files": [
+        "frontend-modern/src/pages/Alerts.tsx"
+      ],
+      "verification": {
+        "allow_same_subsystem_tests": true,
+        "test_prefixes": [],
+        "exact_files": [
+          "internal/alerts/migration_characterization_test.go",
+          "internal/alerts/specs/evaluator_test.go",
+          "internal/alerts/specs/types_test.go"
+        ],
+        "require_explicit_path_policy_coverage": true,
+        "path_policies": [
+          {
+            "id": "alert-specs",
+            "label": "alert spec proof",
+            "match_prefixes": [
+              "internal/alerts/specs/"
+            ],
+            "match_files": [],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/alerts/specs/evaluator_test.go",
+              "internal/alerts/specs/types_test.go",
+              "internal/alerts/specs/unified_resource_builder_test.go"
+            ]
+          },
+          {
+            "id": "canonical-alert-runtime",
+            "label": "canonical alert runtime proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/alerts/canonical_identity.go",
+              "internal/alerts/canonical_lifecycle.go",
+              "internal/alerts/canonical_metric.go",
+              "internal/alerts/unified_eval.go",
+              "internal/alerts/unified_incidents.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/alerts/migration_characterization_test.go",
+              "internal/alerts/unified_eval_parity_test.go",
+              "internal/alerts/unified_eval_test.go",
+              "internal/alerts/unified_incidents_test.go"
+            ]
+          },
+          {
+            "id": "alerts-frontend-surface",
+            "label": "alerts frontend surface proof",
+            "match_prefixes": [
+              "frontend-modern/src/components/Alerts/",
+              "frontend-modern/src/features/alerts/"
+            ],
+            "match_files": [
+              "frontend-modern/src/pages/Alerts.tsx"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/components/Alerts/__tests__/BulkEditDialog.test.tsx",
+              "frontend-modern/src/components/Alerts/__tests__/InvestigateAlertButton.test.tsx",
+              "frontend-modern/src/components/Alerts/__tests__/ThresholdsTable.test.tsx",
+              "frontend-modern/src/components/Alerts/EmailProviderSelect.test.tsx",
+              "frontend-modern/src/components/Alerts/ResourceTable.test.tsx",
+              "frontend-modern/src/components/Alerts/Thresholds/hooks/__tests__/useCollapsedSections.test.ts",
+              "frontend-modern/src/components/Alerts/Thresholds/sections/__tests__/CollapsibleSection.test.tsx",
+              "frontend-modern/src/components/Alerts/WebhookConfig.test.tsx",
+              "frontend-modern/src/features/alerts/__tests__/helpers.test.ts",
+              "frontend-modern/src/features/alerts/__tests__/OverviewTab.emptystate.test.tsx",
+              "frontend-modern/src/features/alerts/__tests__/OverviewTab.timelineerror.test.tsx",
+              "frontend-modern/src/features/alerts/__tests__/OverviewTab.total24h.test.tsx",
+              "frontend-modern/src/features/alerts/identity.test.ts",
+              "frontend-modern/src/features/alerts/thresholds/__tests__/helpers.test.ts",
+              "frontend-modern/src/pages/__tests__/Alerts.helpers.test.ts"
+            ]
+          },
+          {
+            "id": "alerts-runtime-support",
+            "label": "alerts runtime support proof",
+            "match_prefixes": [
+              "internal/alerts/"
+            ],
+            "match_files": [],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/alerts/alerts_test.go",
+              "internal/alerts/callback_config_coverage_test.go",
+              "internal/alerts/config_validation_test.go",
+              "internal/alerts/filter_evaluation_test.go",
+              "internal/alerts/guest_snapshot_test.go",
+              "internal/alerts/history_concurrency_test.go",
+              "internal/alerts/history_test.go",
+              "internal/alerts/threshold_resolution_shared_test.go",
+              "internal/alerts/update_alerts_test.go"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "api-contracts",
+      "lane": "L6",
+      "contract": "docs/release-control/v6/internal/subsystems/api-contracts.md",
+      "owned_prefixes": [
+        "frontend-modern/src/api/",
+        "internal/api/"
+      ],
+      "owned_files": [
+        "frontend-modern/src/components/Settings/APITokenManager.tsx",
+        "frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx",
+        "frontend-modern/src/components/Settings/UnifiedAgents.tsx",
+        "frontend-modern/src/types/api.ts",
+        "frontend-modern/src/utils/agentInstallCommand.ts"
+      ],
+      "verification": {
+        "allow_same_subsystem_tests": false,
+        "test_prefixes": [
+          "frontend-modern/src/api/__tests__/"
+        ],
+        "exact_files": [
+          "internal/api/contract_test.go"
+        ],
+        "require_explicit_path_policy_coverage": true,
+        "path_policies": [
+          {
+            "id": "auth-state-persistence-compatibility",
+            "label": "session and CSRF persistence migration proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/api/csrf_store.go",
+              "internal/api/session_store.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/api/csrf_store_test.go",
+              "internal/api/session_store_test.go",
+              "tests/migration/v5_session_db_test.go"
+            ]
+          },
+          {
+            "id": "agent-install-backend-contract",
+            "label": "agent install and registration backend API contract proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/api/agent_install_command_shared.go",
+              "internal/api/config_setup_handlers.go",
+              "internal/api/unified_agent.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/api/agent_install_command_shared_test.go",
+              "internal/api/config_handlers_auto_register_test.go",
+              "internal/api/config_handlers_canonical_auto_register_test.go",
+              "internal/api/contract_test.go",
+              "internal/api/hosted_agent_install_command_test.go",
+              "internal/api/unified_agent_more_test.go",
+              "internal/api/unified_agent_test.go"
+            ]
+          },
+          {
+            "id": "update-transport-contract",
+            "label": "update transport API contract proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/api/updates.ts",
+              "internal/api/updates.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/api/__tests__/updates.test.ts",
+              "frontend-modern/src/types/api.ts",
+              "internal/api/updates_test.go"
+            ]
+          },
+          {
+            "id": "security-transport-contract",
+            "label": "security transport API contract proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/api/security.ts",
+              "internal/api/security.go",
+              "internal/api/security_tokens.go",
+              "internal/api/system_settings.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/api/__tests__/security.test.ts",
+              "frontend-modern/src/types/api.ts",
+              "internal/api/security_regression_test.go",
+              "internal/api/security_status_additional_test.go",
+              "internal/api/security_tokens_lifecycle_test.go",
+              "internal/api/security_tokens_owner_binding_test.go",
+              "internal/api/security_tokens_test.go",
+              "internal/api/system_settings_telemetry_test.go"
+            ]
+          },
+          {
+            "id": "diagnostics-memory-contract",
+            "label": "diagnostics memory-source API contract proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/api/diagnostics.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/api/diagnostics_memory_test.go"
+            ]
+          },
+          {
+            "id": "backend-payload-contracts",
+            "label": "backend API payload proof",
+            "match_prefixes": [
+              "internal/api/"
+            ],
+            "match_files": [],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [
+              "frontend-modern/src/api/__tests__/"
+            ],
+            "exact_files": [
+              "frontend-modern/src/types/api.ts",
+              "internal/api/contract_test.go"
+            ]
+          },
+          {
+            "id": "api-token-management-surface",
+            "label": "API token management surface proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/components/Settings/APITokenManager.tsx"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/components/Settings/__tests__/APITokenManager.test.tsx"
+            ]
+          },
+          {
+            "id": "agent-profiles-client-contract",
+            "label": "agent profiles client API contract proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/api/agentProfiles.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/api/__tests__/agentProfiles.test.ts",
+              "frontend-modern/src/types/api.ts"
+            ]
+          },
+          {
+            "id": "proxmox-node-client-contract",
+            "label": "proxmox node client API contract proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/api/nodes.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/api/__tests__/nodes.test.ts",
+              "frontend-modern/src/types/api.ts"
+            ]
+          },
+          {
+            "id": "frontend-api-clients",
+            "label": "frontend API client proof",
+            "match_prefixes": [
+              "frontend-modern/src/api/"
+            ],
+            "match_files": [],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [
+              "frontend-modern/src/api/__tests__/"
+            ],
+            "exact_files": [
+              "frontend-modern/src/types/api.ts"
+            ]
+          },
+          {
+            "id": "frontend-api-types",
+            "label": "frontend API type sync proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/types/api.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [
+              "frontend-modern/src/api/__tests__/"
+            ],
+            "exact_files": [
+              "frontend-modern/src/types/api.ts"
+            ]
+          },
+          {
+            "id": "frontend-install-command-helper",
+            "label": "frontend install transport contract proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/utils/agentInstallCommand.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/utils/__tests__/agentInstallCommand.test.ts"
+            ]
+          },
+          {
+            "id": "unified-agent-settings-surface",
+            "label": "infrastructure operations API proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx",
+              "frontend-modern/src/components/Settings/UnifiedAgents.tsx"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/api/__tests__/agentProfiles.test.ts",
+              "frontend-modern/src/api/__tests__/monitoring.test.ts",
+              "frontend-modern/src/api/__tests__/security.test.ts",
+              "frontend-modern/src/components/Settings/__tests__/UnifiedAgents.test.tsx"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "cloud-paid",
+      "lane": "L3",
+      "contract": "docs/release-control/v6/internal/subsystems/cloud-paid.md",
+      "owned_prefixes": [
+        "internal/api/licensing_",
+        "internal/api/payments_",
+        "internal/api/stripe_",
+        "pkg/licensing/"
+      ],
+      "owned_files": [
+        "frontend-modern/src/App.tsx",
+        "frontend-modern/src/components/Dashboard/RelayOnboardingCard.tsx",
+        "frontend-modern/src/components/Settings/BillingAdminPanel.tsx",
+        "frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx",
+        "frontend-modern/src/components/Settings/ProLicensePanel.tsx",
+        "frontend-modern/src/components/Settings/RelaySettingsPanel.tsx",
+        "frontend-modern/src/pages/CloudPricing.tsx",
+        "frontend-modern/src/pages/HostedSignup.tsx",
+        "frontend-modern/src/utils/apiClient.ts",
+        "internal/api/public_signup_handlers.go",
+        "internal/cloudcp/account/tenant_handlers.go",
+        "internal/cloudcp/entitlements/service.go",
+        "internal/cloudcp/registry/registry.go",
+        "internal/cloudcp/stripe/provisioner.go",
+        "internal/hosted/provisioner.go"
+      ],
+      "verification": {
+        "allow_same_subsystem_tests": true,
+        "test_prefixes": [],
+        "exact_files": [
+          "internal/api/contract_test.go",
+          "pkg/licensing/grant_claims_contract_test.go"
+        ],
+        "require_explicit_path_policy_coverage": true,
+        "path_policies": [
+          {
+            "id": "runtime-entitlement-surface",
+            "label": "runtime entitlement surface proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pkg/licensing/entitlement_payload.go",
+              "pkg/licensing/evaluator.go",
+              "pkg/licensing/hosted_subscription.go",
+              "pkg/licensing/token_source.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "pkg/licensing/cloud_paid_guardrails_test.go",
+              "pkg/licensing/entitlement_payload_test.go",
+              "pkg/licensing/evaluator_test.go",
+              "pkg/licensing/hosted_subscription_test.go",
+              "pkg/licensing/token_source_test.go"
+            ]
+          },
+          {
+            "id": "billing-state-canonicalization",
+            "label": "billing state canonicalization proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pkg/licensing/billing_state_normalization.go",
+              "pkg/licensing/database_source.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "pkg/licensing/billing_state_normalization_test.go",
+              "pkg/licensing/cloud_paid_guardrails_test.go",
+              "pkg/licensing/database_source_test.go",
+              "pkg/licensing/grant_claims_contract_test.go"
+            ]
+          },
+          {
+            "id": "cloud-plan-contracts",
+            "label": "cloud plan limit proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pkg/licensing/features.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "pkg/licensing/features_test.go",
+              "pkg/licensing/grant_claims_contract_test.go"
+            ]
+          },
+          {
+            "id": "stripe-plan-derivation",
+            "label": "stripe plan derivation proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pkg/licensing/stripe_subscription.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "pkg/licensing/grant_claims_contract_test.go",
+              "pkg/licensing/stripe_subscription_test.go"
+            ]
+          },
+          {
+            "id": "jwt-entitlement-claims",
+            "label": "JWT entitlement claim proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pkg/licensing/models.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "pkg/licensing/cloud_paid_guardrails_test.go",
+              "pkg/licensing/models_test.go",
+              "pkg/licensing/service_activate_test.go"
+            ]
+          },
+          {
+            "id": "activation-grant-bridge",
+            "label": "activation grant bridge proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pkg/licensing/activation_types.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "pkg/licensing/activation_types_test.go",
+              "pkg/licensing/grant_claims_contract_test.go",
+              "pkg/licensing/service_activate_test.go"
+            ]
+          },
+          {
+            "id": "hosted-entitlement-issuer",
+            "label": "hosted entitlement issuer proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/cloudcp/entitlements/service.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/cloudcp/entitlements/service_test.go",
+              "pkg/licensing/entitlement_lease_test.go"
+            ]
+          },
+          {
+            "id": "control-plane-registry-canonicalization",
+            "label": "control-plane registry plan proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/cloudcp/registry/registry.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/cloudcp/registry/registry_test.go"
+            ]
+          },
+          {
+            "id": "msp-workspace-provisioning-handler",
+            "label": "MSP workspace provisioning handler proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/cloudcp/account/tenant_handlers.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/cloudcp/account/tenant_handlers_test.go",
+              "internal/cloudcp/stripe/msp_lifecycle_integration_test.go"
+            ]
+          },
+          {
+            "id": "stripe-plan-resolution",
+            "label": "stripe plan resolution proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/cloudcp/stripe/provisioner.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/cloudcp/stripe/cloud_lifecycle_integration_test.go",
+              "internal/cloudcp/stripe/helpers_test.go",
+              "internal/cloudcp/stripe/msp_lifecycle_integration_test.go"
+            ]
+          },
+          {
+            "id": "entitlement-lease-boundary",
+            "label": "hosted entitlement lease proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pkg/licensing/entitlement_lease.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "pkg/licensing/cloud_paid_guardrails_test.go",
+              "pkg/licensing/database_source_test.go",
+              "pkg/licensing/entitlement_lease_test.go"
+            ]
+          },
+          {
+            "id": "activation-service-runtime",
+            "label": "activation service runtime proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pkg/licensing/grant_refresh.go",
+              "pkg/licensing/revocation_poll.go",
+              "pkg/licensing/service.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "pkg/licensing/cloud_paid_guardrails_test.go",
+              "pkg/licensing/grant_refresh_test.go",
+              "pkg/licensing/revocation_poll_test.go",
+              "pkg/licensing/service_activate_test.go"
+            ]
+          },
+          {
+            "id": "license-server-transport",
+            "label": "license server transport proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pkg/licensing/license_server_client.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "pkg/licensing/license_server_client_test.go",
+              "pkg/licensing/revocation_poll_test.go"
+            ]
+          },
+          {
+            "id": "activation-state-persistence",
+            "label": "activation state persistence proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pkg/licensing/activation_store.go",
+              "pkg/licensing/persistence.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "pkg/licensing/activation_store_test.go",
+              "pkg/licensing/persistence_test.go"
+            ]
+          },
+          {
+            "id": "feature-and-limit-primitives",
+            "label": "feature and limit primitive proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pkg/licensing/capability_aliases.go",
+              "pkg/licensing/feature_map.go",
+              "pkg/licensing/legacy_v5_monitored_system_limit_aliases.go",
+              "pkg/licensing/monitored_system_limit.go",
+              "pkg/licensing/user_limit.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "pkg/licensing/capability_aliases_test.go",
+              "pkg/licensing/feature_map_test.go",
+              "pkg/licensing/monitored_system_limit_test.go",
+              "pkg/licensing/user_limit_test.go"
+            ]
+          },
+          {
+            "id": "billing-and-entitlement-types",
+            "label": "billing and entitlement type proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pkg/licensing/billing_store.go",
+              "pkg/licensing/contracts.go",
+              "pkg/licensing/entitlement_source.go",
+              "pkg/licensing/entitlements.go",
+              "pkg/licensing/subscription_state.go",
+              "pkg/licensing/subscription_transitions.go",
+              "pkg/licensing/types.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/api/contract_test.go",
+              "pkg/licensing/entitlement_payload_test.go",
+              "pkg/licensing/grant_claims_contract_test.go",
+              "pkg/licensing/subscription_test.go",
+              "pkg/licensing/trial_start_test.go"
+            ]
+          },
+          {
+            "id": "commercial-migration-and-trial-flow",
+            "label": "commercial migration and trial flow proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pkg/licensing/commercial_migration.go",
+              "pkg/licensing/http.go",
+              "pkg/licensing/quickstart_credits.go",
+              "pkg/licensing/trial_start.go",
+              "pkg/licensing/upgrade.go",
+              "pkg/licensing/upgrade_reasons.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "pkg/licensing/commercial_migration_test.go",
+              "pkg/licensing/http_test.go",
+              "pkg/licensing/quickstart_credits_test.go",
+              "pkg/licensing/trial_start_test.go",
+              "pkg/licensing/upgrade_test.go"
+            ]
+          },
+          {
+            "id": "conversion-telemetry-pipeline",
+            "label": "conversion telemetry pipeline proof",
+            "match_prefixes": [
+              "pkg/licensing/conversion_",
+              "pkg/licensing/metering/"
+            ],
+            "match_files": [],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "pkg/licensing/conversion_api_helpers_test.go",
+              "pkg/licensing/conversion_config_test.go",
+              "pkg/licensing/conversion_events_test.go",
+              "pkg/licensing/conversion_metrics_test.go",
+              "pkg/licensing/conversion_quality_test.go",
+              "pkg/licensing/conversion_recorder_test.go",
+              "pkg/licensing/conversion_store_queryplan_test.go"
+            ]
+          },
+          {
+            "id": "host-lifecycle-tracking",
+            "label": "host lifecycle tracking proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pkg/licensing/host_lifecycle.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "pkg/licensing/host_lifecycle_test.go"
+            ]
+          },
+          {
+            "id": "public-key-and-build-modes",
+            "label": "public key and build mode proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pkg/licensing/dev_mode_dev.go",
+              "pkg/licensing/dev_mode_release.go",
+              "pkg/licensing/public_key.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "pkg/licensing/license_server_client_test.go",
+              "pkg/licensing/public_key_test.go",
+              "pkg/licensing/service_activate_test.go",
+              "pkg/licensing/trial_activation_test.go"
+            ]
+          },
+          {
+            "id": "hosted-trial-activation",
+            "label": "hosted trial activation proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pkg/licensing/trial_activation.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "pkg/licensing/trial_activation_test.go"
+            ]
+          },
+          {
+            "id": "cloud-paid-api-boundary",
+            "label": "cloud paid API boundary proof",
+            "match_prefixes": [
+              "internal/api/licensing_",
+              "internal/api/payments_",
+              "internal/api/stripe_"
+            ],
+            "match_files": [],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/api/__tests__/hostedSignup.test.ts",
+              "frontend-modern/src/pages/__tests__/HostedSignup.test.tsx",
+              "internal/api/billing_state_handlers_test.go",
+              "internal/api/contract_test.go",
+              "internal/api/licensing_handlers_auto_migrate_test.go",
+              "internal/api/licensing_handlers_self_hosted_fallback_test.go",
+              "internal/api/stripe_webhook_handlers_additional_test.go",
+              "internal/api/stripe_webhook_handlers_test.go"
+            ]
+          },
+          {
+            "id": "hosted-billing-admin-surface",
+            "label": "hosted billing admin surface proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/components/Settings/BillingAdminPanel.tsx"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/components/Settings/__tests__/BillingAdminPanel.test.tsx"
+            ]
+          },
+          {
+            "id": "organization-billing-surface",
+            "label": "organization billing surface proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/components/Settings/__tests__/OrganizationBillingPanel.test.tsx"
+            ]
+          },
+          {
+            "id": "pro-license-surface",
+            "label": "pro license surface proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/components/Settings/ProLicensePanel.tsx"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/components/Settings/__tests__/ProLicensePanel.test.tsx"
+            ]
+          },
+          {
+            "id": "relay-frontend-surfaces",
+            "label": "relay frontend surface proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/components/Dashboard/RelayOnboardingCard.tsx",
+              "frontend-modern/src/components/Settings/RelaySettingsPanel.tsx"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/components/Dashboard/__tests__/RelayOnboardingCard.test.tsx",
+              "frontend-modern/src/components/Settings/__tests__/RelaySettingsPanel.runtime.test.tsx",
+              "frontend-modern/src/components/Settings/__tests__/settingsReadOnlyPanels.test.tsx"
+            ]
+          },
+          {
+            "id": "hosted-signup-provisioning",
+            "label": "hosted signup provisioning proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/api/public_signup_handlers.go",
+              "internal/hosted/provisioner.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/api/hosted_lifecycle_integration_test.go",
+              "internal/api/hosted_signup_handlers_test.go",
+              "internal/hosted/provisioner_additional_test.go",
+              "internal/hosted/provisioner_test.go"
+            ]
+          },
+          {
+            "id": "hosted-browser-org-bootstrap",
+            "label": "hosted browser org bootstrap proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/App.tsx",
+              "frontend-modern/src/utils/apiClient.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/utils/__tests__/apiClient.org.test.ts"
+            ]
+          },
+          {
+            "id": "pricing-pages",
+            "label": "pricing page proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/pages/CloudPricing.tsx",
+              "frontend-modern/src/pages/HostedSignup.tsx"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/api/__tests__/hostedSignup.test.ts",
+              "frontend-modern/src/pages/__tests__/CloudPricing.test.tsx",
+              "frontend-modern/src/pages/__tests__/HostedSignup.test.tsx"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "deployment-installability",
+      "lane": "L1",
+      "contract": "docs/release-control/v6/internal/subsystems/deployment-installability.md",
+      "owned_prefixes": [
+        "internal/updates/"
+      ],
+      "owned_files": [
+        ".github/workflows/create-release.yml",
+        ".github/workflows/deploy-demo-server.yml",
+        ".github/workflows/release-dry-run.yml",
+        "Dockerfile",
+        "frontend-modern/src/api/updates.ts",
+        "internal/api/updates.go",
+        "scripts/build-release.sh",
+        "scripts/install-container-agent.sh",
+        "scripts/install.ps1",
+        "scripts/install.sh",
+        "scripts/pulse-auto-update.sh",
+        "scripts/release_control/resolve_release_promotion.py",
+        "scripts/release_ldflags.sh"
+      ],
+      "verification": {
+        "allow_same_subsystem_tests": false,
+        "test_prefixes": [],
+        "exact_files": [],
+        "require_explicit_path_policy_coverage": true,
+        "path_policies": [
+          {
+            "id": "deployment-update-runtime",
+            "label": "deployment update runtime proof",
+            "match_prefixes": [
+              "internal/updates/"
+            ],
+            "match_files": [],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [
+              "internal/updates/"
+            ],
+            "exact_files": []
+          },
+          {
+            "id": "updates-api-surface",
+            "label": "update transport API proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/api/updates.ts",
+              "internal/api/updates.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/api/__tests__/updates.test.ts",
+              "internal/api/updates_test.go"
+            ]
+          },
+          {
+            "id": "release-promotion-metadata-runtime",
+            "label": "release promotion metadata proof",
+            "match_prefixes": [],
+            "match_files": [
+              ".github/workflows/create-release.yml",
+              ".github/workflows/release-dry-run.yml",
+              "scripts/release_control/resolve_release_promotion.py"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "scripts/release_control/release_promotion_policy_test.py",
+              "scripts/release_control/resolve_release_promotion_test.py"
+            ]
+          },
+          {
+            "id": "release-build-metadata-runtime",
+            "label": "release build metadata proof",
+            "match_prefixes": [],
+            "match_files": [
+              ".github/workflows/deploy-demo-server.yml",
+              "Dockerfile",
+              "scripts/build-release.sh",
+              "scripts/release_ldflags.sh"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "scripts/installtests/build_release_assets_test.go",
+              "scripts/installtests/release_ldflags_test.go"
+            ]
+          },
+          {
+            "id": "deployment-script-runtime",
+            "label": "deployment script runtime proof",
+            "match_prefixes": [],
+            "match_files": [
+              "scripts/install-container-agent.sh",
+              "scripts/install.ps1",
+              "scripts/pulse-auto-update.sh"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "scripts/installtests/install_docker_sh_test.go",
+              "scripts/installtests/install_ps1_test.go",
+              "scripts/installtests/root_install_sh_test.go"
+            ]
+          },
+          {
+            "id": "shell-installer-runtime",
+            "label": "shell installer runtime proof",
+            "match_prefixes": [],
+            "match_files": [
+              "scripts/install.sh"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "scripts/installtests/install_sh_test.go"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "frontend-primitives",
+      "lane": "L8",
+      "contract": "docs/release-control/v6/internal/subsystems/frontend-primitives.md",
+      "owned_prefixes": [
+        "frontend-modern/src/components/shared/"
+      ],
+      "owned_files": [
+        "frontend-modern/src/components/Settings/AISettings.tsx",
+        "frontend-modern/src/components/Settings/APIAccessPanel.tsx",
+        "frontend-modern/src/components/Settings/AuditLogPanel.tsx",
+        "frontend-modern/src/components/Settings/AuditWebhookPanel.tsx",
+        "frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx",
+        "frontend-modern/src/components/Settings/NetworkSettingsPanel.tsx",
+        "frontend-modern/src/components/Settings/RecoverySettingsPanel.tsx",
+        "frontend-modern/src/components/Settings/SecurityAuthPanel.tsx",
+        "frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx",
+        "frontend-modern/src/components/Settings/Settings.tsx",
+        "frontend-modern/src/components/Settings/settingsHeaderMeta.ts",
+        "frontend-modern/src/components/Settings/SettingsPageShell.tsx",
+        "frontend-modern/src/components/Settings/settingsPanelRegistry.ts",
+        "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx",
+        "frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx",
+        "frontend-modern/src/components/SetupWizard/SetupCompletionPreview.tsx",
+        "frontend-modern/src/components/SetupWizard/SetupWizard.tsx"
+      ],
+      "verification": {
+        "allow_same_subsystem_tests": false,
+        "test_prefixes": [],
+        "exact_files": [
+          "frontend-modern/src/components/shared/PageControls.guardrails.test.ts",
+          "frontend-modern/src/components/shared/TypeColumn.guardrails.test.ts"
+        ],
+        "require_explicit_path_policy_coverage": true,
+        "path_policies": [
+          {
+            "id": "page-controls-and-filters",
+            "label": "page controls and filter proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/components/shared/FilterToolbar.tsx",
+              "frontend-modern/src/components/shared/PageControls.tsx",
+              "frontend-modern/src/components/shared/SettingsPanel.tsx",
+              "frontend-modern/src/components/shared/Subtabs.tsx",
+              "frontend-modern/src/components/shared/Toggle.tsx"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
+              "frontend-modern/src/components/shared/FilterToolbar.test.tsx",
+              "frontend-modern/src/components/shared/PageControls.guardrails.test.ts",
+              "frontend-modern/src/components/shared/PageControls.test.tsx"
+            ]
+          },
+          {
+            "id": "settings-shell-and-framing",
+            "label": "settings shell framing proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/components/Settings/AISettings.tsx",
+              "frontend-modern/src/components/Settings/APIAccessPanel.tsx",
+              "frontend-modern/src/components/Settings/AuditLogPanel.tsx",
+              "frontend-modern/src/components/Settings/AuditWebhookPanel.tsx",
+              "frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx",
+              "frontend-modern/src/components/Settings/NetworkSettingsPanel.tsx",
+              "frontend-modern/src/components/Settings/RecoverySettingsPanel.tsx",
+              "frontend-modern/src/components/Settings/SecurityAuthPanel.tsx",
+              "frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx",
+              "frontend-modern/src/components/Settings/Settings.tsx",
+              "frontend-modern/src/components/Settings/settingsHeaderMeta.ts",
+              "frontend-modern/src/components/Settings/SettingsPageShell.tsx",
+              "frontend-modern/src/components/Settings/settingsPanelRegistry.ts",
+              "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx",
+              "frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts"
+            ]
+          },
+          {
+            "id": "first-session-runtime-and-preview",
+            "label": "first-session runtime and preview proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/components/SetupWizard/SetupCompletionPreview.tsx",
+              "frontend-modern/src/components/SetupWizard/SetupWizard.tsx"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/components/SetupWizard/__tests__/SetupCompletionPreview.test.tsx",
+              "frontend-modern/src/components/SetupWizard/__tests__/SetupWizard.test.tsx"
+            ]
+          },
+          {
+            "id": "search-inputs",
+            "label": "search input proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/components/shared/CollapsibleSearchInput.tsx",
+              "frontend-modern/src/components/shared/SearchField.tsx",
+              "frontend-modern/src/components/shared/SearchInput.tsx",
+              "frontend-modern/src/components/shared/SearchInputEnhancements.tsx",
+              "frontend-modern/src/components/shared/useSearchInputEnhancements.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/components/shared/__tests__/SearchField.test.tsx",
+              "frontend-modern/src/components/shared/__tests__/SearchInput.test.tsx"
+            ]
+          },
+          {
+            "id": "data-grid-and-summary",
+            "label": "data grid and summary proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/components/shared/InfrastructureSummaryTable.tsx",
+              "frontend-modern/src/components/shared/PulseDataGrid.tsx",
+              "frontend-modern/src/components/shared/Table.tsx"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/components/shared/__tests__/InfrastructureSummaryTable.test.tsx",
+              "frontend-modern/src/components/shared/__tests__/PulseDataGrid.test.tsx"
+            ]
+          },
+          {
+            "id": "shared-component-guardrails",
+            "label": "shared primitive guardrail proof",
+            "match_prefixes": [
+              "frontend-modern/src/components/shared/"
+            ],
+            "match_files": [],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/components/shared/__tests__/CommandPaletteModal.test.tsx",
+              "frontend-modern/src/components/shared/__tests__/Dialog.test.tsx",
+              "frontend-modern/src/components/shared/__tests__/InfrastructureSummaryTable.test.tsx",
+              "frontend-modern/src/components/shared/__tests__/PulseDataGrid.test.tsx",
+              "frontend-modern/src/components/shared/__tests__/SearchField.test.tsx",
+              "frontend-modern/src/components/shared/__tests__/SearchInput.test.tsx",
+              "frontend-modern/src/components/shared/__tests__/WhatsNewModal.test.tsx",
+              "frontend-modern/src/components/shared/ColumnPicker.test.tsx",
+              "frontend-modern/src/components/shared/FilterToolbar.test.tsx",
+              "frontend-modern/src/components/shared/PageControls.guardrails.test.ts",
+              "frontend-modern/src/components/shared/PageControls.test.tsx",
+              "frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts",
+              "frontend-modern/src/components/shared/TypeColumn.guardrails.test.ts"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "monitoring",
+      "lane": "L13",
+      "contract": "docs/release-control/v6/internal/subsystems/monitoring.md",
+      "owned_prefixes": [
+        "internal/monitoring/"
+      ],
+      "owned_files": [
+        "docker-entrypoint.sh"
+      ],
+      "verification": {
+        "allow_same_subsystem_tests": true,
+        "test_prefixes": [],
+        "exact_files": [
+          "internal/unifiedresources/code_standards_test.go"
+        ],
+        "require_explicit_path_policy_coverage": true,
+      "path_policies": [
+        {
+          "id": "discovery-provider-runtime",
+          "label": "monitoring discovery provider proof",
+          "match_prefixes": [],
+          "match_files": [
+            "internal/monitoring/kubernetes_agents.go",
+            "internal/monitoring/monitor_discovery_helpers.go",
+            "internal/monitoring/monitor_pbs_pmg.go",
+            "internal/monitoring/poll_providers.go",
+            "internal/monitoring/truenas_poller.go"
+          ],
+          "allow_same_subsystem_tests": false,
+          "test_prefixes": [],
+          "exact_files": [
+            "internal/monitoring/kubernetes_agents_test.go",
+            "internal/monitoring/monitor_host_agents_test.go",
+            "internal/monitoring/monitor_pbs_coverage_test.go",
+            "internal/monitoring/monitor_pmg_test.go",
+            "internal/monitoring/monitor_polling_test.go",
+            "internal/monitoring/truenas_poller_test.go"
+          ]
+        },
+        {
+          "id": "metrics-hot-path",
+          "label": "monitoring metrics hot-path proof",
+          "match_prefixes": [],
+          "match_files": [
+            "internal/monitoring/monitor_metrics.go"
+          ],
+          "allow_same_subsystem_tests": false,
+          "test_prefixes": [],
+          "exact_files": [
+            "internal/monitoring/monitor_metrics_chart_batch_bench_test.go",
+            "internal/monitoring/monitor_metrics_slo_test.go"
+          ]
+        },
+        {
+          "id": "metrics-history-runtime",
+          "label": "monitoring metrics history proof",
+          "match_prefixes": [],
+          "match_files": [
+            "internal/monitoring/metrics.go",
+            "internal/monitoring/metrics_history.go",
+            "internal/monitoring/mock_metrics_history.go"
+          ],
+          "allow_same_subsystem_tests": false,
+          "test_prefixes": [],
+          "exact_files": [
+            "internal/monitoring/metrics_history_concurrency_test.go",
+            "internal/monitoring/metrics_history_memory_regression_test.go",
+            "internal/monitoring/metrics_history_test.go",
+            "internal/monitoring/metrics_test.go",
+            "internal/monitoring/mock_metrics_history_test.go"
+          ]
+        },
+        {
+          "id": "memory-source-runtime",
+          "label": "monitoring memory-source proof",
+          "match_prefixes": [],
+          "match_files": [
+            "internal/api/diagnostics.go",
+            "internal/monitoring/guest_memory_sources.go",
+            "internal/monitoring/memory_source_catalog.go",
+            "internal/monitoring/monitor_polling_node.go",
+            "internal/monitoring/monitor_polling_vm.go",
+            "internal/monitoring/node_memory_sources.go"
+          ],
+          "allow_same_subsystem_tests": false,
+          "test_prefixes": [],
+          "exact_files": [
+            "internal/api/diagnostics_memory_test.go",
+            "internal/monitoring/diagnostic_snapshots_test.go",
+            "internal/monitoring/memory_source_catalog_test.go",
+            "internal/monitoring/memory_trust_characterization_test.go",
+            "internal/monitoring/node_memory_sources_test.go"
+          ]
+        },
+        {
+          "id": "container-entrypoint-runtime",
+          "label": "container entrypoint runtime proof",
+          "match_prefixes": [],
+          "match_files": [
+              "docker-entrypoint.sh"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "scripts/installtests/docker_entrypoint_test.go"
+            ]
+          },
+          {
+            "id": "monitoring-runtime",
+            "label": "monitoring runtime proof",
+            "match_prefixes": [
+              "internal/monitoring/"
+            ],
+            "match_files": [],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/monitoring/canonical_guardrails_test.go",
+              "internal/unifiedresources/code_standards_test.go"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "notifications",
+      "lane": "L6",
+      "contract": "docs/release-control/v6/internal/subsystems/notifications.md",
+      "owned_prefixes": [
+        "internal/notifications/"
+      ],
+      "owned_files": [
+        "frontend-modern/src/api/notifications.ts",
+        "internal/api/notifications.go"
+      ],
+      "verification": {
+        "allow_same_subsystem_tests": false,
+        "test_prefixes": [],
+        "exact_files": [],
+        "require_explicit_path_policy_coverage": true,
+        "path_policies": [
+          {
+            "id": "notifications-api-surface",
+            "label": "notification management API proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/api/notifications.ts",
+              "internal/api/notifications.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/api/__tests__/notifications.test.ts",
+              "internal/api/notifications_scope_test.go",
+              "internal/api/notifications_test.go"
+            ]
+          },
+          {
+            "id": "notification-delivery-runtime",
+            "label": "notification delivery runtime proof",
+            "match_prefixes": [
+              "internal/notifications/"
+            ],
+            "match_files": [],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [
+              "internal/notifications/"
+            ],
+            "exact_files": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "organization-settings",
+      "lane": "L14",
+      "contract": "docs/release-control/v6/internal/subsystems/organization-settings.md",
+      "owned_prefixes": [],
+      "owned_files": [
+        "frontend-modern/src/components/Settings/OrganizationAccessPanel.tsx",
+        "frontend-modern/src/components/Settings/OrganizationOverviewPanel.tsx",
+        "frontend-modern/src/components/Settings/OrganizationSharingPanel.tsx",
+        "frontend-modern/src/components/Settings/RolesPanel.tsx",
+        "frontend-modern/src/components/Settings/UserAssignmentsPanel.tsx",
+        "frontend-modern/src/utils/organizationRolePresentation.ts",
+        "frontend-modern/src/utils/organizationSettingsPresentation.ts",
+        "frontend-modern/src/utils/orgUtils.ts",
+        "internal/models/organization.go"
+      ],
+      "verification": {
+        "allow_same_subsystem_tests": false,
+        "test_prefixes": [],
+        "exact_files": [
+          "frontend-modern/src/api/__tests__/orgs.test.ts",
+          "frontend-modern/src/utils/__tests__/organizationSettingsPresentation.test.ts",
+          "internal/models/organization_additional_test.go"
+        ],
+        "require_explicit_path_policy_coverage": true,
+        "path_policies": [
+          {
+            "id": "organization-domain-model",
+            "label": "organization domain model proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/models/organization.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/api/org_handlers_test.go",
+              "internal/api/org_lifecycle_handlers_test.go",
+              "internal/api/org_validation_test.go",
+              "internal/models/organization_additional_test.go"
+            ]
+          },
+          {
+            "id": "organization-settings-surface",
+            "label": "organization settings surface proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/components/Settings/OrganizationAccessPanel.tsx",
+              "frontend-modern/src/components/Settings/OrganizationOverviewPanel.tsx",
+              "frontend-modern/src/components/Settings/OrganizationSharingPanel.tsx",
+              "frontend-modern/src/components/Settings/RolesPanel.tsx",
+              "frontend-modern/src/components/Settings/UserAssignmentsPanel.tsx",
+              "frontend-modern/src/utils/organizationRolePresentation.ts",
+              "frontend-modern/src/utils/organizationSettingsPresentation.ts",
+              "frontend-modern/src/utils/orgUtils.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/api/__tests__/orgs.test.ts",
+              "frontend-modern/src/components/Settings/__tests__/monitoredSystemModelGuardrails.test.ts",
+              "frontend-modern/src/components/Settings/__tests__/OrganizationSharingPanel.test.tsx",
+              "frontend-modern/src/components/Settings/__tests__/RBACPaywallPanels.test.tsx",
+              "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
+              "frontend-modern/src/utils/__tests__/organizationRolePresentation.test.ts",
+              "frontend-modern/src/utils/__tests__/organizationSettingsPresentation.test.ts",
+              "frontend-modern/src/utils/__tests__/orgUtils.test.ts"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "patrol-intelligence",
+      "lane": "L6",
+      "contract": "docs/release-control/v6/internal/subsystems/patrol-intelligence.md",
+      "owned_prefixes": [],
+      "owned_files": [
+        "frontend-modern/src/components/AI/FindingsPanel.tsx",
+        "frontend-modern/src/components/Brand/PulsePatrolLogo.tsx",
+        "frontend-modern/src/components/patrol/ApprovalBanner.tsx",
+        "frontend-modern/src/components/patrol/ApprovalSection.tsx",
+        "frontend-modern/src/components/patrol/CountdownTimer.tsx",
+        "frontend-modern/src/components/patrol/index.ts",
+        "frontend-modern/src/components/patrol/InvestigationMessages.tsx",
+        "frontend-modern/src/components/patrol/InvestigationSection.tsx",
+        "frontend-modern/src/components/patrol/PatrolStatusBar.tsx",
+        "frontend-modern/src/components/patrol/RemediationStatus.tsx",
+        "frontend-modern/src/components/patrol/RunHistoryEntry.tsx",
+        "frontend-modern/src/components/patrol/RunHistoryPanel.tsx",
+        "frontend-modern/src/components/patrol/RunToolCallTrace.tsx",
+        "frontend-modern/src/pages/AIIntelligence.tsx",
+        "frontend-modern/src/stores/aiIntelligence.ts",
+        "frontend-modern/src/types/aiIntelligence.ts",
+        "frontend-modern/src/utils/aiFindingPresentation.ts",
+        "frontend-modern/src/utils/approvalRiskPresentation.ts",
+        "frontend-modern/src/utils/findingAlertIdentity.ts",
+        "frontend-modern/src/utils/patrolEmptyStatePresentation.ts",
+        "frontend-modern/src/utils/patrolFormat.ts",
+        "frontend-modern/src/utils/patrolRunPresentation.ts",
+        "frontend-modern/src/utils/patrolSummaryPresentation.ts"
+      ],
+      "verification": {
+        "allow_same_subsystem_tests": false,
+        "test_prefixes": [],
+        "exact_files": [
+          "frontend-modern/src/components/AI/__tests__/FindingsPanel.test.ts",
+          "frontend-modern/src/pages/__tests__/AIIntelligence.test.tsx",
+          "frontend-modern/src/stores/__tests__/aiIntelligence.test.ts"
+        ],
+        "require_explicit_path_policy_coverage": true,
+        "path_policies": [
+          {
+            "id": "patrol-page-and-state",
+            "label": "patrol page and state proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/components/Brand/PulsePatrolLogo.tsx",
+              "frontend-modern/src/components/patrol/index.ts",
+              "frontend-modern/src/pages/AIIntelligence.tsx",
+              "frontend-modern/src/stores/aiIntelligence.ts",
+              "frontend-modern/src/types/aiIntelligence.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/components/Brand/__tests__/PulsePatrolLogo.test.tsx",
+              "frontend-modern/src/components/Settings/__tests__/monitoredSystemModelGuardrails.test.ts",
+              "frontend-modern/src/pages/__tests__/AIIntelligence.test.tsx",
+              "frontend-modern/src/stores/__tests__/aiIntelligence.test.ts",
+              "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts"
+            ]
+          },
+          {
+            "id": "patrol-findings-and-approvals",
+            "label": "patrol findings and approvals proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/components/AI/FindingsPanel.tsx",
+              "frontend-modern/src/components/patrol/ApprovalBanner.tsx",
+              "frontend-modern/src/components/patrol/ApprovalSection.tsx",
+              "frontend-modern/src/components/patrol/InvestigationMessages.tsx",
+              "frontend-modern/src/components/patrol/InvestigationSection.tsx",
+              "frontend-modern/src/components/patrol/RemediationStatus.tsx",
+              "frontend-modern/src/utils/aiFindingPresentation.ts",
+              "frontend-modern/src/utils/approvalRiskPresentation.ts",
+              "frontend-modern/src/utils/findingAlertIdentity.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/components/AI/__tests__/FindingsPanel.test.ts",
+              "frontend-modern/src/components/patrol/__tests__/ApprovalSection.test.tsx",
+              "frontend-modern/src/components/patrol/__tests__/InvestigationSection.test.tsx",
+              "frontend-modern/src/utils/__tests__/approvalRiskPresentation.test.ts",
+              "frontend-modern/src/utils/__tests__/findingAlertIdentity.test.ts",
+              "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts"
+            ]
+          },
+          {
+            "id": "patrol-history-and-summary",
+            "label": "patrol history and summary proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/components/patrol/CountdownTimer.tsx",
+              "frontend-modern/src/components/patrol/PatrolStatusBar.tsx",
+              "frontend-modern/src/components/patrol/RunHistoryEntry.tsx",
+              "frontend-modern/src/components/patrol/RunHistoryPanel.tsx",
+              "frontend-modern/src/components/patrol/RunToolCallTrace.tsx",
+              "frontend-modern/src/utils/patrolEmptyStatePresentation.ts",
+              "frontend-modern/src/utils/patrolFormat.ts",
+              "frontend-modern/src/utils/patrolRunPresentation.ts",
+              "frontend-modern/src/utils/patrolSummaryPresentation.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/components/patrol/__tests__/PatrolStatusBar.test.tsx",
+              "frontend-modern/src/components/patrol/__tests__/RunHistoryEntry.test.tsx",
+              "frontend-modern/src/components/patrol/__tests__/RunToolCallTrace.test.tsx",
+              "frontend-modern/src/pages/__tests__/AIIntelligence.test.tsx",
+              "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
+              "frontend-modern/src/utils/__tests__/patrolEmptyStatePresentation.test.ts",
+              "frontend-modern/src/utils/__tests__/patrolFormat.test.ts",
+              "frontend-modern/src/utils/__tests__/patrolRunPresentation.test.ts",
+              "frontend-modern/src/utils/__tests__/patrolSummaryPresentation.test.ts"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "performance-and-scalability",
+      "lane": "L10",
+      "contract": "docs/release-control/v6/internal/subsystems/performance-and-scalability.md",
+      "owned_prefixes": [
+        "pkg/metrics/"
+      ],
+      "owned_files": [
+        "frontend-modern/src/components/Dashboard/Dashboard.tsx",
+        "frontend-modern/src/components/Dashboard/workloadSelectors.ts",
+        "frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts",
+        "frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts",
+        "frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx",
+        "internal/api/router_bench_test.go",
+        "internal/api/slo.go",
+        "internal/api/slo_bench_test.go"
+      ],
+      "verification": {
+        "allow_same_subsystem_tests": false,
+        "test_prefixes": [],
+        "exact_files": [
+          "frontend-modern/src/components/Dashboard/__tests__/Dashboard.performance.contract.test.tsx",
+          "internal/api/router_bench_test.go",
+          "internal/api/slo_bench_test.go",
+          "pkg/metrics/store_bench_test.go",
+          "pkg/metrics/store_query_plan_test.go",
+          "pkg/metrics/store_slo_test.go"
+        ],
+        "require_explicit_path_policy_coverage": true,
+        "path_policies": [
+          {
+            "id": "metrics-store-hot-paths",
+            "label": "metrics store hot-path proof",
+            "match_prefixes": [
+              "pkg/metrics/"
+            ],
+            "match_files": [],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "pkg/metrics/store_additional_test.go",
+              "pkg/metrics/store_bench_test.go",
+              "pkg/metrics/store_query_plan_test.go",
+              "pkg/metrics/store_slo_test.go"
+            ]
+          },
+          {
+            "id": "dashboard-workload-hot-path",
+            "label": "dashboard workload selector proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/components/Dashboard/Dashboard.tsx",
+              "frontend-modern/src/components/Dashboard/workloadSelectors.ts",
+              "frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts",
+              "frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts",
+              "frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/components/Dashboard/__tests__/Dashboard.performance.contract.test.tsx",
+              "frontend-modern/src/components/Dashboard/__tests__/workloadSelectors.test.ts",
+              "frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx"
+            ]
+          },
+          {
+            "id": "api-history-slo",
+            "label": "API history SLO proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/api/slo.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/api/slo_bench_test.go"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "relay-runtime",
+      "lane": "L7",
+      "contract": "docs/release-control/v6/internal/subsystems/relay-runtime.md",
+      "owned_prefixes": [
+        "internal/relay/"
+      ],
+      "owned_files": [
+        "internal/config/persistence_relay.go"
+      ],
+      "verification": {
+        "allow_same_subsystem_tests": true,
+        "test_prefixes": [],
+        "exact_files": [
+          "internal/config/persistence_relay_test.go",
+          "internal/relay/client_test.go"
+        ],
+        "require_explicit_path_policy_coverage": true,
+        "path_policies": [
+          {
+            "id": "relay-client-runtime",
+            "label": "desktop relay runtime proof",
+            "match_prefixes": [
+              "internal/relay/"
+            ],
+            "match_files": [],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/relay/client_test.go"
+            ]
+          },
+          {
+            "id": "relay-config-persistence",
+            "label": "relay config persistence proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/config/persistence_relay.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/config/persistence_relay_test.go"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "security-privacy",
+      "lane": "L14",
+      "contract": "docs/release-control/v6/internal/subsystems/security-privacy.md",
+      "owned_prefixes": [],
+      "owned_files": [
+        "docs/PRIVACY.md",
+        "frontend-modern/src/api/security.ts",
+        "frontend-modern/src/components/Settings/APITokenManager.tsx",
+        "frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx",
+        "frontend-modern/src/components/Settings/SecurityAuthPanel.tsx",
+        "frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx",
+        "frontend-modern/src/components/Settings/useSystemSettingsState.ts",
+        "internal/api/security.go",
+        "internal/api/security_tokens.go",
+        "internal/api/system_settings.go",
+        "internal/telemetry/telemetry.go",
+        "SECURITY.md"
+      ],
+      "verification": {
+        "allow_same_subsystem_tests": false,
+        "test_prefixes": [],
+        "exact_files": [
+          "frontend-modern/src/api/__tests__/security.test.ts",
+          "frontend-modern/src/components/Settings/__tests__/APITokenManager.test.tsx",
+          "frontend-modern/src/components/Settings/__tests__/SecurityPostureSummary.test.tsx",
+          "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
+          "frontend-modern/src/stores/__tests__/systemSettings.test.ts",
+          "internal/api/security_regression_test.go",
+          "internal/api/security_status_additional_test.go",
+          "internal/api/security_tokens_lifecycle_test.go",
+          "internal/api/security_tokens_owner_binding_test.go",
+          "internal/api/security_tokens_test.go",
+          "internal/api/system_settings_telemetry_test.go",
+          "internal/telemetry/telemetry_test.go"
+        ],
+        "require_explicit_path_policy_coverage": true,
+        "path_policies": [
+          {
+            "id": "privacy-docs-and-telemetry",
+            "label": "privacy docs and telemetry proof",
+            "match_prefixes": [],
+            "match_files": [
+              "docs/PRIVACY.md",
+              "frontend-modern/src/components/Settings/useSystemSettingsState.ts",
+              "internal/telemetry/telemetry.go",
+              "SECURITY.md"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/stores/__tests__/systemSettings.test.ts",
+              "internal/api/system_settings_telemetry_test.go",
+              "internal/telemetry/telemetry_test.go"
+            ]
+          },
+          {
+            "id": "security-settings-surfaces",
+            "label": "security settings surface proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/components/Settings/APITokenManager.tsx",
+              "frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx",
+              "frontend-modern/src/components/Settings/SecurityAuthPanel.tsx",
+              "frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/components/Settings/__tests__/APITokenManager.test.tsx",
+              "frontend-modern/src/components/Settings/__tests__/SecurityPostureSummary.test.tsx",
+              "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
+              "frontend-modern/src/stores/__tests__/systemSettings.test.ts"
+            ]
+          },
+          {
+            "id": "security-api-surface",
+            "label": "security API surface proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/api/security.ts",
+              "internal/api/security.go",
+              "internal/api/security_tokens.go",
+              "internal/api/system_settings.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/api/__tests__/security.test.ts",
+              "internal/api/security_regression_test.go",
+              "internal/api/security_status_additional_test.go",
+              "internal/api/security_tokens_lifecycle_test.go",
+              "internal/api/security_tokens_owner_binding_test.go",
+              "internal/api/security_tokens_test.go",
+              "internal/api/system_settings_telemetry_test.go"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "storage-recovery",
+      "lane": "L15",
+      "contract": "docs/release-control/v6/internal/subsystems/storage-recovery.md",
+      "owned_prefixes": [
+        "frontend-modern/src/components/Recovery/",
+        "frontend-modern/src/components/Storage/",
+        "frontend-modern/src/features/storageBackups/",
+        "internal/recovery/"
+      ],
+      "owned_files": [
+        "frontend-modern/src/hooks/useDashboardRecovery.ts",
+        "frontend-modern/src/hooks/useRecoveryPoints.ts",
+        "frontend-modern/src/hooks/useRecoveryPointsFacets.ts",
+        "frontend-modern/src/hooks/useRecoveryPointsSeries.ts",
+        "frontend-modern/src/hooks/useRecoveryRollups.ts",
+        "frontend-modern/src/pages/Dashboard.tsx",
+        "frontend-modern/src/pages/DashboardPanels/dashboardWidgets.ts",
+        "frontend-modern/src/pages/DashboardPanels/RecoveryStatusPanel.tsx",
+        "frontend-modern/src/pages/DashboardPanels/StoragePanel.tsx",
+        "frontend-modern/src/pages/RecoveryRoute.tsx",
+        "frontend-modern/src/types/recovery.ts",
+        "frontend-modern/src/utils/dashboardRecoveryPresentation.ts",
+        "frontend-modern/src/utils/recoveryActionPresentation.ts",
+        "frontend-modern/src/utils/recoveryArtifactModePresentation.ts",
+        "frontend-modern/src/utils/recoveryDatePresentation.ts",
+        "frontend-modern/src/utils/recoveryEmptyStatePresentation.ts",
+        "frontend-modern/src/utils/recoveryFilterChipPresentation.ts",
+        "frontend-modern/src/utils/recoveryIssuePresentation.ts",
+        "frontend-modern/src/utils/recoveryOutcomePresentation.ts",
+        "frontend-modern/src/utils/recoveryRecordPresentation.ts",
+        "frontend-modern/src/utils/recoveryStatusPresentation.ts",
+        "frontend-modern/src/utils/recoverySummaryPresentation.ts",
+        "frontend-modern/src/utils/recoveryTablePresentation.ts",
+        "frontend-modern/src/utils/recoveryTimelineChartPresentation.ts",
+        "frontend-modern/src/utils/recoveryTimelinePresentation.ts"
+      ],
+      "verification": {
+        "allow_same_subsystem_tests": false,
+        "test_prefixes": [],
+        "exact_files": [
+          "frontend-modern/src/components/Recovery/__tests__/Recovery.test.tsx",
+          "frontend-modern/src/components/Recovery/RecoverySummary.test.tsx",
+          "frontend-modern/src/components/Storage/code_standards.test.ts",
+          "frontend-modern/src/pages/__tests__/RecoveryRoute.test.tsx",
+          "frontend-modern/src/utils/__tests__/dashboardRecoveryPresentation.test.ts",
+          "internal/recovery/recovery_test.go"
+        ],
+        "require_explicit_path_policy_coverage": true,
+        "path_policies": [
+          {
+            "id": "recovery-engine-runtime",
+            "label": "recovery engine runtime proof",
+            "match_prefixes": [
+              "internal/recovery/"
+            ],
+            "match_files": [],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/recovery/idgen/idgen_test.go",
+              "internal/recovery/manager/manager_test.go",
+              "internal/recovery/recovery_test.go",
+              "internal/recovery/store/store_queryplan_test.go",
+              "internal/recovery/store/store_rollups_test.go",
+              "internal/recovery/store/store_series_test.go",
+              "internal/recovery/store/store_test.go"
+            ]
+          },
+          {
+            "id": "dashboard-storage-recovery-surface",
+            "label": "dashboard storage and recovery surface proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/pages/Dashboard.tsx",
+              "frontend-modern/src/pages/DashboardPanels/dashboardWidgets.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/pages/__tests__/DashboardPage.test.tsx"
+            ]
+          },
+          {
+            "id": "recovery-product-surface",
+            "label": "recovery product surface proof",
+            "match_prefixes": [
+              "frontend-modern/src/components/Recovery/"
+            ],
+            "match_files": [
+              "frontend-modern/src/hooks/useDashboardRecovery.ts",
+              "frontend-modern/src/hooks/useRecoveryPoints.ts",
+              "frontend-modern/src/hooks/useRecoveryPointsFacets.ts",
+              "frontend-modern/src/hooks/useRecoveryPointsSeries.ts",
+              "frontend-modern/src/hooks/useRecoveryRollups.ts",
+              "frontend-modern/src/pages/DashboardPanels/RecoveryStatusPanel.tsx",
+              "frontend-modern/src/pages/RecoveryRoute.tsx",
+              "frontend-modern/src/types/recovery.ts",
+              "frontend-modern/src/utils/dashboardRecoveryPresentation.ts",
+              "frontend-modern/src/utils/recoveryActionPresentation.ts",
+              "frontend-modern/src/utils/recoveryArtifactModePresentation.ts",
+              "frontend-modern/src/utils/recoveryDatePresentation.ts",
+              "frontend-modern/src/utils/recoveryEmptyStatePresentation.ts",
+              "frontend-modern/src/utils/recoveryFilterChipPresentation.ts",
+              "frontend-modern/src/utils/recoveryIssuePresentation.ts",
+              "frontend-modern/src/utils/recoveryOutcomePresentation.ts",
+              "frontend-modern/src/utils/recoveryRecordPresentation.ts",
+              "frontend-modern/src/utils/recoveryStatusPresentation.ts",
+              "frontend-modern/src/utils/recoverySummaryPresentation.ts",
+              "frontend-modern/src/utils/recoveryTablePresentation.ts",
+              "frontend-modern/src/utils/recoveryTimelineChartPresentation.ts",
+              "frontend-modern/src/utils/recoveryTimelinePresentation.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/components/Recovery/__tests__/Recovery.test.tsx",
+              "frontend-modern/src/components/Recovery/RecoverySummary.test.tsx",
+              "frontend-modern/src/pages/__tests__/RecoveryRoute.test.tsx",
+              "frontend-modern/src/utils/__tests__/dashboardRecoveryPresentation.test.ts",
+              "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts"
+            ]
+          },
+          {
+            "id": "storage-product-surface",
+            "label": "storage product surface proof",
+            "match_prefixes": [
+              "frontend-modern/src/components/Storage/",
+              "frontend-modern/src/features/storageBackups/"
+            ],
+            "match_files": [
+              "frontend-modern/src/pages/DashboardPanels/StoragePanel.tsx"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/components/Storage/__tests__/DiskList.test.tsx",
+              "frontend-modern/src/components/Storage/__tests__/Storage.test.tsx",
+              "frontend-modern/src/components/Storage/__tests__/StorageControls.test.tsx",
+              "frontend-modern/src/components/Storage/__tests__/StorageGroupRow.test.tsx",
+              "frontend-modern/src/components/Storage/__tests__/StoragePoolDetail.test.tsx",
+              "frontend-modern/src/components/Storage/code_standards.test.ts",
+              "frontend-modern/src/features/storageBackups/__tests__/resourceStorageMapping.test.ts",
+              "frontend-modern/src/features/storageBackups/__tests__/storageAdapters.test.ts",
+              "frontend-modern/src/features/storageBackups/__tests__/storageAlertState.test.ts",
+              "frontend-modern/src/features/storageBackups/__tests__/storageDomain.test.ts",
+              "frontend-modern/src/features/storageBackups/__tests__/storageModelCore.test.ts",
+              "frontend-modern/src/features/storageBackups/__tests__/storagePagePresentation.test.ts",
+              "frontend-modern/src/features/storageBackups/__tests__/storagePoolsTablePresentation.test.ts",
+              "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "unified-resources",
+      "lane": "L13",
+      "contract": "docs/release-control/v6/internal/subsystems/unified-resources.md",
+      "owned_prefixes": [
+        "internal/unifiedresources/"
+      ],
+      "owned_files": [
+        "frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts",
+        "frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx",
+        "frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts",
+        "frontend-modern/src/components/Infrastructure/ResourceFacetSummary.tsx",
+        "frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx",
+        "frontend-modern/src/hooks/useDashboardTrends.ts",
+        "frontend-modern/src/hooks/useUnifiedResources.ts",
+        "frontend-modern/src/pages/Infrastructure.tsx",
+        "frontend-modern/src/routing/resourceLinks.ts",
+        "frontend-modern/src/types/resource.ts",
+        "internal/api/resources.go"
+      ],
+      "verification": {
+        "allow_same_subsystem_tests": true,
+        "test_prefixes": [],
+        "exact_files": [
+          "frontend-modern/src/stores/__tests__/websocket-unified.test.ts",
+          "internal/unifiedresources/code_standards_test.go"
+        ],
+        "require_explicit_path_policy_coverage": true,
+      "path_policies": [
+        {
+          "id": "identity-canonicalization",
+          "label": "canonical identity proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/unifiedresources/canonical_identity.go",
+              "internal/unifiedresources/identity.go",
+              "internal/unifiedresources/ids.go",
+              "internal/unifiedresources/legacy_aliases.go",
+              "internal/unifiedresources/physical_disk_ids.go",
+              "internal/unifiedresources/types.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/unifiedresources/canonical_identity_test.go",
+              "internal/unifiedresources/canonical_ids_types_test.go",
+              "internal/unifiedresources/code_standards_test.go",
+              "internal/unifiedresources/identity_test.go",
+              "internal/unifiedresources/ids_test.go"
+            ]
+          },
+          {
+            "id": "read-state-views",
+            "label": "read-state and adapter proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/unifiedresources/adapters.go",
+              "internal/unifiedresources/monitor_adapter.go",
+              "internal/unifiedresources/read_state.go",
+              "internal/unifiedresources/views.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/stores/__tests__/websocket-unified.test.ts",
+              "internal/unifiedresources/adapter_coverage_test.go",
+              "internal/unifiedresources/adapters_test.go",
+              "internal/unifiedresources/monitor_adapter_read_state_test.go",
+              "internal/unifiedresources/views_test.go"
+            ]
+          },
+        {
+          "id": "resource-consumers",
+          "label": "unified resource consumer proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts",
+              "frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx",
+              "frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts",
+              "frontend-modern/src/components/Infrastructure/ResourceFacetSummary.tsx",
+              "frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx",
+              "frontend-modern/src/hooks/useDashboardTrends.ts",
+              "frontend-modern/src/hooks/useUnifiedResources.ts",
+              "frontend-modern/src/pages/Infrastructure.tsx",
+              "frontend-modern/src/routing/resourceLinks.ts",
+              "frontend-modern/src/types/resource.ts",
+              "internal/api/resources.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/components/Infrastructure/__tests__/infrastructureSelectors.test.ts",
+              "frontend-modern/src/components/Infrastructure/__tests__/ResourceDetailDrawer.history.test.tsx",
+              "frontend-modern/src/components/Infrastructure/__tests__/resourceDetailMappers.test.ts",
+              "frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx",
+              "frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.workloads-link.test.tsx",
+              "frontend-modern/src/hooks/__tests__/useDashboardTrends.test.ts",
+              "frontend-modern/src/hooks/__tests__/useUnifiedResources.test.ts",
+              "frontend-modern/src/pages/__tests__/Infrastructure.empty-state.test.tsx",
+              "frontend-modern/src/pages/__tests__/Infrastructure.pbs-pmg.test.tsx",
+              "frontend-modern/src/routing/__tests__/resourceLinks.test.ts",
+              "frontend-modern/src/stores/__tests__/websocket-unified.test.ts",
+              "frontend-modern/src/types/__tests__/resource.test.ts",
+              "internal/unifiedresources/code_standards_test.go"
+          ]
+        },
+        {
+          "id": "metrics-target-runtime",
+          "label": "unified resource metrics target proof",
+          "match_prefixes": [],
+          "match_files": [
+            "internal/unifiedresources/metrics.go",
+            "internal/unifiedresources/metrics_targets.go"
+          ],
+          "allow_same_subsystem_tests": false,
+          "test_prefixes": [],
+          "exact_files": [
+            "internal/unifiedresources/metrics_targets_test.go",
+            "internal/unifiedresources/metrics_test.go"
+          ]
+        },
+        {
+          "id": "platform-registry-runtime",
+          "label": "unified resource platform registry proof",
+          "match_prefixes": [],
+          "match_files": [
+            "internal/unifiedresources/kubernetes_capabilities.go",
+            "internal/unifiedresources/pbs_rollups.go",
+            "internal/unifiedresources/registry.go",
+            "internal/unifiedresources/resolve.go",
+            "internal/unifiedresources/resolved_host_set.go",
+            "internal/unifiedresources/snapshot_source_filter.go",
+            "internal/unifiedresources/store.go"
+          ],
+          "allow_same_subsystem_tests": false,
+          "test_prefixes": [],
+          "exact_files": [
+            "internal/unifiedresources/kubernetes_registry_test.go",
+            "internal/unifiedresources/pbs_pmg_registry_test.go",
+            "internal/unifiedresources/registry_merge_policy_test.go",
+            "internal/unifiedresources/registry_test.go",
+            "internal/unifiedresources/resolve_test.go",
+            "internal/unifiedresources/resolved_host_set_test.go",
+            "internal/unifiedresources/snapshot_source_filter_test.go",
+            "internal/unifiedresources/store_test.go"
+          ]
+        },
+        {
+          "id": "unified-resource-runtime-support",
+          "label": "unified resource runtime support proof",
+            "match_prefixes": [
+              "internal/unifiedresources/"
+            ],
+            "match_files": [],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/unifiedresources/code_standards_test.go",
+              "internal/unifiedresources/kubernetes_registry_test.go",
+              "internal/unifiedresources/metrics_targets_test.go",
+              "internal/unifiedresources/metrics_test.go",
+              "internal/unifiedresources/pbs_pmg_registry_test.go",
+              "internal/unifiedresources/registry_merge_policy_test.go",
+              "internal/unifiedresources/registry_test.go",
+              "internal/unifiedresources/resolve_test.go",
+              "internal/unifiedresources/resolved_host_set_test.go",
+              "internal/unifiedresources/snapshot_source_filter_test.go",
+              "internal/unifiedresources/store_test.go"
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}
