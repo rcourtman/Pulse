@@ -204,7 +204,7 @@ func (h DockerHostFrontend) NormalizeCollections() DockerHostFrontend {
 }
 
 // ConnectedInfrastructureSurfaceFrontend describes one reporting surface that
-// Pulse associates with an infrastructure item in the Connected infrastructure
+// Pulse associates with an infrastructure item in the connected-infrastructure
 // settings view.
 type ConnectedInfrastructureSurfaceFrontend struct {
 	ID        string `json:"id"`
