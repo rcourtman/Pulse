@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 import re
 import sys
@@ -331,6 +332,7 @@ def agent_entrypoint(*, staged: bool = False) -> dict[str, Any]:
             "python3 scripts/release_control/status_lookup.py --release-gate <GATE_ID> --pretty",
             "python3 scripts/release_control/status_lookup.py --followup <FOLLOWUP_ID> --pretty",
             "python3 scripts/release_control/status_lookup.py --work-claim <CLAIM_ID> --pretty",
+            "python3 scripts/release_control/work_claim.py --kind <KIND> --id <ID> --summary <SUMMARY> --agent-id <AGENT_ID> --pretty",
             "python3 scripts/release_control/subsystem_lookup.py <path> [<path> ...] --pretty",
             "python3 scripts/release_control/worktree_base.py --base-branch <BASE_BRANCH> --pretty",
             "python3 scripts/release_control/worktree_claim.py --kind <KIND> --id <ID> --summary <SUMMARY> --agent-id <AGENT_ID> --pretty",
@@ -347,6 +349,11 @@ def agent_entrypoint(*, staged: bool = False) -> dict[str, Any]:
         selection_rule = (
             "Pick from the current lane map first unless the user overrides the priority or a narrower governed surface is already the explicit task."
         )
+    claim_rule = (
+        "Before mutating a governed slice, reserve exactly one lane, candidate lane, coverage gap, or narrower governed item with work_claim.py. "
+        "Support-only slices should claim the owning governed surface and explain the plumbing rationale in the claim summary. "
+        "Before replacing or releasing the claim, record any remaining same-lane residual in status.json rather than dropping the slice silently."
+    )
     return {
         "active_profile_id": resolved["active_profile_id"],
         "active_target_id": resolved["active_target_id"],
@@ -360,9 +367,11 @@ def agent_entrypoint(*, staged: bool = False) -> dict[str, Any]:
         "targeted_lookup_commands": targeted_lookup_commands,
         "default_pick_surface": default_pick_surface,
         "selection_rule": selection_rule,
+        "claim_rule": claim_rule,
         "subsystems_dir": resolved["subsystems_dir_rel"],
         "subsystem_lookup": "scripts/release_control/subsystem_lookup.py",
         "status_lookup": "scripts/release_control/status_lookup.py",
+        "work_claim": "scripts/release_control/work_claim.py",
         "worktree_base": "scripts/release_control/worktree_base.py",
         "worktree_claim": "scripts/release_control/worktree_claim.py",
         "worktree_finish": "scripts/release_control/worktree_finish.py",
@@ -445,6 +454,7 @@ def main(argv: list[str] | None = None) -> int:
                         *[f"  - {command}" for command in payload["startup_commands"]],
                         f"default_pick_surface={payload['default_pick_surface']}",
                         f"selection_rule={payload['selection_rule']}",
+                        f"claim_rule={payload['claim_rule']}",
                         "targeted_lookup_commands:",
                         *[f"  - {command}" for command in payload["targeted_lookup_commands"]],
                         "escalation_files:",
@@ -452,6 +462,7 @@ def main(argv: list[str] | None = None) -> int:
                         f"subsystems_dir={payload['subsystems_dir']}",
                         f"subsystem_lookup={payload['subsystem_lookup']}",
                         f"status_lookup={payload['status_lookup']}",
+                        f"work_claim={payload['work_claim']}",
                     ]
                 )
             )

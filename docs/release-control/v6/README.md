@@ -37,6 +37,9 @@ Record the claim immediately once the slice is chosen, and if an agent rolls
 straight from one slice to another it should replace the claim in the same
 `status.json` edit so the live reservation set never drops to a misleading
 no-owner gap.
+Support-only slices should still reserve the owning lane, candidate lane,
+coverage gap, or narrower governed item, and the claim summary should say why
+the plumbing is required for that governed surface.
 Candidate lanes should point at the owning target from
 `docs/release-control/control_plane.json` so lane-expansion work is routed to
 an explicit initiative.
@@ -77,6 +80,8 @@ Useful helper tools:
   Runs any executable hybrid proof commands required by the active target phase, without replacing the linked manual release gates.
 - `python3 scripts/release_control/registry_audit.py --check`
 - `python3 scripts/release_control/subsystem_lookup.py <path> [<path> ...]` for subsystem ownership, proof routing, lane context, relevant decision records, and dependent contract-update obligations
+- `python3 scripts/release_control/work_claim.py --kind <KIND> --id <ID> --summary <SUMMARY> --agent-id <AGENT_ID> --pretty`
+  Reserve or renew exactly one governed slice in a shared checkout before mutation without hand-editing `status.json`.
 - `python3 scripts/release_control/worktree_base.py --base-branch <BASE_BRANCH> --pretty`
   Ensures the canonical clean landing worktree exists for the base branch before an isolated mutating slice begins.
 - `python3 scripts/release_control/worktree_claim.py --kind <KIND> --id <ID> --summary <SUMMARY> --agent-id <AGENT_ID> --pretty`

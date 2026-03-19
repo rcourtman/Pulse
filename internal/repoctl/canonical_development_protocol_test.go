@@ -514,6 +514,15 @@ func TestReleaseControlPlaneFilesExist(t *testing.T) {
 		t.Fatalf("%s has unexpected active_target_id %q", jsonRel, activeTargetID)
 	}
 
+	workClaimRel := "scripts/release_control/work_claim.py"
+	workClaim := readRepoFile(t, workClaimRel)
+	assertContainsAll(t, workClaimRel, workClaim, []string{
+		"Reserve and release governed work claims",
+		"def claim_work(",
+		"def release_claims(",
+		"def parse_args(",
+	})
+
 	rawTargets, ok := controlPlane["targets"].([]any)
 	if !ok || len(rawTargets) == 0 {
 		t.Fatalf("%s missing targets", jsonRel)

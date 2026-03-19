@@ -113,6 +113,12 @@ class ControlPlaneAuditTest(unittest.TestCase):
             entrypoint["targeted_lookup_commands"],
         )
         self.assertIn(
+            "python3 scripts/release_control/work_claim.py --kind <KIND> --id <ID> --summary <SUMMARY> --agent-id <AGENT_ID> --pretty",
+            entrypoint["targeted_lookup_commands"],
+        )
+        self.assertIn("reserve exactly one", entrypoint["claim_rule"])
+        self.assertIn("record any remaining same-lane residual", entrypoint["claim_rule"])
+        self.assertIn(
             "python3 scripts/release_control/worktree_base.py --base-branch <BASE_BRANCH> --pretty",
             entrypoint["targeted_lookup_commands"],
         )
@@ -133,6 +139,7 @@ class ControlPlaneAuditTest(unittest.TestCase):
                 "docs/release-control/v6/internal/subsystems/registry.schema.json",
             ],
         )
+        self.assertEqual(entrypoint["work_claim"], "scripts/release_control/work_claim.py")
         self.assertEqual(entrypoint["worktree_base"], "scripts/release_control/worktree_base.py")
         self.assertEqual(entrypoint["worktree_claim"], "scripts/release_control/worktree_claim.py")
         self.assertEqual(entrypoint["worktree_finish"], "scripts/release_control/worktree_finish.py")
