@@ -287,6 +287,9 @@ The shared workloads-link helper now also uses that preferred-label helper
 for Kubernetes-cluster navigation fallbacks, so drawer/table navigation
 context stays inside the same governed resource-label boundary instead of
 repeating a raw display-name fork.
+The resource drawer's Kubernetes namespace and deployment tabs use the
+canonical cluster-name helper for backend fetch keys, keeping lookup identity
+separate from the governed display-label contract.
 That same contract also owns the canonical resource display-name fallback, so
 name-or-ID presentation stays consistent between the unified AI adapter, the
 AI resource context, and the shared resource selectors instead of being

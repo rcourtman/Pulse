@@ -30,6 +30,7 @@ import {
   getPrimaryResourceIdentity,
   getPrimaryResourceIdentityRows,
   getResourceIdentityAliases,
+  getPreferredResourceClusterName,
   getPreferredResourceDisplayName,
 } from '@/utils/resourceIdentity';
 import { SystemInfoCard } from '@/components/shared/cards/SystemInfoCard';
@@ -141,6 +142,9 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
   const [showReportModal, setShowReportModal] = createSignal(false);
 
   const displayName = createMemo(() => getPreferredResourceDisplayName(props.resource));
+  const kubernetesClusterName = createMemo(() =>
+    getPreferredResourceClusterName(props.resource) ?? '',
+  );
   const resolveResourceLabel = (resourceId: string): string =>
     props.resolveResourceLabel?.(resourceId)?.trim() || resourceId;
   const statusIndicator = createMemo(() =>
@@ -1734,7 +1738,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
             }
           >
             <K8sNamespacesDrawer
-              cluster={props.resource.name || props.resource.displayName || ''}
+              cluster={kubernetesClusterName()}
               onOpenDeployments={(ns) => {
                 setK8sDeploymentsPrefillNamespace((ns || '').trim());
                 setActiveTab('deployments');
@@ -1760,7 +1764,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
             }
           >
             <K8sDeploymentsDrawer
-              cluster={props.resource.name || props.resource.displayName || ''}
+              cluster={kubernetesClusterName()}
               initialNamespace={k8sDeploymentsPrefillNamespace() || null}
             />
           </Show>

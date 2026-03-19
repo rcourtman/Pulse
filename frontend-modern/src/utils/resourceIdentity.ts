@@ -301,6 +301,22 @@ export const getPreferredResourceHostname = (resource: Resource): string | undef
   );
 };
 
+export const getPreferredResourceClusterName = (resource: Resource): string | undefined =>
+  (() => {
+    const platformData = getPlatformDataRecord(resource);
+    const kubernetes = platformData?.kubernetes as Record<string, unknown> | undefined;
+    return (
+      asTrimmedString(resource.kubernetes?.clusterName) ||
+      asTrimmedString(kubernetes?.clusterName) ||
+      asTrimmedString(resource.kubernetes?.context) ||
+      asTrimmedString(kubernetes?.context) ||
+      asTrimmedString(resource.kubernetes?.clusterId) ||
+      asTrimmedString(kubernetes?.clusterId) ||
+      asTrimmedString(resource.clusterId) ||
+      asTrimmedString(resource.name)
+    );
+  })();
+
 export const getPreferredResourceDisplayName = (resource: Resource): string =>
   requiresGovernedResourceDisplay(resource.policy)
     ? getResourcePolicyDisplayLabel(resource)

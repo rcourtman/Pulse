@@ -10,6 +10,7 @@ import {
   getNormalizedIdentityLookupVariants,
   getInfrastructureDiscoveryHostname,
   getInfrastructureMetadataId,
+  getPreferredResourceClusterName,
   getPreferredResourceDisplayName,
   getPreferredResourceHostname,
   getPreferredWorkloadsAgentHint,
@@ -164,6 +165,22 @@ describe('resourceIdentity', () => {
       { label: 'Discovery', value: 'agent:agent-1' },
       { label: 'Metrics Target', value: 'docker-host:docker-host-1' },
     ]);
+  });
+
+  it('prefers the canonical Kubernetes cluster name over display labels', () => {
+    const resource = makeResource({
+      type: 'k8s-cluster',
+      name: 'secret-cluster',
+      displayName: 'Governed Cluster',
+      clusterId: 'cluster-override',
+      kubernetes: {
+        clusterName: 'cluster-a',
+        context: 'cluster-context',
+        clusterId: 'cluster-a-id',
+      },
+    });
+
+    expect(getPreferredResourceClusterName(resource)).toBe('cluster-a');
   });
 
   it('builds agent-like aliases for legacy summary/detail surfaces', () => {
