@@ -1,4 +1,5 @@
 // Pure formatting helpers for Patrol run data — no SolidJS dependencies.
+import { formatIdentifierLabel } from '@/utils/textPresentation';
 
 interface ModelInfo {
   id: string;
@@ -52,7 +53,7 @@ export function formatTriggerReason(reason?: string): string {
     case 'config_changed':
       return 'Config change';
     default:
-      return reason ? reason.replace(/_/g, ' ') : 'Unknown';
+      return formatIdentifierLabel(reason, { fallback: 'Unknown' });
   }
 }
 

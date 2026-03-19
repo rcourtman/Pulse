@@ -1,4 +1,5 @@
 import type { PatrolRunStatus } from '@/api/patrol';
+import { formatIdentifierLabel } from '@/utils/textPresentation';
 
 export interface PatrolRunStatusPresentation {
   badgeClass: string;
@@ -29,7 +30,7 @@ export function getPatrolRunStatusPresentation(
     case 'error':
       return {
         badgeClass: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300',
-        label: normalized.replace(/_/g, ' '),
+        label: formatIdentifierLabel(normalized),
       };
     case 'issues_found':
       return {
@@ -44,7 +45,7 @@ export function getPatrolRunStatusPresentation(
     default:
       return {
         badgeClass: 'bg-surface-alt text-base-content',
-        label: normalized ? normalized.replace(/_/g, ' ') : 'unknown',
+        label: formatIdentifierLabel(normalized, { fallback: 'unknown' }),
       };
   }
 }

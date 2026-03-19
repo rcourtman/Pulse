@@ -71,6 +71,12 @@ import resourceRelationshipPresentationSource from '@/utils/resourceRelationship
 import resourceCorrelationPresentationSource from '@/utils/resourceCorrelationPresentation.ts?raw';
 import confidencePresentationSource from '@/utils/confidencePresentation.ts?raw';
 import textPresentationSource from '@/utils/textPresentation.ts?raw';
+import messageItemSource from '@/components/AI/Chat/MessageItem.tsx?raw';
+import toolExecutionBlockSource from '@/components/AI/Chat/ToolExecutionBlock.tsx?raw';
+import aiChatSource from '@/components/AI/Chat/index.tsx?raw';
+import patrolStatusBarSource from '@/components/patrol/PatrolStatusBar.tsx?raw';
+import patrolFormatSource from '@/utils/patrolFormat.ts?raw';
+import aiFindingPresentationSource from '@/utils/aiFindingPresentation.ts?raw';
 import resourcePolicyNormalizationSource from '@/utils/resourcePolicyNormalization.ts?raw';
 import diskListSource from '@/components/Storage/DiskList.tsx?raw';
 import useDiskListModelSource from '@/components/Storage/useDiskListModel.ts?raw';
@@ -148,7 +154,6 @@ import useUnifiedResourcesSource from '@/hooks/useUnifiedResources.ts?raw';
 import findingsPanelSource from '@/components/AI/FindingsPanel.tsx?raw';
 import exploreStatusBlockSource from '@/components/AI/Chat/ExploreStatusBlock.tsx?raw';
 import aiExplorePresentationSource from '@/utils/aiExplorePresentation.ts?raw';
-import aiFindingPresentationSource from '@/utils/aiFindingPresentation.ts?raw';
 import discoveryTabSource from '@/components/Discovery/DiscoveryTab.tsx?raw';
 import discoveryPresentationSource from '@/utils/discoveryPresentation.ts?raw';
 import mailGatewaySource from '@/components/PMG/MailGateway.tsx?raw';
@@ -1867,6 +1872,22 @@ describe('frontend resource type boundaries', () => {
     expect(resourceCorrelationPresentationSource).toContain('humanizeToken');
     expect(resourceDetailDrawerSource).toContain('humanizeToken');
     expect(textPresentationSource).toContain('humanizeToken');
+    expect(textPresentationSource).toContain('formatIdentifierLabel');
+    expect(messageItemSource).toContain('formatIdentifierLabel');
+    expect(toolExecutionBlockSource).toContain('formatIdentifierLabel');
+    expect(aiChatSource).toContain('formatIdentifierLabel');
+    expect(patrolStatusBarSource).toContain('formatTriggerReason');
+    expect(patrolFormatSource).toContain('formatIdentifierLabel');
+    expect(aiFindingPresentationSource).toContain('formatIdentifierLabel');
+    expect(messageItemSource).not.toContain("replace(/^pulse_/, '').replace(/_/g, ' ')");
+    expect(toolExecutionBlockSource).not.toContain("replace(/^pulse_/, '').replace(/_/g, ' ')");
+    expect(aiChatSource).not.toContain("replace(/^pulse_/, '').replace(/_/g, ' ')");
+    expect(patrolStatusBarSource).not.toContain("replace(/_/g, ' ') : ''");
+    expect(patrolFormatSource).not.toContain("replace(/_/g, ' ') : 'Unknown'");
+    expect(aiFindingPresentationSource).not.toContain("replace(/_/g, ' ')");
+    expect(patrolRunPresentationSource).toContain('formatIdentifierLabel');
+    expect(patrolRunPresentationSource).not.toContain("normalized.replace(/_/g, ' ')");
+    expect(patrolRunPresentationSource).not.toContain("normalized ? normalized.replace(/_/g, ' ') : 'unknown'");
     expect(useUnifiedResourcesSource).toContain('normalizeResourcePolicyAISafeSummary(');
     expect(resourcePolicyNormalizationSource).toContain(
       'normalizeResourcePolicyAISafeSummary',

@@ -2,6 +2,7 @@ import type { UnifiedFinding } from '@/stores/aiIntelligence';
 import type { ApprovalRequest } from '@/api/ai';
 import type { InvestigationOutcome, InvestigationStatus } from '@/api/patrol';
 import { isLivePendingApproval } from '@/utils/approvalState';
+import { formatIdentifierLabel } from '@/utils/textPresentation';
 
 const DEFAULT_BADGE_CLASSES = 'border-border bg-surface-alt text-muted';
 const DEFAULT_LOOP_STATE_CLASSES = 'border-border bg-surface-alt text-muted';
@@ -305,10 +306,11 @@ export const doesFindingNeedAttention = (
 export const getFindingLoopStateBadgeClasses = (loopState: string): string =>
   FINDING_LOOP_STATE_CLASSES[loopState] || DEFAULT_LOOP_STATE_CLASSES;
 
-export const formatFindingLoopState = (loopState: string): string => loopState.replace(/_/g, ' ');
+export const formatFindingLoopState = (loopState: string): string =>
+  formatIdentifierLabel(loopState);
 
 export const formatFindingLifecycleType = (value: string): string =>
-  FINDING_LIFECYCLE_LABELS[value] || value.replace(/_/g, ' ');
+  FINDING_LIFECYCLE_LABELS[value] || formatIdentifierLabel(value);
 
 export const getFindingResolutionReason = (
   finding: Pick<

@@ -1,6 +1,7 @@
 import { Component, Show, createSignal, createMemo, For } from 'solid-js';
 import type { ToolExecution, PendingTool } from './types';
 import { getToolCallResultTextClass } from '@/utils/patrolRunPresentation';
+import { formatIdentifierLabel } from '@/utils/textPresentation';
 
 interface ToolExecutionBlockProps {
   tool: ToolExecution;
@@ -28,10 +29,7 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
     if (name === 'pulse_get_storage_config') return 'storage cfg';
     if (name === 'get_resource_details' || name === 'pulse_get_resource_details') return 'resource';
     if (name.includes('finding')) return 'finding';
-    return name
-      .replace(/^pulse_/, '')
-      .replace(/_/g, ' ')
-      .substring(0, 12);
+    return formatIdentifierLabel(name, { stripPrefix: 'pulse_', maxLength: 12 });
   });
 
   // Check if output is non-empty and interesting
@@ -155,10 +153,7 @@ export const PendingToolBlock: Component<PendingToolBlockProps> = (props) => {
     if (name === 'get_storage' || name === 'pulse_get_storage') return 'storage';
     if (name === 'get_resource_details' || name === 'pulse_get_resource_details') return 'resource';
     if (name.includes('finding')) return 'finding';
-    return name
-      .replace(/^pulse_/, '')
-      .replace(/_/g, ' ')
-      .substring(0, 12);
+    return formatIdentifierLabel(name, { stripPrefix: 'pulse_', maxLength: 12 });
   });
 
   return (

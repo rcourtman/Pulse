@@ -6,6 +6,7 @@ import { ToolExecutionBlock } from './ToolExecutionBlock';
 import { ApprovalCard } from './ApprovalCard';
 import { QuestionCard } from './QuestionCard';
 import type { ChatMessage, PendingApproval, PendingQuestion, StreamDisplayEvent } from './types';
+import { formatIdentifierLabel } from '@/utils/textPresentation';
 
 interface MessageItemProps {
   message: ChatMessage;
@@ -101,8 +102,6 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
 
     return Array.from(names);
   });
-
-  const formatToolName = (name: string) => name.replace(/^pulse_/, '').replace(/_/g, ' ');
 
   // Check if currently streaming content (no tools pending, still streaming)
   const isStreamingText = () =>
@@ -236,7 +235,7 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                   <div class="flex flex-wrap gap-1.5">
                     {contextTools().map((name) => (
                       <span class="px-1.5 py-0.5 rounded text-[10px] bg-surface-hover text-muted border border-border font-medium">
-                        {formatToolName(name)}
+                        {formatIdentifierLabel(name, { stripPrefix: 'pulse_' })}
                       </span>
                     ))}
                   </div>

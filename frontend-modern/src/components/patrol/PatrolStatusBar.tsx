@@ -9,6 +9,7 @@ import { Component, createResource, createMemo, Show } from 'solid-js';
 import { getPatrolRunHistory, type PatrolRunRecord } from '@/api/patrol';
 import { aiIntelligenceStore } from '@/stores/aiIntelligence';
 import { formatRelativeTime } from '@/utils/format';
+import { formatTriggerReason } from '@/utils/patrolFormat';
 import { isPatrolRunHealthy } from '@/utils/patrolRunPresentation';
 import CheckCircleIcon from 'lucide-solid/icons/check-circle';
 import AlertCircleIcon from 'lucide-solid/icons/alert-circle';
@@ -20,29 +21,6 @@ interface PatrolStatusBarProps {
 }
 
 export const PatrolStatusBar: Component<PatrolStatusBarProps> = (props) => {
-  const formatTrigger = (reason?: string) => {
-    switch (reason) {
-      case 'scheduled':
-        return 'Scheduled';
-      case 'manual':
-        return 'Manual';
-      case 'startup':
-        return 'Startup';
-      case 'alert_fired':
-        return 'Alert fired';
-      case 'alert_cleared':
-        return 'Alert cleared';
-      case 'anomaly':
-        return 'Anomaly';
-      case 'user_action':
-        return 'User action';
-      case 'config_changed':
-        return 'Config change';
-      default:
-        return reason ? reason.replace(/_/g, ' ') : '';
-    }
-  };
-
   const [runs] = createResource(
     () => props.refreshTrigger ?? 0,
     async (): Promise<PatrolRunRecord[]> => {
@@ -68,7 +46,7 @@ export const PatrolStatusBar: Component<PatrolStatusBarProps> = (props) => {
       runsToday: todayRuns.length,
       newFindingsToday: todayRuns.reduce((sum, r) => sum + (r.new_findings || 0), 0),
       lastRunTime: lastRunTime ? formatRelativeTime(lastRunTime, { compact: true }) : null,
-      lastRunTrigger: formatTrigger(lastRun?.trigger_reason),
+      lastRunTrigger: formatTriggerReason(lastRun?.trigger_reason),
       isHealthy: isPatrolRunHealthy(lastRun?.status, lastRun?.error_count ?? 0),
     };
   });

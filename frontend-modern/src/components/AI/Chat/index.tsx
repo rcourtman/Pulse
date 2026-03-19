@@ -36,6 +36,7 @@ import { ChatMessages } from './ChatMessages';
 import { ModelSelector } from './ModelSelector';
 import { MentionAutocomplete, type MentionResource } from './MentionAutocomplete';
 import type { PendingApproval, PendingQuestion, ModelInfo } from './types';
+import { formatIdentifierLabel } from '@/utils/textPresentation';
 
 const MODEL_SESSION_STORAGE_KEY = 'pulse:ai_chat_models_by_session';
 const DEFAULT_SESSION_KEY = '__default__';
@@ -276,7 +277,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
     if (lastMessage.pendingTools && lastMessage.pendingTools.length > 0) {
       const tool = lastMessage.pendingTools[0];
-      const toolName = tool.name.replace(/^pulse_/, '').replace(/_/g, ' ');
+      const toolName = formatIdentifierLabel(tool.name, { stripPrefix: 'pulse_' });
       return { type: 'tool', text: `Running ${toolName}...` };
     }
 

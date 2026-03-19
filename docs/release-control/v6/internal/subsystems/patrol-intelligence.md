@@ -34,6 +34,7 @@ helpers.
 11. `frontend-modern/src/utils/patrolFormat.ts`
 12. `frontend-modern/src/utils/patrolRunPresentation.ts`
 13. `frontend-modern/src/utils/patrolSummaryPresentation.ts`
+14. `frontend-modern/src/utils/textPresentation.ts`
 
 ## Shared Boundaries
 
@@ -43,7 +44,8 @@ helpers.
 
 1. Add or change Patrol page orchestration through `frontend-modern/src/pages/AIIntelligence.tsx` and `frontend-modern/src/stores/aiIntelligence.ts`
 2. Add or change Patrol findings, approvals, investigation, or run-history presentation through `frontend-modern/src/components/AI/FindingsPanel.tsx` and `frontend-modern/src/components/patrol/`
-3. Keep Patrol transport and payload changes aligned through the governed AI runtime and API contract transport surfaces
+3. Keep Patrol and chat identifier-label presentation aligned through the shared `frontend-modern/src/utils/textPresentation.ts`
+4. Keep Patrol transport and payload changes aligned through the governed AI runtime and API contract transport surfaces
 
 ## Forbidden Paths
 

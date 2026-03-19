@@ -678,7 +678,7 @@ describe('MessageItem', () => {
       ));
 
       expect(screen.getByText('Context used')).toBeInTheDocument();
-      // formatToolName strips 'pulse_' and replaces underscores
+      // Shared identifier formatter strips 'pulse_' and replaces underscores
       expect(screen.getByText('get nodes')).toBeInTheDocument();
       expect(screen.getByText('get metrics')).toBeInTheDocument();
     });

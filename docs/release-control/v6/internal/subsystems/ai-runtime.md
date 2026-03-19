@@ -26,6 +26,8 @@ runtime cost control, and shared AI transport surfaces.
 4. `internal/api/ai_intelligence_handlers.go`
 5. `frontend-modern/src/api/ai.ts`
 6. `frontend-modern/src/api/patrol.ts`
+7. `frontend-modern/src/components/AI/Chat/`
+8. `frontend-modern/src/utils/textPresentation.ts`
 
 ## Shared Boundaries
 
@@ -40,6 +42,7 @@ runtime cost control, and shared AI transport surfaces.
 1. Add or change chat runtime, Patrol orchestration, findings generation, or remediation behavior through `internal/ai/`
 2. Add or change Pulse Assistant request flow through `internal/api/ai_handler.go` and `frontend-modern/src/api/ai.ts`
 3. Add or change Patrol, alert-analysis, or remediation transport through `internal/api/ai_handlers.go`, `internal/api/ai_intelligence_handlers.go`, and `frontend-modern/src/api/patrol.ts`
+4. Keep AI chat presentation helpers aligned through `frontend-modern/src/components/AI/Chat/` and the shared `frontend-modern/src/utils/textPresentation.ts`
 
 ## Forbidden Paths
 
