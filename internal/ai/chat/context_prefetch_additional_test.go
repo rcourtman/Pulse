@@ -451,7 +451,7 @@ func TestContextPrefetcher_FormatContextSummary_GovernedMention(t *testing.T) {
 	if !strings.Contains(summary, "Governed resource") {
 		t.Fatalf("expected governed heading, got %q", summary)
 	}
-	if !strings.Contains(summary, "Policy: sensitivity=Restricted, routing=Local Only, cloud_summary=false, cloud_raw_signals=false") {
+	if !strings.Contains(summary, "Policy: sensitivity=Restricted, routing=Local Only, cloud_summary=false") {
 		t.Fatalf("expected canonical policy line, got %q", summary)
 	}
 	if !strings.Contains(summary, "Redactions: Hostname, Alias, Path") {

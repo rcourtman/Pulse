@@ -187,11 +187,10 @@ func ResourcePolicySummaryLines(policy *ResourcePolicy) []string {
 	}
 
 	lines := []string{
-		fmt.Sprintf("Policy: sensitivity=%s, routing=%s, cloud_summary=%t, cloud_raw_signals=%t",
+		fmt.Sprintf("Policy: sensitivity=%s, routing=%s, cloud_summary=%t",
 			ResourceSensitivityLabel(policy.Sensitivity),
 			ResourceRoutingScopeLabel(policy.Routing.Scope),
 			policy.Routing.AllowCloudSummary,
-			policy.Routing.AllowCloudRawSignals,
 		),
 	}
 

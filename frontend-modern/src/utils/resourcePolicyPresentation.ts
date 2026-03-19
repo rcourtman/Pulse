@@ -127,10 +127,6 @@ export const getResourcePolicyRoutingDecisionSummaries = (
       label: 'Cloud Summary',
       value: getResourcePolicyRoutingDecisionLabel(policy.routing.allowCloudSummary),
     },
-    {
-      label: 'Raw Signals',
-      value: getResourcePolicyRoutingDecisionLabel(policy.routing.allowCloudRawSignals),
-    },
   ];
 };
 

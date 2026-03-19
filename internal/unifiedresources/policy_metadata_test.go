@@ -272,7 +272,7 @@ func TestResourcePolicySummaryLines(t *testing.T) {
 
 	got := ResourcePolicySummaryLines(policy)
 	want := []string{
-		"Policy: sensitivity=Restricted, routing=Local Only, cloud_summary=false, cloud_raw_signals=false",
+		"Policy: sensitivity=Restricted, routing=Local Only, cloud_summary=false",
 		"Redactions: Hostname, Alias, Path",
 	}
 	if len(got) != len(want) {
@@ -307,7 +307,7 @@ func TestFormatResourcePolicyGovernedSummary(t *testing.T) {
 	}
 
 	got := FormatResourcePolicyGovernedSummary("system container resource; status online; local-only context", policy)
-	want := "## Governed resource\nsystem container resource; status online; local-only context\nPolicy: sensitivity=Restricted, routing=Local Only, cloud_summary=false, cloud_raw_signals=false\nRedactions: Hostname, Alias\nRaw routing coordinates, bind mounts, hostnames, and discovery file paths withheld by canonical resource policy.\n\n"
+	want := "## Governed resource\nsystem container resource; status online; local-only context\nPolicy: sensitivity=Restricted, routing=Local Only, cloud_summary=false\nRedactions: Hostname, Alias\nRaw routing coordinates, bind mounts, hostnames, and discovery file paths withheld by canonical resource policy.\n\n"
 	if got != want {
 		t.Fatalf("FormatResourcePolicyGovernedSummary() = %q, want %q", got, want)
 	}

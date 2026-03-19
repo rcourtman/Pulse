@@ -132,12 +132,12 @@ The canonical policy-posture aggregate now also lives in
 context share the same sensitivity, routing, and redaction counts from the
 resource model instead of rebuilding governance posture in AI-local code.
 The same policy presenter now also owns the `Allowed`/`Blocked` routing
-decision labels shown in the resource detail drawer, so routing-state wording
+decision label shown in the resource detail drawer, so routing-state wording
 stays canonical with the rest of the policy surface instead of being
 rendered inline by the drawer.
-That same helper also owns the drawer's `Cloud Summary` and `Raw Signals`
-routing rows, so the detail view no longer reconstructs the row structure or
-decision labels locally.
+That same helper also owns the drawer's `Cloud Summary` routing row, so the
+detail view no longer reconstructs the row structure or decision label
+locally.
 The backend AI and Patrol correlation context renderers now derive their canonical
 relationship labels, direction, provenance, freshness, and metadata flags
 from `internal/unifiedresources/relationship_presentation.go`, so the correlation

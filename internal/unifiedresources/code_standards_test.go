@@ -441,6 +441,7 @@ func TestResourcePolicyLabelHelpersUsedByAIConsumers(t *testing.T) {
 			"func ResourcePolicyLabel(name, aiSafeSummary string, policy *ResourcePolicy) string",
 			"if ResourcePolicyRequiresGovernedSummary(policy) {",
 			"return ResourcePolicyRedactedLabel",
+			"Policy: sensitivity=%s, routing=%s, cloud_summary=%t",
 			"func ResourcePolicyRedactedValue(value string, policy *ResourcePolicy, hints ...ResourceRedactionHint) string",
 			"const ResourcePolicyRedactedLabel = \"redacted by policy\"",
 			"func ResourceRedactionLabelsFromHints(hints []ResourceRedactionHint) []string",

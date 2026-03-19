@@ -49,10 +49,7 @@ describe('resourcePolicyPresentation utils', () => {
           redact: [],
         },
       }),
-    ).toEqual([
-      { label: 'Cloud Summary', value: 'Allowed' },
-      { label: 'Raw Signals', value: 'Blocked' },
-    ]);
+    ).toEqual([{ label: 'Cloud Summary', value: 'Allowed' }]);
   });
 
   it('formats canonical policy count summaries', () => {
