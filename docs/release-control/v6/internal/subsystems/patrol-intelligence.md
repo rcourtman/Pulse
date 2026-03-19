@@ -92,6 +92,9 @@ That Patrol summary card now also includes the canonical data-governance
 posture snapshot from the shared AI summary payload, so the visible page can
 show the same sensitivity, routing, and redaction distribution that the
 runtime derives from unified resources.
+The resource drawer now carries the same canonical posture snapshot through
+the resource-intelligence payload, so the resource-level AI card can show the
+org posture context without introducing a separate posture endpoint.
 The Patrol page and resource drawer now also share the canonical
 `frontend-modern/src/utils/resourceChangePresentation.ts` formatter so
 recent-change kind and headline wording stays aligned wherever the canonical

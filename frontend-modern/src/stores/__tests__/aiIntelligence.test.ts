@@ -132,6 +132,7 @@ describe('aiIntelligenceStore', () => {
       },
     });
     expect(aiIntelligenceStore.intelligenceSummary?.recent_changes).toHaveLength(1);
+    expect(aiIntelligenceStore.intelligenceSummary?.policy_posture?.routing_counts?.['local-only']).toBe(1);
   });
 
   it('treats queued fixes without a live approval as findings needing attention', async () => {

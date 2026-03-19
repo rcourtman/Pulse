@@ -171,6 +171,9 @@ The same unified intelligence summary now also surfaces a canonical policy
 posture snapshot derived from unified resources, so sensitivity, routing, and
 redaction counts stay aligned with the governed resource model that the
 runtime uses for prompt export and context rendering.
+The resource-intelligence payload used by the resource drawer also carries
+the same canonical policy posture snapshot, so the detail surface can show
+governed posture context without inventing a second posture contract.
 The shared AI resource and infrastructure prompt contexts should also surface
 the same canonical recent changes section before any patrol-local fallback so
 the model sees the same timeline entries that power the resource API and

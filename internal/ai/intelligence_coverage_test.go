@@ -625,6 +625,19 @@ func TestIntelligence_GetResourceIntelligence_WithAllSubsystems(t *testing.T) {
 	_ = knowledgeStore.SaveNote("vm-intel", "vm-intel", "vm", "general", "Note", "Content")
 
 	intel.SetSubsystems(findings, patternDetector, correlationDetector, baselineStore, incidentStore, knowledgeStore, nil, nil)
+	intel.SetUnifiedResourceProvider(&mockUnifiedResourceProvider{
+		getAllFunc: func() []ur.Resource {
+			return []ur.Resource{
+				{ID: "public-1", Type: ur.ResourceTypeVM, Tags: []string{"public"}},
+				{
+					ID:     "internal-1",
+					Type:   ur.ResourceTypeAgent,
+					Agent:  &ur.AgentData{Hostname: "agent-1"},
+					Status: ur.StatusOnline,
+				},
+			}
+		},
+	})
 	canonicalStore := ur.NewMemoryStore()
 	if err := canonicalStore.RecordChange(ur.ResourceChange{
 		ID:            "change-intel",
@@ -663,6 +676,15 @@ func TestIntelligence_GetResourceIntelligence_WithAllSubsystems(t *testing.T) {
 	}
 	if res.RecentChanges[0].Kind != ur.ChangeRestart {
 		t.Fatalf("expected restart change kind, got %s", res.RecentChanges[0].Kind)
+	}
+	if res.PolicyPosture == nil {
+		t.Fatal("expected policy posture summary")
+	}
+	if res.PolicyPosture.TotalResources != 2 {
+		t.Fatalf("expected 2 governed resources, got %d", res.PolicyPosture.TotalResources)
+	}
+	if got := res.PolicyPosture.SensitivityCounts[ur.ResourceSensitivityPublic]; got != 1 {
+		t.Fatalf("expected 1 public resource, got %d", got)
 	}
 	if res.Knowledge == nil || res.NoteCount == 0 {
 		t.Error("expected knowledge")

@@ -70,6 +70,7 @@ type ResourceIntelligence struct {
 	Anomalies       []AnomalyReport                   `json:"anomalies,omitempty"`
 	RecentIncidents []*memory.Incident                `json:"recent_incidents,omitempty"`
 	RecentChanges   []unifiedresources.ResourceChange `json:"recent_changes,omitempty"`
+	PolicyPosture   *PolicyPostureSummary             `json:"policy_posture,omitempty"`
 	Knowledge       *knowledge.GuestKnowledge         `json:"knowledge,omitempty"`
 	NoteCount       int                               `json:"note_count"`
 }
@@ -305,6 +306,7 @@ func (i *Intelligence) GetSummary() *IntelligenceSummary {
 // GetResourceIntelligence returns aggregated intelligence for a specific resource
 func (i *Intelligence) GetResourceIntelligence(resourceID string) *ResourceIntelligence {
 	i.mu.RLock()
+	unifiedResourceProvider := i.unifiedResourceProvider
 	defer i.mu.RUnlock()
 
 	intel := &ResourceIntelligence{
@@ -357,6 +359,12 @@ func (i *Intelligence) GetResourceIntelligence(resourceID string) *ResourceIntel
 	// Recent changes
 	if recentChanges := i.getRecentChangesForResource(resourceID, 5); len(recentChanges) > 0 {
 		intel.RecentChanges = recentChanges
+	}
+
+	if unifiedResourceProvider != nil {
+		intel.PolicyPosture = summarizePolicyPosture(
+			normalizeUnifiedResourceContextSlice(unifiedResourceProvider.GetAll()),
+		)
 	}
 
 	// Knowledge

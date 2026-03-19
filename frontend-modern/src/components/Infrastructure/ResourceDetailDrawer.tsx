@@ -5,6 +5,9 @@ import type {
   ResourceChangeKind,
   ResourceChangeSourceAdapter,
   ResourceChangeSourceType,
+  ResourceRedactionHint,
+  ResourceRoutingScope,
+  ResourceSensitivity,
 } from '@/types/resource';
 import { getDisplayName } from '@/types/resource';
 import { formatUptime, formatRelativeTime, formatAbsoluteTime } from '@/utils/format';
@@ -49,6 +52,7 @@ import { buildInfrastructurePath } from '@/routing/resourceLinks';
 import {
   getResourcePolicyBadges,
   getResourcePolicyRedactionLabels,
+  getResourceRedactionHintLabel,
   getResourceRoutingScopeLabel,
   getResourceSensitivityLabel,
 } from '@/utils/resourcePolicyPresentation';
@@ -111,6 +115,23 @@ const timelineSourceAdapterOptions: Array<{ label: string; value: ResourceChange
     { label: 'TrueNAS adapter', value: 'truenas_adapter' },
     { label: 'Ops agent', value: 'agent:ops-helper' },
   ];
+
+const policySensitivityOrder: ResourceSensitivity[] = [
+  'public',
+  'internal',
+  'sensitive',
+  'restricted',
+];
+
+const policyRoutingOrder: ResourceRoutingScope[] = ['cloud-summary', 'local-first', 'local-only'];
+
+const policyRedactionOrder: ResourceRedactionHint[] = [
+  'hostname',
+  'ip-address',
+  'platform-id',
+  'alias',
+  'path',
+];
 
 const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
   type DrawerTab =
@@ -275,6 +296,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
     },
     { initialValue: null as ResourceIntelligence | null },
   );
+  const policyPosture = createMemo(() => resourceIntelligence()?.policy_posture);
   const timelineFacetRequest = createMemo(() => {
     const id = resourceFacetId();
     if (!id) return null;
@@ -870,6 +892,65 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                         })}
                       </div>
                     </div>
+                  </Show>
+                  <Show when={policyPosture()}>
+                    {(posture) => (
+                      <div class="rounded border border-border-subtle bg-base px-2 py-1.5">
+                        <div class="text-[10px] uppercase tracking-wide text-muted">
+                          Policy posture
+                        </div>
+                        <div class="mt-0.5 text-[11px] text-base-content">
+                          {posture().total_resources} governed resources
+                        </div>
+                        <div class="mt-2 grid grid-cols-2 gap-1.5">
+                          <For each={policySensitivityOrder}>
+                            {(sensitivity) => (
+                              <div class="rounded bg-surface px-2 py-1">
+                                <div class="text-[9px] uppercase tracking-wide text-muted">
+                                  {getResourceSensitivityLabel(sensitivity)}
+                                </div>
+                                <div class="font-medium text-base-content">
+                                  {posture().sensitivity_counts?.[sensitivity] ?? 0}
+                                </div>
+                              </div>
+                            )}
+                          </For>
+                        </div>
+                        <div class="mt-2 grid grid-cols-3 gap-1.5">
+                          <For each={policyRoutingOrder}>
+                            {(scope) => (
+                              <div class="rounded bg-surface px-2 py-1">
+                                <div class="text-[9px] uppercase tracking-wide text-muted">
+                                  {getResourceRoutingScopeLabel(scope)}
+                                </div>
+                                <div class="font-medium text-base-content">
+                                  {posture().routing_counts?.[scope] ?? 0}
+                                </div>
+                              </div>
+                            )}
+                          </For>
+                        </div>
+                        <Show
+                          when={policyRedactionOrder.some(
+                            (hint) => (posture().redaction_counts?.[hint] ?? 0) > 0,
+                          )}
+                        >
+                          <div class="mt-2 flex flex-wrap gap-1">
+                            <For each={policyRedactionOrder}>
+                              {(hint) => {
+                                const count = posture().redaction_counts?.[hint] ?? 0;
+                                if (!count) return null;
+                                return (
+                                  <span class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px]">
+                                    {getResourceRedactionHintLabel(hint)} {count}
+                                  </span>
+                                );
+                              }}
+                            </For>
+                          </div>
+                        </Show>
+                      </div>
+                    )}
                   </Show>
                 </div>
               </div>

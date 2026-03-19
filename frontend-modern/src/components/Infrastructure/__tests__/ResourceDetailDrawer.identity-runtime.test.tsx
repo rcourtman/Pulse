@@ -54,6 +54,20 @@ vi.mock('@/api/ai', () => ({
           reason: 'Updated canonical config',
         },
       ],
+      policy_posture: {
+        total_resources: 2,
+        sensitivity_counts: {
+          public: 1,
+          internal: 1,
+        },
+        routing_counts: {
+          'cloud-summary': 1,
+          'local-first': 1,
+        },
+        redaction_counts: {
+          hostname: 1,
+        },
+      },
       note_count: 3,
     }),
   },
@@ -297,7 +311,11 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
 
     expect(getByText(/A · 92\/100/)).toBeInTheDocument();
     expect(getByText('Recent Changes')).toBeInTheDocument();
-    expect(getByText('1')).toBeInTheDocument();
+    expect(getByText('Recent Changes').parentElement).toHaveTextContent('1');
+    expect(getByText('Policy posture')).toBeInTheDocument();
+    expect(getByText('2 governed resources')).toBeInTheDocument();
+    expect(getByText('Public')).toBeInTheDocument();
+    expect(getByText('Cloud Summary')).toBeInTheDocument();
     const latestChange = getByText('Latest canonical change').parentElement;
     expect(latestChange).not.toBeNull();
     expect(latestChange).toHaveTextContent('Config update');
