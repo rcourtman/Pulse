@@ -238,11 +238,8 @@ func monitoredSystemResourceDisplayName(resource *Resource) string {
 	if resource == nil {
 		return ""
 	}
-	if resource.Canonical != nil && strings.TrimSpace(resource.Canonical.DisplayName) != "" {
-		return strings.TrimSpace(resource.Canonical.DisplayName)
-	}
-	if strings.TrimSpace(resource.Name) != "" {
-		return strings.TrimSpace(resource.Name)
+	if name := ResourceDisplayName(*resource); name != "" {
+		return name
 	}
 	switch {
 	case resource.Proxmox != nil && strings.TrimSpace(resource.Proxmox.NodeName) != "":

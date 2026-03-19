@@ -75,3 +75,38 @@ func TestBuildConnectedInfrastructure_AppliesIgnoreStateToActiveSurfaces(t *test
 		t.Fatalf("expected ignored docker surface, got %#v", ignored.Surfaces)
 	}
 }
+
+func TestBuildConnectedInfrastructure_UsesSharedDisplayNameFallback(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0)
+	items := buildConnectedInfrastructure([]unifiedresources.Resource{
+		{
+			ID:       "tower-resource",
+			LastSeen: now,
+			Status:   unifiedresources.StatusOnline,
+			Canonical: &unifiedresources.CanonicalIdentity{
+				DisplayName: "Canonical Tower",
+			},
+			Agent: &unifiedresources.AgentData{
+				AgentID:      "tower-agent",
+				AgentVersion: "1.2.3",
+				Hostname:     "tower.local",
+				Platform:     "linux",
+			},
+			Identity: unifiedresources.ResourceIdentity{
+				Hostnames: []string{"tower.local"},
+			},
+		},
+	}, models.StateSnapshot{})
+
+	if len(items) != 1 {
+		t.Fatalf("expected 1 connected infrastructure item, got %d", len(items))
+	}
+
+	item := items[0]
+	if item.Name != "Canonical Tower" {
+		t.Fatalf("expected canonical display name to drive name, got %q", item.Name)
+	}
+	if item.DisplayName != "Canonical Tower" {
+		t.Fatalf("expected canonical display name to drive displayName, got %q", item.DisplayName)
+	}
+}

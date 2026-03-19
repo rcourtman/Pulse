@@ -193,8 +193,9 @@ shared `ResourcePolicyLabel(...)` and `ResourcePolicyRedactedValue(...)`
 helpers instead of through AI-local presentation shims, so policy copying and
 policy-bound labels both stay centralized in the resource model.
 That same contract also owns the canonical resource display-name fallback, so
-name-or-ID presentation stays consistent between the unified AI adapter and
-the AI resource context instead of being recomputed locally.
+name-or-ID presentation stays consistent between the unified AI adapter, the
+AI resource context, and the connected-infrastructure / monitored-system
+projections instead of being recomputed locally.
 
 That same shared store now also persists append-only action lifecycle, action
 audit, and export audit records, giving the control-plane verbs a durable home

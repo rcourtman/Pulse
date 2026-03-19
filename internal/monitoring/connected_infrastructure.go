@@ -236,7 +236,7 @@ func addConnectedInfrastructureSurface(
 		group = &connectedInfrastructureGroup{
 			id:                key,
 			name:              connectedInfrastructureName(resource),
-			displayName:       connectedInfrastructureDisplayName(resource),
+			displayName:       unifiedresources.ResourceDisplayName(resource),
 			hostname:          connectedInfrastructureHostname(resource),
 			status:            "active",
 			healthStatus:      strings.TrimSpace(string(resource.Status)),
@@ -285,7 +285,7 @@ func addConnectedInfrastructureSurface(
 		group.hostname = connectedInfrastructureHostname(resource)
 	}
 	if group.displayName == "" {
-		group.displayName = connectedInfrastructureDisplayName(resource)
+		group.displayName = unifiedresources.ResourceDisplayName(resource)
 	}
 	if group.name == "" {
 		group.name = connectedInfrastructureName(resource)
@@ -398,8 +398,7 @@ func connectedInfrastructureHostname(resource unifiedresources.Resource) string 
 
 func connectedInfrastructureName(resource unifiedresources.Resource) string {
 	for _, candidate := range []string{
-		connectedInfrastructureCanonicalDisplayName(resource),
-		strings.TrimSpace(resource.Name),
+		unifiedresources.ResourceDisplayName(resource),
 		connectedInfrastructureHostname(resource),
 		resource.ID,
 	} {
@@ -408,13 +407,6 @@ func connectedInfrastructureName(resource unifiedresources.Resource) string {
 		}
 	}
 	return resource.ID
-}
-
-func connectedInfrastructureDisplayName(resource unifiedresources.Resource) string {
-	if resource.Canonical != nil {
-		return strings.TrimSpace(resource.Canonical.DisplayName)
-	}
-	return ""
 }
 
 func connectedInfrastructureVersion(resource unifiedresources.Resource) string {
@@ -673,13 +665,6 @@ func connectedInfrastructurePMGHostname(resource unifiedresources.Resource) stri
 func connectedInfrastructureCanonicalHostname(resource unifiedresources.Resource) string {
 	if resource.Canonical != nil {
 		return strings.TrimSpace(resource.Canonical.Hostname)
-	}
-	return ""
-}
-
-func connectedInfrastructureCanonicalDisplayName(resource unifiedresources.Resource) string {
-	if resource.Canonical != nil {
-		return strings.TrimSpace(resource.Canonical.DisplayName)
 	}
 	return ""
 }

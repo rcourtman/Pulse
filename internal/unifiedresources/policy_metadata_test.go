@@ -237,6 +237,15 @@ func TestResourcePolicyLabelHelpers(t *testing.T) {
 }
 
 func TestResourceDisplayName(t *testing.T) {
+	if got := ResourceDisplayName(Resource{
+		Name: "  node-a  ",
+		ID:   "id-a",
+		Canonical: &CanonicalIdentity{
+			DisplayName: "canonical-node-a",
+		},
+	}); got != "canonical-node-a" {
+		t.Fatalf("ResourceDisplayName() with canonical name = %q, want canonical-node-a", got)
+	}
 	if got := ResourceDisplayName(Resource{Name: "  node-a  ", ID: "id-a"}); got != "node-a" {
 		t.Fatalf("ResourceDisplayName() with name = %q, want node-a", got)
 	}

@@ -351,6 +351,28 @@ func TestResourcePolicyLabelHelpersUsedByAIConsumers(t *testing.T) {
 	}
 }
 
+func TestResourceDisplayNameUsedByInfrastructureConsumers(t *testing.T) {
+	requiredSnippets := map[string][]string{
+		filepath.Join("..", "monitoring", "connected_infrastructure.go"): {
+			"unifiedresources.ResourceDisplayName(resource)",
+		},
+		filepath.Join(".", "monitored_systems.go"): {
+			"if name := ResourceDisplayName(*resource); name != \"\" {",
+		},
+	}
+	for name, snippets := range requiredSnippets {
+		data, err := os.ReadFile(name)
+		if err != nil {
+			t.Fatalf("failed to read %s: %v", name, err)
+		}
+		for _, snippet := range snippets {
+			if !strings.Contains(string(data), snippet) {
+				t.Fatalf("%s must contain %q", name, snippet)
+			}
+		}
+	}
+}
+
 func TestResourceTimelineStoreIndexesSupportFilteredReads(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join("store.go"))
 	if err != nil {

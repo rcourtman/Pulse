@@ -228,6 +228,11 @@ func ResourcePolicyRedactedValue(value string, policy *ResourcePolicy, hints ...
 
 // ResourceDisplayName returns the canonical resource display name fallback.
 func ResourceDisplayName(resource Resource) string {
+	if resource.Canonical != nil {
+		if name := strings.TrimSpace(resource.Canonical.DisplayName); name != "" {
+			return name
+		}
+	}
 	if name := strings.TrimSpace(resource.Name); name != "" {
 		return name
 	}
