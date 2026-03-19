@@ -184,6 +184,7 @@ describe('ResourceDetailDrawer change history section', () => {
     ));
 
     await screen.findByText('Changes loaded');
+    expect(screen.queryByRole('button', { name: 'Discovery' })).toBeNull();
     expect(screen.getByText('Change history')).toBeInTheDocument();
     expect(screen.getByText('Recent activity')).toBeInTheDocument();
     expect(screen.getByText('Events')).toBeInTheDocument();

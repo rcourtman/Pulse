@@ -135,13 +135,13 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
     | 'namespaces'
     | 'deployments'
     | 'swarm'
-    | 'discovery'
     | 'debug';
   const [activeTab, setActiveTab] = createSignal<DrawerTab>('overview');
   const [debugEnabled] = createLocalStorageBooleanSignal(STORAGE_KEYS.DEBUG_MODE, false);
   const [copied, setCopied] = createSignal(false);
   const [showReportModal, setShowReportModal] = createSignal(false);
   const [showInvestigationContext, setShowInvestigationContext] = createSignal(false);
+  const [showDiscoveryContext, setShowDiscoveryContext] = createSignal(false);
 
   const displayName = createMemo(() => getPreferredResourceDisplayName(props.resource));
   const kubernetesClusterName = createMemo(() =>
@@ -622,7 +622,6 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
       ...(props.resource.type === 'docker-host' && dockerSwarmClusterKey()
         ? [{ id: 'swarm' as DrawerTab, label: 'Swarm' }]
         : []),
-      { id: 'discovery' as DrawerTab, label: 'Discovery' },
     ];
     if (debugEnabled()) {
       base.push({ id: 'debug' as DrawerTab, label: 'Debug' });
@@ -1474,12 +1473,55 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
 
         <Show when={discoveryConfig()}>
           {(config) => (
-            <div class="mt-3">
+            <div class="mt-3 space-y-3">
               <WebInterfaceUrlField
                 metadataKind={config().metadataKind}
                 metadataId={config().metadataId}
                 targetLabel={config().targetLabel}
               />
+
+              <div class="rounded border border-border bg-surface p-3">
+                <div class="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <div class="text-[11px] font-medium uppercase tracking-wide text-base-content">
+                      Discovery context
+                    </div>
+                    <div class="mt-1 text-[10px] text-muted">
+                      Supporting discovery details for this {config().targetLabel}.
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowDiscoveryContext((value) => !value)}
+                    class="inline-flex items-center rounded-md border border-border bg-surface-hover px-3 py-1.5 text-[11px] font-medium text-base-content transition-colors hover:bg-surface"
+                  >
+                    {showDiscoveryContext() ? 'Hide details' : 'Show details'}
+                  </button>
+                </div>
+
+                <Show when={showDiscoveryContext()}>
+                  <div class="mt-3">
+                    <Suspense
+                      fallback={
+                        <div class="flex items-center justify-center py-8">
+                          <div class="animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full" />
+                          <span class="ml-2 text-sm text-muted">
+                            {getDiscoveryLoadingState().text}
+                          </span>
+                        </div>
+                      }
+                    >
+                      <DiscoveryTab
+                        resourceType={config().resourceType}
+                        agentId={config().agentId}
+                        resourceId={config().resourceId}
+                        hostname={config().hostname}
+                      />
+                    </Suspense>
+                  </div>
+                </Show>
+              </div>
             </div>
           )}
         </Show>
@@ -1717,39 +1759,6 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
             </Show>
           </div>
         </div>
-      </div>
-
-      {/* Discovery Tab */}
-      <div
-        class={activeTab() === 'discovery' ? '' : 'hidden'}
-        style={{ 'overflow-anchor': 'none' }}
-      >
-        <Show
-          when={discoveryConfig()}
-          fallback={
-            <div class="rounded border border-dashed border-border bg-surface-hover p-4 text-sm">
-              Discovery is not available for this resource type yet.
-            </div>
-          }
-        >
-          {(config) => (
-            <Suspense
-              fallback={
-                <div class="flex items-center justify-center py-8">
-                  <div class="animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full" />
-                  <span class="ml-2 text-sm text-muted">{getDiscoveryLoadingState().text}</span>
-                </div>
-              }
-            >
-              <DiscoveryTab
-                resourceType={config().resourceType}
-                agentId={config().agentId}
-                resourceId={config().resourceId}
-                hostname={config().hostname}
-              />
-            </Suspense>
-          )}
-        </Show>
       </div>
 
       {/* PMG Mail Tab */}

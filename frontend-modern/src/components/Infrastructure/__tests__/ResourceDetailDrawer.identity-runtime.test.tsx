@@ -127,6 +127,22 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     );
   });
 
+  it('keeps discovery as secondary overview context instead of a peer tab', async () => {
+    const { getByRole, getByText, queryByRole, queryByTestId } = render(() => (
+      <ResourceDetailDrawer resource={baseResource({})} />
+    ));
+
+    expect(queryByRole('button', { name: 'Discovery' })).toBeNull();
+    expect(getByText('Discovery context')).toBeInTheDocument();
+    expect(queryByTestId('discovery-tab')).toBeNull();
+
+    fireEvent.click(getByRole('button', { name: 'Show details' }));
+
+    await waitFor(() => {
+      expect(queryByTestId('discovery-tab')).toBeInTheDocument();
+    });
+  });
+
   it('falls back to source list summary when per-source health is unavailable', () => {
     const resource = baseResource({
       sourceType: 'api',
