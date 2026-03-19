@@ -159,6 +159,8 @@ describe('ResourceDetailDrawer service cards', () => {
     fireEvent.click(getByRole('button', { name: 'Show mail flow' }));
     expect(getByText('Queue')).toBeInTheDocument();
     expect(getByText('Backlog')).toBeInTheDocument();
+    const pmgSupportContext = within(getByTestId('pmg-support-context'));
+    expect(pmgSupportContext.getByText('Nodes')).toBeInTheDocument();
     expect(getByText('Queue detail')).toBeInTheDocument();
     expect(getByText('Mail detail')).toBeInTheDocument();
     expect(getByRole('link', { name: /open pmg thresholds/i })).toHaveAttribute(

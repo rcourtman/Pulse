@@ -301,6 +301,9 @@ inside PBS or PMG cards, and the service-local reveal labels stay terse
 also use shorter section labels (`Types`, `Queue detail`, `Mail detail`) and
 count-only summary badges so opened cards read like current state instead of
 descriptive chrome.
+Within that same PMG opened state, queue and backlog remain the primary metric
+tiles while node count moves into quieter support context beneath them, so the
+first read stays on mail-flow state instead of cluster metadata.
 The Docker service card now follows the same rule: its opened state uses
 compact labels (`Docker runtime`, `Updates`, `Checked`, `Show actions`,
 `Check now`, `Update all`) and short queued/confirm feedback so action

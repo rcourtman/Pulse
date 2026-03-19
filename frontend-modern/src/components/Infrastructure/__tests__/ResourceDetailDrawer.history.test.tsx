@@ -384,6 +384,48 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(screen.getByText('Types')).toBeInTheDocument();
   });
 
+  it('keeps PMG node count out of the primary mail-flow metric grid', () => {
+    facetBundleMock.getFacetBundle.mockResolvedValueOnce({
+      capabilities: [],
+      relationships: [],
+      recentChanges: [],
+    });
+
+    const resource = baseResource({
+      id: 'pmg-1',
+      type: 'pmg',
+      name: 'pmg-main',
+      displayName: 'PMG Main',
+      platformId: 'pmg-main',
+      platformType: 'proxmox-pmg',
+      platformData: {
+        sources: ['pmg'],
+        pmg: {
+          hostname: 'pmg-main.local',
+          connectionHealth: 'online',
+          nodeCount: 1,
+          queueTotal: 519,
+          queueDeferred: 12,
+          queueHold: 4,
+          mailCountTotal: 1200,
+          spamIn: 32,
+          virusIn: 2,
+        },
+      },
+    });
+
+    render(() => <ResourceDetailDrawer resource={resource} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show service details' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Show mail flow' }));
+    expect(screen.getByText('Queue')).toBeInTheDocument();
+    expect(screen.getByText('Backlog')).toBeInTheDocument();
+    const supportContext = within(screen.getByTestId('pmg-support-context'));
+    expect(supportContext.getByText('Nodes')).toBeInTheDocument();
+    expect(screen.getByText('Queue detail')).toBeInTheDocument();
+    expect(screen.getByText('Mail detail')).toBeInTheDocument();
+  });
+
   it('filters timeline entries by kind and source type', async () => {
     const unfilteredFacetBundle = {
       capabilities: [

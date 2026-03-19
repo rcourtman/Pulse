@@ -1461,13 +1461,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                             </Show>
                             <Show when={showPmgMailFlowDetail()}>
                               <div class="space-y-1.5 border-t border-rose-200 pt-2 dark:border-rose-700">
-                                <div class="grid grid-cols-3 gap-2">
-                                  <div class="rounded border border-rose-200 bg-surface px-2 py-1.5 dark:border-rose-700">
-                                    <div class="text-[10px] text-muted">Nodes</div>
-                                    <div class="text-sm font-semibold text-base-content">
-                                      {formatInteger(pmg().nodeCount)}
-                                    </div>
-                                  </div>
+                                <div class="grid grid-cols-2 gap-2">
                                   <div class="rounded border border-rose-200 bg-surface px-2 py-1.5 dark:border-rose-700">
                                     <div class="text-[10px] text-muted">Queue</div>
                                     <div
@@ -1485,6 +1479,17 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                                     </div>
                                   </div>
                                 </div>
+                                <Show when={pmg().nodeCount}>
+                                  <div
+                                    data-testid="pmg-support-context"
+                                    class="flex items-center justify-between gap-2 rounded border border-dashed border-rose-200 bg-surface px-2 py-1.5 text-[10px] dark:border-rose-700"
+                                  >
+                                    <span class="text-muted">Nodes</span>
+                                    <span class="font-medium text-base-content">
+                                      {formatInteger(pmg().nodeCount)}
+                                    </span>
+                                  </div>
+                                </Show>
                                 <details class="rounded border border-rose-200 bg-surface px-2 py-1.5 dark:border-rose-700">
                                   <summary class="flex cursor-pointer list-none items-center justify-between text-[10px] font-medium text-muted">
                                     <span>Queue detail</span>
