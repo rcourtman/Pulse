@@ -56,3 +56,38 @@ type ExportAuditRecord struct {
 	Destination  string         `json:"destination"`
 	Redactions   []string       `json:"redactions,omitempty"`
 }
+
+// ExportSensitivityFloor returns the canonical highest data-sensitivity floor
+// represented by the supplied resource sensitivity counts.
+func ExportSensitivityFloor(counts map[ResourceSensitivity]int) DataSensitivity {
+	if counts == nil {
+		return SensitivityPublic
+	}
+	if counts[ResourceSensitivityRestricted] > 0 {
+		return SensitivityRestricted
+	}
+	if counts[ResourceSensitivitySensitive] > 0 {
+		return SensitivitySensitive
+	}
+	if counts[ResourceSensitivityInternal] > 0 {
+		return SensitivityInternal
+	}
+	return SensitivityPublic
+}
+
+// ExportDecisionForContext returns the canonical export decision and reason for
+// governed unified-resource context payloads.
+func ExportDecisionForContext(sensitivityFloor DataSensitivity, localOnlyCount int, redactionCount int) (ExportDecision, string) {
+	if localOnlyCount > 0 || redactionCount > 0 {
+		return ExportRedacted, "governed unified resource context exported in redacted form"
+	}
+
+	switch sensitivityFloor {
+	case SensitivityRestricted, SensitivitySensitive:
+		return ExportRedacted, "governed unified resource context exported in redacted form"
+	case SensitivityInternal:
+		return ExportRequiresConsent, "internal unified resource context requires export consent"
+	default:
+		return ExportAllowed, "public unified resource context"
+	}
+}

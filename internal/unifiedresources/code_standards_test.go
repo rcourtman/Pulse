@@ -351,6 +351,40 @@ func TestResourcePolicyLabelHelpersUsedByAIConsumers(t *testing.T) {
 	}
 }
 
+func TestExportDecisionHelpersUsedByAIConsumers(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "ai", "resource_export.go"))
+	if err != nil {
+		t.Fatalf("failed to read resource_export.go: %v", err)
+	}
+	source := string(data)
+	requiredSnippets := []string{
+		"unifiedresources.ExportSensitivityFloor(sensitivityCounts)",
+		"unifiedresources.ExportDecisionForContext(sensitivityFloor, localOnlyCount, len(redactions))",
+	}
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(source, snippet) {
+			t.Fatalf("internal/ai/resource_export.go must pin canonical export decision snippet %q", snippet)
+		}
+	}
+}
+
+func TestExportDecisionHelpersCanonicalInUnifiedResources(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("privacy.go"))
+	if err != nil {
+		t.Fatalf("failed to read privacy.go: %v", err)
+	}
+	source := string(data)
+	requiredSnippets := []string{
+		"func ExportSensitivityFloor(counts map[ResourceSensitivity]int) DataSensitivity",
+		"func ExportDecisionForContext(sensitivityFloor DataSensitivity, localOnlyCount int, redactionCount int) (ExportDecision, string)",
+	}
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(source, snippet) {
+			t.Fatalf("internal/unifiedresources/privacy.go must pin canonical export helper snippet %q", snippet)
+		}
+	}
+}
+
 func TestResourceDisplayNameUsedByInfrastructureConsumers(t *testing.T) {
 	requiredSnippets := map[string][]string{
 		filepath.Join("..", "monitoring", "connected_infrastructure.go"): {

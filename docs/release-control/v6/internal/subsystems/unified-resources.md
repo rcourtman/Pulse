@@ -432,6 +432,10 @@ redaction hints for hostname, IP, platform-identity, alias, and path-bearing
 surfaces. Downstream API, AI, and frontend consumers may read those fields,
 but they must not replace them with local sensitivity inference or ad hoc
 privacy heuristics.
+Shared privacy helpers also own the export sensitivity floor and route
+decision derived from those canonical policy counts, so AI export audits and
+route decisions reuse the same governed boundary logic instead of rebuilding
+it in consumer packages.
 The AI runtime now also uses the canonical policy presentation helpers to
 surface those routing and redaction labels in shared context output, so the
 same policy model is reflected in prompt summaries instead of being

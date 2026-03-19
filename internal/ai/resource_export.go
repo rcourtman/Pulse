@@ -53,8 +53,8 @@ func (s *Service) recordUnifiedResourceExport(destinationModel, summary string, 
 	sort.Strings(redactions)
 	redactions = uniqueStrings(redactions)
 
-	sensitivityFloor := unifiedResourceExportSensitivityFloor(sensitivityCounts)
-	decision, reason := unifiedResourceExportDecision(sensitivityFloor, localOnlyCount, len(redactions))
+	sensitivityFloor := unifiedresources.ExportSensitivityFloor(sensitivityCounts)
+	decision, reason := unifiedresources.ExportDecisionForContext(sensitivityFloor, localOnlyCount, len(redactions))
 
 	infraCount := stats.ByType[unifiedresources.ResourceTypeAgent] +
 		stats.ByType[unifiedresources.ResourceTypeK8sCluster] +
@@ -120,37 +120,6 @@ func (s *Service) recordUnifiedResourceExport(destinationModel, summary string, 
 			Str("orgID", orgID).
 			Str("destinationModel", destinationModel).
 			Msg("failed to persist unified resource export audit")
-	}
-}
-
-func unifiedResourceExportSensitivityFloor(counts map[unifiedresources.ResourceSensitivity]int) unifiedresources.DataSensitivity {
-	if counts == nil {
-		return unifiedresources.SensitivityPublic
-	}
-	if counts[unifiedresources.ResourceSensitivityRestricted] > 0 {
-		return unifiedresources.SensitivityRestricted
-	}
-	if counts[unifiedresources.ResourceSensitivitySensitive] > 0 {
-		return unifiedresources.SensitivitySensitive
-	}
-	if counts[unifiedresources.ResourceSensitivityInternal] > 0 {
-		return unifiedresources.SensitivityInternal
-	}
-	return unifiedresources.SensitivityPublic
-}
-
-func unifiedResourceExportDecision(sensitivityFloor unifiedresources.DataSensitivity, localOnlyCount int, redactionCount int) (unifiedresources.ExportDecision, string) {
-	if localOnlyCount > 0 || redactionCount > 0 {
-		return unifiedresources.ExportRedacted, "governed unified resource context exported in redacted form"
-	}
-
-	switch sensitivityFloor {
-	case unifiedresources.SensitivityRestricted, unifiedresources.SensitivitySensitive:
-		return unifiedresources.ExportRedacted, "governed unified resource context exported in redacted form"
-	case unifiedresources.SensitivityInternal:
-		return unifiedresources.ExportRequiresConsent, "internal unified resource context requires export consent"
-	default:
-		return unifiedresources.ExportAllowed, "public unified resource context"
 	}
 }
 

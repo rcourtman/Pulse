@@ -141,6 +141,10 @@ boundary. When the AI service assembles unified-resource context for a model
 request, it must record a durable export audit with the active destination
 model and governed redaction decision instead of treating the prompt boundary
 as a transient formatting step.
+That export decision must come from the shared unified-resource privacy
+helpers, so sensitivity floors and redaction-triggered routing stay aligned
+with the canonical policy contract instead of being recomputed in AI-local
+code.
 The same AI runtime boundary now also consumes the canonical unified-resource
 timeline when it assembles rich resource or incident context. Recent-change
 context should come from the shared resource store first so AI prompts reflect
