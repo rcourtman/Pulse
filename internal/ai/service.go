@@ -4604,19 +4604,10 @@ func (s *Service) buildRecentResourceChangesContext(resourceID string) string {
 	if len(changes) == 0 {
 		return ""
 	}
-
-	var changeInfo []string
-	for _, c := range changes {
-		if len(changeInfo) >= 3 {
-			break
-		}
-		ago := time.Since(c.DetectedAt).Truncate(time.Minute)
-		changeInfo = append(changeInfo, fmt.Sprintf("**%s** %s (%s ago)", c.ChangeType, c.Description, ago))
+	if len(changes) > 3 {
+		changes = changes[:3]
 	}
-	if len(changeInfo) == 0 {
-		return ""
-	}
-	return "\n\n### Recent Changes\n" + strings.Join(changeInfo, "\n")
+	return memory.FormatRecentChangesContext(changes, false, "###")
 }
 
 type canonicalResourceGetter interface {

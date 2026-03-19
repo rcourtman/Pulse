@@ -563,6 +563,23 @@ func TestService_BuildResourceGraphContext_UsesCanonicalReadState(t *testing.T) 
 	}
 }
 
+func TestService_BuildRecentResourceChangesContext_FallsBackToMemoryFormatter(t *testing.T) {
+	s := &Service{}
+	ps := NewPatrolService(nil, nil)
+	cd := NewChangeDetector(ChangeDetectorConfig{MaxChanges: 10})
+	cd.DetectChanges([]ResourceSnapshot{
+		{ID: "res-fallback", Name: "fallback-resource", Type: "vm", Status: "running", SnapshotTime: time.Now()},
+	})
+	ps.SetChangeDetector(cd)
+	s.patrolService = ps
+
+	got := s.buildRecentResourceChangesContext("res-fallback")
+	want := memory.FormatRecentChangesContext(cd.GetChangesForResource("res-fallback", 5), false, "###")
+	if got != want {
+		t.Fatalf("expected fallback recent-resource-changes context to use shared memory formatter:\nwant %q\n got %q", want, got)
+	}
+}
+
 type mockIncidentStore struct {
 }
 

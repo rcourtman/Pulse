@@ -81,6 +81,10 @@ Patrol-owned resource and global intelligence prompt contexts should also
 render the canonical recent changes section before any patrol-local change
 detector fallback so the prompt surface stays aligned with the shared
 unified-resource timeline.
+When that detector fallback is used, the Patrol runtime must render recent
+changes through the shared memory presentation helper so the same heading,
+resource prefixing, and change labels are reused across the Patrol and AI
+fallback paths.
 Those same Patrol-owned prompt contexts now also surface a canonical
 resource-graph section from unified-resource relationships, so edge labels,
 directionality, and provenance stay aligned with the shared graph model

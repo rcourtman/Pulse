@@ -535,64 +535,7 @@ func (i *Intelligence) buildRecentChangesContext(resourceID string, resourceTime
 	if len(recent) == 0 {
 		return ""
 	}
-	return formatMemoryRecentChangesContext(recent, includeResourcePrefix)
-}
-
-func formatMemoryRecentChangesContext(changes []memory.Change, includeResourcePrefix bool) string {
-	if len(changes) == 0 {
-		return ""
-	}
-
-	heading := "\n## Recent Changes"
-	if includeResourcePrefix {
-		heading = "\n## Recent Changes Across Infrastructure"
-	}
-
-	lines := []string{heading, "What changed recently:"}
-	for _, change := range changes {
-		entry := fmt.Sprintf("**%s** %s", formatMemoryChangeTypeLabel(change.ChangeType), change.Description)
-		if includeResourcePrefix {
-			scope := strings.TrimSpace(change.ResourceID)
-			if scope == "" {
-				scope = strings.TrimSpace(change.ResourceName)
-			}
-			if scope == "" {
-				scope = "resource"
-			}
-			if resourceType := strings.TrimSpace(change.ResourceType); resourceType != "" && !strings.Contains(scope, resourceType) {
-				scope = fmt.Sprintf("%s (%s)", scope, resourceType)
-			}
-			entry = fmt.Sprintf("%s: %s", scope, entry)
-		}
-		ago := time.Since(change.DetectedAt).Truncate(time.Minute)
-		lines = append(lines, fmt.Sprintf("- %s (%s ago)", entry, formatDuration(ago)))
-	}
-	return strings.Join(lines, "\n")
-}
-
-func formatMemoryChangeTypeLabel(changeType memory.ChangeType) string {
-	switch changeType {
-	case memory.ChangeCreated:
-		return "Created"
-	case memory.ChangeDeleted:
-		return "Deleted"
-	case memory.ChangeConfig:
-		return "Config update"
-	case memory.ChangeStatus:
-		return "Status change"
-	case memory.ChangeMigrated:
-		return "Migration"
-	case memory.ChangeRestarted:
-		return "Restart"
-	case memory.ChangeBackedUp:
-		return "Backup"
-	default:
-		raw := strings.TrimSpace(strings.ReplaceAll(string(changeType), "_", " "))
-		if raw == "" {
-			return "Change"
-		}
-		return strings.ToUpper(raw[:1]) + raw[1:]
-	}
+	return memory.FormatRecentChangesContext(recent, includeResourcePrefix, "##")
 }
 
 // RecordLearning saves a learning to the knowledge store after a fix

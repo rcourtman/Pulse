@@ -146,7 +146,9 @@ timeline when it assembles rich resource or incident context. Recent-change
 context should come from the shared resource store first so AI prompts reflect
 the same change record that powers the resource API, with patrol-local change
 detectors only serving as fallback coverage when the canonical store is not
-available.
+available. When that patrol-local fallback is used, it must render through the
+shared memory change presentation helper so the same heading, scope prefix, and
+change-type labels are reused instead of being rebuilt ad hoc in AI-local code.
 Resource-only incident context should follow the same rule: if an alert
 timeline is absent, the incident prompt path should fall back to the canonical
 unified-resource timeline rather than depending only on patrol-local change
@@ -234,6 +236,10 @@ Those backend AI and Patrol change summaries should derive their canonical
 labels and provenance fragments from
 `internal/unifiedresources/change_presentation.go`, so the resource-model
 semantics are shared before any surface-specific markdown styling is applied.
+The patrol-local recent-change fallback itself should derive its section layout
+and change labels from `internal/ai/memory/presentation.go`, so detector-based
+fallbacks stay consistent across AI runtime entry points when the canonical
+resource timeline is unavailable.
 The per-resource intelligence payload returned from
 `/api/ai/intelligence?resource_id=...` should also include the canonical
 `recent_changes` history so UI and API consumers can read the same timeline

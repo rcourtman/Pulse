@@ -485,6 +485,20 @@ func TestIntelligence_BuildRecentChangesContext_UsesCanonicalSectionFormatter(t 
 	}
 }
 
+func TestIntelligence_BuildRecentChangesContext_FallsBackToMemoryFormatter(t *testing.T) {
+	intel := NewIntelligence(IntelligenceConfig{})
+	changes := memory.NewChangeDetector(memory.ChangeDetectorConfig{MaxChanges: 10})
+	changes.DetectChanges([]memory.ResourceSnapshot{
+		{ID: "vm-302", Name: "fallback-vm", Type: "vm", Status: "running", SnapshotTime: time.Now()},
+	})
+
+	ctx := intel.buildRecentChangesContext("vm-302", nil, changes, true, 5)
+	want := memory.FormatRecentChangesContext(changes.GetChangesForResource("vm-302", 5), true, "##")
+	if ctx != want {
+		t.Fatalf("expected fallback recent-changes context to use shared memory formatter:\nwant %q\n got %q", want, ctx)
+	}
+}
+
 func TestIntelligence_CreatePredictionFinding_LowSeverity(t *testing.T) {
 	intel := NewIntelligence(IntelligenceConfig{})
 
