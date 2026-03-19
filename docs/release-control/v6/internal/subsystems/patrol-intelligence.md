@@ -115,10 +115,10 @@ surface instead of being rebuilt in each caller.
 The Patrol page also now renders the canonical intelligence summary card
 through the governed AI client and store, so the visible page summary and the
 resource/timeline sections stay aligned on the same shared backend slice.
-That same summary card now keeps the learning block framed as derived signal
-coverage beneath the timeline and learned-correlation sections, so the page
-does not present the supporting counts as the main intelligence story or
-surface incident tracking as a pretend learning metric.
+That same summary card now keeps recent changes and learned correlations
+primary while leaving the broader learning counters as backend coverage, so
+the page does not present telemetry-style counts as a headline intelligence
+story.
 That Patrol summary card now also includes the canonical data-governance
 posture snapshot from the shared AI summary payload, so the visible page can
 show the same sensitivity, routing, and redaction distribution that the

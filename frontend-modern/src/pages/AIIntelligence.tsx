@@ -1279,54 +1279,6 @@ export function AIIntelligence() {
                   />
 
                   <div class="space-y-4">
-                    <div class="rounded-md border border-border-subtle bg-base p-4">
-                      <div class="flex items-center justify-between gap-2">
-                        <h3 class="text-sm font-semibold text-base-content">
-                          Derived signal coverage
-                        </h3>
-                        <span class="text-xs text-muted">
-                          {summary().learning.resources_with_baselines} baselined
-                        </span>
-                      </div>
-                      <p class="mt-1 text-xs text-muted">
-                        Coverage from baselines, knowledge, patterns, learned correlations, and
-                        predictions.
-                      </p>
-
-                      <dl class="mt-3 grid grid-cols-2 gap-2 text-sm">
-                        <div class="rounded-md bg-surface px-3 py-2">
-                          <dt class="text-xs uppercase tracking-wide text-muted">Knowledge</dt>
-                          <dd class="mt-1 font-semibold text-base-content">
-                            {summary().learning.resources_with_knowledge}
-                          </dd>
-                        </div>
-                        <div class="rounded-md bg-surface px-3 py-2">
-                          <dt class="text-xs uppercase tracking-wide text-muted">Notes</dt>
-                          <dd class="mt-1 font-semibold text-base-content">
-                            {summary().learning.total_notes}
-                          </dd>
-                        </div>
-                        <div class="rounded-md bg-surface px-3 py-2">
-                          <dt class="text-xs uppercase tracking-wide text-muted">Patterns</dt>
-                          <dd class="mt-1 font-semibold text-base-content">
-                            {summary().learning.patterns_detected}
-                          </dd>
-                        </div>
-                        <div class="rounded-md bg-surface px-3 py-2">
-                          <dt class="text-xs uppercase tracking-wide text-muted">Correlations</dt>
-                          <dd class="mt-1 font-semibold text-base-content">
-                            {summary().learning.correlations_learned}
-                          </dd>
-                        </div>
-                        <div class="rounded-md bg-surface px-3 py-2">
-                          <dt class="text-xs uppercase tracking-wide text-muted">Predictions</dt>
-                          <dd class="mt-1 font-semibold text-base-content">
-                            {summary().predictions_count}
-                          </dd>
-                        </div>
-                      </dl>
-                    </div>
-
                     <Show when={(aiIntelligenceStore.correlations?.correlations?.length ?? 0) > 0}>
                       <ResourceCorrelationSummary
                         title="Learned correlations"
