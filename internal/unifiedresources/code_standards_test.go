@@ -264,6 +264,26 @@ func TestResourceAPIExposesDedicatedFacetReads(t *testing.T) {
 	}
 }
 
+func TestResourcePolicyPresentationUsesCanonicalLabels(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join(".", "policy_presentation.go"))
+	if err != nil {
+		t.Fatalf("failed to read policy_presentation.go: %v", err)
+	}
+	source := string(data)
+
+	requiredSnippets := []string{
+		"ResourceSensitivityLabel(",
+		"ResourceRoutingScopeLabel(",
+		"ResourceRedactionHintLabel(",
+		"ResourcePolicyRedactionLabels(",
+	}
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(source, snippet) {
+			t.Fatalf("policy_presentation.go must contain %q", snippet)
+		}
+	}
+}
+
 func TestResourceTimelineStoreIndexesSupportFilteredReads(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join("store.go"))
 	if err != nil {

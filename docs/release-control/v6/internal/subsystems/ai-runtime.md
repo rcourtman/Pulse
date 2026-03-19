@@ -105,6 +105,10 @@ policy-aware metadata contract. The AI runtime may summarize governed resource
 policy counts for context, and it must switch to `aiSafeSummary` when a
 resource is marked `local-only` instead of leaking raw resource names or local
 identifiers for restricted resources through ad hoc context formatting.
+That governed context should also surface the canonical routing posture and
+redaction hints that were derived from the shared policy model, so prompts
+reflect the same sensitivity, routing, and scrub decisions that the runtime
+uses for export boundaries instead of rebuilding privacy posture locally.
 That same policy boundary now applies to chat structured-mention prefetch and
 resource-summary formatting: mention resolution must consume canonical
 unified-resource policy metadata, skip discovery fan-out when governed

@@ -79,6 +79,31 @@ func TestRefreshPolicyMetadata_ClassifiesInfrastructureAsInternal(t *testing.T) 
 	}
 }
 
+func TestResourcePolicyPresentationLabels(t *testing.T) {
+	if got := ResourceSensitivityLabel(ResourceSensitivityPublic); got != "Public" {
+		t.Fatalf("sensitivity label = %q, want %q", got, "Public")
+	}
+	if got := ResourceRoutingScopeLabel(ResourceRoutingScopeLocalOnly); got != "Local Only" {
+		t.Fatalf("routing label = %q, want %q", got, "Local Only")
+	}
+	if got := ResourceRedactionHintLabel(ResourceRedactionIPAddress); got != "IP Address" {
+		t.Fatalf("redaction label = %q, want %q", got, "IP Address")
+	}
+
+	policy := &ResourcePolicy{
+		Routing: ResourceRoutingPolicy{
+			Redact: []ResourceRedactionHint{
+				ResourceRedactionPath,
+				ResourceRedactionHostname,
+			},
+		},
+	}
+	got := ResourcePolicyRedactionLabels(policy)
+	if len(got) != 2 || got[0] != "Hostname" || got[1] != "Path" {
+		t.Fatalf("redaction labels = %#v, want [Hostname Path]", got)
+	}
+}
+
 func containsRedactionHint(hints []ResourceRedactionHint, want ResourceRedactionHint) bool {
 	for _, hint := range hints {
 		if hint == want {

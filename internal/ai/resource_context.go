@@ -106,6 +106,7 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 			byResourceID[resource.ID] = resource
 		}
 		sensitivityCounts := make(map[unifiedresources.ResourceSensitivity]int)
+		routingCounts := make(map[unifiedresources.ResourceRoutingScope]int)
 		localOnlyCount := 0
 		var redactionHints []unifiedresources.ResourceRedactionHint
 		redactionHintSet := make(map[unifiedresources.ResourceRedactionHint]struct{})
@@ -115,6 +116,7 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 					continue
 				}
 				sensitivityCounts[resource.Policy.Sensitivity]++
+				routingCounts[resource.Policy.Routing.Scope]++
 				if resource.Policy.Routing.Scope == unifiedresources.ResourceRoutingScopeLocalOnly {
 					localOnlyCount++
 				}
@@ -133,10 +135,16 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 			}
 			if len(sensitivityCounts) > 0 {
 				sections = append(sections, "\n### Data Governance")
-				sections = append(sections, fmt.Sprintf("- Sensitivity: %d internal, %d sensitive, %d restricted",
+				sections = append(sections, fmt.Sprintf("- Sensitivity: %d public, %d internal, %d sensitive, %d restricted",
+					sensitivityCounts[unifiedresources.ResourceSensitivityPublic],
 					sensitivityCounts[unifiedresources.ResourceSensitivityInternal],
 					sensitivityCounts[unifiedresources.ResourceSensitivitySensitive],
 					sensitivityCounts[unifiedresources.ResourceSensitivityRestricted],
+				))
+				sections = append(sections, fmt.Sprintf("- Routing: %d cloud-summary, %d local-first, %d local-only",
+					routingCounts[unifiedresources.ResourceRoutingScopeCloudSummary],
+					routingCounts[unifiedresources.ResourceRoutingScopeLocalFirst],
+					routingCounts[unifiedresources.ResourceRoutingScopeLocalOnly],
 				))
 				sections = append(sections, fmt.Sprintf("- Local-only resources: %d", localOnlyCount))
 			}
@@ -515,6 +523,19 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 				}
 				sections = append(sections, fmt.Sprintf("%d. **%s** (%s): %.1f%%",
 					i+1, unifiedResourceContextLabel(resource), resource.Type, diskPercent))
+			}
+		}
+
+		if len(redactionHints) > 0 {
+			sections = append(sections, "\n### Policy Redaction Hints")
+			labels := make([]string, 0, len(redactionHints))
+			for _, hint := range redactionHints {
+				if label := unifiedresources.ResourceRedactionHintLabel(hint); label != "" {
+					labels = append(labels, label)
+				}
+			}
+			if len(labels) > 0 {
+				sections = append(sections, fmt.Sprintf("- Redactions in use: %s", strings.Join(labels, ", ")))
 			}
 		}
 

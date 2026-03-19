@@ -373,6 +373,10 @@ redaction hints for hostname, IP, platform-identity, alias, and path-bearing
 surfaces. Downstream API, AI, and frontend consumers may read those fields,
 but they must not replace them with local sensitivity inference or ad hoc
 privacy heuristics.
+The AI runtime now also uses the canonical policy presentation helpers to
+surface those routing and redaction labels in shared context output, so the
+same policy model is reflected in prompt summaries instead of being
+re-described independently per surface.
 Canonical resources now carry first-class graph-expansion fields: `Capabilities`
 (bounded action definitions with approval levels), `Relationships` (typed
 inter-resource links with direction and confidence), and `RecentChanges` (typed

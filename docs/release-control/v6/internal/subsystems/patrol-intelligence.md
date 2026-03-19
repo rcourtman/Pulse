@@ -100,3 +100,6 @@ The backend Patrol and AI runtime summaries now also share
 `internal/unifiedresources/change_presentation.go` for the canonical
 change-kind and provenance mapping, so the same resource-model semantics
 drive both the backend summaries and the frontend presentation helpers.
+The canonical shared AI resource context now also surfaces policy routing and
+redaction hints from unified resources, so the Patrol page and resource drawer
+see the same governance posture that the runtime uses for export boundaries.
