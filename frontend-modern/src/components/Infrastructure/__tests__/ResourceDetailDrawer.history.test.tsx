@@ -404,6 +404,7 @@ describe('ResourceDetailDrawer change history section', () => {
           hostname: 'pmg-main.local',
           connectionHealth: 'online',
           nodeCount: 1,
+          lastUpdated: '2026-03-19T23:00:00Z',
           queueTotal: 519,
           queueDeferred: 12,
           queueHold: 4,
@@ -422,6 +423,7 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(screen.getByText('Backlog')).toBeInTheDocument();
     const supportContext = within(screen.getByTestId('pmg-support-context'));
     expect(supportContext.getByText('Nodes')).toBeInTheDocument();
+    expect(supportContext.getByText('Updated')).toBeInTheDocument();
     expect(screen.getByText('Queue detail')).toBeInTheDocument();
     expect(screen.getByText('Mail detail')).toBeInTheDocument();
   });

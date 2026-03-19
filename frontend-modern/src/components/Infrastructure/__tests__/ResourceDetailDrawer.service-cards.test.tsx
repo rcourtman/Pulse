@@ -127,6 +127,7 @@ describe('ResourceDetailDrawer service cards', () => {
           hostname: 'pmg-main.local',
           connectionHealth: 'online',
           nodeCount: 1,
+          lastUpdated: '2026-03-19T23:00:00Z',
           queueTotal: 519,
           queueDeferred: 12,
           queueHold: 4,
@@ -161,12 +162,44 @@ describe('ResourceDetailDrawer service cards', () => {
     expect(getByText('Backlog')).toBeInTheDocument();
     const pmgSupportContext = within(getByTestId('pmg-support-context'));
     expect(pmgSupportContext.getByText('Nodes')).toBeInTheDocument();
+    expect(pmgSupportContext.getByText('Updated')).toBeInTheDocument();
     expect(getByText('Queue detail')).toBeInTheDocument();
     expect(getByText('Mail detail')).toBeInTheDocument();
     expect(getByRole('link', { name: /open pmg thresholds/i })).toHaveAttribute(
       'href',
       '/alerts/thresholds/mail-gateway',
     );
+  });
+
+  it('keeps PMG freshness in support context even without a node count', () => {
+    const resource = baseResource({
+      id: 'pmg-2',
+      type: 'pmg',
+      name: 'pmg-edge',
+      displayName: 'PMG Edge',
+      platformId: 'pmg-edge',
+      platformType: 'proxmox-pmg',
+      platformData: {
+        sources: ['pmg'],
+        pmg: {
+          hostname: 'pmg-edge.local',
+          connectionHealth: 'online',
+          lastUpdated: '2026-03-19T23:00:00Z',
+          queueTotal: 12,
+          mailCountTotal: 320,
+        },
+      },
+    });
+
+    const { getByRole, getByTestId } = render(() => (
+      <ResourceDetailDrawer resource={resource} />
+    ));
+
+    fireEvent.click(getByRole('button', { name: 'Show service details' }));
+    fireEvent.click(getByRole('button', { name: 'Show mail flow' }));
+    const pmgSupportContext = within(getByTestId('pmg-support-context'));
+    expect(pmgSupportContext.queryByText('Nodes')).toBeNull();
+    expect(pmgSupportContext.getByText('Updated')).toBeInTheDocument();
   });
 
   it('keeps docker update controls behind a secondary reveal', () => {

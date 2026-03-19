@@ -1479,15 +1479,29 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                                     </div>
                                   </div>
                                 </div>
-                                <Show when={pmg().nodeCount}>
+                                <Show when={pmg().nodeCount || pmgUpdatedRelative()}>
                                   <div
                                     data-testid="pmg-support-context"
-                                    class="flex items-center justify-between gap-2 rounded border border-dashed border-rose-200 bg-surface px-2 py-1.5 text-[10px] dark:border-rose-700"
+                                    class="space-y-1.5 rounded border border-dashed border-rose-200 bg-surface px-2 py-1.5 text-[10px] dark:border-rose-700"
                                   >
-                                    <span class="text-muted">Nodes</span>
-                                    <span class="font-medium text-base-content">
-                                      {formatInteger(pmg().nodeCount)}
-                                    </span>
+                                    <Show when={pmg().nodeCount}>
+                                      <div class="flex items-center justify-between gap-2">
+                                        <span class="text-muted">Nodes</span>
+                                        <span class="font-medium text-base-content">
+                                          {formatInteger(pmg().nodeCount)}
+                                        </span>
+                                      </div>
+                                    </Show>
+                                    <Show when={pmgUpdatedRelative()}>
+                                      <div
+                                        class={`flex items-center justify-between gap-2 ${pmg().nodeCount ? 'border-t border-rose-200 pt-1.5 dark:border-rose-700' : ''}`}
+                                      >
+                                        <span class="text-muted">Updated</span>
+                                        <span class="font-medium text-base-content">
+                                          {pmgUpdatedRelative()}
+                                        </span>
+                                      </div>
+                                    </Show>
                                   </div>
                                 </Show>
                                 <details class="rounded border border-rose-200 bg-surface px-2 py-1.5 dark:border-rose-700">
@@ -1527,12 +1541,6 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                                       )}
                                     </For>
                                   </div>
-                                  <Show when={pmgUpdatedRelative()}>
-                                    <div class="mt-2 flex items-center justify-between gap-2 border-t border-rose-200 pt-2 text-[10px] dark:border-rose-700">
-                                      <span class="text-muted">Updated</span>
-                                      <span class="font-medium text-base-content">{pmgUpdatedRelative()}</span>
-                                    </div>
-                                  </Show>
                                 </details>
                               </div>
                             </Show>
