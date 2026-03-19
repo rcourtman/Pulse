@@ -448,8 +448,11 @@ func TestContextPrefetcher_FormatContextSummary_GovernedMention(t *testing.T) {
 	if !strings.Contains(summary, "Governed resource") {
 		t.Fatalf("expected governed heading, got %q", summary)
 	}
-	if !strings.Contains(summary, "Redactions: alias, hostname, path") {
-		t.Fatalf("expected redaction list, got %q", summary)
+	if !strings.Contains(summary, "Policy: sensitivity=Restricted, routing=Local Only, cloud_summary=false, cloud_raw_signals=false") {
+		t.Fatalf("expected canonical policy line, got %q", summary)
+	}
+	if !strings.Contains(summary, "Redactions: Hostname, Alias, Path") {
+		t.Fatalf("expected canonical redaction list, got %q", summary)
 	}
 	if strings.Contains(summary, "customer-db") {
 		t.Fatalf("expected governed formatter to avoid raw name, got %q", summary)

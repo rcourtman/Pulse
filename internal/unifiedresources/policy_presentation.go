@@ -3,6 +3,7 @@ package unifiedresources
 import (
 	"fmt"
 	"sort"
+	"strings"
 )
 
 // ResourceSensitivityOrder captures the canonical presentation order for
@@ -160,4 +161,27 @@ func ResourcePolicyRoutingSummaryFromCounts(counts map[ResourceRoutingScope]int)
 			counts[scope], ResourceRoutingScopeLabel(scope)))
 	}
 	return parts
+}
+
+// ResourcePolicySummaryLines returns the canonical human-readable summary lines
+// for a single resource policy.
+func ResourcePolicySummaryLines(policy *ResourcePolicy) []string {
+	if policy == nil {
+		return nil
+	}
+
+	lines := []string{
+		fmt.Sprintf("Policy: sensitivity=%s, routing=%s, cloud_summary=%t, cloud_raw_signals=%t",
+			ResourceSensitivityLabel(policy.Sensitivity),
+			ResourceRoutingScopeLabel(policy.Routing.Scope),
+			policy.Routing.AllowCloudSummary,
+			policy.Routing.AllowCloudRawSignals,
+		),
+	}
+
+	if redactions := ResourcePolicyRedactionLabels(policy); len(redactions) > 0 {
+		lines = append(lines, fmt.Sprintf("Redactions: %s", strings.Join(redactions, ", ")))
+	}
+
+	return lines
 }

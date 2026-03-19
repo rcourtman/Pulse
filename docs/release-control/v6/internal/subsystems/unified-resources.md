@@ -161,6 +161,10 @@ The same unified resource model now also feeds the canonical AI policy
 posture summary, so sensitivity, routing, and redaction distributions stay
 derived from the shared resource view instead of being rebuilt as a
 page-local governance rollup.
+The same shared policy presentation helper now also formats governed mention
+policy lines and redaction lists for AI chat prefetch, so prompt context
+stays aligned with the canonical sensitivity, routing, and redaction labels
+instead of rebuilding them in lane-local helpers.
 
 That same shared store now also persists append-only action lifecycle, action
 audit, and export audit records, giving the control-plane verbs a durable home

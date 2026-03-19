@@ -930,20 +930,9 @@ func formatGovernedMentionSummary(sb *strings.Builder, mention ResourceMention) 
 		sb.WriteString(summary)
 		sb.WriteString("\n")
 	}
-	if mention.Policy != nil {
-		sb.WriteString(fmt.Sprintf("Policy: sensitivity=%s, routing=%s, cloud_summary=%t, cloud_raw_signals=%t\n",
-			mention.Policy.Sensitivity,
-			mention.Policy.Routing.Scope,
-			mention.Policy.Routing.AllowCloudSummary,
-			mention.Policy.Routing.AllowCloudRawSignals,
-		))
-		if len(mention.Policy.Routing.Redact) > 0 {
-			redactions := make([]string, 0, len(mention.Policy.Routing.Redact))
-			for _, hint := range mention.Policy.Routing.Redact {
-				redactions = append(redactions, string(hint))
-			}
-			sb.WriteString(fmt.Sprintf("Redactions: %s\n", strings.Join(redactions, ", ")))
-		}
+	for _, line := range unifiedresources.ResourcePolicySummaryLines(mention.Policy) {
+		sb.WriteString(line)
+		sb.WriteString("\n")
 	}
 	sb.WriteString("Raw routing coordinates, bind mounts, hostnames, and discovery file paths withheld by canonical resource policy.\n\n")
 }

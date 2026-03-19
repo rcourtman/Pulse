@@ -115,6 +115,10 @@ unified-resource policy metadata, skip discovery fan-out when governed
 redaction already blocks cloud-safe raw context, and withhold routing
 coordinates, bind-mount paths, hostnames, and discovery file paths whenever
 resource policy marks those identifiers as redacted.
+The governed mention formatter must also render the policy line and redaction
+list through the shared unified-resource policy presentation helper so the
+chat prefetch path stays aligned with the same canonical sensitivity, routing,
+and redaction labels used by the AI summary and resource drawer.
 The same governed-context rule also applies to the main unified AI resource
 overview: infrastructure, workload, alert-label, and top-consumer summaries
 must not leak raw resource names, cluster labels, IP addresses, or unresolved

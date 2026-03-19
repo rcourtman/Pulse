@@ -149,6 +149,36 @@ func TestResourcePolicyCountSummariesUseCanonicalOrder(t *testing.T) {
 	}
 }
 
+func TestResourcePolicySummaryLines(t *testing.T) {
+	policy := &ResourcePolicy{
+		Sensitivity: ResourceSensitivityRestricted,
+		Routing: ResourceRoutingPolicy{
+			Scope:                ResourceRoutingScopeLocalOnly,
+			AllowCloudSummary:    false,
+			AllowCloudRawSignals: false,
+			Redact: []ResourceRedactionHint{
+				ResourceRedactionAlias,
+				ResourceRedactionHostname,
+				ResourceRedactionPath,
+			},
+		},
+	}
+
+	got := ResourcePolicySummaryLines(policy)
+	want := []string{
+		"Policy: sensitivity=Restricted, routing=Local Only, cloud_summary=false, cloud_raw_signals=false",
+		"Redactions: Hostname, Alias, Path",
+	}
+	if len(got) != len(want) {
+		t.Fatalf("summary lines = %#v, want %#v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("summary line[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
 func containsRedactionHint(hints []ResourceRedactionHint, want ResourceRedactionHint) bool {
 	for _, hint := range hints {
 		if hint == want {
