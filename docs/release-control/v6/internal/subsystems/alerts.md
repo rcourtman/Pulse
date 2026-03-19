@@ -64,6 +64,11 @@ but canonical service-field ownership such as Pushover `token` / `user`
 normalization belongs to `internal/notifications/` and persistence boundaries,
 not to alert-surface runtime delivery code.
 
+The alert webhook editor now mirrors that canonical Pushover field rule through
+`frontend-modern/src/utils/alertWebhookPresentation.ts`, so the UI shares the
+same alias and preset mapping instead of carrying its own local webhook-field
+normalization fork.
+
 Frontend alert surfaces and backend alert-support files now require explicit
 registry path-policy coverage, so new alert-owned runtime files must be mapped
 to a concrete proof route instead of silently inheriting subsystem-default

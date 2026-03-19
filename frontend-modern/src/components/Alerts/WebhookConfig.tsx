@@ -29,6 +29,7 @@ import {
   ALERT_WEBHOOK_URL_HELP_TEMPLATE_VARIABLE,
   getAlertWebhookMentionHelp,
   getAlertWebhookMentionPlaceholder,
+  getAlertWebhookCustomFieldPresets,
   getAlertWebhookNamePlaceholder,
   getAlertWebhookServiceLabel,
   getAlertWebhookServices,
@@ -39,6 +40,7 @@ import {
   getAlertWebhookToggleAllLabel,
   getAlertWebhookToggleLabel,
   getAlertWebhookUrlPlaceholder,
+  normalizeAlertWebhookCustomFields,
 } from '@/utils/alertWebhookPresentation';
 import {
   formField,
@@ -69,54 +71,10 @@ interface WebhookConfigProps {
 
 type HeaderInput = { id: string; key: string; value: string };
 
-type CustomFieldPreset = {
-  key: string;
-  label: string;
-  placeholder?: string;
-  required?: boolean;
-};
-
 type CustomFieldInput = HeaderInput & {
   label?: string;
   placeholder?: string;
   required?: boolean;
-};
-
-const customFieldPresets: Record<string, CustomFieldPreset[]> = {
-  pushover: [
-    {
-      key: 'token',
-      label: 'Application Token',
-      placeholder: 'Your Pushover application token',
-      required: true,
-    },
-    {
-      key: 'user',
-      label: 'User Key',
-      placeholder: 'Primary user key or group key',
-      required: true,
-    },
-  ],
-};
-
-const normalizeWebhookCustomFields = (
-  service: string,
-  fields: Record<string, string> = {},
-): Record<string, string> => {
-  if (service !== 'pushover') {
-    return { ...fields };
-  }
-
-  const normalized = { ...fields };
-  if (!normalized.token?.trim() && normalized.app_token?.trim()) {
-    normalized.token = normalized.app_token;
-  }
-  if (!normalized.user?.trim() && normalized.user_token?.trim()) {
-    normalized.user = normalized.user_token;
-  }
-  delete normalized.app_token;
-  delete normalized.user_token;
-  return normalized;
 };
 
 const buildMapFromInputs = (
@@ -135,8 +93,8 @@ const createCustomFieldInputs = (
   service: string,
   existing: Record<string, string> = {},
 ): CustomFieldInput[] => {
-  const presets = customFieldPresets[service];
-  const normalizedExisting = normalizeWebhookCustomFields(service, existing);
+  const presets = getAlertWebhookCustomFieldPresets(service);
+  const normalizedExisting = normalizeAlertWebhookCustomFields(service, existing);
   const timestamp = Date.now();
 
   if (!presets) {
@@ -212,10 +170,10 @@ export function WebhookConfig(props: WebhookConfigProps) {
   };
 
   const ensurePresetCustomFields = (service: string) => {
-    if (!customFieldPresets[service]) {
+    if (!getAlertWebhookCustomFieldPresets(service)) {
       return;
     }
-    const existing = normalizeWebhookCustomFields(service, formData().customFields || {});
+    const existing = normalizeAlertWebhookCustomFields(service, formData().customFields || {});
     const inputs = createCustomFieldInputs(service, existing);
     setCustomFieldInputs(inputs);
   };
@@ -241,7 +199,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
         headers[input.key] = input.value;
       }
     });
-    const customFields = normalizeWebhookCustomFields(
+    const customFields = normalizeAlertWebhookCustomFields(
       data.service,
       buildMapFromInputs(customFieldInputs()),
     );
@@ -318,7 +276,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
       ...webhook,
       service: webhook.service || 'generic',
       payloadTemplate: webhook.template || '',
-      customFields: normalizeWebhookCustomFields(
+      customFields: normalizeAlertWebhookCustomFields(
         webhook.service || 'generic',
         webhook.customFields || {},
       ),
@@ -335,8 +293,11 @@ export function WebhookConfig(props: WebhookConfigProps) {
     );
 
     const service = webhook.service || 'generic';
-    const existingCustomFields = normalizeWebhookCustomFields(service, webhook.customFields || {});
-    if (customFieldPresets[service] || Object.keys(existingCustomFields).length > 0) {
+    const existingCustomFields = normalizeAlertWebhookCustomFields(
+      service,
+      webhook.customFields || {},
+    );
+    if (getAlertWebhookCustomFieldPresets(service) || Object.keys(existingCustomFields).length > 0) {
       setCustomFieldInputs(createCustomFieldInputs(service, existingCustomFields));
     } else {
       setCustomFieldInputs([]);

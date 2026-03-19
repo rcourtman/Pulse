@@ -1142,6 +1142,30 @@ describe('WebhookConfig', () => {
     expect(tokenInput).toBeTruthy();
   });
 
+  it('shows shared pushover custom fields when creating a webhook', async () => {
+    render(() => (
+      <WebhookConfig
+        webhooks={[]}
+        onAdd={onAddMock}
+        onUpdate={onUpdateMock}
+        onDelete={onDeleteMock}
+        onTest={onTestMock}
+      />
+    ));
+
+    fireEvent.click(screen.getByText('+ Add Webhook'));
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText('Generic Webhook')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText(/Generic →/));
+    fireEvent.click(screen.getByText('Pushover').closest('button')!);
+
+    expect(screen.getByText('Application Token')).toBeInTheDocument();
+    expect(screen.getByText('User Key')).toBeInTheDocument();
+  });
+
   // --- Edge case: webhook with no id for delete/test ---
 
   it('does not call onDelete when webhook has no id', () => {

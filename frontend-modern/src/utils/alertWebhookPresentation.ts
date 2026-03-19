@@ -21,6 +21,13 @@ type AlertWebhookServicePresentation = {
   mentionHelp?: string;
 };
 
+type AlertWebhookCustomFieldPreset = {
+  key: string;
+  label: string;
+  placeholder?: string;
+  required?: boolean;
+};
+
 const ALERT_WEBHOOK_SERVICE_PRESENTATION: Record<
   AlertWebhookService,
   AlertWebhookServicePresentation
@@ -79,6 +86,25 @@ const ALERT_WEBHOOK_SERVICE_PRESENTATION: Record<
     label: 'ntfy',
     description: 'Push notifications via ntfy.sh',
   },
+};
+
+const ALERT_WEBHOOK_CUSTOM_FIELD_PRESETS: Partial<
+  Record<string, readonly AlertWebhookCustomFieldPreset[]>
+> = {
+  pushover: [
+    {
+      key: 'token',
+      label: 'Application Token',
+      placeholder: 'Your Pushover application token',
+      required: true,
+    },
+    {
+      key: 'user',
+      label: 'User Key',
+      placeholder: 'Primary user key or group key',
+      required: true,
+    },
+  ],
 };
 
 export const ALERT_WEBHOOK_SETUP_INSTRUCTIONS_TITLE = 'Setup Instructions';
@@ -154,6 +180,30 @@ export function getAlertWebhookServiceDescription(service: string) {
     ALERT_WEBHOOK_SERVICE_PRESENTATION[service as AlertWebhookService]?.description ||
     ALERT_WEBHOOK_SERVICE_PRESENTATION.pagerduty.description
   );
+}
+
+export function getAlertWebhookCustomFieldPresets(service: string) {
+  return ALERT_WEBHOOK_CUSTOM_FIELD_PRESETS[service.trim().toLowerCase()];
+}
+
+export function normalizeAlertWebhookCustomFields(
+  service: string,
+  fields: Record<string, string> = {},
+) {
+  if (service.trim().toLowerCase() !== 'pushover') {
+    return { ...fields };
+  }
+
+  const normalized = { ...fields };
+  if (!normalized.token?.trim() && normalized.app_token?.trim()) {
+    normalized.token = normalized.app_token;
+  }
+  if (!normalized.user?.trim() && normalized.user_token?.trim()) {
+    normalized.user = normalized.user_token;
+  }
+  delete normalized.app_token;
+  delete normalized.user_token;
+  return normalized;
 }
 
 export function getAlertWebhookSetupInstructionsTitle() {
