@@ -316,6 +316,8 @@ describe('frontend resource type boundaries', () => {
     expect(dashboardSource).toContain('normalizeWorkloadViewModeParam');
     expect(dashboardSource).not.toContain('function normalizeViewModeParam');
     expect(dashboardSource).not.toContain('workloadSummaryGuestId');
+    expect(dashboardSource).toContain('createMemo(() => getCanonicalWorkloadId(guest()))');
+    expect(dashboardSource).not.toContain('const guestId = () => {');
     expect(guestRowSource).toContain('getCanonicalWorkloadId');
     expect(guestRowSource).not.toContain('buildGuestId');
     expect(guestDrawerSource).toContain('getCanonicalWorkloadId');

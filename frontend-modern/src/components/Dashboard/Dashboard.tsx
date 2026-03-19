@@ -1694,10 +1694,7 @@ export function Dashboard(props: DashboardProps) {
                           {/* Inner <Index> tracks by position — updates props reactively instead of recreating DOM */}
                           <Index each={groupGuests()} fallback={<></>}>
                             {(guest) => {
-                              const guestId = () => {
-                                const g = guest();
-                                return getCanonicalWorkloadId(g);
-                              };
+                              const guestId = createMemo(() => getCanonicalWorkloadId(guest()));
                               const getMetadata = () =>
                                 guestMetadata()[guestId()] ||
                                 guestMetadata()[

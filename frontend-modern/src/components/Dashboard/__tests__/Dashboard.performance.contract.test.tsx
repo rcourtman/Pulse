@@ -8,7 +8,7 @@ import {
   groupWorkloads,
   computeWorkloadStats,
 } from '../workloadSelectors';
-import { normalizeWorkloadViewModeParam } from '@/utils/workloads';
+import { getCanonicalWorkloadId, normalizeWorkloadViewModeParam } from '@/utils/workloads';
 
 // Stub ResizeObserver for jsdom
 if (typeof globalThis.ResizeObserver === 'undefined') {
@@ -389,6 +389,9 @@ describe('Dashboard performance contract', () => {
         makeGuest(1, { id: 'raw-a', instance: 'shared', node: 'node-x', vmid: 42 }),
         makeGuest(2, { id: 'raw-b', instance: 'shared', node: 'node-x', vmid: 42 }),
       ];
+      const canonicalId = getCanonicalWorkloadId(
+        makeGuest(1, { id: 'raw-a', instance: 'shared', node: 'node-x', vmid: 42 }) as any,
+      );
 
       const { container } = render(() => <Dashboard vms={[]} containers={[]} nodes={[]} useWorkloads />);
 
@@ -398,6 +401,7 @@ describe('Dashboard performance contract', () => {
       await waitFor(() => {
         expect(getGuestRowCount(container)).toBe(1);
       });
+      expect(canonicalId).toBe('shared:node-x:42');
     });
 
     it('filterWorkloads returns all guests when no filters active', () => {
