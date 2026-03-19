@@ -539,6 +539,17 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
   );
   const hasMergedSources = createMemo(() => mergedSources().length > 1);
   const discoveryConfig = createMemo(() => toDiscoveryConfig(props.resource));
+  const discoveryContextSummary = createMemo(() => {
+    const config = discoveryConfig();
+    if (!config) return null;
+
+    const discoveryMode =
+      config.resourceType === 'agent'
+        ? 'Host discovery'
+        : `${formatIdentifierLabel(config.resourceType)} discovery`;
+
+    return config.hostname ? `${discoveryMode} via ${config.hostname}` : discoveryMode;
+  });
   const workloadsHref = createMemo(() => buildWorkloadsHref(props.resource));
   const headerIdentity = createMemo(() => getPrimaryResourceIdentity(props.resource));
   const relatedLinks = createMemo(() => {
@@ -1507,35 +1518,43 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
 
         <Show when={discoveryConfig()}>
           {(config) => (
-            <div class="mt-3 space-y-3">
+            <div class="mt-3 space-y-2">
               <WebInterfaceUrlField
                 metadataKind={config().metadataKind}
                 metadataId={config().metadataId}
                 targetLabel={config().targetLabel}
               />
 
-              <div class="rounded border border-border bg-surface p-3">
+              <div class="rounded border border-dashed border-border bg-surface-hover p-3">
                 <div class="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <div class="text-[11px] font-medium uppercase tracking-wide text-base-content">
                       Discovery context
                     </div>
                     <div class="mt-1 text-[10px] text-muted">
-                      Supporting discovery details for this {config().targetLabel}.
+                      Supporting metadata only. The web interface path above stays primary.
                     </div>
+                    <Show when={discoveryContextSummary()}>
+                      <div class="mt-1 text-[10px] text-base-content">
+                        {discoveryContextSummary()}
+                      </div>
+                    </Show>
                   </div>
 
                   <button
                     type="button"
                     onClick={() => setShowDiscoveryContext((value) => !value)}
-                    class="inline-flex items-center rounded-md border border-border bg-surface-hover px-3 py-1.5 text-[11px] font-medium text-base-content transition-colors hover:bg-surface"
+                    class="inline-flex items-center rounded-md border border-border bg-surface px-2.5 py-1 text-[10px] font-medium text-base-content transition-colors hover:bg-base"
                   >
-                    {showDiscoveryContext() ? 'Hide details' : 'Show details'}
+                    {showDiscoveryContext() ? 'Hide metadata' : 'Show metadata'}
                   </button>
                 </div>
 
                 <Show when={showDiscoveryContext()}>
-                  <div class="mt-3">
+                  <div class="mt-3 rounded border border-border bg-surface p-2.5">
+                    <div class="mb-2 text-[10px] text-muted">
+                      Detailed discovery metadata for this {config().targetLabel}.
+                    </div>
                     <Suspense
                       fallback={
                         <div class="flex items-center justify-center py-8">

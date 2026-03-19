@@ -260,6 +260,10 @@ Discovery support now also lives inside overview-only `Discovery context`
 instead of a peer drawer tab, so supplemental discovery detail stays available
 without claiming the same navigation weight as runtime, identity, or
 service-specific operational views.
+That discovery surface is now a compact support row with a one-line summary and
+an on-demand metadata panel, so the actionable web-interface path stays primary
+while deeper discovery inspection remains available without reading like a
+second peer overview surface.
 The same facet bundle now also returns grouped recent-change counts by
 canonical change kind, so the detail drawer can surface the distribution of
 state transitions, restarts, config updates, and anomalies without
