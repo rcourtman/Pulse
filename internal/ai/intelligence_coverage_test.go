@@ -208,7 +208,7 @@ func TestIntelligence_getLearningStats(t *testing.T) {
 	}
 }
 
-func TestIntelligence_summarizePolicyPosture(t *testing.T) {
+func TestIntelligence_SummarizePolicyPostureUsesSharedHelper(t *testing.T) {
 	resources := []ur.Resource{
 		{
 			ID:   "public-1",
@@ -246,7 +246,7 @@ func TestIntelligence_summarizePolicyPosture(t *testing.T) {
 		},
 	}
 
-	summary := summarizePolicyPosture(normalizeUnifiedResourceContextSlice(resources))
+	summary := ur.SummarizePolicyPosture(normalizeUnifiedResourceContextSlice(resources))
 	if summary == nil {
 		t.Fatal("expected posture summary")
 	}

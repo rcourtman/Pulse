@@ -101,7 +101,7 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 		infrastructure := normalizeUnifiedResourceContextSlice(urp.GetInfrastructure())
 		workloads := normalizeUnifiedResourceContextSlice(urp.GetWorkloads())
 		allResources := normalizeUnifiedResourceContextSlice(urp.GetAll())
-		policyPosture := summarizePolicyPosture(allResources)
+		policyPosture := unifiedresources.SummarizePolicyPosture(allResources)
 		sensitivityCounts := map[unifiedresources.ResourceSensitivity]int{}
 		routingCounts := map[unifiedresources.ResourceRoutingScope]int{}
 		var redactionHints []unifiedresources.ResourceRedactionHint

@@ -108,6 +108,10 @@ The patrol-local memory conversion helpers also live in
 `internal/ai/memory/presentation.go`, so the canonical change timeline and
 the Patrol memory fallback both translate through the same adapter boundary
 instead of carrying duplicate mapping code.
+The canonical policy-posture aggregate now also lives in
+`internal/unifiedresources/policy_posture.go`, so AI summaries and resource
+context share the same sensitivity, routing, and redaction counts from the
+resource model instead of rebuilding governance posture in AI-local code.
 The backend AI and Patrol graph context renderers now derive their canonical
 relationship labels, direction, provenance, freshness, and metadata flags
 from `internal/unifiedresources/relationship_presentation.go`, so the graph

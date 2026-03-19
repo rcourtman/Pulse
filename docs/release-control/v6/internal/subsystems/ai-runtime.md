@@ -167,6 +167,10 @@ redacted values stay consistent without AI-local presentation shims.
 Those same paths also use the shared resource display-name helper, so the
 name-or-ID fallback stays aligned across chat extraction, resource context,
 and unified adapter presentation.
+The policy-posture aggregate itself now also comes from
+`internal/unifiedresources/policy_posture.go`, so AI summaries and resource
+context reuse the same canonical sensitivity, routing, and redaction counts
+instead of collecting governance posture in an AI-local helper.
 That shared presentation layer also owns the elapsed-time and "ago" wording
 utilities, so the same "time ago" phrasing stays consistent across resource,
 incident, and fallback memory summaries instead of being reformatted

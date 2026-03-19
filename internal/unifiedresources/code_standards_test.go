@@ -351,6 +351,34 @@ func TestResourcePolicyLabelHelpersUsedByAIConsumers(t *testing.T) {
 	}
 }
 
+func TestPolicyPostureSummaryIsOwnedByUnifiedResources(t *testing.T) {
+	requiredSnippets := map[string][]string{
+		filepath.Join(".", "policy_posture.go"): {
+			"type PolicyPostureSummary struct {",
+			"func SummarizePolicyPosture(resources []Resource) *PolicyPostureSummary",
+		},
+		filepath.Join("..", "ai", "intelligence.go"): {
+			"unifiedresources.PolicyPostureSummary",
+			"unifiedresources.SummarizePolicyPosture(",
+		},
+		filepath.Join("..", "ai", "resource_context.go"): {
+			"unifiedresources.SummarizePolicyPosture(allResources)",
+		},
+	}
+
+	for name, snippets := range requiredSnippets {
+		data, err := os.ReadFile(name)
+		if err != nil {
+			t.Fatalf("failed to read %s: %v", name, err)
+		}
+		for _, snippet := range snippets {
+			if !strings.Contains(string(data), snippet) {
+				t.Fatalf("%s must contain %q", name, snippet)
+			}
+		}
+	}
+}
+
 func TestExportDecisionHelpersUsedByAIConsumers(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join("..", "ai", "resource_export.go"))
 	if err != nil {
