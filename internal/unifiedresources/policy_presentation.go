@@ -276,6 +276,41 @@ func ResourceDisplayName(resource Resource) string {
 	return strings.TrimSpace(resource.ID)
 }
 
+// ResourceClusterName returns the canonical cluster or topology name for a resource.
+func ResourceClusterName(resource Resource) string {
+	var name string
+	switch {
+	case strings.TrimSpace(resource.Identity.ClusterName) != "":
+		name = strings.TrimSpace(resource.Identity.ClusterName)
+	case resource.Proxmox != nil && strings.TrimSpace(resource.Proxmox.ClusterName) != "":
+		name = strings.TrimSpace(resource.Proxmox.ClusterName)
+	case resource.Kubernetes != nil && strings.TrimSpace(resource.Kubernetes.ClusterName) != "":
+		name = strings.TrimSpace(resource.Kubernetes.ClusterName)
+	case resource.Kubernetes != nil && strings.TrimSpace(resource.Kubernetes.SourceName) != "":
+		name = strings.TrimSpace(resource.Kubernetes.SourceName)
+	}
+	if name == "" {
+		return ""
+	}
+	return ResourcePolicyRedactedValue(name, resource.Policy,
+		ResourceRedactionAlias,
+		ResourceRedactionHostname,
+		ResourceRedactionPlatformID,
+	)
+}
+
+// ResourceIPSummary returns the canonical governed IP summary line for a resource.
+func ResourceIPSummary(resource Resource, limit int) string {
+	ips := resource.Identity.IPAddresses
+	if len(ips) == 0 {
+		return ""
+	}
+	if limit > 0 && len(ips) > limit {
+		ips = ips[:limit]
+	}
+	return " - IPs " + ResourcePolicyRedactedValue(strings.Join(ips, ", "), resource.Policy, ResourceRedactionIPAddress)
+}
+
 // ResourcePolicyUsesAISafeSummary reports whether the canonical aiSafeSummary
 // should be used instead of raw resource labels for governed output.
 func ResourcePolicyUsesAISafeSummary(summary string, policy *ResourcePolicy) bool {

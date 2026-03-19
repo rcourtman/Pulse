@@ -187,7 +187,7 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 					}
 
 					clusterInfo := ""
-					if name := unifiedResourceContextClusterName(node); name != "" {
+					if name := unifiedresources.ResourceClusterName(node); name != "" {
 						clusterInfo = fmt.Sprintf(" [cluster: %s]", name)
 					}
 
@@ -210,7 +210,7 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 			if len(standaloneHosts) > 0 {
 				sections = append(sections, "\n**Standalone Hosts (via Host Agent):**")
 				for _, host := range standaloneHosts {
-					ips := unifiedResourceContextIPSummary(host, 0)
+					ips := unifiedresources.ResourceIPSummary(host, 0)
 
 					metrics := ""
 					cpuPercent := 0.0
@@ -279,7 +279,7 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 					}
 
 					clusterInfo := ""
-					if name := unifiedResourceContextClusterName(cluster); name != "" {
+					if name := unifiedresources.ResourceClusterName(cluster); name != "" {
 						clusterInfo = fmt.Sprintf(" [cluster: %s]", name)
 					}
 					sections = append(sections, fmt.Sprintf("- **%s** (Cluster%s, %d nodes) [%s]",
@@ -293,7 +293,7 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 					}
 
 					clusterInfo := ""
-					if name := unifiedResourceContextClusterName(node); name != "" {
+					if name := unifiedresources.ResourceClusterName(node); name != "" {
 						clusterInfo = fmt.Sprintf(" [cluster: %s]", name)
 					}
 
@@ -366,7 +366,7 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 						vmidInfo = fmt.Sprintf(" %d", workload.Proxmox.VMID)
 					}
 
-					ips := unifiedResourceContextIPSummary(workload, 2)
+					ips := unifiedresources.ResourceIPSummary(workload, 2)
 
 					sections = append(sections, fmt.Sprintf("  - **%s** (%s%s)%s [%s]",
 						unifiedresources.ResourcePolicyLabel(workload.Name, workload.AISafeSummary, workload.Policy), typeLabel, vmidInfo, ips, workload.Status))
@@ -379,7 +379,7 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 				})
 				sections = append(sections, "\n**Other workloads:**")
 				for _, workload := range noParent {
-					ips := unifiedResourceContextIPSummary(workload, 2)
+					ips := unifiedresources.ResourceIPSummary(workload, 2)
 					sections = append(sections, fmt.Sprintf("  - **%s** (%s)%s [%s]",
 						unifiedresources.ResourcePolicyLabel(workload.Name, workload.AISafeSummary, workload.Policy), workload.Type, ips, workload.Status))
 				}
@@ -544,37 +544,6 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 	}
 
 	return ""
-}
-
-func unifiedResourceContextClusterName(r unifiedresources.Resource) string {
-	name := ""
-	switch {
-	case strings.TrimSpace(r.Identity.ClusterName) != "":
-		name = strings.TrimSpace(r.Identity.ClusterName)
-	case r.Proxmox != nil && strings.TrimSpace(r.Proxmox.ClusterName) != "":
-		name = strings.TrimSpace(r.Proxmox.ClusterName)
-	case r.Kubernetes != nil && strings.TrimSpace(r.Kubernetes.ClusterName) != "":
-		name = strings.TrimSpace(r.Kubernetes.ClusterName)
-	}
-	if name == "" {
-		return ""
-	}
-	return unifiedresources.ResourcePolicyRedactedValue(name, r.Policy,
-		unifiedresources.ResourceRedactionAlias,
-		unifiedresources.ResourceRedactionHostname,
-		unifiedresources.ResourceRedactionPlatformID,
-	)
-}
-
-func unifiedResourceContextIPSummary(r unifiedresources.Resource, limit int) string {
-	ips := r.Identity.IPAddresses
-	if len(ips) == 0 {
-		return ""
-	}
-	if limit > 0 && len(ips) > limit {
-		ips = ips[:limit]
-	}
-	return " - IPs " + unifiedresources.ResourcePolicyRedactedValue(strings.Join(ips, ", "), r.Policy, unifiedresources.ResourceRedactionIPAddress)
 }
 
 func unifiedMetricPercent(m *unifiedresources.MetricValue) float64 {

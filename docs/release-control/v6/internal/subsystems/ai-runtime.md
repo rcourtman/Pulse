@@ -207,7 +207,10 @@ and unified adapter presentation.
 The unified resource context's IP summaries now also route through the shared
 policy redaction helper, so the local "IPs" line follows the same governed
 redaction decision and label vocabulary as the rest of the policy-aware
-resource presentation layer.
+resource presentation layer. Cluster labels for AI resource context now also
+come from the shared unified-resource presentation helper, so the same policy
+rules govern cluster names and IP summaries instead of leaving the fallback
+logic in the AI package.
 The policy-posture aggregate itself now also comes from
 `internal/unifiedresources/policy_posture.go`, so AI summaries and resource
 context reuse the same canonical sensitivity, routing, and redaction counts

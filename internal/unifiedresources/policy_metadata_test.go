@@ -160,6 +160,56 @@ func TestResourcePolicyPresentationLabels(t *testing.T) {
 	}
 }
 
+func TestResourceClusterName(t *testing.T) {
+	public := Resource{
+		Identity: ResourceIdentity{
+			ClusterName: "  cluster-a  ",
+		},
+	}
+	if got := ResourceClusterName(public); got != "cluster-a" {
+		t.Fatalf("ResourceClusterName() = %q, want cluster-a", got)
+	}
+
+	governed := Resource{
+		Policy: &ResourcePolicy{
+			Routing: ResourceRoutingPolicy{
+				Redact: []ResourceRedactionHint{ResourceRedactionHostname},
+			},
+		},
+		Kubernetes: &K8sData{
+			ClusterName: "k8s-prod",
+		},
+	}
+	if got := ResourceClusterName(governed); got != ResourcePolicyRedactedLabel {
+		t.Fatalf("ResourceClusterName() with governed policy = %q, want redacted label", got)
+	}
+}
+
+func TestResourceIPSummary(t *testing.T) {
+	public := Resource{
+		Identity: ResourceIdentity{
+			IPAddresses: []string{"10.0.0.1", "10.0.0.2", "10.0.0.3"},
+		},
+	}
+	if got := ResourceIPSummary(public, 2); got != " - IPs 10.0.0.1, 10.0.0.2" {
+		t.Fatalf("ResourceIPSummary() = %q, want truncated IP list", got)
+	}
+
+	governed := Resource{
+		Policy: &ResourcePolicy{
+			Routing: ResourceRoutingPolicy{
+				Redact: []ResourceRedactionHint{ResourceRedactionIPAddress},
+			},
+		},
+		Identity: ResourceIdentity{
+			IPAddresses: []string{"10.0.0.10", "10.0.0.11"},
+		},
+	}
+	if got := ResourceIPSummary(governed, 10); got != " - IPs redacted by policy" {
+		t.Fatalf("ResourceIPSummary() with governed policy = %q, want redacted summary", got)
+	}
+}
+
 func TestResourcePolicyRedactionLabelsUseCanonicalOrder(t *testing.T) {
 	policy := &ResourcePolicy{
 		Routing: ResourceRoutingPolicy{
