@@ -229,6 +229,10 @@ timeline endpoint is paginated. Relationship and timeline references in that
 drawer now route through the canonical infrastructure resource filter, so the
 resource graph remains navigable from the history surface instead of being
 purely descriptive text.
+`ResourceFacetSummary` now consumes the shared
+`frontend-modern/src/utils/resourceChangePresentation.ts` label helper for
+canonical change kinds, source types, and adapter provenance, so the chip
+wording stays aligned across table, drawer, and intelligence surfaces.
 Relationship cards in that drawer also surface `lastSeenAt` freshness and
 optional metadata blocks, and timeline cards surface change metadata when it
 is present, so the graph history view preserves the richer provenance already

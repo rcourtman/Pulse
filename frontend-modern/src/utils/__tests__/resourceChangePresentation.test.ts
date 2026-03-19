@@ -3,6 +3,9 @@ import { describe, expect, it } from 'vitest';
 import {
   formatResourceChangeHeadline,
   formatResourceChangeKind,
+  getResourceChangeKindPresentation,
+  getResourceChangeSourceAdapterPresentation,
+  getResourceChangeSourceTypePresentation,
 } from '@/utils/resourceChangePresentation';
 
 describe('resourceChangePresentation utils', () => {
@@ -33,5 +36,20 @@ describe('resourceChangePresentation utils', () => {
         observedAt: '2026-03-18T12:00:00Z',
       } as never),
     ).toBe('Config update: Updated canonical config');
+  });
+
+  it('exposes canonical kind, source type, and adapter presentations', () => {
+    expect(getResourceChangeKindPresentation('restart')).toMatchObject({
+      label: 'Restart',
+      plural: 'Restarts',
+    });
+    expect(getResourceChangeSourceTypePresentation('platform_event')).toMatchObject({
+      label: 'Platform event',
+      plural: 'Platform events',
+    });
+    expect(getResourceChangeSourceAdapterPresentation('proxmox_adapter')).toMatchObject({
+      label: 'Proxmox adapter',
+      plural: 'Proxmox adapters',
+    });
   });
 });

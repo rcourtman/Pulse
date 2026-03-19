@@ -154,6 +154,7 @@ describe('UnifiedResourceTable performance contract', () => {
             recentChanges: 3,
             recentChangeKinds: {
               restart: 2,
+              config_update: 1,
               metric_anomaly: 1,
             },
             recentChangeSourceTypes: {
@@ -173,6 +174,7 @@ describe('UnifiedResourceTable performance contract', () => {
       expect(getByText('Relationships 1')).toBeInTheDocument();
       expect(getByText('Timeline 3')).toBeInTheDocument();
       expect(getByText('Restart 2')).toBeInTheDocument();
+      expect(getByText('Config update 1')).toBeInTheDocument();
       expect(getByText('Anomaly 1')).toBeInTheDocument();
       expect(getByText('Platform event 1')).toBeInTheDocument();
       expect(getByText('Pulse diff 2')).toBeInTheDocument();
@@ -210,6 +212,7 @@ describe('UnifiedResourceTable performance contract', () => {
                 recentChanges: 3,
                 recentChangeKinds: {
                   restart: 2,
+                  config_update: 1,
                   metric_anomaly: 1,
                 },
               recentChangeSourceTypes: {
@@ -241,6 +244,7 @@ describe('UnifiedResourceTable performance contract', () => {
         expect(getByText('Capabilities 1')).toBeInTheDocument();
         expect(getByText('Relationships 1')).toBeInTheDocument();
         expect(getByText('Timeline 3')).toBeInTheDocument();
+        expect(getByText('Config update 1')).toBeInTheDocument();
       });
       await waitFor(() => {
         expect(getBodyRowCount(container)).toBe(PROFILES.S);
