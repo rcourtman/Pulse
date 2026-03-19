@@ -87,7 +87,7 @@ describe('resourceCorrelationPresentation utils', () => {
     expect(sorted.map((item) => item.source_id)).toEqual(['storage-3', 'storage-1', 'storage-2']);
   });
 
-  it('formats canonical graph summary text', () => {
+  it('formats canonical correlation summary text', () => {
     expect(
       formatResourceCorrelationSummaryText({
         dependenciesCount: 2,

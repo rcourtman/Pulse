@@ -99,7 +99,7 @@ registry rebuilds and supplemental ingest into `ResourceChange` records, and
 `internal/unifiedresources/store.go` persists those changes so `RecentChanges`
 can round-trip through the SQLite-backed resource store instead of living only
 in memory or adapter-local state.
-Timeline records now keep graph context in `relatedResources` for every
+Timeline records now keep correlation context in `relatedResources` for every
 meaningful canonical change kind, so the durable history preserves the same
 cross-resource context the detail drawer can surface later instead of
 collapsing state, restart, anomaly, or config changes down to resource-only
