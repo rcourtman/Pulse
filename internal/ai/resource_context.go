@@ -167,7 +167,7 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 
 			sortResources := func(resources []unifiedresources.Resource) {
 				sort.Slice(resources, func(i, j int) bool {
-					return strings.ToLower(unifiedResourceDisplayName(resources[i])) < strings.ToLower(unifiedResourceDisplayName(resources[j]))
+					return strings.ToLower(unifiedresources.ResourceDisplayName(resources[i])) < strings.ToLower(unifiedresources.ResourceDisplayName(resources[j]))
 				})
 			}
 
@@ -347,7 +347,7 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 				sections = append(sections, fmt.Sprintf("\n**On %s:**", parentName))
 				children := byParent[parentID]
 				sort.Slice(children, func(i, j int) bool {
-					return strings.ToLower(unifiedResourceDisplayName(children[i])) < strings.ToLower(unifiedResourceDisplayName(children[j]))
+					return strings.ToLower(unifiedresources.ResourceDisplayName(children[i])) < strings.ToLower(unifiedresources.ResourceDisplayName(children[j]))
 				})
 
 				for _, workload := range children {
@@ -375,7 +375,7 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 
 			if len(noParent) > 0 {
 				sort.Slice(noParent, func(i, j int) bool {
-					return strings.ToLower(unifiedResourceDisplayName(noParent[i])) < strings.ToLower(unifiedResourceDisplayName(noParent[j]))
+					return strings.ToLower(unifiedresources.ResourceDisplayName(noParent[i])) < strings.ToLower(unifiedresources.ResourceDisplayName(noParent[j]))
 				})
 				sections = append(sections, "\n**Other workloads:**")
 				for _, workload := range noParent {
@@ -544,13 +544,6 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 	}
 
 	return ""
-}
-
-func unifiedResourceDisplayName(r unifiedresources.Resource) string {
-	if strings.TrimSpace(r.Name) != "" {
-		return strings.TrimSpace(r.Name)
-	}
-	return strings.TrimSpace(r.ID)
 }
 
 func unifiedResourceContextClusterName(r unifiedresources.Resource) string {

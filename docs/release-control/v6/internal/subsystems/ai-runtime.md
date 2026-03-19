@@ -156,6 +156,9 @@ at each resolved mention site rather than going through an AI-local wrapper.
 Chat knowledge extraction and resource-context rendering now also consume the
 shared unified-resource label helpers directly, so governed labels and
 redacted values stay consistent without AI-local presentation shims.
+Those same paths also use the shared resource display-name helper, so the
+name-or-ID fallback stays aligned across chat extraction, resource context,
+and unified adapter presentation.
 That shared presentation layer also owns the elapsed-time and "ago" wording
 utilities, so the same "time ago" phrasing stays consistent across resource,
 incident, and fallback memory summaries instead of being reformatted

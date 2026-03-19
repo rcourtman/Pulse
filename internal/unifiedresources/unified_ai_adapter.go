@@ -250,7 +250,7 @@ func (a *UnifiedAIAdapter) getTopByMetric(limit int, types []ResourceType, metri
 		left := metric(results[i])
 		right := metric(results[j])
 		if left == right {
-			return strings.ToLower(unifiedDisplayName(results[i])) < strings.ToLower(unifiedDisplayName(results[j]))
+			return strings.ToLower(ResourceDisplayName(results[i])) < strings.ToLower(ResourceDisplayName(results[j]))
 		}
 		return left > right
 	})
@@ -275,13 +275,6 @@ func metricPercent(metric *MetricValue) float64 {
 		return (float64(*metric.Used) / float64(*metric.Total)) * 100
 	}
 	return 0
-}
-
-func unifiedDisplayName(resource Resource) string {
-	if strings.TrimSpace(resource.Name) != "" {
-		return resource.Name
-	}
-	return resource.ID
 }
 
 func isUnifiedInfrastructure(t ResourceType) bool {

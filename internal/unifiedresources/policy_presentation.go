@@ -226,6 +226,14 @@ func ResourcePolicyRedactedValue(value string, policy *ResourcePolicy, hints ...
 	return value
 }
 
+// ResourceDisplayName returns the canonical resource display name fallback.
+func ResourceDisplayName(resource Resource) string {
+	if name := strings.TrimSpace(resource.Name); name != "" {
+		return name
+	}
+	return strings.TrimSpace(resource.ID)
+}
+
 // ResourcePolicyUsesAISafeSummary reports whether the canonical aiSafeSummary
 // should be used instead of raw resource labels for governed output.
 func ResourcePolicyUsesAISafeSummary(summary string, policy *ResourcePolicy) bool {

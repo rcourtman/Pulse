@@ -236,6 +236,18 @@ func TestResourcePolicyLabelHelpers(t *testing.T) {
 	}
 }
 
+func TestResourceDisplayName(t *testing.T) {
+	if got := ResourceDisplayName(Resource{Name: "  node-a  ", ID: "id-a"}); got != "node-a" {
+		t.Fatalf("ResourceDisplayName() with name = %q, want node-a", got)
+	}
+	if got := ResourceDisplayName(Resource{Name: "   ", ID: "  id-b  "}); got != "id-b" {
+		t.Fatalf("ResourceDisplayName() with fallback ID = %q, want id-b", got)
+	}
+	if got := ResourceDisplayName(Resource{}); got != "" {
+		t.Fatalf("ResourceDisplayName() empty resource = %q, want empty string", got)
+	}
+}
+
 func TestCloneResourcePolicy(t *testing.T) {
 	t.Parallel()
 

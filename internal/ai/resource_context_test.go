@@ -400,6 +400,15 @@ func TestResourcePolicyHelpersShareAISafeSummaryDecision(t *testing.T) {
 	}
 }
 
+func TestUnifiedResourceDisplayNameUsesSharedHelper(t *testing.T) {
+	if got := unifiedresources.ResourceDisplayName(unifiedresources.Resource{Name: "  node-a  ", ID: "id-a"}); got != "node-a" {
+		t.Fatalf("ResourceDisplayName() with name = %q, want node-a", got)
+	}
+	if got := unifiedresources.ResourceDisplayName(unifiedresources.Resource{Name: "   ", ID: "  id-b  "}); got != "id-b" {
+		t.Fatalf("ResourceDisplayName() with fallback ID = %q, want id-b", got)
+	}
+}
+
 func TestBuildUnifiedResourceContext_UnifiedPath(t *testing.T) {
 	clusterID := "k8s-cluster-1"
 	k8sCluster := unifiedresources.Resource{
