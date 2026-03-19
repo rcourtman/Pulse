@@ -210,6 +210,33 @@ func TestResourcePolicyRedactsAndUsesAISafeSummary(t *testing.T) {
 	}
 }
 
+func TestResourcePolicyRequiresGovernedSummary(t *testing.T) {
+	if ResourcePolicyRequiresGovernedSummary(nil) {
+		t.Fatal("expected nil policy to not require governed summary")
+	}
+
+	if ResourcePolicyRequiresGovernedSummary(&ResourcePolicy{}) {
+		t.Fatal("expected empty policy to not require governed summary")
+	}
+
+	if !ResourcePolicyRequiresGovernedSummary(&ResourcePolicy{
+		Routing: ResourceRoutingPolicy{
+			Scope: ResourceRoutingScopeLocalOnly,
+		},
+	}) {
+		t.Fatal("expected local-only policy to require governed summary")
+	}
+
+	if !ResourcePolicyRequiresGovernedSummary(&ResourcePolicy{
+		Routing: ResourceRoutingPolicy{
+			Scope:  ResourceRoutingScopeLocalFirst,
+			Redact: []ResourceRedactionHint{ResourceRedactionHostname},
+		},
+	}) {
+		t.Fatal("expected redacted policy to require governed summary")
+	}
+}
+
 func TestResourcePolicyLabelHelpers(t *testing.T) {
 	policy := &ResourcePolicy{
 		Sensitivity: ResourceSensitivityRestricted,

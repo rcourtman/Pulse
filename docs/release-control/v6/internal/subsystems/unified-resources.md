@@ -203,6 +203,9 @@ The same shared policy presentation helper now also formats governed mention
 policy lines and redaction lists for AI chat prefetch, so prompt context
 stays aligned with the canonical sensitivity, routing, and redaction labels
 instead of rebuilding them in lane-local helpers.
+The same helper now also owns the governed-summary gate for mention
+prefetching, so the decision to surface the block follows the same canonical
+local-only and redaction rules as the rendered policy text.
 The same shared policy helper also owns the `aiSafeSummary` decision and
 redaction predicates used by AI chat knowledge extraction and resource
 context rendering, so governed labels and summary selection stay rooted in

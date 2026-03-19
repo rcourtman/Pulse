@@ -266,3 +266,15 @@ func ResourcePolicyUsesAISafeSummary(summary string, policy *ResourcePolicy) boo
 		ResourceRedactionPlatformID,
 	)
 }
+
+// ResourcePolicyRequiresGovernedSummary reports whether the policy requires a
+// governed mention or prompt summary instead of raw resource identity fields.
+func ResourcePolicyRequiresGovernedSummary(policy *ResourcePolicy) bool {
+	if policy == nil {
+		return false
+	}
+	if policy.Routing.Scope == ResourceRoutingScopeLocalOnly {
+		return true
+	}
+	return len(policy.Routing.Redact) > 0
+}

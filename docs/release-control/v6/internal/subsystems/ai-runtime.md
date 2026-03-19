@@ -119,6 +119,9 @@ The governed mention formatter must also render the policy line and redaction
 list through the shared unified-resource policy presentation helper so the
 chat prefetch path stays aligned with the same canonical sensitivity, routing,
 and redaction labels used by the AI summary and resource drawer.
+The decision to show that governed mention block now comes from the shared
+unified-resource policy helper as well, so the local gate stays aligned with
+the same routing and redaction rules as the rendered summary itself.
 The same governed-context rule also applies to the main unified AI resource
 overview: infrastructure, workload, alert-label, and top-consumer summaries
 must not leak raw resource names, cluster labels, IP addresses, or unresolved

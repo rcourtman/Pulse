@@ -361,6 +361,9 @@ func TestResourcePolicyLabelHelpersUsedByAIConsumers(t *testing.T) {
 			"unifiedresources.ResourcePolicyLabel(",
 			"unifiedresources.ResourcePolicyRedactedValue(",
 		},
+		filepath.Join("..", "ai", "chat", "context_prefetch.go"): {
+			"unifiedresources.ResourcePolicyRequiresGovernedSummary(m.Policy)",
+		},
 		filepath.Join("..", "ai", "resource_export.go"): {
 			"unifiedresources.ResourceRedactionLabelsFromHints(redactionHints)",
 		},
@@ -378,6 +381,7 @@ func TestResourcePolicyLabelHelpersUsedByAIConsumers(t *testing.T) {
 			"func ResourcePolicyRedactedValue(value string, policy *ResourcePolicy, hints ...ResourceRedactionHint) string",
 			"const ResourcePolicyRedactedLabel = \"redacted by policy\"",
 			"func ResourceRedactionLabelsFromHints(hints []ResourceRedactionHint) []string",
+			"func ResourcePolicyRequiresGovernedSummary(policy *ResourcePolicy) bool",
 			"func ResourceDisplayName(resource Resource) string",
 		},
 	}

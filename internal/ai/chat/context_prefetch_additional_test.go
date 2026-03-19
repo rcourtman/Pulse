@@ -410,7 +410,7 @@ func TestContextPrefetcher_PrefetchRestrictedMentionSkipsDiscoveryAndPaths(t *te
 	if !strings.Contains(ctx.Summary, "local-only context") {
 		t.Fatalf("expected aiSafeSummary local-only wording, got %q", ctx.Summary)
 	}
-	if !strings.Contains(ctx.Summary, "routing=local-only") {
+	if !strings.Contains(ctx.Summary, "routing=Local Only") {
 		t.Fatalf("expected policy routing in summary, got %q", ctx.Summary)
 	}
 	if strings.Contains(ctx.Summary, "customer-db") {
@@ -418,6 +418,33 @@ func TestContextPrefetcher_PrefetchRestrictedMentionSkipsDiscoveryAndPaths(t *te
 	}
 	if strings.Contains(ctx.Summary, "target_host") {
 		t.Fatalf("expected restricted summary to withhold target_host, got %q", ctx.Summary)
+	}
+}
+
+func TestResourceMentionRequiresGovernedSummaryUsesSharedHelper(t *testing.T) {
+	if (ResourceMention{}).requiresGovernedSummary() {
+		t.Fatal("expected empty mention to not require governed summary")
+	}
+
+	if !(ResourceMention{
+		Policy: &unifiedresources.ResourcePolicy{
+			Routing: unifiedresources.ResourceRoutingPolicy{
+				Scope: unifiedresources.ResourceRoutingScopeLocalOnly,
+			},
+		},
+	}).requiresGovernedSummary() {
+		t.Fatal("expected local-only policy to require governed summary")
+	}
+
+	if !(ResourceMention{
+		Policy: &unifiedresources.ResourcePolicy{
+			Routing: unifiedresources.ResourceRoutingPolicy{
+				Scope:  unifiedresources.ResourceRoutingScopeLocalFirst,
+				Redact: []unifiedresources.ResourceRedactionHint{unifiedresources.ResourceRedactionHostname},
+			},
+		},
+	}).requiresGovernedSummary() {
+		t.Fatal("expected redacted policy to require governed summary")
 	}
 }
 

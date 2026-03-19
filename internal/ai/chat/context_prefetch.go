@@ -905,13 +905,7 @@ func mentionAISafeSummary(resource *unifiedresources.Resource) string {
 }
 
 func (m ResourceMention) requiresGovernedSummary() bool {
-	if m.Policy == nil {
-		return false
-	}
-	if m.Policy.Routing.Scope == unifiedresources.ResourceRoutingScopeLocalOnly {
-		return true
-	}
-	return len(m.Policy.Routing.Redact) > 0
+	return unifiedresources.ResourcePolicyRequiresGovernedSummary(m.Policy)
 }
 
 func formatGovernedMentionSummary(sb *strings.Builder, mention ResourceMention) {
