@@ -409,6 +409,35 @@ func TestUnifiedResourceDisplayNameUsesSharedHelper(t *testing.T) {
 	}
 }
 
+func TestUnifiedResourceContextIPSummaryUsesSharedHelper(t *testing.T) {
+	sensitive := unifiedresources.Resource{
+		Policy: &unifiedresources.ResourcePolicy{
+			Sensitivity: unifiedresources.ResourceSensitivitySensitive,
+			Routing: unifiedresources.ResourceRoutingPolicy{
+				Scope: unifiedresources.ResourceRoutingScopeLocalFirst,
+				Redact: []unifiedresources.ResourceRedactionHint{
+					unifiedresources.ResourceRedactionIPAddress,
+				},
+			},
+		},
+		Identity: unifiedresources.ResourceIdentity{
+			IPAddresses: []string{"10.0.0.10", "10.0.0.11"},
+		},
+	}
+	if got := unifiedResourceContextIPSummary(sensitive, 10); got != " - IPs redacted by policy" {
+		t.Fatalf("unifiedResourceContextIPSummary() = %q, want redacted summary", got)
+	}
+
+	public := unifiedresources.Resource{
+		Identity: unifiedresources.ResourceIdentity{
+			IPAddresses: []string{"10.0.0.10", "10.0.0.11"},
+		},
+	}
+	if got := unifiedResourceContextIPSummary(public, 10); got != " - IPs 10.0.0.10, 10.0.0.11" {
+		t.Fatalf("unifiedResourceContextIPSummary() = %q, want IP list", got)
+	}
+}
+
 func TestBuildUnifiedResourceContext_UnifiedPath(t *testing.T) {
 	clusterID := "k8s-cluster-1"
 	k8sCluster := unifiedresources.Resource{

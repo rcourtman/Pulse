@@ -171,6 +171,10 @@ redacted values stay consistent without AI-local presentation shims.
 Those same paths also use the shared resource display-name helper, so the
 name-or-ID fallback stays aligned across chat extraction, resource context,
 and unified adapter presentation.
+The unified resource context's IP summaries now also route through the shared
+policy redaction helper, so the local "IPs" line follows the same governed
+redaction decision and label vocabulary as the rest of the policy-aware
+resource presentation layer.
 The policy-posture aggregate itself now also comes from
 `internal/unifiedresources/policy_posture.go`, so AI summaries and resource
 context reuse the same canonical sensitivity, routing, and redaction counts

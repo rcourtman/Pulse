@@ -571,13 +571,10 @@ func unifiedResourceContextIPSummary(r unifiedresources.Resource, limit int) str
 	if len(ips) == 0 {
 		return ""
 	}
-	if unifiedresources.ResourcePolicyRedacts(r.Policy, unifiedresources.ResourceRedactionIPAddress) {
-		return " - IPs " + unifiedresources.ResourcePolicyRedactedLabel
-	}
 	if limit > 0 && len(ips) > limit {
 		ips = ips[:limit]
 	}
-	return " - " + strings.Join(ips, ", ")
+	return " - IPs " + unifiedresources.ResourcePolicyRedactedValue(strings.Join(ips, ", "), r.Policy, unifiedresources.ResourceRedactionIPAddress)
 }
 
 func normalizeUnifiedResourceContextSlice(resources []unifiedresources.Resource) []unifiedresources.Resource {
