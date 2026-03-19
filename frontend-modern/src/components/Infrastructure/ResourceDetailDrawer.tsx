@@ -823,7 +823,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                   />
                   <ResourcePolicySummary posture={policyPosture()} title="Policy posture" />
                   <ResourceGraphSummary
-                    title="Graph context"
+                    title="Correlation context"
                     dependencies={resourceDependencies()}
                     dependents={resourceDependents()}
                     correlations={resourceCorrelations()}

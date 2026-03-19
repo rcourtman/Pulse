@@ -334,7 +334,9 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     expect(getByText('2 governed resources')).toBeInTheDocument();
     expect(getByText('Public')).toBeInTheDocument();
     expect(getByText('Cloud Summary')).toBeInTheDocument();
-    expect(getByText('Graph context')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(getByText('Correlation context')).toBeInTheDocument();
+    });
     expect(getByText('1 dependency · 1 dependent · 1 correlation')).toBeInTheDocument();
     expect(
       getByRole('link', {

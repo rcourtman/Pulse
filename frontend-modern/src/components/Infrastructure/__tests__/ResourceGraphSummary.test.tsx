@@ -40,10 +40,10 @@ describe('ResourceGraphSummary', () => {
     expect(screen.queryByText(/last seen/i)).toBeNull();
   });
 
-  it('renders graph context with dependency and dependent links', () => {
+  it('renders correlation context with dependency and dependent links', () => {
     render(() => (
       <ResourceGraphSummary
-        title="Graph context"
+        title="Correlation context"
         dependencies={['storage-1']}
         dependents={['vm-child']}
         correlations={[
@@ -66,7 +66,7 @@ describe('ResourceGraphSummary', () => {
       />
     ));
 
-    expect(screen.getByText('Graph context')).toBeInTheDocument();
+    expect(screen.getByText('Correlation context')).toBeInTheDocument();
     expect(screen.getByText('1 dependency · 1 dependent · 1 correlation')).toBeInTheDocument();
     expect(screen.getByText('Depends on')).toBeInTheDocument();
     expect(screen.getByText('Used by')).toBeInTheDocument();
