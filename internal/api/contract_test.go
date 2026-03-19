@@ -377,6 +377,26 @@ func TestContract_ResourceIntelligenceIncludesRecentChanges(t *testing.T) {
 	if len(dependencies) == 0 {
 		t.Fatal("expected at least one dependency in response")
 	}
+	correlations, ok := payload["correlations"].([]interface{})
+	if !ok {
+		t.Fatalf("expected correlations array in response, got %T", payload["correlations"])
+	}
+	if len(correlations) == 0 {
+		t.Fatal("expected at least one correlation in response")
+	}
+	firstCorrelation, ok := correlations[0].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected correlation object, got %T", correlations[0])
+	}
+	if firstCorrelation["event_pattern"] == "" {
+		t.Fatal("expected correlation event_pattern in response")
+	}
+	if firstCorrelation["avg_delay"] == nil {
+		t.Fatal("expected correlation avg_delay in response")
+	}
+	if firstCorrelation["confidence"] == nil {
+		t.Fatal("expected correlation confidence in response")
+	}
 }
 
 func TestContract_IntelligenceSummaryIncludesRecentChanges(t *testing.T) {

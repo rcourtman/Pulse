@@ -56,6 +56,22 @@ vi.mock('@/api/ai', () => ({
       ],
       dependencies: ['storage-1'],
       dependents: ['vm-child'],
+      correlations: [
+        {
+          source_id: 'storage-1',
+          source_name: 'Storage 1',
+          source_type: 'storage',
+          target_id: 'resource-1',
+          target_name: 'Host 1',
+          target_type: 'vm',
+          event_pattern: 'disk_full -> restart',
+          occurrences: 2,
+          avg_delay: 125000000000,
+          confidence: 0.875,
+          last_seen: '2026-03-01T00:15:00Z',
+          description: 'Disk pressure often precedes restarts',
+        },
+      ],
       policy_posture: {
         total_resources: 2,
         sensitivity_counts: {
@@ -319,7 +335,7 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     expect(getByText('Public')).toBeInTheDocument();
     expect(getByText('Cloud Summary')).toBeInTheDocument();
     expect(getByText('Graph context')).toBeInTheDocument();
-    expect(getByText('1 dependencies · 1 dependents')).toBeInTheDocument();
+    expect(getByText('1 dependencies · 1 dependents · 1 correlations')).toBeInTheDocument();
     expect(
       getByRole('link', {
         name: 'Open dependency resource storage-1 in Infrastructure',
@@ -330,6 +346,11 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
         name: 'Open dependent resource vm-child in Infrastructure',
       }),
     ).toHaveAttribute('href', expect.stringContaining('/infrastructure?resource=vm-child'));
+    expect(getByText('Storage 1')).toBeInTheDocument();
+    expect(getByText('Host 1')).toBeInTheDocument();
+    expect(getByText('Disk Full → Restart')).toBeInTheDocument();
+    expect(getByText(/2 occurrences · avg delay 2m · 88% confidence/)).toBeInTheDocument();
+    expect(getByText('Disk pressure often precedes restarts')).toBeInTheDocument();
     const latestChange = getByText('Latest canonical change').parentElement;
     expect(latestChange).not.toBeNull();
     expect(latestChange).toHaveTextContent('Config update');

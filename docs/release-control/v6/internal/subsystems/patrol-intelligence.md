@@ -96,9 +96,9 @@ The resource drawer now carries the same canonical posture snapshot through
 the resource-intelligence payload, so the resource-level AI card can show the
 org posture context without introducing a separate posture endpoint.
 That same resource-intelligence payload also carries canonical dependency and
-dependent graph context, so the resource drawer can surface relationship
-reachability directly from the AI contract instead of inventing a second
-graph summary.
+dependent graph context plus canonical correlation evidence, so the resource
+drawer can surface relationship reachability and learned edge patterns
+directly from the AI contract instead of inventing a second graph summary.
 The Patrol page and resource drawer now also share the canonical
 `frontend-modern/src/utils/resourceChangePresentation.ts` formatter so
 recent-change kind and headline wording stays aligned wherever the canonical

@@ -175,9 +175,9 @@ client in `frontend-modern/src/api/resources.ts`, which fetches the governed
 capability, relationship, and timeline surfaces from `internal/api/resources.go`
 instead of teaching the drawer or list views to reconstruct them inline.
 The same AI resource-intelligence payload now also carries dependency and
-dependent graph arrays, so the drawer can render canonical graph context from
-the shared AI contract instead of inferring it from the relationship facet
-payload alone.
+dependent graph arrays plus correlation evidence, so the drawer can render
+canonical graph context from the shared AI contract instead of inferring it
+from the relationship facet payload alone.
 The unified action, lifecycle, and export audit reads now also clamp oversized
 `limit` requests to the governed maximum of `1000`, so the control-plane audit
 surface stays bounded even when callers ask for arbitrarily large history

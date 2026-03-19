@@ -102,6 +102,10 @@ relationship labels, direction, provenance, freshness, and metadata flags
 from `internal/unifiedresources/relationship_presentation.go`, so the graph
 semantics live with the resource model instead of being duplicated in prompt
 helpers or drawer-specific markdown.
+The same AI resource-intelligence payload now also carries canonical
+correlation evidence from the shared detector, so the drawer can show learned
+edge patterns alongside the dependency graph without rebuilding correlation
+reasoning from raw events.
 The change emitter now also classifies canonical restart changes for Docker
 and Kubernetes resources when restart counters increase or uptime resets, so
 the timeline can distinguish restarts from generic state transitions instead

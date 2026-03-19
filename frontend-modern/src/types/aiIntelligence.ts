@@ -94,6 +94,21 @@ export interface IntelligencePolicyPostureSummary {
   redaction_counts?: Partial<Record<ResourceRedactionHint, number>>;
 }
 
+export interface ResourceCorrelation {
+  source_id: string;
+  source_name: string;
+  source_type: string;
+  target_id: string;
+  target_name: string;
+  target_type: string;
+  event_pattern: string;
+  occurrences: number;
+  avg_delay: number;
+  confidence: number;
+  last_seen: string;
+  description: string;
+}
+
 export interface IntelligenceSummary {
   timestamp: string;
   overall_health: IntelligenceHealthScore;
@@ -114,6 +129,7 @@ export interface ResourceIntelligence {
   health: IntelligenceHealthScore;
   dependencies?: string[];
   dependents?: string[];
+  correlations?: ResourceCorrelation[];
   recent_changes?: ResourceChange[];
   policy_posture?: IntelligencePolicyPostureSummary;
   note_count: number;
