@@ -4,11 +4,17 @@ import type {
   ResourceRoutingScope,
   ResourceSensitivity,
 } from '@/types/resource';
+import type { IntelligencePolicyPostureSummary } from '@/types/aiIntelligence';
 
 type PolicyBadgePresentation = {
   label: string;
   title: string;
   className: string;
+};
+
+export type ResourcePolicyCountSummary = {
+  label: string;
+  count: number;
 };
 
 export const RESOURCE_POLICY_SENSITIVITY_ORDER: ResourceSensitivity[] = [
@@ -106,3 +112,55 @@ export const getResourceRedactionHintLabel = (hint?: ResourceRedactionHint): str
 
 export const getResourcePolicyRedactionLabels = (policy?: ResourcePolicy): string[] =>
   (policy?.routing.redact ?? []).map((hint) => getResourceRedactionHintLabel(hint));
+
+const buildCountSummaries = <T extends string>(
+  counts: Partial<Record<T, number>> | undefined,
+  order: readonly T[],
+  labelFn: (value: T) => string,
+  includeZeroCounts: boolean,
+): ResourcePolicyCountSummary[] => {
+  if (!counts) return [];
+
+  const summaries: ResourcePolicyCountSummary[] = [];
+  for (const value of order) {
+    const count = counts[value] ?? 0;
+    if (!includeZeroCounts && count <= 0) {
+      continue;
+    }
+    summaries.push({
+      label: labelFn(value),
+      count,
+    });
+  }
+  return summaries;
+};
+
+export const getResourcePolicySensitivitySummaries = (
+  posture?: IntelligencePolicyPostureSummary | null,
+): ResourcePolicyCountSummary[] =>
+  buildCountSummaries(
+    posture?.sensitivity_counts,
+    RESOURCE_POLICY_SENSITIVITY_ORDER,
+    getResourceSensitivityLabel,
+    true,
+  );
+
+export const getResourcePolicyRoutingSummaries = (
+  posture?: IntelligencePolicyPostureSummary | null,
+): ResourcePolicyCountSummary[] =>
+  buildCountSummaries(
+    posture?.routing_counts,
+    RESOURCE_POLICY_ROUTING_ORDER,
+    getResourceRoutingScopeLabel,
+    true,
+  );
+
+export const getResourcePolicyRedactionSummaries = (
+  posture?: IntelligencePolicyPostureSummary | null,
+): ResourcePolicyCountSummary[] =>
+  buildCountSummaries(
+    posture?.redaction_counts,
+    RESOURCE_POLICY_REDACTION_ORDER,
+    getResourceRedactionHintLabel,
+    false,
+  );
