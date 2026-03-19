@@ -9,6 +9,7 @@ import {
   createWorkloadSortComparator,
   groupWorkloads,
   computeWorkloadStats,
+  getKubernetesContextKey,
 } from '../workloadSelectors';
 import { filterResources } from '@/components/Infrastructure/infrastructureSelectors';
 import { getCanonicalWorkloadId, normalizeWorkloadViewModeParam } from '@/utils/workloads';
@@ -453,6 +454,41 @@ describe('Dashboard performance contract', () => {
         selectedKubernetesContext: null,
       });
       expect(result).toHaveLength(PROFILES.S);
+    });
+
+    it('keeps pod context selection aligned with the projected canonical cluster label', () => {
+      const guests = [
+        makeGuest(1, {
+          id: 'pod-a',
+          type: 'pod',
+          workloadType: 'pod',
+          contextLabel: 'cluster-a',
+          instance: 'cluster-b',
+          node: 'worker-a',
+        }),
+        makeGuest(2, {
+          id: 'pod-b',
+          type: 'pod',
+          workloadType: 'pod',
+          contextLabel: 'cluster-b',
+          instance: 'cluster-a',
+          node: 'worker-b',
+        }),
+      ];
+
+      expect(getKubernetesContextKey(guests[0] as any)).toBe('cluster-a');
+
+      const result = filterWorkloads({
+        guests: guests as any,
+        viewMode: 'pod',
+        statusMode: 'all',
+        searchTerm: '',
+        selectedNode: null,
+        selectedHostHint: null,
+        selectedKubernetesContext: 'cluster-a',
+      });
+
+      expect(result.map((guest) => guest.id)).toEqual(['pod-a']);
     });
 
     it('filterWorkloads correctly filters by viewMode', () => {

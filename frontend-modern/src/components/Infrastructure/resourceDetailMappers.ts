@@ -21,6 +21,7 @@ import {
 } from '@/utils/agentResources';
 import {
   getPreferredResourceDisplayName,
+  getPreferredResourceClusterName,
   getPreferredResourceHostname,
 } from '@/utils/resourceIdentity';
 import { titleCaseDelimitedLabel } from '@/utils/textPresentation';
@@ -265,13 +266,7 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
     asString(resource.kubernetes?.agentId) ||
     asString(kubernetesPlatformData?.agentId) ||
     actionableKubernetesId ||
-    asString(resource.kubernetes?.clusterId) ||
-    asString(kubernetesPlatformData?.clusterId) ||
-    asString(resource.clusterId) ||
-    asString(resource.kubernetes?.context) ||
-    asString(kubernetesPlatformData?.context) ||
-    asString(resource.kubernetes?.clusterName) ||
-    asString(kubernetesPlatformData?.clusterName);
+    getPreferredResourceClusterName(resource);
   const kubernetesResourceId =
     asString(resource.kubernetes?.podUid) ||
     asString(kubernetesPlatformData?.podUid) ||

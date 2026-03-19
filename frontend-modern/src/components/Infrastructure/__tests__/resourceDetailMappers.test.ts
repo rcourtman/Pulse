@@ -132,5 +132,28 @@ describe('resourceDetailMappers', () => {
 
       expect(config?.hostname).toBe('tower.canonical');
     });
+
+    it('uses the shared Kubernetes cluster helper for pod fallback agent ids', () => {
+      const config = toDiscoveryConfig({
+        ...createHybridHostResource(),
+        id: 'resource:pod:hash-2',
+        type: 'pod',
+        platformType: 'kubernetes',
+        kubernetes: {
+          context: 'cluster-context',
+          podUid: 'pod-uid-2',
+          namespace: 'default',
+        },
+        platformData: {
+          kubernetes: {
+            context: 'cluster-context',
+            namespace: 'default',
+          },
+        },
+      } as unknown as Resource);
+
+      expect(config?.agentId).toBe('cluster-context');
+      expect(config?.resourceId).toBe('pod-uid-2');
+    });
   });
 });
