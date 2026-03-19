@@ -164,6 +164,10 @@ AI resource and incident context now also surfaces a canonical resource-graph
 section from unified-resource relationships, so relationship wording and edge
 provenance stay aligned with the same shared resource model instead of being
 reconstructed from the drawer or prompt helpers.
+That graph section is now rendered by the shared
+`internal/unifiedresources.FormatResourceGraphContext` helper, so the service
+layer only resolves the canonical resource and does not rebuild the section
+format locally.
 The related-resource correlation section now also comes from the shared
 correlation formatter in `internal/ai/correlation`, so resource chat and
 incident prompts reuse the same learned-edge wording instead of rebuilding a

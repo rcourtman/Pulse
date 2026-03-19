@@ -4647,48 +4647,10 @@ func (s *Service) buildResourceGraphContext(resourceID string) string {
 	}
 
 	resource, ok := getter.Get(resourceID)
-	if !ok || resource == nil || len(resource.Relationships) == 0 {
+	if !ok || resource == nil {
 		return ""
 	}
-
-	relationshipLimit := len(resource.Relationships)
-	if relationshipLimit > 3 {
-		relationshipLimit = 3
-	}
-	lines := make([]string, 0, relationshipLimit)
-	for _, rel := range resource.Relationships {
-		if len(lines) >= 3 {
-			break
-		}
-		presentation := unifiedresources.DescribeRelationship(rel)
-		parts := []string{
-			fmt.Sprintf("**%s** %s", presentation.TypeLabel, presentation.Direction),
-		}
-		if presentation.StateLabel != "" {
-			parts = append(parts, presentation.StateLabel)
-		}
-		if presentation.Provenance != "" {
-			parts = append(parts, fmt.Sprintf("discoverer %s", presentation.Provenance))
-		}
-		if presentation.Confidence != "" {
-			parts = append(parts, fmt.Sprintf("confidence %s", presentation.Confidence))
-		}
-		if !rel.ObservedAt.IsZero() {
-			parts = append(parts, fmt.Sprintf("observed %s ago", formatDuration(time.Since(rel.ObservedAt).Truncate(time.Minute))))
-		}
-		if !rel.LastSeenAt.IsZero() {
-			parts = append(parts, fmt.Sprintf("last seen %s ago", formatDuration(time.Since(rel.LastSeenAt).Truncate(time.Minute))))
-		}
-		if presentation.HasMetadata {
-			parts = append(parts, "metadata present")
-		}
-		lines = append(lines, strings.Join(parts, "; "))
-	}
-
-	if len(lines) == 0 {
-		return ""
-	}
-	return "\n\n### Resource Graph\n" + strings.Join(lines, "\n")
+	return unifiedresources.FormatResourceGraphContext(resource, 3)
 }
 
 // truncateString truncates a string to maxLen characters

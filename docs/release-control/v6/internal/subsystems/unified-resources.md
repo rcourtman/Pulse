@@ -102,6 +102,10 @@ relationship labels, direction, provenance, freshness, and metadata flags
 from `internal/unifiedresources/relationship_presentation.go`, so the graph
 semantics live with the resource model instead of being duplicated in prompt
 helpers or drawer-specific markdown.
+That same resource model now also owns the canonical
+`FormatResourceGraphContext` helper, so service-layer callers only resolve the
+resource and hand the model the relationship list instead of rebuilding the
+graph section header, ordering, or freshness wording locally.
 The same AI resource-intelligence payload now also carries canonical
 correlation evidence from the shared detector, so the drawer can show learned
 edge patterns alongside the dependency graph without rebuilding correlation

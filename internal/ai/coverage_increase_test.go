@@ -533,6 +533,9 @@ func TestService_BuildResourceGraphContext_UsesCanonicalReadState(t *testing.T) 
 	if !strings.Contains(resourceCtx, "discoverer proxmox_adapter") {
 		t.Fatalf("expected enriched resource context to include provenance, got %q", resourceCtx)
 	}
+	if !strings.Contains(resourceCtx, "metadata present") {
+		t.Fatalf("expected enriched resource context to include shared graph metadata marker, got %q", resourceCtx)
+	}
 	if !strings.Contains(resourceCtx, "Resource Correlations") {
 		t.Fatalf("expected enriched resource context to include correlation section, got %q", resourceCtx)
 	}

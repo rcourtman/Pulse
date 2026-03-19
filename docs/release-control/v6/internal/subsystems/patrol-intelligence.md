@@ -85,6 +85,10 @@ Those same Patrol-owned prompt contexts now also surface a canonical
 resource-graph section from unified-resource relationships, so edge labels,
 directionality, and provenance stay aligned with the shared graph model
 instead of being reconstructed locally.
+That graph section is now rendered by the shared
+`internal/unifiedresources.FormatResourceGraphContext` helper, so the Patrol
+runtime only resolves the canonical resource graph rather than formatting the
+relationship section itself.
 The Patrol seed context and AI runtime prompt path now also share the same
 correlation summary formatter from `internal/ai/correlation`, so learned-edge
 wording and confidence/count annotations stay canonical across the prompt
