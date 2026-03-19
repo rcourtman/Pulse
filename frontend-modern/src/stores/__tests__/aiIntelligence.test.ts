@@ -4,6 +4,7 @@ vi.mock('@/api/ai', () => ({
   AIAPI: {
     getUnifiedFindings: vi.fn(),
     getPendingApprovals: vi.fn(),
+    getIntelligenceSummary: vi.fn(),
   },
 }));
 
@@ -58,6 +59,58 @@ describe('aiIntelligenceStore', () => {
     expect(aiIntelligenceStore.findings[0]).toMatchObject({
       alertIdentifier: 'instance:node:100::metric/cpu',
     });
+  });
+
+  it('loads the canonical intelligence summary', async () => {
+    vi.mocked(AIAPI.getIntelligenceSummary).mockResolvedValueOnce({
+      timestamp: '2026-03-01T00:00:00Z',
+      overall_health: {
+        score: 87,
+        grade: 'B',
+        trend: 'stable',
+        factors: [],
+        prediction: 'Stable',
+      },
+      findings_count: {
+        critical: 1,
+        warning: 2,
+        watch: 0,
+        info: 4,
+        total: 7,
+      },
+      predictions_count: 3,
+      recent_changes_count: 1,
+      recent_changes: [
+        {
+          id: 'change-1',
+          observedAt: '2026-03-01T00:00:00Z',
+          resourceId: 'vm-100',
+          kind: 'config_update',
+          sourceType: 'pulse_diff',
+          confidence: 'high',
+        },
+      ],
+      learning: {
+        resources_with_knowledge: 4,
+        total_notes: 11,
+        resources_with_baselines: 3,
+        patterns_detected: 2,
+        correlations_learned: 1,
+        incidents_tracked: 5,
+      },
+    });
+
+    await aiIntelligenceStore.loadIntelligenceSummary();
+
+    expect(aiIntelligenceStore.intelligenceSummary).toMatchObject({
+      findings_count: {
+        critical: 1,
+        warning: 2,
+        total: 7,
+      },
+      recent_changes_count: 1,
+    });
+    expect(aiIntelligenceStore.intelligenceSummary?.recent_changes).toHaveLength(1);
   });
 
   it('treats queued fixes without a live approval as findings needing attention', async () => {

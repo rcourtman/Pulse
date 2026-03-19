@@ -17,7 +17,12 @@ import type {
   AIStreamEvent,
   AICostSummary,
 } from '@/types/ai';
-import type { AnomaliesResponse, LearningStatusResponse } from '@/types/aiIntelligence';
+import type {
+  AnomaliesResponse,
+  IntelligenceSummary,
+  LearningStatusResponse,
+  ResourceIntelligence,
+} from '@/types/aiIntelligence';
 
 export class AIAPI {
   private static baseUrl = '/api';
@@ -127,6 +132,21 @@ export class AIAPI {
     return apiFetchJSON(
       `${this.baseUrl}/ai/intelligence/learning`,
     ) as Promise<LearningStatusResponse>;
+  }
+
+  private static async fetchIntelligence(resourceId?: string): Promise<unknown> {
+    const params = resourceId ? `?resource_id=${encodeURIComponent(resourceId)}` : '';
+    return apiFetchJSON(`${this.baseUrl}/ai/intelligence${params}`);
+  }
+
+  // Get the canonical infrastructure-wide intelligence summary
+  static async getIntelligenceSummary(): Promise<IntelligenceSummary> {
+    return (await this.fetchIntelligence()) as IntelligenceSummary;
+  }
+
+  // Get canonical intelligence for a single resource
+  static async getResourceIntelligence(resourceId: string): Promise<ResourceIntelligence> {
+    return (await this.fetchIntelligence(resourceId)) as ResourceIntelligence;
   }
 
   // Analyze a Kubernetes cluster with AI

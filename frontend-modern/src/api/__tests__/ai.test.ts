@@ -105,6 +105,18 @@ describe('AIAPI', () => {
     });
   });
 
+  it('fetches canonical intelligence summaries with encoded resource ids', async () => {
+    apiFetchJSONMock.mockResolvedValueOnce({} as any);
+    await AIAPI.getIntelligenceSummary();
+    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/ai/intelligence');
+
+    apiFetchJSONMock.mockResolvedValueOnce({} as any);
+    await AIAPI.getResourceIntelligence('vm/100?filter=all');
+    expect(apiFetchJSONMock).toHaveBeenCalledWith(
+      '/api/ai/intelligence?resource_id=vm%2F100%3Ffilter%3Dall',
+    );
+  });
+
   it('treats 402 responses from optional AI paywalled collections as empty state', async () => {
     const paymentRequiredError = Object.assign(new Error('Approval management requires Pulse Pro'), {
       status: 402,

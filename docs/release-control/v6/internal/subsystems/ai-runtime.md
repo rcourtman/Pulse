@@ -170,3 +170,7 @@ slice that the prompt context uses.
 The system-wide `/api/ai/intelligence` summary should also surface the same
 canonical recent-change slice, alongside the count, so the aggregate payload
 and the prompt context stay aligned on the same shared timeline source.
+The frontend Patrol intelligence page now also consumes that canonical
+summary payload directly through the shared AI client and store, so the
+visible summary card stays aligned with the same recent-change slice that the
+runtime and API contracts expose.

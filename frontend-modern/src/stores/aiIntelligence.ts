@@ -3,6 +3,7 @@
  *
  * Central store for managing AI intelligence state:
  * - Unified findings (alerts + AI findings)
+ * - Canonical intelligence summary
  * - Remediation plans
  * - Circuit breaker status
  */
@@ -24,6 +25,7 @@ import {
 } from '@/utils/aiFindingPresentation';
 import { getApprovalExpiryTime, isLivePendingApproval } from '@/utils/approvalState';
 import { logger } from '@/utils/logger';
+import type { IntelligenceSummary } from '@/types/aiIntelligence';
 
 // ============================================
 // Enum validation helpers
@@ -213,6 +215,14 @@ function getLivePendingApprovals() {
 // ============================================
 
 const [circuitBreakerStatus, setCircuitBreakerStatus] = createSignal<CircuitBreakerStatus | null>(
+  null,
+);
+
+// ============================================
+// Canonical Intelligence Summary
+// ============================================
+
+const [intelligenceSummary, setIntelligenceSummary] = createSignal<IntelligenceSummary | null>(
   null,
 );
 
@@ -479,6 +489,24 @@ export const aiIntelligenceStore = {
   },
   circuitBreakerStatusSignal: circuitBreakerStatus,
 
+  // Canonical Intelligence Summary
+  get intelligenceSummary() {
+    return intelligenceSummary();
+  },
+  intelligenceSummarySignal: intelligenceSummary,
+
+  async loadIntelligenceSummary() {
+    try {
+      const summary = await AIAPI.getIntelligenceSummary();
+      setIntelligenceSummary(summary);
+      return summary;
+    } catch (e) {
+      logger.error('Failed to load intelligence summary:', e);
+      setIntelligenceSummary(null);
+      return null;
+    }
+  },
+
   async loadCircuitBreakerStatus() {
     try {
       const status = await AIAPI.getCircuitBreakerStatus();
@@ -491,6 +519,7 @@ export const aiIntelligenceStore = {
   // Initialize - load all data
   async initialize() {
     await Promise.all([
+      this.loadIntelligenceSummary(),
       this.loadFindings(),
       this.loadRemediationPlans(),
       this.loadCircuitBreakerStatus(),

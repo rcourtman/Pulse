@@ -95,8 +95,41 @@ import {
   getTrialStartErrorMessage,
   getTrialTryAgainLaterMessage,
 } from '@/utils/upgradePresentation';
+import type { ResourceChange } from '@/types/resource';
 
 type PatrolTab = 'findings' | 'history';
+
+function formatRecentChangeKind(kind: ResourceChange['kind']): string {
+  switch (kind) {
+    case 'state_transition':
+      return 'State transition';
+    case 'restart':
+      return 'Restart';
+    case 'config_update':
+      return 'Config change';
+    case 'metric_anomaly':
+      return 'Metric anomaly';
+    case 'relationship_change':
+      return 'Relationship change';
+    case 'capability_change':
+      return 'Capability change';
+    default:
+      return String(kind).replace(/_/g, ' ');
+  }
+}
+
+function formatRecentChangeHeadline(change: ResourceChange): string {
+  if (change.kind === 'state_transition' && change.from && change.to) {
+    return `${formatRecentChangeKind(change.kind)}: ${change.from} → ${change.to}`;
+  }
+  if (change.kind === 'restart' && change.from && change.to) {
+    return `${formatRecentChangeKind(change.kind)}: ${change.from} → ${change.to}`;
+  }
+  if (change.reason) {
+    return `${formatRecentChangeKind(change.kind)}: ${change.reason}`;
+  }
+  return `${formatRecentChangeKind(change.kind)}: ${change.resourceId}`;
+}
 
 export function AIIntelligence() {
   const [activeTab, setActiveTab] = createSignal<PatrolTab>('findings');
@@ -537,6 +570,8 @@ export function AIIntelligence() {
     return getCanonicalScopeResourceIds(selectedRun());
   });
 
+  const intelligenceSummary = createMemo(() => aiIntelligenceStore.intelligenceSummary);
+
   // Live in-progress run entry for history list
   const liveRunRecord = createMemo<PatrolRunRecord | null>(() => {
     if (!shouldShowLiveRun()) return null;
@@ -717,6 +752,7 @@ export function AIIntelligence() {
     setIsRefreshing(true);
     try {
       await Promise.all([
+        aiIntelligenceStore.loadIntelligenceSummary(),
         aiIntelligenceStore.loadFindings(),
         aiIntelligenceStore.loadCircuitBreakerStatus(),
         aiIntelligenceStore.loadPendingApprovals(),
@@ -1235,6 +1271,150 @@ export function AIIntelligence() {
             enabled={patrolEnabledLocal()}
             refreshTrigger={activityRefreshTrigger()}
           />
+
+          <Show when={intelligenceSummary()}>
+            {(summary) => (
+              <section class="rounded-md border border-border bg-surface p-4">
+                <div class="flex flex-wrap items-start justify-between gap-4">
+                  <div>
+                    <p class="text-xs font-semibold uppercase tracking-[0.16em] text-muted">
+                      Canonical intelligence summary
+                    </p>
+                    <h2 class="mt-1 text-lg font-semibold text-base-content">
+                      Health {summary().overall_health.grade} ·{' '}
+                      {Math.round(summary().overall_health.score)}/100
+                    </h2>
+                    <p class="mt-1 text-sm text-muted">{summary().overall_health.prediction}</p>
+                  </div>
+
+                  <div class="flex flex-wrap items-center gap-2">
+                    <span class="rounded-full border border-border-subtle bg-base px-2.5 py-1 text-xs font-medium text-base-content">
+                      Critical {summary().findings_count.critical}
+                    </span>
+                    <span class="rounded-full border border-border-subtle bg-base px-2.5 py-1 text-xs font-medium text-base-content">
+                      Warning {summary().findings_count.warning}
+                    </span>
+                    <span class="rounded-full border border-border-subtle bg-base px-2.5 py-1 text-xs font-medium text-base-content">
+                      Recent changes {summary().recent_changes_count}
+                    </span>
+                  </div>
+                </div>
+
+                <div class="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+                  <div>
+                    <div class="flex items-center justify-between gap-2">
+                      <h3 class="text-sm font-semibold text-base-content">Recent changes</h3>
+                      <span class="text-xs text-muted">Canonical 24h timeline</span>
+                    </div>
+                    <Show
+                      when={(summary().recent_changes ?? []).length > 0}
+                      fallback={
+                        <p class="mt-3 text-sm text-muted">
+                          No canonical changes were recorded in the last 24 hours.
+                        </p>
+                      }
+                    >
+                      <ul class="mt-3 space-y-2">
+                        <For each={summary().recent_changes ?? []}>
+                          {(change) => (
+                            <li class="rounded-md border border-border-subtle bg-base p-3">
+                              <div class="flex flex-wrap items-start justify-between gap-3">
+                                <div class="min-w-0">
+                                  <p class="text-sm font-medium text-base-content">
+                                    {formatRecentChangeHeadline(change)}
+                                  </p>
+                                  <p class="mt-1 text-xs text-muted">
+                                    <span class="font-mono">{change.resourceId}</span>
+                                    <span class="mx-1.5">·</span>
+                                    {formatRelativeTime(change.observedAt, {
+                                      compact: true,
+                                      emptyText: 'just now',
+                                    })}
+                                  </p>
+                                </div>
+
+                                <div class="flex flex-wrap items-center gap-1.5">
+                                  <span class="rounded-full border border-border-subtle bg-surface px-2 py-0.5 text-[11px] font-medium text-muted">
+                                    {formatRecentChangeKind(change.kind)}
+                                  </span>
+                                  <span class="rounded-full border border-border-subtle bg-surface px-2 py-0.5 text-[11px] font-medium text-muted">
+                                    {change.sourceType}
+                                  </span>
+                                  <Show when={change.sourceAdapter}>
+                                    <span class="rounded-full border border-border-subtle bg-surface px-2 py-0.5 text-[11px] font-medium text-muted">
+                                      {change.sourceAdapter}
+                                    </span>
+                                  </Show>
+                                </div>
+                              </div>
+
+                              <Show when={change.reason}>
+                                <p class="mt-2 text-xs text-muted">{change.reason}</p>
+                              </Show>
+
+                              <Show when={(change.relatedResources ?? []).length > 0}>
+                                <p class="mt-2 text-xs text-muted">
+                                  Related: {(change.relatedResources ?? []).slice(0, 3).join(', ')}
+                                </p>
+                              </Show>
+                            </li>
+                          )}
+                        </For>
+                      </ul>
+                    </Show>
+                  </div>
+
+                  <div class="rounded-md border border-border-subtle bg-base p-4">
+                    <div class="flex items-center justify-between gap-2">
+                      <h3 class="text-sm font-semibold text-base-content">Learning signals</h3>
+                      <span class="text-xs text-muted">
+                        {summary().learning.resources_with_baselines} baselined
+                      </span>
+                    </div>
+
+                    <dl class="mt-3 grid grid-cols-2 gap-2 text-sm">
+                      <div class="rounded-md bg-surface px-3 py-2">
+                        <dt class="text-xs uppercase tracking-wide text-muted">Knowledge</dt>
+                        <dd class="mt-1 font-semibold text-base-content">
+                          {summary().learning.resources_with_knowledge}
+                        </dd>
+                      </div>
+                      <div class="rounded-md bg-surface px-3 py-2">
+                        <dt class="text-xs uppercase tracking-wide text-muted">Notes</dt>
+                        <dd class="mt-1 font-semibold text-base-content">
+                          {summary().learning.total_notes}
+                        </dd>
+                      </div>
+                      <div class="rounded-md bg-surface px-3 py-2">
+                        <dt class="text-xs uppercase tracking-wide text-muted">Patterns</dt>
+                        <dd class="mt-1 font-semibold text-base-content">
+                          {summary().learning.patterns_detected}
+                        </dd>
+                      </div>
+                      <div class="rounded-md bg-surface px-3 py-2">
+                        <dt class="text-xs uppercase tracking-wide text-muted">Correlations</dt>
+                        <dd class="mt-1 font-semibold text-base-content">
+                          {summary().learning.correlations_learned}
+                        </dd>
+                      </div>
+                      <div class="rounded-md bg-surface px-3 py-2">
+                        <dt class="text-xs uppercase tracking-wide text-muted">Incidents</dt>
+                        <dd class="mt-1 font-semibold text-base-content">
+                          {summary().learning.incidents_tracked}
+                        </dd>
+                      </div>
+                      <div class="rounded-md bg-surface px-3 py-2">
+                        <dt class="text-xs uppercase tracking-wide text-muted">Predictions</dt>
+                        <dd class="mt-1 font-semibold text-base-content">
+                          {summary().predictions_count}
+                        </dd>
+                      </div>
+                    </dl>
+                  </div>
+                </div>
+              </section>
+            )}
+          </Show>
 
           {/* Summary Cards */}
           <Show

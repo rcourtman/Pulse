@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-li
 
 import { AIIntelligence } from '../AIIntelligence';
 
-const { findingsPanelState, runHistoryState } = vi.hoisted(() => ({
+const { findingsPanelState, runHistoryState, intelligenceState } = vi.hoisted(() => ({
   findingsPanelState: {
     latestProps: null as {
       filterOverride?: string;
@@ -15,6 +15,48 @@ const { findingsPanelState, runHistoryState } = vi.hoisted(() => ({
   },
   runHistoryState: {
     selection: null as Record<string, unknown> | null,
+  },
+  intelligenceState: {
+    summary: null as
+      | {
+          timestamp: string;
+          overall_health: {
+            score: number;
+            grade: 'A' | 'B' | 'C' | 'D' | 'F';
+            trend: 'improving' | 'stable' | 'declining';
+            factors: Array<Record<string, unknown>>;
+            prediction: string;
+          };
+          findings_count: {
+            critical: number;
+            warning: number;
+            watch: number;
+            info: number;
+            total: number;
+          };
+          predictions_count: number;
+          recent_changes_count: number;
+          recent_changes: Array<{
+            id: string;
+            observedAt: string;
+            resourceId: string;
+            kind: string;
+            sourceType: string;
+            sourceAdapter?: string;
+            confidence: string;
+            reason?: string;
+            relatedResources?: string[];
+          }>;
+          learning: {
+            resources_with_knowledge: number;
+            total_notes: number;
+            resources_with_baselines: number;
+            patterns_detected: number;
+            correlations_learned: number;
+            incidents_tracked: number;
+          };
+        }
+      | null,
   },
 }));
 
@@ -70,8 +112,12 @@ vi.mock('@/stores/aiIntelligence', () => ({
   aiIntelligenceStore: {
     findings: [],
     loadFindings: vi.fn().mockResolvedValue(undefined),
+    loadIntelligenceSummary: vi.fn().mockResolvedValue(undefined),
     loadCircuitBreakerStatus: vi.fn().mockResolvedValue(undefined),
     loadPendingApprovals: vi.fn().mockResolvedValue(undefined),
+    get intelligenceSummary() {
+      return intelligenceState.summary;
+    },
   },
 }));
 
@@ -206,6 +252,7 @@ describe('AIIntelligence entitlement gating', () => {
     notificationErrorMock.mockReset();
     findingsPanelState.latestProps = null;
     runHistoryState.selection = null;
+    intelligenceState.summary = null;
 
     getPatrolStatusMock.mockResolvedValue(defaultPatrolStatus());
     getPatrolAutonomySettingsMock.mockResolvedValue({
@@ -305,6 +352,66 @@ describe('AIIntelligence entitlement gating', () => {
     expect(screen.queryByRole('link', { name: 'Upgrade to Pro' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Upgrade' })).not.toBeInTheDocument();
     expect(trackPaywallViewedMock).not.toHaveBeenCalled();
+  });
+
+  it('renders the canonical intelligence summary card with recent changes', async () => {
+    hasFeatureMock.mockReturnValue(true);
+    licenseStatusMock.mockReturnValue({ subscription_state: 'active' });
+    getPatrolStatusMock.mockResolvedValue(defaultPatrolStatus({ license_required: false }));
+    intelligenceState.summary = {
+      timestamp: '2026-03-01T00:00:00Z',
+      overall_health: {
+        score: 91,
+        grade: 'A',
+        trend: 'stable',
+        factors: [],
+        prediction: 'Stable',
+      },
+      findings_count: {
+        critical: 1,
+        warning: 2,
+        watch: 0,
+        info: 4,
+        total: 7,
+      },
+      predictions_count: 3,
+      recent_changes_count: 1,
+      recent_changes: [
+        {
+          id: 'change-1',
+          observedAt: '2026-03-01T00:00:00Z',
+          resourceId: 'vm-100',
+          kind: 'config_update',
+          sourceType: 'pulse_diff',
+          sourceAdapter: 'proxmox_adapter',
+          confidence: 'high',
+          reason: 'Updated guest configuration',
+          relatedResources: ['agent-1'],
+        },
+      ],
+      learning: {
+        resources_with_knowledge: 4,
+        total_notes: 11,
+        resources_with_baselines: 3,
+        patterns_detected: 2,
+        correlations_learned: 1,
+        incidents_tracked: 5,
+      },
+    };
+
+    render(() => <AIIntelligence />);
+
+    await waitFor(() => {
+      expect(getPatrolStatusMock).toHaveBeenCalled();
+      expect(screen.getByText('Canonical intelligence summary')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText(/Health A · 91\/100/)).toBeInTheDocument();
+    expect(screen.getByText(/Recent changes 1/)).toBeInTheDocument();
+    expect(screen.getByText('Config change: Updated guest configuration')).toBeInTheDocument();
+    expect(screen.getByText('vm-100')).toBeInTheDocument();
+    expect(screen.getByText('proxmox_adapter')).toBeInTheDocument();
+    expect(screen.getByText('Learning signals')).toBeInTheDocument();
   });
 
   it('treats a selected zero-finding run as an empty snapshot and uses effective scope ids', async () => {
