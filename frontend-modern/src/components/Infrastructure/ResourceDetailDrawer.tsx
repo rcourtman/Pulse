@@ -57,6 +57,7 @@ import { ResourceGraphSummary } from './ResourceGraphSummary';
 import { ResourceChangeSummary } from './ResourceChangeSummary';
 import { ResourceFacetSummary } from './ResourceFacetSummary';
 import { ResourcePolicySummary } from './ResourcePolicySummary';
+import { getResourceApprovalLevelLabel } from '@/utils/approvalPresentation';
 import {
   RESOURCE_CHANGE_KIND_ORDER,
   RESOURCE_CHANGE_SOURCE_ADAPTER_ORDER,
@@ -608,21 +609,6 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
       setActiveTab('overview');
     }
   });
-
-  const formatApprovalLevel = (value?: string) => {
-    switch ((value || '').trim()) {
-      case 'none':
-        return 'None';
-      case 'dry_run_only':
-        return 'Dry Run Only';
-      case 'admin':
-        return 'Admin';
-      case 'mfa':
-        return 'MFA';
-      default:
-        return humanizeToken(value, { fallback: '—', preserveShortAllCaps: true });
-    }
-  };
 
   const handleCopyJson = async () => {
     const payload = debugJson();
@@ -1633,7 +1619,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                         <div class="flex items-center justify-between gap-2">
                           <span class="text-muted">Approval</span>
                           <span class="font-medium text-base-content">
-                            {formatApprovalLevel(capability.minimumApprovalLevel)}
+                            {getResourceApprovalLevelLabel(capability.minimumApprovalLevel)}
                           </span>
                         </div>
                         <Show when={capability.platform}>

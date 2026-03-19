@@ -75,6 +75,7 @@ import resourceChangePresentationSource from '@/utils/resourceChangePresentation
 import resourceRelationshipPresentationSource from '@/utils/resourceRelationshipPresentation.ts?raw';
 import resourceCorrelationPresentationSource from '@/utils/resourceCorrelationPresentation.ts?raw';
 import confidencePresentationSource from '@/utils/confidencePresentation.ts?raw';
+import approvalPresentationSource from '@/utils/approvalPresentation.ts?raw';
 import textPresentationSource from '@/utils/textPresentation.ts?raw';
 import messageItemSource from '@/components/AI/Chat/MessageItem.tsx?raw';
 import toolExecutionBlockSource from '@/components/AI/Chat/ToolExecutionBlock.tsx?raw';
@@ -1916,6 +1917,7 @@ describe('frontend resource type boundaries', () => {
     expect(resourceCorrelationPresentationSource).toContain('formatConfidencePercentage');
     expect(confidencePresentationSource).toContain('formatConfidencePercentage');
     expect(confidencePresentationSource).toContain('formatConfidenceLabel');
+    expect(approvalPresentationSource).toContain('getResourceApprovalLevelLabel');
     expect(resourceChangePresentationSource).toContain('humanizeToken');
     expect(resourceRelationshipPresentationSource).toContain('humanizeToken');
     expect(resourceCorrelationPresentationSource).toContain('humanizeToken');

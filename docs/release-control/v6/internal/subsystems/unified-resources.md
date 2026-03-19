@@ -542,7 +542,10 @@ Canonical resources now carry first-class graph-expansion fields: `Capabilities`
 inter-resource links with direction and confidence), and `RecentChanges` (typed
 change timeline entries with source, confidence, and related-resource
 references). These fields are defined in `capabilities.go`, `relationships.go`,
-`changes.go`, `privacy.go`, and `actions.go`. The store now also owns a
+`changes.go`, `privacy.go`, and `actions.go`. The frontend capability drawer
+now formats the shared approval-level vocabulary through a canonical
+presentation helper instead of a local switch, so the resource model and the
+rendered labels stay aligned. The store now also owns a
 `resource_changes` persistence table with `RecordChange` and `GetRecentChanges`
 methods so change history is queryable by canonical ID and time window.
 The shared change presentation helper also owns the canonical kind, source
