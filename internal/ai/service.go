@@ -4822,7 +4822,7 @@ func (s *Service) buildEnrichedResourceContext(resourceID, _ string, currentMetr
 		sections = append(sections, recentChanges)
 	}
 
-	// Get canonical resource graph context from unified resources.
+	// Get canonical relationship context from unified resources.
 	if graphContext := s.buildResourceGraphContext(resourceID); graphContext != "" {
 		sections = append(sections, graphContext)
 	}

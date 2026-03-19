@@ -652,6 +652,7 @@ func TestResourceGraphContextUsesCanonicalRelationshipPresentation(t *testing.T)
 	requiredSnippets := []string{
 		"func (s *Service) buildResourceGraphContext(resourceID string) string",
 		"if graphContext := s.buildResourceGraphContext(resourceID); graphContext != \"\" {",
+		"Get canonical relationship context from unified resources.",
 		"unifiedresources.FormatResourceGraphContext(resource, 3)",
 		"unifiedresources.FormatResourceRecentChangesContext(changes, false, \"###\")",
 		"type canonicalResourceGetter interface {",

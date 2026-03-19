@@ -146,7 +146,7 @@ helpers or drawer-specific markdown.
 That same resource model now also owns the canonical
 `FormatResourceGraphContext` helper, so service-layer callers only resolve the
 resource and hand the model the relationship list instead of rebuilding the
-graph section header, ordering, or freshness wording locally.
+relationship section header, ordering, or freshness wording locally.
 The same shared relationship presenter also owns the compact change-timeline
 relationship summary used by resource change records, so change `from` and
 `to` values stay aligned with the canonical relationship labels instead of
@@ -441,8 +441,8 @@ instead of `"myserver"`.
 The infrastructure summary surfaces now use the shared normalized identity
 lookup helper for these matches, so dotted hostnames such as
 `tower.example.local` collapse to the same canonical lookup variants as the
-resource table and resource graph surfaces instead of each view inventing its
-own comparison rule.
+resource table and resource detail surfaces instead of each view inventing
+its own comparison rule.
 The same identity surfaces also share the trimmed-string helper from
 `frontend-modern/src/utils/stringUtils.ts` so resource-id, hostname, and
 linked-node normalization keep the same fail-closed whitespace trimming rules

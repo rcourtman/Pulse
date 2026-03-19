@@ -253,11 +253,11 @@ prefixing, and change-type labels without re-implementing the markdown shape.
 Those unified-resource action and export audit records are now also exposed
 through the enterprise audit read surface so operators can inspect the
 execution trail without reaching into storage internals.
-AI resource and incident context now also surfaces a canonical resource-graph
+AI resource and incident context now also surfaces a canonical relationship
 section from unified-resource relationships, so relationship wording and edge
 provenance stay aligned with the same shared resource model instead of being
 reconstructed from the drawer or prompt helpers.
-That graph section is now rendered by the shared
+That relationship section is now rendered by the shared
 `internal/unifiedresources.FormatResourceGraphContext` helper, so the service
 layer only resolves the canonical resource and does not rebuild the section
 format locally.

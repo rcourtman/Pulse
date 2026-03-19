@@ -339,6 +339,31 @@ func TestResourceAlertSpecValidateAllowsProxmoxDiskMigrationBridgeType(t *testin
 	}
 }
 
+func TestResourceAlertSpecValidateRejectsNonCanonicalAlias(t *testing.T) {
+	t.Parallel()
+
+	spec := ResourceAlertSpec{
+		ID:           "node-pve1-cpu",
+		ResourceID:   "node/pve-1",
+		ResourceType: unifiedresources.ResourceType("Node"),
+		Kind:         AlertSpecKindMetricThreshold,
+		Severity:     AlertSeverityWarning,
+		MetricThreshold: &MetricThresholdSpec{
+			Metric:    "cpu",
+			Direction: ThresholdDirectionAbove,
+			Trigger:   85,
+		},
+	}
+
+	err := spec.Validate()
+	if err == nil {
+		t.Fatal("expected validation error")
+	}
+	if !strings.Contains(err.Error(), "canonical unified resource type") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestResourceAlertSpecValidateRejectsPayloadKindMismatch(t *testing.T) {
 	t.Parallel()
 

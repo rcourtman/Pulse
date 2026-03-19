@@ -75,6 +75,13 @@ list of services, labels, descriptions, and mention-copy metadata.
 The WebhookConfig editor now imports the shared webhook template API type
 directly so it does not retain a local duplicate shape for chooser metadata.
 
+Alert spec validation still accepts the explicit migration-bridge resource
+types (`node`, `agent-disk`, `docker-host`, `backup-subject`,
+`proxmox-disk`), but any other non-canonical type string is rejected before
+it can reach alert persistence. That keeps alert routing aligned with the
+canonical unified resource model instead of silently normalizing legacy type
+aliases inside the alert layer.
+
 Frontend alert surfaces and backend alert-support files now require explicit
 registry path-policy coverage, so new alert-owned runtime files must be mapped
 to a concrete proof route instead of silently inheriting subsystem-default

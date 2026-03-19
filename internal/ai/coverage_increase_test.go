@@ -479,7 +479,7 @@ func TestService_BuildIncidentContext(t *testing.T) {
 	}
 }
 
-func TestService_BuildResourceGraphContext_UsesCanonicalReadState(t *testing.T) {
+func TestService_BuildRelationshipContext_UsesCanonicalReadState(t *testing.T) {
 	now := time.Now()
 	s := NewService(nil, nil)
 	ps := NewPatrolService(nil, nil)
@@ -534,9 +534,20 @@ func TestService_BuildResourceGraphContext_UsesCanonicalReadState(t *testing.T) 
 	})
 	ps.SetCorrelationDetector(corr)
 
+	graphContext := s.buildResourceGraphContext(resourceID)
+	if !strings.Contains(graphContext, "### Resource Graph") {
+		t.Fatalf("expected canonical relationship context to include graph heading, got %q", graphContext)
+	}
+	if !strings.Contains(graphContext, "Runs on") {
+		t.Fatalf("expected canonical relationship context to include relationship label, got %q", graphContext)
+	}
+	if !strings.Contains(graphContext, "metadata present") {
+		t.Fatalf("expected canonical relationship context to include shared metadata marker, got %q", graphContext)
+	}
+
 	resourceCtx := s.buildEnrichedResourceContext(resourceID, "", nil)
 	if !strings.Contains(resourceCtx, "Resource Graph") {
-		t.Fatalf("expected enriched resource context to include graph section, got %q", resourceCtx)
+		t.Fatalf("expected enriched resource context to include relationship section, got %q", resourceCtx)
 	}
 	if !strings.Contains(resourceCtx, "Runs on") {
 		t.Fatalf("expected enriched resource context to include canonical relationship label, got %q", resourceCtx)
@@ -545,7 +556,7 @@ func TestService_BuildResourceGraphContext_UsesCanonicalReadState(t *testing.T) 
 		t.Fatalf("expected enriched resource context to include provenance, got %q", resourceCtx)
 	}
 	if !strings.Contains(resourceCtx, "metadata present") {
-		t.Fatalf("expected enriched resource context to include shared graph metadata marker, got %q", resourceCtx)
+		t.Fatalf("expected enriched resource context to include shared relationship metadata marker, got %q", resourceCtx)
 	}
 	if !strings.Contains(resourceCtx, "Resource Correlations") {
 		t.Fatalf("expected enriched resource context to include correlation section, got %q", resourceCtx)
@@ -556,7 +567,7 @@ func TestService_BuildResourceGraphContext_UsesCanonicalReadState(t *testing.T) 
 
 	incidentCtx := s.buildIncidentContext(resourceID, "")
 	if !strings.Contains(incidentCtx, "Resource Graph") {
-		t.Fatalf("expected incident context to include graph section, got %q", incidentCtx)
+		t.Fatalf("expected incident context to include relationship section, got %q", incidentCtx)
 	}
 	if !strings.Contains(incidentCtx, "Runs on") {
 		t.Fatalf("expected incident context to include canonical relationship label, got %q", incidentCtx)

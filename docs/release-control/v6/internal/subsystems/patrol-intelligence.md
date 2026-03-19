@@ -96,17 +96,17 @@ fallback paths.
 helper, so the detector-owned summary API and the Patrol fallback prompt path
 stay aligned on the same markdown shape.
 Those same Patrol-owned prompt contexts now also surface a canonical
-resource-graph section from unified-resource relationships, so edge labels,
-directionality, and provenance stay aligned with the shared graph model
+relationship section from unified-resource relationships, so edge labels,
+directionality, and provenance stay aligned with the shared relationship model
 instead of being reconstructed locally.
-That graph section is now rendered by the shared
+That relationship section is now rendered by the shared
 `internal/unifiedresources.FormatResourceGraphContext` helper, so the Patrol
-runtime only resolves the canonical resource graph rather than formatting the
+runtime only resolves the canonical relationship context rather than formatting the
 relationship section itself.
 Patrol-owned correlation context now also comes through the shared AI
 intelligence facade before reaching the detector, so the learned correlation
 surface is routed through the same canonical AI ownership boundary as recent
-changes and resource graph data instead of being pulled from the detector
+changes and relationship data instead of being pulled from the detector
 directly in each caller.
 The Patrol seed context and AI runtime prompt path now also share the same
 correlation summary formatter from `internal/ai/correlation`, so learned-edge

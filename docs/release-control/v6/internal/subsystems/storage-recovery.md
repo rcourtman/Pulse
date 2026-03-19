@@ -733,7 +733,7 @@ locally, so storage and recovery views see the same policy posture the API
 publishes. The same hook and the resource-identity helpers it depends on now
 share the canonical trimmed-string utility instead of each surface rebuilding
 its own whitespace cleanup, so storage and recovery identity checks stay
-aligned with the other resource-graph consumers. That same boundary now also
+aligned with the other unified-resource consumers. That same boundary now also
 owns the backend facet-bundle route for timeline history and related change
 counts, so storage and recovery surfaces must continue to consume the shared
 bundle rather than issuing separate local resource-detail fetches.

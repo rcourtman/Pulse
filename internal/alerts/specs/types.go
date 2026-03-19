@@ -1081,7 +1081,7 @@ func isKnownResourceType(rt unifiedresources.ResourceType) bool {
 		return false
 	}
 	// "node", "agent-disk", "docker-host", "backup-subject", and "proxmox-disk" remain migration bridges while
-	// live alerts are still keyed separately from the canonical unified resource graph.
+	// live alerts are still keyed separately from the canonical unified resource model.
 	if rt != unifiedresources.ResourceType("node") &&
 		rt != unifiedresources.ResourceType("agent-disk") &&
 		rt != unifiedresources.ResourceType("docker-host") &&

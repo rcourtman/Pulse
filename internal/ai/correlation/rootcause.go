@@ -14,8 +14,8 @@ import (
 )
 
 // RelationshipType and ResourceRelationship are aliases to the canonical
-// unified-resource graph model so root-cause correlation consumes the same
-// edge vocabulary as the rest of the platform.
+// unified-resource relationship model so root-cause correlation consumes the
+// same edge vocabulary as the rest of the platform.
 type RelationshipType = unifiedresources.RelationshipType
 
 type ResourceRelationship = unifiedresources.ResourceRelationship
