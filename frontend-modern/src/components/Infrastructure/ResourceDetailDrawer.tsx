@@ -62,7 +62,6 @@ import {
 import { ResourceCorrelationSummary } from './ResourceCorrelationSummary';
 import { ResourceChangeSummary } from './ResourceChangeSummary';
 import { ResourceFacetSummary } from './ResourceFacetSummary';
-import { ResourcePolicySummary } from './ResourcePolicySummary';
 import {
   RESOURCE_CHANGE_KIND_ORDER,
   RESOURCE_CHANGE_SOURCE_ADAPTER_ORDER,
@@ -295,7 +294,6 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
   const resourceDependencies = createMemo(() => resourceIntelligence()?.dependencies ?? []);
   const resourceDependents = createMemo(() => resourceIntelligence()?.dependents ?? []);
   const resourceCorrelations = createMemo(() => resourceIntelligence()?.correlations ?? []);
-  const policyPosture = createMemo(() => resourceIntelligence()?.policy_posture);
   const timelineFacetRequest = createMemo(() => {
     const id = resourceFacetId();
     if (!id) return null;
@@ -817,7 +815,6 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                     maxChanges={1}
                     compact
                   />
-                  <ResourcePolicySummary posture={policyPosture()} title="Policy posture" />
                   <ResourceCorrelationSummary
                     title="Correlation context"
                     dependencies={resourceDependencies()}

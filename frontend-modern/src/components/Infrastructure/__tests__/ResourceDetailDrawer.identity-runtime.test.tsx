@@ -326,10 +326,6 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     expect(getByText(/A · 92\/100/)).toBeInTheDocument();
     expect(getByText('Recent Changes')).toBeInTheDocument();
     expect(getByText('Recent Changes').parentElement).toHaveTextContent('1');
-    expect(getByText('Policy posture')).toBeInTheDocument();
-    expect(getByText('2 governed resources')).toBeInTheDocument();
-    expect(getByText('Public')).toBeInTheDocument();
-    expect(getByText('Cloud Summary')).toBeInTheDocument();
     await waitFor(() => {
       expect(getByText('Correlation context')).toBeInTheDocument();
     });
