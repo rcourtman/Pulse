@@ -4827,10 +4827,9 @@ func (s *Service) buildEnrichedResourceContext(resourceID, _ string, currentMetr
 		sections = append(sections, graphContext)
 	}
 
-	// Get shared correlation detector context for learned related resources.
-	correlationDetector := patrol.GetCorrelationDetector()
-	if correlationDetector != nil {
-		if ctx := correlationDetector.FormatForContext(resourceID); ctx != "" {
+	// Get shared correlation context for learned related resources.
+	if intel := patrol.GetIntelligence(); intel != nil {
+		if ctx := intel.FormatCorrelationsContext(resourceID); ctx != "" {
 			sections = append(sections, ctx)
 		}
 	}

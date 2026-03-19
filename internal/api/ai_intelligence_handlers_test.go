@@ -232,6 +232,48 @@ func TestHandleGetCorrelations_ResourceIDFilter(t *testing.T) {
 	}
 }
 
+func TestHandleGetCorrelations_UsesCanonicalIntelligenceFacade(t *testing.T) {
+	t.Setenv("PULSE_MOCK_MODE", "true")
+	handler, _ := setupAIHandlerWithIntelligence(t)
+
+	handler.defaultAIService.SetCorrelationDetector(seedCorrelationDetector(time.Now()))
+	intel := handler.defaultAIService.GetPatrolService().GetIntelligence()
+	if intel == nil || !intel.HasCorrelationsSource() {
+		t.Fatal("expected correlation source to be available through intelligence facade")
+	}
+	if correlations := intel.GetCorrelations("vm-1"); len(correlations) != 1 {
+		t.Fatalf("expected 1 canonical correlation from intelligence facade, got %d", len(correlations))
+	}
+	if ctx := intel.FormatCorrelationsContext("vm-1"); !strings.Contains(ctx, "## Resource Correlations") {
+		t.Fatalf("expected canonical correlation context, got %q", ctx)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/intelligence/correlations?resource_id=vm-1", nil)
+	rec := httptest.NewRecorder()
+
+	handler.HandleGetCorrelations(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+
+	var resp struct {
+		Correlations []struct {
+			TargetID string `json:"target_id"`
+		} `json:"correlations"`
+		Count int `json:"count"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp.Count != 1 || len(resp.Correlations) != 1 {
+		t.Fatalf("correlations count = %d, want 1", resp.Count)
+	}
+	if resp.Correlations[0].TargetID != "vm-1" {
+		t.Fatalf("target_id = %s, want vm-1", resp.Correlations[0].TargetID)
+	}
+}
+
 // TestHandleGetRecentChanges tests the changes endpoint
 func TestHandleGetRecentChanges_MethodNotAllowed(t *testing.T) {
 	t.Parallel()

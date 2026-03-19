@@ -100,6 +100,11 @@ That graph section is now rendered by the shared
 `internal/unifiedresources.FormatResourceGraphContext` helper, so the Patrol
 runtime only resolves the canonical resource graph rather than formatting the
 relationship section itself.
+Patrol-owned correlation context now also comes through the shared AI
+intelligence facade before reaching the detector, so the learned correlation
+surface is routed through the same canonical AI ownership boundary as recent
+changes and resource graph data instead of being pulled from the detector
+directly in each caller.
 The Patrol seed context and AI runtime prompt path now also share the same
 correlation summary formatter from `internal/ai/correlation`, so learned-edge
 wording and confidence/count annotations stay canonical across the prompt

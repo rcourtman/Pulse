@@ -389,6 +389,55 @@ func TestIntelligence_GetRecentChanges_FallsBackToMemoryDetector(t *testing.T) {
 	}
 }
 
+func TestIntelligence_GetCorrelations_UsesCanonicalFacade(t *testing.T) {
+	intel := NewIntelligence(IntelligenceConfig{})
+	detector := correlation.NewDetector(correlation.Config{
+		MaxEvents:         10,
+		CorrelationWindow: 2 * time.Hour,
+		MinOccurrences:    1,
+		RetentionWindow:   24 * time.Hour,
+	})
+	base := time.Now().Add(-30 * time.Minute)
+	detector.RecordEvent(correlation.Event{
+		ResourceID:   "node-1",
+		ResourceName: "node-1",
+		ResourceType: "node",
+		EventType:    correlation.EventHighCPU,
+		Timestamp:    base,
+	})
+	detector.RecordEvent(correlation.Event{
+		ResourceID:   "vm-1",
+		ResourceName: "vm-1",
+		ResourceType: "vm",
+		EventType:    correlation.EventRestart,
+		Timestamp:    base.Add(1 * time.Minute),
+	})
+	intel.SetSubsystems(nil, nil, detector, nil, nil, nil, nil, nil)
+
+	if !intel.HasCorrelationsSource() {
+		t.Fatal("expected correlation source to be available")
+	}
+
+	correlations := intel.GetCorrelations("vm-1")
+	if len(correlations) != 1 {
+		t.Fatalf("expected 1 canonical correlation, got %d", len(correlations))
+	}
+	if correlations[0].TargetID != "vm-1" {
+		t.Fatalf("target id = %q, want vm-1", correlations[0].TargetID)
+	}
+
+	ctx := intel.FormatCorrelationsContext("vm-1")
+	for _, want := range []string{
+		"## Resource Correlations",
+		"node-1",
+		"vm-1",
+	} {
+		if !strings.Contains(ctx, want) {
+			t.Fatalf("expected canonical correlation context %q to contain %q", ctx, want)
+		}
+	}
+}
+
 func TestIntelligence_DescribeResource_UsesUnifiedProvider(t *testing.T) {
 	intel := NewIntelligence(IntelligenceConfig{})
 	intel.SetUnifiedResourceProvider(&mockUnifiedResourceProvider{

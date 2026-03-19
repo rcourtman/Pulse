@@ -171,6 +171,9 @@ That same boundary now also assumes the Patrol-backed recent-changes API
 surface reads through the canonical intelligence facade first, so adjacent
 fleet and install surfaces do not bypass the shared unified timeline through
 the old detector-only handler path.
+The Patrol-backed correlation API surface must follow the same canonical
+intelligence-facade path, so fleet and install surfaces do not need to know
+about the detector directly when they render learned relationship context.
 That same canonical /api/auto-register response must stay on one completion
 truth: caller-supplied Proxmox credentials complete registration with a
 direct-use action, and the runtime no longer preserves a dead pending-secret

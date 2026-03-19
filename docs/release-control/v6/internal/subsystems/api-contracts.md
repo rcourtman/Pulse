@@ -195,6 +195,10 @@ through the shared `frontend-modern/src/stores/aiIntelligence.ts` store for
 the Patrol intelligence page and the AI summary page, so the
 learned-correlation list is governed by the same API contract that backs the
 resource drawer's graph evidence instead of being fetched as page-local state.
+That correlations route now reads through the canonical AI intelligence
+facade first, so the handler and its payload keep the detector behind one
+shared access layer instead of routing directly to Patrol-local correlation
+state.
 That store now also owns the dashboard load bundle used by the Patrol page,
 so the page refresh path stays aligned on one store-owned orchestration layer
 instead of re-encoding the AI bundle inline.

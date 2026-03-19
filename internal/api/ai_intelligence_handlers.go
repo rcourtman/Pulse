@@ -289,11 +289,11 @@ func (h *AISettingsHandler) HandleGetCorrelations(w http.ResponseWriter, r *http
 		return
 	}
 
-	detector := patrol.GetCorrelationDetector()
-	if detector == nil {
+	intel := patrol.GetIntelligence()
+	if intel == nil || !intel.HasCorrelationsSource() {
 		if err := utils.WriteJSONResponse(w, map[string]interface{}{
 			"correlations": []interface{}{},
-			"message":      "Correlation detector not initialized",
+			"message":      "Correlation intelligence not initialized",
 		}); err != nil {
 			log.Error().Err(err).Msg("Failed to write correlations response")
 		}
@@ -302,13 +302,7 @@ func (h *AISettingsHandler) HandleGetCorrelations(w http.ResponseWriter, r *http
 
 	// Get resource filter if provided
 	resourceID := r.URL.Query().Get("resource_id")
-
-	var correlations []*ai.Correlation
-	if resourceID != "" {
-		correlations = detector.GetCorrelationsForResource(resourceID)
-	} else {
-		correlations = detector.GetCorrelations()
-	}
+	correlations := intel.GetCorrelations(resourceID)
 
 	var result []map[string]interface{}
 	for _, corr := range correlations {

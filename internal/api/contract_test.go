@@ -527,6 +527,56 @@ func TestContract_RecentChangesEndpointUsesCanonicalTimeline(t *testing.T) {
 	}
 }
 
+func TestContract_AIIntelligenceCorrelationsJSONSnapshot(t *testing.T) {
+	now := time.Date(2026, 3, 18, 17, 30, 0, 0, time.UTC)
+	payload := map[string]any{
+		"correlations": []map[string]any{
+			{
+				"source_id":     "node-1",
+				"source_name":   "node-1",
+				"source_type":   "node",
+				"target_id":     "vm-1",
+				"target_name":   "vm-1",
+				"target_type":   "vm",
+				"event_pattern": "high_cpu -> restart",
+				"occurrences":   1,
+				"avg_delay":     "1m0s",
+				"confidence":    0.1,
+				"last_seen":     now,
+				"description":   "When node-1 experiences high_cpu, vm-1 often follows within 1m0s",
+			},
+		},
+		"count": 1,
+	}
+
+	got, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal correlations response: %v", err)
+	}
+
+	const want = `{
+		"correlations":[
+			{
+				"avg_delay":"1m0s",
+				"confidence":0.1,
+				"description":"When node-1 experiences high_cpu, vm-1 often follows within 1m0s",
+				"event_pattern":"high_cpu -\u003e restart",
+				"last_seen":"2026-03-18T17:30:00Z",
+				"occurrences":1,
+				"source_id":"node-1",
+				"source_name":"node-1",
+				"source_type":"node",
+				"target_id":"vm-1",
+				"target_name":"vm-1",
+				"target_type":"vm"
+			}
+		],
+		"count":1
+	}`
+
+	assertJSONSnapshot(t, got, want)
+}
+
 func TestContract_ResolveAuthEnvPathUsesCanonicalRuntimeDataDir(t *testing.T) {
 	envDir := t.TempDir()
 	t.Setenv("PULSE_DATA_DIR", envDir)

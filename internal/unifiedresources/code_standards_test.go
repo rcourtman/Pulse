@@ -342,6 +342,21 @@ func TestResourcePolicyCloneHelperUsedByAIConsumers(t *testing.T) {
 
 func TestResourcePolicyLabelHelpersUsedByAIConsumers(t *testing.T) {
 	requiredSnippets := map[string][]string{
+		filepath.Join("..", "ai", "intelligence.go"): {
+			"func (i *Intelligence) HasCorrelationsSource() bool",
+			"func (i *Intelligence) GetCorrelations(resourceID string) []*correlation.Correlation",
+			"func (i *Intelligence) FormatCorrelationsContext(resourceID string) string",
+		},
+		filepath.Join("..", "ai", "service.go"): {
+			"intel.FormatCorrelationsContext(resourceID)",
+		},
+		filepath.Join("..", "ai", "patrol_ai.go"): {
+			"intelFacade.GetCorrelations(\"\")",
+		},
+		filepath.Join("..", "api", "ai_intelligence_handlers.go"): {
+			"intel.HasCorrelationsSource()",
+			"intel.GetCorrelations(resourceID)",
+		},
 		filepath.Join("..", "ai", "chat", "knowledge_extractor.go"): {
 			"unifiedresources.ResourcePolicyLabel(",
 			"unifiedresources.ResourcePolicyRedactedValue(",
@@ -566,7 +581,7 @@ func TestResourceGraphContextUsesCanonicalRelationshipPresentation(t *testing.T)
 		"unifiedresources.FormatResourceGraphContext(resource, 3)",
 		"unifiedresources.FormatResourceRecentChangesContext(changes, false, \"###\")",
 		"type canonicalResourceGetter interface {",
-		"correlationDetector.FormatForContext(resourceID)",
+		"intel.FormatCorrelationsContext(resourceID)",
 	}
 	for _, snippet := range requiredSnippets {
 		if !strings.Contains(source, snippet) {

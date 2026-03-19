@@ -161,6 +161,11 @@ The AI correlation root-cause engine also consumes the canonical unified-
 resource relationship model directly, so cross-resource reasoning stays aligned
 with the same graph edges that back the resource API instead of maintaining a
 parallel relationship vocabulary inside AI correlation.
+The Patrol-backed correlation endpoint, resource-intelligence payload, and
+seed prompt correlations now flow through the shared AI intelligence facade
+first, so the detector remains an implementation detail behind one canonical
+correlation access path instead of being routed directly by handlers or prompt
+builders.
 AI-facing policy metadata must also be cloned through the shared unified-
 resource policy helper so chat and tools consumers do not maintain their own
 policy copy logic. Chat mention prefetch now calls that shared helper directly

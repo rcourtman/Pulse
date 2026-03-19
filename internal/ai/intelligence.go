@@ -768,6 +768,44 @@ func (i *Intelligence) getLearningStats() LearningStats {
 	return stats
 }
 
+// HasCorrelationsSource reports whether the intelligence layer can provide
+// learned correlation data.
+func (i *Intelligence) HasCorrelationsSource() bool {
+	i.mu.RLock()
+	defer i.mu.RUnlock()
+	return i.correlations != nil
+}
+
+// GetCorrelations returns canonical learned correlations for the optional
+// resource scope.
+func (i *Intelligence) GetCorrelations(resourceID string) []*correlation.Correlation {
+	i.mu.RLock()
+	detector := i.correlations
+	i.mu.RUnlock()
+
+	if detector == nil {
+		return nil
+	}
+
+	resourceID = strings.TrimSpace(resourceID)
+	if resourceID != "" {
+		return detector.GetCorrelationsForResource(resourceID)
+	}
+	return detector.GetCorrelations()
+}
+
+// FormatCorrelationsContext returns the canonical AI prompt section for learned
+// correlations.
+func (i *Intelligence) FormatCorrelationsContext(resourceID string) string {
+	i.mu.RLock()
+	detector := i.correlations
+	i.mu.RUnlock()
+	if detector == nil {
+		return ""
+	}
+	return detector.FormatForContext(resourceID)
+}
+
 func (i *Intelligence) calculateOverallHealth(summary *IntelligenceSummary) HealthScore {
 	health := HealthScore{
 		Score:   100,

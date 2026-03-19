@@ -1500,7 +1500,6 @@ func (p *PatrolService) seedPrecomputeIntelligenceState(snap patrolRuntimeState,
 	mh := p.metricsHistory
 	pd := p.patternDetector
 	cd := p.changeDetector
-	corrDet := p.correlationDetector
 	p.mu.RUnlock()
 
 	var intel seedIntelligence
@@ -1619,8 +1618,8 @@ func (p *PatrolService) seedPrecomputeIntelligenceState(snap patrolRuntimeState,
 	}
 
 	// Correlations
-	if corrDet != nil {
-		allCorrs := corrDet.GetCorrelations()
+	if intelFacade := p.GetIntelligence(); intelFacade != nil && intelFacade.HasCorrelationsSource() {
+		allCorrs := intelFacade.GetCorrelations("")
 		for _, c := range allCorrs {
 			if !seedIsInScope(scopedSet, c.SourceID) && !seedIsInScope(scopedSet, c.TargetID) {
 				continue
