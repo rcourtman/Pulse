@@ -23,6 +23,7 @@ import { formatRelativeTime } from '@/utils/format';
 import { getFindingAlertIdentifier, hasTriggeringAlert } from '@/utils/findingAlertIdentity';
 import { logger } from '@/utils/logger';
 import { segmentedButtonClass } from '@/utils/segmentedButton';
+import { formatIdentifierLabel } from '@/utils/textPresentation';
 import {
   buildFindingFilterOptions,
   formatFindingLifecycleType,
@@ -527,7 +528,9 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
               </span>
             </Show>
             <Show when={finding.dismissedReason}>
-              <span class="ml-2 text-muted">({finding.dismissedReason?.replace(/_/g, ' ')})</span>
+              <span class="ml-2 text-muted">
+                ({formatIdentifierLabel(finding.dismissedReason)})
+              </span>
             </Show>
             <Show when={finding.status === 'snoozed' && finding.snoozedUntil}>
               <span class="ml-2 text-blue-500 dark:text-blue-400">
@@ -846,7 +849,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
         <div class="mt-2 p-2 rounded border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900">
           <div class="flex items-center gap-2 mb-1.5">
             <span class="text-xs font-medium text-red-700 dark:text-red-300">
-              Dismiss as: {dismissReason().replace(/_/g, ' ')}
+              Dismiss as: {formatIdentifierLabel(dismissReason())}
             </span>
           </div>
           <textarea

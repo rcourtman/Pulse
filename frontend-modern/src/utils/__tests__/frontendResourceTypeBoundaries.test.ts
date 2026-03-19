@@ -1877,11 +1877,13 @@ describe('frontend resource type boundaries', () => {
     expect(toolExecutionBlockSource).toContain('formatIdentifierLabel');
     expect(aiChatSource).toContain('formatIdentifierLabel');
     expect(patrolStatusBarSource).toContain('formatTriggerReason');
+    expect(findingsPanelSource).toContain('formatIdentifierLabel');
     expect(patrolFormatSource).toContain('formatIdentifierLabel');
     expect(aiFindingPresentationSource).toContain('formatIdentifierLabel');
     expect(messageItemSource).not.toContain("replace(/^pulse_/, '').replace(/_/g, ' ')");
     expect(toolExecutionBlockSource).not.toContain("replace(/^pulse_/, '').replace(/_/g, ' ')");
     expect(aiChatSource).not.toContain("replace(/^pulse_/, '').replace(/_/g, ' ')");
+    expect(findingsPanelSource).not.toContain("replace(/_/g, ' ')");
     expect(patrolStatusBarSource).not.toContain("replace(/_/g, ' ') : ''");
     expect(patrolFormatSource).not.toContain("replace(/_/g, ' ') : 'Unknown'");
     expect(aiFindingPresentationSource).not.toContain("replace(/_/g, ' ')");

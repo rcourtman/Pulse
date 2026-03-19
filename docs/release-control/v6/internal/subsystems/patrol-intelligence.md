@@ -176,3 +176,7 @@ prefix rules instead of rebuilding that section locally.
 The canonical shared AI resource context now also surfaces policy routing and
 redaction hints from unified resources, so the Patrol page and resource drawer
 see the same governance posture that the runtime uses for export boundaries.
+Patrol finding dismissal reasons and Patrol status labels now also route
+through the shared frontend identifier-label helper, so the Patrol surfaces
+do not keep their own underscore-stripping behavior separate from the rest
+of the governed presentation helpers.

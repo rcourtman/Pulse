@@ -352,3 +352,7 @@ The frontend Patrol intelligence page now also consumes that canonical
 summary payload directly through the shared AI client and store, so the
 visible summary card stays aligned with the same recent-change slice that the
 runtime and API contracts expose.
+AI chat tool-name labels, pending-tool headers, and assistant status copy now
+also route through the shared frontend identifier-label helper, so the chat
+surfaces do not keep their own underscore-stripping behavior separate from
+the rest of the governed presentation helpers.
