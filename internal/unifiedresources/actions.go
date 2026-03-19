@@ -67,8 +67,7 @@ type ActionPlan struct {
 	ExpiresAt       time.Time `json:"expiresAt"`
 	ResourceVersion string    `json:"resourceVersion"` // Hash of the resource state at planning time
 	PolicyVersion   string    `json:"policyVersion"`   // Version of the capability/policy when planned
-	GraphVersion    string    `json:"graphVersion"`    // Enforces blast-radius hasn't drifted
-	PlanHash        string    `json:"planHash"`        // Hash verifying params and relationships haven't drifted
+	PlanHash        string    `json:"planHash"`        // Hash verifying params and resource state haven't drifted
 }
 
 // ExecutionResult captures the output of the native capability driver.

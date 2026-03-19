@@ -236,6 +236,10 @@ The canonical resource-change kind, source type, and source adapter labels
 now also come from the shared change presentation helper, so the resource
 summary card and drawer history use the same badge vocabulary instead of
 hardcoding their own labels.
+Action-plan stale-plan protection now keys the durable audit payload on the
+canonical `resourceVersion`, `policyVersion`, and `planHash` fields only,
+so the audit record stays on the minimal deterministic contract instead of
+carrying a separate topology version.
 Resource-only incident context should follow the same rule: if an alert
 timeline is absent, the incident prompt path should fall back to the canonical
 unified-resource timeline rather than depending only on patrol-local change

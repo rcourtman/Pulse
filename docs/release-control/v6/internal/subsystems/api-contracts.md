@@ -191,6 +191,10 @@ export history endpoints live in `internal/api/activity_audit_handlers.go` and
 `internal/api/router_routes_licensing.go`, and the contract tests now pin their
 response shapes so the execution trail remains queryable through the governed
 API surface rather than only through the underlying store.
+Action-plan stale-plan protection on those audit records now uses the canonical
+`resourceVersion`, `policyVersion`, and `planHash` fields only, so the
+response contract stays deterministic without a separate topology-version
+alias.
 The same API contract now also owns the dedicated frontend resource facet
 client in `frontend-modern/src/api/resources.ts`, which fetches the governed
 capability, relationship, and timeline surfaces from `internal/api/resources.go`

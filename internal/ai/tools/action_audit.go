@@ -52,7 +52,6 @@ func (e *PulseToolExecutor) executeCommandWithAudit(
 		ExpiresAt:       now.Add(5 * time.Minute),
 		ResourceVersion: "",
 		PolicyVersion:   "",
-		GraphVersion:    "",
 		PlanHash:        actionPlanHash(actionID, requestCorrelationID, capabilityName, resourceID, payload, reason),
 		Message:         reason,
 	}

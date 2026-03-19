@@ -928,7 +928,6 @@ func TestActionAuditRecord_RoundTrip(t *testing.T) {
 			ExpiresAt:            expires,
 			ResourceVersion:      "rv-1",
 			PolicyVersion:        "pv-1",
-			GraphVersion:         "gv-1",
 			PlanHash:             "plan-hash-1",
 		},
 		Approvals: []ActionApprovalRecord{
@@ -962,7 +961,7 @@ func TestActionAuditRecord_RoundTrip(t *testing.T) {
 	if got.Request.RequestID != record.Request.RequestID || got.Request.RequestedBy != record.Request.RequestedBy {
 		t.Fatalf("request round-trip failed: %+v", got.Request)
 	}
-	if got.Plan.PolicyVersion != record.Plan.PolicyVersion || got.Plan.GraphVersion != record.Plan.GraphVersion {
+	if got.Plan.ResourceVersion != record.Plan.ResourceVersion || got.Plan.PolicyVersion != record.Plan.PolicyVersion || got.Plan.PlanHash != record.Plan.PlanHash {
 		t.Fatalf("plan round-trip failed: %+v", got.Plan)
 	}
 	if len(got.Approvals) != 1 || got.Approvals[0].Actor != record.Approvals[0].Actor || got.Approvals[0].Outcome != record.Approvals[0].Outcome {

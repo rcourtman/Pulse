@@ -215,6 +215,17 @@ func TestPulseToolExecutor_ExecuteRunCommand(t *testing.T) {
 		require.Len(t, audits, 1)
 		assert.Equal(t, "pulse_control", audits[0].Request.CapabilityName)
 		assert.Contains(t, audits[0].Plan.Message, "run command \"uptime\"")
+		assert.Empty(t, audits[0].Plan.ResourceVersion)
+		assert.Empty(t, audits[0].Plan.PolicyVersion)
+		assert.NotEmpty(t, audits[0].Plan.PlanHash)
+
+		planJSON, err := json.Marshal(audits[0].Plan)
+		require.NoError(t, err)
+		planMap := mustParseJSONMap(t, string(planJSON))
+		_, hasRelationshipVersion := planMap["relationshipVersion"]
+		assert.False(t, hasRelationshipVersion)
+		_, hasGraphVersion := planMap["graphVersion"]
+		assert.False(t, hasGraphVersion)
 
 		events, err := store.GetActionLifecycleEvents(audits[0].ID, time.Time{}, 10)
 		require.NoError(t, err)

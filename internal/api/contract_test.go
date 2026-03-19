@@ -4383,7 +4383,6 @@ func TestContract_UnifiedActionAuditsJSONSnapshot(t *testing.T) {
 					ExpiresAt:         now.Add(5 * time.Minute),
 					ResourceVersion:   "rv-1",
 					PolicyVersion:     "pv-1",
-					GraphVersion:      "gv-1",
 					PlanHash:          "hash-1",
 				},
 				Approvals: []unifiedresources.ActionApprovalRecord{
@@ -4435,7 +4434,6 @@ func TestContract_UnifiedActionAuditsJSONSnapshot(t *testing.T) {
 					"expiresAt":"2026-03-18T16:05:00Z",
 					"resourceVersion":"rv-1",
 					"policyVersion":"pv-1",
-					"graphVersion":"gv-1",
 					"planHash":"hash-1"
 				},
 				"approvals":[
