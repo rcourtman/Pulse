@@ -190,6 +190,7 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(screen.queryByText('Host details')).toBeNull();
     expect(screen.queryByText('Service details')).toBeNull();
     expect(screen.queryByText('Supporting context')).toBeNull();
+    expect(screen.queryByText('No identity metadata yet.')).toBeNull();
     expect(screen.getByText('Discovery context')).toBeInTheDocument();
     expect(
       screen.queryByText('Supporting metadata only. The web interface path above stays primary.'),

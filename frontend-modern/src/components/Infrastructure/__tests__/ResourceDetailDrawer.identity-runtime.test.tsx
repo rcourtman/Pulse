@@ -250,7 +250,7 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     expect(getByText('Supporting context')).toBeInTheDocument();
     expect(getByText('Aliases')).toBeInTheDocument();
     expect(getAllByText('pmg-main').length).toBeGreaterThan(0);
-    expect(queryByText('No enriched identity metadata yet.')).toBeNull();
+    expect(queryByText('No identity metadata yet.')).toBeNull();
 
     const sparse = baseResource({
       id: 'host-min',
@@ -267,7 +267,7 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     });
 
     const sparseRender = render(() => <ResourceDetailDrawer resource={sparse} />);
-    expect(sparseRender.getByText('No enriched identity metadata yet.')).toBeInTheDocument();
+    expect(sparseRender.getByText('No identity metadata yet.')).toBeInTheDocument();
   });
 
   it('shows canonical metrics target identity for docker-backed host resources', () => {

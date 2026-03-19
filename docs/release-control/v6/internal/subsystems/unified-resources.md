@@ -283,6 +283,9 @@ The identity card now follows the same rule: canonical identity rows stay in
 the primary summary, while aliases, IPs, and tags live in a smaller
 `Supporting context` block so the drawer answers "what is this resource" before
 showing every attached label.
+When that card has no owned identity rows or supporting labels yet, the sparse
+fallback now stays terse (`No identity metadata yet.`) so empty state chrome
+does not read heavier than the data it is standing in for.
 Type-specific Docker, PBS, and PMG operational panels now also live inside a
 collapsed `Service details` support block, so lane-specific controls and
 breakdowns stay available without displacing the common runtime and identity

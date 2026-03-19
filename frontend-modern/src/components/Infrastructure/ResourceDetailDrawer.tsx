@@ -1120,7 +1120,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
               </Show>
               <Show when={!identityCardHasRichData()}>
                 <div class="rounded border border-dashed bg-surface-hover px-2 py-1.5 text-[10px] ">
-                  No enriched identity metadata yet.
+                  No identity metadata yet.
                 </div>
               </Show>
             </div>
