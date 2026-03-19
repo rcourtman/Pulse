@@ -305,6 +305,32 @@ describe('ThresholdsTable Resource Rendering', () => {
     expect(screen.getByTestId('resource-name-h1')).toHaveTextContent('Host 1');
   });
 
+  it('renders governed agents with the policy-aware display label', async () => {
+    setPathname('/alerts/thresholds/agents');
+    const host = {
+      id: 'h2',
+      hostname: 'secret-host',
+      displayName: 'Secret Host',
+      status: 'online',
+      lastSeen: 123,
+      memory: { total: 100, used: 50, free: 50, usage: 50 },
+      policy: {
+        sensitivity: 'restricted',
+        routing: { scope: 'local-only', redact: ['hostname'] },
+      },
+      aiSafeSummary: 'redacted by policy',
+    } as Agent & { policy: unknown; aiSafeSummary: string };
+
+    render(() => <ThresholdsTable {...(baseProps() as any)} agents={[host]} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('resource-table-Agents')).toBeInTheDocument();
+    });
+
+    expect(screen.getByTestId('resource-name-h2')).toHaveTextContent('redacted by policy');
+    expect(screen.getByTestId('resource-name-h2')).not.toHaveTextContent('secret-host');
+  });
+
   it('renders proxmox nodes and guests correctly', async () => {
     setPathname('/alerts/thresholds/proxmox');
     const node = {
@@ -333,6 +359,57 @@ describe('ThresholdsTable Resource Rendering', () => {
 
     expect(screen.getByTestId('section-VMs & Containers')).toBeInTheDocument();
     expect(screen.getByTestId('resource-name-guest1')).toHaveTextContent('vm1');
+  });
+
+  it('renders governed guests with the policy-aware display label', async () => {
+    setPathname('/alerts/thresholds/proxmox');
+    const guest = {
+      id: 'guest2',
+      name: 'secret-vm-2',
+      vmid: 200,
+      status: 'running',
+      node: 'pve1',
+      displayName: 'Secret VM 2',
+      policy: {
+        sensitivity: 'restricted',
+        routing: { scope: 'local-only', redact: ['hostname'] },
+      },
+      aiSafeSummary: 'redacted by policy',
+    } as any;
+
+    render(() => <ThresholdsTable {...(baseProps() as any)} allGuests={() => [guest]} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('section-VMs & Containers')).toBeInTheDocument();
+    });
+
+    expect(screen.getByTestId('resource-name-guest2')).toHaveTextContent('redacted by policy');
+    expect(screen.getByTestId('resource-name-guest2')).not.toHaveTextContent('secret-vm-2');
+  });
+
+  it('renders governed storage with the policy-aware display label', async () => {
+    setPathname('/alerts/thresholds/proxmox');
+    const storage = {
+      id: 'storage1',
+      name: 'secret-datastore',
+      status: 'available',
+      node: 'pve1',
+      displayName: 'Secret Datastore',
+      policy: {
+        sensitivity: 'restricted',
+        routing: { scope: 'local-only', redact: ['path'] },
+      },
+      aiSafeSummary: 'redacted by policy',
+    } as any;
+
+    render(() => <ThresholdsTable {...(baseProps() as any)} storage={[storage]} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('resource-name-storage1')).toBeInTheDocument();
+    });
+
+    expect(screen.getByTestId('resource-name-storage1')).toHaveTextContent('redacted by policy');
+    expect(screen.getByTestId('resource-name-storage1')).not.toHaveTextContent('secret-datastore');
   });
 });
 

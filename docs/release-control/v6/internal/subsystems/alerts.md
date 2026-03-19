@@ -106,6 +106,10 @@ duplicated inline across the alerts page and overview timeline surfaces.
 Alert resource tables now route resource labels and row action labels through
 the shared policy-aware resource identity helper so governed resources do not
 fall back to raw names inside the alerts surface.
+Alert threshold tables now route their visible resource row labels, search
+labels, and persisted override display names through the same shared helper
+so governed agent, guest, and storage rows do not leak raw names when the
+threshold editor saves or re-renders them.
 
 Alert incident timeline event cards now route through
 `frontend-modern/src/components/Alerts/IncidentTimelineEventCard.tsx`,

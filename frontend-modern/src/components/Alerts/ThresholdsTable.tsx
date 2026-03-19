@@ -403,7 +403,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       const note = typeof override?.note === 'string' ? override.note : undefined;
       const hasNote = Boolean(note && note.trim().length > 0);
 
-      const originalDisplayName = node.displayName?.trim() || node.name;
+      const originalDisplayName = getPreferredResourceDisplayName(node);
       const friendlyName = getFriendlyNodeName(originalDisplayName, clusterName);
       const rawName = node.name;
       const sanitizedName = friendlyName || originalDisplayName || rawName.split('.')[0] || rawName;
@@ -429,7 +429,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
         id: node.id,
         name: sanitizedName,
         displayName: sanitizedName,
-        rawName: originalDisplayName,
+        rawName: node.name,
         host: normalizedHost,
         type: 'agent' as const,
         resourceType: 'Agent',
@@ -479,11 +479,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           );
         });
 
-      const displayName =
-        agentResource.displayName?.trim() ||
-        agentResource.identity?.hostname ||
-        agentResource.name ||
-        agentResource.id;
+      const displayName = getPreferredResourceDisplayName(agentResource);
       const status = agentResource.status;
       const data = pd(agentResource);
       const agentData = asRecord(data?.agent);
@@ -1196,7 +1192,9 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
 
       return {
         id: guestId,
-        name: guest.name,
+        name: getPreferredResourceDisplayName(guest),
+        displayName: getPreferredResourceDisplayName(guest),
+        rawName: guest.name,
         type: 'guest' as const,
         resourceType: guest.type === 'vm' ? 'VM' : 'Container',
         vmid,
@@ -1474,7 +1472,9 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
 
       return {
         id: storage.id,
-        name: storage.name,
+        name: getPreferredResourceDisplayName(storage),
+        displayName: getPreferredResourceDisplayName(storage),
+        rawName: storage.name,
         type: 'storage' as const,
         resourceType: 'Storage',
         node: coords.node,
