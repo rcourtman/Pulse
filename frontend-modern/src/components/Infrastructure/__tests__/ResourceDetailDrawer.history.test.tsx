@@ -8,6 +8,21 @@ const facetBundleMock = vi.hoisted(() => ({
   getFacetBundle: vi.fn(),
 }));
 
+const aiIntelligenceMock = vi.hoisted(() => ({
+  getResourceIntelligence: vi.fn().mockResolvedValue({
+    resource_id: 'resource-1',
+    health: {
+      score: 92,
+      grade: 'A',
+      trend: 'stable',
+      factors: [],
+      prediction: 'Stable',
+    },
+    recent_changes: [],
+    note_count: 3,
+  }),
+}));
+
 vi.mock('@/App', () => ({
   useWebSocket: () => ({
     state: { pmg: [] as any[] },
@@ -26,6 +41,12 @@ vi.mock('@/components/Discovery/DiscoveryTab', () => ({
 vi.mock('@/api/resources', () => ({
   ResourceAPI: {
     getFacetBundle: facetBundleMock.getFacetBundle,
+  },
+}));
+
+vi.mock('@/api/ai', () => ({
+  AIAPI: {
+    getResourceIntelligence: aiIntelligenceMock.getResourceIntelligence,
   },
 }));
 

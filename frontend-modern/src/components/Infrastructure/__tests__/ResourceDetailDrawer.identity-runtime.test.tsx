@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render } from '@solidjs/testing-library';
+import { render, waitFor } from '@solidjs/testing-library';
 
 import type { Resource } from '@/types/resource';
 import { ResourceDetailDrawer } from '@/components/Infrastructure/ResourceDetailDrawer';
@@ -28,6 +28,33 @@ vi.mock('@/api/resources', () => ({
       capabilities: [],
       relationships: [],
       recentChanges: [],
+    }),
+  },
+}));
+
+vi.mock('@/api/ai', () => ({
+  AIAPI: {
+    getResourceIntelligence: vi.fn().mockResolvedValue({
+      resource_id: 'resource-1',
+      health: {
+        score: 92,
+        grade: 'A',
+        trend: 'stable',
+        factors: [],
+        prediction: 'Stable',
+      },
+      recent_changes: [
+        {
+          id: 'change-1',
+          observedAt: '2026-03-01T00:00:00Z',
+          resourceId: 'resource-1',
+          kind: 'config_update',
+          sourceType: 'pulse_diff',
+          confidence: 'high',
+          reason: 'Updated canonical config',
+        },
+      ],
+      note_count: 3,
     }),
   },
 }));
@@ -258,5 +285,23 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     expect(
       getByText('restricted host summary safe for remote AI consumption'),
     ).toBeInTheDocument();
+  });
+
+  it('surfaces canonical AI intelligence for the resource overview', async () => {
+    const resource = baseResource({});
+    const { getByText } = render(() => <ResourceDetailDrawer resource={resource} />);
+
+    await waitFor(() => {
+      expect(getByText('AI Intelligence')).toBeInTheDocument();
+    });
+
+    expect(getByText(/A · 92\/100/)).toBeInTheDocument();
+    expect(getByText('Recent Changes')).toBeInTheDocument();
+    expect(getByText('1')).toBeInTheDocument();
+    const latestChange = getByText('Latest canonical change').parentElement;
+    expect(latestChange).not.toBeNull();
+    expect(latestChange).toHaveTextContent('config update');
+    expect(latestChange).toHaveTextContent('Updated canonical config');
+    expect(latestChange).toHaveTextContent(/just now|m ago|h ago|d ago/);
   });
 });

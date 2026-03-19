@@ -39,6 +39,7 @@ import { PMGInstanceDrawer } from '@/components/PMG/PMGInstanceDrawer';
 import { K8sDeploymentsDrawer } from '@/components/Kubernetes/K8sDeploymentsDrawer';
 import { K8sNamespacesDrawer } from '@/components/Kubernetes/K8sNamespacesDrawer';
 import { MonitoringAPI } from '@/api/monitoring';
+import { AIAPI } from '@/api/ai';
 import { areSystemSettingsLoaded, shouldHideDockerUpdateActions } from '@/stores/systemSettings';
 import { SwarmServicesDrawer } from '@/components/Docker/SwarmServicesDrawer';
 import { WebInterfaceUrlField } from '@/components/shared/WebInterfaceUrlField';
@@ -52,6 +53,7 @@ import {
   getResourceSensitivityLabel,
 } from '@/utils/resourcePolicyPresentation';
 import { ResourceFacetSummary } from './ResourceFacetSummary';
+import type { ResourceIntelligence } from '@/types/aiIntelligence';
 
 interface ResourceDetailDrawerProps {
   resource: Resource;
@@ -262,6 +264,14 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
       return ResourceAPI.getFacetBundle(request.id, { limit: 25 });
     },
     { initialValue: null },
+  );
+  const [resourceIntelligence] = createResource(
+    resourceFacetRequest,
+    async (request) => {
+      if (!request?.id) return null;
+      return AIAPI.getResourceIntelligence(request.id);
+    },
+    { initialValue: null as ResourceIntelligence | null },
   );
   const timelineFacetRequest = createMemo(() => {
     const id = resourceFacetId();
@@ -806,9 +816,61 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
               )}
             </Show>
           </div>
-        </Show>
+          </Show>
 
         <div class="grid gap-3 md:grid-cols-2 lg:grid-cols-3 mt-3">
+          <Show when={resourceIntelligence()}>
+            {(intel) => (
+              <div class="rounded border border-border bg-surface p-3">
+                <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
+                  AI Intelligence
+                </div>
+                <div class="space-y-1.5 text-[11px]">
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="text-muted">Health</span>
+                    <span class="font-medium text-base-content">
+                      {intel().health.grade} · {Math.round(intel().health.score)}/100
+                    </span>
+                  </div>
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="text-muted">Trend</span>
+                    <span class="font-medium text-base-content capitalize">
+                      {intel().health.trend}
+                    </span>
+                  </div>
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="text-muted">Notes</span>
+                    <span class="font-medium text-base-content">{intel().note_count}</span>
+                  </div>
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="text-muted">Recent Changes</span>
+                    <span class="font-medium text-base-content">
+                      {intel().recent_changes?.length ?? 0}
+                    </span>
+                  </div>
+                  <Show when={intel().recent_changes?.[0]}>
+                    <div class="rounded border border-border bg-surface-hover px-2 py-1.5">
+                      <div class="text-[10px] uppercase tracking-wide text-muted">
+                        Latest canonical change
+                      </div>
+                      <div class="mt-0.5 text-[11px] text-base-content">
+                        {intel().recent_changes?.[0]?.kind.replace(/_/g, ' ')} ·{' '}
+                        {intel().recent_changes?.[0]?.reason ||
+                          intel().recent_changes?.[0]?.resourceId}
+                      </div>
+                      <div class="mt-0.5 text-[10px] text-muted">
+                        {formatRelativeTime(intel().recent_changes?.[0]?.observedAt, {
+                          compact: true,
+                          emptyText: 'just now',
+                        })}
+                      </div>
+                    </div>
+                  </Show>
+                </div>
+              </div>
+            )}
+          </Show>
+
           <div class="rounded border border-border bg-surface p-3">
             <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
               Runtime
