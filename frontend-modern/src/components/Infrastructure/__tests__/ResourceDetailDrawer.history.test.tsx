@@ -197,6 +197,7 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(screen.getAllByText('Proxmox adapter 1')).toHaveLength(1);
     expect(screen.queryByText('Quick links')).toBeNull();
     expect(screen.getByText('Investigation context')).toBeInTheDocument();
+    expect(screen.queryByText('Correlation context')).toBeNull();
     expect(screen.queryByText('Storage 1 alias')).toBeNull();
     expect(screen.queryByText('VM Child')).toBeNull();
     expect(screen.queryByText('Capabilities 1')).toBeNull();

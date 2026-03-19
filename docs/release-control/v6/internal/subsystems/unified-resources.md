@@ -245,6 +245,10 @@ That same overview now keeps AI intelligence and data-governance details
 inside a collapsed `Investigation context` disclosure, so runtime status and
 identity stay primary while secondary AI and policy signals remain available
 without competing with the first-screen monitoring story.
+Inside that disclosure, learned dependency and correlation detail now sits
+behind its own reveal instead of rendering at full depth immediately, so the
+opened investigation surface still starts with compact health, change, and
+policy summaries before the user asks for relationship pattern detail.
 The drawer header now stays focused on canonical identity and source/type
 badges only, while workload/service drill-down links and Kubernetes platform
 signals live with the runtime card, so the top strip does not compete with

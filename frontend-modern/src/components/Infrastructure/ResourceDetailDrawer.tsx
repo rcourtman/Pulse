@@ -141,6 +141,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
   const [copied, setCopied] = createSignal(false);
   const [showReportModal, setShowReportModal] = createSignal(false);
   const [showInvestigationContext, setShowInvestigationContext] = createSignal(false);
+  const [showCorrelationContext, setShowCorrelationContext] = createSignal(false);
   const [showDiscoveryContext, setShowDiscoveryContext] = createSignal(false);
 
   const displayName = createMemo(() => getPreferredResourceDisplayName(props.resource));
@@ -308,6 +309,12 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
   const resourceDependencies = createMemo(() => resourceIntelligence()?.dependencies ?? []);
   const resourceDependents = createMemo(() => resourceIntelligence()?.dependents ?? []);
   const resourceCorrelations = createMemo(() => resourceIntelligence()?.correlations ?? []);
+  const hasCorrelationContext = createMemo(
+    () =>
+      resourceDependencies().length > 0 ||
+      resourceDependents().length > 0 ||
+      resourceCorrelations().length > 0,
+  );
   const hasInvestigationContext = createMemo(
     () => Boolean(resourceIntelligence()) || hasGovernanceData(),
   );
@@ -1383,23 +1390,27 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                       <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
                         AI Intelligence
                       </div>
-                      <div class="space-y-1.5 text-[11px]">
-                        <div class="flex items-center justify-between gap-2">
-                          <span class="text-muted">Health</span>
-                          <span class="font-medium text-base-content">
+                      <div class="grid gap-2 sm:grid-cols-3">
+                        <div class="rounded border border-border bg-surface-hover px-2 py-1.5">
+                          <div class="text-[10px] text-muted">Health</div>
+                          <div class="text-sm font-semibold text-base-content">
                             {intel().health.grade} · {Math.round(intel().health.score)}/100
-                          </span>
+                          </div>
                         </div>
-                        <div class="flex items-center justify-between gap-2">
-                          <span class="text-muted">Trend</span>
-                          <span class="font-medium text-base-content capitalize">
+                        <div class="rounded border border-border bg-surface-hover px-2 py-1.5">
+                          <div class="text-[10px] text-muted">Trend</div>
+                          <div class="text-sm font-semibold text-base-content capitalize">
                             {intel().health.trend}
-                          </span>
+                          </div>
                         </div>
-                        <div class="flex items-center justify-between gap-2">
-                          <span class="text-muted">Notes</span>
-                          <span class="font-medium text-base-content">{intel().note_count}</span>
+                        <div class="rounded border border-border bg-surface-hover px-2 py-1.5">
+                          <div class="text-[10px] text-muted">Notes</div>
+                          <div class="text-sm font-semibold text-base-content">
+                            {intel().note_count}
+                          </div>
                         </div>
+                      </div>
+                      <div class="mt-3 space-y-1.5 text-[11px]">
                         <ResourceChangeSummary
                           class="space-y-0"
                           title="Latest canonical change"
@@ -1408,14 +1419,42 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                           maxChanges={1}
                           compact
                         />
-                        <ResourceCorrelationSummary
-                          title="Correlation context"
-                          dependencies={resourceDependencies()}
-                          dependents={resourceDependents()}
-                          correlations={resourceCorrelations()}
-                          resolveResourceLabel={resolveResourceLabel}
-                          showLastSeen
-                        />
+                        <Show when={hasCorrelationContext()}>
+                          <div class="rounded border border-border bg-surface-hover px-2 py-2">
+                            <div class="flex flex-wrap items-center justify-between gap-2">
+                              <div>
+                                <div class="text-[10px] font-medium uppercase tracking-wide text-base-content">
+                                  Correlation context
+                                </div>
+                                <div class="mt-0.5 text-[10px] text-muted">
+                                  {resourceDependencies().length} dependencies ·{' '}
+                                  {resourceDependents().length} dependents ·{' '}
+                                  {resourceCorrelations().length} correlations
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setShowCorrelationContext((value) => !value)}
+                                class="inline-flex items-center rounded-md border border-border bg-surface px-2.5 py-1 text-[10px] font-medium text-base-content transition-colors hover:bg-surface-hover"
+                              >
+                                {showCorrelationContext() ? 'Hide correlations' : 'Show correlations'}
+                              </button>
+                            </div>
+
+                            <Show when={showCorrelationContext()}>
+                              <div class="mt-3">
+                                <ResourceCorrelationSummary
+                                  title="Correlation context"
+                                  dependencies={resourceDependencies()}
+                                  dependents={resourceDependents()}
+                                  correlations={resourceCorrelations()}
+                                  resolveResourceLabel={resolveResourceLabel}
+                                  showLastSeen
+                                />
+                              </div>
+                            </Show>
+                          </div>
+                        </Show>
                       </div>
                     </div>
                   )}
@@ -1426,24 +1465,34 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                     <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
                       Data Governance
                     </div>
-                    <div class="space-y-1.5 text-[11px]">
+                    <div class="grid gap-2 sm:grid-cols-2">
                       <Show when={props.resource.policy}>
-                        <div class="flex items-center justify-between gap-2">
-                          <span class="text-muted">Sensitivity</span>
-                          <span class="font-medium text-base-content">
+                        <div class="rounded border border-border bg-surface-hover px-2 py-1.5">
+                          <div class="text-[10px] text-muted">Sensitivity</div>
+                          <div class="text-sm font-semibold text-base-content">
                             {getResourceSensitivityLabel(props.resource.policy?.sensitivity)}
-                          </span>
+                          </div>
                         </div>
-                        <div class="flex items-center justify-between gap-2">
-                          <span class="text-muted">Routing</span>
-                          <span class="font-medium text-base-content">
+                        <div class="rounded border border-border bg-surface-hover px-2 py-1.5">
+                          <div class="text-[10px] text-muted">Routing</div>
+                          <div class="text-sm font-semibold text-base-content">
                             {getResourceRoutingScopeLabel(props.resource.policy?.routing.scope)}
-                          </span>
+                          </div>
                         </div>
                       </Show>
+                      <Show when={policyRedactions().length > 0 || governanceSummary()}>
+                        <div class="rounded border border-border bg-surface-hover px-2 py-1.5">
+                          <div class="text-[10px] text-muted">Redactions</div>
+                          <div class="text-sm font-semibold text-base-content">
+                            {policyRedactions().length}
+                          </div>
+                        </div>
+                      </Show>
+                    </div>
+                    <div class="mt-3 space-y-1.5 text-[11px]">
                       <Show when={policyRedactions().length > 0}>
                         <div class="flex flex-col gap-1">
-                          <span class="text-muted">Redactions</span>
+                          <span class="text-muted">Redaction labels</span>
                           <div class="flex flex-wrap gap-1">
                             <For each={policyRedactions()}>
                               {(label) => (
