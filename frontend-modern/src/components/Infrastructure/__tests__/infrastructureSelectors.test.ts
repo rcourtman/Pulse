@@ -58,6 +58,21 @@ describe('infrastructureSelectors', () => {
       expect(matchesSearch(resource, 'NODE-123')).toBe(true);
     });
 
+    it('matches governed resources by their safe label instead of raw name', () => {
+      const governedResource = makeResource(2, {
+        name: 'secret-node-2',
+        displayName: 'secret-node-2',
+        policy: {
+          sensitivity: 'restricted',
+          routing: { scope: 'local-only', redact: ['hostname'] },
+        },
+        aiSafeSummary: 'Production Node',
+      });
+
+      expect(matchesSearch(governedResource, 'Production')).toBe(true);
+      expect(matchesSearch(governedResource, 'secret-node-2')).toBe(false);
+    });
+
     it('matches by ip and tag and returns false when missing', () => {
       expect(matchesSearch(resource, '192.168.1.10')).toBe(true);
       expect(matchesSearch(resource, 'database')).toBe(true);
@@ -132,6 +147,7 @@ describe('infrastructureSelectors', () => {
       }),
       makeResource(3, {
         name: 'gamma-node',
+        displayName: 'Gamma Node',
         status: 'degraded',
         tags: ['prod', 'db'],
         platformData: { sources: ['k8s'] },

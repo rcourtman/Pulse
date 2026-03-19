@@ -382,6 +382,10 @@ that drawer now route
 through the canonical infrastructure resource filter, so the resource history
 remains navigable from the history surface instead of being purely
 descriptive text.
+The same infrastructure selector pipeline now also uses the policy-aware
+display contract for search candidates, so governed resources do not reappear
+through raw-name search forks even though the selector stays on the same
+hot-path budget.
 `ResourceFacetSummary` now consumes the shared
 `frontend-modern/src/utils/resourceChangePresentation.ts` label helper for
 canonical change kinds, source types, and adapter provenance, so the chip

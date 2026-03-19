@@ -130,8 +130,7 @@ export const matchesSearch = (resource: Resource, term: string): boolean => {
   if (!term) return true;
   const normalizedTerm = term.toLowerCase();
   const candidates: string[] = [
-    resource.name,
-    resource.displayName,
+    getDisplayName(resource),
     resource.id,
     resource.identity?.hostname ?? '',
     ...(resource.identity?.ips ?? []),

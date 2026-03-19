@@ -8,6 +8,7 @@ import { getPreferredResourceDisplayName } from '@/utils/resourceIdentity';
 import {
   buildStatusOptions,
   filterResources,
+  matchesSearch,
   sortResources,
   groupResources,
   splitPrimaryAndServiceResources,
@@ -177,6 +178,21 @@ describe('UnifiedResourceTable performance contract', () => {
 
       expect(filtered).toHaveLength(1);
       expect(filtered[0]?.platformData?.sources).toEqual(['proxmox']);
+    });
+
+    it('keeps governed resource search aligned with the safe display label', () => {
+      const governedResource = makeResource(9, {
+        name: 'secret-host-9',
+        displayName: 'secret-host-9',
+        policy: {
+          sensitivity: 'restricted',
+          routing: { scope: 'local-only', redact: ['hostname'] },
+        },
+        aiSafeSummary: 'Production Host',
+      });
+
+      expect(matchesSearch(governedResource, 'Production')).toBe(true);
+      expect(matchesSearch(governedResource, 'secret-host-9')).toBe(false);
     });
 
     it('renders facet summary badges without changing the Profile S row budget', async () => {
