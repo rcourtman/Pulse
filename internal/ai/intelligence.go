@@ -346,46 +346,67 @@ func (i *Intelligence) GetResourceIntelligence(resourceID string) *ResourceIntel
 // FormatContext builds a comprehensive context string for AI prompts
 func (i *Intelligence) FormatContext(resourceID string) string {
 	i.mu.RLock()
-	defer i.mu.RUnlock()
+	knowledgeStore := i.knowledge
+	baselinesStore := i.baselines
+	patternsDetector := i.patterns
+	correlationsDetector := i.correlations
+	incidentsStore := i.incidents
+	resourceTimelineStore := i.resourceTimelineStore
+	changesDetector := i.changes
+	anomalyDetector := i.anomalyDetector
+	i.mu.RUnlock()
 
 	var sections []string
 
 	// Knowledge (most important - what we've learned)
-	if i.knowledge != nil {
-		if ctx := i.knowledge.FormatForContext(resourceID); ctx != "" {
+	if knowledgeStore != nil {
+		if ctx := knowledgeStore.FormatForContext(resourceID); ctx != "" {
 			sections = append(sections, ctx)
 		}
 	}
 
 	// Baselines (what's normal for this resource)
-	if i.baselines != nil {
+	if baselinesStore != nil {
 		if ctx := i.formatBaselinesForContext(resourceID); ctx != "" {
 			sections = append(sections, ctx)
 		}
 	}
 
 	// Current anomalies
-	if anomalies := i.detectCurrentAnomalies(resourceID); len(anomalies) > 0 {
-		sections = append(sections, i.formatAnomaliesForContext(anomalies))
+	if anomalyDetector != nil {
+		if anomalies := anomalyDetector(resourceID); len(anomalies) > 0 {
+			sections = append(sections, i.formatAnomaliesForContext(anomalies))
+		}
+	}
+
+	// Canonical recent changes (preferred) with patrol-local fallback
+	if recentChanges := i.buildRecentChangesContext(
+		resourceID,
+		resourceTimelineStore,
+		changesDetector,
+		false,
+		5,
+	); recentChanges != "" {
+		sections = append(sections, recentChanges)
 	}
 
 	// Patterns/Predictions
-	if i.patterns != nil {
-		if ctx := i.patterns.FormatForContext(resourceID); ctx != "" {
+	if patternsDetector != nil {
+		if ctx := patternsDetector.FormatForContext(resourceID); ctx != "" {
 			sections = append(sections, ctx)
 		}
 	}
 
 	// Correlations
-	if i.correlations != nil {
-		if ctx := i.correlations.FormatForContext(resourceID); ctx != "" {
+	if correlationsDetector != nil {
+		if ctx := correlationsDetector.FormatForContext(resourceID); ctx != "" {
 			sections = append(sections, ctx)
 		}
 	}
 
 	// Incidents
-	if i.incidents != nil {
-		if ctx := i.incidents.FormatForResource(resourceID, 5); ctx != "" {
+	if incidentsStore != nil {
+		if ctx := incidentsStore.FormatForResource(resourceID, 5); ctx != "" {
 			sections = append(sections, ctx)
 		}
 	}
@@ -396,39 +417,161 @@ func (i *Intelligence) FormatContext(resourceID string) string {
 // FormatGlobalContext builds context for infrastructure-wide analysis
 func (i *Intelligence) FormatGlobalContext() string {
 	i.mu.RLock()
-	defer i.mu.RUnlock()
+	knowledgeStore := i.knowledge
+	incidentsStore := i.incidents
+	correlationsDetector := i.correlations
+	patternsDetector := i.patterns
+	resourceTimelineStore := i.resourceTimelineStore
+	changesDetector := i.changes
+	i.mu.RUnlock()
 
 	var sections []string
 
 	// All saved knowledge (limited)
-	if i.knowledge != nil {
-		if ctx := i.knowledge.FormatAllForContext(); ctx != "" {
+	if knowledgeStore != nil {
+		if ctx := knowledgeStore.FormatAllForContext(); ctx != "" {
 			sections = append(sections, ctx)
 		}
 	}
 
+	// Canonical recent changes across infrastructure (preferred) with patrol-local fallback
+	if recentChanges := i.buildRecentChangesContext(
+		"",
+		resourceTimelineStore,
+		changesDetector,
+		true,
+		5,
+	); recentChanges != "" {
+		sections = append(sections, recentChanges)
+	}
+
 	// Recent incidents across infrastructure
-	if i.incidents != nil {
-		if ctx := i.incidents.FormatForPatrol(8); ctx != "" {
+	if incidentsStore != nil {
+		if ctx := incidentsStore.FormatForPatrol(8); ctx != "" {
 			sections = append(sections, ctx)
 		}
 	}
 
 	// Top correlations
-	if i.correlations != nil {
-		if ctx := i.correlations.FormatForContext(""); ctx != "" {
+	if correlationsDetector != nil {
+		if ctx := correlationsDetector.FormatForContext(""); ctx != "" {
 			sections = append(sections, ctx)
 		}
 	}
 
 	// Top predictions
-	if i.patterns != nil {
-		if ctx := i.patterns.FormatForContext(""); ctx != "" {
+	if patternsDetector != nil {
+		if ctx := patternsDetector.FormatForContext(""); ctx != "" {
 			sections = append(sections, ctx)
 		}
 	}
 
 	return strings.Join(sections, "\n")
+}
+
+func (i *Intelligence) buildRecentChangesContext(resourceID string, resourceTimelineStore unifiedresources.ResourceStore, changesDetector *memory.ChangeDetector, includeResourcePrefix bool, limit int) string {
+	since := time.Now().Add(-24 * time.Hour)
+
+	if resourceTimelineStore != nil {
+		if recent, err := resourceTimelineStore.GetRecentChanges(resourceID, since, limit); err == nil && len(recent) > 0 {
+			return formatCanonicalRecentChangesContext(recent, includeResourcePrefix)
+		}
+	}
+
+	if changesDetector == nil {
+		return ""
+	}
+
+	var recent []memory.Change
+	if resourceID != "" {
+		recent = changesDetector.GetChangesForResource(resourceID, limit)
+	} else {
+		recent = changesDetector.GetRecentChanges(limit, since)
+	}
+	if len(recent) == 0 {
+		return ""
+	}
+	return formatMemoryRecentChangesContext(recent, includeResourcePrefix)
+}
+
+func formatCanonicalRecentChangesContext(changes []unifiedresources.ResourceChange, includeResourcePrefix bool) string {
+	if len(changes) == 0 {
+		return ""
+	}
+
+	heading := "\n## Recent Changes"
+	if includeResourcePrefix {
+		heading = "\n## Recent Changes Across Infrastructure"
+	}
+
+	lines := []string{heading, "What changed recently:"}
+	for _, change := range changes {
+		entry := formatResourceChangeContext(change)
+		if includeResourcePrefix {
+			if resourceID := strings.TrimSpace(change.ResourceID); resourceID != "" {
+				entry = fmt.Sprintf("%s: %s", resourceID, entry)
+			}
+		}
+		lines = append(lines, "- "+entry)
+	}
+	return strings.Join(lines, "\n")
+}
+
+func formatMemoryRecentChangesContext(changes []memory.Change, includeResourcePrefix bool) string {
+	if len(changes) == 0 {
+		return ""
+	}
+
+	heading := "\n## Recent Changes"
+	if includeResourcePrefix {
+		heading = "\n## Recent Changes Across Infrastructure"
+	}
+
+	lines := []string{heading, "What changed recently:"}
+	for _, change := range changes {
+		entry := fmt.Sprintf("**%s** %s", formatMemoryChangeTypeLabel(change.ChangeType), change.Description)
+		if includeResourcePrefix {
+			scope := strings.TrimSpace(change.ResourceID)
+			if scope == "" {
+				scope = strings.TrimSpace(change.ResourceName)
+			}
+			if scope == "" {
+				scope = "resource"
+			}
+			if resourceType := strings.TrimSpace(change.ResourceType); resourceType != "" && !strings.Contains(scope, resourceType) {
+				scope = fmt.Sprintf("%s (%s)", scope, resourceType)
+			}
+			entry = fmt.Sprintf("%s: %s", scope, entry)
+		}
+		ago := time.Since(change.DetectedAt).Truncate(time.Minute)
+		lines = append(lines, fmt.Sprintf("- %s (%s ago)", entry, formatDuration(ago)))
+	}
+	return strings.Join(lines, "\n")
+}
+
+func formatMemoryChangeTypeLabel(changeType memory.ChangeType) string {
+	switch changeType {
+	case memory.ChangeCreated:
+		return "Created"
+	case memory.ChangeDeleted:
+		return "Deleted"
+	case memory.ChangeConfig:
+		return "Config update"
+	case memory.ChangeStatus:
+		return "Status change"
+	case memory.ChangeMigrated:
+		return "Migration"
+	case memory.ChangeRestarted:
+		return "Restart"
+	case memory.ChangeBackedUp:
+		return "Backup"
+	default:
+		raw := strings.TrimSpace(strings.ReplaceAll(string(changeType), "_", " "))
+		if raw == "" {
+			return "Change"
+		}
+		return strings.ToUpper(raw[:1]) + raw[1:]
+	}
 }
 
 // RecordLearning saves a learning to the knowledge store after a fix
@@ -913,11 +1056,15 @@ func (i *Intelligence) detectCurrentAnomalies(resourceID string) []AnomalyReport
 }
 
 func (i *Intelligence) formatBaselinesForContext(resourceID string) string {
-	if i.baselines == nil {
+	i.mu.RLock()
+	store := i.baselines
+	i.mu.RUnlock()
+
+	if store == nil {
 		return ""
 	}
 
-	rb, ok := i.baselines.GetResourceBaseline(resourceID)
+	rb, ok := store.GetResourceBaseline(resourceID)
 	if !ok || len(rb.Metrics) == 0 {
 		return ""
 	}

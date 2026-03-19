@@ -10,6 +10,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/knowledge"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/patterns"
+	ur "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 func TestNewIntelligence(t *testing.T) {
@@ -327,6 +328,99 @@ func TestIntelligence_FormatContext_WithKnowledge(t *testing.T) {
 	// Should contain the knowledge context
 	if ctx == "" {
 		t.Error("Expected non-empty context with knowledge")
+	}
+}
+
+func TestIntelligence_FormatContext_IncludesCanonicalRecentChanges(t *testing.T) {
+	intel := NewIntelligence(IntelligenceConfig{})
+	changes := memory.NewChangeDetector(memory.ChangeDetectorConfig{MaxChanges: 10})
+	changes.DetectChanges([]memory.ResourceSnapshot{
+		{ID: "vm-300", Name: "fallback-vm", Type: "vm", Status: "running", SnapshotTime: time.Now()},
+	})
+	intel.SetSubsystems(nil, nil, nil, nil, nil, nil, changes, nil)
+
+	canonicalStore := ur.NewMemoryStore()
+	if err := canonicalStore.RecordChange(ur.ResourceChange{
+		ID:            "change-1",
+		ObservedAt:    time.Now().Add(-time.Hour),
+		ResourceID:    "vm-300",
+		Kind:          ur.ChangeConfigUpdate,
+		SourceType:    ur.SourcePulseDiff,
+		SourceAdapter: ur.AdapterOpsAgent,
+		Reason:        "canonical refresh",
+	}); err != nil {
+		t.Fatalf("record canonical change: %v", err)
+	}
+	intel.SetResourceTimelineStore(canonicalStore, "org-1")
+
+	ctx := intel.FormatContext("vm-300")
+	if !strings.Contains(ctx, "Recent Changes") {
+		t.Fatalf("expected recent changes section, got %q", ctx)
+	}
+	if !strings.Contains(ctx, "canonical refresh") {
+		t.Fatalf("expected canonical timeline entry, got %q", ctx)
+	}
+}
+
+func TestIntelligence_FormatContext_FallsBackToChangeDetector(t *testing.T) {
+	intel := NewIntelligence(IntelligenceConfig{})
+	changes := memory.NewChangeDetector(memory.ChangeDetectorConfig{MaxChanges: 10})
+	changes.DetectChanges([]memory.ResourceSnapshot{
+		{ID: "vm-301", Name: "fallback-vm", Type: "vm", Status: "running", SnapshotTime: time.Now()},
+	})
+	intel.SetSubsystems(nil, nil, nil, nil, nil, nil, changes, nil)
+
+	ctx := intel.FormatContext("vm-301")
+	if !strings.Contains(ctx, "Recent Changes") {
+		t.Fatalf("expected recent changes section, got %q", ctx)
+	}
+	if !strings.Contains(ctx, "fallback-vm") {
+		t.Fatalf("expected fallback change detector entry, got %q", ctx)
+	}
+}
+
+func TestIntelligence_FormatGlobalContext_IncludesCanonicalRecentChanges(t *testing.T) {
+	intel := NewIntelligence(IntelligenceConfig{})
+	canonicalStore := ur.NewMemoryStore()
+	if err := canonicalStore.RecordChange(ur.ResourceChange{
+		ID:            "change-1",
+		ObservedAt:    time.Now().Add(-time.Hour),
+		ResourceID:    "node-1",
+		Kind:          ur.ChangeRestart,
+		SourceType:    ur.SourcePlatformEvent,
+		SourceAdapter: ur.AdapterProxmox,
+		Reason:        "node restarted after maintenance",
+	}); err != nil {
+		t.Fatalf("record canonical change: %v", err)
+	}
+	intel.SetResourceTimelineStore(canonicalStore, "org-1")
+
+	ctx := intel.FormatGlobalContext()
+	if !strings.Contains(ctx, "Recent Changes Across Infrastructure") {
+		t.Fatalf("expected global recent changes section, got %q", ctx)
+	}
+	if !strings.Contains(ctx, "node-1") {
+		t.Fatalf("expected resource identifier in global timeline, got %q", ctx)
+	}
+	if !strings.Contains(ctx, "node restarted after maintenance") {
+		t.Fatalf("expected canonical global timeline entry, got %q", ctx)
+	}
+}
+
+func TestIntelligence_FormatGlobalContext_FallsBackToChangeDetector(t *testing.T) {
+	intel := NewIntelligence(IntelligenceConfig{})
+	changes := memory.NewChangeDetector(memory.ChangeDetectorConfig{MaxChanges: 10})
+	changes.DetectChanges([]memory.ResourceSnapshot{
+		{ID: "node-fallback", Name: "fallback-node", Type: "node", Status: "running", SnapshotTime: time.Now()},
+	})
+	intel.SetSubsystems(nil, nil, nil, nil, nil, nil, changes, nil)
+
+	ctx := intel.FormatGlobalContext()
+	if !strings.Contains(ctx, "Recent Changes Across Infrastructure") {
+		t.Fatalf("expected global recent changes section, got %q", ctx)
+	}
+	if !strings.Contains(ctx, "fallback-node") {
+		t.Fatalf("expected fallback global timeline entry, got %q", ctx)
 	}
 }
 

@@ -159,3 +159,7 @@ the same change source of truth.
 The unified intelligence summary should follow the same rule when it counts
 recent activity, so the shared AI summary and the Patrol seed context stay
 aligned with the canonical timeline.
+The shared AI resource and infrastructure prompt contexts should also surface
+the same canonical recent changes section before any patrol-local fallback so
+the model sees the same timeline entries that power the resource API and
+intelligence summary counts.
