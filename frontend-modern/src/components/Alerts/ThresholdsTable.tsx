@@ -16,6 +16,7 @@ import Mail from 'lucide-solid/icons/mail';
 import Users from 'lucide-solid/icons/users';
 import Boxes from 'lucide-solid/icons/boxes';
 import { unwrap } from 'solid-js/store';
+import { requiresGovernedResourceDisplay } from '@/types/resource';
 import type { Resource } from '@/types/resource';
 import {
   getAgentDiscoveryResourceId,
@@ -88,10 +89,8 @@ import {
   DEFAULT_BACKUP_FRESH_HOURS,
   DEFAULT_BACKUP_STALE_HOURS,
 } from '@/features/alerts/thresholds/constants';
-import {
-  normalizeDockerIgnoredInput,
-  formatMetricValue,
-} from '@/features/alerts/thresholds/helpers';
+import { getAlertResourceDisplayLabel } from '@/features/alerts/helpers';
+import { normalizeDockerIgnoredInput, formatMetricValue } from '@/features/alerts/thresholds/helpers';
 
 export function ThresholdsTable(props: ThresholdsTableProps) {
   const navigate = useNavigate();
@@ -327,6 +326,11 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
 
     return base;
   };
+  const getFriendlyAlertNodeName = (
+    value: string,
+    policy?: Resource['policy'],
+    clusterName?: string,
+  ): string => (requiresGovernedResourceDisplay(policy) ? value : getFriendlyNodeName(value, clusterName));
 
   const buildNodeHeaderMeta = (node: Resource) => {
     const data = pd(node);
@@ -334,8 +338,8 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     const isClusterMember =
       (data?.isClusterMember as boolean | undefined) ?? Boolean(node.clusterId);
 
-    const originalDisplayName = node.displayName?.trim() || node.name;
-    const friendlyName = getFriendlyNodeName(originalDisplayName, clusterName);
+    const originalDisplayName = getAlertResourceDisplayLabel(node);
+    const friendlyName = getFriendlyAlertNodeName(originalDisplayName, node.policy, clusterName);
 
     // Prioritize guestURL over host (same as NodeGroupHeader)
     const guestUrlValue =
@@ -404,7 +408,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       const hasNote = Boolean(note && note.trim().length > 0);
 
       const originalDisplayName = getPreferredResourceDisplayName(node);
-      const friendlyName = getFriendlyNodeName(originalDisplayName, clusterName);
+      const friendlyName = getFriendlyAlertNodeName(originalDisplayName, node.policy, clusterName);
       const rawName = node.name;
       const sanitizedName = friendlyName || originalDisplayName || rawName.split('.')[0] || rawName;
       // Build a best-effort management URL for the node
@@ -479,7 +483,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           );
         });
 
-      const displayName = getPreferredResourceDisplayName(agentResource);
+      const displayName = getAlertResourceDisplayLabel(agentResource);
       const status = agentResource.status;
       const data = pd(agentResource);
       const agentData = asRecord(data?.agent);
@@ -493,7 +497,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
         rawName: agentResource.identity?.hostname ?? agentResource.name,
         type: 'agent' as const,
         resourceType: 'Agent',
-        node: agentResource.identity?.hostname ?? agentResource.name,
+        node: displayName,
         instance:
           asString(agentData?.platform) ||
           asString(agentData?.osName) ||
@@ -567,11 +571,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
 
     // Extract disks from all agents
     (props.agents ?? []).forEach((agentResource) => {
-      const agentDisplayName =
-        agentResource.displayName?.trim() ||
-        agentResource.identity?.hostname ||
-        agentResource.name ||
-        agentResource.id;
+      const agentDisplayName = getAlertResourceDisplayLabel(agentResource);
       const agentIdCandidates = hostOverrideIdCandidates(agentResource);
       const agentIdForActions = hostActionId(agentResource);
       const platformData = pd(agentResource);
@@ -696,7 +696,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     const hosts: TableResource[] = (props.dockerHosts ?? []).map((host) => {
       const idCandidates = dockerHostOverrideIdCandidates(host);
       const originalName = getPreferredResourceDisplayName(host);
-      const friendlyName = getFriendlyNodeName(originalName);
+      const friendlyName = getFriendlyAlertNodeName(originalName, host.policy);
       const override = findOverrideByCandidates(overridesMap, idCandidates);
       const resourceId = override?.id || idCandidates[0] || host.id;
       const disableConnectivity = override?.disableConnectivity || false;
@@ -727,7 +727,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       .filter((override) => override.type === 'dockerHost' && !seen.has(override.id))
       .forEach((override) => {
         const originalName = override.name || override.id;
-        const friendlyName = getFriendlyNodeName(originalName);
+        const friendlyName = originalName;
         hosts.push({
           id: override.id,
           name: friendlyName,
@@ -783,7 +783,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       const dockerHostIds = dockerHostOverrideIdCandidates(host);
       const dockerHostIdForActions = dockerHostIds[0] || host.id;
       const hostLabel = getPreferredResourceDisplayName(host);
-      const friendlyHostName = getFriendlyNodeName(hostLabel);
+      const friendlyHostName = getFriendlyAlertNodeName(hostLabel, host.policy);
       const hostLabelLower = hostLabel.toLowerCase();
       const friendlyHostNameLower = friendlyHostName.toLowerCase();
 
@@ -818,7 +818,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           overrideSeverity !== undefined ||
           false;
 
-        const containerName = container.name?.replace(/^\/+/, '') || shortId;
+        const containerName = getAlertResourceDisplayLabel(container, shortId);
         const containerNameLower = containerName.toLowerCase();
         const image = (pd(container)?.image as string) ?? '';
         const imageLower = image.toLowerCase();
@@ -919,7 +919,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     const meta: Record<string, GroupHeaderMeta> = {};
     (props.dockerHosts ?? []).forEach((host) => {
       const originalName = getPreferredResourceDisplayName(host);
-      const friendlyName = getFriendlyNodeName(originalName);
+      const friendlyName = getFriendlyAlertNodeName(originalName, host.policy);
       const headerMeta: GroupHeaderMeta = {
         displayName: friendlyName,
         rawName: originalName,

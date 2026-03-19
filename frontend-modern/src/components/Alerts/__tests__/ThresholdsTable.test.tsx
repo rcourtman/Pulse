@@ -24,6 +24,7 @@ vi.mock('../ResourceTable', () => ({
     title?: string;
     resources?: any[];
     groupedResources?: Record<string, any[]>;
+    groupHeaderMeta?: Record<string, { displayName?: string; rawName?: string }>;
     formatMetricValue?: (metric: string, value: number | undefined) => string;
     onToggleDisabled?: (id: string, forceState?: boolean) => void;
     onToggleNodeConnectivity?: (id: string, forceState?: boolean) => void;
@@ -32,35 +33,48 @@ vi.mock('../ResourceTable', () => ({
       props.resources ||
       (props.groupedResources ? Object.values(props.groupedResources).flat() : []);
     const title = props.title ?? 'unnamed';
+    const renderRow = (r: any) => (
+      <div data-testid={`resource-row-${r.id}`}>
+        <div data-testid={`resource-name-${r.id}`}>{r.name}</div>
+        {r.node ? <div data-testid={`resource-node-${r.id}`}>{r.node}</div> : null}
+        <div data-testid={`resource-cpu-${r.id}`}>
+          {props.formatMetricValue && r.thresholds
+            ? props.formatMetricValue('cpu', r.thresholds.cpu)
+            : (r.thresholds?.cpu ?? '')}
+        </div>
+        {props.onToggleDisabled ? (
+          <button
+            data-testid={`toggle-disabled-${r.id}`}
+            onClick={() => props.onToggleDisabled?.(r.id, true)}
+          >
+            Disable
+          </button>
+        ) : null}
+        {props.onToggleNodeConnectivity ? (
+          <button
+            data-testid={`toggle-connectivity-${r.id}`}
+            onClick={() => props.onToggleNodeConnectivity?.(r.id, true)}
+          >
+            Disable connectivity
+          </button>
+        ) : null}
+      </div>
+    );
     return (
       <div data-testid={`resource-table-${title}`}>
         <div data-testid={`resource-count-${title}`}>{resources.length}</div>
-        {resources.map((r: any) => (
-          <div data-testid={`resource-row-${r.id}`}>
-            <div data-testid={`resource-name-${r.id}`}>{r.name}</div>
-            <div data-testid={`resource-cpu-${r.id}`}>
-              {props.formatMetricValue && r.thresholds
-                ? props.formatMetricValue('cpu', r.thresholds.cpu)
-                : (r.thresholds?.cpu ?? '')}
-            </div>
-            {props.onToggleDisabled ? (
-              <button
-                data-testid={`toggle-disabled-${r.id}`}
-                onClick={() => props.onToggleDisabled?.(r.id, true)}
-              >
-                Disable
-              </button>
-            ) : null}
-            {props.onToggleNodeConnectivity ? (
-              <button
-                data-testid={`toggle-connectivity-${r.id}`}
-                onClick={() => props.onToggleNodeConnectivity?.(r.id, true)}
-              >
-                Disable connectivity
-              </button>
-            ) : null}
-          </div>
-        ))}
+        {props.groupedResources
+          ? Object.entries(props.groupedResources).map(([group, groupResources], index) => (
+              <div data-testid={`resource-group-${index}`}>
+                <div data-testid={`group-header-${index}`}>
+                  {props.groupHeaderMeta?.[group]?.displayName ||
+                    props.groupHeaderMeta?.[group]?.rawName ||
+                    group}
+                </div>
+                {groupResources.map(renderRow)}
+              </div>
+            ))
+          : resources.map(renderRow)}
       </div>
     );
   },
@@ -387,6 +401,42 @@ describe('ThresholdsTable Resource Rendering', () => {
     expect(screen.getByTestId('resource-name-guest2')).not.toHaveTextContent('secret-vm-2');
   });
 
+  it('renders governed guest groups with the policy-aware node header label', async () => {
+    setPathname('/alerts/thresholds/proxmox');
+    const node = {
+      id: 'node-governed',
+      name: 'secret-node',
+      displayName: 'Secret Node',
+      status: 'online',
+      policy: {
+        sensitivity: 'restricted',
+        routing: { scope: 'local-only', redact: ['hostname'] },
+      },
+      aiSafeSummary: 'redacted by policy',
+    } as any;
+    const guest = {
+      id: 'guest-grouped',
+      name: 'vm-grouped',
+      vmid: 101,
+      status: 'running',
+      platformData: {
+        node: 'secret-node',
+        instance: 'secret-node',
+      },
+    } as any;
+
+    render(() => (
+      <ThresholdsTable {...(baseProps() as any)} nodes={[node]} allGuests={() => [guest]} />
+    ));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('group-header-0')).toBeInTheDocument();
+    });
+
+    expect(screen.getByTestId('group-header-0')).toHaveTextContent('redacted by policy');
+    expect(screen.getByTestId('group-header-0')).not.toHaveTextContent('secret-node');
+  });
+
   it('renders governed storage with the policy-aware display label', async () => {
     setPathname('/alerts/thresholds/proxmox');
     const storage = {
@@ -410,6 +460,93 @@ describe('ThresholdsTable Resource Rendering', () => {
 
     expect(screen.getByTestId('resource-name-storage1')).toHaveTextContent('redacted by policy');
     expect(screen.getByTestId('resource-name-storage1')).not.toHaveTextContent('secret-datastore');
+  });
+
+  it('renders governed docker containers with the policy-aware display label', async () => {
+    setPathname('/alerts/thresholds/containers');
+    const dockerHost = {
+      id: 'docker-host-1',
+      type: 'docker-host',
+      name: 'docker-parent',
+      displayName: 'Docker Parent',
+      platformId: 'docker-platform-parent',
+      platformType: 'docker',
+      sourceType: 'agent',
+      status: 'online',
+      lastSeen: 789,
+    } as any;
+    const container = {
+      id: 'container-governed',
+      parentId: 'docker-host-1',
+      type: 'app-container',
+      name: '/secret-nginx',
+      displayName: 'Secret Nginx',
+      platformId: 'docker-platform-parent',
+      platformType: 'docker',
+      sourceType: 'agent',
+      status: 'running',
+      lastSeen: 789,
+      policy: {
+        sensitivity: 'restricted',
+        routing: { scope: 'local-only', redact: ['hostname'] },
+      },
+      aiSafeSummary: 'redacted by policy',
+    } as any;
+
+    render(() => (
+      <ThresholdsTable
+        {...(baseProps() as any)}
+        dockerHosts={[dockerHost]}
+        allResources={[container]}
+      />
+    ));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('resource-name-docker:docker-host-1/container-governed')).toBeTruthy();
+    });
+
+    expect(
+      screen.getByTestId('resource-name-docker:docker-host-1/container-governed'),
+    ).toHaveTextContent('redacted by policy');
+    expect(
+      screen.getByTestId('resource-name-docker:docker-host-1/container-governed'),
+    ).not.toHaveTextContent('secret-nginx');
+  });
+
+  it('renders governed agent disk node labels with the policy-aware display label', async () => {
+    setPathname('/alerts/thresholds/agents');
+    const host = {
+      id: 'agent-governed',
+      type: 'agent',
+      name: 'secret-host',
+      displayName: 'Secret Host',
+      status: 'online',
+      lastSeen: 123,
+      memory: { total: 100, used: 50, free: 50, usage: 50 },
+      platformData: {
+        agent: {
+          disks: [{ mountpoint: '/var/lib', type: 'ext4' }],
+        },
+      },
+      policy: {
+        sensitivity: 'restricted',
+        routing: { scope: 'local-only', redact: ['hostname'] },
+      },
+      aiSafeSummary: 'redacted by policy',
+    } as any;
+
+    render(() => <ThresholdsTable {...(baseProps() as any)} agents={[host]} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('resource-node-agent:agent-governed/disk:var-lib')).toBeTruthy();
+    });
+
+    expect(screen.getByTestId('resource-node-agent:agent-governed/disk:var-lib')).toHaveTextContent(
+      'redacted by policy',
+    );
+    expect(
+      screen.getByTestId('resource-node-agent:agent-governed/disk:var-lib'),
+    ).not.toHaveTextContent('secret-host');
   });
 });
 

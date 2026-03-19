@@ -159,6 +159,14 @@ Active alert card state and action-button presentation must also route through
 feature-local alert card styling inside
 `frontend-modern/src/features/alerts/OverviewTab.tsx`.
 
+Alert resource display labels used by the thresholds editor and alerts page
+must now route through the shared helper in
+`frontend-modern/src/features/alerts/helpers.ts` instead of rebuilding
+resource display-name fallback chains inline. Governed resources must preserve
+their canonical policy-aware label across grouped node headers, docker host
+grouping, and saved override rows rather than collapsing back to raw names or
+friendly-name truncation.
+
 Shared search inputs must now keep their forwarded keyboard, blur, and clear
 handlers as explicit callable functions instead of relying on loose Solid
 event-handler unions. Shared search primitives still need to accept the real

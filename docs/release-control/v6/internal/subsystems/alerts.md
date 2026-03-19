@@ -103,9 +103,10 @@ presentation now also route through
 `frontend-modern/src/utils/alertIncidentPresentation.ts` instead of remaining
 duplicated inline across the alerts page and overview timeline surfaces.
 
-Alert resource tables now route resource labels and row action labels through
-the shared policy-aware resource identity helper so governed resources do not
-fall back to raw names inside the alerts surface.
+Alert resource tables, grouped node headers, and alert override reconstruction
+now route resource-backed names through the shared policy-aware alerts helper
+so governed resources do not fall back to raw names when the thresholds editor
+rebuilds, saves, or re-renders override rows.
 Alert threshold tables now route their visible resource row labels, search
 labels, and persisted override display names through the same shared helper
 so governed agent, guest, and storage rows do not leak raw names when the

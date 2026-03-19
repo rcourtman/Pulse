@@ -15,6 +15,7 @@ import {
   createDefaultQuietHours,
   fallbackMaxAlertsPerHour,
   extractTriggerValues,
+  getAlertResourceDisplayLabel,
   getTriggerValue,
   normalizeEmailConfigFromAPI,
   normalizeMetricDelayMap,
@@ -43,7 +44,7 @@ import {
   getAlertQuietSuppressCheckboxClass,
 } from '@/utils/alertSchedulePresentation';
 import type { RawOverrideConfig } from '@/types/alerts';
-import type { ResourceType } from '@/types/resource';
+import type { Resource, ResourceType } from '@/types/resource';
 
 describe('normalizeMetricDelayMap', () => {
   it('returns empty object when input is nullish', () => {
@@ -90,6 +91,37 @@ describe('normalizeMetricDelayMap', () => {
     });
 
     expect(result).toEqual({});
+  });
+});
+
+describe('alert resource display labels', () => {
+  it('uses the governed aiSafeSummary when policy requires redaction', () => {
+    const resource = {
+      id: 'resource-1',
+      name: 'secret-host',
+      displayName: 'Secret Host',
+      type: 'agent',
+      policy: {
+        sensitivity: 'restricted',
+        routing: {
+          scope: 'local-only',
+          redact: ['hostname'],
+        },
+      },
+      aiSafeSummary: 'redacted by policy',
+    } as unknown as Resource;
+
+    expect(getAlertResourceDisplayLabel(resource)).toBe('redacted by policy');
+  });
+
+  it('falls back to the provided alert-specific fallback when needed', () => {
+    const resource = {
+      id: 'docker:agent-1/container-abc123',
+      name: '',
+      type: 'app-container',
+    } as unknown as Resource;
+
+    expect(getAlertResourceDisplayLabel(resource, 'abc123')).toBe('abc123');
   });
 });
 

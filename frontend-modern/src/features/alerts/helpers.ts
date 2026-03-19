@@ -2,6 +2,7 @@ import type { EmailConfig } from '@/api/notifications';
 import type { Resource, ResourceType } from '@/types/resource';
 import type { RawOverrideConfig, HysteresisThreshold } from '@/types/alerts';
 import { getResourceTypeLabel } from '@/utils/resourceTypePresentation';
+import { getPreferredResourceDisplayName } from '@/utils/resourceIdentity';
 import {
   MAX_ALERTS_MIN,
   MAX_ALERTS_MAX,
@@ -330,3 +331,12 @@ export const guessNumericId = (value: string): number => {
   const match = value.match(/(\d+)\s*$/);
   return match ? parseInt(match[1], 10) : 0;
 };
+
+export const getAlertResourceDisplayLabel = (resource: Resource, fallback?: string): string =>
+  (() => {
+    const preferred = getPreferredResourceDisplayName(resource);
+    if (preferred && preferred !== resource.id) {
+      return preferred;
+    }
+    return fallback || preferred || resource.id;
+  })();

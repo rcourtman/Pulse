@@ -307,6 +307,7 @@ import {
   alertTypeDisplayLabel,
   platformData,
   guessNumericId,
+  getAlertResourceDisplayLabel,
   DEFAULT_DELAY_SECONDS,
 } from '@/features/alerts/helpers';
 
@@ -690,11 +691,7 @@ export function Alerts() {
         if (dockerHost) {
           overridesList.push({
             id: key,
-            name:
-              dockerHost.displayName?.trim() ||
-              dockerHost.identity?.hostname ||
-              dockerHost.name ||
-              dockerHost.id,
+            name: getAlertResourceDisplayLabel(dockerHost),
             type: 'dockerHost',
             resourceType: 'Container Runtime',
             disableConnectivity: thresholds.disableConnectivity || false,
@@ -707,14 +704,14 @@ export function Alerts() {
         const dockerContainer = dockerContainerMap.get(key);
         if (dockerContainer) {
           const { host, container, containerShortId } = dockerContainer;
-          const containerName = container.name?.replace(/^\/+/, '') || containerShortId;
+          const containerName = getAlertResourceDisplayLabel(container, containerShortId);
           overridesList.push({
             id: key,
             name: containerName,
             type: 'dockerContainer',
             resourceType: 'Container',
-            node: host.identity?.hostname ?? host.name,
-            instance: host.displayName,
+            node: getAlertResourceDisplayLabel(host),
+            instance: getAlertResourceDisplayLabel(host),
             disabled: thresholds.disabled || false,
             disableConnectivity: thresholds.disableConnectivity || false,
             poweredOffSeverity:
@@ -776,7 +773,7 @@ export function Alerts() {
             name: displayName,
             type: 'agentDisk',
             resourceType: 'Agent Disk',
-            node: agent?.displayName?.trim() || agent?.identity?.hostname || agent?.name || agentId,
+            node: agent ? getAlertResourceDisplayLabel(agent) : agentId,
             disabled: thresholds.disabled || false,
             thresholds: extractTriggerValues(thresholds),
           });
@@ -786,11 +783,7 @@ export function Alerts() {
         // Agent override stored by agent ID
         const agentResource = agentMap.get(key);
         if (agentResource) {
-          const displayName =
-            agentResource.displayName?.trim() ||
-            agentResource.identity?.hostname ||
-            agentResource.name ||
-            agentResource.id;
+          const displayName = getAlertResourceDisplayLabel(agentResource);
           const data = pd(agentResource);
           const agent = asRecord(data?.agent);
 
@@ -799,7 +792,7 @@ export function Alerts() {
             name: displayName,
             type: 'agent',
             resourceType: 'Agent',
-            node: agentResource.identity?.hostname ?? agentResource.name,
+            node: displayName,
             instance:
               asString(agent?.platform) ||
               asString(agent?.osName) ||
@@ -832,7 +825,7 @@ export function Alerts() {
           if (node) {
             overridesList.push({
               id: key,
-              name: node.name,
+              name: getAlertResourceDisplayLabel(node),
               type: 'agent',
               resourceType: 'Agent',
               disableConnectivity: thresholds.disableConnectivity || false,
@@ -845,7 +838,7 @@ export function Alerts() {
               const coords = storageCoords(storage);
               overridesList.push({
                 id: key,
-                name: storage.name,
+                name: getAlertResourceDisplayLabel(storage),
                 type: 'storage',
                 resourceType: 'Storage',
                 node: coords.node,
@@ -862,7 +855,7 @@ export function Alerts() {
                 const data = pd(guest);
                 overridesList.push({
                   id: key,
-                  name: guest.name,
+                  name: getAlertResourceDisplayLabel(guest),
                   type: 'guest',
                   resourceType: guest.type === 'vm' ? 'VM' : 'Container',
                   vmid: (data?.vmid as number | undefined) ?? guessNumericId(guest.id),
