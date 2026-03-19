@@ -10,6 +10,7 @@ import {
   getActionableAgentIdFromResource,
   getActionableDockerRuntimeIdFromResource,
   getActionableKubernetesClusterIdFromResource,
+  getPreferredResourceKubernetesContext,
   getPlatformAgentRecord,
   getPlatformDataRecord,
 } from '@/utils/agentResources';
@@ -318,6 +319,8 @@ export const getPreferredResourceHostname = (resource: Resource): string | undef
   );
 };
 
+export { getPreferredResourceKubernetesContext };
+
 export const getPreferredResourceClusterName = (
   resource: ResourceClusterNameLike,
 ): string | undefined =>
@@ -331,18 +334,6 @@ export const getPreferredResourceClusterName = (
       asTrimmedString(resource.name)
     );
   })();
-
-export const getPreferredResourceKubernetesContext = (
-  resource: ResourceClusterNameLike,
-): string | undefined => {
-  const kubernetes = resource.kubernetes || resource.platformData?.kubernetes;
-  return (
-    asTrimmedString(kubernetes?.clusterName) ||
-    asTrimmedString(kubernetes?.context) ||
-    asTrimmedString(kubernetes?.clusterId) ||
-    asTrimmedString(resource.clusterId)
-  );
-};
 
 export const getPreferredResourceDisplayName = (resource: Resource): string =>
   requiresGovernedResourceDisplay(resource.policy)

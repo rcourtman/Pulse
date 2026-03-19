@@ -131,6 +131,19 @@ describe('agentResources', () => {
         }),
       ),
     ).toBe('cluster-1');
+
+    expect(
+      getActionableKubernetesClusterIdFromResource(
+        makeResource({
+          type: 'k8s-cluster',
+          kubernetes: {
+            clusterName: 'cluster-a',
+            context: 'cluster-context',
+            clusterId: 'cluster-a-id',
+          },
+        }),
+      ),
+    ).toBe('cluster-a');
   });
 
   it('detects docker workloads scope from explicit docker facets instead of source lists', () => {

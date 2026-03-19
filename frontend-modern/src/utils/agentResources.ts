@@ -19,6 +19,23 @@ const AGENT_PROFILE_ASSIGNABLE_TYPES = new Set<ResourceType>([
 const asRecord = (value: unknown): Record<string, unknown> | undefined =>
   value && typeof value === 'object' ? (value as Record<string, unknown>) : undefined;
 
+type KubernetesContextLike = {
+  clusterId?: string | null;
+  name?: string | null;
+  kubernetes?: {
+    clusterName?: string | null;
+    context?: string | null;
+    clusterId?: string | null;
+  } | null;
+  platformData?: {
+    kubernetes?: {
+      clusterName?: string | null;
+      context?: string | null;
+      clusterId?: string | null;
+    } | null;
+  } | null;
+};
+
 export const getPlatformDataRecord = (resource: Resource): Record<string, unknown> | undefined =>
   resource.platformData ? (resource.platformData as Record<string, unknown>) : undefined;
 
@@ -80,18 +97,27 @@ export const hasDockerWorkloadsScope = (resource: Resource): boolean => {
 export const getActionableKubernetesClusterIdFromResource = (
   resource: Resource,
 ): string | undefined => {
-  const platformData = getPlatformDataRecord(resource);
-  const kubernetes = asRecord(platformData?.kubernetes);
-
   if (resource.discoveryTarget?.resourceType === 'pod' && resource.discoveryTarget.resourceId) {
     return resource.discoveryTarget.resourceId;
   }
 
   return (
-    asTrimmedString(resource.kubernetes?.clusterId) ||
-    asTrimmedString(kubernetes?.clusterId) ||
-    asTrimmedString(platformData?.clusterId) ||
+    getPreferredResourceKubernetesContext(resource) ||
     (resource.type === 'k8s-cluster' ? resource.id : undefined)
+  );
+};
+
+export const getPreferredResourceKubernetesContext = (
+  resource: KubernetesContextLike,
+): string | undefined => {
+  return (
+    asTrimmedString(resource.kubernetes?.clusterName) ||
+    asTrimmedString(resource.kubernetes?.context) ||
+    asTrimmedString(resource.kubernetes?.clusterId) ||
+    asTrimmedString(resource.platformData?.kubernetes?.clusterName) ||
+    asTrimmedString(resource.platformData?.kubernetes?.context) ||
+    asTrimmedString(resource.platformData?.kubernetes?.clusterId) ||
+    asTrimmedString(resource.clusterId)
   );
 };
 

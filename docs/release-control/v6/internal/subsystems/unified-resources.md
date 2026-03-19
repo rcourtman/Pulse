@@ -297,9 +297,9 @@ The drawer's discovery mapper also reuses that helper for pod fallback agent
 IDs, so the resource-detail path and the dashboard path stay aligned on the
 same cluster-name source of truth.
 The dashboard workload projection and workloads-link route helpers also share
-the same Kubernetes context prefix helper, so pod grouping and cluster
-navigation keep the same cluster-context prefix before any surface-specific
-display fallback is applied.
+the same Kubernetes context prefix helper in the shared agent-resource
+layer, so pod grouping and cluster navigation keep the same cluster-context
+prefix before any surface-specific display fallback is applied.
 The unified-resource projection also reuses that same prefix helper for
 projected Kubernetes `clusterId`, so the shared resource store stays aligned
 with the dashboard and detail surfaces on the same canonical cluster-context
