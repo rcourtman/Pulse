@@ -132,9 +132,9 @@ The same detail drawer also uses that resolver for correlation dependency and
 dependent chips, so the investigation path does not fall back to raw IDs in
 the drawer while the AI page keeps its broader no-catalog fallback.
 The shared infrastructure selector search path now also routes through that
-same policy-aware display contract, so governed resources do not reappear via
-raw-name search candidates while the selector stays on the same hot-path
-budget.
+same preferred resource display contract, so governed resources do not
+reappear via raw-name search candidates while the selector stays on the same
+hot-path budget.
 The aggregate `/api/charts/workloads-summary` endpoint now also has its own
 explicit API p95 budget constant, aligned with the per-workload charts budget,
 and `internal/api/slo_bench_test.go` must fail if that aggregate budget or its

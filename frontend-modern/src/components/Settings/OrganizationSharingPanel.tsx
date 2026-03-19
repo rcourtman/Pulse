@@ -48,7 +48,8 @@ import {
   ORGANIZATION_SETTINGS_UNAVAILABLE_CLASS,
   ORGANIZATION_SETTINGS_UNAVAILABLE_MESSAGE,
 } from '@/utils/organizationSettingsPresentation';
-import { useResources, getDisplayName } from '@/hooks/useResources';
+import { useResources } from '@/hooks/useResources';
+import { getPreferredResourceDisplayName } from '@/utils/resourceIdentity';
 import Share2 from 'lucide-solid/icons/share-2';
 import Trash2 from 'lucide-solid/icons/trash-2';
 import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
@@ -99,7 +100,7 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
       .map((resource) => ({
         id: resource.id,
         type: resource.type,
-        name: (getDisplayName(resource) || resource.id).trim(),
+        name: (getPreferredResourceDisplayName(resource) || resource.id).trim(),
       }))
       .sort((left, right) => left.name.localeCompare(right.name));
   });

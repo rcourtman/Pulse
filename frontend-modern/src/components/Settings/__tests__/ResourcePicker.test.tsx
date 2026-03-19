@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
-import { getDisplayName as getResourceDisplayName, type Resource } from '@/types/resource';
+import type { Resource } from '@/types/resource';
 import { ResourcePicker, type SelectedResource } from '../ResourcePicker';
 
 let mockResources: Resource[] = [];
@@ -11,7 +11,6 @@ vi.mock('@/hooks/useResources', () => ({
   useResources: () => ({
     resources: () => mockResources,
   }),
-  getDisplayName: (resource: Resource) => getResourceDisplayName(resource),
 }));
 
 vi.mock('@/utils/toast', () => ({

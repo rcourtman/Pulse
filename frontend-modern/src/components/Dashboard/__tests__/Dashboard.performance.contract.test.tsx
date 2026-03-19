@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, waitFor } from '@solidjs/testing-library';
 import { createSignal, onCleanup, onMount } from 'solid-js';
+import type { Resource } from '@/types/resource';
 import { Dashboard } from '../Dashboard';
 import dashboardSource from '../Dashboard.tsx?raw';
 import {
@@ -9,6 +10,7 @@ import {
   groupWorkloads,
   computeWorkloadStats,
 } from '../workloadSelectors';
+import { filterResources } from '@/components/Infrastructure/infrastructureSelectors';
 import { getCanonicalWorkloadId, normalizeWorkloadViewModeParam } from '@/utils/workloads';
 
 // Stub ResizeObserver for jsdom
@@ -186,6 +188,24 @@ const makeGuest = (i: number, overrides?: Record<string, unknown>) => ({
   ...overrides,
 });
 
+const makeResource = (overrides?: Partial<Resource>): Resource => ({
+  id: 'resource-1',
+  type: 'vm',
+  name: 'secret-host-1',
+  displayName: 'secret-host-1',
+  platformId: 'platform-1',
+  platformType: 'proxmox-pve',
+  sourceType: 'api',
+  status: 'running',
+  lastSeen: Date.now(),
+  policy: {
+    sensitivity: 'restricted',
+    routing: { scope: 'local-only', redact: ['hostname'] },
+  },
+  aiSafeSummary: 'Production Host',
+  ...overrides,
+});
+
 const PROFILES = {
   S: 400,
   M: 1500,
@@ -265,6 +285,16 @@ describe('Dashboard performance contract', () => {
       await waitFor(() => {
         expect(getGuestRowCount(container)).toBe(PROFILES.S);
       });
+    });
+
+    it('keeps governed resource search aligned with the preferred display label', () => {
+      const resources = [makeResource()];
+
+      const filtered = filterResources(resources, new Set(), new Set(), ['Production']);
+      const rawFiltered = filterResources(resources, new Set(), new Set(), ['secret-host']);
+
+      expect(filtered).toHaveLength(1);
+      expect(rawFiltered).toHaveLength(0);
     });
   });
 

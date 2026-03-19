@@ -502,16 +502,6 @@ export interface ResourceFilter {
 }
 
 /**
- * Helper to get effective display name
- */
-export function getDisplayName(r: Resource): string {
-  if (requiresGovernedResourceDisplay(r.policy)) {
-    return r.aiSafeSummary?.trim() || 'redacted by policy';
-  }
-  return r.displayName || r.name;
-}
-
-/**
  * Helper to get CPU percentage
  */
 export function getCpuPercent(r: Resource): number {

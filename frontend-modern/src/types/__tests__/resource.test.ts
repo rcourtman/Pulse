@@ -6,13 +6,13 @@ import {
   isInfrastructure,
   isWorkload,
   isStorage,
-  getDisplayName,
   getCpuPercent,
   getMemoryPercent,
   getDiskPercent,
   type Resource,
   type ResourceType,
 } from '@/types/resource';
+import { getPreferredResourceDisplayName } from '@/utils/resourceIdentity';
 
 // Helper to create a minimal resource for testing
 function createResource(overrides: Partial<Resource> = {}): Resource {
@@ -91,22 +91,22 @@ describe('Resource Type Guards', () => {
 });
 
 describe('Resource Helper Functions', () => {
-  describe('getDisplayName', () => {
+  describe('getPreferredResourceDisplayName', () => {
     it('returns displayName when set', () => {
       const resource = createResource({ name: 'machine-1', displayName: 'Production Server' });
-      expect(getDisplayName(resource)).toBe('Production Server');
+      expect(getPreferredResourceDisplayName(resource)).toBe('Production Server');
     });
 
     it('returns name when displayName is empty', () => {
       const resource = createResource({ name: 'machine-1', displayName: '' });
-      expect(getDisplayName(resource)).toBe('machine-1');
+      expect(getPreferredResourceDisplayName(resource)).toBe('machine-1');
     });
 
     it('returns name when displayName is undefined', () => {
       const resource = createResource({ name: 'machine-1' });
       // Force displayName to be falsy
       (resource as any).displayName = undefined;
-      expect(getDisplayName(resource)).toBe('machine-1');
+      expect(getPreferredResourceDisplayName(resource)).toBe('machine-1');
     });
 
     it('returns the safe label for governed resources', () => {
@@ -120,7 +120,7 @@ describe('Resource Helper Functions', () => {
         aiSafeSummary: 'Production VM',
       } as Partial<Resource>);
 
-      expect(getDisplayName(resource)).toBe('Production VM');
+      expect(getPreferredResourceDisplayName(resource)).toBe('Production VM');
     });
 
     it('falls back to the redacted policy label when the safe summary is missing', () => {
@@ -133,7 +133,7 @@ describe('Resource Helper Functions', () => {
         },
       } as Partial<Resource>);
 
-      expect(getDisplayName(resource)).toBe('redacted by policy');
+      expect(getPreferredResourceDisplayName(resource)).toBe('redacted by policy');
     });
   });
 

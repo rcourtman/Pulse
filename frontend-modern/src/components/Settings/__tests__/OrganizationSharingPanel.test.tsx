@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
-import { getDisplayName as getResourceDisplayName, type Resource } from '@/types/resource';
+import type { Resource } from '@/types/resource';
 import { OrganizationSharingPanel } from '../OrganizationSharingPanel';
 import organizationSharingPanelSource from '../OrganizationSharingPanel.tsx?raw';
 
@@ -36,7 +36,6 @@ vi.mock('@/hooks/useResources', () => ({
   useResources: () => ({
     resources: () => mockResources,
   }),
-  getDisplayName: (resource: Resource) => getResourceDisplayName(resource),
 }));
 
 vi.mock('@/stores/license', () => ({
@@ -178,7 +177,7 @@ describe('OrganizationSharingPanel', () => {
     const quickPick = screen.getByLabelText('Quick Pick Resource') as HTMLSelectElement;
     const labels = Array.from(quickPick.options).map((option) => option.textContent?.trim());
 
-    expect(labels).toEqual(['Select resource', 'Alpha VM (vm)', 'host-1 (agent)', 'Zulu VM (vm)']);
+    expect(labels).toEqual(['Select resource', 'Alpha VM (vm)', 'pve-1 (agent)', 'Zulu VM (vm)']);
     expect(labels).not.toContain('Hidden (vm)');
   });
 

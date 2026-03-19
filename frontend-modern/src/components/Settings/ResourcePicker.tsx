@@ -5,8 +5,9 @@ import XSquare from 'lucide-solid/icons/x-square';
 import { formControl } from '@/components/shared/Form';
 import { SearchField } from '@/components/shared/SearchField';
 import { StatusDot } from '@/components/shared/StatusDot';
-import { useResources, getDisplayName } from '@/hooks/useResources';
+import { useResources } from '@/hooks/useResources';
 import type { Resource, ResourceType } from '@/types/resource';
+import { getPreferredResourceDisplayName } from '@/utils/resourceIdentity';
 import {
   getResourcePickerEmptyState,
   getResourcePickerTypeFilterLabel,
@@ -55,7 +56,7 @@ export function ResourcePicker(props: ResourcePickerProps) {
     const searchTerm = search().toLowerCase().trim();
     if (searchTerm) {
       result = result.filter((r) => {
-        const name = getDisplayName(r).toLowerCase();
+        const name = getPreferredResourceDisplayName(r).toLowerCase();
         const id = r.id.toLowerCase();
         return name.includes(searchTerm) || id.includes(searchTerm);
       });
@@ -72,7 +73,9 @@ export function ResourcePicker(props: ResourcePickerProps) {
       const aOrder = reportableResourceTypeSortOrder(a.type);
       const bOrder = reportableResourceTypeSortOrder(b.type);
       if (aOrder !== bOrder) return aOrder - bOrder;
-      return getDisplayName(a).localeCompare(getDisplayName(b));
+      return getPreferredResourceDisplayName(a).localeCompare(
+        getPreferredResourceDisplayName(b),
+      );
     });
 
     return result;
@@ -96,7 +99,7 @@ export function ResourcePicker(props: ResourcePickerProps) {
         {
           id: resource.id,
           type: resource.type,
-          name: getDisplayName(resource),
+          name: getPreferredResourceDisplayName(resource),
         },
       ]);
     }
@@ -110,7 +113,7 @@ export function ResourcePicker(props: ResourcePickerProps) {
       .map((r) => ({
         id: r.id,
         type: r.type,
-        name: getDisplayName(r),
+        name: getPreferredResourceDisplayName(r),
       }));
 
     const newSelection = [...current, ...toAdd];
@@ -245,7 +248,7 @@ export function ResourcePicker(props: ResourcePickerProps) {
                       {/* Name and ID */}
                       <div class="flex-1 min-w-0">
                         <div class="text-sm text-white sm:truncate break-words">
-                          {getDisplayName(resource)}
+                          {getPreferredResourceDisplayName(resource)}
                         </div>
                         <div class="text-xs text-slate-500 sm:truncate break-all">
                           {resource.id}

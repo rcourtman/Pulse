@@ -1,5 +1,6 @@
 import type { Resource } from '@/types/resource';
-import { getCpuPercent, getDiskPercent, getDisplayName, getMemoryPercent } from '@/types/resource';
+import { getCpuPercent, getDiskPercent, getMemoryPercent } from '@/types/resource';
+import { getPreferredResourceDisplayName } from '@/utils/resourceIdentity';
 import { normalizeSourcePlatformKey, type KnownSourcePlatform } from '@/utils/sourcePlatforms';
 import { getCanonicalStatusLabel, STATUS_SORT_ORDER } from '@/utils/status';
 
@@ -68,7 +69,7 @@ const buildIODistribution = (values: number[]): IODistributionStats => {
 const getSortValue = (resource: Resource, key: string): number | string | null => {
   switch (key) {
     case 'name':
-      return getDisplayName(resource);
+      return getPreferredResourceDisplayName(resource);
     case 'uptime':
       return resource.uptime ?? 0;
     case 'cpu':
@@ -94,7 +95,7 @@ const defaultComparison = (a: Resource, b: Resource) => {
   const aOnline = isResourceOnline(a);
   const bOnline = isResourceOnline(b);
   if (aOnline !== bOnline) return aOnline ? -1 : 1;
-  return getDisplayName(a).localeCompare(getDisplayName(b));
+  return getPreferredResourceDisplayName(a).localeCompare(getPreferredResourceDisplayName(b));
 };
 
 const compareValues = (valueA: number | string | null, valueB: number | string | null) => {
@@ -130,7 +131,7 @@ export const matchesSearch = (resource: Resource, term: string): boolean => {
   if (!term) return true;
   const normalizedTerm = term.toLowerCase();
   const candidates: string[] = [
-    getDisplayName(resource),
+    getPreferredResourceDisplayName(resource),
     resource.id,
     resource.identity?.hostname ?? '',
     ...(resource.identity?.ips ?? []),

@@ -34,11 +34,11 @@ import type {
 import {
   isInfrastructure,
   isWorkload,
-  getDisplayName,
   getCpuPercent,
   getMemoryPercent,
   getDiskPercent,
 } from '@/types/resource';
+import { getPreferredResourceDisplayName } from '@/utils/resourceIdentity';
 type ResourceStoreLike = Pick<ReturnType<typeof getGlobalWebSocketStore>, 'state'>;
 
 export interface UseResourcesReturn {
@@ -204,7 +204,7 @@ export function useResources(storeOverride?: ResourceStoreLike): UseResourcesRet
     if (filter.search && filter.search.trim()) {
       const term = filter.search.toLowerCase().trim();
       result = result.filter((r) => {
-        const name = getDisplayName(r).toLowerCase();
+        const name = getPreferredResourceDisplayName(r).toLowerCase();
         const id = r.id.toLowerCase();
         return name.includes(term) || id.includes(term);
       });
@@ -262,7 +262,6 @@ export type { Resource, ResourceType, PlatformType, ResourceStatus, ResourceFilt
 export {
   isInfrastructure,
   isWorkload,
-  getDisplayName,
   getCpuPercent,
   getMemoryPercent,
   getDiskPercent,
