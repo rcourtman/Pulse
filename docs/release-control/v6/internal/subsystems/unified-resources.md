@@ -403,6 +403,10 @@ The unified resource table now also supplies a canonical resource-label
 resolver into the resource drawer, so related-resource timeline chips can use
 the same governed display labels as the table without adding a new
 detail-local lookup path.
+The resource drawer now also passes that same resolver into the shared
+correlation summary, so dependency and dependent chips stay on governed
+labels in the investigation path while the AI summary page keeps its broader
+raw-ID fallback.
 The same timeline and facet-bundle reads now also accept governed `kind` and
 `sourceType` filters, plus a governed `sourceAdapter` filter for adapter-level
 provenance drill-down, so history can narrow by canonical change class and

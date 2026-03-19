@@ -18,6 +18,24 @@ const aiIntelligenceMock = vi.hoisted(() => ({
       factors: [],
       prediction: 'Stable',
     },
+    dependencies: ['storage-1'],
+    dependents: ['vm-child'],
+    correlations: [
+      {
+        source_id: 'storage-1',
+        source_name: 'Storage 1',
+        source_type: 'storage',
+        target_id: 'resource-1',
+        target_name: 'Host 1',
+        target_type: 'vm',
+        event_pattern: 'disk_full -> restart',
+        occurrences: 2,
+        avg_delay: 125000000000,
+        confidence: 0.875,
+        last_seen: '2026-03-01T00:15:00Z',
+        description: 'Disk pressure often precedes restarts',
+      },
+    ],
     recent_changes: [],
     note_count: 3,
   }),
@@ -154,7 +172,13 @@ describe('ResourceDetailDrawer history tab', () => {
       <ResourceDetailDrawer
         resource={resource}
         resolveResourceLabel={(resourceId) =>
-          resourceId === 'node:pve-1' ? 'PVE Node 1' : resourceId
+          resourceId === 'node:pve-1'
+            ? 'PVE Node 1'
+            : resourceId === 'storage-1'
+              ? 'Storage 1 alias'
+              : resourceId === 'vm-child'
+                ? 'VM Child'
+                : resourceId
         }
       />
     ));
@@ -167,6 +191,8 @@ describe('ResourceDetailDrawer history tab', () => {
     expect(screen.getAllByText('Pulse diff 2')).toHaveLength(2);
     expect(screen.getAllByText('Docker adapter 2')).toHaveLength(2);
     expect(screen.getAllByText('Proxmox adapter 1')).toHaveLength(2);
+    expect(screen.getByText('Storage 1 alias')).toBeInTheDocument();
+    expect(screen.getByText('VM Child')).toBeInTheDocument();
     expect(screen.queryByText('Capabilities 1')).toBeNull();
     expect(screen.queryByText('Relationships 1')).toBeNull();
   });

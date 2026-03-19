@@ -824,6 +824,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                     dependencies={resourceDependencies()}
                     dependents={resourceDependents()}
                     correlations={resourceCorrelations()}
+                    resolveResourceLabel={resolveResourceLabel}
                     showLastSeen
                   />
                 </div>

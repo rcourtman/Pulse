@@ -128,6 +128,9 @@ The shared table now also passes the same canonical resource-label resolver
 into the detail drawer so related-resource chips in the timeline/history path
 can resolve through the canonical catalog without adding a separate
 detail-only lookup branch to the hot-row path.
+The same detail drawer also uses that resolver for correlation dependency and
+dependent chips, so the investigation path does not fall back to raw IDs in
+the drawer while the AI page keeps its broader no-catalog fallback.
 The shared infrastructure selector search path now also routes through that
 same policy-aware display contract, so governed resources do not reappear via
 raw-name search candidates while the selector stays on the same hot-path

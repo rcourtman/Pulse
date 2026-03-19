@@ -46,6 +46,13 @@ describe('ResourceCorrelationSummary', () => {
         title="Correlation context"
         dependencies={['storage-1']}
         dependents={['vm-child']}
+        resolveResourceLabel={(resourceId) =>
+          resourceId === 'storage-1'
+            ? 'Storage 1 alias'
+            : resourceId === 'vm-child'
+              ? 'VM Child'
+              : resourceId
+        }
         correlations={[
           {
             source_id: 'storage-1',
@@ -71,10 +78,14 @@ describe('ResourceCorrelationSummary', () => {
     expect(screen.getByText('Depends on')).toBeInTheDocument();
     expect(screen.getByText('Used by')).toBeInTheDocument();
     expect(screen.getByText('Correlations')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Open dependency resource storage-1 in Infrastructure' }))
-      .toHaveAttribute('href', '/infrastructure?resource=storage-1');
-    expect(screen.getByRole('link', { name: 'Open dependent resource vm-child in Infrastructure' }))
-      .toHaveAttribute('href', '/infrastructure?resource=vm-child');
+    expect(
+      screen.getByRole('link', { name: 'Open dependency resource Storage 1 alias in Infrastructure' }),
+    ).toHaveAttribute('href', '/infrastructure?resource=storage-1');
+    expect(screen.getByText('Storage 1 alias')).toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: 'Open dependent resource VM Child in Infrastructure' }),
+    ).toHaveAttribute('href', '/infrastructure?resource=vm-child');
+    expect(screen.getByText('VM Child')).toBeInTheDocument();
     expect(screen.getByText(/last seen/i)).toBeInTheDocument();
   });
 });

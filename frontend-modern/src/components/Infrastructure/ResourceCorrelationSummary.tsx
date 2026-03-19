@@ -18,6 +18,7 @@ interface ResourceCorrelationSummaryProps {
   title?: string;
   summaryText?: string;
   buildResourceHref?: (resourceId: string) => string | null | undefined;
+  resolveResourceLabel?: (resourceId: string) => string | null | undefined;
   showLastSeen?: boolean;
   class?: string;
   maxCorrelations?: number;
@@ -29,6 +30,7 @@ export const ResourceCorrelationSummary: Component<ResourceCorrelationSummaryPro
   const dependencies = () => props.dependencies ?? [];
   const dependents = () => props.dependents ?? [];
   const buildResourceHref = props.buildResourceHref ?? buildInfrastructureResourceHref;
+  const resolveResourceLabel = props.resolveResourceLabel;
   const maxCorrelations = () => props.maxCorrelations ?? 3;
   const hasContent = () =>
     dependencies().length > 0 || dependents().length > 0 || correlations().length > 0;
@@ -60,18 +62,19 @@ export const ResourceCorrelationSummary: Component<ResourceCorrelationSummaryPro
             <div class="mt-1 flex flex-wrap gap-1">
               <For each={dependencies().slice(0, maxCorrelations())}>
                 {(dependency) => {
+                  const label = resolveResourceLabel?.(dependency)?.trim() || dependency;
                   const href = buildResourceHref(dependency);
                   return href ? (
                     <a
                       class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px] text-blue-700 hover:underline dark:text-blue-300"
                       href={href}
-                      aria-label={`Open dependency resource ${dependency} in Infrastructure`}
+                      aria-label={`Open dependency resource ${label} in Infrastructure`}
                     >
-                      {dependency}
+                      {label}
                     </a>
                   ) : (
                     <span class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px]">
-                      {dependency}
+                      {label}
                     </span>
                   );
                 }}
@@ -86,18 +89,19 @@ export const ResourceCorrelationSummary: Component<ResourceCorrelationSummaryPro
             <div class="mt-1 flex flex-wrap gap-1">
               <For each={dependents().slice(0, maxCorrelations())}>
                 {(dependent) => {
+                  const label = resolveResourceLabel?.(dependent)?.trim() || dependent;
                   const href = buildResourceHref(dependent);
                   return href ? (
                     <a
                       class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px] text-blue-700 hover:underline dark:text-blue-300"
                       href={href}
-                      aria-label={`Open dependent resource ${dependent} in Infrastructure`}
+                      aria-label={`Open dependent resource ${label} in Infrastructure`}
                     >
-                      {dependent}
+                      {label}
                     </a>
                   ) : (
                     <span class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px]">
-                      {dependent}
+                      {label}
                     </span>
                   );
                 }}
