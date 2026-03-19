@@ -57,6 +57,18 @@ const dedupeTrimmedValues = (values: Array<string | undefined>): string[] => {
   return deduped;
 };
 
+export const getNormalizedIdentityLookupVariants = (value?: string | null): string[] => {
+  if (!value) return [];
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return [];
+  const variants = new Set<string>([normalized]);
+  const dotIndex = normalized.indexOf('.');
+  if (dotIndex > 0) {
+    variants.add(normalized.slice(0, dotIndex));
+  }
+  return Array.from(variants);
+};
+
 const formatIdentityTarget = (resourceType?: string, resourceId?: string): string | null => {
   const type = asTrimmedString(resourceType);
   const id = asTrimmedString(resourceId);

@@ -24,7 +24,10 @@ import { StackedDiskBar } from '@/components/Dashboard/StackedDiskBar';
 import { EnhancedCPUBar } from '@/components/Dashboard/EnhancedCPUBar';
 import { TemperatureGauge } from '@/components/shared/TemperatureGauge';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
-import { getAgentLikeIdentityAliases } from '@/utils/resourceIdentity';
+import {
+  getAgentLikeIdentityAliases,
+  getNormalizedIdentityLookupVariants,
+} from '@/utils/resourceIdentity';
 
 // Lazy load InfrastructureDetailsDrawer to avoid circular dependencies and reduce bundle size
 const InfrastructureDetailsDrawer = lazy(() =>
@@ -50,17 +53,6 @@ const getAgentLinkedNodeId = (agent: Agent): string | undefined => {
     asTrimmedString(platformData?.linkedNodeId) ||
     asTrimmedString(platformAgent?.linkedNodeId)
   );
-};
-
-const normalizeIdentifier = (value: string): string[] => {
-  const normalized = value.trim().toLowerCase();
-  if (!normalized) return [];
-  const variants = new Set<string>([normalized]);
-  const dotIndex = normalized.indexOf('.');
-  if (dotIndex > 0) {
-    variants.add(normalized.slice(0, dotIndex));
-  }
-  return Array.from(variants);
 };
 
 interface InfrastructureSummaryTableProps {
@@ -544,7 +536,7 @@ export const InfrastructureSummaryTable: Component<InfrastructureSummaryTablePro
                     return false;
                   }
                   const aliases = getAgentLikeIdentityAliases(agent).flatMap((value) =>
-                    normalizeIdentifier(value),
+                    getNormalizedIdentityLookupVariants(value),
                   );
                   return aliases.includes(nodeName.toLowerCase());
                 });

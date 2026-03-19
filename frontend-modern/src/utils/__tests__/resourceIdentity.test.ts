@@ -7,6 +7,7 @@ import {
   getPreferredConfiguredNodeLabel,
   getPreferredNamedEntityLabel,
   getPreferredNormalizedPlatformId,
+  getNormalizedIdentityLookupVariants,
   getInfrastructureDiscoveryHostname,
   getInfrastructureMetadataId,
   getPreferredResourceDisplayName,
@@ -226,6 +227,14 @@ describe('resourceIdentity', () => {
       'agent-linked',
       'agent-explicit',
     ]);
+  });
+
+  it('builds normalized identity lookup variants for host-like values', () => {
+    expect(getNormalizedIdentityLookupVariants('tower.local')).toEqual(['tower.local', 'tower']);
+    expect(getNormalizedIdentityLookupVariants('Tower.Local')).toEqual(['tower.local', 'tower']);
+    expect(getNormalizedIdentityLookupVariants('tower')).toEqual(['tower']);
+    expect(getNormalizedIdentityLookupVariants('')).toEqual([]);
+    expect(getNormalizedIdentityLookupVariants(undefined)).toEqual([]);
   });
 
   it('resolves infrastructure metadata ids and discovery hostnames', () => {

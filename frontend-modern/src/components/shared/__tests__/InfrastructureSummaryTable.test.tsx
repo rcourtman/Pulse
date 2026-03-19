@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, waitFor } from '@solidjs/testing-library';
 import { InfrastructureSummaryTable } from '@/components/shared/InfrastructureSummaryTable';
 import type { Agent, Node } from '@/types/api';
+import resourceIdentitySource from '@/utils/resourceIdentity.ts?raw';
 
 const enhancedCpuBarMock = vi.fn();
 const infrastructureDetailsDrawerMock = vi.fn();
@@ -95,6 +96,11 @@ const makeAgent = (overrides: Partial<Agent> = {}): Agent => ({
 });
 
 describe('InfrastructureSummaryTable', () => {
+  it('uses the shared normalized identity lookup helper', () => {
+    expect(resourceIdentitySource).toContain('getNormalizedIdentityLookupVariants');
+    expect(resourceIdentitySource).not.toContain('const dedupeTrimmedValues = (values: Array<string | undefined>): string[] => {');
+  });
+
   it('uses linked agent ids for agent-backed node metric keys', () => {
     enhancedCpuBarMock.mockClear();
 

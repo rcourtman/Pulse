@@ -23,31 +23,22 @@ import {
   getPreferredResourceDisplayName,
   getPreferredResourceHostname,
   getResourceIdentityAliases,
+  getNormalizedIdentityLookupVariants,
 } from '@/utils/resourceIdentity';
 import { getOrgID } from '@/utils/apiClient';
 import { normalizeOrgScope } from '@/utils/orgScope';
 import { eventBus } from '@/stores/events';
 import { getChartSeriesColor } from '@/utils/chartSeriesPresentation';
 
-const normalizeResourceIdentifier = (value?: string | null): string[] => {
-  if (!value) return [];
-  const normalized = value.trim().toLowerCase();
-  if (!normalized) return [];
-  const variants = new Set<string>([normalized]);
-  const dotIndex = normalized.indexOf('.');
-  if (dotIndex > 0) {
-    variants.add(normalized.slice(0, dotIndex));
-  }
-  return Array.from(variants);
-};
-
 const getNormalizedResourceIdentifiers = (resource: Resource): Set<string> =>
   new Set<string>([
-    ...normalizeResourceIdentifier(resource.id),
-    ...normalizeResourceIdentifier(resource.platformId),
-    ...normalizeResourceIdentifier(getPreferredResourceDisplayName(resource)),
-    ...normalizeResourceIdentifier(getPreferredResourceHostname(resource)),
-    ...getResourceIdentityAliases(resource).flatMap((value) => normalizeResourceIdentifier(value)),
+    ...getNormalizedIdentityLookupVariants(resource.id),
+    ...getNormalizedIdentityLookupVariants(resource.platformId),
+    ...getNormalizedIdentityLookupVariants(getPreferredResourceDisplayName(resource)),
+    ...getNormalizedIdentityLookupVariants(getPreferredResourceHostname(resource)),
+    ...getResourceIdentityAliases(resource).flatMap((value) =>
+      getNormalizedIdentityLookupVariants(value),
+    ),
   ]);
 
 const asTrimmedString = (value: unknown): string | null => {

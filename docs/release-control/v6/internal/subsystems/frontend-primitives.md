@@ -91,6 +91,11 @@ The subsystem registry now also requires explicit proof-policy coverage for all
 shared runtime files, and shared-component guardrails fail if raw table
 composition is reintroduced in new shared components outside the canonical
 allowlist.
+Infrastructure summary and detail surfaces now also use the shared normalized
+identity lookup helper from `frontend-modern/src/utils/resourceIdentity.ts`
+so dotted hostnames and alias variants stay consistent between the shared
+table, drawer, and detail views instead of each component carrying its own
+identifier-variant logic.
 
 General settings segmented selectors for theme preference and temperature unit
 must now also route through the shared `FilterButtonGroup` primitive instead of

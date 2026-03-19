@@ -425,6 +425,11 @@ ReadState resource-resolution lookups must also normalize surrounding
 whitespace on the incoming name before matching canonical resources. A valid
 resource must not look missing just because a consumer asked for `" myserver "`
 instead of `"myserver"`.
+The infrastructure summary surfaces now use the shared normalized identity
+lookup helper for these matches, so dotted hostnames such as
+`tower.example.local` collapse to the same canonical lookup variants as the
+resource table and resource graph surfaces instead of each view inventing its
+own comparison rule.
 The same governed lookup boundary now also owns policy-aware resolved context:
 downstream consumers that need routing plus canonical policy metadata must use
 the unified-resource resolution context instead of rescanning typed views or
