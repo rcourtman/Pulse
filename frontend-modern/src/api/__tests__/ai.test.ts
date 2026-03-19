@@ -115,6 +115,12 @@ describe('AIAPI', () => {
     expect(apiFetchJSONMock).toHaveBeenCalledWith(
       '/api/ai/intelligence?resource_id=vm%2F100%3Ffilter%3Dall',
     );
+
+    apiFetchJSONMock.mockResolvedValueOnce({} as any);
+    await AIAPI.getCorrelations('storage/1?filter=all');
+    expect(apiFetchJSONMock).toHaveBeenCalledWith(
+      '/api/ai/intelligence/correlations?resource_id=storage%2F1%3Ffilter%3Dall',
+    );
   });
 
   it('treats 402 responses from optional AI paywalled collections as empty state', async () => {

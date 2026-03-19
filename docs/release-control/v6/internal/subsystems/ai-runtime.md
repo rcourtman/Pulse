@@ -160,6 +160,10 @@ AI resource and incident context now also surfaces a canonical resource-graph
 section from unified-resource relationships, so relationship wording and edge
 provenance stay aligned with the same shared resource model instead of being
 reconstructed from the drawer or prompt helpers.
+The Patrol intelligence page now also fetches the learned correlation list
+from the canonical AI correlations endpoint, so the global AI surface and the
+resource drawer both expose the same learned edge evidence instead of only
+showing a correlation count.
 The Patrol intelligence seed context now also prefers the canonical
 unified-resource timeline before falling back to the patrol-local change
 detector, so deterministic patrol context and resource detail context share

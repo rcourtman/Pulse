@@ -178,6 +178,9 @@ The same AI resource-intelligence payload now also carries dependency and
 dependent graph arrays plus correlation evidence, so the drawer can render
 canonical graph context from the shared AI contract instead of inferring it
 from the relationship facet payload alone.
+The same AI frontend client now also fetches `/api/ai/intelligence/correlations`
+for the Patrol intelligence page, so the learned-correlation list is governed
+by the same API contract that backs the resource drawer's graph evidence.
 The unified action, lifecycle, and export audit reads now also clamp oversized
 `limit` requests to the governed maximum of `1000`, so the control-plane audit
 surface stays bounded even when callers ask for arbitrarily large history

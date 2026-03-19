@@ -1,6 +1,30 @@
 import type { ResourceCorrelation } from '@/types/aiIntelligence';
 import { formatDurationMs } from '@/utils/patrolFormat';
 
+const parseGoDurationMs = (value: string): number | null => {
+  const normalized = value.trim();
+  if (!normalized) return null;
+
+  let totalNs = 0;
+  let matched = false;
+  const pattern = /(\d+(?:\.\d+)?)(h|m|s|ms|us|µs|ns)/g;
+  for (const match of normalized.matchAll(pattern)) {
+    matched = true;
+    const amount = Number.parseFloat(match[1]);
+    if (!Number.isFinite(amount)) continue;
+    const unit = match[2];
+    if (unit === 'h') totalNs += amount * 60 * 60 * 1_000_000_000;
+    else if (unit === 'm') totalNs += amount * 60 * 1_000_000_000;
+    else if (unit === 's') totalNs += amount * 1_000_000_000;
+    else if (unit === 'ms') totalNs += amount * 1_000_000;
+    else if (unit === 'us' || unit === 'µs') totalNs += amount * 1_000;
+    else if (unit === 'ns') totalNs += amount;
+  }
+
+  if (!matched || !Number.isFinite(totalNs) || totalNs <= 0) return null;
+  return Math.round(totalNs / 1_000_000);
+};
+
 const humanizeCorrelationToken = (value?: string): string => {
   const normalized = (value || '').trim();
   if (!normalized) return 'Correlation';
@@ -42,8 +66,11 @@ export function formatResourceCorrelationSummary(correlation: ResourceCorrelatio
     parts.push(`${correlation.occurrences} occurrence${correlation.occurrences === 1 ? '' : 's'}`);
   }
 
-  const avgDelayMs = Math.round((correlation.avg_delay || 0) / 1_000_000);
-  const formattedDelay = formatDurationMs(avgDelayMs);
+  const avgDelayMs =
+    typeof correlation.avg_delay === 'number'
+      ? Math.round(correlation.avg_delay / 1_000_000)
+      : parseGoDurationMs(correlation.avg_delay);
+  const formattedDelay = avgDelayMs ? formatDurationMs(avgDelayMs) : '';
   if (formattedDelay) {
     parts.push(`avg delay ${formattedDelay}`);
   }

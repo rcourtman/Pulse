@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 
 import { AIIntelligence } from '../AIIntelligence';
+import { AIAPI } from '@/api/ai';
 
 const { findingsPanelState, runHistoryState, intelligenceState } = vi.hoisted(() => ({
   findingsPanelState: {
@@ -88,6 +89,15 @@ vi.mock('@/api/patrol', () => ({
   updatePatrolAutonomySettings: (...args: unknown[]) => updatePatrolAutonomySettingsMock(...args),
   triggerPatrolRun: (...args: unknown[]) => triggerPatrolRunMock(...args),
   getPatrolRunHistory: (...args: unknown[]) => getPatrolRunHistoryMock(...args),
+}));
+
+vi.mock('@/api/ai', () => ({
+  AIAPI: {
+    getCorrelations: vi.fn().mockResolvedValue({
+      correlations: [],
+      count: 0,
+    }),
+  },
 }));
 
 vi.mock('@/utils/apiClient', () => ({
@@ -294,6 +304,77 @@ describe('AIIntelligence entitlement gating', () => {
     getUpgradeActionUrlOrFallbackMock.mockImplementation(
       (feature?: string) => `/upgrade${feature ? `?feature=${feature}` : ''}`,
     );
+    vi.mocked(AIAPI.getCorrelations).mockResolvedValue({
+      correlations: [],
+      count: 0,
+    });
+  });
+
+  it('renders canonical learned correlations in the summary page', async () => {
+    hasFeatureMock.mockReturnValue(true);
+    licenseStatusMock.mockReturnValue({ subscription_state: 'active' });
+    getPatrolStatusMock.mockResolvedValue(defaultPatrolStatus({ license_required: false }));
+    intelligenceState.summary = {
+      timestamp: '2026-03-01T00:00:00Z',
+      overall_health: {
+        score: 91,
+        grade: 'A',
+        trend: 'stable',
+        factors: [],
+        prediction: 'Stable',
+      },
+      findings_count: {
+        critical: 0,
+        warning: 0,
+        watch: 0,
+        info: 0,
+        total: 0,
+      },
+      predictions_count: 0,
+      recent_changes_count: 0,
+      recent_changes: [],
+      learning: {
+        resources_with_knowledge: 0,
+        total_notes: 0,
+        resources_with_baselines: 0,
+        patterns_detected: 0,
+        correlations_learned: 1,
+        incidents_tracked: 0,
+      },
+    };
+    const { AIAPI } = await import('@/api/ai');
+    vi.mocked(AIAPI.getCorrelations).mockResolvedValue({
+      correlations: [
+        {
+          source_id: 'storage-1',
+          source_name: 'Storage 1',
+          source_type: 'storage',
+          target_id: 'vm-100',
+          target_name: 'VM 100',
+          target_type: 'vm',
+          event_pattern: 'disk_full -> restart',
+          occurrences: 2,
+          avg_delay: '1m30s',
+          confidence: 0.875,
+          last_seen: '2026-03-01T00:05:00Z',
+          description: 'Disk pressure often precedes restarts',
+        },
+      ],
+      count: 1,
+    });
+
+    render(() => <AIIntelligence />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Learned correlations')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('1 total')).toBeInTheDocument();
+    expect(screen.getByText('Storage 1')).toBeInTheDocument();
+    expect(screen.getByText('VM 100')).toBeInTheDocument();
+    expect(screen.getByText('Disk Full → Restart')).toBeInTheDocument();
+    expect(screen.getByText(/2 occurrences · avg delay 2m · 88% confidence/)).toBeInTheDocument();
+    expect(screen.getByText('Disk pressure often precedes restarts')).toBeInTheDocument();
   });
 
   afterEach(() => {

@@ -19,6 +19,7 @@ import type {
 } from '@/types/ai';
 import type {
   AnomaliesResponse,
+  CorrelationsResponse,
   IntelligenceSummary,
   LearningStatusResponse,
   ResourceIntelligence,
@@ -147,6 +148,13 @@ export class AIAPI {
   // Get canonical intelligence for a single resource
   static async getResourceIntelligence(resourceId: string): Promise<ResourceIntelligence> {
     return (await this.fetchIntelligence(resourceId)) as ResourceIntelligence;
+  }
+
+  static async getCorrelations(resourceId?: string): Promise<CorrelationsResponse> {
+    const params = resourceId ? `?resource_id=${encodeURIComponent(resourceId)}` : '';
+    return apiFetchJSON(
+      `${this.baseUrl}/ai/intelligence/correlations${params}`,
+    ) as Promise<CorrelationsResponse>;
   }
 
   // Analyze a Kubernetes cluster with AI

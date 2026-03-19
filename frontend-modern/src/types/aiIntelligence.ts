@@ -103,10 +103,18 @@ export interface ResourceCorrelation {
   target_type: string;
   event_pattern: string;
   occurrences: number;
-  avg_delay: number;
+  avg_delay: number | string;
   confidence: number;
   last_seen: string;
   description: string;
+}
+
+export interface CorrelationsResponse {
+  correlations: ResourceCorrelation[];
+  count: number;
+  message?: string;
+  license_required?: boolean;
+  upgrade_url?: string;
 }
 
 export interface IntelligenceSummary {

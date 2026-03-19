@@ -94,6 +94,11 @@ import {
   formatResourceChangeKind,
 } from '@/utils/resourceChangePresentation';
 import {
+  formatResourceCorrelationEndpoint,
+  formatResourceCorrelationPattern,
+  formatResourceCorrelationSummary,
+} from '@/utils/resourceCorrelationPresentation';
+import {
   getResourceRedactionHintLabel,
   getResourceRoutingScopeLabel,
   getResourceSensitivityLabel,
@@ -104,11 +109,14 @@ import {
   getTrialStartErrorMessage,
   getTrialTryAgainLaterMessage,
 } from '@/utils/upgradePresentation';
+import { AIAPI } from '@/api/ai';
+import { buildInfrastructurePath } from '@/routing/resourceLinks';
 import type {
   ResourceRedactionHint,
   ResourceRoutingScope,
   ResourceSensitivity,
 } from '@/types/resource';
+import type { CorrelationsResponse } from '@/types/aiIntelligence';
 type PatrolTab = 'findings' | 'history';
 
 const policySensitivityOrder: ResourceSensitivity[] = [
@@ -503,6 +511,8 @@ export function AIIntelligence() {
     },
   );
 
+  const [correlations, setCorrelations] = createSignal<CorrelationsResponse | null>(null);
+
   const licenseRequired = createMemo(() => patrolStatus()?.license_required ?? false);
   const upgradeUrl = createMemo(() => getUpgradeActionUrlOrFallback('ai_autofix'));
   const blockedReason = createMemo(() => patrolStatus()?.blocked_reason?.trim() ?? '');
@@ -569,6 +579,10 @@ export function AIIntelligence() {
 
   const intelligenceSummary = createMemo(() => aiIntelligenceStore.intelligenceSummary);
   const policyPosture = createMemo(() => intelligenceSummary()?.policy_posture);
+  const correlationHighlights = createMemo(
+    () => correlations()?.correlations?.slice(0, 3) ?? [],
+  );
+  const correlationTotal = createMemo(() => correlations()?.count ?? correlationHighlights().length);
 
   // Live in-progress run entry for history list
   const liveRunRecord = createMemo<PatrolRunRecord | null>(() => {
@@ -756,6 +770,12 @@ export function AIIntelligence() {
         aiIntelligenceStore.loadPendingApprovals(),
         refetchPatrolStatus(),
       ]);
+      try {
+        setCorrelations(await AIAPI.getCorrelations());
+      } catch (err) {
+        console.error('Failed to load correlations:', err);
+        setCorrelations(null);
+      }
       // Trigger refresh of patrol status bar
       setActivityRefreshTrigger((prev) => prev + 1);
     } finally {
@@ -1410,6 +1430,60 @@ export function AIIntelligence() {
                         </div>
                       </dl>
                     </div>
+
+                    <Show when={correlationHighlights().length > 0}>
+                      <div class="rounded-md border border-border-subtle bg-base p-4">
+                        <div class="flex items-center justify-between gap-2">
+                          <h3 class="text-sm font-semibold text-base-content">
+                            Learned correlations
+                          </h3>
+                          <span class="text-xs text-muted">{correlationTotal()} total</span>
+                        </div>
+
+                        <div class="mt-3 space-y-2">
+                          <For each={correlationHighlights()}>
+                            {(correlation) => {
+                              const sourceHref = buildInfrastructurePath({
+                                resource: correlation.source_id,
+                              });
+                              const targetHref = buildInfrastructurePath({
+                                resource: correlation.target_id,
+                              });
+                              return (
+                                <div class="rounded-md bg-surface px-3 py-2">
+                                  <div class="flex flex-wrap items-center gap-1 text-sm">
+                                    <a
+                                      class="font-medium text-blue-700 hover:underline dark:text-blue-300"
+                                      href={sourceHref}
+                                    >
+                                      {formatResourceCorrelationEndpoint(correlation, 'source')}
+                                    </a>
+                                    <span class="text-muted">→</span>
+                                    <a
+                                      class="font-medium text-blue-700 hover:underline dark:text-blue-300"
+                                      href={targetHref}
+                                    >
+                                      {formatResourceCorrelationEndpoint(correlation, 'target')}
+                                    </a>
+                                    <span class="rounded-full border border-border-subtle bg-base px-2 py-0.5 text-[11px] font-medium text-muted">
+                                      {formatResourceCorrelationPattern(correlation)}
+                                    </span>
+                                  </div>
+                                  <p class="mt-1 text-xs text-muted">
+                                    {formatResourceCorrelationSummary(correlation)}
+                                  </p>
+                                  <Show when={correlation.description}>
+                                    <p class="mt-1 text-xs text-muted">
+                                      {correlation.description}
+                                    </p>
+                                  </Show>
+                                </div>
+                              );
+                            }}
+                          </For>
+                        </div>
+                      </div>
+                    </Show>
 
                     <Show when={policyPosture()}>
                       {(posture) => (
