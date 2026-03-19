@@ -139,6 +139,10 @@ The shared workloads-link helper used by the resource drawer and table now
 also routes its Kubernetes-cluster fallback through the same preferred
 resource display contract, so navigation context does not leak raw
 `displayName` values for governed clusters.
+That same workloads-link path and the dashboard workload projection now also
+share the canonical Kubernetes context prefix helper, so route labels and pod
+grouping keep using the same cluster-context source of truth instead of
+rebuilding the `clusterName`/`context`/`clusterId` prefix locally.
 The drawer's Kubernetes namespace/deployment tabs use the canonical
 cluster-name helper for fetch keys, so the visible navigation label stays
 separate from the backend cluster lookup contract.

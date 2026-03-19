@@ -11,6 +11,7 @@ import {
   getInfrastructureDiscoveryHostname,
   getInfrastructureMetadataId,
   getPreferredResourceClusterName,
+  getPreferredResourceKubernetesContext,
   getPreferredResourceDisplayName,
   getPreferredResourceHostname,
   getPreferredWorkloadsAgentHint,
@@ -181,6 +182,22 @@ describe('resourceIdentity', () => {
     });
 
     expect(getPreferredResourceClusterName(resource)).toBe('cluster-a');
+  });
+
+  it('prefers the canonical Kubernetes context prefix without display fallbacks', () => {
+    const resource = makeResource({
+      type: 'k8s-node',
+      name: 'secret-node',
+      displayName: 'Governed Node',
+      clusterId: 'cluster-override',
+      kubernetes: {
+        clusterName: 'cluster-a',
+        context: 'cluster-context',
+        clusterId: 'cluster-a-id',
+      },
+    });
+
+    expect(getPreferredResourceKubernetesContext(resource)).toBe('cluster-a');
   });
 
   it('builds agent-like aliases for legacy summary/detail surfaces', () => {

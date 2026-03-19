@@ -296,6 +296,10 @@ canonical cluster-name contract instead of re-encoding the fallback locally.
 The drawer's discovery mapper also reuses that helper for pod fallback agent
 IDs, so the resource-detail path and the dashboard path stay aligned on the
 same cluster-name source of truth.
+The dashboard workload projection and workloads-link route helpers also share
+the same Kubernetes context prefix helper, so pod grouping and cluster
+navigation keep the same cluster-context prefix before any surface-specific
+display fallback is applied.
 That same contract also owns the canonical resource display-name fallback, so
 name-or-ID presentation stays consistent between the unified AI adapter, the
 AI resource context, and the shared resource selectors instead of being

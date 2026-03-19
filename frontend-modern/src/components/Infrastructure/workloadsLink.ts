@@ -7,27 +7,9 @@ import {
 import {
   getPreferredResourceDisplayName,
   getPreferredWorkloadsAgentHint,
+  getPreferredResourceKubernetesContext,
 } from '@/utils/resourceIdentity';
-
-type ProxmoxPlatformData = {
-  nodeName?: string;
-};
-
-type AgentPlatformData = {
-  hostname?: string;
-};
-
-type KubernetesPlatformData = {
-  clusterId?: string;
-  clusterName?: string;
-  context?: string;
-};
-
-type PlatformData = {
-  proxmox?: ProxmoxPlatformData;
-  agent?: AgentPlatformData;
-  kubernetes?: KubernetesPlatformData;
-};
+import { requiresGovernedResourceDisplay } from '@/types/resource';
 
 const firstNonEmpty = (values: Array<string | undefined | null>): string | undefined => {
   for (const value of values) {
@@ -39,24 +21,18 @@ const firstNonEmpty = (values: Array<string | undefined | null>): string | undef
 };
 
 const resolveKubernetesContext = (resource: Resource): string | undefined => {
-  const platformData = resource.platformData as PlatformData | undefined;
-  const kubernetes = platformData?.kubernetes;
+  const kubernetesContext = getPreferredResourceKubernetesContext(resource);
   if (resource.type === 'k8s-cluster') {
+    const displayLabel = requiresGovernedResourceDisplay(resource.policy)
+      ? getPreferredResourceDisplayName(resource)
+      : resource.displayName?.trim() || resource.name?.trim() || undefined;
     return firstNonEmpty([
-      kubernetes?.clusterName,
-      kubernetes?.context,
-      kubernetes?.clusterId,
-      resource.clusterId,
-      getPreferredResourceDisplayName(resource),
+      kubernetesContext,
+      displayLabel,
     ]);
   }
   if (resource.type === 'k8s-node') {
-    return firstNonEmpty([
-      kubernetes?.clusterName,
-      kubernetes?.context,
-      kubernetes?.clusterId,
-      resource.clusterId,
-    ]);
+    return kubernetesContext;
   }
   return undefined;
 };

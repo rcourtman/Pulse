@@ -297,6 +297,18 @@ describe('Dashboard performance contract', () => {
       expect(filtered).toHaveLength(1);
       expect(rawFiltered).toHaveLength(0);
     });
+
+    it('keeps projected pod context keys aligned with the canonical cluster label', () => {
+      const guest = makeGuest(1, {
+        type: 'pod',
+        workloadType: 'pod',
+        contextLabel: 'cluster-a',
+        instance: 'cluster-b',
+        node: 'worker-a',
+      });
+
+      expect(getKubernetesContextKey(guest as any)).toBe('cluster-a');
+    });
   });
 
   describe('Workload windowing contracts', () => {

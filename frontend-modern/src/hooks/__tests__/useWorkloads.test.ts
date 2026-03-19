@@ -191,6 +191,7 @@ describe('useWorkloads', () => {
     await waitForWorkloadCount(() => result!.workloads().length);
 
     expect(result!.workloads()[0]?.contextLabel).toBe('cluster-a');
+    expect(result!.workloads()[0]?.instance).toBe('cluster-a');
 
     dispose();
   });

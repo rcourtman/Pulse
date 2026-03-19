@@ -332,6 +332,18 @@ export const getPreferredResourceClusterName = (
     );
   })();
 
+export const getPreferredResourceKubernetesContext = (
+  resource: ResourceClusterNameLike,
+): string | undefined => {
+  const kubernetes = resource.kubernetes || resource.platformData?.kubernetes;
+  return (
+    asTrimmedString(kubernetes?.clusterName) ||
+    asTrimmedString(kubernetes?.context) ||
+    asTrimmedString(kubernetes?.clusterId) ||
+    asTrimmedString(resource.clusterId)
+  );
+};
+
 export const getPreferredResourceDisplayName = (resource: Resource): string =>
   requiresGovernedResourceDisplay(resource.policy)
     ? getResourcePolicyDisplayLabel(resource)

@@ -12,7 +12,10 @@ import { eventBus } from '@/stores/events';
 import { resolvePlatformTypeFromSources } from '@/utils/sourcePlatforms';
 import { normalizeDiskArray } from '@/utils/format';
 import { resolveWorkloadTypeFromString } from '@/utils/workloads';
-import { getPreferredResourceClusterName } from '@/utils/resourceIdentity';
+import {
+  getPreferredResourceClusterName,
+  getPreferredResourceKubernetesContext,
+} from '@/utils/resourceIdentity';
 import type { WorkloadGuest } from '@/types/workloads';
 
 const WORKLOADS_URL = '/api/resources?type=vm,system-container,app-container,pod';
@@ -281,12 +284,11 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
 
   const name = (resource.name || resource.id || '').toString().trim();
   const node = resource.node ?? resource.proxmox?.nodeName ?? resource.kubernetes?.nodeName ?? '';
+  const kubernetesContext = getPreferredResourceKubernetesContext(resource);
   const instance =
     resource.instance ??
     resource.proxmox?.instance ??
-    resource.kubernetes?.clusterId ??
-    resource.kubernetes?.clusterName ??
-    resource.kubernetes?.context ??
+    kubernetesContext ??
     resource.proxmox?.clusterName ??
     resource.identity?.clusterName ??
     '';
