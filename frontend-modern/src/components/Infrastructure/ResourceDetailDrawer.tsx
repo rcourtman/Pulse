@@ -65,7 +65,7 @@ import {
   getResourceChangeSourceAdapterPresentation,
   getResourceChangeSourceTypePresentation,
 } from '@/utils/resourceChangePresentation';
-import { formatConfidencePercentage } from '@/utils/confidencePresentation';
+import { formatConfidenceLabel } from '@/utils/confidencePresentation';
 import { humanizeToken } from '@/utils/textPresentation';
 import type { ResourceIntelligence } from '@/types/aiIntelligence';
 import { buildInfrastructureResourceHref } from '@/routing/resourceLinks';
@@ -609,17 +609,6 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
     }
   });
 
-  const formatSourceTime = (value?: string | number) => {
-    if (!value) return '';
-    const timestamp = typeof value === 'number' ? value : Date.parse(value);
-    if (!Number.isFinite(timestamp)) return '';
-    return formatRelativeTime(timestamp);
-  };
-
-  const humanizeFacetToken = (value?: string) => {
-    return humanizeToken(value, { fallback: '—', preserveShortAllCaps: true });
-  };
-
   const formatApprovalLevel = (value?: string) => {
     switch ((value || '').trim()) {
       case 'none':
@@ -631,22 +620,8 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
       case 'mfa':
         return 'MFA';
       default:
-        return humanizeFacetToken(value);
+        return humanizeToken(value, { fallback: '—', preserveShortAllCaps: true });
     }
-  };
-
-  const formatConfidence = (value?: string | number) => {
-    if (typeof value === 'number' && Number.isFinite(value)) {
-      return formatConfidencePercentage(value);
-    }
-    return humanizeFacetToken(typeof value === 'string' ? value : undefined);
-  };
-
-  const formatFacetTimestamp = (value?: string) => {
-    if (!value) return '';
-    const timestamp = Date.parse(value);
-    if (!Number.isFinite(timestamp)) return '';
-    return formatRelativeTime(timestamp);
   };
 
   const handleCopyJson = async () => {
@@ -1647,7 +1622,12 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                         <span class="truncate" title={capability.name}>
                           {capability.name}
                         </span>
-                        <span class="text-muted">{humanizeFacetToken(capability.type)}</span>
+                        <span class="text-muted">
+                          {humanizeToken(capability.type, {
+                            fallback: '—',
+                            preserveShortAllCaps: true,
+                          })}
+                        </span>
                       </summary>
                       <div class="mt-2 space-y-1.5 border-t border-border pt-2 text-[10px]">
                         <div class="flex items-center justify-between gap-2">
@@ -1764,7 +1744,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                         <div class="flex items-center justify-between gap-2">
                           <span class="text-muted">Confidence</span>
                           <span class="font-medium text-base-content">
-                            {formatConfidence(relationship.confidence)}
+                            {formatConfidenceLabel(relationship.confidence)}
                           </span>
                         </div>
                         <div class="flex items-center justify-between gap-2">
@@ -1782,16 +1762,14 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                         <div class="flex items-center justify-between gap-2">
                           <span class="text-muted">Observed</span>
                           <span class="font-medium text-base-content">
-                            {formatFacetTimestamp(relationship.observedAt) ||
-                              formatRelativeTime(relationship.observedAt)}
+                            {formatRelativeTime(relationship.observedAt)}
                           </span>
                         </div>
                         <div class="flex items-center justify-between gap-2">
                           <span class="text-muted">Last Seen</span>
                           <span class="font-medium text-base-content">
-                            {formatFacetTimestamp(relationship.lastSeenAt) ||
-                              formatFacetTimestamp(relationship.observedAt) ||
-                              formatRelativeTime(relationship.lastSeenAt)}
+                            {formatRelativeTime(relationship.lastSeenAt) ||
+                              formatRelativeTime(relationship.observedAt)}
                           </span>
                         </div>
                       </div>
@@ -1842,10 +1820,10 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                           <div class="min-w-0">
                             <div class="font-medium text-base-content">{kindPresentation.label}</div>
                             <div class="mt-0.5 text-muted">
-                              {formatFacetTimestamp(change.observedAt)}
+                              {formatRelativeTime(change.observedAt)}
                               <Show when={change.occurredAt}>
                                 <span class="mx-1">•</span>
-                                <span>Occurred {formatFacetTimestamp(change.occurredAt)}</span>
+                                <span>Occurred {formatRelativeTime(change.occurredAt)}</span>
                               </Show>
                             </div>
                           </div>
@@ -1855,7 +1833,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                           <div class="flex items-center justify-between gap-2">
                             <span class="text-muted">Confidence</span>
                             <span class="font-medium text-base-content">
-                              {formatConfidence(change.confidence)}
+                              {formatConfidenceLabel(change.confidence)}
                             </span>
                           </div>
                           <div class="flex items-center justify-between gap-2">
@@ -2096,7 +2074,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                 <For each={sourceSections()}>
                   {(section) => {
                     const status = sourceStatus()[section.id];
-                    const lastSeenText = formatSourceTime(status?.lastSeen);
+                    const lastSeenText = formatRelativeTime(status?.lastSeen);
                     return (
                       <details class="rounded-md border border-border bg-surface p-3">
                         <summary class="flex cursor-pointer list-none items-center justify-between text-sm font-medium text-base-content">

@@ -1915,6 +1915,7 @@ describe('frontend resource type boundaries', () => {
     expect(resourceRelationshipPresentationSource).toContain('formatConfidencePercentage');
     expect(resourceCorrelationPresentationSource).toContain('formatConfidencePercentage');
     expect(confidencePresentationSource).toContain('formatConfidencePercentage');
+    expect(confidencePresentationSource).toContain('formatConfidenceLabel');
     expect(resourceChangePresentationSource).toContain('humanizeToken');
     expect(resourceRelationshipPresentationSource).toContain('humanizeToken');
     expect(resourceCorrelationPresentationSource).toContain('humanizeToken');
