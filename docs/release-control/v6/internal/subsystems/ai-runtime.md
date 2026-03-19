@@ -167,3 +167,6 @@ The per-resource intelligence payload returned from
 `/api/ai/intelligence?resource_id=...` should also include the canonical
 `recent_changes` history so UI and API consumers can read the same timeline
 slice that the prompt context uses.
+The system-wide `/api/ai/intelligence` summary should also surface the same
+canonical recent-change slice, alongside the count, so the aggregate payload
+and the prompt context stay aligned on the same shared timeline source.

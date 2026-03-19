@@ -89,6 +89,19 @@ func TestHandleGetIntelligence_ResourceIDTooLong(t *testing.T) {
 func TestHandleGetIntelligence_WithPatrolService(t *testing.T) {
 	t.Parallel()
 	svc := newEnabledAIService(t)
+	canonicalStore := ur.NewMemoryStore()
+	if err := canonicalStore.RecordChange(ur.ResourceChange{
+		ID:         "change-summary",
+		ObservedAt: time.Now().Add(-20 * time.Minute),
+		ResourceID: "vm-summary",
+		Kind:       ur.ChangeRestart,
+		SourceType: ur.SourcePlatformEvent,
+		Reason:     "guest restarted",
+	}); err != nil {
+		t.Fatalf("record canonical change: %v", err)
+	}
+	setUnexportedField(t, svc, "resourceExportStore", canonicalStore)
+	setUnexportedField(t, svc.GetPatrolService(), "aiService", svc)
 	handler := &AISettingsHandler{defaultAIService: svc}
 
 	req := httptest.NewRequest(http.MethodGet, "/api/ai/intelligence", nil)
@@ -106,6 +119,13 @@ func TestHandleGetIntelligence_WithPatrolService(t *testing.T) {
 	// Should contain timestamp from GetSummary
 	if _, ok := payload["timestamp"]; !ok {
 		t.Fatalf("expected timestamp in intelligence summary, got %v", payload)
+	}
+	recentChanges, ok := payload["recent_changes"].([]interface{})
+	if !ok {
+		t.Fatalf("expected recent_changes array in summary response, got %T", payload["recent_changes"])
+	}
+	if len(recentChanges) != 1 {
+		t.Fatalf("expected 1 recent change in summary, got %d", len(recentChanges))
 	}
 }
 

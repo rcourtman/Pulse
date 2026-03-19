@@ -466,6 +466,12 @@ func TestIntelligence_GetSummary_WithSubsystems(t *testing.T) {
 	if summary.RecentChangesCount == 0 {
 		t.Error("expected recent changes in summary")
 	}
+	if len(summary.RecentChanges) == 0 {
+		t.Error("expected recent change entries in summary")
+	}
+	if summary.RecentChanges[0].SourceType != ur.SourceHeuristic {
+		t.Fatalf("expected heuristic source type for fallback summary, got %s", summary.RecentChanges[0].SourceType)
+	}
 	if len(summary.RecentRemediations) == 0 {
 		t.Error("expected recent remediations in summary")
 	}
@@ -494,6 +500,12 @@ func TestIntelligence_GetSummary_UsesCanonicalResourceTimeline(t *testing.T) {
 	summary := intel.GetSummary()
 	if summary.RecentChangesCount != 1 {
 		t.Fatalf("expected canonical recent change count, got %d", summary.RecentChangesCount)
+	}
+	if len(summary.RecentChanges) != 1 {
+		t.Fatalf("expected canonical recent change slice, got %d", len(summary.RecentChanges))
+	}
+	if summary.RecentChanges[0].Kind != ur.ChangeConfigUpdate {
+		t.Fatalf("expected canonical recent change kind, got %s", summary.RecentChanges[0].Kind)
 	}
 }
 

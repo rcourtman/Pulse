@@ -98,8 +98,9 @@ type IntelligenceSummary struct {
 	UpcomingRisks    []patterns.FailurePrediction `json:"upcoming_risks,omitempty"`
 
 	// Recent activity
-	RecentChangesCount int                        `json:"recent_changes_count"`
-	RecentRemediations []memory.RemediationRecord `json:"recent_remediations,omitempty"`
+	RecentChangesCount int                               `json:"recent_changes_count"`
+	RecentChanges      []unifiedresources.ResourceChange `json:"recent_changes,omitempty"`
+	RecentRemediations []memory.RemediationRecord        `json:"recent_remediations,omitempty"`
 
 	// Learning progress
 	Learning LearningStats `json:"learning"`
@@ -247,12 +248,22 @@ func (i *Intelligence) GetSummary() *IntelligenceSummary {
 	if resourceTimelineStore != nil {
 		if recent, err := resourceTimelineStore.GetRecentChanges("", time.Now().Add(-24*time.Hour), 100); err == nil {
 			summary.RecentChangesCount = len(recent)
+			if len(recent) > 0 {
+				summary.RecentChanges = append([]unifiedresources.ResourceChange{}, recent[:min(len(recent), 5)]...)
+			}
 			usedCanonicalRecentChanges = true
 		}
 	}
 	if !usedCanonicalRecentChanges && changes != nil {
 		recent := changes.GetRecentChanges(100, time.Now().Add(-24*time.Hour))
 		summary.RecentChangesCount = len(recent)
+		if len(recent) > 0 {
+			converted := make([]unifiedresources.ResourceChange, 0, len(recent))
+			for _, change := range recent {
+				converted = append(converted, convertMemoryChangeToResourceChange(change))
+			}
+			summary.RecentChanges = append([]unifiedresources.ResourceChange{}, converted[:min(len(converted), 5)]...)
+		}
 	}
 
 	if remediations != nil {
