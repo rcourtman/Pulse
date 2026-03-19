@@ -128,6 +128,27 @@ func TestResourcePolicyRedactionLabelsUseCanonicalOrder(t *testing.T) {
 	}
 }
 
+func TestResourcePolicyCountSummariesUseCanonicalOrder(t *testing.T) {
+	sensitivityCounts := map[ResourceSensitivity]int{
+		ResourceSensitivityRestricted: 1,
+		ResourceSensitivityPublic:     2,
+		ResourceSensitivitySensitive:  3,
+		ResourceSensitivityInternal:   4,
+	}
+	if got := ResourcePolicySensitivitySummaryFromCounts(sensitivityCounts); len(got) != 4 || got[0] != "2 Public" || got[1] != "4 Internal" || got[2] != "3 Sensitive" || got[3] != "1 Restricted" {
+		t.Fatalf("sensitivity summary = %#v, want [2 Public 4 Internal 3 Sensitive 1 Restricted]", got)
+	}
+
+	routingCounts := map[ResourceRoutingScope]int{
+		ResourceRoutingScopeLocalOnly:    5,
+		ResourceRoutingScopeCloudSummary: 6,
+		ResourceRoutingScopeLocalFirst:   7,
+	}
+	if got := ResourcePolicyRoutingSummaryFromCounts(routingCounts); len(got) != 3 || got[0] != "6 Cloud Summary" || got[1] != "7 Local First" || got[2] != "5 Local Only" {
+		t.Fatalf("routing summary = %#v, want [6 Cloud Summary 7 Local First 5 Local Only]", got)
+	}
+}
+
 func containsRedactionHint(hints []ResourceRedactionHint, want ResourceRedactionHint) bool {
 	for _, hint := range hints {
 		if hint == want {

@@ -1,6 +1,9 @@
 package unifiedresources
 
-import "sort"
+import (
+	"fmt"
+	"sort"
+)
 
 // ResourceSensitivityOrder captures the canonical presentation order for
 // sensitivity counts across policy surfaces.
@@ -127,4 +130,34 @@ func ResourcePolicyRedactionLabelsFromCounts(counts map[ResourceRedactionHint]in
 	}
 	sort.Strings(remaining)
 	return append(labels, remaining...)
+}
+
+// ResourcePolicySensitivitySummaryFromCounts returns the canonical
+// human-readable count summary for sensitivity posture.
+func ResourcePolicySensitivitySummaryFromCounts(counts map[ResourceSensitivity]int) []string {
+	if len(counts) == 0 {
+		return nil
+	}
+
+	parts := make([]string, 0, len(ResourceSensitivityOrder))
+	for _, sensitivity := range ResourceSensitivityOrder {
+		parts = append(parts, fmt.Sprintf("%d %s",
+			counts[sensitivity], ResourceSensitivityLabel(sensitivity)))
+	}
+	return parts
+}
+
+// ResourcePolicyRoutingSummaryFromCounts returns the canonical human-readable
+// count summary for routing posture.
+func ResourcePolicyRoutingSummaryFromCounts(counts map[ResourceRoutingScope]int) []string {
+	if len(counts) == 0 {
+		return nil
+	}
+
+	parts := make([]string, 0, len(ResourceRoutingScopeOrder))
+	for _, scope := range ResourceRoutingScopeOrder {
+		parts = append(parts, fmt.Sprintf("%d %s",
+			counts[scope], ResourceRoutingScopeLabel(scope)))
+	}
+	return parts
 }

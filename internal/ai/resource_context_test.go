@@ -222,8 +222,19 @@ func TestBuildUnifiedResourceContext_FullContext(t *testing.T) {
 	assertContains("## Unified Infrastructure View")
 	assertContains("Total resources: 11 (Infrastructure: 5, Workloads: 6)")
 	assertContains("Data Governance")
-	assertContains("Sensitivity: 0 Public, 5 Internal, 6 Sensitive, 0 Restricted")
-	assertContains("Routing: 5 Cloud Summary, 6 Local First, 0 Local Only")
+	expectedSensitivity := strings.Join(unifiedresources.ResourcePolicySensitivitySummaryFromCounts(map[unifiedresources.ResourceSensitivity]int{
+		unifiedresources.ResourceSensitivityPublic:     0,
+		unifiedresources.ResourceSensitivityInternal:   5,
+		unifiedresources.ResourceSensitivitySensitive:  6,
+		unifiedresources.ResourceSensitivityRestricted: 0,
+	}), ", ")
+	assertContains("Sensitivity: " + expectedSensitivity)
+	expectedRouting := strings.Join(unifiedresources.ResourcePolicyRoutingSummaryFromCounts(map[unifiedresources.ResourceRoutingScope]int{
+		unifiedresources.ResourceRoutingScopeCloudSummary: 5,
+		unifiedresources.ResourceRoutingScopeLocalFirst:   6,
+		unifiedresources.ResourceRoutingScopeLocalOnly:    0,
+	}), ", ")
+	assertContains("Routing: " + expectedRouting)
 	assertContains("Policy Redaction Hints")
 	assertContains("Redactions in use: Hostname, IP Address, Platform ID, Alias")
 	assertContains("Proxmox VE Nodes")

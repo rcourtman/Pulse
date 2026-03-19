@@ -280,6 +280,8 @@ func TestResourcePolicyPresentationUsesCanonicalLabels(t *testing.T) {
 		"ResourceRedactionHintLabel(",
 		"ResourcePolicyRedactionLabels(",
 		"ResourcePolicyRedactionLabelsFromCounts(",
+		"ResourcePolicySensitivitySummaryFromCounts(",
+		"ResourcePolicyRoutingSummaryFromCounts(",
 	}
 	for _, snippet := range requiredSnippets {
 		if !strings.Contains(source, snippet) {
