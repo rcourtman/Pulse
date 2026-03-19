@@ -383,6 +383,23 @@ describe('Dashboard performance contract', () => {
       expect(normalizeWorkloadViewModeParam('host')).toBeNull();
     });
 
+    it('deduplicates workloads by canonical workload ID before rendering rows', async () => {
+      mockLocationSearch = '?type=all';
+      mockWorkloads = [
+        makeGuest(1, { id: 'raw-a', instance: 'shared', node: 'node-x', vmid: 42 }),
+        makeGuest(2, { id: 'raw-b', instance: 'shared', node: 'node-x', vmid: 42 }),
+      ];
+
+      const { container } = render(() => <Dashboard vms={[]} containers={[]} nodes={[]} useWorkloads />);
+
+      await waitFor(() => {
+        expect(container.querySelector('table')).toBeInTheDocument();
+      });
+      await waitFor(() => {
+        expect(getGuestRowCount(container)).toBe(1);
+      });
+    });
+
     it('filterWorkloads returns all guests when no filters active', () => {
       const guests = makeGuests(PROFILES.S);
       const result = filterWorkloads({

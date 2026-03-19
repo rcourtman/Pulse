@@ -315,6 +315,7 @@ describe('frontend resource type boundaries', () => {
     expect(workloadsSource).toContain('export const normalizeWorkloadViewModeParam');
     expect(dashboardSource).toContain('normalizeWorkloadViewModeParam');
     expect(dashboardSource).not.toContain('function normalizeViewModeParam');
+    expect(dashboardSource).not.toContain('workloadSummaryGuestId');
     expect(emptyStateSource).toContain('getEmptyStatePresentation');
     expect(emptyStateSource).not.toContain('const iconBgClass: Record<EmptyStateTone, string> =');
     expect(emptyStateSource).not.toContain(

@@ -125,8 +125,6 @@ const workloadMetricPercent = (value: number | null | undefined): number => {
   return Math.max(0, value);
 };
 
-const workloadSummaryGuestId = (guest: WorkloadGuest): string => getCanonicalWorkloadId(guest);
-
 const readGuestMetadataCache = (storageKey: string): GuestMetadataRecord => {
   if (cachedGuestMetadata && cachedGuestMetadataStorageKey === storageKey) {
     return cachedGuestMetadata;
@@ -1079,7 +1077,7 @@ export function Dashboard(props: DashboardProps) {
   });
 
   const workloadsSummaryVisibleIds = createMemo<string[]>(() =>
-    filteredGuests().map((guest) => workloadSummaryGuestId(guest)),
+    filteredGuests().map((guest) => getCanonicalWorkloadId(guest)),
   );
 
   const workloadsSummaryFallbackCounts = createMemo(() => {
@@ -1096,7 +1094,7 @@ export function Dashboard(props: DashboardProps) {
 
   const workloadsSummaryFallbackSnapshots = createMemo<WorkloadSummarySnapshot[]>(() =>
     filteredGuests().map((guest) => {
-      const guestId = workloadSummaryGuestId(guest);
+      const guestId = getCanonicalWorkloadId(guest);
       const memoryUsage = workloadMetricPercent(guest.memory?.usage);
       let diskUsage = workloadMetricPercent(guest.disk?.usage);
       if (
@@ -1127,7 +1125,7 @@ export function Dashboard(props: DashboardProps) {
   createEffect(() => {
     const hoveredId = hoveredWorkloadId();
     if (!hoveredId) return;
-    const exists = filteredGuests().some((guest) => workloadSummaryGuestId(guest) === hoveredId);
+    const exists = filteredGuests().some((guest) => getCanonicalWorkloadId(guest) === hoveredId);
     if (!exists) {
       setHoveredWorkloadId(null);
     }
