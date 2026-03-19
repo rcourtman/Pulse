@@ -272,6 +272,10 @@ Within the runtime card, current-state facts now stay in the primary summary
 while platform IDs, quick links, and platform-signal badges live in a smaller
 `Operational context` block, so first read remains status-first instead of
 mixing state and supporting action surfaces together.
+The identity card now follows the same rule: canonical identity rows stay in
+the primary summary, while aliases, IPs, and tags live in a smaller
+`Supporting context` block so the drawer answers "what is this resource" before
+showing every attached label.
 The same facet bundle now also returns grouped recent-change counts by
 canonical change kind, so the detail drawer can surface the distribution of
 state transitions, restarts, config updates, and anomalies without

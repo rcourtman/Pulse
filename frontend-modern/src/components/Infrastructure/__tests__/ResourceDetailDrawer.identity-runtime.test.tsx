@@ -247,6 +247,7 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     ));
 
     expect(getByText('Identity')).toBeInTheDocument();
+    expect(getByText('Supporting context')).toBeInTheDocument();
     expect(getByText('Aliases')).toBeInTheDocument();
     expect(getAllByText('pmg-main').length).toBeGreaterThan(0);
     expect(queryByText('No enriched identity metadata yet.')).toBeNull();
@@ -325,6 +326,7 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     });
 
     const inlineRender = render(() => <ResourceDetailDrawer resource={inlineResource} />);
+    expect(inlineRender.getByText('Supporting context')).toBeInTheDocument();
     expect(inlineRender.getByText('Aliases')).toBeInTheDocument();
     expect(inlineRender.container.querySelector('details')).toBeNull();
     expect(inlineRender.getByText('agent-inline-1')).toBeInTheDocument();
@@ -354,6 +356,7 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     });
 
     const overflowRender = render(() => <ResourceDetailDrawer resource={overflowResource} />);
+    expect(overflowRender.getByText('Supporting context')).toBeInTheDocument();
     expect(overflowRender.getByText('Aliases')).toBeInTheDocument();
     expect(overflowRender.container.querySelector('details')).toBeTruthy();
   });

@@ -538,6 +538,24 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
   const hasAliasOverflow = createMemo(
     () => identityAliasValues().length > ALIAS_COLLAPSE_THRESHOLD,
   );
+  const hasIdentitySupportContext = createMemo(
+    () =>
+      (props.resource.identity?.ips?.length ?? 0) > 0 ||
+      (props.resource.tags?.length ?? 0) > 0 ||
+      identityAliasValues().length > 0,
+  );
+  const identitySupportSummary = createMemo(() => {
+    const parts: string[] = [];
+    const ipCount = props.resource.identity?.ips?.length ?? 0;
+    const tagCount = props.resource.tags?.length ?? 0;
+    const aliasCount = identityAliasValues().length;
+
+    if (ipCount > 0) parts.push(`${ipCount} IP${ipCount === 1 ? '' : 's'}`);
+    if (tagCount > 0) parts.push(`${tagCount} tag${tagCount === 1 ? '' : 's'}`);
+    if (aliasCount > 0) parts.push(`${aliasCount} alias${aliasCount === 1 ? '' : 'es'}`);
+
+    return parts.join(' · ');
+  });
   const hasMergedSources = createMemo(() => mergedSources().length > 1);
   const discoveryConfig = createMemo(() => toDiscoveryConfig(props.resource));
   const discoveryContextSummary = createMemo(() => {
@@ -939,69 +957,81 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                   </div>
                 )}
               </For>
-              <Show when={props.resource.identity?.ips && props.resource.identity.ips.length > 0}>
-                <div class="flex flex-col gap-1">
-                  <span class="text-muted">IP Addresses</span>
-                  <div class="flex flex-wrap gap-1">
-                    <For each={props.resource.identity?.ips ?? []}>
-                      {(ip) => (
-                        <span
-                          class="inline-flex items-center rounded bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700 dark:bg-blue-900 dark:text-blue-200"
-                          title={ip}
-                        >
-                          {ip}
-                        </span>
-                      )}
-                    </For>
+              <Show when={hasIdentitySupportContext()}>
+                <div class="mt-2 rounded border border-border bg-surface-hover px-2 py-2">
+                  <div class="text-[10px] font-medium uppercase tracking-wide text-base-content">
+                    Supporting context
+                  </div>
+                  <Show when={identitySupportSummary()}>
+                    <div class="mt-1 text-[10px] text-muted">{identitySupportSummary()}</div>
+                  </Show>
+                  <div class="mt-2 space-y-1.5">
+                    <Show when={props.resource.identity?.ips && props.resource.identity.ips.length > 0}>
+                      <div class="flex flex-col gap-1">
+                        <span class="text-muted">IP Addresses</span>
+                        <div class="flex flex-wrap gap-1">
+                          <For each={props.resource.identity?.ips ?? []}>
+                            {(ip) => (
+                              <span
+                                class="inline-flex items-center rounded bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700 dark:bg-blue-900 dark:text-blue-200"
+                                title={ip}
+                              >
+                                {ip}
+                              </span>
+                            )}
+                          </For>
+                        </div>
+                      </div>
+                    </Show>
+                    <Show when={props.resource.tags && props.resource.tags.length > 0}>
+                      <div class="flex items-center justify-between gap-2">
+                        <span class="text-muted">Tags</span>
+                        <TagBadges tags={props.resource.tags} maxVisible={6} />
+                      </div>
+                    </Show>
+                    <Show when={identityAliasValues().length > 0}>
+                      <Show
+                        when={hasAliasOverflow()}
+                        fallback={
+                          <div class="flex flex-col gap-1">
+                            <span class="text-muted">Aliases</span>
+                            <div class="flex flex-wrap gap-1">
+                              <For each={aliasPreviewValues()}>
+                                {(value) => (
+                                  <span
+                                    class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px]"
+                                    title={value}
+                                  >
+                                    {value}
+                                  </span>
+                                )}
+                              </For>
+                            </div>
+                          </div>
+                        }
+                      >
+                        <details class="rounded border border-border bg-surface px-2 py-1.5">
+                          <summary class="flex cursor-pointer list-none items-center justify-between text-[10px] font-medium text-muted">
+                            <span>Aliases</span>
+                            <span class="text-muted">{identityAliasValues().length}</span>
+                          </summary>
+                          <div class="mt-2 flex flex-wrap gap-1 border-t border-border pt-2">
+                            <For each={identityAliasValues()}>
+                              {(value) => (
+                                <span
+                                  class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px]"
+                                  title={value}
+                                >
+                                  {value}
+                                </span>
+                              )}
+                            </For>
+                          </div>
+                        </details>
+                      </Show>
+                    </Show>
                   </div>
                 </div>
-              </Show>
-              <Show when={props.resource.tags && props.resource.tags.length > 0}>
-                <div class="flex items-center justify-between gap-2">
-                  <span class="text-muted">Tags</span>
-                  <TagBadges tags={props.resource.tags} maxVisible={6} />
-                </div>
-              </Show>
-              <Show when={identityAliasValues().length > 0}>
-                <Show
-                  when={hasAliasOverflow()}
-                  fallback={
-                    <div class="flex flex-col gap-1">
-                      <span class="text-muted">Aliases</span>
-                      <div class="flex flex-wrap gap-1">
-                        <For each={aliasPreviewValues()}>
-                          {(value) => (
-                            <span
-                              class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px]"
-                              title={value}
-                            >
-                              {value}
-                            </span>
-                          )}
-                        </For>
-                      </div>
-                    </div>
-                  }
-                >
-                  <details class="rounded border border-border bg-surface px-2 py-1.5">
-                    <summary class="flex cursor-pointer list-none items-center justify-between text-[10px] font-medium text-muted">
-                      <span>Aliases</span>
-                      <span class="text-muted">{identityAliasValues().length}</span>
-                    </summary>
-                    <div class="mt-2 flex flex-wrap gap-1 border-t border-border pt-2">
-                      <For each={identityAliasValues()}>
-                        {(value) => (
-                          <span
-                            class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px]"
-                            title={value}
-                          >
-                            {value}
-                          </span>
-                        )}
-                      </For>
-                    </div>
-                  </details>
-                </Show>
               </Show>
               <Show when={!identityCardHasRichData()}>
                 <div class="rounded border border-dashed bg-surface-hover px-2 py-1.5 text-[10px] ">
