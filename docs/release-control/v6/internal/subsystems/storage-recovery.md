@@ -170,6 +170,9 @@ The shared unified-resource consumer hook now also preserves `recentChanges`,
 surfaces read unified resources, so those pages see the same control-plane
 timeline facets and recent-change totals as the dedicated resource drawer
 instead of flattening them away locally.
+That shared policy payload now remains intentionally minimal as well: storage
+and recovery consumers should expect only routing scope, `allowCloudSummary`,
+and redaction hints, not a raw-signals routing flag.
 The same storage-facing runtime paths now also normalize org scope through
 `frontend-modern/src/utils/orgScope.ts` before building cache keys or
 multi-tenant fetch state, so Dashboard, StorageSummary, and other storage

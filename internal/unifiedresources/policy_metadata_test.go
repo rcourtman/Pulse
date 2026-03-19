@@ -1,6 +1,9 @@
 package unifiedresources
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestRefreshPolicyMetadata_ClassifiesRestrictedResources(t *testing.T) {
 	resource := Resource{
@@ -73,9 +76,6 @@ func TestRefreshPolicyMetadata_ClassifiesInfrastructureAsInternal(t *testing.T) 
 	}
 	if !resource.Policy.Routing.AllowCloudSummary {
 		t.Fatal("expected internal resource to allow cloud summary")
-	}
-	if resource.Policy.Routing.AllowCloudRawSignals {
-		t.Fatal("expected raw signals to remain local")
 	}
 }
 
@@ -259,9 +259,8 @@ func TestResourcePolicySummaryLines(t *testing.T) {
 	policy := &ResourcePolicy{
 		Sensitivity: ResourceSensitivityRestricted,
 		Routing: ResourceRoutingPolicy{
-			Scope:                ResourceRoutingScopeLocalOnly,
-			AllowCloudSummary:    false,
-			AllowCloudRawSignals: false,
+			Scope:             ResourceRoutingScopeLocalOnly,
+			AllowCloudSummary: false,
 			Redact: []ResourceRedactionHint{
 				ResourceRedactionAlias,
 				ResourceRedactionHostname,
@@ -317,9 +316,8 @@ func TestResourcePolicyRedactsAndUsesAISafeSummary(t *testing.T) {
 	policy := &ResourcePolicy{
 		Sensitivity: ResourceSensitivitySensitive,
 		Routing: ResourceRoutingPolicy{
-			Scope:                ResourceRoutingScopeLocalFirst,
-			AllowCloudSummary:    true,
-			AllowCloudRawSignals: false,
+			Scope:             ResourceRoutingScopeLocalFirst,
+			AllowCloudSummary: true,
 			Redact: []ResourceRedactionHint{
 				ResourceRedactionHostname,
 				ResourceRedactionIPAddress,
@@ -457,9 +455,8 @@ func TestCloneResourcePolicy(t *testing.T) {
 	original := &ResourcePolicy{
 		Sensitivity: ResourceSensitivityRestricted,
 		Routing: ResourceRoutingPolicy{
-			Scope:                ResourceRoutingScopeLocalOnly,
-			AllowCloudSummary:    false,
-			AllowCloudRawSignals: false,
+			Scope:             ResourceRoutingScopeLocalOnly,
+			AllowCloudSummary: false,
 			Redact: []ResourceRedactionHint{
 				ResourceRedactionHostname,
 				ResourceRedactionIPAddress,
@@ -486,6 +483,21 @@ func TestCloneResourcePolicy(t *testing.T) {
 	}
 	if CloneResourcePolicy(nil) != nil {
 		t.Fatal("expected nil clone for nil policy")
+	}
+}
+
+func TestResourcePolicySummaryLinesOmitRawSignals(t *testing.T) {
+	got := ResourcePolicySummaryLines(&ResourcePolicy{
+		Sensitivity: ResourceSensitivityInternal,
+		Routing: ResourceRoutingPolicy{
+			Scope:             ResourceRoutingScopeCloudSummary,
+			AllowCloudSummary: true,
+		},
+	})
+
+	joined := strings.Join(got, "\n")
+	if strings.Contains(joined, "Raw Signals") || strings.Contains(joined, "allowCloudRawSignals") {
+		t.Fatalf("policy summary leaked raw-signals wording: %q", joined)
 	}
 }
 

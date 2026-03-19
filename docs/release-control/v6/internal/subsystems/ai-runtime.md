@@ -115,9 +115,9 @@ uses for export boundaries instead of rebuilding privacy posture locally.
 The same shared policy presenter also owns the `Allowed`/`Blocked` routing
 decision labels shown in the resource drawer, so the policy state wording
 stays canonical instead of being rendered inline by the consumer.
-That same presenter also owns the drawer's `Cloud Summary` and `Raw Signals`
-routing rows, so the AI-facing resource policy view does not rebuild the row
-layout or decision labels locally.
+That same presenter also owns the drawer's `Cloud Summary` routing row, so
+the AI-facing resource policy view does not rebuild the row layout or
+decision labels locally.
 That same policy boundary now applies to chat structured-mention prefetch and
 resource-summary formatting: mention resolution must consume canonical
 unified-resource policy metadata, skip discovery fan-out when governed

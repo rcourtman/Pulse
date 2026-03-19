@@ -373,7 +373,6 @@ type APIResource = {
     routing?: {
       scope?: string;
       allowCloudSummary?: boolean;
-      allowCloudRawSignals?: boolean;
       redact?: string[];
     };
   };

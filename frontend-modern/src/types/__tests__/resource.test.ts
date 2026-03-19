@@ -284,7 +284,6 @@ describe('Resource Interface', () => {
         routing: {
           scope: 'local-only',
           allowCloudSummary: false,
-          allowCloudRawSignals: false,
           redact: ['hostname', 'ip-address', 'platform-id', 'alias'],
         },
       },

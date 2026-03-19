@@ -138,6 +138,10 @@ rendered inline by the drawer.
 That same helper also owns the drawer's `Cloud Summary` routing row, so the
 detail view no longer reconstructs the row structure or decision label
 locally.
+The shared routing policy itself now stays intentionally minimal: it carries
+only the routing scope, `allowCloudSummary`, and the redaction hints derived
+from canonical sensitivity, so the old raw-signals flag no longer appears in
+the owned resource-policy contract.
 The backend AI and Patrol correlation context renderers now derive their canonical
 relationship labels, direction, provenance, freshness, and metadata flags
 from `internal/unifiedresources/relationship_presentation.go`, so the correlation

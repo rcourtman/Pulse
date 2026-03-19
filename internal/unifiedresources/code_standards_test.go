@@ -259,6 +259,24 @@ func TestResourceAPIExposesDedicatedFacetReads(t *testing.T) {
 	}
 }
 
+func TestResourcePolicySummaryContractOmitsRawSignals(t *testing.T) {
+	policy := ResourcePolicy{
+		Sensitivity: ResourceSensitivityRestricted,
+		Routing: ResourceRoutingPolicy{
+			Scope:             ResourceRoutingScopeLocalOnly,
+			AllowCloudSummary: false,
+			Redact: []ResourceRedactionHint{
+				ResourceRedactionHostname,
+			},
+		},
+	}
+
+	summary := strings.Join(ResourcePolicySummaryLines(&policy), "\n")
+	if strings.Contains(summary, "Raw Signals") || strings.Contains(summary, "allowCloudRawSignals") {
+		t.Fatalf("resource policy summary leaked raw-signals wording: %q", summary)
+	}
+}
+
 func TestResourceChangeFilterParsingIsOwnedByUnifiedResources(t *testing.T) {
 	requiredSnippets := map[string][]string{
 		filepath.Join(".", "change_filters.go"): {

@@ -31,7 +31,6 @@ describe('resourcePolicyPresentation utils', () => {
         routing: {
           scope: 'local-first',
           allowCloudSummary: true,
-          allowCloudRawSignals: false,
           redact: ['hostname', 'ip-address'],
         },
       }),
@@ -45,7 +44,6 @@ describe('resourcePolicyPresentation utils', () => {
         routing: {
           scope: 'local-first',
           allowCloudSummary: true,
-          allowCloudRawSignals: false,
           redact: [],
         },
       }),

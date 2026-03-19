@@ -42,7 +42,6 @@ const resource: Resource = {
     routing: {
       scope: 'local-only',
       allowCloudSummary: false,
-      allowCloudRawSignals: false,
       redact: ['hostname', 'alias'],
     },
   },
