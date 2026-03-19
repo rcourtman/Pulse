@@ -48,7 +48,7 @@ import { ResourceAPI } from '@/api/resources';
 import {
   getResourcePolicyBadges,
   getResourcePolicyRedactionLabels,
-  getResourcePolicyRoutingDecisionLabel,
+  getResourcePolicyRoutingDecisionSummaries,
   getResourceRoutingScopeLabel,
   getResourceSensitivityLabel,
 } from '@/utils/resourcePolicyPresentation';
@@ -149,6 +149,9 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
   const hasUnifiedSources = createMemo(() => unifiedSourceBadges().length > 0);
   const policyBadges = createMemo(() => getResourcePolicyBadges(props.resource.policy));
   const policyRedactions = createMemo(() => getResourcePolicyRedactionLabels(props.resource.policy));
+  const policyRoutingDecisions = createMemo(() =>
+    getResourcePolicyRoutingDecisionSummaries(props.resource.policy),
+  );
   const hasGovernanceData = createMemo(
     () => policyBadges().length > 0 || Boolean(props.resource.aiSafeSummary),
   );
@@ -1061,22 +1064,14 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                       {getResourceRoutingScopeLabel(props.resource.policy?.routing.scope)}
                     </span>
                   </div>
-                  <div class="flex items-center justify-between gap-2">
-                    <span class="text-muted">Cloud Summary</span>
-                    <span class="font-medium text-base-content">
-                      {getResourcePolicyRoutingDecisionLabel(
-                        props.resource.policy?.routing.allowCloudSummary,
-                      )}
-                    </span>
-                  </div>
-                  <div class="flex items-center justify-between gap-2">
-                    <span class="text-muted">Raw Signals</span>
-                    <span class="font-medium text-base-content">
-                      {getResourcePolicyRoutingDecisionLabel(
-                        props.resource.policy?.routing.allowCloudRawSignals,
-                      )}
-                    </span>
-                  </div>
+                  <For each={policyRoutingDecisions()}>
+                    {(decision) => (
+                      <div class="flex items-center justify-between gap-2">
+                        <span class="text-muted">{decision.label}</span>
+                        <span class="font-medium text-base-content">{decision.value}</span>
+                      </div>
+                    )}
+                  </For>
                 </Show>
                 <Show when={policyRedactions().length > 0}>
                   <div class="flex flex-col gap-1">

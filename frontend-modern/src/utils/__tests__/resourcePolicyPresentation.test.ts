@@ -9,6 +9,7 @@ import {
   getResourcePolicySensitivitySummaries,
   getResourcePolicyRedactionLabels,
   getResourcePolicyRoutingDecisionLabel,
+  getResourcePolicyRoutingDecisionSummaries,
   getResourceRedactionHintLabel,
   getResourceRoutingScopeLabel,
   getResourceSensitivityLabel,
@@ -35,6 +36,23 @@ describe('resourcePolicyPresentation utils', () => {
         },
       }),
     ).toEqual(['Hostname', 'IP Address']);
+  });
+
+  it('formats canonical policy routing decision summaries', () => {
+    expect(
+      getResourcePolicyRoutingDecisionSummaries({
+        sensitivity: 'sensitive',
+        routing: {
+          scope: 'local-first',
+          allowCloudSummary: true,
+          allowCloudRawSignals: false,
+          redact: [],
+        },
+      }),
+    ).toEqual([
+      { label: 'Cloud Summary', value: 'Allowed' },
+      { label: 'Raw Signals', value: 'Blocked' },
+    ]);
   });
 
   it('formats canonical policy count summaries', () => {
