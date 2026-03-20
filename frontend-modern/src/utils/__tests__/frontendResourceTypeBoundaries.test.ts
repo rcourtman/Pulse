@@ -273,6 +273,7 @@ import diagnosticsPanelSource from '@/components/Settings/DiagnosticsPanel.tsx?r
 import diagnosticsPresentationSource from '@/utils/diagnosticsPresentation.ts?raw';
 import aiSettingsSource from '@/components/Settings/AISettings.tsx?raw';
 import aiIntelligenceSource from '@/pages/AIIntelligence.tsx?raw';
+import patrolIntelligenceSurfaceSource from '@/features/patrol/PatrolIntelligenceSurface.tsx?raw';
 import aiQuickstartPresentationSource from '@/utils/aiQuickstartPresentation.ts?raw';
 import aiCostPresentationSource from '@/utils/aiCostPresentation.ts?raw';
 import thresholdSliderPresentationSource from '@/utils/thresholdSliderPresentation.ts?raw';
@@ -2660,21 +2661,26 @@ describe('frontend resource type boundaries', () => {
     expect(aiSettingsSource).not.toContain(
       "providerTestResult()?.success ? 'text-green-600' : 'text-red-600'",
     );
-    expect(aiIntelligenceSource).toContain('getPatrolSummaryPresentation');
-    expect(aiIntelligenceSource).toContain('getAIQuickstartCreditsPresentation');
-    expect(aiIntelligenceSource).not.toContain(
+    expect(aiIntelligenceSource).toContain(
+      "import { PatrolIntelligenceSurface } from '@/features/patrol/PatrolIntelligenceSurface';",
+    );
+    expect(aiIntelligenceSource).not.toContain('getPatrolSummaryPresentation');
+    expect(aiIntelligenceSource).not.toContain('getAIQuickstartCreditsPresentation');
+    expect(patrolIntelligenceSurfaceSource).toContain('getPatrolSummaryPresentation');
+    expect(patrolIntelligenceSurfaceSource).toContain('getAIQuickstartCreditsPresentation');
+    expect(patrolIntelligenceSurfaceSource).not.toContain(
       "summaryStats().criticalFindings > 0\n                        ? 'bg-red-50 dark:bg-red-900 border-red-200 dark:border-red-800'",
     );
-    expect(aiIntelligenceSource).not.toContain(
+    expect(patrolIntelligenceSurfaceSource).not.toContain(
       "summaryStats().warningFindings > 0\n                        ? 'bg-amber-50 dark:bg-amber-900 border-amber-200 dark:border-amber-800'",
     );
-    expect(aiIntelligenceSource).not.toContain(
+    expect(patrolIntelligenceSurfaceSource).not.toContain(
       "summaryStats().fixedCount > 0\n                        ? 'bg-green-50 dark:bg-green-900 border-green-200 dark:border-green-800'",
     );
     expect(patrolSummaryPresentationSource).toContain(
       'export function getPatrolSummaryPresentation',
     );
-    expect(aiIntelligenceSource).not.toContain(
+    expect(patrolIntelligenceSurfaceSource).not.toContain(
       "(patrolStatus()?.quickstart_credits_remaining ?? 0) > 0\n                  ? 'bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300'",
     );
     expect(aiQuickstartPresentationSource).toContain(

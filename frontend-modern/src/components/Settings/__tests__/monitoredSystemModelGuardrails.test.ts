@@ -19,6 +19,8 @@ import infrastructureSelectorComponentSource from '@/components/shared/Infrastru
 import workloadsLinkSource from '@/components/Infrastructure/workloadsLink.ts?raw';
 import unifiedResourceTableSource from '@/components/Infrastructure/UnifiedResourceTable.tsx?raw';
 import thresholdsTableSource from '@/components/Alerts/ThresholdsTable.tsx?raw';
+import alertsConfigurationSurfaceSource from '@/features/alerts/AlertsConfigurationSurface.tsx?raw';
+import thresholdsDataHookSource from '@/features/alerts/thresholds/hooks/useThresholdsData.ts?raw';
 import collapsibleSectionSource from '@/components/Alerts/Thresholds/sections/CollapsibleSection.tsx?raw';
 import alertThresholdsPresentationSource from '@/utils/alertThresholdsPresentation.ts?raw';
 import alertThresholdsSectionPresentationSource from '@/utils/alertThresholdsSectionPresentation.ts?raw';
@@ -29,6 +31,7 @@ import reportingPanelSource from '../ReportingPanel.tsx?raw';
 import updatesSettingsPanelSource from '../UpdatesSettingsPanel.tsx?raw';
 import suggestProfileModalSource from '../SuggestProfileModal.tsx?raw';
 import aiIntelligenceSource from '@/pages/AIIntelligence.tsx?raw';
+import patrolIntelligenceSurfaceSource from '@/features/patrol/PatrolIntelligenceSurface.tsx?raw';
 import aiPatrolSchedulePresentationSource from '@/utils/aiPatrolSchedulePresentation.ts?raw';
 import patrolSummaryPresentationSource from '@/utils/patrolSummaryPresentation.ts?raw';
 import aiCostDashboardSource from '@/components/AI/AICostDashboard.tsx?raw';
@@ -394,10 +397,17 @@ describe('monitored-system model guardrails', () => {
     expect(reportingPanelSource).not.toContain("<For each={['24h', '7d', '30d']}>");
     expect(reportingPresentationSource).toContain('export const REPORTING_RANGE_OPTIONS');
     expect(reportingPresentationSource).not.toContain('getReportingToggleButtonClass');
-    expect(aiIntelligenceSource).toContain('buildPatrolScheduleOptions');
-    expect(aiIntelligenceSource).toContain('PATROL_NO_ISSUES_LABEL');
+    expect(aiIntelligenceSource).toContain(
+      "import { PatrolIntelligenceSurface } from '@/features/patrol/PatrolIntelligenceSurface';",
+    );
+    expect(aiIntelligenceSource).not.toContain('buildPatrolScheduleOptions');
+    expect(aiIntelligenceSource).not.toContain('PATROL_NO_ISSUES_LABEL');
+    expect(patrolIntelligenceSurfaceSource).toContain('buildPatrolScheduleOptions');
+    expect(patrolIntelligenceSurfaceSource).toContain('PATROL_NO_ISSUES_LABEL');
     expect(aiIntelligenceSource).not.toContain('No issues found');
+    expect(patrolIntelligenceSurfaceSource).not.toContain('No issues found');
     expect(aiIntelligenceSource).not.toContain('const SCHEDULE_PRESETS =');
+    expect(patrolIntelligenceSurfaceSource).not.toContain('const SCHEDULE_PRESETS =');
     expect(aiPatrolSchedulePresentationSource).toContain('export const PATROL_SCHEDULE_PRESETS');
     expect(aiPatrolSchedulePresentationSource).toContain(
       'export function buildPatrolScheduleOptions',
@@ -524,14 +534,21 @@ describe('monitored-system model guardrails', () => {
   });
 
   it('keeps alerts agent thresholds sourced from unified agent resources', () => {
-    expect(alertsPageSource).toContain('const agentResources = createMemo(');
-    expect(alertsPageSource).toContain('agents={agentResources()}');
-    expect(alertsPageSource).toContain("resourceType: 'Agent Disk'");
-    expect(alertsPageSource).not.toContain("resourceType: 'Host Disk'");
-    expect(alertsPageSource).toContain('agentDefaults');
-    expect(alertsPageSource).toContain('disableAllAgents');
-    expect(alertsPageSource).not.toContain('hostDefaults');
-    expect(alertsPageSource).not.toContain('disableAllHosts');
+    expect(alertsPageSource).toContain(
+      "import { AlertsConfigurationSurface } from '@/features/alerts/AlertsConfigurationSurface';",
+    );
+    expect(alertsPageSource).not.toContain('const agentResources = createMemo(');
+    expect(alertsPageSource).not.toContain("resourceType: 'Agent Disk'");
+    expect(alertsConfigurationSurfaceSource).toContain('<ThresholdsTab');
+    expect(thresholdsTableSource).toContain(
+      "import { useThresholdsData } from '@/features/alerts/thresholds/hooks/useThresholdsData';",
+    );
+    expect(thresholdsDataHookSource).toContain("resourceType: 'Agent Disk'");
+    expect(thresholdsDataHookSource).not.toContain("resourceType: 'Host Disk'");
+    expect(thresholdsTableSource).toContain('props.agentDefaults');
+    expect(thresholdsTableSource).toContain('disableAllAgents');
+    expect(thresholdsTableSource).not.toContain('hostDefaults');
+    expect(thresholdsTableSource).not.toContain('disableAllHosts');
   });
 
   it('keeps setup and node summary fallbacks aware of v6 agent facets', () => {
@@ -602,7 +619,11 @@ describe('monitored-system model guardrails', () => {
     expect(aiChatSource).not.toContain('const normalizeControlLevel =');
     expect(aiChatSource).not.toContain('const labelForControlLevel =');
     expect(aiChatSource).not.toContain('const controlTone =');
-    expect(aiChatSource).toContain(
+    expect(aiChatSource).toContain('const mentionsForAPI =');
+    expect(aiChatSource).toContain('? mentions.map((mention) => ({');
+    expect(aiChatSource).toContain('name: mention.label,');
+    expect(aiChatSource).toContain('type: mention.type,');
+    expect(aiChatSource).not.toContain(
       'const mentionsForAPI = mentions.length > 0 ? mentions : undefined;',
     );
     expect(aiChatPresentationSource).toContain('export const AI_CHAT_SESSION_EMPTY_STATE');
@@ -862,10 +883,10 @@ describe('monitored-system model guardrails', () => {
       "if (path.includes('/thresholds/containers')) return 'docker';",
     );
     expect(thresholdsTableSource).toContain('/thresholds/agents');
-    expect(thresholdsTableSource).toContain("resourceType: 'Agent Disk'");
+    expect(thresholdsDataHookSource).toContain("resourceType: 'Agent Disk'");
     expect(thresholdsTableSource).toContain('getAlertThresholdsSectionTitles');
     expect(thresholdsTableSource).toContain('title={sectionTitles.agentDisks}');
-    expect(thresholdsTableSource).not.toContain("resourceType: 'Host Disk'");
+    expect(thresholdsDataHookSource).not.toContain("resourceType: 'Host Disk'");
     expect(thresholdsTableSource).toContain('props.agentDefaults');
     expect(thresholdsTableSource).not.toContain('props.hostDefaults');
     expect(thresholdsTableSource).not.toContain('timeThresholds().host');

@@ -15,26 +15,27 @@
 
 ## Purpose
 
-Own the Patrol intelligence page, its local state orchestration, findings and
-approval presentation, run-history rendering, and Patrol-specific presentation
-helpers.
+Own the Patrol intelligence route shell, feature surface, local state
+orchestration, findings and approval presentation, run-history rendering, and
+Patrol-specific presentation helpers.
 
 ## Canonical Files
 
-1. `frontend-modern/src/pages/AIIntelligence.tsx`
-2. `frontend-modern/src/stores/aiIntelligence.ts`
-3. `frontend-modern/src/types/aiIntelligence.ts`
-4. `frontend-modern/src/components/AI/FindingsPanel.tsx`
-5. `frontend-modern/src/components/Brand/PulsePatrolLogo.tsx`
-6. `frontend-modern/src/components/patrol/`
-7. `frontend-modern/src/utils/aiFindingPresentation.ts`
-8. `frontend-modern/src/utils/approvalRiskPresentation.ts`
-9. `frontend-modern/src/utils/findingAlertIdentity.ts`
-10. `frontend-modern/src/utils/patrolEmptyStatePresentation.ts`
-11. `frontend-modern/src/utils/patrolFormat.ts`
-12. `frontend-modern/src/utils/patrolRunPresentation.ts`
-13. `frontend-modern/src/utils/patrolSummaryPresentation.ts`
-14. `frontend-modern/src/utils/textPresentation.ts`
+1. `frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx`
+2. `frontend-modern/src/pages/AIIntelligence.tsx`
+3. `frontend-modern/src/stores/aiIntelligence.ts`
+4. `frontend-modern/src/types/aiIntelligence.ts`
+5. `frontend-modern/src/components/AI/FindingsPanel.tsx`
+6. `frontend-modern/src/components/Brand/PulsePatrolLogo.tsx`
+7. `frontend-modern/src/components/patrol/`
+8. `frontend-modern/src/utils/aiFindingPresentation.ts`
+9. `frontend-modern/src/utils/approvalRiskPresentation.ts`
+10. `frontend-modern/src/utils/findingAlertIdentity.ts`
+11. `frontend-modern/src/utils/patrolEmptyStatePresentation.ts`
+12. `frontend-modern/src/utils/patrolFormat.ts`
+13. `frontend-modern/src/utils/patrolRunPresentation.ts`
+14. `frontend-modern/src/utils/patrolSummaryPresentation.ts`
+15. `frontend-modern/src/utils/textPresentation.ts`
 
 ## Shared Boundaries
 
@@ -42,7 +43,7 @@ helpers.
 
 ## Extension Points
 
-1. Add or change Patrol page orchestration through `frontend-modern/src/pages/AIIntelligence.tsx` and `frontend-modern/src/stores/aiIntelligence.ts`
+1. Add or change Patrol page orchestration through `frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx`, keep `frontend-modern/src/pages/AIIntelligence.tsx` as the route shell, and update `frontend-modern/src/stores/aiIntelligence.ts` together
 2. Add or change Patrol findings, approvals, investigation, or run-history presentation through `frontend-modern/src/components/AI/FindingsPanel.tsx` and `frontend-modern/src/components/patrol/`
 3. Keep Patrol and chat identifier-label presentation aligned through the shared `frontend-modern/src/utils/textPresentation.ts`
 4. Keep Patrol and chat stream-matching / mention dedupe aligned through the shared `frontend-modern/src/utils/chatIdentifiers.ts`
@@ -67,6 +68,12 @@ outside the governed subsystem map even though they are the top-level runtime
 surface for Patrol intelligence. This contract now owns that orchestration and
 presentation boundary while leaving shared transport and payload-shape
 ownership in the governed AI runtime and API contract surfaces.
+
+The route file `frontend-modern/src/pages/AIIntelligence.tsx` is now also a
+thin shell that delegates to the feature-owned
+`frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx`, so Patrol
+runtime state and presentation no longer accumulate directly in the route
+component itself.
 
 Patrol finding state must now also consume the canonical camelCase
 `alertIdentifier` field and pending-approval expiry metadata end to end.
