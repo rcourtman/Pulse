@@ -12,6 +12,7 @@ import infrastructureOperationsStateSource from '../useInfrastructureOperationsS
 import nodeModalStateSource from '../useNodeModalState.ts?raw';
 import apiAccessPanelSource from '../APIAccessPanel.tsx?raw';
 import auditLogPanelSource from '../AuditLogPanel.tsx?raw';
+import auditLogStateSource from '../useAuditLogPanelState.ts?raw';
 import auditWebhookPanelSource from '../AuditWebhookPanel.tsx?raw';
 import billingAdminPanelSource from '../BillingAdminPanel.tsx?raw';
 import generalSettingsPanelSource from '../GeneralSettingsPanel.tsx?raw';
@@ -50,6 +51,7 @@ const extractedModules = [
   '../InfrastructureOperationsController.tsx',
   '../infrastructureOperationsModel.tsx',
   '../useInfrastructureOperationsState.tsx',
+  '../useAuditLogPanelState.ts',
   '../NodeModal.tsx',
   '../nodeModalModel.ts',
   '../useNodeModalState.ts',
@@ -345,6 +347,19 @@ describe('Settings architecture guardrails', () => {
     expect(aiSettingsDialogsSource).toContain('@/components/Settings/aiSettingsModel');
     expect(aiSettingsModelSource).toContain('export const AI_PROVIDER_CONFIGS');
     expect(aiSettingsModelSource).toContain('export const AI_SETUP_PROVIDER_OPTIONS');
+  });
+
+  it('keeps the audit log shell behind an extracted runtime owner', () => {
+    expect(auditLogPanelSource).toContain('@/components/Settings/useAuditLogPanelState');
+    expect(auditLogPanelSource).not.toContain('createLocalStorageStringSignal');
+    expect(auditLogPanelSource).not.toContain('const fetchAuditEvents = async (');
+    expect(auditLogPanelSource).not.toContain('const verifyAllEvents = async (');
+    expect(auditLogPanelSource).not.toContain('trackPaywallViewed');
+    expect(auditLogStateSource).toContain('export const useAuditLogPanelState =');
+    expect(auditLogStateSource).toContain('createLocalStorageStringSignal');
+    expect(auditLogStateSource).toContain('const fetchAuditEvents = async (');
+    expect(auditLogStateSource).toContain('const verifyAllEvents = async (');
+    expect(auditLogStateSource).toContain('trackPaywallViewed');
   });
 
   it('keeps the SSO providers shell behind extracted runtime owners', () => {

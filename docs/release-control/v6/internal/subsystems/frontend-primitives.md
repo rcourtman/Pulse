@@ -30,29 +30,30 @@ work extends shared components instead of creating new local variants.
 8. `frontend-modern/src/components/Settings/AISettingsDialogs.tsx`
 9. `frontend-modern/src/components/Settings/aiSettingsModel.ts`
 10. `frontend-modern/src/components/Settings/AuditLogPanel.tsx`
-11. `frontend-modern/src/components/Settings/AuditWebhookPanel.tsx`
-12. `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx`
-13. `frontend-modern/src/components/Settings/NetworkSettingsPanel.tsx`
-14. `frontend-modern/src/components/Settings/RecoverySettingsPanel.tsx`
-15. `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx`
-16. `frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx`
-17. `frontend-modern/src/components/Settings/settingsHeaderMeta.ts`
-18. `frontend-modern/src/components/Settings/SettingsPageShell.tsx`
-19. `frontend-modern/src/components/Settings/settingsPanelRegistry.ts`
-20. `frontend-modern/src/components/Settings/SSOProvidersPanel.tsx`
-21. `frontend-modern/src/components/Settings/useSSOProvidersState.ts`
-22. `frontend-modern/src/components/Settings/ssoProvidersModel.ts`
-23. `frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx`
-24. `frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts`
-25. `tests/integration/tests/15-settings-shell-consistency.spec.ts`
-26. `frontend-modern/src/components/shared/PageControls.guardrails.test.ts`
-27. `frontend-modern/src/components/shared/TypeColumn.guardrails.test.ts`
-28. `frontend-modern/src/features/`
-29. `frontend-modern/src/components/SetupWizard/SetupWizard.tsx`
-30. `frontend-modern/src/components/SetupWizard/SetupCompletionPreview.tsx`
-31. `frontend-modern/src/components/SetupWizard/__tests__/SetupWizard.test.tsx`
-32. `frontend-modern/src/components/SetupWizard/__tests__/SetupCompletionPreview.test.tsx`
-33. `frontend-modern/src/components/shared/MonitoredSystemLimitWarningBanner.tsx`
+11. `frontend-modern/src/components/Settings/useAuditLogPanelState.ts`
+12. `frontend-modern/src/components/Settings/AuditWebhookPanel.tsx`
+13. `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx`
+14. `frontend-modern/src/components/Settings/NetworkSettingsPanel.tsx`
+15. `frontend-modern/src/components/Settings/RecoverySettingsPanel.tsx`
+16. `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx`
+17. `frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx`
+18. `frontend-modern/src/components/Settings/settingsHeaderMeta.ts`
+19. `frontend-modern/src/components/Settings/SettingsPageShell.tsx`
+20. `frontend-modern/src/components/Settings/settingsPanelRegistry.ts`
+21. `frontend-modern/src/components/Settings/SSOProvidersPanel.tsx`
+22. `frontend-modern/src/components/Settings/useSSOProvidersState.ts`
+23. `frontend-modern/src/components/Settings/ssoProvidersModel.ts`
+24. `frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx`
+25. `frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts`
+26. `tests/integration/tests/15-settings-shell-consistency.spec.ts`
+27. `frontend-modern/src/components/shared/PageControls.guardrails.test.ts`
+28. `frontend-modern/src/components/shared/TypeColumn.guardrails.test.ts`
+29. `frontend-modern/src/features/`
+30. `frontend-modern/src/components/SetupWizard/SetupWizard.tsx`
+31. `frontend-modern/src/components/SetupWizard/SetupCompletionPreview.tsx`
+32. `frontend-modern/src/components/SetupWizard/__tests__/SetupWizard.test.tsx`
+33. `frontend-modern/src/components/SetupWizard/__tests__/SetupCompletionPreview.test.tsx`
+34. `frontend-modern/src/components/shared/MonitoredSystemLimitWarningBanner.tsx`
 
 ## Shared Boundaries
 
@@ -113,6 +114,14 @@ identifier-variant logic.
 Those same surfaces also share the trimmed-string helper from
 `frontend-modern/src/utils/stringUtils.ts` so shared components do not keep
 their own copy of the same whitespace-trimming identity logic.
+
+The audit log settings surface now follows that same owner split.
+`frontend-modern/src/components/Settings/AuditLogPanel.tsx` stays the canonical
+`SettingsPanel` shell, while
+`frontend-modern/src/components/Settings/useAuditLogPanelState.ts` owns the
+license/paywall lifecycle, persisted filters, verification flow, and audit-log
+fetch orchestration. The shell must not re-accumulate localStorage or API
+runtime logic inline.
 
 General settings segmented selectors for theme preference and temperature unit
 must now also route through the shared `FilterButtonGroup` primitive instead of

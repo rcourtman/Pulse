@@ -1,4 +1,4 @@
-import { createSignal, Show, For, onMount, createMemo, onCleanup, createEffect } from 'solid-js';
+import { For, Show } from 'solid-js';
 import Shield from 'lucide-solid/icons/shield';
 import RefreshCw from 'lucide-solid/icons/refresh-cw';
 import Filter from 'lucide-solid/icons/filter';
@@ -11,23 +11,6 @@ import Toggle from '@/components/shared/Toggle';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
 import {
-  createLocalStorageBooleanSignal,
-  createLocalStorageNumberSignal,
-  createLocalStorageStringSignal,
-  STORAGE_KEYS,
-} from '@/utils/localStorage';
-import { apiFetch } from '@/utils/apiClient';
-import { showSuccess, showWarning, showToast } from '@/utils/toast';
-import {
-  getUpgradeActionUrlOrFallback,
-  hasFeature,
-  loadLicenseStatus,
-  licenseLoaded,
-  entitlements,
-  startProTrial,
-} from '@/stores/license';
-import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/upgradeMetrics';
-import {
   AUDIT_REFRESH_BUTTON_CLASS,
   AUDIT_VERIFY_ALL_BUTTON_CLASS,
   AUDIT_VERIFY_ROW_BUTTON_CLASS,
@@ -39,552 +22,141 @@ import {
   getAuditVerificationBadgePresentation,
 } from '@/utils/auditLogPresentation';
 import {
-  getProTrialStartedMessage,
-  getTrialAlreadyUsedMessage,
-  getTrialStartErrorMessage,
   getUpgradeActionButtonClass,
   UPGRADE_ACTION_LABEL,
   UPGRADE_TRIAL_LABEL,
   UPGRADE_TRIAL_LINK_CLASS,
 } from '@/utils/upgradePresentation';
-
-interface AuditEvent {
-  id: string;
-  timestamp: string;
-  event: string;
-  user: string;
-  ip: string;
-  path: string;
-  success: boolean;
-  details: string;
-  signature?: string;
-}
-
-interface AuditResponse {
-  events: AuditEvent[];
-  total: number;
-  persistentLogging: boolean;
-}
-
-interface VerifyResponse {
-  available: boolean;
-  verified?: boolean;
-  message?: string;
-}
-
-type VerificationState = {
-  status: 'verified' | 'failed' | 'unavailable' | 'error';
-  message: string;
-};
+import { useAuditLogPanelState } from '@/components/Settings/useAuditLogPanelState';
 
 export default function AuditLogPanel() {
-  const [events, setEvents] = createSignal<AuditEvent[]>([]);
-  const [totalEvents, setTotalEvents] = createSignal(0);
-  const [loading, setLoading] = createSignal(true);
-  const [error, setError] = createSignal<string | null>(null);
-  const [isPersistent, setIsPersistent] = createSignal(false);
-  const [eventFilter, setEventFilter] = createLocalStorageStringSignal(
-    STORAGE_KEYS.AUDIT_EVENT_FILTER,
-    '',
-  );
-  const [userFilter, setUserFilter] = createLocalStorageStringSignal(
-    STORAGE_KEYS.AUDIT_USER_FILTER,
-    '',
-  );
-  const [successFilter, setSuccessFilter] = createLocalStorageStringSignal(
-    STORAGE_KEYS.AUDIT_SUCCESS_FILTER,
-    'all',
-  );
-  const [verificationFilter, setVerificationFilter] = createLocalStorageStringSignal(
-    STORAGE_KEYS.AUDIT_VERIFICATION_FILTER,
-    'all',
-  );
-
-  const canStartTrial = () => entitlements()?.trial_eligible !== false;
-  const [startingTrial, setStartingTrial] = createSignal(false);
-
-  const handleStartTrial = async () => {
-    if (startingTrial()) return;
-    setStartingTrial(true);
-    try {
-      const result = await startProTrial();
-      if (result?.outcome === 'redirect') {
-        window.location.href = result.actionUrl;
-        return;
-      }
-      showSuccess(getProTrialStartedMessage());
-    } catch (err) {
-      const statusCode = (err as { status?: number } | null)?.status;
-      if (statusCode === 409) {
-        showWarning(getTrialAlreadyUsedMessage());
-      } else {
-        showWarning(getTrialStartErrorMessage(err instanceof Error ? err.message : undefined));
-      }
-    } finally {
-      setStartingTrial(false);
-    }
-  };
-
-  // Track when the in-panel Audit Logging paywall is actually shown.
-  // Note: settings tab gating is tracked separately via settingsFeatureGates.
-  createEffect((wasPaywallVisible) => {
-    const isPaywallVisible = licenseLoaded() && !hasFeature('audit_logging') && !loading();
-    if (isPaywallVisible && !wasPaywallVisible) {
-      trackPaywallViewed('audit_logging', 'settings_audit_log_panel');
-    }
-    return isPaywallVisible;
-  }, false);
-  const allowedVerificationFilters = new Set(['all', 'needs', 'verified', 'failed']);
-  const allowedSuccessFilters = new Set(['all', 'success', 'failed']);
-  const [pageSize, setPageSize] = createLocalStorageNumberSignal(STORAGE_KEYS.AUDIT_PAGE_SIZE, 100);
-  const [pageOffset, setPageOffset] = createLocalStorageNumberSignal(
-    STORAGE_KEYS.AUDIT_PAGE_OFFSET,
-    0,
-  );
-  const [verification, setVerification] = createSignal<Record<string, VerificationState>>({});
-  const [verifying, setVerifying] = createSignal<Record<string, boolean>>({});
-  const [verifyingAll, setVerifyingAll] = createSignal(false);
-  const [verifyAllTotal, setVerifyAllTotal] = createSignal(0);
-  const [verifyAllDone, setVerifyAllDone] = createSignal(0);
-  const [autoVerifyEnabled, setAutoVerifyEnabled] = createLocalStorageBooleanSignal(
-    STORAGE_KEYS.AUDIT_AUTO_VERIFY,
-    true,
-  );
-  const [autoVerifyLimit, setAutoVerifyLimit] = createLocalStorageNumberSignal(
-    STORAGE_KEYS.AUDIT_AUTO_VERIFY_LIMIT,
-    50,
-  );
-  const [pageInput, setPageInput] = createSignal('');
-  const [isMounted, setIsMounted] = createSignal(false);
-  const [cancelVerifyAll, setCancelVerifyAll] = createSignal(false);
-  const [verifyCanceled, setVerifyCanceled] = createSignal(false);
-  const [verifyControllers, setVerifyControllers] = createSignal<Record<string, AbortController>>(
-    {},
-  );
-  const auditLoggingEnabled = createMemo(() => licenseLoaded() && hasFeature('audit_logging'));
-
-  const fetchAuditEvents = async (options?: { limit?: number; offset?: number }) => {
-    if (!auditLoggingEnabled()) {
-      setEvents([]);
-      setTotalEvents(0);
-      setIsPersistent(false);
-      setError(null);
-      setLoading(false);
-      return;
-    }
-
-    const limit = options?.limit ?? pageSize();
-    const offset = options?.offset ?? pageOffset();
-
-    setLoading(true);
-    setError(null);
-    setVerification({});
-    setVerifying({});
-    setVerifyAllTotal(0);
-    setVerifyAllDone(0);
-    try {
-      const params = new URLSearchParams();
-      params.set('limit', String(limit));
-      params.set('offset', String(Math.max(0, offset)));
-      if (eventFilter()) params.set('event', eventFilter());
-      if (userFilter()) params.set('user', userFilter());
-      if (successFilter() === 'success') params.set('success', 'true');
-      if (successFilter() === 'failed') params.set('success', 'false');
-
-      const response = await apiFetch(`/api/audit?${params.toString()}`);
-      if (response.status === 402) {
-        setEvents([]);
-        setTotalEvents(0);
-        setIsPersistent(false);
-        setError(null);
-        return;
-      }
-      if (!response.ok) {
-        throw new Error(`Failed to fetch audit events: ${response.statusText}`);
-      }
-      const data: AuditResponse = await response.json();
-      setEvents(data.events || []);
-      setIsPersistent(data.persistentLogging);
-      setTotalEvents(data.total ?? 0);
-      if (data.total && offset >= data.total) {
-        const maxOffset = Math.max(0, Math.floor((data.total - 1) / limit) * limit);
-        if (maxOffset !== offset) {
-          setPageOffset(maxOffset);
-          void fetchAuditEvents({ limit, offset: maxOffset });
-          return;
-        }
-      }
-      if (data.persistentLogging && autoVerifyEnabled()) {
-        const limit = autoVerifyLimit();
-        if (limit <= 0) return;
-        setTimeout(() => {
-          if (!isMounted()) return;
-          void verifyAllEvents({ limit, showToast: false });
-        }, 0);
-      }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Unknown error';
-      if (typeof msg === 'string' && /feature not included in license/i.test(msg)) {
-        setEvents([]);
-        setTotalEvents(0);
-        setIsPersistent(false);
-        setError(null);
-        return;
-      }
-      setError(msg);
-      showWarning('Audit Log Error', msg);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const verifyEvent = async (event: AuditEvent) => {
-    if (!auditLoggingEnabled()) return;
-    if (!event.signature) return;
-    setVerifying((prev) => ({ ...prev, [event.id]: true }));
-    try {
-      const controller = new AbortController();
-      setVerifyControllers((prev) => ({ ...prev, [event.id]: controller }));
-      if (!isMounted()) {
-        controller.abort();
-      }
-      const response = await apiFetch(`/api/audit/${event.id}/verify`, {
-        signal: controller.signal,
-      });
-      if (!response.ok) {
-        throw new Error(`Failed to verify signature: ${response.statusText}`);
-      }
-      const data: VerifyResponse = await response.json();
-      let status: VerificationState['status'] = 'unavailable';
-      if (!data.available) {
-        status = 'unavailable';
-      } else if (data.verified) {
-        status = 'verified';
-      } else {
-        status = 'failed';
-      }
-      setVerification((prev) => ({
-        ...prev,
-        [event.id]: { status, message: data.message || '' },
-      }));
-    } catch (err) {
-      if ((err as { name?: string })?.name === 'AbortError') {
-        return;
-      }
-      setVerification((prev) => ({
-        ...prev,
-        [event.id]: {
-          status: 'error',
-          message: err instanceof Error ? err.message : 'Unknown error',
-        },
-      }));
-    } finally {
-      setVerifying((prev) => ({ ...prev, [event.id]: false }));
-      setVerifyControllers((prev) => {
-        const next = { ...prev };
-        delete next[event.id];
-        return next;
-      });
-    }
-  };
-
-  const verifyAllEvents = async (options?: {
-    limit?: number;
-    showToast?: boolean;
-    resume?: boolean;
-  }) => {
-    if (!auditLoggingEnabled()) return;
-    const limit = options?.limit;
-    let signedEvents = events().filter((event) => event.signature);
-    if (options?.resume) {
-      signedEvents = signedEvents.filter((event) => {
-        const state = verification()[event.id];
-        return !state || state.status === 'failed' || state.status === 'error';
-      });
-    }
-    if (limit !== undefined) {
-      signedEvents = signedEvents.slice(0, Math.max(0, limit));
-    }
-    if (signedEvents.length === 0) return;
-    setVerifyingAll(true);
-    setVerifyCanceled(false);
-    setCancelVerifyAll(false);
-    setVerifyAllTotal(signedEvents.length);
-    setVerifyAllDone(0);
-    for (const event of signedEvents) {
-      if (cancelVerifyAll()) {
-        setVerifyingAll(false);
-        setVerifyCanceled(true);
-        if (options?.showToast) {
-          showToast('info', 'Signature verification canceled');
-        }
-        const controllers = verifyControllers();
-        for (const controller of Object.values(controllers)) {
-          controller.abort();
-        }
-        return;
-      }
-      await verifyEvent(event);
-      setVerifyAllDone((prev) => prev + 1);
-    }
-    setVerifyingAll(false);
-    setVerifyCanceled(false);
-
-    if (options?.showToast) {
-      let verified = 0;
-      let failed = 0;
-      let errors = 0;
-      let unavailable = 0;
-
-      for (const event of signedEvents) {
-        const state = verification()[event.id];
-        if (!state) {
-          continue;
-        }
-        switch (state.status) {
-          case 'verified':
-            verified += 1;
-            break;
-          case 'failed':
-            failed += 1;
-            break;
-          case 'error':
-            errors += 1;
-            break;
-          case 'unavailable':
-            unavailable += 1;
-            break;
-          default:
-            break;
-        }
-      }
-
-      if (failed > 0 || errors > 0) {
-        showWarning(
-          'Signature verification completed',
-          `Verified ${verified}, failed ${failed}, errors ${errors}, unavailable ${unavailable}.`,
-        );
-      } else {
-        showSuccess('Signature verification completed', `Verified ${verified} events.`);
-      }
-    }
-  };
-
-  onMount(() => {
-    setIsMounted(true);
-    void loadLicenseStatus();
-  });
-
-  createEffect(() => {
-    if (!licenseLoaded()) {
-      setLoading(true);
-      return;
-    }
-    if (!hasFeature('audit_logging')) {
-      setEvents([]);
-      setTotalEvents(0);
-      setIsPersistent(false);
-      setError(null);
-      setLoading(false);
-      return;
-    }
-    void fetchAuditEvents();
-  });
-
-  createEffect(() => {
-    const current = verificationFilter();
-    if (!allowedVerificationFilters.has(current)) {
-      setVerificationFilter('all');
-    }
-  });
-
-  createEffect(() => {
-    const current = successFilter();
-    if (!allowedSuccessFilters.has(current)) {
-      setSuccessFilter('all');
-    }
-  });
-
-  onCleanup(() => {
-    setIsMounted(false);
-    setCancelVerifyAll(true);
-    const controllers = verifyControllers();
-    for (const controller of Object.values(controllers)) {
-      controller.abort();
-    }
-  });
+  const {
+    activeFilterChips,
+    activeFilterCount,
+    applyFilters,
+    auditLoggingEnabled,
+    autoVerifyEnabled,
+    autoVerifyLimit,
+    canStartTrial,
+    cancelVerification,
+    clearFilterChip,
+    clearFilters,
+    error,
+    eventFilter,
+    filteredEvents,
+    goToFirstPage,
+    goToLastPage,
+    goToNextPage,
+    goToPreviousPage,
+    handleStartTrial,
+    handleUpgradeClick,
+    hasNextPage,
+    hasResumeEvents,
+    hasSignedEvents,
+    isPersistent,
+    loading,
+    pageInput,
+    pageNumber,
+    pageRangeText,
+    pageSize,
+    refresh,
+    resumeCount,
+    resumeVerification,
+    resetPreferences,
+    setAutoVerifyEnabled,
+    setAutoVerifyLimit,
+    setEventFilter,
+    setPageInput,
+    setPageSize,
+    setSuccessFilter,
+    setUserFilter,
+    setVerificationFilter,
+    showUpgradePaywall,
+    startingTrial,
+    submitPageInput,
+    successFilter,
+    totalEvents,
+    totalPages,
+    upgradeActionUrl,
+    verification,
+    verificationFilter,
+    verificationSummary,
+    verifyAll,
+    verifyAllLabel,
+    verifyCanceled,
+    verifyEvent,
+    verifying,
+    verifyingAll,
+    userFilter,
+  } = useAuditLogPanelState();
 
   const formatTimestamp = (ts: string) => {
     const date = new Date(ts);
     return date.toLocaleString();
   };
 
-  const hasSignedEvents = () => events().some((event) => event.signature);
-  const hasResumeEvents = () =>
-    events().some((event) => {
-      if (!event.signature) return false;
-      const state = verification()[event.id];
-      return !state || state.status === 'failed' || state.status === 'error';
-    });
-  const resumeCount = () =>
-    events().filter((event) => {
-      if (!event.signature) return false;
-      const state = verification()[event.id];
-      return !state || state.status === 'failed' || state.status === 'error';
-    }).length;
-  const verifyAllLabel = () => {
-    if (!verifyingAll()) return 'Verify All';
-    if (verifyAllTotal() === 0) return 'Verifying…';
-    return `Verifying ${verifyAllDone()} of ${verifyAllTotal()}`;
-  };
-  const hasNextPage = () => events().length === pageSize();
-  const pageNumber = () => Math.floor(pageOffset() / pageSize()) + 1;
-  const totalPages = () => Math.max(1, Math.ceil(totalEvents() / pageSize()));
-  const pageRangeText = () => {
-    if (totalEvents() === 0) return 'Showing 0 of 0';
-    const start = pageOffset() + 1;
-    const end = Math.min(totalEvents(), pageOffset() + events().length);
-    return `Showing ${start}-${end} of ${totalEvents()}`;
-  };
-
-  const verificationSummary = createMemo(() => {
-    const summary = {
-      total: events().length,
-      signed: 0,
-      verified: 0,
-      failed: 0,
-      error: 0,
-      unavailable: 0,
-      unchecked: 0,
-    };
-
-    for (const event of events()) {
-      if (!event.signature) continue;
-      summary.signed += 1;
-      const state = verification()[event.id];
-      if (!state) {
-        summary.unchecked += 1;
-        continue;
-      }
-      switch (state.status) {
-        case 'verified':
-          summary.verified += 1;
-          break;
-        case 'failed':
-          summary.failed += 1;
-          break;
-        case 'error':
-          summary.error += 1;
-          break;
-        case 'unavailable':
-          summary.unavailable += 1;
-          break;
-        default:
-          summary.unchecked += 1;
-      }
-    }
-
-    return summary;
-  });
-
-  const activeFilterCount = () => {
-    let count = 0;
-    if (eventFilter()) count += 1;
-    if (userFilter()) count += 1;
-    if (successFilter() !== 'all') count += 1;
-    if (verificationFilter() !== 'all') count += 1;
-    return count;
-  };
-
-  const activeFilterChips = () => {
-    const chips: { label: string; key: 'event' | 'user' | 'success' | 'verification' }[] = [];
-    if (eventFilter()) chips.push({ label: `Event: ${eventFilter()}`, key: 'event' });
-    if (userFilter()) chips.push({ label: `User: ${userFilter()}`, key: 'user' });
-    if (successFilter() !== 'all')
-      chips.push({ label: `Success: ${successFilter()}`, key: 'success' });
-    if (verificationFilter() !== 'all')
-      chips.push({ label: `Verification: ${verificationFilter()}`, key: 'verification' });
-    return chips;
-  };
-
-  const filteredEvents = createMemo(() => {
-    const filter = verificationFilter();
-    if (filter === 'all') return events();
-    return events().filter((event) => {
-      if (!event.signature) return false;
-      const state = verification()[event.id];
-      if (!state) {
-        return filter === 'needs';
-      }
-      if (filter === 'verified') return state.status === 'verified';
-      if (filter === 'failed') return state.status === 'failed' || state.status === 'error';
-      return false;
-    });
-  });
-
   return (
     <SettingsPanel
-        title="Audit Log"
-        description="Persistent, searchable audit events with optional signature verification."
-        icon={<Shield class="w-5 h-5" strokeWidth={2} />}
-        noPadding
-        bodyClass="space-y-6 p-4 sm:p-6"
-        action={
-          <div class="flex w-full flex-wrap items-center gap-2 sm:w-auto">
-            <button
-              onClick={() => fetchAuditEvents()}
-              disabled={loading() || !auditLoggingEnabled()}
-              class={AUDIT_REFRESH_BUTTON_CLASS}
-            >
-              <RefreshCw class={`w-4 h-4 ${loading() ? 'animate-spin' : ''}`} />
-              Refresh
-            </button>
-            <button
-              onClick={() => verifyAllEvents({ showToast: true })}
-              disabled={!isPersistent() || loading() || verifyingAll() || !hasSignedEvents()}
-              class={AUDIT_VERIFY_ALL_BUTTON_CLASS}
-            >
-              {(() => {
-                const presentation = getAuditEventStatusPresentation(true);
-                const Icon = presentation.icon;
-                return <Icon class="w-4 h-4" />;
-              })()}
-              {verifyAllLabel()}
-            </button>
-            <button
-              onClick={() => setCancelVerifyAll(true)}
-              disabled={!verifyingAll()}
-              class={`${AUDIT_TOOLBAR_BUTTON_CLASS} text-muted`}
-            >
-              Cancel
-            </button>
-            <button
-              onClick={() => verifyAllEvents({ showToast: true, resume: true })}
-              disabled={verifyingAll() || !hasResumeEvents()}
-              class={`${AUDIT_TOOLBAR_BUTTON_CLASS} text-muted`}
-              onMouseEnter={(e) => {
-                if (!hasResumeEvents()) return;
-                const rect = e.currentTarget.getBoundingClientRect();
-                showTooltip(
-                  'Retries failed, error, or unchecked signatures on this page.',
-                  rect.left + rect.width / 2,
-                  rect.top,
-                  { align: 'center', direction: 'up', maxWidth: 260 },
-                );
-              }}
-              onMouseLeave={() => hideTooltip()}
-            >
-              <Play class="w-4 h-4" />
-              Resume{resumeCount() > 0 ? ` (${resumeCount()})` : ''}
-            </button>
-            <Show when={verifyCanceled() && !verifyingAll()}>
-              <span class="text-xs text-amber-600 dark:text-amber-400">Verification canceled</span>
-            </Show>
-          </div>
-        }
-      >
-        {/* Upgrade CTA */}
-        <Show when={licenseLoaded() && !hasFeature('audit_logging') && !loading()}>
+      title="Audit Log"
+      description="Persistent, searchable audit events with optional signature verification."
+      icon={<Shield class="w-5 h-5" strokeWidth={2} />}
+      noPadding
+      bodyClass="space-y-6 p-4 sm:p-6"
+      action={
+        <div class="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+          <button
+            onClick={refresh}
+            disabled={loading() || !auditLoggingEnabled()}
+            class={AUDIT_REFRESH_BUTTON_CLASS}
+          >
+            <RefreshCw class={`w-4 h-4 ${loading() ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
+          <button
+            onClick={verifyAll}
+            disabled={!isPersistent() || loading() || verifyingAll() || !hasSignedEvents()}
+            class={AUDIT_VERIFY_ALL_BUTTON_CLASS}
+          >
+            {(() => {
+              const presentation = getAuditEventStatusPresentation(true);
+              const Icon = presentation.icon;
+              return <Icon class="w-4 h-4" />;
+            })()}
+            {verifyAllLabel()}
+          </button>
+          <button
+            onClick={cancelVerification}
+            disabled={!verifyingAll()}
+            class={`${AUDIT_TOOLBAR_BUTTON_CLASS} text-muted`}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={resumeVerification}
+            disabled={verifyingAll() || !hasResumeEvents()}
+            class={`${AUDIT_TOOLBAR_BUTTON_CLASS} text-muted`}
+            onMouseEnter={(e) => {
+              if (!hasResumeEvents()) return;
+              const rect = e.currentTarget.getBoundingClientRect();
+              showTooltip(
+                'Retries failed, error, or unchecked signatures on this page.',
+                rect.left + rect.width / 2,
+                rect.top,
+                { align: 'center', direction: 'up', maxWidth: 260 },
+              );
+            }}
+            onMouseLeave={() => hideTooltip()}
+          >
+            <Play class="w-4 h-4" />
+            Resume{resumeCount() > 0 ? ` (${resumeCount()})` : ''}
+          </button>
+          <Show when={verifyCanceled() && !verifyingAll()}>
+            <span class="text-xs text-amber-600 dark:text-amber-400">Verification canceled</span>
+          </Show>
+        </div>
+      }
+    >
+      <Show when={showUpgradePaywall()}>
           <div class="p-6 bg-surface-alt border border-border rounded-md">
             <div class="flex flex-col sm:flex-row items-center gap-4">
               <div class="flex-1">
@@ -595,11 +167,11 @@ export default function AuditLogPanel() {
               </div>
               <div class="flex flex-col items-center gap-2">
                 <a
-                  href={getUpgradeActionUrlOrFallback('audit_logging')}
+                  href={upgradeActionUrl()}
                   target="_blank"
                   rel="noopener noreferrer"
                   class={getUpgradeActionButtonClass({ mobileFullWidth: false })}
-                  onClick={() => trackUpgradeClicked('settings_audit_log_panel', 'audit_logging')}
+                  onClick={handleUpgradeClick}
                 >
                   {UPGRADE_ACTION_LABEL}
                 </a>
@@ -616,10 +188,9 @@ export default function AuditLogPanel() {
               </div>
             </div>
           </div>
-        </Show>
+      </Show>
 
-        {/* Filters */}
-        <Show when={isPersistent()}>
+      <Show when={isPersistent()}>
           <div class="flex flex-wrap gap-3 p-4 bg-surface-alt rounded-md">
             <div class="flex items-center gap-2">
               <Filter class="w-4 h-4 text-slate-400" />
@@ -673,27 +244,13 @@ export default function AuditLogPanel() {
               <option value="200">200 / page</option>
             </select>
             <button
-              onClick={() => {
-                setPageOffset(0);
-                void fetchAuditEvents({ offset: 0 });
-              }}
+              onClick={applyFilters}
               class="w-full sm:w-auto min-h-10 sm:min-h-10 px-3 py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md"
             >
               Apply
             </button>
             <button
-              onClick={() => {
-                const hadFilters = activeFilterCount() > 0;
-                setEventFilter('');
-                setUserFilter('');
-                setSuccessFilter('all');
-                setVerificationFilter('all');
-                setPageOffset(0);
-                void fetchAuditEvents({ offset: 0 });
-                if (hadFilters) {
-                  showSuccess('Audit filters cleared');
-                }
-              }}
+              onClick={clearFilters}
               class="w-full sm:w-auto min-h-10 sm:min-h-10 px-3 py-2.5 text-sm font-medium text-base-content bg-surface border border-border rounded-md hover:bg-surface-hover"
             >
               Clear{activeFilterCount() > 0 ? ` (${activeFilterCount()})` : ''}
@@ -705,14 +262,7 @@ export default function AuditLogPanel() {
                 {(chip) => (
                   <button
                     type="button"
-                    onClick={() => {
-                      if (chip.key === 'event') setEventFilter('');
-                      if (chip.key === 'user') setUserFilter('');
-                      if (chip.key === 'success') setSuccessFilter('all');
-                      if (chip.key === 'verification') setVerificationFilter('all');
-                      setPageOffset(0);
-                      void fetchAuditEvents({ offset: 0 });
-                    }}
+                    onClick={() => clearFilterChip(chip.key)}
                     class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-surface-alt text-base-content hover:bg-surface-hover"
                     title="Click to clear filter"
                     aria-label={`Clear ${chip.label}`}
@@ -727,12 +277,7 @@ export default function AuditLogPanel() {
                     onKeyDown={(e) => {
                       if (e.key !== 'Enter' && e.key !== ' ') return;
                       e.preventDefault();
-                      if (chip.key === 'event') setEventFilter('');
-                      if (chip.key === 'user') setUserFilter('');
-                      if (chip.key === 'success') setSuccessFilter('all');
-                      if (chip.key === 'verification') setVerificationFilter('all');
-                      setPageOffset(0);
-                      void fetchAuditEvents({ offset: 0 });
+                      clearFilterChip(chip.key);
                     }}
                   >
                     {chip.label}
@@ -790,39 +335,29 @@ export default function AuditLogPanel() {
                 <Info class="w-3 h-3" />
               </span>
               <button
-                onClick={() => {
-                  setAutoVerifyEnabled(true);
-                  setAutoVerifyLimit(50);
-                  setPageSize(100);
-                  setPageOffset(0);
-                  setPageInput('');
-                  showSuccess('Audit preferences reset');
-                }}
+                onClick={resetPreferences}
                 class="w-full sm:w-auto sm:ml-2 min-h-10 sm:min-h-10 px-3 py-2 text-sm font-medium text-muted border border-border rounded-md hover:bg-surface-hover"
               >
                 Reset preferences
               </button>
             </div>
           </div>
-        </Show>
+      </Show>
 
-        {/* Error State */}
-        <Show when={error()}>
+      <Show when={error()}>
           <div class="p-4 bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-800 rounded-md text-red-700 dark:text-red-300">
             {error()}
           </div>
-        </Show>
+      </Show>
 
-        {/* Loading State */}
-        <Show when={loading()}>
+      <Show when={loading()}>
           <div class="flex items-center justify-center py-12">
             <RefreshCw class="w-8 h-8 text-blue-500 animate-spin" />
             <span class="sr-only">{getAuditLogLoadingState().text}</span>
           </div>
-        </Show>
+      </Show>
 
-        {/* Events Table */}
-        <Show when={!loading() && isPersistent() && filteredEvents().length > 0}>
+      <Show when={!loading() && isPersistent() && filteredEvents().length > 0}>
           <div class="flex flex-wrap items-center gap-3 text-xs text-muted">
             <span>Total: {totalEvents()}</span>
             <span>Signed: {verificationSummary().signed}</span>
@@ -937,7 +472,7 @@ export default function AuditLogPanel() {
                           <span class="text-xs text-muted">Verifying…</span>
                         </Show>
                         <button
-                          onClick={() => verifyEvent(event)}
+                          onClick={() => void verifyEvent(event)}
                           disabled={isVerifying}
                           class={AUDIT_VERIFY_ROW_BUTTON_CLASS}
                         >
@@ -952,10 +487,9 @@ export default function AuditLogPanel() {
               desktopMinWidth="900px"
             />
           </div>
-        </Show>
+      </Show>
 
-        {/* Empty State */}
-        <Show when={!loading() && isPersistent() && filteredEvents().length === 0}>
+      <Show when={!loading() && isPersistent() && filteredEvents().length === 0}>
           <div class="text-center py-12 px-4 bg-surface-alt rounded-md border border-dashed border-border">
             <div class="flex flex-col items-center max-w-sm mx-auto">
               <Show
@@ -972,14 +506,7 @@ export default function AuditLogPanel() {
               </p>
               <Show when={activeFilterCount() > 0}>
                 <button
-                  onClick={() => {
-                    setEventFilter('');
-                    setUserFilter('');
-                    setSuccessFilter('all');
-                    setVerificationFilter('all');
-                    setPageOffset(0);
-                    void fetchAuditEvents({ offset: 0 });
-                  }}
+                  onClick={clearFilters}
                   class="mt-6 px-4 py-2 text-sm font-medium text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 rounded-md hover:bg-blue-50 dark:hover:bg-blue-900"
                 >
                   Clear all filters
@@ -987,10 +514,9 @@ export default function AuditLogPanel() {
               </Show>
             </div>
           </div>
-        </Show>
+      </Show>
 
-        {/* Pagination */}
-        <Show when={!loading() && isPersistent()}>
+      <Show when={!loading() && isPersistent()}>
           <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
             <div class="flex items-center gap-2 text-xs text-muted">
               <label class="flex items-center gap-2">
@@ -1000,27 +526,12 @@ export default function AuditLogPanel() {
                   min="1"
                   value={pageInput()}
                   onInput={(e) => setPageInput(e.currentTarget.value)}
-                  onKeyDown={(e) => {
-                    if (e.key !== 'Enter') return;
-                    const parsed = Number(pageInput());
-                    if (!Number.isFinite(parsed)) return;
-                    const clamped = Math.max(1, Math.min(totalPages(), Math.floor(parsed)));
-                    const nextOffset = (clamped - 1) * pageSize();
-                    setPageOffset(nextOffset);
-                    void fetchAuditEvents({ offset: nextOffset });
-                  }}
+                  onKeyDown={(e) => e.key === 'Enter' && submitPageInput()}
                   class="min-h-10 sm:min-h-10 w-20 rounded-md border border-border bg-surface px-2.5 text-sm text-base-content"
                 />
               </label>
               <button
-                onClick={() => {
-                  const parsed = Number(pageInput());
-                  if (!Number.isFinite(parsed)) return;
-                  const clamped = Math.max(1, Math.min(totalPages(), Math.floor(parsed)));
-                  const nextOffset = (clamped - 1) * pageSize();
-                  setPageOffset(nextOffset);
-                  void fetchAuditEvents({ offset: nextOffset });
-                }}
+                onClick={submitPageInput}
                 class="min-h-10 sm:min-h-10 px-3 py-2.5 text-sm font-medium text-base-content bg-surface border border-border rounded-md hover:bg-surface-hover"
               >
                 Go
@@ -1028,43 +539,28 @@ export default function AuditLogPanel() {
             </div>
             <div class="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:justify-end">
               <button
-                onClick={() => {
-                  setPageOffset(0);
-                  void fetchAuditEvents({ offset: 0 });
-                }}
-                disabled={pageOffset() === 0}
+                onClick={goToFirstPage}
+                disabled={pageNumber() === 1}
                 class="min-h-10 sm:min-h-10 px-3 py-2.5 text-sm font-medium text-base-content bg-surface border border-border rounded-md hover:bg-surface-hover disabled:opacity-50"
               >
                 First
               </button>
               <button
-                onClick={() => {
-                  const nextOffset = Math.max(0, pageOffset() - pageSize());
-                  setPageOffset(nextOffset);
-                  void fetchAuditEvents({ offset: nextOffset });
-                }}
-                disabled={pageOffset() === 0}
+                onClick={goToPreviousPage}
+                disabled={pageNumber() === 1}
                 class="min-h-10 sm:min-h-10 px-3 py-2.5 text-sm font-medium text-base-content bg-surface border border-border rounded-md hover:bg-surface-hover disabled:opacity-50"
               >
                 Previous
               </button>
               <button
-                onClick={() => {
-                  const nextOffset = pageOffset() + pageSize();
-                  setPageOffset(nextOffset);
-                  void fetchAuditEvents({ offset: nextOffset });
-                }}
+                onClick={goToNextPage}
                 disabled={!hasNextPage()}
                 class="min-h-10 sm:min-h-10 px-3 py-2.5 text-sm font-medium text-base-content bg-surface border border-border rounded-md hover:bg-surface-hover disabled:opacity-50"
               >
                 Next
               </button>
               <button
-                onClick={() => {
-                  const lastOffset = Math.max(0, (totalPages() - 1) * pageSize());
-                  setPageOffset(lastOffset);
-                  void fetchAuditEvents({ offset: lastOffset });
-                }}
+                onClick={goToLastPage}
                 disabled={!hasNextPage()}
                 class="min-h-10 sm:min-h-10 px-3 py-2.5 text-sm font-medium text-base-content bg-surface border border-border rounded-md hover:bg-surface-hover disabled:opacity-50"
               >
@@ -1072,7 +568,7 @@ export default function AuditLogPanel() {
               </button>
             </div>
           </div>
-        </Show>
-      </SettingsPanel>
+      </Show>
+    </SettingsPanel>
   );
 }
