@@ -6,9 +6,7 @@ import {
   createMemo,
   createSignal,
   onCleanup,
-  untrack,
 } from 'solid-js';
-import { useLocation, useNavigate } from '@solidjs/router';
 import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
 import {
@@ -24,10 +22,8 @@ import { SearchInput } from '@/components/shared/SearchInput';
 import { getSourcePlatformBadge } from '@/components/shared/sourcePlatformBadges';
 import {
   getSourcePlatformLabel,
-  normalizeSourcePlatformKey,
   normalizeSourcePlatformQueryValue,
 } from '@/utils/sourcePlatforms';
-import { buildSourcePlatformOptions } from '@/utils/sourcePlatformOptions';
 import { hideTooltip, showTooltip } from '@/components/shared/Tooltip';
 import { useColumnVisibility } from '@/hooks/useColumnVisibility';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
@@ -35,15 +31,8 @@ import { formatAbsoluteTime, formatBytes, formatRelativeTime } from '@/utils/for
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import { segmentedButtonClass } from '@/utils/segmentedButton';
 import { useKioskMode } from '@/hooks/useKioskMode';
-import { useStorageRecoveryResources } from '@/hooks/useUnifiedResources';
-import { useRecoveryRollups } from '@/hooks/useRecoveryRollups';
-import { useRecoveryPoints } from '@/hooks/useRecoveryPoints';
-import { useRecoveryPointsFacets } from '@/hooks/useRecoveryPointsFacets';
-import { useRecoveryPointsSeries } from '@/hooks/useRecoveryPointsSeries';
-import { buildRecoveryPath, parseRecoveryLinkSearch } from '@/routing/resourceLinks';
 import type { ProtectionRollup, RecoveryPoint } from '@/types/recovery';
 import type { RecoveryOutcome } from '@/types/recovery';
-import type { Resource } from '@/types/resource';
 import {
   getRecoveryOutcomeBadgeClass,
   normalizeRecoveryOutcome as normalizeOutcome,
@@ -135,59 +124,15 @@ import {
 } from '@/components/shared/Table';
 import type { ColumnDef } from '@/hooks/useColumnVisibility';
 import { createHiddenCanonicalTypeColumn } from '@/utils/typeColumnDefinition';
+import { useRecoverySurfaceState } from '@/features/recovery/useRecoverySurfaceState';
 
 type ArtifactMode = RecoveryArtifactMode;
 type VerificationFilter = 'all' | 'verified' | 'unverified' | 'unknown';
 
-const isRecoveryDateKey = (value: string): boolean => /^\d{4}-\d{2}-\d{2}$/.test(value);
-const isRecoveryRangeDays = (value: string): value is '7' | '30' | '90' | '365' =>
-  value === '7' || value === '30' || value === '90' || value === '365';
-
-const normalizeRecoveryRouteValue = (value: string | null | undefined): string =>
-  String(value || '').trim();
-
-const normalizeRecoveryRouteSelection = (value: string | null | undefined): string => {
-  const normalized = normalizeRecoveryRouteValue(value);
-  return normalized.toLowerCase() === 'all' ? 'all' : normalized;
-};
-
-const normalizeRecoveryBooleanFlag = (value: string | null | undefined): boolean => {
-  const normalized = normalizeRecoveryRouteValue(value).toLowerCase();
-  return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on';
-};
-
-const normalizeRecoveryProviderSelection = (value: string | null | undefined): string => {
-  const normalized = normalizeSourcePlatformQueryValue(value);
-  if (!normalized || normalized === 'all') return 'all';
-  return normalizeSourcePlatformKey(normalized) || 'all';
-};
-
 type IssueTone = RecoveryIssueTone;
 
 const Recovery: Component = () => {
-  const navigate = useNavigate();
-  const location = useLocation();
-
   const kioskMode = useKioskMode();
-
-  const storageRecoveryResources = useStorageRecoveryResources();
-
-  const [rollupId, setRollupId] = createSignal('');
-  const [queryFilter, setQueryFilter] = createSignal('');
-  const [providerFilter, setProviderFilter] = createSignal('all');
-  const [clusterFilter, setClusterFilter] = createSignal('all');
-  const [modeFilter, setModeFilter] = createSignal<'all' | ArtifactMode>('all');
-  const [historyOutcomeFilter, setHistoryOutcomeFilter] = createSignal<'all' | RecoveryOutcome>(
-    'all',
-  );
-  const [verificationFilter, setVerificationFilter] = createSignal<VerificationFilter>('all');
-  const [scopeFilter, setScopeFilter] = createSignal<'all' | 'workload'>('all');
-  const [nodeFilter, setNodeFilter] = createSignal('all');
-  const [namespaceFilter, setNamespaceFilter] = createSignal('all');
-  const [protectedStaleOnly, setProtectedStaleOnly] = createSignal(false);
-  const [chartRangeDays, setChartRangeDays] = createSignal<7 | 30 | 90 | 365>(30);
-  const [selectedDateKey, setSelectedDateKey] = createSignal<string | null>(null);
-  const [currentPage, setCurrentPage] = createSignal(1);
   const [selectedPoint, setSelectedPoint] = createSignal<RecoveryPoint | null>(null);
   const [moreFiltersOpen, setMoreFiltersOpen] = createSignal(false);
   const { isMobile } = useBreakpoint();
@@ -209,175 +154,52 @@ const Recovery: Component = () => {
       setProtectedSortDir('asc');
     }
   };
-
-  const tzOffsetMinutes = createMemo(() => -new Date().getTimezoneOffset());
-
-  const chartWindow = createMemo(() => {
-    const days = chartRangeDays();
-    const end = new Date();
-    end.setHours(23, 59, 59, 999);
-    const start = new Date(end);
-    start.setDate(start.getDate() - (days - 1));
-    start.setHours(0, 0, 0, 0);
-    return { from: start.toISOString(), to: end.toISOString() };
-  });
-
-  const tableWindow = createMemo(() => {
-    const selected = selectedDateKey();
-    if (selected) {
-      const start = parseRecoveryDateKey(selected);
-      start.setHours(0, 0, 0, 0);
-      const end = new Date(start);
-      end.setHours(23, 59, 59, 999);
-      return { from: start.toISOString(), to: end.toISOString() };
-    }
-    return chartWindow();
-  });
-
-  const recoveryRollups = useRecoveryRollups(() => {
-    const rid = rollupId().trim();
-    const window = chartWindow();
-    const vf = verificationFilter();
-    return {
-      rollupId: rid || null,
-      provider: providerFilter() === 'all' ? null : providerFilter(),
-      mode: modeFilter() === 'all' ? null : modeFilter(),
-      outcome: historyOutcomeFilter() === 'all' ? null : historyOutcomeFilter(),
-      q: queryFilter().trim() || null,
-      cluster: clusterFilter() === 'all' ? null : clusterFilter(),
-      node: nodeFilter() === 'all' ? null : nodeFilter(),
-      namespace: namespaceFilter() === 'all' ? null : namespaceFilter(),
-      scope: scopeFilter() === 'workload' ? 'workload' : null,
-      verification: vf === 'all' ? null : vf,
-      from: window.from,
-      to: window.to,
-    };
-  });
-  const rollups = createMemo<ProtectionRollup[]>(() => recoveryRollups.rollups() || []);
-
-  const recoveryPoints = useRecoveryPoints(() => {
-    const rid = rollupId().trim();
-    const window = tableWindow();
-    const vf = verificationFilter();
-    return {
-      page: currentPage(),
-      limit: 200,
-      rollupId: rid || null,
-      provider: providerFilter() === 'all' ? null : providerFilter(),
-      cluster: clusterFilter() === 'all' ? null : clusterFilter(),
-      mode: modeFilter() === 'all' ? null : modeFilter(),
-      outcome: historyOutcomeFilter() === 'all' ? null : historyOutcomeFilter(),
-      q: queryFilter().trim() || null,
-      node: nodeFilter() === 'all' ? null : nodeFilter(),
-      namespace: namespaceFilter() === 'all' ? null : namespaceFilter(),
-      scope: scopeFilter() === 'workload' ? 'workload' : null,
-      verification: vf === 'all' ? null : vf,
-      from: window.from,
-      to: window.to,
-    };
-  });
-
-  const recoveryFacets = useRecoveryPointsFacets(() => {
-    const rid = rollupId().trim();
-    const window = tableWindow();
-    const vf = verificationFilter();
-    return {
-      rollupId: rid || null,
-      provider: providerFilter() === 'all' ? null : providerFilter(),
-      cluster: clusterFilter() === 'all' ? null : clusterFilter(),
-      mode: modeFilter() === 'all' ? null : modeFilter(),
-      outcome: historyOutcomeFilter() === 'all' ? null : historyOutcomeFilter(),
-      q: queryFilter().trim() || null,
-      scope: scopeFilter() === 'workload' ? 'workload' : null,
-      node: nodeFilter() === 'all' ? null : nodeFilter(),
-      namespace: namespaceFilter() === 'all' ? null : namespaceFilter(),
-      verification: vf === 'all' ? null : vf,
-      from: window.from,
-      to: window.to,
-    };
-  });
-
-  const recoverySeries = useRecoveryPointsSeries(() => {
-    const rid = rollupId().trim();
-    const window = chartWindow();
-    const vf = verificationFilter();
-    return {
-      rollupId: rid || null,
-      provider: providerFilter() === 'all' ? null : providerFilter(),
-      cluster: clusterFilter() === 'all' ? null : clusterFilter(),
-      mode: modeFilter() === 'all' ? null : modeFilter(),
-      outcome: historyOutcomeFilter() === 'all' ? null : historyOutcomeFilter(),
-      q: queryFilter().trim() || null,
-      node: nodeFilter() === 'all' ? null : nodeFilter(),
-      namespace: namespaceFilter() === 'all' ? null : namespaceFilter(),
-      scope: scopeFilter() === 'workload' ? 'workload' : null,
-      verification: vf === 'all' ? null : vf,
-      from: window.from,
-      to: window.to,
-      tzOffsetMinutes: tzOffsetMinutes(),
-    };
-  });
-
-  const resourcesById = createMemo(() => {
-    const map = new Map<string, Resource>();
-    for (const r of storageRecoveryResources.resources() || []) {
-      if (r?.id) map.set(r.id, r);
-    }
-    return map;
-  });
-
-  createEffect(() => {
-    const parsed = parseRecoveryLinkSearch(location.search);
-
-    const nextRollup = normalizeRecoveryRouteValue(parsed.rollupId);
-    const nextQuery = normalizeRecoveryRouteValue(parsed.query);
-    const nextProvider = normalizeRecoveryProviderSelection(parsed.provider || '');
-    const nextStaleOnly = normalizeRecoveryBooleanFlag(parsed.stale);
-    const normalizedRange = normalizeRecoveryRouteValue(parsed.range);
-    const nextRange = isRecoveryRangeDays(normalizedRange) ? Number(normalizedRange) : 30;
-    const nextCluster = normalizeRecoveryRouteSelection(parsed.cluster || 'all') || 'all';
-    const normalizedDay = normalizeRecoveryRouteValue(parsed.day);
-    const nextDay = isRecoveryDateKey(normalizedDay) ? normalizedDay : '';
-    const nextMode = normalizeRecoveryModeQueryValue(parsed.mode);
-    const rawScope = normalizeRecoveryRouteValue(parsed.scope).toLowerCase();
-    const nextScope: 'all' | 'workload' = rawScope === 'workload' ? 'workload' : 'all';
-    const nextNode = normalizeRecoveryRouteSelection(parsed.node || 'all') || 'all';
-    const nextNamespace = normalizeRecoveryRouteSelection(parsed.namespace || 'all') || 'all';
-    const verificationValue = normalizeRecoveryRouteValue(parsed.verification).toLowerCase();
-    const statusValue = normalizeRecoveryRouteValue(parsed.status).toLowerCase();
-
-    if (nextRollup !== untrack(rollupId)) setRollupId(nextRollup);
-    if (nextQuery !== untrack(queryFilter)) setQueryFilter(nextQuery);
-    if (nextProvider !== untrack(providerFilter)) setProviderFilter(nextProvider);
-    if (nextStaleOnly !== untrack(protectedStaleOnly)) setProtectedStaleOnly(nextStaleOnly);
-    if (nextRange !== untrack(chartRangeDays)) setChartRangeDays(nextRange as 7 | 30 | 90 | 365);
-    if (nextCluster !== untrack(clusterFilter)) setClusterFilter(nextCluster);
-    if ((nextDay || null) !== untrack(selectedDateKey)) setSelectedDateKey(nextDay || null);
-
-    if (nextMode !== untrack(modeFilter)) setModeFilter(nextMode);
-    if (nextScope !== untrack(scopeFilter)) setScopeFilter(nextScope);
-    if (nextNode !== untrack(nodeFilter)) setNodeFilter(nextNode);
-    if (nextNamespace !== untrack(namespaceFilter)) setNamespaceFilter(nextNamespace);
-
-    if (
-      verificationValue === 'verified' ||
-      verificationValue === 'unverified' ||
-      verificationValue === 'unknown'
-    ) {
-      if (verificationValue !== untrack(verificationFilter))
-        setVerificationFilter(verificationValue as VerificationFilter);
-      if (untrack(historyOutcomeFilter) !== 'all') setHistoryOutcomeFilter('all');
-    } else {
-      if (untrack(verificationFilter) !== 'all') setVerificationFilter('all');
-      const normalizedOutcome = normalizeOutcome(statusValue);
-      if (statusValue && normalizedOutcome !== 'unknown') {
-        if (normalizedOutcome !== untrack(historyOutcomeFilter))
-          setHistoryOutcomeFilter(normalizedOutcome);
-      } else if (untrack(historyOutcomeFilter) !== 'all') {
-        setHistoryOutcomeFilter('all');
-      }
-    }
-  });
+  const {
+    chartRangeDays,
+    clusterFilter,
+    clusterOptions,
+    currentPage,
+    facets,
+    historyOutcomeFilter,
+    modeFilter,
+    namespaceFilter,
+    namespaceOptions,
+    nodeFilter,
+    nodeOptions,
+    protectedStaleOnly,
+    providerFilter,
+    providerOptions,
+    queryFilter,
+    recoveryPoints,
+    recoveryRollups,
+    recoverySeries,
+    resourcesById,
+    rollupId,
+    rollups,
+    scopeFilter,
+    selectedDateKey,
+    setChartRangeDays,
+    setClusterFilter,
+    setCurrentPage,
+    setHistoryOutcomeFilter,
+    setModeFilter,
+    setNamespaceFilter,
+    setNodeFilter,
+    setProtectedStaleOnly,
+    setProviderFilter,
+    setQueryFilter,
+    setRollupId,
+    setScopeFilter,
+    setSelectedDateKey,
+    setVerificationFilter,
+    showClusterFilter,
+    showNamespaceFilter,
+    showNodeFilter,
+    showVerificationFilter,
+    tableWindow,
+    totalPages,
+    verificationFilter,
+  } = useRecoverySurfaceState();
 
   createEffect(() => {
     // Avoid leaving modals open when filters or selection change.
@@ -411,65 +233,6 @@ const Recovery: Component = () => {
 
   onCleanup(() => {
     document.removeEventListener('mousedown', handleAdvancedFiltersClickOutside);
-  });
-
-  createEffect(() => {
-    // Keep paging stable: any filter change resets to the first page.
-    rollupId();
-    queryFilter();
-    providerFilter();
-    clusterFilter();
-    modeFilter();
-    historyOutcomeFilter();
-    verificationFilter();
-    nodeFilter();
-    namespaceFilter();
-    scopeFilter();
-    chartRangeDays();
-    selectedDateKey();
-    if (untrack(currentPage) !== 1) setCurrentPage(1);
-  });
-
-  createEffect(() => {
-    const rid = rollupId().trim();
-    const status = historyOutcomeFilter() !== 'all' ? historyOutcomeFilter() : null;
-    const verification = verificationFilter() !== 'all' ? verificationFilter() : null;
-
-    const nextPath = buildRecoveryPath({
-      rollupId: rid || null,
-      query: queryFilter().trim() || null,
-      provider: providerFilter() !== 'all' ? providerFilter() : null,
-      stale: protectedStaleOnly() ? '1' : null,
-      range: chartRangeDays() !== 30 ? String(chartRangeDays()) : null,
-      cluster: clusterFilter() !== 'all' ? clusterFilter() : null,
-      day: selectedDateKey(),
-      mode: modeFilter() !== 'all' ? modeFilter() : null,
-      status,
-      verification,
-      scope: scopeFilter() === 'workload' ? 'workload' : null,
-      node: nodeFilter() !== 'all' ? nodeFilter() : null,
-      namespace: namespaceFilter() !== 'all' ? namespaceFilter() : null,
-    });
-
-    const currentPath = `${location.pathname}${location.search || ''}`;
-    if (nextPath !== currentPath) {
-      navigate(nextPath, { replace: true });
-    }
-  });
-
-  const providerOptions = createMemo(() => {
-    const providers = new Set<string>();
-    for (const r of rollups()) {
-      for (const p of r.providers || []) {
-        const v = normalizeSourcePlatformQueryValue(String(p || '').trim());
-        if (v) providers.add(v);
-      }
-    }
-    for (const p of recoveryPoints.points() || []) {
-      const v = normalizeSourcePlatformQueryValue(String(p?.provider || '').trim());
-      if (v) providers.add(v);
-    }
-    return ['all', ...buildSourcePlatformOptions(providers).map((option) => option.key)];
   });
 
   const baseRollups = createMemo<ProtectionRollup[]>(() => {
@@ -612,51 +375,6 @@ const Recovery: Component = () => {
 
   const availableOutcomes = ['all', 'success', 'warning', 'failed', 'running'] as const;
 
-  const facets = createMemo(() => recoveryFacets.facets() || {});
-
-  const clusterOptions = createMemo(() => {
-    const values = (facets().clusters || [])
-      .slice()
-      .map((v) => String(v || '').trim())
-      .filter(Boolean)
-      .sort();
-    const selected = clusterFilter().trim();
-    if (selected && selected !== 'all' && !values.includes(selected)) values.unshift(selected);
-    return ['all', ...values];
-  });
-
-  const nodeOptions = createMemo(() => {
-    const values = (facets().nodesAgents || [])
-      .slice()
-      .map((v) => String(v || '').trim())
-      .filter(Boolean)
-      .sort();
-    const selected = nodeFilter().trim();
-    if (selected && selected !== 'all' && !values.includes(selected)) values.unshift(selected);
-    return ['all', ...values];
-  });
-
-  const namespaceOptions = createMemo(() => {
-    const values = (facets().namespaces || [])
-      .slice()
-      .map((v) => String(v || '').trim())
-      .filter(Boolean)
-      .sort();
-    const selected = namespaceFilter().trim();
-    if (selected && selected !== 'all' && !values.includes(selected)) values.unshift(selected);
-    return ['all', ...values];
-  });
-
-  const showClusterFilter = createMemo(
-    () => clusterOptions().length > 1 || clusterFilter() !== 'all',
-  );
-  const showNodeFilter = createMemo(() => nodeOptions().length > 1 || nodeFilter() !== 'all');
-  const showNamespaceFilter = createMemo(
-    () => namespaceOptions().length > 1 || namespaceFilter() !== 'all',
-  );
-  const showVerificationFilter = createMemo(
-    () => Boolean(facets().hasVerification) || verificationFilter() !== 'all',
-  );
   const activeAdvancedFilterCount = createMemo(() => {
     let count = 0;
     if (scopeFilter() !== 'all') count += 1;
@@ -760,8 +478,6 @@ const Recovery: Component = () => {
 
     return groups;
   });
-
-  const totalPages = createMemo(() => Math.max(1, recoveryPoints.meta().totalPages || 1));
 
   const hasSizeData = createMemo(() => Boolean(facets().hasSize));
   const hasVerificationData = createMemo(() => Boolean(facets().hasVerification));

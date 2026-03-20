@@ -28,6 +28,7 @@ import discoveryTargetSource from '@/utils/discoveryTarget.ts?raw';
 import infrastructureEmptyStatePresentationSource from '@/utils/infrastructureEmptyStatePresentation.ts?raw';
 import recoverySummarySource from '@/components/Recovery/RecoverySummary.tsx?raw';
 import recoverySource from '@/components/Recovery/Recovery.tsx?raw';
+import recoverySurfaceStateSource from '@/features/recovery/useRecoverySurfaceState.ts?raw';
 import dashboardRecoverySource from '@/hooks/useDashboardRecovery.ts?raw';
 import recoveryOutcomePresentationSource from '@/utils/recoveryOutcomePresentation.ts?raw';
 import recoveryArtifactModePresentationSource from '@/utils/recoveryArtifactModePresentation.ts?raw';
@@ -414,6 +415,20 @@ describe('frontend resource type boundaries', () => {
       'export function getRecoveryArtifactModePresentation',
     );
     expect(recoveryIssuePresentationSource).toContain('export function getRecoveryIssueRailClass');
+    expect(recoverySource).toContain(
+      "import { useRecoverySurfaceState } from '@/features/recovery/useRecoverySurfaceState';",
+    );
+    expect(recoverySource).not.toContain('parseRecoveryLinkSearch');
+    expect(recoverySource).not.toContain('buildRecoveryPath');
+    expect(recoverySource).not.toContain('useRecoveryRollups');
+    expect(recoverySource).not.toContain('useRecoveryPointsFacets');
+    expect(recoverySurfaceStateSource).toContain('export function useRecoverySurfaceState');
+    expect(recoverySurfaceStateSource).toContain('parseRecoveryLinkSearch');
+    expect(recoverySurfaceStateSource).toContain('buildRecoveryPath');
+    expect(recoverySurfaceStateSource).toContain('useRecoveryRollups');
+    expect(recoverySurfaceStateSource).toContain('useRecoveryPoints');
+    expect(recoverySurfaceStateSource).toContain('useRecoveryPointsFacets');
+    expect(recoverySurfaceStateSource).toContain('useRecoveryPointsSeries');
     expect(recoverySource).toContain('getRecoveryFilterChipPresentation');
     expect(recoverySource).not.toContain('const titleize =');
     expect(recoverySource).toContain("segmentedButtonClass(chartRangeDays() === range, false, 'accent')");
