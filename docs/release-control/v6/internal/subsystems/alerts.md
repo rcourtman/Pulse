@@ -117,6 +117,13 @@ with `frontend-modern/src/components/Alerts/ThresholdsTable.tsx` limited to
 table interaction and presentation. New threshold row grouping, override-ID
 compatibility, and resource normalization logic should land in the hook rather
 than being rebuilt inside the table component.
+The alert resource thresholds editor now follows the same shape: shared metric
+normalization, bounds, value-resolution, and override-label logic live in
+`frontend-modern/src/components/Alerts/alertResourceTableModel.ts`, while
+selection state, delay-row toggling, and inline metric-input focus live in
+`frontend-modern/src/components/Alerts/useAlertResourceTableState.ts`. Future
+resource-table threshold semantics should land in those owners instead of
+being rebuilt inline in `frontend-modern/src/components/Alerts/ResourceTable.tsx`.
 
 Alert incident timeline event cards now route through
 `frontend-modern/src/components/Alerts/IncidentTimelineEventCard.tsx`,

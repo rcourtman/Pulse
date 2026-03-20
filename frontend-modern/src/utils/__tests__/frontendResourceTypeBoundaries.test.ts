@@ -241,7 +241,9 @@ import thresholdsDataHookSource from '@/features/alerts/thresholds/hooks/useThre
 import alertIncidentPresentationSource from '@/utils/alertIncidentPresentation.ts?raw';
 import alertHistoryPresentationSource from '@/utils/alertHistoryPresentation.ts?raw';
 import bulkEditDialogSource from '@/components/Alerts/BulkEditDialog.tsx?raw';
+import alertResourceTableModelSource from '@/components/Alerts/alertResourceTableModel.ts?raw';
 import alertResourceTableSource from '@/components/Alerts/ResourceTable.tsx?raw';
+import alertResourceTableStateSource from '@/components/Alerts/useAlertResourceTableState.ts?raw';
 import emailProviderSelectSource from '@/components/Alerts/EmailProviderSelect.tsx?raw';
 import webhookConfigSource from '@/components/Alerts/WebhookConfig.tsx?raw';
 import alertActivationPresentationSource from '@/utils/alertActivationPresentation.ts?raw';
@@ -3073,6 +3075,15 @@ describe('frontend resource type boundaries', () => {
   });
 
   it('keeps alert resource table vocabulary in a shared presentation utility', () => {
+    expect(alertResourceTableSource).toContain('useAlertResourceTableState');
+    expect(alertResourceTableSource).toContain('normalizeAlertResourceMetricKey');
+    expect(alertResourceTableSource).not.toContain('const flattenResources = (): Resource[] => {');
+    expect(alertResourceTableSource).not.toContain(
+      'const normalizeMetricKey = (column: string): string => {',
+    );
+    expect(alertResourceTableSource).not.toContain(
+      'const metricBounds = (metric: string): { min: number; max: number } => {',
+    );
     expect(alertResourceTableSource).toContain('getAlertResourceTableEmptyState');
     expect(alertResourceTableSource).toContain('getAlertResourceTableNoResultsState');
     expect(alertResourceTableSource).toContain('getAlertResourceTableCustomBadgeLabel');
@@ -3119,6 +3130,18 @@ describe('frontend resource type boundaries', () => {
     );
     expect(alertResourceTablePresentationSource).toContain(
       'export function getAlertResourceTableEditMetricTitle',
+    );
+    expect(alertResourceTableStateSource).toContain('export function useAlertResourceTableState');
+    expect(alertResourceTableStateSource).toContain('toggleAll');
+    expect(alertResourceTableStateSource).toContain('clearSelectedIds');
+    expect(alertResourceTableModelSource).toContain(
+      'export function normalizeAlertResourceMetricKey',
+    );
+    expect(alertResourceTableModelSource).toContain(
+      'export function getAlertResourceMetricDisplayValue',
+    );
+    expect(alertResourceTableModelSource).toContain(
+      'export function buildAlertResourceEditPayload',
     );
   });
 

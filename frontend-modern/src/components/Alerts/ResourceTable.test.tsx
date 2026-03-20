@@ -1,6 +1,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { ALERT_BULK_EDIT_CLEAR_LABEL } from '@/utils/alertBulkEditPresentation';
+import resourceTableSource from '@/components/Alerts/ResourceTable.tsx?raw';
+import alertResourceTableModelSource from '@/components/Alerts/alertResourceTableModel.ts?raw';
+import alertResourceTableStateSource from '@/components/Alerts/useAlertResourceTableState.ts?raw';
+import {
+  buildAlertResourceEditPayload,
+  getAlertResourceMetricDisplayValue,
+  normalizeAlertResourceMetricKey,
+} from '@/components/Alerts/alertResourceTableModel';
 
 // --- Mocks (must be before component import) ---
 const mockIsMobile = vi.fn(() => false);
@@ -255,6 +263,60 @@ describe('ResourceTable', () => {
         'title',
         'Percent memory usage threshold for triggering alerts.',
       );
+    });
+  });
+
+  describe('table ownership model', () => {
+    it('keeps table state and metric rules in dedicated owners', () => {
+      expect(resourceTableSource).toContain('useAlertResourceTableState');
+      expect(resourceTableSource).not.toContain('const flattenResources = (): Resource[] => {');
+      expect(resourceTableSource).not.toContain(
+        'const normalizeMetricKey = (column: string): string => {',
+      );
+      expect(alertResourceTableStateSource).toContain('export function useAlertResourceTableState');
+      expect(alertResourceTableModelSource).toContain(
+        'export function normalizeAlertResourceMetricKey',
+      );
+      expect(alertResourceTableModelSource).toContain(
+        'export function getAlertResourceMetricDisplayValue',
+      );
+    });
+
+    it('resolves metric values and edit payloads through the shared model', () => {
+      expect(normalizeAlertResourceMetricKey('CPU %')).toBe('cpu');
+      expect(
+        getAlertResourceMetricDisplayValue(
+          makeResource({
+            thresholds: { cpu: 80 },
+            defaults: { cpu: 75 },
+          }),
+          'cpu',
+        ),
+      ).toBe(80);
+      expect(
+        getAlertResourceMetricDisplayValue(
+          makeResource({
+            thresholds: { cpu: 80 },
+            defaults: { cpu: 75 },
+          }),
+          'cpu',
+          { cpu: undefined },
+          true,
+        ),
+      ).toBe(75);
+      expect(
+        buildAlertResourceEditPayload(
+          makeResource({
+            thresholds: { cpu: 85 },
+            defaults: { cpu: 80 },
+            note: 'Investigating bursty load',
+          }),
+        ),
+      ).toEqual({
+        thresholds: { cpu: 85 },
+        defaults: { cpu: 80 },
+        note: 'Investigating bursty load',
+      });
     });
   });
 

@@ -1,4 +1,4 @@
-import { For, Show, createSignal, createEffect } from 'solid-js';
+import { For, Show, createEffect } from 'solid-js';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { TogglePrimitive } from '@/components/shared/Toggle';
 import { StatusBadge } from '@/components/shared/StatusBadge';
@@ -16,7 +16,6 @@ import { SectionHeader } from '@/components/shared/SectionHeader';
 import { ThresholdSlider } from '@/components/Dashboard/ThresholdSlider';
 import { HelpIcon } from '@/components/shared/HelpIcon';
 import RotateCcw from 'lucide-solid/icons/rotate-ccw';
-import { logger } from '@/utils/logger';
 import {
   getAlertResourceTableAlertDelayLabel,
   getAlertResourceTableCustomBadgeLabel,
@@ -32,58 +31,30 @@ import {
   getAlertResourceTableResetFactoryDefaultsLabel,
   getAlertResourceTableRevertToDefaultsLabel,
 } from '@/utils/alertResourceTablePresentation';
-import { getPreferredResourceDisplayName } from '@/utils/resourceIdentity';
 import {
   ALERT_BULK_EDIT_CLEAR_LABEL,
   getAlertBulkEditOpenLabel,
 } from '@/utils/alertBulkEditPresentation';
-import type { Resource as UnifiedResource, ResourcePolicy } from '@/types/resource';
-
-const COLUMN_TOOLTIP_LOOKUP: Record<string, string> = {
-  'cpu %': 'Percent CPU utilization allowed before an alert fires.',
-  'memory %': 'Percent memory usage threshold for triggering alerts.',
-  'disk %': 'Percent disk usage threshold for this resource.',
-  'disk r mb/s': 'Maximum sustained disk read throughput before alerting.',
-  'disk w mb/s': 'Maximum sustained disk write throughput before alerting.',
-  'net in mb/s': 'Inbound network throughput threshold for alerts.',
-  'net out mb/s': 'Outbound network throughput threshold for alerts.',
-  'usage %': 'Storage capacity usage percentage that triggers an alert.',
-  'temp °c': 'CPU temperature limit for node alerts.',
-  'temperature °c': 'CPU temperature limit for node alerts.',
-  temperature: 'CPU temperature limit for node alerts.',
-  'disk temp °c': 'Individual disk temperature threshold for agents.',
-  'restart count': 'Maximum container restarts within the evaluation window.',
-  'restart window': 'Time window used to evaluate the restart count threshold.',
-  'restart window (s)': 'Time window used to evaluate the restart count threshold.',
-  'memory warn %': 'Warning threshold for container memory usage.',
-  'memory critical %': 'Critical threshold for container memory usage.',
-  // PMG (Proxmox Mail Gateway) thresholds
-  'queue warn': 'Early warning when total mail queue exceeds this message count.',
-  'queue crit': 'Critical alert requiring urgent action when queue reaches this size.',
-  'deferred warn':
-    'Early warning for messages stuck in deferred queue (waiting to retry delivery).',
-  'deferred crit': 'Critical threshold for deferred messages indicating serious delivery problems.',
-  'hold warn': 'Early warning when administratively held messages exceed this count.',
-  'hold crit': 'Critical alert for held messages requiring immediate moderation attention.',
-  'oldest warn (min)': 'Early warning when oldest queued message exceeds this age in minutes.',
-  'oldest crit (min)': 'Critical alert when message queue age indicates delivery has stalled.',
-  'spam warn': 'Early warning for spam messages accumulating in quarantine.',
-  'spam crit': 'Critical spam quarantine level requiring urgent intervention.',
-  'virus warn': 'Early warning for virus-positive messages in quarantine.',
-  'virus crit': 'Critical virus quarantine threshold indicating potential outbreak.',
-  'growth warn %': 'Early warning when quarantine growth rate exceeds this percentage.',
-  'growth warn min': 'Minimum new messages required before growth percentage triggers warning.',
-  'growth crit %': 'Critical quarantine growth rate requiring immediate investigation.',
-  'growth crit min':
-    'Minimum new messages required before growth percentage triggers critical alert.',
-  'warning size (gib)': 'Total snapshot size in GiB that raises a warning.',
-  'critical size (gib)': 'Total snapshot size in GiB that raises a critical alert.',
-};
+import type { ResourcePolicy } from '@/types/resource';
+import {
+  ALERT_RESOURCE_TABLE_SLIDER_METRICS,
+  alertResourceSupportsMetric,
+  buildAlertResourceEditPayload,
+  getAlertResourceColumnHeaderTooltip,
+  getAlertResourceEnabledDefault,
+  getAlertResourceLabel,
+  getAlertResourceMetricBounds,
+  getAlertResourceMetricDelayOverride,
+  getAlertResourceMetricDisplayValue,
+  getAlertResourceMetricStep,
+  isAlertResourceMetricOverridden,
+  normalizeAlertResourceMetricKey,
+  type AlertResourceThresholdMap,
+} from './alertResourceTableModel';
+import { useAlertResourceTableState } from './useAlertResourceTableState';
 
 const OFFLINE_ALERTS_TOOLTIP =
   'Toggle default behavior for powered-off or connectivity alerts for this resource type.';
-
-const SLIDER_METRICS = new Set(['cpu', 'memory', 'disk', 'temperature', 'diskTemperature']);
 
 export interface Resource {
   id: string;
@@ -98,8 +69,8 @@ export interface Resource {
   type?: string;
   resourceType?: string;
   subtitle?: string;
-  thresholds?: Record<string, number | undefined>;
-  defaults?: Record<string, number | undefined>;
+  thresholds?: AlertResourceThresholdMap;
+  defaults?: AlertResourceThresholdMap;
   disabled?: boolean;
   disableConnectivity?: boolean;
   poweredOffSeverity?: 'warning' | 'critical';
@@ -190,234 +161,28 @@ type OfflineState = 'off' | 'warning' | 'critical';
 
 export function ResourceTable(props: ResourceTableProps) {
   const { isMobile } = useBreakpoint();
-
-  const flattenResources = (): Resource[] => {
-    if (props.groupedResources) {
-      return Object.values(props.groupedResources).flat();
-    }
-    return props.resources ?? [];
-  };
-
-  const hasRows = () => {
-    if (flattenResources().length > 0) {
-      return true;
-    }
-    if (props.groupedResources && Object.keys(props.groupedResources).length > 0) {
-      return true;
-    }
-    return Boolean(props.globalDefaults);
-  };
-
-  const [activeMetricInput, setActiveMetricInput] = createSignal<{
-    resourceId: string;
-    metric: string;
-  } | null>(null);
-  const [showDelayRow, setShowDelayRow] = createSignal(false);
-  const [selectedIds, setSelectedIds] = createSignal<Set<string>>(new Set());
-
-  const toggleSelection = (id: string, checked: boolean) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (checked) next.add(id);
-      else next.delete(id);
-      return next;
-    });
-  };
-
-  const toggleAll = (checked: boolean) => {
-    if (checked) {
-      setSelectedIds(new Set<string>(flattenResources().map((r) => r.id)));
-    } else {
-      setSelectedIds(new Set<string>());
-    }
-  };
-
-  const allSelected = () => {
-    const total = flattenResources().length;
-    return total > 0 && selectedIds().size === total;
-  };
-
-  const someSelected = () => {
-    return selectedIds().size > 0 && selectedIds().size < flattenResources().length;
-  };
-
-  // Track changes to global defaults and factory defaults for debugging
-  createEffect(() => {
-    logger.debug('[ResourceTable] props changed', {
-      title: props.title,
-      globalDefaults: props.globalDefaults,
-      factoryDefaults: props.factoryDefaults,
-      onResetDefaults: !!props.onResetDefaults,
-    });
+  const {
+    activeMetricInput,
+    setActiveMetricInput,
+    showDelayRow,
+    setShowDelayRow,
+    selectedIds,
+    hasRows,
+    hasCustomGlobalDefaults,
+    toggleSelection,
+    toggleAll,
+    allSelected,
+    someSelected,
+    clearSelectedIds,
+  } = useAlertResourceTableState({
+    resources: props.resources,
+    groupedResources: props.groupedResources,
+    globalDefaults: props.globalDefaults,
+    factoryDefaults: props.factoryDefaults,
   });
-
-  // Check if global defaults have been customized from factory defaults
-  const hasCustomGlobalDefaults = () => {
-    logger.debug('[ResourceTable] hasCustomGlobalDefaults check', {
-      globalDefaults: props.globalDefaults,
-      factoryDefaults: props.factoryDefaults,
-      title: props.title,
-    });
-    if (!props.globalDefaults || !props.factoryDefaults) {
-      logger.debug('[ResourceTable] Missing props, returning false');
-      return false;
-    }
-    const result = Object.keys(props.factoryDefaults).some((key) => {
-      const current = props.globalDefaults?.[key];
-      const factory = props.factoryDefaults?.[key];
-      const differs = current !== undefined && current !== factory;
-      if (differs) {
-        logger.debug('[ResourceTable] Difference found', {
-          key,
-          current,
-          factory,
-        });
-      }
-      return differs;
-    });
-    logger.debug('[ResourceTable] hasCustomGlobalDefaults result', { result });
-    return result;
-  };
-
-  const normalizeMetricKey = (column: string): string => {
-    const key = column.trim().toLowerCase();
-    const mapped = new Map<string, string>([
-      ['cpu %', 'cpu'],
-      ['memory %', 'memory'],
-      ['disk %', 'disk'],
-      ['disk r mb/s', 'diskRead'],
-      ['disk w mb/s', 'diskWrite'],
-      ['net in mb/s', 'networkIn'],
-      ['net out mb/s', 'networkOut'],
-      ['usage %', 'usage'],
-      ['temp °c', 'temperature'],
-      ['temperature °c', 'temperature'],
-      ['temperature', 'temperature'],
-      ['restart count', 'restartCount'],
-      ['restart window', 'restartWindow'],
-      ['restart window (s)', 'restartWindow'],
-      ['memory warn %', 'memoryWarnPct'],
-      ['memory critical %', 'memoryCriticalPct'],
-      ['warning size (gib)', 'warningSizeGiB'],
-      ['critical size (gib)', 'criticalSizeGiB'],
-      ['disk temp °c', 'diskTemperature'],
-      ['backup', 'backup'],
-      ['snapshot', 'snapshot'],
-    ]).get(key);
-    if (mapped) {
-      return mapped;
-    }
-
-    return key
-      .replace(' %', '')
-      .replace(' °c', '')
-      .replace(' mb/s', '')
-      .replace('disk r', 'diskRead')
-      .replace('disk w', 'diskWrite')
-      .replace('net in', 'networkIn')
-      .replace('net out', 'networkOut');
-  };
-
-  const metricBounds = (metric: string): { min: number; max: number } => {
-    if (metric === 'temperature' || metric === 'diskTemperature') {
-      return { min: -1, max: 150 };
-    }
-    if (['diskRead', 'diskWrite', 'networkIn', 'networkOut'].includes(metric)) {
-      return { min: -1, max: 10000 };
-    }
-    if (['cpu', 'memory', 'disk', 'usage', 'memoryWarnPct', 'memoryCriticalPct'].includes(metric)) {
-      return { min: -1, max: 100 };
-    }
-    if (['warningSizeGiB', 'criticalSizeGiB'].includes(metric)) {
-      return { min: -1, max: 100000 };
-    }
-    if (metric === 'restartCount') {
-      return { min: -1, max: 50 };
-    }
-    if (metric === 'restartWindow') {
-      return { min: -1, max: 86400 };
-    }
-    return { min: -1, max: 10000 };
-  };
-
-  const metricStep = (metric: string): string | number => {
-    if (['diskRead', 'diskWrite', 'networkIn', 'networkOut'].includes(metric)) {
-      return 'any';
-    }
-    if (['warningSizeGiB', 'criticalSizeGiB'].includes(metric)) {
-      return 'any';
-    }
-    return 1;
-  };
-
-  const getEnabledDefaultValue = (metric: string): number => {
-    if (['diskRead', 'diskWrite', 'networkIn', 'networkOut'].includes(metric)) {
-      return 100;
-    }
-    if (metric === 'temperature') {
-      return 80;
-    }
-    if (metric === 'diskTemperature') {
-      return 55;
-    }
-    if (metric === 'restartCount') {
-      return 3;
-    }
-    if (metric === 'restartWindow') {
-      return 300;
-    }
-    if (metric === 'memoryWarnPct') {
-      return 90;
-    }
-    if (metric === 'memoryCriticalPct') {
-      return 95;
-    }
-    return 80;
-  };
-
-  const metricDelayOverride = (metric: string): number | undefined => {
-    const normalized = metric.trim().toLowerCase();
-    const value = props.metricDelaySeconds?.[normalized] ?? props.metricDelaySeconds?.[metric];
-    if (typeof value !== 'number' || !Number.isFinite(value)) {
-      return undefined;
-    }
-    return value;
-  };
 
   const totalColumnCount = () =>
     props.columns.length + 3 + (props.showOfflineAlertsColumn ? 1 : 0) + (props.onBulkEdit ? 1 : 0);
-
-  const getColumnHeaderTooltip = (column: string): string | undefined => {
-    const normalized = column.trim().toLowerCase();
-    return COLUMN_TOOLTIP_LOOKUP[column] ?? COLUMN_TOOLTIP_LOOKUP[normalized];
-  };
-
-  const resourceSupportsMetric = (resourceType: string | undefined, metric: string): boolean => {
-    if (!resourceType) return true;
-    if (
-      resourceType === 'node' &&
-      ['diskRead', 'diskWrite', 'networkIn', 'networkOut'].includes(metric)
-    ) {
-      return false;
-    }
-    if (resourceType === 'pbs') {
-      return ['cpu', 'memory'].includes(metric);
-    }
-    if (resourceType === 'storage') {
-      return metric === 'usage';
-    }
-    if (resourceType === 'dockerContainer') {
-      return [
-        'cpu',
-        'memory',
-        'restartCount',
-        'restartWindow',
-        'memoryWarnPct',
-        'memoryCriticalPct',
-      ].includes(metric);
-    }
-    return true;
-  };
 
   const renderGroupHeader = (groupKey: string, meta?: GroupHeaderMeta) => {
     const groupLabel = meta?.displayName || meta?.rawName || groupKey;
@@ -453,9 +218,35 @@ export function ResourceTable(props: ResourceTableProps) {
       </div>
     );
   };
-
-  const getResourceLabel = (resource: Resource): string => {
-    return getPreferredResourceDisplayName(resource as unknown as UnifiedResource);
+  const getThresholds = (resource: Resource, isEditing: boolean): AlertResourceThresholdMap =>
+    isEditing ? props.editingThresholds() : (resource.thresholds ?? {});
+  const getResourceLabel = (resource: Resource) => getAlertResourceLabel(resource);
+  const getDisplayValue = (resource: Resource, metric: string, isEditing: boolean) =>
+    getAlertResourceMetricDisplayValue(resource, metric, props.editingThresholds(), isEditing);
+  const startEditing = (resource: Resource, metric?: string, event?: MouseEvent) => {
+    event?.stopPropagation();
+    if (resource.editable === false) {
+      return;
+    }
+    if (metric) {
+      setActiveMetricInput({ resourceId: resource.id, metric });
+    }
+    const payload = buildAlertResourceEditPayload(resource);
+    props.onEdit(resource.id, payload.thresholds, payload.defaults, payload.note);
+  };
+  const cancelEditing = () => {
+    props.onCancelEdit();
+    setActiveMetricInput(null);
+  };
+  const saveEditing = (resourceId: string) => {
+    props.onSaveEdit(resourceId);
+    setActiveMetricInput(null);
+  };
+  const updateEditingThreshold = (metric: string, value: number | undefined) => {
+    props.setEditingThresholds({
+      ...props.editingThresholds(),
+      [metric]: value,
+    });
   };
 
   const MetricValueWithHeat = (metricProps: {
@@ -564,13 +355,13 @@ export function ResourceTable(props: ResourceTableProps) {
           <div class="grid grid-cols-2 gap-2">
             <For
               each={props.columns.filter((c) => {
-                const m = normalizeMetricKey(c);
+                const m = normalizeAlertResourceMetricKey(c);
                 return m !== 'backup' && m !== 'snapshot';
               })}
             >
               {(column) => {
-                const metric = normalizeMetricKey(column);
-                const bounds = metricBounds(metric);
+                const metric = normalizeAlertResourceMetricKey(column);
+                const bounds = getAlertResourceMetricBounds(metric);
                 const val = () => props.globalDefaults?.[metric] ?? 0;
                 const isOff = () => val() === -1;
                 return (
@@ -581,7 +372,7 @@ export function ResourceTable(props: ResourceTableProps) {
                         type="number"
                         min={bounds.min}
                         max={bounds.max}
-                        step={metricStep(metric)}
+                        step={getAlertResourceMetricStep(metric)}
                         value={isOff() ? '' : val()}
                         placeholder={getAlertResourceTableMetricPlaceholder(isOff())}
                         disabled={isOff()}
@@ -605,7 +396,7 @@ export function ResourceTable(props: ResourceTableProps) {
                             if (!props.setGlobalDefaults) return;
                             props.setGlobalDefaults((prev) => ({
                               ...prev,
-                              [metric]: getEnabledDefaultValue(metric),
+                              [metric]: getAlertResourceEnabledDefault(metric),
                             }));
                             props.setHasUnsavedChanges?.(true);
                           }}
@@ -638,39 +429,11 @@ export function ResourceTable(props: ResourceTableProps) {
             <For each={resources as Resource[]}>
               {(resource) => {
                 const isEditing = () => props.editingId() === resource.id;
-                const thresholds = () =>
-                  isEditing() ? props.editingThresholds() : (resource.thresholds ?? {});
-
-                // Helper logic duplicated/adapted for scope access
-                const displayValue = (metric: string): number => {
-                  const parseNumeric = (value: unknown): number | undefined => {
-                    if (value === undefined || value === null) return undefined;
-                    if (typeof value === 'number') return value;
-                    const parsed = Number(value);
-                    return Number.isFinite(parsed) ? parsed : undefined;
-                  };
-                  const extract = (source: Record<string, unknown> | undefined) =>
-                    parseNumeric(source?.[metric]);
-                  const defaults = resource.defaults as Record<string, unknown> | undefined;
-
-                  if (isEditing()) {
-                    const edited = extract(thresholds() as Record<string, unknown>);
-                    if (edited !== undefined) return edited;
-                    const fallback = extract(defaults);
-                    return fallback !== undefined ? fallback : 0;
-                  }
-
-                  const liveValue = extract(
-                    resource.thresholds as Record<string, unknown> | undefined,
-                  );
-                  if (liveValue !== undefined) return liveValue;
-                  const fallback = extract(defaults);
-                  return fallback !== undefined ? fallback : 0;
-                };
-
+                const thresholds = () => getThresholds(resource, isEditing());
+                const displayValue = (metric: string) =>
+                  getDisplayValue(resource, metric, isEditing());
                 const isOverridden = (metric: string) =>
-                  resource.thresholds?.[metric] !== undefined &&
-                  resource.thresholds?.[metric] !== null;
+                  isAlertResourceMetricOverridden(resource, metric);
 
                 return (
                   <Card
@@ -713,14 +476,7 @@ export function ResourceTable(props: ResourceTableProps) {
                         <Show when={!isEditing() && resource.type !== 'dockerHost'}>
                           <button
                             type="button"
-                            onClick={() =>
-                              props.onEdit(
-                                resource.id,
-                                resource.thresholds ? { ...resource.thresholds } : {},
-                                resource.defaults ? { ...resource.defaults } : {},
-                                resource.note,
-                              )
-                            }
+                            onClick={() => startEditing(resource)}
                             class="p-1.5 bg-blue-50 dark:bg-blue-900 text-blue-600 rounded"
                             aria-label={`Edit thresholds for ${getResourceLabel(resource)}`}
                           >
@@ -742,10 +498,7 @@ export function ResourceTable(props: ResourceTableProps) {
                         <Show when={isEditing()}>
                           <button
                             type="button"
-                            onClick={() => {
-                              props.onCancelEdit();
-                              setActiveMetricInput(null);
-                            }}
+                            onClick={cancelEditing}
                             class="p-1.5 bg-surface-hover text-slate-600 rounded"
                             aria-label="Cancel threshold edits"
                           >
@@ -765,10 +518,7 @@ export function ResourceTable(props: ResourceTableProps) {
                           </button>
                           <button
                             type="button"
-                            onClick={() => {
-                              props.onSaveEdit(resource.id);
-                              setActiveMetricInput(null);
-                            }}
+                            onClick={() => saveEditing(resource.id)}
                             class="p-1.5 bg-green-50 dark:bg-green-900 text-green-600 rounded"
                             aria-label={`Save threshold edits for ${getResourceLabel(resource)}`}
                           >
@@ -821,12 +571,12 @@ export function ResourceTable(props: ResourceTableProps) {
                     <div class="grid grid-cols-2 gap-2 text-sm border-t pt-2">
                       <For each={props.columns}>
                         {(column) => {
-                          const metric = normalizeMetricKey(column);
+                          const metric = normalizeAlertResourceMetricKey(column);
                           // Check support
-                          if (!resourceSupportsMetric(resource.type, metric)) return null;
+                          if (!alertResourceSupportsMetric(resource.type, metric)) return null;
 
                           const isDisabled = () => thresholds()?.[metric] === -1;
-                          const bounds = metricBounds(metric);
+                          const bounds = getAlertResourceMetricBounds(metric);
 
                           return (
                             <div class="flex justify-between items-center p-1.5 bg-surface-alt rounded">
@@ -839,16 +589,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                 fallback={
                                   <button
                                     type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setActiveMetricInput({ resourceId: resource.id, metric });
-                                      props.onEdit(
-                                        resource.id,
-                                        resource.thresholds ? { ...resource.thresholds } : {},
-                                        resource.defaults ? { ...resource.defaults } : {},
-                                        resource.note,
-                                      );
-                                    }}
+                                    onClick={(e) => startEditing(resource, metric, e)}
                                     class="font-mono text-xs font-medium cursor-pointer rounded px-1 -mx-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                                     aria-label={`Edit ${column} threshold for ${getResourceLabel(resource)}`}
                                   >
@@ -891,7 +632,7 @@ export function ResourceTable(props: ResourceTableProps) {
           </div>
         )}
       </For>
-      <Show when={!hasRows()}>
+      <Show when={hasRows() === false}>
         <div class="text-center p-8 text-slate-500 text-sm italic bg-surface-alt rounded-md">
           {getAlertResourceTableEmptyState(props.emptyMessage)}
         </div>
@@ -936,7 +677,7 @@ export function ResourceTable(props: ResourceTableProps) {
                   {(column) => (
                     <TableHead
                       class="text-center whitespace-normal break-words"
-                      title={getColumnHeaderTooltip(column)}
+                      title={getAlertResourceColumnHeaderTooltip(column)}
                     >
                       {column}
                     </TableHead>
@@ -993,8 +734,8 @@ export function ResourceTable(props: ResourceTableProps) {
                   </TableCell>
                   <For each={props.columns}>
                     {(column) => {
-                      const metric = normalizeMetricKey(column);
-                      const bounds = metricBounds(metric);
+                      const metric = normalizeAlertResourceMetricKey(column);
+                      const bounds = getAlertResourceMetricBounds(metric);
                       const val = () => props.globalDefaults?.[metric] ?? 0;
                       const isOff = () => val() === -1;
 
@@ -1005,7 +746,7 @@ export function ResourceTable(props: ResourceTableProps) {
                               type="number"
                               min={bounds.min}
                               max={bounds.max}
-                              step={metricStep(metric)}
+                              step={getAlertResourceMetricStep(metric)}
                               value={isOff() ? '' : val()}
                               placeholder={getAlertResourceTableMetricPlaceholder(isOff())}
                               disabled={isOff()}
@@ -1036,7 +777,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                   if (!props.setGlobalDefaults) return;
                                   props.setGlobalDefaults((prev) => ({
                                     ...prev,
-                                    [metric]: getEnabledDefaultValue(metric),
+                                    [metric]: getAlertResourceEnabledDefault(metric),
                                   }));
                                   props.setHasUnsavedChanges?.(true);
                                 }}
@@ -1189,9 +930,12 @@ export function ResourceTable(props: ResourceTableProps) {
                   </TableCell>
                   <For each={props.columns}>
                     {(column) => {
-                      const metric = normalizeMetricKey(column);
+                      const metric = normalizeAlertResourceMetricKey(column);
                       const typeDefaultDelay = props.globalDelaySeconds ?? 5;
-                      const overrideDelay = metricDelayOverride(metric);
+                      const overrideDelay = getAlertResourceMetricDelayOverride(
+                        props.metricDelaySeconds,
+                        metric,
+                      );
 
                       return (
                         <TableCell class="p-1 px-2 text-center align-middle">
@@ -1264,52 +1008,11 @@ export function ResourceTable(props: ResourceTableProps) {
                         <For each={resources}>
                           {(resource) => {
                             const isEditing = () => props.editingId() === resource.id;
-                            const thresholds = (): Record<string, number | undefined> => {
-                              if (isEditing()) {
-                                return props.editingThresholds();
-                              }
-                              return resource.thresholds ?? {};
-                            };
-                            const displayValue = (metric: string): number => {
-                              const parseNumeric = (value: unknown): number | undefined => {
-                                if (value === undefined || value === null) return undefined;
-                                if (typeof value === 'number') return value;
-                                const parsed = Number(value);
-                                return Number.isFinite(parsed) ? parsed : undefined;
-                              };
-
-                              const extract = (source: Record<string, unknown> | undefined) =>
-                                parseNumeric(source?.[metric]);
-
-                              const defaults = resource.defaults as
-                                | Record<string, unknown>
-                                | undefined;
-
-                              if (isEditing()) {
-                                const edited = extract(thresholds() as Record<string, unknown>);
-                                if (edited !== undefined) {
-                                  return edited;
-                                }
-                                const fallback = extract(defaults);
-                                return fallback !== undefined ? fallback : 0;
-                              }
-
-                              const liveValue = extract(
-                                resource.thresholds as Record<string, unknown> | undefined,
-                              );
-                              if (liveValue !== undefined) {
-                                return liveValue;
-                              }
-
-                              const fallback = extract(defaults);
-                              return fallback !== undefined ? fallback : 0;
-                            };
-                            const isOverridden = (metric: string) => {
-                              return (
-                                resource.thresholds?.[metric] !== undefined &&
-                                resource.thresholds?.[metric] !== null
-                              );
-                            };
+                            const thresholds = () => getThresholds(resource, isEditing());
+                            const displayValue = (metric: string) =>
+                              getDisplayValue(resource, metric, isEditing());
+                            const isOverridden = (metric: string) =>
+                              isAlertResourceMetricOverridden(resource, metric);
 
                             return (
                               <TableRow
@@ -1459,10 +1162,10 @@ export function ResourceTable(props: ResourceTableProps) {
                                 {/* Metric columns - dynamically rendered based on resource type */}
                                 <For each={props.columns}>
                                   {(column) => {
-                                    const metric = normalizeMetricKey(column);
+                                    const metric = normalizeAlertResourceMetricKey(column);
                                     const showMetric = () =>
-                                      resourceSupportsMetric(resource.type, metric);
-                                    const bounds = metricBounds(metric);
+                                      alertResourceSupportsMetric(resource.type, metric);
+                                    const bounds = getAlertResourceMetricBounds(metric);
                                     const isDisabled = () => thresholds()?.[metric] === -1;
                                     const isSpecialToggle =
                                       metric === 'backup' || metric === 'snapshot';
@@ -1498,16 +1201,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                     }
 
                                     const openMetricEditor = (e: MouseEvent) => {
-                                      e.stopPropagation();
-                                      setActiveMetricInput({ resourceId: resource.id, metric });
-                                      props.onEdit(
-                                        resource.id,
-                                        resource.thresholds ? { ...resource.thresholds } : {},
-                                        resource.defaults ? { ...resource.defaults } : {},
-                                        typeof resource.note === 'string'
-                                          ? resource.note
-                                          : undefined,
-                                      );
+                                      startEditing(resource, metric, e);
                                     };
 
                                     return (
@@ -1536,7 +1230,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                             }
                                           >
                                             <div class="flex w-full items-center gap-3">
-                                              <Show when={SLIDER_METRICS.has(metric)}>
+                                              <Show when={ALERT_RESOURCE_TABLE_SLIDER_METRICS.has(metric)}>
                                                 {(() => {
                                                   const isTemperatureMetric =
                                                     metric === 'temperature' ||
@@ -1604,7 +1298,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                                   type="number"
                                                   min={bounds.min}
                                                   max={bounds.max}
-                                                  step={metricStep(metric)}
+                                                  step={getAlertResourceMetricStep(metric)}
                                                   value={thresholds()?.[metric] ?? ''}
                                                   placeholder={getAlertResourceTableMetricPlaceholder(
                                                     isDisabled(),
@@ -1628,25 +1322,18 @@ export function ResourceTable(props: ResourceTableProps) {
                                                   onInput={(e) => {
                                                     const raw = e.currentTarget.value;
                                                     if (raw === '') {
-                                                      props.setEditingThresholds({
-                                                        ...props.editingThresholds(),
-                                                        [metric]: undefined,
-                                                      });
+                                                      updateEditingThreshold(metric, undefined);
                                                       return;
                                                     }
                                                     const val = parseFloat(raw);
                                                     if (!Number.isNaN(val)) {
-                                                      props.setEditingThresholds({
-                                                        ...props.editingThresholds(),
-                                                        [metric]: val,
-                                                      });
+                                                      updateEditingThreshold(metric, val);
                                                     }
                                                   }}
                                                   onBlur={() => {
                                                     if (props.editingId() === resource.id) {
-                                                      props.onSaveEdit(resource.id);
+                                                      saveEditing(resource.id);
                                                     }
-                                                    setActiveMetricInput(null);
                                                   }}
                                                   class={`w-16 px-2 py-0.5 text-sm text-center border rounded ${
                                                     isDisabled()
@@ -1734,10 +1421,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                       fallback={
                                         <button
                                           type="button"
-                                          onClick={() => {
-                                            props.onCancelEdit();
-                                            setActiveMetricInput(null);
-                                          }}
+                                          onClick={cancelEditing}
                                           class="p-1 hover:text-muted"
                                           title="Cancel editing"
                                           aria-label="Cancel editing"
@@ -1761,16 +1445,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                       <Show when={resource.type !== 'dockerHost'}>
                                         <button
                                           type="button"
-                                          onClick={() =>
-                                            props.onEdit(
-                                              resource.id,
-                                              resource.thresholds ? { ...resource.thresholds } : {},
-                                              resource.defaults ? { ...resource.defaults } : {},
-                                              typeof resource.note === 'string'
-                                                ? resource.note
-                                                : undefined,
-                                            )
-                                          }
+                                          onClick={() => startEditing(resource)}
                                           class="p-1 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
                                           title="Edit thresholds"
                                           aria-label={`Edit thresholds for ${getResourceLabel(resource)}`}
@@ -1827,50 +1502,11 @@ export function ResourceTable(props: ResourceTableProps) {
                     <For each={props.resources}>
                       {(resource) => {
                         const isEditing = () => props.editingId() === resource.id;
-                        const thresholds = (): Record<string, number | undefined> => {
-                          if (isEditing()) {
-                            return props.editingThresholds();
-                          }
-                          return resource.thresholds ?? {};
-                        };
-                        const displayValue = (metric: string): number => {
-                          const parseNumeric = (value: unknown): number | undefined => {
-                            if (value === undefined || value === null) return undefined;
-                            if (typeof value === 'number') return value;
-                            const parsed = Number(value);
-                            return Number.isFinite(parsed) ? parsed : undefined;
-                          };
-
-                          const extract = (source: Record<string, unknown> | undefined) =>
-                            parseNumeric(source?.[metric]);
-
-                          const defaults = resource.defaults as Record<string, unknown> | undefined;
-
-                          if (isEditing()) {
-                            const edited = extract(thresholds() as Record<string, unknown>);
-                            if (edited !== undefined) {
-                              return edited;
-                            }
-                            const fallback = extract(defaults);
-                            return fallback !== undefined ? fallback : 0;
-                          }
-
-                          const liveValue = extract(
-                            resource.thresholds as Record<string, unknown> | undefined,
-                          );
-                          if (liveValue !== undefined) {
-                            return liveValue;
-                          }
-
-                          const fallback = extract(defaults);
-                          return fallback !== undefined ? fallback : 0;
-                        };
-                        const isOverridden = (metric: string) => {
-                          return (
-                            resource.thresholds?.[metric] !== undefined &&
-                            resource.thresholds?.[metric] !== null
-                          );
-                        };
+                        const thresholds = () => getThresholds(resource, isEditing());
+                        const displayValue = (metric: string) =>
+                          getDisplayValue(resource, metric, isEditing());
+                        const isOverridden = (metric: string) =>
+                          isAlertResourceMetricOverridden(resource, metric);
 
                         return (
                           <TableRow
@@ -1992,7 +1628,7 @@ export function ResourceTable(props: ResourceTableProps) {
                             {/* Metric columns - dynamically rendered based on resource type */}
                             <For each={props.columns}>
                               {(column) => {
-                                const metric = normalizeMetricKey(column);
+                                const metric = normalizeAlertResourceMetricKey(column);
 
                                 // Check if this metric applies to this resource type
                                 const showMetric = () => {
@@ -2017,17 +1653,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                 const isDisabled = () => thresholds()?.[metric] === -1;
 
                                 const openMetricEditor = (e: MouseEvent) => {
-                                  e.stopPropagation();
-                                  if (resource.editable === false) {
-                                    return;
-                                  }
-                                  setActiveMetricInput({ resourceId: resource.id, metric });
-                                  props.onEdit(
-                                    resource.id,
-                                    resource.thresholds ? { ...resource.thresholds } : {},
-                                    resource.defaults ? { ...resource.defaults } : {},
-                                    typeof resource.note === 'string' ? resource.note : undefined,
-                                  );
+                                  startEditing(resource, metric, e);
                                 };
 
                                 return (
@@ -2065,7 +1691,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                                 ? 100
                                                 : 10000
                                             }
-                                            step={metricStep(metric)}
+                                            step={getAlertResourceMetricStep(metric)}
                                             value={thresholds()?.[metric] ?? ''}
                                             placeholder={getAlertResourceTableMetricPlaceholder(
                                               isDisabled(),
@@ -2088,25 +1714,18 @@ export function ResourceTable(props: ResourceTableProps) {
                                             onInput={(e) => {
                                               const raw = e.currentTarget.value;
                                               if (raw === '') {
-                                                props.setEditingThresholds({
-                                                  ...props.editingThresholds(),
-                                                  [metric]: undefined,
-                                                });
+                                                updateEditingThreshold(metric, undefined);
                                                 return;
                                               }
                                               const val = parseFloat(raw);
                                               if (!Number.isNaN(val)) {
-                                                props.setEditingThresholds({
-                                                  ...props.editingThresholds(),
-                                                  [metric]: val,
-                                                });
+                                                updateEditingThreshold(metric, val);
                                               }
                                             }}
                                             onBlur={() => {
                                               if (props.editingId() === resource.id) {
-                                                props.onSaveEdit(resource.id);
+                                                saveEditing(resource.id);
                                               }
-                                              setActiveMetricInput(null);
                                             }}
                                             class={`w-16 px-2 py-0.5 text-sm text-center border rounded ${
                                               isDisabled()
@@ -2174,10 +1793,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                     fallback={
                                       <button
                                         type="button"
-                                        onClick={() => {
-                                          props.onCancelEdit();
-                                          setActiveMetricInput(null);
-                                        }}
+                                        onClick={cancelEditing}
                                         class="p-1 hover:text-muted"
                                         title="Cancel editing"
                                         aria-label="Cancel editing"
@@ -2201,16 +1817,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                     <div class="flex items-center gap-1">
                                       <button
                                         type="button"
-                                        onClick={() =>
-                                          props.onEdit(
-                                            resource.id,
-                                            resource.thresholds ? { ...resource.thresholds } : {},
-                                            resource.defaults ? { ...resource.defaults } : {},
-                                            typeof resource.note === 'string'
-                                              ? resource.note
-                                              : undefined,
-                                          )
-                                        }
+                                        onClick={() => startEditing(resource)}
                                         class="p-1 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
                                         title="Edit thresholds"
                                         aria-label={`Edit thresholds for ${getResourceLabel(resource)}`}
@@ -2267,7 +1874,7 @@ export function ResourceTable(props: ResourceTableProps) {
                   </TableRow>
                 </Show>
               </Show>
-              <Show when={!hasRows()}>
+              <Show when={hasRows() === false}>
                 <TableRow>
                   <TableCell
                     colspan={totalColumnCount()}
@@ -2294,7 +1901,7 @@ export function ResourceTable(props: ResourceTableProps) {
               onClick={() => {
                 if (props.onBulkEdit) {
                   props.onBulkEdit(Array.from(selectedIds()));
-                  setSelectedIds(new Set<string>());
+                  clearSelectedIds();
                 }
               }}
             >
@@ -2303,7 +1910,7 @@ export function ResourceTable(props: ResourceTableProps) {
             <button
               type="button"
               class="text-slate-400 hover:text-white bg-surface hover:bg-slate-700 rounded-full p-1.5 transition-colors focus:outline-none"
-              onClick={() => setSelectedIds(new Set<string>())}
+              onClick={clearSelectedIds}
               aria-label={ALERT_BULK_EDIT_CLEAR_LABEL}
               title={ALERT_BULK_EDIT_CLEAR_LABEL}
             >
