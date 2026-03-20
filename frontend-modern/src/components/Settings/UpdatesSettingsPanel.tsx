@@ -9,9 +9,13 @@ import RefreshCw from 'lucide-solid/icons/refresh-cw';
 import CheckCircle from 'lucide-solid/icons/check-circle';
 import ArrowRight from 'lucide-solid/icons/arrow-right';
 import Package from 'lucide-solid/icons/package';
-import Download from 'lucide-solid/icons/download';
 import type { UpdateInfo, VersionInfo, UpdatePlan } from '@/api/updates';
 import { buildDockerImageTag, buildLinuxAmd64DownloadCommand } from '@/components/updateVersion';
+import { UpdateInstallGuide } from '@/components/Settings/UpdateInstallGuide';
+import {
+  getUpdateChannelCardOptions,
+  type UpdateChannelOptionValue,
+} from '@/components/Settings/updatesSettingsModel';
 import {
   getUpdateAvailabilityHeading,
   getUpdateBuildBadges,
@@ -45,52 +49,40 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
   const systemdDownloadCommand = () => buildLinuxAmd64DownloadCommand(latestVersion());
   const isPreviewChannel = () => props.updateChannel() === 'rc';
   const autoUpdateLocked = () => Boolean(props.versionInfo()?.isSourceBuild || isPreviewChannel());
-  const updateChannelOptions = (): SelectionCardOption<'stable' | 'rc'>[] => [
-    {
-      value: 'stable',
-      title: 'Stable',
-      description: 'Production-ready releases for paid and self-hosted environments',
-      tone: 'success',
-      disabled: props.versionInfo()?.isSourceBuild,
-      icon: ({ active }) => (
-        <svg
-          class={`w-5 h-5 ${active ? 'text-green-600 dark:text-green-400' : 'text-muted'}`}
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-          stroke-width="2"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
-          />
-        </svg>
-      ),
-    },
-    {
-      value: 'rc',
-      title: 'Release Candidate',
-      description: 'Preview builds for staging, internal validation, and opt-in testers',
-      tone: 'accent',
-      disabled: props.versionInfo()?.isSourceBuild,
-      icon: ({ active }) => (
-        <svg
-          class={`w-5 h-5 ${active ? 'text-blue-600 dark:text-blue-400' : 'text-muted'}`}
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-          stroke-width="2"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"
-          />
-        </svg>
-      ),
-    },
-  ];
+  const updateChannelOptions = (): SelectionCardOption<UpdateChannelOptionValue>[] =>
+    getUpdateChannelCardOptions(props.versionInfo()).map((option) => ({
+      ...option,
+      icon: (iconProps) =>
+        option.value === 'stable' ? (
+          <svg
+            class={`w-5 h-5 ${iconProps.active ? 'text-green-600 dark:text-green-400' : 'text-muted'}`}
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
+            />
+          </svg>
+        ) : (
+          <svg
+            class={`w-5 h-5 ${iconProps.active ? 'text-blue-600 dark:text-blue-400' : 'text-muted'}`}
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"
+            />
+          </svg>
+        ),
+    }));
 
   return (
     <SettingsPanel
@@ -222,492 +214,15 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
               </div>
             </div>
 
-            {/* Docker installation notice - enhanced with copy-able commands */}
-            <Show when={props.versionInfo()?.isDocker && !props.updateInfo()?.available}>
-              <div class="p-4 bg-blue-50 dark:bg-blue-900 border border-blue-200 dark:border-blue-800 rounded-md space-y-3">
-                <div class="flex items-center gap-2">
-                  <svg
-                    class="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0"
-                    viewBox="0 0 24 24"
-                    fill="currentColor"
-                  >
-                    <path d="M13.983 11.078h2.119a.186.186 0 00.186-.185V9.006a.186.186 0 00-.186-.186h-2.119a.186.186 0 00-.185.186v1.887c0 .102.083.185.185.185m-2.954-5.43h2.118a.186.186 0 00.186-.186V3.574a.186.186 0 00-.186-.185h-2.118a.186.186 0 00-.185.185v1.888c0 .102.082.186.185.186m0 2.716h2.118a.187.187 0 00.186-.186V6.29a.186.186 0 00-.186-.185h-2.118a.186.186 0 00-.185.185v1.888c0 .102.082.185.185.186m-2.93 0h2.12a.186.186 0 00.184-.186V6.29a.185.185 0 00-.185-.185H8.1a.185.185 0 00-.185.185v1.888c0 .102.083.185.185.186m-2.964 0h2.119a.186.186 0 00.185-.186V6.29a.186.186 0 00-.185-.185H5.136a.186.186 0 00-.186.185v1.888c0 .102.084.185.186.186m5.893 2.715h2.118a.186.186 0 00.186-.185V9.006a.186.186 0 00-.186-.186h-2.118a.186.186 0 00-.185.186v1.887c0 .102.082.185.185.185m-2.93 0h2.12a.185.185 0 00.184-.185V9.006a.185.185 0 00-.184-.186h-2.12a.185.185 0 00-.184.186v1.887c0 .102.083.185.185.185m-2.964 0h2.119a.185.185 0 00.185-.185V9.006a.185.185 0 00-.185-.186h-2.119a.186.186 0 00-.186.186v1.887c0 .102.084.185.186.185m-2.92 0h2.12a.185.185 0 00.184-.185V9.006a.185.185 0 00-.184-.186h-2.12a.186.186 0 00-.186.186v1.887c0 .102.084.185.186.185m-.001 2.716h2.118a.185.185 0 00.185-.185v-1.888a.185.185 0 00-.185-.185H2.136a.185.185 0 00-.186.185v1.888c0 .102.084.185.186.185m23.063-3.167a.509.509 0 00-.376-.25.431.431 0 00-.116-.01.431.431 0 00-.114.01 3.6 3.6 0 00-1.618.877c-.186.166-.356.36-.509.577a6.6 6.6 0 00-1.117-1.474 6.6 6.6 0 00-9.336 0 6.6 6.6 0 00-1.938 4.684 6.6 6.6 0 001.938 4.684 6.6 6.6 0 004.668 1.938 6.6 6.6 0 004.668-1.938 6.6 6.6 0 001.938-4.684 6.6 6.6 0 00-.185-1.41 3.6 3.6 0 001.587-.904.509.509 0 00.134-.459" />
-                  </svg>
-                  <p class="text-sm font-medium text-blue-800 dark:text-blue-200">
-                    Docker Installation
-                  </p>
-                </div>
-                <p class="text-xs text-blue-700 dark:text-blue-300">
-                  Updates are managed through Docker. Use these commands to check for and apply
-                  updates:
-                </p>
-                <div class="space-y-2">
-                  <div class="relative group">
-                    <code class="block p-2.5 bg-base rounded-md text-xs font-mono text-blue-400 border border-border">
-                      docker pull rcourtman/pulse:latest && docker restart pulse
-                    </code>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        navigator.clipboard.writeText(
-                          'docker pull rcourtman/pulse:latest && docker restart pulse',
-                        )
-                      }
-                      class="absolute top-1.5 right-1.5 p-1 rounded bg-surface-hover hover:bg-slate-600 text-slate-300 opacity-60 hover:opacity-100 transition-opacity"
-                      title="Copy to clipboard"
-                    >
-                      <svg
-                        class="w-3.5 h-3.5"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                        stroke-width="2"
-                      >
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-                        />
-                      </svg>
-                    </button>
-                  </div>
-                  <p class="text-[10px] text-blue-600 dark:text-blue-400">
-                    Or with Docker Compose:{' '}
-                    <code class="px-1 py-0.5 bg-blue-100 dark:bg-blue-800 rounded text-[10px]">
-                      docker-compose pull && docker-compose up -d
-                    </code>
-                  </p>
-                </div>
-              </div>
-            </Show>
-
-            {/* Source build notice */}
-            <Show when={props.versionInfo()?.isSourceBuild}>
-              <div class="p-3 bg-blue-50 dark:bg-blue-900 border border-blue-200 dark:border-blue-800 rounded-md">
-                <p class="text-xs text-blue-800 dark:text-blue-200">
-                  <strong>Built from source:</strong> Pull the latest code from git and rebuild to
-                  update.
-                </p>
-              </div>
-            </Show>
-
-            {/* Warning message */}
-            <Show when={Boolean(props.updateInfo()?.warning)}>
-              <div class="p-3 bg-amber-50 dark:bg-amber-900 border border-amber-200 dark:border-amber-700 rounded-md">
-                <p class="text-xs text-amber-800 dark:text-amber-200">
-                  {props.updateInfo()?.warning}
-                </p>
-              </div>
-            </Show>
-
-            {/* Update available */}
-            <Show when={props.updateInfo()?.available}>
-              <div class="rounded-md border border-green-200 dark:border-green-700 overflow-hidden bg-green-50 dark:bg-green-900">
-                {/* Header */}
-                <div class="px-5 py-4 border-b border-green-200 dark:border-green-800 bg-green-100 dark:bg-green-800">
-                  <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div class="flex items-center gap-3">
-                      <div class="p-2 bg-green-100 dark:bg-green-900 rounded-md">
-                        <svg
-                          class="w-5 h-5 text-green-700 dark:text-green-300"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                          stroke-width="2"
-                        >
-                          <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
-                          />
-                        </svg>
-                      </div>
-                      <div>
-                        <h4 class="text-base font-semibold text-green-900 dark:text-green-100">
-                          Update Available
-                        </h4>
-                        <p class="text-xs text-green-700 dark:text-green-300">
-                          Version {props.updateInfo()?.latestVersion} is ready to install
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Automated Install Button */}
-                    <Show when={props.updatePlan()?.canAutoUpdate}>
-                      <button
-                        type="button"
-                        onClick={props.onInstallUpdate}
-                        disabled={props.isInstalling()}
-                        class={`w-full justify-center sm:w-auto px-4 py-2.5 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${
-                          props.isInstalling()
-                            ? 'bg-green-400 dark:bg-green-600 text-white cursor-not-allowed'
-                            : 'bg-green-600 hover:bg-green-700 text-white'
-                        }`}
-                      >
-                        <Show
-                          when={props.isInstalling()}
-                          fallback={
-                            <>
-                              <Download class="w-4 h-4" />
-                              Install Update
-                            </>
-                          }
-                        >
-                          <div class="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
-                          Installing...
-                        </Show>
-                      </button>
-                    </Show>
-                  </div>
-                </div>
-
-                {/* Installation Steps */}
-                <div class="p-5 space-y-4">
-                  {/* Manual Steps Header */}
-                  <Show when={!props.updatePlan()?.canAutoUpdate}>
-                    <div class="text-sm font-medium text-green-800 dark:text-green-200 mb-3">
-                      Follow these steps to update manually:
-                    </div>
-                  </Show>
-
-                  <Show when={props.updatePlan()?.canAutoUpdate}>
-                    <div class="text-sm text-green-700 dark:text-green-300 mb-3">
-                      Click "Install Update" above for automatic installation, or update manually:
-                    </div>
-                  </Show>
-
-                  {/* ProxmoxVE LXC Installation */}
-                  <Show when={props.versionInfo()?.deploymentType === 'proxmoxve'}>
-                    <div class="space-y-3">
-                      <div class="flex items-center gap-2 text-sm font-medium text-green-800 dark:text-green-200">
-                        <span class="flex items-center justify-center w-6 h-6 rounded-full bg-green-200 dark:bg-green-800 text-xs font-bold text-green-700 dark:text-green-300">
-                          1
-                        </span>
-                        Open your Pulse LXC console
-                      </div>
-                      <div class="flex items-center gap-2 text-sm font-medium text-green-800 dark:text-green-200">
-                        <span class="flex items-center justify-center w-6 h-6 rounded-full bg-green-200 dark:bg-green-800 text-xs font-bold text-green-700 dark:text-green-300">
-                          2
-                        </span>
-                        Run the update command:
-                      </div>
-                      <div class="ml-0 sm:ml-8 relative group">
-                        <code class="block p-3 bg-base rounded-md text-sm font-mono text-green-400 border border-border">
-                          update
-                        </code>
-                        <button
-                          type="button"
-                          onClick={() => navigator.clipboard.writeText('update')}
-                          class="absolute right-2 top-2 inline-flex min-h-9 min-w-9 items-center justify-center rounded bg-surface-hover p-2 text-slate-300 opacity-70 transition-opacity hover:bg-slate-600 hover:opacity-100"
-                          title="Copy to clipboard"
-                        >
-                          <svg
-                            class="w-4 h-4"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                            stroke-width="2"
-                          >
-                            <path
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                              d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-                            />
-                          </svg>
-                        </button>
-                      </div>
-                      <p class="ml-0 sm:ml-8 text-xs text-green-600 dark:text-green-400">
-                        The script will automatically download and install the latest version.
-                      </p>
-                    </div>
-                  </Show>
-
-                  {/* Docker Installation */}
-                  <Show
-                    when={
-                      props.versionInfo()?.deploymentType === 'docker' ||
-                      (!props.versionInfo()?.deploymentType && props.versionInfo()?.isDocker)
-                    }
-                  >
-                    <div class="space-y-3">
-                      <div class="flex items-center gap-2 text-sm font-medium text-green-800 dark:text-green-200">
-                        <span class="flex items-center justify-center w-6 h-6 rounded-full bg-green-200 dark:bg-green-800 text-xs font-bold text-green-700 dark:text-green-300">
-                          1
-                        </span>
-                        Pull the latest image
-                      </div>
-                      <div class="ml-0 sm:ml-8 relative group">
-                        <code class="block p-3 bg-base rounded-md text-sm font-mono text-green-400 border border-border">
-                          docker pull rcourtman/pulse:{dockerImageTag()}
-                        </code>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            navigator.clipboard.writeText(
-                              `docker pull rcourtman/pulse:${dockerImageTag()}`,
-                            )
-                          }
-                          class="absolute right-2 top-2 inline-flex min-h-9 min-w-9 items-center justify-center rounded bg-surface-hover p-2 text-slate-300 opacity-70 transition-opacity hover:bg-slate-600 hover:opacity-100"
-                          title="Copy to clipboard"
-                        >
-                          <svg
-                            class="w-4 h-4"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                            stroke-width="2"
-                          >
-                            <path
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                              d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-                            />
-                          </svg>
-                        </button>
-                      </div>
-
-                      <div class="flex items-center gap-2 text-sm font-medium text-green-800 dark:text-green-200">
-                        <span class="flex items-center justify-center w-6 h-6 rounded-full bg-green-200 dark:bg-green-800 text-xs font-bold text-green-700 dark:text-green-300">
-                          2
-                        </span>
-                        Restart the container
-                      </div>
-                      <div class="ml-0 sm:ml-8 relative group">
-                        <code class="block p-3 bg-base rounded-md text-sm font-mono text-green-400 border border-border">
-                          docker restart pulse
-                        </code>
-                        <button
-                          type="button"
-                          onClick={() => navigator.clipboard.writeText('docker restart pulse')}
-                          class="absolute right-2 top-2 inline-flex min-h-9 min-w-9 items-center justify-center rounded bg-surface-hover p-2 text-slate-300 opacity-70 transition-opacity hover:bg-slate-600 hover:opacity-100"
-                          title="Copy to clipboard"
-                        >
-                          <svg
-                            class="w-4 h-4"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                            stroke-width="2"
-                          >
-                            <path
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                              d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-                            />
-                          </svg>
-                        </button>
-                      </div>
-                      <p class="ml-0 sm:ml-8 text-xs text-green-600 dark:text-green-400">
-                        Or use Docker Compose:{' '}
-                        <code class="px-1.5 py-0.5 bg-surface-hover rounded text-xs">
-                          docker-compose pull && docker-compose up -d
-                        </code>
-                      </p>
-                    </div>
-                  </Show>
-
-                  {/* Systemd/Manual Installation */}
-                  <Show
-                    when={
-                      props.versionInfo()?.deploymentType === 'systemd' ||
-                      props.versionInfo()?.deploymentType === 'manual'
-                    }
-                  >
-                    <div class="space-y-3">
-                      <div class="flex items-center gap-2 text-sm font-medium text-green-800 dark:text-green-200">
-                        <span class="flex items-center justify-center w-6 h-6 rounded-full bg-green-200 dark:bg-green-800 text-xs font-bold text-green-700 dark:text-green-300">
-                          1
-                        </span>
-                        Stop the service
-                      </div>
-                      <div class="ml-0 sm:ml-8 relative group">
-                        <code class="block p-3 bg-base rounded-md text-sm font-mono text-green-400 border border-border">
-                          sudo systemctl stop pulse
-                        </code>
-                        <button
-                          type="button"
-                          onClick={() => navigator.clipboard.writeText('sudo systemctl stop pulse')}
-                          class="absolute right-2 top-2 inline-flex min-h-9 min-w-9 items-center justify-center rounded bg-surface-hover p-2 text-slate-300 opacity-70 transition-opacity hover:bg-slate-600 hover:opacity-100"
-                          title="Copy to clipboard"
-                        >
-                          <svg
-                            class="w-4 h-4"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                            stroke-width="2"
-                          >
-                            <path
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                              d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-                            />
-                          </svg>
-                        </button>
-                      </div>
-
-                      <div class="flex items-center gap-2 text-sm font-medium text-green-800 dark:text-green-200">
-                        <span class="flex items-center justify-center w-6 h-6 rounded-full bg-green-200 dark:bg-green-800 text-xs font-bold text-green-700 dark:text-green-300">
-                          2
-                        </span>
-                        Download and extract the new version
-                      </div>
-                      <div class="ml-0 sm:ml-8 relative group">
-                        <code class="block p-3 bg-base rounded-md text-sm font-mono text-green-400 border border-border whitespace-pre-wrap break-all">
-                          {systemdDownloadCommand()}
-                        </code>
-                        <button
-                          type="button"
-                          onClick={() => navigator.clipboard.writeText(systemdDownloadCommand())}
-                          class="absolute right-2 top-2 inline-flex min-h-9 min-w-9 items-center justify-center rounded bg-surface-hover p-2 text-slate-300 opacity-70 transition-opacity hover:bg-slate-600 hover:opacity-100"
-                          title="Copy to clipboard"
-                        >
-                          <svg
-                            class="w-4 h-4"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                            stroke-width="2"
-                          >
-                            <path
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                              d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-                            />
-                          </svg>
-                        </button>
-                      </div>
-
-                      <div class="flex items-center gap-2 text-sm font-medium text-green-800 dark:text-green-200">
-                        <span class="flex items-center justify-center w-6 h-6 rounded-full bg-green-200 dark:bg-green-800 text-xs font-bold text-green-700 dark:text-green-300">
-                          3
-                        </span>
-                        Start the service
-                      </div>
-                      <div class="ml-0 sm:ml-8 relative group">
-                        <code class="block p-3 bg-base rounded-md text-sm font-mono text-green-400 border border-border">
-                          sudo systemctl start pulse
-                        </code>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            navigator.clipboard.writeText('sudo systemctl start pulse')
-                          }
-                          class="absolute right-2 top-2 inline-flex min-h-9 min-w-9 items-center justify-center rounded bg-surface-hover p-2 text-slate-300 opacity-70 transition-opacity hover:bg-slate-600 hover:opacity-100"
-                          title="Copy to clipboard"
-                        >
-                          <svg
-                            class="w-4 h-4"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                            stroke-width="2"
-                          >
-                            <path
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                              d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-                            />
-                          </svg>
-                        </button>
-                      </div>
-                    </div>
-                  </Show>
-
-                  {/* Development Installation */}
-                  <Show when={props.versionInfo()?.deploymentType === 'development'}>
-                    <div class="space-y-3">
-                      <div class="flex items-center gap-2 text-sm font-medium text-green-800 dark:text-green-200">
-                        <span class="flex items-center justify-center w-6 h-6 rounded-full bg-green-200 dark:bg-green-800 text-xs font-bold text-green-700 dark:text-green-300">
-                          1
-                        </span>
-                        Pull the latest changes
-                      </div>
-                      <div class="ml-0 sm:ml-8 relative group">
-                        <code class="block p-3 bg-base rounded-md text-sm font-mono text-green-400 border border-border">
-                          git pull origin main
-                        </code>
-                        <button
-                          type="button"
-                          onClick={() => navigator.clipboard.writeText('git pull origin main')}
-                          class="absolute right-2 top-2 inline-flex min-h-9 min-w-9 items-center justify-center rounded bg-surface-hover p-2 text-slate-300 opacity-70 transition-opacity hover:bg-slate-600 hover:opacity-100"
-                          title="Copy to clipboard"
-                        >
-                          <svg
-                            class="w-4 h-4"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                            stroke-width="2"
-                          >
-                            <path
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                              d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-                            />
-                          </svg>
-                        </button>
-                      </div>
-
-                      <div class="flex items-center gap-2 text-sm font-medium text-green-800 dark:text-green-200">
-                        <span class="flex items-center justify-center w-6 h-6 rounded-full bg-green-200 dark:bg-green-800 text-xs font-bold text-green-700 dark:text-green-300">
-                          2
-                        </span>
-                        Rebuild and restart
-                      </div>
-                      <div class="ml-0 sm:ml-8 relative group">
-                        <code class="block p-3 bg-base rounded-md text-sm font-mono text-green-400 border border-border">
-                          make build && make run
-                        </code>
-                        <button
-                          type="button"
-                          onClick={() => navigator.clipboard.writeText('make build && make run')}
-                          class="absolute right-2 top-2 inline-flex min-h-9 min-w-9 items-center justify-center rounded bg-surface-hover p-2 text-slate-300 opacity-70 transition-opacity hover:bg-slate-600 hover:opacity-100"
-                          title="Copy to clipboard"
-                        >
-                          <svg
-                            class="w-4 h-4"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                            stroke-width="2"
-                          >
-                            <path
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                              d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-                            />
-                          </svg>
-                        </button>
-                      </div>
-                    </div>
-                  </Show>
-                </div>
-
-                {/* Release notes footer */}
-                <Show when={props.updateInfo()?.releaseNotes}>
-                  <div class="px-5 py-3 border-t border-green-200 dark:border-green-800 bg-surface">
-                    <details class="group">
-                      <summary class="flex items-center gap-2 text-sm font-medium text-green-700 dark:text-green-300 cursor-pointer hover:text-green-800 dark:hover:text-green-200 transition-colors">
-                        <svg
-                          class="w-4 h-4 transition-transform group-open:rotate-90"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                          stroke-width="2"
-                        >
-                          <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
-                        </svg>
-                        View Release Notes
-                      </summary>
-                      <pre class="mt-3 p-4 text-xs text-base-content whitespace-pre-wrap font-mono bg-surface-alt rounded-md border border-border max-h-64 overflow-y-auto">
-                        {props.updateInfo()?.releaseNotes}
-                      </pre>
-                    </details>
-                  </div>
-                </Show>
-              </div>
-            </Show>
+            <UpdateInstallGuide
+              versionInfo={props.versionInfo()}
+              updateInfo={props.updateInfo()}
+              updatePlan={props.updatePlan()}
+              isInstalling={props.isInstalling()}
+              dockerImageTag={dockerImageTag()}
+              systemdDownloadCommand={systemdDownloadCommand()}
+              onInstallUpdate={props.onInstallUpdate}
+            />
           </div>
         </div>
 

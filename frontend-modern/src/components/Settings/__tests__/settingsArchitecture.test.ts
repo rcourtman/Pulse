@@ -21,6 +21,9 @@ import aiProviderConfigurationSectionSource from '../AIProviderConfigurationSect
 import aiSettingsDialogsSource from '../AISettingsDialogs.tsx?raw';
 import aiSettingsModelSource from '../aiSettingsModel.ts?raw';
 import networkSettingsPanelSource from '../NetworkSettingsPanel.tsx?raw';
+import copyCommandBlockSource from '../CopyCommandBlock.tsx?raw';
+import updateInstallGuideSource from '../UpdateInstallGuide.tsx?raw';
+import updatesSettingsModelSource from '../updatesSettingsModel.ts?raw';
 import updatesSettingsPanelSource from '../UpdatesSettingsPanel.tsx?raw';
 import recoverySettingsPanelSource from '../RecoverySettingsPanel.tsx?raw';
 import relaySettingsPanelSource from '../RelaySettingsPanel.tsx?raw';
@@ -61,6 +64,9 @@ const extractedModules = [
   '../AIProviderConfigurationSection.tsx',
   '../AISettingsDialogs.tsx',
   '../aiSettingsModel.ts',
+  '../CopyCommandBlock.tsx',
+  '../UpdateInstallGuide.tsx',
+  '../updatesSettingsModel.ts',
   '../useSSOProvidersState.ts',
   '../ssoProvidersModel.ts',
   '../ProxmoxSettingsPanel.tsx',
@@ -347,6 +353,20 @@ describe('Settings architecture guardrails', () => {
     expect(aiSettingsDialogsSource).toContain('@/components/Settings/aiSettingsModel');
     expect(aiSettingsModelSource).toContain('export const AI_PROVIDER_CONFIGS');
     expect(aiSettingsModelSource).toContain('export const AI_SETUP_PROVIDER_OPTIONS');
+  });
+
+  it('keeps the updates settings shell behind extracted install-guide owners', () => {
+    expect(updatesSettingsPanelSource).toContain('@/components/Settings/UpdateInstallGuide');
+    expect(updatesSettingsPanelSource).toContain('@/components/Settings/updatesSettingsModel');
+    expect(updatesSettingsPanelSource).not.toContain("navigator.clipboard.writeText('update')");
+    expect(updatesSettingsPanelSource).not.toContain("value: 'stable'");
+    expect(updatesSettingsPanelSource).not.toContain("value: 'rc'");
+    expect(updateInstallGuideSource).toContain('@/components/Settings/CopyCommandBlock');
+    expect(updateInstallGuideSource).toContain('buildUpdateInstallGuide');
+    expect(copyCommandBlockSource).toContain('export function CopyCommandBlock');
+    expect(copyCommandBlockSource).toContain("aria-label=\"Copy to clipboard\"");
+    expect(updatesSettingsModelSource).toContain('export function getUpdateChannelCardOptions');
+    expect(updatesSettingsModelSource).toContain('export function buildUpdateInstallGuide');
   });
 
   it('keeps the audit log shell behind an extracted runtime owner', () => {

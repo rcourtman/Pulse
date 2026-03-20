@@ -43,17 +43,20 @@ work extends shared components instead of creating new local variants.
 21. `frontend-modern/src/components/Settings/SSOProvidersPanel.tsx`
 22. `frontend-modern/src/components/Settings/useSSOProvidersState.ts`
 23. `frontend-modern/src/components/Settings/ssoProvidersModel.ts`
-24. `frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx`
-25. `frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts`
-26. `tests/integration/tests/15-settings-shell-consistency.spec.ts`
-27. `frontend-modern/src/components/shared/PageControls.guardrails.test.ts`
-28. `frontend-modern/src/components/shared/TypeColumn.guardrails.test.ts`
-29. `frontend-modern/src/features/`
-30. `frontend-modern/src/components/SetupWizard/SetupWizard.tsx`
-31. `frontend-modern/src/components/SetupWizard/SetupCompletionPreview.tsx`
-32. `frontend-modern/src/components/SetupWizard/__tests__/SetupWizard.test.tsx`
-33. `frontend-modern/src/components/SetupWizard/__tests__/SetupCompletionPreview.test.tsx`
-34. `frontend-modern/src/components/shared/MonitoredSystemLimitWarningBanner.tsx`
+24. `frontend-modern/src/components/Settings/CopyCommandBlock.tsx`
+25. `frontend-modern/src/components/Settings/UpdateInstallGuide.tsx`
+26. `frontend-modern/src/components/Settings/updatesSettingsModel.ts`
+27. `frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx`
+28. `frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts`
+29. `tests/integration/tests/15-settings-shell-consistency.spec.ts`
+30. `frontend-modern/src/components/shared/PageControls.guardrails.test.ts`
+31. `frontend-modern/src/components/shared/TypeColumn.guardrails.test.ts`
+32. `frontend-modern/src/features/`
+33. `frontend-modern/src/components/SetupWizard/SetupWizard.tsx`
+34. `frontend-modern/src/components/SetupWizard/SetupCompletionPreview.tsx`
+35. `frontend-modern/src/components/SetupWizard/__tests__/SetupWizard.test.tsx`
+36. `frontend-modern/src/components/SetupWizard/__tests__/SetupCompletionPreview.test.tsx`
+37. `frontend-modern/src/components/shared/MonitoredSystemLimitWarningBanner.tsx`
 
 ## Shared Boundaries
 
@@ -122,6 +125,16 @@ The audit log settings surface now follows that same owner split.
 license/paywall lifecycle, persisted filters, verification flow, and audit-log
 fetch orchestration. The shell must not re-accumulate localStorage or API
 runtime logic inline.
+
+The updates settings surface now follows the same presentation-owner rule.
+`frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx` stays the
+top-level settings shell, while
+`frontend-modern/src/components/Settings/UpdateInstallGuide.tsx`,
+`frontend-modern/src/components/Settings/CopyCommandBlock.tsx`, and
+`frontend-modern/src/components/Settings/updatesSettingsModel.ts` own the
+deployment-specific install guide, copy-command block, and update-channel/install
+model data. The panel shell must not rebuild copy-to-clipboard command cards or
+deployment instruction trees inline.
 
 General settings segmented selectors for theme preference and temperature unit
 must now also route through the shared `FilterButtonGroup` primitive instead of
