@@ -73,7 +73,7 @@ const NotFoundPage = lazy(() => import('./pages/NotFound'));
 const PricingPage = lazy(() => import('./pages/PricingV6'));
 const CloudPricingPage = lazy(() => import('./pages/CloudPricing'));
 const HostedSignupPage = lazy(() => import('./pages/HostedSignup'));
-const Operations = lazy(() => import('./pages/Operations'));
+const OperationsPage = lazy(() => import('./pages/Operations'));
 const SetupCompletionPreviewPage = lazy(() =>
   import('./components/SetupWizard/SetupCompletionPreview').then((module) => ({
     default: module.SetupCompletionPreview,
@@ -393,7 +393,7 @@ function App() {
       <Route path="/ai/*" component={AIIntelligencePage} />
       <Route path="/settings/operations/*" component={LegacyOperationsSettingsRedirect} />
       <Route path="/settings/*" component={SettingsRoute} />
-      <Route path="/operations/*" component={Operations} />
+      <Route path="/operations/*" component={OperationsPage} />
       <Route path="*all" component={NotFoundPage} />
     </Router>
   );

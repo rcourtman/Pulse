@@ -30,6 +30,7 @@ import environmentLockBadgeSource from '@/components/shared/EnvironmentLockBadge
 import environmentLockPresentationSource from '@/utils/environmentLockPresentation.ts?raw';
 import dockerRuntimeSettingsCardSource from '@/components/Settings/DockerRuntimeSettingsCard.tsx?raw';
 import infrastructurePageShellSource from '@/pages/Infrastructure.tsx?raw';
+import operationsPageRouteSource from '@/pages/Operations.tsx?raw';
 import discoveryTargetSource from '@/utils/discoveryTarget.ts?raw';
 import infrastructureEmptyStatePresentationSource from '@/utils/infrastructureEmptyStatePresentation.ts?raw';
 import recoverySummarySource from '@/components/Recovery/RecoverySummary.tsx?raw';
@@ -97,6 +98,8 @@ import useChatSource from '@/components/AI/Chat/hooks/useChat.ts?raw';
 import patrolStatusBarSource from '@/components/patrol/PatrolStatusBar.tsx?raw';
 import patrolFormatSource from '@/utils/patrolFormat.ts?raw';
 import aiFindingPresentationSource from '@/utils/aiFindingPresentation.ts?raw';
+import operationsPageSurfaceSource from '@/features/operations/OperationsPageSurface.tsx?raw';
+import operationsPageModelSource from '@/features/operations/operationsPageModel.ts?raw';
 import chatIdentifiersSource from '@/utils/chatIdentifiers.ts?raw';
 import resourceIdentitySource from '@/utils/resourceIdentity.ts?raw';
 import stringUtilsSource from '@/utils/stringUtils.ts?raw';
@@ -2748,6 +2751,24 @@ describe('frontend resource type boundaries', () => {
     );
     expect(aiIntelligenceSource).not.toContain('getPatrolSummaryPresentation');
     expect(aiIntelligenceSource).not.toContain('getAIQuickstartCreditsPresentation');
+    expect(operationsPageRouteSource).toContain(
+      "import { OperationsPageSurface } from '@/features/operations/OperationsPageSurface';",
+    );
+    expect(operationsPageRouteSource).toContain('<OperationsPageSurface />');
+    expect(operationsPageRouteSource).not.toContain('useLocation');
+    expect(operationsPageRouteSource).not.toContain('useNavigate');
+    expect(operationsPageSurfaceSource).toContain('@/components/shared/Subtabs');
+    expect(operationsPageSurfaceSource).toContain('getOperationsTabFromPath');
+    expect(operationsPageSurfaceSource).toContain('buildOperationsPath');
+    expect(operationsPageSurfaceSource).toContain('<DiagnosticsPanel />');
+    expect(operationsPageSurfaceSource).toContain('<ReportingPanel />');
+    expect(operationsPageSurfaceSource).toContain('<SystemLogsPanel />');
+    expect(operationsPageSurfaceSource).not.toContain('-webkit-overflow-scrolling');
+    expect(operationsPageModelSource).toContain('export const OPERATIONS_TABS');
+    expect(operationsPageModelSource).toContain('export function getOperationsTabFromPath');
+    expect(operationsPageModelSource).toContain('export function buildOperationsPath');
+    expect(reportingPanelSource).toContain('OperationsPanel');
+    expect(systemLogsPanelSource).toContain('OperationsPanel');
     expect(patrolIntelligenceSurfaceSource).toContain('getPatrolSummaryPresentation');
     expect(patrolIntelligenceSurfaceSource).toContain('getAIQuickstartCreditsPresentation');
     expect(patrolIntelligenceSurfaceSource).not.toContain(

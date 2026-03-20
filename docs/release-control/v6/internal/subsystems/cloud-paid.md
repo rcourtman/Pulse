@@ -226,6 +226,7 @@ work must extend that split rather than pulling org bootstrap and app chrome
 back into one monolithic route component.
 That same route/provider shell must stay page-oriented as well: `App.tsx`
 should lazy-load route shells like `frontend-modern/src/pages/Storage.tsx`
+and `frontend-modern/src/pages/Operations.tsx`
 instead of wiring product-surface components such as
 `frontend-modern/src/components/Storage/Storage.tsx` directly into the router,
 so hosted bootstrap ownership stays at the app boundary rather than leaking

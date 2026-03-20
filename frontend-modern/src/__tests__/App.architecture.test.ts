@@ -9,6 +9,7 @@ describe('App architecture', () => {
     expect(appSource).toContain("import { useAppRuntimeState } from '@/useAppRuntimeState';");
     expect(appSource).toContain('const runtime = useAppRuntimeState();');
     expect(appSource).toContain("const StoragePage = lazy(() => import('./pages/Storage'));");
+    expect(appSource).toContain("const OperationsPage = lazy(() => import('./pages/Operations'));");
     expect(appSource).not.toContain(
       "const StorageComponent = lazy(() => import('./components/Storage/Storage'));",
     );

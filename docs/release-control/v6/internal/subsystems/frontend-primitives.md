@@ -61,6 +61,12 @@ work extends shared components instead of creating new local variants.
 39. `frontend-modern/src/components/SetupWizard/__tests__/SetupWizard.test.tsx`
 40. `frontend-modern/src/components/SetupWizard/__tests__/SetupCompletionPreview.test.tsx`
 41. `frontend-modern/src/components/shared/MonitoredSystemLimitWarningBanner.tsx`
+42. `frontend-modern/src/components/Settings/ReportingPanel.tsx`
+43. `frontend-modern/src/components/Settings/SystemLogsPanel.tsx`
+44. `frontend-modern/src/features/operations/OperationsPageSurface.tsx`
+45. `frontend-modern/src/features/operations/operationsPageModel.ts`
+46. `frontend-modern/src/pages/Operations.tsx`
+47. `frontend-modern/src/pages/__tests__/Operations.helpers.test.ts`
 
 ## Shared Boundaries
 
@@ -139,6 +145,15 @@ top-level diagnostics shell, while
 diagnostics run/export lifecycle, results rendering, and sanitization/model
 helpers. The shell must not re-accumulate inline API calls, export-download
 plumbing, or diagnostics-card composition.
+
+The operations route now follows the same thin-route pattern as infrastructure,
+storage, and Patrol. `frontend-modern/src/pages/Operations.tsx` stays the route
+shell, `frontend-modern/src/features/operations/OperationsPageSurface.tsx` owns
+the tabbed operations surface, and
+`frontend-modern/src/features/operations/operationsPageModel.ts` owns the tab
+and path contract. The operations route must keep its navigation routed through
+the shared `frontend-modern/src/components/shared/Subtabs.tsx` primitive rather
+than rebuilding a bespoke page-local tab bar.
 
 The updates settings surface now follows the same presentation-owner rule.
 `frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx` stays the
