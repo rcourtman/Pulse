@@ -57,7 +57,7 @@ function isPublicRoutePath(pathname: string): boolean {
 const Dashboard = lazy(() =>
   import('./components/Dashboard/Dashboard').then((module) => ({ default: module.Dashboard })),
 );
-const StorageComponent = lazy(() => import('./components/Storage/Storage'));
+const StoragePage = lazy(() => import('./pages/Storage'));
 const RecoveryRoute = lazy(() => import('./pages/RecoveryRoute'));
 const CephPage = lazy(() => import('./pages/Ceph'));
 const AlertsPage = lazy(() =>
@@ -384,7 +384,7 @@ function App() {
       <Route path="/dashboard" component={DashboardPage} />
       <Route path="/" component={() => <Navigate href={ROOT_INFRASTRUCTURE_PATH} />} />
       <Route path={ROOT_WORKLOADS_PATH} component={WorkloadsView} />
-      <Route path={STORAGE_PATH} component={StorageComponent} />
+      <Route path={STORAGE_PATH} component={StoragePage} />
       <Route path={RECOVERY_ROUTE_PATH} component={RecoveryRoute} />
       <Route path="/ceph" component={CephPage} />
       <Route path={ROOT_INFRASTRUCTURE_PATH} component={InfrastructurePage} />

@@ -8,6 +8,10 @@ describe('App architecture', () => {
     expect(appSource).toContain("import { AppLayout } from '@/AppLayout';");
     expect(appSource).toContain("import { useAppRuntimeState } from '@/useAppRuntimeState';");
     expect(appSource).toContain('const runtime = useAppRuntimeState();');
+    expect(appSource).toContain("const StoragePage = lazy(() => import('./pages/Storage'));");
+    expect(appSource).not.toContain(
+      "const StorageComponent = lazy(() => import('./components/Storage/Storage'));",
+    );
     expect(appSource).not.toContain('function ConnectionStatusBadge(');
     expect(appSource).not.toContain('function AppLayout(');
     expect(appSource).not.toContain('const [organizations, setOrganizations] = createSignal(');

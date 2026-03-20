@@ -333,9 +333,31 @@ class SubsystemLookupTest(unittest.TestCase):
                 "frontend-modern/src/features/storageBackups/__tests__/storageModelCore.test.ts",
                 "frontend-modern/src/features/storageBackups/__tests__/storagePagePresentation.test.ts",
                 "frontend-modern/src/features/storageBackups/__tests__/storagePoolsTablePresentation.test.ts",
+                "frontend-modern/src/pages/__tests__/Storage.helpers.test.ts",
                 "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
             ],
         )
+
+    def test_lookup_paths_assigns_storage_page_to_storage_recovery(self) -> None:
+        result = lookup_paths(["frontend-modern/src/pages/Storage.tsx"])
+        self.assertEqual(result["unowned_runtime_files"], [])
+        self.assertEqual(
+            {item["subsystem"] for item in result["impacted_subsystems"]},
+            {"storage-recovery"},
+        )
+        file_entry = result["files"][0]
+        self.assertEqual(file_entry["classification"], "runtime")
+        self.assertEqual(
+            {match["subsystem"] for match in file_entry["matches"]},
+            {"storage-recovery"},
+        )
+        match = file_entry["matches"][0]
+        self.assertEqual(
+            match["contract"],
+            "docs/release-control/v6/internal/subsystems/storage-recovery.md",
+        )
+        self.assertEqual(match["lane_context"]["lane_id"], "L15")
+        self.assertEqual(match["verification_requirement"]["id"], "storage-product-surface")
 
     def test_lookup_paths_assigns_recovery_types_to_storage_recovery(self) -> None:
         result = lookup_paths(["frontend-modern/src/types/recovery.ts"])

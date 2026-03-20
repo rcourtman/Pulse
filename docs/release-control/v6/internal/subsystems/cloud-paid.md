@@ -224,6 +224,12 @@ theme synchronization, and authenticated runtime startup, and
 as org switching and kiosk-safe navigation. Future hosted browser bootstrap
 work must extend that split rather than pulling org bootstrap and app chrome
 back into one monolithic route component.
+That same route/provider shell must stay page-oriented as well: `App.tsx`
+should lazy-load route shells like `frontend-modern/src/pages/Storage.tsx`
+instead of wiring product-surface components such as
+`frontend-modern/src/components/Storage/Storage.tsx` directly into the router,
+so hosted bootstrap ownership stays at the app boundary rather than leaking
+route concerns back into feature components.
 The Pro license settings surface now follows the same rule as well. Changes to
 `frontend-modern/src/components/Settings/ProLicensePanel.tsx` must carry this
 contract and the dedicated Pro-license proof file instead of remaining an

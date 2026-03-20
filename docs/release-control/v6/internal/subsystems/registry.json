@@ -2420,6 +2420,7 @@
         "frontend-modern/src/pages/DashboardPanels/RecoveryStatusPanel.tsx",
         "frontend-modern/src/pages/DashboardPanels/StoragePanel.tsx",
         "frontend-modern/src/pages/RecoveryRoute.tsx",
+        "frontend-modern/src/pages/Storage.tsx",
         "frontend-modern/src/types/recovery.ts",
         "frontend-modern/src/utils/dashboardRecoveryPresentation.ts",
         "frontend-modern/src/utils/recoveryActionPresentation.ts",
@@ -2530,7 +2531,8 @@
               "frontend-modern/src/features/storageBackups/"
             ],
             "match_files": [
-              "frontend-modern/src/pages/DashboardPanels/StoragePanel.tsx"
+              "frontend-modern/src/pages/DashboardPanels/StoragePanel.tsx",
+              "frontend-modern/src/pages/Storage.tsx"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
@@ -2548,6 +2550,7 @@
               "frontend-modern/src/features/storageBackups/__tests__/storageModelCore.test.ts",
               "frontend-modern/src/features/storageBackups/__tests__/storagePagePresentation.test.ts",
               "frontend-modern/src/features/storageBackups/__tests__/storagePoolsTablePresentation.test.ts",
+              "frontend-modern/src/pages/__tests__/Storage.helpers.test.ts",
               "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts"
             ]
           }

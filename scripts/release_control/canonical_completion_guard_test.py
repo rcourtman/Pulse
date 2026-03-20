@@ -978,10 +978,29 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                         "frontend-modern/src/features/storageBackups/__tests__/storageModelCore.test.ts",
                         "frontend-modern/src/features/storageBackups/__tests__/storagePagePresentation.test.ts",
                         "frontend-modern/src/features/storageBackups/__tests__/storagePoolsTablePresentation.test.ts",
+                        "frontend-modern/src/pages/__tests__/Storage.helpers.test.ts",
                         "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
                     ],
                 }
             ],
+        )
+
+    def test_storage_page_route_change_requires_storage_recovery_contract(self):
+        required = infer_impacted_subsystems(["frontend-modern/src/pages/Storage.tsx"])
+        self.assertEqual(set(required), {"storage-recovery"})
+
+        recovery = required["storage-recovery"]
+        self.assertEqual(
+            recovery["contract"],
+            "docs/release-control/v6/internal/subsystems/storage-recovery.md",
+        )
+        self.assertEqual(
+            recovery["touched_runtime_files"],
+            ["frontend-modern/src/pages/Storage.tsx"],
+        )
+        self.assertEqual(
+            recovery["verification_requirements"][0]["id"],
+            "storage-product-surface",
         )
 
     def test_recovery_types_change_requires_storage_recovery_contract(self):

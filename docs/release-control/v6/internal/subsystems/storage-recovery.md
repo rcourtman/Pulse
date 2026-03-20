@@ -33,18 +33,19 @@ querying, and the operator-facing storage health presentation layer.
 8. `frontend-modern/src/components/Recovery/RecoveryHistorySection.tsx`
 9. `frontend-modern/src/components/Recovery/RecoveryHistoryTable.tsx`
 10. `frontend-modern/src/components/Recovery/useRecoveryHistorySectionState.ts`
-11. `frontend-modern/src/components/Storage/Storage.tsx`
-12. `frontend-modern/src/features/storageBackups/storageModelCore.ts`
-13. `frontend-modern/src/hooks/useRecoveryPoints.ts`
-14. `frontend-modern/src/hooks/useRecoveryRollups.ts`
-15. `frontend-modern/src/pages/RecoveryRoute.tsx`
-16. `frontend-modern/src/pages/Dashboard.tsx`
-17. `frontend-modern/src/pages/DashboardPanels/dashboardWidgets.ts`
-18. `frontend-modern/src/pages/DashboardPanels/RecoveryStatusPanel.tsx`
-19. `frontend-modern/src/pages/DashboardPanels/StoragePanel.tsx`
-20. `frontend-modern/src/types/recovery.ts`
-21. `frontend-modern/src/utils/recoveryTablePresentation.ts`
-22. `frontend-modern/src/utils/textPresentation.ts`
+11. `frontend-modern/src/pages/Storage.tsx`
+12. `frontend-modern/src/components/Storage/Storage.tsx`
+13. `frontend-modern/src/features/storageBackups/storageModelCore.ts`
+14. `frontend-modern/src/hooks/useRecoveryPoints.ts`
+15. `frontend-modern/src/hooks/useRecoveryRollups.ts`
+16. `frontend-modern/src/pages/RecoveryRoute.tsx`
+17. `frontend-modern/src/pages/Dashboard.tsx`
+18. `frontend-modern/src/pages/DashboardPanels/dashboardWidgets.ts`
+19. `frontend-modern/src/pages/DashboardPanels/RecoveryStatusPanel.tsx`
+20. `frontend-modern/src/pages/DashboardPanels/StoragePanel.tsx`
+21. `frontend-modern/src/types/recovery.ts`
+22. `frontend-modern/src/utils/recoveryTablePresentation.ts`
+23. `frontend-modern/src/utils/textPresentation.ts`
 
 ## Shared Boundaries
 
@@ -54,7 +55,7 @@ querying, and the operator-facing storage health presentation layer.
 
 1. Add or change recovery-point persistence, rollups, or series derivation through `internal/recovery/`
 2. Add or change recovery page UX through `frontend-modern/src/components/Recovery/` and keep canonical route/query/filter state ownership in `frontend-modern/src/features/recovery/useRecoverySurfaceState.ts`
-3. Add or change storage page UX through `frontend-modern/src/components/Storage/` and `frontend-modern/src/features/storageBackups/`
+3. Add or change storage page UX through `frontend-modern/src/pages/Storage.tsx`, `frontend-modern/src/components/Storage/`, and `frontend-modern/src/features/storageBackups/`
 4. Route transport changes for storage and recovery endpoints through `internal/api/` and the owning `api-contracts` proof routes
 5. Route canonical storage/recovery resource selection through `frontend-modern/src/hooks/useUnifiedResources.ts` and the owning `unified-resources` contract
    That shared hook now also projects resource `clusterId` through the shared cluster-name helper, so storage and recovery links keep the same cluster-context label as other unified-resource consumers instead of rebuilding a local fallback chain.
@@ -198,9 +199,11 @@ adjacent consumers do not each keep a local `getOrgID() || 'default'`
 fallback.
 
 The frontend storage and recovery surfaces are also first-class runtime entry
-points. `frontend-modern/src/components/Storage/` plus
-`frontend-modern/src/features/storageBackups/` define the operator-facing
-storage health model and presentation, while
+points. `frontend-modern/src/pages/Storage.tsx` is the storage route shell,
+`frontend-modern/src/components/Storage/Storage.tsx` is the operator-facing
+storage surface owner, and `frontend-modern/src/components/Storage/` plus
+`frontend-modern/src/features/storageBackups/` define the storage health model
+and presentation, while
 `frontend-modern/src/components/Recovery/` and the recovery hooks define the
 timeline, protected-item, and recovery-summary UX.
 The recovery table presentation helper now owns the canonical subject-type
