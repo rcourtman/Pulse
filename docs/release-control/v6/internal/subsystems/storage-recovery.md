@@ -28,18 +28,21 @@ querying, and the operator-facing storage health presentation layer.
 3. `internal/recovery/store/store.go`
 4. `frontend-modern/src/components/Recovery/Recovery.tsx`
 5. `frontend-modern/src/features/recovery/useRecoverySurfaceState.ts`
-6. `frontend-modern/src/components/Storage/Storage.tsx`
-7. `frontend-modern/src/features/storageBackups/storageModelCore.ts`
-8. `frontend-modern/src/hooks/useRecoveryPoints.ts`
-9. `frontend-modern/src/hooks/useRecoveryRollups.ts`
-10. `frontend-modern/src/pages/RecoveryRoute.tsx`
-11. `frontend-modern/src/pages/Dashboard.tsx`
-12. `frontend-modern/src/pages/DashboardPanels/dashboardWidgets.ts`
-13. `frontend-modern/src/pages/DashboardPanels/RecoveryStatusPanel.tsx`
-14. `frontend-modern/src/pages/DashboardPanels/StoragePanel.tsx`
-15. `frontend-modern/src/types/recovery.ts`
-16. `frontend-modern/src/utils/recoveryTablePresentation.ts`
-17. `frontend-modern/src/utils/textPresentation.ts`
+6. `frontend-modern/src/components/Recovery/RecoveryProtectedInventorySection.tsx`
+7. `frontend-modern/src/components/Recovery/RecoveryActivitySection.tsx`
+8. `frontend-modern/src/components/Recovery/RecoveryHistorySection.tsx`
+9. `frontend-modern/src/components/Storage/Storage.tsx`
+10. `frontend-modern/src/features/storageBackups/storageModelCore.ts`
+11. `frontend-modern/src/hooks/useRecoveryPoints.ts`
+12. `frontend-modern/src/hooks/useRecoveryRollups.ts`
+13. `frontend-modern/src/pages/RecoveryRoute.tsx`
+14. `frontend-modern/src/pages/Dashboard.tsx`
+15. `frontend-modern/src/pages/DashboardPanels/dashboardWidgets.ts`
+16. `frontend-modern/src/pages/DashboardPanels/RecoveryStatusPanel.tsx`
+17. `frontend-modern/src/pages/DashboardPanels/StoragePanel.tsx`
+18. `frontend-modern/src/types/recovery.ts`
+19. `frontend-modern/src/utils/recoveryTablePresentation.ts`
+20. `frontend-modern/src/utils/textPresentation.ts`
 
 ## Shared Boundaries
 
@@ -105,10 +108,12 @@ The recovery backend is a real product boundary, not just a helper package:
 query filtering, and recovery-point indexing for the `/api/recovery/*`
 surfaces.
 The recovery frontend now also separates that ownership more explicitly:
-`frontend-modern/src/components/Recovery/Recovery.tsx` is the product surface,
-while `frontend-modern/src/features/recovery/useRecoverySurfaceState.ts` owns
+`frontend-modern/src/features/recovery/useRecoverySurfaceState.ts` owns
 canonical route parsing, filter/query state, transport hook inputs, and URL
-synchronization so those concerns do not drift back into the component shell.
+synchronization, while `frontend-modern/src/components/Recovery/Recovery.tsx`
+is the composition root for the operator-facing recovery surface and the split
+section owners under `frontend-modern/src/components/Recovery/` hold the
+protected inventory, activity, and history presentation layers.
 That same shared `internal/api/` dependency now also assumes tenant-scoped
 resource handlers seed registries from canonical unified resources only:
 recovery- and storage-adjacent API helpers may not fall back to raw tenant

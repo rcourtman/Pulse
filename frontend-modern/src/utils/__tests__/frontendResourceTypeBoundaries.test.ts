@@ -27,7 +27,10 @@ import infrastructurePageSource from '@/pages/Infrastructure.tsx?raw';
 import discoveryTargetSource from '@/utils/discoveryTarget.ts?raw';
 import infrastructureEmptyStatePresentationSource from '@/utils/infrastructureEmptyStatePresentation.ts?raw';
 import recoverySummarySource from '@/components/Recovery/RecoverySummary.tsx?raw';
-import recoverySource from '@/components/Recovery/Recovery.tsx?raw';
+import recoveryComponentSource from '@/components/Recovery/Recovery.tsx?raw';
+import recoveryActivitySectionSource from '@/components/Recovery/RecoveryActivitySection.tsx?raw';
+import recoveryHistorySectionSource from '@/components/Recovery/RecoveryHistorySection.tsx?raw';
+import recoveryProtectedInventorySectionSource from '@/components/Recovery/RecoveryProtectedInventorySection.tsx?raw';
 import recoverySurfaceStateSource from '@/features/recovery/useRecoverySurfaceState.ts?raw';
 import dashboardRecoverySource from '@/hooks/useDashboardRecovery.ts?raw';
 import recoveryOutcomePresentationSource from '@/utils/recoveryOutcomePresentation.ts?raw';
@@ -258,6 +261,13 @@ import organizationOverviewPanelSource from '@/components/Settings/OrganizationO
 import organizationSharingPanelSource from '@/components/Settings/OrganizationSharingPanel.tsx?raw';
 import organizationRolePresentationSource from '@/utils/organizationRolePresentation.ts?raw';
 import organizationSettingsPresentationSource from '@/utils/organizationSettingsPresentation.ts?raw';
+
+const recoverySource = [
+  recoveryComponentSource,
+  recoveryProtectedInventorySectionSource,
+  recoveryActivitySectionSource,
+  recoveryHistorySectionSource,
+].join('\n');
 import rolesPanelSource from '@/components/Settings/RolesPanel.tsx?raw';
 import auditWebhookPanelSource from '@/components/Settings/AuditWebhookPanel.tsx?raw';
 import auditWebhookPresentationSource from '@/utils/auditWebhookPresentation.ts?raw';
@@ -418,6 +428,7 @@ describe('frontend resource type boundaries', () => {
     expect(recoverySource).toContain(
       "import { useRecoverySurfaceState } from '@/features/recovery/useRecoverySurfaceState';",
     );
+    expect(recoveryComponentSource).toContain('useRecoverySurfaceState');
     expect(recoverySource).not.toContain('parseRecoveryLinkSearch');
     expect(recoverySource).not.toContain('buildRecoveryPath');
     expect(recoverySource).not.toContain('useRecoveryRollups');
@@ -431,7 +442,9 @@ describe('frontend resource type boundaries', () => {
     expect(recoverySurfaceStateSource).toContain('useRecoveryPointsSeries');
     expect(recoverySource).toContain('getRecoveryFilterChipPresentation');
     expect(recoverySource).not.toContain('const titleize =');
-    expect(recoverySource).toContain("segmentedButtonClass(chartRangeDays() === range, false, 'accent')");
+    expect(recoverySource).toContain(
+      "segmentedButtonClass(props.chartRangeDays() === range, false, 'accent')",
+    );
     expect(recoverySource).not.toContain('border-blue-200 bg-blue-50 px-2 py-0.5');
     expect(recoverySource).not.toContain('border-cyan-200 bg-cyan-50 px-2 py-0.5');
     expect(recoverySource).not.toContain('border-emerald-200 bg-emerald-50 px-2 py-0.5');

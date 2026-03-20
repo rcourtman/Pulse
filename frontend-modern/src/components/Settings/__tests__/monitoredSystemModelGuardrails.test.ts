@@ -68,7 +68,10 @@ import resourceStateAdaptersSource from '@/utils/resourceStateAdapters.ts?raw';
 import resourceDetailMappersSource from '@/components/Infrastructure/resourceDetailMappers.ts?raw';
 import resourceBadgesSource from '@/components/Infrastructure/resourceBadges.ts?raw';
 import resourceBadgePresentationSource from '@/utils/resourceBadgePresentation.ts?raw';
-import recoverySource from '@/components/Recovery/Recovery.tsx?raw';
+import recoveryComponentSource from '@/components/Recovery/Recovery.tsx?raw';
+import recoveryActivitySectionSource from '@/components/Recovery/RecoveryActivitySection.tsx?raw';
+import recoveryHistorySectionSource from '@/components/Recovery/RecoveryHistorySection.tsx?raw';
+import recoveryProtectedInventorySectionSource from '@/components/Recovery/RecoveryProtectedInventorySection.tsx?raw';
 import recoveryTablePresentationSource from '@/utils/recoveryTablePresentation.ts?raw';
 import problemResourcesTableSource from '@/pages/DashboardPanels/ProblemResourcesTable.tsx?raw';
 import workloadTypeBadgesSource from '@/components/shared/workloadTypeBadges.ts?raw';
@@ -101,6 +104,13 @@ import rbacPresentationSource from '@/utils/rbacPresentation.ts?raw';
 import apiTokenPresentationSource from '@/utils/apiTokenPresentation.ts?raw';
 import ssoProviderPresentationSource from '@/utils/ssoProviderPresentation.ts?raw';
 import systemSettingsPresentationSource from '@/utils/systemSettingsPresentation.ts?raw';
+
+const recoverySource = [
+  recoveryComponentSource,
+  recoveryProtectedInventorySectionSource,
+  recoveryActivitySectionSource,
+  recoveryHistorySectionSource,
+].join('\n');
 
 describe('monitored-system model guardrails', () => {
   it('keeps AgentProfilesPanel on unified resources (not host-only slices)', () => {
