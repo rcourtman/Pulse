@@ -204,7 +204,8 @@ Assertion design rules:
     or target update, remove it from `coverage_gaps` instead of leaving it
     behind as historical noise.
 17. Before coding begins on a governed slice, record a `status.json.work_claims`
-    entry for the chosen slice.
+    entry for the chosen slice, then verify it with
+    `python3 scripts/release_control/agent_preflight.py --require-active-claim --agent-id <AGENT_ID>`.
     The claim is an audit trail: it records what is being worked on and
     prevents accidental overlap if the same surface is resumed or handed off.
     Expired claims no longer mark active work; remove them when encountered so

@@ -315,6 +315,7 @@ def agent_entrypoint(*, staged: bool = False) -> dict[str, Any]:
         resolved["registry_schema_rel"],
     ]
     startup_commands = [
+        "python3 scripts/release_control/agent_preflight.py --pretty",
         "python3 scripts/release_control/status_audit.py --pretty",
     ]
     targeted_lookup_commands = []
