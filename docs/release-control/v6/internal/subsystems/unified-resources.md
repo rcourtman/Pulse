@@ -289,12 +289,12 @@ Host and node system or hardware cards now also live behind a collapsed
 cards, so runtime status, identity, and next investigation steps stay first
 while deeper machine detail remains available on demand.
 Within that summary shell, current-state facts now stay in the primary summary
-while platform IDs, quick links, and platform-signal badges live in a smaller
-`Operational context` block, so first read remains status-first instead of
-mixing state and supporting action surfaces together.
-That same summary shell also keeps canonical identity rows primary, while
-aliases, IPs, and tags live in a smaller `Supporting context` block that stays
-label-first instead of adding another summary sentence before the data.
+while a single collapsed `Details` disclosure owns platform IDs, quick links,
+platform-signal badges, aliases, IPs, and tags, so first read remains
+status-first and identity-first instead of mixing state with supporting action
+surfaces.
+That disclosure stays label-first and only opens when asked, so the summary
+answers the main resource question before the supporting metadata appears.
 When the identity side has no owned rows or supporting labels yet, the sparse
 fallback now stays terse (`No identity metadata yet.`) so empty state chrome
 does not read heavier than the data it is standing in for.

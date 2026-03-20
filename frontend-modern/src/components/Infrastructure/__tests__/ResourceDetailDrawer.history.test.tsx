@@ -165,6 +165,7 @@ describe('ResourceDetailDrawer change history section', () => {
       displayName: 'VM 42',
       platformId: 'vm-42',
       platformType: 'proxmox-pve',
+      tags: ['timeline-tag'],
       platformData: { sources: ['proxmox'] },
     });
 
@@ -217,7 +218,10 @@ describe('ResourceDetailDrawer change history section', () => {
       screen.queryByText('Supporting metadata only. The web interface path above stays primary.'),
     ).toBeNull();
     expect(screen.getByRole('button', { name: 'Show metadata' })).toBeInTheDocument();
-    expect(screen.queryByText('Operational context')).toBeNull();
+    expect(screen.getByText('Details')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Show details' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Show details' }));
+    expect(screen.getByText('Tags')).toBeInTheDocument();
     expect(
       within(changeHistorySection).queryByText('Filterable event history for this resource.'),
     ).toBeNull();
@@ -248,7 +252,7 @@ describe('ResourceDetailDrawer change history section', () => {
     ).toBeNull();
   });
 
-  it('keeps supporting context label-first without a summary sentence', () => {
+  it('keeps details label-first without a summary sentence', () => {
     facetBundleMock.getFacetBundle.mockResolvedValueOnce({
       capabilities: [],
       relationships: [],
@@ -276,11 +280,8 @@ describe('ResourceDetailDrawer change history section', () => {
 
     render(() => <ResourceDetailDrawer resource={resource} />);
 
-    const supportingContext = screen.getByText('Supporting context');
-    expect(supportingContext).toBeInTheDocument();
-    expect(
-      supportingContext.parentElement?.querySelector('.mt-1.text-\\[10px\\].text-muted'),
-    ).toBeNull();
+    expect(screen.getByText('Details')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Show details' }));
     expect(screen.getByText('Aliases')).toBeInTheDocument();
   });
 

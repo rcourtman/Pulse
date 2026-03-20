@@ -214,6 +214,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
   const [showInvestigationContext, setShowInvestigationContext] = createSignal(false);
   const [showCorrelationContext, setShowCorrelationContext] = createSignal(false);
   const [showDiscoveryContext, setShowDiscoveryContext] = createSignal(false);
+  const [showSummaryDetails, setShowSummaryDetails] = createSignal(false);
   const [showHostDetails, setShowHostDetails] = createSignal(false);
   const [showServiceDetails, setShowServiceDetails] = createSignal(false);
   const [showDockerUpdateControls, setShowDockerUpdateControls] = createSignal(false);
@@ -978,55 +979,135 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                       </span>
                     </div>
                   </Show>
-                  <Show when={hasRuntimeOperationalContext()}>
-                    <div class="mt-2 space-y-1.5">
-                      <div class="text-[10px] font-medium uppercase tracking-wide text-base-content">
-                        Operational context
-                      </div>
-                      <Show when={props.resource.platformId}>
-                        <div class="flex items-center justify-between gap-2">
-                          <span class="text-muted">Platform ID</span>
-                          <span
-                            class="font-medium text-base-content truncate"
-                            title={props.resource.platformId}
+                  <Show when={hasRuntimeOperationalContext() || hasIdentitySupportContext()}>
+                    <SupportDisclosure
+                      title="Details"
+                      summary="Operational and identity support details."
+                      expanded={showSummaryDetails()}
+                      onToggle={() => setShowSummaryDetails((value) => !value)}
+                      showLabel="Show details"
+                      hideLabel="Hide details"
+                      class="mt-2 rounded border border-dashed border-border bg-surface-hover p-3"
+                      contentClass="mt-3 space-y-2.5"
+                    >
+                      <Show when={hasRuntimeOperationalContext()}>
+                        <div class="space-y-1.5">
+                          <Show when={props.resource.platformId}>
+                            <div class="flex items-center justify-between gap-2">
+                              <span class="text-muted">Platform ID</span>
+                              <span
+                                class="font-medium text-base-content truncate"
+                                title={props.resource.platformId}
+                              >
+                                {props.resource.platformId}
+                              </span>
+                            </div>
+                          </Show>
+                          <Show when={kubernetesCapabilityBadges().length > 0}>
+                            <div class="flex flex-col gap-1">
+                              <span class="text-muted">Platform signals</span>
+                              <div class="flex flex-wrap gap-1">
+                                <For each={kubernetesCapabilityBadges()}>
+                                  {(badge) => (
+                                    <span class={badge.classes} title={badge.title}>
+                                      {badge.label}
+                                    </span>
+                                  )}
+                                </For>
+                              </div>
+                            </div>
+                          </Show>
+                          <Show when={relatedLinks().length > 0}>
+                            <div class="flex flex-col gap-1">
+                              <span class="text-muted">Quick links</span>
+                              <div class="flex flex-wrap gap-2">
+                                <For each={relatedLinks()}>
+                                  {(link) => (
+                                    <a
+                                      href={link.href}
+                                      aria-label={link.ariaLabel}
+                                      class="inline-flex items-center rounded border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-200 dark:hover:bg-blue-900"
+                                    >
+                                      {link.compactLabel}
+                                    </a>
+                                  )}
+                                </For>
+                              </div>
+                            </div>
+                          </Show>
+                        </div>
+                      </Show>
+                      <Show when={hasIdentitySupportContext()}>
+                        <div class="space-y-1.5">
+                          <Show
+                            when={props.resource.identity?.ips && props.resource.identity.ips.length > 0}
                           >
-                            {props.resource.platformId}
-                          </span>
+                            <div class="flex flex-col gap-1">
+                              <span class="text-muted">IP Addresses</span>
+                              <div class="flex flex-wrap gap-1">
+                                <For each={props.resource.identity?.ips ?? []}>
+                                  {(ip) => (
+                                    <span
+                                      class="inline-flex items-center rounded bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700 dark:bg-blue-900 dark:text-blue-200"
+                                      title={ip}
+                                    >
+                                      {ip}
+                                    </span>
+                                  )}
+                                </For>
+                              </div>
+                            </div>
+                          </Show>
+                          <Show when={props.resource.tags && props.resource.tags.length > 0}>
+                            <div class="flex items-center justify-between gap-2">
+                              <span class="text-muted">Tags</span>
+                              <TagBadges tags={props.resource.tags} maxVisible={6} />
+                            </div>
+                          </Show>
+                          <Show when={identityAliasValues().length > 0}>
+                            <Show
+                              when={hasAliasOverflow()}
+                              fallback={
+                                <div class="flex flex-col gap-1">
+                                  <span class="text-muted">Aliases</span>
+                                  <div class="flex flex-wrap gap-1">
+                                    <For each={aliasPreviewValues()}>
+                                      {(value) => (
+                                        <span
+                                          class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px]"
+                                          title={value}
+                                        >
+                                          {value}
+                                        </span>
+                                      )}
+                                    </For>
+                                  </div>
+                                </div>
+                              }
+                            >
+                              <details class="rounded border border-border bg-surface px-2 py-1.5">
+                                <summary class="flex cursor-pointer list-none items-center justify-between text-[10px] font-medium text-muted">
+                                  <span>Aliases</span>
+                                  <span class="text-muted">{identityAliasValues().length}</span>
+                                </summary>
+                                <div class="mt-2 flex flex-wrap gap-1 border-t border-border pt-2">
+                                  <For each={identityAliasValues()}>
+                                    {(value) => (
+                                      <span
+                                        class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px]"
+                                        title={value}
+                                      >
+                                        {value}
+                                      </span>
+                                    )}
+                                  </For>
+                                </div>
+                              </details>
+                            </Show>
+                          </Show>
                         </div>
                       </Show>
-                      <Show when={kubernetesCapabilityBadges().length > 0}>
-                        <div class="flex flex-col gap-1">
-                          <span class="text-muted">Platform signals</span>
-                          <div class="flex flex-wrap gap-1">
-                            <For each={kubernetesCapabilityBadges()}>
-                              {(badge) => (
-                                <span class={badge.classes} title={badge.title}>
-                                  {badge.label}
-                                </span>
-                              )}
-                            </For>
-                          </div>
-                        </div>
-                      </Show>
-                      <Show when={relatedLinks().length > 0}>
-                        <div class="flex flex-col gap-1">
-                          <span class="text-muted">Quick links</span>
-                          <div class="flex flex-wrap gap-2">
-                            <For each={relatedLinks()}>
-                              {(link) => (
-                                <a
-                                  href={link.href}
-                                  aria-label={link.ariaLabel}
-                                  class="inline-flex items-center rounded border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-200 dark:hover:bg-blue-900"
-                                >
-                                  {link.compactLabel}
-                                </a>
-                              )}
-                            </For>
-                          </div>
-                        </div>
-                      </Show>
-                    </div>
+                    </SupportDisclosure>
                   </Show>
                 </div>
               </div>
@@ -1046,79 +1127,6 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                       </div>
                     )}
                   </For>
-                  <Show when={hasIdentitySupportContext()}>
-                    <div class="mt-2 space-y-1.5">
-                      <div class="text-[10px] font-medium uppercase tracking-wide text-base-content">
-                        Supporting context
-                      </div>
-                      <Show
-                        when={props.resource.identity?.ips && props.resource.identity.ips.length > 0}
-                      >
-                        <div class="flex flex-col gap-1">
-                          <span class="text-muted">IP Addresses</span>
-                          <div class="flex flex-wrap gap-1">
-                            <For each={props.resource.identity?.ips ?? []}>
-                              {(ip) => (
-                                <span
-                                  class="inline-flex items-center rounded bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700 dark:bg-blue-900 dark:text-blue-200"
-                                  title={ip}
-                                >
-                                  {ip}
-                                </span>
-                              )}
-                            </For>
-                          </div>
-                        </div>
-                      </Show>
-                      <Show when={props.resource.tags && props.resource.tags.length > 0}>
-                        <div class="flex items-center justify-between gap-2">
-                          <span class="text-muted">Tags</span>
-                          <TagBadges tags={props.resource.tags} maxVisible={6} />
-                        </div>
-                      </Show>
-                      <Show when={identityAliasValues().length > 0}>
-                        <Show
-                          when={hasAliasOverflow()}
-                          fallback={
-                            <div class="flex flex-col gap-1">
-                              <span class="text-muted">Aliases</span>
-                              <div class="flex flex-wrap gap-1">
-                                <For each={aliasPreviewValues()}>
-                                  {(value) => (
-                                    <span
-                                      class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px]"
-                                      title={value}
-                                    >
-                                      {value}
-                                    </span>
-                                  )}
-                                </For>
-                              </div>
-                            </div>
-                          }
-                        >
-                          <details class="rounded border border-border bg-surface px-2 py-1.5">
-                            <summary class="flex cursor-pointer list-none items-center justify-between text-[10px] font-medium text-muted">
-                              <span>Aliases</span>
-                              <span class="text-muted">{identityAliasValues().length}</span>
-                            </summary>
-                            <div class="mt-2 flex flex-wrap gap-1 border-t border-border pt-2">
-                              <For each={identityAliasValues()}>
-                                {(value) => (
-                                  <span
-                                    class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px]"
-                                    title={value}
-                                  >
-                                    {value}
-                                  </span>
-                                )}
-                              </For>
-                            </div>
-                          </details>
-                        </Show>
-                      </Show>
-                    </div>
-                  </Show>
                   <Show when={!identityCardHasRichData()}>
                     <div class="rounded border border-dashed bg-surface-hover px-2 py-1.5 text-[10px] ">
                       No identity metadata yet.
