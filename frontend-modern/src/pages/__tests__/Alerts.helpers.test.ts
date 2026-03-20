@@ -5,6 +5,8 @@ import alertDestinationsTabSource from '@/features/alerts/tabs/DestinationsTab.t
 import alertHistoryTabSource from '@/features/alerts/tabs/HistoryTab.tsx?raw';
 import alertScheduleTabSource from '@/features/alerts/tabs/ScheduleTab.tsx?raw';
 import alertThresholdsTabSource from '@/features/alerts/tabs/ThresholdsTab.tsx?raw';
+import thresholdsTableSource from '@/components/Alerts/ThresholdsTable.tsx?raw';
+import thresholdsDataHookSource from '@/features/alerts/thresholds/hooks/useThresholdsData.ts?raw';
 
 import {
   ALERT_TAB_SEGMENTS,
@@ -186,6 +188,11 @@ describe('tab path helpers', () => {
     expect(alertHistoryTabSource).toContain('IncidentTimelinePanel');
     expect(alertScheduleTabSource).toContain('getAlertConfigQuietHourSuppressOptions');
     expect(alertThresholdsTabSource).toContain('ThresholdsTable');
+    expect(thresholdsTableSource).toContain(
+      "import { useThresholdsData } from '@/features/alerts/thresholds/hooks/useThresholdsData';",
+    );
+    expect(thresholdsTableSource).not.toContain('const nodesWithOverrides = createMemo');
+    expect(thresholdsDataHookSource).toContain('export function useThresholdsData');
   });
 });
 

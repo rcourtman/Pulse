@@ -1,12 +1,17 @@
 import { createMemo } from 'solid-js';
 import { unwrap } from 'solid-js/store';
+import { requiresGovernedResourceDisplay } from '@/types/resource';
 import type { Resource } from '@/types/resource';
 import type { GroupHeaderMeta } from '@/components/Alerts/ResourceTable';
 import type { Resource as TableResource } from '@/components/Alerts/ResourceTable';
 import {
-  getPreferredResourceDisplayName,
+  getAgentDiscoveryResourceId,
+  isAppContainerDiscoveryResourceType,
+} from '@/utils/discoveryTarget';
+import {
   getPreferredResourceHostname,
 } from '@/utils/resourceIdentity';
+import { getAlertResourceDisplayLabel } from '@/features/alerts/helpers';
 import {
   PMG_THRESHOLD_COLUMNS,
   PMG_KEY_TO_NORMALIZED,
@@ -27,10 +32,159 @@ export function useThresholdsData(
   props: ThresholdsTableProps,
   editingId: () => string | null,
   searchTerm: () => string,
-  pd: (r: Resource) => Record<string, unknown> | undefined,
-  buildNodeHeaderMeta: (node: Resource) => { headerMeta: GroupHeaderMeta; keys: Set<string> },
-  getFriendlyNodeName: (value: string, clusterName?: string) => string,
 ) {
+  const pd = (r: Resource): Record<string, unknown> | undefined =>
+    r.platformData ? (unwrap(r.platformData) as Record<string, unknown>) : undefined;
+  const asRecord = (value: unknown): Record<string, unknown> | undefined =>
+    value && typeof value === 'object' ? (value as Record<string, unknown>) : undefined;
+  const asString = (value: unknown): string | undefined =>
+    typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+  const uniqueIds = (...values: unknown[]): string[] => {
+    const ids: string[] = [];
+    const seen = new Set<string>();
+    values.forEach((value) => {
+      const normalized = asString(value);
+      if (!normalized || seen.has(normalized)) return;
+      seen.add(normalized);
+      ids.push(normalized);
+    });
+    return ids;
+  };
+  const hostOverrideIdCandidates = (resource: Resource): string[] => {
+    const platformData = pd(resource);
+    const agent = asRecord(platformData?.agent);
+    const discoveryTarget = resource.discoveryTarget ?? null;
+    return uniqueIds(
+      getAgentDiscoveryResourceId(discoveryTarget),
+      discoveryTarget?.agentId,
+      resource.agent?.agentId,
+      agent?.agentId,
+      platformData?.agentId,
+      resource.id,
+    );
+  };
+  const hostActionId = (resource: Resource): string =>
+    hostOverrideIdCandidates(resource)[0] || resource.id;
+  const dockerHostOverrideIdCandidates = (resource: Resource): string[] => {
+    const platformData = pd(resource);
+    const docker = asRecord(platformData?.docker);
+    const discoveryTarget = resource.discoveryTarget;
+    return uniqueIds(
+      isAppContainerDiscoveryResourceType(discoveryTarget?.resourceType)
+        ? discoveryTarget?.resourceId
+        : undefined,
+      docker?.hostSourceId,
+      platformData?.hostSourceId,
+      discoveryTarget?.agentId,
+      resource.id,
+    );
+  };
+  const dockerContainerOverrideIdCandidates = (host: Resource, shortId: string): string[] =>
+    uniqueIds(
+      ...dockerHostOverrideIdCandidates(host).map((hostId) => `docker:${hostId}/${shortId}`),
+    );
+  const findOverrideByCandidates = (
+    overridesMap: Map<string, Override>,
+    candidates: string[],
+  ): Override | undefined => {
+    for (const candidate of candidates) {
+      const override = overridesMap.get(candidate);
+      if (override) {
+        return override;
+      }
+    }
+    return undefined;
+  };
+  const getFriendlyNodeName = (value: string, clusterName?: string): string => {
+    if (!value) return value;
+
+    const clusterLower = clusterName?.toLowerCase().trim();
+
+    const normalizeToken = (token?: string | null): string => {
+      if (!token) return '';
+      let result = token
+        .replace(/\(.*?\)/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      if (clusterLower) {
+        result = result
+          .split(' ')
+          .filter((part) => part.toLowerCase() !== clusterLower)
+          .join(' ')
+          .trim();
+      }
+      if (!result) return '';
+      const firstWord = result.split(/\s+/)[0] || result;
+      const withoutDomain = firstWord.includes('.')
+        ? (firstWord.split('.')[0] ?? firstWord)
+        : firstWord;
+      return withoutDomain.trim();
+    };
+
+    const parentheticalMatch = value.match(/\(([^)]+)\)/);
+    const parentheticalRaw = parentheticalMatch?.[1]?.trim();
+
+    let base = normalizeToken(value);
+    if (!base) {
+      base = value.trim();
+    }
+
+    const parenthetical = normalizeToken(parentheticalRaw);
+    if (parenthetical && parenthetical.toLowerCase() !== base.toLowerCase()) {
+      return parenthetical;
+    }
+
+    return base;
+  };
+  const getFriendlyAlertNodeName = (
+    value: string,
+    policy?: Resource['policy'],
+    clusterName?: string,
+  ): string => (requiresGovernedResourceDisplay(policy) ? value : getFriendlyNodeName(value, clusterName));
+  const buildNodeHeaderMeta = (node: Resource) => {
+    const data = pd(node);
+    const clusterName = (data?.clusterName as string | undefined) ?? undefined;
+    const isClusterMember =
+      (data?.isClusterMember as boolean | undefined) ?? Boolean(node.clusterId);
+
+    const originalDisplayName = getAlertResourceDisplayLabel(node);
+    const friendlyName = getFriendlyAlertNodeName(originalDisplayName, node.policy, clusterName);
+
+    const guestUrlValue =
+      typeof data?.guestURL === 'string' ? (data.guestURL as string).trim() : '';
+    const hostValue = typeof data?.host === 'string' ? (data.host as string).trim() : '';
+
+    let host: string | undefined;
+    if (guestUrlValue && guestUrlValue !== '') {
+      host = guestUrlValue.startsWith('http') ? guestUrlValue : `https://${guestUrlValue}`;
+    } else if (hostValue && hostValue !== '') {
+      host = hostValue.startsWith('http')
+        ? hostValue
+        : `https://${hostValue.includes(':') ? hostValue : `${hostValue}:8006`}`;
+    } else if (node.name) {
+      host = `https://${node.name.includes(':') ? node.name : `${node.name}:8006`}`;
+    }
+
+    const headerMeta: GroupHeaderMeta = {
+      type: 'node',
+      displayName: friendlyName,
+      rawName: originalDisplayName,
+      host,
+      status: node.status,
+      clusterName: isClusterMember ? clusterName?.trim() || 'Cluster' : undefined,
+      isClusterMember,
+    };
+
+    const keys = new Set<string>();
+    [node.name, originalDisplayName, friendlyName].forEach((value) => {
+      if (value && value.trim()) {
+        keys.add(value.trim());
+      }
+    });
+
+    return { headerMeta, keys };
+  };
+
   // Passed-in blocks:
   const nodesWithOverrides = createMemo<TableResource[]>((prev = []) => {
     // If we're currently editing, return the previous value to avoid re-renders
@@ -65,8 +219,8 @@ export function useThresholdsData(
           : undefined;
       const hasNote = Boolean(note && note.trim().length > 0);
 
-      const originalDisplayName = node.displayName?.trim() || node.name;
-      const friendlyName = getFriendlyNodeName(originalDisplayName, clusterName);
+      const originalDisplayName = getAlertResourceDisplayLabel(node);
+      const friendlyName = getFriendlyAlertNodeName(originalDisplayName, node.policy, clusterName);
       const rawName = node.name;
       const sanitizedName = friendlyName || originalDisplayName || rawName.split('.')[0] || rawName;
       // Build a best-effort management URL for the node
@@ -131,7 +285,9 @@ export function useThresholdsData(
     const seen = new Set<string>();
 
     const agents: TableResource[] = (props.agents ?? []).map((agentResource) => {
-      const override = overridesMap.get(agentResource.id);
+      const idCandidates = hostOverrideIdCandidates(agentResource);
+      const override = findOverrideByCandidates(overridesMap, idCandidates);
+      const resourceId = override?.id || idCandidates[0] || agentResource.id;
       const hasCustomThresholds =
         (override as Override | undefined)?.thresholds &&
         Object.keys((override as Override).thresholds).some((key: string) => {
@@ -142,25 +298,27 @@ export function useThresholdsData(
           );
         });
 
-      const displayName =
-        agentResource.displayName?.trim() ||
-        agentResource.identity?.hostname ||
-        agentResource.name ||
-        agentResource.id;
+      const displayName = getAlertResourceDisplayLabel(agentResource);
       const status = agentResource.status;
+      const data = pd(agentResource);
+      const agentData = asRecord(data?.agent);
 
-      seen.add(agentResource.id);
+      seen.add(resourceId);
 
       return {
-        id: agentResource.id,
+        id: resourceId,
         name: displayName,
         displayName,
         rawName: agentResource.identity?.hostname ?? agentResource.name,
         type: 'agent' as const,
         resourceType: 'Agent',
-        node: agentResource.identity?.hostname ?? agentResource.name,
+        node: displayName,
         instance:
-          (pd(agentResource)?.platform as string) || (pd(agentResource)?.osName as string) || '',
+          asString(agentData?.platform) ||
+          asString(agentData?.osName) ||
+          asString(data?.platform) ||
+          asString(data?.osName) ||
+          '',
         status,
         hasOverride:
           hasCustomThresholds ||
@@ -176,7 +334,7 @@ export function useThresholdsData(
     (props.overrides() ?? [])
       .filter(
         (override) =>
-          (override as Override).type === 'agent' && !seen.has((override as Override).id),
+        (override as Override).type === 'agent' && !seen.has((override as Override).id),
       )
       .forEach((override) => {
         const name = (override as Override).name?.trim() || (override as Override).id;
@@ -231,13 +389,23 @@ export function useThresholdsData(
 
     // Extract disks from all agents
     (props.agents ?? []).forEach((agentResource) => {
-      const agentDisplayName =
-        agentResource.displayName?.trim() ||
-        agentResource.identity?.hostname ||
-        agentResource.name ||
-        agentResource.id;
+      const agentDisplayName = getAlertResourceDisplayLabel(agentResource);
+      const agentIdCandidates = hostOverrideIdCandidates(agentResource);
+      const agentIdForActions = hostActionId(agentResource);
+      const platformData = pd(agentResource);
+      const platformAgent = asRecord(platformData?.agent);
+      const disksFromPlatformRoot = Array.isArray(platformData?.disks) ? platformData.disks : null;
+      const disksFromPlatformAgent = Array.isArray(platformAgent?.disks)
+        ? platformAgent.disks
+        : null;
+      const disksFromResourceAgent = Array.isArray(agentResource.agent?.disks)
+        ? agentResource.agent.disks
+        : null;
 
-      const disksForAgent = (pd(agentResource)?.disks ?? []) as Array<{
+      const disksForAgent = (disksFromPlatformRoot ||
+        disksFromPlatformAgent ||
+        disksFromResourceAgent ||
+        []) as Array<{
         mountpoint?: string;
         device?: string;
         used?: number;
@@ -247,12 +415,14 @@ export function useThresholdsData(
 
       disksForAgent.forEach((disk) => {
         const diskLabel = disk.mountpoint?.trim() || disk.device?.trim() || 'disk';
-        const resourceId = agentDiskResourceID(
-          agentResource.id,
-          disk.mountpoint || '',
-          disk.device,
+        const resourceIdCandidates = uniqueIds(
+          ...agentIdCandidates.map((agentId) =>
+            agentDiskResourceID(agentId, disk.mountpoint || '', disk.device),
+          ),
         );
-        const override = overridesMap.get(resourceId);
+        const override = findOverrideByCandidates(overridesMap, resourceIdCandidates);
+        const resourceId = override?.id || resourceIdCandidates[0];
+        if (!resourceId) return;
 
         const hasCustomThresholds =
           (override as Override | undefined)?.thresholds?.disk !== undefined &&
@@ -267,7 +437,7 @@ export function useThresholdsData(
           rawName: disk.device || diskLabel,
           type: 'agentDisk' as const,
           resourceType: 'Agent Disk',
-          host: agentResource.id,
+          host: agentIdForActions,
           node: agentDisplayName,
           instance: disk.type || '',
           status: agentResource.status,
@@ -346,16 +516,18 @@ export function useThresholdsData(
     const seen = new Set<string>();
 
     const hosts: TableResource[] = (props.dockerHosts ?? []).map((host) => {
-      const originalName = getPreferredResourceDisplayName(host);
-      const friendlyName = getFriendlyNodeName(originalName);
-      const override = overridesMap.get(host.id);
+      const idCandidates = dockerHostOverrideIdCandidates(host);
+      const originalName = getAlertResourceDisplayLabel(host);
+      const friendlyName = getFriendlyAlertNodeName(originalName, host.policy);
+      const override = findOverrideByCandidates(overridesMap, idCandidates);
+      const resourceId = override?.id || idCandidates[0] || host.id;
       const disableConnectivity = (override as Override | undefined)?.disableConnectivity || false;
       const status = host.status;
 
-      seen.add(host.id);
+      seen.add(resourceId);
 
       return {
-        id: host.id,
+        id: resourceId,
         name: friendlyName,
         displayName: friendlyName,
         rawName: originalName,
@@ -434,8 +606,10 @@ export function useThresholdsData(
     const seen = new Set<string>();
 
     (props.dockerHosts ?? []).forEach((host) => {
-      const hostLabel = getPreferredResourceDisplayName(host);
-      const friendlyHostName = getFriendlyNodeName(hostLabel);
+      const dockerHostIds = dockerHostOverrideIdCandidates(host);
+      const dockerHostIdForActions = dockerHostIds[0] || host.id;
+      const hostLabel = getAlertResourceDisplayLabel(host);
+      const friendlyHostName = getFriendlyAlertNodeName(hostLabel, host.policy);
       const hostLabelLower = hostLabel.toLowerCase();
       const friendlyHostNameLower = friendlyHostName.toLowerCase();
 
@@ -446,8 +620,10 @@ export function useThresholdsData(
         const shortId = container.id.includes('/')
           ? (container.id.split('/').pop() ?? container.id)
           : container.id;
-        const resourceId = `docker:${host.id}/${shortId}`;
-        const override = overridesMap.get(resourceId);
+        const resourceIdCandidates = dockerContainerOverrideIdCandidates(host, shortId);
+        const override = findOverrideByCandidates(overridesMap, resourceIdCandidates);
+        const resourceId =
+          override?.id || resourceIdCandidates[0] || `docker:${dockerHostIdForActions}/${shortId}`;
         const overrideSeverity = (override as Override | undefined)?.poweredOffSeverity;
 
         const defaults = props.dockerDefaults as Record<string, number | undefined>;
@@ -468,7 +644,7 @@ export function useThresholdsData(
           overrideSeverity !== undefined ||
           false;
 
-        const containerName = container.name?.replace(/^\/+/, '') || shortId;
+        const containerName = getAlertResourceDisplayLabel(container, shortId);
         const containerNameLower = containerName.toLowerCase();
         const image = (pd(container)?.image as string) ?? '';
         const imageLower = image.toLowerCase();
@@ -499,7 +675,7 @@ export function useThresholdsData(
           disableConnectivity: (override as Override | undefined)?.disableConnectivity || false,
           thresholds: (override as Override | undefined)?.thresholds || {},
           defaults: props.dockerDefaults,
-          hostId: host.id,
+          hostId: dockerHostIdForActions,
           image,
           poweredOffSeverity: overrideSeverity,
         };
@@ -574,8 +750,8 @@ export function useThresholdsData(
   const dockerHostGroupMeta = createMemo<Record<string, GroupHeaderMeta>>(() => {
     const meta: Record<string, GroupHeaderMeta> = {};
     (props.dockerHosts ?? []).forEach((host) => {
-      const originalName = getPreferredResourceDisplayName(host);
-      const friendlyName = getFriendlyNodeName(originalName);
+      const originalName = getAlertResourceDisplayLabel(host);
+      const friendlyName = getFriendlyAlertNodeName(originalName, host.policy);
       const headerMeta: GroupHeaderMeta = {
         displayName: friendlyName,
         rawName: originalName,
@@ -813,7 +989,9 @@ export function useThresholdsData(
 
       return {
         id: guestId,
-        name: guest.name,
+        name: getAlertResourceDisplayLabel(guest),
+        displayName: getAlertResourceDisplayLabel(guest),
+        rawName: guest.name,
         type: 'guest' as const,
         resourceType: guest.type === 'vm' ? 'VM' : 'Container',
         vmid,
@@ -1066,7 +1244,9 @@ export function useThresholdsData(
 
       return {
         id: storage.id,
-        name: storage.name,
+        name: getAlertResourceDisplayLabel(storage),
+        displayName: getAlertResourceDisplayLabel(storage),
+        rawName: storage.name,
         type: 'storage' as const,
         resourceType: 'Storage',
         node: coords.node,

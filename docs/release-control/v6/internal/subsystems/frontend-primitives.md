@@ -231,6 +231,13 @@ continue by extracting page-local tab blocks into feature modules rather than
 expanding the top-level page file again, and history-table behavior or
 thresholds-table adapter logic should stay feature-owned unless it graduates
 into a shared primitive used by more than one alert surface.
+Within that thresholds surface, `frontend-modern/src/components/Alerts/ThresholdsTable.tsx`
+is now explicitly a feature consumer rather than the data owner. Canonical
+threshold row shaping, override-ID compatibility, and grouped resource
+normalization live in
+`frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsData.ts`,
+so future cleanup should extend that feature hook instead of rebuilding
+resource normalization inside the table component.
 
 The alerts page now also applies the same shell-versus-feature rule to
 configuration orchestration. `frontend-modern/src/pages/Alerts.tsx` is the page

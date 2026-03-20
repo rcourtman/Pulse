@@ -111,6 +111,12 @@ Alert threshold tables now route their visible resource row labels, search
 labels, and persisted override display names through the same shared helper
 so governed agent, guest, and storage rows do not leak raw names when the
 threshold editor saves or re-renders them.
+That threshold editor data shaping now lives under
+`frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsData.ts`,
+with `frontend-modern/src/components/Alerts/ThresholdsTable.tsx` limited to
+table interaction and presentation. New threshold row grouping, override-ID
+compatibility, and resource normalization logic should land in the hook rather
+than being rebuilt inside the table component.
 
 Alert incident timeline event cards now route through
 `frontend-modern/src/components/Alerts/IncidentTimelineEventCard.tsx`,

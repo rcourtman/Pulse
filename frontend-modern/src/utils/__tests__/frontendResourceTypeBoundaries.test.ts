@@ -228,6 +228,8 @@ import alertDestinationsTabSource from '@/features/alerts/tabs/DestinationsTab.t
 import alertHistoryTabSource from '@/features/alerts/tabs/HistoryTab.tsx?raw';
 import alertScheduleTabSource from '@/features/alerts/tabs/ScheduleTab.tsx?raw';
 import alertThresholdsTabSource from '@/features/alerts/tabs/ThresholdsTab.tsx?raw';
+import thresholdsTableSource from '@/components/Alerts/ThresholdsTable.tsx?raw';
+import thresholdsDataHookSource from '@/features/alerts/thresholds/hooks/useThresholdsData.ts?raw';
 import alertIncidentPresentationSource from '@/utils/alertIncidentPresentation.ts?raw';
 import alertHistoryPresentationSource from '@/utils/alertHistoryPresentation.ts?raw';
 import bulkEditDialogSource from '@/components/Alerts/BulkEditDialog.tsx?raw';
@@ -2258,6 +2260,11 @@ describe('frontend resource type boundaries', () => {
     expect(alertsPageSource).not.toContain('function ThresholdsTab(');
     expect(alertThresholdsTabSource).toContain("import { ThresholdsTable } from '@/components/Alerts/ThresholdsTable';");
     expect(alertThresholdsTabSource).toContain('pmgThresholds={props.pmgThresholds}');
+    expect(thresholdsTableSource).toContain(
+      "import { useThresholdsData } from '@/features/alerts/thresholds/hooks/useThresholdsData';",
+    );
+    expect(thresholdsTableSource).not.toContain('const nodesWithOverrides = createMemo');
+    expect(thresholdsDataHookSource).toContain('export function useThresholdsData');
     expect(alertScheduleTabSource).toContain('getAlertGroupingCardClass');
     expect(alertScheduleTabSource).toContain('getAlertGroupingCheckboxClass');
     expect(alertScheduleTabSource).toContain('getAlertQuietDayButtonClass');
