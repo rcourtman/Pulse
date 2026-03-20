@@ -15,6 +15,8 @@ describe('resourceChangePresentation utils', () => {
     expect(formatResourceChangeKind('config_update')).toBe('Config update');
     expect(formatResourceChangeKind('metric_anomaly')).toBe('Metric anomaly');
     expect(formatResourceChangeKind('relationship_change')).toBe('Relationship change');
+    expect(formatResourceChangeKind('alert_fired')).toBe('Alert fired');
+    expect(formatResourceChangeKind('runbook_executed')).toBe('Runbook executed');
   });
 
   it('formats canonical resource change headlines', () => {
@@ -44,6 +46,10 @@ describe('resourceChangePresentation utils', () => {
     expect(getResourceChangeKindPresentation('restart')).toMatchObject({
       label: 'Restart',
       plural: 'Restarts',
+    });
+    expect(getResourceChangeKindPresentation('alert_resolved')).toMatchObject({
+      label: 'Alert resolved',
+      plural: 'Alerts resolved',
     });
     expect(getResourceChangeSourceTypePresentation('platform_event')).toMatchObject({
       label: 'Platform event',

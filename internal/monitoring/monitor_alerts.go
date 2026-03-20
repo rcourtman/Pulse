@@ -2,12 +2,18 @@ package monitoring
 
 import (
 	"context"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
+
+type canonicalResourceChangeRecorder interface {
+	RecordChange(change unifiedresources.ResourceChange) error
+}
 
 // GetAlertManager returns the alert manager
 func (m *Monitor) GetAlertManager() *alerts.Manager {
@@ -60,6 +66,7 @@ func (m *Monitor) handleAlertFired(alert *alerts.Alert) {
 	if m.incidentStore != nil {
 		m.incidentStore.RecordAlertFired(alert)
 	}
+	m.recordAlertTimelineChange(alert, unifiedresources.ChangeAlertFired, alert.StartTime, "")
 
 	// Trigger AI analysis if callback is configured
 	if m.alertTriggeredAICallback != nil {
@@ -89,6 +96,12 @@ func (m *Monitor) handleAlertResolved(alertID string) {
 		if resolvedAlert != nil && resolvedAlert.Alert != nil {
 			m.incidentStore.RecordAlertResolved(resolvedAlert.Alert, resolvedAlert.ResolvedTime)
 		}
+	}
+	if resolvedAlert == nil && m.alertManager != nil {
+		resolvedAlert = m.alertManager.GetResolvedAlert(alertID)
+	}
+	if resolvedAlert != nil && resolvedAlert.Alert != nil {
+		m.recordAlertTimelineChange(resolvedAlert.Alert, unifiedresources.ChangeAlertResolved, resolvedAlert.ResolvedTime, "")
 	}
 
 	// Always trigger AI callback, regardless of notification suppression.
@@ -129,16 +142,57 @@ func (m *Monitor) handleAlertResolved(alertID string) {
 
 func (m *Monitor) handleAlertAcknowledged(alert *alerts.Alert, user string) {
 	if m.incidentStore == nil || alert == nil {
-		return
+		if alert == nil {
+			return
+		}
+	} else {
+		m.incidentStore.RecordAlertAcknowledged(alert, user)
 	}
-	m.incidentStore.RecordAlertAcknowledged(alert, user)
+	occurredAt := time.Now()
+	if alert.AckTime != nil {
+		occurredAt = *alert.AckTime
+	}
+	m.recordAlertTimelineChange(alert, unifiedresources.ChangeAlertAcknowledged, occurredAt, user)
 }
 
 func (m *Monitor) handleAlertUnacknowledged(alert *alerts.Alert, user string) {
-	if m.incidentStore == nil || alert == nil {
+	if alert == nil {
 		return
 	}
-	m.incidentStore.RecordAlertUnacknowledged(alert, user)
+	if m.incidentStore != nil {
+		m.incidentStore.RecordAlertUnacknowledged(alert, user)
+	}
+	m.recordAlertTimelineChange(alert, unifiedresources.ChangeAlertUnacknowledged, time.Now(), user)
+}
+
+func (m *Monitor) recordAlertTimelineChange(alert *alerts.Alert, kind unifiedresources.ChangeKind, occurredAt time.Time, actor string) {
+	if alert == nil || m == nil {
+		return
+	}
+	recorder, ok := m.resourceStore.(canonicalResourceChangeRecorder)
+	if !ok || recorder == nil {
+		return
+	}
+
+	change := unifiedresources.BuildAlertTimelineChange(alert.ResourceID, kind, occurredAt, actor, unifiedresources.AlertTimelineChange{
+		AlertIdentifier: alert.ID,
+		AlertType:       alert.Type,
+		AlertLevel:      string(alert.Level),
+		AlertMessage:    alert.Message,
+		AlertValue:      alert.Value,
+		AlertThreshold:  alert.Threshold,
+	})
+	if change == nil {
+		return
+	}
+	if err := recorder.RecordChange(*change); err != nil {
+		log.Warn().
+			Err(err).
+			Str("resource_id", alert.ResourceID).
+			Str("alert_id", alert.ID).
+			Str("kind", string(kind)).
+			Msg("failed to record canonical alert timeline change")
+	}
 }
 
 // broadcastStateUpdate sends an immediate state update to all WebSocket clients.

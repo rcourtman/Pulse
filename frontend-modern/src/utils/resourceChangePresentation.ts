@@ -15,6 +15,12 @@ export const RESOURCE_CHANGE_KIND_ORDER: ResourceChangeKind[] = [
   'metric_anomaly',
   'relationship_change',
   'capability_change',
+  'alert_fired',
+  'alert_acknowledged',
+  'alert_unacknowledged',
+  'alert_resolved',
+  'command_executed',
+  'runbook_executed',
 ];
 
 const RESOURCE_CHANGE_KIND_PRESENTATIONS: Record<
@@ -50,6 +56,36 @@ const RESOURCE_CHANGE_KIND_PRESENTATIONS: Record<
     label: 'Capability change',
     plural: 'Capability changes',
     className: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900 dark:text-cyan-300',
+  },
+  alert_fired: {
+    label: 'Alert fired',
+    plural: 'Alerts fired',
+    className: 'bg-rose-100 text-rose-700 dark:bg-rose-900 dark:text-rose-300',
+  },
+  alert_acknowledged: {
+    label: 'Alert acknowledged',
+    plural: 'Alerts acknowledged',
+    className: 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300',
+  },
+  alert_unacknowledged: {
+    label: 'Alert unacknowledged',
+    plural: 'Alerts unacknowledged',
+    className: 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300',
+  },
+  alert_resolved: {
+    label: 'Alert resolved',
+    plural: 'Alerts resolved',
+    className: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300',
+  },
+  command_executed: {
+    label: 'Command executed',
+    plural: 'Commands executed',
+    className: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
+  },
+  runbook_executed: {
+    label: 'Runbook executed',
+    plural: 'Runbooks executed',
+    className: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300',
   },
 };
 
@@ -148,7 +184,10 @@ const fallbackResourceChangePresentation = (value: string): ResourceChangeLabelP
 export function getResourceChangeKindPresentation(
   kind: ResourceChangeKind | string,
 ): ResourceChangeLabelPresentation {
-  return RESOURCE_CHANGE_KIND_PRESENTATIONS[kind as ResourceChangeKind] ?? fallbackResourceChangePresentation(String(kind));
+  return (
+    RESOURCE_CHANGE_KIND_PRESENTATIONS[kind as ResourceChangeKind] ??
+    fallbackResourceChangePresentation(String(kind))
+  );
 }
 
 export function getResourceChangeSourceTypePresentation(
@@ -183,6 +222,18 @@ export function formatResourceChangeKind(kind: ResourceChange['kind']): string {
       return 'Relationship change';
     case 'capability_change':
       return 'Capability change';
+    case 'alert_fired':
+      return 'Alert fired';
+    case 'alert_acknowledged':
+      return 'Alert acknowledged';
+    case 'alert_unacknowledged':
+      return 'Alert unacknowledged';
+    case 'alert_resolved':
+      return 'Alert resolved';
+    case 'command_executed':
+      return 'Command executed';
+    case 'runbook_executed':
+      return 'Runbook executed';
     default:
       return humanizeToken(String(kind), { fallback: String(kind) });
   }

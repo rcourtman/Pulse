@@ -4,11 +4,13 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/cost"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 func TestService_QuickAnalysis(t *testing.T) {
@@ -141,17 +143,20 @@ func TestService_AnalyzeForDiscovery(t *testing.T) {
 
 func TestService_RecordIncidentRunbook(t *testing.T) {
 	svc := NewService(nil, nil)
+	canonicalStore := unifiedresources.NewMemoryStore()
+	svc.resourceExportStore = canonicalStore
+	svc.resourceExportStoreOrgID = svc.orgID
 
 	// Case 1: No store -> should safe return
-	svc.RecordIncidentRunbook("alert1", "rb1", "title", memory.OutcomeResolved, true, "msg")
+	svc.RecordIncidentRunbook("vm-1", "alert1", "rb1", "title", memory.OutcomeResolved, true, "msg")
 
 	// Case 2: Invalid inputs -> should safe return
 	svc.incidentStore = memory.NewIncidentStore(memory.IncidentStoreConfig{})
-	svc.RecordIncidentRunbook("", "rb1", "title", memory.OutcomeResolved, true, "msg")
-	svc.RecordIncidentRunbook("alert1", "", "title", memory.OutcomeResolved, true, "msg")
+	svc.RecordIncidentRunbook("vm-1", "", "rb1", "title", memory.OutcomeResolved, true, "msg")
+	svc.RecordIncidentRunbook("vm-1", "alert1", "", "title", memory.OutcomeResolved, true, "msg")
 
 	// Case 3: Valid
-	svc.RecordIncidentRunbook("alert1", "rb1", "title", memory.OutcomeResolved, true, "msg")
+	svc.RecordIncidentRunbook("vm-1", "alert1", "rb1", "title", memory.OutcomeResolved, true, "msg")
 
 	timeline := svc.incidentStore.GetTimelineByAlertIdentifier("alert1")
 	if timeline == nil {
@@ -172,6 +177,17 @@ func TestService_RecordIncidentRunbook(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("expected runbook event to be recorded, got %d events", len(timeline.Events))
+	}
+
+	changes, err := canonicalStore.GetRecentChanges("vm-1", time.Time{}, 10)
+	if err != nil {
+		t.Fatalf("GetRecentChanges: %v", err)
+	}
+	if len(changes) == 0 {
+		t.Fatal("expected canonical runbook change")
+	}
+	if changes[0].Kind != unifiedresources.ChangeRunbookExecuted {
+		t.Fatalf("Kind = %q, want %q", changes[0].Kind, unifiedresources.ChangeRunbookExecuted)
 	}
 }
 

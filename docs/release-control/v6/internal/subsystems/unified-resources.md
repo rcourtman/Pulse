@@ -90,6 +90,15 @@ assembly branch.
 This subsystem now sits under the dedicated core monitoring runtime lane so
 canonical resource identity, discovery normalization, and platform-runtime
 coverage stay governed as a first-class Pulse product surface.
+The canonical resource timeline now also owns durable incident-response facts
+that materially changed resource investigation state. `ResourceChange` kinds
+such as `alert_fired`, `alert_acknowledged`, `alert_unacknowledged`,
+`alert_resolved`, `command_executed`, and `runbook_executed` are part of the
+canonical history contract, not optional AI-local annotations. Alert-scoped
+incident memory may still project those events for one investigation thread,
+but the durable source of truth for resource-affecting alert lifecycle and
+remediation activity now belongs to unified-resource history keyed by
+canonical resource ID.
 Kubernetes node identity enrichment remains intentionally hostname-based when
 the API cannot supply machine-level identity signals; the code may borrow
 machine-id and MAC evidence from a uniquely matched host agent, but duplicate

@@ -3102,24 +3102,32 @@ func (s *Service) executeTool(ctx context.Context, req ExecuteRequest, tc provid
 		result, err := s.executeOnAgent(ctx, execReq, command)
 		recordIncident := func(success bool, output string) {
 			alertIdentifier := extractAlertIdentifier(req.Context)
-			if alertIdentifier == "" {
-				return
-			}
-			s.mu.RLock()
-			incidentStore := s.incidentStore
-			s.mu.RUnlock()
-			if incidentStore == nil {
-				return
-			}
-			details := map[string]interface{}{
-				"resource_id":   req.TargetID,
+			resourceID := extractIncidentResourceIdentifier(req.TargetID, req.Context)
+			details := map[string]any{
+				"resource_id":   resourceID,
 				"resource_type": req.TargetType,
 				"run_on_host":   runOnHost,
 			}
 			if targetHost != "" {
 				details["target_host"] = targetHost
 			}
-			incidentStore.RecordCommand(alertIdentifier, command, success, output, details)
+			if alertIdentifier != "" {
+				s.mu.RLock()
+				incidentStore := s.incidentStore
+				s.mu.RUnlock()
+				if incidentStore != nil {
+					incidentStore.RecordCommand(alertIdentifier, command, success, output, details)
+				}
+			}
+			s.recordCanonicalResourceChange(unifiedresources.BuildCommandExecutionChange(
+				resourceID,
+				alertIdentifier,
+				"agent:pulse-assistant",
+				command,
+				success,
+				output,
+				details,
+			))
 		}
 		if err != nil {
 			recordIncident(false, result)
@@ -4541,17 +4549,34 @@ func (s *Service) RecordIncidentAnalysis(alertIdentifier, summary string, detail
 }
 
 // RecordIncidentRunbook stores a runbook execution event for an alert.
-func (s *Service) RecordIncidentRunbook(alertIdentifier, runbookID, title string, outcome memory.Outcome, automatic bool, message string) {
+func (s *Service) RecordIncidentRunbook(resourceID, alertIdentifier, runbookID, title string, outcome memory.Outcome, automatic bool, message string) {
 	if alertIdentifier == "" || runbookID == "" {
 		return
 	}
 	s.mu.RLock()
 	store := s.incidentStore
 	s.mu.RUnlock()
-	if store == nil {
-		return
+	if store != nil {
+		store.RecordRunbook(alertIdentifier, runbookID, title, string(outcome), automatic, message)
 	}
-	store.RecordRunbook(alertIdentifier, runbookID, title, string(outcome), automatic, message)
+	if resourceID == "" {
+		resourceID = s.lookupIncidentResourceIdentifier(alertIdentifier)
+	}
+	actor := ""
+	if automatic {
+		actor = "agent:pulse-patrol"
+	}
+	s.recordCanonicalResourceChange(unifiedresources.BuildRunbookExecutionChange(
+		resourceID,
+		alertIdentifier,
+		actor,
+		runbookID,
+		title,
+		string(outcome),
+		automatic,
+		message,
+		nil,
+	))
 }
 
 func extractAlertIdentifier(ctx map[string]interface{}) string {
@@ -4562,6 +4587,65 @@ func extractAlertIdentifier(ctx map[string]interface{}) string {
 		return alertIdentifier
 	}
 	return ""
+}
+
+func extractIncidentResourceIdentifier(targetID string, ctx map[string]interface{}) string {
+	targetID = strings.TrimSpace(targetID)
+	if targetID != "" {
+		return targetID
+	}
+	if ctx == nil {
+		return ""
+	}
+	for _, key := range []string{"resourceID", "resource_id", "resourceId"} {
+		if value, ok := ctx[key].(string); ok && strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
+}
+
+func (s *Service) lookupIncidentResourceIdentifier(alertIdentifier string) string {
+	if strings.TrimSpace(alertIdentifier) == "" {
+		return ""
+	}
+	s.mu.RLock()
+	store := s.incidentStore
+	s.mu.RUnlock()
+	if store == nil {
+		return ""
+	}
+	timeline := store.GetTimelineByAlertIdentifier(alertIdentifier)
+	if timeline == nil {
+		return ""
+	}
+	return strings.TrimSpace(timeline.ResourceID)
+}
+
+func (s *Service) recordCanonicalResourceChange(change *unifiedresources.ResourceChange) {
+	if s == nil || change == nil {
+		return
+	}
+
+	s.mu.RLock()
+	store := s.resourceExportStore
+	orgID := strings.TrimSpace(s.orgID)
+	storeOrgID := strings.TrimSpace(s.resourceExportStoreOrgID)
+	s.mu.RUnlock()
+
+	if store == nil {
+		return
+	}
+	if storeOrgID != "" && orgID != "" && storeOrgID != orgID {
+		return
+	}
+	if err := store.RecordChange(*change); err != nil {
+		log.Warn().
+			Err(err).
+			Str("resource_id", change.ResourceID).
+			Str("kind", string(change.Kind)).
+			Msg("failed to record canonical incident timeline change")
+	}
 }
 
 func (s *Service) buildRecentResourceChangesContext(resourceID string) string {

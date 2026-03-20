@@ -41,6 +41,16 @@ func (a *MonitorAdapter) currentRegistry() *ResourceRegistry {
 	return registry
 }
 
+// RecordChange forwards canonical resource-history events into the underlying
+// resource store when monitoring has a durable store attached.
+func (a *MonitorAdapter) RecordChange(change ResourceChange) error {
+	registry := a.currentRegistry()
+	if registry == nil || registry.store == nil {
+		return nil
+	}
+	return registry.store.RecordChange(change)
+}
+
 func (a *MonitorAdapter) replaceRegistry(snapshot models.StateSnapshot, recordsBySource map[DataSource][]IngestRecord) {
 	registry := a.currentRegistry()
 	if registry == nil {

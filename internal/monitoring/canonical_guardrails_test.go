@@ -6,6 +6,10 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
+	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 var bannedSnapshotResourceAccessPatterns = []struct {
@@ -82,5 +86,35 @@ func TestLegacyMemorySourceAliasesRemainCanonicalized(t *testing.T) {
 				t.Fatalf("CanonicalMemorySource(%q) = %q, want %q", tt.source, got, tt.canonical)
 			}
 		})
+	}
+}
+
+func TestAlertLifecycleCanonicalChangesRemainWritable(t *testing.T) {
+	store := unifiedresources.NewMemoryStore()
+	monitor := &Monitor{
+		resourceStore: unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(store)),
+	}
+
+	startedAt := time.Date(2026, 3, 20, 9, 0, 0, 0, time.UTC)
+	alert := &alerts.Alert{
+		ID:         "alert-guardrail-1",
+		Type:       "cpu",
+		Level:      alerts.AlertLevelCritical,
+		ResourceID: "vm-guardrail",
+		Message:    "CPU threshold exceeded",
+		StartTime:  startedAt,
+	}
+
+	monitor.handleAlertFired(alert)
+
+	changes, err := store.GetRecentChanges("vm-guardrail", time.Time{}, 10)
+	if err != nil {
+		t.Fatalf("GetRecentChanges: %v", err)
+	}
+	if len(changes) != 1 {
+		t.Fatalf("expected 1 canonical alert change, got %d", len(changes))
+	}
+	if changes[0].Kind != unifiedresources.ChangeAlertFired {
+		t.Fatalf("Kind = %q, want %q", changes[0].Kind, unifiedresources.ChangeAlertFired)
 	}
 }

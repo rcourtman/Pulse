@@ -1129,6 +1129,9 @@ func TestService_ExecuteTool_RunCommand_WithTargetHost(t *testing.T) {
 	}
 	svc := NewService(nil, mockServer)
 	svc.policy = &mockPolicy{decision: agentexec.PolicyAllow}
+	canonicalStore := unifiedresources.NewMemoryStore()
+	svc.resourceExportStore = canonicalStore
+	svc.resourceExportStoreOrgID = svc.orgID
 
 	tc := providers.ToolCall{
 		Name: "run_command",
@@ -1143,7 +1146,8 @@ func TestService_ExecuteTool_RunCommand_WithTargetHost(t *testing.T) {
 		TargetType: "vm",
 		TargetID:   "vm-100",
 		Context: map[string]interface{}{
-			"node": "original-node",
+			"node":            "original-node",
+			"alertIdentifier": "alert-123",
 		},
 	}
 
@@ -1153,6 +1157,20 @@ func TestService_ExecuteTool_RunCommand_WithTargetHost(t *testing.T) {
 	}
 	if exec.Input != "[target-node] uptime" {
 		t.Errorf("Expected input to show target-node, got: %s", exec.Input)
+	}
+
+	changes, err := canonicalStore.GetRecentChanges("vm-100", time.Time{}, 10)
+	if err != nil {
+		t.Fatalf("GetRecentChanges: %v", err)
+	}
+	if len(changes) != 1 {
+		t.Fatalf("expected 1 canonical command change, got %d", len(changes))
+	}
+	if changes[0].Kind != unifiedresources.ChangeCommandExecuted {
+		t.Fatalf("Kind = %q, want %q", changes[0].Kind, unifiedresources.ChangeCommandExecuted)
+	}
+	if got := changes[0].Metadata["alert_identifier"]; got != "alert-123" {
+		t.Fatalf("alert_identifier = %#v, want alert-123", got)
 	}
 }
 

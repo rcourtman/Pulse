@@ -59,6 +59,18 @@ func parseResourceChangeKinds(values []string) ([]ChangeKind, error) {
 			parsed = append(parsed, ChangeRelationship)
 		case string(ChangeCapability):
 			parsed = append(parsed, ChangeCapability)
+		case string(ChangeAlertFired):
+			parsed = append(parsed, ChangeAlertFired)
+		case string(ChangeAlertAcknowledged):
+			parsed = append(parsed, ChangeAlertAcknowledged)
+		case string(ChangeAlertUnacknowledged):
+			parsed = append(parsed, ChangeAlertUnacknowledged)
+		case string(ChangeAlertResolved):
+			parsed = append(parsed, ChangeAlertResolved)
+		case string(ChangeCommandExecuted):
+			parsed = append(parsed, ChangeCommandExecuted)
+		case string(ChangeRunbookExecuted):
+			parsed = append(parsed, ChangeRunbookExecuted)
 		default:
 			return nil, fmt.Errorf("invalid kind value %q", normalized)
 		}

@@ -8,6 +8,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
+	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 )
 
@@ -40,6 +41,52 @@ func TestMonitor_HandleAlertFired_Extra(t *testing.T) {
 	// We are just verifying it doesn't crash and calls methods.
 	// Hub doesn't expose way to check broadcasts easily without client.
 	// NotificationMgr might spin up goroutine.
+}
+
+func TestMonitor_HandleAlertLifecycle_WritesCanonicalChanges(t *testing.T) {
+	store := unifiedresources.NewMemoryStore()
+	m := &Monitor{
+		resourceStore: unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(store)),
+	}
+
+	startedAt := time.Date(2026, 3, 20, 9, 0, 0, 0, time.UTC)
+	ackAt := startedAt.Add(2 * time.Minute)
+	alert := &alerts.Alert{
+		ID:         "alert-canonical-1",
+		Type:       "cpu",
+		Level:      alerts.AlertLevelCritical,
+		ResourceID: "vm-1",
+		Message:    "CPU threshold exceeded",
+		Value:      93.4,
+		Threshold:  80,
+		StartTime:  startedAt,
+		AckTime:    &ackAt,
+	}
+
+	m.handleAlertFired(alert)
+	m.handleAlertAcknowledged(alert, "admin")
+	m.handleAlertUnacknowledged(alert, "admin")
+
+	changes, err := store.GetRecentChanges("vm-1", time.Time{}, 10)
+	if err != nil {
+		t.Fatalf("GetRecentChanges: %v", err)
+	}
+	if len(changes) != 3 {
+		t.Fatalf("expected 3 canonical changes, got %d", len(changes))
+	}
+	wantKinds := []unifiedresources.ChangeKind{
+		unifiedresources.ChangeAlertUnacknowledged,
+		unifiedresources.ChangeAlertAcknowledged,
+		unifiedresources.ChangeAlertFired,
+	}
+	for idx, want := range wantKinds {
+		if changes[idx].Kind != want {
+			t.Fatalf("changes[%d].Kind = %q, want %q", idx, changes[idx].Kind, want)
+		}
+	}
+	if got := changes[2].Metadata["alert_identifier"]; got != "alert-canonical-1" {
+		t.Fatalf("alert_identifier = %#v, want alert-canonical-1", got)
+	}
 }
 
 func TestMonitor_HandleAlertResolved_Detailed_Extra(t *testing.T) {

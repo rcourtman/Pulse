@@ -149,7 +149,13 @@ export type ResourceChangeKind =
   | 'config_update'
   | 'metric_anomaly'
   | 'relationship_change'
-  | 'capability_change';
+  | 'capability_change'
+  | 'alert_fired'
+  | 'alert_acknowledged'
+  | 'alert_unacknowledged'
+  | 'alert_resolved'
+  | 'command_executed'
+  | 'runbook_executed';
 export type ResourceChangeSourceType =
   | 'platform_event'
   | 'pulse_diff'

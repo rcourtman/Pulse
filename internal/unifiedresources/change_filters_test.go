@@ -7,7 +7,7 @@ import (
 
 func TestParseResourceChangeFilters(t *testing.T) {
 	filters, err := ParseResourceChangeFilters(
-		[]string{" state_transition,RESTART ", "config_update"},
+		[]string{" state_transition,RESTART ", "config_update", "alert_fired,command_executed"},
 		[]string{" platform_event ", "pulse_diff, HEURISTIC"},
 		[]string{" docker_adapter ", "proxmox_adapter,agent:ops-helper"},
 	)
@@ -15,10 +15,10 @@ func TestParseResourceChangeFilters(t *testing.T) {
 		t.Fatalf("ParseResourceChangeFilters() error = %v", err)
 	}
 
-	if got, want := len(filters.Kinds), 3; got != want {
+	if got, want := len(filters.Kinds), 5; got != want {
 		t.Fatalf("kinds length = %d, want %d", got, want)
 	}
-	if filters.Kinds[0] != ChangeStateTransition || filters.Kinds[1] != ChangeRestart || filters.Kinds[2] != ChangeConfigUpdate {
+	if filters.Kinds[0] != ChangeStateTransition || filters.Kinds[1] != ChangeRestart || filters.Kinds[2] != ChangeConfigUpdate || filters.Kinds[3] != ChangeAlertFired || filters.Kinds[4] != ChangeCommandExecuted {
 		t.Fatalf("unexpected parsed kinds: %#v", filters.Kinds)
 	}
 	if got, want := len(filters.SourceTypes), 3; got != want {

@@ -16,6 +16,12 @@ func TestChangeKindLabel(t *testing.T) {
 		ChangeAnomaly:             "Metric anomaly",
 		ChangeRelationship:        "Relationship change",
 		ChangeCapability:          "Capability change",
+		ChangeAlertFired:          "Alert fired",
+		ChangeAlertAcknowledged:   "Alert acknowledged",
+		ChangeAlertUnacknowledged: "Alert unacknowledged",
+		ChangeAlertResolved:       "Alert resolved",
+		ChangeCommandExecuted:     "Command executed",
+		ChangeRunbookExecuted:     "Runbook executed",
 		ChangeKind("custom_kind"): "Custom kind",
 		ChangeKind(""):            "Change",
 	}
@@ -139,6 +145,20 @@ func TestFormatResourceChangeSummary(t *testing.T) {
 				"just now",
 			},
 		},
+		{
+			name: "alert fired",
+			change: ResourceChange{
+				Kind:       ChangeAlertFired,
+				SourceType: SourceHeuristic,
+				Reason:     "CPU usage exceeded threshold",
+				ObservedAt: time.Now().Add(-15 * time.Minute),
+			},
+			wants: []string{
+				"**Alert fired**",
+				"heuristic",
+				"CPU usage exceeded threshold",
+			},
+		},
 	}
 
 	for _, tc := range cases {
@@ -155,6 +175,59 @@ func TestFormatResourceChangeSummary(t *testing.T) {
 				t.Fatalf("summary should not contain duplicated ago wording: %q", summary)
 			}
 		})
+	}
+}
+
+func TestBuildIncidentTimelineChanges(t *testing.T) {
+	alertChange := BuildAlertTimelineChange("vm-1", ChangeAlertResolved, time.Date(2026, 3, 20, 12, 0, 0, 0, time.UTC), "ops-user", AlertTimelineChange{
+		AlertIdentifier: "alert-1",
+		AlertType:       "cpu",
+		AlertLevel:      "critical",
+		AlertMessage:    "CPU normalized",
+		AlertValue:      91.4,
+		AlertThreshold:  80,
+	})
+	if alertChange == nil {
+		t.Fatal("expected alert change")
+	}
+	if alertChange.Kind != ChangeAlertResolved {
+		t.Fatalf("Kind = %q, want %q", alertChange.Kind, ChangeAlertResolved)
+	}
+	if alertChange.SourceType != SourceHeuristic {
+		t.Fatalf("SourceType = %q, want %q", alertChange.SourceType, SourceHeuristic)
+	}
+	if got := alertChange.Metadata[metadataAlertIdentifier]; got != "alert-1" {
+		t.Fatalf("alert_identifier = %#v, want alert-1", got)
+	}
+
+	commandChange := BuildCommandExecutionChange("vm-1", "alert-1", "agent:pulse-assistant", "systemctl restart nginx", true, strings.Repeat("x", 700), map[string]any{
+		"resource_type": "vm",
+	})
+	if commandChange == nil {
+		t.Fatal("expected command change")
+	}
+	if commandChange.Kind != ChangeCommandExecuted {
+		t.Fatalf("Kind = %q, want %q", commandChange.Kind, ChangeCommandExecuted)
+	}
+	if commandChange.SourceType != SourceAgentAction {
+		t.Fatalf("SourceType = %q, want %q", commandChange.SourceType, SourceAgentAction)
+	}
+	if got := commandChange.Metadata[metadataOutputExcerpt].(string); len(got) <= resourceChangeOutputExcerptLimit {
+		t.Fatalf("expected truncated output excerpt to include ellipsis, got length %d", len(got))
+	}
+
+	runbookChange := BuildRunbookExecutionChange("vm-1", "alert-1", "agent:pulse-patrol", "rb-1", "Restart service", "resolved", true, "Recovered", nil)
+	if runbookChange == nil {
+		t.Fatal("expected runbook change")
+	}
+	if runbookChange.Kind != ChangeRunbookExecuted {
+		t.Fatalf("Kind = %q, want %q", runbookChange.Kind, ChangeRunbookExecuted)
+	}
+	if runbookChange.SourceType != SourceAgentAction {
+		t.Fatalf("SourceType = %q, want %q", runbookChange.SourceType, SourceAgentAction)
+	}
+	if got := runbookChange.Metadata[metadataRunbookID]; got != "rb-1" {
+		t.Fatalf("runbook_id = %#v, want rb-1", got)
 	}
 }
 

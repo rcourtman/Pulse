@@ -38,6 +38,18 @@ func ChangeKindLabel(kind ChangeKind) string {
 		return "Relationship change"
 	case ChangeCapability:
 		return "Capability change"
+	case ChangeAlertFired:
+		return "Alert fired"
+	case ChangeAlertAcknowledged:
+		return "Alert acknowledged"
+	case ChangeAlertUnacknowledged:
+		return "Alert unacknowledged"
+	case ChangeAlertResolved:
+		return "Alert resolved"
+	case ChangeCommandExecuted:
+		return "Command executed"
+	case ChangeRunbookExecuted:
+		return "Runbook executed"
 	default:
 		raw := strings.TrimSpace(strings.ReplaceAll(string(kind), "_", " "))
 		if raw == "" {

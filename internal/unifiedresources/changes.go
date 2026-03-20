@@ -17,12 +17,18 @@ const (
 type ChangeKind string
 
 const (
-	ChangeStateTransition ChangeKind = "state_transition"
-	ChangeRestart         ChangeKind = "restart"
-	ChangeConfigUpdate    ChangeKind = "config_update"
-	ChangeAnomaly         ChangeKind = "metric_anomaly"
-	ChangeRelationship    ChangeKind = "relationship_change"
-	ChangeCapability      ChangeKind = "capability_change"
+	ChangeStateTransition     ChangeKind = "state_transition"
+	ChangeRestart             ChangeKind = "restart"
+	ChangeConfigUpdate        ChangeKind = "config_update"
+	ChangeAnomaly             ChangeKind = "metric_anomaly"
+	ChangeRelationship        ChangeKind = "relationship_change"
+	ChangeCapability          ChangeKind = "capability_change"
+	ChangeAlertFired          ChangeKind = "alert_fired"
+	ChangeAlertAcknowledged   ChangeKind = "alert_acknowledged"
+	ChangeAlertUnacknowledged ChangeKind = "alert_unacknowledged"
+	ChangeAlertResolved       ChangeKind = "alert_resolved"
+	ChangeCommandExecuted     ChangeKind = "command_executed"
+	ChangeRunbookExecuted     ChangeKind = "runbook_executed"
 )
 
 // ChangeSourceType defines the high-level origin of a change.

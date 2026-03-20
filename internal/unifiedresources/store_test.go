@@ -732,6 +732,62 @@ func TestCountRecentChangesByKind_RespectsFilters(t *testing.T) {
 	}
 }
 
+func TestStorePersistsCanonicalIncidentTimelineKinds(t *testing.T) {
+	store := newTestStore(t)
+	base := time.Date(2026, 3, 20, 12, 0, 0, 0, time.UTC)
+	changes := []ResourceChange{
+		{
+			ID:         "incident-kind-1",
+			ResourceID: "vm:incident",
+			ObservedAt: base.Add(-3 * time.Minute),
+			Kind:       ChangeAlertFired,
+			SourceType: SourceHeuristic,
+			Confidence: ConfidenceHigh,
+		},
+		{
+			ID:         "incident-kind-2",
+			ResourceID: "vm:incident",
+			ObservedAt: base.Add(-2 * time.Minute),
+			Kind:       ChangeCommandExecuted,
+			SourceType: SourceAgentAction,
+			Confidence: ConfidenceHigh,
+		},
+		{
+			ID:         "incident-kind-3",
+			ResourceID: "vm:incident",
+			ObservedAt: base.Add(-time.Minute),
+			Kind:       ChangeRunbookExecuted,
+			SourceType: SourceAgentAction,
+			Confidence: ConfidenceHigh,
+		},
+	}
+	for _, change := range changes {
+		if err := store.RecordChange(change); err != nil {
+			t.Fatalf("RecordChange(%s): %v", change.ID, err)
+		}
+	}
+
+	results, err := store.GetRecentChangesFiltered("vm:incident", base.Add(-10*time.Minute), 10, ResourceChangeFilters{
+		Kinds: []ChangeKind{ChangeAlertFired, ChangeCommandExecuted, ChangeRunbookExecuted},
+	})
+	if err != nil {
+		t.Fatalf("GetRecentChangesFiltered: %v", err)
+	}
+	if len(results) != 3 {
+		t.Fatalf("expected 3 incident timeline changes, got %d", len(results))
+	}
+
+	counts, err := store.CountRecentChangesByKind("vm:incident", base.Add(-10*time.Minute))
+	if err != nil {
+		t.Fatalf("CountRecentChangesByKind: %v", err)
+	}
+	for _, kind := range []ChangeKind{ChangeAlertFired, ChangeCommandExecuted, ChangeRunbookExecuted} {
+		if counts[kind] != 1 {
+			t.Fatalf("CountRecentChangesByKind[%q] = %d, want 1", kind, counts[kind])
+		}
+	}
+}
+
 func TestCountRecentChangesBySourceType_RespectsFilters(t *testing.T) {
 	store := newTestStore(t)
 	base := time.Date(2026, 3, 18, 12, 0, 0, 0, time.UTC)

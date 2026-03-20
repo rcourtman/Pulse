@@ -9,6 +9,7 @@ import {
   getCpuPercent,
   getMemoryPercent,
   getDiskPercent,
+  type ResourceChangeKind,
   type Resource,
   type ResourceType,
 } from '@/types/resource';
@@ -206,6 +207,26 @@ describe('Resource Helper Functions', () => {
 });
 
 describe('Resource Interface', () => {
+  it('supports canonical incident timeline change kinds', () => {
+    const kinds: ResourceChangeKind[] = [
+      'alert_fired',
+      'alert_acknowledged',
+      'alert_unacknowledged',
+      'alert_resolved',
+      'command_executed',
+      'runbook_executed',
+    ];
+
+    expect(kinds).toEqual([
+      'alert_fired',
+      'alert_acknowledged',
+      'alert_unacknowledged',
+      'alert_resolved',
+      'command_executed',
+      'runbook_executed',
+    ]);
+  });
+
   it('allows all valid resource types', () => {
     const types: ResourceType[] = [
       'agent',

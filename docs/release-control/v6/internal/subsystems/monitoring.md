@@ -69,6 +69,14 @@ rebuilds and supplemental ingest into the unified-resource timeline. That means
 monitoring no longer just materializes state snapshots for consumers; it also
 emits durable `ResourceChange` history through the shared resource store so
 live monitoring updates and historical inspection stay aligned.
+That same ownership now includes alert-lifecycle facts emitted by monitoring.
+When an alert is fired, acknowledged, unacknowledged, or resolved for a
+canonical resource, the monitoring runtime must write the corresponding durable
+resource-history event into the unified-resource change store instead of
+leaving that lifecycle only inside alert-scoped incident memory. Incident
+timelines may still project those breadcrumbs for operator flow, but the
+durable backend truth for alert lifecycle now lives on the canonical resource
+timeline.
 
 The registry proof map now treats provider discovery and metrics history as
 their own governed runtime surfaces instead of leaving them folded into a

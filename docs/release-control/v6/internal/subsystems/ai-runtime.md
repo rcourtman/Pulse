@@ -258,6 +258,15 @@ incident memory first, canonical resource timeline second.
 The same runtime boundary now also owns durable action execution auditing.
 `internal/ai/chat/service.go` initializes the unified-resource audit store on
 startup, and the write-action tool paths under `internal/ai/tools/` persist
+AI incident handling must now also write durable resource-history facts
+through the canonical unified-resource change store when a concrete resource
+target is known. Command executions and runbook executions triggered during an
+alert investigation may remain visible inside `internal/ai/memory/incidents.go`
+as operator-facing incident projection entries, but the durable backend truth
+for those events now belongs to canonical `ResourceChange` kinds such as
+`command_executed` and `runbook_executed`, keyed by canonical resource ID and
+linked back to the alert through metadata instead of being stored only in AI
+memory.
 append-only action lifecycle and action audit records through that shared
 store instead of leaving command execution state in memory-only tool helpers.
 The patrol-local `memory.ChangeDetector.GetChangesSummary` path now also
