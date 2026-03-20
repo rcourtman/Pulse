@@ -1365,12 +1365,12 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
             <SupportDisclosure
               title="Service details"
               summary={serviceDetailsSummary()}
-              expanded={showServiceDetails()}
-              onToggle={() => setShowServiceDetails((value) => !value)}
-              showLabel="Show service details"
-              hideLabel="Hide service details"
-              contentClass="mt-3 grid gap-3 md:grid-cols-2 lg:grid-cols-3"
-              dataTestId="resource-service-details-section"
+            expanded={showServiceDetails()}
+            onToggle={() => setShowServiceDetails((value) => !value)}
+            showLabel="Show service details"
+            hideLabel="Hide service details"
+            contentClass="mt-3 space-y-3"
+            dataTestId="resource-service-details-section"
             >
                   <Show when={props.resource.type === 'docker-host'}>
                     <div class="rounded border border-sky-200 bg-sky-50 p-3 dark:border-sky-700 dark:bg-sky-900">
@@ -1792,7 +1792,8 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
             showLabel="Show host details"
             hideLabel="Hide host details"
             class="mt-3 rounded border border-dashed border-border bg-surface-hover p-3"
-            contentClass="mt-3 flex flex-wrap gap-3 [&>*]:flex-1 [&>*]:basis-[calc(25%-0.75rem)] [&>*]:min-w-[200px] [&>*]:max-w-full [&>*]:overflow-hidden"
+            contentClass="mt-3 space-y-3"
+            dataTestId="resource-host-details-section"
           >
                 <Show when={proxmoxNode()}>
                   {(node) => (

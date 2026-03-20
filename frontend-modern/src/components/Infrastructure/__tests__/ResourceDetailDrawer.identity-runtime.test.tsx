@@ -203,7 +203,7 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
       },
     });
 
-    const { getByRole, getByText, queryByText } = render(() => (
+    const { getByRole, getByText, getByTestId, queryByText } = render(() => (
       <ResourceDetailDrawer resource={resource} />
     ));
 
@@ -219,6 +219,8 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     await waitFor(() => {
       expect(getByText('Hardware')).toBeInTheDocument();
     });
+    expect(getByTestId('resource-host-details-section').querySelector('.mt-3.space-y-3')).toBeTruthy();
+    expect(getByTestId('resource-host-details-section').querySelector('.mt-3.flex.flex-wrap')).toBeNull();
     expect(getByText('Network')).toBeInTheDocument();
     expect(getByText('Disks')).toBeInTheDocument();
     expect(getByText('eth0')).toBeInTheDocument();

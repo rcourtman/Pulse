@@ -296,6 +296,9 @@ Host and node system or hardware cards now also live behind a collapsed
 `Host details` support block instead of rendering before the primary overview
 cards, so runtime status, identity, and next investigation steps stay first
 while deeper machine detail remains available on demand.
+That host-details section now reads as a simple vertical stack of detail cards
+instead of a wrapped card grid, so the opened state stays linear instead of
+feeling like a second dashboard.
 Within that summary shell, current-state facts now stay in the primary summary
 while platform IDs, quick links, platform-signal badges, aliases, IPs, and
 tags render inline as supporting rows, so first read remains status-first and
@@ -310,6 +313,9 @@ Type-specific Docker, PBS, and PMG operational panels now also live inside a
 collapsed `Service details` support block, so lane-specific controls and
 breakdowns stay available without displacing the common runtime and identity
 hierarchy on first read.
+That service-details section now also stacks vertically instead of using a
+multi-column card grid, so the opened service state stays scan-first instead
+of turning into a mini board.
 When `Service details` is expanded, each service card remains summary-first and
 pushes heavier breakdowns or update controls behind one more service-local
 reveal, so the opened state still scans as current state before deeper

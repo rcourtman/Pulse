@@ -436,6 +436,10 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(screen.getByText('Service details')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Show service details' }));
     const serviceDetails = within(screen.getByTestId('resource-service-details-section'));
+    expect(
+      screen.getByTestId('resource-service-details-section').querySelector('.mt-3.space-y-3'),
+    ).toBeTruthy();
+    expect(screen.getByTestId('resource-service-details-section').querySelector('.mt-3.grid')).toBeNull();
     expect(serviceDetails.getByText('PBS')).toBeInTheDocument();
     expect(serviceDetails.queryByText('PBS Service')).toBeNull();
     expect(serviceDetails.queryByText('Connection')).toBeNull();

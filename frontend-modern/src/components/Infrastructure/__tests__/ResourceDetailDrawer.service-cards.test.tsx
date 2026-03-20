@@ -95,6 +95,7 @@ describe('ResourceDetailDrawer service cards', () => {
     expect(getByText('Platform ID')).toBeInTheDocument();
     expect(queryByText('PBS Service')).toBeNull();
     fireEvent.click(getByRole('button', { name: 'Show service details' }));
+    expect(getByTestId('resource-service-details-section').querySelector('.mt-3.grid')).toBeNull();
     const serviceDetails = within(getByTestId('resource-service-details-section'));
     expect(serviceDetails.getByText('PBS')).toBeInTheDocument();
     expect(serviceDetails.queryByText('Connection')).toBeNull();
@@ -148,6 +149,7 @@ describe('ResourceDetailDrawer service cards', () => {
     expect(getByText('Platform ID')).toBeInTheDocument();
     expect(queryByText('Mail Gateway')).toBeNull();
     fireEvent.click(getByRole('button', { name: 'Show service details' }));
+    expect(getByTestId('resource-service-details-section').querySelector('.mt-3.grid')).toBeNull();
     const serviceDetails = within(getByTestId('resource-service-details-section'));
     expect(serviceDetails.getByText('PMG')).toBeInTheDocument();
     expect(serviceDetails.queryByText('Connection')).toBeNull();
