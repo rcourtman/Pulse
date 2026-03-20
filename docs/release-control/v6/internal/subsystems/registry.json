@@ -2166,6 +2166,7 @@
       ],
       "owned_files": [
         "frontend-modern/src/components/Dashboard/Dashboard.tsx",
+        "frontend-modern/src/components/Dashboard/useDashboardState.ts",
         "frontend-modern/src/components/Dashboard/workloadSelectors.ts",
         "frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts",
         "frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts",
@@ -2210,6 +2211,7 @@
             "match_prefixes": [],
             "match_files": [
               "frontend-modern/src/components/Dashboard/Dashboard.tsx",
+              "frontend-modern/src/components/Dashboard/useDashboardState.ts",
               "frontend-modern/src/components/Dashboard/workloadSelectors.ts",
               "frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts",
               "frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts",

@@ -26,13 +26,14 @@ regression protection.
 4. `internal/api/slo.go`
 5. `internal/api/slo_bench_test.go`
 6. `frontend-modern/src/components/Dashboard/Dashboard.tsx`
-7. `frontend-modern/src/components/Dashboard/workloadSelectors.ts`
-8. `frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx`
-9. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`
-10. `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts`
-11. `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts`
-12. `frontend-modern/src/components/Dashboard/__tests__/Dashboard.performance.contract.test.tsx`
-13. `frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx`
+7. `frontend-modern/src/components/Dashboard/useDashboardState.ts`
+8. `frontend-modern/src/components/Dashboard/workloadSelectors.ts`
+9. `frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx`
+10. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`
+11. `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts`
+12. `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts`
+13. `frontend-modern/src/components/Dashboard/__tests__/Dashboard.performance.contract.test.tsx`
+14. `frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx`
 
 ## Shared Boundaries
 
@@ -79,6 +80,11 @@ The dashboard workload selector path and the dashboard runtime that consumes it
 are now part of the protected performance surface rather than proof-only
 context. Future hot-path filter/group/sort/windowing changes must route through
 the explicit dashboard performance proof policy in the subsystem registry.
+That runtime state owner now lives in
+`frontend-modern/src/components/Dashboard/useDashboardState.ts`, so guest
+metadata persistence, workload-route synchronization, grouping/windowing, and
+filter/sort state must extend through that owner instead of accreting back into
+`frontend-modern/src/components/Dashboard/Dashboard.tsx`.
 
 The unified resource table hot path is now also governed as explicit
 performance-owned runtime, with shared ownership against the unified-resource
