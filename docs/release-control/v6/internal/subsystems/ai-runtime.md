@@ -206,6 +206,11 @@ exist as compatibility-era shell state for segmentation and fallback, but the
 projected incident returned to runtime consumers must rebuild those fields from
 canonical resource changes and preserve only annotation-local entries such as
 analysis and notes.
+The remaining shell should stay as narrow as possible: alert occurrence
+boundaries and annotation anchors may remain private implementation state, but
+public incident status, acknowledgement, and remediation entries should be
+treated as read-model output rebuilt from canonical history whenever that
+history exists.
 The AI correlation root-cause engine also consumes the canonical unified-
 resource relationship model directly, so cross-resource reasoning stays aligned
 with the same relationship edges that back the resource API instead of

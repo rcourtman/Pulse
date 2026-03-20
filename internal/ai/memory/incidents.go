@@ -67,6 +67,8 @@ type Incident struct {
 	AckUser         string          `json:"ackUser,omitempty"`
 	AckTime         *time.Time      `json:"ackTime,omitempty"`
 	Events          []IncidentEvent `json:"events,omitempty"`
+
+	occurrenceClosedAt *time.Time
 }
 
 type incidentJSON struct {
@@ -268,17 +270,15 @@ func (s *IncidentStore) RecordAlertAcknowledged(alert *alerts.Alert, user string
 	defer s.mu.Unlock()
 
 	incident := s.ensureIncidentForAlertLocked(alert)
-
-	incident.Acknowledged = true
-	if alert.AckTime != nil {
-		incident.AckTime = alert.AckTime
-	} else {
-		now := time.Now()
-		incident.AckTime = &now
-	}
-	incident.AckUser = user
-
 	if !s.projectsFromCanonicalLocked() {
+		incident.Acknowledged = true
+		if alert.AckTime != nil {
+			incident.AckTime = alert.AckTime
+		} else {
+			now := time.Now()
+			incident.AckTime = &now
+		}
+		incident.AckUser = user
 		s.addEventLocked(incident, IncidentEventAlertAcknowledged, "Alert acknowledged", map[string]interface{}{
 			"user": user,
 		})
@@ -298,12 +298,10 @@ func (s *IncidentStore) RecordAlertUnacknowledged(alert *alerts.Alert, user stri
 	defer s.mu.Unlock()
 
 	incident := s.ensureIncidentForAlertLocked(alert)
-
-	incident.Acknowledged = false
-	incident.AckTime = nil
-	incident.AckUser = ""
-
 	if !s.projectsFromCanonicalLocked() {
+		incident.Acknowledged = false
+		incident.AckTime = nil
+		incident.AckUser = ""
 		s.addEventLocked(incident, IncidentEventAlertUnacknowledged, "Alert unacknowledged", map[string]interface{}{
 			"user": user,
 		})
@@ -328,14 +326,15 @@ func (s *IncidentStore) RecordAlertResolved(alert *alerts.Alert, resolvedAt time
 		s.incidents = append(s.incidents, incident)
 	}
 
-	incident.Status = IncidentStatusResolved
 	if resolvedAt.IsZero() {
 		now := time.Now()
 		resolvedAt = now
 	}
-	incident.ClosedAt = &resolvedAt
+	incident.occurrenceClosedAt = cloneTime(resolvedAt)
 
 	if !s.projectsFromCanonicalLocked() {
+		incident.Status = IncidentStatusResolved
+		incident.ClosedAt = cloneTime(resolvedAt)
 		s.addEventLocked(incident, IncidentEventAlertResolved, "Alert resolved", map[string]interface{}{
 			"resolved_at": resolvedAt.Format(time.RFC3339),
 		})
@@ -1077,9 +1076,6 @@ func newIncidentShellFromAlert(alert *alerts.Alert) *Incident {
 		Message:         alert.Message,
 		Status:          IncidentStatusOpen,
 		OpenedAt:        openedAt,
-		Acknowledged:    alert.Acknowledged,
-		AckUser:         alert.AckUser,
-		AckTime:         alert.AckTime,
 		Events:          make([]IncidentEvent, 0),
 	}
 }
@@ -1095,9 +1091,6 @@ func updateIncidentShellFromAlert(incident *Incident, alert *alerts.Alert) {
 	incident.Node = alert.Node
 	incident.Instance = alert.Instance
 	incident.Message = alert.Message
-	incident.Acknowledged = alert.Acknowledged
-	incident.AckUser = alert.AckUser
-	incident.AckTime = alert.AckTime
 }
 
 func (s *IncidentStore) ensureIncidentForAlertLocked(alert *alerts.Alert) *Incident {
@@ -1148,7 +1141,7 @@ func (s *IncidentStore) findOpenIncidentByAlertIdentifierLocked(alertIdentifier 
 	}
 	for i := len(s.incidents) - 1; i >= 0; i-- {
 		incident := s.incidents[i]
-		if incident != nil && incident.AlertIdentifier == alertIdentifier && incident.Status == IncidentStatusOpen {
+		if incident != nil && incident.AlertIdentifier == alertIdentifier && incidentOccurrenceClosedAt(incident) == nil {
 			return incident
 		}
 	}
@@ -1190,8 +1183,8 @@ func (s *IncidentStore) trimLocked() {
 				continue
 			}
 			compareTime := incident.OpenedAt
-			if incident.ClosedAt != nil {
-				compareTime = *incident.ClosedAt
+			if closedAt := incidentOccurrenceClosedAt(incident); closedAt != nil {
+				compareTime = *closedAt
 			}
 			if compareTime.After(cutoff) {
 				filtered = append(filtered, incident)
@@ -1280,6 +1273,9 @@ func (s *IncidentStore) loadFromDisk() error {
 		return err
 	}
 
+	for _, incident := range incidents {
+		normalizeIncidentShellState(incident)
+	}
 	s.incidents = incidents
 	s.trimLocked()
 	return nil
@@ -1298,6 +1294,10 @@ func cloneIncident(src *Incident) *Incident {
 		t := *src.ClosedAt
 		clone.ClosedAt = &t
 	}
+	if src.occurrenceClosedAt != nil {
+		t := *src.occurrenceClosedAt
+		clone.occurrenceClosedAt = &t
+	}
 	if len(src.Events) > 0 {
 		clone.Events = make([]IncidentEvent, len(src.Events))
 		for i, event := range src.Events {
@@ -1313,6 +1313,33 @@ func cloneIncident(src *Incident) *Incident {
 		}
 	}
 	return &clone
+}
+
+func incidentOccurrenceClosedAt(incident *Incident) *time.Time {
+	if incident == nil {
+		return nil
+	}
+	if incident.occurrenceClosedAt != nil {
+		return incident.occurrenceClosedAt
+	}
+	return incident.ClosedAt
+}
+
+func normalizeIncidentShellState(incident *Incident) {
+	if incident == nil {
+		return
+	}
+	if incident.occurrenceClosedAt == nil && incident.ClosedAt != nil {
+		incident.occurrenceClosedAt = cloneTime(*incident.ClosedAt)
+	}
+}
+
+func cloneTime(value time.Time) *time.Time {
+	if value.IsZero() {
+		return nil
+	}
+	cloned := value
+	return &cloned
 }
 
 var incidentCounter int64

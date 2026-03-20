@@ -243,6 +243,70 @@ func TestIncidentStore_CanonicalProjectionOverridesLegacyLifecycleState(t *testi
 	}
 }
 
+func TestIncidentStore_CanonicalModeKeepsShellAsOccurrenceAndAnnotationsOnly(t *testing.T) {
+	store := NewIncidentStore(IncidentStoreConfig{
+		MaxIncidents:         10,
+		MaxEventsPerIncident: 20,
+		MaxAgeDays:           30,
+	})
+	store.SetResourceTimelineStore(unifiedresources.NewMemoryStore())
+
+	firstStart := time.Now().UTC().Add(-25 * time.Minute).Truncate(time.Second)
+	first := &alerts.Alert{
+		ID:           "alert-shell-1",
+		Type:         "cpu",
+		Level:        alerts.AlertLevelCritical,
+		ResourceID:   "res-shell-1",
+		ResourceName: "vm-shell-1",
+		StartTime:    firstStart,
+	}
+
+	store.RecordAlertFired(first)
+	store.RecordAlertAcknowledged(first, "operator")
+	store.RecordRunbook(first.ID, "rb-1", "Restart service", "resolved", true, "Recovered")
+	store.RecordAlertResolved(first, firstStart.Add(4*time.Minute))
+
+	if len(store.incidents) != 1 {
+		t.Fatalf("expected one shell incident, got %d", len(store.incidents))
+	}
+	firstShell := store.incidents[0]
+	if firstShell.Acknowledged {
+		t.Fatal("expected canonical shell to avoid persisted acknowledgement state")
+	}
+	if firstShell.AckUser != "" || firstShell.AckTime != nil {
+		t.Fatal("expected canonical shell to avoid persisted acknowledgement metadata")
+	}
+	if firstShell.ClosedAt != nil {
+		t.Fatal("expected canonical shell to avoid persisted resolved timestamp")
+	}
+	if firstShell.occurrenceClosedAt == nil {
+		t.Fatal("expected canonical shell to preserve private occurrence closure boundary")
+	}
+	for _, event := range firstShell.Events {
+		switch event.Type {
+		case IncidentEventAlertAcknowledged, IncidentEventAlertResolved, IncidentEventRunbook:
+			t.Fatalf("unexpected derived event %q stored in canonical incident shell", event.Type)
+		}
+	}
+
+	second := &alerts.Alert{
+		ID:           first.ID,
+		Type:         first.Type,
+		Level:        first.Level,
+		ResourceID:   first.ResourceID,
+		ResourceName: first.ResourceName,
+		StartTime:    firstStart.Add(10 * time.Minute),
+	}
+	store.RecordAlertFired(second)
+
+	if len(store.incidents) != 2 {
+		t.Fatalf("expected second alert occurrence to create a new shell, got %d incidents", len(store.incidents))
+	}
+	if store.incidents[1].occurrenceClosedAt != nil {
+		t.Fatal("expected new occurrence shell to remain open")
+	}
+}
+
 func TestIncidentStore_GetTimelineByAlertAt(t *testing.T) {
 	store := NewIncidentStore(IncidentStoreConfig{
 		MaxIncidents:         10,
