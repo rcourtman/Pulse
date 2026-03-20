@@ -26,7 +26,10 @@ import alertThresholdsPresentationSource from '@/utils/alertThresholdsPresentati
 import alertThresholdsSectionPresentationSource from '@/utils/alertThresholdsSectionPresentation.ts?raw';
 import loginSource from '@/components/Login.tsx?raw';
 import settingsSource from '../Settings.tsx?raw';
-import aiSettingsSource from '../AISettings.tsx?raw';
+import aiSettingsShellSource from '../AISettings.tsx?raw';
+import aiProviderConfigurationSectionSource from '../AIProviderConfigurationSection.tsx?raw';
+import aiSettingsDialogsSource from '../AISettingsDialogs.tsx?raw';
+import aiSettingsModelSource from '../aiSettingsModel.ts?raw';
 import reportingPanelSource from '../ReportingPanel.tsx?raw';
 import updatesSettingsPanelSource from '../UpdatesSettingsPanel.tsx?raw';
 import suggestProfileModalSource from '../SuggestProfileModal.tsx?raw';
@@ -78,6 +81,13 @@ import recoveryTablePresentationSource from '@/utils/recoveryTablePresentation.t
 import problemResourcesTableSource from '@/pages/DashboardPanels/ProblemResourcesTable.tsx?raw';
 import workloadTypeBadgesSource from '@/components/shared/workloadTypeBadges.ts?raw';
 import workloadTypePresentationSource from '@/utils/workloadTypePresentation.ts?raw';
+
+const aiSettingsSource = [
+  aiSettingsShellSource,
+  aiProviderConfigurationSectionSource,
+  aiSettingsDialogsSource,
+  aiSettingsModelSource,
+].join('\n');
 import dashboardGuestPresentationSource from '@/utils/dashboardGuestPresentation.ts?raw';
 import containerUpdatesSource from '@/stores/containerUpdates.ts?raw';
 import websocketStoreSource from '@/stores/websocket.ts?raw';
@@ -127,9 +137,7 @@ describe('monitored-system model guardrails', () => {
     expect(agentProfilesPanelSource).not.toContain(
       'No agents connected. Install an agent to assign profiles.',
     );
-    expect(agentProfilesPresentationSource).toContain(
-      'export function getAgentProfilesEmptyState',
-    );
+    expect(agentProfilesPresentationSource).toContain('export function getAgentProfilesEmptyState');
     expect(agentProfilesPresentationSource).toContain(
       'export function getAgentProfileAssignmentsEmptyState',
     );
@@ -162,7 +170,9 @@ describe('monitored-system model guardrails', () => {
       "const hostResources = createMemo(() => byType('host'))",
     );
     expect(apiTokenManagerSource).not.toContain('isAppContainerDiscoveryResourceType');
-    expect(apiTokenManagerSource).not.toContain("notificationStore.error('Failed to load API tokens')");
+    expect(apiTokenManagerSource).not.toContain(
+      "notificationStore.error('Failed to load API tokens')",
+    );
     expect(apiTokenManagerSource).not.toContain(
       "notificationStore.error('Failed to generate API token')",
     );
@@ -176,7 +186,9 @@ describe('monitored-system model guardrails', () => {
     expect(infrastructureOperationsStateSource).not.toContain('previousHostTypes');
     expect(infrastructureOperationsStateSource).not.toContain('const allHosts = createMemo(');
     expect(infrastructureOperationsStateSource).toContain('@/utils/unifiedAgentStatusPresentation');
-    expect(infrastructureOperationsStateSource).not.toContain('const MONITORING_STOPPED_STATUS_LABEL =');
+    expect(infrastructureOperationsStateSource).not.toContain(
+      'const MONITORING_STOPPED_STATUS_LABEL =',
+    );
     expect(infrastructureOperationsStateSource).not.toContain('const ALLOW_RECONNECT_LABEL =');
     expect(infrastructureOperationsStateSource).toContain('withPrivilegeEscalation');
     expect(infrastructureOperationsStateSource).toContain('@/utils/agentCapabilityPresentation');
@@ -195,7 +207,9 @@ describe('monitored-system model guardrails', () => {
     expect(infrastructureOperationsStateSource).toContain('@/utils/unifiedAgentStatusPresentation');
     expect(infrastructureOperationsStateSource).not.toContain('const statusBadgeClass =');
     expect(infrastructureOperationsStateSource).not.toContain('const statusBadgeClasses =');
-    expect(infrastructureOperationsStateSource).toContain('getUnifiedAgentLookupStatusPresentation');
+    expect(infrastructureOperationsStateSource).toContain(
+      'getUnifiedAgentLookupStatusPresentation',
+    );
     expect(unifiedAgentStatusPresentationSource).toContain(
       'export function getUnifiedAgentStatusPresentation',
     );
@@ -338,34 +352,20 @@ describe('monitored-system model guardrails', () => {
     expect(aiSettingsPresentationSource).toContain(
       'export function getAISettingsReadinessPresentation',
     );
-    expect(aiSettingsPresentationSource).toContain(
-      'export function getAISettingsLoadingState',
-    );
-    expect(aiSettingsPresentationSource).toContain(
-      'export function getAISettingsLoadErrorMessage',
-    );
-    expect(aiSettingsPresentationSource).toContain(
-      'export function getAISettingsRetryLabel',
-    );
+    expect(aiSettingsPresentationSource).toContain('export function getAISettingsLoadingState');
+    expect(aiSettingsPresentationSource).toContain('export function getAISettingsLoadErrorMessage');
+    expect(aiSettingsPresentationSource).toContain('export function getAISettingsRetryLabel');
     expect(aiSettingsSource).toContain('SelectionCardGroup');
     expect(aiSettingsSource).toContain('variant="compact"');
     expect(updatesSettingsPanelSource).toContain('SelectionCardGroup');
     expect(updatesSettingsPanelSource).toContain('variant="detail"');
-    expect(aiSettingsPresentationSource).toContain(
-      'export function getAIChatSessionsLoadingState',
-    );
-    expect(aiSettingsPresentationSource).toContain(
-      'export function getAIChatSessionsEmptyState',
-    );
-    expect(aiSettingsPresentationSource).toContain(
-      'export function getAIModelsLoadErrorMessage',
-    );
+    expect(aiSettingsPresentationSource).toContain('export function getAIChatSessionsLoadingState');
+    expect(aiSettingsPresentationSource).toContain('export function getAIChatSessionsEmptyState');
+    expect(aiSettingsPresentationSource).toContain('export function getAIModelsLoadErrorMessage');
     expect(aiSettingsPresentationSource).toContain(
       'export function getAIChatSessionsLoadErrorMessage',
     );
-    expect(aiSettingsPresentationSource).toContain(
-      'export function getAIOAuthErrorMessage',
-    );
+    expect(aiSettingsPresentationSource).toContain('export function getAIOAuthErrorMessage');
     expect(suggestProfileModalSource).toContain('@/utils/agentProfileSuggestionPresentation');
     expect(suggestProfileModalSource).toContain('AGENT_PROFILE_SUGGESTION_EXAMPLE_PROMPTS');
     expect(suggestProfileModalSource).toContain('getAgentProfileSuggestionLoadingState');
@@ -494,7 +494,9 @@ describe('monitored-system model guardrails', () => {
     expect(organizationOverviewPanelSource).toContain('@/utils/organizationSettingsPresentation');
     expect(organizationAccessPanelSource).toContain('ORGANIZATION_MEMBER_ROLE_OPTIONS');
     expect(organizationAccessPanelSource).not.toContain("{ value: 'viewer', label: 'Viewer' }");
-    expect(organizationAccessPanelSource).not.toContain("notificationStore.error('User ID is required')");
+    expect(organizationAccessPanelSource).not.toContain(
+      "notificationStore.error('User ID is required')",
+    );
     expect(organizationAccessPanelSource).not.toContain(
       "notificationStore.error(error instanceof Error ? error.message : 'Failed to add member')",
     );
@@ -512,7 +514,7 @@ describe('monitored-system model guardrails', () => {
     expect(organizationSharingPanelSource).toContain('ORGANIZATION_SHARE_ROLE_OPTIONS');
     expect(organizationSharingPanelSource).toContain('normalizeOrganizationShareRole');
     expect(organizationSharingPanelSource).not.toContain(
-      "const accessRoleOptions: Array<{ value: ShareAccessRole; label: string }> = [",
+      'const accessRoleOptions: Array<{ value: ShareAccessRole; label: string }> = [',
     );
     expect(organizationSharingPanelSource).not.toContain('const normalizeShareRole =');
     expect(organizationSharingPanelSource).not.toContain(
@@ -701,15 +703,11 @@ describe('monitored-system model guardrails', () => {
     );
     expect(resourcePickerSource).not.toContain('No resources match your filters');
     expect(reportableResourceTypesSource).toContain('export const REPORTABLE_RESOURCE_TYPES =');
-    expect(reportableResourceTypesSource).toContain(
-      'export const RESOURCE_PICKER_TYPE_FILTERS',
-    );
+    expect(reportableResourceTypesSource).toContain('export const RESOURCE_PICKER_TYPE_FILTERS');
     expect(reportableResourceTypesSource).toContain(
       'export const getResourcePickerTypeFilterLabel',
     );
-    expect(reportableResourceTypesSource).toContain(
-      'export const getResourcePickerEmptyState',
-    );
+    expect(reportableResourceTypesSource).toContain('export const getResourcePickerEmptyState');
     expect(reportableResourceTypesSource).toContain(
       'export const matchesReportableResourceTypeFilter =',
     );
@@ -758,9 +756,7 @@ describe('monitored-system model guardrails', () => {
     expect(systemSettingsPresentationSource).toContain(
       'export function getBackupIntervalSelectValue',
     );
-    expect(systemSettingsPresentationSource).toContain(
-      'export function getBackupIntervalSummary',
-    );
+    expect(systemSettingsPresentationSource).toContain('export function getBackupIntervalSummary');
     expect(systemSettingsPresentationSource).toContain(
       'export function getSystemSettingsSaveErrorMessage',
     );
@@ -787,15 +783,25 @@ describe('monitored-system model guardrails', () => {
     expect(ssoProvidersPanelSource).toContain('SSOProviderTypeIcon');
     expect(ssoProvidersPanelSource).not.toContain('No SSO providers configured');
     expect(ssoProvidersPanelSource).not.toContain('Loading SSO providers...');
-    expect(ssoProvidersPanelSource).not.toContain("notificationStore.error('Failed to load SSO providers')");
+    expect(ssoProvidersPanelSource).not.toContain(
+      "notificationStore.error('Failed to load SSO providers')",
+    );
     expect(ssoProvidersPanelSource).not.toContain(
       "notificationStore.error('Failed to load provider details')",
     );
     expect(ssoProvidersPanelSource).not.toContain("notificationStore.success('Provider deleted')");
-    expect(ssoProvidersPanelSource).not.toContain("notificationStore.error('Failed to delete provider')");
-    expect(ssoProvidersPanelSource).not.toContain("notificationStore.success('Connection test successful')");
-    expect(ssoProvidersPanelSource).not.toContain("notificationStore.error('Failed to test connection')");
-    expect(ssoProvidersPanelSource).not.toContain("notificationStore.error('Please enter an IdP Metadata URL')");
+    expect(ssoProvidersPanelSource).not.toContain(
+      "notificationStore.error('Failed to delete provider')",
+    );
+    expect(ssoProvidersPanelSource).not.toContain(
+      "notificationStore.success('Connection test successful')",
+    );
+    expect(ssoProvidersPanelSource).not.toContain(
+      "notificationStore.error('Failed to test connection')",
+    );
+    expect(ssoProvidersPanelSource).not.toContain(
+      "notificationStore.error('Please enter an IdP Metadata URL')",
+    );
     expect(ssoProvidersPanelSource).not.toContain('provider.type.toUpperCase()');
     expect(ssoProvidersPanelSource).not.toContain("provider.type === 'oidc' ? (");
     expect(ssoProvidersPanelSource).not.toContain(
@@ -807,9 +813,7 @@ describe('monitored-system model guardrails', () => {
     expect(ssoProviderPresentationSource).toContain('export function getSSOProviderTypeLabel');
     expect(ssoProviderPresentationSource).toContain('export function getSSOProviderSummary');
     expect(ssoProviderPresentationSource).toContain('export function getSSOProviderCardClass');
-    expect(ssoProviderPresentationSource).toContain(
-      'export function getSSOProviderAddButtonLabel',
-    );
+    expect(ssoProviderPresentationSource).toContain('export function getSSOProviderAddButtonLabel');
     expect(ssoProviderPresentationSource).toContain('export function getSSOProviderModalTitle');
     expect(ssoProviderPresentationSource).toContain(
       'export function getSSOProviderEmptyStateTitle',
@@ -817,12 +821,8 @@ describe('monitored-system model guardrails', () => {
     expect(ssoProviderPresentationSource).toContain(
       'export function getSSOProviderEmptyStateDescription',
     );
-    expect(ssoProviderPresentationSource).toContain(
-      'export function getSSOProvidersLoadingState',
-    );
-    expect(ssoProviderPresentationSource).toContain(
-      'export function getSSOTestResultPresentation',
-    );
+    expect(ssoProviderPresentationSource).toContain('export function getSSOProvidersLoadingState');
+    expect(ssoProviderPresentationSource).toContain('export function getSSOTestResultPresentation');
     expect(ssoProviderPresentationSource).toContain(
       'export function getSSOCertificatePresentation',
     );
@@ -854,8 +854,12 @@ describe('monitored-system model guardrails', () => {
     expect(rolesPanelSource).toContain('createDefaultRBACPermission');
     expect(rolesPanelSource).toContain('getRBACFeatureGateCopy');
     expect(rolesPanelSource).toContain('getRolesEmptyState');
-    expect(rolesPanelSource).not.toContain("const ACTIONS = ['read', 'write', 'delete', 'admin', '*']");
-    expect(rolesPanelSource).not.toContain("const RESOURCES = ['settings', 'audit_logs', 'nodes', 'users', 'license', '*']");
+    expect(rolesPanelSource).not.toContain(
+      "const ACTIONS = ['read', 'write', 'delete', 'admin', '*']",
+    );
+    expect(rolesPanelSource).not.toContain(
+      "const RESOURCES = ['settings', 'audit_logs', 'nodes', 'users', 'license', '*']",
+    );
     expect(rolesPanelSource).not.toContain('Custom Roles (Pro)');
     expect(rolesPanelSource).not.toContain('No roles available.');
     expect(rbacPermissionsSource).toContain('export const RBAC_PERMISSION_ACTIONS');
@@ -865,12 +869,8 @@ describe('monitored-system model guardrails', () => {
     expect(rbacPresentationSource).toContain('export function getRolesEmptyState');
     expect(rbacPresentationSource).toContain('export function getRolesLoadErrorMessage');
     expect(rbacPresentationSource).toContain('export function getRolesSaveErrorMessage');
-    expect(rbacPresentationSource).toContain(
-      'export function getUserAssignmentsLoadErrorMessage',
-    );
-    expect(rbacPresentationSource).toContain(
-      'export function getUserAssignmentsEmptyStateCopy',
-    );
+    expect(rbacPresentationSource).toContain('export function getUserAssignmentsLoadErrorMessage');
+    expect(rbacPresentationSource).toContain('export function getUserAssignmentsEmptyStateCopy');
     expect(userAssignmentsPanelSource).toContain('@/utils/rbacPresentation');
     expect(userAssignmentsPanelSource).toContain('getRBACFeatureGateCopy');
     expect(userAssignmentsPanelSource).toContain('getUserAssignmentsEmptyStateCopy');
@@ -924,9 +924,7 @@ describe('monitored-system model guardrails', () => {
     expect(thresholdsTableSource).toContain('CONTAINERS_FILTER_EMPTY_STATE');
     expect(thresholdsTableSource).toContain('getAlertThresholdsGuestFilterPresentation');
     expect(thresholdsTableSource).toContain('getAlertThresholdsBackupOrphanedPresentation');
-    expect(thresholdsTableSource).toContain(
-      'getAlertThresholdsDockerIgnoredPrefixesPresentation',
-    );
+    expect(thresholdsTableSource).toContain('getAlertThresholdsDockerIgnoredPrefixesPresentation');
     expect(thresholdsTableSource).not.toContain('No PBS servers configured.');
     expect(thresholdsTableSource).not.toContain('No VMs or containers found.');
     expect(thresholdsTableSource).not.toContain('No nodes match the current filters.');
@@ -994,9 +992,7 @@ describe('monitored-system model guardrails', () => {
     expect(alertThresholdsPresentationSource).toContain(
       'export const NODE_THRESHOLDS_FILTER_EMPTY_STATE',
     );
-    expect(alertThresholdsPresentationSource).toContain(
-      'export const PMG_THRESHOLDS_EMPTY_STATE',
-    );
+    expect(alertThresholdsPresentationSource).toContain('export const PMG_THRESHOLDS_EMPTY_STATE');
     expect(alertThresholdsPresentationSource).toContain(
       'export const ALERT_THRESHOLDS_SEARCH_PLACEHOLDER',
     );
@@ -1120,7 +1116,9 @@ describe('monitored-system model guardrails', () => {
     expect(settingsSource).not.toContain(
       "stateHosts={(state.resources ?? []).filter((r) => r.type === 'host')}",
     );
-    expect(infrastructureSettingsStateSource).toContain('@/utils/infrastructureSettingsPresentation');
+    expect(infrastructureSettingsStateSource).toContain(
+      '@/utils/infrastructureSettingsPresentation',
+    );
     expect(infrastructureSettingsStateSource).toContain('getDiscoveryScanStartErrorMessage');
     expect(infrastructureSettingsStateSource).toContain('getDiscoverySettingUpdateErrorMessage');
     expect(infrastructureSettingsStateSource).toContain('getDiscoverySubnetUpdateErrorMessage');

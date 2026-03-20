@@ -26,28 +26,31 @@ work extends shared components instead of creating new local variants.
 4. `frontend-modern/src/components/Settings/settingsPanelRegistry.ts`
 5. `frontend-modern/src/components/Settings/APIAccessPanel.tsx`
 6. `frontend-modern/src/components/Settings/AISettings.tsx`
-7. `frontend-modern/src/components/Settings/AuditLogPanel.tsx`
-8. `frontend-modern/src/components/Settings/AuditWebhookPanel.tsx`
-9. `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx`
-10. `frontend-modern/src/components/Settings/NetworkSettingsPanel.tsx`
-11. `frontend-modern/src/components/Settings/RecoverySettingsPanel.tsx`
-12. `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx`
-13. `frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx`
-14. `frontend-modern/src/components/Settings/settingsHeaderMeta.ts`
-15. `frontend-modern/src/components/Settings/SettingsPageShell.tsx`
-16. `frontend-modern/src/components/Settings/settingsPanelRegistry.ts`
-17. `frontend-modern/src/components/Settings/SSOProvidersPanel.tsx`
-18. `frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx`
-19. `frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts`
-20. `tests/integration/tests/15-settings-shell-consistency.spec.ts`
-21. `frontend-modern/src/components/shared/PageControls.guardrails.test.ts`
-22. `frontend-modern/src/components/shared/TypeColumn.guardrails.test.ts`
-23. `frontend-modern/src/features/`
-24. `frontend-modern/src/components/SetupWizard/SetupWizard.tsx`
-25. `frontend-modern/src/components/SetupWizard/SetupCompletionPreview.tsx`
-26. `frontend-modern/src/components/SetupWizard/__tests__/SetupWizard.test.tsx`
-27. `frontend-modern/src/components/SetupWizard/__tests__/SetupCompletionPreview.test.tsx`
-28. `frontend-modern/src/components/shared/MonitoredSystemLimitWarningBanner.tsx`
+7. `frontend-modern/src/components/Settings/AIProviderConfigurationSection.tsx`
+8. `frontend-modern/src/components/Settings/AISettingsDialogs.tsx`
+9. `frontend-modern/src/components/Settings/aiSettingsModel.ts`
+10. `frontend-modern/src/components/Settings/AuditLogPanel.tsx`
+11. `frontend-modern/src/components/Settings/AuditWebhookPanel.tsx`
+12. `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx`
+13. `frontend-modern/src/components/Settings/NetworkSettingsPanel.tsx`
+14. `frontend-modern/src/components/Settings/RecoverySettingsPanel.tsx`
+15. `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx`
+16. `frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx`
+17. `frontend-modern/src/components/Settings/settingsHeaderMeta.ts`
+18. `frontend-modern/src/components/Settings/SettingsPageShell.tsx`
+19. `frontend-modern/src/components/Settings/settingsPanelRegistry.ts`
+20. `frontend-modern/src/components/Settings/SSOProvidersPanel.tsx`
+21. `frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx`
+22. `frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts`
+23. `tests/integration/tests/15-settings-shell-consistency.spec.ts`
+24. `frontend-modern/src/components/shared/PageControls.guardrails.test.ts`
+25. `frontend-modern/src/components/shared/TypeColumn.guardrails.test.ts`
+26. `frontend-modern/src/features/`
+27. `frontend-modern/src/components/SetupWizard/SetupWizard.tsx`
+28. `frontend-modern/src/components/SetupWizard/SetupCompletionPreview.tsx`
+29. `frontend-modern/src/components/SetupWizard/__tests__/SetupWizard.test.tsx`
+30. `frontend-modern/src/components/SetupWizard/__tests__/SetupCompletionPreview.test.tsx`
+31. `frontend-modern/src/components/shared/MonitoredSystemLimitWarningBanner.tsx`
 
 ## Shared Boundaries
 
@@ -256,6 +259,12 @@ well: `frontend-modern/src/components/Settings/settingsHeaderMeta.ts` and
 representative top-level panels such as
 `frontend-modern/src/components/Settings/APIAccessPanel.tsx`,
 `frontend-modern/src/components/Settings/AISettings.tsx`,
+`frontend-modern/src/components/Settings/AIProviderConfigurationSection.tsx`,
+`frontend-modern/src/components/Settings/AISettingsDialogs.tsx`, and
+`frontend-modern/src/components/Settings/aiSettingsModel.ts` now also define
+the canonical AI settings runtime boundary: `AISettings.tsx` is the shell and
+controller, while provider configuration, modal flows, and provider metadata
+must extend those extracted owners instead of being re-inlined into the shell.
 `frontend-modern/src/components/Settings/AuditLogPanel.tsx`,
 `frontend-modern/src/components/Settings/AuditWebhookPanel.tsx`,
 `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx`,

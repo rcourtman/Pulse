@@ -286,7 +286,10 @@ import runHistoryPanelSource from '@/components/patrol/RunHistoryPanel.tsx?raw';
 import runToolCallTraceSource from '@/components/patrol/RunToolCallTrace.tsx?raw';
 import diagnosticsPanelSource from '@/components/Settings/DiagnosticsPanel.tsx?raw';
 import diagnosticsPresentationSource from '@/utils/diagnosticsPresentation.ts?raw';
-import aiSettingsSource from '@/components/Settings/AISettings.tsx?raw';
+import aiSettingsShellSource from '@/components/Settings/AISettings.tsx?raw';
+import aiProviderConfigurationSectionSource from '@/components/Settings/AIProviderConfigurationSection.tsx?raw';
+import aiSettingsDialogsSource from '@/components/Settings/AISettingsDialogs.tsx?raw';
+import aiSettingsModelSource from '@/components/Settings/aiSettingsModel.ts?raw';
 import aiIntelligenceSource from '@/pages/AIIntelligence.tsx?raw';
 import patrolIntelligenceSurfaceSource from '@/features/patrol/PatrolIntelligenceSurface.tsx?raw';
 import aiQuickstartPresentationSource from '@/utils/aiQuickstartPresentation.ts?raw';
@@ -305,6 +308,13 @@ import remediationStatusSource from '@/components/patrol/RemediationStatus.tsx?r
 import remediationPresentationSource from '@/utils/remediationPresentation.ts?raw';
 import aiChatPresentationSource from '@/utils/aiChatPresentation.ts?raw';
 import infrastructureDetailsDrawerSource from '@/components/shared/InfrastructureDetailsDrawer.tsx?raw';
+
+const aiSettingsSource = [
+  aiSettingsShellSource,
+  aiProviderConfigurationSectionSource,
+  aiSettingsDialogsSource,
+  aiSettingsModelSource,
+].join('\n');
 
 describe('frontend resource type boundaries', () => {
   it('keeps the shared compatibility adapter narrow and explicit', () => {
@@ -409,15 +419,17 @@ describe('frontend resource type boundaries', () => {
     expect(recoverySummarySource).toContain('buildRecoveryPostureSegments');
     expect(recoverySummarySource).toContain('RECOVERY_SUMMARY_TIME_RANGES');
     expect(recoverySummarySource).toContain('buildRecoveryFreshnessBuckets');
-    expect(recoverySummarySource).not.toContain("const RECOVERY_TIME_RANGES: readonly string[] = ['7d', '30d', '90d']");
-    expect(recoverySummarySource).not.toContain('const RECOVERY_TIME_RANGE_LABELS: Record<string, string>');
-    expect(recoverySummarySource).not.toContain("const FRESHNESS_LABELS:");
+    expect(recoverySummarySource).not.toContain(
+      "const RECOVERY_TIME_RANGES: readonly string[] = ['7d', '30d', '90d']",
+    );
+    expect(recoverySummarySource).not.toContain(
+      'const RECOVERY_TIME_RANGE_LABELS: Record<string, string>',
+    );
+    expect(recoverySummarySource).not.toContain('const FRESHNESS_LABELS:');
     expect(recoverySource).toContain('getRecoveryArtifactModePresentation');
     expect(recoverySource).not.toContain('const MODE_LABELS: Record<ArtifactMode, string>');
     expect(recoverySource).not.toContain('const MODE_BADGE_CLASS: Record<ArtifactMode, string>');
-    expect(recoverySource).not.toContain(
-      'const CHART_SEGMENT_CLASS: Record<ArtifactMode, string>',
-    );
+    expect(recoverySource).not.toContain('const CHART_SEGMENT_CLASS: Record<ArtifactMode, string>');
     expect(recoverySource).toContain('getRecoveryIssueRailClass');
     expect(recoverySource).not.toContain(
       "const ISSUE_RAIL_CLASS: Record<Exclude<IssueTone, 'none'>, string>",
@@ -536,10 +548,16 @@ describe('frontend resource type boundaries', () => {
     expect(recoverySource).not.toContain(
       'inline-flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-base-content hover:bg-surface-hover',
     );
-    expect(recoverySource).not.toContain('rounded-md p-1 hover:text-base-content hover:bg-surface-hover');
-    expect(recoverySource).not.toContain("const labelEvery = dayCount <= 7 ? 1 : dayCount <= 30 ? 3 : 10");
-    expect(recoverySource).not.toContain("class=\"flex items-center gap-1\"");
-    expect(recoverySource).not.toContain("class=\"inline-flex rounded border border-border bg-surface p-0.5 text-xs\"");
+    expect(recoverySource).not.toContain(
+      'rounded-md p-1 hover:text-base-content hover:bg-surface-hover',
+    );
+    expect(recoverySource).not.toContain(
+      'const labelEvery = dayCount <= 7 ? 1 : dayCount <= 30 ? 3 : 10',
+    );
+    expect(recoverySource).not.toContain('class="flex items-center gap-1"');
+    expect(recoverySource).not.toContain(
+      'class="inline-flex rounded border border-border bg-surface p-0.5 text-xs"',
+    );
     expect(recoverySource).not.toContain("'font-semibold text-blue-700 dark:text-blue-300'");
     expect(recoverySource).not.toContain('const rollupSubjectLabel =');
     expect(recoverySource).not.toContain('const pointTimestampMs =');
@@ -554,7 +572,9 @@ describe('frontend resource type boundaries', () => {
     expect(recoverySource).not.toContain('Loading recovery points...');
     expect(recoverySource).not.toContain('Failed to load protected items');
     expect(recoverySource).not.toContain('Failed to load recovery points');
-    expect(recoverySource).not.toContain('Pulse hasn’t observed any protected items for this org yet.');
+    expect(recoverySource).not.toContain(
+      'Pulse hasn’t observed any protected items for this org yet.',
+    );
     expect(recoverySource).not.toContain('No recovery history matches your filters');
     expect(recoverySource).not.toContain(
       'Adjust your search, provider, method, status, or verification filters.',
@@ -579,21 +599,11 @@ describe('frontend resource type boundaries', () => {
       'export function recoveryDateKeyFromTimestamp',
     );
     expect(recoveryDatePresentationSource).toContain('export function parseRecoveryDateKey');
-    expect(recoveryDatePresentationSource).toContain(
-      'export function getRecoveryPrettyDateLabel',
-    );
-    expect(recoveryDatePresentationSource).toContain(
-      'export function getRecoveryFullDateLabel',
-    );
-    expect(recoveryDatePresentationSource).toContain(
-      'export function getRecoveryCompactAxisLabel',
-    );
-    expect(recoveryDatePresentationSource).toContain(
-      'export function formatRecoveryTimeOnly',
-    );
-    expect(recoveryDatePresentationSource).toContain(
-      'export function getRecoveryNiceAxisMax',
-    );
+    expect(recoveryDatePresentationSource).toContain('export function getRecoveryPrettyDateLabel');
+    expect(recoveryDatePresentationSource).toContain('export function getRecoveryFullDateLabel');
+    expect(recoveryDatePresentationSource).toContain('export function getRecoveryCompactAxisLabel');
+    expect(recoveryDatePresentationSource).toContain('export function formatRecoveryTimeOnly');
+    expect(recoveryDatePresentationSource).toContain('export function getRecoveryNiceAxisMax');
     expect(recoveryActionPresentationSource).toContain(
       'export function getRecoveryBreadcrumbLinkClass',
     );
@@ -681,9 +691,7 @@ describe('frontend resource type boundaries', () => {
     expect(recoveryTablePresentationSource).toContain(
       'export function getRecoverySubjectTypeLabel',
     );
-    expect(recoveryTablePresentationSource).toContain(
-      'export function getRecoveryRollupIssueTone',
-    );
+    expect(recoveryTablePresentationSource).toContain('export function getRecoveryRollupIssueTone');
     expect(recoveryTablePresentationSource).toContain(
       'export function getRecoveryRollupAgeTextClass',
     );
@@ -705,9 +713,7 @@ describe('frontend resource type boundaries', () => {
     expect(recoverySummaryPresentationSource).toContain(
       'export const RECOVERY_SUMMARY_TIME_RANGES',
     );
-    expect(recoverySummaryPresentationSource).toContain(
-      'export const RECOVERY_FRESHNESS_BUCKETS',
-    );
+    expect(recoverySummaryPresentationSource).toContain('export const RECOVERY_FRESHNESS_BUCKETS');
     expect(recoverySummaryPresentationSource).toContain(
       'export function getRecoveryAttentionChipClass',
     );
@@ -716,8 +722,8 @@ describe('frontend resource type boundaries', () => {
     );
     expect(recoverySummarySource).toContain('getRecoveryAttentionChipClass');
     expect(recoverySummarySource).toContain('getRecoveryAttentionDotClass');
-    expect(recoverySummarySource).not.toContain("function getAttentionChipClass(");
-    expect(recoverySummarySource).not.toContain("function getAttentionDotClass(");
+    expect(recoverySummarySource).not.toContain('function getAttentionChipClass(');
+    expect(recoverySummarySource).not.toContain('function getAttentionDotClass(');
     expect(dashboardHelpersSource).toContain("from '@/utils/dashboardMetricPresentation'");
     expect(dashboardHelpersSource).not.toContain('export function statusBadgeClass');
     expect(dashboardHelpersSource).not.toContain('export function priorityBadgeClass');
@@ -731,9 +737,7 @@ describe('frontend resource type boundaries', () => {
     expect(trendChartsSource).toContain('getDashboardTrendErrorState');
     expect(trendChartsSource).not.toContain('RESOURCE_COLORS');
     expect(trendChartsSource).not.toContain('Unable to load trends');
-    expect(dashboardTrendPresentationSource).toContain(
-      'export function getDashboardTrendColor',
-    );
+    expect(dashboardTrendPresentationSource).toContain('export function getDashboardTrendColor');
     expect(dashboardTrendPresentationSource).toContain(
       'export function getDashboardTrendErrorState',
     );
@@ -742,9 +746,7 @@ describe('frontend resource type boundaries', () => {
     expect(systemSettingsPresentationSource).toContain(
       'export function getBackupIntervalSelectValue',
     );
-    expect(systemSettingsPresentationSource).toContain(
-      'export function getBackupIntervalSummary',
-    );
+    expect(systemSettingsPresentationSource).toContain('export function getBackupIntervalSummary');
     expect(systemSettingsPresentationSource).toContain('export const COMMON_DISCOVERY_SUBNETS');
     expect(reportingPanelSource).toContain('@/utils/upgradePresentation');
     expect(reportingPanelSource).toContain('getUpgradeActionButtonClass');
@@ -772,13 +774,13 @@ describe('frontend resource type boundaries', () => {
     expect(organizationAccessPanelSource).toContain('@/utils/organizationRolePresentation');
     expect(organizationAccessPanelSource).toContain('ORGANIZATION_MEMBER_ROLE_OPTIONS');
     expect(organizationAccessPanelSource).not.toContain(
-      "const roleOptions: Array<{ value: OrganizationRole; label: string }> = [",
+      'const roleOptions: Array<{ value: OrganizationRole; label: string }> = [',
     );
     expect(organizationSharingPanelSource).toContain('@/utils/organizationRolePresentation');
     expect(organizationSharingPanelSource).toContain('ORGANIZATION_SHARE_ROLE_OPTIONS');
     expect(organizationSharingPanelSource).toContain('normalizeOrganizationShareRole');
     expect(organizationSharingPanelSource).not.toContain(
-      "const accessRoleOptions: Array<{ value: ShareAccessRole; label: string }> = [",
+      'const accessRoleOptions: Array<{ value: ShareAccessRole; label: string }> = [',
     );
     expect(organizationSharingPanelSource).not.toContain('const normalizeShareRole =');
     expect(organizationRolePresentationSource).toContain(
@@ -819,9 +821,7 @@ describe('frontend resource type boundaries', () => {
     expect(organizationSharingPanelSource).toContain(
       'getOrganizationShareTargetOrgRequiredMessage',
     );
-    expect(organizationSharingPanelSource).toContain(
-      'getOrganizationShareCreateSuccessMessage',
-    );
+    expect(organizationSharingPanelSource).toContain('getOrganizationShareCreateSuccessMessage');
     expect(organizationAccessPanelSource).not.toContain('No organization members found.');
     expect(organizationOverviewPanelSource).not.toContain('No members found.');
     expect(organizationSharingPanelSource).not.toContain('No outgoing shares configured.');
@@ -847,7 +847,7 @@ describe('frontend resource type boundaries', () => {
       'export function getOrganizationSettingsLoadErrorMessage',
     );
     expect(organizationSettingsPresentationSource).toContain(
-      "export type OrganizationSettingsLoadContext =",
+      'export type OrganizationSettingsLoadContext =',
     );
     expect(organizationSettingsPresentationSource).toContain(
       'export const ORGANIZATION_SETTINGS_UNAVAILABLE_MESSAGE',
@@ -884,12 +884,8 @@ describe('frontend resource type boundaries', () => {
     expect(userAssignmentsPanelSource).not.toContain('Users sync on first login');
     expect(rbacPresentationSource).toContain('export function getRBACFeatureGateCopy');
     expect(rbacPresentationSource).toContain('export function getRolesEmptyState');
-    expect(rbacPresentationSource).toContain(
-      'export function getUserAssignmentsEmptyStateCopy',
-    );
-    expect(agentProfilesPresentationSource).toContain(
-      'export function getAgentProfilesEmptyState',
-    );
+    expect(rbacPresentationSource).toContain('export function getUserAssignmentsEmptyStateCopy');
+    expect(agentProfilesPresentationSource).toContain('export function getAgentProfilesEmptyState');
     expect(agentProfilesPresentationSource).toContain(
       'export function getAgentProfileAssignmentsEmptyState',
     );
@@ -932,9 +928,7 @@ describe('frontend resource type boundaries', () => {
     expect(dashboardAlertPresentationSource).toContain(
       'export function getDashboardAlertSummaryText',
     );
-    expect(dashboardAlertPresentationSource).toContain(
-      'export const DASHBOARD_ALERTS_EMPTY_STATE',
-    );
+    expect(dashboardAlertPresentationSource).toContain('export const DASHBOARD_ALERTS_EMPTY_STATE');
     expect(storagePanelSource).toContain('@/utils/dashboardStoragePresentation');
     expect(storagePanelSource).not.toContain('No storage resources');
     expect(recoveryStatusPanelSource).toContain('@/utils/dashboardRecoveryPresentation');
@@ -1007,14 +1001,18 @@ describe('frontend resource type boundaries', () => {
     expect(diskDetailSource).not.toContain('function extractDiskData(');
     expect(diskDetailSource).not.toContain('const getMetricResourceId = () => {');
     expect(diskDetailSource).not.toContain('function attrColor(');
-    expect(diskDetailSource).not.toContain('flex flex-wrap items-end justify-between gap-3 border-b border-border-subtle pb-3');
+    expect(diskDetailSource).not.toContain(
+      'flex flex-wrap items-end justify-between gap-3 border-b border-border-subtle pb-3',
+    );
     expect(diskDetailSource).not.toContain('class="relative"');
     expect(useDiskDetailModelSource).toContain('extractPhysicalDiskPresentationData');
     expect(useDiskDetailModelSource).toContain('resolvePhysicalDiskMetricResourceId');
     expect(diskLiveMetricSource).toContain('useDiskLiveMetricModel');
     expect(diskLiveMetricSource).not.toContain('const latestMetric = createMemo(() => {');
     expect(diskLiveMetricSource).not.toContain('const formatted = createMemo(() => {');
-    expect(diskLiveMetricSource).not.toContain("if (v > 90) return 'text-red-600 dark:text-red-400 font-bold'");
+    expect(diskLiveMetricSource).not.toContain(
+      "if (v > 90) return 'text-red-600 dark:text-red-400 font-bold'",
+    );
     expect(useDiskLiveMetricModelSource).toContain('getDiskLiveMetricFormattedValue');
     expect(useDiskLiveMetricModelSource).toContain('getDiskLiveMetricTextClass');
     expect(storagePoolRowSource).toContain('getStoragePoolProtectionTextClass');
@@ -1028,27 +1026,13 @@ describe('frontend resource type boundaries', () => {
     expect(storagePoolRowSource).not.toContain('const platformLabel = createMemo(');
     expect(storagePoolRowSource).not.toContain('const hostLabel = createMemo(');
     expect(storagePoolRowSource).not.toContain('const topologyLabel = createMemo(');
-    expect(storagePoolRowPresentationSource).toContain(
-      'export const buildStoragePoolRowModel',
-    );
-    expect(storagePoolRowPresentationSource).toContain(
-      'getSourcePlatformPresentation',
-    );
-    expect(storagePoolRowPresentationSource).toContain(
-      'getCompactStoragePoolProtectionLabel',
-    );
-    expect(storagePoolRowPresentationSource).toContain(
-      'getCompactStoragePoolImpactLabel',
-    );
-    expect(storagePoolRowPresentationSource).toContain(
-      'getCompactStoragePoolIssueLabel',
-    );
-    expect(storagePoolRowPresentationSource).toContain(
-      'getCompactStoragePoolIssueSummary',
-    );
-    expect(storagePoolRowPresentationSource).toContain(
-      'getCompactStoragePoolProtectionTitle',
-    );
+    expect(storagePoolRowPresentationSource).toContain('export const buildStoragePoolRowModel');
+    expect(storagePoolRowPresentationSource).toContain('getSourcePlatformPresentation');
+    expect(storagePoolRowPresentationSource).toContain('getCompactStoragePoolProtectionLabel');
+    expect(storagePoolRowPresentationSource).toContain('getCompactStoragePoolImpactLabel');
+    expect(storagePoolRowPresentationSource).toContain('getCompactStoragePoolIssueLabel');
+    expect(storagePoolRowPresentationSource).toContain('getCompactStoragePoolIssueSummary');
+    expect(storagePoolRowPresentationSource).toContain('getCompactStoragePoolProtectionTitle');
     expect(storagePoolRowSource).not.toContain('const protectionTextClass =');
     expect(storagePoolRowSource).not.toContain('const issueTextClass =');
     expect(storagePoolRowSource).not.toContain('const compactProtection = createMemo(() => {');
@@ -1100,9 +1084,7 @@ describe('frontend resource type boundaries', () => {
     expect(storageRowPresentationSource).toContain(
       'export function getStoragePoolProtectionTextClass',
     );
-    expect(storageRowPresentationSource).toContain(
-      'export function getStoragePoolIssueTextClass',
-    );
+    expect(storageRowPresentationSource).toContain('export function getStoragePoolIssueTextClass');
     expect(storageRowPresentationSource).toContain(
       'export function getCompactStoragePoolProtectionLabel',
     );
@@ -1125,9 +1107,7 @@ describe('frontend resource type boundaries', () => {
     expect(storageGroupPresentationSource).toContain(
       'export const getStorageGroupHealthCountPresentation',
     );
-    expect(storageGroupPresentationSource).toContain(
-      'export const getStorageGroupPoolCountLabel',
-    );
+    expect(storageGroupPresentationSource).toContain('export const getStorageGroupPoolCountLabel');
     expect(storageGroupPresentationSource).toContain(
       'export const getStorageGroupUsagePercentLabel',
     );
@@ -1140,7 +1120,7 @@ describe('frontend resource type boundaries', () => {
     expect(zfsHealthMapSource).toContain('getZfsHealthMapErrorSummaryClass');
     expect(zfsHealthMapSource).toContain('getZfsHealthMapMessageClass');
     expect(zfsHealthMapSource).toContain('useZFSHealthMapModel');
-    expect(zfsHealthMapSource).not.toContain("const getDeviceColor = (device: ZFSDevice) => {");
+    expect(zfsHealthMapSource).not.toContain('const getDeviceColor = (device: ZFSDevice) => {');
     expect(zfsHealthMapSource).not.toContain('const isResilvering = (device: ZFSDevice) => {');
     expect(enhancedStorageBarSource).toContain('getZfsPoolStateTextClass');
     expect(enhancedStorageBarSource).toContain('getZfsPoolErrorOverlayClass');
@@ -1154,15 +1134,15 @@ describe('frontend resource type boundaries', () => {
     expect(enhancedStorageBarSource).not.toContain('const isScrubbing = createMemo(() => {');
     expect(enhancedStorageBarSource).not.toContain('const isResilvering = createMemo(() => {');
     expect(enhancedStorageBarSource).not.toContain('const hasErrors = createMemo(() => {');
-    expect(enhancedStorageBarSource).not.toContain('metric-text w-full h-5 flex items-center min-w-0');
+    expect(enhancedStorageBarSource).not.toContain(
+      'metric-text w-full h-5 flex items-center min-w-0',
+    );
     expect(useEnhancedStorageBarModelSource).toContain('getStorageBarUsagePercent');
     expect(useEnhancedStorageBarModelSource).toContain('getStorageBarLabel');
     expect(useEnhancedStorageBarModelSource).toContain('getStorageBarTooltipRows');
     expect(useEnhancedStorageBarModelSource).toContain('getStorageBarZfsSummary');
     expect(storagePagePresentationSource).toContain('export const shouldShowCephSummaryCard');
-    expect(storagePagePresentationSource).toContain(
-      'export const getStoragePageBannerMessage',
-    );
+    expect(storagePagePresentationSource).toContain('export const getStoragePageBannerMessage');
     expect(storagePagePresentationSource).toContain('export const STORAGE_VIEW_OPTIONS');
     expect(storagePagePresentationSource).toContain('export const STORAGE_POOL_TABLE_COLUMNS');
     expect(storagePagePresentationSource).toContain(
@@ -1214,7 +1194,9 @@ describe('frontend resource type boundaries', () => {
     expect(storageControlsSource).toContain('STORAGE_CONTROLS_NODE_DIVIDER_CLASS');
     expect(storageControlsSource).toContain('DEFAULT_STORAGE_SORT_OPTIONS');
     expect(storageControlsSource).not.toContain('STORAGE_VIEW_OPTIONS');
-    expect(storageControlsSource).not.toContain("props.setSelectedNodeId(event.currentTarget.value)");
+    expect(storageControlsSource).not.toContain(
+      'props.setSelectedNodeId(event.currentTarget.value)',
+    );
     expect(storageControlsSource).not.toContain('focus:ring-blue-500');
     expect(useStorageControlsModelSource).toContain('STORAGE_VIEW_OPTIONS');
     expect(useStorageControlsModelSource).toContain('handleNodeFilterChange');
@@ -1226,7 +1208,9 @@ describe('frontend resource type boundaries', () => {
     expect(storageFilterSource).not.toContain('const sourceOptions = (): StorageSourceOption[] =>');
     expect(storageFilterSource).not.toContain('props.setSortKey(DEFAULT_STORAGE_SORT_KEY)');
     expect(storageFilterSource).not.toContain("props.sortDirection() === 'asc' ? 'desc' : 'asc'");
-    expect(storageFilterSource).not.toContain("props.sortDirection() === 'asc' ? 'rotate-180' : ''");
+    expect(storageFilterSource).not.toContain(
+      "props.sortDirection() === 'asc' ? 'rotate-180' : ''",
+    );
     expect(storageFilterSource).not.toContain('focus:ring-blue-500');
     expect(useStorageFilterToolbarModelSource).toContain('countActiveStorageFilters');
     expect(useStorageFilterToolbarModelSource).toContain('hasActiveStorageFilters');
@@ -1235,9 +1219,7 @@ describe('frontend resource type boundaries', () => {
     expect(useStorageFilterToolbarModelSource).toContain('getStorageSortDirectionTitle');
     expect(useStorageFilterToolbarModelSource).toContain('getStorageSortDirectionIconClass');
     expect(useStorageFilterToolbarModelSource).toContain('getNextStorageSortDirection');
-    expect(storageFilterPresentationSource).toContain(
-      'export const getStorageSortDirectionTitle',
-    );
+    expect(storageFilterPresentationSource).toContain('export const getStorageSortDirectionTitle');
     expect(storageFilterPresentationSource).toContain(
       'export const getStorageSortDirectionIconClass',
     );
@@ -1251,7 +1233,9 @@ describe('frontend resource type boundaries', () => {
     expect(storagePageControlsSource).toContain('StorageControls');
     expect(storagePageControlsSource).toContain('useStoragePageControlsModel');
     expect(storagePageControlsSource).not.toContain('normalizeStorageSortKey');
-    expect(storagePageControlsSource).not.toContain("props.view() === 'pools' ? props.storageFilterGroupBy : undefined");
+    expect(storagePageControlsSource).not.toContain(
+      "props.view() === 'pools' ? props.storageFilterGroupBy : undefined",
+    );
     expect(storagePageControlsSource).not.toContain("props.view() !== 'pools'");
     expect(useStoragePageControlsModelSource).toContain('normalizeStorageSortKey');
     expect(useStoragePageControlsModelSource).toContain("options.view() === 'pools'");
@@ -1269,7 +1253,9 @@ describe('frontend resource type boundaries', () => {
     expect(storagePageBannersSource).toContain('StoragePageBanner');
     expect(storagePageBannersSource).toContain('useStoragePageBannersModel');
     expect(storagePageBannersSource).not.toContain("props.kind() === 'reconnecting'");
-    expect(useStoragePageBannersModelSource).toContain("kind === 'reconnecting' || kind === 'disconnected'");
+    expect(useStoragePageBannersModelSource).toContain(
+      "kind === 'reconnecting' || kind === 'disconnected'",
+    );
     expect(storagePageSummarySource).toContain('export const StoragePageSummary');
     expect(storagePageSummarySource).toContain('useStoragePageSummary');
     expect(storagePageSummarySource).toContain('StorageSummary');
@@ -1277,9 +1263,15 @@ describe('frontend resource type boundaries', () => {
     expect(storageCephSummaryCardSource).toContain('CEPH_SUMMARY_CARD_GRID_CLASS');
     expect(storageCephSummaryCardSource).toContain('CEPH_SUMMARY_CARD_HEALTH_BADGE_CLASS');
     expect(storageCephSummaryCardSource).not.toContain('const summary = () => props.summary');
-    expect(storageCephSummaryCardSource).not.toContain('rounded-md border border-border bg-surface p-3');
-    expect(storageCephSummaryCardSource).not.toContain('text-[11px] text-muted truncate max-w-[240px]');
-    expect(storageCephSummaryCardSource).not.toContain('flex flex-wrap items-center justify-between gap-3');
+    expect(storageCephSummaryCardSource).not.toContain(
+      'rounded-md border border-border bg-surface p-3',
+    );
+    expect(storageCephSummaryCardSource).not.toContain(
+      'text-[11px] text-muted truncate max-w-[240px]',
+    );
+    expect(storageCephSummaryCardSource).not.toContain(
+      'flex flex-wrap items-center justify-between gap-3',
+    );
     expect(useStorageCephSummaryCardModelSource).toContain('getCephSummaryHeaderPresentation');
     expect(useStorageCephSummaryCardModelSource).toContain('getCephSummaryClusterCards');
     expect(storageContentCardSource).toContain('export const StorageContentCard');
@@ -1287,8 +1279,12 @@ describe('frontend resource type boundaries', () => {
     expect(storageContentCardSource).toContain('DiskList');
     expect(storageContentCardSource).toContain('StoragePoolsTable');
     expect(storageContentCardSource).toContain('STORAGE_CONTENT_CARD_HEADER_CLASS');
-    expect(storageContentCardSource).not.toContain("props.selectedNodeId() === 'all' ? null : props.selectedNodeId()");
-    expect(storageContentCardSource).not.toContain('border-b border-border bg-surface-hover px-3 py-2');
+    expect(storageContentCardSource).not.toContain(
+      "props.selectedNodeId() === 'all' ? null : props.selectedNodeId()",
+    );
+    expect(storageContentCardSource).not.toContain(
+      'border-b border-border bg-surface-hover px-3 py-2',
+    );
     expect(useStorageContentCardModelSource).toContain('getStorageTableHeading');
     expect(useStorageContentCardModelSource).toContain("options.view() === 'disks'");
     expect(useStorageCephSectionModelSource).toContain('shouldShowCephSummaryCard');
@@ -1309,9 +1305,7 @@ describe('frontend resource type boundaries', () => {
     expect(storagePoolsTablePresentationSource).toContain(
       'export const buildStoragePoolsTableRowModel',
     );
-    expect(storagePoolsTablePresentationSource).toContain(
-      'getStorageRowAlertPresentation',
-    );
+    expect(storagePoolsTablePresentationSource).toContain('getStorageRowAlertPresentation');
     expect(useStoragePoolsTableModelSource).toContain('buildStoragePoolsTableGroups');
     expect(useStoragePoolsTableModelSource).toContain('buildStoragePoolsTableRowModel');
     expect(useStoragePoolsTableModelSource).toContain('togglePool');
@@ -1329,18 +1323,22 @@ describe('frontend resource type boundaries', () => {
     expect(storagePageSource).not.toContain('const activeAlertsAccessor = () => {');
     expect(storagePageSource).not.toContain('const adapterResources = createMemo(() => {');
     expect(storagePageSource).not.toContain('const [summaryTimeRange, setSummaryTimeRange]');
-    expect(storagePageSource).not.toContain("buildPath: buildStoragePath");
+    expect(storagePageSource).not.toContain('buildPath: buildStoragePath');
     expect(storagePageSource).not.toContain('const storageFilterGroupBy =');
     expect(storagePageSource).not.toContain('const storageFilterStatus =');
     expect(storagePageSource).not.toContain('const setStorageFilterStatus =');
     expect(storagePageSource).not.toContain('const records = createMemo(() => buildStorageRecords');
     expect(storagePageSource).not.toContain('const { byType } = useResources()');
-    expect(storagePageSource).not.toContain('const storageRecoveryResources = useStorageRecoveryResources()');
+    expect(storagePageSource).not.toContain(
+      'const storageRecoveryResources = useStorageRecoveryResources()',
+    );
     expect(storagePageSource).not.toContain('useStoragePageFilters({');
     expect(storagePageSource).not.toContain('useStoragePageData({');
     expect(storagePageSource).not.toContain('useStoragePageResources()');
     expect(storagePageSource).not.toContain('fields: {');
-    expect(storagePageSource).not.toContain('rounded border border-amber-300 bg-amber-100 px-2 py-1');
+    expect(storagePageSource).not.toContain(
+      'rounded border border-amber-300 bg-amber-100 px-2 py-1',
+    );
     expect(storagePageSource).not.toContain('flex flex-wrap items-center justify-between gap-3');
     expect(storagePageSource).not.toContain('<Table class="w-full text-xs">');
     expect(storagePageSource).not.toContain('<StoragePageBanner kind=');
@@ -1348,15 +1346,11 @@ describe('frontend resource type boundaries', () => {
     expect(storageRowAlertPresentationSource).toContain(
       'export const getStorageRowAlertPresentation',
     );
-    expect(diskLiveMetricPresentationSource).toContain(
-      'export const getDiskLiveMetricTextClass',
-    );
+    expect(diskLiveMetricPresentationSource).toContain('export const getDiskLiveMetricTextClass');
     expect(diskLiveMetricPresentationSource).toContain(
       'export const getDiskLiveMetricFormattedValue',
     );
-    expect(diskPresentationSource).toContain(
-      'export function extractPhysicalDiskPresentationData',
-    );
+    expect(diskPresentationSource).toContain('export function extractPhysicalDiskPresentationData');
     expect(diskPresentationSource).toContain('export function matchesPhysicalDiskSearch');
     expect(diskPresentationSource).toContain('export function comparePhysicalDiskPresentation');
     expect(diskPresentationSource).toContain(
@@ -1365,14 +1359,20 @@ describe('frontend resource type boundaries', () => {
     expect(diskPresentationSource).toContain('export function filterAndSortPhysicalDisks');
     expect(diskDetailPresentationSource).toContain('export function getDiskDetailAttributeCards');
     expect(diskDetailPresentationSource).toContain('export function getDiskDetailHistoryCharts');
-    expect(diskDetailPresentationSource).toContain('export const DISK_DETAIL_HISTORY_RANGE_OPTIONS');
+    expect(diskDetailPresentationSource).toContain(
+      'export const DISK_DETAIL_HISTORY_RANGE_OPTIONS',
+    );
     expect(diskDetailPresentationSource).toContain('export const DISK_DETAIL_LIVE_CHARTS');
     expect(storageDetailPresentationSource).toContain('export const STORAGE_DETAIL_CARD_CLASS');
     expect(storageDetailPresentationSource).toContain('export const STORAGE_DETAIL_SELECT_CLASS');
     expect(storageDetailPresentationSource).toContain('export const STORAGE_DETAIL_EMPTY_CLASS');
     expect(storageDetailPresentationSource).toContain('export const STORAGE_DETAIL_ROW_CLASS');
-    expect(storageDetailPresentationSource).toContain('export const STORAGE_DISK_DETAIL_HEADER_CLASS');
-    expect(storageDetailPresentationSource).toContain('export const STORAGE_DETAIL_FULL_WIDTH_ROW_CLASS');
+    expect(storageDetailPresentationSource).toContain(
+      'export const STORAGE_DISK_DETAIL_HEADER_CLASS',
+    );
+    expect(storageDetailPresentationSource).toContain(
+      'export const STORAGE_DETAIL_FULL_WIDTH_ROW_CLASS',
+    );
     expect(storageDetailKeyValueRowSource).toContain('STORAGE_DETAIL_KEY_VALUE_ROW_CLASS');
     expect(storageDetailMetricCardSource).toContain('STORAGE_DETAIL_CARD_CLASS');
     expect(storagePoolDetailSource).toContain('STORAGE_DETAIL_ROW_CLASS');
@@ -1388,15 +1388,11 @@ describe('frontend resource type boundaries', () => {
     expect(zfsHealthMapPresentationSource).toContain(
       'export const getZfsHealthMapTooltipPresentation',
     );
-    expect(zfsHealthMapPresentationSource).toContain(
-      'export const getZfsHealthMapDeviceClass',
-    );
+    expect(zfsHealthMapPresentationSource).toContain('export const getZfsHealthMapDeviceClass');
     expect(zfsHealthMapPresentationSource).toContain(
       'export const getZfsHealthMapErrorSummaryClass',
     );
-    expect(zfsHealthMapPresentationSource).toContain(
-      'export const getZfsHealthMapMessageClass',
-    );
+    expect(zfsHealthMapPresentationSource).toContain('export const getZfsHealthMapMessageClass');
     expect(zfsHealthMapPresentationSource).toContain(
       'export const ZFS_HEALTH_MAP_TOOLTIP_CARD_CLASS',
     );
@@ -1405,13 +1401,13 @@ describe('frontend resource type boundaries', () => {
     expect(useZFSHealthMapModelSource).toContain('getZfsHealthMapTooltipPresentation');
     expect(zfsHealthMapSource).toContain('ZFS_HEALTH_MAP_TOOLTIP_CARD_CLASS');
     expect(zfsHealthMapSource).not.toContain('fixed z-[9999] pointer-events-none');
-    expect(zfsHealthMapSource).not.toContain('bg-surface text-base-content text-[10px] rounded-md shadow-sm px-2 py-1.5 min-w-[120px] border border-border');
+    expect(zfsHealthMapSource).not.toContain(
+      'bg-surface text-base-content text-[10px] rounded-md shadow-sm px-2 py-1.5 min-w-[120px] border border-border',
+    );
     expect(cephSummaryCardPresentationSource).toContain(
       'export const getCephSummaryHeaderPresentation',
     );
-    expect(cephSummaryCardPresentationSource).toContain(
-      'export const getCephSummaryClusterCards',
-    );
+    expect(cephSummaryCardPresentationSource).toContain('export const getCephSummaryClusterCards');
     expect(cephSummaryCardPresentationSource).toContain(
       'export const CEPH_SUMMARY_CARD_GRID_CLASS',
     );
@@ -1430,9 +1426,7 @@ describe('frontend resource type boundaries', () => {
     expect(useDiskListModelSource).toContain('buildPhysicalDiskPresentationDataMap');
     expect(useDiskListModelSource).toContain('filterAndSortPhysicalDisks');
     expect(useDiskListModelSource).toContain('matchesPhysicalDiskNode');
-    expect(storageAdaptersSource).toContain(
-      "from './resourceStoragePresentation'",
-    );
+    expect(storageAdaptersSource).toContain("from './resourceStoragePresentation'");
     expect(storageAdaptersSource).toContain("from './resourceStorageMapping'");
     expect(storageAdaptersSource).toContain("from './storageAdapterCore'");
     expect(storageAdaptersSource).toContain('asNumberOrNull');
@@ -1529,21 +1523,13 @@ describe('frontend resource type boundaries', () => {
     expect(diskDetailPresentationSource).toContain(
       'export function getDiskAttributeValueTextClass',
     );
-    expect(diskDetailPresentationSource).toContain(
-      'export function getLinkedDiskHealthDotClass',
-    );
+    expect(diskDetailPresentationSource).toContain('export function getLinkedDiskHealthDotClass');
     expect(diskDetailPresentationSource).toContain(
       'export function getLinkedDiskTemperatureTextClass',
     );
-    expect(storagePoolDetailPresentationSource).toContain(
-      'export function getZfsScanTextClass',
-    );
-    expect(storagePoolDetailPresentationSource).toContain(
-      'export function getZfsErrorTextClass',
-    );
-    expect(storagePoolDetailPresentationSource).toContain(
-      'export function getZfsErrorSummary',
-    );
+    expect(storagePoolDetailPresentationSource).toContain('export function getZfsScanTextClass');
+    expect(storagePoolDetailPresentationSource).toContain('export function getZfsErrorTextClass');
+    expect(storagePoolDetailPresentationSource).toContain('export function getZfsErrorSummary');
     expect(storagePoolDetailPresentationSource).toContain(
       'export const STORAGE_POOL_DETAIL_HISTORY_RANGE_OPTIONS',
     );
@@ -1574,31 +1560,19 @@ describe('frontend resource type boundaries', () => {
     expect(storageRecordPresentationSource).toContain('export const getStorageRecordType');
     expect(storageRecordPresentationSource).toContain('export const getStorageRecordContent');
     expect(storageRecordPresentationSource).toContain('export const getStorageRecordStatus');
-    expect(storageRecordPresentationSource).toContain(
-      'export const getStorageRecordPlatformLabel',
-    );
+    expect(storageRecordPresentationSource).toContain('export const getStorageRecordPlatformLabel');
     expect(storageRecordPresentationSource).toContain('export const getStorageRecordHostLabel');
-    expect(storageRecordPresentationSource).toContain(
-      'export const getStorageRecordTopologyLabel',
-    );
+    expect(storageRecordPresentationSource).toContain('export const getStorageRecordTopologyLabel');
     expect(storageRecordPresentationSource).toContain(
       'export const getStorageRecordProtectionLabel',
     );
     expect(storageRecordPresentationSource).toContain('export const getStorageRecordIssueLabel');
-    expect(storageRecordPresentationSource).toContain(
-      'export const getStorageRecordIssueSummary',
-    );
-    expect(storageRecordPresentationSource).toContain(
-      'export const getStorageRecordImpactSummary',
-    );
-    expect(storageRecordPresentationSource).toContain(
-      'export const getStorageRecordActionSummary',
-    );
+    expect(storageRecordPresentationSource).toContain('export const getStorageRecordIssueSummary');
+    expect(storageRecordPresentationSource).toContain('export const getStorageRecordImpactSummary');
+    expect(storageRecordPresentationSource).toContain('export const getStorageRecordActionSummary');
     expect(storageRecordPresentationSource).toContain('export const getStorageRecordShared');
     expect(storageRecordPresentationSource).toContain('export const getStorageRecordNodeLabel');
-    expect(storageRecordPresentationSource).toContain(
-      'export const getStorageRecordUsagePercent',
-    );
+    expect(storageRecordPresentationSource).toContain('export const getStorageRecordUsagePercent');
     expect(storageRecordPresentationSource).toContain('export const getStorageRecordZfsPool');
     expect(storageRecordPresentationSource).toContain('export const getStorageRecordStats');
     expect(resourceStoragePresentationSource).toContain(
@@ -1627,27 +1601,19 @@ describe('frontend resource type boundaries', () => {
     );
     expect(resourceStorageMappingSource).toContain('export type ResourceStorageMeta');
     expect(resourceStorageMappingSource).toContain('export const readResourceStorageMeta');
-    expect(resourceStorageMappingSource).toContain(
-      'export const resolveResourceStorageContent',
-    );
+    expect(resourceStorageMappingSource).toContain('export const resolveResourceStorageContent');
     expect(resourceStorageMappingSource).toContain(
       'export const getStorageCapabilitiesForResource',
     );
-    expect(resourceStorageMappingSource).toContain(
-      'export const getStorageCategoryFromType',
-    );
+    expect(resourceStorageMappingSource).toContain('export const getStorageCategoryFromType');
     expect(storageAdapterCoreSource).toContain('export const asNumberOrNull');
     expect(storageAdapterCoreSource).toContain('export const dedupe');
     expect(storageAdapterCoreSource).toContain('export const getStringArray');
     expect(storageAdapterCoreSource).toContain('export const canonicalStorageIdentityKey');
     expect(storageAdapterCoreSource).toContain('export const buildStorageSource');
     expect(storageAdapterCoreSource).toContain('export const buildStorageCapacity');
-    expect(storageAdapterCoreSource).toContain(
-      'export const metricsTargetForStorageResource',
-    );
-    expect(storageAdapterCoreSource).toContain(
-      'export const normalizeStorageResourceHealth',
-    );
+    expect(storageAdapterCoreSource).toContain('export const metricsTargetForStorageResource');
+    expect(storageAdapterCoreSource).toContain('export const normalizeStorageResourceHealth');
     expect(storageAlertStateSource).toContain('export type StorageAlertRowState');
     expect(storageAlertStateSource).toContain('export const EMPTY_STORAGE_ALERT_STATE');
     expect(storageAlertStateSource).toContain('export const asStorageAlertRecord');
@@ -1719,7 +1685,7 @@ describe('frontend resource type boundaries', () => {
     expect(k8sDeploymentsDrawerSource).not.toContain('const statusTone =');
     expect(k8sDeploymentsDrawerSource).not.toContain('Desired state controllers (not Pods)');
     expect(k8sDeploymentsDrawerSource).not.toContain('Search deployments...');
-    expect(k8sDeploymentsDrawerSource).not.toContain("label=\"Namespace\"");
+    expect(k8sDeploymentsDrawerSource).not.toContain('label="Namespace"');
     expect(k8sDeploymentsDrawerSource).not.toContain('All namespaces');
     expect(k8sDeploymentsDrawerSource).not.toContain('Open Pods');
     expect(k8sDeploymentsDrawerSource).not.toContain('Loading deployments...');
@@ -1755,9 +1721,7 @@ describe('frontend resource type boundaries', () => {
     expect(k8sNamespacePresentationSource).toContain(
       'export function getK8sNamespacesDrawerPresentation',
     );
-    expect(k8sNamespacePresentationSource).toContain(
-      'export function getK8sNamespacesEmptyState',
-    );
+    expect(k8sNamespacePresentationSource).toContain('export function getK8sNamespacesEmptyState');
     expect(k8sNamespacePresentationSource).toContain(
       'export function getK8sNamespacesLoadingState',
     );
@@ -1794,9 +1758,7 @@ describe('frontend resource type boundaries', () => {
       'export const getOrganizationBillingLicenseStatusLabel',
     );
     expect(licensePresentationSource).toContain('export const getBillingAdminTrialStatus');
-    expect(licensePresentationSource).toContain(
-      'export const getBillingAdminOrganizationBadges',
-    );
+    expect(licensePresentationSource).toContain('export const getBillingAdminOrganizationBadges');
     expect(licensePresentationSource).toContain(
       'export const getBillingAdminStateUpdateSuccessMessage',
     );
@@ -1819,7 +1781,9 @@ describe('frontend resource type boundaries', () => {
     expect(securityWarningSource).toContain('warningPresentation().background');
     expect(securityWarningSource).toContain('warningPresentation().border');
     expect(securityWarningSource).not.toContain('bg-yellow-50 dark:bg-yellow-900');
-    expect(securityWarningSource).not.toContain("status()!.credentialsEncrypted ? 'text-green-600' : 'text-red-600'");
+    expect(securityWarningSource).not.toContain(
+      "status()!.credentialsEncrypted ? 'text-green-600' : 'text-red-600'",
+    );
     expect(findingsPanelSource).toContain('getFindingStatusBadgeClasses');
     expect(findingsPanelSource).toContain('getFindingStatusLabel');
     expect(findingsPanelSource).toContain('getFindingSeveritySortOrder');
@@ -1842,31 +1806,17 @@ describe('frontend resource type boundaries', () => {
     );
     expect(findingsPanelSource).not.toContain('No active findings');
     expect(findingsPanelSource).not.toContain('No pending approvals.');
-    expect(aiFindingPresentationSource).toContain(
-      'export const getFindingStatusBadgeClasses',
-    );
+    expect(aiFindingPresentationSource).toContain('export const getFindingStatusBadgeClasses');
     expect(aiFindingPresentationSource).toContain('export const getFindingStatusLabel');
-    expect(aiFindingPresentationSource).toContain(
-      'export const getFindingSeveritySortOrder',
-    );
-    expect(aiFindingPresentationSource).toContain(
-      'export const getFindingSeverityCompactLabel',
-    );
+    expect(aiFindingPresentationSource).toContain('export const getFindingSeveritySortOrder');
+    expect(aiFindingPresentationSource).toContain('export const getFindingSeverityCompactLabel');
     expect(aiFindingPresentationSource).toContain(
       'export const getInvestigationOutcomeBadgeClasses',
     );
-    expect(aiFindingPresentationSource).toContain(
-      'export const getInvestigationOutcomeLabel',
-    );
-    expect(aiFindingPresentationSource).toContain(
-      'export const getInvestigationStatusLabel',
-    );
-    expect(aiFindingPresentationSource).toContain(
-      'export const getInvestigationOutcomeSortOrder',
-    );
-    expect(aiFindingPresentationSource).toContain(
-      'export const hasFindingInvestigationDetails',
-    );
+    expect(aiFindingPresentationSource).toContain('export const getInvestigationOutcomeLabel');
+    expect(aiFindingPresentationSource).toContain('export const getInvestigationStatusLabel');
+    expect(aiFindingPresentationSource).toContain('export const getInvestigationOutcomeSortOrder');
+    expect(aiFindingPresentationSource).toContain('export const hasFindingInvestigationDetails');
     expect(aiFindingPresentationSource).toContain('export const getFindingResolutionReason');
     expect(aiFindingPresentationSource).toContain('export const buildFindingFilterOptions');
     expect(aiFindingPresentationSource).toContain('export const getFindingEmptyStateCopy');
@@ -1892,9 +1842,7 @@ describe('frontend resource type boundaries', () => {
     expect(securityScorePresentationSource).toContain(
       'export function getSecurityFeatureCardPresentation',
     );
-    expect(securityScorePresentationSource).toContain(
-      'export function getSecurityPostureItems',
-    );
+    expect(securityScorePresentationSource).toContain('export function getSecurityPostureItems');
     expect(securityScorePresentationSource).toContain(
       'export function getSecurityNetworkAccessSubtitle',
     );
@@ -1907,9 +1855,7 @@ describe('frontend resource type boundaries', () => {
     expect(securityAuthPanelSource).not.toContain(
       'Authentication is currently disabled. Set up password authentication to protect your Pulse instance.',
     );
-    expect(securityAuthPanelSource).not.toContain(
-      'Security Configured - Restart Required',
-    );
+    expect(securityAuthPanelSource).not.toContain('Security Configured - Restart Required');
     expect(securityAuthPresentationSource).toContain(
       'export const SECURITY_AUTH_DISABLED_PANEL_TITLE',
     );
@@ -1930,9 +1876,7 @@ describe('frontend resource type boundaries', () => {
     expect(environmentLockPresentationSource).toContain(
       'export const ENVIRONMENT_LOCK_BADGE_CLASS',
     );
-    expect(environmentLockPresentationSource).toContain(
-      'export function getEnvironmentLockTitle',
-    );
+    expect(environmentLockPresentationSource).toContain('export function getEnvironmentLockTitle');
     expect(environmentLockPresentationSource).toContain(
       'export const ENVIRONMENT_LOCK_BUTTON_TITLE',
     );
@@ -1947,15 +1891,11 @@ describe('frontend resource type boundaries', () => {
     expect(resourceDetailDrawerSource).toContain('getResourceChangeSourceAdapterPresentation');
     expect(resourceChangeSummarySource).toContain('getResourceChangeKindPresentation');
     expect(resourceChangeSummarySource).toContain('getResourceChangeSourceTypePresentation');
-    expect(resourceChangeSummarySource).toContain(
-      'getResourceChangeSourceAdapterPresentation',
-    );
+    expect(resourceChangeSummarySource).toContain('getResourceChangeSourceAdapterPresentation');
     expect(resourceDetailDrawerSource).not.toContain('healthToneClass(');
     expect(resourceDetailDrawerSource).not.toContain('normalizeHealthLabel(');
     expect(resourceChangePresentationSource).toContain('getResourceChangeKindPresentation');
-    expect(resourceChangePresentationSource).toContain(
-      'getResourceChangeSourceTypePresentation',
-    );
+    expect(resourceChangePresentationSource).toContain('getResourceChangeSourceTypePresentation');
     expect(resourceChangePresentationSource).toContain(
       'getResourceChangeSourceAdapterPresentation',
     );
@@ -1969,21 +1909,29 @@ describe('frontend resource type boundaries', () => {
     expect(resourceDetailDrawerSource).toContain('formatIdentifierLabel');
     expect(resourceChangePresentationSource).toContain('humanizeToken');
     expect(textPresentationSource).toContain('humanizeArrowDelimitedLabel');
-    expect(resourceCorrelationPresentationSource).not.toContain('formatResourceCorrelationEndpointLabel');
     expect(resourceCorrelationPresentationSource).not.toContain(
-      "replace(/\\s*->\\s*/g, ' → ')",
+      'formatResourceCorrelationEndpointLabel',
     );
+    expect(resourceCorrelationPresentationSource).not.toContain("replace(/\\s*->\\s*/g, ' → ')");
     expect(textPresentationSource).toContain('humanizeToken');
     expect(textPresentationSource).toContain('formatIdentifierLabel');
     expect(resourceCorrelationPresentationSource).not.toContain('formatTrimmedLabel');
     expect(swarmServicesDrawerSource).toContain('asTrimmedString');
-    expect(swarmServicesDrawerSource).not.toContain("const normalize = (value?: string | null) => (value || '').trim();");
+    expect(swarmServicesDrawerSource).not.toContain(
+      "const normalize = (value?: string | null) => (value || '').trim();",
+    );
     expect(pmgInstanceDrawerSource).toContain('asTrimmedString');
-    expect(pmgInstanceDrawerSource).not.toContain("const normalize = (value?: string | null) => (value || '').trim();");
+    expect(pmgInstanceDrawerSource).not.toContain(
+      "const normalize = (value?: string | null) => (value || '').trim();",
+    );
     expect(k8sNamespacesDrawerSource).toContain('asTrimmedString');
-    expect(k8sNamespacesDrawerSource).not.toContain("const normalize = (value?: string | null) => (value || '').trim();");
+    expect(k8sNamespacesDrawerSource).not.toContain(
+      "const normalize = (value?: string | null) => (value || '').trim();",
+    );
     expect(k8sDeploymentsDrawerSource).toContain('asTrimmedString');
-    expect(k8sDeploymentsDrawerSource).not.toContain("const normalize = (value?: string | null) => (value || '').trim();");
+    expect(k8sDeploymentsDrawerSource).not.toContain(
+      "const normalize = (value?: string | null) => (value || '').trim();",
+    );
     expect(messageItemSource).toContain('formatIdentifierLabel');
     expect(toolExecutionBlockSource).toContain('formatIdentifierLabel');
     expect(aiChatSource).toContain('formatIdentifierLabel');
@@ -2000,18 +1948,22 @@ describe('frontend resource type boundaries', () => {
     expect(aiFindingPresentationSource).not.toContain("replace(/_/g, ' ')");
     expect(patrolRunPresentationSource).toContain('formatIdentifierLabel');
     expect(patrolRunPresentationSource).not.toContain("normalized.replace(/_/g, ' ')");
-    expect(patrolRunPresentationSource).not.toContain("normalized ? normalized.replace(/_/g, ' ') : 'unknown'");
+    expect(patrolRunPresentationSource).not.toContain(
+      "normalized ? normalized.replace(/_/g, ' ') : 'unknown'",
+    );
     expect(useChatSource).toContain('normalizeChatToolName');
     expect(useChatSource).not.toContain("replace(/^(pulse_)+/, '')");
     expect(aiChatSource).toContain('normalizeChatMentionKeyPart');
-    expect(aiChatSource).not.toContain("const normalizeMentionKeyPart =");
+    expect(aiChatSource).not.toContain('const normalizeMentionKeyPart =');
     expect(chatIdentifiersSource).toContain('normalizeChatMentionKeyPart');
     expect(chatIdentifiersSource).toContain('normalizeChatToolName');
     expect(infrastructureSummarySource).toContain('getNormalizedIdentityLookupVariants');
     expect(infrastructureSummaryTableSource).toContain('getNormalizedIdentityLookupVariants');
     expect(resourceIdentitySource).toContain('getNormalizedIdentityLookupVariants');
     expect(stringUtilsSource).toContain('export const asTrimmedString');
-    expect(resourceIdentitySource).not.toContain('const asTrimmedString = (value: unknown): string | undefined => {');
+    expect(resourceIdentitySource).not.toContain(
+      'const asTrimmedString = (value: unknown): string | undefined => {',
+    );
     expect(infrastructureSummarySource).not.toContain(
       'const asTrimmedString = (value: unknown): string | null => {',
     );
@@ -2171,9 +2123,7 @@ describe('frontend resource type boundaries', () => {
     expect(nodeModalPresentationSource).toContain('export function getNodeGuestUrlPlaceholder');
     expect(nodeModalPresentationSource).toContain('export function getNodeUsernamePlaceholder');
     expect(nodeModalPresentationSource).toContain('export function getNodeTokenIdPlaceholder');
-    expect(nodeModalPresentationSource).toContain(
-      'export function getNodeMonitoringCoverageCopy',
-    );
+    expect(nodeModalPresentationSource).toContain('export function getNodeMonitoringCoverageCopy');
     expect(nodeModalPresentationSource).toContain(
       'export function getTemperatureMonitoringLockedCopy',
     );
@@ -2196,13 +2146,9 @@ describe('frontend resource type boundaries', () => {
     expect(cephPageSource).not.toContain('No pools match "');
     expect(storageDomainSource).toContain('export const getCephServiceStatusPresentation');
     expect(storageDomainSource).toContain('export const getCephLoadingStatePresentation');
-    expect(storageDomainSource).toContain(
-      'export const getCephDisconnectedStatePresentation',
-    );
+    expect(storageDomainSource).toContain('export const getCephDisconnectedStatePresentation');
     expect(storageDomainSource).toContain('export const getCephNoClustersStatePresentation');
-    expect(storageDomainSource).toContain(
-      'export const getCephPoolsSearchEmptyStatePresentation',
-    );
+    expect(storageDomainSource).toContain('export const getCephPoolsSearchEmptyStatePresentation');
     expect(cephServiceIconSource).toContain('export const CephServiceIcon');
     expect(deployStatusBadgeSource).toContain('getDeployStatusPresentation');
     expect(deployStatusBadgeSource).not.toContain('const statusConfig: Record<DeployTargetStatus');
@@ -2217,19 +2163,17 @@ describe('frontend resource type boundaries', () => {
     expect(deployFlowPresentationSource).toContain(
       'export function getDeployCandidatesLoadingState',
     );
-    expect(deployFlowPresentationSource).toContain(
-      'export function getDeployNoSourceAgentsState',
-    );
-    expect(deployFlowPresentationSource).toContain(
-      'export function getDeployNoCandidatesState',
-    );
+    expect(deployFlowPresentationSource).toContain('export function getDeployNoSourceAgentsState');
+    expect(deployFlowPresentationSource).toContain('export function getDeployNoCandidatesState');
     expect(deployFlowPresentationSource).toContain(
       'export function getDeployInstallCommandLoadingState',
     );
     expect(deployStatusPresentationSource).toContain('export const getDeployStatusPresentation');
     expect(alertHistoryTabSource).toContain('getAlertIncidentStatusPresentation');
     expect(alertHistoryTabSource).toContain('getAlertIncidentLevelBadgeClass');
-    expect(alertsPageSource).toContain("import { AlertsConfigurationSurface } from '@/features/alerts/AlertsConfigurationSurface';");
+    expect(alertsPageSource).toContain(
+      "import { AlertsConfigurationSurface } from '@/features/alerts/AlertsConfigurationSurface';",
+    );
     expect(alertsPageSource).not.toContain('getAlertDestinationsConfigLoadError');
     expect(alertsConfigurationSurfaceSource).toContain('getAlertDestinationsConfigLoadError');
     expect(alertDestinationsTabSource).toContain('getAlertDestinationsWebhookLoadError');
@@ -2245,7 +2189,9 @@ describe('frontend resource type boundaries', () => {
     expect(alertDestinationsTabSource).toContain('getAlertDestinationsStatusLabel');
     expect(alertDestinationsTabSource).toContain('getAlertWebhookTestSuccess');
     expect(alertDestinationsTabSource).toContain('getAlertWebhookTestFailure');
-    expect(alertsPageSource).toContain("import { HistoryTab } from '@/features/alerts/tabs/HistoryTab';");
+    expect(alertsPageSource).toContain(
+      "import { HistoryTab } from '@/features/alerts/tabs/HistoryTab';",
+    );
     expect(alertsPageSource).not.toContain('function HistoryTab(');
     expect(alertHistoryTabSource).toContain('getAlertHistoryStatusPresentation');
     expect(alertHistoryTabSource).toContain('getAlertHistorySourcePresentation');
@@ -2292,11 +2238,19 @@ describe('frontend resource type boundaries', () => {
     expect(alertsPageSource).toContain('getAlertsMobileTabClass');
     expect(alertsPageSource).toContain('getAlertsTabTitle');
     expect(alertsPageSource).toContain('getAlertsTabGroups');
-    expect(alertsConfigurationSurfaceSource).toContain("import { ThresholdsTab } from './tabs/ThresholdsTab';");
-    expect(alertsPageSource).not.toContain("import { ThresholdsTab } from '@/features/alerts/tabs/ThresholdsTab';");
-    expect(alertsPageSource).not.toContain("import { ThresholdsTable } from '@/components/Alerts/ThresholdsTable';");
+    expect(alertsConfigurationSurfaceSource).toContain(
+      "import { ThresholdsTab } from './tabs/ThresholdsTab';",
+    );
+    expect(alertsPageSource).not.toContain(
+      "import { ThresholdsTab } from '@/features/alerts/tabs/ThresholdsTab';",
+    );
+    expect(alertsPageSource).not.toContain(
+      "import { ThresholdsTable } from '@/components/Alerts/ThresholdsTable';",
+    );
     expect(alertsPageSource).not.toContain('function ThresholdsTab(');
-    expect(alertThresholdsTabSource).toContain("import { ThresholdsTable } from '@/components/Alerts/ThresholdsTable';");
+    expect(alertThresholdsTabSource).toContain(
+      "import { ThresholdsTable } from '@/components/Alerts/ThresholdsTable';",
+    );
     expect(alertThresholdsTabSource).toContain('pmgThresholds={props.pmgThresholds}');
     expect(thresholdsTableSource).toContain(
       "import { useThresholdsData } from '@/features/alerts/thresholds/hooks/useThresholdsData';",
@@ -2336,9 +2290,7 @@ describe('frontend resource type boundaries', () => {
     expect(alertsPageSource).not.toContain(
       "isAlertsActive() ? 'text-green-600 dark:text-green-400' : 'text-muted'",
     );
-    expect(alertsPageSource).not.toContain(
-      "isAlertsActive() ? 'bg-blue-600' : 'bg-surface-hover'",
-    );
+    expect(alertsPageSource).not.toContain("isAlertsActive() ? 'bg-blue-600' : 'bg-surface-hover'");
     expect(alertsPageSource).not.toContain(
       'Failed to load notification configuration. Your existing settings could not be retrieved.',
     );
@@ -2347,10 +2299,18 @@ describe('frontend resource type boundaries', () => {
       'Saving now may overwrite your existing settings with defaults.',
     );
     expect(alertsPageSource).not.toContain('Configure SMTP delivery for alert emails.');
-    expect(alertsPageSource).not.toContain('Relay grouped alerts through Apprise via CLI or remote API.');
-    expect(alertsPageSource).not.toContain('Choose how Pulse should execute Apprise notifications.');
-    expect(alertsPageSource).not.toContain('Enter one Apprise URL per line. Commas are also supported.');
-    expect(alertsPageSource).not.toContain('Optional: override the URLs defined on your Apprise API instance. Leave blank to use the server defaults.');
+    expect(alertsPageSource).not.toContain(
+      'Relay grouped alerts through Apprise via CLI or remote API.',
+    );
+    expect(alertsPageSource).not.toContain(
+      'Choose how Pulse should execute Apprise notifications.',
+    );
+    expect(alertsPageSource).not.toContain(
+      'Enter one Apprise URL per line. Commas are also supported.',
+    );
+    expect(alertsPageSource).not.toContain(
+      'Optional: override the URLs defined on your Apprise API instance. Leave blank to use the server defaults.',
+    );
     expect(alertsPageSource).not.toContain('Enable Apprise notifications before sending a test.');
     expect(alertsPageSource).not.toContain('Add at least one Apprise target to test CLI delivery.');
     expect(alertsPageSource).not.toContain('Enter an Apprise API server URL to test API delivery.');
@@ -2360,10 +2320,10 @@ describe('frontend resource type boundaries', () => {
     expect(alertsPageSource).not.toContain('Failed to send test notification');
     expect(alertsPageSource).not.toContain('Test webhook sent successfully!');
     expect(alertsPageSource).not.toContain('Failed to send test webhook');
-    expect(alertsPageSource).not.toContain('Enable only when the Apprise API uses a self-signed certificate.');
     expect(alertsPageSource).not.toContain(
-      "isAlertsActive() ? 'translate-x-5' : 'translate-x-0'",
+      'Enable only when the Apprise API uses a self-signed certificate.',
     );
+    expect(alertsPageSource).not.toContain("isAlertsActive() ? 'translate-x-5' : 'translate-x-0'");
     expect(alertsPageSource).not.toContain(
       'inline-flex items-center gap-2 rounded-full border border-blue-200',
     );
@@ -2427,12 +2387,8 @@ describe('frontend resource type boundaries', () => {
     expect(alertsPageSource).not.toContain('• Quiet hours active from ');
     expect(alertsPageSource).not.toContain('• Suppressing ');
     expect(alertsPageSource).not.toContain('• Recovery notifications enabled when alerts clear');
-    expect(alertsPageSource).not.toContain(
-      'CPU, memory, disk, and network thresholds stay quiet.',
-    );
-    expect(alertsPageSource).not.toContain(
-      'Silence storage usage, disk health, and ZFS events.',
-    );
+    expect(alertsPageSource).not.toContain('CPU, memory, disk, and network thresholds stay quiet.');
+    expect(alertsPageSource).not.toContain('Silence storage usage, disk health, and ZFS events.');
     expect(alertsPageSource).not.toContain(
       'Skip connectivity and powered-off alerts during backups.',
     );
@@ -2502,9 +2458,7 @@ describe('frontend resource type boundaries', () => {
     expect(alertTabsPresentationSource).toContain('export function getAlertsMobileTabClass');
     expect(alertTabsPresentationSource).toContain('export function getAlertsTabTitle');
     expect(alertTabsPresentationSource).toContain('export function getAlertsTabGroups');
-    expect(alertGroupingPresentationSource).toContain(
-      'export function getAlertGroupingCardClass',
-    );
+    expect(alertGroupingPresentationSource).toContain('export function getAlertGroupingCardClass');
     expect(alertGroupingPresentationSource).toContain(
       'export function getAlertGroupingCheckboxClass',
     );
@@ -2522,7 +2476,9 @@ describe('frontend resource type boundaries', () => {
     expect(configuredNodeTablesSource).toContain('resolveConfiguredInstanceStatusIndicator');
     expect(configuredNodeTablesSource).not.toContain("'monitorVMs' in node");
     expect(configuredNodeTablesSource).not.toContain("'monitorDatastores' in node");
-    expect(configuredNodeTablesSource).not.toContain('const resolveConfiguredNodeStatusIndicator =');
+    expect(configuredNodeTablesSource).not.toContain(
+      'const resolveConfiguredNodeStatusIndicator =',
+    );
     expect(configuredNodeTablesSource).not.toContain('const resolvePbsStatusIndicator =');
     expect(configuredNodeTablesSource).not.toContain('const resolvePmgStatusIndicator =');
     expect(configuredNodeCapabilityPresentationSource).toContain(
@@ -2551,23 +2507,31 @@ describe('frontend resource type boundaries', () => {
     expect(ssoProvidersPanelSource).toContain('SSOProviderTypeIcon');
     expect(ssoProvidersPanelSource).not.toContain('No SSO providers configured');
     expect(ssoProvidersPanelSource).not.toContain('Loading SSO providers...');
-    expect(ssoProvidersPanelSource).not.toContain("notificationStore.error('Failed to load SSO providers')");
+    expect(ssoProvidersPanelSource).not.toContain(
+      "notificationStore.error('Failed to load SSO providers')",
+    );
     expect(ssoProvidersPanelSource).not.toContain(
       "notificationStore.error('Failed to load provider details')",
     );
     expect(ssoProvidersPanelSource).not.toContain("notificationStore.success('Provider deleted')");
-    expect(ssoProvidersPanelSource).not.toContain("notificationStore.error('Failed to delete provider')");
-    expect(ssoProvidersPanelSource).not.toContain("notificationStore.success('Connection test successful')");
-    expect(ssoProvidersPanelSource).not.toContain("notificationStore.error('Failed to test connection')");
-    expect(ssoProvidersPanelSource).not.toContain("notificationStore.error('Please enter an IdP Metadata URL')");
+    expect(ssoProvidersPanelSource).not.toContain(
+      "notificationStore.error('Failed to delete provider')",
+    );
+    expect(ssoProvidersPanelSource).not.toContain(
+      "notificationStore.success('Connection test successful')",
+    );
+    expect(ssoProvidersPanelSource).not.toContain(
+      "notificationStore.error('Failed to test connection')",
+    );
+    expect(ssoProvidersPanelSource).not.toContain(
+      "notificationStore.error('Please enter an IdP Metadata URL')",
+    );
     expect(ssoProvidersPanelSource).not.toContain('provider.type.toUpperCase()');
     expect(ssoProvidersPanelSource).not.toContain("provider.type === 'oidc' ? (");
     expect(ssoProviderPresentationSource).toContain('export function getSSOProviderTypeLabel');
     expect(ssoProviderPresentationSource).toContain('export function getSSOProviderSummary');
     expect(ssoProviderPresentationSource).toContain('export function getSSOProviderCardClass');
-    expect(ssoProviderPresentationSource).toContain(
-      'export function getSSOProviderAddButtonLabel',
-    );
+    expect(ssoProviderPresentationSource).toContain('export function getSSOProviderAddButtonLabel');
     expect(ssoProviderPresentationSource).toContain('export function getSSOProviderModalTitle');
     expect(ssoProviderPresentationSource).toContain(
       'export function getSSOProviderEmptyStateTitle',
@@ -2575,12 +2539,8 @@ describe('frontend resource type boundaries', () => {
     expect(ssoProviderPresentationSource).toContain(
       'export function getSSOProviderEmptyStateDescription',
     );
-    expect(ssoProviderPresentationSource).toContain(
-      'export function getSSOProvidersLoadingState',
-    );
-    expect(ssoProviderPresentationSource).toContain(
-      'export function getSSOTestResultPresentation',
-    );
+    expect(ssoProviderPresentationSource).toContain('export function getSSOProvidersLoadingState');
+    expect(ssoProviderPresentationSource).toContain('export function getSSOTestResultPresentation');
     expect(ssoProviderPresentationSource).toContain(
       'export function getSSOCertificatePresentation',
     );
@@ -2618,9 +2578,7 @@ describe('frontend resource type boundaries', () => {
     expect(auditWebhookPresentationSource).toContain(
       'export function getAuditWebhookEmptyStateCopy',
     );
-    expect(auditWebhookPresentationSource).toContain(
-      'export function getAuditWebhookLoadingState',
-    );
+    expect(auditWebhookPresentationSource).toContain('export function getAuditWebhookLoadingState');
     expect(auditLogPanelSource).toContain('getAuditLogLoadingState');
     expect(auditLogPanelSource).toContain('getAuditLogEmptyState');
     expect(auditLogPanelSource).not.toContain('No audit events found');
@@ -2639,9 +2597,7 @@ describe('frontend resource type boundaries', () => {
     expect(auditLogPresentationSource).toContain(
       'export function getAuditVerificationBadgePresentation',
     );
-    expect(auditLogPresentationSource).toContain(
-      'export function getAuditEventStatusPresentation',
-    );
+    expect(auditLogPresentationSource).toContain('export function getAuditEventStatusPresentation');
     expect(auditLogPresentationSource).toContain('export const AUDIT_REFRESH_BUTTON_CLASS');
     expect(auditLogPresentationSource).toContain('export const AUDIT_VERIFY_ALL_BUTTON_CLASS');
     expect(auditLogPresentationSource).toContain('export const AUDIT_VERIFY_ROW_BUTTON_CLASS');
@@ -2740,23 +2696,17 @@ describe('frontend resource type boundaries', () => {
     expect(runToolCallTraceSource).toContain('getToolCallsLoadingState');
     expect(runToolCallTraceSource).toContain('getToolCallsUnavailableState');
     expect(runToolCallTraceSource).not.toContain('Loading tool calls...');
-    expect(runToolCallTraceSource).not.toContain(
-      'Tool call details not available for this run.',
-    );
+    expect(runToolCallTraceSource).not.toContain('Tool call details not available for this run.');
     expect(patrolEmptyStatePresentationSource).toContain(
       'export function getInvestigationMessagesState',
     );
     expect(patrolEmptyStatePresentationSource).toContain(
       'export function getInvestigationSectionState',
     );
-    expect(patrolEmptyStatePresentationSource).toContain(
-      'export function getRunHistoryEmptyState',
-    );
+    expect(patrolEmptyStatePresentationSource).toContain('export function getRunHistoryEmptyState');
     expect(patrolRunPresentationSource).toContain('export function getRunHistoryLoadingState');
     expect(patrolRunPresentationSource).toContain('export function getToolCallsLoadingState');
-    expect(patrolRunPresentationSource).toContain(
-      'export function getToolCallsUnavailableState',
-    );
+    expect(patrolRunPresentationSource).toContain('export function getToolCallsUnavailableState');
     expect(systemLogsPanelSource).toContain('getSystemLogLineClass');
     expect(systemLogsPanelSource).toContain('getSystemLogStreamPresentation');
     expect(systemLogsPanelSource).not.toContain("log.includes('ERR')");
@@ -2919,7 +2869,9 @@ describe('frontend resource type boundaries', () => {
     expect(alertOverviewTabSource).toContain('IncidentTimelinePanel');
     expect(alertIncidentEventFiltersSource).toContain('getAlertIncidentEventFilterContainerClass');
     expect(alertIncidentEventFiltersSource).toContain('getAlertIncidentEventFilterChipClass');
-    expect(alertIncidentEventFiltersSource).toContain('getAlertIncidentEventFilterActionButtonClass');
+    expect(alertIncidentEventFiltersSource).toContain(
+      'getAlertIncidentEventFilterActionButtonClass',
+    );
     expect(alertIncidentTimelinePanelSource).toContain('getAlertTimelineLoadingState');
     expect(alertIncidentTimelinePanelSource).toContain('getAlertTimelineFilterEmptyState');
     expect(alertIncidentTimelinePanelSource).toContain('getAlertTimelineEmptyState');
@@ -2941,9 +2893,7 @@ describe('frontend resource type boundaries', () => {
     expect(alertOverviewTabSource).toContain('getAlertOverviewPrimaryActionClass');
     expect(alertOverviewTabSource).toContain('getAlertOverviewSecondaryActionClass');
     expect(alertOverviewTabSource).not.toContain('Loading timeline...');
-    expect(alertOverviewTabSource).not.toContain(
-      'No timeline events match the selected filters.',
-    );
+    expect(alertOverviewTabSource).not.toContain('No timeline events match the selected filters.');
     expect(alertOverviewTabSource).not.toContain('No timeline events yet.');
     expect(alertOverviewTabSource).not.toContain('No incident timeline available.');
     expect(alertOverviewTabSource).not.toContain('Failed to load timeline.');
@@ -2953,9 +2903,7 @@ describe('frontend resource type boundaries', () => {
     expect(alertOverviewPresentationSource).toContain(
       'export function getAlertTimelineFilterEmptyState',
     );
-    expect(alertOverviewPresentationSource).toContain(
-      'export function getAlertTimelineEmptyState',
-    );
+    expect(alertOverviewPresentationSource).toContain('export function getAlertTimelineEmptyState');
     expect(alertOverviewPresentationSource).toContain(
       'export function getAlertTimelineUnavailableState',
     );
@@ -3036,30 +2984,14 @@ describe('frontend resource type boundaries', () => {
     expect(alertIncidentTimelineEventCardSource).toContain(
       'getAlertIncidentTimelineEventCardClass',
     );
-    expect(alertIncidentTimelineEventCardSource).toContain(
-      'getAlertIncidentTimelineMetaRowClass',
-    );
-    expect(alertIncidentTimelineEventCardSource).toContain(
-      'getAlertIncidentTimelineHeadingClass',
-    );
-    expect(alertIncidentTimelineEventCardSource).toContain(
-      'getAlertIncidentTimelineDetailClass',
-    );
-    expect(alertIncidentTimelineEventCardSource).toContain(
-      'getAlertIncidentTimelineCommandClass',
-    );
-    expect(alertIncidentTimelineEventCardSource).toContain(
-      'getAlertIncidentTimelineOutputClass',
-    );
-    expect(alertOverviewPresentationSource).toContain(
-      'export function getAlertHistoryEmptyState',
-    );
-    expect(alertOverviewPresentationSource).toContain(
-      'export function getAlertsPageHeaderMeta',
-    );
-    expect(alertOverviewPresentationSource).toContain(
-      'export function getAlertBucketCountLabel',
-    );
+    expect(alertIncidentTimelineEventCardSource).toContain('getAlertIncidentTimelineMetaRowClass');
+    expect(alertIncidentTimelineEventCardSource).toContain('getAlertIncidentTimelineHeadingClass');
+    expect(alertIncidentTimelineEventCardSource).toContain('getAlertIncidentTimelineDetailClass');
+    expect(alertIncidentTimelineEventCardSource).toContain('getAlertIncidentTimelineCommandClass');
+    expect(alertIncidentTimelineEventCardSource).toContain('getAlertIncidentTimelineOutputClass');
+    expect(alertOverviewPresentationSource).toContain('export function getAlertHistoryEmptyState');
+    expect(alertOverviewPresentationSource).toContain('export function getAlertsPageHeaderMeta');
+    expect(alertOverviewPresentationSource).toContain('export function getAlertBucketCountLabel');
     expect(alertIncidentPresentationSource).toContain(
       'export function getAlertResourceIncidentLoadingState',
     );
@@ -3124,9 +3056,7 @@ describe('frontend resource type boundaries', () => {
     expect(alertResourceTableSource).toContain('getAlertResourceTableCustomBadgeLabel');
     expect(alertResourceTableSource).toContain('getAlertResourceTableMetricPlaceholder');
     expect(alertResourceTableSource).toContain('getAlertResourceTableOverrideNotePlaceholder');
-    expect(alertResourceTableSource).toContain(
-      'getAlertResourceTableResetFactoryDefaultsLabel',
-    );
+    expect(alertResourceTableSource).toContain('getAlertResourceTableResetFactoryDefaultsLabel');
     expect(alertResourceTableSource).toContain('getAlertResourceTableAlertDelayLabel');
     expect(alertResourceTableSource).toContain('getAlertResourceTableMetricInputTitle');
     expect(alertResourceTableSource).toContain('getAlertResourceTableEditMetricTitle');
@@ -3188,9 +3118,7 @@ describe('frontend resource type boundaries', () => {
     expect(alertEmailPresentationSource).toContain(
       'export function getAlertEmailRecipientsPlaceholder',
     );
-    expect(alertEmailPresentationSource).toContain(
-      'export function getAlertEmailTestButtonLabel',
-    );
+    expect(alertEmailPresentationSource).toContain('export function getAlertEmailTestButtonLabel');
   });
 
   it('keeps alert bulk-edit dialog labels in a shared presentation utility', () => {
@@ -3202,18 +3130,12 @@ describe('frontend resource type boundaries', () => {
     expect(bulkEditDialogSource).not.toContain('Unchanged');
     expect(bulkEditDialogSource).not.toContain('Clear');
     expect(bulkEditDialogSource).not.toContain('Apply to ');
-    expect(alertBulkEditPresentationSource).toContain(
-      'export const ALERT_BULK_EDIT_DIALOG_TITLE',
-    );
+    expect(alertBulkEditPresentationSource).toContain('export const ALERT_BULK_EDIT_DIALOG_TITLE');
     expect(alertBulkEditPresentationSource).toContain(
       'export function getAlertBulkEditDescription',
     );
-    expect(alertBulkEditPresentationSource).toContain(
-      'export function getAlertBulkEditApplyLabel',
-    );
-    expect(alertBulkEditPresentationSource).toContain(
-      'export function getAlertBulkEditOpenLabel',
-    );
+    expect(alertBulkEditPresentationSource).toContain('export function getAlertBulkEditApplyLabel');
+    expect(alertBulkEditPresentationSource).toContain('export function getAlertBulkEditOpenLabel');
   });
 
   it('keeps alert webhook service vocabulary and action copy in a shared presentation utility', () => {
@@ -3251,9 +3173,7 @@ describe('frontend resource type boundaries', () => {
     expect(alertWebhookPresentationSource).toContain(
       'export function getAlertWebhookServiceLabelFromTemplates',
     );
-    expect(alertWebhookPresentationSource).toContain(
-      'export function getAlertWebhookServices',
-    );
+    expect(alertWebhookPresentationSource).toContain('export function getAlertWebhookServices');
     expect(alertWebhookPresentationSource).not.toContain('ALERT_WEBHOOK_SERVICES');
     expect(alertWebhookPresentationSource).toContain(
       'export function getAlertWebhookMentionPlaceholderFromTemplates',
@@ -3273,11 +3193,7 @@ describe('frontend resource type boundaries', () => {
     expect(alertWebhookPresentationSource).toContain(
       'export function normalizeAlertWebhookCustomFields',
     );
-    expect(alertWebhookPresentationSource).toContain(
-      'export function getAlertWebhookTestLabel',
-    );
-    expect(alertWebhookPresentationSource).toContain(
-      'export function getAlertWebhookSubmitLabel',
-    );
+    expect(alertWebhookPresentationSource).toContain('export function getAlertWebhookTestLabel');
+    expect(alertWebhookPresentationSource).toContain('export function getAlertWebhookSubmitLabel');
   });
 });

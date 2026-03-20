@@ -13,6 +13,9 @@ import auditWebhookPanelSource from '../AuditWebhookPanel.tsx?raw';
 import billingAdminPanelSource from '../BillingAdminPanel.tsx?raw';
 import generalSettingsPanelSource from '../GeneralSettingsPanel.tsx?raw';
 import aiSettingsPanelSource from '../AISettings.tsx?raw';
+import aiProviderConfigurationSectionSource from '../AIProviderConfigurationSection.tsx?raw';
+import aiSettingsDialogsSource from '../AISettingsDialogs.tsx?raw';
+import aiSettingsModelSource from '../aiSettingsModel.ts?raw';
 import networkSettingsPanelSource from '../NetworkSettingsPanel.tsx?raw';
 import updatesSettingsPanelSource from '../UpdatesSettingsPanel.tsx?raw';
 import recoverySettingsPanelSource from '../RecoverySettingsPanel.tsx?raw';
@@ -45,6 +48,9 @@ const extractedModules = [
   '../InfrastructureWorkspace.tsx',
   '../InfrastructureInstallPanel.tsx',
   '../InfrastructureReportingPanel.tsx',
+  '../AIProviderConfigurationSection.tsx',
+  '../AISettingsDialogs.tsx',
+  '../aiSettingsModel.ts',
   '../ProxmoxSettingsPanel.tsx',
   '../SettingsDialogs.tsx',
   '../SettingsPageShell.tsx',
@@ -222,8 +228,8 @@ describe('Settings architecture guardrails', () => {
     expect(commercialBillingModelSource).toContain('buildSelfHostedCommercialPlanModel');
     expect(commercialBillingModelSource).toContain('buildHostedCommercialPlanModel');
     expect(commercialBillingModelSource).toContain('buildHostedCommercialUsageModel');
-    expect(proLicensePanelSource).toContain("./CommercialBillingSections");
-    expect(proLicensePanelSource).toContain("buildSelfHostedCommercialPlanModel");
+    expect(proLicensePanelSource).toContain('./CommercialBillingSections');
+    expect(proLicensePanelSource).toContain('buildSelfHostedCommercialPlanModel');
     expect(proLicensePanelSource).toContain('SelfHostedCommercialActivationSection');
     expect(proLicensePanelSource).toContain('MonitoredSystemLedgerPanel');
     expect(proLicensePanelSource).toContain('CommercialBillingShell');
@@ -231,9 +237,9 @@ describe('Settings architecture guardrails', () => {
     expect(proLicensePanelSource).toContain('CommercialStatGrid');
     expect(selfHostedCommercialActivationSectionSource).toContain('License / Activation Key');
     expect(selfHostedCommercialActivationSectionSource).toContain('Start 14-day Pro Trial');
-    expect(organizationBillingPanelSource).toContain("./CommercialBillingSections");
-    expect(organizationBillingPanelSource).toContain("buildHostedCommercialPlanModel");
-    expect(organizationBillingPanelSource).toContain("buildHostedCommercialUsageModel");
+    expect(organizationBillingPanelSource).toContain('./CommercialBillingSections');
+    expect(organizationBillingPanelSource).toContain('buildHostedCommercialPlanModel');
+    expect(organizationBillingPanelSource).toContain('buildHostedCommercialUsageModel');
     expect(organizationBillingPanelSource).toContain('CommercialBillingShell');
     expect(organizationBillingPanelSource).toContain('CommercialSection');
     expect(organizationBillingPanelSource).toContain('CommercialUsageMeters');
@@ -284,13 +290,15 @@ describe('Settings architecture guardrails', () => {
     expect(infrastructureInstallPanelSource).toContain('useInfrastructureOperationsState');
     expect(infrastructureReportingPanelSource).toContain('useInfrastructureOperationsState');
     expect(infrastructureOperationsControllerSource).toContain('useInfrastructureOperationsState');
-    expect(infrastructureOperationsStateSource).toContain('export const useInfrastructureOperationsState');
+    expect(infrastructureOperationsStateSource).toContain(
+      'export const useInfrastructureOperationsState',
+    );
     expect(infrastructureInstallPanelSource).not.toContain('<PageHeader');
     expect(infrastructureReportingPanelSource).not.toContain('<PageHeader');
   });
 
   it('keeps the infrastructure operations model extracted from the reactive hook owner', () => {
-    expect(infrastructureOperationsStateSource).toContain("./infrastructureOperationsModel");
+    expect(infrastructureOperationsStateSource).toContain('./infrastructureOperationsModel');
     expect(infrastructureOperationsStateSource).not.toContain('const INSTALL_PROFILE_OPTIONS');
     expect(infrastructureOperationsStateSource).not.toContain('const buildCommandsByPlatform =');
     expect(infrastructureOperationsStateSource).not.toContain(
@@ -301,6 +309,16 @@ describe('Settings architecture guardrails', () => {
       'export const rowFromConnectedInfrastructureItem',
     );
     expect(infrastructureOperationsModelSource).toContain('export const buildCommandsByPlatform');
+  });
+
+  it('keeps AI settings sub-surfaces behind extracted runtime owners', () => {
+    expect(aiSettingsPanelSource).toContain('@/components/Settings/AIProviderConfigurationSection');
+    expect(aiSettingsPanelSource).toContain('@/components/Settings/AISettingsDialogs');
+    expect(aiSettingsPanelSource).toContain('@/components/Settings/aiSettingsModel');
+    expect(aiProviderConfigurationSectionSource).toContain('@/components/Settings/aiSettingsModel');
+    expect(aiSettingsDialogsSource).toContain('@/components/Settings/aiSettingsModel');
+    expect(aiSettingsModelSource).toContain('export const AI_PROVIDER_CONFIGS');
+    expect(aiSettingsModelSource).toContain('export const AI_SETUP_PROVIDER_OPTIONS');
   });
 
   it('routes every top-level settings surface through the canonical panel shell framing', () => {

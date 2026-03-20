@@ -1,12 +1,18 @@
 import { Component, Show, createSignal, onMount, For, createMemo, createEffect } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { useNavigate } from '@solidjs/router';
-import SettingsPanel from '@/components/shared/SettingsPanel';
-import { Dialog } from '@/components/shared/Dialog';
+import { AIProviderConfigurationSection } from '@/components/Settings/AIProviderConfigurationSection';
+import { AISettingsDialogs } from '@/components/Settings/AISettingsDialogs';
 import {
-  SelectionCardGroup,
-  type SelectionCardOption,
-} from '@/components/shared/SelectionCardGroup';
+  AI_PROVIDERS,
+  createInitialProviderHealth,
+  groupModelsByProvider,
+  isAIProviderConfigured,
+  isModelProviderConfigured,
+  type ProviderHealthState,
+  type ProviderTestResult,
+} from '@/components/Settings/aiSettingsModel';
+import SettingsPanel from '@/components/shared/SettingsPanel';
 import { Toggle } from '@/components/shared/Toggle';
 import { HelpIcon } from '@/components/shared/HelpIcon';
 import { formField, labelClass, controlClass } from '@/components/shared/Form';
@@ -16,10 +22,6 @@ import { logger } from '@/utils/logger';
 import { AIAPI } from '@/api/ai';
 import { AIChatAPI, type ChatSession, type FileChange } from '@/api/aiChat';
 import {
-  getAIProviderHealthPresentation,
-  type AIProviderHealthStatus,
-} from '@/utils/aiProviderHealthPresentation';
-import {
   getAIControlLevelBadgeClass,
   getAIControlLevelDescription,
   getAIControlLevelPanelClass,
@@ -27,14 +29,12 @@ import {
   type AIControlLevel,
 } from '@/utils/aiControlLevelPresentation';
 import { getAIProviderDisplayName, getProviderFromModelId } from '@/utils/aiProviderPresentation';
-import { getAISessionDiffStatusPresentation } from '@/utils/aiSessionDiffPresentation';
 import {
   getAICredentialsClearErrorMessage,
   getAIOAuthErrorMessage,
   getAIChatSessionsEmptyState,
   getAIChatSessionsLoadErrorMessage,
   getAIChatSessionsLoadingState,
-  getAIProviderTestResultTextClass,
   getAISessionDiffErrorMessage,
   getAISessionRevertErrorMessage,
   getAISessionSummarizeErrorMessage,
@@ -61,83 +61,6 @@ import {
 import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/upgradeMetrics';
 import { showSuccess, showWarning } from '@/utils/toast';
 import type { AISettings as AISettingsType, AIProvider, AuthMethod } from '@/types/ai';
-
-// Providers are now configured via accordion sections, not a single-provider selector
-
-const AI_PROVIDERS: AIProvider[] = [
-  'anthropic',
-  'openai',
-  'openrouter',
-  'deepseek',
-  'gemini',
-  'ollama',
-];
-
-const AI_SETUP_PROVIDER_OPTIONS: SelectionCardOption<AIProvider>[] = [
-  { value: 'anthropic', title: 'Anthropic', description: 'Claude' },
-  { value: 'openai', title: 'OpenAI', description: 'ChatGPT' },
-  { value: 'openrouter', title: 'OpenRouter', description: 'Gateway' },
-  { value: 'deepseek', title: 'DeepSeek', description: 'V3' },
-  { value: 'gemini', title: 'Gemini', description: 'Google' },
-  { value: 'ollama', title: 'Ollama', description: 'Local' },
-];
-
-type ProviderHealthState = {
-  status: AIProviderHealthStatus;
-  message: string;
-};
-
-const createInitialProviderHealth = (): Record<AIProvider, ProviderHealthState> => ({
-  anthropic: { status: 'not_configured', message: '' },
-  openai: { status: 'not_configured', message: '' },
-  openrouter: { status: 'not_configured', message: '' },
-  deepseek: { status: 'not_configured', message: '' },
-  gemini: { status: 'not_configured', message: '' },
-  ollama: { status: 'not_configured', message: '' },
-});
-
-// Check if a provider is configured based on settings
-function isProviderConfigured(provider: string, settings: AISettingsType | null): boolean {
-  if (!settings) return false;
-  switch (provider) {
-    case 'anthropic':
-      return settings.anthropic_configured;
-    case 'openai':
-      return settings.openai_configured;
-    case 'openrouter':
-      return settings.openrouter_configured;
-    case 'deepseek':
-      return settings.deepseek_configured;
-    case 'gemini':
-      return settings.gemini_configured;
-    case 'ollama':
-      return settings.ollama_configured;
-    default:
-      return false;
-  }
-}
-
-// Check if a model's provider is configured
-function isModelProviderConfigured(modelId: string, settings: AISettingsType | null): boolean {
-  const provider = getProviderFromModelId(modelId);
-  return isProviderConfigured(provider, settings);
-}
-
-// Group models by provider for optgroup rendering
-function groupModelsByProvider(
-  models: { id: string; name: string; description?: string }[],
-): Map<string, { id: string; name: string; description?: string }[]> {
-  const grouped = new Map<string, { id: string; name: string; description?: string }[]>();
-
-  for (const model of models) {
-    const provider = getProviderFromModelId(model.id);
-    const existing = grouped.get(provider) || [];
-    existing.push(model);
-    grouped.set(provider, existing);
-  }
-
-  return grouped;
-}
 
 export const AISettings: Component = () => {
   const navigate = useNavigate();
@@ -171,12 +94,8 @@ export const AISettings: Component = () => {
   );
 
   // Per-provider test state
-  const [testingProvider, setTestingProvider] = createSignal<string | null>(null);
-  const [providerTestResult, setProviderTestResult] = createSignal<{
-    provider: string;
-    success: boolean;
-    message: string;
-  } | null>(null);
+  const [testingProvider, setTestingProvider] = createSignal<AIProvider | null>(null);
+  const [providerTestResult, setProviderTestResult] = createSignal<ProviderTestResult | null>(null);
   const [providerHealth, setProviderHealth] = createStore<Record<AIProvider, ProviderHealthState>>(
     createInitialProviderHealth(),
   );
@@ -232,9 +151,7 @@ export const AISettings: Component = () => {
 
   // First-time setup modal state
   const [showSetupModal, setShowSetupModal] = createSignal(false);
-  const [setupProvider, setSetupProvider] = createSignal<
-    'anthropic' | 'openai' | 'openrouter' | 'deepseek' | 'gemini' | 'ollama'
-  >('anthropic');
+  const [setupProvider, setSetupProvider] = createSignal<AIProvider>('anthropic');
   const [setupApiKey, setSetupApiKey] = createSignal('');
   const [setupOllamaUrl, setSetupOllamaUrl] = createSignal('http://localhost:11434');
   const [setupSaving, setSetupSaving] = createSignal(false);
@@ -329,7 +246,7 @@ export const AISettings: Component = () => {
           ? String(data.cost_budget_usd_30d)
           : '',
       requestTimeoutSeconds: data.request_timeout_seconds ?? 300,
-        controlLevel: normalizeAIControlLevel(data.control_level),
+      controlLevel: normalizeAIControlLevel(data.control_level),
       protectedGuests: Array.isArray(data.protected_guests) ? data.protected_guests.join(', ') : '',
       discoveryEnabled: data.discovery_enabled ?? false,
       discoveryIntervalHours: data.discovery_interval_hours ?? 0,
@@ -407,6 +324,78 @@ export const AISettings: Component = () => {
   };
 
   const formatDiffStats = (change: FileChange) => `+${change.added} -${change.removed}`;
+
+  const handleCloseSetupModal = () => {
+    setShowSetupModal(false);
+    setSetupApiKey('');
+  };
+
+  const handleSetupSubmit = async () => {
+    setSetupSaving(true);
+    try {
+      const payload: Record<string, unknown> = { enabled: true };
+
+      if (setupProvider() === 'anthropic') {
+        if (!setupApiKey().trim()) {
+          notificationStore.error('Please enter your Anthropic API key');
+          return;
+        }
+        payload.anthropic_api_key = setupApiKey().trim();
+        payload.model = 'anthropic:claude-sonnet-4-20250514';
+      } else if (setupProvider() === 'openai') {
+        if (!setupApiKey().trim()) {
+          notificationStore.error('Please enter your OpenAI API key');
+          return;
+        }
+        payload.openai_api_key = setupApiKey().trim();
+        payload.model = 'openai:gpt-4o';
+      } else if (setupProvider() === 'openrouter') {
+        if (!setupApiKey().trim()) {
+          notificationStore.error('Please enter your OpenRouter API key');
+          return;
+        }
+        payload.openrouter_api_key = setupApiKey().trim();
+        payload.model = 'openrouter:openai/gpt-4o-mini';
+      } else if (setupProvider() === 'deepseek') {
+        if (!setupApiKey().trim()) {
+          notificationStore.error('Please enter your DeepSeek API key');
+          return;
+        }
+        payload.deepseek_api_key = setupApiKey().trim();
+        payload.model = 'deepseek:deepseek-chat';
+      } else if (setupProvider() === 'gemini') {
+        if (!setupApiKey().trim()) {
+          notificationStore.error('Please enter your Google Gemini API key');
+          return;
+        }
+        payload.gemini_api_key = setupApiKey().trim();
+        payload.model = 'gemini:gemini-2.5-flash';
+      } else {
+        if (!setupOllamaUrl().trim()) {
+          notificationStore.error('Please enter your Ollama server URL');
+          return;
+        }
+        payload.ollama_base_url = setupOllamaUrl().trim();
+        payload.model = 'ollama:llama3.2:latest';
+      }
+
+      const updated = await AIAPI.updateSettings(payload);
+      setSettings(updated);
+      setForm('enabled', true);
+      resetForm(updated);
+      void runProviderPreflight(updated);
+      handleCloseSetupModal();
+      notificationStore.success('Pulse Assistant enabled! You can customize settings below.');
+      loadModels();
+      aiChatStore.notifySettingsChanged();
+    } catch (error) {
+      logger.error('[AISettings] Setup failed:', error);
+      const message = error instanceof Error ? error.message : 'Setup failed';
+      notificationStore.error(message);
+    } finally {
+      setSetupSaving(false);
+    }
+  };
 
   const handleSessionSummarize = async () => {
     const sessionId = selectedSessionId();
@@ -510,15 +499,20 @@ export const AISettings: Component = () => {
   const checkProviderHealth = async (
     provider: AIProvider,
     opts: { notify?: boolean; storeManualResult?: boolean } = {},
-  ): Promise<{ success: boolean; message: string; provider: string }> => {
+  ): Promise<ProviderTestResult> => {
     try {
       const result = await AIAPI.testProvider(provider);
+      const normalizedResult: ProviderTestResult = {
+        provider,
+        success: result.success,
+        message: result.message,
+      };
       setProviderHealth(provider, {
         status: result.success ? 'ok' : 'error',
         message: result.message || '',
       });
       if (opts.storeManualResult) {
-        setProviderTestResult(result);
+        setProviderTestResult(normalizedResult);
       }
       if (opts.notify) {
         if (result.success) {
@@ -527,10 +521,10 @@ export const AISettings: Component = () => {
           notificationStore.error(`${provider}: ${result.message}`);
         }
       }
-      return result;
+      return normalizedResult;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Connection test failed';
-      const result = { provider, success: false, message };
+      const result: ProviderTestResult = { provider, success: false, message };
       setProviderHealth(provider, {
         status: 'error',
         message,
@@ -552,7 +546,7 @@ export const AISettings: Component = () => {
     }
 
     const configuredProviders = AI_PROVIDERS.filter((provider) =>
-      isProviderConfigured(provider, current),
+      isAIProviderConfigured(provider, current),
     );
     for (const provider of AI_PROVIDERS) {
       if (!configuredProviders.includes(provider)) {
@@ -616,7 +610,7 @@ export const AISettings: Component = () => {
     const selectedModel = form.model.trim();
     if (selectedModel && form.enabled) {
       const modelProvider = getProviderFromModelId(selectedModel);
-      if (!isProviderConfigured(modelProvider, settings())) {
+      if (!isAIProviderConfigured(modelProvider, settings())) {
         // Check if any API key is being added in this save for this provider
         const isAddingCredential =
           (modelProvider === 'anthropic' && form.anthropicApiKey.trim()) ||
@@ -786,12 +780,11 @@ export const AISettings: Component = () => {
     }
   };
 
-  const handleTestProvider = async (provider: string) => {
-    const typedProvider = provider as AIProvider;
-    setTestingProvider(typedProvider);
+  const handleTestProvider = async (provider: AIProvider) => {
+    setTestingProvider(provider);
     setProviderTestResult(null);
     try {
-      await checkProviderHealth(typedProvider, { notify: true, storeManualResult: true });
+      await checkProviderHealth(provider, { notify: true, storeManualResult: true });
     } catch (error) {
       logger.error(`[AISettings] Test ${provider} failed:`, error);
       const message = error instanceof Error ? error.message : 'Connection test failed';
@@ -802,7 +795,7 @@ export const AISettings: Component = () => {
     }
   };
 
-  const handleClearProvider = async (provider: string) => {
+  const handleClearProvider = async (provider: AIProvider) => {
     // Check if this is the last configured provider
     const s = settings();
     const configuredCount = [
@@ -813,7 +806,7 @@ export const AISettings: Component = () => {
       s?.gemini_configured,
       s?.ollama_configured,
     ].filter(Boolean).length;
-    const isLastProvider = configuredCount === 1 && isProviderConfigured(provider, s);
+    const isLastProvider = configuredCount === 1 && isAIProviderConfigured(provider, s);
 
     // Check if current model uses this provider
     const currentModel = form.model.trim();
@@ -862,7 +855,9 @@ export const AISettings: Component = () => {
       aiChatStore.notifySettingsChanged();
     } catch (error) {
       logger.error(`[AISettings] Clear ${provider} failed:`, error);
-      const message = getAICredentialsClearErrorMessage(error instanceof Error ? error.message : '');
+      const message = getAICredentialsClearErrorMessage(
+        error instanceof Error ? error.message : '',
+      );
       notificationStore.error(message);
     } finally {
       setSaving(false);
@@ -1076,7 +1071,7 @@ export const AISettings: Component = () => {
                     {/* Show configured providers first */}
                     <For
                       each={Array.from(groupModelsByProvider(availableModels()).entries()).filter(
-                        ([p]) => isProviderConfigured(p, settings()),
+                        ([p]) => isAIProviderConfigured(p, settings()),
                       )}
                     >
                       {([provider, models]) => (
@@ -1094,7 +1089,7 @@ export const AISettings: Component = () => {
                     {/* Show unconfigured providers in a separate section with warning */}
                     <For
                       each={Array.from(groupModelsByProvider(availableModels()).entries()).filter(
-                        ([p]) => !isProviderConfigured(p, settings()),
+                        ([p]) => !isAIProviderConfigured(p, settings()),
                       )}
                     >
                       {([provider, models]) => (
@@ -1310,699 +1305,24 @@ export const AISettings: Component = () => {
                 </Show>
               </div>
 
-              {/* Provider Configuration - Configure API keys for all providers */}
-              <div class={`${formField} p-5 rounded-md border border-border bg-surface-alt`}>
-                <div class="mb-3 space-y-1.5">
-                  <div class="flex items-center justify-between gap-2">
-                    <h4 class="font-medium text-base-content flex items-center gap-2">
-                      <svg
-                        class="w-5 h-5 text-blue-600 dark:text-blue-400"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="2"
-                          d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
-                        />
-                      </svg>
-                      Provider Configuration
-                    </h4>
-                    <button
-                      type="button"
-                      onClick={() => void runProviderPreflight()}
-                      disabled={preflightRunning() || saving()}
-                      class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-3 py-2 text-sm bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800 disabled:opacity-50"
-                    >
-                      {preflightRunning() ? 'Checking...' : 'Run Preflight'}
-                    </button>
-                  </div>
-                  <p class="text-xs text-muted mt-1">
-                    Configure API keys for each provider you want to use. Models from all configured
-                    providers will appear in the model selectors.
-                  </p>
-                  <Show when={preflightLastCheckedAt()}>
-                    <p class="text-[11px] text-muted">
-                      Last checked: {new Date(preflightLastCheckedAt()!).toLocaleTimeString()}
-                    </p>
-                  </Show>
-                  <Show when={providerIssueCount() > 0}>
-                    <div class="rounded border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900 px-2 py-1.5">
-                      <p class="text-xs text-red-700 dark:text-red-300">
-                        {providerIssueCount()} provider{providerIssueCount() === 1 ? '' : 's'}{' '}
-                        configured but currently not usable.
-                      </p>
-                      <For
-                        each={AI_PROVIDERS.filter(
-                          (provider) => providerHealth[provider].status === 'error',
-                        )}
-                      >
-                        {(provider) => (
-                          <p class="text-[11px] text-red-600 dark:text-red-300">
-                            <span class="font-medium">
-                              {getAIProviderDisplayName(provider) || provider}:
-                            </span>{' '}
-                            {providerHealth[provider].message}
-                          </p>
-                        )}
-                      </For>
-                    </div>
-                  </Show>
-                </div>
-
-                {/* Provider Accordions */}
-                <div class="space-y-2">
-                  {/* Anthropic */}
-                  <div
-                    class={`border rounded-md overflow-hidden ${settings()?.anthropic_configured ? 'border-green-300 dark:border-green-700' : 'border-border'}`}
-                  >
-                    <button
-                      type="button"
-                      class="w-full min-h-10 sm:min-h-9 px-3 py-2.5 flex items-center justify-between bg-surface hover:bg-surface-hover transition-colors"
-                      onClick={() => {
-                        const current = expandedProviders();
-                        const next = new Set(current);
-                        if (next.has('anthropic')) next.delete('anthropic');
-                        else next.add('anthropic');
-                        setExpandedProviders(next);
-                      }}
-                    >
-                      <div class="flex items-center gap-2">
-                        <span class="font-medium text-sm">Anthropic</span>
-                        <Show when={settings()?.anthropic_configured}>
-                          <span class="px-1.5 py-0.5 text-[10px] font-semibold bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded">
-                            Configured
-                          </span>
-                        </Show>
-                        <Show when={settings()?.anthropic_configured}>
-                          <span
-                            class={`px-1.5 py-0.5 text-[10px] font-semibold rounded ${getAIProviderHealthPresentation(providerHealth.anthropic.status).badgeClass}`}
-                          >
-                            {getAIProviderHealthPresentation(providerHealth.anthropic.status).label}
-                          </span>
-                        </Show>
-                      </div>
-                      <svg
-                        class={`w-4 h-4 transition-transform ${expandedProviders().has('anthropic') ? 'rotate-180' : ''}`}
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="2"
-                          d="M19 9l-7 7-7-7"
-                        />
-                      </svg>
-                    </button>
-                    <Show when={expandedProviders().has('anthropic')}>
-                      <div class="px-3 py-3 bg-surface-alt border-t border-border space-y-2">
-                        <input
-                          type="password"
-                          value={form.anthropicApiKey}
-                          onInput={(e) => setForm('anthropicApiKey', e.currentTarget.value)}
-                          placeholder={
-                            settings()?.anthropic_configured
-                              ? '••••••••••• (configured)'
-                              : 'sk-ant-...'
-                          }
-                          class={controlClass()}
-                          disabled={saving()}
-                        />
-                        <div class="flex items-center justify-between">
-                          <p class="text-xs text-slate-500">
-                            <a
-                              href="https://console.anthropic.com/settings/keys"
-                              target="_blank"
-                              rel="noopener"
-                              class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-1 py-1 text-sm text-blue-600 dark:text-blue-400 hover:underline"
-                            >
-                              Get API key →
-                            </a>
-                          </p>
-                          <Show when={settings()?.anthropic_configured}>
-                            <div class="flex gap-1">
-                              <button
-                                type="button"
-                                onClick={() => handleTestProvider('anthropic')}
-                                disabled={testingProvider() === 'anthropic' || saving()}
-                                class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-3 py-2 text-sm bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800 disabled:opacity-50"
-                              >
-                                {testingProvider() === 'anthropic' ? 'Testing...' : 'Test'}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleClearProvider('anthropic')}
-                                disabled={saving()}
-                                class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-3 py-2 text-sm bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-800 disabled:opacity-50"
-                                title="Clear API key"
-                              >
-                                Clear
-                              </button>
-                            </div>
-                          </Show>
-                        </div>
-                        <Show when={providerTestResult()?.provider === 'anthropic'}>
-                          <p
-                            class={`text-xs ${getAIProviderTestResultTextClass(Boolean(providerTestResult()?.success))}`}
-                          >
-                            {providerTestResult()?.message}
-                          </p>
-                        </Show>
-                      </div>
-                    </Show>
-                  </div>
-
-                  {/* OpenAI */}
-                  <div
-                    class={`border rounded-md overflow-hidden ${settings()?.openai_configured ? 'border-green-300 dark:border-green-700' : 'border-border'}`}
-                  >
-                    <button
-                      type="button"
-                      class="w-full min-h-10 sm:min-h-9 px-3 py-2.5 flex items-center justify-between bg-surface hover:bg-surface-hover transition-colors"
-                      onClick={() => {
-                        const current = expandedProviders();
-                        const next = new Set(current);
-                        if (next.has('openai')) next.delete('openai');
-                        else next.add('openai');
-                        setExpandedProviders(next);
-                      }}
-                    >
-                      <div class="flex items-center gap-2">
-                        <span class="font-medium text-sm">OpenAI</span>
-                        <Show when={settings()?.openai_configured}>
-                          <span class="px-1.5 py-0.5 text-[10px] font-semibold bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded">
-                            Configured
-                          </span>
-                        </Show>
-                        <Show when={settings()?.openai_configured}>
-                          <span
-                            class={`px-1.5 py-0.5 text-[10px] font-semibold rounded ${getAIProviderHealthPresentation(providerHealth.openai.status).badgeClass}`}
-                          >
-                            {getAIProviderHealthPresentation(providerHealth.openai.status).label}
-                          </span>
-                        </Show>
-                      </div>
-                      <svg
-                        class={`w-4 h-4 transition-transform ${expandedProviders().has('openai') ? 'rotate-180' : ''}`}
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="2"
-                          d="M19 9l-7 7-7-7"
-                        />
-                      </svg>
-                    </button>
-                    <Show when={expandedProviders().has('openai')}>
-                      <div class="px-3 py-3 bg-surface-alt border-t border-border space-y-2">
-                        <input
-                          type="password"
-                          value={form.openaiApiKey}
-                          onInput={(e) => setForm('openaiApiKey', e.currentTarget.value)}
-                          placeholder={
-                            settings()?.openai_configured ? '••••••••••• (configured)' : 'sk-...'
-                          }
-                          class={controlClass()}
-                          disabled={saving()}
-                        />
-                        <div class="space-y-1">
-                          <label class="text-xs text-muted inline-flex items-center gap-1">
-                            Custom Base URL
-                            <HelpIcon contentId="ai.openai.baseUrl" size="xs" />
-                          </label>
-                          <input
-                            type="url"
-                            value={form.openaiBaseUrl}
-                            onInput={(e) => setForm('openaiBaseUrl', e.currentTarget.value)}
-                            placeholder="https://api.together.xyz/v1 (optional)"
-                            class={controlClass()}
-                            disabled={saving()}
-                          />
-                        </div>
-                        <div class="flex items-center justify-between">
-                          <p class="text-xs text-slate-500">
-                            <a
-                              href="https://platform.openai.com/api-keys"
-                              target="_blank"
-                              rel="noopener"
-                              class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-1 py-1 text-sm text-blue-600 dark:text-blue-400 hover:underline"
-                            >
-                              Get API key →
-                            </a>
-                          </p>
-                          <Show when={settings()?.openai_configured}>
-                            <div class="flex gap-1">
-                              <button
-                                type="button"
-                                onClick={() => handleTestProvider('openai')}
-                                disabled={testingProvider() === 'openai' || saving()}
-                                class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-3 py-2 text-sm bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800 disabled:opacity-50"
-                              >
-                                {testingProvider() === 'openai' ? 'Testing...' : 'Test'}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleClearProvider('openai')}
-                                disabled={saving()}
-                                class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-3 py-2 text-sm bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-800 disabled:opacity-50"
-                                title="Clear API key"
-                              >
-                                Clear
-                              </button>
-                            </div>
-                          </Show>
-                        </div>
-                        <Show when={providerTestResult()?.provider === 'openai'}>
-                          <p
-                            class={`text-xs ${getAIProviderTestResultTextClass(Boolean(providerTestResult()?.success))}`}
-                          >
-                            {providerTestResult()?.message}
-                          </p>
-                        </Show>
-                      </div>
-                    </Show>
-                  </div>
-
-                  {/* OpenRouter */}
-                  <div
-                    class={`border rounded-md overflow-hidden ${settings()?.openrouter_configured ? 'border-green-300 dark:border-green-700' : 'border-border'}`}
-                  >
-                    <button
-                      type="button"
-                      class="w-full min-h-10 sm:min-h-9 px-3 py-2.5 flex items-center justify-between bg-surface hover:bg-surface-hover transition-colors"
-                      onClick={() => {
-                        const current = expandedProviders();
-                        const next = new Set(current);
-                        if (next.has('openrouter')) next.delete('openrouter');
-                        else next.add('openrouter');
-                        setExpandedProviders(next);
-                      }}
-                    >
-                      <div class="flex items-center gap-2">
-                        <span class="font-medium text-sm">OpenRouter</span>
-                        <Show when={settings()?.openrouter_configured}>
-                          <span class="px-1.5 py-0.5 text-[10px] font-semibold bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded">
-                            Configured
-                          </span>
-                        </Show>
-                        <Show when={settings()?.openrouter_configured}>
-                          <span
-                            class={`px-1.5 py-0.5 text-[10px] font-semibold rounded ${getAIProviderHealthPresentation(providerHealth.openrouter.status).badgeClass}`}
-                          >
-                            {
-                              getAIProviderHealthPresentation(providerHealth.openrouter.status)
-                                .label
-                            }
-                          </span>
-                        </Show>
-                      </div>
-                      <svg
-                        class={`w-4 h-4 transition-transform ${expandedProviders().has('openrouter') ? 'rotate-180' : ''}`}
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="2"
-                          d="M19 9l-7 7-7-7"
-                        />
-                      </svg>
-                    </button>
-                    <Show when={expandedProviders().has('openrouter')}>
-                      <div class="px-3 py-3 bg-surface-alt border-t border-border space-y-2">
-                        <input
-                          type="password"
-                          value={form.openrouterApiKey}
-                          onInput={(e) => setForm('openrouterApiKey', e.currentTarget.value)}
-                          placeholder={
-                            settings()?.openrouter_configured
-                              ? '••••••••••• (configured)'
-                              : 'sk-or-...'
-                          }
-                          class={controlClass()}
-                          disabled={saving()}
-                        />
-                        <p class="text-xs text-slate-500">
-                          Uses <code>https://openrouter.ai/api/v1</code> automatically.
-                        </p>
-                        <div class="flex items-center justify-between">
-                          <p class="text-xs text-slate-500">
-                            <a
-                              href="https://openrouter.ai/keys"
-                              target="_blank"
-                              rel="noopener"
-                              class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-1 py-1 text-sm text-blue-600 dark:text-blue-400 hover:underline"
-                            >
-                              Get API key →
-                            </a>
-                          </p>
-                          <Show when={settings()?.openrouter_configured}>
-                            <div class="flex gap-1">
-                              <button
-                                type="button"
-                                onClick={() => handleTestProvider('openrouter')}
-                                disabled={testingProvider() === 'openrouter' || saving()}
-                                class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-3 py-2 text-sm bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800 disabled:opacity-50"
-                              >
-                                {testingProvider() === 'openrouter' ? 'Testing...' : 'Test'}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleClearProvider('openrouter')}
-                                disabled={saving()}
-                                class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-3 py-2 text-sm bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-800 disabled:opacity-50"
-                                title="Clear API key"
-                              >
-                                Clear
-                              </button>
-                            </div>
-                          </Show>
-                        </div>
-                        <Show when={providerTestResult()?.provider === 'openrouter'}>
-                          <p
-                            class={`text-xs ${getAIProviderTestResultTextClass(Boolean(providerTestResult()?.success))}`}
-                          >
-                            {providerTestResult()?.message}
-                          </p>
-                        </Show>
-                      </div>
-                    </Show>
-                  </div>
-
-                  {/* DeepSeek */}
-                  <div
-                    class={`border rounded-md overflow-hidden ${settings()?.deepseek_configured ? 'border-green-300 dark:border-green-700' : 'border-border'}`}
-                  >
-                    <button
-                      type="button"
-                      class="w-full min-h-10 sm:min-h-9 px-3 py-2.5 flex items-center justify-between bg-surface hover:bg-surface-hover transition-colors"
-                      onClick={() => {
-                        const current = expandedProviders();
-                        const next = new Set(current);
-                        if (next.has('deepseek')) next.delete('deepseek');
-                        else next.add('deepseek');
-                        setExpandedProviders(next);
-                      }}
-                    >
-                      <div class="flex items-center gap-2">
-                        <span class="font-medium text-sm">DeepSeek</span>
-                        <Show when={settings()?.deepseek_configured}>
-                          <span class="px-1.5 py-0.5 text-[10px] font-semibold bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded">
-                            Configured
-                          </span>
-                        </Show>
-                        <Show when={settings()?.deepseek_configured}>
-                          <span
-                            class={`px-1.5 py-0.5 text-[10px] font-semibold rounded ${getAIProviderHealthPresentation(providerHealth.deepseek.status).badgeClass}`}
-                          >
-                            {getAIProviderHealthPresentation(providerHealth.deepseek.status).label}
-                          </span>
-                        </Show>
-                      </div>
-                      <svg
-                        class={`w-4 h-4 transition-transform ${expandedProviders().has('deepseek') ? 'rotate-180' : ''}`}
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="2"
-                          d="M19 9l-7 7-7-7"
-                        />
-                      </svg>
-                    </button>
-                    <Show when={expandedProviders().has('deepseek')}>
-                      <div class="px-3 py-3 bg-surface-alt border-t border-border space-y-2">
-                        <input
-                          type="password"
-                          value={form.deepseekApiKey}
-                          onInput={(e) => setForm('deepseekApiKey', e.currentTarget.value)}
-                          placeholder={
-                            settings()?.deepseek_configured ? '••••••••••• (configured)' : 'sk-...'
-                          }
-                          class={controlClass()}
-                          disabled={saving()}
-                        />
-                        <div class="flex items-center justify-between">
-                          <p class="text-xs text-slate-500">
-                            <a
-                              href="https://platform.deepseek.com/api_keys"
-                              target="_blank"
-                              rel="noopener"
-                              class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-1 py-1 text-sm text-blue-600 dark:text-blue-400 hover:underline"
-                            >
-                              Get API key →
-                            </a>
-                          </p>
-                          <Show when={settings()?.deepseek_configured}>
-                            <div class="flex gap-1">
-                              <button
-                                type="button"
-                                onClick={() => handleTestProvider('deepseek')}
-                                disabled={testingProvider() === 'deepseek' || saving()}
-                                class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-3 py-2 text-sm bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800 disabled:opacity-50"
-                              >
-                                {testingProvider() === 'deepseek' ? 'Testing...' : 'Test'}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleClearProvider('deepseek')}
-                                disabled={saving()}
-                                class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-3 py-2 text-sm bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-800 disabled:opacity-50"
-                                title="Clear API key"
-                              >
-                                Clear
-                              </button>
-                            </div>
-                          </Show>
-                        </div>
-                        <Show when={providerTestResult()?.provider === 'deepseek'}>
-                          <p
-                            class={`text-xs ${getAIProviderTestResultTextClass(Boolean(providerTestResult()?.success))}`}
-                          >
-                            {providerTestResult()?.message}
-                          </p>
-                        </Show>
-                      </div>
-                    </Show>
-                  </div>
-
-                  {/* Google Gemini */}
-                  <div
-                    class={`border rounded-md overflow-hidden ${settings()?.gemini_configured ? 'border-green-300 dark:border-green-700' : 'border-border'}`}
-                  >
-                    <button
-                      type="button"
-                      class="w-full min-h-10 sm:min-h-9 px-3 py-2.5 flex items-center justify-between bg-surface hover:bg-surface-hover transition-colors"
-                      onClick={() => {
-                        const current = expandedProviders();
-                        const next = new Set(current);
-                        if (next.has('gemini')) next.delete('gemini');
-                        else next.add('gemini');
-                        setExpandedProviders(next);
-                      }}
-                    >
-                      <div class="flex items-center gap-2">
-                        <span class="font-medium text-sm">Google Gemini</span>
-                        <Show when={settings()?.gemini_configured}>
-                          <span class="px-1.5 py-0.5 text-[10px] font-semibold bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded">
-                            Configured
-                          </span>
-                        </Show>
-                        <Show when={settings()?.gemini_configured}>
-                          <span
-                            class={`px-1.5 py-0.5 text-[10px] font-semibold rounded ${getAIProviderHealthPresentation(providerHealth.gemini.status).badgeClass}`}
-                          >
-                            {getAIProviderHealthPresentation(providerHealth.gemini.status).label}
-                          </span>
-                        </Show>
-                      </div>
-                      <svg
-                        class={`w-4 h-4 transition-transform ${expandedProviders().has('gemini') ? 'rotate-180' : ''}`}
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="2"
-                          d="M19 9l-7 7-7-7"
-                        />
-                      </svg>
-                    </button>
-                    <Show when={expandedProviders().has('gemini')}>
-                      <div class="px-3 py-3 bg-surface-alt border-t border-border space-y-2">
-                        <input
-                          type="password"
-                          value={form.geminiApiKey}
-                          onInput={(e) => setForm('geminiApiKey', e.currentTarget.value)}
-                          placeholder={
-                            settings()?.gemini_configured ? '••••••••••• (configured)' : 'AIza...'
-                          }
-                          class={controlClass()}
-                          disabled={saving()}
-                        />
-                        <div class="flex items-center justify-between">
-                          <p class="text-xs text-slate-500">
-                            <a
-                              href="https://aistudio.google.com/app/apikey"
-                              target="_blank"
-                              rel="noopener"
-                              class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-1 py-1 text-sm text-blue-600 dark:text-blue-400 hover:underline"
-                            >
-                              Get API key →
-                            </a>
-                          </p>
-                          <Show when={settings()?.gemini_configured}>
-                            <div class="flex gap-1">
-                              <button
-                                type="button"
-                                onClick={() => handleTestProvider('gemini')}
-                                disabled={testingProvider() === 'gemini' || saving()}
-                                class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-3 py-2 text-sm bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800 disabled:opacity-50"
-                              >
-                                {testingProvider() === 'gemini' ? 'Testing...' : 'Test'}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleClearProvider('gemini')}
-                                disabled={saving()}
-                                class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-3 py-2 text-sm bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-800 disabled:opacity-50"
-                                title="Clear API key"
-                              >
-                                Clear
-                              </button>
-                            </div>
-                          </Show>
-                        </div>
-                        <Show when={providerTestResult()?.provider === 'gemini'}>
-                          <p
-                            class={`text-xs ${getAIProviderTestResultTextClass(Boolean(providerTestResult()?.success))}`}
-                          >
-                            {providerTestResult()?.message}
-                          </p>
-                        </Show>
-                      </div>
-                    </Show>
-                  </div>
-
-                  {/* Ollama */}
-                  <div
-                    class={`border rounded-md overflow-hidden ${settings()?.ollama_configured ? 'border-green-300 dark:border-green-700' : 'border-border'}`}
-                  >
-                    <button
-                      type="button"
-                      class="w-full min-h-10 sm:min-h-9 px-3 py-2.5 flex items-center justify-between bg-surface hover:bg-surface-hover transition-colors"
-                      onClick={() => {
-                        const current = expandedProviders();
-                        const next = new Set(current);
-                        if (next.has('ollama')) next.delete('ollama');
-                        else next.add('ollama');
-                        setExpandedProviders(next);
-                      }}
-                    >
-                      <div class="flex items-center gap-2">
-                        <span class="font-medium text-sm">Ollama</span>
-                        <Show when={settings()?.ollama_configured}>
-                          <span class="px-1.5 py-0.5 text-[10px] font-semibold bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded">
-                            Available
-                          </span>
-                        </Show>
-                        <Show when={settings()?.ollama_configured}>
-                          <span
-                            class={`px-1.5 py-0.5 text-[10px] font-semibold rounded ${getAIProviderHealthPresentation(providerHealth.ollama.status).badgeClass}`}
-                          >
-                            {getAIProviderHealthPresentation(providerHealth.ollama.status).label}
-                          </span>
-                        </Show>
-                      </div>
-                      <svg
-                        class={`w-4 h-4 transition-transform ${expandedProviders().has('ollama') ? 'rotate-180' : ''}`}
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="2"
-                          d="M19 9l-7 7-7-7"
-                        />
-                      </svg>
-                    </button>
-                    <Show when={expandedProviders().has('ollama')}>
-                      <div class="px-3 py-3 bg-surface-alt border-t border-border space-y-2">
-                        <div class="space-y-1">
-                          <label class="text-xs text-muted inline-flex items-center gap-1">
-                            Server URL
-                            <HelpIcon contentId="ai.ollama.baseUrl" size="xs" />
-                          </label>
-                          <input
-                            type="url"
-                            value={form.ollamaBaseUrl}
-                            onInput={(e) => setForm('ollamaBaseUrl', e.currentTarget.value)}
-                            placeholder="http://localhost:11434"
-                            class={controlClass()}
-                            disabled={saving()}
-                          />
-                        </div>
-                        <div class="flex items-center justify-between">
-                          <p class="text-xs text-slate-500">
-                            <a
-                              href="https://ollama.ai"
-                              target="_blank"
-                              rel="noopener"
-                              class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-1 py-1 text-sm text-blue-600 dark:text-blue-400 hover:underline"
-                            >
-                              Learn about Ollama →
-                            </a>
-                            <span class="text-slate-400"> · Free & local</span>
-                          </p>
-                          <Show when={settings()?.ollama_configured}>
-                            <div class="flex gap-1">
-                              <button
-                                type="button"
-                                onClick={() => handleTestProvider('ollama')}
-                                disabled={testingProvider() === 'ollama' || saving()}
-                                class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-3 py-2 text-sm bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800 disabled:opacity-50"
-                              >
-                                {testingProvider() === 'ollama' ? 'Testing...' : 'Test'}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleClearProvider('ollama')}
-                                disabled={saving()}
-                                class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-3 py-2 text-sm bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-800 disabled:opacity-50"
-                                title="Clear Ollama URL"
-                              >
-                                Clear
-                              </button>
-                            </div>
-                          </Show>
-                        </div>
-                        <Show when={providerTestResult()?.provider === 'ollama'}>
-                          <p
-                            class={`text-xs ${getAIProviderTestResultTextClass(Boolean(providerTestResult()?.success))}`}
-                          >
-                            {providerTestResult()?.message}
-                          </p>
-                        </Show>
-                      </div>
-                    </Show>
-                  </div>
-                </div>
+              <div class={formField}>
+                <AIProviderConfigurationSection
+                  settings={settings}
+                  form={form}
+                  setForm={setForm}
+                  expandedProviders={expandedProviders}
+                  setExpandedProviders={setExpandedProviders}
+                  providerHealth={providerHealth}
+                  preflightRunning={preflightRunning}
+                  preflightLastCheckedAt={preflightLastCheckedAt}
+                  providerIssueCount={providerIssueCount}
+                  testingProvider={testingProvider}
+                  providerTestResult={providerTestResult}
+                  saving={saving}
+                  runProviderPreflight={() => runProviderPreflight()}
+                  handleTestProvider={handleTestProvider}
+                  handleClearProvider={handleClearProvider}
+                />
               </div>
 
               {/* Discovery Settings - Collapsible */}
@@ -2502,263 +1822,24 @@ export const AISettings: Component = () => {
         </form>
       </SettingsPanel>
 
-      {/* Session Diff Modal */}
-      <Show when={showDiffModal()}>
-        <Dialog
-          isOpen={true}
-          onClose={() => setShowDiffModal(false)}
-          panelClass="max-w-2xl"
-          ariaLabel="Session file changes"
-        >
-          <div class="w-full overflow-hidden">
-            <div class="flex items-start justify-between gap-4 px-6 py-4 border-b border-border">
-              <div>
-                <h3 class="text-lg font-semibold text-base-content">Session File Changes</h3>
-                <p class="text-xs text-muted">{diffSessionLabel() || 'Selected session'}</p>
-              </div>
-              <button
-                type="button"
-                class="text-sm text-muted hover:text-base-content"
-                onClick={() => setShowDiffModal(false)}
-              >
-                Close
-              </button>
-            </div>
-            <div class="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
-              <Show when={diffSummary()}>
-                <div class="rounded-md border border-border bg-surface-alt p-3">
-                  <p class="text-xs font-semibold text-base-content">Summary</p>
-                  <p class="text-xs text-muted mt-1 whitespace-pre-wrap">{diffSummary()}</p>
-                </div>
-              </Show>
-              <div class="space-y-2">
-                <For each={diffFiles()}>
-                  {(file) => {
-                    const diffStatus = getAISessionDiffStatusPresentation(file.status);
-                    return (
-                      <div class="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between rounded-md border border-border px-3 py-2 text-xs">
-                        <div class="flex items-center gap-2 min-w-0">
-                          <span
-                            class={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase ${diffStatus.badgeClasses}`}
-                          >
-                            {diffStatus.label}
-                          </span>
-                          <span class="text-base-content truncate">{file.path}</span>
-                        </div>
-                        <span class="text-muted sm:flex-shrink-0">{formatDiffStats(file)}</span>
-                      </div>
-                    );
-                  }}
-                </For>
-              </div>
-            </div>
-          </div>
-        </Dialog>
-      </Show>
-
-      {/* First-time Setup Modal */}
-      <Show when={showSetupModal()}>
-        <Dialog
-          isOpen={true}
-          onClose={() => {
-            setShowSetupModal(false);
-            setSetupApiKey('');
-          }}
-          panelClass="max-w-md"
-          closeOnBackdrop={false}
-          ariaLabel="Set up Pulse Assistant"
-        >
-          <div class="w-full overflow-hidden">
-            {/* Header */}
-            <div class="bg-blue-600 px-6 py-4">
-              <h3 class="text-lg font-semibold text-white">Set Up Pulse Assistant</h3>
-              <p class="text-blue-100 text-sm mt-1">Choose a provider to get started</p>
-            </div>
-
-            {/* Provider Selection */}
-            <div class="p-6 space-y-4">
-              <SelectionCardGroup
-                options={AI_SETUP_PROVIDER_OPTIONS}
-                value={setupProvider()}
-                onChange={setSetupProvider}
-                variant="compact"
-              />
-
-              {/* API Key / URL Input */}
-              <Show
-                when={setupProvider() === 'ollama'}
-                fallback={
-                  <div>
-                    <label class="block text-sm font-medium text-base-content mb-1.5">
-                      {setupProvider() === 'anthropic'
-                        ? 'Anthropic'
-                        : setupProvider() === 'openai'
-                          ? 'OpenAI'
-                          : setupProvider() === 'openrouter'
-                            ? 'OpenRouter'
-                            : setupProvider() === 'gemini'
-                              ? 'Google Gemini'
-                              : 'DeepSeek'}{' '}
-                      API Key
-                    </label>
-                    <input
-                      type="password"
-                      value={setupApiKey()}
-                      onInput={(e) => setSetupApiKey(e.currentTarget.value)}
-                      placeholder={
-                        setupProvider() === 'anthropic'
-                          ? 'sk-ant-...'
-                          : setupProvider() === 'gemini'
-                            ? 'AIza...'
-                            : setupProvider() === 'openrouter'
-                              ? 'sk-or-...'
-                              : 'sk-...'
-                      }
-                      class="w-full px-3 py-2 border border-border rounded-md bg-surface focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                    <p class="text-xs text-slate-500 mt-1.5">
-                      <a
-                        href={
-                          setupProvider() === 'anthropic'
-                            ? 'https://console.anthropic.com/settings/keys'
-                            : setupProvider() === 'openai'
-                              ? 'https://platform.openai.com/api-keys'
-                              : setupProvider() === 'openrouter'
-                                ? 'https://openrouter.ai/keys'
-                                : setupProvider() === 'gemini'
-                                  ? 'https://aistudio.google.com/app/apikey'
-                                  : 'https://platform.deepseek.com/api_keys'
-                        }
-                        target="_blank"
-                        rel="noopener"
-                        class="text-blue-600 hover:underline"
-                      >
-                        Get your API key →
-                      </a>
-                    </p>
-                  </div>
-                }
-              >
-                <div>
-                  <label class="block text-sm font-medium text-base-content mb-1.5">
-                    Ollama Server URL
-                  </label>
-                  <input
-                    type="url"
-                    value={setupOllamaUrl()}
-                    onInput={(e) => setSetupOllamaUrl(e.currentTarget.value)}
-                    placeholder="http://localhost:11434"
-                    class="w-full px-3 py-2 border border-border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                  <p class="text-xs text-slate-500 mt-1.5">
-                    Ollama runs locally - no API key needed
-                  </p>
-                </div>
-              </Show>
-            </div>
-
-            {/* Footer */}
-            <div class="px-6 py-4 bg-surface-alt border-t border-border flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowSetupModal(false);
-                  setSetupApiKey('');
-                }}
-                class="px-4 py-2 text-base-content hover:bg-surface-hover rounded-md"
-                disabled={setupSaving()}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={async () => {
-                  setSetupSaving(true);
-                  try {
-                    const payload: Record<string, unknown> = { enabled: true };
-
-                    if (setupProvider() === 'anthropic') {
-                      if (!setupApiKey().trim()) {
-                        notificationStore.error('Please enter your Anthropic API key');
-                        return;
-                      }
-                      payload.anthropic_api_key = setupApiKey().trim();
-                      payload.model = 'anthropic:claude-sonnet-4-20250514';
-                    } else if (setupProvider() === 'openai') {
-                      if (!setupApiKey().trim()) {
-                        notificationStore.error('Please enter your OpenAI API key');
-                        return;
-                      }
-                      payload.openai_api_key = setupApiKey().trim();
-                      payload.model = 'openai:gpt-4o';
-                    } else if (setupProvider() === 'openrouter') {
-                      if (!setupApiKey().trim()) {
-                        notificationStore.error('Please enter your OpenRouter API key');
-                        return;
-                      }
-                      payload.openrouter_api_key = setupApiKey().trim();
-                      payload.model = 'openrouter:openai/gpt-4o-mini';
-                    } else if (setupProvider() === 'deepseek') {
-                      if (!setupApiKey().trim()) {
-                        notificationStore.error('Please enter your DeepSeek API key');
-                        return;
-                      }
-                      payload.deepseek_api_key = setupApiKey().trim();
-                      payload.model = 'deepseek:deepseek-chat';
-                    } else if (setupProvider() === 'gemini') {
-                      if (!setupApiKey().trim()) {
-                        notificationStore.error('Please enter your Google Gemini API key');
-                        return;
-                      }
-                      payload.gemini_api_key = setupApiKey().trim();
-                      payload.model = 'gemini:gemini-2.5-flash';
-                    } else {
-                      if (!setupOllamaUrl().trim()) {
-                        notificationStore.error('Please enter your Ollama server URL');
-                        return;
-                      }
-                      payload.ollama_base_url = setupOllamaUrl().trim();
-                      payload.model = 'ollama:llama3.2:latest';
-                    }
-
-                    const updated = await AIAPI.updateSettings(payload);
-                    setSettings(updated);
-                    setForm('enabled', true);
-                    resetForm(updated);
-                    void runProviderPreflight(updated);
-                    setShowSetupModal(false);
-                    setSetupApiKey('');
-                    notificationStore.success(
-                      'Pulse Assistant enabled! You can customize settings below.',
-                    );
-                    // Load models after setup
-                    loadModels();
-                    // Notify other components (like AIChat) that settings changed
-                    aiChatStore.notifySettingsChanged();
-                  } catch (error) {
-                    logger.error('[AISettings] Setup failed:', error);
-                    const message = error instanceof Error ? error.message : 'Setup failed';
-                    notificationStore.error(message);
-                  } finally {
-                    setSetupSaving(false);
-                  }
-                }}
-                class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
-                disabled={
-                  setupSaving() ||
-                  (setupProvider() !== 'ollama' && !setupApiKey().trim()) ||
-                  (setupProvider() === 'ollama' && !setupOllamaUrl().trim())
-                }
-              >
-                {setupSaving() && (
-                  <span class="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                )}
-                Enable Pulse Assistant
-              </button>
-            </div>
-          </div>
-        </Dialog>
-      </Show>
+      <AISettingsDialogs
+        showDiffModal={showDiffModal}
+        setShowDiffModal={setShowDiffModal}
+        diffFiles={diffFiles}
+        diffSummary={diffSummary}
+        diffSessionLabel={diffSessionLabel}
+        formatDiffStats={formatDiffStats}
+        showSetupModal={showSetupModal}
+        setupProvider={setupProvider}
+        setSetupProvider={setSetupProvider}
+        setupApiKey={setupApiKey}
+        setSetupApiKey={setSetupApiKey}
+        setupOllamaUrl={setupOllamaUrl}
+        setSetupOllamaUrl={setSetupOllamaUrl}
+        setupSaving={setupSaving}
+        handleCloseSetupModal={handleCloseSetupModal}
+        handleSetupSubmit={handleSetupSubmit}
+      />
     </>
   );
 };
