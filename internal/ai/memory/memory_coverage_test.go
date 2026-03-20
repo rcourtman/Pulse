@@ -435,7 +435,7 @@ func TestIncidentStore_Timelines_EmptyAndZeroTime(t *testing.T) {
 
 func TestIncidentStore_GetTimelineByAlertAt_SkipsMismatched(t *testing.T) {
 	store := &IncidentStore{
-		incidents: []*Incident{
+		incidents: []*incidentShell{
 			nil,
 			{ID: "inc-a", AlertIdentifier: "alert-a", OpenedAt: time.Now().Add(-10 * time.Minute)},
 			{ID: "inc-b", AlertIdentifier: "alert-b", OpenedAt: time.Now().Add(-5 * time.Minute)},
@@ -450,21 +450,27 @@ func TestIncidentStore_GetTimelineByAlertAt_SkipsMismatched(t *testing.T) {
 
 func TestIncidentStore_FormatForPatrol_MessageFallback(t *testing.T) {
 	store := NewIncidentStore(IncidentStoreConfig{})
-	store.incidents = append(store.incidents, &Incident{
+	store.incidents = append(store.incidents, &incidentShell{
 		ID:              "inc-message",
 		AlertIdentifier: "alert-message",
-		Status:          IncidentStatusOpen,
 		OpenedAt:        time.Now(),
 		Message:         "fallback message",
 	})
-	store.incidents = append(store.incidents, &Incident{
+	store.incidents = append(store.incidents, &incidentShell{
 		ID:              "inc-ack",
 		AlertIdentifier: "alert-ack",
-		Status:          IncidentStatusOpen,
 		OpenedAt:        time.Now().Add(1 * time.Minute),
-		Acknowledged:    true,
 		ResourceName:    "vm-ack",
 		AlertType:       "cpu",
+		Events: []IncidentEvent{
+			{
+				ID:        "evt-ack",
+				Type:      IncidentEventAlertAcknowledged,
+				Timestamp: time.Now().Add(2 * time.Minute),
+				Summary:   "Alert acknowledged",
+				Details:   map[string]interface{}{"user": "admin"},
+			},
+		},
 	})
 	store.incidents = append(store.incidents, nil)
 
@@ -479,7 +485,7 @@ func TestIncidentStore_FormatForPatrol_MessageFallback(t *testing.T) {
 
 func TestIncidentStore_HelperPaths(t *testing.T) {
 	store := &IncidentStore{
-		incidents:    make([]*Incident, 0),
+		incidents:    make([]*incidentShell, 0),
 		maxEvents:    1,
 		maxIncidents: 1,
 		maxAge:       30 * time.Minute,
@@ -513,7 +519,7 @@ func TestIncidentStore_HelperPaths(t *testing.T) {
 		t.Fatalf("expected summary to be set")
 	}
 
-	store.incidents = append([]*Incident{nil}, store.incidents...)
+	store.incidents = append([]*incidentShell{nil}, store.incidents...)
 	if store.findOpenIncidentByAlertIdentifierLocked("") != nil {
 		t.Fatalf("expected nil for empty alert ID")
 	}
@@ -525,12 +531,12 @@ func TestIncidentStore_HelperPaths(t *testing.T) {
 	}
 
 	oldClosed := time.Now().Add(-2 * time.Hour)
-	store.incidents = []*Incident{
+	store.incidents = []*incidentShell{
 		nil,
-		{ID: "old-open", AlertIdentifier: "old", Status: IncidentStatusOpen, OpenedAt: time.Now().Add(-2 * time.Hour)},
-		{ID: "old-closed", AlertIdentifier: "oldc", Status: IncidentStatusResolved, OpenedAt: time.Now().Add(-3 * time.Hour), ClosedAt: &oldClosed},
-		{ID: "recent", AlertIdentifier: "recent", Status: IncidentStatusOpen, OpenedAt: time.Now().Add(-5 * time.Minute)},
-		{ID: "recent2", AlertIdentifier: "recent2", Status: IncidentStatusOpen, OpenedAt: time.Now().Add(-4 * time.Minute)},
+		{ID: "old-open", AlertIdentifier: "old", OpenedAt: time.Now().Add(-2 * time.Hour)},
+		{ID: "old-closed", AlertIdentifier: "oldc", OpenedAt: time.Now().Add(-3 * time.Hour), OccurrenceClosedAt: &oldClosed},
+		{ID: "recent", AlertIdentifier: "recent", OpenedAt: time.Now().Add(-5 * time.Minute)},
+		{ID: "recent2", AlertIdentifier: "recent2", OpenedAt: time.Now().Add(-4 * time.Minute)},
 	}
 	store.trimLocked()
 	if len(store.incidents) != 1 || store.incidents[0].ID != "recent2" {
@@ -541,8 +547,8 @@ func TestIncidentStore_HelperPaths(t *testing.T) {
 func TestIncidentStore_SaveAsyncAndPersistence(t *testing.T) {
 	tmpDir := t.TempDir()
 	store := &IncidentStore{
-		incidents: []*Incident{
-			{ID: "inc-1", AlertIdentifier: "alert-1", Status: IncidentStatusOpen, OpenedAt: time.Now()},
+		incidents: []*incidentShell{
+			{ID: "inc-1", AlertIdentifier: "alert-1", OpenedAt: time.Now()},
 		},
 		dataDir:  tmpDir,
 		filePath: filepath.Join(tmpDir, incidentFileName),
@@ -570,8 +576,8 @@ func TestIncidentStore_SaveAsync_Error(t *testing.T) {
 	}
 
 	store := &IncidentStore{
-		incidents: []*Incident{
-			{ID: "inc-err", AlertIdentifier: "alert-err", Status: IncidentStatusOpen, OpenedAt: time.Now()},
+		incidents: []*incidentShell{
+			{ID: "inc-err", AlertIdentifier: "alert-err", OpenedAt: time.Now()},
 		},
 		dataDir:  badDir,
 		filePath: filepath.Join(badDir, incidentFileName),
@@ -622,11 +628,10 @@ func TestIncidentStore_SaveToDisk_Scenarios(t *testing.T) {
 	t.Run("MarshalError", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		store := &IncidentStore{
-			incidents: []*Incident{
+			incidents: []*incidentShell{
 				{
 					ID:              "inc-1",
 					AlertIdentifier: "alert-1",
-					Status:          IncidentStatusOpen,
 					OpenedAt:        time.Now(),
 					Events: []IncidentEvent{
 						{
@@ -654,8 +659,8 @@ func TestIncidentStore_SaveToDisk_Scenarios(t *testing.T) {
 			t.Fatalf("mkdir file path: %v", err)
 		}
 		store := &IncidentStore{
-			incidents: []*Incident{
-				{ID: "inc-1", AlertIdentifier: "alert-1", Status: IncidentStatusOpen, OpenedAt: time.Now()},
+			incidents: []*incidentShell{
+				{ID: "inc-1", AlertIdentifier: "alert-1", OpenedAt: time.Now()},
 			},
 			dataDir:  tmpDir,
 			filePath: filePath,
@@ -668,11 +673,10 @@ func TestIncidentStore_SaveToDisk_Scenarios(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		store := &IncidentStore{
-			incidents: []*Incident{
+			incidents: []*incidentShell{
 				{
 					ID:              "inc-1",
 					AlertIdentifier: "alert-1",
-					Status:          IncidentStatusOpen,
 					OpenedAt:        time.Now(),
 					Events: []IncidentEvent{
 						{ID: "evt-1", Type: IncidentEventNote, Timestamp: time.Now(), Summary: "note", Details: map[string]interface{}{"k": "v"}},
@@ -810,6 +814,9 @@ func TestIncidentStore_LoadFromDisk_Scenarios(t *testing.T) {
 		}
 		if len(store.incidents) != 1 {
 			t.Fatalf("expected trimmed incidents, got %d", len(store.incidents))
+		}
+		if store.incidents[0].ID != "inc-b" {
+			t.Fatalf("expected newest shell after trim, got %q", store.incidents[0].ID)
 		}
 	})
 }

@@ -211,6 +211,11 @@ boundaries and annotation anchors may remain private implementation state, but
 public incident status, acknowledgement, and remediation entries should be
 treated as read-model output rebuilt from canonical history whenever that
 history exists.
+That boundary should also be visible in code shape: the persisted incident
+shell used by `internal/ai/memory/incidents.go` should stay a private storage
+model for occurrence segmentation and annotations, while the exported
+`Incident` type remains the public/projected read model returned to handlers
+and operators.
 The AI correlation root-cause engine also consumes the canonical unified-
 resource relationship model directly, so cross-resource reasoning stays aligned
 with the same relationship edges that back the resource API instead of

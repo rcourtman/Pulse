@@ -270,16 +270,7 @@ func TestIncidentStore_CanonicalModeKeepsShellAsOccurrenceAndAnnotationsOnly(t *
 		t.Fatalf("expected one shell incident, got %d", len(store.incidents))
 	}
 	firstShell := store.incidents[0]
-	if firstShell.Acknowledged {
-		t.Fatal("expected canonical shell to avoid persisted acknowledgement state")
-	}
-	if firstShell.AckUser != "" || firstShell.AckTime != nil {
-		t.Fatal("expected canonical shell to avoid persisted acknowledgement metadata")
-	}
-	if firstShell.ClosedAt != nil {
-		t.Fatal("expected canonical shell to avoid persisted resolved timestamp")
-	}
-	if firstShell.occurrenceClosedAt == nil {
+	if firstShell.OccurrenceClosedAt == nil {
 		t.Fatal("expected canonical shell to preserve private occurrence closure boundary")
 	}
 	for _, event := range firstShell.Events {
@@ -302,7 +293,7 @@ func TestIncidentStore_CanonicalModeKeepsShellAsOccurrenceAndAnnotationsOnly(t *
 	if len(store.incidents) != 2 {
 		t.Fatalf("expected second alert occurrence to create a new shell, got %d incidents", len(store.incidents))
 	}
-	if store.incidents[1].occurrenceClosedAt != nil {
+	if store.incidents[1].OccurrenceClosedAt != nil {
 		t.Fatal("expected new occurrence shell to remain open")
 	}
 }
