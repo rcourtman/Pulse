@@ -1862,13 +1862,14 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                         compact
                       />
                       <Show when={hasCorrelationContext()}>
-                        <div class="rounded border border-border bg-surface-hover px-2 py-2">
+                        <div
+                          data-testid="resource-correlation-context"
+                          class="space-y-1.5"
+                        >
                           <div class="flex flex-wrap items-center justify-between gap-2">
-                            <div>
-                              <div class="text-[10px] font-medium uppercase tracking-wide text-base-content">
-                                Correlation context
-                              </div>
-                            </div>
+                            <span class="text-[10px] font-medium uppercase tracking-wide text-base-content">
+                              Correlation context
+                            </span>
                             <button
                               type="button"
                               onClick={() => setShowCorrelationContext((value) => !value)}
@@ -1879,7 +1880,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                           </div>
 
                           <Show when={showCorrelationContext()}>
-                            <div class="mt-3">
+                            <div class="pt-1">
                               <ResourceCorrelationSummary
                                 title="Correlation context"
                                 dependencies={resourceDependencies()}

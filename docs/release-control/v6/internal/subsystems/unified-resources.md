@@ -256,7 +256,7 @@ Inside that disclosure, the governance summary also stays label-first with
 compact rows and badges instead of a second card stack, so policy detail reads
 as supporting context rather than another dashboard.
 Inside that disclosure, learned dependency and correlation detail now sits
-behind its own reveal instead of rendering at full depth immediately, so the
+behind its own reveal without an additional bordered card wrapper, so the
 opened investigation surface stays label-first and leaves relationship pattern
 detail behind the reveal.
 Change-related summary badges now belong to the `Change history` section

@@ -256,6 +256,7 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(screen.getByText('stable')).toBeInTheDocument();
     expect(screen.getByText('Notes')).toBeInTheDocument();
     expect(screen.getByText('3')).toBeInTheDocument();
+    expect(screen.getByTestId('resource-correlation-context').querySelector('.rounded.border')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Show correlations' }));
     expect(
       screen
