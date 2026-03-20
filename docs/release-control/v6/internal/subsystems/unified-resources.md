@@ -250,8 +250,8 @@ identity stay primary while secondary AI and policy signals remain available
 without competing with the first-screen monitoring story.
 Inside that disclosure, learned dependency and correlation detail now sits
 behind its own reveal instead of rendering at full depth immediately, so the
-opened investigation surface still starts with compact health, change, and
-policy summaries before the user asks for relationship pattern detail.
+opened investigation surface stays label-first and leaves relationship pattern
+detail behind the reveal.
 Change-related summary badges now belong to the `Change history` section
 instead of the `Runtime` card, so current-state facts and timeline context do
 not compete for the same ownership on first read.

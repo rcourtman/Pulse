@@ -237,6 +237,15 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(screen.queryByText('VM Child')).toBeNull();
     expect(screen.queryByText('Capabilities 1')).toBeNull();
     expect(screen.queryByText('Relationships 1')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show context' }));
+    await screen.findByText('AI Intelligence');
+    fireEvent.click(screen.getByRole('button', { name: 'Show correlations' }));
+    expect(
+      screen
+        .getByRole('button', { name: 'Hide correlations' })
+        .parentElement?.querySelector('.mt-0\\.5.text-\\[10px\\].text-muted'),
+    ).toBeNull();
   });
 
   it('keeps supporting context label-first without a summary sentence', () => {

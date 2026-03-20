@@ -471,7 +471,10 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     await waitFor(() => {
       expect(getByText('Storage 1')).toBeInTheDocument();
     });
-    expect(getByText('1 dependency · 1 dependent · 1 correlation')).toBeInTheDocument();
+    expect(
+      getByRole('button', { name: 'Hide correlations' })
+        .parentElement?.querySelector('.mt-0\\.5.text-\\[10px\\].text-muted'),
+    ).toBeNull();
     expect(
       getByRole('link', {
         name: 'Open dependency resource storage-1 in Infrastructure',

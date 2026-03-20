@@ -1872,11 +1872,6 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                                 <div class="text-[10px] font-medium uppercase tracking-wide text-base-content">
                                   Correlation context
                                 </div>
-                                <div class="mt-0.5 text-[10px] text-muted">
-                                  {resourceDependencies().length} dependencies ·{' '}
-                                  {resourceDependents().length} dependents ·{' '}
-                                  {resourceCorrelations().length} correlations
-                                </div>
                               </div>
                               <button
                                 type="button"
