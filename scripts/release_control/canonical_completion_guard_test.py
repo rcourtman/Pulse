@@ -2092,10 +2092,10 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
             ],
         )
 
-    def test_api_token_manager_change_requires_security_and_api_contracts(self):
-        required = infer_impacted_subsystems(
-            ["frontend-modern/src/components/Settings/APITokenManager.tsx"]
-        )
+    def _assert_api_token_manager_change_requires_security_and_api_contracts(
+        self, touched_path: str
+    ) -> None:
+        required = infer_impacted_subsystems([touched_path])
         self.assertEqual(set(required), {"security-privacy", "api-contracts"})
 
         security = required["security-privacy"]
@@ -2105,7 +2105,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
         )
         self.assertEqual(
             security["touched_runtime_files"],
-            ["frontend-modern/src/components/Settings/APITokenManager.tsx"],
+            [touched_path],
         )
         self.assertEqual(
             security["verification_requirements"],
@@ -2113,9 +2113,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                 {
                     "id": "security-settings-surfaces",
                     "label": "security settings surface proof",
-                    "touched_runtime_files": [
-                        "frontend-modern/src/components/Settings/APITokenManager.tsx"
-                    ],
+                    "touched_runtime_files": [touched_path],
                     "allow_same_subsystem_tests": False,
                     "test_prefixes": [],
                     "exact_files": [
@@ -2135,7 +2133,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
         )
         self.assertEqual(
             api_contracts["touched_runtime_files"],
-            ["frontend-modern/src/components/Settings/APITokenManager.tsx"],
+            [touched_path],
         )
         self.assertEqual(
             api_contracts["verification_requirements"],
@@ -2143,16 +2141,30 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                 {
                     "id": "api-token-management-surface",
                     "label": "API token management surface proof",
-                    "touched_runtime_files": [
-                        "frontend-modern/src/components/Settings/APITokenManager.tsx"
-                    ],
+                    "touched_runtime_files": [touched_path],
                     "allow_same_subsystem_tests": False,
                     "test_prefixes": [],
                     "exact_files": [
                         "frontend-modern/src/components/Settings/__tests__/APITokenManager.test.tsx",
+                        "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
                     ],
                 }
             ],
+        )
+
+    def test_api_token_manager_change_requires_security_and_api_contracts(self):
+        self._assert_api_token_manager_change_requires_security_and_api_contracts(
+            "frontend-modern/src/components/Settings/APITokenManager.tsx"
+        )
+
+    def test_api_token_manager_model_change_requires_security_and_api_contracts(self):
+        self._assert_api_token_manager_change_requires_security_and_api_contracts(
+            "frontend-modern/src/components/Settings/apiTokenManagerModel.ts"
+        )
+
+    def test_api_token_manager_state_change_requires_security_and_api_contracts(self):
+        self._assert_api_token_manager_change_requires_security_and_api_contracts(
+            "frontend-modern/src/components/Settings/useAPITokenManagerState.ts"
         )
 
     def test_security_client_change_requires_security_and_api_contracts(self):

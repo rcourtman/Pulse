@@ -28,20 +28,22 @@ Own canonical runtime payload shapes between backend and frontend.
 5. `frontend-modern/src/types/api.ts`
 6. `frontend-modern/src/api/responseUtils.ts`
 7. `frontend-modern/src/components/Settings/APITokenManager.tsx`
-8. `frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx`
-9. `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`
-10. `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx`
-11. `frontend-modern/src/components/Settings/UnifiedAgents.tsx`
-12. `frontend-modern/src/components/Settings/NodeModal.tsx`
-13. `frontend-modern/src/components/Settings/nodeModalModel.ts`
-14. `frontend-modern/src/components/Settings/useNodeModalState.ts`
-15. `frontend-modern/src/utils/agentInstallCommand.ts`
-16. `frontend-modern/src/api/nodes.ts`
-17. `frontend-modern/src/api/license.ts`
-18. `frontend-modern/src/api/monitoredSystemLedger.ts`
-19. `frontend-modern/src/api/resources.ts`
-20. `frontend-modern/src/api/monitoring.ts`
-21. `internal/api/monitored_system_ledger.go`
+8. `frontend-modern/src/components/Settings/apiTokenManagerModel.ts`
+9. `frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx`
+10. `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`
+11. `frontend-modern/src/components/Settings/useAPITokenManagerState.ts`
+12. `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx`
+13. `frontend-modern/src/components/Settings/UnifiedAgents.tsx`
+14. `frontend-modern/src/components/Settings/NodeModal.tsx`
+15. `frontend-modern/src/components/Settings/nodeModalModel.ts`
+16. `frontend-modern/src/components/Settings/useNodeModalState.ts`
+17. `frontend-modern/src/utils/agentInstallCommand.ts`
+18. `frontend-modern/src/api/nodes.ts`
+19. `frontend-modern/src/api/license.ts`
+20. `frontend-modern/src/api/monitoredSystemLedger.ts`
+21. `frontend-modern/src/api/resources.ts`
+22. `frontend-modern/src/api/monitoring.ts`
+23. `internal/api/monitored_system_ledger.go`
 
 ## Shared Boundaries
 
@@ -53,31 +55,33 @@ Own canonical runtime payload shapes between backend and frontend.
 6. `frontend-modern/src/api/security.ts` shared with `security-privacy`: the security frontend client is both a security/privacy control surface and a canonical API payload contract boundary.
 7. `frontend-modern/src/api/updates.ts` shared with `deployment-installability`: the updates frontend client is both a deployment-installability control surface and a canonical API payload contract boundary.
 8. `frontend-modern/src/components/Settings/APITokenManager.tsx` shared with `security-privacy`: the API token settings surface is both a security/privacy control surface and a canonical API payload contract boundary.
-9. `frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx` shared with `agent-lifecycle`: the infrastructure operations controller is both an agent fleet lifecycle control surface and an API token, lookup, assignment, and reporting/install contract boundary.
-10. `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx` shared with `agent-lifecycle`: the pure infrastructure operations inventory/install model is both an agent fleet lifecycle control surface and an API token, lookup, assignment, and reporting/install contract boundary.
-11. `frontend-modern/src/components/Settings/NodeModal.tsx` shared with `agent-lifecycle`: the node setup modal render shell is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
-12. `frontend-modern/src/components/Settings/nodeModalModel.ts` shared with `agent-lifecycle`: the pure node setup modal model is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
-13. `frontend-modern/src/components/Settings/UnifiedAgents.tsx` shared with `agent-lifecycle`: the UnifiedAgents module is a compatibility shim for the canonical infrastructure operations controller and remains on the same shared agent lifecycle and API contract boundary while the old module path exists.
-14. `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx` shared with `agent-lifecycle`: the shared infrastructure operations state hook is both an agent fleet lifecycle control surface and an API token, lookup, assignment, and reporting/install contract boundary.
-15. `frontend-modern/src/components/Settings/useNodeModalState.ts` shared with `agent-lifecycle`: the node setup modal state hook is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
-16. `frontend-modern/src/utils/agentInstallCommand.ts` shared with `agent-lifecycle`: the shared frontend install-command helper is both an agent lifecycle control surface and a canonical API/install transport contract boundary.
-17. `internal/api/agent_install_command_shared.go` shared with `agent-lifecycle`: agent install command assembly is both an agent lifecycle control surface and a canonical API payload contract boundary.
-18. `internal/api/ai_handler.go` shared with `ai-runtime`: Pulse Assistant handlers are both an AI runtime control surface and a canonical API payload contract boundary.
-19. `internal/api/ai_handlers.go` shared with `ai-runtime`: AI settings and remediation handlers are both an AI runtime control surface and a canonical API payload contract boundary.
-20. `internal/api/ai_intelligence_handlers.go` shared with `ai-runtime`: AI intelligence handlers are both an AI runtime control surface and a canonical API payload contract boundary.
-21. `internal/api/config_setup_handlers.go` shared with `agent-lifecycle`: auto-register and setup handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.
-22. `internal/api/licensing_bridge.go` shared with `cloud-paid`: commercial licensing bridge handlers carry both API payload contract and cloud-paid entitlement boundary ownership.
-23. `internal/api/licensing_handlers.go` shared with `cloud-paid`: commercial licensing handlers carry both API payload contract and cloud-paid entitlement boundary ownership.
-24. `internal/api/notifications.go` shared with `notifications`: notification handlers are both a notification delivery control surface and a canonical API payload contract boundary.
-25. `internal/api/payments_webhook_handlers.go` shared with `cloud-paid`: commercial payment webhook handlers carry both API payload contract and cloud-paid billing boundary ownership.
-26. `internal/api/public_signup_handlers.go` shared with `cloud-paid`: hosted signup handlers carry both API payload contract and cloud-paid hosted provisioning boundary ownership.
-27. `internal/api/resources.go` shared with `unified-resources`: the unified resource endpoint is both a backend payload contract surface and a unified-resource runtime boundary.
-28. `internal/api/security.go` shared with `security-privacy`: the security handlers are both a security/privacy control surface and a canonical API payload contract boundary.
-29. `internal/api/security_tokens.go` shared with `security-privacy`: the security token handlers are both a security/privacy control surface and a canonical API payload contract boundary.
-30. `internal/api/slo.go` shared with `performance-and-scalability`: the SLO endpoint is both an API contract surface and a protected performance hot-path boundary.
-31. `internal/api/system_settings.go` shared with `security-privacy`: the system settings telemetry and auth controls are both a security/privacy control surface and a canonical API payload contract boundary.
-32. `internal/api/unified_agent.go` shared with `agent-lifecycle`: unified agent download and installer handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.
-33. `internal/api/updates.go` shared with `deployment-installability`: update handlers are both a deployment-installability control surface and a canonical API payload contract boundary.
+9. `frontend-modern/src/components/Settings/apiTokenManagerModel.ts` shared with `security-privacy`: the pure API token settings model is both a security/privacy control surface and a canonical API payload contract boundary.
+10. `frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx` shared with `agent-lifecycle`: the infrastructure operations controller is both an agent fleet lifecycle control surface and an API token, lookup, assignment, and reporting/install contract boundary.
+11. `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx` shared with `agent-lifecycle`: the pure infrastructure operations inventory/install model is both an agent fleet lifecycle control surface and an API token, lookup, assignment, and reporting/install contract boundary.
+12. `frontend-modern/src/components/Settings/NodeModal.tsx` shared with `agent-lifecycle`: the node setup modal render shell is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
+13. `frontend-modern/src/components/Settings/nodeModalModel.ts` shared with `agent-lifecycle`: the pure node setup modal model is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
+14. `frontend-modern/src/components/Settings/UnifiedAgents.tsx` shared with `agent-lifecycle`: the UnifiedAgents module is a compatibility shim for the canonical infrastructure operations controller and remains on the same shared agent lifecycle and API contract boundary while the old module path exists.
+15. `frontend-modern/src/components/Settings/useAPITokenManagerState.ts` shared with `security-privacy`: the API token settings state hook is both a security/privacy control surface and a canonical API payload contract boundary.
+16. `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx` shared with `agent-lifecycle`: the shared infrastructure operations state hook is both an agent fleet lifecycle control surface and an API token, lookup, assignment, and reporting/install contract boundary.
+17. `frontend-modern/src/components/Settings/useNodeModalState.ts` shared with `agent-lifecycle`: the node setup modal state hook is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
+18. `frontend-modern/src/utils/agentInstallCommand.ts` shared with `agent-lifecycle`: the shared frontend install-command helper is both an agent lifecycle control surface and a canonical API/install transport contract boundary.
+19. `internal/api/agent_install_command_shared.go` shared with `agent-lifecycle`: agent install command assembly is both an agent lifecycle control surface and a canonical API payload contract boundary.
+20. `internal/api/ai_handler.go` shared with `ai-runtime`: Pulse Assistant handlers are both an AI runtime control surface and a canonical API payload contract boundary.
+21. `internal/api/ai_handlers.go` shared with `ai-runtime`: AI settings and remediation handlers are both an AI runtime control surface and a canonical API payload contract boundary.
+22. `internal/api/ai_intelligence_handlers.go` shared with `ai-runtime`: AI intelligence handlers are both an AI runtime control surface and a canonical API payload contract boundary.
+23. `internal/api/config_setup_handlers.go` shared with `agent-lifecycle`: auto-register and setup handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.
+24. `internal/api/licensing_bridge.go` shared with `cloud-paid`: commercial licensing bridge handlers carry both API payload contract and cloud-paid entitlement boundary ownership.
+25. `internal/api/licensing_handlers.go` shared with `cloud-paid`: commercial licensing handlers carry both API payload contract and cloud-paid entitlement boundary ownership.
+26. `internal/api/notifications.go` shared with `notifications`: notification handlers are both a notification delivery control surface and a canonical API payload contract boundary.
+27. `internal/api/payments_webhook_handlers.go` shared with `cloud-paid`: commercial payment webhook handlers carry both API payload contract and cloud-paid billing boundary ownership.
+28. `internal/api/public_signup_handlers.go` shared with `cloud-paid`: hosted signup handlers carry both API payload contract and cloud-paid hosted provisioning boundary ownership.
+29. `internal/api/resources.go` shared with `unified-resources`: the unified resource endpoint is both a backend payload contract surface and a unified-resource runtime boundary.
+30. `internal/api/security.go` shared with `security-privacy`: the security handlers are both a security/privacy control surface and a canonical API payload contract boundary.
+31. `internal/api/security_tokens.go` shared with `security-privacy`: the security token handlers are both a security/privacy control surface and a canonical API payload contract boundary.
+32. `internal/api/slo.go` shared with `performance-and-scalability`: the SLO endpoint is both an API contract surface and a protected performance hot-path boundary.
+33. `internal/api/system_settings.go` shared with `security-privacy`: the system settings telemetry and auth controls are both a security/privacy control surface and a canonical API payload contract boundary.
+34. `internal/api/unified_agent.go` shared with `agent-lifecycle`: unified agent download and installer handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.
+35. `internal/api/updates.go` shared with `deployment-installability`: update handlers are both a deployment-installability control surface and a canonical API payload contract boundary.
 ## Extension Points
 
 1. Add or change payload fields through handler + contract tests together
@@ -100,7 +104,7 @@ Own canonical runtime payload shapes between backend and frontend.
    and the same shared correlation card's ordering and truncation rule, so callers pass raw correlations instead of encoding their own top-N sort behavior
    and the shared `frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx` and `frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx` cards' infrastructure resource-link default, so the Patrol page, resource drawer, and problem-resource dashboard panels inherit the canonical resource-filter path construction instead of rebuilding infrastructure URLs inline
 8. Route frontend API-client parsed error propagation, API-error-status fallback handling, allowed-status handling, custom status-specific error handling, command-trigger success envelope handling, shared response parsing pipelines, missing-resource lookup handling, metadata CRUD routing, stream event consumption, response status, collection normalization, scalar payload coercion, and structured error normalization through canonical shared helpers under `frontend-modern/src/api/`
-9. Add or change API token scope, assignment, and revocation presentation through `frontend-modern/src/components/Settings/APITokenManager.tsx`
+9. Add or change API token scope, assignment, and revocation presentation through `frontend-modern/src/components/Settings/APITokenManager.tsx`, `frontend-modern/src/components/Settings/apiTokenManagerModel.ts`, and `frontend-modern/src/components/Settings/useAPITokenManagerState.ts`
 10. Add or change infrastructure operations token generation, lookup, assignment, the pure unified-agent inventory/install model, and reporting/install presentation through `frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx`, `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`, and `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx`
 11. Keep `internal/api/session_store.go` on a fail-closed auth-persistence boundary: persisted OIDC refresh tokens may only round-trip through encrypted-at-rest session payloads, and any missing-crypto or invalid-ciphertext path must drop the token instead of preserving plaintext-at-rest session state.
 12. Keep tenant AI handler wiring on canonical provider ownership: `internal/api/ai_handlers.go` may wire tenant `ReadState` and tenant-scoped unified-resource providers into AI services, but it must not revive tenant snapshot-provider bridges once Patrol can initialize and verify from those canonical providers directly.
@@ -1342,14 +1346,16 @@ magic-link payload semantics, while `internal/hosted/provisioner.go` owns the
 shared org bootstrap and rollback mechanics that the hosted signup handler
 invokes.
 The API token settings surface now also follows the same explicit ownership
-rule. Changes to `frontend-modern/src/components/Settings/APITokenManager.tsx`
-must carry this contract and the dedicated API-token management proof file
-instead of remaining an unowned consumer of token scope labels, token
-assignment visibility, and revoke-state presentation.
-That shared `APITokenManager.tsx` boundary must also stay under explicit proof
-routing on both sides instead of relying only on broad settings-surface
-coverage on the security side: token settings changes must continue to carry
-the direct `api-token-management-surface` API-contract proof together with the
+rule. Changes to `frontend-modern/src/components/Settings/APITokenManager.tsx`,
+`frontend-modern/src/components/Settings/apiTokenManagerModel.ts`, and
+`frontend-modern/src/components/Settings/useAPITokenManagerState.ts` must
+carry this contract and the dedicated API-token management proof file instead
+of remaining an unowned consumer of token scope labels, token assignment
+visibility, and revoke-state presentation.
+That shared API-token boundary must also stay under explicit proof routing on
+both sides instead of relying only on broad settings-surface coverage on the
+security side: token settings changes must continue to carry the direct
+`api-token-management-surface` API-contract proof together with the
 security-side surface proof.
 That same token surface, together with `frontend-modern/src/api/security.ts`,
 `internal/api/security.go`, `internal/api/security_tokens.go`, and

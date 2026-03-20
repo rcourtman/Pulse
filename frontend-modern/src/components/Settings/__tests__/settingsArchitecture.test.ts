@@ -11,6 +11,9 @@ import nodeModalSource from '../NodeModal.tsx?raw';
 import infrastructureOperationsStateSource from '../useInfrastructureOperationsState.tsx?raw';
 import nodeModalStateSource from '../useNodeModalState.ts?raw';
 import apiAccessPanelSource from '../APIAccessPanel.tsx?raw';
+import apiTokenManagerSource from '../APITokenManager.tsx?raw';
+import apiTokenManagerModelSource from '../apiTokenManagerModel.ts?raw';
+import apiTokenManagerStateSource from '../useAPITokenManagerState.ts?raw';
 import auditLogPanelSource from '../AuditLogPanel.tsx?raw';
 import auditLogStateSource from '../useAuditLogPanelState.ts?raw';
 import auditWebhookPanelSource from '../AuditWebhookPanel.tsx?raw';
@@ -63,6 +66,8 @@ const extractedModules = [
   '../InfrastructureOperationsController.tsx',
   '../infrastructureOperationsModel.tsx',
   '../useInfrastructureOperationsState.tsx',
+  '../apiTokenManagerModel.ts',
+  '../useAPITokenManagerState.ts',
   '../useAuditLogPanelState.ts',
   '../useAuditWebhookPanelState.ts',
   '../NodeModal.tsx',
@@ -345,6 +350,20 @@ describe('Settings architecture guardrails', () => {
       'export const rowFromConnectedInfrastructureItem',
     );
     expect(infrastructureOperationsModelSource).toContain('export const buildCommandsByPlatform');
+  });
+
+  it('keeps the API token manager shell behind extracted state and model owners', () => {
+    expect(apiTokenManagerSource).toContain('./useAPITokenManagerState');
+    expect(apiTokenManagerSource).not.toContain('const [tokens, setTokens] = createSignal<APITokenRecord[]>([])');
+    expect(apiTokenManagerSource).not.toContain('const loadTokens = async () =>');
+    expect(apiTokenManagerSource).not.toContain('const hasAgentScopeResource = (resource: Resource)');
+    expect(apiTokenManagerStateSource).toContain('export const useAPITokenManagerState =');
+    expect(apiTokenManagerStateSource).toContain('const [tokens, setTokens] = createSignal<APITokenRecord[]>([])');
+    expect(apiTokenManagerStateSource).toContain('const loadTokens = async () =>');
+    expect(apiTokenManagerStateSource).toContain('SecurityAPI.listTokens()');
+    expect(apiTokenManagerModelSource).toContain('export const hasAgentScopeResource =');
+    expect(apiTokenManagerModelSource).toContain('export const buildDockerTokenUsage =');
+    expect(apiTokenManagerModelSource).toContain('export const buildAgentTokenUsage =');
   });
 
   it('keeps the node setup modal shell behind extracted state and model owners', () => {

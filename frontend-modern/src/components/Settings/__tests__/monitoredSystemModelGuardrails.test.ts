@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import agentProfilesPanelSource from '../AgentProfilesPanel.tsx?raw';
 import agentProfilesPanelStateSource from '../useAgentProfilesPanelState.ts?raw';
 import apiTokenManagerSource from '../APITokenManager.tsx?raw';
+import apiTokenManagerModelSource from '../apiTokenManagerModel.ts?raw';
+import apiTokenManagerStateSource from '../useAPITokenManagerState.ts?raw';
 import infrastructureOperationsStateSource from '../useInfrastructureOperationsState.tsx?raw';
 import agentLedgerPanelSource from '../MonitoredSystemLedgerPanel.tsx?raw';
 import alertsPageSource from '@/pages/Alerts.tsx?raw';
@@ -167,33 +169,39 @@ describe('monitored-system model guardrails', () => {
   });
 
   it('keeps APITokenManager runtime usage mapped from unified resources', () => {
-    expect(apiTokenManagerSource).toContain('const agentCapableResources = createMemo(() =>');
-    expect(apiTokenManagerSource).toContain('@/utils/apiTokenPresentation');
-    expect(apiTokenManagerSource).toContain(
+    expect(apiTokenManagerSource).toContain("import { useAPITokenManagerState }");
+    expect(apiTokenManagerSource).toContain('useAPITokenManagerState(props)');
+    expect(apiTokenManagerSource).not.toContain('const agentCapableResources = createMemo(() =>');
+    expect(apiTokenManagerSource).not.toContain('@/utils/apiTokenPresentation');
+    expect(apiTokenManagerStateSource).toContain('const agentCapableResources = createMemo(() =>');
+    expect(apiTokenManagerStateSource).toContain('@/utils/apiTokenPresentation');
+    expect(apiTokenManagerStateSource).toContain(
       "const dockerRuntimeResources = createMemo(() => byType('docker-host'))",
     );
-    expect(apiTokenManagerSource).toContain('const hasAgentScopeResource = (resource: Resource)');
-    expect(apiTokenManagerSource).toContain("resource.type === 'agent'");
-    expect(apiTokenManagerSource).toContain("resource.type === 'pbs'");
-    expect(apiTokenManagerSource).toContain("resource.type === 'pmg'");
-    expect(apiTokenManagerSource).toContain("resource.type === 'truenas'");
-    expect(apiTokenManagerSource).toContain('resourceHasAgentFacet(resource)');
-    expect(apiTokenManagerSource).toContain('getActionableDockerRuntimeIdFromResource(resource)');
-    expect(apiTokenManagerSource).toContain('markDockerRuntimesTokenRevoked');
-    expect(apiTokenManagerSource).not.toContain('markDockerHostsTokenRevoked');
-    expect(apiTokenManagerSource).not.toContain("resource.type === 'host'");
-    expect(apiTokenManagerSource).not.toContain('markHostsTokenRevoked');
-    expect(apiTokenManagerSource).not.toContain(
+    expect(apiTokenManagerModelSource).toContain('export const hasAgentScopeResource =');
+    expect(apiTokenManagerModelSource).toContain("resource.type === 'agent'");
+    expect(apiTokenManagerModelSource).toContain("resource.type === 'pbs'");
+    expect(apiTokenManagerModelSource).toContain("resource.type === 'pmg'");
+    expect(apiTokenManagerModelSource).toContain("resource.type === 'truenas'");
+    expect(apiTokenManagerModelSource).toContain('resourceHasAgentFacet(resource)');
+    expect(apiTokenManagerModelSource).toContain(
+      'getActionableDockerRuntimeIdFromResource(resource)',
+    );
+    expect(apiTokenManagerStateSource).toContain('markDockerRuntimesTokenRevoked');
+    expect(apiTokenManagerStateSource).not.toContain('markDockerHostsTokenRevoked');
+    expect(apiTokenManagerModelSource).not.toContain("resource.type === 'host'");
+    expect(apiTokenManagerStateSource).not.toContain('markHostsTokenRevoked');
+    expect(apiTokenManagerStateSource).not.toContain(
       "const hostResources = createMemo(() => byType('host'))",
     );
-    expect(apiTokenManagerSource).not.toContain('isAppContainerDiscoveryResourceType');
-    expect(apiTokenManagerSource).not.toContain(
+    expect(apiTokenManagerModelSource).not.toContain('isAppContainerDiscoveryResourceType');
+    expect(apiTokenManagerStateSource).not.toContain(
       "notificationStore.error('Failed to load API tokens')",
     );
-    expect(apiTokenManagerSource).not.toContain(
+    expect(apiTokenManagerStateSource).not.toContain(
       "notificationStore.error('Failed to generate API token')",
     );
-    expect(apiTokenManagerSource).not.toContain(
+    expect(apiTokenManagerStateSource).not.toContain(
       "notificationStore.error('Failed to revoke API token')",
     );
     expect(apiTokenPresentationSource).toContain('export function getAPITokensLoadErrorMessage');

@@ -773,7 +773,10 @@ class SubsystemLookupTest(unittest.TestCase):
         )
         self.assertEqual(
             api_match["verification_requirement"]["exact_files"],
-            ["frontend-modern/src/components/Settings/__tests__/APITokenManager.test.tsx"],
+            [
+                "frontend-modern/src/components/Settings/__tests__/APITokenManager.test.tsx",
+                "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
+            ],
         )
         security_match = next(
             match for match in file_entry["matches"] if match["subsystem"] == "security-privacy"

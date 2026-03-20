@@ -1,48 +1,10 @@
-import {
-  Component,
-  For,
-  Show,
-  createEffect,
-  createMemo,
-  createSignal,
-  onCleanup,
-  onMount,
-} from 'solid-js';
-import { unwrap } from 'solid-js/store';
-import { SecurityAPI, type APITokenRecord } from '@/api/security';
-import { notificationStore } from '@/stores/notifications';
-import { formatRelativeTime } from '@/utils/format';
-import { useWebSocket } from '@/App';
-import { getPulseBaseUrl } from '@/utils/url';
-import { showTokenReveal, useTokenRevealState } from '@/stores/tokenReveal';
-import { logger } from '@/utils/logger';
-import {
-  getAPITokenGenerateErrorMessage,
-  getAPITokensLoadErrorMessage,
-  getAPITokenRevokeErrorMessage,
-} from '@/utils/apiTokenPresentation';
+import { Component, For, Show } from 'solid-js';
 import { Card } from '@/components/shared/Card';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
-import { useResources } from '@/hooks/useResources';
-import type { Resource } from '@/types/resource';
-import {
-  getActionableAgentIdFromResource,
-  getActionableDockerRuntimeIdFromResource,
-  hasAgentFacet as resourceHasAgentFacet,
-} from '@/utils/agentResources';
-import { getPreferredResourceDisplayName } from '@/utils/resourceIdentity';
 import BadgeCheck from 'lucide-solid/icons/badge-check';
-import {
-  API_SCOPE_LABELS,
-  API_SCOPE_OPTIONS,
-  DOCKER_MANAGE_SCOPE,
-  DOCKER_REPORT_SCOPE,
-  AGENT_REPORT_SCOPE,
-  MONITORING_READ_SCOPE,
-  SETTINGS_READ_SCOPE,
-  SETTINGS_WRITE_SCOPE,
-} from '@/constants/apiScopes';
+import { MONITORING_READ_SCOPE } from '@/constants/apiScopes';
+import { useAPITokenManagerState } from './useAPITokenManagerState';
 
 interface APITokenManagerProps {
   currentTokenHint?: string;
@@ -51,439 +13,45 @@ interface APITokenManagerProps {
   canManage?: boolean;
 }
 
-const SCOPES_DOC_URL =
-  'https://github.com/rcourtman/Pulse/blob/main/docs/CONFIGURATION.md#token-scopes';
-const WILDCARD_SCOPE = '*';
-
 export const APITokenManager: Component<APITokenManagerProps> = (props) => {
-  const { markDockerRuntimesTokenRevoked, markAgentsTokenRevoked } = useWebSocket();
-  const { byType, resources } = useResources();
-
-  const dockerRuntimeResources = createMemo(() => byType('docker-host'));
-  const hasAgentScopeResource = (resource: Resource): boolean => {
-    if (resource.type === 'docker-host') return false;
-    return (
-      resource.type === 'agent' ||
-      resource.type === 'pbs' ||
-      resource.type === 'pmg' ||
-      resource.type === 'truenas' ||
-      resourceHasAgentFacet(resource)
-    );
-  };
-  const agentCapableResources = createMemo(() =>
-    resources().filter((resource) => hasAgentScopeResource(resource)),
-  );
-
-  const readPlatformData = (resource: Resource): Record<string, unknown> | undefined => {
-    return resource.platformData
-      ? (unwrap(resource.platformData) as Record<string, unknown>)
-      : undefined;
-  };
-
-  const readPlatformString = (value: unknown): string | undefined => {
-    return typeof value === 'string' && value.length > 0 ? value : undefined;
-  };
-
-  const readPlatformNumber = (value: unknown): number | undefined => {
-    return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
-  };
-
-  const readNestedPlatformField = (
-    platformData: Record<string, unknown> | undefined,
-    field: string,
-  ): unknown => {
-    if (!platformData) return undefined;
-    if (field in platformData) return platformData[field];
-    const agent = platformData.agent;
-    if (agent && typeof agent === 'object' && field in (agent as Record<string, unknown>)) {
-      return (agent as Record<string, unknown>)[field];
-    }
-    const docker = platformData.docker;
-    if (docker && typeof docker === 'object' && field in (docker as Record<string, unknown>)) {
-      return (docker as Record<string, unknown>)[field];
-    }
-    return undefined;
-  };
-
-  const tokenIdForResource = (resource: Resource): string | undefined => {
-    const platformData = readPlatformData(resource);
-    return readPlatformString(readNestedPlatformField(platformData, 'tokenId'));
-  };
-
-  const agentActionIdForResource = (resource: Resource): string => {
-    return getActionableAgentIdFromResource(resource) || resource.id;
-  };
-
-  const dockerActionIdForResource = (resource: Resource): string => {
-    return getActionableDockerRuntimeIdFromResource(resource) || resource.id;
-  };
-
-  const revokedTokenIdForResource = (resource: Resource): string | undefined => {
-    const platformData = readPlatformData(resource);
-    return readPlatformString(readNestedPlatformField(platformData, 'revokedTokenId'));
-  };
-
-  const tokenRevokedAtForResource = (resource: Resource): number | undefined => {
-    const platformData = readPlatformData(resource);
-    return readPlatformNumber(readNestedPlatformField(platformData, 'tokenRevokedAt'));
-  };
-
-  const dockerTokenUsage = createMemo(() => {
-    type UsageRuntime = { id: string; label: string };
-    const usage = new Map<string, { count: number; runtimes: UsageRuntime[] }>();
-    for (const resource of dockerRuntimeResources()) {
-      const tokenId = tokenIdForResource(resource);
-      if (!tokenId) continue;
-      const runtimeId = dockerActionIdForResource(resource);
-      const label = getPreferredResourceDisplayName(resource);
-      const previous = usage.get(tokenId);
-      if (previous) {
-        if (previous.runtimes.some((runtime) => runtime.id === runtimeId)) continue;
-        usage.set(tokenId, {
-          count: previous.count + 1,
-          runtimes: [...previous.runtimes, { id: runtimeId, label }],
-        });
-      } else {
-        usage.set(tokenId, {
-          count: 1,
-          runtimes: [{ id: runtimeId, label }],
-        });
-      }
-    }
-    return usage;
-  });
-  const agentTokenUsage = createMemo(() => {
-    type UsageAgent = { id: string; label: string };
-    const usage = new Map<string, { count: number; agents: UsageAgent[] }>();
-    for (const resource of agentCapableResources()) {
-      const tokenId = tokenIdForResource(resource);
-      if (!tokenId) continue;
-      const agentId = agentActionIdForResource(resource);
-      const label = getPreferredResourceDisplayName(resource);
-      const previous = usage.get(tokenId);
-      if (previous) {
-        if (previous.agents.some((agent) => agent.id === agentId)) continue;
-        usage.set(tokenId, {
-          count: previous.count + 1,
-          agents: [...previous.agents, { id: agentId, label }],
-        });
-      } else {
-        usage.set(tokenId, { count: 1, agents: [{ id: agentId, label }] });
-      }
-    }
-    return usage;
-  });
-
-  const [tokens, setTokens] = createSignal<APITokenRecord[]>([]);
-  const [tokensLoaded, setTokensLoaded] = createSignal(false);
-  const sortedTokens = createMemo(() =>
-    [...tokens()].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
-  );
-  const totalTokens = createMemo(() => sortedTokens().length);
-  const wildcardCount = createMemo(
-    () =>
-      sortedTokens().filter((token) => {
-        const scopes = token.scopes;
-        return !scopes || scopes.length === 0 || scopes.includes('*');
-      }).length,
-  );
-  const scopedTokenCount = createMemo(() => totalTokens() - wildcardCount());
-  const hasWildcardTokens = createMemo(() => wildcardCount() > 0);
-
-  const [loading, setLoading] = createSignal(true);
-  const [isGenerating, setIsGenerating] = createSignal(false);
-  const [newTokenValue, setNewTokenValue] = createSignal<string | null>(null);
-  const [newTokenRecord, setNewTokenRecord] = createSignal<APITokenRecord | null>(null);
-  const [nameInput, setNameInput] = createSignal('');
-  const tokenRevealState = useTokenRevealState();
-  const [selectedScopes, setSelectedScopes] = createSignal<string[]>([]);
-  const canManage = () => props.canManage !== false;
-
-  type ScopeGroup = (typeof API_SCOPE_OPTIONS)[number]['group'];
-  type ScopeOption = (typeof API_SCOPE_OPTIONS)[number];
-  const scopeGroupOrder: ScopeGroup[] = ['Monitoring', 'Agents', 'Settings'];
-  const scopeGroups = createMemo<[ScopeGroup, ScopeOption[]][]>(() => {
-    const grouped: Record<ScopeGroup, ScopeOption[]> = {
-      Monitoring: [],
-      Agents: [],
-      Settings: [],
-    };
-    for (const option of API_SCOPE_OPTIONS) {
-      grouped[option.group].push(option);
-    }
-    return scopeGroupOrder
-      .map((group) => [group, grouped[group]] as [ScopeGroup, ScopeOption[]])
-      .filter(([, options]) => options.length > 0);
-  });
-
-  const isFullAccessSelected = () =>
-    selectedScopes().length === 0 || selectedScopes().includes(WILDCARD_SCOPE);
-
-  const scopePresets: { label: string; scopes: string[]; description: string }[] = [
-    {
-      label: 'Kiosk / Dashboard',
-      scopes: [MONITORING_READ_SCOPE],
-      description:
-        'Read-only access for wall displays. Use ?token=xxx&kiosk=1 in the URL to hide navigation and filters.',
-    },
-    {
-      label: 'Agent',
-      scopes: [AGENT_REPORT_SCOPE],
-      description: 'Allow the Pulse agent to submit OS, CPU, and disk metrics.',
-    },
-    {
-      label: 'Container report',
-      scopes: [DOCKER_REPORT_SCOPE],
-      description:
-        'Permits container agents (Docker or Podman) to stream runtime and container telemetry only.',
-    },
-    {
-      label: 'Container manage',
-      scopes: [DOCKER_REPORT_SCOPE, DOCKER_MANAGE_SCOPE],
-      description: 'Extends container reporting with lifecycle actions (restart, stop, etc.).',
-    },
-    {
-      label: 'Settings read',
-      scopes: [SETTINGS_READ_SCOPE],
-      description: 'Read configuration snapshots and diagnostics without modifying anything.',
-    },
-    {
-      label: 'Settings admin',
-      scopes: [SETTINGS_READ_SCOPE, SETTINGS_WRITE_SCOPE],
-      description: 'Full settings read/write – equivalent to automation with admin privileges.',
-    },
-  ];
-
-  const presetMatchesSelection = (presetScopes: string[]) => {
-    const selection = [...selectedScopes()].filter((scope) => scope !== WILDCARD_SCOPE).sort();
-    const target = [...presetScopes].sort();
-    if (target.length === 0) {
-      return isFullAccessSelected();
-    }
-    if (selection.length !== target.length) {
-      return false;
-    }
-    return target.every((scope) => selection.includes(scope));
-  };
-
-  const applyScopePreset = (scopes: string[]) => {
-    const unique = Array.from(new Set(scopes)).filter(Boolean);
-    setSelectedScopes(unique);
-  };
-  const clearScopes = () => setSelectedScopes([]);
-
-  let createSectionRef: HTMLDivElement | undefined;
-  const [createHighlight, setCreateHighlight] = createSignal(false);
-  let highlightTimer: number | undefined;
-  const focusCreateSection = () => {
-    if (!createSectionRef) return;
-    createSectionRef.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    setCreateHighlight(true);
-    window.clearTimeout(highlightTimer);
-    highlightTimer = window.setTimeout(() => setCreateHighlight(false), 1600);
-  };
-  onCleanup(() => {
-    if (highlightTimer) window.clearTimeout(highlightTimer);
-  });
-
-  const loadTokens = async () => {
-    setLoading(true);
-    setTokensLoaded(false);
-    try {
-      const list = await SecurityAPI.listTokens();
-      setTokens(list);
-      setTokensLoaded(true);
-    } catch (err) {
-      logger.error('Failed to load API tokens', err);
-      notificationStore.error(getAPITokensLoadErrorMessage());
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  onMount(() => {
-    void loadTokens();
-  });
-
-  createEffect(() => {
-    if (!tokensLoaded()) return;
-    const activeTokenIds = new Set(tokens().map((token) => token.id));
-    const pendingRuntimesByToken = new Map<string, string[]>();
-
-    for (const resource of dockerRuntimeResources()) {
-      const tokenId = tokenIdForResource(resource);
-      if (!tokenId) continue;
-      if (activeTokenIds.has(tokenId)) continue;
-      if (revokedTokenIdForResource(resource) === tokenId) continue;
-
-      if (!pendingRuntimesByToken.has(tokenId)) {
-        pendingRuntimesByToken.set(tokenId, []);
-      }
-      const runtimeIds = pendingRuntimesByToken.get(tokenId)!;
-      const runtimeId = dockerActionIdForResource(resource);
-      if (!runtimeIds.includes(runtimeId)) {
-        runtimeIds.push(runtimeId);
-      }
-    }
-
-    pendingRuntimesByToken.forEach((runtimeIds, tokenId) => {
-      if (runtimeIds.length === 0) return;
-      markDockerRuntimesTokenRevoked(tokenId, runtimeIds);
-    });
-
-    const pendingAgentsByToken = new Map<string, string[]>();
-    for (const resource of agentCapableResources()) {
-      const tokenId = tokenIdForResource(resource);
-      if (!tokenId) continue;
-      if (activeTokenIds.has(tokenId)) continue;
-      if (revokedTokenIdForResource(resource) === tokenId && tokenRevokedAtForResource(resource))
-        continue;
-
-      if (!pendingAgentsByToken.has(tokenId)) {
-        pendingAgentsByToken.set(tokenId, []);
-      }
-      const agentIds = pendingAgentsByToken.get(tokenId)!;
-      const agentId = agentActionIdForResource(resource);
-      if (!agentIds.includes(agentId)) {
-        agentIds.push(agentId);
-      }
-    }
-
-    pendingAgentsByToken.forEach((agentIds, tokenId) => {
-      if (agentIds.length === 0) return;
-      markAgentsTokenRevoked(tokenId, agentIds);
-    });
-  });
-
-  const handleGenerate = async () => {
-    if (!canManage()) return;
-    setIsGenerating(true);
-    try {
-      const trimmedName = nameInput().trim() || undefined;
-      const scopeSelection = [...selectedScopes()].sort();
-      const scopePayload = scopeSelection.length > 0 ? scopeSelection : undefined;
-      const { token, record } = await SecurityAPI.createToken(trimmedName, scopePayload);
-
-      setTokens((prev) => [record, ...prev]);
-      setNewTokenRecord(record);
-      setNewTokenValue(token);
-      setNameInput('');
-
-      showTokenReveal({
-        token,
-        record,
-        source: 'security',
-        note: 'Copy this token now. You can reopen this dialog from Security → API tokens while this page stays open.',
-      });
-      notificationStore.success(
-        'New API token generated. Copy it below while it is still visible.',
-      );
-      props.onTokensChanged?.();
-    } catch (err) {
-      logger.error('Failed to generate API token', err);
-      notificationStore.error(getAPITokenGenerateErrorMessage(err));
-    } finally {
-      setIsGenerating(false);
-    }
-  };
-
-  const tokenHint = (record: APITokenRecord | null | undefined) => {
-    if (!record) return '—';
-    if (record.prefix && record.suffix) {
-      return `${record.prefix}…${record.suffix}`;
-    }
-    if (record.prefix) {
-      return `${record.prefix}…`;
-    }
-    return '—';
-  };
-
-  const tokenNameForDialog = (record: APITokenRecord) => {
-    if (record.name?.trim()) return record.name.trim();
-    if (record.prefix && record.suffix) return `${record.prefix}…${record.suffix}`;
-    if (record.prefix) return `${record.prefix}…`;
-    return 'untitled token';
-  };
-
-  const handleDelete = async (record: APITokenRecord) => {
-    if (!canManage()) return;
-    const dockerUsage = dockerTokenUsage().get(record.id);
-    const agentUsage = agentTokenUsage().get(record.id);
-    const displayName = tokenNameForDialog(record);
-
-    const affectedRuntimeIds = dockerUsage ? dockerUsage.runtimes.map((runtime) => runtime.id) : [];
-    const affectedAgentIds = agentUsage ? agentUsage.agents.map((agent) => agent.id) : [];
-    let revokeMessage: string | undefined;
-    const messageChunks: string[] = [];
-    if (dockerUsage) {
-      const runtimeListPreview = dockerUsage.runtimes
-        .slice(0, 5)
-        .map((runtime) => runtime.label)
-        .join(', ');
-      const extraCount = dockerUsage.runtimes.length - 5;
-      const usageSummary =
-        extraCount > 0 ? `${runtimeListPreview}, +${extraCount} more` : runtimeListPreview;
-      const runtimeCountLabel =
-        dockerUsage.count === 1 ? 'container runtime' : `${dockerUsage.count} container runtimes`;
-      messageChunks.push(`${runtimeCountLabel}: ${usageSummary}`);
-    }
-    if (agentUsage) {
-      const agentListPreview = agentUsage.agents
-        .slice(0, 5)
-        .map((agent) => agent.label)
-        .join(', ');
-      const agentExtra = agentUsage.agents.length - 5;
-      const agentSummary =
-        agentExtra > 0 ? `${agentListPreview}, +${agentExtra} more` : agentListPreview;
-      const agentCountLabel = agentUsage.count === 1 ? 'agent' : `${agentUsage.count} agents`;
-      messageChunks.push(`${agentCountLabel}: ${agentSummary}`);
-    }
-    if (messageChunks.length > 0) {
-      revokeMessage = `Token "${displayName}" was previously used by ${messageChunks.join(' • ')}. Update those agents with a new token.`;
-    }
-
-    try {
-      await SecurityAPI.deleteToken(record.id);
-      setTokens((prev) => prev.filter((token) => token.id !== record.id));
-      notificationStore.success(
-        revokeMessage ? `Token revoked: ${revokeMessage}` : 'Token revoked',
-      );
-      props.onTokensChanged?.();
-      if (affectedRuntimeIds.length > 0) {
-        markDockerRuntimesTokenRevoked(record.id, affectedRuntimeIds);
-      }
-      if (affectedAgentIds.length > 0) {
-        markAgentsTokenRevoked(record.id, affectedAgentIds);
-      }
-
-      const current = newTokenRecord();
-      if (current && current.id === record.id) {
-        setNewTokenValue(null);
-        setNewTokenRecord(null);
-      }
-    } catch (err) {
-      logger.error('Failed to revoke API token', err);
-      notificationStore.error(getAPITokenRevokeErrorMessage());
-    }
-  };
-
-  const isRevealActiveForCurrentToken = () => {
-    const active = tokenRevealState();
-    if (!active) return false;
-    return newTokenValue() !== null && active.token === newTokenValue();
-  };
-
-  const reopenTokenDialog = () => {
-    const token = newTokenValue();
-    const record = newTokenRecord();
-    if (!token || !record) return;
-    showTokenReveal({
-      token,
-      record,
-      source: 'security',
-      note: 'Copy this token now. Close the dialog once you have stored it safely.',
-    });
-  };
+  const {
+    API_SCOPE_LABELS,
+    API_TOKEN_SCOPES_DOC_URL,
+    agentTokenUsage,
+    applyScopePreset,
+    canManage,
+    clearScopes,
+    copyNewMonitoringKioskLink,
+    createHighlight,
+    dismissNewToken,
+    dockerTokenUsage,
+    focusCreateSection,
+    formatRelativeTime,
+    handleDelete,
+    handleGenerate,
+    hasWildcardTokens,
+    isFullAccessSelected,
+    isGenerating,
+    isRevealActiveForCurrentToken,
+    loading,
+    nameInput,
+    newMonitoringKioskLink,
+    newTokenRecord,
+    newTokenValue,
+    reopenTokenDialog,
+    scopedTokenCount,
+    scopeGroups,
+    scopePresets,
+    selectedScopes,
+    setCreateSectionRef,
+    setNameInput,
+    sortedTokens,
+    tokenHint,
+    toggleScope,
+    totalTokens,
+    wildcardCount,
+    presetMatchesSelection,
+  } = useAPITokenManagerState(props);
 
   return (
     <div class="space-y-5">
@@ -626,8 +194,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
               </button>
               <button
                 onClick={() => {
-                  setNewTokenValue(null);
-                  setNewTokenRecord(null);
+                  dismissNewToken();
                 }}
                 class="font-medium underline decoration-green-500 underline-offset-2 hover:text-green-900 dark:hover:text-green-100"
               >
@@ -650,15 +217,11 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
               </p>
               <div class="flex items-center gap-2">
                 <code class="flex-1 rounded border border-blue-200 bg-surface px-3 py-2 font-mono text-xs text-blue-800 dark:border-blue-800 dark:bg-black dark:text-blue-200 break-all">
-                  {getPulseBaseUrl()}/?token={newTokenValue()}&kiosk=1
+                  {newMonitoringKioskLink()}
                 </code>
                 <button
                   type="button"
-                  onClick={() => {
-                    const url = `${getPulseBaseUrl()}/?token=${newTokenValue()}&kiosk=1`;
-                    navigator.clipboard.writeText(url);
-                    notificationStore.success('Link copied to clipboard');
-                  }}
+                  onClick={() => void copyNewMonitoringKioskLink()}
                   class="flex-shrink-0 rounded-md bg-blue-600 px-3 py-2 text-xs font-semibold text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 dark:bg-blue-600 dark:hover:bg-blue-500"
                 >
                   Copy Link
@@ -771,21 +334,21 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                     if (dockerUsageEntry) {
                       usageSegments.push(
                         dockerUsageEntry.count === 1
-                          ? (dockerUsageEntry.runtimes[0]?.label ?? 'Container runtime')
+                          ? (dockerUsageEntry.items[0]?.label ?? 'Container runtime')
                           : `${dockerUsageEntry.count} container runtimes`,
                       );
                       usageTitleSegments.push(
-                        `Container runtimes: ${dockerUsageEntry.runtimes.map((runtime) => runtime.label).join(', ')}`,
+                        `Container runtimes: ${dockerUsageEntry.items.map((runtime) => runtime.label).join(', ')}`,
                       );
                     }
                     if (agentUsageEntry) {
                       usageSegments.push(
                         agentUsageEntry.count === 1
-                          ? `${agentUsageEntry.agents[0]?.label ?? 'Agent'}`
+                          ? `${agentUsageEntry.items[0]?.label ?? 'Agent'}`
                           : `${agentUsageEntry.count} agents`,
                       );
                       usageTitleSegments.push(
-                        `Agents: ${agentUsageEntry.agents.map((agent) => agent.label).join(', ')}`,
+                        `Agents: ${agentUsageEntry.items.map((agent) => agent.label).join(', ')}`,
                       );
                     }
                     const usageSummary = usageSegments.length > 0 ? usageSegments.join(' • ') : '—';
@@ -861,9 +424,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
         class={`border border-border transition-shadow ${
           createHighlight() ? 'ring-2 ring-blue-500 shadow-sm' : ''
         }`}
-        ref={(el: HTMLDivElement) => {
-          createSectionRef = el;
-        }}
+        ref={setCreateSectionRef}
       >
         <div class="flex flex-col gap-6 p-4 sm:p-6 lg:p-8">
           <div class="flex flex-wrap items-start justify-between gap-4">
@@ -959,14 +520,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                               <button
                                 type="button"
                                 class={`min-h-10 sm:min-h-10 rounded-full border px-3 py-2 text-sm font-semibold transition ${isActive() ? 'border-blue-500 bg-blue-600 text-white shadow-sm' : 'border-border bg-surface text-base-content hover:border-blue-400 hover:text-blue-600 dark:hover:border-blue-400 dark:hover:text-blue-200'}`}
-                                onClick={() => {
-                                  setSelectedScopes((prev) => {
-                                    if (prev.includes(option.value)) {
-                                      return prev.filter((v) => v !== option.value);
-                                    }
-                                    return [...prev, option.value];
-                                  });
-                                }}
+                                onClick={() => toggleScope(option.value)}
                                 disabled={!canManage()}
                                 title={option.description}
                               >
@@ -1000,7 +554,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
         Separate tokens per integration • Rotate regularly •{' '}
         <a
           class="inline-flex min-h-10 sm:min-h-10 items-center rounded-md px-2 py-1.5 text-sm font-medium text-blue-600 underline-offset-2 hover:underline dark:text-blue-400"
-          href={SCOPES_DOC_URL}
+          href={API_TOKEN_SCOPES_DOC_URL}
           target="_blank"
           rel="noreferrer"
         >

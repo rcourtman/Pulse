@@ -25,32 +25,36 @@ token-management visibility, and privacy controls to operators.
 2. `docs/PRIVACY.md`
 3. `frontend-modern/src/api/security.ts`
 4. `frontend-modern/src/components/Settings/APITokenManager.tsx`
-5. `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx`
-6. `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx`
-7. `frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx`
-8. `frontend-modern/src/components/Settings/useSystemSettingsState.ts`
-9. `internal/api/security.go`
-10. `internal/api/security_tokens.go`
-11. `internal/api/system_settings.go`
-12. `internal/telemetry/telemetry.go`
+5. `frontend-modern/src/components/Settings/apiTokenManagerModel.ts`
+6. `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx`
+7. `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx`
+8. `frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx`
+9. `frontend-modern/src/components/Settings/useAPITokenManagerState.ts`
+10. `frontend-modern/src/components/Settings/useSystemSettingsState.ts`
+11. `internal/api/security.go`
+12. `internal/api/security_tokens.go`
+13. `internal/api/system_settings.go`
+14. `internal/telemetry/telemetry.go`
 
 ## Shared Boundaries
 
 1. `frontend-modern/src/api/security.ts` shared with `api-contracts`: the security frontend client is both a security/privacy control surface and a canonical API payload contract boundary.
 2. `frontend-modern/src/components/Settings/APITokenManager.tsx` shared with `api-contracts`: the API token settings surface is both a security/privacy control surface and a canonical API payload contract boundary.
-3. `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx` shared with `frontend-primitives`: the general settings privacy panel is both a security/privacy control surface and a canonical settings-shell presentation boundary.
-4. `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx` shared with `frontend-primitives`: the authentication settings surface is both a security/privacy control surface and a canonical settings-shell presentation boundary.
-5. `frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx` shared with `frontend-primitives`: the security overview settings surface is both a security/privacy control surface and a canonical settings-shell presentation boundary.
-6. `internal/api/security.go` shared with `api-contracts`: the security handlers are both a security/privacy control surface and a canonical API payload contract boundary.
-7. `internal/api/security_tokens.go` shared with `api-contracts`: the security token handlers are both a security/privacy control surface and a canonical API payload contract boundary.
-8. `internal/api/system_settings.go` shared with `api-contracts`: the system settings telemetry and auth controls are both a security/privacy control surface and a canonical API payload contract boundary.
+3. `frontend-modern/src/components/Settings/apiTokenManagerModel.ts` shared with `api-contracts`: the pure API token settings model is both a security/privacy control surface and a canonical API payload contract boundary.
+4. `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx` shared with `frontend-primitives`: the general settings privacy panel is both a security/privacy control surface and a canonical settings-shell presentation boundary.
+5. `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx` shared with `frontend-primitives`: the authentication settings surface is both a security/privacy control surface and a canonical settings-shell presentation boundary.
+6. `frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx` shared with `frontend-primitives`: the security overview settings surface is both a security/privacy control surface and a canonical settings-shell presentation boundary.
+7. `frontend-modern/src/components/Settings/useAPITokenManagerState.ts` shared with `api-contracts`: the API token settings state hook is both a security/privacy control surface and a canonical API payload contract boundary.
+8. `internal/api/security.go` shared with `api-contracts`: the security handlers are both a security/privacy control surface and a canonical API payload contract boundary.
+9. `internal/api/security_tokens.go` shared with `api-contracts`: the security token handlers are both a security/privacy control surface and a canonical API payload contract boundary.
+10. `internal/api/system_settings.go` shared with `api-contracts`: the system settings telemetry and auth controls are both a security/privacy control surface and a canonical API payload contract boundary.
 
 ## Extension Points
 
 1. Change privacy disclosures or outbound-data guarantees through `docs/PRIVACY.md` and `internal/telemetry/telemetry.go` together.
 2. Change security policy, hardening guidance, or supported auth boundaries through `SECURITY.md`.
 3. Change telemetry/privacy settings state handling through `frontend-modern/src/components/Settings/useSystemSettingsState.ts`.
-4. Change security/auth/token transport behavior through the shared `frontend-modern/src/api/security.ts`, `frontend-modern/src/components/Settings/APITokenManager.tsx`, `internal/api/security.go`, `internal/api/security_tokens.go`, and `internal/api/system_settings.go` boundary.
+4. Change security/auth/token transport behavior through the shared `frontend-modern/src/api/security.ts`, `frontend-modern/src/components/Settings/APITokenManager.tsx`, `frontend-modern/src/components/Settings/apiTokenManagerModel.ts`, `frontend-modern/src/components/Settings/useAPITokenManagerState.ts`, `internal/api/security.go`, `internal/api/security_tokens.go`, and `internal/api/system_settings.go` boundary.
 5. Change security/privacy settings presentation through the shared `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx`, `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx`, and `frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx` boundary.
 
 ## Forbidden Paths
@@ -212,7 +216,9 @@ migration input. Once a legacy plaintext license file can be read, canonical
 persistence must rewrite encrypted-at-rest storage immediately on load instead
 of allowing plaintext licensing state to remain on the runtime primary path.
 That same shared token-settings boundary must stay under explicit proof routing
-on both sides: `frontend-modern/src/components/Settings/APITokenManager.tsx`
-must continue to carry the direct `security-settings-surfaces` proof path
-together with the API-contract token-management proof instead of borrowing
-coverage only from broader settings-shell or API ownership.
+on both sides: `frontend-modern/src/components/Settings/APITokenManager.tsx`,
+`frontend-modern/src/components/Settings/apiTokenManagerModel.ts`, and
+`frontend-modern/src/components/Settings/useAPITokenManagerState.ts` must
+continue to carry the direct `security-settings-surfaces` proof path together
+with the API-contract token-management proof instead of borrowing coverage only
+from broader settings-shell or API ownership.
