@@ -245,6 +245,11 @@ describe('ResourceDetailDrawer change history section', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Show context' }));
     await screen.findByText('AI Intelligence');
+    expect(
+      screen
+        .getByTestId('resource-investigation-context')
+        .querySelectorAll('.rounded.border.border-border.bg-surface.p-3').length,
+    ).toBe(0);
     expect(screen.getByText('Health')).toBeInTheDocument();
     expect(screen.getByText('A · 92/100')).toBeInTheDocument();
     expect(screen.getByText('Trend')).toBeInTheDocument();
