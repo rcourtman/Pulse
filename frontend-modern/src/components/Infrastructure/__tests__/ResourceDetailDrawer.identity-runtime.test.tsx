@@ -149,6 +149,8 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     ).toBeNull();
     expect(queryByTestId('discovery-tab')).toBeNull();
 
+    expect(getByRole('button', { name: 'Show metadata' })).toBeInTheDocument();
+
     fireEvent.click(getByRole('button', { name: 'Show metadata' }));
 
     await waitFor(() => {
