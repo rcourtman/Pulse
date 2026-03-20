@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   ALERT_TAB_SEGMENTS,
   pathForTab,
+  summarizeIncidentEvents,
   tabFromPath,
   clampCooldownMinutes,
   fallbackCooldownMinutes,
@@ -34,6 +35,8 @@ import {
   getAlertIncidentTimelineHeadingClass,
   getAlertIncidentTimelineMetaRowClass,
   getAlertIncidentTimelineOutputClass,
+  getAlertResourceIncidentActivityChipClass,
+  getAlertResourceIncidentActivitySummaryClass,
   getAlertResourceIncidentCardClass,
   getAlertResourceIncidentSummaryRowClass,
   getAlertResourceIncidentToggleButtonClass,
@@ -273,10 +276,52 @@ describe('incident timeline presentation helpers', () => {
     expect(getAlertResourceIncidentSummaryRowClass()).toBe(
       'mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-muted',
     );
+    expect(getAlertResourceIncidentActivitySummaryClass()).toBe(
+      'flex flex-wrap items-center gap-1.5',
+    );
+    expect(getAlertResourceIncidentActivityChipClass()).toBe(
+      'rounded bg-surface-alt px-2 py-0.5 text-[10px] font-medium text-base-content',
+    );
     expect(getAlertResourceIncidentToggleButtonClass()).toBe(
       'px-2 py-1 text-[10px] border rounded-md border-border text-muted hover:bg-surface-hover',
     );
     expect(getAlertResourceIncidentTruncatedEventsLabel(6)).toBe('Showing last 6 events');
+    expect(getAlertResourceIncidentTruncatedEventsLabel(6, 6)).toBe('Showing 6 events');
+    expect(getAlertResourceIncidentTruncatedEventsLabel(6, 9)).toBe('Showing last 6 of 9 events');
+  });
+});
+
+describe('incident event summaries', () => {
+  it('summarizes incident events in canonical order and retains unknown event types', () => {
+    expect(
+      summarizeIncidentEvents([
+        { id: '1', type: 'note', timestamp: '2026-03-20T10:00:00Z', summary: 'Added note' },
+        {
+          id: '2',
+          type: 'alert_fired',
+          timestamp: '2026-03-20T10:01:00Z',
+          summary: 'Alert fired',
+        },
+        { id: '3', type: 'note', timestamp: '2026-03-20T10:02:00Z', summary: 'Added note' },
+        {
+          id: '4',
+          type: 'command',
+          timestamp: '2026-03-20T10:03:00Z',
+          summary: 'Command executed',
+        },
+        {
+          id: '5',
+          type: 'operator_followup',
+          timestamp: '2026-03-20T10:04:00Z',
+          summary: 'Operator follow-up',
+        },
+      ]),
+    ).toEqual([
+      { type: 'alert_fired', label: 'Fired', count: 1 },
+      { type: 'command', label: 'Cmd', count: 1 },
+      { type: 'note', label: 'Note', count: 2 },
+      { type: 'operator_followup', label: 'operator_followup', count: 1 },
+    ]);
   });
 });
 

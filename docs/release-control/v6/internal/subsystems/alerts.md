@@ -123,6 +123,13 @@ Resource incident panel cards, summary rows, and toggle-button presentation
 now also route through `frontend-modern/src/utils/alertIncidentPresentation.ts`
 instead of remaining inline inside `frontend-modern/src/pages/Alerts.tsx`.
 
+That same resource incident panel now treats collapsed incident activity as a
+canonical alert read-model summary rather than a page-local sentence. The
+collapsed row must summarize filtered incident events by canonical event type
+order and reuse the shared event-card renderer for expanded incident detail,
+so the alert history page does not drift away from the overview timeline when
+canonical lifecycle or remediation events are added.
+
 Active alert card state, acknowledged badge, and primary/secondary action
 button presentation now route through
 `frontend-modern/src/utils/alertOverviewPresentation.ts` instead of remaining

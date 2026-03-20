@@ -149,6 +149,12 @@ through `frontend-modern/src/utils/alertIncidentPresentation.ts` instead of
 maintaining page-local incident panel styling inside
 `frontend-modern/src/pages/Alerts.tsx`.
 
+The resource incident panel's collapsed activity summary is now part of that
+same shared primitive boundary. Event-type count chips, visible-event copy,
+and the summary-ordering helper in `frontend-modern/src/features/alerts/types.ts`
+must stay shared across alert timeline surfaces instead of rebuilding
+page-local event summaries or bespoke incident-card markup.
+
 Shared primitive consumers that split status-dot tone and status-text tone
 must now keep both values routed through the same exported presentation helper.
 Feature cards such as RAID status may not call shadow local aliases that drift

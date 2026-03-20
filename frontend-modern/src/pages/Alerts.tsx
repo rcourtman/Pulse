@@ -78,6 +78,8 @@ import {
   getAlertIncidentTimelineHeadingClass,
   getAlertIncidentTimelineMetaRowClass,
   getAlertIncidentTimelineOutputClass,
+  getAlertResourceIncidentActivityChipClass,
+  getAlertResourceIncidentActivitySummaryClass,
   getAlertResourceIncidentAcknowledgedByLabel,
   getAlertResourceIncidentCardClass,
   getAlertResourceIncidentCountLabel,
@@ -284,6 +286,7 @@ import {
   INCIDENT_EVENT_TYPES,
   GROUPING_WINDOW_DEFAULT_SECONDS,
   INCIDENT_EVENT_LABELS,
+  summarizeIncidentEvents,
   fallbackCooldownMinutes,
   clampCooldownMinutes,
 } from '@/features/alerts/types';
@@ -5005,6 +5008,7 @@ function HistoryTab(props: {
                           events,
                           resourceIncidentEventFilters(),
                         );
+                        const eventSummary = summarizeIncidentEvents(filteredEvents);
                         const recentEvents =
                           filteredEvents.length > 6
                             ? filteredEvents.slice(filteredEvents.length - 6)
@@ -5048,18 +5052,35 @@ function HistoryTab(props: {
                             </Show>
                             <Show when={events.length > 0}>
                               <div class={getAlertResourceIncidentSummaryRowClass()}>
-                                <span>
-                                  <Show
-                                    when={filteredEvents.length > 0}
-                                    fallback={
-                                      <span>
-                                        {getAlertResourceIncidentFilteredEventsEmptyState().text}
-                                      </span>
-                                    }
-                                  >
-                                    Last event: {lastEvent?.summary}
-                                  </Show>
-                                </span>
+                                <Show
+                                  when={filteredEvents.length > 0}
+                                  fallback={
+                                    <span>
+                                      {getAlertResourceIncidentFilteredEventsEmptyState().text}
+                                    </span>
+                                  }
+                                >
+                                  <div class={getAlertResourceIncidentActivitySummaryClass()}>
+                                    <span class="text-[10px] font-medium uppercase tracking-wide text-muted">
+                                      Activity
+                                    </span>
+                                    <For each={eventSummary}>
+                                      {(summary) => (
+                                        <span class={getAlertResourceIncidentActivityChipClass()}>
+                                          {summary.label} {summary.count}
+                                        </span>
+                                      )}
+                                    </For>
+                                    <span>
+                                      {filteredEvents.length !== events.length
+                                        ? `${filteredEvents.length}/${events.length} events`
+                                        : `${events.length} event${events.length === 1 ? '' : 's'}`}
+                                    </span>
+                                    <Show when={lastEvent}>
+                                      <span>Latest: {lastEvent?.summary}</span>
+                                    </Show>
+                                  </div>
+                                </Show>
                                 <button
                                   type="button"
                                   class={getAlertResourceIncidentToggleButtonClass()}
@@ -5081,54 +5102,14 @@ function HistoryTab(props: {
                                 >
                                   <For each={recentEvents}>
                                     {(event) => (
-                                      <div class="rounded border border-border bg-surface-alt p-2">
-                                        <div class="flex flex-wrap items-center gap-2 text-xs text-muted">
-                                          <span class="font-medium text-base-content">
-                                            {event.summary}
-                                          </span>
-                                          <span>{new Date(event.timestamp).toLocaleString()}</span>
-                                        </div>
-                                        <Show
-                                          when={
-                                            event.details &&
-                                            (event.details as { note?: string }).note
-                                          }
-                                        >
-                                          <p class="text-xs text-base-content mt-1">
-                                            {(event.details as { note?: string }).note}
-                                          </p>
-                                        </Show>
-                                        <Show
-                                          when={
-                                            event.details &&
-                                            (event.details as { command?: string }).command
-                                          }
-                                        >
-                                          <p class="text-xs text-base-content mt-1 font-mono">
-                                            {(event.details as { command?: string }).command}
-                                          </p>
-                                        </Show>
-                                        <Show
-                                          when={
-                                            event.details &&
-                                            (event.details as { output_excerpt?: string })
-                                              .output_excerpt
-                                          }
-                                        >
-                                          <p class="text-xs text-muted mt-1">
-                                            {
-                                              (event.details as { output_excerpt?: string })
-                                                .output_excerpt
-                                            }
-                                          </p>
-                                        </Show>
-                                      </div>
+                                      <IncidentTimelineEventCard event={event} variant="alt" />
                                     )}
                                   </For>
-                                  <Show when={filteredEvents.length > recentEvents.length}>
+                                  <Show when={filteredEvents.length > 0}>
                                     <p class="text-[10px] text-muted">
                                       {getAlertResourceIncidentTruncatedEventsLabel(
                                         recentEvents.length,
+                                        filteredEvents.length,
                                       )}
                                     </p>
                                   </Show>

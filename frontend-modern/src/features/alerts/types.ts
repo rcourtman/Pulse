@@ -225,3 +225,46 @@ export const filterIncidentEvents = (
   }
   return events.filter((event) => filters.has(event.type));
 };
+
+export interface IncidentEventSummary {
+  type: string;
+  label: string;
+  count: number;
+}
+
+export const summarizeIncidentEvents = (
+  events: IncidentEvent[] | undefined,
+): IncidentEventSummary[] => {
+  if (!events || events.length === 0) {
+    return [];
+  }
+
+  const counts = new Map<string, number>();
+  const unknownTypes: string[] = [];
+
+  events.forEach((event) => {
+    counts.set(event.type, (counts.get(event.type) ?? 0) + 1);
+    if (
+      !Object.prototype.hasOwnProperty.call(INCIDENT_EVENT_LABELS, event.type) &&
+      !unknownTypes.includes(event.type)
+    ) {
+      unknownTypes.push(event.type);
+    }
+  });
+
+  const knownSummary = INCIDENT_EVENT_TYPES.flatMap((type) => {
+    const count = counts.get(type);
+    if (!count) {
+      return [];
+    }
+    return [{ type, label: INCIDENT_EVENT_LABELS[type], count }];
+  });
+
+  const unknownSummary = unknownTypes.map((type) => ({
+    type,
+    label: type,
+    count: counts.get(type) ?? 0,
+  }));
+
+  return [...knownSummary, ...unknownSummary];
+};

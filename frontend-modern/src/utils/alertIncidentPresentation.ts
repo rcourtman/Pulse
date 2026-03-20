@@ -259,10 +259,27 @@ export function getAlertResourceIncidentSummaryRowClass(): string {
   return 'mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-muted';
 }
 
+export function getAlertResourceIncidentActivitySummaryClass(): string {
+  return 'flex flex-wrap items-center gap-1.5';
+}
+
+export function getAlertResourceIncidentActivityChipClass(): string {
+  return 'rounded bg-surface-alt px-2 py-0.5 text-[10px] font-medium text-base-content';
+}
+
 export function getAlertResourceIncidentToggleButtonClass(): string {
   return 'px-2 py-1 text-[10px] border rounded-md border-border text-muted hover:bg-surface-hover';
 }
 
-export function getAlertResourceIncidentTruncatedEventsLabel(count: number): string {
+export function getAlertResourceIncidentTruncatedEventsLabel(
+  count: number,
+  totalCount?: number,
+): string {
+  if (typeof totalCount === 'number') {
+    if (totalCount <= count) {
+      return `Showing ${totalCount} event${totalCount === 1 ? '' : 's'}`;
+    }
+    return `Showing last ${count} of ${totalCount} events`;
+  }
   return `Showing last ${count} events`;
 }
