@@ -82,6 +82,14 @@
       ]
     },
     {
+      "path": "frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts",
+      "rationale": "unified resource table state, grouping, and windowing are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary",
+      "subsystems": [
+        "performance-and-scalability",
+        "unified-resources"
+      ]
+    },
+    {
       "path": "frontend-modern/src/components/Settings/APITokenManager.tsx",
       "rationale": "the API token settings surface is both a security/privacy control surface and a canonical API payload contract boundary",
       "subsystems": [
@@ -2114,6 +2122,7 @@
         "frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts",
         "frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts",
         "frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx",
+        "frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts",
         "internal/api/router_bench_test.go",
         "internal/api/slo.go",
         "internal/api/slo_bench_test.go"
@@ -2156,7 +2165,8 @@
               "frontend-modern/src/components/Dashboard/workloadSelectors.ts",
               "frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts",
               "frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts",
-              "frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx"
+              "frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx",
+              "frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
@@ -2499,6 +2509,7 @@
         "frontend-modern/src/components/Infrastructure/ResourceFacetSummary.tsx",
         "frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx",
         "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts",
+        "frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts",
         "frontend-modern/src/features/infrastructure/InfrastructurePageSurface.tsx",
         "frontend-modern/src/features/infrastructure/useInfrastructurePageState.ts",
         "frontend-modern/src/hooks/useDashboardTrends.ts",
@@ -2570,6 +2581,7 @@
               "frontend-modern/src/components/Infrastructure/ResourceFacetSummary.tsx",
               "frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx",
               "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts",
+              "frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts",
               "frontend-modern/src/features/infrastructure/InfrastructurePageSurface.tsx",
               "frontend-modern/src/features/infrastructure/useInfrastructurePageState.ts",
               "frontend-modern/src/hooks/useDashboardTrends.ts",

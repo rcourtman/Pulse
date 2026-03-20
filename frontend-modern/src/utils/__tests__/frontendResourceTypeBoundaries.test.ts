@@ -170,6 +170,7 @@ import infrastructureSummarySource from '@/components/Infrastructure/Infrastruct
 import resourceDetailMappersSource from '@/components/Infrastructure/resourceDetailMappers.ts?raw';
 import resourceDetailDrawerStateSource from '@/components/Infrastructure/useResourceDetailDrawerState.ts?raw';
 import unifiedResourceTableSource from '@/components/Infrastructure/UnifiedResourceTable.tsx?raw';
+import unifiedResourceTableStateSource from '@/components/Infrastructure/useUnifiedResourceTableState.ts?raw';
 import useUnifiedResourcesSource from '@/hooks/useUnifiedResources.ts?raw';
 import useWorkloadsSource from '@/hooks/useWorkloads.ts?raw';
 import findingsPanelSource from '@/components/AI/FindingsPanel.tsx?raw';
@@ -1993,8 +1994,15 @@ describe('frontend resource type boundaries', () => {
     expect(resourceDetailMappersSource).toContain('titleCaseDelimitedLabel');
     expect(resourceDetailMappersSource).not.toContain('export const normalizeHealthLabel');
     expect(resourceDetailMappersSource).not.toContain('export const healthToneClass');
+    expect(unifiedResourceTableSource).toContain('useUnifiedResourceTableState');
+    expect(unifiedResourceTableSource).not.toContain('const split = createMemo(() =>');
+    expect(unifiedResourceTableSource).not.toContain('const sortedPBSResources = createMemo(() =>');
+    expect(unifiedResourceTableSource).not.toContain('const resourceColumnStyle = createMemo(() =>');
     expect(unifiedResourceTableSource).toContain('getServiceHealthSummaryPresentation');
     expect(unifiedResourceTableSource).not.toContain('const summarizeServiceHealthTone =');
+    expect(unifiedResourceTableStateSource).toContain('export function useUnifiedResourceTableState');
+    expect(unifiedResourceTableStateSource).toContain('splitPrimaryAndServiceResources');
+    expect(unifiedResourceTableStateSource).toContain('useTableWindowing');
     expect(exploreStatusBlockSource).toContain('getAIExploreStatusPresentation');
     expect(exploreStatusBlockSource).not.toContain('const phaseLabel =');
     expect(exploreStatusBlockSource).not.toContain('const phaseClasses =');

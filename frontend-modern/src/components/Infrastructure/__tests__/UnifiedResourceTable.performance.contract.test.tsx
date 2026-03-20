@@ -5,6 +5,8 @@ import { UnifiedResourceTable } from '@/components/Infrastructure/UnifiedResourc
 import { ResourceFacetSummary } from '@/components/Infrastructure/ResourceFacetSummary';
 import { formatSensorName } from '@/components/Infrastructure/resourceDetailMappers';
 import { getPreferredResourceDisplayName } from '@/utils/resourceIdentity';
+import unifiedResourceTableSource from '@/components/Infrastructure/UnifiedResourceTable.tsx?raw';
+import unifiedResourceTableStateSource from '@/components/Infrastructure/useUnifiedResourceTableState.ts?raw';
 import {
   buildStatusOptions,
   filterResources,
@@ -173,6 +175,13 @@ describe('UnifiedResourceTable performance contract', () => {
     it('formats sensor labels through the shared resource detail mapper helper', () => {
       expect(formatSensorName('fan1_cpu_temp')).toBe('Cpu Temp');
       expect(formatSensorName('psu_temp')).toBe('Temp');
+    });
+
+    it('keeps hot-path table state and windowing in the shared table state owner', () => {
+      expect(unifiedResourceTableSource).toContain('useUnifiedResourceTableState');
+      expect(unifiedResourceTableSource).not.toContain('const sortedPBSResources = createMemo(() =>');
+      expect(unifiedResourceTableStateSource).toContain('splitPrimaryAndServiceResources');
+      expect(unifiedResourceTableStateSource).toContain('useTableWindowing');
     });
 
     it('keeps source filtering on the shared canonical source-platform helper', () => {

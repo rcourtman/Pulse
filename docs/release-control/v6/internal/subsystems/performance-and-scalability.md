@@ -28,17 +28,19 @@ regression protection.
 6. `frontend-modern/src/components/Dashboard/Dashboard.tsx`
 7. `frontend-modern/src/components/Dashboard/workloadSelectors.ts`
 8. `frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx`
-9. `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts`
-10. `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts`
-11. `frontend-modern/src/components/Dashboard/__tests__/Dashboard.performance.contract.test.tsx`
-12. `frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx`
+9. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`
+10. `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts`
+11. `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts`
+12. `frontend-modern/src/components/Dashboard/__tests__/Dashboard.performance.contract.test.tsx`
+13. `frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx`
 
 ## Shared Boundaries
 
 1. `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts` shared with `unified-resources`: the infrastructure selector pipeline is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
 2. `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts` shared with `unified-resources`: resource detail mappers are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
 3. `frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx` shared with `unified-resources`: the unified resource table is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-4. `internal/api/slo.go` shared with `api-contracts`: the SLO endpoint is both an API contract surface and a protected performance hot-path boundary.
+4. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts` shared with `unified-resources`: unified resource table state, grouping, and windowing are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
+5. `internal/api/slo.go` shared with `api-contracts`: the SLO endpoint is both an API contract surface and a protected performance hot-path boundary.
 
 ## Extension Points
 
@@ -82,6 +84,10 @@ The unified resource table hot path is now also governed as explicit
 performance-owned runtime, with shared ownership against the unified-resource
 consumer boundary. The remaining performance work is no longer top-level
 ownership ambiguity on the main dashboard or infrastructure tables.
+The table's sort, grouping, row-windowing, and viewport-sync owner now lives
+in `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`,
+so future hot-path table-state changes must route through that state owner
+instead of rebuilding selector and scroll coordination inside the render shell.
 That hot-path contract now includes policy badge rendering on resource rows.
 It now also includes the compact resource-facet summary chips rendered next
 to policy metadata, and those chips must stay within the same bounded

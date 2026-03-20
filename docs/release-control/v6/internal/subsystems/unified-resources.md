@@ -46,15 +46,17 @@ cross-source deduplication.
 24. `frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx`
 25. `frontend-modern/src/components/Infrastructure/ResourceFacetSummary.tsx`
 26. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts`
-27. `frontend-modern/src/features/infrastructure/InfrastructurePageSurface.tsx`
-28. `frontend-modern/src/features/infrastructure/useInfrastructurePageState.ts`
+27. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`
+28. `frontend-modern/src/features/infrastructure/InfrastructurePageSurface.tsx`
+29. `frontend-modern/src/features/infrastructure/useInfrastructurePageState.ts`
 
 ## Shared Boundaries
 
 1. `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts` shared with `performance-and-scalability`: the infrastructure selector pipeline is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
 2. `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts` shared with `performance-and-scalability`: resource detail mappers are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
 3. `frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx` shared with `performance-and-scalability`: the unified resource table is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-4. `internal/api/resources.go` shared with `api-contracts`: the unified resource endpoint is both a backend payload contract surface and a unified-resource runtime boundary.
+4. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts` shared with `performance-and-scalability`: unified resource table state, grouping, and windowing are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
+5. `internal/api/resources.go` shared with `api-contracts`: the unified resource endpoint is both a backend payload contract surface and a unified-resource runtime boundary.
 
 ## Extension Points
 
@@ -199,6 +201,11 @@ The shared node-state adapter also routes Proxmox cluster labels through that
 same helper, so infrastructure summary projections keep the same canonical
 cluster name as the rest of the unified resource model instead of rewriting
 the label locally.
+The unified resource table now routes sort state, grouped host/service
+projection, canonical resource-label resolution, and row-windowing through
+`frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`,
+so the shared consumer model is owned by one state boundary instead of
+staying interleaved with the render shell.
 The canonical unified-resource change and relationship presenters now also
 share the same elapsed-time and "ago" wording utilities, so `observed`,
 `last seen`, and `ago` fragments stay consistent without each formatter
