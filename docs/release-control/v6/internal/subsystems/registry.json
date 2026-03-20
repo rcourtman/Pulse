@@ -357,6 +357,7 @@
         "frontend-modern/src/components/Settings/NodeModal.tsx",
         "frontend-modern/src/components/Settings/nodeModalModel.ts",
         "frontend-modern/src/components/Settings/UnifiedAgents.tsx",
+        "frontend-modern/src/components/Settings/useAgentProfilesPanelState.ts",
         "frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx",
         "frontend-modern/src/components/Settings/useNodeModalState.ts",
         "frontend-modern/src/components/SetupWizard/SetupCompletionPanel.tsx",
@@ -473,6 +474,7 @@
             "match_files": [
               "frontend-modern/src/api/agentProfiles.ts",
               "frontend-modern/src/components/Settings/AgentProfilesPanel.tsx",
+              "frontend-modern/src/components/Settings/useAgentProfilesPanelState.ts",
               "frontend-modern/src/utils/agentProfilesPresentation.ts"
             ],
             "allow_same_subsystem_tests": false,

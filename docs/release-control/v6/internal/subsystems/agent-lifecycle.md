@@ -31,18 +31,19 @@ management, and fleet control surfaces.
 7. `scripts/install.ps1`
 8. `frontend-modern/src/api/agentProfiles.ts`
 9. `frontend-modern/src/components/Settings/AgentProfilesPanel.tsx`
-10. `frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx`
-11. `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`
-12. `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx`
-13. `frontend-modern/src/components/Settings/UnifiedAgents.tsx`
-14. `frontend-modern/src/components/Settings/NodeModal.tsx`
-15. `frontend-modern/src/components/Settings/nodeModalModel.ts`
-16. `frontend-modern/src/components/Settings/useNodeModalState.ts`
-17. `frontend-modern/src/components/SetupWizard/SetupCompletionPanel.tsx`
-18. `frontend-modern/src/components/Infrastructure/deploy/ResultsStep.tsx`
-19. `frontend-modern/src/utils/agentProfilesPresentation.ts`
-20. `frontend-modern/src/utils/agentInstallCommand.ts`
-21. `frontend-modern/src/api/nodes.ts`
+10. `frontend-modern/src/components/Settings/useAgentProfilesPanelState.ts`
+11. `frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx`
+12. `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`
+13. `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx`
+14. `frontend-modern/src/components/Settings/UnifiedAgents.tsx`
+15. `frontend-modern/src/components/Settings/NodeModal.tsx`
+16. `frontend-modern/src/components/Settings/nodeModalModel.ts`
+17. `frontend-modern/src/components/Settings/useNodeModalState.ts`
+18. `frontend-modern/src/components/SetupWizard/SetupCompletionPanel.tsx`
+19. `frontend-modern/src/components/Infrastructure/deploy/ResultsStep.tsx`
+20. `frontend-modern/src/utils/agentProfilesPresentation.ts`
+21. `frontend-modern/src/utils/agentInstallCommand.ts`
+22. `frontend-modern/src/api/nodes.ts`
 
 ## Shared Boundaries
 
@@ -69,7 +70,7 @@ management, and fleet control surfaces.
 3. Add or change runtime-side Unified Agent startup, first-report assembly, and enroll/runtime continuity through `internal/hostagent/`.
 4. Keep legacy Unified Agent compatibility names explicitly secondary when touching shared `internal/api/` runtime helpers: the legacy host-route family and `host-agent:*` scope names may remain as ingress or migration aliases, but they must not retake primary ownership in router state, live runtime scope checks, handler commentary, or operator-facing guidance.
 5. Add or change installer flags, persisted service arguments, or upgrade-safe re-entry behavior through `scripts/install.sh` and `scripts/install.ps1`.
-6. Add or change profile management, the pure unified-agent inventory/install model, shared frontend install-command assembly, Proxmox setup/install API transport, setup-completion install handoff transport, deploy-fallback manual install transport, and fleet-control presentation through `frontend-modern/src/api/agentProfiles.ts`, `frontend-modern/src/api/nodes.ts`, `frontend-modern/src/components/Settings/AgentProfilesPanel.tsx`, `frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx`, `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`, `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx`, `frontend-modern/src/components/Settings/NodeModal.tsx`, `frontend-modern/src/components/Settings/nodeModalModel.ts`, `frontend-modern/src/components/Settings/useNodeModalState.ts`, `frontend-modern/src/components/SetupWizard/SetupCompletionPanel.tsx`, `frontend-modern/src/components/Infrastructure/deploy/ResultsStep.tsx`, and `frontend-modern/src/utils/agentInstallCommand.ts`.
+6. Add or change profile management, the extracted agent profiles runtime owner, the pure unified-agent inventory/install model, shared frontend install-command assembly, Proxmox setup/install API transport, setup-completion install handoff transport, deploy-fallback manual install transport, and fleet-control presentation through `frontend-modern/src/api/agentProfiles.ts`, `frontend-modern/src/api/nodes.ts`, `frontend-modern/src/components/Settings/AgentProfilesPanel.tsx`, `frontend-modern/src/components/Settings/useAgentProfilesPanelState.ts`, `frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx`, `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`, `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx`, `frontend-modern/src/components/Settings/NodeModal.tsx`, `frontend-modern/src/components/Settings/nodeModalModel.ts`, `frontend-modern/src/components/Settings/useNodeModalState.ts`, `frontend-modern/src/components/SetupWizard/SetupCompletionPanel.tsx`, `frontend-modern/src/components/Infrastructure/deploy/ResultsStep.tsx`, and `frontend-modern/src/utils/agentInstallCommand.ts`.
 
 ## Forbidden Paths
 
@@ -419,14 +420,19 @@ leaving stale profile options visible.
 That same shared profile-management boundary must also fail closed on malformed
 list payloads: `frontend-modern/src/api/agentProfiles.ts` may not silently
 reinterpret non-array profile or assignment responses as an empty state, and
-`AgentProfilesPanel.tsx` / `InfrastructureOperationsController.tsx` must surface that load failure
-instead of pretending no profiles exist.
+`useAgentProfilesPanelState.ts` / `InfrastructureOperationsController.tsx` must surface that load
+failure instead of pretending no profiles exist.
 That same shared profile-management boundary must also fail closed on malformed
 profile-object, suggestion, schema, and validation payloads: the shared
 `agentProfiles` client may not trust partial profile objects, malformed schema
 definitions, or malformed validation/suggestion bodies, and the profile editor
 plus suggestion modal must surface those canonical contract failures instead of
 flattening them into generic save/delete/schema/validation fallback copy.
+That same frontend profile-management boundary now keeps its render shell and
+runtime owner separate: `AgentProfilesPanel.tsx` is the surface shell, while
+`useAgentProfilesPanelState.ts` owns license gating, AI availability, profile
+load/save mutations, assignment resync, and modal form lifecycle so the panel
+does not carry a second inline controller.
 Canonical Proxmox auto-register must also preserve the legacy DHCP continuity
 contract: when a node reruns registration from a new IP but presents the
 same canonical node name and deterministic Pulse-managed token identity, Pulse

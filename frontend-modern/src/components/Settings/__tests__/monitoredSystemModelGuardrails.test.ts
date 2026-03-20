@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import agentProfilesPanelSource from '../AgentProfilesPanel.tsx?raw';
+import agentProfilesPanelStateSource from '../useAgentProfilesPanelState.ts?raw';
 import apiTokenManagerSource from '../APITokenManager.tsx?raw';
 import infrastructureOperationsStateSource from '../useInfrastructureOperationsState.tsx?raw';
 import agentLedgerPanelSource from '../MonitoredSystemLedgerPanel.tsx?raw';
@@ -134,15 +135,25 @@ const recoverySource = [
 
 describe('monitored-system model guardrails', () => {
   it('keeps AgentProfilesPanel on unified resources (not host-only slices)', () => {
-    expect(agentProfilesPanelSource).toContain('const { resources } = useResources()');
+    expect(agentProfilesPanelSource).toContain("import { useAgentProfilesPanelState }");
+    expect(agentProfilesPanelSource).toContain('useAgentProfilesPanelState()');
     expect(agentProfilesPanelSource).toContain('@/utils/agentProfilesPresentation');
     expect(agentProfilesPanelSource).toContain('getAgentProfilesEmptyState');
     expect(agentProfilesPanelSource).toContain('getAgentProfileAssignmentsEmptyState');
+    expect(agentProfilesPanelSource).not.toContain('const loadData = async () =>');
+    expect(agentProfilesPanelSource).not.toContain('const handleSave = async () =>');
+    expect(agentProfilesPanelSource).not.toContain('AIAPI.getSettings()');
     expect(agentProfilesPanelSource).not.toContain("const hosts = byType('host')");
     expect(agentProfilesPanelSource).not.toContain('No profiles yet. Create one to get started.');
     expect(agentProfilesPanelSource).not.toContain(
       'No agents connected. Install an agent to assign profiles.',
     );
+    expect(agentProfilesPanelStateSource).toContain('const { resources } = useResources()');
+    expect(agentProfilesPanelStateSource).toContain('const loadData = async () =>');
+    expect(agentProfilesPanelStateSource).toContain('const handleSave = async () =>');
+    expect(agentProfilesPanelStateSource).toContain('AIAPI.getSettings()');
+    expect(agentProfilesPanelStateSource).toContain('AgentProfilesAPI.listProfiles()');
+    expect(agentProfilesPanelStateSource).toContain('AgentProfilesAPI.listAssignments()');
     expect(agentProfilesPresentationSource).toContain('export function getAgentProfilesEmptyState');
     expect(agentProfilesPresentationSource).toContain(
       'export function getAgentProfileAssignmentsEmptyState',
@@ -207,7 +218,7 @@ describe('monitored-system model guardrails', () => {
     );
     expect(infrastructureOperationsStateSource).not.toContain('isConnectedHealthStatus');
     expect(infrastructureOperationsStateSource).not.toContain('const connectedFromStatus =');
-    expect(agentProfilesPanelSource).toContain('isConnectedHealthStatus');
+    expect(agentProfilesPanelStateSource).toContain('isConnectedHealthStatus');
     expect(agentProfilesPanelSource).not.toContain('const connectedFromStatus =');
     expect(statusUtilsSource).toContain('export function isConnectedHealthStatus');
     expect(infrastructureOperationsStateSource).toContain('@/utils/unifiedAgentStatusPresentation');
@@ -475,7 +486,7 @@ describe('monitored-system model guardrails', () => {
     expect(aiCostPresentationSource).toContain('export const AI_COST_DAILY_TOKEN_EMPTY_STATE');
     expect(rolesPanelSource).toContain('@/utils/upgradePresentation');
     expect(userAssignmentsPanelSource).toContain('@/utils/upgradePresentation');
-    expect(agentProfilesPanelSource).toContain('@/utils/upgradePresentation');
+    expect(agentProfilesPanelStateSource).toContain('@/utils/upgradePresentation');
     expect(auditLogPanelSource).toContain('@/utils/upgradePresentation');
     expect(ssoProvidersPanelSource).toContain('@/utils/upgradePresentation');
     expect(auditWebhookPanelSource).toContain('@/utils/upgradePresentation');
