@@ -1968,7 +1968,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                 showLabel="Show metadata"
                 hideLabel="Hide metadata"
                 class="rounded border border-dashed border-border bg-surface-hover p-3"
-                contentClass="mt-3 rounded border border-border bg-surface p-2.5"
+                dataTestId="resource-discovery-context"
               >
                     <Suspense
                       fallback={

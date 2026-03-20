@@ -224,6 +224,11 @@ describe('ResourceDetailDrawer change history section', () => {
       screen.queryByText('Supporting metadata only. The web interface path above stays primary.'),
     ).toBeNull();
     expect(screen.getByRole('button', { name: 'Show metadata' })).toBeInTheDocument();
+    expect(
+      screen.getByTestId('resource-discovery-context').querySelector(
+        '.mt-3.rounded.border.border-border.bg-surface.p-2\\.5',
+      ),
+    ).toBeNull();
     expect(screen.queryByText('Details')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Show details' })).toBeNull();
     expect(screen.getByText('Platform ID')).toBeInTheDocument();

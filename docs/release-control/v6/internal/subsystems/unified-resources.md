@@ -290,6 +290,9 @@ That discovery surface is now a compact support row with a one-line summary and
 an on-demand metadata panel, so the actionable web-interface path stays primary
 while deeper discovery inspection remains available without reading like a
 second peer overview surface.
+The discovery metadata panel now expands directly under the outer support
+disclosure instead of nesting a second bordered card, so the support surface
+reads as one flattened reveal instead of a card inside a card.
 The overview keeps host, service, investigation, and discovery detail as
 collapsed sibling disclosures under the primary summary, so the drawer keeps
 the top-level shape to `Summary` plus `Change history` before any secondary
