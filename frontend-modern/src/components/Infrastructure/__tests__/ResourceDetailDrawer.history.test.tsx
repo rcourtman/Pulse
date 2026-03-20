@@ -198,6 +198,9 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(
       screen.getByTestId('resource-summary-section').querySelector('.mt-3.grid.gap-4'),
     ).toBeNull();
+    expect(
+      screen.getByTestId('resource-change-history-section').querySelector('.mt-3.grid.gap-2'),
+    ).toBeNull();
     expect(screen.queryByText('Host details')).toBeNull();
     expect(screen.queryByText('Service details')).toBeNull();
     expect(screen.queryByText('Supporting context')).toBeNull();

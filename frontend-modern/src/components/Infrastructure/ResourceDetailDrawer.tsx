@@ -1163,7 +1163,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
               </div>
             </div>
 
-            <div class="mt-3 grid gap-2 sm:grid-cols-2">
+            <div class="mt-3 space-y-2">
               <label class="space-y-1 text-[10px]">
                 <span class="text-muted">Change kind</span>
                 <select

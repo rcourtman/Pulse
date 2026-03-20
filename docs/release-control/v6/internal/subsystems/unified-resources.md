@@ -294,6 +294,9 @@ The overview keeps host, service, investigation, and discovery detail as
 collapsed sibling disclosures under the primary summary, so the drawer keeps
 the top-level shape to `Summary` plus `Change history` before any secondary
 operational context appears.
+The `Change history` filter controls now stack vertically instead of using a
+paired filter grid, so the timeline reads like a simple inspection surface
+rather than a two-field form on wider screens.
 Those support surfaces still use the same title-plus-summary header and
 explicit reveal control without extra explanatory chrome, so the drawer signals
 secondary depth through one governed structure instead of repeating prose about
