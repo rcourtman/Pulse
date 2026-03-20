@@ -313,6 +313,7 @@ import aiSettingsShellSource from '@/components/Settings/AISettings.tsx?raw';
 import aiProviderConfigurationSectionSource from '@/components/Settings/AIProviderConfigurationSection.tsx?raw';
 import aiSettingsDialogsSource from '@/components/Settings/AISettingsDialogs.tsx?raw';
 import aiSettingsModelSource from '@/components/Settings/aiSettingsModel.ts?raw';
+import aiSettingsStateSource from '@/components/Settings/useAISettingsState.ts?raw';
 import aiIntelligenceSource from '@/pages/AIIntelligence.tsx?raw';
 import patrolIntelligenceSurfaceSource from '@/features/patrol/PatrolIntelligenceSurface.tsx?raw';
 import aiQuickstartPresentationSource from '@/utils/aiQuickstartPresentation.ts?raw';
@@ -339,6 +340,7 @@ const aiSettingsSource = [
   aiProviderConfigurationSectionSource,
   aiSettingsDialogsSource,
   aiSettingsModelSource,
+  aiSettingsStateSource,
 ].join('\n');
 
 const resourceDetailDrawerSource = [
@@ -2773,6 +2775,7 @@ describe('frontend resource type boundaries', () => {
     expect(aiSettingsSource).toContain('getAISettingsSaveErrorMessage');
     expect(aiSettingsSource).toContain('getAICredentialsClearErrorMessage');
     expect(aiSettingsSource).toContain('getAISettingsToggleErrorMessage');
+    expect(aiSettingsShellSource).toContain('@/components/Settings/useAISettingsState');
     expect(aiSettingsSource).not.toContain('Loading Pulse Assistant settings...');
     expect(aiSettingsSource).not.toContain('Loading chat sessions...');
     expect(aiSettingsSource).not.toContain('No chat sessions yet. Start a chat to create one.');
@@ -2787,9 +2790,15 @@ describe('frontend resource type boundaries', () => {
     expect(aiSettingsSource).not.toContain("'Failed to save Pulse Assistant settings'");
     expect(aiSettingsSource).not.toContain("'Failed to clear credentials'");
     expect(aiSettingsSource).not.toContain("'Failed to update Pulse Assistant setting'");
+    expect(aiSettingsShellSource).not.toContain('const [loading, setLoading] = createSignal(false);');
+    expect(aiSettingsShellSource).not.toContain('const handleSave = async (event?: Event) =>');
     expect(aiSettingsSource).not.toContain(
       "providerTestResult()?.success ? 'text-green-600' : 'text-red-600'",
     );
+    expect(aiSettingsStateSource).toContain('export const useAISettingsState =');
+    expect(aiSettingsStateSource).toContain('const [loading, setLoading] = createSignal(false);');
+    expect(aiSettingsStateSource).toContain('const handleSave = async (event?: Event) =>');
+    expect(aiSettingsStateSource).toContain('const handleEnabledToggle = async (newValue: boolean) =>');
     expect(aiIntelligenceSource).toContain(
       "import { PatrolIntelligenceSurface } from '@/features/patrol/PatrolIntelligenceSurface';",
     );

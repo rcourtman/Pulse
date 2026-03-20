@@ -21,6 +21,7 @@ import aiSettingsPanelSource from '../AISettings.tsx?raw';
 import aiProviderConfigurationSectionSource from '../AIProviderConfigurationSection.tsx?raw';
 import aiSettingsDialogsSource from '../AISettingsDialogs.tsx?raw';
 import aiSettingsModelSource from '../aiSettingsModel.ts?raw';
+import aiSettingsStateSource from '../useAISettingsState.ts?raw';
 import diagnosticsModelSource from '../diagnosticsModel.ts?raw';
 import diagnosticsPanelSource from '../DiagnosticsPanel.tsx?raw';
 import diagnosticsResultsPanelSource from '../DiagnosticsResultsPanel.tsx?raw';
@@ -73,6 +74,7 @@ const extractedModules = [
   '../AIProviderConfigurationSection.tsx',
   '../AISettingsDialogs.tsx',
   '../aiSettingsModel.ts',
+  '../useAISettingsState.ts',
   '../diagnosticsModel.ts',
   '../DiagnosticsPanel.tsx',
   '../DiagnosticsResultsPanel.tsx',
@@ -365,10 +367,19 @@ describe('Settings architecture guardrails', () => {
     expect(aiSettingsPanelSource).toContain('@/components/Settings/AIProviderConfigurationSection');
     expect(aiSettingsPanelSource).toContain('@/components/Settings/AISettingsDialogs');
     expect(aiSettingsPanelSource).toContain('@/components/Settings/aiSettingsModel');
+    expect(aiSettingsPanelSource).toContain('@/components/Settings/useAISettingsState');
+    expect(aiSettingsPanelSource).not.toContain('const [loading, setLoading] = createSignal(false);');
+    expect(aiSettingsPanelSource).not.toContain('const handleSave = async (event?: Event) =>');
+    expect(aiSettingsPanelSource).not.toContain('AIAPI.getSettings()');
     expect(aiProviderConfigurationSectionSource).toContain('@/components/Settings/aiSettingsModel');
     expect(aiSettingsDialogsSource).toContain('@/components/Settings/aiSettingsModel');
     expect(aiSettingsModelSource).toContain('export const AI_PROVIDER_CONFIGS');
     expect(aiSettingsModelSource).toContain('export const AI_SETUP_PROVIDER_OPTIONS');
+    expect(aiSettingsStateSource).toContain('export const useAISettingsState =');
+    expect(aiSettingsStateSource).toContain('const [loading, setLoading] = createSignal(false);');
+    expect(aiSettingsStateSource).toContain('const handleSave = async (event?: Event) =>');
+    expect(aiSettingsStateSource).toContain('const handleEnabledToggle = async (newValue: boolean) =>');
+    expect(aiSettingsStateSource).toContain('AIAPI.getSettings()');
   });
 
   it('keeps the updates settings shell behind extracted install-guide owners', () => {

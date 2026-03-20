@@ -30,6 +30,7 @@ import aiSettingsShellSource from '../AISettings.tsx?raw';
 import aiProviderConfigurationSectionSource from '../AIProviderConfigurationSection.tsx?raw';
 import aiSettingsDialogsSource from '../AISettingsDialogs.tsx?raw';
 import aiSettingsModelSource from '../aiSettingsModel.ts?raw';
+import aiSettingsStateSource from '../useAISettingsState.ts?raw';
 import reportingPanelSource from '../ReportingPanel.tsx?raw';
 import reportingPanelModelSource from '../reportingPanelModel.ts?raw';
 import updatesSettingsPanelSource from '../UpdatesSettingsPanel.tsx?raw';
@@ -89,6 +90,7 @@ const aiSettingsSource = [
   aiProviderConfigurationSectionSource,
   aiSettingsDialogsSource,
   aiSettingsModelSource,
+  aiSettingsStateSource,
 ].join('\n');
 import dashboardGuestPresentationSource from '@/utils/dashboardGuestPresentation.ts?raw';
 import containerUpdatesSource from '@/stores/containerUpdates.ts?raw';
@@ -329,6 +331,7 @@ describe('monitored-system model guardrails', () => {
     expect(aiSettingsSource).toContain('getAISettingsSaveErrorMessage');
     expect(aiSettingsSource).toContain('getAICredentialsClearErrorMessage');
     expect(aiSettingsSource).toContain('getAISettingsToggleErrorMessage');
+    expect(aiSettingsShellSource).toContain('@/components/Settings/useAISettingsState');
     expect(aiSettingsSource).not.toContain('Loading Pulse Assistant settings...');
     expect(aiSettingsSource).not.toContain('Loading chat sessions...');
     expect(aiSettingsSource).not.toContain('No chat sessions yet. Start a chat to create one.');
@@ -340,6 +343,12 @@ describe('monitored-system model guardrails', () => {
     expect(aiSettingsSource).not.toContain("'Failed to update Pulse Assistant setting'");
     expect(aiSettingsSource).not.toContain('const normalizeControlLevel =');
     expect(aiSettingsSource).not.toContain('const errorMessages: Record<string, string> =');
+    expect(aiSettingsShellSource).not.toContain('const [loading, setLoading] = createSignal(false);');
+    expect(aiSettingsShellSource).not.toContain('const handleSave = async (event?: Event) =>');
+    expect(aiSettingsStateSource).toContain('export const useAISettingsState =');
+    expect(aiSettingsStateSource).toContain('const [loading, setLoading] = createSignal(false);');
+    expect(aiSettingsStateSource).toContain('const handleSave = async (event?: Event) =>');
+    expect(aiSettingsStateSource).toContain('const handleEnabledToggle = async (newValue: boolean) =>');
     expect(aiControlLevelPresentationSource).toContain('export function normalizeAIControlLevel');
     expect(aiControlLevelPresentationSource).toContain(
       'export function getAIControlLevelPanelClass',
