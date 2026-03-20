@@ -297,6 +297,9 @@ operational context appears.
 The `Change history` filter controls now stack vertically instead of using a
 paired filter grid, so the timeline reads like a simple inspection surface
 rather than a two-field form on wider screens.
+When filters are active, the filtered facet bundle drives both the summary
+chips and the event log, so the header and the list stay aligned instead of
+showing stale unfiltered counts above filtered results.
 Those support surfaces still use the same title-plus-summary header and
 explicit reveal control without extra explanatory chrome, so the drawer signals
 secondary depth through one governed structure instead of repeating prose about

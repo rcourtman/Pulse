@@ -655,6 +655,8 @@ describe('ResourceDetailDrawer change history section', () => {
     });
 
     expect(await panel.findByText('Filtered changes loaded')).toBeInTheDocument();
+    expect(await panel.findByText('Timeline 1')).toBeInTheDocument();
+    expect(panel.queryByText('Timeline 2')).toBeNull();
     expect(await panel.findByText('Routine restart requested')).toBeInTheDocument();
     expect(panel.queryByText('CPU spike detected')).toBeNull();
   });
@@ -797,6 +799,8 @@ describe('ResourceDetailDrawer change history section', () => {
     });
 
     expect(await panel.findByText('Filtered changes loaded')).toBeInTheDocument();
+    expect(await panel.findByText('Timeline 1')).toBeInTheDocument();
+    expect(panel.queryByText('Timeline 2')).toBeNull();
     expect(await panel.findByText('CPU spike detected')).toBeInTheDocument();
     expect(panel.queryByText('Routine restart requested')).toBeNull();
   });

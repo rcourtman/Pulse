@@ -515,14 +515,20 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
   const historyFacetBundle = createMemo(() =>
     timelineFacetRequest() ? (timelineFacets() ?? resourceFacets()) : resourceFacets(),
   );
-  const historyTimeline = createMemo(
+  const historyFacetCounts = createMemo(
+    () => historyFacetBundle()?.counts ?? resourceFacetCounts() ?? null,
+  );
+  const historyRecentChanges = createMemo(
     () => historyFacetBundle()?.recentChanges ?? resourceTimeline(),
+  );
+  const historyTimeline = createMemo(
+    () => historyRecentChanges(),
   );
   const hasTimelineFilters = createMemo(() =>
     Boolean(timelineKindFilter() || timelineSourceTypeFilter() || timelineSourceAdapterFilter()),
   );
   const resourceTimelineCount = createMemo(
-    () => resourceFacetCounts()?.recentChanges ?? resourceTimeline().length,
+    () => historyFacetCounts()?.recentChanges ?? historyRecentChanges().length,
   );
   const sortedResourceTimeline = createMemo(() =>
     [...historyTimeline()].sort((left, right) => {
@@ -1147,8 +1153,8 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                 <Show when={resourceTimelineCount() > 0}>
                   <div class="mt-1">
                     <ResourceFacetSummary
-                      recentChanges={resourceTimeline()}
-                      counts={resourceFacetCounts()}
+                      recentChanges={historyRecentChanges()}
+                      counts={historyFacetCounts()}
                     />
                   </div>
                 </Show>
