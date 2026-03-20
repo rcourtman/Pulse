@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import alertsPageSource from '@/pages/Alerts.tsx?raw';
 import alertDestinationsTabSource from '@/features/alerts/tabs/DestinationsTab.tsx?raw';
+import alertHistoryTabSource from '@/features/alerts/tabs/HistoryTab.tsx?raw';
 import alertScheduleTabSource from '@/features/alerts/tabs/ScheduleTab.tsx?raw';
 
 import {
@@ -152,16 +153,22 @@ describe('tab path helpers', () => {
     expect(tabFromPath('/alerts/summary', custom)).toBe('overview');
   });
 
-  it('keeps destinations and schedule tabs feature-owned', () => {
+  it('keeps destinations, history, and schedule tabs feature-owned', () => {
     expect(alertsPageSource).toContain(
       "import { DestinationsTab } from '@/features/alerts/tabs/DestinationsTab';",
+    );
+    expect(alertsPageSource).toContain(
+      "import { HistoryTab } from '@/features/alerts/tabs/HistoryTab';",
     );
     expect(alertsPageSource).toContain(
       "import { ScheduleTab } from '@/features/alerts/tabs/ScheduleTab';",
     );
     expect(alertsPageSource).not.toContain('function DestinationsTab(');
+    expect(alertsPageSource).not.toContain('function HistoryTab(');
     expect(alertsPageSource).not.toContain('function ScheduleTab(');
     expect(alertDestinationsTabSource).toContain('NotificationsAPI.getWebhooks');
+    expect(alertHistoryTabSource).toContain('AlertsAPI.getHistory');
+    expect(alertHistoryTabSource).toContain('IncidentTimelinePanel');
     expect(alertScheduleTabSource).toContain('getAlertConfigQuietHourSuppressOptions');
   });
 });
