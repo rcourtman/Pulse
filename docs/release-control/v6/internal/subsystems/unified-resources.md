@@ -248,6 +248,9 @@ That same overview now keeps AI intelligence and data-governance details
 inside a collapsed `Investigation context` disclosure, so runtime status and
 identity stay primary while secondary AI and policy signals remain available
 without competing with the first-screen monitoring story.
+Inside that disclosure, the AI intelligence summary now reads as compact
+label/value rows instead of metric tiles, so the opened investigation surface
+stays scan-first before the change summary and correlation reveal appear.
 Inside that disclosure, learned dependency and correlation detail now sits
 behind its own reveal instead of rendering at full depth immediately, so the
 opened investigation surface stays label-first and leaves relationship pattern

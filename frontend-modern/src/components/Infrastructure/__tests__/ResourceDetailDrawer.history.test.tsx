@@ -241,9 +241,16 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(screen.queryByText('VM Child')).toBeNull();
     expect(screen.queryByText('Capabilities 1')).toBeNull();
     expect(screen.queryByText('Relationships 1')).toBeNull();
+    expect(screen.queryByText('AI Intelligence')).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Show context' }));
     await screen.findByText('AI Intelligence');
+    expect(screen.getByText('Health')).toBeInTheDocument();
+    expect(screen.getByText('A · 92/100')).toBeInTheDocument();
+    expect(screen.getByText('Trend')).toBeInTheDocument();
+    expect(screen.getByText('stable')).toBeInTheDocument();
+    expect(screen.getByText('Notes')).toBeInTheDocument();
+    expect(screen.getByText('3')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Show correlations' }));
     expect(
       screen

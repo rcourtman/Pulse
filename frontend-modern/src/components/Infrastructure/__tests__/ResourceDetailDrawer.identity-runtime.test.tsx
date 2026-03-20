@@ -464,7 +464,12 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     await waitFor(() => {
       expect(getByText('AI Intelligence')).toBeInTheDocument();
     });
-    expect(getByText('AI health A · 92/100 · 1 correlation')).toBeInTheDocument();
+    expect(getByText('Health')).toBeInTheDocument();
+    expect(getByText('A · 92/100')).toBeInTheDocument();
+    expect(getByText('Trend')).toBeInTheDocument();
+    expect(getByText('stable')).toBeInTheDocument();
+    expect(getByText('Notes')).toBeInTheDocument();
+    expect(getByText('3')).toBeInTheDocument();
     expect(queryByText('Storage 1')).toBeNull();
     fireEvent.click(getByRole('button', { name: 'Show correlations' }));
     await waitFor(() => {

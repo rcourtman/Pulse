@@ -1844,24 +1844,22 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                       <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
                         AI Intelligence
                       </div>
-                      <div class="grid gap-2 sm:grid-cols-3">
-                        <div class="rounded border border-border bg-surface-hover px-2 py-1.5">
-                          <div class="text-[10px] text-muted">Health</div>
-                          <div class="text-sm font-semibold text-base-content">
+                      <div class="space-y-1.5 text-[11px]">
+                        <div class="flex items-center justify-between gap-2">
+                          <span class="text-muted">Health</span>
+                          <span class="font-semibold text-base-content">
                             {intel().health.grade} · {Math.round(intel().health.score)}/100
-                          </div>
+                          </span>
                         </div>
-                        <div class="rounded border border-border bg-surface-hover px-2 py-1.5">
-                          <div class="text-[10px] text-muted">Trend</div>
-                          <div class="text-sm font-semibold text-base-content capitalize">
+                        <div class="flex items-center justify-between gap-2">
+                          <span class="text-muted">Trend</span>
+                          <span class="font-semibold capitalize text-base-content">
                             {intel().health.trend}
-                          </div>
+                          </span>
                         </div>
-                        <div class="rounded border border-border bg-surface-hover px-2 py-1.5">
-                          <div class="text-[10px] text-muted">Notes</div>
-                          <div class="text-sm font-semibold text-base-content">
-                            {intel().note_count}
-                          </div>
+                        <div class="flex items-center justify-between gap-2">
+                          <span class="text-muted">Notes</span>
+                          <span class="font-semibold text-base-content">{intel().note_count}</span>
                         </div>
                       </div>
                       <div class="mt-3 space-y-1.5 text-[11px]">
