@@ -1141,237 +1141,237 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
             </div>
           </div>
 
-          <div
-            data-testid="resource-change-history-section"
-            class="rounded border border-border bg-surface p-3"
-          >
-            <div class="flex items-center justify-between gap-3">
-              <div>
-                <div class="text-[11px] font-medium uppercase tracking-wide text-base-content">
-                  Change history
-                </div>
-                <Show when={resourceTimelineCount() > 0}>
-                  <div class="mt-1">
-                    <ResourceFacetSummary
-                      recentChanges={historyRecentChanges()}
-                      counts={historyFacetCounts()}
-                    />
-                  </div>
-                </Show>
-              </div>
-              <div class="text-right text-[10px] text-muted">
+          <div data-testid="resource-secondary-sections" class="grid gap-3 sm:grid-cols-2">
+            <div
+              data-testid="resource-change-history-section"
+              class="h-full rounded border border-border bg-surface p-3 shadow-sm"
+            >
+              <div class="flex items-center justify-between gap-3">
                 <div>
-                  {timelineFacetRequest()
-                    ? timelineFacets.loading
-                      ? 'Refreshing filtered changes...'
-                      : 'Filtered changes loaded'
-                    : resourceFacets.loading
-                      ? 'Refreshing changes...'
-                      : 'Changes loaded'}
+                  <div class="text-[11px] font-medium uppercase tracking-wide text-base-content">
+                    Change history
+                  </div>
+                  <Show when={resourceTimelineCount() > 0}>
+                    <div class="mt-1">
+                      <ResourceFacetSummary
+                        recentChanges={historyRecentChanges()}
+                        counts={historyFacetCounts()}
+                      />
+                    </div>
+                  </Show>
                 </div>
-                <Show when={hasTimelineFilters()}>
-                  <div class="mt-0.5 text-blue-700 dark:text-blue-300">Change filters active</div>
-                </Show>
+                <div class="text-right text-[10px] text-muted">
+                  <div>
+                    {timelineFacetRequest()
+                      ? timelineFacets.loading
+                        ? 'Refreshing filtered changes...'
+                        : 'Filtered changes loaded'
+                      : resourceFacets.loading
+                        ? 'Refreshing changes...'
+                        : 'Changes loaded'}
+                  </div>
+                  <Show when={hasTimelineFilters()}>
+                    <div class="mt-0.5 text-blue-700 dark:text-blue-300">Change filters active</div>
+                  </Show>
+                </div>
               </div>
-            </div>
-
-            <div class="mt-3 space-y-2">
-              <label class="space-y-1 text-[10px]">
-                <span class="text-muted">Change kind</span>
-                <select
-                  class="w-full rounded border border-border bg-base px-2 py-1 text-[11px] text-base-content"
-                  value={timelineKindFilter()}
-                  onChange={(event) =>
-                    setTimelineKindFilter(
-                      (event.currentTarget.value || '') as ResourceChangeKind | '',
-                    )
-                  }
-                >
-                  <For each={timelineKindOptions}>
-                    {(option) => <option value={option.value}>{option.label}</option>}
-                  </For>
-                </select>
-              </label>
-              <label class="space-y-1 text-[10px]">
-                <span class="text-muted">Source type</span>
-                <select
-                  class="w-full rounded border border-border bg-base px-2 py-1 text-[11px] text-base-content"
-                  value={timelineSourceTypeFilter()}
-                  onChange={(event) =>
-                    setTimelineSourceTypeFilter(
-                      (event.currentTarget.value || '') as ResourceChangeSourceType | '',
-                    )
-                  }
-                >
-                  <For each={timelineSourceTypeOptions}>
-                    {(option) => <option value={option.value}>{option.label}</option>}
-                  </For>
-                </select>
-              </label>
-              <label class="space-y-1 text-[10px]">
-                <span class="text-muted">Source adapter</span>
-                <select
-                  class="w-full rounded border border-border bg-base px-2 py-1 text-[11px] text-base-content"
-                  value={timelineSourceAdapterFilter()}
-                  onChange={(event) =>
-                    setTimelineSourceAdapterFilter(
-                      (event.currentTarget.value || '') as ResourceChangeSourceAdapter | '',
-                    )
-                  }
-                >
-                  <For each={timelineSourceAdapterOptions}>
-                    {(option) => <option value={option.value}>{option.label}</option>}
-                  </For>
-                </select>
-              </label>
-            </div>
-
-            <Show when={hasTimelineFilters()}>
-              <div class="mt-2 flex justify-end">
-                <button
-                  type="button"
-                  class="rounded-md border border-border bg-surface-hover px-2.5 py-1 text-[10px] font-semibold text-base-content hover:bg-surface"
-                  onClick={() => {
-                    setTimelineKindFilter('');
-                    setTimelineSourceTypeFilter('');
-                    setTimelineSourceAdapterFilter('');
-                  }}
-                >
-                  Clear filters
-                </button>
+              <div class="mt-3 space-y-2">
+                <label class="space-y-1 text-[10px]">
+                  <span class="text-muted">Change kind</span>
+                  <select
+                    class="w-full rounded border border-border bg-base px-2 py-1 text-[11px] text-base-content"
+                    value={timelineKindFilter()}
+                    onChange={(event) =>
+                      setTimelineKindFilter(
+                        (event.currentTarget.value || '') as ResourceChangeKind | '',
+                      )
+                    }
+                  >
+                    <For each={timelineKindOptions}>
+                      {(option) => <option value={option.value}>{option.label}</option>}
+                    </For>
+                  </select>
+                </label>
+                <label class="space-y-1 text-[10px]">
+                  <span class="text-muted">Source type</span>
+                  <select
+                    class="w-full rounded border border-border bg-base px-2 py-1 text-[11px] text-base-content"
+                    value={timelineSourceTypeFilter()}
+                    onChange={(event) =>
+                      setTimelineSourceTypeFilter(
+                        (event.currentTarget.value || '') as ResourceChangeSourceType | '',
+                      )
+                    }
+                  >
+                    <For each={timelineSourceTypeOptions}>
+                      {(option) => <option value={option.value}>{option.label}</option>}
+                    </For>
+                  </select>
+                </label>
+                <label class="space-y-1 text-[10px]">
+                  <span class="text-muted">Source adapter</span>
+                  <select
+                    class="w-full rounded border border-border bg-base px-2 py-1 text-[11px] text-base-content"
+                    value={timelineSourceAdapterFilter()}
+                    onChange={(event) =>
+                      setTimelineSourceAdapterFilter(
+                        (event.currentTarget.value || '') as ResourceChangeSourceAdapter | '',
+                      )
+                    }
+                  >
+                    <For each={timelineSourceAdapterOptions}>
+                      {(option) => <option value={option.value}>{option.label}</option>}
+                    </For>
+                  </select>
+                </label>
               </div>
-            </Show>
 
-            <Show when={facetBundleError()}>
-              <div class="mt-2 rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-[10px] text-amber-700 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-200">
-                <div class="flex items-start justify-between gap-2">
-                  <span>{facetBundleError()}</span>
+              <Show when={hasTimelineFilters()}>
+                <div class="mt-2 flex justify-end">
                   <button
                     type="button"
-                    class="shrink-0 font-medium text-amber-700 underline dark:text-amber-200"
-                    onClick={() => refetchHistoryFacets()}
+                    class="rounded-md border border-border bg-surface-hover px-2.5 py-1 text-[10px] font-semibold text-base-content hover:bg-surface"
+                    onClick={() => {
+                      setTimelineKindFilter('');
+                      setTimelineSourceTypeFilter('');
+                      setTimelineSourceAdapterFilter('');
+                    }}
                   >
-                    Retry
+                    Clear filters
                   </button>
                 </div>
-              </div>
-            </Show>
+              </Show>
 
-            <div class="mt-3 rounded border border-border bg-surface p-3">
-              <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
-                Event log
-              </div>
-              <Show
-                when={sortedResourceTimeline().length > 0}
-                fallback={
-                  <div class="rounded border border-dashed border-border bg-surface-hover px-2 py-2 text-[10px] text-muted">
-                    No events yet.
+              <Show when={facetBundleError()}>
+                <div class="mt-2 rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-[10px] text-amber-700 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-200">
+                  <div class="flex items-start justify-between gap-2">
+                    <span>{facetBundleError()}</span>
+                    <button
+                      type="button"
+                      class="shrink-0 font-medium text-amber-700 underline dark:text-amber-200"
+                      onClick={() => refetchHistoryFacets()}
+                    >
+                      Retry
+                    </button>
                   </div>
-                }
-              >
-                <div class="space-y-2">
-                  <For each={sortedResourceTimeline()}>
-                    {(change) => {
-                      const kindPresentation = getResourceChangeKindPresentation(change.kind);
-                      const sourceTypePresentation = getResourceChangeSourceTypePresentation(
-                        change.sourceType,
-                      );
-                      const sourceAdapterPresentation = change.sourceAdapter
-                        ? getResourceChangeSourceAdapterPresentation(change.sourceAdapter)
-                        : null;
-
-                      return (
-                        <div class="rounded border border-border bg-surface-hover px-2 py-1.5 text-[10px]">
-                          <div class="flex items-start justify-between gap-3">
-                            <div class="min-w-0">
-                              <div class="font-medium text-base-content">
-                                {kindPresentation.label}
-                              </div>
-                              <div class="mt-0.5 text-muted">
-                                {formatRelativeTime(change.observedAt)}
-                                <Show when={change.occurredAt}>
-                                  <span class="mx-1">•</span>
-                                  <span>Occurred {formatRelativeTime(change.occurredAt)}</span>
-                                </Show>
-                              </div>
-                            </div>
-                            <span class="text-muted">{sourceTypePresentation.label}</span>
-                          </div>
-                          <div class="mt-1 space-y-1">
-                            <div class="flex items-center justify-between gap-2">
-                              <span class="text-muted">Confidence</span>
-                              <span class="font-medium text-base-content">
-                                {formatConfidenceLabel(change.confidence)}
-                              </span>
-                            </div>
-                            <div class="flex items-center justify-between gap-2">
-                              <span class="text-muted">Adapter</span>
-                              <span class="font-medium text-base-content">
-                                {sourceAdapterPresentation?.label || '—'}
-                              </span>
-                            </div>
-                            <Show when={change.actor}>
-                              <div class="flex items-center justify-between gap-2">
-                                <span class="text-muted">Actor</span>
-                                <span class="font-medium text-base-content">{change.actor}</span>
-                              </div>
-                            </Show>
-                            <Show when={change.from || change.to}>
-                              <div class="flex items-center justify-between gap-2">
-                                <span class="text-muted">Transition</span>
-                                <span class="font-medium text-base-content">
-                                  {change.from || '—'} → {change.to || '—'}
-                                </span>
-                              </div>
-                            </Show>
-                          </div>
-                          <Show when={change.reason}>
-                            <div class="mt-1 rounded border border-border bg-base px-2 py-1 text-[10px] text-base-content">
-                              {change.reason}
-                            </div>
-                          </Show>
-                          <Show when={hasMetadataEntries(change.metadata)}>
-                            <details class="mt-1 rounded border border-border bg-base px-2 py-1">
-                              <summary class="cursor-pointer list-none text-[10px] font-medium text-muted">
-                                Metadata
-                              </summary>
-                              <pre class="mt-2 overflow-auto whitespace-pre-wrap break-words text-[10px] text-base-content">
-                                {JSON.stringify(change.metadata ?? {}, null, 2)}
-                              </pre>
-                            </details>
-                          </Show>
-                          <Show when={change.relatedResources && change.relatedResources.length > 0}>
-                            <div class="mt-1 flex flex-wrap items-center gap-1 text-muted">
-                              <span>Related:</span>
-                              <For each={change.relatedResources ?? []}>
-                                {(relatedResource) => {
-                                  const label = resolveResourceLabel(relatedResource);
-                                  const href = buildInfrastructureResourceHref(relatedResource);
-                                  return href ? (
-                                    <a
-                                      class="inline-flex rounded bg-surface px-1.5 py-0.5 text-[10px] text-blue-700 hover:underline dark:text-blue-300"
-                                      href={href}
-                                      aria-label={`Open related resource ${label} in Infrastructure`}
-                                    >
-                                      {label}
-                                    </a>
-                                  ) : (
-                                    <span class="inline-flex rounded bg-surface px-1.5 py-0.5 text-[10px] text-base-content">
-                                      {label}
-                                    </span>
-                                  );
-                                }}
-                              </For>
-                            </div>
-                          </Show>
-                        </div>
-                      );
-                    }}
-                  </For>
                 </div>
               </Show>
+
+              <div class="mt-3 rounded border border-border bg-surface p-3">
+                <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
+                  Event log
+                </div>
+                <Show
+                  when={sortedResourceTimeline().length > 0}
+                  fallback={
+                    <div class="rounded border border-dashed border-border bg-surface-hover px-2 py-2 text-[10px] text-muted">
+                      No events yet.
+                    </div>
+                  }
+                >
+                  <div class="space-y-2">
+                    <For each={sortedResourceTimeline()}>
+                      {(change) => {
+                        const kindPresentation = getResourceChangeKindPresentation(change.kind);
+                        const sourceTypePresentation = getResourceChangeSourceTypePresentation(
+                          change.sourceType,
+                        );
+                        const sourceAdapterPresentation = change.sourceAdapter
+                          ? getResourceChangeSourceAdapterPresentation(change.sourceAdapter)
+                          : null;
+
+                        return (
+                          <div class="rounded border border-border bg-surface-hover px-2 py-1.5 text-[10px]">
+                            <div class="flex items-start justify-between gap-3">
+                              <div class="min-w-0">
+                                <div class="font-medium text-base-content">
+                                  {kindPresentation.label}
+                                </div>
+                                <div class="mt-0.5 text-muted">
+                                  {formatRelativeTime(change.observedAt)}
+                                  <Show when={change.occurredAt}>
+                                    <span class="mx-1">•</span>
+                                    <span>Occurred {formatRelativeTime(change.occurredAt)}</span>
+                                  </Show>
+                                </div>
+                              </div>
+                              <span class="text-muted">{sourceTypePresentation.label}</span>
+                            </div>
+                            <div class="mt-1 space-y-1">
+                              <div class="flex items-center justify-between gap-2">
+                                <span class="text-muted">Confidence</span>
+                                <span class="font-medium text-base-content">
+                                  {formatConfidenceLabel(change.confidence)}
+                                </span>
+                              </div>
+                              <div class="flex items-center justify-between gap-2">
+                                <span class="text-muted">Adapter</span>
+                                <span class="font-medium text-base-content">
+                                  {sourceAdapterPresentation?.label || '—'}
+                                </span>
+                              </div>
+                              <Show when={change.actor}>
+                                <div class="flex items-center justify-between gap-2">
+                                  <span class="text-muted">Actor</span>
+                                  <span class="font-medium text-base-content">{change.actor}</span>
+                                </div>
+                              </Show>
+                              <Show when={change.from || change.to}>
+                                <div class="flex items-center justify-between gap-2">
+                                  <span class="text-muted">Transition</span>
+                                  <span class="font-medium text-base-content">
+                                    {change.from || '—'} → {change.to || '—'}
+                                  </span>
+                                </div>
+                              </Show>
+                            </div>
+                            <Show when={change.reason}>
+                              <div class="mt-1 rounded border border-border bg-base px-2 py-1 text-[10px] text-base-content">
+                                {change.reason}
+                              </div>
+                            </Show>
+                            <Show when={hasMetadataEntries(change.metadata)}>
+                              <details class="mt-1 rounded border border-border bg-base px-2 py-1">
+                                <summary class="cursor-pointer list-none text-[10px] font-medium text-muted">
+                                  Metadata
+                                </summary>
+                                <pre class="mt-2 overflow-auto whitespace-pre-wrap break-words text-[10px] text-base-content">
+                                  {JSON.stringify(change.metadata ?? {}, null, 2)}
+                                </pre>
+                              </details>
+                            </Show>
+                            <Show when={change.relatedResources && change.relatedResources.length > 0}>
+                              <div class="mt-1 flex flex-wrap items-center gap-1 text-muted">
+                                <span>Related:</span>
+                                <For each={change.relatedResources ?? []}>
+                                  {(relatedResource) => {
+                                    const label = resolveResourceLabel(relatedResource);
+                                    const href = buildInfrastructureResourceHref(relatedResource);
+                                    return href ? (
+                                      <a
+                                        class="inline-flex rounded bg-surface px-1.5 py-0.5 text-[10px] text-blue-700 hover:underline dark:text-blue-300"
+                                        href={href}
+                                        aria-label={`Open related resource ${label} in Infrastructure`}
+                                      >
+                                        {label}
+                                      </a>
+                                    ) : (
+                                      <span class="inline-flex rounded bg-surface px-1.5 py-0.5 text-[10px] text-base-content">
+                                        {label}
+                                      </span>
+                                    );
+                                  }}
+                                </For>
+                              </div>
+                            </Show>
+                          </div>
+                        );
+                      }}
+                    </For>
+                  </div>
+                </Show>
+              </div>
             </div>
-          </div>
 
           <Show when={hasServiceDetails()}>
             <SupportDisclosure
@@ -1381,6 +1381,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
             onToggle={() => setShowServiceDetails((value) => !value)}
             showLabel="Show service details"
             hideLabel="Hide service details"
+            class="h-full"
             contentClass="mt-3 space-y-3"
             dataTestId="resource-service-details-section"
             >
@@ -1795,7 +1796,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
           </Show>
         </div>
 
-        <Show when={hasHostDetails()}>
+          <Show when={hasHostDetails()}>
           <SupportDisclosure
             title="Host details"
             summary={hostDetailSummary()}
@@ -1803,8 +1804,8 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
             onToggle={() => setShowHostDetails((value) => !value)}
             showLabel="Show host details"
             hideLabel="Hide host details"
-            class="mt-3 rounded border border-dashed border-border bg-surface-hover p-3"
-            contentClass="mt-3 space-y-3"
+            class="h-full"
+            contentClass="mt-3 grid gap-3 sm:grid-cols-2"
             dataTestId="resource-host-details-section"
           >
                 <Show when={proxmoxNode()}>
@@ -1831,7 +1832,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
           </SupportDisclosure>
         </Show>
 
-        <Show when={hasInvestigationContext()}>
+          <Show when={hasInvestigationContext()}>
           <SupportDisclosure
             title="Investigation context"
             summary={investigationContextSummary()}
@@ -1839,7 +1840,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
             onToggle={() => setShowInvestigationContext((value) => !value)}
             showLabel="Show context"
             hideLabel="Hide context"
-            class="mt-3 rounded border border-border bg-surface p-3"
+            class="h-full"
             contentClass="mt-3 space-y-3"
             dataTestId="resource-investigation-context"
           >
@@ -1965,7 +1966,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
 
         <Show when={discoveryConfig()}>
           {(config) => (
-            <div class="mt-3 space-y-2">
+            <div class="space-y-2">
               <WebInterfaceUrlField
                 metadataKind={config().metadataKind}
                 metadataId={config().metadataId}
@@ -1979,7 +1980,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                 onToggle={() => setShowDiscoveryContext((value) => !value)}
                 showLabel="Show metadata"
                 hideLabel="Hide metadata"
-                class="rounded border border-dashed border-border bg-surface-hover p-3"
+                class="h-full"
                 dataTestId="resource-discovery-context"
               >
                     <Suspense
@@ -2003,6 +2004,8 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
             </div>
           )}
         </Show>
+
+      </div>
 
       </div>
 

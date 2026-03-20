@@ -191,6 +191,10 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(screen.getByText('Current state')).toBeInTheDocument();
     expect(screen.queryByText('Runtime')).toBeNull();
     expect(screen.getByText('Change history')).toBeInTheDocument();
+    expect(screen.getByTestId('resource-secondary-sections').classList.contains('grid')).toBe(true);
+    expect(
+      screen.getByTestId('resource-secondary-sections').classList.contains('sm:grid-cols-2'),
+    ).toBe(true);
     expect(
       screen.getByTestId('resource-summary-section').querySelectorAll('.bg-surface-hover.px-2.py-2')
         .length,
