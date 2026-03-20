@@ -343,6 +343,11 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
 
     const inlineRender = render(() => <ResourceDetailDrawer resource={inlineResource} />);
     expect(inlineRender.getByText('Supporting context')).toBeInTheDocument();
+    expect(
+      inlineRender
+        .getByText('Supporting context')
+        .parentElement?.querySelector('.mt-1.text-\\[10px\\].text-muted'),
+    ).toBeNull();
     expect(inlineRender.getByText('Aliases')).toBeInTheDocument();
     expect(inlineRender.container.querySelector('details')).toBeNull();
     expect(inlineRender.getByText('agent-inline-1')).toBeInTheDocument();
@@ -373,6 +378,11 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
 
     const overflowRender = render(() => <ResourceDetailDrawer resource={overflowResource} />);
     expect(overflowRender.getByText('Supporting context')).toBeInTheDocument();
+    expect(
+      overflowRender
+        .getByText('Supporting context')
+        .parentElement?.querySelector('.mt-1.text-\\[10px\\].text-muted'),
+    ).toBeNull();
     expect(overflowRender.getByText('Aliases')).toBeInTheDocument();
     expect(overflowRender.container.querySelector('details')).toBeTruthy();
   });

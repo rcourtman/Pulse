@@ -619,18 +619,6 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
       (props.resource.tags?.length ?? 0) > 0 ||
       identityAliasValues().length > 0,
   );
-  const identitySupportSummary = createMemo(() => {
-    const parts: string[] = [];
-    const ipCount = props.resource.identity?.ips?.length ?? 0;
-    const tagCount = props.resource.tags?.length ?? 0;
-    const aliasCount = identityAliasValues().length;
-
-    if (ipCount > 0) parts.push(`${ipCount} IP${ipCount === 1 ? '' : 's'}`);
-    if (tagCount > 0) parts.push(`${tagCount} tag${tagCount === 1 ? '' : 's'}`);
-    if (aliasCount > 0) parts.push(`${aliasCount} alias${aliasCount === 1 ? '' : 'es'}`);
-
-    return parts.join(' · ');
-  });
   const hasMergedSources = createMemo(() => mergedSources().length > 1);
   const discoveryConfig = createMemo(() => toDiscoveryConfig(props.resource));
   const discoveryContextSummary = createMemo(() => {
@@ -1063,9 +1051,6 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                       <div class="text-[10px] font-medium uppercase tracking-wide text-base-content">
                         Supporting context
                       </div>
-                      <Show when={identitySupportSummary()}>
-                        <div class="mt-1 text-[10px] text-muted">{identitySupportSummary()}</div>
-                      </Show>
                       <Show
                         when={props.resource.identity?.ips && props.resource.identity.ips.length > 0}
                       >

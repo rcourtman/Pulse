@@ -293,9 +293,8 @@ while platform IDs, quick links, and platform-signal badges live in a smaller
 `Operational context` block, so first read remains status-first instead of
 mixing state and supporting action surfaces together.
 That same summary shell also keeps canonical identity rows primary, while
-aliases, IPs, and tags live in a smaller
-`Supporting context` block so the drawer answers "what is this resource" before
-showing every attached label.
+aliases, IPs, and tags live in a smaller `Supporting context` block that stays
+label-first instead of adding another summary sentence before the data.
 When the identity side has no owned rows or supporting labels yet, the sparse
 fallback now stays terse (`No identity metadata yet.`) so empty state chrome
 does not read heavier than the data it is standing in for.

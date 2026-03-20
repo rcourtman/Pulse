@@ -239,6 +239,42 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(screen.queryByText('Relationships 1')).toBeNull();
   });
 
+  it('keeps supporting context label-first without a summary sentence', () => {
+    facetBundleMock.getFacetBundle.mockResolvedValueOnce({
+      capabilities: [],
+      relationships: [],
+      recentChanges: [],
+    });
+
+    const resource = baseResource({
+      id: 'agent-with-support',
+      name: 'agent-with-support',
+      displayName: 'Agent With Support',
+      platformId: 'agent-with-support',
+      sourceType: 'agent',
+      identity: {
+        hostname: 'agent-with-support.local',
+      },
+      tags: ['support-tag'],
+      platformData: {
+        sources: ['agent'],
+        agent: {
+          agentId: 'agent-support-1',
+          hostname: 'agent-with-support.local',
+        },
+      },
+    });
+
+    render(() => <ResourceDetailDrawer resource={resource} />);
+
+    const supportingContext = screen.getByText('Supporting context');
+    expect(supportingContext).toBeInTheDocument();
+    expect(
+      supportingContext.parentElement?.querySelector('.mt-1.text-\\[10px\\].text-muted'),
+    ).toBeNull();
+    expect(screen.getByText('Aliases')).toBeInTheDocument();
+  });
+
   it('renders timeline history without surfacing unsupported capability or relationship facets', async () => {
     facetBundleMock.getFacetBundle.mockResolvedValueOnce({
       capabilities: [
