@@ -285,6 +285,8 @@ import auditWebhookPresentationSource from '@/utils/auditWebhookPresentation.ts?
 import auditLogPanelSource from '@/components/Settings/AuditLogPanel.tsx?raw';
 import auditLogPresentationSource from '@/utils/auditLogPresentation.ts?raw';
 import ssoProvidersPanelSource from '@/components/Settings/SSOProvidersPanel.tsx?raw';
+import ssoProvidersStateSource from '@/components/Settings/useSSOProvidersState.ts?raw';
+import ssoProvidersModelSource from '@/components/Settings/ssoProvidersModel.ts?raw';
 import ssoProviderPresentationSource from '@/utils/ssoProviderPresentation.ts?raw';
 import userAssignmentsPanelSource from '@/components/Settings/UserAssignmentsPanel.tsx?raw';
 import investigationMessagesSource from '@/components/patrol/InvestigationMessages.tsx?raw';
@@ -2532,10 +2534,10 @@ describe('frontend resource type boundaries', () => {
       'export function resolveConfiguredInstanceStatusIndicator',
     );
     expect(ssoProvidersPanelSource).toContain('@/utils/ssoProviderPresentation');
+    expect(ssoProvidersPanelSource).toContain('@/components/Settings/useSSOProvidersState');
     expect(ssoProvidersPanelSource).toContain('getSSOProviderTypeLabel');
     expect(ssoProvidersPanelSource).toContain('getSSOProviderSummary');
     expect(ssoProvidersPanelSource).toContain('getSSOProviderCardClass');
-    expect(ssoProvidersPanelSource).toContain('getSSOTestResultPresentation');
     expect(ssoProvidersPanelSource).toContain('getSSOCertificatePresentation');
     expect(ssoProvidersPanelSource).toContain('getSSOProviderAddButtonLabel');
     expect(ssoProvidersPanelSource).toContain('getSSOProviderModalTitle');
@@ -2564,6 +2566,9 @@ describe('frontend resource type boundaries', () => {
     expect(ssoProvidersPanelSource).not.toContain(
       "notificationStore.error('Please enter an IdP Metadata URL')",
     );
+    expect(ssoProvidersPanelSource).not.toContain('const loadProviders = async () =>');
+    expect(ssoProvidersPanelSource).not.toContain('const handleSave = async (');
+    expect(ssoProvidersPanelSource).not.toContain('const testConnection = async () =>');
     expect(ssoProvidersPanelSource).not.toContain('provider.type.toUpperCase()');
     expect(ssoProvidersPanelSource).not.toContain("provider.type === 'oidc' ? (");
     expect(ssoProviderPresentationSource).toContain('export function getSSOProviderTypeLabel');
@@ -2600,6 +2605,17 @@ describe('frontend resource type boundaries', () => {
     expect(ssoProviderPresentationSource).toContain(
       'export function getSSOMetadataUrlRequiredMessage',
     );
+    expect(ssoProvidersStateSource).toContain('@/components/Settings/ssoProvidersModel');
+    expect(ssoProvidersStateSource).toContain('getSSOTestResultPresentation');
+    expect(ssoProvidersStateSource).toContain('getSSOProvidersLoadErrorMessage');
+    expect(ssoProvidersStateSource).toContain('getSSOProviderDetailsLoadErrorMessage');
+    expect(ssoProvidersStateSource).toContain('getSSOProviderSaveSuccessMessage');
+    expect(ssoProvidersStateSource).toContain('getSSOProviderDeleteSuccessMessage');
+    expect(ssoProvidersStateSource).toContain('getSSOConnectionTestSuccessMessage');
+    expect(ssoProvidersModelSource).toContain('export const createEmptyProviderForm =');
+    expect(ssoProvidersModelSource).toContain('export const mapProviderDetailsToForm =');
+    expect(ssoProvidersModelSource).toContain('export const buildProviderPayload =');
+    expect(ssoProvidersModelSource).toContain('export const buildProviderTestPayload =');
     expect(auditWebhookPanelSource).toContain('@/utils/auditWebhookPresentation');
     expect(auditWebhookPanelSource).toContain('getAuditWebhookFeatureGateCopy');
     expect(auditWebhookPanelSource).toContain('getAuditWebhookEmptyStateCopy');

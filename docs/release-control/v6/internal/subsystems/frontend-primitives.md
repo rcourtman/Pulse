@@ -40,17 +40,19 @@ work extends shared components instead of creating new local variants.
 18. `frontend-modern/src/components/Settings/SettingsPageShell.tsx`
 19. `frontend-modern/src/components/Settings/settingsPanelRegistry.ts`
 20. `frontend-modern/src/components/Settings/SSOProvidersPanel.tsx`
-21. `frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx`
-22. `frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts`
-23. `tests/integration/tests/15-settings-shell-consistency.spec.ts`
-24. `frontend-modern/src/components/shared/PageControls.guardrails.test.ts`
-25. `frontend-modern/src/components/shared/TypeColumn.guardrails.test.ts`
-26. `frontend-modern/src/features/`
-27. `frontend-modern/src/components/SetupWizard/SetupWizard.tsx`
-28. `frontend-modern/src/components/SetupWizard/SetupCompletionPreview.tsx`
-29. `frontend-modern/src/components/SetupWizard/__tests__/SetupWizard.test.tsx`
-30. `frontend-modern/src/components/SetupWizard/__tests__/SetupCompletionPreview.test.tsx`
-31. `frontend-modern/src/components/shared/MonitoredSystemLimitWarningBanner.tsx`
+21. `frontend-modern/src/components/Settings/useSSOProvidersState.ts`
+22. `frontend-modern/src/components/Settings/ssoProvidersModel.ts`
+23. `frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx`
+24. `frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts`
+25. `tests/integration/tests/15-settings-shell-consistency.spec.ts`
+26. `frontend-modern/src/components/shared/PageControls.guardrails.test.ts`
+27. `frontend-modern/src/components/shared/TypeColumn.guardrails.test.ts`
+28. `frontend-modern/src/features/`
+29. `frontend-modern/src/components/SetupWizard/SetupWizard.tsx`
+30. `frontend-modern/src/components/SetupWizard/SetupCompletionPreview.tsx`
+31. `frontend-modern/src/components/SetupWizard/__tests__/SetupWizard.test.tsx`
+32. `frontend-modern/src/components/SetupWizard/__tests__/SetupCompletionPreview.test.tsx`
+33. `frontend-modern/src/components/shared/MonitoredSystemLimitWarningBanner.tsx`
 
 ## Shared Boundaries
 
@@ -281,7 +283,12 @@ must extend those extracted owners instead of being re-inlined into the shell.
 `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx` must keep
 `frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx`,
 `frontend-modern/src/components/Settings/RecoverySettingsPanel.tsx`,
-`frontend-modern/src/components/Settings/SSOProvidersPanel.tsx`, and
+`frontend-modern/src/components/Settings/SSOProvidersPanel.tsx`,
+`frontend-modern/src/components/Settings/useSSOProvidersState.ts`, and
+`frontend-modern/src/components/Settings/ssoProvidersModel.ts` now also define
+the canonical SSO provider settings runtime boundary: `SSOProvidersPanel.tsx`
+is the shell, `useSSOProvidersState.ts` owns the reactive/API lifecycle, and
+`ssoProvidersModel.ts` owns provider-form normalization and payload building.
 `frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx` must keep
 page-shell titles, descriptions, and lead panel framing aligned instead of
 letting navigation/header labels drift away from the actual settings surface.

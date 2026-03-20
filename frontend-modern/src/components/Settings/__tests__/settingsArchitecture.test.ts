@@ -34,6 +34,8 @@ import organizationBillingPanelSource from '../OrganizationBillingPanel.tsx?raw'
 import securityOverviewPanelSource from '../SecurityOverviewPanel.tsx?raw';
 import securityAuthPanelSource from '../SecurityAuthPanel.tsx?raw';
 import ssoProvidersPanelSource from '../SSOProvidersPanel.tsx?raw';
+import ssoProvidersStateSource from '../useSSOProvidersState.ts?raw';
+import ssoProvidersModelSource from '../ssoProvidersModel.ts?raw';
 import rolesPanelSource from '../RolesPanel.tsx?raw';
 import userAssignmentsPanelSource from '../UserAssignmentsPanel.tsx?raw';
 import { SETTINGS_HEADER_META } from '../settingsHeaderMeta';
@@ -57,6 +59,8 @@ const extractedModules = [
   '../AIProviderConfigurationSection.tsx',
   '../AISettingsDialogs.tsx',
   '../aiSettingsModel.ts',
+  '../useSSOProvidersState.ts',
+  '../ssoProvidersModel.ts',
   '../ProxmoxSettingsPanel.tsx',
   '../SettingsDialogs.tsx',
   '../SettingsPageShell.tsx',
@@ -341,6 +345,22 @@ describe('Settings architecture guardrails', () => {
     expect(aiSettingsDialogsSource).toContain('@/components/Settings/aiSettingsModel');
     expect(aiSettingsModelSource).toContain('export const AI_PROVIDER_CONFIGS');
     expect(aiSettingsModelSource).toContain('export const AI_SETUP_PROVIDER_OPTIONS');
+  });
+
+  it('keeps the SSO providers shell behind extracted runtime owners', () => {
+    expect(ssoProvidersPanelSource).toContain('@/components/Settings/useSSOProvidersState');
+    expect(ssoProvidersPanelSource).not.toContain('const loadProviders = async () =>');
+    expect(ssoProvidersPanelSource).not.toContain('const handleSave = async (');
+    expect(ssoProvidersPanelSource).not.toContain('const testConnection = async () =>');
+    expect(ssoProvidersStateSource).toContain('@/components/Settings/ssoProvidersModel');
+    expect(ssoProvidersStateSource).toContain('export const useSSOProvidersState =');
+    expect(ssoProvidersStateSource).toContain('const loadProviders = async () =>');
+    expect(ssoProvidersStateSource).toContain('const handleSave = async (event?: Event) =>');
+    expect(ssoProvidersStateSource).toContain('const testConnection = async () =>');
+    expect(ssoProvidersModelSource).toContain('export const createEmptyProviderForm =');
+    expect(ssoProvidersModelSource).toContain('export const mapProviderDetailsToForm =');
+    expect(ssoProvidersModelSource).toContain('export const buildProviderPayload =');
+    expect(ssoProvidersModelSource).toContain('export const buildProviderTestPayload =');
   });
 
   it('routes every top-level settings surface through the canonical panel shell framing', () => {

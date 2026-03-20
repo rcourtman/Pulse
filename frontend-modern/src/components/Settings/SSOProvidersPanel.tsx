@@ -1,20 +1,8 @@
-import { Component, Show, For, createSignal, onMount, createMemo, createEffect } from 'solid-js';
-import { createStore } from 'solid-js/store';
+import { Component, For, Show } from 'solid-js';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { Dialog } from '@/components/shared/Dialog';
 import { Toggle } from '@/components/shared/Toggle';
 import { formField, labelClass, controlClass, formHelpText } from '@/components/shared/Form';
-import { notificationStore } from '@/stores/notifications';
-import { logger } from '@/utils/logger';
-import {
-  getUpgradeActionUrlOrFallback,
-  hasFeature,
-  loadLicenseStatus,
-  licenseLoaded,
-  startProTrial,
-  entitlements,
-} from '@/stores/license';
-import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/upgradeMetrics';
 import Plus from 'lucide-solid/icons/plus';
 import Pencil from 'lucide-solid/icons/pencil';
 import Trash2 from 'lucide-solid/icons/trash-2';
@@ -29,192 +17,23 @@ import { SSOProviderTypeIcon } from './SSOProviderTypeIcon';
 import {
   getSSOProviderAddButtonLabel,
   getSSOCertificatePresentation,
-  getSSOCopySuccessMessage,
-  getSSOConnectionTestErrorMessage,
-  getSSOConnectionTestFailureMessage,
-  getSSOConnectionTestSuccessMessage,
   getSSOProviderCardClass,
-  getSSOProviderDeleteErrorMessage,
-  getSSOProviderDeleteSuccessMessage,
-  getSSOProviderDetailsLoadErrorMessage,
   getSSOProviderEmptyStateDescription,
   getSSOProviderEmptyStateTitle,
-  getSSOMetadataFetchErrorMessage,
-  getSSOMetadataUrlRequiredMessage,
   getSSOProvidersLoadingState,
-  getSSOProvidersLoadErrorMessage,
   getSSOProviderModalTitle,
-  getSSOProviderSaveErrorMessage,
-  getSSOProviderSaveSuccessMessage,
   getSSOProviderSummary,
-  getSSOProviderToggleErrorMessage,
-  getSSOProviderToggleSuccessMessage,
   getSSOProviderTypeBadgeClass,
   getSSOProviderTypeLabel,
-  getSSOTestResultPresentation,
 } from '@/utils/ssoProviderPresentation';
 import {
-  getProTrialStartedMessage,
-  getTrialAlreadyUsedMessage,
-  getTrialStartErrorMessage,
   getUpgradeActionButtonClass,
   UPGRADE_ACTION_LABEL,
   UPGRADE_TRIAL_LABEL,
   UPGRADE_TRIAL_LINK_CLASS,
 } from '@/utils/upgradePresentation';
 import { ALERT_EMAIL_REPLY_TO_PLACEHOLDER } from '@/utils/alertEmailPresentation';
-
-// Types
-interface SSOProvider {
-  id: string;
-  name: string;
-  type: 'oidc' | 'saml';
-  enabled: boolean;
-  displayName?: string;
-  iconUrl?: string;
-  priority: number;
-  oidcIssuerUrl?: string;
-  oidcClientId?: string;
-  oidcClientSecretSet?: boolean;
-  samlIdpEntityId?: string;
-  samlSpEntityId?: string;
-  samlMetadataUrl?: string;
-  samlAcsUrl?: string;
-  allowedGroups?: string[];
-  allowedDomains?: string[];
-  allowedEmails?: string[];
-}
-
-interface SSOProvidersResponse {
-  providers: SSOProvider[];
-  defaultProviderId?: string;
-  allowMultipleProviders: boolean;
-}
-
-// Test connection response
-interface TestResult {
-  success: boolean;
-  message: string;
-  error?: string;
-  details?: {
-    type: string;
-    entityId?: string;
-    ssoUrl?: string;
-    sloUrl?: string;
-    tokenEndpoint?: string;
-    userinfoEndpoint?: string;
-    certificates?: Array<{
-      subject: string;
-      issuer: string;
-      notBefore: string;
-      notAfter: string;
-      isExpired: boolean;
-    }>;
-  };
-}
-
-// Metadata preview response
-interface MetadataPreview {
-  xml: string;
-  parsed: {
-    entityId: string;
-    ssoUrl?: string;
-    sloUrl?: string;
-    certificates?: Array<{
-      subject: string;
-      notAfter: string;
-      isExpired?: boolean;
-    }>;
-    nameIdFormats?: string[];
-  };
-}
-
-// Provider form for creating/editing
-interface ProviderForm {
-  id: string;
-  name: string;
-  type: 'oidc' | 'saml';
-  enabled: boolean;
-  displayName: string;
-  priority: number;
-  // OIDC fields
-  oidcIssuerUrl: string;
-  oidcClientId: string;
-  oidcClientSecret: string;
-  oidcRedirectUrl: string;
-  oidcLogoutUrl: string;
-  oidcScopes: string;
-  // SAML fields
-  samlIdpMetadataUrl: string;
-  samlIdpMetadataXml: string;
-  samlIdpSsoUrl: string;
-  samlIdpEntityId: string;
-  samlIdpCertificate: string;
-  samlSpEntityId: string;
-  samlSignRequests: boolean;
-  samlAllowIdpInitiated: boolean;
-  samlUsernameAttr: string;
-  samlEmailAttr: string;
-  samlGroupsAttr: string;
-  // Common
-  allowedGroups: string;
-  allowedDomains: string;
-  allowedEmails: string;
-  groupRoleMappings: string;
-}
-
-const emptyForm = (): ProviderForm => ({
-  id: '',
-  name: '',
-  type: 'oidc',
-  enabled: true,
-  displayName: '',
-  priority: 0,
-  oidcIssuerUrl: '',
-  oidcClientId: '',
-  oidcClientSecret: '',
-  oidcRedirectUrl: '',
-  oidcLogoutUrl: '',
-  oidcScopes: 'openid profile email',
-  samlIdpMetadataUrl: '',
-  samlIdpMetadataXml: '',
-  samlIdpSsoUrl: '',
-  samlIdpEntityId: '',
-  samlIdpCertificate: '',
-  samlSpEntityId: '',
-  samlSignRequests: false,
-  samlAllowIdpInitiated: false,
-  samlUsernameAttr: '',
-  samlEmailAttr: 'email',
-  samlGroupsAttr: '',
-  allowedGroups: '',
-  allowedDomains: '',
-  allowedEmails: '',
-  groupRoleMappings: '',
-});
-
-const listToString = (values?: string[]) => (values && values.length > 0 ? values.join(', ') : '');
-const splitList = (input: string) =>
-  input
-    .split(/[,\s]+/)
-    .map((v) => v.trim())
-    .filter(Boolean);
-
-const mappingsToString = (mappings?: Record<string, string>) =>
-  mappings
-    ? Object.entries(mappings)
-        .map(([k, v]) => `${k}=${v}`)
-        .join(', ')
-    : '';
-
-const stringToMappings = (input: string) => {
-  const result: Record<string, string> = {};
-  splitList(input).forEach((pair) => {
-    const [k, v] = pair.split('=').map((s) => s.trim());
-    if (k && v) result[k] = v;
-  });
-  return result;
-};
+import { useSSOProvidersState } from '@/components/Settings/useSSOProvidersState';
 
 interface SSOProvidersPanelProps {
   onConfigUpdated?: () => void;
@@ -222,390 +41,48 @@ interface SSOProvidersPanelProps {
 }
 
 export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
-  const [providers, setProviders] = createSignal<SSOProvider[]>([]);
-  const [loading, setLoading] = createSignal(true);
-  const [saving, setSaving] = createSignal(false);
-  const [showModal, setShowModal] = createSignal(false);
-  const [editingProvider, setEditingProvider] = createSignal<SSOProvider | null>(null);
-  const [form, setForm] = createStore<ProviderForm>(emptyForm());
-  const [advancedOpen, setAdvancedOpen] = createSignal(false);
-  const [deleteConfirm, setDeleteConfirm] = createSignal<string | null>(null);
-  const [publicUrl, setPublicUrl] = createSignal<string>('');
-
-  const [showSamlUpsell, setShowSamlUpsell] = createSignal(false);
-
-  // Test connection state
-  const [testing, setTesting] = createSignal(false);
-  const [testResult, setTestResult] = createSignal<TestResult | null>(null);
-
-  // Metadata preview state
-  const [showMetadataPreview, setShowMetadataPreview] = createSignal(false);
-  const [metadataPreview, setMetadataPreview] = createSignal<MetadataPreview | null>(null);
-  const [loadingPreview, setLoadingPreview] = createSignal(false);
-
-  const hasAdvancedSSO = createMemo(() => hasFeature('advanced_sso'));
-  const canManage = () => props.canManage !== false;
-  const [startingTrial, setStartingTrial] = createSignal(false);
-  const canStartTrial = () => entitlements()?.trial_eligible !== false;
-
-  const handleStartTrial = async () => {
-    if (startingTrial()) return;
-    setStartingTrial(true);
-    try {
-      const result = await startProTrial();
-      if (result?.outcome === 'redirect') {
-        window.location.href = result.actionUrl;
-        return;
-      }
-      notificationStore.success(getProTrialStartedMessage());
-    } catch (err) {
-      const statusCode = (err as { status?: number } | null)?.status;
-      if (statusCode === 409) {
-        notificationStore.error(getTrialAlreadyUsedMessage());
-      } else {
-        notificationStore.error(
-          getTrialStartErrorMessage(err instanceof Error ? err.message : undefined),
-        );
-      }
-    } finally {
-      setStartingTrial(false);
-    }
-  };
-
-  createEffect((wasBannerVisible) => {
-    const isBannerVisible = licenseLoaded() && !hasAdvancedSSO() && !loading();
-    if (isBannerVisible && !wasBannerVisible) {
-      trackPaywallViewed('advanced_sso', 'settings_sso_providers_banner');
-    }
-    return isBannerVisible;
-  }, false);
-
-  createEffect((wasUpsellVisible) => {
-    const isUpsellVisible = showSamlUpsell();
-    if (isUpsellVisible && !wasUpsellVisible) {
-      trackPaywallViewed('advanced_sso', 'settings_sso_providers_add_saml_gate');
-    }
-    return isUpsellVisible;
-  }, false);
-
-  const loadProviders = async () => {
-    setLoading(true);
-    try {
-      const { apiFetch } = await import('@/utils/apiClient');
-      const response = await apiFetch('/api/security/sso/providers');
-      if (!response.ok) {
-        throw new Error(`Failed to load SSO providers (${response.status})`);
-      }
-      const data = (await response.json()) as SSOProvidersResponse;
-      setProviders(data.providers || []);
-
-      // Also get public URL for metadata display
-      const statusResp = await apiFetch('/api/security/status');
-      if (statusResp.ok) {
-        const status = await statusResp.json();
-        setPublicUrl(status.publicUrl || window.location.origin);
-      }
-    } catch (error) {
-      logger.error('[SSOProvidersPanel] Failed to load providers:', error);
-      notificationStore.error(getSSOProvidersLoadErrorMessage());
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  onMount(() => {
-    loadLicenseStatus();
-    loadProviders();
-  });
-
-  const openAddModal = (type: 'oidc' | 'saml') => {
-    if (!canManage()) return;
-    setEditingProvider(null);
-    setForm(emptyForm());
-    setForm('type', type);
-    setAdvancedOpen(false);
-    setShowModal(true);
-  };
-
-  const openEditModal = async (provider: SSOProvider) => {
-    if (!canManage()) return;
-    setEditingProvider(provider);
-    try {
-      const { apiFetch } = await import('@/utils/apiClient');
-      const response = await apiFetch(`/api/security/sso/providers/${provider.id}`);
-      if (!response.ok) throw new Error('Failed to load provider details');
-      const full = await response.json();
-
-      setForm({
-        id: full.id,
-        name: full.name,
-        type: full.type,
-        enabled: full.enabled,
-        displayName: full.displayName || '',
-        priority: full.priority || 0,
-        oidcIssuerUrl: full.oidc?.issuerUrl || '',
-        oidcClientId: full.oidc?.clientId || '',
-        oidcClientSecret: '',
-        oidcRedirectUrl: full.oidc?.redirectUrl || '',
-        oidcLogoutUrl: full.oidc?.logoutUrl || '',
-        oidcScopes: full.oidc?.scopes?.join(' ') || 'openid profile email',
-        samlIdpMetadataUrl: full.saml?.idpMetadataUrl || '',
-        samlIdpMetadataXml: full.saml?.idpMetadataXml || '',
-        samlIdpSsoUrl: full.saml?.idpSsoUrl || '',
-        samlIdpEntityId: full.saml?.idpEntityId || '',
-        samlIdpCertificate: full.saml?.idpCertificate || '',
-        samlSpEntityId: full.saml?.spEntityId || '',
-        samlSignRequests: full.saml?.signRequests || false,
-        samlAllowIdpInitiated: full.saml?.allowIdpInitiated || false,
-        samlUsernameAttr: full.saml?.usernameAttr || '',
-        samlEmailAttr: full.saml?.emailAttr || 'email',
-        samlGroupsAttr: full.saml?.groupsAttr || full.groupsClaim || '',
-        allowedGroups: listToString(full.allowedGroups),
-        allowedDomains: listToString(full.allowedDomains),
-        allowedEmails: listToString(full.allowedEmails),
-        groupRoleMappings: mappingsToString(full.groupRoleMappings),
-      });
-      setAdvancedOpen(false);
-      setShowModal(true);
-    } catch (error) {
-      logger.error('[SSOProvidersPanel] Failed to load provider for editing:', error);
-      notificationStore.error(getSSOProviderDetailsLoadErrorMessage());
-    }
-  };
-
-  const handleSave = async (e?: Event) => {
-    e?.preventDefault();
-    if (!canManage()) return;
-    setSaving(true);
-
-    try {
-      const { apiFetch } = await import('@/utils/apiClient');
-      const isEdit = !!editingProvider();
-
-      // Build payload based on type
-      const payload: Record<string, unknown> = {
-        id: form.id || undefined,
-        name: form.name.trim(),
-        type: form.type,
-        enabled: form.enabled,
-        displayName: form.displayName.trim() || undefined,
-        priority: form.priority,
-        allowedGroups: splitList(form.allowedGroups),
-        allowedDomains: splitList(form.allowedDomains),
-        allowedEmails: splitList(form.allowedEmails),
-        groupRoleMappings: stringToMappings(form.groupRoleMappings),
-      };
-
-      if (form.type === 'oidc') {
-        payload.oidc = {
-          issuerUrl: form.oidcIssuerUrl.trim(),
-          clientId: form.oidcClientId.trim(),
-          clientSecret: form.oidcClientSecret.trim() || undefined,
-          redirectUrl: form.oidcRedirectUrl.trim() || undefined,
-          logoutUrl: form.oidcLogoutUrl.trim() || undefined,
-          scopes: splitList(form.oidcScopes),
-        };
-        payload.groupsClaim = form.samlGroupsAttr.trim() || undefined;
-      } else {
-        payload.saml = {
-          idpMetadataUrl: form.samlIdpMetadataUrl.trim() || undefined,
-          idpMetadataXml: form.samlIdpMetadataXml.trim() || undefined,
-          idpSsoUrl: form.samlIdpSsoUrl.trim() || undefined,
-          idpEntityId: form.samlIdpEntityId.trim() || undefined,
-          idpCertificate: form.samlIdpCertificate.trim() || undefined,
-          spEntityId: form.samlSpEntityId.trim() || undefined,
-          signRequests: form.samlSignRequests,
-          allowIdpInitiated: form.samlAllowIdpInitiated,
-          usernameAttr: form.samlUsernameAttr.trim() || undefined,
-          emailAttr: form.samlEmailAttr.trim() || undefined,
-          groupsAttr: form.samlGroupsAttr.trim() || undefined,
-        };
-        payload.groupsClaim = form.samlGroupsAttr.trim() || undefined;
-      }
-
-      const url = isEdit
-        ? `/api/security/sso/providers/${editingProvider()!.id}`
-        : '/api/security/sso/providers';
-
-      const response = await apiFetch(url, {
-        method: isEdit ? 'PUT' : 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) {
-        const errText = await response.text();
-        throw new Error(errText || `Failed to save provider (${response.status})`);
-      }
-
-      notificationStore.success(getSSOProviderSaveSuccessMessage(isEdit));
-      setShowModal(false);
-      loadProviders();
-      props.onConfigUpdated?.();
-    } catch (error) {
-      logger.error('[SSOProvidersPanel] Failed to save provider:', error);
-      notificationStore.error(getSSOProviderSaveErrorMessage(error));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleDelete = async (providerId: string) => {
-    if (!canManage()) return;
-    try {
-      const { apiFetch } = await import('@/utils/apiClient');
-      const response = await apiFetch(`/api/security/sso/providers/${providerId}`, {
-        method: 'DELETE',
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to delete provider (${response.status})`);
-      }
-
-      notificationStore.success(getSSOProviderDeleteSuccessMessage());
-      setDeleteConfirm(null);
-      loadProviders();
-      props.onConfigUpdated?.();
-    } catch (error) {
-      logger.error('[SSOProvidersPanel] Failed to delete provider:', error);
-      notificationStore.error(getSSOProviderDeleteErrorMessage());
-    }
-  };
-
-  const handleToggleEnabled = async (provider: SSOProvider) => {
-    if (!canManage()) return;
-    try {
-      const { apiFetch } = await import('@/utils/apiClient');
-      const response = await apiFetch(`/api/security/sso/providers/${provider.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...provider, enabled: !provider.enabled }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to update provider (${response.status})`);
-      }
-
-      notificationStore.success(getSSOProviderToggleSuccessMessage(!provider.enabled));
-      loadProviders();
-      props.onConfigUpdated?.();
-    } catch (error) {
-      logger.error('[SSOProvidersPanel] Failed to toggle provider:', error);
-      notificationStore.error(getSSOProviderToggleErrorMessage());
-    }
-  };
-
-  const copyToClipboard = (text: string, label: string) => {
-    navigator.clipboard.writeText(text);
-    notificationStore.success(getSSOCopySuccessMessage(label));
-  };
-
-  const testResultPresentation = createMemo(() =>
-    testResult() ? getSSOTestResultPresentation(Boolean(testResult()?.success)) : null,
-  );
-
-  // Test connection for current form configuration
-  const testConnection = async () => {
-    setTesting(true);
-    setTestResult(null);
-
-    try {
-      const { apiFetch } = await import('@/utils/apiClient');
-
-      const payload: Record<string, unknown> = {
-        type: form.type,
-      };
-
-      if (form.type === 'oidc') {
-        payload.oidc = {
-          issuerUrl: form.oidcIssuerUrl.trim(),
-          clientId: form.oidcClientId.trim() || undefined,
-        };
-      } else {
-        payload.saml = {
-          idpMetadataUrl: form.samlIdpMetadataUrl.trim() || undefined,
-          idpMetadataXml: form.samlIdpMetadataXml.trim() || undefined,
-          idpSsoUrl: form.samlIdpSsoUrl.trim() || undefined,
-          idpCertificate: form.samlIdpCertificate.trim() || undefined,
-        };
-      }
-
-      const response = await apiFetch('/api/security/sso/providers/test', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      const result = (await response.json()) as TestResult;
-      setTestResult(result);
-
-      if (result.success) {
-        notificationStore.success(getSSOConnectionTestSuccessMessage());
-      } else {
-        notificationStore.error(getSSOConnectionTestFailureMessage(result.message));
-      }
-    } catch (error) {
-      logger.error('[SSOProvidersPanel] Test connection error:', error);
-      setTestResult({
-        success: false,
-        message: getSSOConnectionTestErrorMessage(),
-        error: String(error),
-      });
-      notificationStore.error(getSSOConnectionTestErrorMessage());
-    } finally {
-      setTesting(false);
-    }
-  };
-
-  // Check if we have enough info to test
-  const canTest = () => {
-    if (form.type === 'oidc') {
-      return !!form.oidcIssuerUrl.trim();
-    }
-    return !!(
-      form.samlIdpMetadataUrl.trim() ||
-      form.samlIdpMetadataXml.trim() ||
-      form.samlIdpSsoUrl.trim()
-    );
-  };
-
-  // Fetch and preview metadata
-  const fetchMetadataPreview = async () => {
-    if (!form.samlIdpMetadataUrl.trim()) {
-      notificationStore.error(getSSOMetadataUrlRequiredMessage());
-      return;
-    }
-
-    setLoadingPreview(true);
-    setMetadataPreview(null);
-
-    try {
-      const { apiFetch } = await import('@/utils/apiClient');
-
-      const response = await apiFetch('/api/security/sso/providers/metadata/preview', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 'saml',
-          metadataUrl: form.samlIdpMetadataUrl.trim(),
-        }),
-      });
-
-      if (!response.ok) {
-        const err = await response.text();
-        throw new Error(err || 'Failed to fetch metadata');
-      }
-
-      const preview = (await response.json()) as MetadataPreview;
-      setMetadataPreview(preview);
-      setShowMetadataPreview(true);
-    } catch (error) {
-      logger.error('[SSOProvidersPanel] Metadata preview error:', error);
-      notificationStore.error(getSSOMetadataFetchErrorMessage(error));
-    } finally {
-      setLoadingPreview(false);
-    }
-  };
+  const {
+    providers,
+    loading,
+    saving,
+    showModal,
+    setShowModal,
+    editingProvider,
+    form,
+    setForm,
+    advancedOpen,
+    setAdvancedOpen,
+    deleteConfirm,
+    setDeleteConfirm,
+    publicUrl,
+    showSamlUpsell,
+    setShowSamlUpsell,
+    testing,
+    testResult,
+    setTestResult,
+    showMetadataPreview,
+    setShowMetadataPreview,
+    metadataPreview,
+    loadingPreview,
+    hasAdvancedSSO,
+    canManage,
+    startingTrial,
+    canStartTrial,
+    handleStartTrial,
+    openAddModal,
+    openEditModal,
+    handleSave,
+    handleDelete,
+    handleToggleEnabled,
+    copyToClipboard,
+    testResultPresentation,
+    testConnection,
+    canTest,
+    fetchMetadataPreview,
+    licenseLoaded,
+    getUpgradeActionUrlOrFallback,
+    trackUpgradeClicked,
+  } = useSSOProvidersState(props);
 
   return (
     <div class="space-y-6">
@@ -1409,8 +886,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                   type="button"
                   onClick={() => {
                     if (metadataPreview()?.xml) {
-                      navigator.clipboard.writeText(metadataPreview()!.xml);
-                      notificationStore.success(getSSOCopySuccessMessage('XML'));
+                      copyToClipboard(metadataPreview()!.xml, 'XML');
                     }
                   }}
                   class="px-2 py-1 text-xs font-medium text-muted bg-surface-hover rounded hover:bg-surface-hover flex items-center gap-1"

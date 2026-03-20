@@ -111,6 +111,8 @@ import recoverySettingsPanelSource from '../RecoverySettingsPanel.tsx?raw';
 import rolesPanelSource from '../RolesPanel.tsx?raw';
 import userAssignmentsPanelSource from '../UserAssignmentsPanel.tsx?raw';
 import ssoProvidersPanelSource from '../SSOProvidersPanel.tsx?raw';
+import ssoProvidersStateSource from '../useSSOProvidersState.ts?raw';
+import ssoProvidersModelSource from '../ssoProvidersModel.ts?raw';
 import rbacPermissionsSource from '@/utils/rbacPermissions.ts?raw';
 import rbacPresentationSource from '@/utils/rbacPresentation.ts?raw';
 import apiTokenPresentationSource from '@/utils/apiTokenPresentation.ts?raw';
@@ -770,10 +772,10 @@ describe('monitored-system model guardrails', () => {
 
   it('keeps SSO provider presentation on shared utilities', () => {
     expect(ssoProvidersPanelSource).toContain('@/utils/ssoProviderPresentation');
+    expect(ssoProvidersPanelSource).toContain('@/components/Settings/useSSOProvidersState');
     expect(ssoProvidersPanelSource).toContain('getSSOProviderTypeLabel');
     expect(ssoProvidersPanelSource).toContain('getSSOProviderSummary');
     expect(ssoProvidersPanelSource).toContain('getSSOProviderCardClass');
-    expect(ssoProvidersPanelSource).toContain('getSSOTestResultPresentation');
     expect(ssoProvidersPanelSource).toContain('getSSOCertificatePresentation');
     expect(ssoProvidersPanelSource).toContain('getSSOProviderAddButtonLabel');
     expect(ssoProvidersPanelSource).toContain('getSSOProviderModalTitle');
@@ -802,6 +804,9 @@ describe('monitored-system model guardrails', () => {
     expect(ssoProvidersPanelSource).not.toContain(
       "notificationStore.error('Please enter an IdP Metadata URL')",
     );
+    expect(ssoProvidersPanelSource).not.toContain('const loadProviders = async () =>');
+    expect(ssoProvidersPanelSource).not.toContain('const handleSave = async (');
+    expect(ssoProvidersPanelSource).not.toContain('const testConnection = async () =>');
     expect(ssoProvidersPanelSource).not.toContain('provider.type.toUpperCase()');
     expect(ssoProvidersPanelSource).not.toContain("provider.type === 'oidc' ? (");
     expect(ssoProvidersPanelSource).not.toContain(
@@ -844,6 +849,17 @@ describe('monitored-system model guardrails', () => {
     expect(ssoProviderPresentationSource).toContain(
       'export function getSSOMetadataUrlRequiredMessage',
     );
+    expect(ssoProvidersStateSource).toContain('@/components/Settings/ssoProvidersModel');
+    expect(ssoProvidersStateSource).toContain('getSSOTestResultPresentation');
+    expect(ssoProvidersStateSource).toContain('getSSOProvidersLoadErrorMessage');
+    expect(ssoProvidersStateSource).toContain('getSSOProviderDetailsLoadErrorMessage');
+    expect(ssoProvidersStateSource).toContain('getSSOProviderSaveSuccessMessage');
+    expect(ssoProvidersStateSource).toContain('getSSOProviderDeleteSuccessMessage');
+    expect(ssoProvidersStateSource).toContain('getSSOConnectionTestSuccessMessage');
+    expect(ssoProvidersModelSource).toContain('export const createEmptyProviderForm =');
+    expect(ssoProvidersModelSource).toContain('export const mapProviderDetailsToForm =');
+    expect(ssoProvidersModelSource).toContain('export const buildProviderPayload =');
+    expect(ssoProvidersModelSource).toContain('export const buildProviderTestPayload =');
   });
 
   it('keeps RBAC permission vocabulary on shared utilities', () => {

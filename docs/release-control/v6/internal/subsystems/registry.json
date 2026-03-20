@@ -1651,8 +1651,10 @@
         "frontend-modern/src/components/Settings/settingsHeaderMeta.ts",
         "frontend-modern/src/components/Settings/SettingsPageShell.tsx",
         "frontend-modern/src/components/Settings/settingsPanelRegistry.ts",
+        "frontend-modern/src/components/Settings/ssoProvidersModel.ts",
         "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx",
         "frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx",
+        "frontend-modern/src/components/Settings/useSSOProvidersState.ts",
         "frontend-modern/src/components/SetupWizard/SetupCompletionPreview.tsx",
         "frontend-modern/src/components/SetupWizard/SetupWizard.tsx"
       ],
@@ -1706,8 +1708,10 @@
               "frontend-modern/src/components/Settings/settingsHeaderMeta.ts",
               "frontend-modern/src/components/Settings/SettingsPageShell.tsx",
               "frontend-modern/src/components/Settings/settingsPanelRegistry.ts",
+              "frontend-modern/src/components/Settings/ssoProvidersModel.ts",
               "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx",
-              "frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx"
+              "frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx",
+              "frontend-modern/src/components/Settings/useSSOProvidersState.ts"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
