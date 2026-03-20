@@ -1,6 +1,6 @@
 # Pulse v6 Source Of Truth
 
-Last updated: 2026-03-17
+Last updated: 2026-03-20
 Status: ACTIVE
 
 This file is the stable human governance layer for the active v6 release
@@ -398,6 +398,11 @@ Assertion design rules:
     defensible stop point and complete the next obvious same-lane work when it
     is necessary for trustworthy results, then normalize any remaining valid
     gap instead of calling the lane done by default.
+12. Unified-resource change history is the canonical durable backend timeline.
+    Alert incident memory may retain investigation-local notes, analysis,
+    commands, runbooks, and alert lifecycle breadcrumbs, but it must remain a
+    derived incident projection rather than a competing source of truth for
+    durable resource history.
 
 ## Cross-Repo Contracts
 

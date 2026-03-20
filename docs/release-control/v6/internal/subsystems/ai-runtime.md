@@ -188,6 +188,11 @@ detectors only serving as fallback coverage when the canonical store is not
 available. When that patrol-local fallback is used, it must render through the
 shared memory change presentation helper so the same heading, scope prefix, and
 change-type labels are reused instead of being rebuilt ad hoc in AI-local code.
+`internal/ai/memory/incidents.go` is therefore an alert-scoped investigation
+projection only: it may retain notes, analysis, command executions, runbooks,
+and alert lifecycle breadcrumbs for one incident, but it must not become a
+parallel source of truth for durable backend history that already belongs to
+`internal/unifiedresources/`.
 The AI correlation root-cause engine also consumes the canonical unified-
 resource relationship model directly, so cross-resource reasoning stays aligned
 with the same relationship edges that back the resource API instead of
@@ -246,6 +251,9 @@ Resource-only incident context should follow the same rule: if an alert
 timeline is absent, the incident prompt path should fall back to the canonical
 unified-resource timeline rather than depending only on patrol-local change
 memory.
+When both an alert identifier and a canonical resource ID are known, the prompt
+path should include both surfaces in source-precedence order: alert-scoped
+incident memory first, canonical resource timeline second.
 
 The same runtime boundary now also owns durable action execution auditing.
 `internal/ai/chat/service.go` initializes the unified-resource audit store on

@@ -463,6 +463,13 @@ record state that SQLite persists for the control-plane execution trail.
 The enterprise audit API now reads those same unified-resource action and
 export records back out, so the durable store is not just a write sink but the
 canonical history surface for the control-plane verbs.
+That same ownership boundary applies to incident-adjacent runtime history:
+durable backend facts about what changed on a resource belong in
+`ResourceChange` and the shared unified-resource store, while
+`internal/ai/memory/incidents.go` remains an alert-scoped investigation
+projection for notes, analyses, command breadcrumbs, runbooks, and other
+operator-facing incident memory. Agents must not model the same durable backend
+fact in both places as competing primary histories.
 
 The unified resource core is strong and canonical, but monitoring and some
 frontend/API consumers are still being tightened around it.

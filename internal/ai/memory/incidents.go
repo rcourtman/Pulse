@@ -45,7 +45,9 @@ type IncidentEvent struct {
 	Details   map[string]interface{} `json:"details,omitempty"`
 }
 
-// Incident captures an alert occurrence and its timeline.
+// Incident captures an alert occurrence and its investigation timeline.
+// It is an alert-scoped memory/projection for investigation support rather than
+// the canonical durable resource-change history.
 type Incident struct {
 	ID              string          `json:"id"`
 	AlertIdentifier string          `json:"alertIdentifier"`
@@ -147,7 +149,9 @@ type IncidentStoreConfig struct {
 	MaxAgeDays           int
 }
 
-// IncidentStore maintains incident timelines and persistence.
+// IncidentStore maintains alert-scoped incident timelines and persistence for
+// investigation memory. Durable resource history belongs to the canonical
+// unified-resource change model.
 type IncidentStore struct {
 	mu           sync.RWMutex
 	saveMu       sync.Mutex

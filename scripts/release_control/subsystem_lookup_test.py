@@ -2047,7 +2047,10 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(lane_context["lane_id"], "L13")
         self.assertEqual(
             {decision["id"] for decision in lane_context["resolved_decisions"]},
-            {"host-type-migration-boundary-audit"},
+            {
+                "canonical-timeline-source-precedence",
+                "host-type-migration-boundary-audit",
+            },
         )
 
     def test_lookup_paths_assigns_monitoring_discovery_runtime(self) -> None:

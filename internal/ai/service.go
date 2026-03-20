@@ -183,7 +183,7 @@ type Service struct {
 	resourceExportStoreOrgID string
 	patrolService            *PatrolService        // Background AI monitoring service
 	metadataProvider         MetadataProvider      // Enables AI to update resource URLs
-	incidentStore            *memory.IncidentStore // Incident timelines for alert memory
+	incidentStore            *memory.IncidentStore // Alert-scoped investigation memory; not the canonical durable resource history
 	chatService              ChatServiceProvider   // Chat service for investigation orchestrator
 
 	// Infrastructure discovery service - detects apps running on hosts
@@ -4488,7 +4488,10 @@ func (s *Service) buildRemediationContext(resourceID, currentProblem string) str
 	return context
 }
 
-// buildIncidentContext adds incident timeline context for alerts/resources.
+// buildIncidentContext adds alert-scoped incident memory first, then the
+// canonical resource timeline and relationship context when a resource is known.
+// The incident store is a derived investigation view, not the source of truth
+// for durable backend history.
 func (s *Service) buildIncidentContext(resourceID, alertIdentifier string) string {
 	s.mu.RLock()
 	store := s.incidentStore
@@ -4508,7 +4511,7 @@ func (s *Service) buildIncidentContext(resourceID, alertIdentifier string) strin
 		}
 	}
 
-	if alertIdentifier == "" && resourceID != "" {
+	if resourceID != "" {
 		if recentChanges := s.buildRecentResourceChangesContext(resourceID); recentChanges != "" {
 			sections = append(sections, recentChanges)
 		}

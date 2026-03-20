@@ -8,6 +8,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/baseline"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/correlation"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
@@ -476,6 +477,55 @@ func TestService_BuildIncidentContext(t *testing.T) {
 	ctx = s.buildIncidentContext("", "")
 	if ctx != "" {
 		t.Error("Expected empty context when both IDs are empty")
+	}
+}
+
+func TestService_BuildIncidentContext_AlertIncludesCanonicalResourceChanges(t *testing.T) {
+	s := NewService(nil, nil)
+
+	incidentStore := memory.NewIncidentStore(memory.IncidentStoreConfig{})
+	alert := &alerts.Alert{
+		ID:           "alert-canonical-1",
+		Type:         "cpu_high",
+		Level:        alerts.AlertLevelWarning,
+		ResourceID:   "res-canonical-1",
+		ResourceName: "vm-canonical-1",
+		StartTime:    time.Now().Add(-30 * time.Minute),
+	}
+	incidentStore.RecordAlertFired(alert)
+
+	canonicalStore := unifiedresources.NewMemoryStore()
+	if err := canonicalStore.RecordChange(unifiedresources.ResourceChange{
+		ID:            "change-canonical-1",
+		ObservedAt:    time.Now().Add(-15 * time.Minute),
+		ResourceID:    alert.ResourceID,
+		Kind:          unifiedresources.ChangeConfigUpdate,
+		From:          "old",
+		To:            "new",
+		SourceType:    unifiedresources.SourcePulseDiff,
+		SourceAdapter: unifiedresources.AdapterOpsAgent,
+		Confidence:    unifiedresources.ConfidenceHigh,
+		Reason:        "Config drift corrected",
+	}); err != nil {
+		t.Fatalf("record canonical change: %v", err)
+	}
+
+	s.mu.Lock()
+	s.incidentStore = incidentStore
+	s.orgID = "org-1"
+	s.resourceExportStore = canonicalStore
+	s.resourceExportStoreOrgID = s.orgID
+	s.mu.Unlock()
+
+	ctx := s.buildIncidentContext(alert.ResourceID, alert.ID)
+	if !strings.Contains(ctx, "Incident Memory") {
+		t.Fatalf("expected alert incident memory in context, got %q", ctx)
+	}
+	if !strings.Contains(ctx, "Recent Changes") {
+		t.Fatalf("expected canonical recent changes in alert context, got %q", ctx)
+	}
+	if !strings.Contains(ctx, "Config update") {
+		t.Fatalf("expected canonical change summary in alert context, got %q", ctx)
 	}
 }
 
