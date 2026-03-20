@@ -44,16 +44,18 @@ agreement, and cloud-specific enforcement rules.
 22. `internal/cloudcp/stripe/provisioner.go`
 23. `internal/hosted/provisioner.go`
 24. `frontend-modern/src/App.tsx`
-25. `frontend-modern/src/components/Dashboard/RelayOnboardingCard.tsx`
-26. `frontend-modern/src/components/Settings/BillingAdminPanel.tsx`
-27. `frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx`
-28. `frontend-modern/src/components/Settings/ProLicensePanel.tsx`
-29. `frontend-modern/src/components/Settings/CommercialBillingSections.tsx`
-30. `frontend-modern/src/components/Settings/SelfHostedCommercialActivationSection.tsx`
-31. `frontend-modern/src/components/Settings/RelaySettingsPanel.tsx`
-32. `frontend-modern/src/pages/CloudPricing.tsx`
-33. `frontend-modern/src/utils/apiClient.ts`
-34. `frontend-modern/src/utils/commercialBillingModel.ts`
+25. `frontend-modern/src/AppLayout.tsx`
+26. `frontend-modern/src/useAppRuntimeState.ts`
+27. `frontend-modern/src/components/Dashboard/RelayOnboardingCard.tsx`
+28. `frontend-modern/src/components/Settings/BillingAdminPanel.tsx`
+29. `frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx`
+30. `frontend-modern/src/components/Settings/ProLicensePanel.tsx`
+31. `frontend-modern/src/components/Settings/CommercialBillingSections.tsx`
+32. `frontend-modern/src/components/Settings/SelfHostedCommercialActivationSection.tsx`
+33. `frontend-modern/src/components/Settings/RelaySettingsPanel.tsx`
+34. `frontend-modern/src/pages/CloudPricing.tsx`
+35. `frontend-modern/src/utils/apiClient.ts`
+36. `frontend-modern/src/utils/commercialBillingModel.ts`
 
 ## Shared Boundaries
 
@@ -81,7 +83,7 @@ agreement, and cloud-specific enforcement rules.
 15. Add or change paid relay settings and onboarding presentation through `frontend-modern/src/components/Settings/RelaySettingsPanel.tsx` and `frontend-modern/src/components/Dashboard/RelayOnboardingCard.tsx`
 16. Add or change cloud plan presentation through `frontend-modern/src/pages/CloudPricing.tsx`
 17. Add contract tests where runtime and pricing need to stay aligned
-18. Add or change hosted browser org-context bootstrap through `frontend-modern/src/App.tsx` and `frontend-modern/src/utils/apiClient.ts`
+18. Add or change hosted browser org-context bootstrap through `frontend-modern/src/App.tsx`, `frontend-modern/src/AppLayout.tsx`, `frontend-modern/src/useAppRuntimeState.ts`, and `frontend-modern/src/utils/apiClient.ts`
 
 ## Forbidden Paths
 
@@ -214,6 +216,14 @@ simply because hosted tenants do not expose self-hosted multi-tenant admin
 capabilities. Hosted runtime entry must therefore treat tenant org context as
 infrastructure state, not a paid UI toggle that can be discarded during app
 bootstrap.
+That hosted browser bootstrap owner is now intentionally split by role:
+`frontend-modern/src/App.tsx` is the route/provider entry shell,
+`frontend-modern/src/useAppRuntimeState.ts` owns authentication, org bootstrap,
+theme synchronization, and authenticated runtime startup, and
+`frontend-modern/src/AppLayout.tsx` owns authenticated cloud-aware chrome such
+as org switching and kiosk-safe navigation. Future hosted browser bootstrap
+work must extend that split rather than pulling org bootstrap and app chrome
+back into one monolithic route component.
 The Pro license settings surface now follows the same rule as well. Changes to
 `frontend-modern/src/components/Settings/ProLicensePanel.tsx` must carry this
 contract and the dedicated Pro-license proof file instead of remaining an

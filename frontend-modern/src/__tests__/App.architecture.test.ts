@@ -1,0 +1,31 @@
+import { describe, expect, it } from 'vitest';
+import appSource from '@/App.tsx?raw';
+import appLayoutSource from '@/AppLayout.tsx?raw';
+import appRuntimeStateSource from '@/useAppRuntimeState.ts?raw';
+
+describe('App architecture', () => {
+  it('keeps App as the entry shell that delegates runtime and chrome ownership', () => {
+    expect(appSource).toContain("import { AppLayout } from '@/AppLayout';");
+    expect(appSource).toContain("import { useAppRuntimeState } from '@/useAppRuntimeState';");
+    expect(appSource).toContain('const runtime = useAppRuntimeState();');
+    expect(appSource).not.toContain('function ConnectionStatusBadge(');
+    expect(appSource).not.toContain('function AppLayout(');
+    expect(appSource).not.toContain('const [organizations, setOrganizations] = createSignal(');
+    expect(appSource).not.toContain('const [themePreference, setThemePreference] =');
+    expect(appSource).not.toContain('const [activeOrgID, setActiveOrgID] = createSignal(');
+  });
+
+  it('keeps authenticated chrome in AppLayout and hosted bootstrap in useAppRuntimeState', () => {
+    expect(appLayoutSource).toContain('export function AppLayout(props: AppLayoutProps)');
+    expect(appLayoutSource).toContain('<OrgSwitcher');
+    expect(appLayoutSource).toContain('const utilityTabs = createMemo(() =>');
+    expect(appRuntimeStateSource).toContain('export const useAppRuntimeState = () =>');
+    expect(appRuntimeStateSource).toContain('const beginAuthenticatedRuntime = async () =>');
+    expect(appRuntimeStateSource).toContain('const loadOrganizations = async () =>');
+    expect(appRuntimeStateSource).toContain('const handleOrgSwitch = (nextOrgID: string) =>');
+    expect(appRuntimeStateSource).toContain(
+      'const [activeOrgID, setActiveOrgID] = createSignal(',
+    );
+    expect(appRuntimeStateSource).not.toContain('function AppLayout(');
+  });
+});
