@@ -218,6 +218,15 @@ the brief three-step explanation: install the Unified Agent, get the first
 Pulse resource, then layer on additional context.
 
 The settings shell is now also a governed frontend primitive boundary.
+
+The alerts page shell now follows that same page-shell rule for feature tabs:
+`frontend-modern/src/pages/Alerts.tsx` owns navigation, load/save
+orchestration, and cross-tab state, while feature-owned tab surfaces such as
+`frontend-modern/src/features/alerts/tabs/DestinationsTab.tsx` and
+`frontend-modern/src/features/alerts/tabs/ScheduleTab.tsx` own their tab-local
+rendering and interaction logic. Future alert tab cleanup should continue by
+extracting page-local tab blocks into feature modules rather than expanding the
+top-level page file again.
 Top-level settings surfaces must route through `Settings.tsx`,
 `SettingsPageShell.tsx`, and
 `frontend-modern/src/components/shared/SettingsPanel.tsx` instead of

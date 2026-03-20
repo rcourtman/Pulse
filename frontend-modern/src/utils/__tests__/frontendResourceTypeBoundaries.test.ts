@@ -223,6 +223,8 @@ import alertOverviewPresentationSource from '@/utils/alertOverviewPresentation.t
 import alertResourceTablePresentationSource from '@/utils/alertResourceTablePresentation.ts?raw';
 import alertWebhookPresentationSource from '@/utils/alertWebhookPresentation.ts?raw';
 import alertOverviewTabSource from '@/features/alerts/OverviewTab.tsx?raw';
+import alertDestinationsTabSource from '@/features/alerts/tabs/DestinationsTab.tsx?raw';
+import alertScheduleTabSource from '@/features/alerts/tabs/ScheduleTab.tsx?raw';
 import alertIncidentPresentationSource from '@/utils/alertIncidentPresentation.ts?raw';
 import alertHistoryPresentationSource from '@/utils/alertHistoryPresentation.ts?raw';
 import bulkEditDialogSource from '@/components/Alerts/BulkEditDialog.tsx?raw';
@@ -2185,19 +2187,19 @@ describe('frontend resource type boundaries', () => {
     expect(alertsPageSource).toContain('getAlertIncidentStatusPresentation');
     expect(alertsPageSource).toContain('getAlertIncidentLevelBadgeClass');
     expect(alertsPageSource).toContain('getAlertDestinationsConfigLoadError');
-    expect(alertsPageSource).toContain('getAlertDestinationsWebhookLoadError');
-    expect(alertsPageSource).toContain('getAlertDestinationsLoadErrorBanner');
-    expect(alertsPageSource).toContain('getAlertDestinationsAppriseTargetsHelp');
-    expect(alertsPageSource).toContain('getAlertDestinationsAppriseTestLabel');
-    expect(alertsPageSource).toContain('getAlertDestinationsAppriseValidationError');
-    expect(alertsPageSource).toContain('getAlertDestinationsEmailTestSuccess');
-    expect(alertsPageSource).toContain('getAlertDestinationsEmailTestFailure');
-    expect(alertsPageSource).toContain('getAlertDestinationsAppriseTestSuccess');
-    expect(alertsPageSource).toContain('getAlertDestinationsAppriseTestFailure');
-    expect(alertsPageSource).toContain('getAlertDestinationsRetryLabel');
-    expect(alertsPageSource).toContain('getAlertDestinationsStatusLabel');
-    expect(alertsPageSource).toContain('getAlertWebhookTestSuccess');
-    expect(alertsPageSource).toContain('getAlertWebhookTestFailure');
+    expect(alertDestinationsTabSource).toContain('getAlertDestinationsWebhookLoadError');
+    expect(alertDestinationsTabSource).toContain('getAlertDestinationsLoadErrorBanner');
+    expect(alertDestinationsTabSource).toContain('getAlertDestinationsAppriseTargetsHelp');
+    expect(alertDestinationsTabSource).toContain('getAlertDestinationsAppriseTestLabel');
+    expect(alertDestinationsTabSource).toContain('getAlertDestinationsAppriseValidationError');
+    expect(alertDestinationsTabSource).toContain('getAlertDestinationsEmailTestSuccess');
+    expect(alertDestinationsTabSource).toContain('getAlertDestinationsEmailTestFailure');
+    expect(alertDestinationsTabSource).toContain('getAlertDestinationsAppriseTestSuccess');
+    expect(alertDestinationsTabSource).toContain('getAlertDestinationsAppriseTestFailure');
+    expect(alertDestinationsTabSource).toContain('getAlertDestinationsRetryLabel');
+    expect(alertDestinationsTabSource).toContain('getAlertDestinationsStatusLabel');
+    expect(alertDestinationsTabSource).toContain('getAlertWebhookTestSuccess');
+    expect(alertDestinationsTabSource).toContain('getAlertWebhookTestFailure');
     expect(alertsPageSource).toContain('getAlertHistoryStatusPresentation');
     expect(alertsPageSource).toContain('getAlertHistorySourcePresentation');
     expect(alertsPageSource).toContain('getAlertHistoryResourceTypeBadgeClass');
@@ -2243,31 +2245,31 @@ describe('frontend resource type boundaries', () => {
     expect(alertsPageSource).toContain('getAlertsMobileTabClass');
     expect(alertsPageSource).toContain('getAlertsTabTitle');
     expect(alertsPageSource).toContain('getAlertsTabGroups');
-    expect(alertsPageSource).toContain('getAlertGroupingCardClass');
-    expect(alertsPageSource).toContain('getAlertGroupingCheckboxClass');
-    expect(alertsPageSource).toContain('getAlertQuietDayButtonClass');
-    expect(alertsPageSource).toContain('getAlertQuietSuppressCardClass');
-    expect(alertsPageSource).toContain('getAlertQuietSuppressCheckboxClass');
+    expect(alertScheduleTabSource).toContain('getAlertGroupingCardClass');
+    expect(alertScheduleTabSource).toContain('getAlertGroupingCheckboxClass');
+    expect(alertScheduleTabSource).toContain('getAlertQuietDayButtonClass');
+    expect(alertScheduleTabSource).toContain('getAlertQuietSuppressCardClass');
+    expect(alertScheduleTabSource).toContain('getAlertQuietSuppressCheckboxClass');
     expect(alertsPageSource).toContain('getAlertConfigUnsavedChangesLabel');
     expect(alertsPageSource).toContain('getAlertConfigSaveChangesLabel');
-    expect(alertsPageSource).toContain('getAlertConfigResetDefaultsLabel');
-    expect(alertsPageSource).toContain('getAlertConfigResetDefaultsTitle');
     expect(alertsPageSource).toContain('getAlertConfigDiscardedSuccess');
     expect(alertsPageSource).toContain('getAlertConfigReloadFailure');
     expect(alertsPageSource).toContain('getAlertConfigDiscardLabel');
-    expect(alertsPageSource).toContain('getAlertConfigToggleStatusLabel');
     expect(alertsPageSource).toContain('getAlertConfigLeaveConfirmation');
-    expect(alertsPageSource).toContain('getAlertConfigSummaryQuietHours');
-    expect(alertsPageSource).toContain('getAlertConfigSummarySuppressing');
-    expect(alertsPageSource).toContain('getAlertConfigSummaryCooldown');
-    expect(alertsPageSource).toContain('getAlertConfigSummaryGrouping');
-    expect(alertsPageSource).toContain('getAlertConfigSummaryRecoveryEnabled');
-    expect(alertsPageSource).toContain('getAlertConfigSummaryEscalation');
-    expect(alertsPageSource).toContain('getAlertConfigQuietHourSuppressOptions');
-    expect(alertsPageSource).toContain('ALERT_CONFIG_COOLDOWN_PERIOD_LABEL');
-    expect(alertsPageSource).toContain('ALERT_CONFIG_COOLDOWN_MAX_ALERTS_LABEL');
-    expect(alertsPageSource).toContain('ALERT_CONFIG_GROUPING_WINDOW_LABEL');
-    expect(alertsPageSource).toContain('ALERT_CONFIG_GROUPING_STRATEGY_LABEL');
+    expect(alertScheduleTabSource).toContain('getAlertConfigResetDefaultsLabel');
+    expect(alertScheduleTabSource).toContain('getAlertConfigResetDefaultsTitle');
+    expect(alertScheduleTabSource).toContain('getAlertConfigToggleStatusLabel');
+    expect(alertScheduleTabSource).toContain('getAlertConfigSummaryQuietHours');
+    expect(alertScheduleTabSource).toContain('getAlertConfigSummarySuppressing');
+    expect(alertScheduleTabSource).toContain('getAlertConfigSummaryCooldown');
+    expect(alertScheduleTabSource).toContain('getAlertConfigSummaryGrouping');
+    expect(alertScheduleTabSource).toContain('getAlertConfigSummaryRecoveryEnabled');
+    expect(alertScheduleTabSource).toContain('getAlertConfigSummaryEscalation');
+    expect(alertScheduleTabSource).toContain('getAlertConfigQuietHourSuppressOptions');
+    expect(alertScheduleTabSource).toContain('ALERT_CONFIG_COOLDOWN_PERIOD_LABEL');
+    expect(alertScheduleTabSource).toContain('ALERT_CONFIG_COOLDOWN_MAX_ALERTS_LABEL');
+    expect(alertScheduleTabSource).toContain('ALERT_CONFIG_GROUPING_WINDOW_LABEL');
+    expect(alertScheduleTabSource).toContain('ALERT_CONFIG_GROUPING_STRATEGY_LABEL');
     expect(alertsPageSource).not.toContain('const statusClasses =');
     expect(alertsPageSource).not.toContain('const levelClasses =');
     expect(alertsPageSource).not.toContain("alert.source === 'ai' ? 'Patrol' : 'Alert'");
@@ -3030,6 +3032,23 @@ describe('frontend resource type boundaries', () => {
     expect(alertDestinationsPresentationSource).toContain(
       'export function getAlertDestinationsStatusLabel',
     );
+  });
+
+  it('keeps alerts configuration tabs feature-owned instead of page-local', () => {
+    expect(alertsPageSource).toContain(
+      "import { DestinationsTab } from '@/features/alerts/tabs/DestinationsTab';",
+    );
+    expect(alertsPageSource).toContain(
+      "import { ScheduleTab } from '@/features/alerts/tabs/ScheduleTab';",
+    );
+    expect(alertsPageSource).not.toContain('function DestinationsTab(');
+    expect(alertsPageSource).not.toContain('function ScheduleTab(');
+    expect(alertDestinationsTabSource).toContain('NotificationsAPI.getWebhooks');
+    expect(alertDestinationsTabSource).toContain('EmailProviderSelect');
+    expect(alertDestinationsTabSource).toContain('WebhookConfig');
+    expect(alertScheduleTabSource).toContain('getAlertConfigQuietHourSuppressOptions');
+    expect(alertScheduleTabSource).toContain('getAlertGroupingCardClass');
+    expect(alertScheduleTabSource).toContain('getAlertQuietDayButtonClass');
   });
 
   it('keeps alert resource table vocabulary in a shared presentation utility', () => {

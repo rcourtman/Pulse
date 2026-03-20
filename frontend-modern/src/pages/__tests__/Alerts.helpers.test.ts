@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import alertsPageSource from '@/pages/Alerts.tsx?raw';
+import alertDestinationsTabSource from '@/features/alerts/tabs/DestinationsTab.tsx?raw';
+import alertScheduleTabSource from '@/features/alerts/tabs/ScheduleTab.tsx?raw';
 
 import {
   ALERT_TAB_SEGMENTS,
@@ -147,6 +150,19 @@ describe('tab path helpers', () => {
     const custom = { ...ALERT_TAB_SEGMENTS, overview: 'summary' as const };
     expect(pathForTab('overview', custom)).toBe('/alerts/summary');
     expect(tabFromPath('/alerts/summary', custom)).toBe('overview');
+  });
+
+  it('keeps destinations and schedule tabs feature-owned', () => {
+    expect(alertsPageSource).toContain(
+      "import { DestinationsTab } from '@/features/alerts/tabs/DestinationsTab';",
+    );
+    expect(alertsPageSource).toContain(
+      "import { ScheduleTab } from '@/features/alerts/tabs/ScheduleTab';",
+    );
+    expect(alertsPageSource).not.toContain('function DestinationsTab(');
+    expect(alertsPageSource).not.toContain('function ScheduleTab(');
+    expect(alertDestinationsTabSource).toContain('NotificationsAPI.getWebhooks');
+    expect(alertScheduleTabSource).toContain('getAlertConfigQuietHourSuppressOptions');
   });
 });
 
