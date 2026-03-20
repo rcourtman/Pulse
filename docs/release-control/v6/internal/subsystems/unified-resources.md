@@ -244,6 +244,9 @@ the event log without duplicating a second timeline-summary card.
 That same change-history header now renders as title plus compact summary only,
 without an explanatory subheading, so the section reads like investigation
 state instead of inline documentation.
+The event log cards inside that section now stack key/value fields vertically
+instead of using a two-column micro-grid, so each event reads like a single
+timeline record rather than a tiny dashboard.
 That same overview now keeps AI intelligence and data-governance details
 inside a collapsed `Investigation context` disclosure, so runtime status and
 identity stay primary while secondary AI and policy signals remain available

@@ -1285,7 +1285,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                             </div>
                             <span class="text-muted">{sourceTypePresentation.label}</span>
                           </div>
-                          <div class="mt-1 grid gap-1 sm:grid-cols-2">
+                          <div class="mt-1 space-y-1">
                             <div class="flex items-center justify-between gap-2">
                               <span class="text-muted">Confidence</span>
                               <span class="font-medium text-base-content">
