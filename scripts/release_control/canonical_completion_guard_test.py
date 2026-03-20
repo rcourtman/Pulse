@@ -1556,7 +1556,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
         required = infer_impacted_subsystems(
             ["frontend-modern/src/components/Settings/NodeModal.tsx"]
         )
-        self.assertEqual(set(required), {"agent-lifecycle"})
+        self.assertEqual(set(required), {"agent-lifecycle", "api-contracts"})
 
         lifecycle = required["agent-lifecycle"]
         self.assertEqual(
@@ -1580,6 +1580,35 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     "test_prefixes": [],
                     "exact_files": [
                         "frontend-modern/src/components/Settings/__tests__/NodeModal.guardrails.test.ts"
+                    ],
+                }
+            ],
+        )
+
+        api_contracts = required["api-contracts"]
+        self.assertEqual(
+            api_contracts["contract"],
+            "docs/release-control/v6/internal/subsystems/api-contracts.md",
+        )
+        self.assertEqual(
+            api_contracts["touched_runtime_files"],
+            ["frontend-modern/src/components/Settings/NodeModal.tsx"],
+        )
+        self.assertEqual(
+            api_contracts["verification_requirements"],
+            [
+                {
+                    "id": "node-setup-settings-client-surface",
+                    "label": "node setup client consumer proof",
+                    "touched_runtime_files": [
+                        "frontend-modern/src/components/Settings/NodeModal.tsx"
+                    ],
+                    "allow_same_subsystem_tests": False,
+                    "test_prefixes": [],
+                    "exact_files": [
+                        "frontend-modern/src/api/__tests__/nodes.test.ts",
+                        "frontend-modern/src/components/Settings/__tests__/NodeModal.guardrails.test.ts",
+                        "frontend-modern/src/types/api.ts",
                     ],
                 }
             ],

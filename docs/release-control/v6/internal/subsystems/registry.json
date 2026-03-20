@@ -122,6 +122,22 @@
       ]
     },
     {
+      "path": "frontend-modern/src/components/Settings/NodeModal.tsx",
+      "rationale": "the node setup modal render shell is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary",
+      "subsystems": [
+        "agent-lifecycle",
+        "api-contracts"
+      ]
+    },
+    {
+      "path": "frontend-modern/src/components/Settings/nodeModalModel.ts",
+      "rationale": "the pure node setup modal model is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary",
+      "subsystems": [
+        "agent-lifecycle",
+        "api-contracts"
+      ]
+    },
+    {
       "path": "frontend-modern/src/components/Settings/SecurityAuthPanel.tsx",
       "rationale": "the authentication settings surface is both a security/privacy control surface and a canonical settings-shell presentation boundary",
       "subsystems": [
@@ -148,6 +164,14 @@
     {
       "path": "frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx",
       "rationale": "the shared infrastructure operations state hook is both an agent fleet lifecycle control surface and an API token, lookup, assignment, and reporting/install contract boundary",
+      "subsystems": [
+        "agent-lifecycle",
+        "api-contracts"
+      ]
+    },
+    {
+      "path": "frontend-modern/src/components/Settings/useNodeModalState.ts",
+      "rationale": "the node setup modal state hook is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary",
       "subsystems": [
         "agent-lifecycle",
         "api-contracts"
@@ -331,8 +355,10 @@
         "frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx",
         "frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx",
         "frontend-modern/src/components/Settings/NodeModal.tsx",
+        "frontend-modern/src/components/Settings/nodeModalModel.ts",
         "frontend-modern/src/components/Settings/UnifiedAgents.tsx",
         "frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx",
+        "frontend-modern/src/components/Settings/useNodeModalState.ts",
         "frontend-modern/src/components/SetupWizard/SetupCompletionPanel.tsx",
         "frontend-modern/src/utils/agentInstallCommand.ts",
         "frontend-modern/src/utils/agentProfilesPresentation.ts",
@@ -489,7 +515,9 @@
         "label": "node setup/install command proof",
         "match_prefixes": [],
         "match_files": [
-          "frontend-modern/src/components/Settings/NodeModal.tsx"
+          "frontend-modern/src/components/Settings/NodeModal.tsx",
+          "frontend-modern/src/components/Settings/nodeModalModel.ts",
+          "frontend-modern/src/components/Settings/useNodeModalState.ts"
               ],
               "allow_same_subsystem_tests": false,
               "test_prefixes": [],
@@ -725,8 +753,11 @@
         "frontend-modern/src/components/Settings/APITokenManager.tsx",
         "frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx",
         "frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx",
+        "frontend-modern/src/components/Settings/NodeModal.tsx",
+        "frontend-modern/src/components/Settings/nodeModalModel.ts",
         "frontend-modern/src/components/Settings/UnifiedAgents.tsx",
         "frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx",
+        "frontend-modern/src/components/Settings/useNodeModalState.ts",
         "frontend-modern/src/types/api.ts",
         "frontend-modern/src/utils/agentInstallCommand.ts"
       ],
@@ -883,6 +914,23 @@
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/api/__tests__/nodes.test.ts",
+              "frontend-modern/src/types/api.ts"
+            ]
+          },
+          {
+            "id": "node-setup-settings-client-surface",
+            "label": "node setup client consumer proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/components/Settings/NodeModal.tsx",
+              "frontend-modern/src/components/Settings/nodeModalModel.ts",
+              "frontend-modern/src/components/Settings/useNodeModalState.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/api/__tests__/nodes.test.ts",
+              "frontend-modern/src/components/Settings/__tests__/NodeModal.guardrails.test.ts",
               "frontend-modern/src/types/api.ts"
             ]
           },

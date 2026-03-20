@@ -36,11 +36,13 @@ management, and fleet control surfaces.
 12. `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx`
 13. `frontend-modern/src/components/Settings/UnifiedAgents.tsx`
 14. `frontend-modern/src/components/Settings/NodeModal.tsx`
-15. `frontend-modern/src/components/SetupWizard/SetupCompletionPanel.tsx`
-16. `frontend-modern/src/components/Infrastructure/deploy/ResultsStep.tsx`
-17. `frontend-modern/src/utils/agentProfilesPresentation.ts`
-18. `frontend-modern/src/utils/agentInstallCommand.ts`
-19. `frontend-modern/src/api/nodes.ts`
+15. `frontend-modern/src/components/Settings/nodeModalModel.ts`
+16. `frontend-modern/src/components/Settings/useNodeModalState.ts`
+17. `frontend-modern/src/components/SetupWizard/SetupCompletionPanel.tsx`
+18. `frontend-modern/src/components/Infrastructure/deploy/ResultsStep.tsx`
+19. `frontend-modern/src/utils/agentProfilesPresentation.ts`
+20. `frontend-modern/src/utils/agentInstallCommand.ts`
+21. `frontend-modern/src/api/nodes.ts`
 
 ## Shared Boundaries
 
@@ -48,14 +50,17 @@ management, and fleet control surfaces.
 2. `frontend-modern/src/api/nodes.ts` shared with `api-contracts`: the shared Proxmox node client is both an agent lifecycle setup/install control surface and a canonical API payload contract boundary.
 3. `frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx` shared with `api-contracts`: the infrastructure operations controller is both an agent fleet lifecycle control surface and an API token, lookup, assignment, and reporting/install contract boundary.
 4. `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx` shared with `api-contracts`: the pure infrastructure operations inventory/install model is both an agent fleet lifecycle control surface and an API token, lookup, assignment, and reporting/install contract boundary.
-5. `frontend-modern/src/components/Settings/UnifiedAgents.tsx` shared with `api-contracts`: the UnifiedAgents module is a compatibility shim for the canonical infrastructure operations controller and remains on the same shared agent lifecycle and API contract boundary while the old module path exists.
-6. `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx` shared with `api-contracts`: the shared infrastructure operations state hook is both an agent fleet lifecycle control surface and an API token, lookup, assignment, and reporting/install contract boundary.
-7. `frontend-modern/src/utils/agentInstallCommand.ts` shared with `api-contracts`: the shared frontend install-command helper is both an agent lifecycle control surface and a canonical API/install transport contract boundary.
-8. `internal/api/agent_install_command_shared.go` shared with `api-contracts`: agent install command assembly is both an agent lifecycle control surface and a canonical API payload contract boundary.
-9. `internal/api/config_setup_handlers.go` shared with `api-contracts`: auto-register and setup handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.
-10. `internal/api/unified_agent.go` shared with `api-contracts`: unified agent download and installer handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.
-11. `scripts/install.ps1` shared with `deployment-installability`: the Windows installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary.
-12. `scripts/install.sh` shared with `deployment-installability`: the shell installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary.
+5. `frontend-modern/src/components/Settings/NodeModal.tsx` shared with `api-contracts`: the node setup modal render shell is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
+6. `frontend-modern/src/components/Settings/nodeModalModel.ts` shared with `api-contracts`: the pure node setup modal model is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
+7. `frontend-modern/src/components/Settings/UnifiedAgents.tsx` shared with `api-contracts`: the UnifiedAgents module is a compatibility shim for the canonical infrastructure operations controller and remains on the same shared agent lifecycle and API contract boundary while the old module path exists.
+8. `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx` shared with `api-contracts`: the shared infrastructure operations state hook is both an agent fleet lifecycle control surface and an API token, lookup, assignment, and reporting/install contract boundary.
+9. `frontend-modern/src/components/Settings/useNodeModalState.ts` shared with `api-contracts`: the node setup modal state hook is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
+10. `frontend-modern/src/utils/agentInstallCommand.ts` shared with `api-contracts`: the shared frontend install-command helper is both an agent lifecycle control surface and a canonical API/install transport contract boundary.
+11. `internal/api/agent_install_command_shared.go` shared with `api-contracts`: agent install command assembly is both an agent lifecycle control surface and a canonical API payload contract boundary.
+12. `internal/api/config_setup_handlers.go` shared with `api-contracts`: auto-register and setup handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.
+13. `internal/api/unified_agent.go` shared with `api-contracts`: unified agent download and installer handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.
+14. `scripts/install.ps1` shared with `deployment-installability`: the Windows installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary.
+15. `scripts/install.sh` shared with `deployment-installability`: the shell installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary.
 
 ## Extension Points
 
@@ -64,7 +69,7 @@ management, and fleet control surfaces.
 3. Add or change runtime-side Unified Agent startup, first-report assembly, and enroll/runtime continuity through `internal/hostagent/`.
 4. Keep legacy Unified Agent compatibility names explicitly secondary when touching shared `internal/api/` runtime helpers: the legacy host-route family and `host-agent:*` scope names may remain as ingress or migration aliases, but they must not retake primary ownership in router state, live runtime scope checks, handler commentary, or operator-facing guidance.
 5. Add or change installer flags, persisted service arguments, or upgrade-safe re-entry behavior through `scripts/install.sh` and `scripts/install.ps1`.
-6. Add or change profile management, the pure unified-agent inventory/install model, shared frontend install-command assembly, Proxmox setup/install API transport, setup-completion install handoff transport, deploy-fallback manual install transport, and fleet-control presentation through `frontend-modern/src/api/agentProfiles.ts`, `frontend-modern/src/api/nodes.ts`, `frontend-modern/src/components/Settings/AgentProfilesPanel.tsx`, `frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx`, `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`, `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx`, `frontend-modern/src/components/Settings/NodeModal.tsx`, `frontend-modern/src/components/SetupWizard/SetupCompletionPanel.tsx`, `frontend-modern/src/components/Infrastructure/deploy/ResultsStep.tsx`, and `frontend-modern/src/utils/agentInstallCommand.ts`.
+6. Add or change profile management, the pure unified-agent inventory/install model, shared frontend install-command assembly, Proxmox setup/install API transport, setup-completion install handoff transport, deploy-fallback manual install transport, and fleet-control presentation through `frontend-modern/src/api/agentProfiles.ts`, `frontend-modern/src/api/nodes.ts`, `frontend-modern/src/components/Settings/AgentProfilesPanel.tsx`, `frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx`, `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`, `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx`, `frontend-modern/src/components/Settings/NodeModal.tsx`, `frontend-modern/src/components/Settings/nodeModalModel.ts`, `frontend-modern/src/components/Settings/useNodeModalState.ts`, `frontend-modern/src/components/SetupWizard/SetupCompletionPanel.tsx`, `frontend-modern/src/components/Infrastructure/deploy/ResultsStep.tsx`, and `frontend-modern/src/utils/agentInstallCommand.ts`.
 
 ## Forbidden Paths
 
@@ -252,11 +257,12 @@ callers: `install.sh`, generated setup scripts, and runtime-side Unified Agent-d
 registration must all create the same Pulse-managed `pulse-<canonical-scope-slug>`
 token name for a given Pulse endpoint instead of letting one caller drift into
 timestamp-suffixed or rerun-local token identities.
-The corresponding `NodeModal.tsx` install/setup surface is presentation only
-for those API-managed Proxmox, PBS, and PMG connections. Lifecycle guidance in
-that modal may explain monitored-system caps, but commercial enforcement still
-belongs to the canonical add-node and `/api/auto-register` boundaries instead
-of becoming a second modal-local exemption rule.
+The corresponding node setup modal owner (`NodeModal.tsx`,
+`nodeModalModel.ts`, and `useNodeModalState.ts`) is presentation-only for
+those API-managed Proxmox, PBS, and PMG connections. Lifecycle guidance in
+that settings surface may explain monitored-system caps, but commercial
+enforcement still belongs to the canonical add-node and `/api/auto-register`
+boundaries instead of becoming a second modal-local exemption rule.
 That same deterministic token-identity contract also applies to backend-owned
 turnkey Proxmox token creation: generated setup scripts and the password-based
 PBS add-node path must derive Pulse-managed token names from the canonical
@@ -461,25 +467,28 @@ must preserve both `PULSE_ENABLE_PROXMOX` and `PULSE_PROXMOX_TYPE`, and
 `scripts/install.ps1` must persist those flags into the managed service
 arguments instead of silently collapsing back to generic host monitoring.
 The same lifecycle ownership now also covers manual node setup command
-presentation in `NodeModal`: the copied PVE permission snippet must stay
+presentation in the extracted node setup modal owner (`NodeModal.tsx`,
+`nodeModalModel.ts`, and `useNodeModalState.ts`): the copied PVE permission
+snippet must stay
 aligned with the canonical backend setup script, including comma-joined
 privilege transport and non-destructive `PulseMonitor` role updates, instead
 of shipping a stale local fork.
-That same `NodeModal` boundary must also route Proxmox agent-install command
+That same node setup modal owner must also route Proxmox agent-install command
 generation through the canonical `NodesAPI.getAgentInstallCommand` client for
 both PVE and PBS, instead of mixing client-mediated and ad hoc raw POST
 transport for the same backend lifecycle command surface. That same settings
 surface must consume the shared validated response uniformly for both node
 types, surfacing canonical install-command errors inline instead of collapsing
 one pane back to generic notification-only failure.
-That same `NodeModal` boundary must also route Proxmox quick-setup command
+That same node setup modal owner must also route Proxmox quick-setup command
 generation and manual setup-script download through canonical `NodesAPI`
 helpers for both PVE and PBS, preserving the shared setup-token and expiry
 contract instead of letting one node type drift onto a raw fetch-only path.
-That same `NodeModal` boundary must also stay on the direct
-`node-setup-settings-surface` proof path, rather than relying only on broad
-lane ownership or downstream command tests to catch lifecycle drift in the
-settings surface.
+That same node setup modal owner must also stay on the direct
+`node-setup-settings-surface` proof path across `NodeModal.tsx`,
+`nodeModalModel.ts`, and `useNodeModalState.ts`, rather than relying only on
+broad lane ownership or downstream command tests to catch lifecycle drift in
+the settings surface.
 That same Proxmox lifecycle transport now explicitly includes the shared
 `frontend-modern/src/api/nodes.ts` client boundary itself: changes to setup
 command or install-command request transport must carry both lifecycle proof
@@ -559,13 +568,14 @@ shared frontend consumer must also reject already-expired setup-script-url
 responses instead of treating any positive `expires` value as sufficient, and
 it must validate the returned `setupToken` without retaining that raw secret
 beyond the shared client boundary.
-`NodeModal.tsx` must then consume that canonicalized response directly,
+The extracted node setup modal owner must then consume that canonicalized
+response directly,
 including copying the token-bearing `commandWithEnv` field while rendering the
 non-secret `commandWithoutEnv` preview instead of re-interpreting the
 bootstrap payload through local nullable fallbacks.
 Operator-facing quick-setup display must also stay on the runtime-owned token
-boundary: the shared frontend client must require masked `tokenHint`, and
-`NodeModal.tsx` must render that hint rather than the full returned
+boundary: the shared frontend client must require masked `tokenHint`, and the
+extracted node setup modal owner must render that hint rather than the full returned
 `setupToken` once the bootstrap artifact itself already carries the live
 secret. That non-secret preview contract applies to both the PVE and PBS
 quick-setup panes; the settings surface may not let one path keep rendering
@@ -578,12 +588,12 @@ before manual setup-script download, so download and copy paths stay on the
 same canonical host-input contract. That same manual download path must also
 stay on one shell-script artifact contract: `/api/setup-script` responses must
 ship with canonical `text/x-shellscript` attachment headers and deterministic
-`pulse-setup-*.sh` filenames, while `frontend-modern/src/api/nodes.ts` and
-`NodeModal.tsx` must validate and use the returned content type and filename
+`pulse-setup-*.sh` filenames, while `frontend-modern/src/api/nodes.ts` and the
+extracted node setup modal owner must validate and use the returned content type and filename
 instead of inventing local text/plain download metadata.
 Manual download must also stay non-interactive without re-exposing raw setup
 tokens in UI state: `/api/setup-script-url` must return a dedicated
-token-bearing `downloadURL`, and the shared frontend client plus `NodeModal`
+token-bearing `downloadURL`, and the shared frontend client plus the extracted node setup modal owner
 must use that runtime-owned download artifact instead of fetching the plain
 script `url` and then relying on a separately displayed token value.
 That same settings quick-setup surface must also treat `/api/setup-script-url`

@@ -1,11 +1,4 @@
-import { Component, Show, For, createSignal, createEffect, createMemo } from 'solid-js';
-import type { NodeConfig } from '@/types/nodes';
-import type { SecurityStatus } from '@/types/config';
-import { copyToClipboard } from '@/utils/clipboard';
-
-import { notificationStore } from '@/stores/notifications';
-import { NodesAPI } from '@/api/nodes';
-import type { ProxmoxSetupCommandResponse } from '@/api/nodes';
+import { Component, Show, For } from 'solid-js';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import {
   formField,
@@ -17,586 +10,52 @@ import {
 import { logger } from '@/utils/logger';
 import { TogglePrimitive } from '@/components/shared/Toggle';
 import { Dialog } from '@/components/shared/Dialog';
-import { licenseStatus, startProTrial } from '@/stores/license';
 import {
-  buildNodeModalMonitoringPayload,
   getNodeEndpointHelp,
   getNodeEndpointPlaceholder,
   getNodeGuestUrlPlaceholder,
-  getNodeModalDefaultFormData,
   getNodeMonitoringCoverageCopy,
-  getNodeModalTestResultPresentation,
   getNodeProductName,
   getTemperatureMonitoringLockedCopy,
   getNodeTokenIdPlaceholder,
   getNodeUsernameHelp,
   getNodeUsernamePlaceholder,
-  type NodeModalFormData,
-  type NodeModalNodeType,
 } from '@/utils/nodeModalPresentation';
 import {
-  getProTrialStartedMessage,
-  getTrialAlreadyUsedMessage,
-  getTrialStartErrorMessage,
-  getTrialTryAgainLaterMessage,
-} from '@/utils/upgradePresentation';
-
-interface NodeModalProps {
-  isOpen: boolean;
-  resetKey?: number;
-  onClose: () => void;
-  nodeType: NodeModalNodeType;
-  editingNode?: NodeConfig;
-  prefillNode?: Partial<NodeConfig>;
-  onSave: (nodeData: Partial<NodeConfig>) => void;
-  showBackToDiscovery?: boolean;
-  onBackToDiscovery?: () => void;
-  securityStatus?: Partial<SecurityStatus>;
-  temperatureMonitoringEnabled?: boolean;
-  temperatureMonitoringLocked?: boolean;
-  savingTemperatureSetting?: boolean;
-  onToggleTemperatureMonitoring?: (enabled: boolean) => Promise<void> | void;
-}
-
-const deriveNameFromHost = (host: string): string => {
-  let value = host.trim();
-  if (!value) {
-    return '';
-  }
-
-  try {
-    const url = value.includes('://') ? new URL(value) : new URL(`https://${value}`);
-    value = url.hostname || value;
-  } catch {
-    value = value.replace(/^https?:\/\//, '');
-  }
-
-  value = value.replace(/\/.*$/, '').replace(/^\[(.*)\]$/, '$1');
-  value = value.replace(/\s+/g, '-');
-
-  return value;
-};
-
-const PVE_MANUAL_PERMISSION_COMMAND = `# Apply monitoring permissions - use built-in PVEAuditor role
-pveum aclmod / -user pulse-monitor@pve -role PVEAuditor
-
-# Gather additional privileges for VM metrics
-EXTRA_PRIVS=()
-
-# Sys.Audit (Ceph, cluster status)
-if pveum role list 2>/dev/null | grep -q "Sys.Audit"; then
-  EXTRA_PRIVS+=("Sys.Audit")
-else
-  if pveum role add PulseTmpSysAudit -privs Sys.Audit 2>/dev/null; then
-    EXTRA_PRIVS+=("Sys.Audit")
-    pveum role delete PulseTmpSysAudit 2>/dev/null
-  fi
-fi
-
-# VM guest agent / monitor privileges
-VM_PRIV=""
-if pveum role list 2>/dev/null | grep -q "VM.Monitor"; then
-  VM_PRIV="VM.Monitor"
-elif pveum role list 2>/dev/null | grep -q "VM.GuestAgent.Audit"; then
-  VM_PRIV="VM.GuestAgent.Audit"
-else
-  if pveum role add PulseTmpVMMonitor -privs VM.Monitor 2>/dev/null; then
-    VM_PRIV="VM.Monitor"
-    pveum role delete PulseTmpVMMonitor 2>/dev/null
-  elif pveum role add PulseTmpGuestAudit -privs VM.GuestAgent.Audit 2>/dev/null; then
-    VM_PRIV="VM.GuestAgent.Audit"
-    pveum role delete PulseTmpGuestAudit 2>/dev/null
-  fi
-fi
-
-if [ -n "$VM_PRIV" ]; then
-  EXTRA_PRIVS+=("$VM_PRIV")
-fi
-
-if [ \${#EXTRA_PRIVS[@]} -gt 0 ]; then
-  PRIV_STRING="$(IFS=,; echo "\${EXTRA_PRIVS[*]}")"
-  pveum role modify PulseMonitor -privs "$PRIV_STRING" 2>/dev/null || pveum role add PulseMonitor -privs "$PRIV_STRING" 2>/dev/null
-  pveum aclmod / -user pulse-monitor@pve -role PulseMonitor
-fi`;
+  PVE_MANUAL_PERMISSION_COMMAND,
+  type NodeModalProps,
+} from '@/components/Settings/nodeModalModel';
+import { useNodeModalState } from '@/components/Settings/useNodeModalState';
 
 export const NodeModal: Component<NodeModalProps> = (props) => {
-  const [testResult, setTestResult] = createSignal<{
-    status: string;
-    message: string;
-    isCluster?: boolean;
-    warnings?: string[];
-  } | null>(null);
-  const [isTesting, setIsTesting] = createSignal(false);
-
-  const [formData, setFormData] = createSignal<NodeModalFormData>(
-    getNodeModalDefaultFormData(props.nodeType),
-  );
-  const [quickSetupBootstrap, setQuickSetupBootstrap] = createSignal<{
-    cacheKey: string;
-    response: ProxmoxSetupCommandResponse;
-  } | null>(null);
-  const [quickSetupPreviewCommand, setQuickSetupPreviewCommand] = createSignal('');
-  const [quickSetupTokenHint, setQuickSetupTokenHint] = createSignal('');
-  const [quickSetupExpiry, setQuickSetupExpiry] = createSignal<number | null>(null);
-  const [agentInstallCommand, setAgentInstallCommand] = createSignal('');
-  const [loadingAgentCommand, setLoadingAgentCommand] = createSignal(false);
-  const [agentCommandError, setAgentCommandError] = createSignal<string | null>(null);
-
-  const copyProxmoxAgentInstallCommand = async (
-    type: 'pve' | 'pbs',
-    successMessage: string,
-  ) => {
-    try {
-      setLoadingAgentCommand(true);
-      setAgentCommandError(null);
-      const data = await NodesAPI.getAgentInstallCommand({
-        type,
-        enableProxmox: true,
-      });
-      setAgentInstallCommand(data.command);
-      const copied = await copyToClipboard(data.command);
-      if (copied) {
-        notificationStore.success(successMessage);
-        return;
-      }
-
-      const copyFailureMessage = 'Failed to copy to clipboard';
-      setAgentCommandError(copyFailureMessage);
-      notificationStore.error(copyFailureMessage);
-    } catch (error) {
-      logger.error('[Agent Install] Error:', error);
-      const message = error instanceof Error ? error.message : 'Failed to generate install command';
-      setAgentCommandError(message);
-      notificationStore.error(message);
-    } finally {
-      setLoadingAgentCommand(false);
-    }
-  };
-  const isAdvancedSetupMode = () =>
-    formData().setupMode === 'auto' || formData().setupMode === 'manual';
-  const showTemperatureMonitoringSection = () =>
-    typeof props.temperatureMonitoringEnabled === 'boolean';
-  const temperatureMonitoringEnabledValue = () => props.temperatureMonitoringEnabled ?? true;
-  const isEditingExistingNode = () => Boolean(props.editingNode?.id);
-
-  // API-managed PVE/PBS/PMG connections are governed when the connection is
-  // added, not from this install flow, so this modal never renders the
-  // monitored-system limit banner.
-  const [startingTrial, setStartingTrial] = createSignal(false);
-  const hostLimitReached = createMemo(() => false);
-  const canStartTrial = createMemo(() => {
-    const ent = licenseStatus();
-    if (!ent) return false;
-    if (ent.subscription_state === 'active' || ent.subscription_state === 'trial') return false;
-    return ent.trial_eligible !== false;
-  });
-  const handleStartTrial = async () => {
-    if (startingTrial()) return;
-    setStartingTrial(true);
-    try {
-      const result = await startProTrial();
-      if (result?.outcome === 'redirect') {
-        if (typeof window !== 'undefined') {
-          window.location.href = result.actionUrl;
-        }
-        return;
-      }
-      notificationStore.success(getProTrialStartedMessage());
-    } catch (err) {
-      const statusCode = (err as { status?: number } | null)?.status;
-      if (statusCode === 409) {
-        notificationStore.error(getTrialAlreadyUsedMessage());
-      } else if (statusCode === 429) {
-        notificationStore.error(getTrialTryAgainLaterMessage());
-      } else {
-        notificationStore.error(
-          getTrialStartErrorMessage(err instanceof Error ? err.message : undefined, {
-            branded: true,
-          }),
-        );
-      }
-    } finally {
-      setStartingTrial(false);
-    }
-  };
-  const quickSetupExpiryLabel = () => {
-    const expiry = quickSetupExpiry();
-    if (!expiry) {
-      return '';
-    }
-    try {
-      return new Date(expiry * 1000).toLocaleTimeString();
-    } catch {
-      return '';
-    }
-  };
-  const clearQuickSetupState = () => {
-    setQuickSetupBootstrap(null);
-    setQuickSetupPreviewCommand('');
-    setQuickSetupTokenHint('');
-    setQuickSetupExpiry(null);
-  };
-  const quickSetupCacheKey = (type: 'pve' | 'pbs', backupPerms: boolean) =>
-    `${type}:${backupPerms ? 'backup' : 'standard'}:${formData().host?.trim() ?? ''}`;
-  const loadQuickSetupBootstrap = async (
-    type: 'pve' | 'pbs',
-    backupPerms: boolean,
-  ): Promise<ProxmoxSetupCommandResponse> => {
-    const host = formData().host?.trim() ?? '';
-    if (!host) {
-      notificationStore.error('Please enter the Endpoint URL first');
-      throw new Error('Proxmox setup host is required');
-    }
-
-    const cacheKey = quickSetupCacheKey(type, backupPerms);
-    const cached = quickSetupBootstrap();
-    const nowUnix = Date.now() / 1000;
-    if (cached && cached.cacheKey === cacheKey && cached.response.expires > nowUnix) {
-      setQuickSetupPreviewCommand(
-        cached.response.commandWithoutEnv ?? cached.response.commandWithEnv,
-      );
-      setQuickSetupTokenHint(cached.response.tokenHint);
-      setQuickSetupExpiry(cached.response.expires);
-      return cached.response;
-    }
-
-    const response = await NodesAPI.getProxmoxSetupCommand({
-      type,
-      host,
-      backupPerms,
-    });
-    setQuickSetupBootstrap({ cacheKey, response });
-    setQuickSetupPreviewCommand(response.commandWithoutEnv ?? response.commandWithEnv);
-    setQuickSetupTokenHint(response.tokenHint);
-    setQuickSetupExpiry(response.expires);
-    return response;
-  };
-  const copyQuickSetupCommand = async (
-    type: 'pve' | 'pbs',
-    backupPerms: boolean,
-    successMessage: string,
-  ) => {
-    const data = await loadQuickSetupBootstrap(type, backupPerms);
-    if (await copyToClipboard(data.commandWithEnv)) {
-      notificationStore.success(successMessage);
-      return;
-    }
-
-    throw new Error('Failed to copy to clipboard');
-  };
-  const setupScriptRunHint = (fileName: string) => `bash ${fileName}`;
-  const downloadProxmoxSetupScript = async (
-    type: 'pve' | 'pbs',
-    backupPerms = false,
-  ) => {
-    const bootstrap = await loadQuickSetupBootstrap(type, backupPerms);
-    const data = await NodesAPI.downloadProxmoxSetupScript(bootstrap);
-
-    const blob = new Blob([data.content], {
-      type: data.contentType,
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = data.fileName;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-
-    notificationStore.success(
-      `Script downloaded! Upload it to your server and run: ${setupScriptRunHint(data.fileName)}`,
-    );
-  };
-  const testResultPresentation = createMemo(() =>
-    getNodeModalTestResultPresentation(testResult()?.status),
-  );
-
-  // Track previous state to detect changes
-  let previousResetKey: number | undefined = undefined;
-  let previousNodeType: string | undefined = undefined;
-  let previousFormSourceSignature: string | null = null;
-
-  // Reset form when conditions change
-  createEffect(() => {
-    const key = props.resetKey;
-    const nodeType = props.nodeType;
-    const isOpen = props.isOpen;
-    const editingNode = props.editingNode;
-    const prefillNode = props.prefillNode;
-
-    // Force reset if resetKey changed
-    if (key !== undefined && key !== previousResetKey) {
-      previousResetKey = key;
-      setFormData(() => getNodeModalDefaultFormData(props.nodeType));
-      clearQuickSetupState();
-      setTestResult(null);
-      previousFormSourceSignature = null;
-      return;
-    }
-
-    // Force reset if node type changed
-    if (nodeType !== previousNodeType && previousNodeType !== undefined) {
-      previousNodeType = nodeType;
-      setFormData(() => getNodeModalDefaultFormData(props.nodeType));
-      clearQuickSetupState();
-      setTestResult(null);
-      previousFormSourceSignature = null;
-      return;
-    }
-    previousNodeType = nodeType;
-
-    // Reset when opening for new node
-    if (isOpen && !editingNode && !prefillNode) {
-      setFormData(() => getNodeModalDefaultFormData(props.nodeType));
-      clearQuickSetupState();
-      setTestResult(null);
-      previousFormSourceSignature = null;
-    }
-  });
-
-  // Generate setup URL when Quick Setup tab is shown
-  // Skip auto-generation to avoid race conditions - generate on-demand when copy is clicked
-
-  // Update form when editing node changes
-  createEffect(() => {
-    // Only populate form if we have an editing node AND it matches the current node type
-    // This prevents PVE data from being used when adding a PBS node
-    const node = props.editingNode ?? props.prefillNode;
-    if (!node || node.type !== props.nodeType) {
-      previousFormSourceSignature = null;
-      return;
-    }
-
-    let username = ('user' in node ? node.user : '') || '';
-    let tokenName = node.tokenName || '';
-
-    const usesToken =
-      node.type !== 'pve' && tokenName && tokenName.includes('!') && !node.hasPassword;
-    if (usesToken) {
-      const parts = tokenName.split('!');
-      username = parts[0];
-    }
-
-    const pmgConfig =
-      node.type === 'pmg'
-        ? (node as NodeConfig & {
-            monitorMailStats?: boolean;
-            monitorQueues?: boolean;
-            monitorQuarantine?: boolean;
-            monitorDomainStats?: boolean;
-          })
-        : undefined;
-
-    const formSource: NodeModalFormData = {
-      name: node.name || '',
-      host: node.host || '',
-      guestURL: ('guestURL' in node ? node.guestURL : '') || '',
-      authType: node.type === 'pmg' ? 'password' : node.hasPassword ? 'password' : 'token',
-      setupMode: node.source === 'agent' ? 'agent' : 'auto',
-      user: username,
-      password: '',
-      tokenName: tokenName,
-      tokenValue: '',
-      fingerprint: ('fingerprint' in node ? node.fingerprint : '') || '',
-      verifySSL: node.verifySSL ?? true,
-      monitorPhysicalDisks:
-        node.type === 'pve'
-          ? ((node as NodeConfig & { monitorPhysicalDisks?: boolean }).monitorPhysicalDisks ?? true)
-          : false,
-      physicalDiskPollingMinutes:
-        node.type === 'pve'
-          ? ((node as NodeConfig & { physicalDiskPollingMinutes?: number })
-              .physicalDiskPollingMinutes ?? 5)
-          : 5,
-      monitorMailStats: pmgConfig?.monitorMailStats ?? true,
-      monitorQueues: pmgConfig?.monitorQueues ?? true,
-      monitorQuarantine: pmgConfig?.monitorQuarantine ?? true,
-      monitorDomainStats: pmgConfig?.monitorDomainStats ?? false,
-    };
-
-    const formSourceSignature = JSON.stringify(formSource);
-    if (formSourceSignature === previousFormSourceSignature) {
-      return;
-    }
-
-    previousFormSourceSignature = formSourceSignature;
-    setFormData(formSource);
-  });
-
-  const handleSubmit = (e: Event) => {
-    e.preventDefault();
-    const data = formData();
-
-    const normalizedName = data.name.trim() || deriveNameFromHost(data.host);
-    if (!normalizedName) {
-      notificationStore.error('Node name is required');
-      return;
-    }
-
-    if (normalizedName !== data.name) {
-      setFormData((prev) => ({ ...prev, name: normalizedName }));
-    }
-
-    // Prepare data based on auth type
-    const nodeData: Partial<NodeConfig> = {
-      type: props.nodeType,
-      name: normalizedName,
-      host: data.host,
-      guestURL: data.guestURL,
-      fingerprint: data.fingerprint,
-      verifySSL: data.verifySSL,
-    };
-
-    if (data.authType === 'password') {
-      nodeData.user = data.user;
-      if (data.password) {
-        nodeData.password = data.password;
-      }
-    } else {
-      // For token auth, tokenName should already contain the full token ID
-      nodeData.tokenName = data.tokenName;
-      if (data.tokenValue) {
-        nodeData.tokenValue = data.tokenValue;
-      }
-    }
-
-    Object.assign(nodeData, buildNodeModalMonitoringPayload(props.nodeType, data));
-
-    props.onSave(nodeData);
-  };
-
-  const updateField = (field: string, value: string | boolean | number) => {
-    if (field === 'host' && typeof value === 'string') {
-      setFormData((prev) => {
-        const next = { ...prev, host: value };
-        const derivedName = deriveNameFromHost(value);
-        const previousDerivedName = deriveNameFromHost(prev.host || '');
-        const shouldAutoUpdate =
-          !prev.name.trim() || (previousDerivedName && prev.name === previousDerivedName);
-        if (derivedName && shouldAutoUpdate) {
-          next.name = derivedName;
-        }
-        return next;
-      });
-      clearQuickSetupState();
-      return;
-    }
-
-    setFormData((prev) => ({ ...prev, [field]: value }));
-
-    if (field === 'setupMode') {
-      if (value !== 'auto') {
-        clearQuickSetupState();
-      }
-      if (value !== 'agent') {
-        setAgentInstallCommand('');
-      }
-    }
-  };
-
-  const handleTestConnection = async () => {
-    const data = formData();
-    const normalizedName = data.name.trim() || deriveNameFromHost(data.host);
-
-    if (!data.name.trim() && normalizedName) {
-      setFormData((prev) => ({ ...prev, name: normalizedName }));
-    }
-
-    // If editing an existing node and no new credentials provided, use stored credentials
-    if (isEditingExistingNode()) {
-      const hasNewPassword = data.authType === 'password' && data.password;
-      const hasNewToken = data.authType === 'token' && data.tokenValue;
-
-      if (!hasNewPassword && !hasNewToken) {
-        // Use the existing node test endpoint which uses stored credentials
-        setIsTesting(true);
-        setTestResult(null);
-
-        try {
-          const result = await NodesAPI.testExistingNode(props.editingNode!.id);
-          setTestResult({
-            status: 'success',
-            message: result.message || 'Connection successful',
-          });
-        } catch (error) {
-          logger.error('Test existing node error:', error);
-          let errorMessage = 'Connection failed';
-          if (error instanceof Error) {
-            // Remove "API request failed: XXX " prefix if present
-            errorMessage = error.message.replace(/^API request failed: \d{3}\s*/, '');
-          }
-          setTestResult({
-            status: 'error',
-            message: errorMessage,
-          });
-        } finally {
-          setIsTesting(false);
-        }
-        return;
-      }
-    }
-
-    // Validate required fields for new nodes or when new credentials are provided
-    if (!data.host) {
-      setTestResult({ status: 'error', message: 'Endpoint URL is required' });
-      return;
-    }
-
-    if (data.authType === 'password' && (!data.user || !data.password)) {
-      setTestResult({ status: 'error', message: 'Username and password are required' });
-      return;
-    }
-
-    if (data.authType === 'token' && (!data.tokenName || !data.tokenValue)) {
-      setTestResult({ status: 'error', message: 'Token ID and token value are required' });
-      return;
-    }
-
-    // Prepare test data
-    const testData: Partial<NodeConfig> = {
-      type: props.nodeType,
-      name: normalizedName || '',
-      host: data.host,
-      fingerprint: data.fingerprint,
-      verifySSL: data.verifySSL,
-    };
-
-    if (data.authType === 'password') {
-      testData.user = data.user;
-      testData.password = data.password;
-    } else {
-      // For token auth, tokenName contains the full token ID
-      testData.tokenName = data.tokenName;
-      testData.tokenValue = data.tokenValue;
-    }
-
-    setIsTesting(true);
-    setTestResult(null);
-
-    try {
-      const result = await NodesAPI.testConnection(testData as NodeConfig);
-      setTestResult({
-        status: result.warnings && result.warnings.length > 0 ? 'warning' : 'success',
-        message: result.message || 'Connection successful',
-        isCluster: result.isCluster,
-        warnings: result.warnings,
-      });
-    } catch (error) {
-      logger.error('Test connection error:', error);
-      let errorMessage = 'Connection failed';
-      if (error instanceof Error) {
-        // Remove "API request failed: XXX " prefix if present
-        errorMessage = error.message.replace(/^API request failed: \d{3}\s*/, '');
-      }
-      setTestResult({
-        status: 'error',
-        message: errorMessage,
-      });
-    } finally {
-      setIsTesting(false);
-    }
-  };
+  const {
+    agentCommandError,
+    agentInstallCommand,
+    canStartTrial,
+    copyCommand,
+    copyProxmoxAgentInstallCommand,
+    copyQuickSetupCommand,
+    downloadProxmoxSetupScript,
+    formData,
+    handleStartTrial,
+    handleSubmit,
+    handleTestConnection,
+    hostLimitReached,
+    isAdvancedSetupMode,
+    isEditingExistingNode,
+    isTesting,
+    loadingAgentCommand,
+    quickSetupExpiry,
+    quickSetupExpiryLabel,
+    quickSetupPreviewCommand,
+    quickSetupTokenHint,
+    showTemperatureMonitoringSection,
+    startingTrial,
+    temperatureMonitoringEnabledValue,
+    testResult,
+    testResultPresentation,
+    updateField,
+  } = useNodeModalState(props);
 
   return (
     <Dialog
@@ -969,22 +428,11 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                               <button
                                 type="button"
                                 onClick={async () => {
-                                  logger.debug('[Quick Setup] Copy button clicked');
-                                  try {
-                                    logger.debug('[Quick Setup] Generating setup URL for host', {
-                                      host: formData().host,
-                                    });
-                                    await copyQuickSetupCommand(
-                                      'pve',
-                                      true,
-                                      'Command copied to clipboard! Run it on the server; the one-time setup token is already embedded.',
-                                    );
-                                  } catch (error) {
-                                    logger.error('[Quick Setup] Error:', error);
-                                    setQuickSetupTokenHint('');
-                                    setQuickSetupExpiry(null);
-                                    notificationStore.error('Failed to copy command');
-                                  }
+                                  await copyQuickSetupCommand(
+                                    'pve',
+                                    true,
+                                    'Command copied to clipboard! Run it on the server; the one-time setup token is already embedded.',
+                                  );
                                 }}
                                 class="absolute top-2 right-2 p-1.5 text-slate-400 hover:text-slate-200 bg-surface-hover rounded-md transition-colors"
                                 title="Copy command"
@@ -1062,17 +510,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                 <button
                                   type="button"
                                   onClick={async () => {
-                                    try {
-                                      await downloadProxmoxSetupScript(
-                                        'pve',
-                                        true,
-                                      );
-                                    } catch (error) {
-                                      logger.error('Failed to download script:', error);
-                                      notificationStore.error(
-                                        'Failed to download script. Please check your connection.',
-                                      );
-                                    }
+                                    await downloadProxmoxSetupScript('pve', true);
                                   }}
                                   class="w-full px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors text-sm font-medium"
                                 >
@@ -1146,9 +584,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                   onClick={async () => {
                                     const cmd =
                                       'pveum user add pulse-monitor@pve --comment "Pulse monitoring service"';
-                                    if (await copyToClipboard(cmd)) {
-                                      notificationStore.success('Command copied!');
-                                    }
+                                    await copyCommand(cmd);
                                   }}
                                   class="absolute top-1 right-1 p-1 text-slate-500 hover:text-base-content transition-colors"
                                   title="Copy command"
@@ -1183,9 +619,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                   onClick={async () => {
                                     const cmd =
                                       'pveum user token add pulse-monitor@pve pulse-token --privsep 0';
-                                    if (await copyToClipboard(cmd)) {
-                                      notificationStore.success('Command copied!');
-                                    }
+                                    await copyCommand(cmd);
                                   }}
                                   class="absolute top-1 right-1 p-1 text-slate-500 hover:text-base-content transition-colors"
                                   title="Copy command"
@@ -1221,9 +655,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                 <button
                                   type="button"
                                   onClick={async () => {
-                                    if (await copyToClipboard(PVE_MANUAL_PERMISSION_COMMAND)) {
-                                      notificationStore.success('Command copied!');
-                                    }
+                                    await copyCommand(PVE_MANUAL_PERMISSION_COMMAND);
                                   }}
                                   class="absolute top-1 right-1 p-1 hover:text-muted transition-colors"
                                   title="Copy command"
@@ -1250,9 +682,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                   onClick={async () => {
                                     const cmd =
                                       'pveum aclmod /storage -user pulse-monitor@pve -role PVEDatastoreAdmin';
-                                    if (await copyToClipboard(cmd)) {
-                                      notificationStore.success('Command copied!');
-                                    }
+                                    await copyCommand(cmd);
                                   }}
                                   class="absolute top-1 right-1 p-1 hover:text-muted transition-colors"
                                   title="Copy command"
@@ -1464,18 +894,11 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                 <button
                                   type="button"
                                   onClick={async () => {
-                                    try {
-                                      await copyQuickSetupCommand(
-                                        'pbs',
-                                        false,
-                                        'Command copied to clipboard! Run it on the server; the one-time setup token is already embedded.',
-                                      );
-                                    } catch (error) {
-                                      logger.error('Failed to copy command:', error);
-                                      setQuickSetupTokenHint('');
-                                      setQuickSetupExpiry(null);
-                                      notificationStore.error('Failed to copy command');
-                                    }
+                                    await copyQuickSetupCommand(
+                                      'pbs',
+                                      false,
+                                      'Command copied to clipboard! Run it on the server; the one-time setup token is already embedded.',
+                                    );
                                   }}
                                   class="absolute top-2 right-2 p-1.5 text-slate-400 hover:text-slate-200 bg-surface-hover rounded-md transition-colors"
                                   title="Copy command"
@@ -1554,16 +977,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                 <button
                                   type="button"
                                   onClick={async () => {
-                                    try {
-                                      await downloadProxmoxSetupScript(
-                                        'pbs',
-                                      );
-                                    } catch (error) {
-                                      logger.error('Failed to download script:', error);
-                                      notificationStore.error(
-                                        'Failed to download script. Please check your connection.',
-                                      );
-                                    }
+                                    await downloadProxmoxSetupScript('pbs');
                                   }}
                                   class="w-full px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors text-sm font-medium"
                                 >
@@ -1637,9 +1051,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                   onClick={async () => {
                                     const cmd =
                                       'proxmox-backup-manager user create pulse-monitor@pbs';
-                                    if (await copyToClipboard(cmd)) {
-                                      notificationStore.success('Command copied!');
-                                    }
+                                    await copyCommand(cmd);
                                   }}
                                   class="absolute top-1 right-1 p-1 text-slate-500 hover:text-base-content transition-colors"
                                   title="Copy command"
@@ -1673,9 +1085,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                   onClick={async () => {
                                     const cmd =
                                       'proxmox-backup-manager user generate-token pulse-monitor@pbs pulse-token';
-                                    if (await copyToClipboard(cmd)) {
-                                      notificationStore.success('Command copied!');
-                                    }
+                                    await copyCommand(cmd);
                                   }}
                                   class="absolute top-1 right-1 p-1 text-slate-500 hover:text-base-content transition-colors"
                                   title="Copy command"
@@ -1713,9 +1123,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                   onClick={async () => {
                                     const cmd =
                                       'proxmox-backup-manager acl update / Audit --auth-id pulse-monitor@pbs';
-                                    if (await copyToClipboard(cmd)) {
-                                      notificationStore.success('Command copied!');
-                                    }
+                                    await copyCommand(cmd);
                                   }}
                                   class="absolute top-1 right-1 p-1 hover:text-muted transition-colors"
                                   title="Copy command"
@@ -1743,9 +1151,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                   onClick={async () => {
                                     const cmd =
                                       "proxmox-backup-manager acl update / Audit --auth-id 'pulse-monitor@pbs!pulse-token'";
-                                    if (await copyToClipboard(cmd)) {
-                                      notificationStore.success('Command copied!');
-                                    }
+                                    await copyCommand(cmd);
                                   }}
                                   class="absolute top-1 right-1 p-1 hover:text-muted transition-colors"
                                   title="Copy command"

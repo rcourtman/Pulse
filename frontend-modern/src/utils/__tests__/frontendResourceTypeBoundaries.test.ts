@@ -187,7 +187,9 @@ import pmgServiceHealthBadgeSource from '@/components/PMG/ServiceHealthBadge.tsx
 import proxmoxSettingsPanelSource from '@/components/Settings/ProxmoxSettingsPanel.tsx?raw';
 import proxmoxSettingsPresentationSource from '@/utils/proxmoxSettingsPresentation.ts?raw';
 import generalSettingsPanelSource from '@/components/Settings/GeneralSettingsPanel.tsx?raw';
+import nodeModalModelSource from '@/components/Settings/nodeModalModel.ts?raw';
 import nodeModalSource from '@/components/Settings/NodeModal.tsx?raw';
+import nodeModalStateSource from '@/components/Settings/useNodeModalState.ts?raw';
 import nodeModalPresentationSource from '@/utils/nodeModalPresentation.ts?raw';
 import cephPageSource from '@/pages/Ceph.tsx?raw';
 import cephServiceIconSource from '@/components/Ceph/CephServiceIcon.tsx?raw';
@@ -2126,7 +2128,6 @@ describe('frontend resource type boundaries', () => {
     expect(proxmoxSettingsPresentationSource).toContain(
       'export function buildProxmoxDiscoveryPrefillNode',
     );
-    expect(nodeModalSource).toContain('getNodeModalDefaultFormData');
     expect(nodeModalSource).toContain('getNodeProductName');
     expect(nodeModalSource).toContain('getNodeEndpointPlaceholder');
     expect(nodeModalSource).toContain('getNodeGuestUrlPlaceholder');
@@ -2135,12 +2136,22 @@ describe('frontend resource type boundaries', () => {
     expect(nodeModalSource).toContain('getNodeTokenIdPlaceholder');
     expect(nodeModalSource).toContain('getNodeMonitoringCoverageCopy');
     expect(nodeModalSource).toContain('getTemperatureMonitoringLockedCopy');
-    expect(nodeModalSource).toContain('getNodeModalTestResultPresentation');
-    expect(nodeModalSource).toContain('buildNodeModalMonitoringPayload');
+    expect(nodeModalSource).toContain('@/components/Settings/nodeModalModel');
+    expect(nodeModalSource).toContain('@/components/Settings/useNodeModalState');
     expect(nodeModalSource).not.toContain('const getCleanFormData =');
     expect(nodeModalSource).not.toContain('const nodeProductName =');
+    expect(nodeModalSource).not.toContain('const deriveNameFromHost =');
+    expect(nodeModalSource).not.toContain('const PVE_MANUAL_PERMISSION_COMMAND = `');
+    expect(nodeModalSource).not.toContain('const [quickSetupBootstrap, setQuickSetupBootstrap] =');
+    expect(nodeModalSource).not.toContain('const handleTestConnection = async () =>');
     expect(nodeModalSource).not.toContain("testResult()?.status === 'success'");
     expect(nodeModalSource).not.toContain("testResult()?.status === 'warning'");
+    expect(nodeModalModelSource).toContain('export const deriveNameFromHost =');
+    expect(nodeModalModelSource).toContain('export const PVE_MANUAL_PERMISSION_COMMAND = `');
+    expect(nodeModalStateSource).toContain('export const useNodeModalState =');
+    expect(nodeModalStateSource).toContain('getNodeModalDefaultFormData');
+    expect(nodeModalStateSource).toContain('getNodeModalTestResultPresentation');
+    expect(nodeModalStateSource).toContain('buildNodeModalMonitoringPayload');
     expect(nodeModalPresentationSource).toContain('export function getNodeModalDefaultFormData');
     expect(nodeModalPresentationSource).toContain('export function getNodeProductName');
     expect(nodeModalPresentationSource).toContain('export function getNodeEndpointPlaceholder');

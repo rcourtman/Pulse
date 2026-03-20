@@ -6,7 +6,10 @@ import infrastructureInstallPanelSource from '../InfrastructureInstallPanel.tsx?
 import infrastructureOperationsControllerSource from '../InfrastructureOperationsController.tsx?raw';
 import infrastructureOperationsModelSource from '../infrastructureOperationsModel.tsx?raw';
 import infrastructureReportingPanelSource from '../InfrastructureReportingPanel.tsx?raw';
+import nodeModalModelSource from '../nodeModalModel.ts?raw';
+import nodeModalSource from '../NodeModal.tsx?raw';
 import infrastructureOperationsStateSource from '../useInfrastructureOperationsState.tsx?raw';
+import nodeModalStateSource from '../useNodeModalState.ts?raw';
 import apiAccessPanelSource from '../APIAccessPanel.tsx?raw';
 import auditLogPanelSource from '../AuditLogPanel.tsx?raw';
 import auditWebhookPanelSource from '../AuditWebhookPanel.tsx?raw';
@@ -45,6 +48,9 @@ const extractedModules = [
   '../InfrastructureOperationsController.tsx',
   '../infrastructureOperationsModel.tsx',
   '../useInfrastructureOperationsState.tsx',
+  '../NodeModal.tsx',
+  '../nodeModalModel.ts',
+  '../useNodeModalState.ts',
   '../InfrastructureWorkspace.tsx',
   '../InfrastructureInstallPanel.tsx',
   '../InfrastructureReportingPanel.tsx',
@@ -309,6 +315,22 @@ describe('Settings architecture guardrails', () => {
       'export const rowFromConnectedInfrastructureItem',
     );
     expect(infrastructureOperationsModelSource).toContain('export const buildCommandsByPlatform');
+  });
+
+  it('keeps the node setup modal shell behind extracted state and model owners', () => {
+    expect(nodeModalSource).toContain('@/components/Settings/nodeModalModel');
+    expect(nodeModalSource).toContain('@/components/Settings/useNodeModalState');
+    expect(nodeModalSource).not.toContain('const deriveNameFromHost =');
+    expect(nodeModalSource).not.toContain('const PVE_MANUAL_PERMISSION_COMMAND = `');
+    expect(nodeModalSource).not.toContain('const [quickSetupBootstrap, setQuickSetupBootstrap] =');
+    expect(nodeModalSource).not.toContain('const handleTestConnection = async () =>');
+    expect(nodeModalModelSource).toContain('export interface NodeModalProps');
+    expect(nodeModalModelSource).toContain('export const deriveNameFromHost =');
+    expect(nodeModalModelSource).toContain('export const PVE_MANUAL_PERMISSION_COMMAND = `');
+    expect(nodeModalStateSource).toContain('export const useNodeModalState =');
+    expect(nodeModalStateSource).toContain('const [quickSetupBootstrap, setQuickSetupBootstrap] =');
+    expect(nodeModalStateSource).toContain('const handleTestConnection = async () =>');
+    expect(nodeModalStateSource).toContain("const PROXMOX_SETUP_HOST_REQUIRED_MESSAGE = 'Proxmox setup host is required';");
   });
 
   it('keeps AI settings sub-surfaces behind extracted runtime owners', () => {

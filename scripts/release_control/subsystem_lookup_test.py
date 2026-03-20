@@ -1014,33 +1014,57 @@ class SubsystemLookupTest(unittest.TestCase):
             self.assertEqual(match["lane_context"]["lane_id"], lane_id)
             self.assertEqual(match["verification_requirement"]["id"], requirement_id)
 
-    def test_lookup_paths_assigns_node_modal_to_agent_lifecycle(self) -> None:
+    def test_lookup_paths_assigns_node_modal_to_agent_lifecycle_and_api_contracts(self) -> None:
         result = lookup_paths(["frontend-modern/src/components/Settings/NodeModal.tsx"])
         self.assertEqual(result["unowned_runtime_files"], [])
         self.assertEqual(
             {item["subsystem"] for item in result["impacted_subsystems"]},
-            {"agent-lifecycle"},
+            {"agent-lifecycle", "api-contracts"},
         )
         file_entry = result["files"][0]
         self.assertEqual(file_entry["classification"], "runtime")
         self.assertEqual(
             {match["subsystem"] for match in file_entry["matches"]},
-            {"agent-lifecycle"},
+            {"agent-lifecycle", "api-contracts"},
         )
-        match = file_entry["matches"][0]
+
+        lifecycle_match = next(
+            match for match in file_entry["matches"] if match["subsystem"] == "agent-lifecycle"
+        )
         self.assertEqual(
-            match["contract"],
+            lifecycle_match["contract"],
             "docs/release-control/v6/internal/subsystems/agent-lifecycle.md",
         )
-        self.assertEqual(match["lane_context"]["lane_id"], "L16")
+        self.assertEqual(lifecycle_match["lane_context"]["lane_id"], "L16")
         self.assertEqual(
-            match["verification_requirement"]["id"],
+            lifecycle_match["verification_requirement"]["id"],
             "node-setup-settings-surface",
         )
         self.assertEqual(
-            match["verification_requirement"]["exact_files"],
+            lifecycle_match["verification_requirement"]["exact_files"],
             [
                 "frontend-modern/src/components/Settings/__tests__/NodeModal.guardrails.test.ts"
+            ],
+        )
+
+        api_contracts_match = next(
+            match for match in file_entry["matches"] if match["subsystem"] == "api-contracts"
+        )
+        self.assertEqual(
+            api_contracts_match["contract"],
+            "docs/release-control/v6/internal/subsystems/api-contracts.md",
+        )
+        self.assertEqual(api_contracts_match["lane_context"]["lane_id"], "L6")
+        self.assertEqual(
+            api_contracts_match["verification_requirement"]["id"],
+            "node-setup-settings-client-surface",
+        )
+        self.assertEqual(
+            api_contracts_match["verification_requirement"]["exact_files"],
+            [
+                "frontend-modern/src/api/__tests__/nodes.test.ts",
+                "frontend-modern/src/components/Settings/__tests__/NodeModal.guardrails.test.ts",
+                "frontend-modern/src/types/api.ts",
             ],
         )
 
