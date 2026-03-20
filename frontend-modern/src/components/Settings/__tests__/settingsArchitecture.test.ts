@@ -5,6 +5,7 @@ import infrastructureWorkspaceSource from '../InfrastructureWorkspace.tsx?raw';
 import infrastructureInstallPanelSource from '../InfrastructureInstallPanel.tsx?raw';
 import infrastructureOperationsControllerSource from '../InfrastructureOperationsController.tsx?raw';
 import infrastructureReportingPanelSource from '../InfrastructureReportingPanel.tsx?raw';
+import infrastructureOperationsStateSource from '../useInfrastructureOperationsState.tsx?raw';
 import apiAccessPanelSource from '../APIAccessPanel.tsx?raw';
 import auditLogPanelSource from '../AuditLogPanel.tsx?raw';
 import auditWebhookPanelSource from '../AuditWebhookPanel.tsx?raw';
@@ -38,6 +39,7 @@ const extractedModules = [
   '../settingsFeatureGates.ts',
   '../BackupTransferDialogs.tsx',
   '../InfrastructureOperationsController.tsx',
+  '../useInfrastructureOperationsState.tsx',
   '../InfrastructureWorkspace.tsx',
   '../InfrastructureInstallPanel.tsx',
   '../InfrastructureReportingPanel.tsx',
@@ -277,9 +279,10 @@ describe('Settings architecture guardrails', () => {
     expect(infrastructureWorkspaceSource).not.toContain('tracking-[0.22em]');
     expect(infrastructureWorkspaceSource).toContain('InfrastructureInstallPanel');
     expect(infrastructureWorkspaceSource).toContain('InfrastructureReportingPanel');
-    expect(infrastructureInstallPanelSource).toContain('InfrastructureOperationsController');
-    expect(infrastructureReportingPanelSource).toContain('InfrastructureOperationsController');
-    expect(infrastructureOperationsControllerSource).toContain('export const InfrastructureOperationsController');
+    expect(infrastructureInstallPanelSource).toContain('useInfrastructureOperationsState');
+    expect(infrastructureReportingPanelSource).toContain('useInfrastructureOperationsState');
+    expect(infrastructureOperationsControllerSource).toContain('useInfrastructureOperationsState');
+    expect(infrastructureOperationsStateSource).toContain('export const useInfrastructureOperationsState');
     expect(infrastructureInstallPanelSource).not.toContain('<PageHeader');
     expect(infrastructureReportingPanelSource).not.toContain('<PageHeader');
   });

@@ -14,24 +14,16 @@ vi.mock('@solidjs/router', async () => {
   };
 });
 
-vi.mock('../InfrastructureOperationsController', () => ({
-  InfrastructureOperationsController: (props: { showInventory?: boolean; showInstaller?: boolean }) => (
-    <div data-testid="unified-agents">
-      {props.showInventory === false
-        ? 'install'
-        : props.showInstaller === false
-          ? 'inventory'
-          : 'default'}
-    </div>
-  ),
+vi.mock('../InfrastructureInstallPanel', () => ({
+  InfrastructureInstallPanel: () => <div data-testid="unified-agents">install</div>,
+}));
+
+vi.mock('../InfrastructureReportingPanel', () => ({
+  InfrastructureReportingPanel: () => <div data-testid="agent-profiles">profiles</div>,
 }));
 
 vi.mock('../ProxmoxSettingsPanel', () => ({
   ProxmoxSettingsPanel: () => <div data-testid="proxmox-settings">direct</div>,
-}));
-
-vi.mock('../AgentProfilesPanel', () => ({
-  AgentProfilesPanel: () => <div data-testid="agent-profiles">profiles</div>,
 }));
 
 describe('InfrastructureWorkspace', () => {

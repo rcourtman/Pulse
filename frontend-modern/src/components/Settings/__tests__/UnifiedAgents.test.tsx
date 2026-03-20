@@ -4,6 +4,10 @@ import { createSignal } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { Router, Route } from '@solidjs/router';
 import { UnifiedAgents } from '../UnifiedAgents';
+import infrastructureInstallPanelSource from '../InfrastructureInstallPanel.tsx?raw';
+import infrastructureOperationsControllerSource from '../InfrastructureOperationsController.tsx?raw';
+import infrastructureReportingPanelSource from '../InfrastructureReportingPanel.tsx?raw';
+import infrastructureOperationsStateSource from '../useInfrastructureOperationsState.tsx?raw';
 import type {
   Agent,
   ConnectedInfrastructureItem,
@@ -41,6 +45,17 @@ const trackAgentInstallProfileSelectedMock = vi.fn();
 const refetchResourcesMock = vi.fn();
 const [mockResources, setMockResources] = createSignal<any[]>([]);
 let securityStatusResponse = { requiresAuth: true, apiTokenConfigured: false };
+
+describe('UnifiedAgents ownership guardrails', () => {
+  it('routes controller and workspace panels through the shared infrastructure operations state owner', () => {
+    expect(infrastructureOperationsControllerSource).toContain('useInfrastructureOperationsState');
+    expect(infrastructureInstallPanelSource).toContain('useInfrastructureOperationsState');
+    expect(infrastructureReportingPanelSource).toContain('useInfrastructureOperationsState');
+    expect(infrastructureOperationsStateSource).toContain('renderInstallerSection');
+    expect(infrastructureOperationsStateSource).toContain('renderInventorySection');
+    expect(infrastructureOperationsStateSource).toContain('renderStopMonitoringDialog');
+  });
+});
 
 vi.mock('@/App', () => ({
   useWebSocket: () => mockWsStore,

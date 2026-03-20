@@ -130,6 +130,14 @@
       ]
     },
     {
+      "path": "frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx",
+      "rationale": "the shared infrastructure operations state hook is both an agent fleet lifecycle control surface and an API token, lookup, assignment, and reporting/install contract boundary",
+      "subsystems": [
+        "agent-lifecycle",
+        "api-contracts"
+      ]
+    },
+    {
       "path": "frontend-modern/src/utils/agentInstallCommand.ts",
       "rationale": "the shared frontend install-command helper is both an agent lifecycle control surface and a canonical API/install transport contract boundary",
       "subsystems": [
@@ -307,6 +315,7 @@
         "frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx",
         "frontend-modern/src/components/Settings/NodeModal.tsx",
         "frontend-modern/src/components/Settings/UnifiedAgents.tsx",
+        "frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx",
         "frontend-modern/src/components/SetupWizard/SetupCompletionPanel.tsx",
         "frontend-modern/src/utils/agentInstallCommand.ts",
         "frontend-modern/src/utils/agentProfilesPresentation.ts",
@@ -503,7 +512,8 @@
             "match_prefixes": [],
             "match_files": [
               "frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx",
-              "frontend-modern/src/components/Settings/UnifiedAgents.tsx"
+              "frontend-modern/src/components/Settings/UnifiedAgents.tsx",
+              "frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
@@ -696,6 +706,7 @@
         "frontend-modern/src/components/Settings/APITokenManager.tsx",
         "frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx",
         "frontend-modern/src/components/Settings/UnifiedAgents.tsx",
+        "frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx",
         "frontend-modern/src/types/api.ts",
         "frontend-modern/src/utils/agentInstallCommand.ts"
       ],
@@ -904,7 +915,8 @@
             "match_prefixes": [],
             "match_files": [
               "frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx",
-              "frontend-modern/src/components/Settings/UnifiedAgents.tsx"
+              "frontend-modern/src/components/Settings/UnifiedAgents.tsx",
+              "frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
