@@ -1843,6 +1843,7 @@ class SubsystemLookupTest(unittest.TestCase):
                 "frontend-modern/src/api/__tests__/agentProfiles.test.ts",
                 "frontend-modern/src/api/__tests__/monitoring.test.ts",
                 "frontend-modern/src/api/__tests__/security.test.ts",
+                "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsModel.test.tsx",
                 "frontend-modern/src/components/Settings/__tests__/UnifiedAgents.test.tsx",
             ],
         )
@@ -1861,6 +1862,7 @@ class SubsystemLookupTest(unittest.TestCase):
             [
                 "frontend-modern/src/api/__tests__/agentProfiles.test.ts",
                 "frontend-modern/src/api/__tests__/monitoring.test.ts",
+                "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsModel.test.tsx",
                 "frontend-modern/src/components/Settings/__tests__/UnifiedAgents.test.tsx",
             ],
         )

@@ -4,6 +4,7 @@ import settingsShellSource from '../SettingsPageShell.tsx?raw';
 import infrastructureWorkspaceSource from '../InfrastructureWorkspace.tsx?raw';
 import infrastructureInstallPanelSource from '../InfrastructureInstallPanel.tsx?raw';
 import infrastructureOperationsControllerSource from '../InfrastructureOperationsController.tsx?raw';
+import infrastructureOperationsModelSource from '../infrastructureOperationsModel.tsx?raw';
 import infrastructureReportingPanelSource from '../InfrastructureReportingPanel.tsx?raw';
 import infrastructureOperationsStateSource from '../useInfrastructureOperationsState.tsx?raw';
 import apiAccessPanelSource from '../APIAccessPanel.tsx?raw';
@@ -39,6 +40,7 @@ const extractedModules = [
   '../settingsFeatureGates.ts',
   '../BackupTransferDialogs.tsx',
   '../InfrastructureOperationsController.tsx',
+  '../infrastructureOperationsModel.tsx',
   '../useInfrastructureOperationsState.tsx',
   '../InfrastructureWorkspace.tsx',
   '../InfrastructureInstallPanel.tsx',
@@ -285,6 +287,20 @@ describe('Settings architecture guardrails', () => {
     expect(infrastructureOperationsStateSource).toContain('export const useInfrastructureOperationsState');
     expect(infrastructureInstallPanelSource).not.toContain('<PageHeader');
     expect(infrastructureReportingPanelSource).not.toContain('<PageHeader');
+  });
+
+  it('keeps the infrastructure operations model extracted from the reactive hook owner', () => {
+    expect(infrastructureOperationsStateSource).toContain("./infrastructureOperationsModel");
+    expect(infrastructureOperationsStateSource).not.toContain('const INSTALL_PROFILE_OPTIONS');
+    expect(infrastructureOperationsStateSource).not.toContain('const buildCommandsByPlatform =');
+    expect(infrastructureOperationsStateSource).not.toContain(
+      'const rowFromConnectedInfrastructureItem =',
+    );
+    expect(infrastructureOperationsModelSource).toContain('export const INSTALL_PROFILE_OPTIONS');
+    expect(infrastructureOperationsModelSource).toContain(
+      'export const rowFromConnectedInfrastructureItem',
+    );
+    expect(infrastructureOperationsModelSource).toContain('export const buildCommandsByPlatform');
   });
 
   it('routes every top-level settings surface through the canonical panel shell framing', () => {

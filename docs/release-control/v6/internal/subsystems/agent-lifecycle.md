@@ -32,28 +32,30 @@ management, and fleet control surfaces.
 8. `frontend-modern/src/api/agentProfiles.ts`
 9. `frontend-modern/src/components/Settings/AgentProfilesPanel.tsx`
 10. `frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx`
-11. `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx`
-12. `frontend-modern/src/components/Settings/UnifiedAgents.tsx`
-13. `frontend-modern/src/components/Settings/NodeModal.tsx`
-14. `frontend-modern/src/components/SetupWizard/SetupCompletionPanel.tsx`
-15. `frontend-modern/src/components/Infrastructure/deploy/ResultsStep.tsx`
-16. `frontend-modern/src/utils/agentProfilesPresentation.ts`
-17. `frontend-modern/src/utils/agentInstallCommand.ts`
-18. `frontend-modern/src/api/nodes.ts`
+11. `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`
+12. `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx`
+13. `frontend-modern/src/components/Settings/UnifiedAgents.tsx`
+14. `frontend-modern/src/components/Settings/NodeModal.tsx`
+15. `frontend-modern/src/components/SetupWizard/SetupCompletionPanel.tsx`
+16. `frontend-modern/src/components/Infrastructure/deploy/ResultsStep.tsx`
+17. `frontend-modern/src/utils/agentProfilesPresentation.ts`
+18. `frontend-modern/src/utils/agentInstallCommand.ts`
+19. `frontend-modern/src/api/nodes.ts`
 
 ## Shared Boundaries
 
 1. `frontend-modern/src/api/agentProfiles.ts` shared with `api-contracts`: the agent profiles frontend client is both an agent lifecycle control surface and a canonical API payload contract boundary.
 2. `frontend-modern/src/api/nodes.ts` shared with `api-contracts`: the shared Proxmox node client is both an agent lifecycle setup/install control surface and a canonical API payload contract boundary.
 3. `frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx` shared with `api-contracts`: the infrastructure operations controller is both an agent fleet lifecycle control surface and an API token, lookup, assignment, and reporting/install contract boundary.
-4. `frontend-modern/src/components/Settings/UnifiedAgents.tsx` shared with `api-contracts`: the UnifiedAgents module is a compatibility shim for the canonical infrastructure operations controller and remains on the same shared agent lifecycle and API contract boundary while the old module path exists.
-5. `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx` shared with `api-contracts`: the shared infrastructure operations state hook is both an agent fleet lifecycle control surface and an API token, lookup, assignment, and reporting/install contract boundary.
-6. `frontend-modern/src/utils/agentInstallCommand.ts` shared with `api-contracts`: the shared frontend install-command helper is both an agent lifecycle control surface and a canonical API/install transport contract boundary.
-7. `internal/api/agent_install_command_shared.go` shared with `api-contracts`: agent install command assembly is both an agent lifecycle control surface and a canonical API payload contract boundary.
-8. `internal/api/config_setup_handlers.go` shared with `api-contracts`: auto-register and setup handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.
-9. `internal/api/unified_agent.go` shared with `api-contracts`: unified agent download and installer handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.
-10. `scripts/install.ps1` shared with `deployment-installability`: the Windows installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary.
-11. `scripts/install.sh` shared with `deployment-installability`: the shell installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary.
+4. `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx` shared with `api-contracts`: the pure infrastructure operations inventory/install model is both an agent fleet lifecycle control surface and an API token, lookup, assignment, and reporting/install contract boundary.
+5. `frontend-modern/src/components/Settings/UnifiedAgents.tsx` shared with `api-contracts`: the UnifiedAgents module is a compatibility shim for the canonical infrastructure operations controller and remains on the same shared agent lifecycle and API contract boundary while the old module path exists.
+6. `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx` shared with `api-contracts`: the shared infrastructure operations state hook is both an agent fleet lifecycle control surface and an API token, lookup, assignment, and reporting/install contract boundary.
+7. `frontend-modern/src/utils/agentInstallCommand.ts` shared with `api-contracts`: the shared frontend install-command helper is both an agent lifecycle control surface and a canonical API/install transport contract boundary.
+8. `internal/api/agent_install_command_shared.go` shared with `api-contracts`: agent install command assembly is both an agent lifecycle control surface and a canonical API payload contract boundary.
+9. `internal/api/config_setup_handlers.go` shared with `api-contracts`: auto-register and setup handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.
+10. `internal/api/unified_agent.go` shared with `api-contracts`: unified agent download and installer handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.
+11. `scripts/install.ps1` shared with `deployment-installability`: the Windows installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary.
+12. `scripts/install.sh` shared with `deployment-installability`: the shell installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary.
 
 ## Extension Points
 
@@ -62,7 +64,7 @@ management, and fleet control surfaces.
 3. Add or change runtime-side Unified Agent startup, first-report assembly, and enroll/runtime continuity through `internal/hostagent/`.
 4. Keep legacy Unified Agent compatibility names explicitly secondary when touching shared `internal/api/` runtime helpers: the legacy host-route family and `host-agent:*` scope names may remain as ingress or migration aliases, but they must not retake primary ownership in router state, live runtime scope checks, handler commentary, or operator-facing guidance.
 5. Add or change installer flags, persisted service arguments, or upgrade-safe re-entry behavior through `scripts/install.sh` and `scripts/install.ps1`.
-6. Add or change profile management, shared frontend install-command assembly, Proxmox setup/install API transport, setup-completion install handoff transport, deploy-fallback manual install transport, and fleet-control presentation through `frontend-modern/src/api/agentProfiles.ts`, `frontend-modern/src/api/nodes.ts`, `frontend-modern/src/components/Settings/AgentProfilesPanel.tsx`, `frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx`, `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx`, `frontend-modern/src/components/Settings/NodeModal.tsx`, `frontend-modern/src/components/SetupWizard/SetupCompletionPanel.tsx`, `frontend-modern/src/components/Infrastructure/deploy/ResultsStep.tsx`, and `frontend-modern/src/utils/agentInstallCommand.ts`.
+6. Add or change profile management, the pure unified-agent inventory/install model, shared frontend install-command assembly, Proxmox setup/install API transport, setup-completion install handoff transport, deploy-fallback manual install transport, and fleet-control presentation through `frontend-modern/src/api/agentProfiles.ts`, `frontend-modern/src/api/nodes.ts`, `frontend-modern/src/components/Settings/AgentProfilesPanel.tsx`, `frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx`, `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`, `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx`, `frontend-modern/src/components/Settings/NodeModal.tsx`, `frontend-modern/src/components/SetupWizard/SetupCompletionPanel.tsx`, `frontend-modern/src/components/Infrastructure/deploy/ResultsStep.tsx`, and `frontend-modern/src/utils/agentInstallCommand.ts`.
 
 ## Forbidden Paths
 

@@ -106,6 +106,14 @@
       ]
     },
     {
+      "path": "frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx",
+      "rationale": "the pure infrastructure operations inventory/install model is both an agent fleet lifecycle control surface and an API token, lookup, assignment, and reporting/install contract boundary",
+      "subsystems": [
+        "agent-lifecycle",
+        "api-contracts"
+      ]
+    },
+    {
       "path": "frontend-modern/src/components/Settings/SecurityAuthPanel.tsx",
       "rationale": "the authentication settings surface is both a security/privacy control surface and a canonical settings-shell presentation boundary",
       "subsystems": [
@@ -313,6 +321,7 @@
         "frontend-modern/src/components/Infrastructure/deploy/ResultsStep.tsx",
         "frontend-modern/src/components/Settings/AgentProfilesPanel.tsx",
         "frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx",
+        "frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx",
         "frontend-modern/src/components/Settings/NodeModal.tsx",
         "frontend-modern/src/components/Settings/UnifiedAgents.tsx",
         "frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx",
@@ -512,6 +521,7 @@
             "match_prefixes": [],
             "match_files": [
               "frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx",
+              "frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx",
               "frontend-modern/src/components/Settings/UnifiedAgents.tsx",
               "frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx"
             ],
@@ -520,6 +530,7 @@
             "exact_files": [
               "frontend-modern/src/api/__tests__/agentProfiles.test.ts",
               "frontend-modern/src/api/__tests__/monitoring.test.ts",
+              "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsModel.test.tsx",
               "frontend-modern/src/components/Settings/__tests__/UnifiedAgents.test.tsx"
             ]
           }
@@ -705,6 +716,7 @@
       "owned_files": [
         "frontend-modern/src/components/Settings/APITokenManager.tsx",
         "frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx",
+        "frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx",
         "frontend-modern/src/components/Settings/UnifiedAgents.tsx",
         "frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx",
         "frontend-modern/src/types/api.ts",
@@ -915,6 +927,7 @@
             "match_prefixes": [],
             "match_files": [
               "frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx",
+              "frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx",
               "frontend-modern/src/components/Settings/UnifiedAgents.tsx",
               "frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx"
             ],
@@ -924,6 +937,7 @@
               "frontend-modern/src/api/__tests__/agentProfiles.test.ts",
               "frontend-modern/src/api/__tests__/monitoring.test.ts",
               "frontend-modern/src/api/__tests__/security.test.ts",
+              "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsModel.test.tsx",
               "frontend-modern/src/components/Settings/__tests__/UnifiedAgents.test.tsx"
             ]
           }

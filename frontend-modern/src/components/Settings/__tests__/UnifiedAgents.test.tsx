@@ -6,6 +6,7 @@ import { Router, Route } from '@solidjs/router';
 import { UnifiedAgents } from '../UnifiedAgents';
 import infrastructureInstallPanelSource from '../InfrastructureInstallPanel.tsx?raw';
 import infrastructureOperationsControllerSource from '../InfrastructureOperationsController.tsx?raw';
+import infrastructureOperationsModelSource from '../infrastructureOperationsModel.tsx?raw';
 import infrastructureReportingPanelSource from '../InfrastructureReportingPanel.tsx?raw';
 import infrastructureOperationsStateSource from '../useInfrastructureOperationsState.tsx?raw';
 import type {
@@ -51,9 +52,14 @@ describe('UnifiedAgents ownership guardrails', () => {
     expect(infrastructureOperationsControllerSource).toContain('useInfrastructureOperationsState');
     expect(infrastructureInstallPanelSource).toContain('useInfrastructureOperationsState');
     expect(infrastructureReportingPanelSource).toContain('useInfrastructureOperationsState');
+    expect(infrastructureOperationsStateSource).toContain("./infrastructureOperationsModel");
     expect(infrastructureOperationsStateSource).toContain('renderInstallerSection');
     expect(infrastructureOperationsStateSource).toContain('renderInventorySection');
     expect(infrastructureOperationsStateSource).toContain('renderStopMonitoringDialog');
+    expect(infrastructureOperationsModelSource).toContain('export const getRowReportingSummary');
+    expect(infrastructureOperationsModelSource).toContain(
+      'export const getPowerShellInstallProfileEnvFromFlags',
+    );
   });
 });
 
