@@ -21,10 +21,13 @@ import systemSettingsPresentationSource from '@/utils/systemSettingsPresentation
 import updatesSettingsPanelSource from '@/components/Settings/UpdatesSettingsPanel.tsx?raw';
 import copyCommandBlockSource from '@/components/Settings/CopyCommandBlock.tsx?raw';
 import updateInstallGuideSource from '@/components/Settings/UpdateInstallGuide.tsx?raw';
+import reportingPanelModelSource from '@/components/Settings/reportingPanelModel.ts?raw';
+import reportingPanelStateSource from '@/components/Settings/useReportingPanelState.ts?raw';
 import updatesSettingsModelSource from '@/components/Settings/updatesSettingsModel.ts?raw';
 import diagnosticsModelSource from '@/components/Settings/diagnosticsModel.ts?raw';
 import diagnosticsResultsPanelSource from '@/components/Settings/DiagnosticsResultsPanel.tsx?raw';
 import diagnosticsStateSource from '@/components/Settings/useDiagnosticsPanelState.ts?raw';
+import reportingPresentationSource from '@/utils/reportingPresentation.ts?raw';
 import updatesPresentationSource from '@/utils/updatesPresentation.ts?raw';
 import environmentLockBadgeSource from '@/components/shared/EnvironmentLockBadge.tsx?raw';
 import environmentLockPresentationSource from '@/utils/environmentLockPresentation.ts?raw';
@@ -784,11 +787,14 @@ describe('frontend resource type boundaries', () => {
     expect(systemSettingsPresentationSource).toContain('export function getBackupIntervalSummary');
     expect(systemSettingsPresentationSource).toContain('export const COMMON_DISCOVERY_SUBNETS');
     expect(reportingPanelSource).toContain('@/utils/upgradePresentation');
+    expect(reportingPanelSource).toContain('@/components/Settings/useReportingPanelState');
+    expect(reportingPanelSource).toContain('@/components/Settings/reportingPanelModel');
     expect(reportingPanelSource).toContain('getUpgradeActionButtonClass');
     expect(reportingPanelSource).toContain('UPGRADE_ACTION_LABEL');
     expect(reportingPanelSource).toContain('UPGRADE_TRIAL_LABEL');
     expect(reportingPanelSource).not.toContain('>Upgrade to Pro<');
     expect(reportingPanelSource).not.toContain('>Start free trial<');
+    expect(reportingPanelSource).not.toContain('window.URL.createObjectURL');
     expect(rolesPanelSource).toContain('@/utils/upgradePresentation');
     expect(userAssignmentsPanelSource).toContain('@/utils/upgradePresentation');
     expect(agentProfilesPanelSource).toContain('@/utils/upgradePresentation');
@@ -2735,6 +2741,20 @@ describe('frontend resource type boundaries', () => {
     expect(copyCommandBlockSource).toContain("aria-label=\"Copy to clipboard\"");
     expect(updatesSettingsModelSource).toContain('export function getUpdateChannelCardOptions');
     expect(updatesSettingsModelSource).toContain('export function buildUpdateInstallGuide');
+    expect(reportingPanelStateSource).toContain('buildReportingRequest');
+    expect(reportingPanelStateSource).toContain('getReportingGenerateSuccessMessage');
+    expect(reportingPanelStateSource).toContain('getReportingGenerateErrorMessage');
+    expect(reportingPanelModelSource).toContain('export function getReportingRangeStart');
+    expect(reportingPanelModelSource).toContain('export function buildReportingRequest');
+    expect(reportingPresentationSource).toContain(
+      'export function getReportingGenerateSelectionRequiredMessage',
+    );
+    expect(reportingPresentationSource).toContain(
+      'export function getReportingGenerateSuccessMessage',
+    );
+    expect(reportingPresentationSource).toContain(
+      'export function getReportingGenerateErrorMessage',
+    );
     expect(updatesPresentationSource).toContain('export function getUpdateBuildBadges');
     expect(updatesPresentationSource).toContain('export function getUpdateAvailabilityHeading');
     expect(updatesPresentationSource).toContain('export function getUpdatePrimaryStatusLabel');

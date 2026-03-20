@@ -31,6 +31,7 @@ import aiProviderConfigurationSectionSource from '../AIProviderConfigurationSect
 import aiSettingsDialogsSource from '../AISettingsDialogs.tsx?raw';
 import aiSettingsModelSource from '../aiSettingsModel.ts?raw';
 import reportingPanelSource from '../ReportingPanel.tsx?raw';
+import reportingPanelModelSource from '../reportingPanelModel.ts?raw';
 import updatesSettingsPanelSource from '../UpdatesSettingsPanel.tsx?raw';
 import suggestProfileModalSource from '../SuggestProfileModal.tsx?raw';
 import aiIntelligenceSource from '@/pages/AIIntelligence.tsx?raw';
@@ -43,6 +44,7 @@ import aiControlLevelPresentationSource from '@/utils/aiControlLevelPresentation
 import agentProfilesPresentationSource from '@/utils/agentProfilesPresentation.ts?raw';
 import agentProfileSuggestionPresentationSource from '@/utils/agentProfileSuggestionPresentation.ts?raw';
 import reportingPresentationSource from '@/utils/reportingPresentation.ts?raw';
+import reportingPanelStateSource from '../useReportingPanelState.ts?raw';
 import aiSettingsPresentationSource from '@/utils/aiSettingsPresentation.ts?raw';
 import aiSessionDiffPresentationSource from '@/utils/aiSessionDiffPresentation.ts?raw';
 import settingsShellPresentationSource from '@/utils/settingsShellPresentation.ts?raw';
@@ -405,13 +407,31 @@ describe('monitored-system model guardrails', () => {
     expect(reportingPanelSource).toContain('CalloutCard');
     expect(reportingPanelSource).toContain('variant="prominent"');
     expect(reportingPanelSource).toContain('@/utils/upgradePresentation');
+    expect(reportingPanelSource).toContain('@/components/Settings/useReportingPanelState');
+    expect(reportingPanelSource).toContain('@/components/Settings/reportingPanelModel');
     expect(reportingPanelSource).toContain('getUpgradeActionButtonClass');
     expect(reportingPanelSource).toContain('UPGRADE_ACTION_LABEL');
     expect(reportingPanelSource).toContain('UPGRADE_TRIAL_LABEL');
     expect(reportingPanelSource).not.toContain('>Upgrade to Pro<');
     expect(reportingPanelSource).not.toContain('>Start free trial<');
     expect(reportingPanelSource).not.toContain("<For each={['24h', '7d', '30d']}>");
+    expect(reportingPanelSource).not.toContain('window.URL.createObjectURL');
+    expect(reportingPanelStateSource).toContain('buildReportingRequest');
+    expect(reportingPanelStateSource).toContain('getReportingGenerateSelectionRequiredMessage');
+    expect(reportingPanelStateSource).toContain('getReportingGenerateSuccessMessage');
+    expect(reportingPanelStateSource).toContain('getReportingGenerateErrorMessage');
+    expect(reportingPanelModelSource).toContain('export function getReportingRangeStart');
+    expect(reportingPanelModelSource).toContain('export function buildReportingRequest');
     expect(reportingPresentationSource).toContain('export const REPORTING_RANGE_OPTIONS');
+    expect(reportingPresentationSource).toContain(
+      'export function getReportingGenerateSelectionRequiredMessage',
+    );
+    expect(reportingPresentationSource).toContain(
+      'export function getReportingGenerateSuccessMessage',
+    );
+    expect(reportingPresentationSource).toContain(
+      'export function getReportingGenerateErrorMessage',
+    );
     expect(reportingPresentationSource).not.toContain('getReportingToggleButtonClass');
     expect(aiIntelligenceSource).toContain(
       "import { PatrolIntelligenceSurface } from '@/features/patrol/PatrolIntelligenceSurface';",

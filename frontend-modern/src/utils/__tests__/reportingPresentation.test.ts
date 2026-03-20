@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { REPORTING_RANGE_OPTIONS } from '@/utils/reportingPresentation';
+import {
+  getReportingGenerateErrorMessage,
+  getReportingGenerateSelectionRequiredMessage,
+  getReportingGenerateSuccessMessage,
+  REPORTING_RANGE_OPTIONS,
+} from '@/utils/reportingPresentation';
 
 describe('reportingPresentation', () => {
   it('returns canonical reporting range options', () => {
@@ -8,5 +13,13 @@ describe('reportingPresentation', () => {
       { value: '7d', label: 'Last 7 Days' },
       { value: '30d', label: 'Last 30 Days' },
     ]);
+  });
+
+  it('returns canonical reporting status copy', () => {
+    expect(getReportingGenerateSelectionRequiredMessage()).toBe(
+      'Please select at least one resource',
+    );
+    expect(getReportingGenerateSuccessMessage()).toBe('Report generated successfully');
+    expect(getReportingGenerateErrorMessage()).toBe('Failed to generate report');
   });
 });

@@ -52,22 +52,25 @@ work extends shared components instead of creating new local variants.
 29. `frontend-modern/src/components/Settings/UpdateInstallGuide.tsx`
 30. `frontend-modern/src/components/Settings/updatesSettingsModel.ts`
 31. `frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx`
-32. `frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts`
-33. `tests/integration/tests/15-settings-shell-consistency.spec.ts`
-34. `frontend-modern/src/components/shared/PageControls.guardrails.test.ts`
-35. `frontend-modern/src/components/shared/TypeColumn.guardrails.test.ts`
-36. `frontend-modern/src/features/`
-37. `frontend-modern/src/components/SetupWizard/SetupWizard.tsx`
-38. `frontend-modern/src/components/SetupWizard/SetupCompletionPreview.tsx`
-39. `frontend-modern/src/components/SetupWizard/__tests__/SetupWizard.test.tsx`
-40. `frontend-modern/src/components/SetupWizard/__tests__/SetupCompletionPreview.test.tsx`
-41. `frontend-modern/src/components/shared/MonitoredSystemLimitWarningBanner.tsx`
-42. `frontend-modern/src/components/Settings/ReportingPanel.tsx`
-43. `frontend-modern/src/components/Settings/SystemLogsPanel.tsx`
-44. `frontend-modern/src/features/operations/OperationsPageSurface.tsx`
-45. `frontend-modern/src/features/operations/operationsPageModel.ts`
-46. `frontend-modern/src/pages/Operations.tsx`
-47. `frontend-modern/src/pages/__tests__/Operations.helpers.test.ts`
+32. `frontend-modern/src/components/Settings/ReportingPanel.tsx`
+33. `frontend-modern/src/components/Settings/reportingPanelModel.ts`
+34. `frontend-modern/src/components/Settings/useReportingPanelState.ts`
+35. `frontend-modern/src/utils/reportingPresentation.ts`
+36. `frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts`
+37. `tests/integration/tests/15-settings-shell-consistency.spec.ts`
+38. `frontend-modern/src/components/shared/PageControls.guardrails.test.ts`
+39. `frontend-modern/src/components/shared/TypeColumn.guardrails.test.ts`
+40. `frontend-modern/src/features/`
+41. `frontend-modern/src/components/SetupWizard/SetupWizard.tsx`
+42. `frontend-modern/src/components/SetupWizard/SetupCompletionPreview.tsx`
+43. `frontend-modern/src/components/SetupWizard/__tests__/SetupWizard.test.tsx`
+44. `frontend-modern/src/components/SetupWizard/__tests__/SetupCompletionPreview.test.tsx`
+45. `frontend-modern/src/components/shared/MonitoredSystemLimitWarningBanner.tsx`
+46. `frontend-modern/src/components/Settings/SystemLogsPanel.tsx`
+47. `frontend-modern/src/features/operations/OperationsPageSurface.tsx`
+48. `frontend-modern/src/features/operations/operationsPageModel.ts`
+49. `frontend-modern/src/pages/Operations.tsx`
+50. `frontend-modern/src/pages/__tests__/Operations.helpers.test.ts`
 
 ## Shared Boundaries
 
@@ -173,6 +176,16 @@ top-level settings shell, while
 deployment-specific install guide, copy-command block, and update-channel/install
 model data. The panel shell must not rebuild copy-to-clipboard command cards or
 deployment instruction trees inline.
+
+The reporting operations surface now follows the same shell-state-model rule.
+`frontend-modern/src/components/Settings/ReportingPanel.tsx` stays the
+operations-panel shell, while
+`frontend-modern/src/components/Settings/useReportingPanelState.ts` owns the
+license/trial lifecycle and report generation flow,
+`frontend-modern/src/components/Settings/reportingPanelModel.ts` owns the
+request/range/filename model, and `frontend-modern/src/utils/reportingPresentation.ts`
+owns the user-facing range/status copy. The shell must not re-accumulate
+license bootstrapping, inline report API requests, or blob-download plumbing.
 
 General settings segmented selectors for theme preference and temperature unit
 must now also route through the shared `FilterButtonGroup` primitive instead of

@@ -8,3 +8,15 @@ export const REPORTING_RANGE_OPTIONS: readonly ReportingRangeOption[] = [
   { value: '7d', label: 'Last 7 Days' },
   { value: '30d', label: 'Last 30 Days' },
 ];
+
+export function getReportingGenerateSelectionRequiredMessage(): string {
+  return 'Please select at least one resource';
+}
+
+export function getReportingGenerateSuccessMessage(): string {
+  return 'Report generated successfully';
+}
+
+export function getReportingGenerateErrorMessage(): string {
+  return 'Failed to generate report';
+}

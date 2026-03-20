@@ -1,4 +1,4 @@
-import { createSignal, createEffect, Show, JSX } from 'solid-js';
+import { Show, JSX } from 'solid-js';
 import FileText from 'lucide-solid/icons/file-text';
 import Download from 'lucide-solid/icons/download';
 import BarChart from 'lucide-solid/icons/bar-chart';
@@ -6,31 +6,17 @@ import OperationsPanel from '@/components/Settings/OperationsPanel';
 import { CalloutCard } from '@/components/shared/CalloutCard';
 import { formField, formLabel, formHelpText, formControl } from '@/components/shared/Form';
 import { FilterButtonGroup, type FilterOption } from '@/components/shared/FilterButtonGroup';
-import { showSuccess, showWarning } from '@/utils/toast';
-import { apiFetch } from '@/utils/apiClient';
-import { ResourcePicker, type SelectedResource } from './ResourcePicker';
+import { ResourcePicker } from './ResourcePicker';
+import { trackUpgradeClicked } from '@/utils/upgradeMetrics';
+import { REPORTING_RANGE_OPTIONS } from '@/utils/reportingPresentation';
 import {
-  hasFeature,
-  licenseLoaded,
-  loadLicenseStatus,
-  getUpgradeActionUrlOrFallback,
-  startProTrial,
-  entitlements,
-} from '@/stores/license';
-import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/upgradeMetrics';
-import { toReportingResourceType } from '@/utils/reportingResourceTypes';
-import { REPORTING_RANGE_OPTIONS, type ReportingRangeOption } from '@/utils/reportingPresentation';
-import {
-  getProTrialStartedMessage,
-  getTrialAlreadyUsedMessage,
-  getTrialStartErrorMessage,
   getUpgradeActionButtonClass,
   UPGRADE_ACTION_LABEL,
   UPGRADE_TRIAL_LABEL,
   UPGRADE_TRIAL_LINK_CLASS,
 } from '@/utils/upgradePresentation';
-
-type ReportingRangeValue = ReportingRangeOption['value'];
+import { useReportingPanelState } from '@/components/Settings/useReportingPanelState';
+import { type ReportingRangeValue } from '@/components/Settings/reportingPanelModel';
 
 const REPORTING_RANGE_FILTER_OPTIONS: FilterOption<ReportingRangeValue>[] = REPORTING_RANGE_OPTIONS.map(
   (option) => ({
@@ -61,130 +47,26 @@ function FormField(props: FormFieldProps) {
 }
 
 export function ReportingPanel() {
-  const [selectedResources, setSelectedResources] = createSignal<SelectedResource[]>([]);
-  const [metricType, setMetricType] = createSignal('');
-  const [format, setFormat] = createSignal<'pdf' | 'csv'>('pdf');
-  const [range, setRange] = createSignal<ReportingRangeValue>('24h');
-  const [generating, setGenerating] = createSignal(false);
-  const [title, setTitle] = createSignal('');
-  const [startingTrial, setStartingTrial] = createSignal(false);
-
-  loadLicenseStatus();
-
-  const isLocked = () => licenseLoaded() && !hasFeature('advanced_reporting');
-  const canStartTrial = () => entitlements()?.trial_eligible !== false;
-
-  createEffect((wasVisible: boolean) => {
-    const visible = isLocked();
-    if (visible && !wasVisible) {
-      trackPaywallViewed('advanced_reporting', 'settings_reporting_panel');
-    }
-    return visible;
-  }, false);
-
-  const handleStartTrial = async () => {
-    if (startingTrial()) return;
-    setStartingTrial(true);
-    try {
-      const result = await startProTrial();
-      if (result?.outcome === 'redirect') {
-        window.location.href = result.actionUrl;
-        return;
-      }
-      showSuccess(getProTrialStartedMessage());
-    } catch (err) {
-      const statusCode = (err as { status?: number } | null)?.status;
-      if (statusCode === 409) {
-        showWarning(getTrialAlreadyUsedMessage());
-      } else {
-        showWarning(getTrialStartErrorMessage(err instanceof Error ? err.message : undefined));
-      }
-    } finally {
-      setStartingTrial(false);
-    }
-  };
-
-  const handleGenerate = async () => {
-    const resources = selectedResources();
-    if (resources.length === 0) {
-      showWarning('Please select at least one resource');
-      return;
-    }
-
-    setGenerating(true);
-    try {
-      const end = new Date().toISOString();
-      let start = new Date();
-      if (range() === '24h') start.setHours(start.getHours() - 24);
-      else if (range() === '7d') start.setDate(start.getDate() - 7);
-      else if (range() === '30d') start.setDate(start.getDate() - 30);
-
-      const startStr = start.toISOString();
-
-      let response: Response;
-      let filename: string;
-
-      if (resources.length === 1) {
-        const res = resources[0];
-        const params = new URLSearchParams({
-          resourceType: toReportingResourceType(res.type),
-          resourceId: res.id,
-          format: format(),
-          start: startStr,
-          end: end,
-          title: title() || `Pulse Report - ${res.name}`,
-        });
-
-        if (metricType()) {
-          params.append('metricType', metricType());
-        }
-
-        response = await apiFetch(`/api/admin/reports/generate?${params.toString()}`);
-        filename = `report-${res.name}-${new Date().toISOString().split('T')[0]}.${format()}`;
-      } else {
-        const body = {
-          resources: resources.map((r) => ({
-            resourceType: toReportingResourceType(r.type),
-            resourceId: r.id,
-          })),
-          format: format(),
-          start: startStr,
-          end: end,
-          title: title() || 'Pulse Fleet Report',
-          metricType: metricType() || undefined,
-        };
-
-        response = await apiFetch('/api/admin/reports/generate-multi', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-        });
-        filename = `fleet-report-${new Date().toISOString().split('T')[0]}.${format()}`;
-      }
-
-      if (!response.ok) {
-        const text = await response.text();
-        throw new Error(text || 'Failed to generate report');
-      }
-
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-
-      showSuccess('Report generated successfully');
-    } catch (err) {
-      console.error('Report generation error:', err);
-      showWarning(err instanceof Error ? err.message : 'Failed to generate report');
-    } finally {
-      setGenerating(false);
-    }
-  };
+  const {
+    canStartTrial,
+    format,
+    generating,
+    handleGenerate,
+    handleStartTrial,
+    isLocked,
+    isReportingEnabled,
+    metricType,
+    range,
+    selectedResources,
+    setFormat,
+    setMetricType,
+    setRange,
+    setSelectedResources,
+    setTitle,
+    startingTrial,
+    title,
+    upgradeActionUrl,
+  } = useReportingPanelState();
 
   return (
     <div class="space-y-6">
@@ -205,7 +87,7 @@ export function ReportingPanel() {
               </div>
               <div class="flex flex-col sm:flex-row items-center gap-2">
                 <a
-                  href={getUpgradeActionUrlOrFallback('advanced_reporting')}
+                  href={upgradeActionUrl()}
                   target="_blank"
                   rel="noopener noreferrer"
                   class={getUpgradeActionButtonClass()}
@@ -231,7 +113,7 @@ export function ReportingPanel() {
         </OperationsPanel>
       </Show>
 
-      <Show when={licenseLoaded() && hasFeature('advanced_reporting')}>
+      <Show when={isReportingEnabled()}>
         <OperationsPanel
           title="Detailed Reporting"
           description="Generate reports across infrastructure, workloads, storage, and backup resources."

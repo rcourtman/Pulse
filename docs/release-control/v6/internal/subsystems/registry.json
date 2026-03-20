@@ -1655,6 +1655,7 @@
         "frontend-modern/src/components/Settings/NetworkSettingsPanel.tsx",
         "frontend-modern/src/components/Settings/RecoverySettingsPanel.tsx",
         "frontend-modern/src/components/Settings/ReportingPanel.tsx",
+        "frontend-modern/src/components/Settings/reportingPanelModel.ts",
         "frontend-modern/src/components/Settings/SecurityAuthPanel.tsx",
         "frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx",
         "frontend-modern/src/components/Settings/Settings.tsx",
@@ -1670,12 +1671,14 @@
         "frontend-modern/src/components/Settings/useAuditLogPanelState.ts",
         "frontend-modern/src/components/Settings/useAuditWebhookPanelState.ts",
         "frontend-modern/src/components/Settings/useDiagnosticsPanelState.ts",
+        "frontend-modern/src/components/Settings/useReportingPanelState.ts",
         "frontend-modern/src/components/Settings/useSSOProvidersState.ts",
         "frontend-modern/src/components/SetupWizard/SetupCompletionPreview.tsx",
         "frontend-modern/src/components/SetupWizard/SetupWizard.tsx",
         "frontend-modern/src/features/operations/operationsPageModel.ts",
         "frontend-modern/src/features/operations/OperationsPageSurface.tsx",
-        "frontend-modern/src/pages/Operations.tsx"
+        "frontend-modern/src/pages/Operations.tsx",
+        "frontend-modern/src/utils/reportingPresentation.ts"
       ],
       "verification": {
         "allow_same_subsystem_tests": false,
@@ -1753,17 +1756,23 @@
             "match_prefixes": [],
             "match_files": [
               "frontend-modern/src/components/Settings/ReportingPanel.tsx",
+              "frontend-modern/src/components/Settings/reportingPanelModel.ts",
               "frontend-modern/src/components/Settings/SystemLogsPanel.tsx",
+              "frontend-modern/src/components/Settings/useReportingPanelState.ts",
               "frontend-modern/src/features/operations/operationsPageModel.ts",
               "frontend-modern/src/features/operations/OperationsPageSurface.tsx",
-              "frontend-modern/src/pages/Operations.tsx"
+              "frontend-modern/src/pages/Operations.tsx",
+              "frontend-modern/src/utils/reportingPresentation.ts"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/__tests__/App.architecture.test.ts",
+              "frontend-modern/src/components/Settings/__tests__/reportingPanelModel.test.ts",
+              "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
               "frontend-modern/src/pages/__tests__/Operations.helpers.test.ts",
-              "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts"
+              "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
+              "frontend-modern/src/utils/__tests__/reportingPresentation.test.ts"
             ]
           },
           {

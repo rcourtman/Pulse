@@ -45,6 +45,9 @@ import ssoProvidersPanelSource from '../SSOProvidersPanel.tsx?raw';
 import ssoProvidersStateSource from '../useSSOProvidersState.ts?raw';
 import ssoProvidersModelSource from '../ssoProvidersModel.ts?raw';
 import diagnosticsStateSource from '../useDiagnosticsPanelState.ts?raw';
+import reportingPanelModelSource from '../reportingPanelModel.ts?raw';
+import reportingPanelSource from '../ReportingPanel.tsx?raw';
+import reportingPanelStateSource from '../useReportingPanelState.ts?raw';
 import rolesPanelSource from '../RolesPanel.tsx?raw';
 import userAssignmentsPanelSource from '../UserAssignmentsPanel.tsx?raw';
 import { SETTINGS_HEADER_META } from '../settingsHeaderMeta';
@@ -75,8 +78,11 @@ const extractedModules = [
   '../DiagnosticsResultsPanel.tsx',
   '../CopyCommandBlock.tsx',
   '../UpdateInstallGuide.tsx',
+  '../ReportingPanel.tsx',
+  '../reportingPanelModel.ts',
   '../updatesSettingsModel.ts',
   '../useDiagnosticsPanelState.ts',
+  '../useReportingPanelState.ts',
   '../useSSOProvidersState.ts',
   '../ssoProvidersModel.ts',
   '../ProxmoxSettingsPanel.tsx',
@@ -394,6 +400,23 @@ describe('Settings architecture guardrails', () => {
     expect(diagnosticsModelSource).toContain('export function sanitizeDiagnosticsData');
     expect(diagnosticsModelSource).toContain('export function buildDiagnosticsExportFilename');
     expect(diagnosticsModelSource).toContain('export function formatUptime');
+  });
+
+  it('keeps the reporting shell behind extracted runtime and model owners', () => {
+    expect(reportingPanelSource).toContain('@/components/Settings/useReportingPanelState');
+    expect(reportingPanelSource).toContain('@/components/Settings/reportingPanelModel');
+    expect(reportingPanelSource).not.toContain('loadLicenseStatus()');
+    expect(reportingPanelSource).not.toContain('startProTrial()');
+    expect(reportingPanelSource).not.toContain("apiFetch('/api/admin/reports/generate");
+    expect(reportingPanelSource).not.toContain('window.URL.createObjectURL');
+    expect(reportingPanelStateSource).toContain('export const useReportingPanelState =');
+    expect(reportingPanelStateSource).toContain('loadLicenseStatus');
+    expect(reportingPanelStateSource).toContain('startProTrial');
+    expect(reportingPanelStateSource).toContain('buildReportingRequest');
+    expect(reportingPanelStateSource).toContain('getReportingGenerateSuccessMessage');
+    expect(reportingPanelModelSource).toContain('export function getReportingRangeStart');
+    expect(reportingPanelModelSource).toContain('export function buildReportingRequest');
+    expect(reportingPanelModelSource).toContain('export function buildReportingFilename');
   });
 
   it('keeps the audit log shell behind an extracted runtime owner', () => {
