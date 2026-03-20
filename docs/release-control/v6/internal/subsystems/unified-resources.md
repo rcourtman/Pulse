@@ -270,7 +270,11 @@ That discovery surface is now a compact support row with a one-line summary and
 an on-demand metadata panel, so the actionable web-interface path stays primary
 while deeper discovery inspection remains available without reading like a
 second peer overview surface.
-All overview support disclosures now use the same title-plus-summary header and
+The overview keeps host, service, investigation, and discovery detail as
+collapsed sibling disclosures under the primary summary, so the drawer keeps
+the top-level shape to `Summary` plus `Change history` before any secondary
+operational context appears.
+Those support surfaces still use the same title-plus-summary header and
 explicit reveal control without extra explanatory chrome, so the drawer signals
 secondary depth through one governed structure instead of repeating prose about
 what is "supporting" or "secondary" in each block.
