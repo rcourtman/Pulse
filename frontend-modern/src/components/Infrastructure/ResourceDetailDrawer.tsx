@@ -1141,7 +1141,10 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
             </div>
           </div>
 
-          <div data-testid="resource-secondary-sections" class="grid gap-3 sm:grid-cols-2">
+          <div
+            data-testid="resource-secondary-sections"
+            class="flex flex-wrap gap-3 [&>*]:flex-1 [&>*]:basis-[calc(50%-0.375rem)] [&>*]:min-w-[260px] [&>*]:max-w-full [&>*]:overflow-hidden"
+          >
             <div
               data-testid="resource-change-history-section"
               class="h-full rounded border border-border bg-surface p-3 shadow-sm"
@@ -1373,18 +1376,18 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
               </div>
             </div>
 
-          <Show when={hasServiceDetails()}>
-            <SupportDisclosure
-              title="Service details"
-              summary={serviceDetailsSummary()}
-            expanded={showServiceDetails()}
-            onToggle={() => setShowServiceDetails((value) => !value)}
-            showLabel="Show service details"
-            hideLabel="Hide service details"
-            class="h-full"
-            contentClass="mt-3 space-y-3"
-            dataTestId="resource-service-details-section"
-            >
+            <Show when={hasServiceDetails()}>
+              <SupportDisclosure
+                title="Service details"
+                summary={serviceDetailsSummary()}
+                expanded={showServiceDetails()}
+                onToggle={() => setShowServiceDetails((value) => !value)}
+                showLabel="Show service details"
+                hideLabel="Hide service details"
+                class="h-full"
+                contentClass="mt-3 space-y-3"
+                dataTestId="resource-service-details-section"
+              >
                   <Show when={props.resource.type === 'docker-host'}>
                     <div class="rounded border border-sky-200 bg-sky-50 p-3 dark:border-sky-700 dark:bg-sky-900">
                       <div class="mb-2 flex items-center justify-between gap-2">
@@ -1792,22 +1795,21 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                       );
                     }}
                   </Show>
-            </SupportDisclosure>
-          </Show>
-        </div>
+              </SupportDisclosure>
+            </Show>
 
-          <Show when={hasHostDetails()}>
-          <SupportDisclosure
-            title="Host details"
-            summary={hostDetailSummary()}
-            expanded={showHostDetails()}
-            onToggle={() => setShowHostDetails((value) => !value)}
-            showLabel="Show host details"
-            hideLabel="Hide host details"
-            class="h-full"
-            contentClass="mt-3 grid gap-3 sm:grid-cols-2"
-            dataTestId="resource-host-details-section"
-          >
+            <Show when={hasHostDetails()}>
+              <SupportDisclosure
+                title="Host details"
+                summary={hostDetailSummary()}
+                expanded={showHostDetails()}
+                onToggle={() => setShowHostDetails((value) => !value)}
+                showLabel="Show host details"
+                hideLabel="Hide host details"
+                class="h-full"
+                contentClass="mt-3 flex flex-wrap gap-3 [&>*]:flex-1 [&>*]:basis-[calc(50%-0.375rem)] [&>*]:min-w-[220px] [&>*]:max-w-full [&>*]:overflow-hidden"
+                dataTestId="resource-host-details-section"
+              >
                 <Show when={proxmoxNode()}>
                   {(node) => (
                     <>
@@ -1829,21 +1831,21 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                     </>
                   )}
                 </Show>
-          </SupportDisclosure>
-        </Show>
+              </SupportDisclosure>
+            </Show>
 
-          <Show when={hasInvestigationContext()}>
-          <SupportDisclosure
-            title="Investigation context"
-            summary={investigationContextSummary()}
-            expanded={showInvestigationContext()}
-            onToggle={() => setShowInvestigationContext((value) => !value)}
-            showLabel="Show context"
-            hideLabel="Hide context"
-            class="h-full"
-            contentClass="mt-3 space-y-3"
-            dataTestId="resource-investigation-context"
-          >
+            <Show when={hasInvestigationContext()}>
+              <SupportDisclosure
+                title="Investigation context"
+                summary={investigationContextSummary()}
+                expanded={showInvestigationContext()}
+                onToggle={() => setShowInvestigationContext((value) => !value)}
+                showLabel="Show context"
+                hideLabel="Hide context"
+                class="h-full"
+                contentClass="mt-3 space-y-3"
+                dataTestId="resource-investigation-context"
+              >
                 <Show when={resourceIntelligence()}>
                   {(intel) => (
                     <div class="space-y-1.5 text-[11px]">
@@ -1961,10 +1963,11 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                     </Show>
                   </div>
                 </Show>
-          </SupportDisclosure>
-        </Show>
+              </SupportDisclosure>
+            </Show>
+          </div>
 
-        <Show when={discoveryConfig()}>
+          <Show when={discoveryConfig()}>
           {(config) => (
             <div class="space-y-2">
               <WebInterfaceUrlField

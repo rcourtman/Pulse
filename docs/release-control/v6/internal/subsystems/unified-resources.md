@@ -325,13 +325,13 @@ Type-specific Docker, PBS, and PMG operational panels now also live inside a
 collapsed `Service details` support block, so lane-specific controls and
 breakdowns stay available without displacing the common runtime and identity
 hierarchy on first read.
-The drawer’s secondary support sections now share a responsive two-column
-card grid, so change history, service details, host details, investigation
-context, and discovery context read side by side on wider screens instead of
-as a single full-width stack.
-Host details uses that same grid pattern inside the disclosure for the system,
-hardware, storage, and network cards, so the drawer matches the shared
-workload-card density instead of stretching those cards one per row.
+The drawer’s secondary support sections now share the same responsive
+flex-wrap card-group pattern used by the workloads drawer, so change history,
+service details, host details, investigation context, and discovery context
+read side by side on wider screens instead of as a single full-width stack.
+Host details uses that same flex-wrap pattern inside the disclosure for the
+system, hardware, storage, and network cards, so the drawer matches the
+shared workload-card density instead of stretching those cards one per row.
 When `Service details` is expanded, each service card remains summary-first and
 pushes heavier breakdowns or update controls behind one more service-local
 reveal, so the opened state still scans as current state before deeper

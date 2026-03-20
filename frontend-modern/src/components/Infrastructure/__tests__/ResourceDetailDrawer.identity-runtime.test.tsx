@@ -224,15 +224,14 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     await waitFor(() => {
       expect(getByText('Hardware')).toBeInTheDocument();
     });
-    expect(getByTestId('resource-secondary-sections').classList.contains('grid')).toBe(true);
+    expect(getByTestId('resource-secondary-sections').classList.contains('flex')).toBe(true);
     expect(
-      getByTestId('resource-secondary-sections').classList.contains('sm:grid-cols-2'),
+      getByTestId('resource-secondary-sections').classList.contains('flex-wrap'),
     ).toBe(true);
-    expect(getByTestId('resource-host-details-section').querySelector('.mt-3.grid.gap-3')).toBeTruthy();
+    expect(getByTestId('resource-host-details-section').querySelector('.mt-3.flex.flex-wrap')).toBeTruthy();
     expect(
-      getByTestId('resource-host-details-section').querySelector('.mt-3.grid.gap-3')?.classList.contains('sm:grid-cols-2'),
+      getByTestId('resource-host-details-section').querySelector('.mt-3.flex.flex-wrap')?.classList.contains('[&>*]:min-w-[220px]'),
     ).toBe(true);
-    expect(getByTestId('resource-host-details-section').querySelector('.mt-3.flex.flex-wrap')).toBeNull();
     expect(getByText('Network')).toBeInTheDocument();
     expect(getByText('Disks')).toBeInTheDocument();
     expect(getByText('eth0')).toBeInTheDocument();
