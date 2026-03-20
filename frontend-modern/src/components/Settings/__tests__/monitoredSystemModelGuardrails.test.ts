@@ -71,7 +71,9 @@ import resourceBadgePresentationSource from '@/utils/resourceBadgePresentation.t
 import recoveryComponentSource from '@/components/Recovery/Recovery.tsx?raw';
 import recoveryActivitySectionSource from '@/components/Recovery/RecoveryActivitySection.tsx?raw';
 import recoveryHistorySectionSource from '@/components/Recovery/RecoveryHistorySection.tsx?raw';
+import recoveryHistoryTableSource from '@/components/Recovery/RecoveryHistoryTable.tsx?raw';
 import recoveryProtectedInventorySectionSource from '@/components/Recovery/RecoveryProtectedInventorySection.tsx?raw';
+import recoveryHistorySectionStateSource from '@/components/Recovery/useRecoveryHistorySectionState.ts?raw';
 import recoveryTablePresentationSource from '@/utils/recoveryTablePresentation.ts?raw';
 import problemResourcesTableSource from '@/pages/DashboardPanels/ProblemResourcesTable.tsx?raw';
 import workloadTypeBadgesSource from '@/components/shared/workloadTypeBadges.ts?raw';
@@ -110,6 +112,8 @@ const recoverySource = [
   recoveryProtectedInventorySectionSource,
   recoveryActivitySectionSource,
   recoveryHistorySectionSource,
+  recoveryHistoryTableSource,
+  recoveryHistorySectionStateSource,
 ].join('\n');
 
 describe('monitored-system model guardrails', () => {

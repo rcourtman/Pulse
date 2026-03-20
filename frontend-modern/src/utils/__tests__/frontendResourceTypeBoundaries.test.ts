@@ -30,7 +30,9 @@ import recoverySummarySource from '@/components/Recovery/RecoverySummary.tsx?raw
 import recoveryComponentSource from '@/components/Recovery/Recovery.tsx?raw';
 import recoveryActivitySectionSource from '@/components/Recovery/RecoveryActivitySection.tsx?raw';
 import recoveryHistorySectionSource from '@/components/Recovery/RecoveryHistorySection.tsx?raw';
+import recoveryHistoryTableSource from '@/components/Recovery/RecoveryHistoryTable.tsx?raw';
 import recoveryProtectedInventorySectionSource from '@/components/Recovery/RecoveryProtectedInventorySection.tsx?raw';
+import recoveryHistorySectionStateSource from '@/components/Recovery/useRecoveryHistorySectionState.ts?raw';
 import recoverySurfaceStateSource from '@/features/recovery/useRecoverySurfaceState.ts?raw';
 import dashboardRecoverySource from '@/hooks/useDashboardRecovery.ts?raw';
 import recoveryOutcomePresentationSource from '@/utils/recoveryOutcomePresentation.ts?raw';
@@ -267,6 +269,8 @@ const recoverySource = [
   recoveryProtectedInventorySectionSource,
   recoveryActivitySectionSource,
   recoveryHistorySectionSource,
+  recoveryHistoryTableSource,
+  recoveryHistorySectionStateSource,
 ].join('\n');
 import rolesPanelSource from '@/components/Settings/RolesPanel.tsx?raw';
 import auditWebhookPanelSource from '@/components/Settings/AuditWebhookPanel.tsx?raw';
@@ -429,6 +433,11 @@ describe('frontend resource type boundaries', () => {
       "import { useRecoverySurfaceState } from '@/features/recovery/useRecoverySurfaceState';",
     );
     expect(recoveryComponentSource).toContain('useRecoverySurfaceState');
+    expect(recoveryHistorySectionSource).toContain('useRecoveryHistorySectionState');
+    expect(recoveryHistorySectionSource).toContain('RecoveryHistoryTable');
+    expect(recoveryHistorySectionStateSource).toContain(
+      'export function useRecoveryHistorySectionState',
+    );
     expect(recoverySource).not.toContain('parseRecoveryLinkSearch');
     expect(recoverySource).not.toContain('buildRecoveryPath');
     expect(recoverySource).not.toContain('useRecoveryRollups');
