@@ -220,8 +220,11 @@ export const filterIncidentEvents = (
   if (!events || events.length === 0) {
     return [];
   }
-  if (filters.size === 0 || filters.size === INCIDENT_EVENT_TYPES.length) {
+  if (filters.size === INCIDENT_EVENT_TYPES.length) {
     return events;
+  }
+  if (filters.size === 0) {
+    return [];
   }
   return events.filter((event) => filters.has(event.type));
 };

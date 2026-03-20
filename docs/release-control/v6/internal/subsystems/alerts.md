@@ -119,6 +119,13 @@ route through `frontend-modern/src/utils/alertIncidentPresentation.ts`
 instead of keeping duplicate timeline card structure inline in the alerts
 page and overview timelines.
 
+Expanded alert incident detail now also routes through
+`frontend-modern/src/components/Alerts/IncidentTimelinePanel.tsx` and
+`frontend-modern/src/components/Alerts/IncidentEventFilters.tsx` so the
+overview surface and the history table share the same loading/error states,
+canonical timeline meta row, note editor, and event-filter controls instead
+of maintaining two independent incident-detail implementations.
+
 Resource incident panel cards, summary rows, and toggle-button presentation
 now also route through `frontend-modern/src/utils/alertIncidentPresentation.ts`
 instead of remaining inline inside `frontend-modern/src/pages/Alerts.tsx`.

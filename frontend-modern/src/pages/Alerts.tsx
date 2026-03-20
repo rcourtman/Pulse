@@ -34,6 +34,8 @@ import { SearchInput } from '@/components/shared/SearchInput';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 
 import { EmailProviderSelect } from '@/components/Alerts/EmailProviderSelect';
+import { IncidentEventFilters } from '@/components/Alerts/IncidentEventFilters';
+import { IncidentTimelinePanel } from '@/components/Alerts/IncidentTimelinePanel';
 import { WebhookConfig } from '@/components/Alerts/WebhookConfig';
 import { ThresholdsTable } from '@/components/Alerts/ThresholdsTable';
 import { InvestigateAlertButton } from '@/components/Alerts/InvestigateAlertButton';
@@ -64,17 +66,9 @@ import type { EmailConfig, AppriseConfig } from '@/api/notifications';
 import { pbsInstanceFromResource, pmgInstanceFromResource } from '@/utils/resourceStateAdapters';
 import { isAppContainerDiscoveryResourceType } from '@/utils/discoveryTarget';
 import { getActionableAgentIdFromResource, hasAgentFacet } from '@/utils/agentResources';
-import { IncidentTimelineEventCard } from '@/components/Alerts/IncidentTimelineEventCard';
 import {
   getAlertHistoryStatusPresentation,
-  getAlertIncidentAcknowledgedBadgeClass,
-  getAlertIncidentEventFilterActionButtonClass,
-  getAlertIncidentEventFilterChipClass,
-  getAlertIncidentEventFilterContainerClass,
-  getAlertIncidentEventFilterLabelClass,
   getAlertIncidentLevelBadgeClass,
-  getAlertIncidentNoteSaveButtonClass,
-  getAlertIncidentNoteTextareaClass,
   getAlertIncidentTimelineHeadingClass,
   getAlertIncidentTimelineMetaRowClass,
   getAlertIncidentTimelineOutputClass,
@@ -89,10 +83,8 @@ import {
   getAlertResourceIncidentLoadingState,
   getAlertResourceIncidentNoteSaveFailure,
   getAlertResourceIncidentNoteSavedLabel,
-  getAlertResourceIncidentNotePlaceholder,
   getAlertResourceIncidentPanelTitle,
   getAlertResourceIncidentRefreshLabel,
-  getAlertResourceIncidentSaveNoteLabel,
   getAlertResourceIncidentSummaryRowClass,
   getAlertResourceIncidentTimelineFailure,
   getAlertResourceIncidentToggleLabel,
@@ -197,11 +189,6 @@ import {
   getAlertHistoryLoadingState,
   getAlertHistoryEmptyState,
   getAlertHistorySearchPlaceholder,
-  getAlertTimelineEmptyState,
-  getAlertTimelineFailureState,
-  getAlertTimelineFilterEmptyState,
-  getAlertTimelineLoadingState,
-  getAlertTimelineUnavailableState,
 } from '@/utils/alertOverviewPresentation';
 import {
   ALERT_CONFIG_COOLDOWN_DESCRIPTION,
@@ -285,7 +272,6 @@ import {
   type EscalationNotifyTarget,
   INCIDENT_EVENT_TYPES,
   GROUPING_WINDOW_DEFAULT_SECONDS,
-  INCIDENT_EVENT_LABELS,
   summarizeIncidentEvents,
   fallbackCooldownMinutes,
   clampCooldownMinutes,
@@ -3830,55 +3816,6 @@ function ScheduleTab(props: ScheduleTabProps) {
   );
 }
 
-export function IncidentEventFilters(props: {
-  filters: () => Set<string>;
-  setFilters: (next: Set<string>) => void;
-}) {
-  const toggleFilter = (type: (typeof INCIDENT_EVENT_TYPES)[number]) => {
-    const next = new Set(props.filters());
-    if (next.has(type)) {
-      next.delete(type);
-    } else {
-      next.add(type);
-    }
-    props.setFilters(next);
-  };
-
-  return (
-    <div class={getAlertIncidentEventFilterContainerClass('compact')}>
-      <span class={getAlertIncidentEventFilterLabelClass('compact')}>Filters</span>
-      <button
-        type="button"
-        class={getAlertIncidentEventFilterActionButtonClass()}
-        onClick={() => props.setFilters(new Set(INCIDENT_EVENT_TYPES))}
-      >
-        All
-      </button>
-      <button
-        type="button"
-        class={getAlertIncidentEventFilterActionButtonClass()}
-        onClick={() => props.setFilters(new Set())}
-      >
-        None
-      </button>
-      <For each={INCIDENT_EVENT_TYPES}>
-        {(type) => {
-          const selected = () => props.filters().has(type);
-          return (
-            <button
-              type="button"
-              class={getAlertIncidentEventFilterChipClass(selected(), 'compact')}
-              onClick={() => toggleFilter(type)}
-            >
-              {INCIDENT_EVENT_LABELS[type]}
-            </button>
-          );
-        }}
-      </For>
-    </div>
-  );
-}
-
 // History Tab - Comprehensive alert table
 function HistoryTab(props: {
   hasAIAlertsFeature: () => boolean;
@@ -4984,6 +4921,8 @@ function HistoryTab(props: {
                     <IncidentEventFilters
                       filters={resourceIncidentEventFilters}
                       setFilters={setResourceIncidentEventFilters}
+                      variant="compact"
+                      showQuickSelection
                     />
                   </div>
                 </Show>
@@ -5369,157 +5308,33 @@ function HistoryTab(props: {
                                   >
                                     <TableRow class="bg-surface-alt border-b border-border">
                                       <TableCell colspan={11} class="p-3">
-                                        <Show when={incidentLoading()[rowKey]}>
-                                          <p class="text-xs text-muted">
-                                            {getAlertTimelineLoadingState().text}
-                                          </p>
-                                        </Show>
-                                        <Show when={!incidentLoading()[rowKey]}>
-                                          <Show when={incidentTimelines()[rowKey]}>
-                                            {(timeline) => (
-                                              <div class="space-y-3">
-                                                <div class={getAlertIncidentTimelineMetaRowClass()}>
-                                                  <span class={getAlertIncidentTimelineHeadingClass()}>
-                                                    Incident
-                                                  </span>
-                                                  <span>{timeline().status}</span>
-                                                  <Show when={timeline().acknowledged}>
-                                                    <span
-                                                      class={getAlertIncidentAcknowledgedBadgeClass()}
-                                                    >
-                                                      acknowledged
-                                                    </span>
-                                                  </Show>
-                                                  <Show when={timeline().openedAt}>
-                                                    <span>
-                                                      opened{' '}
-                                                      {new Date(
-                                                        timeline().openedAt,
-                                                      ).toLocaleString()}
-                                                    </span>
-                                                  </Show>
-                                                  <Show when={timeline().closedAt}>
-                                                    <span>
-                                                      closed{' '}
-                                                      {new Date(
-                                                        timeline().closedAt as string,
-                                                      ).toLocaleString()}
-                                                    </span>
-                                                  </Show>
-                                                </div>
-                                                {(() => {
-                                                  const events = timeline().events || [];
-                                                  const filteredEvents = filterIncidentEvents(
-                                                    events,
-                                                    historyIncidentEventFilters(),
-                                                  );
-                                                  return (
-                                                    <>
-                                                      <Show when={events.length > 0}>
-                                                        <IncidentEventFilters
-                                                          filters={historyIncidentEventFilters}
-                                                          setFilters={
-                                                            setHistoryIncidentEventFilters
-                                                          }
-                                                        />
-                                                      </Show>
-                                                      <Show when={filteredEvents.length > 0}>
-                                                        <div class="space-y-2">
-                                                          <For each={filteredEvents}>
-                                                            {(event) => (
-                                                              <IncidentTimelineEventCard
-                                                                event={event}
-                                                                variant="surface"
-                                                              />
-                                                            )}
-                                                          </For>
-                                                        </div>
-                                                      </Show>
-                                                      <Show
-                                                        when={
-                                                          events.length > 0 &&
-                                                          filteredEvents.length === 0
-                                                        }
-                                                      >
-                                                        <p class="text-xs text-muted">
-                                                          {getAlertTimelineFilterEmptyState().text}
-                                                        </p>
-                                                      </Show>
-                                                      <Show when={events.length === 0}>
-                                                        <p class="text-xs text-muted">
-                                                          {getAlertTimelineEmptyState().text}
-                                                        </p>
-                                                      </Show>
-                                                    </>
-                                                  );
-                                                })()}
-                                                <div class="flex flex-col gap-2">
-                                                  <textarea
-                                                    class={getAlertIncidentNoteTextareaClass()}
-                                                    rows={2}
-                                                    placeholder={getAlertResourceIncidentNotePlaceholder()}
-                                                    value={incidentNoteDrafts()[rowKey] || ''}
-                                                    onInput={(e) => {
-                                                      const value = e.currentTarget.value;
-                                                      setIncidentNoteDrafts((prev) => ({
-                                                        ...prev,
-                                                        [rowKey]: value,
-                                                      }));
-                                                    }}
-                                                  />
-                                                  <div class="flex justify-end">
-                                                    <button
-                                                      class={getAlertIncidentNoteSaveButtonClass()}
-                                                      disabled={
-                                                        incidentNoteSaving().has(rowKey) ||
-                                                        !(incidentNoteDrafts()[rowKey] || '').trim()
-                                                      }
-                                                      onClick={() => {
-                                                        void saveIncidentNote(
-                                                          rowKey,
-                                                          alert.id,
-                                                          alert.startTime,
-                                                        );
-                                                      }}
-                                                    >
-                                                      {getAlertResourceIncidentSaveNoteLabel(
-                                                        incidentNoteSaving().has(rowKey),
-                                                      )}
-                                                    </button>
-                                                  </div>
-                                                </div>
-                                              </div>
-                                            )}
-                                          </Show>
-                                          <Show when={!incidentTimelines()[rowKey]}>
-                                            <Show
-                                              when={incidentErrors()[rowKey]}
-                                              fallback={
-                                                <p class="text-xs text-muted">
-                                                  {getAlertTimelineUnavailableState().text}
-                                                </p>
-                                              }
-                                            >
-                                              <div class="flex items-center gap-2">
-                                                <p class="text-xs text-error">
-                                                  {getAlertTimelineFailureState().text}
-                                                </p>
-                                                <button
-                                                  class="text-xs text-primary hover:underline"
-                                                  onClick={() =>
-                                                    loadIncidentTimeline(
-                                                      rowKey,
-                                                      alert.id,
-                                                      alert.startTime,
-                                                    )
-                                                  }
-                                                >
-                                                  {getAlertTimelineFailureState().actionLabel}
-                                                </button>
-                                              </div>
-                                            </Show>
-                                          </Show>
-                                        </Show>
+                                        <IncidentTimelinePanel
+                                          loading={incidentLoading()[rowKey]}
+                                          error={incidentErrors()[rowKey]}
+                                          timeline={incidentTimelines()[rowKey]}
+                                          filters={historyIncidentEventFilters}
+                                          setFilters={setHistoryIncidentEventFilters}
+                                          filterVariant="compact"
+                                          eventCardVariant="surface"
+                                          noteDraft={incidentNoteDrafts()[rowKey] || ''}
+                                          onNoteDraftChange={(value) =>
+                                            setIncidentNoteDrafts((prev) => ({
+                                              ...prev,
+                                              [rowKey]: value,
+                                            }))
+                                          }
+                                          noteSaving={incidentNoteSaving().has(rowKey)}
+                                          onSaveNote={() => {
+                                            void saveIncidentNote(rowKey, alert.id, alert.startTime);
+                                          }}
+                                          onRetry={() => {
+                                            void loadIncidentTimeline(
+                                              rowKey,
+                                              alert.id,
+                                              alert.startTime,
+                                            );
+                                          }}
+                                        />
                                       </TableCell>
                                     </TableRow>
                                   </Show>

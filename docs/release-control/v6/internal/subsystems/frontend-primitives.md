@@ -144,6 +144,12 @@ Alert incident timeline event card structure must also route through
 alerts page and overview timeline share one canonical event-card renderer
 instead of reimplementing the same summary/detail/output block twice.
 
+The full expanded alert incident detail panel and event-filter controls must
+also route through `frontend-modern/src/components/Alerts/IncidentTimelinePanel.tsx`
+and `frontend-modern/src/components/Alerts/IncidentEventFilters.tsx` rather
+than rebuilding loading/error copy, filter controls, note-editor wiring, or
+event-card composition separately inside the alerts page and overview tab.
+
 Resource incident panel card and summary-row presentation must also route
 through `frontend-modern/src/utils/alertIncidentPresentation.ts` instead of
 maintaining page-local incident panel styling inside

@@ -5,13 +5,13 @@ import { useLocation } from '@solidjs/router';
 import type { Incident } from '@/types/api';
 
 import { AlertsAPI } from '@/api/alerts';
-import type { Alert, IncidentEvent } from '@/types/api';
+import type { Alert } from '@/types/api';
 import type { Override } from './types';
 import { alertTypeDisplayLabel } from './helpers';
 import { getCanonicalAlertId } from './identity';
 import { Card } from '@/components/shared/Card';
 import { SectionHeader } from '@/components/shared/SectionHeader';
-import { IncidentTimelineEventCard } from '@/components/Alerts/IncidentTimelineEventCard';
+import { IncidentTimelinePanel } from '@/components/Alerts/IncidentTimelinePanel';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import {
@@ -23,89 +23,8 @@ import {
   getAlertOverviewPrimaryActionClass,
   getAlertOverviewSecondaryActionClass,
   getAlertOverviewStartedAtClass,
-  getAlertTimelineEmptyState,
-  getAlertTimelineFailureState,
-  getAlertTimelineFilterEmptyState,
-  getAlertTimelineLoadingState,
-  getAlertTimelineUnavailableState,
 } from '@/utils/alertOverviewPresentation';
-import {
-  getAlertIncidentAcknowledgedBadgeClass,
-  getAlertIncidentEventFilterChipClass,
-  getAlertIncidentEventFilterContainerClass,
-  getAlertIncidentEventFilterLabelClass,
-  getAlertIncidentNoteSaveButtonClass,
-  getAlertIncidentNoteTextareaClass,
-  getAlertIncidentTimelineHeadingClass,
-  getAlertIncidentTimelineMetaRowClass,
-  getAlertResourceIncidentNotePlaceholder,
-  getAlertResourceIncidentSaveNoteLabel,
-} from '@/utils/alertIncidentPresentation';
-
-const INCIDENT_EVENT_TYPES = [
-  'alert_fired',
-  'alert_acknowledged',
-  'alert_unacknowledged',
-  'alert_resolved',
-  'ai_analysis',
-  'command',
-  'runbook',
-  'note',
-] as const;
-
-const INCIDENT_EVENT_LABELS: Record<(typeof INCIDENT_EVENT_TYPES)[number], string> = {
-  alert_fired: 'Fired',
-  alert_acknowledged: 'Ack',
-  alert_unacknowledged: 'Unack',
-  alert_resolved: 'Resolved',
-  ai_analysis: 'Patrol',
-  command: 'Cmd',
-  runbook: 'Runbook',
-  note: 'Note',
-};
-
-function filterIncidentEvents(
-  events: IncidentEvent[] | undefined,
-  filters: Set<string>,
-): IncidentEvent[] {
-  if (!events) return [];
-  if (filters.size === 0) return events;
-  return events.filter((e) => filters.has(e.type));
-}
-
-function IncidentEventFilters(props: {
-  filters: () => Set<string>;
-  setFilters: (next: Set<string>) => void;
-}) {
-  const toggleFilter = (type: (typeof INCIDENT_EVENT_TYPES)[number]) => {
-    const next = new Set(props.filters());
-    if (next.has(type)) {
-      next.delete(type);
-    } else {
-      next.add(type);
-    }
-    props.setFilters(next);
-  };
-
-  return (
-    <div class={getAlertIncidentEventFilterContainerClass('panel')}>
-      <span class={getAlertIncidentEventFilterLabelClass('panel')}>Filter events:</span>
-      <For each={INCIDENT_EVENT_TYPES}>
-        {(type) => {
-          const selected = () => props.filters().has(type);
-          return (
-            <button
-              onClick={() => toggleFilter(type)}
-              class={getAlertIncidentEventFilterChipClass(selected(), 'panel')}
-            >
-              {INCIDENT_EVENT_LABELS[type]}
-            </button>
-          );
-        }}
-      </For>
-    </div>
-  );
-}
+import { INCIDENT_EVENT_TYPES } from './types';
 
 // Overview Tab - Shows current alert status
 export function OverviewTab(props: {
@@ -679,133 +598,29 @@ export function OverviewTab(props: {
                   </div>
                   <Show when={expandedIncidents().has(getCanonicalAlertId(alert))}>
                     <div class="mt-3 border-t border-border pt-3">
-                      <Show when={incidentLoading()[getCanonicalAlertId(alert)]}>
-                        <p class="text-xs text-muted">{getAlertTimelineLoadingState().text}</p>
-                      </Show>
-                      <Show when={!incidentLoading()[getCanonicalAlertId(alert)]}>
-                        <Show when={incidentTimelines()[getCanonicalAlertId(alert)]}>
-                          {(timeline) => (
-                            <div class="space-y-3">
-                              <div class={getAlertIncidentTimelineMetaRowClass()}>
-                                <span class={getAlertIncidentTimelineHeadingClass()}>Incident</span>
-                                <span>{timeline().status}</span>
-                                <Show when={timeline().acknowledged}>
-                                  <span class={getAlertIncidentAcknowledgedBadgeClass()}>
-                                    acknowledged
-                                  </span>
-                                </Show>
-                                <Show when={timeline().openedAt}>
-                                  <span>
-                                    opened {new Date(timeline().openedAt).toLocaleString()}
-                                  </span>
-                                </Show>
-                                <Show when={timeline().closedAt}>
-                                  <span>
-                                    closed{' '}
-                                    {new Date(timeline().closedAt as string).toLocaleString()}
-                                  </span>
-                                </Show>
-                              </div>
-                              {(() => {
-                                const events = timeline().events || [];
-                                const filteredEvents = filterIncidentEvents(
-                                  events,
-                                  incidentEventFilters(),
-                                );
-                                return (
-                                  <>
-                                    <Show when={events.length > 0}>
-                                      <IncidentEventFilters
-                                        filters={incidentEventFilters}
-                                        setFilters={setIncidentEventFilters}
-                                      />
-                                    </Show>
-                                    <Show when={filteredEvents.length > 0}>
-                                      <div class="space-y-2">
-                                        <For each={filteredEvents}>
-                                          {(event) => (
-                                            <IncidentTimelineEventCard event={event} variant="alt" />
-                                          )}
-                                        </For>
-                                      </div>
-                                    </Show>
-                                    <Show when={events.length > 0 && filteredEvents.length === 0}>
-                                      <p class="text-xs text-muted">
-                                        {getAlertTimelineFilterEmptyState().text}
-                                      </p>
-                                    </Show>
-                                    <Show when={events.length === 0}>
-                                      <p class="text-xs text-muted">
-                                        {getAlertTimelineEmptyState().text}
-                                      </p>
-                                    </Show>
-                                  </>
-                                );
-                              })()}
-                              <div class="flex flex-col gap-2">
-                                <textarea
-                                  class={getAlertIncidentNoteTextareaClass()}
-                                  rows={2}
-                                  placeholder={getAlertResourceIncidentNotePlaceholder()}
-                                  value={incidentNoteDrafts()[getCanonicalAlertId(alert)] || ''}
-                                  onInput={(e) => {
-                                    const value = e.currentTarget.value;
-                                    setIncidentNoteDrafts((prev) => ({
-                                      ...prev,
-                                      [getCanonicalAlertId(alert)]: value,
-                                    }));
-                                  }}
-                                />
-                                <div class="flex justify-end">
-                                  <button
-                                    class={getAlertIncidentNoteSaveButtonClass()}
-                                    disabled={
-                                      incidentNoteSaving().has(getCanonicalAlertId(alert)) ||
-                                      !(
-                                        incidentNoteDrafts()[getCanonicalAlertId(alert)] || ''
-                                      ).trim()
-                                    }
-                                    onClick={() => {
-                                      void saveIncidentNote(
-                                        getCanonicalAlertId(alert),
-                                        alert.startTime,
-                                      );
-                                    }}
-                                  >
-                                    {getAlertResourceIncidentSaveNoteLabel(
-                                      incidentNoteSaving().has(getCanonicalAlertId(alert)),
-                                    )}
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
-                          )}
-                        </Show>
-                        <Show when={!incidentTimelines()[getCanonicalAlertId(alert)]}>
-                          <Show
-                            when={incidentErrors()[getCanonicalAlertId(alert)]}
-                            fallback={
-                              <p class="text-xs text-muted">
-                                {getAlertTimelineUnavailableState().text}
-                              </p>
-                            }
-                          >
-                            <div class="flex items-center gap-2">
-                              <p class="text-xs text-error">
-                                {getAlertTimelineFailureState().text}
-                              </p>
-                              <button
-                                class="text-xs text-primary hover:underline"
-                                onClick={() =>
-                                  loadIncidentTimeline(getCanonicalAlertId(alert), alert.startTime)
-                                }
-                              >
-                                {getAlertTimelineFailureState().actionLabel}
-                              </button>
-                            </div>
-                          </Show>
-                        </Show>
-                      </Show>
+                      <IncidentTimelinePanel
+                        loading={incidentLoading()[getCanonicalAlertId(alert)]}
+                        error={incidentErrors()[getCanonicalAlertId(alert)]}
+                        timeline={incidentTimelines()[getCanonicalAlertId(alert)]}
+                        filters={incidentEventFilters}
+                        setFilters={setIncidentEventFilters}
+                        filterVariant="panel"
+                        eventCardVariant="alt"
+                        noteDraft={incidentNoteDrafts()[getCanonicalAlertId(alert)] || ''}
+                        onNoteDraftChange={(value) =>
+                          setIncidentNoteDrafts((prev) => ({
+                            ...prev,
+                            [getCanonicalAlertId(alert)]: value,
+                          }))
+                        }
+                        noteSaving={incidentNoteSaving().has(getCanonicalAlertId(alert))}
+                        onSaveNote={() => {
+                          void saveIncidentNote(getCanonicalAlertId(alert), alert.startTime);
+                        }}
+                        onRetry={() => {
+                          void loadIncidentTimeline(getCanonicalAlertId(alert), alert.startTime);
+                        }}
+                      />
                     </div>
                   </Show>
                   </div>

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   ALERT_TAB_SEGMENTS,
+  filterIncidentEvents,
   pathForTab,
   summarizeIncidentEvents,
   tabFromPath,
@@ -292,6 +293,30 @@ describe('incident timeline presentation helpers', () => {
 });
 
 describe('incident event summaries', () => {
+  it('treats a fully selected filter set as all events and an empty set as no events', () => {
+    const events = [
+      { id: '1', type: 'alert_fired', timestamp: '2026-03-20T10:00:00Z', summary: 'Fired' },
+      { id: '2', type: 'note', timestamp: '2026-03-20T10:01:00Z', summary: 'Noted' },
+    ];
+
+    expect(
+      filterIncidentEvents(
+        events,
+        new Set([
+          'alert_fired',
+          'alert_acknowledged',
+          'alert_unacknowledged',
+          'alert_resolved',
+          'ai_analysis',
+          'command',
+          'runbook',
+          'note',
+        ]),
+      ),
+    ).toEqual(events);
+    expect(filterIncidentEvents(events, new Set())).toEqual([]);
+  });
+
   it('summarizes incident events in canonical order and retains unknown event types', () => {
     expect(
       summarizeIncidentEvents([
