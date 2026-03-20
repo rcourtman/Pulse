@@ -273,6 +273,7 @@ import configuredNodeStatusPresentationSource from '@/utils/configuredNodeStatus
 import rbacPresentationSource from '@/utils/rbacPresentation.ts?raw';
 import upgradePresentationSource from '@/utils/upgradePresentation.ts?raw';
 import agentProfilesPanelSource from '@/components/Settings/AgentProfilesPanel.tsx?raw';
+import agentProfilesPanelStateSource from '@/components/Settings/useAgentProfilesPanelState.ts?raw';
 import agentProfilesPresentationSource from '@/utils/agentProfilesPresentation.ts?raw';
 import agentProfileSuggestionPresentationSource from '@/utils/agentProfileSuggestionPresentation.ts?raw';
 import organizationAccessPanelSource from '@/components/Settings/OrganizationAccessPanel.tsx?raw';
@@ -799,7 +800,8 @@ describe('frontend resource type boundaries', () => {
     expect(reportingPanelSource).not.toContain('window.URL.createObjectURL');
     expect(rolesPanelSource).toContain('@/utils/upgradePresentation');
     expect(userAssignmentsPanelSource).toContain('@/utils/upgradePresentation');
-    expect(agentProfilesPanelSource).toContain('@/utils/upgradePresentation');
+    expect(agentProfilesPanelSource).toContain('./useAgentProfilesPanelState');
+    expect(agentProfilesPanelStateSource).toContain('@/utils/upgradePresentation');
     expect(agentProfilesPanelSource).toContain('@/utils/agentProfilesPresentation');
     expect(agentProfilesPanelSource).toContain('getAgentProfilesEmptyState');
     expect(agentProfilesPanelSource).toContain('getAgentProfileAssignmentsEmptyState');

@@ -110,6 +110,9 @@ import unifiedAgentStatusPresentationSource from '@/utils/unifiedAgentStatusPres
 import unifiedAgentInventoryPresentationSource from '@/utils/unifiedAgentInventoryPresentation.ts?raw';
 import relayPresentationSource from '@/utils/relayPresentation.ts?raw';
 import relaySettingsPanelSource from '../RelaySettingsPanel.tsx?raw';
+import proxmoxDeleteNodeDialogSource from '../ProxmoxDeleteNodeDialog.tsx?raw';
+import proxmoxDirectConnectionsCardSource from '../ProxmoxDirectConnectionsCard.tsx?raw';
+import proxmoxDiscoveryResultsCardSource from '../ProxmoxDiscoveryResultsCard.tsx?raw';
 import proxmoxSettingsPanelSource from '../ProxmoxSettingsPanel.tsx?raw';
 import relayOnboardingCardSource from '@/components/Dashboard/RelayOnboardingCard.tsx?raw';
 import generalSettingsPanelSource from '../GeneralSettingsPanel.tsx?raw';
@@ -298,9 +301,16 @@ describe('monitored-system model guardrails', () => {
     expect(relaySettingsPanelSource).not.toContain('const connectionStatusVariant =');
     expect(relaySettingsPanelSource).not.toContain('const connectionStatusText =');
     expect(relaySettingsPanelSource).not.toContain('Loading configuration...');
-    expect(proxmoxSettingsPanelSource).toContain('getSettingsConfigurationLoadingState');
     expect(proxmoxSettingsPanelSource).toContain('CalloutCard');
     expect(proxmoxSettingsPanelSource).not.toContain('Loading configuration...');
+    expect(proxmoxSettingsPanelSource).toContain('./ProxmoxDirectConnectionsCard');
+    expect(proxmoxSettingsPanelSource).toContain('./ProxmoxDiscoveryResultsCard');
+    expect(proxmoxSettingsPanelSource).toContain('./ProxmoxDeleteNodeDialog');
+    expect(proxmoxSettingsPanelSource).not.toContain('No discovery matches for this Proxmox type yet.');
+    expect(proxmoxSettingsPanelSource).not.toContain('What happens next');
+    expect(proxmoxDirectConnectionsCardSource).toContain('getSettingsConfigurationLoadingState');
+    expect(proxmoxDiscoveryResultsCardSource).toContain('formatRelativeTime');
+    expect(proxmoxDeleteNodeDialogSource).toContain('SectionHeader');
     expect(relayOnboardingCardSource).toContain('@/utils/relayPresentation');
     expect(relayOnboardingCardSource).toContain('RELAY_ONBOARDING_TITLE');
     expect(relayOnboardingCardSource).toContain('RELAY_ONBOARDING_DESCRIPTION');

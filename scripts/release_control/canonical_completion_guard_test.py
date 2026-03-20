@@ -1838,6 +1838,48 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
             ],
         )
 
+    def _assert_direct_proxmox_workspace_change_requires_agent_lifecycle(
+        self, touched_path: str
+    ) -> None:
+        required = infer_impacted_subsystems([touched_path])
+        self.assertEqual(set(required), {"agent-lifecycle"})
+
+        lifecycle = required["agent-lifecycle"]
+        self.assertEqual(
+            lifecycle["contract"],
+            "docs/release-control/v6/internal/subsystems/agent-lifecycle.md",
+        )
+        self.assertEqual(lifecycle["touched_runtime_files"], [touched_path])
+        self.assertEqual(
+            lifecycle["verification_requirements"],
+            [
+                {
+                    "id": "direct-proxmox-workspace-surface",
+                    "label": "direct Proxmox workspace lifecycle proof",
+                    "touched_runtime_files": [touched_path],
+                    "allow_same_subsystem_tests": False,
+                    "test_prefixes": [],
+                    "exact_files": [
+                        "frontend-modern/src/components/Settings/__tests__/InfrastructureWorkspace.test.tsx",
+                        "frontend-modern/src/components/Settings/__tests__/UnifiedAgents.test.tsx",
+                        "frontend-modern/src/components/Settings/__tests__/monitoredSystemModelGuardrails.test.ts",
+                        "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
+                        "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
+                    ],
+                }
+            ],
+        )
+
+    def test_proxmox_settings_panel_change_requires_agent_lifecycle(self):
+        self._assert_direct_proxmox_workspace_change_requires_agent_lifecycle(
+            "frontend-modern/src/components/Settings/ProxmoxSettingsPanel.tsx"
+        )
+
+    def test_infrastructure_settings_state_change_requires_agent_lifecycle(self):
+        self._assert_direct_proxmox_workspace_change_requires_agent_lifecycle(
+            "frontend-modern/src/components/Settings/useInfrastructureSettingsState.ts"
+        )
+
     def test_agent_install_backend_change_requires_lifecycle_and_api_contracts(self):
         required = infer_impacted_subsystems(["internal/api/agent_install_command_shared.go"])
         self.assertEqual(set(required), {"agent-lifecycle", "api-contracts"})

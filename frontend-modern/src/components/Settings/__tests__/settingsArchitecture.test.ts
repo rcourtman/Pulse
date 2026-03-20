@@ -43,6 +43,10 @@ import organizationOverviewPanelSource from '../OrganizationOverviewPanel.tsx?ra
 import organizationAccessPanelSource from '../OrganizationAccessPanel.tsx?raw';
 import organizationSharingPanelSource from '../OrganizationSharingPanel.tsx?raw';
 import organizationBillingPanelSource from '../OrganizationBillingPanel.tsx?raw';
+import proxmoxDeleteNodeDialogSource from '../ProxmoxDeleteNodeDialog.tsx?raw';
+import proxmoxDirectConnectionsCardSource from '../ProxmoxDirectConnectionsCard.tsx?raw';
+import proxmoxDiscoveryResultsCardSource from '../ProxmoxDiscoveryResultsCard.tsx?raw';
+import proxmoxSettingsPanelSource from '../ProxmoxSettingsPanel.tsx?raw';
 import securityOverviewPanelSource from '../SecurityOverviewPanel.tsx?raw';
 import securityAuthPanelSource from '../SecurityAuthPanel.tsx?raw';
 import ssoProvidersPanelSource from '../SSOProvidersPanel.tsx?raw';
@@ -93,6 +97,9 @@ const extractedModules = [
   '../useSSOProvidersState.ts',
   '../ssoProvidersModel.ts',
   '../ProxmoxSettingsPanel.tsx',
+  '../ProxmoxDeleteNodeDialog.tsx',
+  '../ProxmoxDirectConnectionsCard.tsx',
+  '../ProxmoxDiscoveryResultsCard.tsx',
   '../SettingsDialogs.tsx',
   '../SettingsPageShell.tsx',
   '../useDiscoverySettingsState.ts',
@@ -303,6 +310,20 @@ describe('Settings architecture guardrails', () => {
     const settingsLineCount = settingsSource.trimEnd().split(/\r?\n/).length;
 
     expect(settingsLineCount).toBeLessThanOrEqual(maxSettingsLines);
+  });
+
+  it('keeps the direct Proxmox settings workspace split into section owners', () => {
+    expect(proxmoxSettingsPanelSource).toContain('./ProxmoxDirectConnectionsCard');
+    expect(proxmoxSettingsPanelSource).toContain('./ProxmoxDiscoveryResultsCard');
+    expect(proxmoxSettingsPanelSource).toContain('./ProxmoxDeleteNodeDialog');
+    expect(proxmoxSettingsPanelSource).not.toContain('No discovery matches for this Proxmox type yet.');
+    expect(proxmoxSettingsPanelSource).not.toContain('What happens next');
+    expect(proxmoxDirectConnectionsCardSource).toContain('getSettingsConfigurationLoadingState');
+    expect(proxmoxDiscoveryResultsCardSource).toContain('Discovery issues:');
+    expect(proxmoxDiscoveryResultsCardSource).toContain(
+      'No discovery matches for this Proxmox type yet. You can still add a direct',
+    );
+    expect(proxmoxDeleteNodeDialogSource).toContain('What happens next');
   });
 
   it('uses lazy() imports for panel components in settingsPanelRegistry', async () => {
