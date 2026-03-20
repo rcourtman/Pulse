@@ -92,8 +92,8 @@ describe('ResourceDetailDrawer service cards', () => {
 
     expect(getByText('Service details')).toBeInTheDocument();
     expect(getByText('2 datastores · 3 jobs')).toBeInTheDocument();
+    expect(getByText('Platform ID')).toBeInTheDocument();
     expect(queryByText('PBS Service')).toBeNull();
-    fireEvent.click(getByRole('button', { name: 'Show details' }));
     fireEvent.click(getByRole('button', { name: 'Show service details' }));
     const serviceDetails = within(getByTestId('resource-service-details-section'));
     expect(serviceDetails.getByText('PBS')).toBeInTheDocument();
@@ -145,6 +145,7 @@ describe('ResourceDetailDrawer service cards', () => {
 
     expect(getByText('Service details')).toBeInTheDocument();
     expect(getByText('519 queue total · 16 backlog')).toBeInTheDocument();
+    expect(getByText('Platform ID')).toBeInTheDocument();
     expect(queryByText('Mail Gateway')).toBeNull();
     fireEvent.click(getByRole('button', { name: 'Show service details' }));
     const serviceDetails = within(getByTestId('resource-service-details-section'));
@@ -152,7 +153,6 @@ describe('ResourceDetailDrawer service cards', () => {
     expect(serviceDetails.queryByText('Connection')).toBeNull();
     expect(serviceDetails.getAllByText('State').length).toBeGreaterThan(0);
     expect(serviceDetails.getAllByText('pmg-main.local').length).toBeGreaterThan(0);
-    fireEvent.click(getByRole('button', { name: 'Show details' }));
     expect(queryByText('Mail flow summary')).toBeNull();
     expect(queryByText('Queue breakdown')).toBeNull();
     expect(queryByText('Mail processing')).toBeNull();

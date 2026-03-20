@@ -117,7 +117,9 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
       },
     });
 
-    const { getByRole, getByText } = render(() => <ResourceDetailDrawer resource={resource} />);
+    const { getByRole, getByText, queryByRole } = render(() => (
+      <ResourceDetailDrawer resource={resource} />
+    ));
 
     expect(getByText('Summary')).toBeInTheDocument();
     expect(getByText('Current state')).toBeInTheDocument();
@@ -125,11 +127,9 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     expect(getByText('2/2 healthy')).toBeInTheDocument();
     expect(getByText('Mode')).toBeInTheDocument();
     expect(getByText('Hybrid')).toBeInTheDocument();
-    expect(getByText('Details')).toBeInTheDocument();
-    expect(getByRole('button', { name: 'Show details' })).toBeInTheDocument();
-    fireEvent.click(getByRole('button', { name: 'Show details' }));
     expect(getByText('Platform ID')).toBeInTheDocument();
     expect(getByText('Quick links')).toBeInTheDocument();
+    expect(queryByRole('button', { name: 'Show details' })).toBeNull();
     expect(() => getByText('Runtime')).toThrow();
     expect(getByRole('link', { name: 'Open related workloads for host-1' })).toHaveTextContent(
       'Workloads',
@@ -240,8 +240,9 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     expect(getAllByText('PMG').length).toBeGreaterThan(0);
     expect(getByText('Mode')).toBeInTheDocument();
     expect(getByText('API')).toBeInTheDocument();
-    expect(getByText('Details')).toBeInTheDocument();
-    expect(queryByText('Operational context')).toBeNull();
+    expect(getByText('Platform ID')).toBeInTheDocument();
+    expect(queryByText('Details')).toBeNull();
+    expect(queryByText('Show details')).toBeNull();
   });
 
   it('shows identity aliases and fallback message when identity metadata is sparse', () => {
@@ -264,13 +265,11 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
       },
     });
 
-    const { getByRole, getByText, getAllByText, queryByText } = render(() => (
+    const { getByText, getAllByText, queryByText } = render(() => (
       <ResourceDetailDrawer resource={resource} />
     ));
 
     expect(getByText('Identity')).toBeInTheDocument();
-    expect(getByText('Details')).toBeInTheDocument();
-    fireEvent.click(getByRole('button', { name: 'Show details' }));
     expect(getByText('Aliases')).toBeInTheDocument();
     expect(getAllByText('pmg-main').length).toBeGreaterThan(0);
     expect(queryByText('No identity metadata yet.')).toBeNull();
@@ -318,14 +317,12 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
       },
     });
 
-    const { container, getByRole, getByText, getAllByText } = render(() => (
+    const { container, getByText, getAllByText } = render(() => (
       <ResourceDetailDrawer resource={resource} />
     ));
 
     expect(getByText('Metrics Target')).toBeInTheDocument();
     expect(getAllByText('docker-host:docker-host-1').length).toBeGreaterThan(1);
-    expect(getByText('Details')).toBeInTheDocument();
-    fireEvent.click(getByRole('button', { name: 'Show details' }));
     expect(getByText('Aliases')).toBeInTheDocument();
     expect(getAllByText('docker-host-1').length).toBeGreaterThan(0);
     expect(container.querySelector('.text-\\[11px\\].text-muted.truncate')?.textContent).toBe(
@@ -351,8 +348,6 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     });
 
     const inlineRender = render(() => <ResourceDetailDrawer resource={inlineResource} />);
-    expect(inlineRender.getByText('Details')).toBeInTheDocument();
-    fireEvent.click(inlineRender.getByRole('button', { name: 'Show details' }));
     expect(inlineRender.getByText('Aliases')).toBeInTheDocument();
     expect(inlineRender.container.querySelector('details')).toBeNull();
     expect(inlineRender.getByText('agent-inline-1')).toBeInTheDocument();
@@ -382,8 +377,6 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     });
 
     const overflowRender = render(() => <ResourceDetailDrawer resource={overflowResource} />);
-    expect(overflowRender.getByText('Details')).toBeInTheDocument();
-    fireEvent.click(overflowRender.getByRole('button', { name: 'Show details' }));
     expect(overflowRender.getByText('Aliases')).toBeInTheDocument();
     expect(overflowRender.container.querySelector('details')).toBeTruthy();
   });

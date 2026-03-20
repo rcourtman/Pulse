@@ -218,9 +218,9 @@ describe('ResourceDetailDrawer change history section', () => {
       screen.queryByText('Supporting metadata only. The web interface path above stays primary.'),
     ).toBeNull();
     expect(screen.getByRole('button', { name: 'Show metadata' })).toBeInTheDocument();
-    expect(screen.getByText('Details')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Show details' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Show details' }));
+    expect(screen.queryByText('Details')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Show details' })).toBeNull();
+    expect(screen.getByText('Platform ID')).toBeInTheDocument();
     expect(screen.getByText('Tags')).toBeInTheDocument();
     expect(
       within(changeHistorySection).queryByText('Filterable event history for this resource.'),
@@ -287,8 +287,6 @@ describe('ResourceDetailDrawer change history section', () => {
 
     render(() => <ResourceDetailDrawer resource={resource} />);
 
-    expect(screen.getByText('Details')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Show details' }));
     expect(screen.getByText('Aliases')).toBeInTheDocument();
   });
 

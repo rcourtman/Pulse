@@ -269,8 +269,9 @@ badges only, while workload/service drill-down links and Kubernetes platform
 signals live with the summary shell, so the top strip does not compete with
 the resource name, status, or primary identity line.
 Inside that summary shell, the operational and supporting context rows stay
-inline instead of sitting in nested bordered cards, so the first read stays
-like one linear sheet rather than a stack of cards inside the summary.
+inline instead of sitting in a collapsed `Details` disclosure or nested
+bordered cards, so the first read stays like one linear sheet rather than a
+stack of cards inside the summary.
 Discovery support now also lives inside overview-only `Discovery context`
 instead of a peer drawer tab, so supplemental discovery detail stays available
 without claiming the same navigation weight as runtime, identity, or
@@ -292,12 +293,12 @@ Host and node system or hardware cards now also live behind a collapsed
 cards, so runtime status, identity, and next investigation steps stay first
 while deeper machine detail remains available on demand.
 Within that summary shell, current-state facts now stay in the primary summary
-while a single collapsed `Details` disclosure owns platform IDs, quick links,
-platform-signal badges, aliases, IPs, and tags, so first read remains
-status-first and identity-first instead of mixing state with supporting action
-surfaces.
-That disclosure stays label-first and only opens when asked, so the summary
-answers the main resource question before the supporting metadata appears.
+while platform IDs, quick links, platform-signal badges, aliases, IPs, and
+tags render inline as supporting rows, so first read remains status-first and
+identity-first instead of mixing state with hidden supporting action surfaces.
+Those rows stay label-first and only expand when a specific value, like alias
+overflow, needs its own reveal, so the summary answers the main resource
+question before deeper metadata appears.
 When the identity side has no owned rows or supporting labels yet, the sparse
 fallback now stays terse (`No identity metadata yet.`) so empty state chrome
 does not read heavier than the data it is standing in for.
