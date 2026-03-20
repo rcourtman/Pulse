@@ -258,10 +258,16 @@ not compete for the same ownership on first read.
 The overview now begins with one primary `Summary` shell instead of separate
 peer `Runtime` and `Identity` cards, so current state and canonical identity
 read as one first-screen answer rather than two adjacent mini-surfaces.
+That summary shell now reads as one linear current-state and identity column
+instead of a split two-pane grid, so the first read stays sequential rather
+than asking the operator to compare two side-by-side blocks.
 The drawer header now stays focused on canonical identity and source/type
 badges only, while workload/service drill-down links and Kubernetes platform
 signals live with the summary shell, so the top strip does not compete with
 the resource name, status, or primary identity line.
+Inside that summary shell, the operational and supporting context rows stay
+inline instead of sitting in nested bordered cards, so the first read stays
+like one linear sheet rather than a stack of cards inside the summary.
 Discovery support now also lives inside overview-only `Discovery context`
 instead of a peer drawer tab, so supplemental discovery detail stays available
 without claiming the same navigation weight as runtime, identity, or
