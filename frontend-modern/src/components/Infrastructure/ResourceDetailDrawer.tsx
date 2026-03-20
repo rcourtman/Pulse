@@ -1,12 +1,4 @@
-import {
-  Show,
-  Suspense,
-  createMemo,
-  For,
-  createSignal,
-  createEffect,
-  createResource,
-} from 'solid-js';
+import { Show, Suspense, For } from 'solid-js';
 import type { Component, JSX } from 'solid-js';
 import type {
   Resource,
@@ -14,27 +6,10 @@ import type {
   ResourceChangeSourceAdapter,
   ResourceChangeSourceType,
 } from '@/types/resource';
-import { requiresGovernedResourceDisplay } from '@/types/resource';
-import { formatUptime, formatRelativeTime, formatAbsoluteTime } from '@/utils/format';
+import { formatUptime, formatRelativeTime } from '@/utils/format';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { Card } from '@/components/shared/Card';
 import { TagBadges } from '@/components/Dashboard/TagBadges';
-import { getAgentStatusIndicator } from '@/utils/status';
-import {
-  getPlatformBadge,
-  getSourceBadge,
-  getTypeBadge,
-  getUnifiedSourceBadges,
-} from '@/utils/resourceBadgePresentation';
-import { buildWorkloadsHref } from './workloadsLink';
-import { buildServiceDetailLinks } from './serviceDetailLinks';
-import {
-  getPrimaryResourceIdentity,
-  getPrimaryResourceIdentityRows,
-  getResourceIdentityAliases,
-  getPreferredResourceClusterName,
-  getPreferredResourceDisplayName,
-} from '@/utils/resourceIdentity';
 import { SystemInfoCard } from '@/components/shared/cards/SystemInfoCard';
 import { HardwareCard } from '@/components/shared/cards/HardwareCard';
 import { RootDiskCard } from '@/components/shared/cards/RootDiskCard';
@@ -42,7 +17,6 @@ import { NetworkInterfacesCard } from '@/components/shared/cards/NetworkInterfac
 import { DisksCard } from '@/components/shared/cards/DisksCard';
 import { TemperaturesCard } from '@/components/shared/cards/TemperaturesCard';
 import { RaidCard } from '@/components/shared/cards/RaidCard';
-import { createLocalStorageBooleanSignal, STORAGE_KEYS } from '@/utils/localStorage';
 import { getDiscoveryLoadingState } from '@/utils/discoveryPresentation';
 import { ReportMergeModal } from './ReportMergeModal';
 import { DiscoveryTab } from '@/components/Discovery/DiscoveryTab';
@@ -50,16 +24,10 @@ import { PMGInstanceDrawer } from '@/components/PMG/PMGInstanceDrawer';
 import { K8sDeploymentsDrawer } from '@/components/Kubernetes/K8sDeploymentsDrawer';
 import { K8sNamespacesDrawer } from '@/components/Kubernetes/K8sNamespacesDrawer';
 import { MonitoringAPI } from '@/api/monitoring';
-import { AIAPI } from '@/api/ai';
-import { areSystemSettingsLoaded, shouldHideDockerUpdateActions } from '@/stores/systemSettings';
 import { SwarmServicesDrawer } from '@/components/Docker/SwarmServicesDrawer';
 import { WebInterfaceUrlField } from '@/components/shared/WebInterfaceUrlField';
 import { getServiceHealthPresentation } from '@/utils/serviceHealthPresentation';
-import { ResourceAPI } from '@/api/resources';
 import {
-  getResourcePolicyBadges,
-  getResourcePolicyDisplayLabel,
-  getResourcePolicyRedactionLabels,
   getResourceRoutingScopeLabel,
   getResourceSensitivityLabel,
 } from '@/utils/resourcePolicyPresentation';
@@ -76,28 +44,15 @@ import {
 } from '@/utils/resourceChangePresentation';
 import { formatConfidenceLabel } from '@/utils/confidencePresentation';
 import { formatIdentifierLabel } from '@/utils/textPresentation';
-import type { ResourceIntelligence } from '@/types/aiIntelligence';
 import { buildInfrastructureResourceHref } from '@/routing/resourceLinks';
+import { formatInteger, formatSourceType } from './resourceDetailMappers';
+import { useResourceDetailDrawerState } from './useResourceDetailDrawerState';
 
 interface ResourceDetailDrawerProps {
   resource: Resource;
   onClose?: () => void;
   resolveResourceLabel?: (resourceId: string) => string | null | undefined;
 }
-
-import {
-  type AgentPlatformData,
-  type KubernetesPlatformData,
-  type PlatformData,
-  type DockerPlatformData,
-  toDiscoveryConfig,
-  toNodeFromProxmox,
-  toAgentFromResource,
-  buildTemperatureRows,
-  formatInteger,
-  ALIAS_COLLAPSE_THRESHOLD,
-  formatSourceType,
-} from './resourceDetailMappers';
 
 const hasMetadataEntries = (value?: Record<string, unknown> | null): boolean =>
   Boolean(value && Object.keys(value).length > 0);
@@ -201,620 +156,124 @@ const timelineSourceAdapterOptions: Array<{
 ];
 
 const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
-  type DrawerTab =
-    | 'overview'
-    | 'mail'
-    | 'namespaces'
-    | 'deployments'
-    | 'swarm'
-    | 'debug';
-  const [activeTab, setActiveTab] = createSignal<DrawerTab>('overview');
-  const [debugEnabled] = createLocalStorageBooleanSignal(STORAGE_KEYS.DEBUG_MODE, false);
-  const [copied, setCopied] = createSignal(false);
-  const [showReportModal, setShowReportModal] = createSignal(false);
-  const [showInvestigationContext, setShowInvestigationContext] = createSignal(false);
-  const [showCorrelationContext, setShowCorrelationContext] = createSignal(false);
-  const [showDiscoveryContext, setShowDiscoveryContext] = createSignal(false);
-  const [showHostDetails, setShowHostDetails] = createSignal(false);
-  const [showServiceDetails, setShowServiceDetails] = createSignal(false);
-  const [showDockerUpdateControls, setShowDockerUpdateControls] = createSignal(false);
-  const [showPbsJobDetail, setShowPbsJobDetail] = createSignal(false);
-  const [showPmgMailFlowDetail, setShowPmgMailFlowDetail] = createSignal(false);
-
-  const displayName = createMemo(() => getPreferredResourceDisplayName(props.resource));
-  const kubernetesClusterName = createMemo(() =>
-    getPreferredResourceClusterName(props.resource) ?? '',
-  );
-  const resolveResourceLabel = (resourceId: string): string =>
-    props.resolveResourceLabel?.(resourceId)?.trim() || resourceId;
-  const statusIndicator = createMemo(() =>
-    getAgentStatusIndicator({ status: props.resource.status }),
-  );
-  const lastSeen = createMemo(() => formatRelativeTime(props.resource.lastSeen));
-  const lastSeenAbsolute = createMemo(() => formatAbsoluteTime(props.resource.lastSeen));
-
-  const platformBadge = createMemo(() => getPlatformBadge(props.resource.platformType));
-  const sourceBadge = createMemo(() => getSourceBadge(props.resource.sourceType));
-  const typeBadge = createMemo(() => getTypeBadge(props.resource.type));
-  const unifiedSourceBadges = createMemo(() => {
-    const platformData = props.resource.platformData as PlatformData | undefined;
-    return getUnifiedSourceBadges(platformData?.sources ?? []);
-  });
-  const hasUnifiedSources = createMemo(() => unifiedSourceBadges().length > 0);
-  const policyBadges = createMemo(() => getResourcePolicyBadges(props.resource.policy));
-  const policyRedactions = createMemo(() =>
-    getResourcePolicyRedactionLabels(props.resource.policy),
-  );
-  const governanceSummary = createMemo(() =>
-    requiresGovernedResourceDisplay(props.resource.policy)
-      ? getResourcePolicyDisplayLabel(props.resource)
-      : props.resource.aiSafeSummary?.trim() ?? '',
-  );
-  const hasGovernanceData = createMemo(
-    () => policyBadges().length > 0 || Boolean(governanceSummary()),
-  );
-  const platformData = createMemo(() => props.resource.platformData as PlatformData | undefined);
-  const agentMeta = createMemo(
-    () => props.resource.agent ?? (platformData()?.agent as AgentPlatformData | undefined),
-  );
-  const kubernetesMeta = createMemo(
-    () =>
-      props.resource.kubernetes ??
-      (platformData()?.kubernetes as KubernetesPlatformData | undefined),
-  );
-  const kubernetesCapabilityBadges = createMemo(() => {
-    const capabilities = kubernetesMeta()?.metricCapabilities;
-    if (!capabilities) return [];
-
-    const supportedBadge =
-      'inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-cyan-100 text-cyan-700 dark:bg-cyan-900 dark:text-cyan-400';
-    const unsupportedBadge =
-      'inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-surface-alt text-muted';
-    const badges: { label: string; classes: string; title: string }[] = [];
-
-    if (capabilities.nodeCpuMemory) {
-      badges.push({
-        label: 'K8s Node CPU/Memory',
-        classes: supportedBadge,
-        title: 'Node CPU and memory metrics are available.',
-      });
-    }
-    if (capabilities.nodeTelemetry) {
-      badges.push({
-        label: 'Node Telemetry (Agent)',
-        classes: supportedBadge,
-        title: 'Linked Pulse agent provides node uptime, temperature, disk, network, and disk I/O.',
-      });
-    }
-    if (capabilities.podCpuMemory) {
-      badges.push({
-        label: 'Pod CPU/Memory',
-        classes: supportedBadge,
-        title: 'Pod CPU and memory metrics are available.',
-      });
-    }
-    if (capabilities.podNetwork) {
-      badges.push({
-        label: 'Pod Network',
-        classes: supportedBadge,
-        title: 'Pod network throughput is available.',
-      });
-    }
-    if (capabilities.podEphemeralDisk) {
-      badges.push({
-        label: 'Pod Ephemeral Disk',
-        classes: supportedBadge,
-        title: 'Pod ephemeral storage usage is available.',
-      });
-    }
-    if (!capabilities.podDiskIo) {
-      badges.push({
-        label: 'Pod Disk I/O Unsupported',
-        classes: unsupportedBadge,
-        title:
-          'Pod disk read/write throughput is not collected by the Kubernetes integration path today.',
-      });
-    }
-
-    return badges;
-  });
-
-  const proxmoxNode = createMemo(() => toNodeFromProxmox(props.resource));
-  const agentInfo = createMemo(() => toAgentFromResource(props.resource, agentMeta()));
-  const temperatureRows = createMemo(() => buildTemperatureRows(agentInfo()?.sensors));
-
-  const dockerHostData = createMemo(() => platformData()?.docker as DockerPlatformData | undefined);
-  const dockerHostSourceId = createMemo(
-    () => (dockerHostData()?.hostSourceId || '').trim() || null,
-  );
-  const dockerUpdatesAvailable = createMemo(() => dockerHostData()?.updatesAvailableCount ?? 0);
-  const dockerContainerCount = createMemo(() => dockerHostData()?.containerCount ?? 0);
-  const dockerUpdatesCheckedRelative = createMemo(() => {
-    const raw = dockerHostData()?.updatesLastCheckedAt;
-    if (!raw) return '';
-    const parsed = Date.parse(raw);
-    if (!Number.isFinite(parsed)) return '';
-    return formatRelativeTime(parsed);
-  });
-  const dockerHostCommand = createMemo(() => dockerHostData()?.command);
-  const dockerHostCommandActive = createMemo(() => {
-    const status = (dockerHostCommand()?.status || '').trim().toLowerCase();
-    return ['queued', 'dispatched', 'acknowledged', 'in_progress'].includes(status);
-  });
-  const dockerUpdateActionsDisabled = createMemo(() => shouldHideDockerUpdateActions());
-  const dockerUpdateActionsLoading = createMemo(() => !areSystemSettingsLoaded());
-
-  const [dockerActionError, setDockerActionError] = createSignal<string>('');
-  const [dockerActionNote, setDockerActionNote] = createSignal<string>('');
-  const [confirmUpdateAll, setConfirmUpdateAll] = createSignal(false);
-  const [dockerActionBusy, setDockerActionBusy] = createSignal(false);
-  const dockerSwarmInfo = createMemo(() => dockerHostData()?.swarm);
-  const dockerSwarmClusterKey = createMemo(() => {
-    const swarm = dockerSwarmInfo();
-    return (swarm?.clusterName || swarm?.clusterId || '').trim();
-  });
-
-  const [k8sDeploymentsPrefillNamespace, setK8sDeploymentsPrefillNamespace] = createSignal('');
-  const resourceFacetId = createMemo(() => props.resource.id.trim());
-  const [timelineKindFilter, setTimelineKindFilter] = createSignal<ResourceChangeKind | ''>('');
-  const [timelineSourceTypeFilter, setTimelineSourceTypeFilter] = createSignal<
-    ResourceChangeSourceType | ''
-  >('');
-  const [timelineSourceAdapterFilter, setTimelineSourceAdapterFilter] = createSignal<
-    ResourceChangeSourceAdapter | ''
-  >('');
-  const resourceFacetRequest = createMemo(() => {
-    const id = resourceFacetId();
-    return id ? { id } : null;
-  });
-  const [resourceFacets, { refetch: refetchResourceFacets }] = createResource(
-    resourceFacetRequest,
-    async (request) => {
-      if (!request?.id) return null;
-      return ResourceAPI.getFacetBundle(request.id, { limit: 25 });
-    },
-    { initialValue: null },
-  );
-  const [resourceIntelligence] = createResource(
-    resourceFacetRequest,
-    async (request) => {
-      if (!request?.id) return null;
-      return AIAPI.getResourceIntelligence(request.id);
-    },
-    { initialValue: null as ResourceIntelligence | null },
-  );
-  const resourceDependencies = createMemo(() => resourceIntelligence()?.dependencies ?? []);
-  const resourceDependents = createMemo(() => resourceIntelligence()?.dependents ?? []);
-  const resourceCorrelations = createMemo(() => resourceIntelligence()?.correlations ?? []);
-  const hasCorrelationContext = createMemo(
-    () =>
-      resourceDependencies().length > 0 ||
-      resourceDependents().length > 0 ||
-      resourceCorrelations().length > 0,
-  );
-  const hasInvestigationContext = createMemo(
-    () => Boolean(resourceIntelligence()) || hasGovernanceData(),
-  );
-  const investigationContextSummary = createMemo(() => {
-    const intel = resourceIntelligence();
-    const summary: string[] = [];
-
-    if (intel) {
-      summary.push(`AI health ${intel.health.grade} · ${Math.round(intel.health.score)}/100`);
-    }
-    if (resourceCorrelations().length > 0) {
-      summary.push(
-        `${resourceCorrelations().length} correlation${resourceCorrelations().length === 1 ? '' : 's'}`,
-      );
-    }
-    if (props.resource.policy?.routing.scope) {
-      summary.push(`Routing ${getResourceRoutingScopeLabel(props.resource.policy.routing.scope)}`);
-    }
-
-    return summary.join(' · ');
-  });
-  const timelineFacetRequest = createMemo(() => {
-    const id = resourceFacetId();
-    if (!id) return null;
-    const kind = timelineKindFilter();
-    const sourceType = timelineSourceTypeFilter();
-    const sourceAdapter = timelineSourceAdapterFilter();
-    if (!kind && !sourceType && !sourceAdapter) return null;
-    return { id, kind, sourceType, sourceAdapter };
-  });
-  const [timelineFacets, { refetch: refetchTimelineFacets }] = createResource(
-    timelineFacetRequest,
-    async (request) => {
-      if (!request) return null;
-      return ResourceAPI.getFacetBundle(request.id, {
-        limit: 25,
-        kind: request.kind || undefined,
-        sourceType: request.sourceType || undefined,
-        sourceAdapter: request.sourceAdapter || undefined,
-      });
-    },
-    { initialValue: null },
-  );
-
-  const pbsData = createMemo(() => platformData()?.pbs);
-  const pmgData = createMemo(() => platformData()?.pmg);
-  const pbsJobTotal = createMemo(() => {
-    const pbs = pbsData();
-    if (!pbs) return 0;
-    return (
-      (pbs.backupJobCount || 0) +
-      (pbs.syncJobCount || 0) +
-      (pbs.verifyJobCount || 0) +
-      (pbs.pruneJobCount || 0) +
-      (pbs.garbageJobCount || 0)
-    );
-  });
-  const pmgQueueBacklog = createMemo(() => {
-    const pmg = pmgData();
-    if (!pmg) return 0;
-    return (pmg.queueDeferred || 0) + (pmg.queueHold || 0);
-  });
-  const pmgUpdatedRelative = createMemo(() => {
-    const raw = pmgData()?.lastUpdated;
-    if (!raw) return '';
-    const parsed = Date.parse(raw);
-    if (!Number.isFinite(parsed)) return '';
-    return formatRelativeTime(parsed);
-  });
-  const pbsJobBreakdown = createMemo(() => {
-    const pbs = pbsData();
-    if (!pbs) return [] as Array<{ label: string; value: number }>;
-    return [
-      { label: 'Backup', value: pbs.backupJobCount || 0 },
-      { label: 'Sync', value: pbs.syncJobCount || 0 },
-      { label: 'Verify', value: pbs.verifyJobCount || 0 },
-      { label: 'Prune', value: pbs.pruneJobCount || 0 },
-      { label: 'Garbage', value: pbs.garbageJobCount || 0 },
-    ];
-  });
-  const pbsVisibleJobBreakdown = createMemo(() => {
-    const all = pbsJobBreakdown();
-    const nonZero = all.filter((entry) => entry.value > 0);
-    return nonZero.length > 0 ? nonZero : all;
-  });
-  const pmgQueueBreakdown = createMemo(() => {
-    const pmg = pmgData();
-    if (!pmg) return [] as Array<{ label: string; value: number; warn?: boolean }>;
-    return [
-      { label: 'Active', value: pmg.queueActive || 0 },
-      { label: 'Deferred', value: pmg.queueDeferred || 0, warn: (pmg.queueDeferred || 0) > 0 },
-      { label: 'Hold', value: pmg.queueHold || 0, warn: (pmg.queueHold || 0) > 0 },
-      { label: 'Incoming', value: pmg.queueIncoming || 0 },
-    ];
-  });
-  const pmgVisibleQueueBreakdown = createMemo(() => {
-    const all = pmgQueueBreakdown();
-    const nonZero = all.filter((entry) => entry.value > 0);
-    return nonZero.length > 0 ? nonZero : all;
-  });
-  const pmgMailBreakdown = createMemo(() => {
-    const pmg = pmgData();
-    if (!pmg) return [] as Array<{ label: string; value: number }>;
-    return [
-      { label: 'Mail', value: pmg.mailCountTotal || 0 },
-      { label: 'Spam', value: pmg.spamIn || 0 },
-      { label: 'Virus', value: pmg.virusIn || 0 },
-    ];
-  });
-  const pmgVisibleMailBreakdown = createMemo(() => {
-    const all = pmgMailBreakdown();
-    const nonZero = all.filter((entry) => entry.value > 0);
-    return nonZero.length > 0 ? nonZero : all;
-  });
-  const resourceTimeline = createMemo(
-    () => resourceFacets()?.recentChanges ?? props.resource.recentChanges ?? [],
-  );
-  const resourceFacetCounts = createMemo(
-    () => resourceFacets()?.counts ?? props.resource.facetCounts ?? null,
-  );
-  const historyFacetBundle = createMemo(() =>
-    timelineFacetRequest() ? (timelineFacets() ?? resourceFacets()) : resourceFacets(),
-  );
-  const historyFacetCounts = createMemo(
-    () => historyFacetBundle()?.counts ?? resourceFacetCounts() ?? null,
-  );
-  const historyRecentChanges = createMemo(
-    () => historyFacetBundle()?.recentChanges ?? resourceTimeline(),
-  );
-  const historyTimeline = createMemo(
-    () => historyRecentChanges(),
-  );
-  const hasTimelineFilters = createMemo(() =>
-    Boolean(timelineKindFilter() || timelineSourceTypeFilter() || timelineSourceAdapterFilter()),
-  );
-  const resourceTimelineCount = createMemo(
-    () => historyFacetCounts()?.recentChanges ?? historyRecentChanges().length,
-  );
-  const sortedResourceTimeline = createMemo(() =>
-    [...historyTimeline()].sort((left, right) => {
-      const leftTime = Date.parse(left.observedAt || '');
-      const rightTime = Date.parse(right.observedAt || '');
-      return (
-        (Number.isFinite(rightTime) ? rightTime : 0) - (Number.isFinite(leftTime) ? leftTime : 0)
-      );
-    }),
-  );
-  const facetBundleError = createMemo(() => {
-    const error = timelineFacetRequest() ? timelineFacets.error : resourceFacets.error;
-    if (!error) return '';
-    return (error as Error)?.message || 'Failed to load resource history';
-  });
-  const refetchHistoryFacets = () => {
-    if (timelineFacetRequest()) {
-      return refetchTimelineFacets();
-    }
-    return refetchResourceFacets();
-  };
-  const mergedSources = createMemo(() => platformData()?.sources ?? []);
-  const sourceStatus = createMemo(() => platformData()?.sourceStatus ?? {});
-  const sourceHealthSummary = createMemo(() => {
-    const entries = Object.entries(sourceStatus());
-    if (entries.length === 0) return null;
-
-    let healthy = 0;
-    let warning = 0;
-    let unhealthy = 0;
-    const parts: string[] = [];
-
-    for (const [source, status] of entries) {
-      const normalized = (status?.status || '').trim().toLowerCase();
-      parts.push(`${source}:${normalized || 'unknown'}`);
-      if (['online', 'running', 'healthy', 'connected', 'ok'].includes(normalized)) {
-        healthy += 1;
-      } else if (['degraded', 'warning', 'stale'].includes(normalized)) {
-        warning += 1;
-      } else {
-        unhealthy += 1;
-      }
-    }
-
-    const total = entries.length;
-    if (unhealthy > 0) {
-      return {
-        label: `${unhealthy}/${total} unhealthy`,
-        className: 'text-red-600 dark:text-red-400',
-        title: parts.join(' • '),
-      };
-    }
-    if (warning > 0) {
-      return {
-        label: `${warning}/${total} degraded`,
-        className: 'text-amber-600 dark:text-amber-400',
-        title: parts.join(' • '),
-      };
-    }
-    return {
-      label: `${healthy}/${total} healthy`,
-      className: 'text-emerald-600 dark:text-emerald-400',
-      title: parts.join(' • '),
-    };
-  });
-  const sourceSummary = createMemo(() => {
-    const health = sourceHealthSummary();
-    if (health) return health;
-    const sources = mergedSources();
-    if (sources.length === 0) return null;
-    return {
-      label: sources.length === 1 ? sources[0].toUpperCase() : `${sources.length} sources`,
-      className: 'text-base-content',
-      title: sources.join(' • '),
-    };
-  });
-  const identityAliasValues = createMemo(() => getResourceIdentityAliases(props.resource));
-  const primaryIdentityRows = createMemo(() => getPrimaryResourceIdentityRows(props.resource));
-  const identityCardHasRichData = createMemo(
-    () =>
-      primaryIdentityRows().length > 0 ||
-      (props.resource.identity?.ips?.length || 0) > 0 ||
-      (props.resource.tags?.length || 0) > 0 ||
-      identityAliasValues().length > 0,
-  );
-  const aliasPreviewValues = createMemo(() =>
-    identityAliasValues().slice(0, ALIAS_COLLAPSE_THRESHOLD),
-  );
-  const hasAliasOverflow = createMemo(
-    () => identityAliasValues().length > ALIAS_COLLAPSE_THRESHOLD,
-  );
-  const hasIdentitySupportContext = createMemo(
-    () =>
-      (props.resource.identity?.ips?.length ?? 0) > 0 ||
-      (props.resource.tags?.length ?? 0) > 0 ||
-      identityAliasValues().length > 0,
-  );
-  const hasMergedSources = createMemo(() => mergedSources().length > 1);
-  const discoveryConfig = createMemo(() => toDiscoveryConfig(props.resource));
-  const discoveryContextSummary = createMemo(() => {
-    const config = discoveryConfig();
-    if (!config) return null;
-
-    const discoveryMode =
-      config.resourceType === 'agent'
-        ? 'Host discovery'
-        : `${formatIdentifierLabel(config.resourceType)} discovery`;
-
-    return config.hostname ? `${discoveryMode} via ${config.hostname}` : discoveryMode;
-  });
-  const hostDetailCards = createMemo(() => {
-    const cards: string[] = [];
-
-    if (proxmoxNode()) {
-      cards.push('system', 'hardware', 'storage');
-    }
-
-    const agent = agentInfo();
-    if (agent) {
-      cards.push('system', 'hardware');
-      if ((agent.networkInterfaces?.length ?? 0) > 0) cards.push('network');
-      if ((agent.disks?.length ?? 0) > 0) cards.push('disks');
-      if ((agentMeta()?.raid?.length ?? 0) > 0) cards.push('raid');
-      if (temperatureRows().length > 0) cards.push('temperatures');
-    }
-
-    return cards;
-  });
-  const hasHostDetails = createMemo(() => hostDetailCards().length > 0);
-  const hostDetailSummary = createMemo(() => {
-    const labels = Array.from(new Set(hostDetailCards()));
-    if (labels.length === 0) return null;
-
-    const categories =
-      labels.length === 1
-        ? labels[0]
-        : labels.length === 2
-          ? `${labels[0]} and ${labels[1]}`
-          : `${labels.slice(0, -1).join(', ')}, and ${labels[labels.length - 1]}`;
-
-    return `${hostDetailCards().length} detail card${hostDetailCards().length === 1 ? '' : 's'} covering ${categories}.`;
-  });
-  const hasServiceDetails = createMemo(
-    () => props.resource.type === 'docker-host' || Boolean(pbsData()) || Boolean(pmgData()),
-  );
-  const serviceDetailsSummary = createMemo(() => {
-    if (props.resource.type === 'docker-host') {
-      return `${formatInteger(dockerContainerCount())} containers · ${formatInteger(dockerUpdatesAvailable())} updates`;
-    }
-
-    const pbs = pbsData();
-    if (pbs) {
-      return `${formatInteger(pbs.datastoreCount)} datastores · ${formatInteger(pbsJobTotal())} jobs`;
-    }
-
-    const pmg = pmgData();
-    if (pmg) {
-      return `${formatInteger(pmg.queueTotal)} queue total · ${formatInteger(pmgQueueBacklog())} backlog`;
-    }
-
-    return null;
-  });
-  const workloadsHref = createMemo(() => buildWorkloadsHref(props.resource));
-  const headerIdentity = createMemo(() => getPrimaryResourceIdentity(props.resource));
-  const relatedLinks = createMemo(() => {
-    const links: Array<{ href: string; label: string; compactLabel: string; ariaLabel: string }> =
-      [];
-    const workloads = workloadsHref();
-    if (workloads) {
-      links.push({
-        href: workloads,
-        label: 'Open in Workloads',
-        compactLabel: 'Workloads',
-        ariaLabel: `Open related workloads for ${displayName()}`,
-      });
-    }
-    links.push(...buildServiceDetailLinks(props.resource));
-    const seen = new Set<string>();
-    return links.filter((link) => {
-      if (seen.has(link.href)) return false;
-      seen.add(link.href);
-      return true;
-    });
-  });
-  const hasRuntimeOperationalContext = createMemo(
-    () => kubernetesCapabilityBadges().length > 0 || relatedLinks().length > 0,
-  );
-  const sourceSections = createMemo(() => {
-    const data = platformData();
-    if (!data) return [];
-    const sections = [
-      { id: 'proxmox', label: 'Proxmox', payload: data.proxmox },
-      { id: 'agent', label: 'Agent', payload: data.agent },
-      { id: 'docker', label: 'Containers', payload: data.docker },
-      { id: 'pbs', label: 'PBS', payload: data.pbs },
-      { id: 'pmg', label: 'PMG', payload: data.pmg },
-      { id: 'kubernetes', label: 'Kubernetes', payload: data.kubernetes },
-      { id: 'metrics', label: 'Metrics', payload: data.metrics },
-    ];
-    return sections.filter((section) => section.payload !== undefined);
-  });
-  const identityMatchInfo = createMemo(() => {
-    const data = platformData();
-    return (
-      data?.identityMatch ??
-      data?.matchResults ??
-      data?.matchCandidates ??
-      data?.matches ??
-      undefined
-    );
-  });
-  const debugBundle = createMemo(() => ({
+  const {
+    activeTab,
+    setActiveTab,
+    debugEnabled,
+    copied,
+    showReportModal,
+    setShowReportModal,
+    showInvestigationContext,
+    setShowInvestigationContext,
+    showCorrelationContext,
+    setShowCorrelationContext,
+    showDiscoveryContext,
+    setShowDiscoveryContext,
+    showHostDetails,
+    setShowHostDetails,
+    showServiceDetails,
+    setShowServiceDetails,
+    showDockerUpdateControls,
+    setShowDockerUpdateControls,
+    showPbsJobDetail,
+    setShowPbsJobDetail,
+    showPmgMailFlowDetail,
+    setShowPmgMailFlowDetail,
+    displayName,
+    kubernetesClusterName,
+    resolveResourceLabel,
+    statusIndicator,
+    lastSeen,
+    lastSeenAbsolute,
+    platformBadge,
+    sourceBadge,
+    typeBadge,
+    unifiedSourceBadges,
+    hasUnifiedSources,
+    policyRedactions,
+    governanceSummary,
+    hasGovernanceData,
+    agentMeta,
+    kubernetesCapabilityBadges,
+    proxmoxNode,
+    agentInfo,
+    temperatureRows,
+    dockerHostData,
+    dockerHostSourceId,
+    dockerUpdatesAvailable,
+    dockerContainerCount,
+    dockerUpdatesCheckedRelative,
+    dockerHostCommand,
+    dockerHostCommandActive,
+    dockerUpdateActionsDisabled,
+    dockerUpdateActionsLoading,
+    dockerActionError,
+    setDockerActionError,
+    dockerActionNote,
+    setDockerActionNote,
+    confirmUpdateAll,
+    setConfirmUpdateAll,
+    dockerActionBusy,
+    setDockerActionBusy,
+    dockerSwarmInfo,
+    dockerSwarmClusterKey,
+    k8sDeploymentsPrefillNamespace,
+    setK8sDeploymentsPrefillNamespace,
+    timelineKindFilter,
+    setTimelineKindFilter,
+    timelineSourceTypeFilter,
+    setTimelineSourceTypeFilter,
+    timelineSourceAdapterFilter,
+    setTimelineSourceAdapterFilter,
+    resourceIntelligence,
+    resourceDependencies,
+    resourceDependents,
+    resourceCorrelations,
+    hasCorrelationContext,
+    hasInvestigationContext,
+    investigationContextSummary,
+    pbsData,
+    pmgData,
+    pbsJobTotal,
+    pmgQueueBacklog,
+    pmgUpdatedRelative,
+    pbsVisibleJobBreakdown,
+    pmgVisibleQueueBreakdown,
+    pmgVisibleMailBreakdown,
+    historyFacetCounts,
+    historyRecentChanges,
+    hasTimelineFilters,
+    historyLoadingLabel,
+    resourceTimelineCount,
+    sortedResourceTimeline,
+    facetBundleError,
+    refetchHistoryFacets,
+    mergedSources,
+    sourceSummary,
+    identityAliasValues,
+    primaryIdentityRows,
+    identityCardHasRichData,
+    aliasPreviewValues,
+    hasAliasOverflow,
+    hasIdentitySupportContext,
+    hasMergedSources,
+    discoveryConfig,
+    discoveryContextSummary,
+    hasHostDetails,
+    hostDetailSummary,
+    hasServiceDetails,
+    serviceDetailsSummary,
+    headerIdentity,
+    relatedLinks,
+    hasRuntimeOperationalContext,
+    sourceSections,
+    identityMatchInfo,
+    tabs,
+    handleCopyJson,
+  } = useResourceDetailDrawerState({
     resource: props.resource,
-    identity: {
-      resourceIdentity: props.resource.identity,
-      matchInfo: identityMatchInfo(),
-    },
-    sources: {
-      sourceStatus: sourceStatus(),
-      proxmox: platformData()?.proxmox,
-      agent: platformData()?.agent,
-      docker: platformData()?.docker,
-      pbs: platformData()?.pbs,
-      pmg: platformData()?.pmg,
-      kubernetes: platformData()?.kubernetes,
-      metrics: platformData()?.metrics,
-    },
-  }));
-  const debugJson = createMemo(() => JSON.stringify(debugBundle(), null, 2));
-
-  createEffect(() => {
-    if (!debugEnabled() && activeTab() === 'debug') {
-      setActiveTab('overview');
-    }
+    resolveResourceLabel: props.resolveResourceLabel,
   });
-
-  const tabs = createMemo(() => {
-    const base = [
-      { id: 'overview' as DrawerTab, label: 'Overview' },
-      ...(props.resource.type === 'pmg' ? [{ id: 'mail' as DrawerTab, label: 'Mail' }] : []),
-      ...(props.resource.type === 'k8s-cluster'
-        ? [{ id: 'namespaces' as DrawerTab, label: 'Namespaces' }]
-        : []),
-      ...(props.resource.type === 'k8s-cluster'
-        ? [{ id: 'deployments' as DrawerTab, label: 'Deployments' }]
-        : []),
-      ...(props.resource.type === 'docker-host' && dockerSwarmClusterKey()
-        ? [{ id: 'swarm' as DrawerTab, label: 'Swarm' }]
-        : []),
-    ];
-    if (debugEnabled()) {
-      base.push({ id: 'debug' as DrawerTab, label: 'Debug' });
-    }
-    return base;
-  });
-
-  createEffect(() => {
-    const current = activeTab();
-    const available = new Set(tabs().map((tab) => tab.id));
-    if (!available.has(current)) {
-      setActiveTab('overview');
-    }
-  });
-
-  const handleCopyJson = async () => {
-    const payload = debugJson();
-    try {
-      if (navigator?.clipboard?.writeText) {
-        await navigator.clipboard.writeText(payload);
-      } else {
-        const textarea = document.createElement('textarea');
-        textarea.value = payload;
-        textarea.setAttribute('readonly', 'true');
-        textarea.style.position = 'fixed';
-        textarea.style.left = '-9999px';
-        document.body.appendChild(textarea);
-        textarea.select();
-        document.execCommand('copy');
-        document.body.removeChild(textarea);
-      }
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      setCopied(false);
-    }
-  };
 
   return (
     <div class="space-y-3">
@@ -1039,7 +498,10 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                         <Show when={hasIdentitySupportContext()}>
                           <div class="space-y-1.5">
                             <Show
-                              when={props.resource.identity?.ips && props.resource.identity.ips.length > 0}
+                              when={
+                                props.resource.identity?.ips &&
+                                props.resource.identity.ips.length > 0
+                              }
                             >
                               <div class="flex flex-col gap-1">
                                 <span class="text-muted">IP Addresses</span>
@@ -1112,11 +574,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                 </div>
               </Card>
 
-              <Card
-                data-testid="resource-identity-section"
-                padding="sm"
-                class="h-full shadow-sm"
-              >
+              <Card data-testid="resource-identity-section" padding="sm" class="h-full shadow-sm">
                 <div class="mb-2 text-[10px] font-medium uppercase tracking-wide text-base-content">
                   Identity
                 </div>
@@ -1164,15 +622,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                   </Show>
                 </div>
                 <div class="text-right text-[10px] text-muted">
-                  <div>
-                    {timelineFacetRequest()
-                      ? timelineFacets.loading
-                        ? 'Refreshing filtered changes...'
-                        : 'Filtered changes loaded'
-                      : resourceFacets.loading
-                        ? 'Refreshing changes...'
-                        : 'Changes loaded'}
-                  </div>
+                  <div>{historyLoadingLabel()}</div>
                   <Show when={hasTimelineFilters()}>
                     <div class="mt-0.5 text-blue-700 dark:text-blue-300">Change filters active</div>
                   </Show>
@@ -1343,7 +793,9 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                                 </pre>
                               </details>
                             </Show>
-                            <Show when={change.relatedResources && change.relatedResources.length > 0}>
+                            <Show
+                              when={change.relatedResources && change.relatedResources.length > 0}
+                            >
                               <div class="mt-1 flex flex-wrap items-center gap-1 text-muted">
                                 <span>Related:</span>
                                 <For each={change.relatedResources ?? []}>
@@ -1388,413 +840,420 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                 contentClass="mt-3 space-y-3"
                 dataTestId="resource-service-details-section"
               >
-                  <Show when={props.resource.type === 'docker-host'}>
-                    <div class="rounded border border-sky-200 bg-sky-50 p-3 dark:border-sky-700 dark:bg-sky-900">
-                      <div class="mb-2 flex items-center justify-between gap-2">
-                        <div class="text-[11px] font-medium uppercase tracking-wide text-sky-700 dark:text-sky-300">
-                          Docker runtime
-                        </div>
-                        <Show when={dockerHostData()?.runtime}>
-                          <span
-                            class="max-w-[55%] truncate text-[10px] text-sky-700 dark:text-sky-300"
-                            title={dockerHostData()?.runtime}
-                          >
-                            {dockerHostData()?.runtime}
-                          </span>
-                        </Show>
+                <Show when={props.resource.type === 'docker-host'}>
+                  <div class="rounded border border-sky-200 bg-sky-50 p-3 dark:border-sky-700 dark:bg-sky-900">
+                    <div class="mb-2 flex items-center justify-between gap-2">
+                      <div class="text-[11px] font-medium uppercase tracking-wide text-sky-700 dark:text-sky-300">
+                        Docker runtime
                       </div>
-
-                      <div class="space-y-1.5 text-[11px]">
-                        <div class="flex items-center justify-between gap-2">
-                          <span class="text-muted">Containers</span>
-                          <span class="font-medium text-base-content">
-                            {formatInteger(dockerContainerCount())}
-                          </span>
-                        </div>
-                        <div class="flex items-center justify-between gap-2">
-                          <span class="text-muted">Updates</span>
-                          <span
-                            class={`font-medium ${dockerUpdatesAvailable() > 0 ? 'text-sky-700 dark:text-sky-300' : 'text-base-content'}`}
-                          >
-                            {formatInteger(dockerUpdatesAvailable())}
-                          </span>
-                        </div>
-                        <Show when={dockerUpdatesCheckedRelative()}>
-                          <div class="flex items-center justify-between gap-2">
-                            <span class="text-muted">Checked</span>
-                            <span class="font-medium text-base-content">
-                              {dockerUpdatesCheckedRelative()}
-                            </span>
-                          </div>
-                        </Show>
-
-                        <Show when={showDockerUpdateControls()}>
-                          <div class="space-y-1.5 border-t border-sky-200 pt-2 dark:border-sky-700">
-                            <Show when={dockerHostCommand()?.type || dockerHostCommand()?.status}>
-                              <div class="rounded border border-sky-200 bg-surface px-2 py-1.5 text-[10px] dark:border-sky-700">
-                                <div class="flex items-center justify-between gap-2">
-                                  <span class="text-muted">Action</span>
-                                  <span class="font-medium text-base-content">
-                                    {formatIdentifierLabel(dockerHostCommand()?.type, {
-                                      fallback: 'command',
-                                    })}
-                                  </span>
-                                </div>
-                                <div class="mt-1 flex items-center justify-between gap-2">
-                                  <span class="text-muted">State</span>
-                                  <span
-                                    class={`font-medium ${dockerHostCommandActive() ? 'text-sky-700 dark:text-sky-300' : 'text-base-content'}`}
-                                  >
-                                    {formatIdentifierLabel(dockerHostCommand()?.status, {
-                                      fallback: 'unknown',
-                                    })}
-                                  </span>
-                                </div>
-                                <Show when={dockerHostCommand()?.message}>
-                                  <div class="mt-1 text-muted truncate" title={dockerHostCommand()?.message}>
-                                    {dockerHostCommand()?.message}
-                                  </div>
-                                </Show>
-                                <Show when={dockerHostCommand()?.failureReason}>
-                                  <div
-                                    class="mt-1 text-red-700 dark:text-red-300 truncate"
-                                    title={dockerHostCommand()?.failureReason}
-                                  >
-                                    {dockerHostCommand()?.failureReason}
-                                  </div>
-                                </Show>
-                              </div>
-                            </Show>
-
-                            <Show when={dockerActionError()}>
-                              <div class="rounded border border-red-200 bg-red-50 px-2 py-1.5 text-[10px] text-red-700 dark:border-red-700 dark:bg-red-900 dark:text-red-200">
-                                {dockerActionError()}
-                              </div>
-                            </Show>
-                            <Show when={dockerActionNote()}>
-                              <div class="rounded border border-sky-200 bg-surface px-2 py-1.5 text-[10px] text-base-content dark:border-sky-700">
-                                {dockerActionNote()}
-                              </div>
-                            </Show>
-
-                            <div class="flex flex-wrap items-center gap-2">
-                              <button
-                                type="button"
-                                disabled={
-                                  dockerActionBusy() ||
-                                  dockerUpdateActionsLoading() ||
-                                  dockerHostCommandActive() ||
-                                  dockerHostSourceId() === null
-                                }
-                                onClick={async () => {
-                                  setDockerActionError('');
-                                  setDockerActionNote('');
-                                  setConfirmUpdateAll(false);
-                                  const hostId = dockerHostSourceId();
-                                  if (!hostId) return;
-                                  try {
-                                    setDockerActionBusy(true);
-                                    await MonitoringAPI.checkDockerUpdates(hostId);
-                                    setDockerActionNote('Check queued.');
-                                  } catch (err) {
-                                    setDockerActionError(
-                                      (err as Error)?.message || 'Failed to queue check',
-                                    );
-                                  } finally {
-                                    setDockerActionBusy(false);
-                                  }
-                                }}
-                                class="rounded-md border border-border bg-surface px-2.5 py-1 text-[11px] font-semibold text-base-content hover:bg-surface-hover disabled:opacity-60"
-                                title={dockerUpdateActionsLoading() ? 'Loading settings...' : undefined}
-                              >
-                                Check now
-                              </button>
-
-                              <button
-                                type="button"
-                                disabled={
-                                  dockerActionBusy() ||
-                                  dockerUpdateActionsLoading() ||
-                                  dockerUpdateActionsDisabled() ||
-                                  dockerHostCommandActive() ||
-                                  dockerHostSourceId() === null ||
-                                  dockerUpdatesAvailable() <= 0
-                                }
-                                onClick={async () => {
-                                  setDockerActionError('');
-                                  setDockerActionNote('');
-                                  const hostId = dockerHostSourceId();
-                                  if (!hostId) return;
-
-                                  if (!confirmUpdateAll()) {
-                                    setConfirmUpdateAll(true);
-                                    setDockerActionNote(`Click again to update ${dockerUpdatesAvailable()} containers.`);
-                                    return;
-                                  }
-
-                                  try {
-                                    setDockerActionBusy(true);
-                                    await MonitoringAPI.updateAllDockerContainers(hostId);
-                                    setDockerActionNote('Update queued.');
-                                  } catch (err) {
-                                    setDockerActionError(
-                                      (err as Error)?.message || 'Failed to queue update',
-                                    );
-                                  } finally {
-                                    setDockerActionBusy(false);
-                                    setConfirmUpdateAll(false);
-                                  }
-                                }}
-                                class="rounded-md border border-sky-200 bg-sky-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-sky-700 disabled:opacity-60 disabled:hover:bg-sky-600 dark:border-sky-700 dark:bg-sky-600 dark:hover:bg-sky-500 dark:disabled:hover:bg-sky-600"
-                                title={
-                                  dockerUpdateActionsDisabled()
-                                    ? 'Updates disabled by server settings.'
-                                    : undefined
-                                }
-                              >
-                                {confirmUpdateAll()
-                                  ? 'Confirm update'
-                                  : `Update all${dockerUpdatesAvailable() > 0 ? ` (${dockerUpdatesAvailable()})` : ''}`}
-                              </button>
-                            </div>
-                          </div>
-                        </Show>
-
-                        <button
-                          type="button"
-                          onClick={() => setShowDockerUpdateControls((value) => !value)}
-                          class="inline-flex items-center rounded-md border border-sky-200 bg-surface px-2.5 py-1 text-[10px] font-medium text-sky-700 transition-colors hover:bg-base dark:border-sky-700 dark:text-sky-300"
+                      <Show when={dockerHostData()?.runtime}>
+                        <span
+                          class="max-w-[55%] truncate text-[10px] text-sky-700 dark:text-sky-300"
+                          title={dockerHostData()?.runtime}
                         >
-                          {showDockerUpdateControls() ? 'Hide actions' : 'Show actions'}
-                        </button>
-                      </div>
+                          {dockerHostData()?.runtime}
+                        </span>
+                      </Show>
                     </div>
-                  </Show>
 
-                  <Show when={pbsData()}>
-                    {(pbs) => {
-                      const connection = getServiceHealthPresentation(
-                        props.resource.status,
-                        pbs().connectionHealth,
-                      );
-                      return (
-                        <div class="rounded border border-indigo-200 bg-indigo-50 p-3 dark:border-indigo-700 dark:bg-indigo-900">
-                          <div class="mb-2 flex items-center justify-between gap-2">
-                            <div class="text-[11px] font-medium uppercase tracking-wide text-indigo-700 dark:text-indigo-300">
-                              PBS
-                            </div>
-                            <Show when={pbs().hostname}>
-                              <span
-                                class="max-w-[55%] truncate text-[10px] text-indigo-700 dark:text-indigo-300"
-                                title={pbs().hostname}
-                              >
-                                {pbs().hostname}
-                              </span>
-                            </Show>
-                          </div>
-                          <div class="space-y-1.5 text-[11px]">
-                            <div class="flex items-center justify-between gap-2">
-                              <span class="text-muted">State</span>
-                              <span class={`font-medium ${connection.text}`}>{connection.label}</span>
-                            </div>
-                            <Show when={pbs().version}>
+                    <div class="space-y-1.5 text-[11px]">
+                      <div class="flex items-center justify-between gap-2">
+                        <span class="text-muted">Containers</span>
+                        <span class="font-medium text-base-content">
+                          {formatInteger(dockerContainerCount())}
+                        </span>
+                      </div>
+                      <div class="flex items-center justify-between gap-2">
+                        <span class="text-muted">Updates</span>
+                        <span
+                          class={`font-medium ${dockerUpdatesAvailable() > 0 ? 'text-sky-700 dark:text-sky-300' : 'text-base-content'}`}
+                        >
+                          {formatInteger(dockerUpdatesAvailable())}
+                        </span>
+                      </div>
+                      <Show when={dockerUpdatesCheckedRelative()}>
+                        <div class="flex items-center justify-between gap-2">
+                          <span class="text-muted">Checked</span>
+                          <span class="font-medium text-base-content">
+                            {dockerUpdatesCheckedRelative()}
+                          </span>
+                        </div>
+                      </Show>
+
+                      <Show when={showDockerUpdateControls()}>
+                        <div class="space-y-1.5 border-t border-sky-200 pt-2 dark:border-sky-700">
+                          <Show when={dockerHostCommand()?.type || dockerHostCommand()?.status}>
+                            <div class="rounded border border-sky-200 bg-surface px-2 py-1.5 text-[10px] dark:border-sky-700">
                               <div class="flex items-center justify-between gap-2">
-                                <span class="text-muted">Version</span>
-                                <span class="font-medium text-base-content">{pbs().version}</span>
-                              </div>
-                            </Show>
-                            <Show when={pbs().uptimeSeconds || props.resource.uptime}>
-                              <div class="flex items-center justify-between gap-2">
-                                <span class="text-muted">Uptime</span>
+                                <span class="text-muted">Action</span>
                                 <span class="font-medium text-base-content">
-                                  {formatUptime(pbs().uptimeSeconds ?? props.resource.uptime ?? 0)}
+                                  {formatIdentifierLabel(dockerHostCommand()?.type, {
+                                    fallback: 'command',
+                                  })}
                                 </span>
                               </div>
-                            </Show>
-                            <Show when={showPbsJobDetail()}>
-                              <div class="space-y-1.5 border-t border-indigo-200 pt-2 dark:border-indigo-700">
-                                <div class="grid grid-cols-2 gap-2">
-                                  <div class="rounded border border-indigo-200 bg-surface px-2 py-1.5 dark:border-indigo-700">
-                                    <div class="text-[10px] text-muted">Datastores</div>
-                                    <div class="text-sm font-semibold text-base-content">
-                                      {formatInteger(pbs().datastoreCount)}
-                                    </div>
-                                  </div>
-                                  <div class="rounded border border-indigo-200 bg-surface px-2 py-1.5 dark:border-indigo-700">
-                                    <div class="text-[10px] text-muted">Jobs</div>
-                                    <div class="text-sm font-semibold text-base-content">
-                                      {formatInteger(pbsJobTotal())}
-                                    </div>
-                                  </div>
-                                </div>
-                                <details class="rounded border border-indigo-200 bg-surface px-2 py-1.5 dark:border-indigo-700">
-                                  <summary class="flex cursor-pointer list-none items-center justify-between text-[10px] font-medium text-muted">
-                                    <span>Types</span>
-                                    <span class="text-muted">{pbsVisibleJobBreakdown().length}</span>
-                                  </summary>
-                                  <div class="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 border-t border-indigo-200 pt-2 text-[10px] dark:border-indigo-700">
-                                    <For each={pbsVisibleJobBreakdown()}>
-                                      {(entry) => (
-                                        <span class="text-muted">
-                                          {entry.label}:{' '}
-                                          <span class="font-medium text-base-content">
-                                            {formatInteger(entry.value)}
-                                          </span>
-                                        </span>
-                                      )}
-                                    </For>
-                                  </div>
-                                </details>
+                              <div class="mt-1 flex items-center justify-between gap-2">
+                                <span class="text-muted">State</span>
+                                <span
+                                  class={`font-medium ${dockerHostCommandActive() ? 'text-sky-700 dark:text-sky-300' : 'text-base-content'}`}
+                                >
+                                  {formatIdentifierLabel(dockerHostCommand()?.status, {
+                                    fallback: 'unknown',
+                                  })}
+                                </span>
                               </div>
-                            </Show>
+                              <Show when={dockerHostCommand()?.message}>
+                                <div
+                                  class="mt-1 text-muted truncate"
+                                  title={dockerHostCommand()?.message}
+                                >
+                                  {dockerHostCommand()?.message}
+                                </div>
+                              </Show>
+                              <Show when={dockerHostCommand()?.failureReason}>
+                                <div
+                                  class="mt-1 text-red-700 dark:text-red-300 truncate"
+                                  title={dockerHostCommand()?.failureReason}
+                                >
+                                  {dockerHostCommand()?.failureReason}
+                                </div>
+                              </Show>
+                            </div>
+                          </Show>
+
+                          <Show when={dockerActionError()}>
+                            <div class="rounded border border-red-200 bg-red-50 px-2 py-1.5 text-[10px] text-red-700 dark:border-red-700 dark:bg-red-900 dark:text-red-200">
+                              {dockerActionError()}
+                            </div>
+                          </Show>
+                          <Show when={dockerActionNote()}>
+                            <div class="rounded border border-sky-200 bg-surface px-2 py-1.5 text-[10px] text-base-content dark:border-sky-700">
+                              {dockerActionNote()}
+                            </div>
+                          </Show>
+
+                          <div class="flex flex-wrap items-center gap-2">
                             <button
                               type="button"
-                              onClick={() => setShowPbsJobDetail((value) => !value)}
-                              class="inline-flex items-center rounded-md border border-indigo-200 bg-surface px-2.5 py-1 text-[10px] font-medium text-indigo-700 transition-colors hover:bg-base dark:border-indigo-700 dark:text-indigo-300"
+                              disabled={
+                                dockerActionBusy() ||
+                                dockerUpdateActionsLoading() ||
+                                dockerHostCommandActive() ||
+                                dockerHostSourceId() === null
+                              }
+                              onClick={async () => {
+                                setDockerActionError('');
+                                setDockerActionNote('');
+                                setConfirmUpdateAll(false);
+                                const hostId = dockerHostSourceId();
+                                if (!hostId) return;
+                                try {
+                                  setDockerActionBusy(true);
+                                  await MonitoringAPI.checkDockerUpdates(hostId);
+                                  setDockerActionNote('Check queued.');
+                                } catch (err) {
+                                  setDockerActionError(
+                                    (err as Error)?.message || 'Failed to queue check',
+                                  );
+                                } finally {
+                                  setDockerActionBusy(false);
+                                }
+                              }}
+                              class="rounded-md border border-border bg-surface px-2.5 py-1 text-[11px] font-semibold text-base-content hover:bg-surface-hover disabled:opacity-60"
+                              title={
+                                dockerUpdateActionsLoading() ? 'Loading settings...' : undefined
+                              }
                             >
-                              {showPbsJobDetail() ? 'Hide jobs' : 'Show jobs'}
+                              Check now
+                            </button>
+
+                            <button
+                              type="button"
+                              disabled={
+                                dockerActionBusy() ||
+                                dockerUpdateActionsLoading() ||
+                                dockerUpdateActionsDisabled() ||
+                                dockerHostCommandActive() ||
+                                dockerHostSourceId() === null ||
+                                dockerUpdatesAvailable() <= 0
+                              }
+                              onClick={async () => {
+                                setDockerActionError('');
+                                setDockerActionNote('');
+                                const hostId = dockerHostSourceId();
+                                if (!hostId) return;
+
+                                if (!confirmUpdateAll()) {
+                                  setConfirmUpdateAll(true);
+                                  setDockerActionNote(
+                                    `Click again to update ${dockerUpdatesAvailable()} containers.`,
+                                  );
+                                  return;
+                                }
+
+                                try {
+                                  setDockerActionBusy(true);
+                                  await MonitoringAPI.updateAllDockerContainers(hostId);
+                                  setDockerActionNote('Update queued.');
+                                } catch (err) {
+                                  setDockerActionError(
+                                    (err as Error)?.message || 'Failed to queue update',
+                                  );
+                                } finally {
+                                  setDockerActionBusy(false);
+                                  setConfirmUpdateAll(false);
+                                }
+                              }}
+                              class="rounded-md border border-sky-200 bg-sky-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-sky-700 disabled:opacity-60 disabled:hover:bg-sky-600 dark:border-sky-700 dark:bg-sky-600 dark:hover:bg-sky-500 dark:disabled:hover:bg-sky-600"
+                              title={
+                                dockerUpdateActionsDisabled()
+                                  ? 'Updates disabled by server settings.'
+                                  : undefined
+                              }
+                            >
+                              {confirmUpdateAll()
+                                ? 'Confirm update'
+                                : `Update all${dockerUpdatesAvailable() > 0 ? ` (${dockerUpdatesAvailable()})` : ''}`}
                             </button>
                           </div>
                         </div>
-                      );
-                    }}
-                  </Show>
+                      </Show>
 
-                  <Show when={pmgData()}>
-                    {(pmg) => {
-                      const connection = getServiceHealthPresentation(
-                        props.resource.status,
-                        pmg().connectionHealth,
-                      );
-                      return (
-                        <div class="rounded border border-rose-200 bg-rose-50 p-3 dark:border-rose-700 dark:bg-rose-900">
-                          <div class="mb-2 flex items-center justify-between gap-2">
-                            <div class="text-[11px] font-medium uppercase tracking-wide text-rose-700 dark:text-rose-300">
-                              PMG
-                            </div>
-                            <Show when={pmg().hostname}>
-                              <span
-                                class="max-w-[55%] truncate text-[10px] text-rose-700 dark:text-rose-300"
-                                title={pmg().hostname}
-                              >
-                                {pmg().hostname}
-                              </span>
-                            </Show>
+                      <button
+                        type="button"
+                        onClick={() => setShowDockerUpdateControls((value) => !value)}
+                        class="inline-flex items-center rounded-md border border-sky-200 bg-surface px-2.5 py-1 text-[10px] font-medium text-sky-700 transition-colors hover:bg-base dark:border-sky-700 dark:text-sky-300"
+                      >
+                        {showDockerUpdateControls() ? 'Hide actions' : 'Show actions'}
+                      </button>
+                    </div>
+                  </div>
+                </Show>
+
+                <Show when={pbsData()}>
+                  {(pbs) => {
+                    const connection = getServiceHealthPresentation(
+                      props.resource.status,
+                      pbs().connectionHealth,
+                    );
+                    return (
+                      <div class="rounded border border-indigo-200 bg-indigo-50 p-3 dark:border-indigo-700 dark:bg-indigo-900">
+                        <div class="mb-2 flex items-center justify-between gap-2">
+                          <div class="text-[11px] font-medium uppercase tracking-wide text-indigo-700 dark:text-indigo-300">
+                            PBS
                           </div>
-                          <div class="space-y-1.5 text-[11px]">
+                          <Show when={pbs().hostname}>
+                            <span
+                              class="max-w-[55%] truncate text-[10px] text-indigo-700 dark:text-indigo-300"
+                              title={pbs().hostname}
+                            >
+                              {pbs().hostname}
+                            </span>
+                          </Show>
+                        </div>
+                        <div class="space-y-1.5 text-[11px]">
+                          <div class="flex items-center justify-between gap-2">
+                            <span class="text-muted">State</span>
+                            <span class={`font-medium ${connection.text}`}>{connection.label}</span>
+                          </div>
+                          <Show when={pbs().version}>
                             <div class="flex items-center justify-between gap-2">
-                              <span class="text-muted">State</span>
-                              <span class={`font-medium ${connection.text}`}>{connection.label}</span>
+                              <span class="text-muted">Version</span>
+                              <span class="font-medium text-base-content">{pbs().version}</span>
                             </div>
-                            <Show when={pmg().version}>
-                              <div class="flex items-center justify-between gap-2">
-                                <span class="text-muted">Version</span>
-                                <span class="font-medium text-base-content">{pmg().version}</span>
-                              </div>
-                            </Show>
-                            <Show when={pmg().uptimeSeconds || props.resource.uptime}>
-                              <div class="flex items-center justify-between gap-2">
-                                <span class="text-muted">Uptime</span>
-                                <span class="font-medium text-base-content">
-                                  {formatUptime(pmg().uptimeSeconds ?? props.resource.uptime ?? 0)}
-                                </span>
-                              </div>
-                            </Show>
-                            <Show when={showPmgMailFlowDetail()}>
-                              <div class="space-y-1.5 border-t border-rose-200 pt-2 dark:border-rose-700">
-                                <div class="grid grid-cols-2 gap-2">
-                                  <div class="rounded border border-rose-200 bg-surface px-2 py-1.5 dark:border-rose-700">
-                                    <div class="text-[10px] text-muted">Queue</div>
-                                    <div
-                                      class={`text-sm font-semibold ${pmgQueueBacklog() > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-base-content'}`}
-                                    >
-                                      {formatInteger(pmg().queueTotal)}
-                                    </div>
-                                  </div>
-                                  <div class="rounded border border-rose-200 bg-surface px-2 py-1.5 dark:border-rose-700">
-                                    <div class="text-[10px] text-muted">Backlog</div>
-                                    <div
-                                      class={`text-sm font-semibold ${pmgQueueBacklog() > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-base-content'}`}
-                                    >
-                                      {formatInteger(pmgQueueBacklog())}
-                                    </div>
+                          </Show>
+                          <Show when={pbs().uptimeSeconds || props.resource.uptime}>
+                            <div class="flex items-center justify-between gap-2">
+                              <span class="text-muted">Uptime</span>
+                              <span class="font-medium text-base-content">
+                                {formatUptime(pbs().uptimeSeconds ?? props.resource.uptime ?? 0)}
+                              </span>
+                            </div>
+                          </Show>
+                          <Show when={showPbsJobDetail()}>
+                            <div class="space-y-1.5 border-t border-indigo-200 pt-2 dark:border-indigo-700">
+                              <div class="grid grid-cols-2 gap-2">
+                                <div class="rounded border border-indigo-200 bg-surface px-2 py-1.5 dark:border-indigo-700">
+                                  <div class="text-[10px] text-muted">Datastores</div>
+                                  <div class="text-sm font-semibold text-base-content">
+                                    {formatInteger(pbs().datastoreCount)}
                                   </div>
                                 </div>
-                                <Show when={pmg().nodeCount || pmgUpdatedRelative()}>
+                                <div class="rounded border border-indigo-200 bg-surface px-2 py-1.5 dark:border-indigo-700">
+                                  <div class="text-[10px] text-muted">Jobs</div>
+                                  <div class="text-sm font-semibold text-base-content">
+                                    {formatInteger(pbsJobTotal())}
+                                  </div>
+                                </div>
+                              </div>
+                              <details class="rounded border border-indigo-200 bg-surface px-2 py-1.5 dark:border-indigo-700">
+                                <summary class="flex cursor-pointer list-none items-center justify-between text-[10px] font-medium text-muted">
+                                  <span>Types</span>
+                                  <span class="text-muted">{pbsVisibleJobBreakdown().length}</span>
+                                </summary>
+                                <div class="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 border-t border-indigo-200 pt-2 text-[10px] dark:border-indigo-700">
+                                  <For each={pbsVisibleJobBreakdown()}>
+                                    {(entry) => (
+                                      <span class="text-muted">
+                                        {entry.label}:{' '}
+                                        <span class="font-medium text-base-content">
+                                          {formatInteger(entry.value)}
+                                        </span>
+                                      </span>
+                                    )}
+                                  </For>
+                                </div>
+                              </details>
+                            </div>
+                          </Show>
+                          <button
+                            type="button"
+                            onClick={() => setShowPbsJobDetail((value) => !value)}
+                            class="inline-flex items-center rounded-md border border-indigo-200 bg-surface px-2.5 py-1 text-[10px] font-medium text-indigo-700 transition-colors hover:bg-base dark:border-indigo-700 dark:text-indigo-300"
+                          >
+                            {showPbsJobDetail() ? 'Hide jobs' : 'Show jobs'}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  }}
+                </Show>
+
+                <Show when={pmgData()}>
+                  {(pmg) => {
+                    const connection = getServiceHealthPresentation(
+                      props.resource.status,
+                      pmg().connectionHealth,
+                    );
+                    return (
+                      <div class="rounded border border-rose-200 bg-rose-50 p-3 dark:border-rose-700 dark:bg-rose-900">
+                        <div class="mb-2 flex items-center justify-between gap-2">
+                          <div class="text-[11px] font-medium uppercase tracking-wide text-rose-700 dark:text-rose-300">
+                            PMG
+                          </div>
+                          <Show when={pmg().hostname}>
+                            <span
+                              class="max-w-[55%] truncate text-[10px] text-rose-700 dark:text-rose-300"
+                              title={pmg().hostname}
+                            >
+                              {pmg().hostname}
+                            </span>
+                          </Show>
+                        </div>
+                        <div class="space-y-1.5 text-[11px]">
+                          <div class="flex items-center justify-between gap-2">
+                            <span class="text-muted">State</span>
+                            <span class={`font-medium ${connection.text}`}>{connection.label}</span>
+                          </div>
+                          <Show when={pmg().version}>
+                            <div class="flex items-center justify-between gap-2">
+                              <span class="text-muted">Version</span>
+                              <span class="font-medium text-base-content">{pmg().version}</span>
+                            </div>
+                          </Show>
+                          <Show when={pmg().uptimeSeconds || props.resource.uptime}>
+                            <div class="flex items-center justify-between gap-2">
+                              <span class="text-muted">Uptime</span>
+                              <span class="font-medium text-base-content">
+                                {formatUptime(pmg().uptimeSeconds ?? props.resource.uptime ?? 0)}
+                              </span>
+                            </div>
+                          </Show>
+                          <Show when={showPmgMailFlowDetail()}>
+                            <div class="space-y-1.5 border-t border-rose-200 pt-2 dark:border-rose-700">
+                              <div class="grid grid-cols-2 gap-2">
+                                <div class="rounded border border-rose-200 bg-surface px-2 py-1.5 dark:border-rose-700">
+                                  <div class="text-[10px] text-muted">Queue</div>
                                   <div
-                                    data-testid="pmg-support-context"
-                                    class="space-y-1.5 rounded border border-dashed border-rose-200 bg-surface px-2 py-1.5 text-[10px] dark:border-rose-700"
+                                    class={`text-sm font-semibold ${pmgQueueBacklog() > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-base-content'}`}
                                   >
-                                    <Show when={pmg().nodeCount}>
-                                      <div class="flex items-center justify-between gap-2">
-                                        <span class="text-muted">Nodes</span>
-                                        <span class="font-medium text-base-content">
-                                          {formatInteger(pmg().nodeCount)}
-                                        </span>
-                                      </div>
-                                    </Show>
-                                    <Show when={pmgUpdatedRelative()}>
-                                      <div
-                                        class={`flex items-center justify-between gap-2 ${pmg().nodeCount ? 'border-t border-rose-200 pt-1.5 dark:border-rose-700' : ''}`}
-                                      >
-                                        <span class="text-muted">Updated</span>
-                                        <span class="font-medium text-base-content">
-                                          {pmgUpdatedRelative()}
-                                        </span>
-                                      </div>
-                                    </Show>
+                                    {formatInteger(pmg().queueTotal)}
                                   </div>
-                                </Show>
-                                <details class="rounded border border-rose-200 bg-surface px-2 py-1.5 dark:border-rose-700">
-                                  <summary class="cursor-pointer list-none text-[10px] font-medium text-muted">
-                                    Queue detail
-                                  </summary>
-                                  <div class="mt-2 space-y-1.5 border-t border-rose-200 pt-2 text-[10px] dark:border-rose-700">
-                                    <For each={pmgVisibleQueueBreakdown()}>
-                                      {(entry) => (
-                                        <div class="flex items-center justify-between gap-2 text-muted">
-                                          <span>{entry.label}</span>
-                                          <span
-                                            class={`font-medium ${entry.warn ? 'text-amber-600 dark:text-amber-400' : 'text-base-content'}`}
-                                          >
-                                            {formatInteger(entry.value)}
-                                          </span>
-                                        </div>
-                                      )}
-                                    </For>
+                                </div>
+                                <div class="rounded border border-rose-200 bg-surface px-2 py-1.5 dark:border-rose-700">
+                                  <div class="text-[10px] text-muted">Backlog</div>
+                                  <div
+                                    class={`text-sm font-semibold ${pmgQueueBacklog() > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-base-content'}`}
+                                  >
+                                    {formatInteger(pmgQueueBacklog())}
                                   </div>
-                                </details>
-                                <details class="rounded border border-rose-200 bg-surface px-2 py-1.5 dark:border-rose-700">
-                                  <summary class="cursor-pointer list-none text-[10px] font-medium text-muted">
-                                    Mail detail
-                                  </summary>
-                                  <div class="mt-2 space-y-1.5 border-t border-rose-200 pt-2 text-[10px] dark:border-rose-700">
-                                    <For each={pmgVisibleMailBreakdown()}>
-                                      {(entry) => (
-                                        <div class="flex items-center justify-between gap-2 text-muted">
-                                          <span>{entry.label}</span>
-                                          <span class="font-medium text-base-content">
-                                            {formatInteger(entry.value)}
-                                          </span>
-                                        </div>
-                                      )}
-                                    </For>
-                                  </div>
-                                </details>
+                                </div>
                               </div>
-                            </Show>
-                            <button
-                              type="button"
-                              onClick={() => setShowPmgMailFlowDetail((value) => !value)}
-                              class="inline-flex items-center rounded-md border border-rose-200 bg-surface px-2.5 py-1 text-[10px] font-medium text-rose-700 transition-colors hover:bg-base dark:border-rose-700 dark:text-rose-300"
-                            >
-                              {showPmgMailFlowDetail() ? 'Hide mail flow' : 'Show mail flow'}
-                            </button>
-                          </div>
+                              <Show when={pmg().nodeCount || pmgUpdatedRelative()}>
+                                <div
+                                  data-testid="pmg-support-context"
+                                  class="space-y-1.5 rounded border border-dashed border-rose-200 bg-surface px-2 py-1.5 text-[10px] dark:border-rose-700"
+                                >
+                                  <Show when={pmg().nodeCount}>
+                                    <div class="flex items-center justify-between gap-2">
+                                      <span class="text-muted">Nodes</span>
+                                      <span class="font-medium text-base-content">
+                                        {formatInteger(pmg().nodeCount)}
+                                      </span>
+                                    </div>
+                                  </Show>
+                                  <Show when={pmgUpdatedRelative()}>
+                                    <div
+                                      class={`flex items-center justify-between gap-2 ${pmg().nodeCount ? 'border-t border-rose-200 pt-1.5 dark:border-rose-700' : ''}`}
+                                    >
+                                      <span class="text-muted">Updated</span>
+                                      <span class="font-medium text-base-content">
+                                        {pmgUpdatedRelative()}
+                                      </span>
+                                    </div>
+                                  </Show>
+                                </div>
+                              </Show>
+                              <details class="rounded border border-rose-200 bg-surface px-2 py-1.5 dark:border-rose-700">
+                                <summary class="cursor-pointer list-none text-[10px] font-medium text-muted">
+                                  Queue detail
+                                </summary>
+                                <div class="mt-2 space-y-1.5 border-t border-rose-200 pt-2 text-[10px] dark:border-rose-700">
+                                  <For each={pmgVisibleQueueBreakdown()}>
+                                    {(entry) => (
+                                      <div class="flex items-center justify-between gap-2 text-muted">
+                                        <span>{entry.label}</span>
+                                        <span
+                                          class={`font-medium ${entry.warn ? 'text-amber-600 dark:text-amber-400' : 'text-base-content'}`}
+                                        >
+                                          {formatInteger(entry.value)}
+                                        </span>
+                                      </div>
+                                    )}
+                                  </For>
+                                </div>
+                              </details>
+                              <details class="rounded border border-rose-200 bg-surface px-2 py-1.5 dark:border-rose-700">
+                                <summary class="cursor-pointer list-none text-[10px] font-medium text-muted">
+                                  Mail detail
+                                </summary>
+                                <div class="mt-2 space-y-1.5 border-t border-rose-200 pt-2 text-[10px] dark:border-rose-700">
+                                  <For each={pmgVisibleMailBreakdown()}>
+                                    {(entry) => (
+                                      <div class="flex items-center justify-between gap-2 text-muted">
+                                        <span>{entry.label}</span>
+                                        <span class="font-medium text-base-content">
+                                          {formatInteger(entry.value)}
+                                        </span>
+                                      </div>
+                                    )}
+                                  </For>
+                                </div>
+                              </details>
+                            </div>
+                          </Show>
+                          <button
+                            type="button"
+                            onClick={() => setShowPmgMailFlowDetail((value) => !value)}
+                            class="inline-flex items-center rounded-md border border-rose-200 bg-surface px-2.5 py-1 text-[10px] font-medium text-rose-700 transition-colors hover:bg-base dark:border-rose-700 dark:text-rose-300"
+                          >
+                            {showPmgMailFlowDetail() ? 'Hide mail flow' : 'Show mail flow'}
+                          </button>
                         </div>
-                      );
-                    }}
-                  </Show>
+                      </div>
+                    );
+                  }}
+                </Show>
               </SupportDisclosure>
             </Show>
 
@@ -1877,10 +1336,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                         compact
                       />
                       <Show when={hasCorrelationContext()}>
-                        <div
-                          data-testid="resource-correlation-context"
-                          class="space-y-1.5"
-                        >
+                        <div data-testid="resource-correlation-context" class="space-y-1.5">
                           <div class="flex flex-wrap items-center justify-between gap-2">
                             <span class="text-[10px] font-medium uppercase tracking-wide text-base-content">
                               Correlation context
@@ -1968,48 +1424,46 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
           </div>
 
           <Show when={discoveryConfig()}>
-          {(config) => (
-            <div class="space-y-2">
-              <WebInterfaceUrlField
-                metadataKind={config().metadataKind}
-                metadataId={config().metadataId}
-                targetLabel={config().targetLabel}
-              />
+            {(config) => (
+              <div class="space-y-2">
+                <WebInterfaceUrlField
+                  metadataKind={config().metadataKind}
+                  metadataId={config().metadataId}
+                  targetLabel={config().targetLabel}
+                />
 
-              <SupportDisclosure
-                title="Discovery context"
-                summary={discoveryContextSummary()}
-                expanded={showDiscoveryContext()}
-                onToggle={() => setShowDiscoveryContext((value) => !value)}
-                showLabel="Show metadata"
-                hideLabel="Hide metadata"
-                class="h-full"
-                dataTestId="resource-discovery-context"
-              >
-                    <Suspense
-                      fallback={
-                        <div class="flex items-center justify-center py-8">
-                          <div class="animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full" />
-                          <span class="ml-2 text-sm text-muted">
-                            {getDiscoveryLoadingState().text}
-                          </span>
-                        </div>
-                      }
-                    >
-                      <DiscoveryTab
-                        resourceType={config().resourceType}
-                        agentId={config().agentId}
-                        resourceId={config().resourceId}
-                        hostname={config().hostname}
-                      />
-                    </Suspense>
-              </SupportDisclosure>
-            </div>
-          )}
-        </Show>
-
-      </div>
-
+                <SupportDisclosure
+                  title="Discovery context"
+                  summary={discoveryContextSummary()}
+                  expanded={showDiscoveryContext()}
+                  onToggle={() => setShowDiscoveryContext((value) => !value)}
+                  showLabel="Show metadata"
+                  hideLabel="Hide metadata"
+                  class="h-full"
+                  dataTestId="resource-discovery-context"
+                >
+                  <Suspense
+                    fallback={
+                      <div class="flex items-center justify-center py-8">
+                        <div class="animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full" />
+                        <span class="ml-2 text-sm text-muted">
+                          {getDiscoveryLoadingState().text}
+                        </span>
+                      </div>
+                    }
+                  >
+                    <DiscoveryTab
+                      resourceType={config().resourceType}
+                      agentId={config().agentId}
+                      resourceId={config().resourceId}
+                      hostname={config().hostname}
+                    />
+                  </Suspense>
+                </SupportDisclosure>
+              </div>
+            )}
+          </Show>
+        </div>
       </div>
 
       {/* PMG Mail Tab */}
@@ -2018,7 +1472,9 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
         <Show when={activeTab() === 'mail'}>
           <Show
             when={props.resource.type === 'pmg'}
-            fallback={<TabAvailabilityNotice message={getSpecializedTabAvailabilityMessage('mail')} />}
+            fallback={
+              <TabAvailabilityNotice message={getSpecializedTabAvailabilityMessage('mail')} />
+            }
           >
             <PMGInstanceDrawer
               resourceId={props.resource.id}
@@ -2038,9 +1494,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
           <Show
             when={props.resource.type === 'k8s-cluster'}
             fallback={
-              <TabAvailabilityNotice
-                message={getSpecializedTabAvailabilityMessage('namespaces')}
-              />
+              <TabAvailabilityNotice message={getSpecializedTabAvailabilityMessage('namespaces')} />
             }
           >
             <K8sNamespacesDrawer

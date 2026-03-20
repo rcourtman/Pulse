@@ -45,6 +45,7 @@ cross-source deduplication.
 23. `internal/unifiedresources/actions.go`
 24. `frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx`
 25. `frontend-modern/src/components/Infrastructure/ResourceFacetSummary.tsx`
+26. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts`
 
 ## Shared Boundaries
 
@@ -70,7 +71,7 @@ assembly branch.
 4. Add metrics-target normalization or synthetic metrics support through `internal/unifiedresources/metrics_targets.go` and `internal/unifiedresources/metrics.go`
 5. Add platform registry, resolution, or host-dedup behavior through `internal/unifiedresources/registry.go`, `internal/unifiedresources/resolve.go`, `internal/unifiedresources/resolved_host_set.go`, `internal/unifiedresources/snapshot_source_filter.go`, `internal/unifiedresources/store.go`, `internal/unifiedresources/kubernetes_capabilities.go`, and `internal/unifiedresources/pbs_rollups.go`
 6. Add canonical governed name-resolution or policy-aware resource lookup behavior through `internal/unifiedresources/resolve.go` and `internal/unifiedresources/resolve_context.go`
-7. Add or change resource drawer timeline/facet presentation through `frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx`, `frontend-modern/src/components/Infrastructure/ResourceFacetSummary.tsx`, `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts`, and the governed `internal/api/resources.go` facet/timeline contract together
+7. Add or change resource drawer timeline/facet presentation through `frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx`, `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts`, `frontend-modern/src/components/Infrastructure/ResourceFacetSummary.tsx`, `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts`, and the governed `internal/api/resources.go` facet/timeline contract together
 
 ## Forbidden Paths
 
@@ -241,6 +242,11 @@ The frontend now also consumes those facet reads through
 `frontend-modern/src/api/resources.ts` and the dedicated resource detail
 drawer, which keeps the presentation surface aligned with the governed API
 contract instead of rebuilding the relationship and timeline inline.
+That drawer shell now routes its canonical timeline filter, facet-bundle, and
+resource-intelligence state through
+`frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts`,
+so unified-resource history and investigation orchestration has one explicit
+frontend owner instead of accumulating inline beside the JSX surface.
 The shared `ResourceFacetSummary` consumer now omits capability and
 relationship badges from the default table/detail surface entirely, while the
 backend contract keeps capability and relationship data on the owned resource

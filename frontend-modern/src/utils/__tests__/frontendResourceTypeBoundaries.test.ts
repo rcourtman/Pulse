@@ -165,9 +165,10 @@ import securityWarningSource from '@/components/SecurityWarning.tsx?raw';
 import licensePresentationSource from '@/utils/licensePresentation.ts?raw';
 import securityScorePresentationSource from '@/utils/securityScorePresentation.ts?raw';
 import securityAuthPresentationSource from '@/utils/securityAuthPresentation.ts?raw';
-import resourceDetailDrawerSource from '@/components/Infrastructure/ResourceDetailDrawer.tsx?raw';
+import resourceDetailDrawerShellSource from '@/components/Infrastructure/ResourceDetailDrawer.tsx?raw';
 import infrastructureSummarySource from '@/components/Infrastructure/InfrastructureSummary.tsx?raw';
 import resourceDetailMappersSource from '@/components/Infrastructure/resourceDetailMappers.ts?raw';
+import resourceDetailDrawerStateSource from '@/components/Infrastructure/useResourceDetailDrawerState.ts?raw';
 import unifiedResourceTableSource from '@/components/Infrastructure/UnifiedResourceTable.tsx?raw';
 import useUnifiedResourcesSource from '@/hooks/useUnifiedResources.ts?raw';
 import useWorkloadsSource from '@/hooks/useWorkloads.ts?raw';
@@ -314,6 +315,11 @@ const aiSettingsSource = [
   aiProviderConfigurationSectionSource,
   aiSettingsDialogsSource,
   aiSettingsModelSource,
+].join('\n');
+
+const resourceDetailDrawerSource = [
+  resourceDetailDrawerShellSource,
+  resourceDetailDrawerStateSource,
 ].join('\n');
 
 describe('frontend resource type boundaries', () => {

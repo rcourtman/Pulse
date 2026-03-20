@@ -192,25 +192,27 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(screen.queryByText('Runtime')).toBeNull();
     expect(screen.getByText('Change history')).toBeInTheDocument();
     expect(screen.getByTestId('resource-secondary-sections').classList.contains('flex')).toBe(true);
-    expect(
-      screen.getByTestId('resource-secondary-sections').classList.contains('flex-wrap'),
-    ).toBe(true);
+    expect(screen.getByTestId('resource-secondary-sections').classList.contains('flex-wrap')).toBe(
+      true,
+    );
     expect(
       screen.getByTestId('resource-summary-section').querySelectorAll('.bg-surface-hover.px-2.py-2')
         .length,
     ).toBe(0);
     const summarySection = screen.getByTestId('resource-summary-section');
     expect(summarySection.querySelector('.mt-3.grid.gap-3')).toBeTruthy();
-    expect(summarySection.querySelector('.mt-3.grid.gap-3')?.classList.contains('sm:grid-cols-2')).toBe(true);
-    expect(screen.getByTestId('resource-current-state-section').classList.contains('rounded-md')).toBe(
-      true,
-    );
-    expect(screen.getByTestId('resource-current-state-section').classList.contains('bg-surface')).toBe(
-      true,
-    );
-    expect(screen.getByTestId('resource-current-state-section').classList.contains('shadow-sm')).toBe(
-      true,
-    );
+    expect(
+      summarySection.querySelector('.mt-3.grid.gap-3')?.classList.contains('sm:grid-cols-2'),
+    ).toBe(true);
+    expect(
+      screen.getByTestId('resource-current-state-section').classList.contains('rounded-md'),
+    ).toBe(true);
+    expect(
+      screen.getByTestId('resource-current-state-section').classList.contains('bg-surface'),
+    ).toBe(true);
+    expect(
+      screen.getByTestId('resource-current-state-section').classList.contains('shadow-sm'),
+    ).toBe(true);
     expect(screen.getByTestId('resource-identity-section').classList.contains('rounded-md')).toBe(
       true,
     );
@@ -247,9 +249,9 @@ describe('ResourceDetailDrawer change history section', () => {
     ).toBeNull();
     expect(screen.getByRole('button', { name: 'Show metadata' })).toBeInTheDocument();
     expect(
-      screen.getByTestId('resource-discovery-context').querySelector(
-        '.mt-3.rounded.border.border-border.bg-surface.p-2\\.5',
-      ),
+      screen
+        .getByTestId('resource-discovery-context')
+        .querySelector('.mt-3.rounded.border.border-border.bg-surface.p-2\\.5'),
     ).toBeNull();
     expect(screen.queryByText('Details')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Show details' })).toBeNull();
@@ -290,7 +292,9 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(screen.getByText('stable')).toBeInTheDocument();
     expect(screen.getByText('Notes')).toBeInTheDocument();
     expect(screen.getByText('3')).toBeInTheDocument();
-    expect(screen.getByTestId('resource-correlation-context').querySelector('.rounded.border')).toBeNull();
+    expect(
+      screen.getByTestId('resource-correlation-context').querySelector('.rounded.border'),
+    ).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Show correlations' }));
     expect(
       screen
@@ -474,7 +478,9 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(
       screen.getByTestId('resource-service-details-section').querySelector('.mt-3.space-y-3'),
     ).toBeTruthy();
-    expect(screen.getByTestId('resource-service-details-section').querySelector('.mt-3.grid')).toBeNull();
+    expect(
+      screen.getByTestId('resource-service-details-section').querySelector('.mt-3.grid'),
+    ).toBeNull();
     expect(serviceDetails.getByText('PBS')).toBeInTheDocument();
     expect(serviceDetails.queryByText('PBS Service')).toBeNull();
     expect(serviceDetails.queryByText('Connection')).toBeNull();
@@ -663,6 +669,13 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(panel.queryByText('Timeline 2')).toBeNull();
     expect(await panel.findByText('Routine restart requested')).toBeInTheDocument();
     expect(panel.queryByText('CPU spike detected')).toBeNull();
+
+    fireEvent.click(panel.getByRole('button', { name: 'Clear filters' }));
+
+    expect(await panel.findByText('Changes loaded')).toBeInTheDocument();
+    expect(await panel.findByText('Timeline 2')).toBeInTheDocument();
+    expect(panel.queryByText('Filtered changes loaded')).toBeNull();
+    expect(panel.getByText('CPU spike detected')).toBeInTheDocument();
   });
 
   it('filters timeline entries by source adapter', async () => {
