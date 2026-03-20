@@ -195,6 +195,9 @@ describe('ResourceDetailDrawer change history section', () => {
       screen.getByTestId('resource-summary-section').querySelectorAll('.bg-surface-hover.px-2.py-2')
         .length,
     ).toBe(0);
+    expect(
+      screen.getByTestId('resource-summary-section').querySelector('.mt-3.grid.gap-4'),
+    ).toBeNull();
     expect(screen.queryByText('Host details')).toBeNull();
     expect(screen.queryByText('Service details')).toBeNull();
     expect(screen.queryByText('Supporting context')).toBeNull();
