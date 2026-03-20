@@ -271,9 +271,6 @@ read as one first-screen answer rather than two adjacent mini-surfaces.
 That summary shell now reads as one linear current-state and identity column
 instead of a split two-pane grid, so the first read stays sequential rather
 than asking the operator to compare two side-by-side blocks.
-The summary shell now stacks current-state and identity sections vertically
-instead of a responsive two-column grid, so the overview reads as one linear
-sheet rather than a paired layout on wider screens.
 The drawer header now stays focused on canonical identity and source/type
 badges only, while workload/service drill-down links and Kubernetes platform
 signals live with the summary shell, so the top strip does not compete with

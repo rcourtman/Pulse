@@ -914,7 +914,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
             <div class="text-[11px] font-medium uppercase tracking-wide text-base-content">
               Summary
             </div>
-            <div class="mt-3 space-y-4">
+            <div class="mt-3 grid gap-4">
               <div data-testid="resource-current-state-section">
                 <div class="mb-2 text-[10px] font-medium uppercase tracking-wide text-base-content">
                   Current state

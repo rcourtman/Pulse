@@ -196,7 +196,7 @@ describe('ResourceDetailDrawer change history section', () => {
         .length,
     ).toBe(0);
     expect(
-      screen.getByTestId('resource-summary-section').querySelector('.mt-3.grid.gap-4'),
+      screen.getByTestId('resource-summary-section').querySelector('.mt-3.space-y-4'),
     ).toBeNull();
     expect(
       screen.getByTestId('resource-change-history-section').querySelector('.mt-3.grid.gap-2'),
