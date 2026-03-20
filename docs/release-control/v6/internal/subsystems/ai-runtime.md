@@ -199,6 +199,13 @@ timeline instead of reading those durable facts only from AI memory. AI memory
 may retain annotation-only entries such as notes and analysis, but the live
 incident timeline shown to handlers, prompts, and operators should read as one
 projection over canonical resource history plus investigation-local annotations.
+That read-side projection must also discard incident-local derived lifecycle
+state when canonical history is present: acknowledgement, resolution, and
+command or runbook entries in `internal/ai/memory/incidents.go` may still
+exist as compatibility-era shell state for segmentation and fallback, but the
+projected incident returned to runtime consumers must rebuild those fields from
+canonical resource changes and preserve only annotation-local entries such as
+analysis and notes.
 The AI correlation root-cause engine also consumes the canonical unified-
 resource relationship model directly, so cross-resource reasoning stays aligned
 with the same relationship edges that back the resource API instead of

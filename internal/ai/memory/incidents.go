@@ -238,7 +238,7 @@ func (s *IncidentStore) RecordAlertFired(alert *alerts.Alert) {
 
 	incident := s.findOpenIncidentByAlertIdentifierLocked(alert.ID)
 	if incident == nil {
-		incident = newIncidentFromAlert(alert)
+		incident = newIncidentShellFromAlert(alert)
 		s.incidents = append(s.incidents, incident)
 		if !s.projectsFromCanonicalLocked() {
 			s.addEventLocked(incident, IncidentEventAlertFired, formatAlertSummary(alert), map[string]interface{}{
@@ -249,7 +249,7 @@ func (s *IncidentStore) RecordAlertFired(alert *alerts.Alert) {
 			})
 		}
 	} else {
-		updateIncidentFromAlert(incident, alert)
+		updateIncidentShellFromAlert(incident, alert)
 		incident.Status = IncidentStatusOpen
 		incident.ClosedAt = nil
 	}
@@ -324,7 +324,7 @@ func (s *IncidentStore) RecordAlertResolved(alert *alerts.Alert, resolvedAt time
 
 	incident := s.findOpenIncidentByAlertIdentifierLocked(alert.ID)
 	if incident == nil {
-		incident = newIncidentFromAlert(alert)
+		incident = newIncidentShellFromAlert(alert)
 		s.incidents = append(s.incidents, incident)
 	}
 
@@ -720,14 +720,10 @@ func (s *IncidentStore) projectIncident(incident *Incident, timelineStore Incide
 	}
 
 	projected := cloneIncident(incident)
-	projectedKinds := make(map[IncidentEventType]bool, len(projectedEvents))
-	for _, event := range projectedEvents {
-		projectedKinds[event.Type] = true
-	}
-
+	resetDerivedIncidentState(projected)
 	filtered := make([]IncidentEvent, 0, len(projected.Events)+len(projectedEvents))
 	for _, event := range projected.Events {
-		if isCanonicalProjectedIncidentEventType(event.Type) && projectedKinds[event.Type] {
+		if isCanonicalProjectedIncidentEventType(event.Type) {
 			continue
 		}
 		filtered = append(filtered, cloneIncidentEvent(event))
@@ -1063,7 +1059,7 @@ func cloneIncidentEventDetails(details map[string]any) map[string]interface{} {
 	return cloned
 }
 
-func newIncidentFromAlert(alert *alerts.Alert) *Incident {
+func newIncidentShellFromAlert(alert *alerts.Alert) *Incident {
 	openedAt := alert.StartTime
 	if openedAt.IsZero() {
 		openedAt = time.Now()
@@ -1088,7 +1084,7 @@ func newIncidentFromAlert(alert *alerts.Alert) *Incident {
 	}
 }
 
-func updateIncidentFromAlert(incident *Incident, alert *alerts.Alert) {
+func updateIncidentShellFromAlert(incident *Incident, alert *alerts.Alert) {
 	if incident == nil || alert == nil {
 		return
 	}
@@ -1107,11 +1103,22 @@ func updateIncidentFromAlert(incident *Incident, alert *alerts.Alert) {
 func (s *IncidentStore) ensureIncidentForAlertLocked(alert *alerts.Alert) *Incident {
 	incident := s.findLatestIncidentByAlertIdentifierLocked(alert.ID)
 	if incident == nil {
-		incident = newIncidentFromAlert(alert)
+		incident = newIncidentShellFromAlert(alert)
 		s.incidents = append(s.incidents, incident)
 	}
-	updateIncidentFromAlert(incident, alert)
+	updateIncidentShellFromAlert(incident, alert)
 	return incident
+}
+
+func resetDerivedIncidentState(incident *Incident) {
+	if incident == nil {
+		return
+	}
+	incident.Status = IncidentStatusOpen
+	incident.ClosedAt = nil
+	incident.Acknowledged = false
+	incident.AckUser = ""
+	incident.AckTime = nil
 }
 
 func (s *IncidentStore) addEventLocked(incident *Incident, eventType IncidentEventType, summary string, details map[string]interface{}) {

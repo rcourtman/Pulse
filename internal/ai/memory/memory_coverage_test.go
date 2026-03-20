@@ -500,8 +500,8 @@ func TestIncidentStore_HelperPaths(t *testing.T) {
 		t.Fatalf("expected same incident to be reused")
 	}
 
-	updateIncidentFromAlert(nil, alert)
-	updateIncidentFromAlert(incident, nil)
+	updateIncidentShellFromAlert(nil, alert)
+	updateIncidentShellFromAlert(incident, nil)
 
 	store.addEventLocked(nil, IncidentEventAnalysis, "", nil)
 	store.addEventLocked(incident, IncidentEventAnalysis, "", nil)

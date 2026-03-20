@@ -176,6 +176,73 @@ func TestIncidentStore_ProjectsCanonicalTimelineWhenAttached(t *testing.T) {
 	}
 }
 
+func TestIncidentStore_CanonicalProjectionOverridesLegacyLifecycleState(t *testing.T) {
+	store := NewIncidentStore(IncidentStoreConfig{
+		MaxIncidents:         10,
+		MaxEventsPerIncident: 20,
+		MaxAgeDays:           30,
+	})
+
+	alertStartedAt := time.Now().UTC().Add(-20 * time.Minute).Truncate(time.Second)
+	alert := &alerts.Alert{
+		ID:           "alert-projected-legacy-1",
+		Type:         "cpu",
+		Level:        alerts.AlertLevelCritical,
+		ResourceID:   "res-projected-legacy-1",
+		ResourceName: "vm-projected-legacy-1",
+		StartTime:    alertStartedAt,
+		Value:        96,
+		Threshold:    80,
+	}
+
+	store.RecordAlertFired(alert)
+	store.RecordAlertAcknowledged(alert, "legacy-user")
+	store.RecordRunbook(alert.ID, "rb-legacy", "Restart service", "resolved", true, "Recovered")
+	store.RecordAlertResolved(alert, alertStartedAt.Add(2*time.Minute))
+	store.RecordAnalysis(alert.ID, "Canonical projection should keep this annotation", nil)
+
+	canonicalStore := unifiedresources.NewMemoryStore()
+	store.SetResourceTimelineStore(canonicalStore)
+
+	fired := unifiedresources.BuildAlertTimelineChange(alert.ResourceID, unifiedresources.ChangeAlertFired, alert.StartTime, "", unifiedresources.AlertTimelineChange{
+		AlertIdentifier: alert.ID,
+		AlertType:       alert.Type,
+		AlertLevel:      string(alert.Level),
+		AlertValue:      alert.Value,
+		AlertThreshold:  alert.Threshold,
+	})
+	if err := canonicalStore.RecordChange(*fired); err != nil {
+		t.Fatalf("RecordChange(%s): %v", fired.ID, err)
+	}
+
+	timeline := store.GetTimelineByAlertIdentifier(alert.ID)
+	if timeline == nil {
+		t.Fatal("expected projected timeline")
+	}
+	if timeline.Status != IncidentStatusOpen {
+		t.Fatalf("Status = %q, want %q", timeline.Status, IncidentStatusOpen)
+	}
+	if timeline.Acknowledged {
+		t.Fatal("expected canonical projection to clear legacy acknowledgement state")
+	}
+	if timeline.ClosedAt != nil {
+		t.Fatal("expected canonical projection to clear legacy resolved state")
+	}
+
+	foundAnalysis := false
+	for _, event := range timeline.Events {
+		switch event.Type {
+		case IncidentEventAnalysis:
+			foundAnalysis = true
+		case IncidentEventAlertAcknowledged, IncidentEventAlertResolved, IncidentEventRunbook:
+			t.Fatalf("unexpected legacy projected event type %q in canonical timeline", event.Type)
+		}
+	}
+	if !foundAnalysis {
+		t.Fatal("expected annotation events to remain in projected timeline")
+	}
+}
+
 func TestIncidentStore_GetTimelineByAlertAt(t *testing.T) {
 	store := NewIncidentStore(IncidentStoreConfig{
 		MaxIncidents:         10,
