@@ -269,8 +269,8 @@ The overview now begins with one primary `Summary` shell instead of separate
 peer `Runtime` and `Identity` cards, so current state and canonical identity
 read as one first-screen answer rather than two adjacent mini-surfaces.
 That summary shell now reads as one linear current-state and identity column
-instead of a split two-pane grid, so the first read stays sequential rather
-than asking the operator to compare two side-by-side blocks.
+with a responsive two-column grid on wider screens, so the first read stays
+compact without making the operator scan a stack of nested cards.
 The drawer header now stays focused on canonical identity and source/type
 badges only, while workload/service drill-down links and Kubernetes platform
 signals live with the summary shell, so the top strip does not compete with

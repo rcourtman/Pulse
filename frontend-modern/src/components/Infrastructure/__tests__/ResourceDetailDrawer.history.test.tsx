@@ -195,9 +195,9 @@ describe('ResourceDetailDrawer change history section', () => {
       screen.getByTestId('resource-summary-section').querySelectorAll('.bg-surface-hover.px-2.py-2')
         .length,
     ).toBe(0);
-    expect(
-      screen.getByTestId('resource-summary-section').querySelector('.mt-3.space-y-4'),
-    ).toBeNull();
+    const summarySection = screen.getByTestId('resource-summary-section');
+    expect(summarySection.querySelector('.mt-3.grid.gap-4')).toBeTruthy();
+    expect(summarySection.querySelector('.mt-3.grid.gap-4')?.classList.contains('sm:grid-cols-2')).toBe(true);
     expect(
       screen.getByTestId('resource-change-history-section').querySelector('.mt-3.grid.gap-2'),
     ).toBeNull();
