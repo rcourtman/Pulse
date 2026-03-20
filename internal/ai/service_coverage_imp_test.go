@@ -9,6 +9,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/cost"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
@@ -188,6 +189,62 @@ func TestService_RecordIncidentRunbook(t *testing.T) {
 	}
 	if changes[0].Kind != unifiedresources.ChangeRunbookExecuted {
 		t.Fatalf("Kind = %q, want %q", changes[0].Kind, unifiedresources.ChangeRunbookExecuted)
+	}
+}
+
+func TestService_SetIncidentStore_AttachesCanonicalTimelineProjection(t *testing.T) {
+	svc := NewService(nil, nil)
+	canonicalStore := unifiedresources.NewMemoryStore()
+
+	svc.resourceExportStore = canonicalStore
+	svc.resourceExportStoreOrgID = svc.orgID
+
+	incidentStore := memory.NewIncidentStore(memory.IncidentStoreConfig{})
+	svc.SetIncidentStore(incidentStore)
+
+	alertStartedAt := time.Now().UTC().Add(-15 * time.Minute).Truncate(time.Second)
+	alert := &alerts.Alert{
+		ID:           "alert-service-projected",
+		Type:         "cpu",
+		Level:        alerts.AlertLevelCritical,
+		ResourceID:   "vm-service-projected",
+		ResourceName: "vm-service-projected",
+		StartTime:    alertStartedAt,
+		Value:        94,
+		Threshold:    80,
+	}
+	incidentStore.RecordAlertFired(alert)
+	incidentStore.RecordAnalysis(alert.ID, "analysis", nil)
+
+	for _, change := range []*unifiedresources.ResourceChange{
+		unifiedresources.BuildAlertTimelineChange(alert.ResourceID, unifiedresources.ChangeAlertFired, alertStartedAt, "", unifiedresources.AlertTimelineChange{
+			AlertIdentifier: alert.ID,
+			AlertType:       alert.Type,
+			AlertLevel:      string(alert.Level),
+			AlertValue:      alert.Value,
+			AlertThreshold:  alert.Threshold,
+		}),
+		unifiedresources.BuildRunbookExecutionChange(alert.ResourceID, alert.ID, "agent:pulse-patrol", "rb-service", "Restart service", "resolved", true, "ok", nil),
+	} {
+		if err := canonicalStore.RecordChange(*change); err != nil {
+			t.Fatalf("RecordChange(%s): %v", change.ID, err)
+		}
+	}
+
+	timeline := incidentStore.GetTimelineByAlertIdentifier(alert.ID)
+	if timeline == nil {
+		t.Fatal("expected projected timeline")
+	}
+
+	foundRunbook := false
+	for _, event := range timeline.Events {
+		if event.Type == memory.IncidentEventRunbook {
+			foundRunbook = true
+			break
+		}
+	}
+	if !foundRunbook {
+		t.Fatal("expected canonical runbook event in projected timeline")
 	}
 }
 

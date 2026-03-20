@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
@@ -91,9 +92,11 @@ func TestLegacyMemorySourceAliasesRemainCanonicalized(t *testing.T) {
 
 func TestAlertLifecycleCanonicalChangesRemainWritable(t *testing.T) {
 	store := unifiedresources.NewMemoryStore()
+	incidentStore := memory.NewIncidentStore(memory.IncidentStoreConfig{})
 	monitor := &Monitor{
-		resourceStore: unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(store)),
+		incidentStore: incidentStore,
 	}
+	monitor.SetResourceStore(unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(store)))
 
 	startedAt := time.Date(2026, 3, 20, 9, 0, 0, 0, time.UTC)
 	alert := &alerts.Alert{
@@ -116,5 +119,13 @@ func TestAlertLifecycleCanonicalChangesRemainWritable(t *testing.T) {
 	}
 	if changes[0].Kind != unifiedresources.ChangeAlertFired {
 		t.Fatalf("Kind = %q, want %q", changes[0].Kind, unifiedresources.ChangeAlertFired)
+	}
+
+	timeline := incidentStore.GetTimelineByAlertIdentifier(alert.ID)
+	if timeline == nil {
+		t.Fatal("expected incident timeline")
+	}
+	if len(timeline.Events) != 1 || timeline.Events[0].Type != memory.IncidentEventAlertFired {
+		t.Fatalf("expected projected alert-fired event, got %#v", timeline.Events)
 	}
 }

@@ -9,19 +9,19 @@ import (
 )
 
 const (
-	metadataAlertIdentifier = "alert_identifier"
-	metadataAlertType       = "alert_type"
-	metadataAlertLevel      = "alert_level"
-	metadataAlertMessage    = "alert_message"
-	metadataAlertValue      = "alert_value"
-	metadataAlertThreshold  = "alert_threshold"
-	metadataCommand         = "command"
-	metadataSuccess         = "success"
-	metadataOutputExcerpt   = "output_excerpt"
-	metadataRunbookID       = "runbook_id"
-	metadataOutcome         = "outcome"
-	metadataAutomatic       = "automatic"
-	metadataMessage         = "message"
+	MetadataAlertIdentifier = "alert_identifier"
+	MetadataAlertType       = "alert_type"
+	MetadataAlertLevel      = "alert_level"
+	MetadataAlertMessage    = "alert_message"
+	MetadataAlertValue      = "alert_value"
+	MetadataAlertThreshold  = "alert_threshold"
+	MetadataCommand         = "command"
+	MetadataSuccess         = "success"
+	MetadataOutputExcerpt   = "output_excerpt"
+	MetadataRunbookID       = "runbook_id"
+	MetadataOutcome         = "outcome"
+	MetadataAutomatic       = "automatic"
+	MetadataMessage         = "message"
 )
 
 const resourceChangeOutputExcerptLimit = 500
@@ -60,12 +60,12 @@ func BuildAlertTimelineChange(resourceID string, kind ChangeKind, occurredAt tim
 		Actor:      strings.TrimSpace(actor),
 		Reason:     alertChangeReason(kind, alert),
 		Metadata: map[string]any{
-			metadataAlertIdentifier: strings.TrimSpace(alert.AlertIdentifier),
-			metadataAlertType:       strings.TrimSpace(alert.AlertType),
-			metadataAlertLevel:      strings.TrimSpace(alert.AlertLevel),
-			metadataAlertMessage:    strings.TrimSpace(alert.AlertMessage),
-			metadataAlertValue:      alert.AlertValue,
-			metadataAlertThreshold:  alert.AlertThreshold,
+			MetadataAlertIdentifier: strings.TrimSpace(alert.AlertIdentifier),
+			MetadataAlertType:       strings.TrimSpace(alert.AlertType),
+			MetadataAlertLevel:      strings.TrimSpace(alert.AlertLevel),
+			MetadataAlertMessage:    strings.TrimSpace(alert.AlertMessage),
+			MetadataAlertValue:      alert.AlertValue,
+			MetadataAlertThreshold:  alert.AlertThreshold,
 		},
 	}
 	if !occurredAt.IsZero() {
@@ -96,11 +96,11 @@ func BuildCommandExecutionChange(resourceID, alertIdentifier, actor, command str
 		Reason:     commandExecutionReason(command, success),
 		Metadata:   cloneChangeMetadata(details),
 	}
-	change.Metadata[metadataAlertIdentifier] = strings.TrimSpace(alertIdentifier)
-	change.Metadata[metadataCommand] = command
-	change.Metadata[metadataSuccess] = success
+	change.Metadata[MetadataAlertIdentifier] = strings.TrimSpace(alertIdentifier)
+	change.Metadata[MetadataCommand] = command
+	change.Metadata[MetadataSuccess] = success
 	if excerpt := truncateResourceChangeOutput(output, resourceChangeOutputExcerptLimit); excerpt != "" {
-		change.Metadata[metadataOutputExcerpt] = excerpt
+		change.Metadata[MetadataOutputExcerpt] = excerpt
 	}
 	return change
 }
@@ -130,15 +130,15 @@ func BuildRunbookExecutionChange(resourceID, alertIdentifier, actor, runbookID, 
 	if automatic {
 		change.SourceType = SourceAgentAction
 	}
-	change.Metadata[metadataAlertIdentifier] = strings.TrimSpace(alertIdentifier)
-	change.Metadata[metadataRunbookID] = runbookID
-	change.Metadata[metadataOutcome] = strings.TrimSpace(outcome)
-	change.Metadata[metadataAutomatic] = automatic
+	change.Metadata[MetadataAlertIdentifier] = strings.TrimSpace(alertIdentifier)
+	change.Metadata[MetadataRunbookID] = runbookID
+	change.Metadata[MetadataOutcome] = strings.TrimSpace(outcome)
+	change.Metadata[MetadataAutomatic] = automatic
 	if trimmedTitle := strings.TrimSpace(title); trimmedTitle != "" {
 		change.Metadata["title"] = trimmedTitle
 	}
 	if trimmedMessage := strings.TrimSpace(message); trimmedMessage != "" {
-		change.Metadata[metadataMessage] = trimmedMessage
+		change.Metadata[MetadataMessage] = trimmedMessage
 	}
 	return change
 }

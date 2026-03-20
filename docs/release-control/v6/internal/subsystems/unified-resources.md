@@ -99,6 +99,10 @@ incident memory may still project those events for one investigation thread,
 but the durable source of truth for resource-affecting alert lifecycle and
 remediation activity now belongs to unified-resource history keyed by
 canonical resource ID.
+The canonical monitor adapter therefore also serves read-side incident
+projection support: when a consumer needs an alert timeline, the incident view
+should read canonical resource changes back through the attached timeline store
+instead of rebuilding another durable event history beside `ResourceChange`.
 Kubernetes node identity enrichment remains intentionally hostname-based when
 the API cannot supply machine-level identity signals; the code may borrow
 machine-id and MAC evidence from a uniquely matched host agent, but duplicate

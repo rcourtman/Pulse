@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 func TestIncidentJSONCanonicalOutput(t *testing.T) {
@@ -100,6 +101,78 @@ func TestIncidentStore_RecordTimeline(t *testing.T) {
 
 	if ok := store.RecordNote(alert.ID, "", "note text", ""); !ok {
 		t.Fatalf("expected note to be saved")
+	}
+}
+
+func TestIncidentStore_ProjectsCanonicalTimelineWhenAttached(t *testing.T) {
+	store := NewIncidentStore(IncidentStoreConfig{
+		MaxIncidents:         10,
+		MaxEventsPerIncident: 20,
+		MaxAgeDays:           30,
+	})
+	canonicalStore := unifiedresources.NewMemoryStore()
+	store.SetResourceTimelineStore(canonicalStore)
+
+	alertStartedAt := time.Now().UTC().Add(-15 * time.Minute).Truncate(time.Second)
+	alert := &alerts.Alert{
+		ID:           "alert-projected-1",
+		Type:         "cpu",
+		Level:        alerts.AlertLevelCritical,
+		ResourceID:   "res-projected-1",
+		ResourceName: "vm-projected-1",
+		StartTime:    alertStartedAt,
+		Value:        91,
+		Threshold:    80,
+	}
+
+	store.RecordAlertFired(alert)
+	store.RecordAnalysis(alert.ID, "Pulse Patrol analysis completed", nil)
+
+	fired := unifiedresources.BuildAlertTimelineChange(alert.ResourceID, unifiedresources.ChangeAlertFired, alert.StartTime, "", unifiedresources.AlertTimelineChange{
+		AlertIdentifier: alert.ID,
+		AlertType:       alert.Type,
+		AlertLevel:      string(alert.Level),
+		AlertMessage:    alert.Message,
+		AlertValue:      alert.Value,
+		AlertThreshold:  alert.Threshold,
+	})
+	runbook := unifiedresources.BuildRunbookExecutionChange(alert.ResourceID, alert.ID, "agent:pulse-patrol", "rb-1", "Restart service", "resolved", true, "Recovered", nil)
+	resolvedAt := alert.StartTime.Add(5 * time.Minute)
+	resolved := unifiedresources.BuildAlertTimelineChange(alert.ResourceID, unifiedresources.ChangeAlertResolved, resolvedAt, "", unifiedresources.AlertTimelineChange{
+		AlertIdentifier: alert.ID,
+		AlertType:       alert.Type,
+		AlertLevel:      string(alert.Level),
+		AlertMessage:    "CPU normalized",
+	})
+	for _, change := range []*unifiedresources.ResourceChange{fired, runbook, resolved} {
+		if err := canonicalStore.RecordChange(*change); err != nil {
+			t.Fatalf("RecordChange(%s): %v", change.ID, err)
+		}
+	}
+
+	timeline := store.GetTimelineByAlertIdentifier(alert.ID)
+	if timeline == nil {
+		t.Fatal("expected projected timeline")
+	}
+	if timeline.Status != IncidentStatusResolved {
+		t.Fatalf("Status = %q, want %q", timeline.Status, IncidentStatusResolved)
+	}
+
+	foundAnalysis := false
+	foundRunbook := false
+	for _, event := range timeline.Events {
+		switch event.Type {
+		case IncidentEventAnalysis:
+			foundAnalysis = true
+		case IncidentEventRunbook:
+			foundRunbook = true
+		}
+	}
+	if !foundAnalysis {
+		t.Fatal("expected analysis event to remain in projected timeline")
+	}
+	if !foundRunbook {
+		t.Fatal("expected runbook event to be projected from canonical history")
 	}
 }
 

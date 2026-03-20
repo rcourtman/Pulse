@@ -77,6 +77,10 @@ leaving that lifecycle only inside alert-scoped incident memory. Incident
 timelines may still project those breadcrumbs for operator flow, but the
 durable backend truth for alert lifecycle now lives on the canonical resource
 timeline.
+The monitor-owned incident store wiring must therefore attach the canonical
+resource timeline reader whenever the unified monitor adapter is present, so
+operator alert timelines and AI incident context project those lifecycle events
+from canonical history instead of reading a second monitoring-owned timeline.
 
 The registry proof map now treats provider discovery and metrics history as
 their own governed runtime surfaces instead of leaving them folded into a

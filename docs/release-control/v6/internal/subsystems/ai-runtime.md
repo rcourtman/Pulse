@@ -193,6 +193,12 @@ projection only: it may retain notes, analysis, command executions, runbooks,
 and alert lifecycle breadcrumbs for one incident, but it must not become a
 parallel source of truth for durable backend history that already belongs to
 `internal/unifiedresources/`.
+When canonical resource history is available, the incident read path must also
+project alert lifecycle and remediation entries back out of the unified-resource
+timeline instead of reading those durable facts only from AI memory. AI memory
+may retain annotation-only entries such as notes and analysis, but the live
+incident timeline shown to handlers, prompts, and operators should read as one
+projection over canonical resource history plus investigation-local annotations.
 The AI correlation root-cause engine also consumes the canonical unified-
 resource relationship model directly, so cross-resource reasoning stays aligned
 with the same relationship edges that back the resource API instead of

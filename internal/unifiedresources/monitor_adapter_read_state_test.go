@@ -239,3 +239,31 @@ func TestMonitorAdapterRecordChangeForwardsToStore(t *testing.T) {
 		t.Fatalf("Kind = %q, want %q", changes[0].Kind, ChangeAlertFired)
 	}
 }
+
+func TestMonitorAdapterGetRecentChangesForwardsToStore(t *testing.T) {
+	store := NewMemoryStore()
+	adapter := NewMonitorAdapter(NewRegistry(store))
+	observedAt := time.Date(2026, 3, 20, 12, 5, 0, 0, time.UTC)
+
+	if err := store.RecordChange(ResourceChange{
+		ID:         "command-change-1",
+		ResourceID: "vm-2",
+		ObservedAt: observedAt,
+		Kind:       ChangeCommandExecuted,
+		SourceType: SourceAgentAction,
+		Confidence: ConfidenceHigh,
+	}); err != nil {
+		t.Fatalf("RecordChange: %v", err)
+	}
+
+	changes, err := adapter.GetRecentChanges("vm-2", time.Time{}, 10)
+	if err != nil {
+		t.Fatalf("GetRecentChanges: %v", err)
+	}
+	if len(changes) != 1 {
+		t.Fatalf("expected 1 forwarded change, got %d", len(changes))
+	}
+	if changes[0].Kind != ChangeCommandExecuted {
+		t.Fatalf("Kind = %q, want %q", changes[0].Kind, ChangeCommandExecuted)
+	}
+}

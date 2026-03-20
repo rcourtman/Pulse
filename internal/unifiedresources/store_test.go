@@ -786,6 +786,10 @@ func TestStorePersistsCanonicalIncidentTimelineKinds(t *testing.T) {
 			t.Fatalf("CountRecentChangesByKind[%q] = %d, want 1", kind, counts[kind])
 		}
 	}
+
+	if got := results[0].Kind; got != ChangeRunbookExecuted {
+		t.Fatalf("latest kind = %q, want %q", got, ChangeRunbookExecuted)
+	}
 }
 
 func TestCountRecentChangesBySourceType_RespectsFilters(t *testing.T) {

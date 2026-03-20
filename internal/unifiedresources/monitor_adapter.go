@@ -51,6 +51,16 @@ func (a *MonitorAdapter) RecordChange(change ResourceChange) error {
 	return registry.store.RecordChange(change)
 }
 
+// GetRecentChanges forwards canonical resource-history reads into the
+// underlying resource store when monitoring has a durable store attached.
+func (a *MonitorAdapter) GetRecentChanges(canonicalID string, since time.Time, limit int) ([]ResourceChange, error) {
+	registry := a.currentRegistry()
+	if registry == nil || registry.store == nil {
+		return nil, nil
+	}
+	return registry.store.GetRecentChanges(canonicalID, since, limit)
+}
+
 func (a *MonitorAdapter) replaceRegistry(snapshot models.StateSnapshot, recordsBySource map[DataSource][]IngestRecord) {
 	registry := a.currentRegistry()
 	if registry == nil {

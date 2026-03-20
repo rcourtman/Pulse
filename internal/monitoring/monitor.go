@@ -3853,8 +3853,17 @@ func (m *Monitor) DisableTemperatureMonitoring() {
 func (m *Monitor) SetResourceStore(store ResourceStoreInterface) {
 	m.mu.Lock()
 	m.resourceStore = store
+	incidentStore := m.incidentStore
 	m.mu.Unlock()
 	log.Info().Msg("resource store set for polling optimization")
+
+	if incidentStore != nil {
+		if timelineStore, ok := store.(memory.IncidentTimelineStore); ok {
+			incidentStore.SetResourceTimelineStore(timelineStore)
+		} else {
+			incidentStore.SetResourceTimelineStore(nil)
+		}
+	}
 
 	// Immediately backfill the store from current state so ReadState
 	// consumers have data as soon as the store is wired.

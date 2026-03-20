@@ -326,11 +326,16 @@ func (s *Service) SetOrgID(orgID string) {
 	}
 
 	oldStore := s.resourceExportStore
+	incidentStore := s.incidentStore
 	persistence := s.persistence
 	s.orgID = normalized
 	s.resourceExportStore = nil
 	s.resourceExportStoreOrgID = ""
 	s.mu.Unlock()
+
+	if incidentStore != nil {
+		incidentStore.SetResourceTimelineStore(nil)
+	}
 
 	if oldStore != nil {
 		if err := oldStore.Close(); err != nil {
@@ -352,7 +357,11 @@ func (s *Service) SetOrgID(orgID string) {
 	if s.orgID == normalized && s.resourceExportStore == nil {
 		s.resourceExportStore = store
 		s.resourceExportStoreOrgID = normalized
+		incidentStore = s.incidentStore
 		s.mu.Unlock()
+		if incidentStore != nil {
+			incidentStore.SetResourceTimelineStore(store)
+		}
 		return
 	}
 	s.mu.Unlock()
@@ -757,6 +766,9 @@ func (s *Service) SetIncidentStore(store *memory.IncidentStore) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.incidentStore = store
+	if store != nil {
+		store.SetResourceTimelineStore(s.resourceExportStore)
+	}
 
 	if s.patrolService != nil {
 		s.patrolService.SetIncidentStore(store)
@@ -1002,9 +1014,14 @@ func (s *Service) Stop() {
 
 	s.mu.Lock()
 	store := s.resourceExportStore
+	incidentStore := s.incidentStore
 	s.resourceExportStore = nil
 	s.resourceExportStoreOrgID = ""
 	defer s.mu.Unlock()
+
+	if incidentStore != nil {
+		incidentStore.SetResourceTimelineStore(nil)
+	}
 
 	if s.infraDiscoveryCancel != nil {
 		s.infraDiscoveryCancel()

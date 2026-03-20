@@ -196,7 +196,7 @@ func TestBuildIncidentTimelineChanges(t *testing.T) {
 	if alertChange.SourceType != SourceHeuristic {
 		t.Fatalf("SourceType = %q, want %q", alertChange.SourceType, SourceHeuristic)
 	}
-	if got := alertChange.Metadata[metadataAlertIdentifier]; got != "alert-1" {
+	if got := alertChange.Metadata[MetadataAlertIdentifier]; got != "alert-1" {
 		t.Fatalf("alert_identifier = %#v, want alert-1", got)
 	}
 
@@ -212,7 +212,7 @@ func TestBuildIncidentTimelineChanges(t *testing.T) {
 	if commandChange.SourceType != SourceAgentAction {
 		t.Fatalf("SourceType = %q, want %q", commandChange.SourceType, SourceAgentAction)
 	}
-	if got := commandChange.Metadata[metadataOutputExcerpt].(string); len(got) <= resourceChangeOutputExcerptLimit {
+	if got := commandChange.Metadata[MetadataOutputExcerpt].(string); len(got) <= resourceChangeOutputExcerptLimit {
 		t.Fatalf("expected truncated output excerpt to include ellipsis, got length %d", len(got))
 	}
 
@@ -226,7 +226,7 @@ func TestBuildIncidentTimelineChanges(t *testing.T) {
 	if runbookChange.SourceType != SourceAgentAction {
 		t.Fatalf("SourceType = %q, want %q", runbookChange.SourceType, SourceAgentAction)
 	}
-	if got := runbookChange.Metadata[metadataRunbookID]; got != "rb-1" {
+	if got := runbookChange.Metadata[MetadataRunbookID]; got != "rb-1" {
 		t.Fatalf("runbook_id = %#v, want rb-1", got)
 	}
 }

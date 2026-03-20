@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
 
@@ -153,24 +154,32 @@ type IncidentStoreConfig struct {
 // investigation memory. Durable resource history belongs to the canonical
 // unified-resource change model.
 type IncidentStore struct {
-	mu           sync.RWMutex
-	saveMu       sync.Mutex
-	incidents    []*Incident
-	maxIncidents int
-	maxEvents    int
-	maxAge       time.Duration
-	dataDir      string
-	filePath     string
+	mu                    sync.RWMutex
+	saveMu                sync.Mutex
+	incidents             []*Incident
+	maxIncidents          int
+	maxEvents             int
+	maxAge                time.Duration
+	dataDir               string
+	filePath              string
+	resourceTimelineStore IncidentTimelineStore
 }
 
 const (
-	defaultIncidentMaxIncidents = 500
-	defaultIncidentMaxEvents    = 120
-	defaultIncidentMaxAgeDays   = 90
-	incidentFileName            = "ai_incidents.json"
-	maxIncidentFileSize         = 20 * 1024 * 1024 // 20MB
-	incidentStartMatchTolerance = 10 * time.Minute
+	defaultIncidentMaxIncidents  = 500
+	defaultIncidentMaxEvents     = 120
+	defaultIncidentMaxAgeDays    = 90
+	incidentFileName             = "ai_incidents.json"
+	maxIncidentFileSize          = 20 * 1024 * 1024 // 20MB
+	incidentStartMatchTolerance  = 10 * time.Minute
+	projectedIncidentChangeLimit = 256
 )
+
+// IncidentTimelineStore exposes the canonical resource timeline used to derive
+// incident lifecycle and remediation history.
+type IncidentTimelineStore interface {
+	GetRecentChanges(canonicalID string, since time.Time, limit int) ([]unifiedresources.ResourceChange, error)
+}
 
 // NewIncidentStore creates a new incident store with persistence.
 func NewIncidentStore(cfg IncidentStoreConfig) *IncidentStore {
@@ -207,6 +216,17 @@ func NewIncidentStore(cfg IncidentStoreConfig) *IncidentStore {
 	return store
 }
 
+// SetResourceTimelineStore attaches the canonical resource timeline used to
+// project durable incident lifecycle and remediation history.
+func (s *IncidentStore) SetResourceTimelineStore(store IncidentTimelineStore) {
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	s.resourceTimelineStore = store
+	s.mu.Unlock()
+}
+
 // RecordAlertFired opens or updates an incident for a fired alert.
 func (s *IncidentStore) RecordAlertFired(alert *alerts.Alert) {
 	if alert == nil {
@@ -220,14 +240,18 @@ func (s *IncidentStore) RecordAlertFired(alert *alerts.Alert) {
 	if incident == nil {
 		incident = newIncidentFromAlert(alert)
 		s.incidents = append(s.incidents, incident)
-		s.addEventLocked(incident, IncidentEventAlertFired, formatAlertSummary(alert), map[string]interface{}{
-			"type":      alert.Type,
-			"level":     string(alert.Level),
-			"value":     alert.Value,
-			"threshold": alert.Threshold,
-		})
+		if !s.projectsFromCanonicalLocked() {
+			s.addEventLocked(incident, IncidentEventAlertFired, formatAlertSummary(alert), map[string]interface{}{
+				"type":      alert.Type,
+				"level":     string(alert.Level),
+				"value":     alert.Value,
+				"threshold": alert.Threshold,
+			})
+		}
 	} else {
 		updateIncidentFromAlert(incident, alert)
+		incident.Status = IncidentStatusOpen
+		incident.ClosedAt = nil
 	}
 
 	s.trimLocked()
@@ -254,9 +278,11 @@ func (s *IncidentStore) RecordAlertAcknowledged(alert *alerts.Alert, user string
 	}
 	incident.AckUser = user
 
-	s.addEventLocked(incident, IncidentEventAlertAcknowledged, "Alert acknowledged", map[string]interface{}{
-		"user": user,
-	})
+	if !s.projectsFromCanonicalLocked() {
+		s.addEventLocked(incident, IncidentEventAlertAcknowledged, "Alert acknowledged", map[string]interface{}{
+			"user": user,
+		})
+	}
 
 	s.trimLocked()
 	s.saveAsync()
@@ -277,9 +303,11 @@ func (s *IncidentStore) RecordAlertUnacknowledged(alert *alerts.Alert, user stri
 	incident.AckTime = nil
 	incident.AckUser = ""
 
-	s.addEventLocked(incident, IncidentEventAlertUnacknowledged, "Alert unacknowledged", map[string]interface{}{
-		"user": user,
-	})
+	if !s.projectsFromCanonicalLocked() {
+		s.addEventLocked(incident, IncidentEventAlertUnacknowledged, "Alert unacknowledged", map[string]interface{}{
+			"user": user,
+		})
+	}
 
 	s.trimLocked()
 	s.saveAsync()
@@ -307,9 +335,11 @@ func (s *IncidentStore) RecordAlertResolved(alert *alerts.Alert, resolvedAt time
 	}
 	incident.ClosedAt = &resolvedAt
 
-	s.addEventLocked(incident, IncidentEventAlertResolved, "Alert resolved", map[string]interface{}{
-		"resolved_at": resolvedAt.Format(time.RFC3339),
-	})
+	if !s.projectsFromCanonicalLocked() {
+		s.addEventLocked(incident, IncidentEventAlertResolved, "Alert resolved", map[string]interface{}{
+			"resolved_at": resolvedAt.Format(time.RFC3339),
+		})
+	}
 
 	s.trimLocked()
 	s.saveAsync()
@@ -367,6 +397,11 @@ func (s *IncidentStore) RecordCommand(alertIdentifier, command string, success b
 	if details == nil {
 		details = make(map[string]interface{})
 	}
+	if incident.ResourceID == "" {
+		if resourceID, ok := details["resource_id"].(string); ok {
+			incident.ResourceID = strings.TrimSpace(resourceID)
+		}
+	}
 	details["command"] = command
 	details["success"] = success
 	if output != "" {
@@ -379,7 +414,9 @@ func (s *IncidentStore) RecordCommand(alertIdentifier, command string, success b
 	}
 	summary := fmt.Sprintf("Command %s: %s", status, command)
 
-	s.addEventLocked(incident, IncidentEventCommand, summary, details)
+	if !s.projectsFromCanonicalLocked() {
+		s.addEventLocked(incident, IncidentEventCommand, summary, details)
+	}
 	s.trimLocked()
 	s.saveAsync()
 }
@@ -414,7 +451,9 @@ func (s *IncidentStore) RecordRunbook(alertIdentifier, runbookID, title string, 
 		details["message"] = message
 	}
 
-	s.addEventLocked(incident, IncidentEventRunbook, summary, details)
+	if !s.projectsFromCanonicalLocked() {
+		s.addEventLocked(incident, IncidentEventRunbook, summary, details)
+	}
 	s.trimLocked()
 	s.saveAsync()
 }
@@ -461,13 +500,15 @@ func (s *IncidentStore) GetTimelineByAlertIdentifier(alertIdentifier string) *In
 	}
 
 	s.mu.RLock()
-	defer s.mu.RUnlock()
+	incident := cloneIncident(s.findLatestIncidentByAlertIdentifierLocked(alertIdentifier))
+	timelineStore := s.resourceTimelineStore
+	maxAge := s.maxAge
+	s.mu.RUnlock()
 
-	incident := s.findLatestIncidentByAlertIdentifierLocked(alertIdentifier)
 	if incident == nil {
-		return nil
+		return s.projectIncidentFromCanonical(alertIdentifier, time.Time{}, timelineStore, maxAge)
 	}
-	return cloneIncident(incident)
+	return s.projectIncident(incident, timelineStore)
 }
 
 // GetTimelineByAlertAt returns the incident closest to the provided start time for an alert.
@@ -480,8 +521,6 @@ func (s *IncidentStore) GetTimelineByAlertAt(alertIdentifier string, startedAt t
 	}
 
 	s.mu.RLock()
-	defer s.mu.RUnlock()
-
 	var best *Incident
 	var bestDelta time.Duration
 	for _, incident := range s.incidents {
@@ -497,11 +536,14 @@ func (s *IncidentStore) GetTimelineByAlertAt(alertIdentifier string, startedAt t
 			bestDelta = delta
 		}
 	}
+	timelineStore := s.resourceTimelineStore
+	maxAge := s.maxAge
+	s.mu.RUnlock()
 
 	if best == nil || bestDelta > incidentStartMatchTolerance {
-		return nil
+		return s.projectIncidentFromCanonical(alertIdentifier, startedAt, timelineStore, maxAge)
 	}
-	return cloneIncident(best)
+	return s.projectIncident(cloneIncident(best), timelineStore)
 }
 
 // ListIncidentsByResource returns recent incidents for a resource.
@@ -511,8 +553,6 @@ func (s *IncidentStore) ListIncidentsByResource(resourceID string, limit int) []
 	}
 
 	s.mu.RLock()
-	defer s.mu.RUnlock()
-
 	var matches []*Incident
 	for i := len(s.incidents) - 1; i >= 0; i-- {
 		incident := s.incidents[i]
@@ -523,7 +563,17 @@ func (s *IncidentStore) ListIncidentsByResource(resourceID string, limit int) []
 			}
 		}
 	}
-	return matches
+	timelineStore := s.resourceTimelineStore
+	s.mu.RUnlock()
+
+	if timelineStore == nil {
+		return matches
+	}
+	projected := make([]*Incident, 0, len(matches))
+	for _, incident := range matches {
+		projected = append(projected, s.projectIncident(incident, timelineStore))
+	}
+	return projected
 }
 
 // FormatForAlert returns a condensed incident timeline for prompt injection.
@@ -591,22 +641,30 @@ func (s *IncidentStore) FormatForPatrol(limit int) string {
 	}
 
 	s.mu.RLock()
-	defer s.mu.RUnlock()
+	snapshot := make([]*Incident, 0, len(s.incidents))
+	for i := len(s.incidents) - 1; i >= 0 && len(snapshot) < limit; i-- {
+		if incident := s.incidents[i]; incident != nil {
+			snapshot = append(snapshot, cloneIncident(incident))
+		}
+	}
+	timelineStore := s.resourceTimelineStore
+	s.mu.RUnlock()
 
-	if len(s.incidents) == 0 {
+	if len(snapshot) == 0 {
 		return ""
+	}
+
+	if timelineStore != nil {
+		for i := range snapshot {
+			snapshot[i] = s.projectIncident(snapshot[i], timelineStore)
+		}
 	}
 
 	var b strings.Builder
 	b.WriteString("\n\n## Incident Memory\n")
 	b.WriteString("Recent incidents across infrastructure:\n")
 
-	count := 0
-	for i := len(s.incidents) - 1; i >= 0 && count < limit; i-- {
-		incident := s.incidents[i]
-		if incident == nil {
-			continue
-		}
+	for _, incident := range snapshot {
 		status := string(incident.Status)
 		if incident.Acknowledged && incident.Status == IncidentStatusOpen {
 			status = "acknowledged"
@@ -642,10 +700,367 @@ func (s *IncidentStore) FormatForPatrol(limit int) string {
 			b.WriteString(truncateOutput(incident.Message, 80))
 		}
 		b.WriteString("\n")
-		count++
 	}
 
 	return b.String()
+}
+
+func (s *IncidentStore) projectsFromCanonicalLocked() bool {
+	return s.resourceTimelineStore != nil
+}
+
+func (s *IncidentStore) projectIncident(incident *Incident, timelineStore IncidentTimelineStore) *Incident {
+	if incident == nil || timelineStore == nil {
+		return incident
+	}
+
+	projectedEvents := s.loadProjectedIncidentEvents(incident, timelineStore)
+	if len(projectedEvents) == 0 {
+		return incident
+	}
+
+	projected := cloneIncident(incident)
+	projectedKinds := make(map[IncidentEventType]bool, len(projectedEvents))
+	for _, event := range projectedEvents {
+		projectedKinds[event.Type] = true
+	}
+
+	filtered := make([]IncidentEvent, 0, len(projected.Events)+len(projectedEvents))
+	for _, event := range projected.Events {
+		if isCanonicalProjectedIncidentEventType(event.Type) && projectedKinds[event.Type] {
+			continue
+		}
+		filtered = append(filtered, cloneIncidentEvent(event))
+	}
+	filtered = append(filtered, projectedEvents...)
+	sortIncidentEvents(filtered)
+	projected.Events = filtered
+	applyProjectedIncidentState(projected, projectedEvents)
+	return projected
+}
+
+func (s *IncidentStore) projectIncidentFromCanonical(alertIdentifier string, startedAt time.Time, timelineStore IncidentTimelineStore, maxAge time.Duration) *Incident {
+	if timelineStore == nil || strings.TrimSpace(alertIdentifier) == "" {
+		return nil
+	}
+
+	since := time.Now().Add(-defaultIncidentMaxAgeDays * 24 * time.Hour)
+	if maxAge > 0 {
+		since = time.Now().Add(-maxAge)
+	}
+
+	changes, err := timelineStore.GetRecentChanges("", since, projectedIncidentChangeLimit)
+	if err != nil || len(changes) == 0 {
+		return nil
+	}
+
+	events := make([]IncidentEvent, 0, len(changes))
+	projected := &Incident{
+		ID:              "projected-" + strings.TrimSpace(alertIdentifier),
+		AlertIdentifier: strings.TrimSpace(alertIdentifier),
+		Status:          IncidentStatusOpen,
+	}
+	for _, change := range changes {
+		if projectedAlertIdentifier(change) != projected.AlertIdentifier {
+			continue
+		}
+		event, ok := incidentEventFromResourceChange(change)
+		if !ok {
+			continue
+		}
+		events = append(events, event)
+		hydrateIncidentFromCanonicalChange(projected, change)
+	}
+	if len(events) == 0 {
+		return nil
+	}
+
+	sortIncidentEvents(events)
+	projected.Events = events
+	if !startedAt.IsZero() {
+		openAt := projected.OpenedAt
+		if openAt.IsZero() {
+			openAt = events[0].Timestamp
+		}
+		delta := openAt.Sub(startedAt)
+		if delta < 0 {
+			delta = -delta
+		}
+		if delta > incidentStartMatchTolerance {
+			return nil
+		}
+	}
+	applyProjectedIncidentState(projected, events)
+	return projected
+}
+
+func (s *IncidentStore) loadProjectedIncidentEvents(incident *Incident, timelineStore IncidentTimelineStore) []IncidentEvent {
+	if incident == nil || timelineStore == nil {
+		return nil
+	}
+
+	resourceID := strings.TrimSpace(incident.ResourceID)
+	alertIdentifier := strings.TrimSpace(incident.AlertIdentifier)
+	if resourceID == "" || alertIdentifier == "" {
+		return nil
+	}
+
+	since := incident.OpenedAt
+	if since.IsZero() {
+		since = time.Now().Add(-defaultIncidentMaxAgeDays * 24 * time.Hour)
+	} else {
+		since = since.Add(-incidentStartMatchTolerance)
+	}
+
+	changes, err := timelineStore.GetRecentChanges(resourceID, since, projectedIncidentChangeLimit)
+	if err != nil || len(changes) == 0 {
+		return nil
+	}
+
+	events := make([]IncidentEvent, 0, len(changes))
+	for _, change := range changes {
+		if projectedAlertIdentifier(change) != alertIdentifier {
+			continue
+		}
+		event, ok := incidentEventFromResourceChange(change)
+		if !ok {
+			continue
+		}
+		events = append(events, event)
+		hydrateIncidentFromCanonicalChange(incident, change)
+	}
+	sortIncidentEvents(events)
+	return events
+}
+
+func hydrateIncidentFromCanonicalChange(incident *Incident, change unifiedresources.ResourceChange) {
+	if incident == nil {
+		return
+	}
+	if resourceID := strings.TrimSpace(change.ResourceID); resourceID != "" && incident.ResourceID == "" {
+		incident.ResourceID = resourceID
+	}
+	if alertType, ok := stringMetadata(change.Metadata, unifiedresources.MetadataAlertType); ok && incident.AlertType == "" {
+		incident.AlertType = alertType
+	}
+	if level, ok := stringMetadata(change.Metadata, unifiedresources.MetadataAlertLevel); ok && incident.Level == "" {
+		incident.Level = level
+	}
+	if message, ok := stringMetadata(change.Metadata, unifiedresources.MetadataAlertMessage); ok && incident.Message == "" {
+		incident.Message = message
+	}
+	if incident.OpenedAt.IsZero() {
+		incident.OpenedAt = incidentEventTimestamp(change)
+	}
+}
+
+func applyProjectedIncidentState(incident *Incident, events []IncidentEvent) {
+	if incident == nil || len(events) == 0 {
+		return
+	}
+
+	for _, event := range events {
+		if incident.OpenedAt.IsZero() || (!event.Timestamp.IsZero() && event.Timestamp.Before(incident.OpenedAt)) {
+			incident.OpenedAt = event.Timestamp
+		}
+
+		switch event.Type {
+		case IncidentEventAlertFired:
+			incident.Status = IncidentStatusOpen
+			incident.ClosedAt = nil
+		case IncidentEventAlertAcknowledged:
+			incident.Acknowledged = true
+			timestamp := event.Timestamp
+			incident.AckTime = &timestamp
+			incident.AckUser = eventActor(event)
+		case IncidentEventAlertUnacknowledged:
+			incident.Acknowledged = false
+			incident.AckTime = nil
+			incident.AckUser = ""
+		case IncidentEventAlertResolved:
+			incident.Status = IncidentStatusResolved
+			timestamp := event.Timestamp
+			incident.ClosedAt = &timestamp
+		}
+	}
+}
+
+func incidentEventFromResourceChange(change unifiedresources.ResourceChange) (IncidentEvent, bool) {
+	eventType, ok := incidentEventTypeFromChangeKind(change.Kind)
+	if !ok {
+		return IncidentEvent{}, false
+	}
+
+	details := cloneIncidentEventDetails(change.Metadata)
+	if user := strings.TrimSpace(change.Actor); user != "" {
+		switch eventType {
+		case IncidentEventAlertAcknowledged, IncidentEventAlertUnacknowledged:
+			details["user"] = user
+		}
+	}
+
+	return IncidentEvent{
+		ID:        strings.TrimSpace(change.ID),
+		Type:      eventType,
+		Timestamp: incidentEventTimestamp(change),
+		Summary:   incidentEventSummaryFromChange(change, eventType),
+		Details:   details,
+	}, true
+}
+
+func incidentEventTypeFromChangeKind(kind unifiedresources.ChangeKind) (IncidentEventType, bool) {
+	switch kind {
+	case unifiedresources.ChangeAlertFired:
+		return IncidentEventAlertFired, true
+	case unifiedresources.ChangeAlertAcknowledged:
+		return IncidentEventAlertAcknowledged, true
+	case unifiedresources.ChangeAlertUnacknowledged:
+		return IncidentEventAlertUnacknowledged, true
+	case unifiedresources.ChangeAlertResolved:
+		return IncidentEventAlertResolved, true
+	case unifiedresources.ChangeCommandExecuted:
+		return IncidentEventCommand, true
+	case unifiedresources.ChangeRunbookExecuted:
+		return IncidentEventRunbook, true
+	default:
+		return "", false
+	}
+}
+
+func incidentEventSummaryFromChange(change unifiedresources.ResourceChange, eventType IncidentEventType) string {
+	switch eventType {
+	case IncidentEventAlertFired:
+		if alertType, ok := stringMetadata(change.Metadata, unifiedresources.MetadataAlertType); ok {
+			level, _ := stringMetadata(change.Metadata, unifiedresources.MetadataAlertLevel)
+			value, hasValue := floatMetadata(change.Metadata, unifiedresources.MetadataAlertValue)
+			threshold, hasThreshold := floatMetadata(change.Metadata, unifiedresources.MetadataAlertThreshold)
+			if hasValue || hasThreshold {
+				return fmt.Sprintf("Alert triggered: %s (%s %.1f >= %.1f)", alertType, level, value, threshold)
+			}
+			if level != "" {
+				return fmt.Sprintf("Alert triggered: %s (%s)", alertType, level)
+			}
+		}
+		return "Alert triggered"
+	case IncidentEventAlertAcknowledged:
+		return "Alert acknowledged"
+	case IncidentEventAlertUnacknowledged:
+		return "Alert unacknowledged"
+	case IncidentEventAlertResolved:
+		return "Alert resolved"
+	default:
+		if summary := strings.TrimSpace(change.Reason); summary != "" {
+			return summary
+		}
+		return unifiedresources.ChangeKindLabel(change.Kind)
+	}
+}
+
+func incidentEventTimestamp(change unifiedresources.ResourceChange) time.Time {
+	if change.OccurredAt != nil && !change.OccurredAt.IsZero() {
+		return change.OccurredAt.UTC()
+	}
+	if !change.ObservedAt.IsZero() {
+		return change.ObservedAt.UTC()
+	}
+	return time.Now().UTC()
+}
+
+func projectedAlertIdentifier(change unifiedresources.ResourceChange) string {
+	value, _ := stringMetadata(change.Metadata, unifiedresources.MetadataAlertIdentifier)
+	return value
+}
+
+func stringMetadata(metadata map[string]any, key string) (string, bool) {
+	if len(metadata) == 0 {
+		return "", false
+	}
+	value, ok := metadata[key]
+	if !ok {
+		return "", false
+	}
+	str, ok := value.(string)
+	if !ok {
+		return "", false
+	}
+	str = strings.TrimSpace(str)
+	if str == "" {
+		return "", false
+	}
+	return str, true
+}
+
+func floatMetadata(metadata map[string]any, key string) (float64, bool) {
+	if len(metadata) == 0 {
+		return 0, false
+	}
+	value, ok := metadata[key]
+	if !ok {
+		return 0, false
+	}
+	switch typed := value.(type) {
+	case float64:
+		return typed, true
+	case float32:
+		return float64(typed), true
+	case int:
+		return float64(typed), true
+	case int64:
+		return float64(typed), true
+	default:
+		return 0, false
+	}
+}
+
+func eventActor(event IncidentEvent) string {
+	if event.Details == nil {
+		return ""
+	}
+	value, ok := event.Details["user"].(string)
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(value)
+}
+
+func isCanonicalProjectedIncidentEventType(eventType IncidentEventType) bool {
+	switch eventType {
+	case IncidentEventAlertFired,
+		IncidentEventAlertAcknowledged,
+		IncidentEventAlertUnacknowledged,
+		IncidentEventAlertResolved,
+		IncidentEventCommand,
+		IncidentEventRunbook:
+		return true
+	default:
+		return false
+	}
+}
+
+func sortIncidentEvents(events []IncidentEvent) {
+	sort.Slice(events, func(i, j int) bool {
+		if events[i].Timestamp.Equal(events[j].Timestamp) {
+			return events[i].ID < events[j].ID
+		}
+		return events[i].Timestamp.Before(events[j].Timestamp)
+	})
+}
+
+func cloneIncidentEvent(event IncidentEvent) IncidentEvent {
+	cloned := event
+	cloned.Details = cloneIncidentEventDetails(event.Details)
+	return cloned
+}
+
+func cloneIncidentEventDetails(details map[string]any) map[string]interface{} {
+	if len(details) == 0 {
+		return map[string]interface{}{}
+	}
+	cloned := make(map[string]interface{}, len(details))
+	for key, value := range details {
+		cloned[key] = value
+	}
+	return cloned
 }
 
 func newIncidentFromAlert(alert *alerts.Alert) *Incident {
