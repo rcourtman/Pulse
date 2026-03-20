@@ -17,6 +17,7 @@ import type {
 import { requiresGovernedResourceDisplay } from '@/types/resource';
 import { formatUptime, formatRelativeTime, formatAbsoluteTime } from '@/utils/format';
 import { StatusDot } from '@/components/shared/StatusDot';
+import { Card } from '@/components/shared/Card';
 import { TagBadges } from '@/components/Dashboard/TagBadges';
 import { getAgentStatusIndicator } from '@/utils/status';
 import {
@@ -907,17 +908,15 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
       {/* Overview Tab */}
       <div class={activeTab() === 'overview' ? '' : 'hidden'} style={{ 'overflow-anchor': 'none' }}>
         <div class="space-y-3">
-          <div
-            data-testid="resource-summary-section"
-            class="rounded border border-border bg-surface p-3"
-          >
+          <div data-testid="resource-summary-section">
             <div class="text-[11px] font-medium uppercase tracking-wide text-base-content">
               Summary
             </div>
-            <div class="mt-3 grid gap-4 sm:grid-cols-2">
-              <div
+            <div class="mt-3 grid gap-3 sm:grid-cols-2">
+              <Card
                 data-testid="resource-current-state-section"
-                class="rounded border border-border bg-surface-hover p-3"
+                padding="sm"
+                class="h-full shadow-sm"
               >
                 <div class="mb-2 text-[10px] font-medium uppercase tracking-wide text-base-content">
                   Current state
@@ -1105,11 +1104,12 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                     </div>
                   </Show>
                 </div>
-              </div>
+              </Card>
 
-              <div
+              <Card
                 data-testid="resource-identity-section"
-                class="rounded border border-border bg-surface-hover p-3"
+                padding="sm"
+                class="h-full shadow-sm"
               >
                 <div class="mb-2 text-[10px] font-medium uppercase tracking-wide text-base-content">
                   Identity
@@ -1131,7 +1131,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                     </div>
                   </Show>
                 </div>
-              </div>
+              </Card>
             </div>
           </div>
 

@@ -196,12 +196,24 @@ describe('ResourceDetailDrawer change history section', () => {
         .length,
     ).toBe(0);
     const summarySection = screen.getByTestId('resource-summary-section');
-    expect(summarySection.querySelector('.mt-3.grid.gap-4')).toBeTruthy();
-    expect(summarySection.querySelector('.mt-3.grid.gap-4')?.classList.contains('sm:grid-cols-2')).toBe(true);
-    expect(screen.getByTestId('resource-current-state-section').classList.contains('rounded')).toBe(
+    expect(summarySection.querySelector('.mt-3.grid.gap-3')).toBeTruthy();
+    expect(summarySection.querySelector('.mt-3.grid.gap-3')?.classList.contains('sm:grid-cols-2')).toBe(true);
+    expect(screen.getByTestId('resource-current-state-section').classList.contains('rounded-md')).toBe(
       true,
     );
-    expect(screen.getByTestId('resource-identity-section').classList.contains('rounded')).toBe(
+    expect(screen.getByTestId('resource-current-state-section').classList.contains('bg-surface')).toBe(
+      true,
+    );
+    expect(screen.getByTestId('resource-current-state-section').classList.contains('shadow-sm')).toBe(
+      true,
+    );
+    expect(screen.getByTestId('resource-identity-section').classList.contains('rounded-md')).toBe(
+      true,
+    );
+    expect(screen.getByTestId('resource-identity-section').classList.contains('bg-surface')).toBe(
+      true,
+    );
+    expect(screen.getByTestId('resource-identity-section').classList.contains('shadow-sm')).toBe(
       true,
     );
     expect(
