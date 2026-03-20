@@ -16,6 +16,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	testifymock "github.com/stretchr/testify/mock"
@@ -445,6 +446,109 @@ func TestGetAlertIncidentTimeline_ListExportsCanonicalAlertIdentifier(t *testing
 	_ = json.NewDecoder(w.Body).Decode(&incidents)
 	assert.Len(t, incidents, 1)
 	assert.Equal(t, "canonical:a1", incidents[0]["alertIdentifier"])
+}
+
+func TestGetAlertIncidentTimeline_ProjectsCanonicalLifecycleAndRemediation(t *testing.T) {
+	mockMonitor := new(MockAlertMonitor)
+	incidentStore := memory.NewIncidentStore(memory.IncidentStoreConfig{})
+	canonicalStore := unifiedresources.NewMemoryStore()
+	incidentStore.SetResourceTimelineStore(canonicalStore)
+	mockMonitor.On("GetIncidentStore").Return(incidentStore)
+	h := NewAlertHandlers(nil, mockMonitor, nil)
+
+	alertStartedAt := time.Now().UTC().Add(-20 * time.Minute).Truncate(time.Second)
+	alert := &alerts.Alert{
+		ID:           "canonical:projected-a1",
+		Type:         "cpu",
+		Level:        alerts.AlertLevelCritical,
+		ResourceID:   "resource-1",
+		ResourceName: "resource-1",
+		Message:      "CPU high",
+		StartTime:    alertStartedAt,
+		Value:        95,
+		Threshold:    80,
+	}
+
+	incidentStore.RecordAlertFired(alert)
+	incidentStore.RecordAnalysis(alert.ID, "Pulse Patrol analysis completed", map[string]interface{}{"source": "test"})
+
+	changes := []*unifiedresources.ResourceChange{
+		unifiedresources.BuildAlertTimelineChange(alert.ResourceID, unifiedresources.ChangeAlertFired, alert.StartTime, "", unifiedresources.AlertTimelineChange{
+			AlertIdentifier: alert.ID,
+			AlertType:       alert.Type,
+			AlertLevel:      string(alert.Level),
+			AlertMessage:    alert.Message,
+			AlertValue:      alert.Value,
+			AlertThreshold:  alert.Threshold,
+		}),
+		unifiedresources.BuildAlertTimelineChange(alert.ResourceID, unifiedresources.ChangeAlertAcknowledged, alert.StartTime.Add(2*time.Minute), "operator", unifiedresources.AlertTimelineChange{
+			AlertIdentifier: alert.ID,
+			AlertType:       alert.Type,
+			AlertLevel:      string(alert.Level),
+			AlertMessage:    alert.Message,
+		}),
+		unifiedresources.BuildRunbookExecutionChange(alert.ResourceID, alert.ID, "agent:pulse-patrol", "rb-1", "Restart service", "resolved", true, "Recovered", nil),
+		unifiedresources.BuildAlertTimelineChange(alert.ResourceID, unifiedresources.ChangeAlertResolved, alert.StartTime.Add(5*time.Minute), "", unifiedresources.AlertTimelineChange{
+			AlertIdentifier: alert.ID,
+			AlertType:       alert.Type,
+			AlertLevel:      string(alert.Level),
+			AlertMessage:    "CPU normalized",
+		}),
+	}
+	for _, change := range changes {
+		if change == nil {
+			t.Fatal("expected canonical change to be built")
+		}
+		if err := canonicalStore.RecordChange(*change); err != nil {
+			t.Fatalf("RecordChange(%s): %v", change.ID, err)
+		}
+	}
+
+	req := httptest.NewRequest("GET", "/api/alerts/incidents?alertIdentifier=canonical:projected-a1", nil)
+	w := httptest.NewRecorder()
+	h.GetAlertIncidentTimeline(w, req)
+
+	assert.Equal(t, 200, w.Code)
+	var incident map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&incident); err != nil {
+		t.Fatalf("decode incident response: %v", err)
+	}
+
+	assert.Equal(t, "canonical:projected-a1", incident["alertIdentifier"])
+	assert.Equal(t, string(memory.IncidentStatusResolved), incident["status"])
+	assert.Equal(t, true, incident["acknowledged"])
+	assert.Equal(t, "operator", incident["ackUser"])
+
+	events, ok := incident["events"].([]interface{})
+	if !ok {
+		t.Fatalf("expected events array, got %#v", incident["events"])
+	}
+
+	foundAnalysis := false
+	foundAck := false
+	foundRunbook := false
+	foundResolved := false
+	for _, rawEvent := range events {
+		event, ok := rawEvent.(map[string]interface{})
+		if !ok {
+			t.Fatalf("expected event object, got %#v", rawEvent)
+		}
+		switch event["type"] {
+		case string(memory.IncidentEventAnalysis):
+			foundAnalysis = true
+		case string(memory.IncidentEventAlertAcknowledged):
+			foundAck = true
+		case string(memory.IncidentEventRunbook):
+			foundRunbook = true
+		case string(memory.IncidentEventAlertResolved):
+			foundResolved = true
+		}
+	}
+
+	assert.True(t, foundAnalysis, "expected analysis annotation in exported timeline")
+	assert.True(t, foundAck, "expected canonical acknowledgement in exported timeline")
+	assert.True(t, foundRunbook, "expected canonical runbook in exported timeline")
+	assert.True(t, foundResolved, "expected canonical resolution in exported timeline")
 }
 
 func TestBulkAcknowledgeAlerts(t *testing.T) {
