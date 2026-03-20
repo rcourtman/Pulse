@@ -271,6 +271,9 @@ read as one first-screen answer rather than two adjacent mini-surfaces.
 That summary shell now reads as one linear current-state and identity column
 with a responsive two-column grid on wider screens, so the first read stays
 compact without making the operator scan a stack of nested cards.
+Each summary column keeps its own bordered card boundary, so the split read
+still has a clear visual container on both sides instead of feeling like loose
+label groups.
 The drawer header now stays focused on canonical identity and source/type
 badges only, while workload/service drill-down links and Kubernetes platform
 signals live with the summary shell, so the top strip does not compete with

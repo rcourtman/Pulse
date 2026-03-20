@@ -198,6 +198,12 @@ describe('ResourceDetailDrawer change history section', () => {
     const summarySection = screen.getByTestId('resource-summary-section');
     expect(summarySection.querySelector('.mt-3.grid.gap-4')).toBeTruthy();
     expect(summarySection.querySelector('.mt-3.grid.gap-4')?.classList.contains('sm:grid-cols-2')).toBe(true);
+    expect(screen.getByTestId('resource-current-state-section').classList.contains('rounded')).toBe(
+      true,
+    );
+    expect(screen.getByTestId('resource-identity-section').classList.contains('rounded')).toBe(
+      true,
+    );
     expect(
       screen.getByTestId('resource-change-history-section').querySelector('.mt-3.grid.gap-2'),
     ).toBeNull();

@@ -915,7 +915,10 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
               Summary
             </div>
             <div class="mt-3 grid gap-4 sm:grid-cols-2">
-              <div data-testid="resource-current-state-section">
+              <div
+                data-testid="resource-current-state-section"
+                class="rounded border border-border bg-surface-hover p-3"
+              >
                 <div class="mb-2 text-[10px] font-medium uppercase tracking-wide text-base-content">
                   Current state
                 </div>
@@ -1104,7 +1107,10 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                 </div>
               </div>
 
-              <div data-testid="resource-identity-section">
+              <div
+                data-testid="resource-identity-section"
+                class="rounded border border-border bg-surface-hover p-3"
+              >
                 <div class="mb-2 text-[10px] font-medium uppercase tracking-wide text-base-content">
                   Identity
                 </div>
