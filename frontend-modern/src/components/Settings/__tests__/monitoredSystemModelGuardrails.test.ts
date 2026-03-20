@@ -16,6 +16,8 @@ import auditLogPanelSource from '../AuditLogPanel.tsx?raw';
 import auditWebhookPanelSource from '../AuditWebhookPanel.tsx?raw';
 import systemSettingsStateSource from '../useSystemSettingsState.ts?raw';
 import infrastructureSettingsStateSource from '../useInfrastructureSettingsState.ts?raw';
+import infrastructureWorkspaceSource from '../InfrastructureWorkspace.tsx?raw';
+import infrastructureWorkspaceModelSource from '../infrastructureWorkspaceModel.ts?raw';
 import settingsPanelRegistrySource from '../useSettingsPanelRegistry.tsx?raw';
 import infrastructureSummarySource from '@/components/Infrastructure/InfrastructureSummary.tsx?raw';
 import infrastructureSelectorComponentSource from '@/components/shared/InfrastructureSelector.tsx?raw';
@@ -512,6 +514,22 @@ describe('monitored-system model guardrails', () => {
     expect(upgradePresentationSource).toContain('export const UPGRADE_TRIAL_LABEL');
     expect(upgradePresentationSource).toContain('export const UPGRADE_TRIAL_LINK_CLASS');
     expect(upgradePresentationSource).toContain('export function getUpgradeActionButtonClass');
+  });
+
+  it('keeps the infrastructure workspace on router-derived view state', () => {
+    expect(infrastructureWorkspaceSource).toContain('./infrastructureWorkspaceModel');
+    expect(infrastructureWorkspaceSource).not.toContain('createSignal<InfrastructureWorkspaceView>');
+    expect(infrastructureWorkspaceSource).not.toContain('setActiveView(');
+    expect(infrastructureWorkspaceSource).not.toContain("navigate('/settings/infrastructure/proxmox')");
+    expect(infrastructureWorkspaceModelSource).toContain(
+      'export function getInfrastructureWorkspaceViewFromPath',
+    );
+    expect(infrastructureWorkspaceModelSource).toContain(
+      "pathname.startsWith('/settings/infrastructure/proxmox')",
+    );
+    expect(infrastructureWorkspaceModelSource).toContain(
+      "path: '/settings/infrastructure/operations'",
+    );
   });
 
   it('keeps websocket State contract resource-first without legacy per-type arrays', () => {

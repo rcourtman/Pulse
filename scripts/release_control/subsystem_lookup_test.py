@@ -1253,6 +1253,42 @@ class SubsystemLookupTest(unittest.TestCase):
             ],
         )
 
+    def test_lookup_paths_assigns_infrastructure_workspace_model_to_agent_lifecycle(self) -> None:
+        result = lookup_paths(
+            ["frontend-modern/src/components/Settings/infrastructureWorkspaceModel.ts"]
+        )
+        self.assertEqual(result["unowned_runtime_files"], [])
+        self.assertEqual(
+            {item["subsystem"] for item in result["impacted_subsystems"]},
+            {"agent-lifecycle"},
+        )
+        file_entry = result["files"][0]
+        self.assertEqual(file_entry["classification"], "runtime")
+        self.assertEqual(
+            {match["subsystem"] for match in file_entry["matches"]},
+            {"agent-lifecycle"},
+        )
+        match = file_entry["matches"][0]
+        self.assertEqual(
+            match["contract"],
+            "docs/release-control/v6/internal/subsystems/agent-lifecycle.md",
+        )
+        self.assertEqual(match["lane_context"]["lane_id"], "L16")
+        self.assertEqual(
+            match["verification_requirement"]["id"],
+            "direct-proxmox-workspace-surface",
+        )
+        self.assertEqual(
+            match["verification_requirement"]["exact_files"],
+            [
+                "frontend-modern/src/components/Settings/__tests__/InfrastructureWorkspace.test.tsx",
+                "frontend-modern/src/components/Settings/__tests__/UnifiedAgents.test.tsx",
+                "frontend-modern/src/components/Settings/__tests__/monitoredSystemModelGuardrails.test.ts",
+                "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
+                "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
+            ],
+        )
+
     def test_lookup_paths_reports_agent_install_backend_as_shared_boundary(self) -> None:
         result = lookup_paths(["internal/api/agent_install_command_shared.go"])
         self.assertEqual(result["unowned_runtime_files"], [])

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import settingsSource from '../Settings.tsx?raw';
 import settingsShellSource from '../SettingsPageShell.tsx?raw';
 import infrastructureWorkspaceSource from '../InfrastructureWorkspace.tsx?raw';
+import infrastructureWorkspaceModelSource from '../infrastructureWorkspaceModel.ts?raw';
 import infrastructureInstallPanelSource from '../InfrastructureInstallPanel.tsx?raw';
 import infrastructureOperationsControllerSource from '../InfrastructureOperationsController.tsx?raw';
 import infrastructureOperationsModelSource from '../infrastructureOperationsModel.tsx?raw';
@@ -78,6 +79,7 @@ const extractedModules = [
   '../nodeModalModel.ts',
   '../useNodeModalState.ts',
   '../InfrastructureWorkspace.tsx',
+  '../infrastructureWorkspaceModel.ts',
   '../InfrastructureInstallPanel.tsx',
   '../InfrastructureReportingPanel.tsx',
   '../AIProviderConfigurationSection.tsx',
@@ -347,6 +349,9 @@ describe('Settings architecture guardrails', () => {
     expect(infrastructureWorkspaceSource).not.toMatch(/<h[12][^>]*>/);
     expect(infrastructureWorkspaceSource).not.toContain('Add and manage infrastructure');
     expect(infrastructureWorkspaceSource).not.toContain('tracking-[0.22em]');
+    expect(infrastructureWorkspaceSource).toContain('./infrastructureWorkspaceModel');
+    expect(infrastructureWorkspaceSource).not.toContain('createSignal<InfrastructureWorkspaceView>');
+    expect(infrastructureWorkspaceSource).not.toContain('createEffect(() =>');
     expect(infrastructureWorkspaceSource).toContain('InfrastructureInstallPanel');
     expect(infrastructureWorkspaceSource).toContain('InfrastructureReportingPanel');
     expect(infrastructureInstallPanelSource).toContain('useInfrastructureOperationsState');
@@ -354,6 +359,15 @@ describe('Settings architecture guardrails', () => {
     expect(infrastructureOperationsControllerSource).toContain('useInfrastructureOperationsState');
     expect(infrastructureOperationsStateSource).toContain(
       'export const useInfrastructureOperationsState',
+    );
+    expect(infrastructureWorkspaceModelSource).toContain(
+      'export const INFRASTRUCTURE_WORKSPACE_TABS',
+    );
+    expect(infrastructureWorkspaceModelSource).toContain(
+      'export function getInfrastructureWorkspaceViewFromPath',
+    );
+    expect(infrastructureWorkspaceModelSource).toContain(
+      'export function buildInfrastructureWorkspacePath',
     );
     expect(infrastructureInstallPanelSource).not.toContain('<PageHeader');
     expect(infrastructureReportingPanelSource).not.toContain('<PageHeader');

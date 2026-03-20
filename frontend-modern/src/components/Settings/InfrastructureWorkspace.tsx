@@ -1,47 +1,26 @@
-import { Component, createEffect, createSignal, Match, Switch } from 'solid-js';
+import { Component, Match, Switch, createMemo } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
 import { Card } from '@/components/shared/Card';
 import { Subtabs } from '@/components/shared/Subtabs';
 import { InfrastructureInstallPanel } from './InfrastructureInstallPanel';
 import { InfrastructureReportingPanel } from './InfrastructureReportingPanel';
 import { ProxmoxSettingsPanel, type ProxmoxSettingsPanelProps } from './ProxmoxSettingsPanel';
-
-type InfrastructureWorkspaceView = 'install' | 'direct' | 'inventory';
-
-const inferViewFromPath = (pathname: string): InfrastructureWorkspaceView =>
-  pathname.startsWith('/settings/infrastructure/proxmox')
-    ? 'direct'
-    : pathname.startsWith('/settings/infrastructure/install')
-      ? 'install'
-      : 'inventory';
+import {
+  INFRASTRUCTURE_WORKSPACE_TABS,
+  buildInfrastructureWorkspacePath,
+  getInfrastructureWorkspaceViewFromPath,
+  type InfrastructureWorkspaceView,
+} from './infrastructureWorkspaceModel';
 
 export type InfrastructureWorkspaceProps = ProxmoxSettingsPanelProps;
 
 export const InfrastructureWorkspace: Component<InfrastructureWorkspaceProps> = (props) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const [activeView, setActiveView] = createSignal<InfrastructureWorkspaceView>(
-    inferViewFromPath(location.pathname),
-  );
+  const activeView = createMemo(() => getInfrastructureWorkspaceViewFromPath(location.pathname));
 
-  createEffect(() => {
-    if (location.pathname.startsWith('/settings/infrastructure/proxmox')) {
-      setActiveView('direct');
-    }
-  });
-
-  const openView = (view: InfrastructureWorkspaceView) => {
-    setActiveView(view);
-    if (view === 'direct') {
-      navigate('/settings/infrastructure/proxmox');
-      return;
-    }
-    if (view === 'install') {
-      navigate('/settings/infrastructure/install');
-      return;
-    }
-    navigate('/settings/infrastructure/operations');
-  };
+  const openView = (view: InfrastructureWorkspaceView) =>
+    navigate(buildInfrastructureWorkspacePath(view));
 
   return (
     <div class="space-y-6">
@@ -64,11 +43,10 @@ export const InfrastructureWorkspace: Component<InfrastructureWorkspaceProps> = 
           value={activeView()}
           onChange={(value) => openView(value as InfrastructureWorkspaceView)}
           ariaLabel="Infrastructure workspace"
-          tabs={[
-            { value: 'install', label: 'Install on a host' },
-            { value: 'direct', label: 'Direct Proxmox' },
-            { value: 'inventory', label: 'Reporting & control' },
-          ]}
+          tabs={INFRASTRUCTURE_WORKSPACE_TABS.map((tab) => ({
+            value: tab.id,
+            label: tab.label,
+          }))}
         />
       </div>
 

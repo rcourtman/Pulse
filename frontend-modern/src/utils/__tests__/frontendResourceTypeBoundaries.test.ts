@@ -198,6 +198,8 @@ import pmgThreatPresentationSource from '@/utils/pmgThreatPresentation.ts?raw';
 import pmgQueuePresentationSource from '@/utils/pmgQueuePresentation.ts?raw';
 import pmgServiceHealthBadgeSource from '@/components/PMG/ServiceHealthBadge.tsx?raw';
 import proxmoxSettingsPanelSource from '@/components/Settings/ProxmoxSettingsPanel.tsx?raw';
+import infrastructureWorkspaceSource from '@/components/Settings/InfrastructureWorkspace.tsx?raw';
+import infrastructureWorkspaceModelSource from '@/components/Settings/infrastructureWorkspaceModel.ts?raw';
 import proxmoxSettingsPresentationSource from '@/utils/proxmoxSettingsPresentation.ts?raw';
 import generalSettingsPanelSource from '@/components/Settings/GeneralSettingsPanel.tsx?raw';
 import nodeModalModelSource from '@/components/Settings/nodeModalModel.ts?raw';
@@ -2153,6 +2155,16 @@ describe('frontend resource type boundaries', () => {
     );
     expect(proxmoxSettingsPresentationSource).toContain(
       'export function buildProxmoxDiscoveryPrefillNode',
+    );
+    expect(infrastructureWorkspaceSource).toContain(
+      '@/components/Settings/infrastructureWorkspaceModel'.replace('@/components/Settings/', './'),
+    );
+    expect(infrastructureWorkspaceSource).not.toContain('inferViewFromPath');
+    expect(infrastructureWorkspaceModelSource).toContain(
+      'export function getInfrastructureWorkspaceViewFromPath',
+    );
+    expect(infrastructureWorkspaceModelSource).toContain(
+      'export function buildInfrastructureWorkspacePath',
     );
     expect(nodeModalSource).toContain('getNodeProductName');
     expect(nodeModalSource).toContain('getNodeEndpointPlaceholder');

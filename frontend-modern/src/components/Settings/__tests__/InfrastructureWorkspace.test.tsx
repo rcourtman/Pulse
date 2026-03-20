@@ -83,6 +83,17 @@ describe('InfrastructureWorkspace', () => {
     expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure/proxmox');
   });
 
+  it('renders the direct workspace from the router pathname', () => {
+    mockPathname = '/settings/infrastructure/proxmox';
+    renderWorkspace();
+
+    expect(screen.getByRole('tab', { name: 'Direct Proxmox' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    expect(screen.getByTestId('proxmox-settings')).toBeInTheDocument();
+  });
+
   it('returns to the base settings route when switching away from direct proxmox', () => {
     mockPathname = '/settings/infrastructure/proxmox';
     renderWorkspace();
@@ -90,6 +101,5 @@ describe('InfrastructureWorkspace', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Reporting & control' }));
 
     expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure/operations');
-    expect(screen.getByTestId('agent-profiles')).toBeInTheDocument();
   });
 });
