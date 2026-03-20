@@ -32,11 +32,12 @@ work extends shared components instead of creating new local variants.
 10. `frontend-modern/src/components/Settings/AuditLogPanel.tsx`
 11. `frontend-modern/src/components/Settings/useAuditLogPanelState.ts`
 12. `frontend-modern/src/components/Settings/AuditWebhookPanel.tsx`
-13. `frontend-modern/src/components/Settings/CopyCommandBlock.tsx`
-14. `frontend-modern/src/components/Settings/diagnosticsModel.ts`
-15. `frontend-modern/src/components/Settings/DiagnosticsPanel.tsx`
-16. `frontend-modern/src/components/Settings/DiagnosticsResultsPanel.tsx`
-17. `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx`
+13. `frontend-modern/src/components/Settings/useAuditWebhookPanelState.ts`
+14. `frontend-modern/src/components/Settings/CopyCommandBlock.tsx`
+15. `frontend-modern/src/components/Settings/diagnosticsModel.ts`
+16. `frontend-modern/src/components/Settings/DiagnosticsPanel.tsx`
+17. `frontend-modern/src/components/Settings/DiagnosticsResultsPanel.tsx`
+18. `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx`
 18. `frontend-modern/src/components/Settings/NetworkSettingsPanel.tsx`
 19. `frontend-modern/src/components/Settings/RecoverySettingsPanel.tsx`
 20. `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx`
@@ -135,6 +136,14 @@ The audit log settings surface now follows that same owner split.
 license/paywall lifecycle, persisted filters, verification flow, and audit-log
 fetch orchestration. The shell must not re-accumulate localStorage or API
 runtime logic inline.
+
+The audit webhook settings surface now follows that same owner split.
+`frontend-modern/src/components/Settings/AuditWebhookPanel.tsx` stays the
+canonical `SettingsPanel` shell, while
+`frontend-modern/src/components/Settings/useAuditWebhookPanelState.ts` owns the
+license/paywall lifecycle, webhook fetch/save flow, validation, and trial
+startup orchestration. The shell must not re-accumulate API calls or paywall
+tracking inline.
 
 The diagnostics settings surface now follows that same owner split.
 `frontend-modern/src/components/Settings/DiagnosticsPanel.tsx` stays the

@@ -1,4 +1,4 @@
-import { createSignal, For, onMount, Show, createEffect, type Component } from 'solid-js';
+import { For, Show, type Component } from 'solid-js';
 import Shield from 'lucide-solid/icons/shield';
 import Globe from 'lucide-solid/icons/globe';
 import Plus from 'lucide-solid/icons/plus';
@@ -7,150 +7,49 @@ import ExternalLink from 'lucide-solid/icons/external-link';
 import { Card } from '@/components/shared/Card';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { formControl } from '@/components/shared/Form';
-import { showSuccess, showWarning } from '@/utils/toast';
-import { apiFetchJSON } from '@/utils/apiClient';
 import {
   AUDIT_WEBHOOK_ENDPOINT_CARD_CLASS,
   AUDIT_WEBHOOK_ENDPOINT_ICON_CLASS,
   AUDIT_WEBHOOK_READONLY_NOTICE_CLASS,
+  AUDIT_WEBHOOK_SECURITY_NOTE_BODY,
+  AUDIT_WEBHOOK_SECURITY_NOTE_TITLE,
   getAuditWebhookEmptyStateCopy,
   getAuditWebhookFeatureGateCopy,
   getAuditWebhookLoadingState,
 } from '@/utils/auditWebhookPresentation';
+import { trackUpgradeClicked } from '@/utils/upgradeMetrics';
 import {
-  hasFeature,
-  licenseLoaded,
-  loadLicenseStatus,
-  getUpgradeActionUrlOrFallback,
-  startProTrial,
-  entitlements,
-} from '@/stores/license';
-import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/upgradeMetrics';
-import {
-  getProTrialStartedMessage,
-  getTrialAlreadyUsedMessage,
-  getTrialStartErrorMessage,
   getUpgradeActionButtonClass,
   UPGRADE_ACTION_LABEL,
   UPGRADE_TRIAL_LABEL,
   UPGRADE_TRIAL_LINK_CLASS,
 } from '@/utils/upgradePresentation';
+import { useAuditWebhookPanelState } from '@/components/Settings/useAuditWebhookPanelState';
 
 interface AuditWebhookPanelProps {
   canManage?: boolean;
 }
 
 export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
-  const [webhookUrls, setWebhookUrls] = createSignal<string[]>([]);
-  const [newUrl, setNewUrl] = createSignal('');
-  const [saving, setSaving] = createSignal(false);
-  const [loading, setLoading] = createSignal(true);
-  const [startingTrial, setStartingTrial] = createSignal(false);
-  const canManage = () => props.canManage !== false;
+  const {
+    canManage,
+    canStartTrial,
+    handleAddWebhook,
+    handleRemoveWebhook,
+    handleStartTrial,
+    isAuditLoggingEnabled,
+    loading,
+    newUrl,
+    saving,
+    setNewUrl,
+    startingTrial,
+    upgradeActionUrl,
+    webhookUrls,
+  } = useAuditWebhookPanelState(props.canManage);
   const featureGateCopy = () => getAuditWebhookFeatureGateCopy();
   const emptyStateCopy = () => getAuditWebhookEmptyStateCopy();
 
-  const canStartTrial = () => entitlements()?.trial_eligible !== false;
-
-  const handleStartTrial = async () => {
-    if (startingTrial()) return;
-    setStartingTrial(true);
-    try {
-      const result = await startProTrial();
-      if (result?.outcome === 'redirect') {
-        window.location.href = result.actionUrl;
-        return;
-      }
-      showSuccess(getProTrialStartedMessage());
-    } catch (err) {
-      const statusCode = (err as { status?: number } | null)?.status;
-      if (statusCode === 409) {
-        showWarning(getTrialAlreadyUsedMessage());
-      } else {
-        showWarning(getTrialStartErrorMessage(err instanceof Error ? err.message : undefined));
-      }
-    } finally {
-      setStartingTrial(false);
-    }
-  };
-
-  onMount(() => {
-    loadLicenseStatus();
-  });
-
-  createEffect((wasPaywallVisible: boolean) => {
-    const isPaywallVisible = licenseLoaded() && !hasFeature('audit_logging');
-    if (isPaywallVisible && !wasPaywallVisible) {
-      trackPaywallViewed('audit_logging', 'settings_audit_webhook_panel');
-    }
-    return isPaywallVisible;
-  }, false);
-
-  createEffect(() => {
-    if (hasFeature('audit_logging')) {
-      fetchWebhooks();
-    } else {
-      setLoading(false);
-    }
-  });
-
-  const fetchWebhooks = async () => {
-    try {
-      const data = await apiFetchJSON<{ urls: string[] }>('/api/admin/webhooks/audit');
-      setWebhookUrls(data.urls || []);
-    } catch (err) {
-      console.error('Failed to fetch audit webhooks:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleAddWebhook = async () => {
-    if (!canManage()) return;
-    const url = newUrl().trim();
-    if (!url) return;
-
-    try {
-      new URL(url); // basic validation
-    } catch {
-      showWarning('Please enter a valid URL');
-      return;
-    }
-
-    if (webhookUrls().includes(url)) {
-      showWarning('This URL is already configured');
-      return;
-    }
-
-    const updated = [...webhookUrls(), url];
-    await saveWebhooks(updated);
-    setNewUrl('');
-  };
-
-  const handleRemoveWebhook = async (url: string) => {
-    if (!canManage()) return;
-    const updated = webhookUrls().filter((u) => u !== url);
-    await saveWebhooks(updated);
-  };
-
-  const saveWebhooks = async (urls: string[]) => {
-    setSaving(true);
-    try {
-      await apiFetchJSON('/api/admin/webhooks/audit', {
-        method: 'POST',
-        body: JSON.stringify({ urls }),
-      });
-
-      setWebhookUrls(urls);
-      showSuccess('Audit webhooks updated');
-    } catch (_err) {
-      showWarning('Failed to save webhook configuration');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  if (!hasFeature('audit_logging')) {
+  if (!isAuditLoggingEnabled()) {
     return (
       <SettingsPanel
         title="Audit Webhooks"
@@ -168,7 +67,7 @@ export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
               </div>
               <div class="flex flex-col sm:flex-row items-center gap-2">
                 <a
-                  href={getUpgradeActionUrlOrFallback('audit_logging')}
+                  href={upgradeActionUrl()}
                   target="_blank"
                   rel="noopener noreferrer"
                   class={getUpgradeActionButtonClass()}
@@ -279,12 +178,10 @@ export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
           </div>
           <div>
             <h3 class="text-base font-semibold text-amber-900 dark:text-amber-100 mb-1.5">
-              Security Note
+              {AUDIT_WEBHOOK_SECURITY_NOTE_TITLE}
             </h3>
             <p class="text-sm text-amber-800 dark:text-amber-200 leading-relaxed">
-              Audit webhooks are dispatched asynchronously to avoid blocking user operations.
-              Endpoints should still verify source trust (for example via an ingest secret) before
-              processing events.
+              {AUDIT_WEBHOOK_SECURITY_NOTE_BODY}
             </p>
           </div>
         </div>

@@ -290,6 +290,7 @@ const recoverySource = [
 ].join('\n');
 import rolesPanelSource from '@/components/Settings/RolesPanel.tsx?raw';
 import auditWebhookPanelSource from '@/components/Settings/AuditWebhookPanel.tsx?raw';
+import auditWebhookStateSource from '@/components/Settings/useAuditWebhookPanelState.ts?raw';
 import auditWebhookPresentationSource from '@/utils/auditWebhookPresentation.ts?raw';
 import auditLogPanelSource from '@/components/Settings/AuditLogPanel.tsx?raw';
 import auditLogStateSource from '@/components/Settings/useAuditLogPanelState.ts?raw';
@@ -2627,6 +2628,7 @@ describe('frontend resource type boundaries', () => {
     expect(ssoProvidersModelSource).toContain('export const buildProviderPayload =');
     expect(ssoProvidersModelSource).toContain('export const buildProviderTestPayload =');
     expect(auditWebhookPanelSource).toContain('@/utils/auditWebhookPresentation');
+    expect(auditWebhookPanelSource).toContain('@/components/Settings/useAuditWebhookPanelState');
     expect(auditWebhookPanelSource).toContain('getAuditWebhookFeatureGateCopy');
     expect(auditWebhookPanelSource).toContain('getAuditWebhookEmptyStateCopy');
     expect(auditWebhookPanelSource).toContain('getAuditWebhookLoadingState');
@@ -2636,6 +2638,9 @@ describe('frontend resource type boundaries', () => {
     expect(auditWebhookPanelSource).not.toContain('No audit webhooks configured yet.');
     expect(auditWebhookPanelSource).not.toContain('Loading audit webhooks…');
     expect(auditWebhookPanelSource).not.toContain('Audit Webhooks (Pro)');
+    expect(auditWebhookPanelSource).not.toContain('loadLicenseStatus();');
+    expect(auditWebhookPanelSource).not.toContain('const fetchWebhooks = async () =>');
+    expect(auditWebhookPanelSource).not.toContain('const saveWebhooks = async (urls: string[]) =>');
     expect(auditWebhookPresentationSource).toContain(
       'export function getAuditWebhookFeatureGateCopy',
     );
@@ -2643,6 +2648,25 @@ describe('frontend resource type boundaries', () => {
       'export function getAuditWebhookEmptyStateCopy',
     );
     expect(auditWebhookPresentationSource).toContain('export function getAuditWebhookLoadingState');
+    expect(auditWebhookPresentationSource).toContain(
+      'export function getAuditWebhookInvalidUrlMessage',
+    );
+    expect(auditWebhookPresentationSource).toContain(
+      'export function getAuditWebhookDuplicateUrlMessage',
+    );
+    expect(auditWebhookPresentationSource).toContain(
+      'export function getAuditWebhookSaveSuccessMessage',
+    );
+    expect(auditWebhookPresentationSource).toContain(
+      'export function getAuditWebhookSaveErrorMessage',
+    );
+    expect(auditWebhookPresentationSource).toContain('AUDIT_WEBHOOK_SECURITY_NOTE_TITLE');
+    expect(auditWebhookPresentationSource).toContain('AUDIT_WEBHOOK_SECURITY_NOTE_BODY');
+    expect(auditWebhookStateSource).toContain('export const useAuditWebhookPanelState =');
+    expect(auditWebhookStateSource).toContain('loadLicenseStatus();');
+    expect(auditWebhookStateSource).toContain('trackPaywallViewed');
+    expect(auditWebhookStateSource).toContain('const fetchWebhooks = async () =>');
+    expect(auditWebhookStateSource).toContain('const saveWebhooks = async (urls: string[]) =>');
     expect(auditLogPanelSource).toContain('getAuditLogLoadingState');
     expect(auditLogPanelSource).toContain('getAuditLogEmptyState');
     expect(auditLogPanelSource).toContain('@/components/Settings/useAuditLogPanelState');

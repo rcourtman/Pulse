@@ -14,6 +14,7 @@ import apiAccessPanelSource from '../APIAccessPanel.tsx?raw';
 import auditLogPanelSource from '../AuditLogPanel.tsx?raw';
 import auditLogStateSource from '../useAuditLogPanelState.ts?raw';
 import auditWebhookPanelSource from '../AuditWebhookPanel.tsx?raw';
+import auditWebhookStateSource from '../useAuditWebhookPanelState.ts?raw';
 import billingAdminPanelSource from '../BillingAdminPanel.tsx?raw';
 import generalSettingsPanelSource from '../GeneralSettingsPanel.tsx?raw';
 import aiSettingsPanelSource from '../AISettings.tsx?raw';
@@ -59,6 +60,7 @@ const extractedModules = [
   '../infrastructureOperationsModel.tsx',
   '../useInfrastructureOperationsState.tsx',
   '../useAuditLogPanelState.ts',
+  '../useAuditWebhookPanelState.ts',
   '../NodeModal.tsx',
   '../nodeModalModel.ts',
   '../useNodeModalState.ts',
@@ -405,6 +407,19 @@ describe('Settings architecture guardrails', () => {
     expect(auditLogStateSource).toContain('const fetchAuditEvents = async (');
     expect(auditLogStateSource).toContain('const verifyAllEvents = async (');
     expect(auditLogStateSource).toContain('trackPaywallViewed');
+  });
+
+  it('keeps the audit webhook shell behind an extracted runtime owner', () => {
+    expect(auditWebhookPanelSource).toContain('@/components/Settings/useAuditWebhookPanelState');
+    expect(auditWebhookPanelSource).not.toContain('loadLicenseStatus();');
+    expect(auditWebhookPanelSource).not.toContain('const fetchWebhooks = async () =>');
+    expect(auditWebhookPanelSource).not.toContain('const saveWebhooks = async (urls: string[]) =>');
+    expect(auditWebhookPanelSource).not.toContain('trackPaywallViewed');
+    expect(auditWebhookStateSource).toContain('export const useAuditWebhookPanelState =');
+    expect(auditWebhookStateSource).toContain('loadLicenseStatus();');
+    expect(auditWebhookStateSource).toContain('const fetchWebhooks = async () =>');
+    expect(auditWebhookStateSource).toContain('const saveWebhooks = async (urls: string[]) =>');
+    expect(auditWebhookStateSource).toContain('trackPaywallViewed');
   });
 
   it('keeps the SSO providers shell behind extracted runtime owners', () => {

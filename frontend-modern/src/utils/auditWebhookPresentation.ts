@@ -7,6 +7,11 @@ export const AUDIT_WEBHOOK_ENDPOINT_CARD_CLASS =
 export const AUDIT_WEBHOOK_ENDPOINT_ICON_CLASS =
   'p-2 bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300 rounded-md shrink-0';
 
+export const AUDIT_WEBHOOK_SECURITY_NOTE_TITLE = 'Security Note';
+
+export const AUDIT_WEBHOOK_SECURITY_NOTE_BODY =
+  'Audit webhooks are dispatched asynchronously to avoid blocking user operations. Endpoints should still verify source trust (for example via an ingest secret) before processing events.';
+
 export interface AuditWebhookFeatureGateCopy {
   title: string;
   body: string;
@@ -33,4 +38,20 @@ export function getAuditWebhookLoadingState() {
   return {
     text: 'Loading audit webhooks…',
   } as const;
+}
+
+export function getAuditWebhookInvalidUrlMessage(): string {
+  return 'Please enter a valid URL';
+}
+
+export function getAuditWebhookDuplicateUrlMessage(): string {
+  return 'This URL is already configured';
+}
+
+export function getAuditWebhookSaveSuccessMessage(): string {
+  return 'Audit webhooks updated';
+}
+
+export function getAuditWebhookSaveErrorMessage(): string {
+  return 'Failed to save webhook configuration';
 }

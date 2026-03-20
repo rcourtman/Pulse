@@ -1668,6 +1668,7 @@
         "frontend-modern/src/components/Settings/updatesSettingsModel.ts",
         "frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx",
         "frontend-modern/src/components/Settings/useAuditLogPanelState.ts",
+        "frontend-modern/src/components/Settings/useAuditWebhookPanelState.ts",
         "frontend-modern/src/components/Settings/useDiagnosticsPanelState.ts",
         "frontend-modern/src/components/Settings/useSSOProvidersState.ts",
         "frontend-modern/src/components/SetupWizard/SetupCompletionPreview.tsx",
@@ -1736,6 +1737,7 @@
               "frontend-modern/src/components/Settings/updatesSettingsModel.ts",
               "frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx",
               "frontend-modern/src/components/Settings/useAuditLogPanelState.ts",
+              "frontend-modern/src/components/Settings/useAuditWebhookPanelState.ts",
               "frontend-modern/src/components/Settings/useDiagnosticsPanelState.ts",
               "frontend-modern/src/components/Settings/useSSOProvidersState.ts"
             ],
