@@ -22,6 +22,9 @@ import updatesSettingsPanelSource from '@/components/Settings/UpdatesSettingsPan
 import copyCommandBlockSource from '@/components/Settings/CopyCommandBlock.tsx?raw';
 import updateInstallGuideSource from '@/components/Settings/UpdateInstallGuide.tsx?raw';
 import updatesSettingsModelSource from '@/components/Settings/updatesSettingsModel.ts?raw';
+import diagnosticsModelSource from '@/components/Settings/diagnosticsModel.ts?raw';
+import diagnosticsResultsPanelSource from '@/components/Settings/DiagnosticsResultsPanel.tsx?raw';
+import diagnosticsStateSource from '@/components/Settings/useDiagnosticsPanelState.ts?raw';
 import updatesPresentationSource from '@/utils/updatesPresentation.ts?raw';
 import environmentLockBadgeSource from '@/components/shared/EnvironmentLockBadge.tsx?raw';
 import environmentLockPresentationSource from '@/utils/environmentLockPresentation.ts?raw';
@@ -2669,15 +2672,24 @@ describe('frontend resource type boundaries', () => {
     expect(auditLogPresentationSource).toContain('export const AUDIT_REFRESH_BUTTON_CLASS');
     expect(auditLogPresentationSource).toContain('export const AUDIT_VERIFY_ALL_BUTTON_CLASS');
     expect(auditLogPresentationSource).toContain('export const AUDIT_VERIFY_ROW_BUTTON_CLASS');
-    expect(diagnosticsPanelSource).toContain('getStatusIndicatorBadgeToneClasses(');
-    expect(diagnosticsPanelSource).toContain('DIAGNOSTICS_EMPTY_PBS_MESSAGE');
+    expect(diagnosticsPanelSource).toContain('@/components/Settings/DiagnosticsResultsPanel');
+    expect(diagnosticsPanelSource).toContain('@/components/Settings/useDiagnosticsPanelState');
+    expect(diagnosticsPanelSource).toContain('formatUptime');
     expect(diagnosticsPanelSource).not.toContain('No PBS configured');
+    expect(diagnosticsPanelSource).not.toContain("apiFetchJSON('/api/diagnostics')");
+    expect(diagnosticsPanelSource).not.toContain('URL.createObjectURL');
     expect(diagnosticsPanelSource).not.toContain(
       "'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300'",
     );
     expect(diagnosticsPanelSource).not.toContain(
       "'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'",
     );
+    expect(diagnosticsResultsPanelSource).toContain('getStatusIndicatorBadgeToneClasses(');
+    expect(diagnosticsResultsPanelSource).toContain('DIAGNOSTICS_EMPTY_PBS_MESSAGE');
+    expect(diagnosticsStateSource).toContain('export const useDiagnosticsPanelState =');
+    expect(diagnosticsStateSource).toContain("apiFetchJSON('/api/diagnostics')");
+    expect(diagnosticsStateSource).toContain('URL.createObjectURL');
+    expect(diagnosticsModelSource).toContain('export function sanitizeDiagnosticsData');
     expect(diagnosticsPresentationSource).toContain('export const DIAGNOSTICS_EMPTY_PBS_MESSAGE');
     expect(updatesSettingsPanelSource).toContain('getUpdateBuildBadges');
     expect(updatesSettingsPanelSource).toContain('getUpdateAvailabilityHeading');

@@ -20,6 +20,9 @@ import aiSettingsPanelSource from '../AISettings.tsx?raw';
 import aiProviderConfigurationSectionSource from '../AIProviderConfigurationSection.tsx?raw';
 import aiSettingsDialogsSource from '../AISettingsDialogs.tsx?raw';
 import aiSettingsModelSource from '../aiSettingsModel.ts?raw';
+import diagnosticsModelSource from '../diagnosticsModel.ts?raw';
+import diagnosticsPanelSource from '../DiagnosticsPanel.tsx?raw';
+import diagnosticsResultsPanelSource from '../DiagnosticsResultsPanel.tsx?raw';
 import networkSettingsPanelSource from '../NetworkSettingsPanel.tsx?raw';
 import copyCommandBlockSource from '../CopyCommandBlock.tsx?raw';
 import updateInstallGuideSource from '../UpdateInstallGuide.tsx?raw';
@@ -40,6 +43,7 @@ import securityAuthPanelSource from '../SecurityAuthPanel.tsx?raw';
 import ssoProvidersPanelSource from '../SSOProvidersPanel.tsx?raw';
 import ssoProvidersStateSource from '../useSSOProvidersState.ts?raw';
 import ssoProvidersModelSource from '../ssoProvidersModel.ts?raw';
+import diagnosticsStateSource from '../useDiagnosticsPanelState.ts?raw';
 import rolesPanelSource from '../RolesPanel.tsx?raw';
 import userAssignmentsPanelSource from '../UserAssignmentsPanel.tsx?raw';
 import { SETTINGS_HEADER_META } from '../settingsHeaderMeta';
@@ -64,9 +68,13 @@ const extractedModules = [
   '../AIProviderConfigurationSection.tsx',
   '../AISettingsDialogs.tsx',
   '../aiSettingsModel.ts',
+  '../diagnosticsModel.ts',
+  '../DiagnosticsPanel.tsx',
+  '../DiagnosticsResultsPanel.tsx',
   '../CopyCommandBlock.tsx',
   '../UpdateInstallGuide.tsx',
   '../updatesSettingsModel.ts',
+  '../useDiagnosticsPanelState.ts',
   '../useSSOProvidersState.ts',
   '../ssoProvidersModel.ts',
   '../ProxmoxSettingsPanel.tsx',
@@ -367,6 +375,23 @@ describe('Settings architecture guardrails', () => {
     expect(copyCommandBlockSource).toContain("aria-label=\"Copy to clipboard\"");
     expect(updatesSettingsModelSource).toContain('export function getUpdateChannelCardOptions');
     expect(updatesSettingsModelSource).toContain('export function buildUpdateInstallGuide');
+  });
+
+  it('keeps the diagnostics shell behind extracted runtime and results owners', () => {
+    expect(diagnosticsPanelSource).toContain('@/components/Settings/DiagnosticsResultsPanel');
+    expect(diagnosticsPanelSource).toContain('@/components/Settings/useDiagnosticsPanelState');
+    expect(diagnosticsPanelSource).toContain('formatUptime');
+    expect(diagnosticsPanelSource).not.toContain("apiFetchJSON('/api/diagnostics')");
+    expect(diagnosticsPanelSource).not.toContain('URL.createObjectURL');
+    expect(diagnosticsPanelSource).not.toContain('sanitizeDiagnosticsData');
+    expect(diagnosticsResultsPanelSource).toContain('DIAGNOSTICS_EMPTY_PBS_MESSAGE');
+    expect(diagnosticsResultsPanelSource).toContain('getStatusIndicatorBadgeToneClasses(');
+    expect(diagnosticsStateSource).toContain('export const useDiagnosticsPanelState =');
+    expect(diagnosticsStateSource).toContain("apiFetchJSON('/api/diagnostics')");
+    expect(diagnosticsStateSource).toContain('URL.createObjectURL');
+    expect(diagnosticsModelSource).toContain('export function sanitizeDiagnosticsData');
+    expect(diagnosticsModelSource).toContain('export function buildDiagnosticsExportFilename');
+    expect(diagnosticsModelSource).toContain('export function formatUptime');
   });
 
   it('keeps the audit log shell behind an extracted runtime owner', () => {
