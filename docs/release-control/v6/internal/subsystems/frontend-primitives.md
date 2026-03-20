@@ -94,6 +94,15 @@ The subsystem registry now also requires explicit proof-policy coverage for all
 shared runtime files, and shared-component guardrails fail if raw table
 composition is reintroduced in new shared components outside the canonical
 allowlist.
+Top-level route files are now also expected to stay thin when a feature owns
+the real product surface. `frontend-modern/src/pages/Infrastructure.tsx` now
+acts only as the route boundary, while
+`frontend-modern/src/features/infrastructure/InfrastructurePageSurface.tsx`
+and `frontend-modern/src/features/infrastructure/useInfrastructurePageState.ts`
+own the actual infrastructure page shell and state contract. Future feature
+surfaces under `frontend-modern/src/features/` should follow that same pattern
+instead of letting page files accumulate route sync, filter, and modal
+orchestration inline.
 Infrastructure summary and detail surfaces now also use the shared normalized
 identity lookup helper from `frontend-modern/src/utils/resourceIdentity.ts`
 so dotted hostnames and alias variants stay consistent between the shared

@@ -99,6 +99,7 @@ describe('Infrastructure PBS/PMG integration', () => {
   it('renders native PBS and PMG resources in infrastructure view', async () => {
     const { getByTestId, getByText } = render(() => <Infrastructure />);
 
+    expect(getByTestId('infrastructure-page')).toBeInTheDocument();
     expect(getByTestId('infra-summary')).toBeInTheDocument();
     expect(getByTestId('infra-table')).toHaveTextContent('pbs-main,pmg-main');
     expect(getByText('PBS')).toBeInTheDocument();

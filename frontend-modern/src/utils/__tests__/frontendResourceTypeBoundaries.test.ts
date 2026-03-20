@@ -23,7 +23,7 @@ import updatesPresentationSource from '@/utils/updatesPresentation.ts?raw';
 import environmentLockBadgeSource from '@/components/shared/EnvironmentLockBadge.tsx?raw';
 import environmentLockPresentationSource from '@/utils/environmentLockPresentation.ts?raw';
 import dockerRuntimeSettingsCardSource from '@/components/Settings/DockerRuntimeSettingsCard.tsx?raw';
-import infrastructurePageSource from '@/pages/Infrastructure.tsx?raw';
+import infrastructurePageShellSource from '@/pages/Infrastructure.tsx?raw';
 import discoveryTargetSource from '@/utils/discoveryTarget.ts?raw';
 import infrastructureEmptyStatePresentationSource from '@/utils/infrastructureEmptyStatePresentation.ts?raw';
 import recoverySummarySource from '@/components/Recovery/RecoverySummary.tsx?raw';
@@ -309,6 +309,8 @@ import remediationStatusSource from '@/components/patrol/RemediationStatus.tsx?r
 import remediationPresentationSource from '@/utils/remediationPresentation.ts?raw';
 import aiChatPresentationSource from '@/utils/aiChatPresentation.ts?raw';
 import infrastructureDetailsDrawerSource from '@/components/shared/InfrastructureDetailsDrawer.tsx?raw';
+import infrastructurePageSurfaceSource from '@/features/infrastructure/InfrastructurePageSurface.tsx?raw';
+import infrastructurePageStateSource from '@/features/infrastructure/useInfrastructurePageState.ts?raw';
 
 const aiSettingsSource = [
   aiSettingsShellSource,
@@ -320,6 +322,12 @@ const aiSettingsSource = [
 const resourceDetailDrawerSource = [
   resourceDetailDrawerShellSource,
   resourceDetailDrawerStateSource,
+].join('\n');
+
+const infrastructurePageSource = [
+  infrastructurePageShellSource,
+  infrastructurePageSurfaceSource,
+  infrastructurePageStateSource,
 ].join('\n');
 
 describe('frontend resource type boundaries', () => {

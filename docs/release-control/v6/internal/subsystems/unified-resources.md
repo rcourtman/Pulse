@@ -46,6 +46,8 @@ cross-source deduplication.
 24. `frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx`
 25. `frontend-modern/src/components/Infrastructure/ResourceFacetSummary.tsx`
 26. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts`
+27. `frontend-modern/src/features/infrastructure/InfrastructurePageSurface.tsx`
+28. `frontend-modern/src/features/infrastructure/useInfrastructurePageState.ts`
 
 ## Shared Boundaries
 
@@ -708,10 +710,16 @@ strings, but it must not widen the canonical unified-resource source/status
 contracts that feed the infrastructure table and workload links.
 
 The same source-filter boundary now also applies to infrastructure filter UI
-options: `frontend-modern/src/pages/Infrastructure.tsx` may render friendly
-string keys, but membership checks against available sources must normalize
-through the shared `frontend-modern/src/utils/sourcePlatforms.ts` helper
-before consulting `KnownSourcePlatform` sets.
+options: `frontend-modern/src/features/infrastructure/InfrastructurePageSurface.tsx`
+and `frontend-modern/src/features/infrastructure/useInfrastructurePageState.ts`
+may render friendly string keys, but membership checks against available
+sources must normalize through the shared
+`frontend-modern/src/utils/sourcePlatforms.ts` helper before consulting
+`KnownSourcePlatform` sets.
+The route file `frontend-modern/src/pages/Infrastructure.tsx` is now only the
+navigation boundary for that surface; canonical infrastructure filter, search,
+deep-link, and expansion state now live behind the dedicated infrastructure
+feature owner instead of accumulating in the page shell itself.
 Shared unified-resource consumers now also normalize org scope through
 `frontend-modern/src/utils/orgScope.ts` before building cache keys or
 multi-tenant resource fetch state, so the canonical resource hooks do not
