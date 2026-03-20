@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import alertsPageSource from '@/pages/Alerts.tsx?raw';
+import alertsConfigurationSurfaceSource from '@/features/alerts/AlertsConfigurationSurface.tsx?raw';
 import alertDestinationsTabSource from '@/features/alerts/tabs/DestinationsTab.tsx?raw';
 import alertHistoryTabSource from '@/features/alerts/tabs/HistoryTab.tsx?raw';
 import alertScheduleTabSource from '@/features/alerts/tabs/ScheduleTab.tsx?raw';
@@ -154,23 +155,32 @@ describe('tab path helpers', () => {
     expect(tabFromPath('/alerts/summary', custom)).toBe('overview');
   });
 
-  it('keeps destinations, history, schedule, and thresholds tabs feature-owned', () => {
+  it('keeps alerts configuration owned by a feature surface instead of the page shell', () => {
     expect(alertsPageSource).toContain(
-      "import { DestinationsTab } from '@/features/alerts/tabs/DestinationsTab';",
+      "import { AlertsConfigurationSurface } from '@/features/alerts/AlertsConfigurationSurface';",
     );
     expect(alertsPageSource).toContain(
       "import { HistoryTab } from '@/features/alerts/tabs/HistoryTab';",
     );
-    expect(alertsPageSource).toContain(
-      "import { ScheduleTab } from '@/features/alerts/tabs/ScheduleTab';",
+    expect(alertsPageSource).not.toContain('const loadAlertConfiguration = async');
+    expect(alertsPageSource).not.toContain('const FACTORY_GUEST_DEFAULTS =');
+    expect(alertsConfigurationSurfaceSource).toContain(
+      "import { DestinationsTab } from './tabs/DestinationsTab';",
     );
-    expect(alertsPageSource).toContain(
-      "import { ThresholdsTab } from '@/features/alerts/tabs/ThresholdsTab';",
+    expect(alertsConfigurationSurfaceSource).toContain(
+      "import { ScheduleTab } from './tabs/ScheduleTab';",
     );
-    expect(alertsPageSource).not.toContain('function DestinationsTab(');
+    expect(alertsConfigurationSurfaceSource).toContain(
+      "import { ThresholdsTab } from './tabs/ThresholdsTab';",
+    );
+    expect(alertsConfigurationSurfaceSource).toContain('AlertsAPI.getConfig');
+    expect(alertsConfigurationSurfaceSource).toContain('NotificationsAPI.getEmailConfig');
+    expect(alertsConfigurationSurfaceSource).toContain('NotificationsAPI.updateEmailConfig');
+    expect(alertsConfigurationSurfaceSource).toContain("eventBus.on('org_switched'");
+    expect(alertsPageSource).toContain(
+      "import { HistoryTab } from '@/features/alerts/tabs/HistoryTab';",
+    );
     expect(alertsPageSource).not.toContain('function HistoryTab(');
-    expect(alertsPageSource).not.toContain('function ScheduleTab(');
-    expect(alertsPageSource).not.toContain('function ThresholdsTab(');
     expect(alertDestinationsTabSource).toContain('NotificationsAPI.getWebhooks');
     expect(alertHistoryTabSource).toContain('AlertsAPI.getHistory');
     expect(alertHistoryTabSource).toContain('IncidentTimelinePanel');

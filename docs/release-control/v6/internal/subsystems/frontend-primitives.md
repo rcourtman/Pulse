@@ -220,8 +220,8 @@ Pulse resource, then layer on additional context.
 The settings shell is now also a governed frontend primitive boundary.
 
 The alerts page shell now follows that same page-shell rule for feature tabs:
-`frontend-modern/src/pages/Alerts.tsx` owns navigation, load/save
-orchestration, and cross-tab state, while feature-owned tab surfaces such as
+`frontend-modern/src/pages/Alerts.tsx` owns navigation and cross-surface
+routing, while feature-owned tab surfaces such as
 `frontend-modern/src/features/alerts/tabs/DestinationsTab.tsx` and
 `frontend-modern/src/features/alerts/tabs/HistoryTab.tsx` plus
 `frontend-modern/src/features/alerts/tabs/ScheduleTab.tsx` and
@@ -231,6 +231,15 @@ continue by extracting page-local tab blocks into feature modules rather than
 expanding the top-level page file again, and history-table behavior or
 thresholds-table adapter logic should stay feature-owned unless it graduates
 into a shared primitive used by more than one alert surface.
+
+The alerts page now also applies the same shell-versus-feature rule to
+configuration orchestration. `frontend-modern/src/pages/Alerts.tsx` is the page
+shell, while `frontend-modern/src/features/alerts/AlertsConfigurationSurface.tsx`
+owns alert config load/save behavior, notification-config reloads, defaults,
+and threshold-override normalization for the destinations, schedule, and
+thresholds tabs. Future cleanup should continue by moving page-local config
+control flow into that feature surface or a narrower shared primitive, not back
+into the top-level page shell.
 Top-level settings surfaces must route through `Settings.tsx`,
 `SettingsPageShell.tsx`, and
 `frontend-modern/src/components/shared/SettingsPanel.tsx` instead of

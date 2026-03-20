@@ -223,6 +223,7 @@ import alertOverviewPresentationSource from '@/utils/alertOverviewPresentation.t
 import alertResourceTablePresentationSource from '@/utils/alertResourceTablePresentation.ts?raw';
 import alertWebhookPresentationSource from '@/utils/alertWebhookPresentation.ts?raw';
 import alertOverviewTabSource from '@/features/alerts/OverviewTab.tsx?raw';
+import alertsConfigurationSurfaceSource from '@/features/alerts/AlertsConfigurationSurface.tsx?raw';
 import alertDestinationsTabSource from '@/features/alerts/tabs/DestinationsTab.tsx?raw';
 import alertHistoryTabSource from '@/features/alerts/tabs/HistoryTab.tsx?raw';
 import alertScheduleTabSource from '@/features/alerts/tabs/ScheduleTab.tsx?raw';
@@ -2188,7 +2189,9 @@ describe('frontend resource type boundaries', () => {
     expect(deployStatusPresentationSource).toContain('export const getDeployStatusPresentation');
     expect(alertHistoryTabSource).toContain('getAlertIncidentStatusPresentation');
     expect(alertHistoryTabSource).toContain('getAlertIncidentLevelBadgeClass');
-    expect(alertsPageSource).toContain('getAlertDestinationsConfigLoadError');
+    expect(alertsPageSource).toContain("import { AlertsConfigurationSurface } from '@/features/alerts/AlertsConfigurationSurface';");
+    expect(alertsPageSource).not.toContain('getAlertDestinationsConfigLoadError');
+    expect(alertsConfigurationSurfaceSource).toContain('getAlertDestinationsConfigLoadError');
     expect(alertDestinationsTabSource).toContain('getAlertDestinationsWebhookLoadError');
     expect(alertDestinationsTabSource).toContain('getAlertDestinationsLoadErrorBanner');
     expect(alertDestinationsTabSource).toContain('getAlertDestinationsAppriseTargetsHelp');
@@ -2249,7 +2252,8 @@ describe('frontend resource type boundaries', () => {
     expect(alertsPageSource).toContain('getAlertsMobileTabClass');
     expect(alertsPageSource).toContain('getAlertsTabTitle');
     expect(alertsPageSource).toContain('getAlertsTabGroups');
-    expect(alertsPageSource).toContain("import { ThresholdsTab } from '@/features/alerts/tabs/ThresholdsTab';");
+    expect(alertsConfigurationSurfaceSource).toContain("import { ThresholdsTab } from './tabs/ThresholdsTab';");
+    expect(alertsPageSource).not.toContain("import { ThresholdsTab } from '@/features/alerts/tabs/ThresholdsTab';");
     expect(alertsPageSource).not.toContain("import { ThresholdsTable } from '@/components/Alerts/ThresholdsTable';");
     expect(alertsPageSource).not.toContain('function ThresholdsTab(');
     expect(alertThresholdsTabSource).toContain("import { ThresholdsTable } from '@/components/Alerts/ThresholdsTable';");
@@ -2259,11 +2263,12 @@ describe('frontend resource type boundaries', () => {
     expect(alertScheduleTabSource).toContain('getAlertQuietDayButtonClass');
     expect(alertScheduleTabSource).toContain('getAlertQuietSuppressCardClass');
     expect(alertScheduleTabSource).toContain('getAlertQuietSuppressCheckboxClass');
-    expect(alertsPageSource).toContain('getAlertConfigUnsavedChangesLabel');
-    expect(alertsPageSource).toContain('getAlertConfigSaveChangesLabel');
-    expect(alertsPageSource).toContain('getAlertConfigDiscardedSuccess');
-    expect(alertsPageSource).toContain('getAlertConfigReloadFailure');
-    expect(alertsPageSource).toContain('getAlertConfigDiscardLabel');
+    expect(alertsPageSource).not.toContain('getAlertConfigUnsavedChangesLabel');
+    expect(alertsConfigurationSurfaceSource).toContain('getAlertConfigUnsavedChangesLabel');
+    expect(alertsConfigurationSurfaceSource).toContain('getAlertConfigSaveChangesLabel');
+    expect(alertsConfigurationSurfaceSource).toContain('getAlertConfigDiscardedSuccess');
+    expect(alertsConfigurationSurfaceSource).toContain('getAlertConfigReloadFailure');
+    expect(alertsConfigurationSurfaceSource).toContain('getAlertConfigDiscardLabel');
     expect(alertsPageSource).toContain('getAlertConfigLeaveConfirmation');
     expect(alertScheduleTabSource).toContain('getAlertConfigResetDefaultsLabel');
     expect(alertScheduleTabSource).toContain('getAlertConfigResetDefaultsTitle');
@@ -3045,10 +3050,13 @@ describe('frontend resource type boundaries', () => {
 
   it('keeps alerts configuration tabs feature-owned instead of page-local', () => {
     expect(alertsPageSource).toContain(
-      "import { DestinationsTab } from '@/features/alerts/tabs/DestinationsTab';",
+      "import { AlertsConfigurationSurface } from '@/features/alerts/AlertsConfigurationSurface';",
     );
-    expect(alertsPageSource).toContain(
-      "import { ScheduleTab } from '@/features/alerts/tabs/ScheduleTab';",
+    expect(alertsConfigurationSurfaceSource).toContain(
+      "import { DestinationsTab } from './tabs/DestinationsTab';",
+    );
+    expect(alertsConfigurationSurfaceSource).toContain(
+      "import { ScheduleTab } from './tabs/ScheduleTab';",
     );
     expect(alertsPageSource).not.toContain('function DestinationsTab(');
     expect(alertsPageSource).not.toContain('function ScheduleTab(');

@@ -152,10 +152,18 @@ The alerts page shell in `frontend-modern/src/pages/Alerts.tsx` must now keep
 destinations, history, schedule, and thresholds rendering feature-owned under
 `frontend-modern/src/features/alerts/tabs/`. New alert tab surfaces should be
 extracted as feature modules instead of remaining page-local function blocks,
-so the page owns navigation/save orchestration while tab files own their
+so the page owns navigation and cross-surface routing while tab files own their
 runtime presentation, tab-local interaction logic, and any history-table
 presentation or thresholds-table adapter logic that does not belong in a shared
 primitive.
+
+Alert configuration load/save state, notification config reloads, and threshold
+override normalization now route through
+`frontend-modern/src/features/alerts/AlertsConfigurationSurface.tsx` instead of
+living inline in `frontend-modern/src/pages/Alerts.tsx`. The page shell owns
+navigation, activation chrome, and cross-surface routing; the configuration
+surface owns the alert config controller and composes the destinations,
+schedule, and thresholds tabs beneath that feature boundary.
 
 Alert filter metadata and grouped header consumers must also preserve the
 canonical `agent` and `node` header boundary when reusing shared filter
