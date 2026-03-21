@@ -214,7 +214,12 @@ import infrastructureWorkspaceSource from '@/components/Settings/InfrastructureW
 import infrastructureWorkspaceModelSource from '@/components/Settings/infrastructureWorkspaceModel.ts?raw';
 import proxmoxSettingsPresentationSource from '@/utils/proxmoxSettingsPresentation.ts?raw';
 import generalSettingsPanelSource from '@/components/Settings/GeneralSettingsPanel.tsx?raw';
+import nodeModalAuthenticationSectionSource from '@/components/Settings/NodeModalAuthenticationSection.tsx?raw';
+import nodeModalBasicInfoSectionSource from '@/components/Settings/NodeModalBasicInfoSection.tsx?raw';
 import nodeModalModelSource from '@/components/Settings/nodeModalModel.ts?raw';
+import nodeModalMonitoringSectionSource from '@/components/Settings/NodeModalMonitoringSection.tsx?raw';
+import nodeModalSetupGuideSectionSource from '@/components/Settings/NodeModalSetupGuideSection.tsx?raw';
+import nodeModalStatusFooterSource from '@/components/Settings/NodeModalStatusFooter.tsx?raw';
 import nodeModalSource from '@/components/Settings/NodeModal.tsx?raw';
 import nodeModalStateSource from '@/components/Settings/useNodeModalState.ts?raw';
 import nodeModalPresentationSource from '@/utils/nodeModalPresentation.ts?raw';
@@ -2292,15 +2297,15 @@ describe('frontend resource type boundaries', () => {
       'export function buildInfrastructureWorkspacePath',
     );
     expect(nodeModalSource).toContain('getNodeProductName');
-    expect(nodeModalSource).toContain('getNodeEndpointPlaceholder');
-    expect(nodeModalSource).toContain('getNodeGuestUrlPlaceholder');
-    expect(nodeModalSource).toContain('getNodeUsernamePlaceholder');
-    expect(nodeModalSource).toContain('getNodeUsernameHelp');
-    expect(nodeModalSource).toContain('getNodeTokenIdPlaceholder');
-    expect(nodeModalSource).toContain('getNodeMonitoringCoverageCopy');
-    expect(nodeModalSource).toContain('getTemperatureMonitoringLockedCopy');
+    expect(nodeModalSource).toContain('@/components/Settings/NodeModalBasicInfoSection');
+    expect(nodeModalSource).toContain('@/components/Settings/NodeModalAuthenticationSection');
+    expect(nodeModalSource).toContain('@/components/Settings/NodeModalMonitoringSection');
+    expect(nodeModalSource).toContain('@/components/Settings/NodeModalStatusFooter');
     expect(nodeModalSource).toContain('@/components/Settings/nodeModalModel');
     expect(nodeModalSource).toContain('@/components/Settings/useNodeModalState');
+    expect(nodeModalSource).not.toContain('title="Basic information"');
+    expect(nodeModalSource).not.toContain('title="Authentication"');
+    expect(nodeModalSource).not.toContain('title="Monitoring coverage"');
     expect(nodeModalSource).not.toContain('const getCleanFormData =');
     expect(nodeModalSource).not.toContain('const nodeProductName =');
     expect(nodeModalSource).not.toContain('const deriveNameFromHost =');
@@ -2312,9 +2317,26 @@ describe('frontend resource type boundaries', () => {
     expect(nodeModalModelSource).toContain('export const deriveNameFromHost =');
     expect(nodeModalModelSource).toContain('export const PVE_MANUAL_PERMISSION_COMMAND = `');
     expect(nodeModalStateSource).toContain('export const useNodeModalState =');
+    expect(nodeModalStateSource).toContain(
+      'export type NodeModalState = ReturnType<typeof useNodeModalState>;',
+    );
     expect(nodeModalStateSource).toContain('getNodeModalDefaultFormData');
     expect(nodeModalStateSource).toContain('getNodeModalTestResultPresentation');
     expect(nodeModalStateSource).toContain('buildNodeModalMonitoringPayload');
+    expect(nodeModalBasicInfoSectionSource).toContain('title="Basic information"');
+    expect(nodeModalBasicInfoSectionSource).toContain('getNodeEndpointPlaceholder');
+    expect(nodeModalBasicInfoSectionSource).toContain('getNodeGuestUrlPlaceholder');
+    expect(nodeModalAuthenticationSectionSource).toContain(
+      '@/components/Settings/NodeModalSetupGuideSection',
+    );
+    expect(nodeModalAuthenticationSectionSource).toContain('getNodeUsernamePlaceholder');
+    expect(nodeModalAuthenticationSectionSource).toContain('getNodeUsernameHelp');
+    expect(nodeModalAuthenticationSectionSource).toContain('getNodeTokenIdPlaceholder');
+    expect(nodeModalSetupGuideSectionSource).toContain('Connection Setup');
+    expect(nodeModalMonitoringSectionSource).toContain('title="Monitoring coverage"');
+    expect(nodeModalMonitoringSectionSource).toContain('getNodeMonitoringCoverageCopy');
+    expect(nodeModalMonitoringSectionSource).toContain('getTemperatureMonitoringLockedCopy');
+    expect(nodeModalStatusFooterSource).toContain('Start your free 14-day trial');
     expect(nodeModalPresentationSource).toContain('export function getNodeModalDefaultFormData');
     expect(nodeModalPresentationSource).toContain('export function getNodeProductName');
     expect(nodeModalPresentationSource).toContain('export function getNodeEndpointPlaceholder');

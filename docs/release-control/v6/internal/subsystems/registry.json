@@ -138,8 +138,48 @@
       ]
     },
     {
+      "path": "frontend-modern/src/components/Settings/NodeModalAuthenticationSection.tsx",
+      "rationale": "the node setup authentication section is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary",
+      "subsystems": [
+        "agent-lifecycle",
+        "api-contracts"
+      ]
+    },
+    {
+      "path": "frontend-modern/src/components/Settings/NodeModalBasicInfoSection.tsx",
+      "rationale": "the node setup basic-info section is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary",
+      "subsystems": [
+        "agent-lifecycle",
+        "api-contracts"
+      ]
+    },
+    {
       "path": "frontend-modern/src/components/Settings/nodeModalModel.ts",
       "rationale": "the pure node setup modal model is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary",
+      "subsystems": [
+        "agent-lifecycle",
+        "api-contracts"
+      ]
+    },
+    {
+      "path": "frontend-modern/src/components/Settings/NodeModalMonitoringSection.tsx",
+      "rationale": "the node setup monitoring section is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary",
+      "subsystems": [
+        "agent-lifecycle",
+        "api-contracts"
+      ]
+    },
+    {
+      "path": "frontend-modern/src/components/Settings/NodeModalSetupGuideSection.tsx",
+      "rationale": "the node setup guide section is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary",
+      "subsystems": [
+        "agent-lifecycle",
+        "api-contracts"
+      ]
+    },
+    {
+      "path": "frontend-modern/src/components/Settings/NodeModalStatusFooter.tsx",
+      "rationale": "the node setup status/footer section is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary",
       "subsystems": [
         "agent-lifecycle",
         "api-contracts"
@@ -382,7 +422,12 @@
         "frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx",
         "frontend-modern/src/components/Settings/infrastructureWorkspaceModel.ts",
         "frontend-modern/src/components/Settings/NodeModal.tsx",
+        "frontend-modern/src/components/Settings/NodeModalAuthenticationSection.tsx",
+        "frontend-modern/src/components/Settings/NodeModalBasicInfoSection.tsx",
         "frontend-modern/src/components/Settings/nodeModalModel.ts",
+        "frontend-modern/src/components/Settings/NodeModalMonitoringSection.tsx",
+        "frontend-modern/src/components/Settings/NodeModalSetupGuideSection.tsx",
+        "frontend-modern/src/components/Settings/NodeModalStatusFooter.tsx",
         "frontend-modern/src/components/Settings/ProxmoxConfiguredNodesTable.tsx",
         "frontend-modern/src/components/Settings/ProxmoxDeleteNodeDialog.tsx",
         "frontend-modern/src/components/Settings/ProxmoxDirectConnectionsCard.tsx",
@@ -554,7 +599,12 @@
             "match_prefixes": [],
             "match_files": [
               "frontend-modern/src/components/Settings/NodeModal.tsx",
+              "frontend-modern/src/components/Settings/NodeModalAuthenticationSection.tsx",
+              "frontend-modern/src/components/Settings/NodeModalBasicInfoSection.tsx",
               "frontend-modern/src/components/Settings/nodeModalModel.ts",
+              "frontend-modern/src/components/Settings/NodeModalMonitoringSection.tsx",
+              "frontend-modern/src/components/Settings/NodeModalSetupGuideSection.tsx",
+              "frontend-modern/src/components/Settings/NodeModalStatusFooter.tsx",
               "frontend-modern/src/components/Settings/useNodeModalState.ts"
             ],
             "allow_same_subsystem_tests": false,
@@ -829,7 +879,12 @@
         "frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx",
         "frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx",
         "frontend-modern/src/components/Settings/NodeModal.tsx",
+        "frontend-modern/src/components/Settings/NodeModalAuthenticationSection.tsx",
+        "frontend-modern/src/components/Settings/NodeModalBasicInfoSection.tsx",
         "frontend-modern/src/components/Settings/nodeModalModel.ts",
+        "frontend-modern/src/components/Settings/NodeModalMonitoringSection.tsx",
+        "frontend-modern/src/components/Settings/NodeModalSetupGuideSection.tsx",
+        "frontend-modern/src/components/Settings/NodeModalStatusFooter.tsx",
         "frontend-modern/src/components/Settings/UnifiedAgents.tsx",
         "frontend-modern/src/components/Settings/useAPITokenManagerState.ts",
         "frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx",
@@ -1002,7 +1057,12 @@
             "match_prefixes": [],
             "match_files": [
               "frontend-modern/src/components/Settings/NodeModal.tsx",
+              "frontend-modern/src/components/Settings/NodeModalAuthenticationSection.tsx",
+              "frontend-modern/src/components/Settings/NodeModalBasicInfoSection.tsx",
               "frontend-modern/src/components/Settings/nodeModalModel.ts",
+              "frontend-modern/src/components/Settings/NodeModalMonitoringSection.tsx",
+              "frontend-modern/src/components/Settings/NodeModalSetupGuideSection.tsx",
+              "frontend-modern/src/components/Settings/NodeModalStatusFooter.tsx",
               "frontend-modern/src/components/Settings/useNodeModalState.ts"
             ],
             "allow_same_subsystem_tests": false,

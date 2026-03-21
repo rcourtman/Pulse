@@ -1,15 +1,42 @@
 import { describe, expect, it } from 'vitest';
+import nodeModalAuthenticationSectionSource from '../NodeModalAuthenticationSection.tsx?raw';
+import nodeModalBasicInfoSectionSource from '../NodeModalBasicInfoSection.tsx?raw';
+import nodeModalMonitoringSectionSource from '../NodeModalMonitoringSection.tsx?raw';
+import nodeModalSetupGuideSectionSource from '../NodeModalSetupGuideSection.tsx?raw';
+import nodeModalStatusFooterSource from '../NodeModalStatusFooter.tsx?raw';
 import nodeModalSource from '../NodeModal.tsx?raw';
 import nodeModalModelSource from '../nodeModalModel.ts?raw';
 import nodeModalStateSource from '../useNodeModalState.ts?raw';
 
 const nodeModalSettingsOwnerSource = [
+  nodeModalAuthenticationSectionSource,
+  nodeModalBasicInfoSectionSource,
+  nodeModalMonitoringSectionSource,
+  nodeModalSetupGuideSectionSource,
+  nodeModalStatusFooterSource,
   nodeModalSource,
   nodeModalModelSource,
   nodeModalStateSource,
 ].join('\n');
 
 describe('NodeModal guardrails', () => {
+  it('keeps the node modal shell focused on extracted section owners', () => {
+    expect(nodeModalSource).toContain('@/components/Settings/NodeModalBasicInfoSection');
+    expect(nodeModalSource).toContain('@/components/Settings/NodeModalAuthenticationSection');
+    expect(nodeModalSource).toContain('@/components/Settings/NodeModalMonitoringSection');
+    expect(nodeModalSource).toContain('@/components/Settings/NodeModalStatusFooter');
+    expect(nodeModalSource).not.toContain('title="Basic information"');
+    expect(nodeModalSource).not.toContain('title="Authentication"');
+    expect(nodeModalSource).not.toContain('title="Monitoring coverage"');
+    expect(nodeModalSource).not.toContain('Start your free 14-day trial');
+    expect(nodeModalAuthenticationSectionSource).toContain(
+      '@/components/Settings/NodeModalSetupGuideSection',
+    );
+    expect(nodeModalSetupGuideSectionSource).toContain("await state.copyProxmoxAgentInstallCommand(");
+    expect(nodeModalMonitoringSectionSource).toContain('title="Monitoring coverage"');
+    expect(nodeModalStatusFooterSource).toContain('Start your free 14-day trial');
+  });
+
   it('keeps the manual PVE permission snippet aligned with the canonical setup script', () => {
     expect(nodeModalSettingsOwnerSource).toContain('export const PVE_MANUAL_PERMISSION_COMMAND = `');
     expect(nodeModalSettingsOwnerSource).toContain(
@@ -28,9 +55,9 @@ describe('NodeModal guardrails', () => {
     expect(nodeModalStateSource).toContain("const data = await NodesAPI.getAgentInstallCommand({");
     expect(nodeModalStateSource).toContain('type,');
     expect(nodeModalStateSource).toContain('enableProxmox: true,');
-    expect(nodeModalSource).toContain("await copyProxmoxAgentInstallCommand(");
-    expect(nodeModalSource).toContain("'pve',");
-    expect(nodeModalSource).toContain("'pbs',");
+    expect(nodeModalSettingsOwnerSource).toContain("await state.copyProxmoxAgentInstallCommand(");
+    expect(nodeModalSettingsOwnerSource).toContain("'pve',");
+    expect(nodeModalSettingsOwnerSource).toContain("'pbs',");
     expect(nodeModalStateSource).toContain(
       "const message = error instanceof Error ? error.message : 'Failed to generate install command';",
     );
@@ -58,10 +85,10 @@ describe('NodeModal guardrails', () => {
       'setQuickSetupPreviewCommand(response.commandWithoutEnv ?? response.commandWithEnv);',
     );
     expect(nodeModalStateSource).toContain('copyToClipboard(data.commandWithEnv)');
-    expect(nodeModalSource).toContain(
+    expect(nodeModalSettingsOwnerSource).toContain(
       "Command copied to clipboard! Run it on the server; the one-time setup token is already embedded.",
     );
-    expect(nodeModalSource).toContain('Setup token hint:');
+    expect(nodeModalSettingsOwnerSource).toContain('Setup token hint:');
     expect(nodeModalStateSource).toContain(
       "notificationStore.error('Please enter the Endpoint URL first');",
     );

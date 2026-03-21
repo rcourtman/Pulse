@@ -35,15 +35,20 @@ Own canonical runtime payload shapes between backend and frontend.
 12. `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx`
 13. `frontend-modern/src/components/Settings/UnifiedAgents.tsx`
 14. `frontend-modern/src/components/Settings/NodeModal.tsx`
-15. `frontend-modern/src/components/Settings/nodeModalModel.ts`
-16. `frontend-modern/src/components/Settings/useNodeModalState.ts`
-17. `frontend-modern/src/utils/agentInstallCommand.ts`
-18. `frontend-modern/src/api/nodes.ts`
-19. `frontend-modern/src/api/license.ts`
-20. `frontend-modern/src/api/monitoredSystemLedger.ts`
-21. `frontend-modern/src/api/resources.ts`
-22. `frontend-modern/src/api/monitoring.ts`
-23. `internal/api/monitored_system_ledger.go`
+15. `frontend-modern/src/components/Settings/NodeModalAuthenticationSection.tsx`
+16. `frontend-modern/src/components/Settings/NodeModalBasicInfoSection.tsx`
+17. `frontend-modern/src/components/Settings/nodeModalModel.ts`
+18. `frontend-modern/src/components/Settings/NodeModalMonitoringSection.tsx`
+19. `frontend-modern/src/components/Settings/NodeModalSetupGuideSection.tsx`
+20. `frontend-modern/src/components/Settings/NodeModalStatusFooter.tsx`
+21. `frontend-modern/src/components/Settings/useNodeModalState.ts`
+22. `frontend-modern/src/utils/agentInstallCommand.ts`
+23. `frontend-modern/src/api/nodes.ts`
+24. `frontend-modern/src/api/license.ts`
+25. `frontend-modern/src/api/monitoredSystemLedger.ts`
+26. `frontend-modern/src/api/resources.ts`
+27. `frontend-modern/src/api/monitoring.ts`
+28. `internal/api/monitored_system_ledger.go`
 
 ## Shared Boundaries
 
@@ -59,13 +64,18 @@ Own canonical runtime payload shapes between backend and frontend.
 10. `frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx` shared with `agent-lifecycle`: the infrastructure operations controller is both an agent fleet lifecycle control surface and an API token, lookup, assignment, and reporting/install contract boundary.
 11. `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx` shared with `agent-lifecycle`: the pure infrastructure operations inventory/install model is both an agent fleet lifecycle control surface and an API token, lookup, assignment, and reporting/install contract boundary.
 12. `frontend-modern/src/components/Settings/NodeModal.tsx` shared with `agent-lifecycle`: the node setup modal render shell is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
-13. `frontend-modern/src/components/Settings/nodeModalModel.ts` shared with `agent-lifecycle`: the pure node setup modal model is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
-14. `frontend-modern/src/components/Settings/UnifiedAgents.tsx` shared with `agent-lifecycle`: the UnifiedAgents module is a compatibility shim for the canonical infrastructure operations controller and remains on the same shared agent lifecycle and API contract boundary while the old module path exists.
-15. `frontend-modern/src/components/Settings/useAPITokenManagerState.ts` shared with `security-privacy`: the API token settings state hook is both a security/privacy control surface and a canonical API payload contract boundary.
-16. `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx` shared with `agent-lifecycle`: the shared infrastructure operations state hook is both an agent fleet lifecycle control surface and an API token, lookup, assignment, and reporting/install contract boundary.
-17. `frontend-modern/src/components/Settings/useNodeModalState.ts` shared with `agent-lifecycle`: the node setup modal state hook is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
-18. `frontend-modern/src/utils/agentInstallCommand.ts` shared with `agent-lifecycle`: the shared frontend install-command helper is both an agent lifecycle control surface and a canonical API/install transport contract boundary.
-19. `internal/api/agent_install_command_shared.go` shared with `agent-lifecycle`: agent install command assembly is both an agent lifecycle control surface and a canonical API payload contract boundary.
+13. `frontend-modern/src/components/Settings/NodeModalAuthenticationSection.tsx` shared with `agent-lifecycle`: the node setup authentication section is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
+14. `frontend-modern/src/components/Settings/NodeModalBasicInfoSection.tsx` shared with `agent-lifecycle`: the node setup basic-info section is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
+15. `frontend-modern/src/components/Settings/nodeModalModel.ts` shared with `agent-lifecycle`: the pure node setup modal model is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
+16. `frontend-modern/src/components/Settings/NodeModalMonitoringSection.tsx` shared with `agent-lifecycle`: the node setup monitoring section is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
+17. `frontend-modern/src/components/Settings/NodeModalSetupGuideSection.tsx` shared with `agent-lifecycle`: the node setup guide section is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
+18. `frontend-modern/src/components/Settings/NodeModalStatusFooter.tsx` shared with `agent-lifecycle`: the node setup status/footer section is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
+19. `frontend-modern/src/components/Settings/UnifiedAgents.tsx` shared with `agent-lifecycle`: the UnifiedAgents module is a compatibility shim for the canonical infrastructure operations controller and remains on the same shared agent lifecycle and API contract boundary while the old module path exists.
+20. `frontend-modern/src/components/Settings/useAPITokenManagerState.ts` shared with `security-privacy`: the API token settings state hook is both a security/privacy control surface and a canonical API payload contract boundary.
+21. `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx` shared with `agent-lifecycle`: the shared infrastructure operations state hook is both an agent fleet lifecycle control surface and an API token, lookup, assignment, and reporting/install contract boundary.
+22. `frontend-modern/src/components/Settings/useNodeModalState.ts` shared with `agent-lifecycle`: the node setup modal state hook is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
+23. `frontend-modern/src/utils/agentInstallCommand.ts` shared with `agent-lifecycle`: the shared frontend install-command helper is both an agent lifecycle control surface and a canonical API/install transport contract boundary.
+24. `internal/api/agent_install_command_shared.go` shared with `agent-lifecycle`: agent install command assembly is both an agent lifecycle control surface and a canonical API payload contract boundary.
 20. `internal/api/ai_handler.go` shared with `ai-runtime`: Pulse Assistant handlers are both an AI runtime control surface and a canonical API payload contract boundary.
 21. `internal/api/ai_handlers.go` shared with `ai-runtime`: AI settings and remediation handlers are both an AI runtime control surface and a canonical API payload contract boundary.
 22. `internal/api/ai_intelligence_handlers.go` shared with `ai-runtime`: AI intelligence handlers are both an AI runtime control surface and a canonical API payload contract boundary.
@@ -1162,7 +1172,8 @@ types. That same shared client boundary must also validate a non-empty
 `command` response and keep the raw backend `token` field inside
 `frontend-modern/src/api/nodes.ts` rather than leaking it into downstream UI
 state. Downstream Proxmox install-command consumers like the extracted node
-setup modal owner (`NodeModal.tsx`, `nodeModalModel.ts`, and
+setup modal owner (`NodeModal.tsx`, `NodeModalAuthenticationSection.tsx`,
+`NodeModalSetupGuideSection.tsx`, `nodeModalModel.ts`, and
 `useNodeModalState.ts`) must then surface those canonical validation errors
 directly rather than collapsing one node-type pane back to generic
 copy-generation failure.

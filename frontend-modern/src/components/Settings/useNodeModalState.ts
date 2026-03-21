@@ -540,3 +540,5 @@ export const useNodeModalState = (props: NodeModalProps) => {
     updateField,
   };
 };
+
+export type NodeModalState = ReturnType<typeof useNodeModalState>;

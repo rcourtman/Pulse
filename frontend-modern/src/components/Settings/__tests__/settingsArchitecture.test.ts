@@ -13,7 +13,12 @@ import infrastructureInventorySectionSource from '../InfrastructureInventorySect
 import infrastructureActiveRowDetailsSource from '../InfrastructureActiveRowDetails.tsx?raw';
 import infrastructureIgnoredRowDetailsSource from '../InfrastructureIgnoredRowDetails.tsx?raw';
 import infrastructureStopMonitoringDialogSource from '../InfrastructureStopMonitoringDialog.tsx?raw';
+import nodeModalAuthenticationSectionSource from '../NodeModalAuthenticationSection.tsx?raw';
+import nodeModalBasicInfoSectionSource from '../NodeModalBasicInfoSection.tsx?raw';
 import nodeModalModelSource from '../nodeModalModel.ts?raw';
+import nodeModalMonitoringSectionSource from '../NodeModalMonitoringSection.tsx?raw';
+import nodeModalSetupGuideSectionSource from '../NodeModalSetupGuideSection.tsx?raw';
+import nodeModalStatusFooterSource from '../NodeModalStatusFooter.tsx?raw';
 import nodeModalSource from '../NodeModal.tsx?raw';
 import infrastructureOperationsStateSource from '../useInfrastructureOperationsState.tsx?raw';
 import nodeModalStateSource from '../useNodeModalState.ts?raw';
@@ -124,6 +129,11 @@ const extractedModules = [
   '../useAuditWebhookPanelState.ts',
   '../BillingAdminOrganizationsTable.tsx',
   '../useBillingAdminPanelState.ts',
+  '../NodeModalAuthenticationSection.tsx',
+  '../NodeModalBasicInfoSection.tsx',
+  '../NodeModalMonitoringSection.tsx',
+  '../NodeModalSetupGuideSection.tsx',
+  '../NodeModalStatusFooter.tsx',
   '../NodeModal.tsx',
   '../nodeModalModel.ts',
   '../useNodeModalState.ts',
@@ -726,16 +736,31 @@ describe('Settings architecture guardrails', () => {
   });
 
   it('keeps the node setup modal shell behind extracted state and model owners', () => {
+    expect(nodeModalSource).toContain('@/components/Settings/NodeModalBasicInfoSection');
+    expect(nodeModalSource).toContain('@/components/Settings/NodeModalAuthenticationSection');
+    expect(nodeModalSource).toContain('@/components/Settings/NodeModalMonitoringSection');
+    expect(nodeModalSource).toContain('@/components/Settings/NodeModalStatusFooter');
     expect(nodeModalSource).toContain('@/components/Settings/nodeModalModel');
     expect(nodeModalSource).toContain('@/components/Settings/useNodeModalState');
+    expect(nodeModalSource).not.toContain('title="Basic information"');
+    expect(nodeModalSource).not.toContain('title="Authentication"');
+    expect(nodeModalSource).not.toContain('title="Monitoring coverage"');
     expect(nodeModalSource).not.toContain('const deriveNameFromHost =');
     expect(nodeModalSource).not.toContain('const PVE_MANUAL_PERMISSION_COMMAND = `');
     expect(nodeModalSource).not.toContain('const [quickSetupBootstrap, setQuickSetupBootstrap] =');
     expect(nodeModalSource).not.toContain('const handleTestConnection = async () =>');
+    expect(nodeModalBasicInfoSectionSource).toContain('title="Basic information"');
+    expect(nodeModalAuthenticationSectionSource).toContain(
+      '@/components/Settings/NodeModalSetupGuideSection',
+    );
+    expect(nodeModalSetupGuideSectionSource).toContain('Connection Setup');
+    expect(nodeModalMonitoringSectionSource).toContain('title="Monitoring coverage"');
+    expect(nodeModalStatusFooterSource).toContain('Start your free 14-day trial');
     expect(nodeModalModelSource).toContain('export interface NodeModalProps');
     expect(nodeModalModelSource).toContain('export const deriveNameFromHost =');
     expect(nodeModalModelSource).toContain('export const PVE_MANUAL_PERMISSION_COMMAND = `');
     expect(nodeModalStateSource).toContain('export const useNodeModalState =');
+    expect(nodeModalStateSource).toContain('export type NodeModalState = ReturnType<typeof useNodeModalState>;');
     expect(nodeModalStateSource).toContain('const [quickSetupBootstrap, setQuickSetupBootstrap] =');
     expect(nodeModalStateSource).toContain('const handleTestConnection = async () =>');
     expect(nodeModalStateSource).toContain("const PROXMOX_SETUP_HOST_REQUIRED_MESSAGE = 'Proxmox setup host is required';");
