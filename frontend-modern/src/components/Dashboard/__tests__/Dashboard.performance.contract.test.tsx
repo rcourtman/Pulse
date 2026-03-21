@@ -29,6 +29,7 @@ import metricBarStateSource from '../useMetricBarState.ts?raw';
 import guestDrawerSource from '../GuestDrawer.tsx?raw';
 import guestDrawerModelSource from '../guestDrawerModel.ts?raw';
 import guestRowSource from '../GuestRow.tsx?raw';
+import guestRowCellsSource from '../GuestRowCells.tsx?raw';
 import guestDrawerStateSource from '../useGuestDrawerState.ts?raw';
 import guestRowModelSource from '../guestRowModel.tsx?raw';
 import guestRowStateSource from '../useGuestRowState.ts?raw';
@@ -574,13 +575,21 @@ describe('Dashboard performance contract', () => {
 
     it('keeps guest row contract and hot-path state in canonical row owners', () => {
       expect(guestRowSource).toContain('useGuestRowState');
+      expect(guestRowSource).toContain("from './GuestRowCells'");
       expect(guestRowSource).not.toContain('export const GUEST_COLUMNS');
       expect(guestRowSource).not.toContain('const guestId = createMemo(');
+      expect(guestRowSource).not.toContain('function NetworkInfoCell(');
+      expect(guestRowSource).not.toContain('function OSInfoCell(');
+      expect(guestRowSource).not.toContain('function BackupStatusCell(');
       expect(guestRowModelSource).toContain('export const GUEST_COLUMNS');
       expect(guestRowModelSource).toContain('export const VIEW_MODE_COLUMNS');
       expect(guestRowStateSource).toContain('getCanonicalWorkloadId');
       expect(guestRowStateSource).toContain('buildMetricKey');
       expect(guestRowStateSource).toContain('getWorkloadTypeBadge');
+      expect(guestRowCellsSource).toContain('export { BackupIndicator');
+      expect(guestRowCellsSource).toContain('function NetworkInfoCell(');
+      expect(guestRowCellsSource).toContain('function OSInfoCell(');
+      expect(guestRowCellsSource).toContain('useTooltip');
     });
 
     it('keeps guest drawer runtime and derivations in canonical drawer owners', () => {

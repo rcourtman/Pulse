@@ -49,33 +49,34 @@ regression protection.
 27. `frontend-modern/src/components/Dashboard/diskListModel.ts`
 28. `frontend-modern/src/components/Dashboard/useDiskListState.ts`
 29. `frontend-modern/src/components/Dashboard/GuestRow.tsx`
-30. `frontend-modern/src/components/Dashboard/guestRowModel.tsx`
-31. `frontend-modern/src/components/Dashboard/useGuestRowState.ts`
-32. `frontend-modern/src/components/Dashboard/GuestDrawer.tsx`
-33. `frontend-modern/src/components/Dashboard/guestDrawerModel.ts`
-34. `frontend-modern/src/components/Dashboard/useGuestDrawerState.ts`
-35. `frontend-modern/src/components/Dashboard/workloadSelectors.ts`
-36. `frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx`
-37. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`
-38. `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts`
-39. `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts`
-40. `frontend-modern/src/components/Dashboard/__tests__/Dashboard.performance.contract.test.tsx`
-41. `frontend-modern/src/components/Dashboard/__tests__/DashboardFilter.test.tsx`
-42. `frontend-modern/src/components/Dashboard/__tests__/useDashboardFilterState.test.ts`
-43. `frontend-modern/src/components/Dashboard/MetricBar.test.tsx`
-44. `frontend-modern/src/components/Dashboard/__tests__/useMetricBarState.test.tsx`
-45. `frontend-modern/src/components/Dashboard/__tests__/EnhancedCPUBar.test.tsx`
-46. `frontend-modern/src/components/Dashboard/__tests__/useEnhancedCPUBarState.test.tsx`
-47. `frontend-modern/src/components/Dashboard/ThresholdSlider.test.tsx`
-48. `frontend-modern/src/components/Dashboard/__tests__/useThresholdSliderState.test.ts`
-49. `frontend-modern/src/components/Dashboard/__tests__/StackedDiskBar.test.tsx`
-50. `frontend-modern/src/components/Dashboard/__tests__/useStackedDiskBarState.test.tsx`
-51. `frontend-modern/src/components/Dashboard/StackedMemoryBar.test.tsx`
-52. `frontend-modern/src/components/Dashboard/__tests__/useStackedMemoryBarState.test.tsx`
-53. `frontend-modern/src/components/Dashboard/__tests__/DiskList.test.tsx`
-54. `frontend-modern/src/components/Dashboard/__tests__/GuestRow.test.tsx`
-55. `frontend-modern/src/components/Dashboard/GuestDrawer.test.tsx`
-56. `frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx`
+30. `frontend-modern/src/components/Dashboard/GuestRowCells.tsx`
+31. `frontend-modern/src/components/Dashboard/guestRowModel.tsx`
+32. `frontend-modern/src/components/Dashboard/useGuestRowState.ts`
+33. `frontend-modern/src/components/Dashboard/GuestDrawer.tsx`
+34. `frontend-modern/src/components/Dashboard/guestDrawerModel.ts`
+35. `frontend-modern/src/components/Dashboard/useGuestDrawerState.ts`
+36. `frontend-modern/src/components/Dashboard/workloadSelectors.ts`
+37. `frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx`
+38. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`
+39. `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts`
+40. `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts`
+41. `frontend-modern/src/components/Dashboard/__tests__/Dashboard.performance.contract.test.tsx`
+42. `frontend-modern/src/components/Dashboard/__tests__/DashboardFilter.test.tsx`
+43. `frontend-modern/src/components/Dashboard/__tests__/useDashboardFilterState.test.ts`
+44. `frontend-modern/src/components/Dashboard/MetricBar.test.tsx`
+45. `frontend-modern/src/components/Dashboard/__tests__/useMetricBarState.test.tsx`
+46. `frontend-modern/src/components/Dashboard/__tests__/EnhancedCPUBar.test.tsx`
+47. `frontend-modern/src/components/Dashboard/__tests__/useEnhancedCPUBarState.test.tsx`
+48. `frontend-modern/src/components/Dashboard/ThresholdSlider.test.tsx`
+49. `frontend-modern/src/components/Dashboard/__tests__/useThresholdSliderState.test.ts`
+50. `frontend-modern/src/components/Dashboard/__tests__/StackedDiskBar.test.tsx`
+51. `frontend-modern/src/components/Dashboard/__tests__/useStackedDiskBarState.test.tsx`
+52. `frontend-modern/src/components/Dashboard/StackedMemoryBar.test.tsx`
+53. `frontend-modern/src/components/Dashboard/__tests__/useStackedMemoryBarState.test.tsx`
+54. `frontend-modern/src/components/Dashboard/__tests__/DiskList.test.tsx`
+55. `frontend-modern/src/components/Dashboard/__tests__/GuestRow.test.tsx`
+56. `frontend-modern/src/components/Dashboard/GuestDrawer.test.tsx`
+57. `frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx`
 
 ## Shared Boundaries
 
@@ -95,7 +96,7 @@ regression protection.
 6. Deduplicate dashboard workload rows by canonical workload ID from `frontend-modern/src/utils/workloads.ts` rather than via local pass-through wrappers in `frontend-modern/src/components/Dashboard/Dashboard.tsx`
 7. Render dashboard row identity directly from the shared canonical workload helper so row selection, hover, and fallback metadata lookup stay aligned with the same workload contract
 8. Format infrastructure sensor labels through the shared `frontend-modern/src/utils/textPresentation.ts` presentation helper instead of maintaining a local title-casing implementation in `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts`
-9. Extend dashboard row contract and per-row hot-path derivations through `frontend-modern/src/components/Dashboard/guestRowModel.tsx` and `frontend-modern/src/components/Dashboard/useGuestRowState.ts` rather than rebuilding column metadata, row identity, or anomaly correlation inside `frontend-modern/src/components/Dashboard/GuestRow.tsx`
+9. Extend dashboard row contract and per-row hot-path derivations through `frontend-modern/src/components/Dashboard/guestRowModel.tsx` and `frontend-modern/src/components/Dashboard/useGuestRowState.ts`, and extend tooltip-backed row cell presentation through `frontend-modern/src/components/Dashboard/GuestRowCells.tsx`, rather than rebuilding column metadata, row identity, cell tooltips, or anomaly correlation inside `frontend-modern/src/components/Dashboard/GuestRow.tsx`
 10. Extend dashboard drawer derivations and runtime wiring through `frontend-modern/src/components/Dashboard/guestDrawerModel.ts` and `frontend-modern/src/components/Dashboard/useGuestDrawerState.ts` rather than rebuilding canonical guest identity, discovery routing, or drawer-local normalization inside `frontend-modern/src/components/Dashboard/GuestDrawer.tsx`
 11. Extend dashboard disk-list derivations and fallback runtime wiring through `frontend-modern/src/components/Dashboard/diskListModel.ts` and `frontend-modern/src/components/Dashboard/useDiskListState.ts` rather than rebuilding usage math, progress-state mapping, or tooltip fallback logic inside `frontend-modern/src/components/Dashboard/DiskList.tsx`
 12. Extend dashboard filter defaults, active-filter counting, reset semantics, and mobile toolbar state through `frontend-modern/src/components/Dashboard/dashboardFilterModel.ts` and `frontend-modern/src/components/Dashboard/useDashboardFilterState.ts`, and keep dashboard-owned filter-config assembly in `frontend-modern/src/components/Dashboard/useDashboardState.ts`, rather than rebuilding filter-local state inside `frontend-modern/src/components/Dashboard/DashboardFilter.tsx` or inline config IIFEs in `frontend-modern/src/components/Dashboard/Dashboard.tsx`
@@ -137,12 +138,14 @@ metadata persistence, workload-route synchronization, grouping/windowing, and
 filter/sort state must extend through that owner instead of accreting back into
 `frontend-modern/src/components/Dashboard/Dashboard.tsx`.
 The dashboard guest-row path now follows the same pattern: the render shell
-stays in `frontend-modern/src/components/Dashboard/GuestRow.tsx`, while the
-canonical row contract and per-row hot-path derivations live in
+stays in `frontend-modern/src/components/Dashboard/GuestRow.tsx`, tooltip-backed
+cell presentation lives in `frontend-modern/src/components/Dashboard/GuestRowCells.tsx`,
+and the canonical row contract and per-row hot-path derivations live in
 `frontend-modern/src/components/Dashboard/guestRowModel.tsx` and
 `frontend-modern/src/components/Dashboard/useGuestRowState.ts`. Future row
-identity, column, anomaly-correlation, and link-state changes must extend
-through those owners instead of rebuilding row-local state inside the shell.
+identity, column, cell-tooltip, anomaly-correlation, and link-state changes
+must extend through those owners instead of rebuilding row-local state inside
+the shell.
 The dashboard guest drawer now follows that same ownership rule: the shell
 stays in `frontend-modern/src/components/Dashboard/GuestDrawer.tsx`, while
 drawer-local normalization, backup/tag formatting, discovery identity wiring,

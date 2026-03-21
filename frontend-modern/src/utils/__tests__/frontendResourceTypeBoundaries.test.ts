@@ -110,6 +110,7 @@ import recentAlertsPanelSource from '@/pages/DashboardPanels/RecentAlertsPanel.t
 import storagePanelSource from '@/pages/DashboardPanels/StoragePanel.tsx?raw';
 import recoveryStatusPanelSource from '@/pages/DashboardPanels/RecoveryStatusPanel.tsx?raw';
 import guestRowSource from '@/components/Dashboard/GuestRow.tsx?raw';
+import guestRowCellsSource from '@/components/Dashboard/GuestRowCells.tsx?raw';
 import guestRowModelSource from '@/components/Dashboard/guestRowModel.tsx?raw';
 import guestRowStateSource from '@/components/Dashboard/useGuestRowState.ts?raw';
 import dashboardDiskListSource from '@/components/Dashboard/DiskList.tsx?raw';
@@ -582,9 +583,15 @@ describe('frontend resource type boundaries', () => {
     expect(storageSummarySource).toContain('normalizeOrgScope(getOrgID())');
     expect(storageSummarySource).not.toContain("getOrgID() || 'default'");
     expect(guestRowSource).toContain('useGuestRowState');
+    expect(guestRowSource).toContain("from './GuestRowCells'");
     expect(guestRowSource).not.toContain('const guestId = createMemo(');
+    expect(guestRowSource).not.toContain('function NetworkInfoCell(');
+    expect(guestRowSource).not.toContain('function OSInfoCell(');
     expect(guestRowStateSource).toContain('getCanonicalWorkloadId');
     expect(guestRowModelSource).toContain('export const GUEST_COLUMNS');
+    expect(guestRowCellsSource).toContain('function NetworkInfoCell(');
+    expect(guestRowCellsSource).toContain('function OSInfoCell(');
+    expect(guestRowCellsSource).toContain('useTooltip');
     expect(guestRowSource).not.toContain('buildGuestId');
     expect(guestDrawerSource).toContain('useGuestDrawerState');
     expect(guestDrawerStateSource).toContain('getCanonicalWorkloadId');
@@ -3287,9 +3294,9 @@ describe('frontend resource type boundaries', () => {
   });
 
   it('keeps dashboard guest fallback copy in a shared presentation utility', () => {
-    expect(guestRowSource).toContain('getDashboardGuestBackupStatusPresentation');
-    expect(guestRowSource).toContain('getDashboardGuestBackupTooltip');
-    expect(guestRowSource).toContain('getDashboardGuestNetworkEmptyState');
+    expect(guestRowCellsSource).toContain('getDashboardGuestBackupStatusPresentation');
+    expect(guestRowCellsSource).toContain('getDashboardGuestBackupTooltip');
+    expect(guestRowCellsSource).toContain('getDashboardGuestNetworkEmptyState');
     expect(guestRowSource).toContain('getDashboardGuestDiskStatusMessage');
     expect(guestRowSource).not.toContain('No backup found');
     expect(guestRowSource).not.toContain('No IP assigned');
