@@ -12,7 +12,7 @@ import {
   settingsAgentPlatformType,
   settingsTabPath,
   type SettingsTab,
-} from '../settingsRouting';
+} from '../settingsNavigationModel';
 import { isFeatureLocked, isTabLocked } from '../settingsFeatureGates';
 
 const canonicalTabPaths = {
@@ -45,7 +45,7 @@ const hasFeatures =
   (feature: string): boolean =>
     features.includes(feature);
 
-describe('settingsRouting', () => {
+describe('settingsNavigationModel', () => {
   it('uses infrastructure operations as the default /settings landing tab', () => {
     expect(DEFAULT_SETTINGS_TAB).toBe('infrastructure-operations');
   });

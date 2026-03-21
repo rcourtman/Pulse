@@ -1,6 +1,6 @@
 import { Accessor, createMemo, createSignal } from 'solid-js';
 import { SETTINGS_HEADER_META } from './settingsHeaderMeta';
-import type { SettingsTab } from './settingsTypes';
+import type { SettingsTab } from './settingsNavigationModel';
 
 interface UseSettingsShellStateParams {
   activeTab: Accessor<SettingsTab>;

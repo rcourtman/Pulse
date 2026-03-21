@@ -50,4 +50,5 @@ describe('systemSettings store', () => {
     expect(shouldReduceProUpsellNoise()).toBe(false);
     expect(shouldDisableLocalUpgradeMetrics()).toBe(false);
   });
+
 });

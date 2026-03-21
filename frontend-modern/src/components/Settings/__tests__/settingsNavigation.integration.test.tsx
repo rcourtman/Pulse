@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { deriveTabFromPath, settingsTabPath, type SettingsTab } from '../settingsRouting';
+import { deriveTabFromPath, settingsTabPath, type SettingsTab } from '../settingsNavigationModel';
 import { getTabLockReason, isTabLocked } from '../settingsFeatureGates';
 import { shouldHideSettingsNavItem } from '../settingsNavVisibility';
 import { getSettingsTabSaveBehavior } from '../settingsTabSaveBehavior';

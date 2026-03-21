@@ -1,4 +1,4 @@
-import type { SettingsHeaderMetaMap } from './settingsTypes';
+import type { SettingsHeaderMetaMap } from './settingsNavigationModel';
 
 export const SETTINGS_HEADER_META: SettingsHeaderMetaMap = {
   proxmox: {

@@ -86,11 +86,16 @@ work extends shared components instead of creating new local variants.
 64. `frontend-modern/src/components/Settings/useSettingsInfrastructurePanelProps.ts`
 65. `frontend-modern/src/components/Settings/settingsPanelRegistryContext.tsx`
 66. `frontend-modern/src/components/Settings/settingsPanelRegistryLoaders.ts`
-67. `frontend-modern/src/components/Settings/settingsNavCatalog.ts`
-68. `frontend-modern/src/components/Settings/settingsNavVisibility.ts`
-69. `frontend-modern/src/components/Settings/settingsTabSaveBehavior.ts`
-70. `frontend-modern/src/components/Settings/useSettingsPanelRegistry.tsx`
-71. `frontend-modern/src/components/Settings/useSettingsSystemPanels.tsx`
+67. `frontend-modern/src/components/Settings/settingsNavigationModel.ts`
+68. `frontend-modern/src/components/Settings/settingsNavCatalog.ts`
+69. `frontend-modern/src/components/Settings/settingsNavigationModel.ts`
+70. `frontend-modern/src/components/Settings/settingsNavVisibility.ts`
+71. `frontend-modern/src/components/Settings/settingsRouting.ts`
+72. `frontend-modern/src/components/Settings/settingsTabSaveBehavior.ts`
+73. `frontend-modern/src/components/Settings/settingsTypes.ts`
+74. `frontend-modern/src/components/Settings/useSettingsNavigation.ts`
+75. `frontend-modern/src/components/Settings/useSettingsPanelRegistry.tsx`
+76. `frontend-modern/src/components/Settings/useSettingsSystemPanels.tsx`
 
 ## Shared Boundaries
 
@@ -283,10 +288,16 @@ shared discovery draft and subnet-validation state,
 `frontend-modern/src/components/Settings/useSettingsInfrastructurePanelProps.ts`
 owns infrastructure workspace prop assembly and resource-derived infrastructure
 read-model shaping for the shell,
-`frontend-modern/src/components/Settings/settingsNavCatalog.ts` owns settings
-navigation metadata and item lookup, `settingsNavVisibility.ts` owns
-feature/capability visibility and lock policy for settings navigation, and
-`settingsTabSaveBehavior.ts` owns settings tab save-behavior lookup,
+`frontend-modern/src/components/Settings/settingsNavigationModel.ts` owns
+settings tab identity, canonical route derivation, legacy alias normalization,
+and Proxmox agent route metadata. `settingsRouting.ts` and
+`settingsTypes.ts` remain thin compatibility re-export shims only, so external
+consumers can bridge to the canonical owner without reintroducing a second
+settings navigation model. `settingsNavCatalog.ts` owns settings navigation
+metadata and item lookup, `settingsNavVisibility.ts` owns
+feature/capability visibility and lock policy for settings navigation,
+`useSettingsNavigation.ts` owns reactive URL sync and canonical tab-selection
+state, and `settingsTabSaveBehavior.ts` owns settings tab save-behavior lookup,
 `frontend-modern/src/components/Settings/useSettingsSystemPanels.tsx` owns
 system panel prop assembly for general, network, updates, and recovery, and
 `frontend-modern/src/components/Settings/settingsPanelRegistryContext.tsx` owns

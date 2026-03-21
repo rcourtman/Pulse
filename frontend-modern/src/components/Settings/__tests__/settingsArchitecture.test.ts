@@ -27,9 +27,13 @@ import infrastructureSettingsStateSource from '../useInfrastructureSettingsState
 import infrastructureSettingsModelSource from '../infrastructureSettingsModel.ts?raw';
 import infrastructureConfiguredNodesStateSource from '../useInfrastructureConfiguredNodesState.ts?raw';
 import infrastructureDiscoveryRuntimeStateSource from '../useInfrastructureDiscoveryRuntimeState.ts?raw';
+import settingsNavigationModelSource from '../settingsNavigationModel.ts?raw';
+import settingsRoutingSource from '../settingsRouting.ts?raw';
+import settingsTypesSource from '../settingsTypes.ts?raw';
 import settingsNavCatalogSource from '../settingsNavCatalog.ts?raw';
 import settingsNavVisibilitySource from '../settingsNavVisibility.ts?raw';
 import settingsInfrastructurePanelPropsSource from '../useSettingsInfrastructurePanelProps.ts?raw';
+import settingsNavigationHookSource from '../useSettingsNavigation.ts?raw';
 import nodeModalStateSource from '../useNodeModalState.ts?raw';
 import settingsPanelRegistryContextSource from '../settingsPanelRegistryContext.tsx?raw';
 import settingsPanelRegistryLoadersSource from '../settingsPanelRegistryLoaders.ts?raw';
@@ -128,10 +132,12 @@ import userAssignmentsPanelStateSource from '../useUserAssignmentsPanelState.ts?
 import { SETTINGS_HEADER_META } from '../settingsHeaderMeta';
 
 const extractedModules = [
-  '../settingsTypes.ts',
+  '../settingsNavigationModel.ts',
+  '../settingsRouting.ts',
   '../settingsNavCatalog.ts',
   '../settingsNavVisibility.ts',
   '../settingsTabSaveBehavior.ts',
+  '../settingsTypes.ts',
   '../DockerRuntimeSettingsCard.tsx',
   '../settingsHeaderMeta.ts',
   '../settingsFeatureGates.ts',
@@ -453,6 +459,15 @@ describe('Settings architecture guardrails', () => {
     expect(settingsInfrastructurePanelPropsSource).toContain('pmgInstanceFromResource');
     expect(settingsInfrastructurePanelPropsSource).toContain('const agentStateResources = createMemo');
     expect(settingsInfrastructurePanelPropsSource).toContain('getInfrastructurePanelProps');
+    expect(settingsNavigationModelSource).toContain('export type SettingsTab =');
+    expect(settingsNavigationModelSource).toContain('export const DEFAULT_SETTINGS_TAB');
+    expect(settingsNavigationModelSource).toContain('export function resolveCanonicalSettingsPath');
+    expect(settingsNavigationModelSource).toContain('export function settingsTabPath');
+    expect(settingsNavigationHookSource).toContain('deriveTabFromPath');
+    expect(settingsNavigationHookSource).toContain('resolveCanonicalSettingsPath');
+    expect(settingsNavigationHookSource).toContain('settingsTabPath');
+    expect(settingsRoutingSource).toContain("from './settingsNavigationModel'");
+    expect(settingsTypesSource).toContain("from './settingsNavigationModel'");
     expect(settingsNavCatalogSource).toContain('export const SETTINGS_NAV_GROUPS');
     expect(settingsNavCatalogSource).toContain('export function getSettingsNavItem');
     expect(settingsNavVisibilitySource).toContain('export function shouldHideSettingsNavItem');

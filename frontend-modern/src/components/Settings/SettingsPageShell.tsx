@@ -4,7 +4,11 @@ import { Card } from '@/components/shared/Card';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { SearchInput } from '@/components/shared/SearchInput';
 import { getSettingsSearchEmptyState } from '@/utils/settingsShellPresentation';
-import type { SettingsHeaderMeta, SettingsNavGroup, SettingsTab } from './settingsTypes';
+import type {
+  SettingsHeaderMeta,
+  SettingsNavGroup,
+  SettingsTab,
+} from './settingsNavigationModel';
 
 interface SettingsPageShellProps {
   headerMeta: Accessor<SettingsHeaderMeta>;

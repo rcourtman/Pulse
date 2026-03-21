@@ -12,7 +12,7 @@ import type { SecurityAuthPanel as SecurityAuthPanelType } from './SecurityAuthP
 import type { RelaySettingsPanel as RelaySettingsPanelType } from './RelaySettingsPanel';
 import type { AuditWebhookPanel as AuditWebhookPanelType } from './AuditWebhookPanel';
 import type { InfrastructureWorkspace as InfrastructureWorkspaceType } from './InfrastructureWorkspace';
-import type { SettingsTab } from './settingsTypes';
+import type { SettingsTab } from './settingsNavigationModel';
 import { SETTINGS_PANEL_REGISTRY_LOADERS } from './settingsPanelRegistryLoaders';
 
 export interface SettingsPanelRegistryEntry {

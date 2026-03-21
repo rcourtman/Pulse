@@ -1,4 +1,4 @@
-import type { SettingsTab } from './settingsTypes';
+import type { SettingsTab } from './settingsNavigationModel';
 import { getSettingsNavItem } from './settingsNavCatalog';
 
 export function getSettingsTabSaveBehavior(tab: SettingsTab) {

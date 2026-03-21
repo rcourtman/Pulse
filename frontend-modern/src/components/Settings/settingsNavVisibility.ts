@@ -1,7 +1,7 @@
 import type { SecurityStatusSettingsCapabilities } from '@/types/config';
 import { isTabLocked } from './settingsFeatureGates';
 import { getSettingsNavItem } from './settingsNavCatalog';
-import type { SettingsTab } from './settingsTypes';
+import type { SettingsTab } from './settingsNavigationModel';
 
 export interface SettingsNavVisibilityContext {
   hasFeature: (feature: string) => boolean;

@@ -9,7 +9,7 @@ import {
   settingsTabPath,
   type AgentKey,
   type SettingsTab,
-} from './settingsRouting';
+} from './settingsNavigationModel';
 
 type SettingsDispatchableTab = Exclude<SettingsTab, 'proxmox'>;
 

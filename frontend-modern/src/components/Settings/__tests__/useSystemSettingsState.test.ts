@@ -1,6 +1,6 @@
 import { createRoot, createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { SettingsTab } from '../settingsTypes';
+import type { SettingsTab } from '../settingsNavigationModel';
 
 type UseSystemSettingsStateModule = typeof import('../useSystemSettingsState');
 

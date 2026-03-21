@@ -17,7 +17,11 @@ import Building2 from 'lucide-solid/icons/building-2';
 import Share2 from 'lucide-solid/icons/share-2';
 import CreditCard from 'lucide-solid/icons/credit-card';
 import { PulseLogoIcon } from '@/components/icons/PulseLogoIcon';
-import type { SettingsNavGroup, SettingsNavItem, SettingsTab } from './settingsTypes';
+import type {
+  SettingsNavGroup,
+  SettingsNavItem,
+  SettingsTab,
+} from './settingsNavigationModel';
 
 export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
   {

@@ -1,4 +1,4 @@
-import type { SettingsTab } from './settingsTypes';
+import type { SettingsTab } from './settingsNavigationModel';
 import { trackPaywallViewed } from '@/utils/upgradeMetrics';
 import { getFeatureMinTierLabel } from '@/utils/licensePresentation';
 

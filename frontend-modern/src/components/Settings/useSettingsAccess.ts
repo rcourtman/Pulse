@@ -2,12 +2,11 @@ import { Accessor, createEffect, createMemo, createSignal } from 'solid-js';
 import type { SecurityStatus } from '@/types/config';
 import { logger } from '@/utils/logger';
 import { hasFeature, isHostedModeEnabled, licenseLoaded } from '@/stores/license';
-import { DEFAULT_SETTINGS_TAB } from './settingsRouting';
+import { DEFAULT_SETTINGS_TAB, type SettingsTab } from './settingsNavigationModel';
 import { tabFeatureRequirements } from './settingsFeatureGates';
 import { SETTINGS_HEADER_META } from './settingsHeaderMeta';
 import { getSettingsNavItem, SETTINGS_NAV_GROUPS } from './settingsNavCatalog';
 import { shouldHideSettingsNavItem } from './settingsNavVisibility';
-import type { SettingsTab } from './settingsTypes';
 
 interface UseSettingsAccessParams {
   activeTab: Accessor<SettingsTab>;
