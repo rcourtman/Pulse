@@ -1,9 +1,9 @@
-import { createMemo, createSignal, createEffect, Show, For } from 'solid-js';
+import { createMemo, Show, For } from 'solid-js';
 import { useTooltip } from '@/hooks/useTooltip';
 import { TooltipPortal } from '@/components/shared/TooltipPortal';
 import { useNavigate } from '@solidjs/router';
-import type { VM, Container, GuestNetworkInterface } from '@/types/api';
-import type { WorkloadGuest, ViewMode } from '@/types/workloads';
+import type { VM, GuestNetworkInterface } from '@/types/api';
+import type { WorkloadGuest } from '@/types/workloads';
 import {
   formatBytes,
   formatUptime,
@@ -16,21 +16,9 @@ import { StackedDiskBar } from './StackedDiskBar';
 import { StackedMemoryBar } from './StackedMemoryBar';
 
 import { StatusDot } from '@/components/shared/StatusDot';
-import { getGuestPowerIndicator, isGuestRunning } from '@/utils/status';
-import { buildMetricKey } from '@/utils/metricsKeys';
-import {
-  getCanonicalWorkloadId,
-  getWorkloadMetricsKind,
-  resolveWorkloadType,
-} from '@/utils/workloads';
-import { getWorkloadTypeBadge } from '@/components/shared/workloadTypeBadges';
-import { buildInfrastructureHrefForWorkload } from './infrastructureLink';
-import type { ColumnDef } from '@/hooks/useColumnVisibility';
+import { resolveWorkloadType } from '@/utils/workloads';
 import { EnhancedCPUBar } from '@/components/Dashboard/EnhancedCPUBar';
-import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { UpdateButton } from '@/components/shared/ContainerUpdateBadge';
-import { getWorkloadDockerHostId } from './workloadSelectors';
-import { createVisibleCanonicalTypeColumn } from '@/utils/typeColumnDefinition';
 import {
   getDashboardGuestBackupStatusPresentation,
   getDashboardGuestBackupTooltip,
@@ -39,76 +27,10 @@ import {
 } from '@/utils/dashboardGuestPresentation';
 
 import { useAlertsActivation } from '@/stores/alertsActivation';
-import { useAnomalyForMetric } from '@/hooks/useAnomalies';
+import type { GuestRowProps } from './guestRowModel';
+import { useGuestRowState } from './useGuestRowState';
 
 type Guest = WorkloadGuest;
-
-interface IODistributionStats {
-  median: number;
-  mad: number;
-  max: number;
-  p97: number;
-  p99: number;
-  count: number;
-}
-
-export interface WorkloadIOEmphasis {
-  network: IODistributionStats;
-  diskIO: IODistributionStats;
-}
-
-const EMPTY_IO_DISTRIBUTION: IODistributionStats = {
-  median: 0,
-  mad: 0,
-  max: 0,
-  p97: 0,
-  p99: 0,
-  count: 0,
-};
-const EMPTY_IO_EMPHASIS: WorkloadIOEmphasis = {
-  network: EMPTY_IO_DISTRIBUTION,
-  diskIO: EMPTY_IO_DISTRIBUTION,
-};
-
-interface IOEmphasis {
-  className: string;
-  showOutlierHint: boolean;
-}
-
-const getOutlierEmphasis = (value: number, stats: IODistributionStats): IOEmphasis => {
-  if (!Number.isFinite(value) || value <= 0 || stats.max <= 0) {
-    return { className: 'text-muted', showOutlierHint: false };
-  }
-
-  if (stats.count < 4) {
-    const ratio = value / stats.max;
-    if (ratio >= 0.995) {
-      return { className: 'text-base-content font-medium', showOutlierHint: true };
-    }
-    return { className: 'text-muted', showOutlierHint: false };
-  }
-
-  if (stats.mad > 0) {
-    const modifiedZ = (0.6745 * (value - stats.median)) / stats.mad;
-    if (modifiedZ >= 6.5 && value >= stats.p99) {
-      return { className: 'text-base-content font-semibold', showOutlierHint: true };
-    }
-    if (modifiedZ >= 5.5 && value >= stats.p97) {
-      return { className: 'text-base-content font-medium', showOutlierHint: true };
-    }
-    return { className: 'text-muted', showOutlierHint: false };
-  }
-
-  if (value >= stats.p99)
-    return { className: 'text-base-content font-semibold', showOutlierHint: true };
-  if (value >= stats.p97)
-    return { className: 'text-base-content font-medium', showOutlierHint: true };
-  if (value > 0) return { className: 'text-muted', showOutlierHint: false };
-  return { className: 'text-muted', showOutlierHint: false };
-};
-
-const GROUPED_FIRST_CELL_INDENT = 'pl-3 sm:pl-5 lg:pl-8';
-const DEFAULT_FIRST_CELL_INDENT = 'pl-2 sm:pl-3';
 
 // Type guard for VM vs Container
 const isVM = (guest: Guest): guest is VM => {
@@ -488,471 +410,59 @@ function InfoTooltipCell(props: { value: string; tooltip: string; type: string }
   );
 }
 
-// Column configuration using the priority system
-export const GUEST_COLUMNS: ColumnDef[] = [
-  { id: 'name', label: 'Name', width: '200px', sortKey: 'name' },
-  createVisibleCanonicalTypeColumn(),
-  { id: 'info', label: 'Info', width: '100px' }, // Merged identifier: VMID for VMs/LXCs, image for app containers, namespace for pods
-  { id: 'vmid', label: 'ID', width: '45px', sortKey: 'vmid' },
-
-  // Core metrics
-  { id: 'cpu', label: 'CPU', width: '140px', sortKey: 'cpu' },
-  { id: 'memory', label: 'Mem', width: '140px', sortKey: 'memory' },
-  { id: 'disk', label: 'Disk', width: '140px', sortKey: 'disk' },
-
-  // Toggleable columns
-  {
-    id: 'ip',
-    label: 'IP',
-    icon: (
-      <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          stroke-width="2"
-          d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"
-        />
-      </svg>
-    ),
-    width: '45px',
-    toggleable: true,
-  },
-  {
-    id: 'uptime',
-    label: 'Uptime',
-    icon: (
-      <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          stroke-width="2"
-          d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-        />
-      </svg>
-    ),
-    width: '60px',
-    toggleable: true,
-    sortKey: 'uptime',
-  },
-  {
-    id: 'node',
-    label: 'Node',
-    icon: (
-      <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          stroke-width="2"
-          d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"
-        />
-      </svg>
-    ),
-    width: '70px',
-    toggleable: true,
-    sortKey: 'node',
-  },
-  {
-    id: 'image',
-    label: 'Image',
-    icon: (
-      <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <rect x="3" y="6" width="18" height="12" rx="2" />
-        <path
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          stroke-width="2"
-          d="M3 10h18M7 6v12M13 6v12"
-        />
-      </svg>
-    ),
-    width: '140px',
-    minWidth: '120px',
-    toggleable: true,
-    sortKey: 'image',
-  },
-  {
-    id: 'namespace',
-    label: 'Namespace',
-    icon: (
-      <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          stroke-width="2"
-          d="M12 2l7 4v8l-7 4-7-4V6l7-4z"
-        />
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v12" />
-      </svg>
-    ),
-    width: '110px',
-    minWidth: '90px',
-    toggleable: true,
-    sortKey: 'namespace',
-  },
-  {
-    id: 'context',
-    label: 'Context',
-    icon: (
-      <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          stroke-width="2"
-          d="M12 6v6m0 6h.01M4 6a8 8 0 018-4 8 8 0 018 4M4 18a8 8 0 008 4 8 8 0 008-4"
-        />
-      </svg>
-    ),
-    width: '120px',
-    minWidth: '100px',
-    toggleable: true,
-    sortKey: 'contextLabel',
-  },
-  {
-    id: 'backup',
-    label: 'Backup',
-    icon: (
-      <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          stroke-width="2"
-          d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
-        />
-      </svg>
-    ),
-    width: '50px',
-    toggleable: true,
-  },
-  {
-    id: 'tags',
-    label: 'Tags',
-    icon: (
-      <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          stroke-width="2"
-          d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"
-        />
-      </svg>
-    ),
-    width: '60px',
-    toggleable: true,
-  },
-  { id: 'update', label: 'Update', width: '60px', toggleable: true },
-  { id: 'os', label: 'OS', width: '45px', toggleable: true },
-  {
-    id: 'netIo',
-    label: 'Net I/O',
-    width: '130px',
-    minWidth: '120px',
-    toggleable: true,
-    sortKey: 'netIo',
-  },
-  {
-    id: 'diskIo',
-    label: 'Disk I/O',
-    width: '130px',
-    minWidth: '120px',
-    toggleable: true,
-    sortKey: 'diskIo',
-  },
-
-  // Link column
-  { id: 'link', label: '', width: '28px' },
-];
-
-/**
- * Columns relevant to each ViewMode.
- * - "all" uses the merged `info` column instead of vmid/image/namespace
- * - Type-specific views use the dedicated columns for that type
- */
-export const VIEW_MODE_COLUMNS: Record<ViewMode, Set<string> | null> = {
-  all: new Set([
-    'name',
-    'type',
-    'info',
-    'cpu',
-    'memory',
-    'disk',
-    'ip',
-    'uptime',
-    'node',
-    'backup',
-    'tags',
-    'os',
-    'diskIo',
-    'netIo',
-    'link',
-  ]),
-  vm: new Set([
-    'name',
-    'vmid',
-    'cpu',
-    'memory',
-    'disk',
-    'ip',
-    'uptime',
-    'node',
-    'backup',
-    'tags',
-    'os',
-    'diskIo',
-    'netIo',
-    'link',
-  ]),
-  'system-container': new Set([
-    'name',
-    'vmid',
-    'cpu',
-    'memory',
-    'disk',
-    'ip',
-    'uptime',
-    'node',
-    'backup',
-    'tags',
-    'os',
-    'diskIo',
-    'netIo',
-    'link',
-  ]),
-  'app-container': new Set([
-    'name',
-    'cpu',
-    'memory',
-    'uptime',
-    'image',
-    'context',
-    'tags',
-    'update',
-    'link',
-  ]),
-  pod: new Set(['name', 'cpu', 'memory', 'image', 'namespace', 'context', 'link']),
-};
-
-interface GuestRowProps {
-  guest: Guest;
-  alertStyles?: {
-    rowClass: string;
-    indicatorClass: string;
-    badgeClass: string;
-    hasAlert: boolean;
-    alertCount: number;
-    severity: 'critical' | 'warning' | null;
-    hasPoweredOffAlert?: boolean;
-    hasNonPoweredOffAlert?: boolean;
-    hasUnacknowledgedAlert?: boolean;
-    unacknowledgedCount?: number;
-    acknowledgedCount?: number;
-    hasAcknowledgedOnlyAlert?: boolean;
-  };
-  customUrl?: string;
-  onTagClick?: (tag: string) => void;
-  activeSearch?: string;
-  parentNodeOnline?: boolean;
-  onCustomUrlUpdate?: (guestId: string, url: string) => void;
-  isGroupedView?: boolean;
-  /** IDs of columns that should be visible */
-  visibleColumnIds?: string[];
-  /** Click handler for the row */
-  onClick?: () => void;
-  /** Whether the row details are expanded */
-  isExpanded?: boolean;
-  /** Optional cross-row I/O emphasis stats for relative highlighting */
-  ioEmphasis?: WorkloadIOEmphasis;
-  /** Called when this row is hovered/unhovered */
-  onHoverChange?: (guestId: string | null) => void;
-}
+export { GUEST_COLUMNS, VIEW_MODE_COLUMNS } from './guestRowModel';
+export type { GuestRowProps, WorkloadIOEmphasis } from './guestRowModel';
 
 export function GuestRow(props: GuestRowProps) {
   const navigate = useNavigate();
-  const guestId = createMemo(() => getCanonicalWorkloadId(props.guest));
-  const infrastructureHref = createMemo(() => buildInfrastructureHrefForWorkload(props.guest));
-
-  // Use breakpoint hook directly for responsive behavior
-  const { isMobile } = useBreakpoint();
-
-  // PERFORMANCE: Use memoized Set for O(1) column visibility lookups instead of O(n) array.includes()
-  const visibleColumnIdSet = createMemo(() =>
-    props.visibleColumnIds ? new Set(props.visibleColumnIds) : null,
-  );
-
-  // Helper to check if a column is visible
-  // If visibleColumnIds is not provided, show all columns for backwards compatibility
-  const isColVisible = (colId: string) => {
-    const set = visibleColumnIdSet();
-    if (!set) return true;
-    return set.has(colId);
-  };
-
-  const workloadType = createMemo(() => resolveWorkloadType(props.guest));
-
-  // Create a stable key for per-resource metric correlation.
-  const metricsKey = createMemo(() =>
-    buildMetricKey(getWorkloadMetricsKind(props.guest), guestId()),
-  );
-
-  // Get anomalies for this guest's metrics (deterministic, no LLM)
-  const cpuAnomaly = useAnomalyForMetric(guestId, () => 'cpu');
-  const memoryAnomaly = useAnomalyForMetric(guestId, () => 'memory');
-  const diskAnomaly = useAnomalyForMetric(guestId, () => 'disk');
-
-  const [customUrl, setCustomUrl] = createSignal<string | undefined>(props.customUrl);
-
-  const displayId = createMemo(() => {
-    const provided = props.guest.displayId?.trim();
-    if (provided) return provided;
-    if (typeof props.guest.vmid === 'number' && props.guest.vmid > 0) {
-      return String(props.guest.vmid);
-    }
-    return '';
-  });
-
-  const ipAddresses = createMemo(() => props.guest.ipAddresses ?? []);
-  const networkInterfaces = createMemo(() => props.guest.networkInterfaces ?? []);
-  const hasNetworkInterfaces = createMemo(() => networkInterfaces().length > 0);
-  const osName = createMemo(() => props.guest.osName?.trim() ?? '');
-  const osVersion = createMemo(() => props.guest.osVersion?.trim() ?? '');
-  const agentVersion = createMemo(() => props.guest.agentVersion?.trim() ?? '');
-  const hasOsInfo = createMemo(() => osName().length > 0 || osVersion().length > 0);
-  const dockerImage = createMemo(() => props.guest.image?.trim() ?? '');
-  const namespace = createMemo(() => props.guest.namespace?.trim() ?? '');
-  const contextLabel = createMemo(() => props.guest.contextLabel?.trim() ?? '');
-  const clusterName = createMemo(() => props.guest.clusterName?.trim() ?? '');
-  const isPveWorkload = createMemo(() => {
-    const t = workloadType();
-    return t === 'vm' || t === 'system-container';
-  });
-
-  // Merged identifier for the "all" view — shows the most relevant ID per type
-  const infoValue = createMemo(() => {
-    const type = workloadType();
-    if (type === 'vm' || type === 'system-container') return displayId();
-    if (type === 'app-container') return dockerImage() ? getShortImageName(dockerImage()) : '';
-    if (type === 'pod') return namespace();
-    return '';
-  });
-  const infoTooltip = createMemo(() => {
-    const type = workloadType();
-    if (type === 'app-container') return dockerImage(); // Full image name in tooltip
-    return infoValue();
-  });
-  const supportsBackup = createMemo(() => {
-    const type = workloadType();
-    return type === 'vm' || type === 'system-container';
-  });
-
-  const isOCIContainer = createMemo(() => {
-    if (workloadType() !== 'system-container') return false;
-    const container = props.guest as Container;
-    return props.guest.type === 'oci-container' || container.isOci === true;
-  });
-
-  // OCI image info - extract clean image name from osTemplate (similar to Docker container image display)
-  const ociImage = createMemo(() => {
-    if (!isOCIContainer()) return null;
-    const template = (props.guest as Container).osTemplate;
-    if (!template) return null;
-    // Strip common prefixes to get clean image reference
-    let image = template;
-    if (image.startsWith('oci:')) image = image.slice(4);
-    if (image.startsWith('docker:')) image = image.slice(7);
-    return image;
-  });
-
-  const typeInfo = createMemo(() => {
-    if (isOCIContainer()) {
-      return getWorkloadTypeBadge('oci-container', {
-        title: `OCI Container${ociImage() ? ` • ${ociImage()}` : ''}`,
-      });
-    }
-    if (workloadType() === 'app-container') {
-      const runtime = (props.guest.containerRuntime || '').trim();
-      const normalized = runtime.toLowerCase();
-      const label =
-        normalized === 'podman'
-          ? 'Podman'
-          : normalized === 'docker'
-            ? 'Docker'
-            : runtime
-              ? runtime
-              : 'Containers';
-      const title =
-        normalized === 'podman'
-          ? 'Podman Container'
-          : normalized === 'docker'
-            ? 'Docker Container'
-            : runtime
-              ? `${runtime} Container`
-              : 'Container (Docker-compatible runtime)';
-      return getWorkloadTypeBadge('app-container', { label, title });
-    }
-    return getWorkloadTypeBadge(workloadType());
-  });
-
-  // Update custom URL when prop changes
-  createEffect(() => {
-    setCustomUrl(props.customUrl);
-  });
+  const {
+    agentVersion,
+    clusterName,
+    contextLabel,
+    cpuAnomaly,
+    customUrl,
+    diskAnomaly,
+    diskIOEmphasis,
+    diskRead,
+    diskWrite,
+    displayId,
+    dockerHostId,
+    dockerImage,
+    firstCellIndent,
+    guestId,
+    guestStatus,
+    hasDiskUsage,
+    hasNetworkInterfaces,
+    hasOsInfo,
+    infoTooltip,
+    infoValue,
+    infrastructureHref,
+    ipAddresses,
+    isColVisible,
+    isMobile,
+    isPveWorkload,
+    isRunning,
+    lockLabel,
+    memoryAnomaly,
+    memoryPercentOnly,
+    memoryTooltip,
+    metricsKey,
+    namespace,
+    networkEmphasis,
+    networkIn,
+    networkInterfaces,
+    networkOut,
+    ociImage,
+    osName,
+    osVersion,
+    rowClass,
+    rowStyle,
+    supportsBackup,
+    typeInfo,
+    workloadType,
+  } = useGuestRowState(props);
 
   const cpuPercent = createMemo(() => (props.guest.cpu || 0) * 100);
-
-  // I/O metrics - must use memos for reactivity with WebSocket updates
-  const diskRead = createMemo(() => props.guest.diskRead || 0);
-  const diskWrite = createMemo(() => props.guest.diskWrite || 0);
-  const networkIn = createMemo(() => props.guest.networkIn || 0);
-  const networkOut = createMemo(() => props.guest.networkOut || 0);
-  const ioEmphasis = createMemo(() => props.ioEmphasis ?? EMPTY_IO_EMPHASIS);
-  const diskIOTotal = createMemo(() => diskRead() + diskWrite());
-  const networkTotal = createMemo(() => networkIn() + networkOut());
-  const diskIOEmphasis = createMemo(() => getOutlierEmphasis(diskIOTotal(), ioEmphasis().diskIO));
-  const networkEmphasis = createMemo(() =>
-    getOutlierEmphasis(networkTotal(), ioEmphasis().network),
-  );
-
-  const memoryExtraLines = createMemo(() => {
-    if (!props.guest.memory) return undefined;
-    const lines: string[] = [];
-    const total = props.guest.memory.total ?? 0;
-    if (
-      props.guest.memory.balloon &&
-      props.guest.memory.balloon > 0 &&
-      props.guest.memory.balloon !== total
-    ) {
-      lines.push(`Balloon: ${formatBytes(props.guest.memory.balloon)}`);
-    }
-    if (props.guest.memory.swapTotal && props.guest.memory.swapTotal > 0) {
-      const swapUsed = props.guest.memory.swapUsed ?? 0;
-      lines.push(`Swap: ${formatBytes(swapUsed)} / ${formatBytes(props.guest.memory.swapTotal)}`);
-    }
-    return lines.length > 0 ? lines : undefined;
-  });
-  const memoryTooltip = createMemo(() => memoryExtraLines()?.join('\n') ?? undefined);
-  const memoryPercentOnly = createMemo(() => {
-    const memory = props.guest.memory;
-    if (!memory) return undefined;
-    if ((memory.total ?? 0) > 0) return undefined;
-    const usage = memory.usage ?? 0;
-    if (!Number.isFinite(usage) || usage <= 0) return undefined;
-    return Math.max(0, Math.min(usage, 100));
-  });
-
-  const diskPercent = createMemo(() => {
-    if (!props.guest.disk || props.guest.disk.total === 0) return 0;
-    if (props.guest.disk.usage === -1) return -1;
-    return (props.guest.disk.used / props.guest.disk.total) * 100;
-  });
-  const hasDiskUsage = createMemo(() => {
-    if (!props.guest.disk) return false;
-    if (props.guest.disk.total <= 0) return false;
-    return diskPercent() !== -1;
-  });
-
-  const parentOnline = createMemo(() => props.parentNodeOnline !== false);
-  const isRunning = createMemo(() => isGuestRunning(props.guest, parentOnline()));
-  const guestStatus = createMemo(() => getGuestPowerIndicator(props.guest, parentOnline()));
-  const lockLabel = createMemo(() => (props.guest.lock || '').trim());
 
   const getDiskStatusTooltip = () => {
     if (!isVM(props.guest)) return 'Disk stats unavailable';
@@ -960,55 +470,6 @@ export function GuestRow(props: GuestRowProps) {
     const vm = props.guest as VM;
     return getDashboardGuestDiskStatusMessage(vm.diskStatusReason);
   };
-
-  const hasUnacknowledgedAlert = createMemo(() => !!props.alertStyles?.hasUnacknowledgedAlert);
-  const hasAcknowledgedOnlyAlert = createMemo(() => !!props.alertStyles?.hasAcknowledgedOnlyAlert);
-  const showAlertHighlight = createMemo(
-    () => hasUnacknowledgedAlert() || hasAcknowledgedOnlyAlert(),
-  );
-
-  const alertAccentColor = createMemo(() => {
-    if (!showAlertHighlight()) return undefined;
-    if (hasUnacknowledgedAlert()) {
-      return props.alertStyles?.severity === 'critical' ? '#ef4444' : '#eab308';
-    }
-    return '#9ca3af';
-  });
-
-  const rowClass = createMemo(() => {
-    const base = 'transition-all duration-200 relative group cursor-pointer';
-
-    if (props.isExpanded) {
-      return `${base} bg-blue-50 dark:bg-blue-900 z-10 hover:shadow-sm`;
-    }
-
-    const hover = 'hover:shadow-sm';
-    const alertBg = hasUnacknowledgedAlert()
-      ? props.alertStyles?.severity === 'critical'
-        ? 'bg-red-50 dark:bg-red-950'
-        : 'bg-yellow-50 dark:bg-yellow-950'
-      : '';
-    const defaultHover = hasUnacknowledgedAlert() ? '' : 'hover:bg-surface-hover';
-    const stoppedDimming = !isRunning() ? 'opacity-60' : '';
-
-    return [base, hover, defaultHover, alertBg, stoppedDimming].filter(Boolean).join(' ');
-  });
-
-  const rowStyle = createMemo(() => {
-    const styles: Record<string, string> = {
-      'min-height': '32px',
-    };
-
-    // Alert styling
-    if (showAlertHighlight()) {
-      const color = alertAccentColor();
-      if (color) {
-        styles['box-shadow'] = `inset 4px 0 0 0 ${color}`;
-      }
-    }
-
-    return styles;
-  });
 
   return (
     <>
@@ -1022,7 +483,7 @@ export function GuestRow(props: GuestRowProps) {
       >
         {/* Name - always visible */}
         <td
-          class={`pr-1.5 sm:pr-2 py-0.5 align-middle whitespace-nowrap ${props.isGroupedView ? GROUPED_FIRST_CELL_INDENT : DEFAULT_FIRST_CELL_INDENT}`}
+          class={`pr-1.5 sm:pr-2 py-0.5 align-middle whitespace-nowrap ${firstCellIndent()}`}
         >
           <div class="flex items-center gap-2 min-w-0">
             <div class={`transition-transform duration-200 ${props.isExpanded ? 'rotate-90' : ''}`}>
@@ -1449,11 +910,11 @@ export function GuestRow(props: GuestRowProps) {
           <td class="px-1.5 sm:px-2 py-0.5 align-middle">
             <div class="flex justify-center">
               <Show
-                when={workloadType() === 'app-container' && getWorkloadDockerHostId(props.guest)}
+                when={workloadType() === 'app-container' && dockerHostId()}
               >
                 <UpdateButton
                   updateStatus={props.guest.updateStatus}
-                  agentId={getWorkloadDockerHostId(props.guest)}
+                  agentId={dockerHostId()}
                   containerId={props.guest.id ?? ''}
                   containerName={props.guest.name}
                   compact={true}

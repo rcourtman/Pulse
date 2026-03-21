@@ -2518,7 +2518,10 @@
       ],
       "owned_files": [
         "frontend-modern/src/components/Dashboard/Dashboard.tsx",
+        "frontend-modern/src/components/Dashboard/GuestRow.tsx",
+        "frontend-modern/src/components/Dashboard/guestRowModel.tsx",
         "frontend-modern/src/components/Dashboard/useDashboardState.ts",
+        "frontend-modern/src/components/Dashboard/useGuestRowState.ts",
         "frontend-modern/src/components/Dashboard/workloadSelectors.ts",
         "frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts",
         "frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts",
@@ -2563,7 +2566,10 @@
             "match_prefixes": [],
             "match_files": [
               "frontend-modern/src/components/Dashboard/Dashboard.tsx",
+              "frontend-modern/src/components/Dashboard/GuestRow.tsx",
+              "frontend-modern/src/components/Dashboard/guestRowModel.tsx",
               "frontend-modern/src/components/Dashboard/useDashboardState.ts",
+              "frontend-modern/src/components/Dashboard/useGuestRowState.ts",
               "frontend-modern/src/components/Dashboard/workloadSelectors.ts",
               "frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts",
               "frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts",
@@ -2574,6 +2580,7 @@
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/components/Dashboard/__tests__/Dashboard.performance.contract.test.tsx",
+              "frontend-modern/src/components/Dashboard/__tests__/GuestRow.test.tsx",
               "frontend-modern/src/components/Dashboard/__tests__/workloadSelectors.test.ts",
               "frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx"
             ]

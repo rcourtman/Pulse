@@ -96,6 +96,8 @@ import recentAlertsPanelSource from '@/pages/DashboardPanels/RecentAlertsPanel.t
 import storagePanelSource from '@/pages/DashboardPanels/StoragePanel.tsx?raw';
 import recoveryStatusPanelSource from '@/pages/DashboardPanels/RecoveryStatusPanel.tsx?raw';
 import guestRowSource from '@/components/Dashboard/GuestRow.tsx?raw';
+import guestRowModelSource from '@/components/Dashboard/guestRowModel.tsx?raw';
+import guestRowStateSource from '@/components/Dashboard/useGuestRowState.ts?raw';
 import dashboardDiskListSource from '@/components/Dashboard/DiskList.tsx?raw';
 import guestDrawerSource from '@/components/Dashboard/GuestDrawer.tsx?raw';
 import dashboardGuestPresentationSource from '@/utils/dashboardGuestPresentation.ts?raw';
@@ -503,7 +505,10 @@ describe('frontend resource type boundaries', () => {
     expect(infrastructureSummarySource).not.toContain("getOrgID() || 'default'");
     expect(storageSummarySource).toContain('normalizeOrgScope(getOrgID())');
     expect(storageSummarySource).not.toContain("getOrgID() || 'default'");
-    expect(guestRowSource).toContain('getCanonicalWorkloadId');
+    expect(guestRowSource).toContain('useGuestRowState');
+    expect(guestRowSource).not.toContain('const guestId = createMemo(');
+    expect(guestRowStateSource).toContain('getCanonicalWorkloadId');
+    expect(guestRowModelSource).toContain('export const GUEST_COLUMNS');
     expect(guestRowSource).not.toContain('buildGuestId');
     expect(guestDrawerSource).toContain('getCanonicalWorkloadId');
     expect(guestDrawerSource).not.toContain('const guestId = () => {');

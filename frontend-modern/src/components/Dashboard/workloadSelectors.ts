@@ -1,6 +1,6 @@
 import type { Node } from '@/types/api';
 import type { WorkloadGuest, ViewMode } from '@/types/workloads';
-import type { WorkloadIOEmphasis } from './GuestRow';
+import type { WorkloadIOEmphasis } from './guestRowModel';
 import { computeIOScale } from '@/components/Infrastructure/infrastructureSelectors';
 import { parseFilterStack, evaluateFilterStack } from '@/utils/searchQuery';
 import { DEGRADED_HEALTH_STATUSES, OFFLINE_HEALTH_STATUSES } from '@/utils/status';

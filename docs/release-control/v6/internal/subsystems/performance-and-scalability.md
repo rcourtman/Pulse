@@ -27,13 +27,17 @@ regression protection.
 5. `internal/api/slo_bench_test.go`
 6. `frontend-modern/src/components/Dashboard/Dashboard.tsx`
 7. `frontend-modern/src/components/Dashboard/useDashboardState.ts`
-8. `frontend-modern/src/components/Dashboard/workloadSelectors.ts`
-9. `frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx`
-10. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`
-11. `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts`
-12. `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts`
-13. `frontend-modern/src/components/Dashboard/__tests__/Dashboard.performance.contract.test.tsx`
-14. `frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx`
+8. `frontend-modern/src/components/Dashboard/GuestRow.tsx`
+9. `frontend-modern/src/components/Dashboard/guestRowModel.tsx`
+10. `frontend-modern/src/components/Dashboard/useGuestRowState.ts`
+11. `frontend-modern/src/components/Dashboard/workloadSelectors.ts`
+12. `frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx`
+13. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`
+14. `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts`
+15. `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts`
+16. `frontend-modern/src/components/Dashboard/__tests__/Dashboard.performance.contract.test.tsx`
+17. `frontend-modern/src/components/Dashboard/__tests__/GuestRow.test.tsx`
+18. `frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx`
 
 ## Shared Boundaries
 
@@ -53,6 +57,7 @@ regression protection.
 6. Deduplicate dashboard workload rows by canonical workload ID from `frontend-modern/src/utils/workloads.ts` rather than via local pass-through wrappers in `frontend-modern/src/components/Dashboard/Dashboard.tsx`
 7. Render dashboard row identity directly from the shared canonical workload helper so row selection, hover, and fallback metadata lookup stay aligned with the same workload contract
 8. Format infrastructure sensor labels through the shared `frontend-modern/src/utils/textPresentation.ts` presentation helper instead of maintaining a local title-casing implementation in `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts`
+9. Extend dashboard row contract and per-row hot-path derivations through `frontend-modern/src/components/Dashboard/guestRowModel.tsx` and `frontend-modern/src/components/Dashboard/useGuestRowState.ts` rather than rebuilding column metadata, row identity, or anomaly correlation inside `frontend-modern/src/components/Dashboard/GuestRow.tsx`
 
 ## Forbidden Paths
 
@@ -85,6 +90,13 @@ That runtime state owner now lives in
 metadata persistence, workload-route synchronization, grouping/windowing, and
 filter/sort state must extend through that owner instead of accreting back into
 `frontend-modern/src/components/Dashboard/Dashboard.tsx`.
+The dashboard guest-row path now follows the same pattern: the render shell
+stays in `frontend-modern/src/components/Dashboard/GuestRow.tsx`, while the
+canonical row contract and per-row hot-path derivations live in
+`frontend-modern/src/components/Dashboard/guestRowModel.tsx` and
+`frontend-modern/src/components/Dashboard/useGuestRowState.ts`. Future row
+identity, column, anomaly-correlation, and link-state changes must extend
+through those owners instead of rebuilding row-local state inside the shell.
 
 The unified resource table hot path is now also governed as explicit
 performance-owned runtime, with shared ownership against the unified-resource

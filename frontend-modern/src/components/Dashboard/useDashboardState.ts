@@ -2,7 +2,7 @@ import { createEffect, createMemo, createSignal, onCleanup, onMount, untrack } f
 import { useLocation, useNavigate } from '@solidjs/router';
 import type { VM, Container, Node } from '@/types/api';
 import type { WorkloadGuest, ViewMode } from '@/types/workloads';
-import { GUEST_COLUMNS, VIEW_MODE_COLUMNS } from './GuestRow';
+import { GUEST_COLUMNS, VIEW_MODE_COLUMNS } from './guestRowModel';
 import { useWebSocket } from '@/App';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import { GuestMetadataAPI } from '@/api/guestMetadata';

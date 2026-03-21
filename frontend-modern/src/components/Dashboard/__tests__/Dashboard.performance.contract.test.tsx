@@ -5,6 +5,9 @@ import type { Resource } from '@/types/resource';
 import { Dashboard } from '../Dashboard';
 import dashboardSource from '../Dashboard.tsx?raw';
 import dashboardStateSource from '../useDashboardState.ts?raw';
+import guestRowSource from '../GuestRow.tsx?raw';
+import guestRowModelSource from '../guestRowModel.tsx?raw';
+import guestRowStateSource from '../useGuestRowState.ts?raw';
 import {
   filterWorkloads,
   createWorkloadSortComparator,
@@ -461,8 +464,21 @@ describe('Dashboard performance contract', () => {
       expect(dashboardSource).not.toContain('const [search, setSearch] = createSignal(');
       expect(dashboardStateSource).toContain('useGroupedTableWindowing');
       expect(dashboardStateSource).toContain('createWorkloadSortComparator');
+      expect(dashboardStateSource).toContain("from './guestRowModel'");
+      expect(dashboardStateSource).not.toContain("from './GuestRow'");
       expect(dashboardSource).toContain('createMemo(() => getCanonicalWorkloadId(guest()))');
       expect(dashboardStateSource).not.toContain('const guestId = () => {');
+    });
+
+    it('keeps guest row contract and hot-path state in canonical row owners', () => {
+      expect(guestRowSource).toContain('useGuestRowState');
+      expect(guestRowSource).not.toContain('export const GUEST_COLUMNS');
+      expect(guestRowSource).not.toContain('const guestId = createMemo(');
+      expect(guestRowModelSource).toContain('export const GUEST_COLUMNS');
+      expect(guestRowModelSource).toContain('export const VIEW_MODE_COLUMNS');
+      expect(guestRowStateSource).toContain('getCanonicalWorkloadId');
+      expect(guestRowStateSource).toContain('buildMetricKey');
+      expect(guestRowStateSource).toContain('getWorkloadTypeBadge');
     });
 
     it('filterWorkloads returns all guests when no filters active', () => {
