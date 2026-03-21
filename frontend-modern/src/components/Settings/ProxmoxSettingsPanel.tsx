@@ -1,22 +1,18 @@
-import { Component, Accessor, Setter, Show, createMemo, createSignal } from 'solid-js';
+import { Component, Accessor, Setter, Show } from 'solid-js';
 import { useNavigate } from '@solidjs/router';
 import type { Resource } from '@/types/resource';
 import type { PBSInstance, PMGInstance } from '@/types/api';
 import type { NodeConfig, NodeConfigWithStatus } from '@/types/nodes';
 import type { SecurityStatus as SecurityStatusInfo } from '@/types/config';
-import { notificationStore } from '@/stores/notifications';
 import { CalloutCard } from '@/components/shared/CalloutCard';
 import type { ToggleChangeEvent } from '@/components/shared/Toggle';
-import { NodeModal } from './NodeModal';
-import { PveNodesTable, PbsNodesTable, PmgNodesTable } from './ConfiguredNodeTables';
+import { ProxmoxConfiguredNodesTable } from './ProxmoxConfiguredNodesTable';
 import { ProxmoxDeleteNodeDialog } from './ProxmoxDeleteNodeDialog';
 import { ProxmoxDirectConnectionsCard } from './ProxmoxDirectConnectionsCard';
 import { ProxmoxDiscoveryResultsCard } from './ProxmoxDiscoveryResultsCard';
+import { ProxmoxNodeModalStack } from './ProxmoxNodeModalStack';
 import { SettingsSectionNav } from './SettingsSectionNav';
-import {
-  buildProxmoxDiscoveryPrefillNode,
-  getProxmoxVariantPresentation,
-} from '@/utils/proxmoxSettingsPresentation';
+import { useProxmoxSettingsPanelState } from './useProxmoxSettingsPanelState';
 import type {
   DiscoveredServer,
   DiscoveryScanStatus,
@@ -75,144 +71,15 @@ export interface ProxmoxSettingsPanelProps {
 
 export const ProxmoxSettingsPanel: Component<ProxmoxSettingsPanelProps> = (props) => {
   const navigate = useNavigate();
-  const [prefillNode, setPrefillNode] = createSignal<Partial<NodeConfig> | null>(null);
-
-  const activeAgent = () => props.selectedAgent();
-  const activeConfig = createMemo(() => getProxmoxVariantPresentation(activeAgent()));
-  const activeDiscoveredNodes = createMemo(() =>
-    props.discoveredNodes().filter((node) => node.type === activeAgent()),
-  );
-  const activeConfiguredNodes = createMemo(() => {
-    switch (activeAgent()) {
-      case 'pve':
-        return props.pveNodes();
-      case 'pbs':
-        return props.pbsNodes();
-      case 'pmg':
-        return props.pmgNodes();
-    }
-  });
-  const hasDiscoveryTimeouts = () =>
-    props.discoveryMode() === 'auto' &&
-    (props.discoveryScanStatus().errors || []).some((error) => /timed out|timeout/i.test(error));
-
-  const openCreateNode = (type: NodeType) => {
-    setPrefillNode(null);
-    props.setEditingNode(null);
-    props.setCurrentNodeType(type);
-    props.setModalResetKey((previous) => previous + 1);
-    props.setShowNodeModal(true);
-  };
-
-  const openEditNode = (type: NodeType, node: NodeConfigWithStatus) => {
-    setPrefillNode(null);
-    props.setEditingNode(node);
-    props.setCurrentNodeType(type);
-    props.setShowNodeModal(true);
-  };
-
-  const openDiscoveredNode = (server: DiscoveredServer) => {
-    setPrefillNode(buildProxmoxDiscoveryPrefillNode(server));
-    props.setEditingNode(null);
-    props.setCurrentNodeType(server.type);
-    props.setModalResetKey((previous) => previous + 1);
-    props.setShowNodeModal(true);
-  };
-
-  const closeNodeModal = () => {
-    setPrefillNode(null);
-    props.setShowNodeModal(false);
-    props.setEditingNode(null);
-    props.setModalResetKey((previous) => previous + 1);
-  };
-
-  const handleRefreshDiscovery = async () => {
-    notificationStore.info('Refreshing discovery...', 2000);
-    try {
-      await props.triggerDiscoveryScan({ quiet: true });
-    } finally {
-      await props.loadDiscoveredNodes();
-    }
-  };
+  const state = useProxmoxSettingsPanelState(props);
 
   const handleDiscoveryToggle = async (event: ToggleChangeEvent) => {
-    if (props.envOverrides().discoveryEnabled || props.savingDiscoverySettings()) {
+    const nextValue = await state.handleDiscoveryToggle(event.currentTarget.checked);
+    if (nextValue !== event.currentTarget.checked) {
       event.preventDefault();
-      return;
-    }
-
-    const success = await props.handleDiscoveryEnabledChange(event.currentTarget.checked);
-    if (!success) {
-      event.currentTarget.checked = props.discoveryEnabled();
+      event.currentTarget.checked = nextValue;
     }
   };
-
-  const renderConfiguredTable = () => {
-    switch (activeAgent()) {
-      case 'pve':
-        return (
-          <PveNodesTable
-            nodes={props.pveNodes()}
-            stateNodes={props.agentStateResources()}
-            globalTemperatureMonitoringEnabled={props.temperatureMonitoringEnabled()}
-            onTestConnection={props.testNodeConnection}
-            onEdit={(node) => openEditNode('pve', node)}
-            onDelete={props.requestDeleteNode}
-            onRefreshCluster={props.refreshClusterNodes}
-          />
-        );
-      case 'pbs':
-        return (
-          <PbsNodesTable
-            nodes={props.pbsNodes()}
-            statePbs={props.pbsInstances()}
-            globalTemperatureMonitoringEnabled={props.temperatureMonitoringEnabled()}
-            onTestConnection={props.testNodeConnection}
-            onEdit={(node) => openEditNode('pbs', node)}
-            onDelete={props.requestDeleteNode}
-          />
-        );
-      case 'pmg':
-        return (
-          <PmgNodesTable
-            nodes={props.pmgNodes()}
-            statePmg={props.pmgInstances()}
-            globalTemperatureMonitoringEnabled={props.temperatureMonitoringEnabled()}
-            onTestConnection={props.testNodeConnection}
-            onEdit={(node) => openEditNode('pmg', node)}
-            onDelete={props.requestDeleteNode}
-          />
-        );
-    }
-  };
-
-  const renderNodeModal = (type: NodeType) => (
-    <Show when={props.isNodeModalVisible(type)}>
-      <NodeModal
-        isOpen={true}
-        resetKey={props.modalResetKey()}
-        onClose={closeNodeModal}
-        nodeType={type}
-        editingNode={
-          props.editingNode()?.type === type ? (props.editingNode() ?? undefined) : undefined
-        }
-        prefillNode={prefillNode()?.type === type ? (prefillNode() ?? undefined) : undefined}
-        securityStatus={props.securityStatus() ?? undefined}
-        temperatureMonitoringEnabled={props.resolveTemperatureMonitoringEnabled(
-          props.editingNode()?.type === type ? props.editingNode() : null,
-        )}
-        temperatureMonitoringLocked={props.temperatureMonitoringLocked()}
-        savingTemperatureSetting={props.savingTemperatureSetting()}
-        onToggleTemperatureMonitoring={
-          props.editingNode()?.id
-            ? (enabled: boolean) =>
-                props.handleNodeTemperatureMonitoringChange(props.editingNode()!.id, enabled)
-            : props.handleTemperatureMonitoringChange
-        }
-        onSave={props.saveNode}
-      />
-    </Show>
-  );
 
   return (
     <>
@@ -261,27 +128,42 @@ export const ProxmoxSettingsPanel: Component<ProxmoxSettingsPanelProps> = (props
       <div class="space-y-6 mt-6">
         <div class="space-y-4">
           <ProxmoxDirectConnectionsCard
-            activeAgent={activeAgent()}
-            activeConfig={activeConfig()}
-            activeConfiguredNodes={activeConfiguredNodes()}
-            activeDiscoveredNodes={activeDiscoveredNodes()}
-            configuredTable={renderConfiguredTable()}
+            activeAgent={state.activeAgent()}
+            activeConfig={state.activeConfig()}
+            activeConfiguredNodes={state.activeConfiguredNodes()}
+            activeDiscoveredNodes={state.activeDiscoveredNodes()}
+            configuredTable={
+              <ProxmoxConfiguredNodesTable
+                activeAgent={state.activeAgent()}
+                pveNodes={props.pveNodes()}
+                pbsNodes={props.pbsNodes()}
+                pmgNodes={props.pmgNodes()}
+                agentStateResources={props.agentStateResources()}
+                pbsInstances={props.pbsInstances()}
+                pmgInstances={props.pmgInstances()}
+                temperatureMonitoringEnabled={props.temperatureMonitoringEnabled()}
+                onTestConnection={props.testNodeConnection}
+                onEditNode={state.openEditNode}
+                onDeleteNode={props.requestDeleteNode}
+                onRefreshClusterNodes={props.refreshClusterNodes}
+              />
+            }
             discoveryEnabled={props.discoveryEnabled()}
             envOverrides={props.envOverrides()}
             initialLoadComplete={props.initialLoadComplete()}
             onDiscoveryToggle={handleDiscoveryToggle}
-            onOpenCreateNode={openCreateNode}
-            onRefreshDiscovery={handleRefreshDiscovery}
+            onOpenCreateNode={state.openCreateNode}
+            onRefreshDiscovery={state.handleRefreshDiscovery}
             savingDiscoverySettings={props.savingDiscoverySettings()}
           />
 
           <Show when={props.discoveryEnabled()}>
             <ProxmoxDiscoveryResultsCard
-              activeConfig={activeConfig()}
-              activeDiscoveredNodes={activeDiscoveredNodes()}
+              activeConfig={state.activeConfig()}
+              activeDiscoveredNodes={state.activeDiscoveredNodes()}
               discoveryScanStatus={props.discoveryScanStatus()}
-              hasDiscoveryTimeouts={hasDiscoveryTimeouts()}
-              onOpenDiscoveredNode={openDiscoveredNode}
+              hasDiscoveryTimeouts={state.hasDiscoveryTimeouts()}
+              onOpenDiscoveredNode={state.openDiscoveredNode}
             />
           </Show>
         </div>
@@ -299,9 +181,21 @@ export const ProxmoxSettingsPanel: Component<ProxmoxSettingsPanelProps> = (props
         />
       </Show>
 
-      {renderNodeModal('pve')}
-      {renderNodeModal('pbs')}
-      {renderNodeModal('pmg')}
+      <ProxmoxNodeModalStack
+        modalResetKey={props.modalResetKey()}
+        prefillNode={state.prefillNode()}
+        editingNodeType={props.editingNode()?.type ?? null}
+        editingNode={props.editingNode}
+        isNodeModalVisible={props.isNodeModalVisible}
+        securityStatus={props.securityStatus()}
+        resolveTemperatureMonitoringEnabled={props.resolveTemperatureMonitoringEnabled}
+        temperatureMonitoringLocked={props.temperatureMonitoringLocked()}
+        savingTemperatureSetting={props.savingTemperatureSetting()}
+        handleNodeTemperatureMonitoringChange={props.handleNodeTemperatureMonitoringChange}
+        handleTemperatureMonitoringChange={props.handleTemperatureMonitoringChange}
+        saveNode={props.saveNode}
+        onClose={state.closeNodeModal}
+      />
     </>
   );
 };

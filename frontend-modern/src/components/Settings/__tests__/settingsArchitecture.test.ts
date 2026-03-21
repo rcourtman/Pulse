@@ -46,9 +46,12 @@ import organizationAccessPanelSource from '../OrganizationAccessPanel.tsx?raw';
 import organizationSharingPanelSource from '../OrganizationSharingPanel.tsx?raw';
 import organizationBillingPanelSource from '../OrganizationBillingPanel.tsx?raw';
 import proxmoxDeleteNodeDialogSource from '../ProxmoxDeleteNodeDialog.tsx?raw';
+import proxmoxConfiguredNodesTableSource from '../ProxmoxConfiguredNodesTable.tsx?raw';
 import proxmoxDirectConnectionsCardSource from '../ProxmoxDirectConnectionsCard.tsx?raw';
 import proxmoxDiscoveryResultsCardSource from '../ProxmoxDiscoveryResultsCard.tsx?raw';
+import proxmoxNodeModalStackSource from '../ProxmoxNodeModalStack.tsx?raw';
 import proxmoxSettingsPanelSource from '../ProxmoxSettingsPanel.tsx?raw';
+import proxmoxSettingsPanelStateSource from '../useProxmoxSettingsPanelState.ts?raw';
 import securityOverviewPanelSource from '../SecurityOverviewPanel.tsx?raw';
 import securityAuthPanelSource from '../SecurityAuthPanel.tsx?raw';
 import ssoProvidersPanelSource from '../SSOProvidersPanel.tsx?raw';
@@ -101,9 +104,12 @@ const extractedModules = [
   '../useSSOProvidersState.ts',
   '../ssoProvidersModel.ts',
   '../ProxmoxSettingsPanel.tsx',
+  '../ProxmoxConfiguredNodesTable.tsx',
   '../ProxmoxDeleteNodeDialog.tsx',
   '../ProxmoxDirectConnectionsCard.tsx',
   '../ProxmoxDiscoveryResultsCard.tsx',
+  '../ProxmoxNodeModalStack.tsx',
+  '../useProxmoxSettingsPanelState.ts',
   '../SettingsDialogs.tsx',
   '../SettingsPageShell.tsx',
   '../useDiscoverySettingsState.ts',
@@ -317,17 +323,29 @@ describe('Settings architecture guardrails', () => {
   });
 
   it('keeps the direct Proxmox settings workspace split into section owners', () => {
+    expect(proxmoxSettingsPanelSource).toContain('./useProxmoxSettingsPanelState');
+    expect(proxmoxSettingsPanelSource).toContain('./ProxmoxConfiguredNodesTable');
     expect(proxmoxSettingsPanelSource).toContain('./ProxmoxDirectConnectionsCard');
     expect(proxmoxSettingsPanelSource).toContain('./ProxmoxDiscoveryResultsCard');
     expect(proxmoxSettingsPanelSource).toContain('./ProxmoxDeleteNodeDialog');
+    expect(proxmoxSettingsPanelSource).toContain('./ProxmoxNodeModalStack');
+    expect(proxmoxSettingsPanelSource).not.toContain('const renderConfiguredTable = () =>');
+    expect(proxmoxSettingsPanelSource).not.toContain('const renderNodeModal = (type: NodeType)');
     expect(proxmoxSettingsPanelSource).not.toContain('No discovery matches for this Proxmox type yet.');
     expect(proxmoxSettingsPanelSource).not.toContain('What happens next');
+    expect(proxmoxConfiguredNodesTableSource).toContain('PveNodesTable');
+    expect(proxmoxConfiguredNodesTableSource).toContain('PbsNodesTable');
+    expect(proxmoxConfiguredNodesTableSource).toContain('PmgNodesTable');
     expect(proxmoxDirectConnectionsCardSource).toContain('getSettingsConfigurationLoadingState');
     expect(proxmoxDiscoveryResultsCardSource).toContain('Discovery issues:');
     expect(proxmoxDiscoveryResultsCardSource).toContain(
       'No discovery matches for this Proxmox type yet. You can still add a direct',
     );
     expect(proxmoxDeleteNodeDialogSource).toContain('What happens next');
+    expect(proxmoxNodeModalStackSource).toContain('PROXMOX_NODE_TYPES');
+    expect(proxmoxNodeModalStackSource).toContain('<NodeModal');
+    expect(proxmoxSettingsPanelStateSource).toContain('export function useProxmoxSettingsPanelState');
+    expect(proxmoxSettingsPanelStateSource).toContain("notificationStore.info('Refreshing discovery...'");
   });
 
   it('uses lazy() imports for panel components in settingsPanelRegistry', async () => {
