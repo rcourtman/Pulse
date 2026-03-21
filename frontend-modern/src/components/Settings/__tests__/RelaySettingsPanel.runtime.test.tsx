@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
+import relayPairingSectionSource from '../RelayPairingSection.tsx?raw';
+import relaySettingsPanelSource from '../RelaySettingsPanel.tsx?raw';
+import relaySettingsPanelStateSource from '../useRelaySettingsPanelState.ts?raw';
 
 const loadLicenseStatusMock = vi.fn();
 const hasFeatureMock = vi.fn();
@@ -324,5 +327,15 @@ describe('RelaySettingsPanel runtime', () => {
 
     expect(screen.getByText('pulse://connect?instance_id=instance-local&auth_token=token-123')).toBeInTheDocument();
     expect(showErrorMock).toHaveBeenCalledWith('Failed to generate pairing QR code');
+  });
+
+  it('keeps relay settings split into shell, runtime, and pairing owners', () => {
+    expect(relaySettingsPanelSource).toContain('./useRelaySettingsPanelState');
+    expect(relaySettingsPanelSource).toContain('./RelayPairingSection');
+    expect(relaySettingsPanelSource).not.toContain('createSignal(');
+    expect(relaySettingsPanelSource).not.toContain('QRCode.toDataURL(');
+    expect(relaySettingsPanelStateSource).toContain('QRCode.toDataURL(payload.deep_link');
+    expect(relaySettingsPanelStateSource).toContain('setInterval(() => void loadStatus(), 5000)');
+    expect(relayPairingSectionSource).toContain('getRelayDiagnosticClass');
   });
 });

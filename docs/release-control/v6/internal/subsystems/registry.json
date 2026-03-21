@@ -1097,8 +1097,10 @@
         "frontend-modern/src/components/Settings/OrganizationBillingLoadingState.tsx",
         "frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx",
         "frontend-modern/src/components/Settings/ProLicensePanel.tsx",
+        "frontend-modern/src/components/Settings/RelayPairingSection.tsx",
         "frontend-modern/src/components/Settings/RelaySettingsPanel.tsx",
         "frontend-modern/src/components/Settings/useOrganizationBillingPanelState.ts",
+        "frontend-modern/src/components/Settings/useRelaySettingsPanelState.ts",
         "frontend-modern/src/pages/CloudPricing.tsx",
         "frontend-modern/src/pages/HostedSignup.tsx",
         "frontend-modern/src/useAppRuntimeState.ts",
@@ -1530,7 +1532,9 @@
             "match_prefixes": [],
             "match_files": [
               "frontend-modern/src/components/Dashboard/RelayOnboardingCard.tsx",
-              "frontend-modern/src/components/Settings/RelaySettingsPanel.tsx"
+              "frontend-modern/src/components/Settings/RelayPairingSection.tsx",
+              "frontend-modern/src/components/Settings/RelaySettingsPanel.tsx",
+              "frontend-modern/src/components/Settings/useRelaySettingsPanelState.ts"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],

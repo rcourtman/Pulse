@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import relayPairingSectionSource from '../RelayPairingSection.tsx?raw';
+import relaySettingsPanelStateSource from '../useRelaySettingsPanelState.ts?raw';
 
 const onboardingSource = Object.values(
   import.meta.glob('../../../api/onboarding.ts', {
@@ -41,7 +43,13 @@ describe('Onboarding QR payload contract', () => {
     expect(onboardingSource).toContain('diagnostics?: OnboardingDiagnostic[];');
   });
 
-  it('uses deep_link as QR code content', () => {
-    expect(relaySettingsPanelSource).toContain('QRCode.toDataURL(payload.deep_link');
+  it('keeps relay settings split into shell, runtime, and pairing owners', () => {
+    expect(relaySettingsPanelSource).toContain('./useRelaySettingsPanelState');
+    expect(relaySettingsPanelSource).toContain('./RelayPairingSection');
+    expect(relaySettingsPanelSource).not.toContain('createSignal(');
+    expect(relaySettingsPanelSource).not.toContain('QRCode.toDataURL(');
+    expect(relaySettingsPanelStateSource).toContain('QRCode.toDataURL(payload.deep_link');
+    expect(relaySettingsPanelStateSource).toContain('setInterval(() => void loadStatus(), 5000)');
+    expect(relayPairingSectionSource).toContain('getRelayDiagnosticClass');
   });
 });

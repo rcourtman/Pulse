@@ -137,7 +137,9 @@ import statusUtilsSource from '@/utils/status.ts?raw';
 import unifiedAgentStatusPresentationSource from '@/utils/unifiedAgentStatusPresentation.ts?raw';
 import unifiedAgentInventoryPresentationSource from '@/utils/unifiedAgentInventoryPresentation.ts?raw';
 import relayPresentationSource from '@/utils/relayPresentation.ts?raw';
+import relayPairingSectionSource from '../RelayPairingSection.tsx?raw';
 import relaySettingsPanelSource from '../RelaySettingsPanel.tsx?raw';
+import relaySettingsPanelStateSource from '../useRelaySettingsPanelState.ts?raw';
 import proxmoxDeleteNodeDialogSource from '../ProxmoxDeleteNodeDialog.tsx?raw';
 import proxmoxConfiguredNodesTableSource from '../ProxmoxConfiguredNodesTable.tsx?raw';
 import proxmoxDirectConnectionsCardSource from '../ProxmoxDirectConnectionsCard.tsx?raw';
@@ -332,12 +334,14 @@ describe('monitored-system model guardrails', () => {
     expect(infrastructureOperationsSource).not.toContain(
       "notificationStore.error('Failed to copy')",
     );
-    expect(relaySettingsPanelSource).toContain('getRelayConnectionPresentation');
-    expect(relaySettingsPanelSource).toContain('getRelayDiagnosticClass');
+    expect(relaySettingsPanelSource).toContain('./useRelaySettingsPanelState');
+    expect(relaySettingsPanelSource).toContain('./RelayPairingSection');
     expect(relaySettingsPanelSource).toContain('getSettingsConfigurationLoadingState');
-    expect(relaySettingsPanelSource).not.toContain('const connectionStatusVariant =');
-    expect(relaySettingsPanelSource).not.toContain('const connectionStatusText =');
+    expect(relaySettingsPanelSource).not.toContain('createSignal(');
     expect(relaySettingsPanelSource).not.toContain('Loading configuration...');
+    expect(relaySettingsPanelStateSource).toContain('getRelayConnectionPresentation');
+    expect(relaySettingsPanelStateSource).toContain('trackPaywallViewed');
+    expect(relayPairingSectionSource).toContain('getRelayDiagnosticClass');
     expect(proxmoxSettingsPanelSource).toContain('CalloutCard');
     expect(proxmoxSettingsPanelSource).not.toContain('Loading configuration...');
     expect(proxmoxSettingsPanelSource).toContain('./useProxmoxSettingsPanelState');

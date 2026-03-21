@@ -42,10 +42,12 @@ import updatesSettingsModelSource from '../updatesSettingsModel.ts?raw';
 import updatesSettingsPanelSource from '../UpdatesSettingsPanel.tsx?raw';
 import recoverySettingsPanelSource from '../RecoverySettingsPanel.tsx?raw';
 import relaySettingsPanelSource from '../RelaySettingsPanel.tsx?raw';
+import relayPairingSectionSource from '../RelayPairingSection.tsx?raw';
 import proLicensePanelSource from '../ProLicensePanel.tsx?raw';
 import commercialBillingSectionsSource from '../CommercialBillingSections.tsx?raw';
 import selfHostedCommercialActivationSectionSource from '../SelfHostedCommercialActivationSection.tsx?raw';
 import commercialBillingModelSource from '@/utils/commercialBillingModel.ts?raw';
+import relaySettingsPanelStateSource from '../useRelaySettingsPanelState.ts?raw';
 import organizationOverviewPanelSource from '../OrganizationOverviewPanel.tsx?raw';
 import organizationOverviewLoadingStateSource from '../OrganizationOverviewLoadingState.tsx?raw';
 import organizationOverviewDetailsSectionSource from '../OrganizationOverviewDetailsSection.tsx?raw';
@@ -129,6 +131,7 @@ const extractedModules = [
   '../UpdateInstallGuide.tsx',
   '../ReportingPanel.tsx',
   '../reportingPanelModel.ts',
+  '../RelayPairingSection.tsx',
   '../OrganizationOverviewLoadingState.tsx',
   '../OrganizationOverviewDetailsSection.tsx',
   '../OrganizationOverviewMembersSection.tsx',
@@ -151,6 +154,7 @@ const extractedModules = [
   '../UserAssignmentsDialog.tsx',
   '../useUserAssignmentsPanelState.ts',
   '../updatesSettingsModel.ts',
+  '../useRelaySettingsPanelState.ts',
   '../useDiagnosticsPanelState.ts',
   '../useReportingPanelState.ts',
   '../useSSOProvidersState.ts',
@@ -362,6 +366,18 @@ describe('Settings architecture guardrails', () => {
     expect(settingsSource).toContain('organizationMonitoredSystemUsage');
     expect(settingsSource).toContain("getLimit('max_monitored_systems')?.current ?? 0");
     expect(settingsSource).not.toContain('organizationAgentUsage');
+  });
+
+  it('keeps relay settings split into shell, runtime, and pairing owners', () => {
+    expect(relaySettingsPanelSource).toContain('./useRelaySettingsPanelState');
+    expect(relaySettingsPanelSource).toContain('./RelayPairingSection');
+    expect(relaySettingsPanelSource).not.toContain('createSignal(');
+    expect(relaySettingsPanelSource).not.toContain('QRCode.toDataURL(');
+    expect(relaySettingsPanelStateSource).toContain("trackPaywallViewed('relay', 'settings_relay_panel')");
+    expect(relaySettingsPanelStateSource).toContain('setInterval(() => void loadStatus(), 5000)');
+    expect(relaySettingsPanelStateSource).toContain('QRCode.toDataURL(payload.deep_link');
+    expect(relayPairingSectionSource).toContain('getRelayDiagnosticClass');
+    expect(relayPairingSectionSource).toContain('Pair New Device');
   });
 
   it('does not re-inline extracted tab and header metadata definitions', () => {
