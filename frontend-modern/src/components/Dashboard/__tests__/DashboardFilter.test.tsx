@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, cleanup, fireEvent } from '@solidjs/testing-library';
 import { DashboardFilter } from '../DashboardFilter';
+import type { DashboardFilterProps } from '../dashboardFilterModel';
 
 // Mock useBreakpoint — hoist so tests can control isMobile
 const { isMobileMock } = vi.hoisted(() => {
@@ -37,11 +38,10 @@ vi.mock('@/components/shared/ColumnPicker', () => ({
 }));
 
 /** Helper to build default required props, with optional overrides. */
-function makeProps(overrides: Partial<Parameters<typeof DashboardFilter>[0]> = {}) {
+function makeProps(overrides: Partial<DashboardFilterProps> = {}): DashboardFilterProps {
   return {
     search: vi.fn(() => ''),
     setSearch: vi.fn(),
-    isSearchLocked: vi.fn(() => false),
     viewMode: vi.fn(() => 'all' as const),
     setViewMode: vi.fn(),
     statusMode: vi.fn(() => 'all' as const),
@@ -234,9 +234,7 @@ describe('DashboardFilter', () => {
       expect(namespaceOnChange).toHaveBeenCalledWith('');
     });
 
-    it('does not reset containerRuntimeFilter on reset (current behavior)', () => {
-      // NOTE: The reset handler does not clear containerRuntimeFilter.
-      // This test documents the current behavior.
+    it('does not reset containerRuntimeFilter when clicked', () => {
       const runtimeOnChange = vi.fn();
       const props = makeProps({
         search: vi.fn(() => 'test'),
@@ -254,8 +252,23 @@ describe('DashboardFilter', () => {
 
       fireEvent.click(screen.getByText('Reset'));
 
-      // containerRuntimeFilter.onChange is NOT called by reset
       expect(runtimeOnChange).not.toHaveBeenCalled();
+    });
+
+    it('shows when a container runtime filter is active', () => {
+      const props = makeProps({
+        viewMode: vi.fn(() => 'app-container' as const),
+        containerRuntimeFilter: {
+          value: 'podman',
+          options: [
+            { value: '', label: 'All Runtimes' },
+            { value: 'podman', label: 'Podman' },
+          ],
+          onChange: vi.fn(),
+        },
+      });
+      render(() => <DashboardFilter {...props} />);
+      expect(screen.getByText('Reset')).toBeInTheDocument();
     });
   });
 
@@ -439,9 +452,11 @@ describe('DashboardFilter', () => {
   describe('column picker', () => {
     it('renders ColumnPicker when all column props are provided', () => {
       const props = makeProps({
-        availableColumns: [{ id: 'cpu', label: 'CPU' }],
-        isColumnHidden: vi.fn(() => false),
-        onColumnToggle: vi.fn(),
+        columnVisibility: {
+          availableColumns: [{ id: 'cpu', label: 'CPU' }],
+          isColumnHidden: vi.fn(() => false),
+          onColumnToggle: vi.fn(),
+        },
       });
       render(() => <DashboardFilter {...props} />);
       expect(screen.getByTestId('column-picker')).toBeInTheDocument();
@@ -544,6 +559,23 @@ describe('DashboardFilter', () => {
       render(() => <DashboardFilter {...props} />);
       // 5 active: search, viewMode, statusMode, host, namespace
       expect(screen.getByText('5')).toBeInTheDocument();
+    });
+
+    it('does not count container runtime as an active filter', () => {
+      isMobileMock.mockReturnValue(true);
+      const props = makeProps({
+        viewMode: vi.fn(() => 'app-container' as const),
+        containerRuntimeFilter: {
+          value: 'docker',
+          options: [
+            { value: '', label: 'All runtimes' },
+            { value: 'docker', label: 'Docker' },
+          ],
+          onChange: vi.fn(),
+        },
+      });
+      render(() => <DashboardFilter {...props} />);
+      expect(screen.getByText('1')).toBeInTheDocument();
     });
 
     it('does not count whitespace-only search as active', () => {

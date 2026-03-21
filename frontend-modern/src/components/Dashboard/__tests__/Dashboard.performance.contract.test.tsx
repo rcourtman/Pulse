@@ -4,7 +4,10 @@ import { createSignal, onCleanup, onMount } from 'solid-js';
 import type { Resource } from '@/types/resource';
 import { Dashboard } from '../Dashboard';
 import dashboardSource from '../Dashboard.tsx?raw';
+import dashboardFilterSource from '../DashboardFilter.tsx?raw';
+import dashboardFilterModelSource from '../dashboardFilterModel.ts?raw';
 import dashboardStateSource from '../useDashboardState.ts?raw';
+import dashboardFilterStateSource from '../useDashboardFilterState.ts?raw';
 import diskListSource from '../DiskList.tsx?raw';
 import diskListModelSource from '../diskListModel.ts?raw';
 import diskListStateSource from '../useDiskListState.ts?raw';
@@ -474,6 +477,21 @@ describe('Dashboard performance contract', () => {
       expect(dashboardStateSource).not.toContain("from './GuestRow'");
       expect(dashboardSource).toContain('createMemo(() => getCanonicalWorkloadId(guest()))');
       expect(dashboardStateSource).not.toContain('const guestId = () => {');
+    });
+
+    it('keeps dashboard filter state in canonical dashboard filter owners', () => {
+      expect(dashboardFilterSource).toContain('useDashboardFilterState');
+      expect(dashboardFilterSource).not.toContain('const [filtersOpen, setFiltersOpen] =');
+      expect(dashboardFilterSource).not.toContain('useBreakpoint');
+      expect(dashboardFilterSource).not.toContain("props.setSortKey('name')");
+      expect(dashboardFilterStateSource).toContain('countActiveDashboardFilters');
+      expect(dashboardFilterStateSource).not.toContain('props.containerRuntimeFilter?.onChange');
+      expect(dashboardFilterStateSource).toContain('useBreakpoint');
+      expect(dashboardFilterModelSource).toContain('export const countActiveDashboardFilters');
+      expect(dashboardFilterModelSource).toContain('export const hasActiveDashboardFilters');
+      expect(dashboardStateSource).toContain('containerRuntimeFilterConfig');
+      expect(dashboardStateSource).toContain('hostFilterConfig');
+      expect(dashboardStateSource).toContain('namespaceFilterConfig');
     });
 
     it('keeps guest row contract and hot-path state in canonical row owners', () => {

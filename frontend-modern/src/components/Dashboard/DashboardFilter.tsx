@@ -1,4 +1,4 @@
-import { Component, For, Show, createMemo, createSignal } from 'solid-js';
+import { Component, For, Show } from 'solid-js';
 import { Card } from '@/components/shared/Card';
 import {
   FilterSegmentedControl,
@@ -6,67 +6,20 @@ import {
 } from '@/components/shared/FilterToolbar';
 import { PageControls } from '@/components/shared/PageControls';
 import { SearchInput } from '@/components/shared/SearchInput';
-import type { ColumnDef } from '@/hooks/useColumnVisibility';
-import { useBreakpoint } from '@/hooks/useBreakpoint';
-import type { ViewMode } from '@/types/workloads';
 import { STORAGE_KEYS } from '@/utils/localStorage';
-
-interface DashboardFilterProps {
-  search: () => string;
-  setSearch: (value: string) => void;
-  isSearchLocked: () => boolean;
-  viewMode: () => ViewMode;
-  setViewMode: (value: ViewMode) => void;
-  statusMode: () => 'all' | 'running' | 'degraded' | 'stopped';
-  setStatusMode: (value: 'all' | 'running' | 'degraded' | 'stopped') => void;
-  groupingMode: () => 'grouped' | 'flat';
-  setGroupingMode: (value: 'grouped' | 'flat') => void;
-  setSortKey: (value: string) => void;
-  setSortDirection: (value: string) => void;
-  onBeforeAutoFocus?: () => boolean;
-  // Column visibility
-  availableColumns?: ColumnDef[];
-  isColumnHidden?: (id: string) => boolean;
-  onColumnToggle?: (id: string) => void;
-  onColumnReset?: () => void;
-  hostFilter?: {
-    id?: string;
-    label?: string;
-    value: string;
-    options: { value: string; label: string }[];
-    onChange: (value: string) => void;
-  };
-  namespaceFilter?: {
-    id?: string;
-    label?: string;
-    value: string;
-    options: { value: string; label: string }[];
-    onChange: (value: string) => void;
-  };
-  containerRuntimeFilter?: {
-    id?: string;
-    label?: string;
-    value: string;
-    options: { value: string; label: string }[];
-    onChange: (value: string) => void;
-  };
-  chartsCollapsed?: () => boolean;
-  onChartsToggle?: () => void;
-}
+import type { DashboardFilterProps } from './dashboardFilterModel';
+import { useDashboardFilterState } from './useDashboardFilterState';
 
 export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
-  const { isMobile } = useBreakpoint();
-  const [filtersOpen, setFiltersOpen] = createSignal(false);
-
-  const activeFilterCount = createMemo(() => {
-    let count = 0;
-    if (props.search().trim() !== '') count++;
-    if (props.viewMode() !== 'all') count++;
-    if (props.statusMode() !== 'all') count++;
-    if (props.hostFilter && props.hostFilter.value !== '') count++;
-    if (props.namespaceFilter && props.namespaceFilter.value !== '') count++;
-    return count;
-  });
+  const {
+    activeFilterCount,
+    isMobile,
+    pageControlsColumnVisibility,
+    resetFilters,
+    showReset,
+    showToolbarFilters,
+    toggleFilters,
+  } = useDashboardFilterState(props);
 
   return (
     <Card class="dashboard-filter mb-4" padding="sm">
@@ -84,41 +37,13 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
         }
         mobileFilters={{
           enabled: isMobile(),
-          onToggle: () => setFiltersOpen((o) => !o),
+          onToggle: toggleFilters,
           count: activeFilterCount(),
         }}
-        columnVisibility={
-          props.availableColumns && props.isColumnHidden && props.onColumnToggle
-            ? {
-                availableToggles: () => props.availableColumns!,
-                isHiddenByUser: props.isColumnHidden!,
-                toggle: props.onColumnToggle!,
-                resetToDefaults: props.onColumnReset ?? (() => undefined),
-              }
-            : undefined
-        }
+        columnVisibility={pageControlsColumnVisibility()}
         resetAction={{
-          show:
-            props.search().trim() !== '' ||
-            props.viewMode() !== 'all' ||
-            props.statusMode() !== 'all' ||
-            props.groupingMode() !== 'grouped' ||
-            (props.hostFilter ? props.hostFilter.value !== '' : false) ||
-            (props.namespaceFilter ? props.namespaceFilter.value !== '' : false),
-          onClick: () => {
-            props.setSearch('');
-            props.setSortKey('name');
-            props.setSortDirection('asc');
-            props.setViewMode('all');
-            props.setStatusMode('all');
-            props.setGroupingMode('grouped');
-            if (props.hostFilter) {
-              props.hostFilter.onChange('');
-            }
-            if (props.namespaceFilter) {
-              props.namespaceFilter.onChange('');
-            }
-          },
+          show: showReset(),
+          onClick: resetFilters,
           title: 'Reset all filters',
           class: 'ml-auto text-base-content',
           icon: (
@@ -137,7 +62,7 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
             </svg>
           ),
         }}
-        showFilters={!isMobile() || filtersOpen()}
+        showFilters={showToolbarFilters()}
         toolbarClass="lg:flex-nowrap"
       >
         <Show when={props.hostFilter}>

@@ -28,10 +28,9 @@ export function Dashboard(props: DashboardProps) {
     alertsEnabled,
     allGuests,
     bottomSpacerHeight,
-    columnVisibility,
     connected,
-    containerRuntime,
-    containerRuntimeOptions,
+    containerRuntimeFilterConfig,
+    dashboardFilterColumnVisibility,
     dashboardDisconnectedState,
     dashboardGuestsEmptyState,
     dashboardInfrastructureEmptyState,
@@ -47,31 +46,25 @@ export function Dashboard(props: DashboardProps) {
     handleNodeSelect,
     handleSort,
     handleTagClick,
+    hostFilterConfig,
     hoveredWorkloadId,
     initialDataReceived,
     isMobile,
-    isSearchLocked,
     isWorkloadsRoute,
     kioskMode,
-    kubernetesContextOptions,
-    kubernetesNamespaceOptions,
     mobileVisibleColumnIds,
     mobileVisibleColumns,
     navigate,
+    namespaceFilterConfig,
     nodeByInstance,
     reconnect,
     search,
     selectedGuestId,
-    selectedKubernetesContext,
-    selectedKubernetesNamespace,
     selectedNode,
-    setContainerRuntime,
     setGroupingMode,
     setHoveredWorkloadId,
     setSearch,
     setSelectedGuestId,
-    setSelectedKubernetesContext,
-    setSelectedKubernetesNamespace,
     setSortDirection,
     setSortKey,
     setStatusMode,
@@ -91,7 +84,6 @@ export function Dashboard(props: DashboardProps) {
     visibleGroupKeys,
     windowedGroupedGuests,
     workloadIOEmphasis,
-    workloadNodeOptions,
     workloads,
     workloadsSummaryCollapsed,
     workloadsSummaryFallbackCounts,
@@ -245,7 +237,6 @@ export function Dashboard(props: DashboardProps) {
         <DashboardFilter
           search={search}
           setSearch={setSearch}
-          isSearchLocked={isSearchLocked}
           viewMode={viewMode}
           setViewMode={setViewMode}
           statusMode={statusMode}
@@ -255,73 +246,14 @@ export function Dashboard(props: DashboardProps) {
           setSortKey={setSortKey}
           setSortDirection={setSortDirection}
           onBeforeAutoFocus={handleBeforeAutoFocus}
-          availableColumns={columnVisibility.availableToggles()}
-          isColumnHidden={columnVisibility.isHiddenByUser}
-          onColumnToggle={columnVisibility.toggle}
-          onColumnReset={columnVisibility.resetToDefaults}
+          columnVisibility={dashboardFilterColumnVisibility()}
           chartsCollapsed={isWorkloadsRoute() ? workloadsSummaryCollapsed : undefined}
           onChartsToggle={
             isWorkloadsRoute() ? () => setWorkloadsSummaryCollapsed((c) => !c) : undefined
           }
-          containerRuntimeFilter={(() => {
-            if (!isWorkloadsRoute()) return undefined;
-            if (viewMode() !== 'app-container') return undefined;
-            const options = containerRuntimeOptions();
-            if (options.length === 0) return undefined;
-            return {
-              id: 'workloads-container-runtime-filter',
-              label: 'Runtime',
-              value: containerRuntime(),
-              options: [
-                { value: '', label: 'All runtimes' },
-                ...options.map((value) => ({ value, label: value })),
-              ],
-              onChange: (value: string) => setContainerRuntime(value),
-            };
-          })()}
-          hostFilter={(() => {
-            if (!isWorkloadsRoute()) return undefined;
-            if (viewMode() === 'pod') {
-              return {
-                id: 'workloads-k8s-context-filter',
-                label: 'Cluster',
-                value: selectedKubernetesContext() ?? '',
-                options: [
-                  { value: '', label: 'All clusters' },
-                  ...kubernetesContextOptions().map((context) => ({
-                    value: context,
-                    label: context,
-                  })),
-                ],
-                onChange: (value: string) => setSelectedKubernetesContext(value || null),
-              };
-            }
-            return {
-              id: 'workloads-node-filter',
-              label: 'Node',
-              value: selectedNode() ?? '',
-              options: [{ value: '', label: 'All nodes' }, ...workloadNodeOptions()],
-              onChange: (value: string) => {
-                handleNodeSelect(value || null, value ? 'pve' : null);
-              },
-            };
-          })()}
-          namespaceFilter={(() => {
-            if (!isWorkloadsRoute()) return undefined;
-            if (viewMode() !== 'pod') return undefined;
-            const options = kubernetesNamespaceOptions();
-            if (options.length === 0) return undefined;
-            return {
-              id: 'workloads-k8s-namespace-filter',
-              label: 'Namespace',
-              value: selectedKubernetesNamespace() ?? '',
-              options: [
-                { value: '', label: 'All namespaces' },
-                ...options.map((value) => ({ value, label: value })),
-              ],
-              onChange: (value: string) => setSelectedKubernetesNamespace(value || null),
-            };
-          })()}
+          containerRuntimeFilter={containerRuntimeFilterConfig()}
+          hostFilter={hostFilterConfig()}
+          namespaceFilter={namespaceFilterConfig()}
         />
       </Show>
 

@@ -56,6 +56,7 @@ import {
 } from './workloadSelectors';
 import { useGroupedTableWindowing } from './useGroupedTableWindowing';
 import type { WorkloadSummarySnapshot } from '@/components/Workloads/WorkloadsSummary';
+import type { DashboardToolbarFilterConfig } from './dashboardFilterModel';
 
 export interface DashboardProps {
   vms: VM[];
@@ -1253,6 +1254,81 @@ export function useDashboardState(props: DashboardProps) {
     }
   };
 
+  const dashboardFilterColumnVisibility = createMemo(() => ({
+    availableColumns: columnVisibility.availableToggles(),
+    isColumnHidden: columnVisibility.isHiddenByUser,
+    onColumnToggle: columnVisibility.toggle,
+    onColumnReset: columnVisibility.resetToDefaults,
+  }));
+
+  const containerRuntimeFilterConfig = createMemo<DashboardToolbarFilterConfig | undefined>(() => {
+    if (!isWorkloadsRoute()) return undefined;
+    if (viewMode() !== 'app-container') return undefined;
+
+    const options = containerRuntimeOptions();
+    if (options.length === 0) return undefined;
+
+    return {
+      id: 'workloads-container-runtime-filter',
+      label: 'Runtime',
+      value: containerRuntime(),
+      options: [
+        { value: '', label: 'All runtimes' },
+        ...options.map((value) => ({ value, label: value })),
+      ],
+      onChange: (value: string) => setContainerRuntime(value),
+    };
+  });
+
+  const hostFilterConfig = createMemo<DashboardToolbarFilterConfig | undefined>(() => {
+    if (!isWorkloadsRoute()) return undefined;
+
+    if (viewMode() === 'pod') {
+      return {
+        id: 'workloads-k8s-context-filter',
+        label: 'Cluster',
+        value: selectedKubernetesContext() ?? '',
+        options: [
+          { value: '', label: 'All clusters' },
+          ...kubernetesContextOptions().map((context) => ({
+            value: context,
+            label: context,
+          })),
+        ],
+        onChange: (value: string) => setSelectedKubernetesContext(value || null),
+      };
+    }
+
+    return {
+      id: 'workloads-node-filter',
+      label: 'Node',
+      value: selectedNode() ?? '',
+      options: [{ value: '', label: 'All nodes' }, ...workloadNodeOptions()],
+      onChange: (value: string) => {
+        handleNodeSelect(value || null, value ? 'pve' : null);
+      },
+    };
+  });
+
+  const namespaceFilterConfig = createMemo<DashboardToolbarFilterConfig | undefined>(() => {
+    if (!isWorkloadsRoute()) return undefined;
+    if (viewMode() !== 'pod') return undefined;
+
+    const options = kubernetesNamespaceOptions();
+    if (options.length === 0) return undefined;
+
+    return {
+      id: 'workloads-k8s-namespace-filter',
+      label: 'Namespace',
+      value: selectedKubernetesNamespace() ?? '',
+      options: [
+        { value: '', label: 'All namespaces' },
+        ...options.map((value) => ({ value, label: value })),
+      ],
+      onChange: (value: string) => setSelectedKubernetesNamespace(value || null),
+    };
+  });
+
   return {
     activeAlerts,
     alertsEnabled,
@@ -1261,7 +1337,9 @@ export function useDashboardState(props: DashboardProps) {
     columnVisibility,
     connected,
     containerRuntime,
+    containerRuntimeFilterConfig,
     containerRuntimeOptions,
+    dashboardFilterColumnVisibility,
     dashboardDisconnectedState,
     dashboardGuestsEmptyState,
     dashboardInfrastructureEmptyState,
@@ -1277,6 +1355,7 @@ export function useDashboardState(props: DashboardProps) {
     handleNodeSelect,
     handleSort,
     handleTagClick,
+    hostFilterConfig,
     hoveredWorkloadId,
     initialDataReceived,
     isMobile,
@@ -1289,6 +1368,7 @@ export function useDashboardState(props: DashboardProps) {
     mobileVisibleColumns,
     navigate,
     nodeByInstance,
+    namespaceFilterConfig,
     reconnect,
     search,
     selectedGuestId,

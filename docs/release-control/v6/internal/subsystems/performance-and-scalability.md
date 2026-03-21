@@ -27,25 +27,30 @@ regression protection.
 5. `internal/api/slo_bench_test.go`
 6. `frontend-modern/src/components/Dashboard/Dashboard.tsx`
 7. `frontend-modern/src/components/Dashboard/useDashboardState.ts`
-8. `frontend-modern/src/components/Dashboard/DiskList.tsx`
-9. `frontend-modern/src/components/Dashboard/diskListModel.ts`
-10. `frontend-modern/src/components/Dashboard/useDiskListState.ts`
-11. `frontend-modern/src/components/Dashboard/GuestRow.tsx`
-12. `frontend-modern/src/components/Dashboard/guestRowModel.tsx`
-13. `frontend-modern/src/components/Dashboard/useGuestRowState.ts`
-14. `frontend-modern/src/components/Dashboard/GuestDrawer.tsx`
-15. `frontend-modern/src/components/Dashboard/guestDrawerModel.ts`
-16. `frontend-modern/src/components/Dashboard/useGuestDrawerState.ts`
-17. `frontend-modern/src/components/Dashboard/workloadSelectors.ts`
-18. `frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx`
-19. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`
-20. `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts`
-21. `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts`
-22. `frontend-modern/src/components/Dashboard/__tests__/Dashboard.performance.contract.test.tsx`
-23. `frontend-modern/src/components/Dashboard/__tests__/DiskList.test.tsx`
-24. `frontend-modern/src/components/Dashboard/__tests__/GuestRow.test.tsx`
-25. `frontend-modern/src/components/Dashboard/GuestDrawer.test.tsx`
-26. `frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx`
+8. `frontend-modern/src/components/Dashboard/DashboardFilter.tsx`
+9. `frontend-modern/src/components/Dashboard/dashboardFilterModel.ts`
+10. `frontend-modern/src/components/Dashboard/useDashboardFilterState.ts`
+11. `frontend-modern/src/components/Dashboard/DiskList.tsx`
+12. `frontend-modern/src/components/Dashboard/diskListModel.ts`
+13. `frontend-modern/src/components/Dashboard/useDiskListState.ts`
+14. `frontend-modern/src/components/Dashboard/GuestRow.tsx`
+15. `frontend-modern/src/components/Dashboard/guestRowModel.tsx`
+16. `frontend-modern/src/components/Dashboard/useGuestRowState.ts`
+17. `frontend-modern/src/components/Dashboard/GuestDrawer.tsx`
+18. `frontend-modern/src/components/Dashboard/guestDrawerModel.ts`
+19. `frontend-modern/src/components/Dashboard/useGuestDrawerState.ts`
+20. `frontend-modern/src/components/Dashboard/workloadSelectors.ts`
+21. `frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx`
+22. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`
+23. `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts`
+24. `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts`
+25. `frontend-modern/src/components/Dashboard/__tests__/Dashboard.performance.contract.test.tsx`
+26. `frontend-modern/src/components/Dashboard/__tests__/DashboardFilter.test.tsx`
+27. `frontend-modern/src/components/Dashboard/__tests__/useDashboardFilterState.test.ts`
+28. `frontend-modern/src/components/Dashboard/__tests__/DiskList.test.tsx`
+29. `frontend-modern/src/components/Dashboard/__tests__/GuestRow.test.tsx`
+30. `frontend-modern/src/components/Dashboard/GuestDrawer.test.tsx`
+31. `frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx`
 
 ## Shared Boundaries
 
@@ -68,6 +73,7 @@ regression protection.
 9. Extend dashboard row contract and per-row hot-path derivations through `frontend-modern/src/components/Dashboard/guestRowModel.tsx` and `frontend-modern/src/components/Dashboard/useGuestRowState.ts` rather than rebuilding column metadata, row identity, or anomaly correlation inside `frontend-modern/src/components/Dashboard/GuestRow.tsx`
 10. Extend dashboard drawer derivations and runtime wiring through `frontend-modern/src/components/Dashboard/guestDrawerModel.ts` and `frontend-modern/src/components/Dashboard/useGuestDrawerState.ts` rather than rebuilding canonical guest identity, discovery routing, or drawer-local normalization inside `frontend-modern/src/components/Dashboard/GuestDrawer.tsx`
 11. Extend dashboard disk-list derivations and fallback runtime wiring through `frontend-modern/src/components/Dashboard/diskListModel.ts` and `frontend-modern/src/components/Dashboard/useDiskListState.ts` rather than rebuilding usage math, progress-state mapping, or tooltip fallback logic inside `frontend-modern/src/components/Dashboard/DiskList.tsx`
+12. Extend dashboard filter defaults, active-filter counting, reset semantics, and mobile toolbar state through `frontend-modern/src/components/Dashboard/dashboardFilterModel.ts` and `frontend-modern/src/components/Dashboard/useDashboardFilterState.ts`, and keep dashboard-owned filter-config assembly in `frontend-modern/src/components/Dashboard/useDashboardState.ts`, rather than rebuilding filter-local state inside `frontend-modern/src/components/Dashboard/DashboardFilter.tsx` or inline config IIFEs in `frontend-modern/src/components/Dashboard/Dashboard.tsx`
 
 ## Forbidden Paths
 
@@ -122,6 +128,16 @@ presentation derivations and fallback tooltip/runtime wiring live in
 `frontend-modern/src/components/Dashboard/useDiskListState.ts`. Future disk
 usage math, threshold-color routing, and fallback handling must extend
 through those owners instead of accreting back into the shell.
+The dashboard filter now follows that same ownership rule: the shell
+stays in `frontend-modern/src/components/Dashboard/DashboardFilter.tsx`, while
+toolbar defaults, active-filter counting, and reset semantics live in
+`frontend-modern/src/components/Dashboard/dashboardFilterModel.ts` and
+`frontend-modern/src/components/Dashboard/useDashboardFilterState.ts`.
+The dashboard-owned filter-config assembly now lives in
+`frontend-modern/src/components/Dashboard/useDashboardState.ts`, so future
+filter runtime changes must extend through those owners instead of
+reintroducing dashboard-local state, reset drift, or inline config assembly
+into the shell.
 
 The unified resource table hot path is now also governed as explicit
 performance-owned runtime, with shared ownership against the unified-resource
