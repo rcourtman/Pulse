@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@solidjs/testing-library';
 
+import discoveryTabSource from '@/components/Discovery/DiscoveryTab.tsx?raw';
+import discoveryTabStateSource from '@/components/Discovery/useDiscoveryTabState.ts?raw';
 import type { Resource } from '@/types/resource';
 import { ResourceDetailDrawer } from '@/components/Infrastructure/ResourceDetailDrawer';
 
@@ -94,6 +96,20 @@ const baseResource = (overrides: Partial<Resource>): Resource => ({
 });
 
 describe('ResourceDetailDrawer change history section', () => {
+  it('keeps discovery context presentation separate from discovery runtime ownership', () => {
+    expect(discoveryTabSource).toContain('useDiscoveryTabState');
+    expect(discoveryTabStateSource).toContain('export function useDiscoveryTabState');
+    expect(discoveryTabStateSource).toContain('createResource');
+    expect(discoveryTabStateSource).toContain("eventBus.on('ai_discovery_progress'");
+    expect(discoveryTabStateSource).toContain('triggerDiscovery(');
+    expect(discoveryTabStateSource).toContain('updateDiscoveryNotes(');
+    expect(discoveryTabSource).not.toContain("eventBus.on('ai_discovery_progress'");
+    expect(discoveryTabSource).not.toContain('createResource(');
+    expect(discoveryTabSource).not.toContain('getConnectedAgents(');
+    expect(discoveryTabSource).not.toContain('triggerDiscovery(');
+    expect(discoveryTabSource).not.toContain('updateDiscoveryNotes(');
+  });
+
   it('keeps compact timeline summary chips in overview while showing one embedded change history section', async () => {
     facetBundleMock.getFacetBundle.mockResolvedValueOnce({
       capabilities: [

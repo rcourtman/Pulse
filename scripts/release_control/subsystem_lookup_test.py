@@ -3116,6 +3116,58 @@ class SubsystemLookupTest(unittest.TestCase):
             ],
         )
 
+    def test_lookup_paths_assigns_discovery_tab_to_unified_resources(self) -> None:
+        result = lookup_paths(["frontend-modern/src/components/Discovery/DiscoveryTab.tsx"])
+        self.assertEqual(result["unowned_runtime_files"], [])
+
+        file_entry = result["files"][0]
+        self.assertEqual(file_entry["classification"], "runtime")
+        self.assertEqual(len(file_entry["matches"]), 1)
+
+        match = file_entry["matches"][0]
+        self.assertEqual(match["subsystem"], "unified-resources")
+        self.assertEqual(
+            match["contract"],
+            "docs/release-control/v6/internal/subsystems/unified-resources.md",
+        )
+        self.assertEqual(match["lane_context"]["lane_id"], "L13")
+        self.assertEqual(match["verification_requirement"]["id"], "resource-consumers")
+        self.assertEqual(
+            match["verification_requirement"]["exact_files"],
+            [
+                "frontend-modern/src/components/Infrastructure/__tests__/ResourceDetailDrawer.history.test.tsx",
+                "frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx",
+                "frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.workloads-link.test.tsx",
+                "frontend-modern/src/components/Infrastructure/__tests__/infrastructureSelectors.test.ts",
+                "frontend-modern/src/components/Infrastructure/__tests__/resourceDetailMappers.test.ts",
+                "frontend-modern/src/hooks/__tests__/useDashboardTrends.test.ts",
+                "frontend-modern/src/hooks/__tests__/useUnifiedResources.test.ts",
+                "frontend-modern/src/pages/__tests__/Infrastructure.empty-state.test.tsx",
+                "frontend-modern/src/pages/__tests__/Infrastructure.pbs-pmg.test.tsx",
+                "frontend-modern/src/routing/__tests__/resourceLinks.test.ts",
+                "frontend-modern/src/stores/__tests__/websocket-unified.test.ts",
+                "frontend-modern/src/types/__tests__/resource.test.ts",
+                "internal/unifiedresources/code_standards_test.go",
+            ],
+        )
+
+    def test_lookup_paths_assigns_discovery_tab_state_owner_to_unified_resources(self) -> None:
+        result = lookup_paths(["frontend-modern/src/components/Discovery/useDiscoveryTabState.ts"])
+        self.assertEqual(result["unowned_runtime_files"], [])
+
+        file_entry = result["files"][0]
+        self.assertEqual(file_entry["classification"], "runtime")
+        self.assertEqual(len(file_entry["matches"]), 1)
+
+        match = file_entry["matches"][0]
+        self.assertEqual(match["subsystem"], "unified-resources")
+        self.assertEqual(
+            match["contract"],
+            "docs/release-control/v6/internal/subsystems/unified-resources.md",
+        )
+        self.assertEqual(match["lane_context"]["lane_id"], "L13")
+        self.assertEqual(match["verification_requirement"]["id"], "resource-consumers")
+
     def test_lookup_paths_reports_dependent_contract_updates_for_shared_canonical_file(self) -> None:
         result = lookup_paths(["internal/unifiedresources/views.go"])
         file_entry = result["files"][0]

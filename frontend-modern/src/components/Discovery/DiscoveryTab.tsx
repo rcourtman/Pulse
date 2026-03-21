@@ -1,26 +1,10 @@
+import { Component, For, Show, createMemo } from 'solid-js';
+import type { ResourceType } from '../../types/discovery';
 import {
-  Component,
-  Show,
-  For,
-  createSignal,
-  createMemo,
-  createResource,
-  onCleanup,
-  createEffect,
-} from 'solid-js';
-import type { ResourceType, DiscoveryProgress } from '../../types/discovery';
-import {
-  getDiscovery,
-  getDiscoveryInfo,
-  triggerDiscovery,
-  updateDiscoveryNotes,
   formatDiscoveryAge,
   getCategoryDisplayName,
   getConfidenceLevel,
-  getConnectedAgents,
 } from '../../api/discovery';
-import { toDiscoveryAPIResourceType } from '@/utils/discoveryTarget';
-import { eventBus } from '../../stores/events';
 import {
   getDiscoveryInitialEmptyState,
   getDiscoveryLoadingState,
@@ -30,6 +14,7 @@ import {
   getDiscoverySuggestedURLFallback,
   getDiscoveryURLSuggestionSourceLabel,
 } from '@/utils/discoveryPresentation';
+import { useDiscoveryTabState } from './useDiscoveryTabState';
 
 interface DiscoveryTabProps {
   resourceType: ResourceType;
@@ -40,11 +25,6 @@ interface DiscoveryTabProps {
   commandsEnabled?: boolean;
 }
 
-// Construct the resource ID in the same format the backend uses
-const makeResourceId = (type: ResourceType, agentId: string, resourceId: string) => {
-  return `${toDiscoveryAPIResourceType(type) || type}:${agentId}:${resourceId}`;
-};
-
 const toSentence = (text?: string): string => {
   const trimmed = (text || '').trim();
   if (!trimmed) return '';
@@ -53,303 +33,62 @@ const toSentence = (text?: string): string => {
 };
 
 export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
-  const [isScanning, setIsScanning] = createSignal(false);
-  const [editingNotes, setEditingNotes] = createSignal(false);
-  // Live elapsed time counter (updates every second while scanning)
-  const [liveElapsedSeconds, setLiveElapsedSeconds] = createSignal(0);
-  const [scanStartTime, setScanStartTime] = createSignal<number | null>(null);
-  // Delayed loading spinner - only show after 150ms to prevent flash
-  const [showLoadingSpinner, setShowLoadingSpinner] = createSignal(false);
+  const {
+    connectedAgents,
+    discovery,
+    discoveryInfo,
+    editingNotes,
+    handleSaveNotes,
+    handleTriggerDiscovery,
+    hasConnectedAgent,
+    hasValidDiscovery,
+    isScanning,
+    liveElapsedSeconds,
+    notesText,
+    saveError,
+    scanError,
+    scanProgress,
+    scanSuccess,
+    setEditingNotes,
+    setNotesText,
+    setScanError,
+    setShowCommandsPreview,
+    setShowExplanation,
+    showCommandsPreview,
+    showExplanation,
+    showLoadingSpinner,
+    startEditingNotes,
+    validDiscovery,
+  } = useDiscoveryTabState(props);
 
-  // Reset ephemeral UI state when changing discovery context
-  createEffect(() => {
-    void discoverySourceKey();
-    setIsScanning(false);
-    setHttpScanInProgress(false);
-    setScanProgress(null);
-    setScanError(null);
-    setScanSuccess(false);
-    setScanStartTime(null);
-    setLiveElapsedSeconds(0);
-    setShowLoadingSpinner(false);
-    setEditingNotes(false);
-    setSaveError(null);
-  });
-  const [notesText, setNotesText] = createSignal('');
-  const [saveError, setSaveError] = createSignal<string | null>(null);
-  const [scanError, setScanError] = createSignal<string | null>(null);
-  const [scanProgress, setScanProgress] = createSignal<DiscoveryProgress | null>(null);
-  const [scanSuccess, setScanSuccess] = createSignal(false);
-  const [showCommandsPreview, setShowCommandsPreview] = createSignal(false);
-  const [showExplanation, setShowExplanation] = createSignal(true);
-  // Track if we initiated scan via HTTP to prevent WebSocket race conditions
-  const [httpScanInProgress, setHttpScanInProgress] = createSignal(false);
-  const targetAgentId = createMemo(() => props.agentId || '');
-
-  // Fetch discovery info (AI provider, commands) - used for pre-scan transparency
-  const [discoveryInfo] = createResource(
-    () => props.resourceType,
-    async (type) => {
-      try {
-        return await getDiscoveryInfo(type);
-      } catch {
-        return null;
-      }
-    },
-  );
-
-  // Fetch connected agents (for WebSocket command execution)
-  const [connectedAgents] = createResource(async () => {
-    try {
-      return await getConnectedAgents();
-    } catch {
-      return { count: 0, agents: [] };
-    }
-  });
-
-  // Check if this resource has a connected agent for command execution
-  // Matches backend logic in deep_scanner.go findAgentForHost()
-  const hasConnectedAgent = () => {
-    const agents = connectedAgents()?.agents || [];
-    const agentId = targetAgentId();
-    if (!agentId) return false;
-
-    // First try exact match on agent ID
-    if (agents.some((agent) => agent.agent_id === agentId)) {
-      return true;
-    }
-
-    // Then try hostname match
-    if (agents.some((agent) => agent.hostname === props.hostname || agent.hostname === agentId)) {
-      return true;
-    }
-
-    // If only one agent connected, backend will use it (fallback)
-    if (agents.length === 1) {
-      return true;
-    }
-
-    return false;
-  };
-
-  // Fetch discovery data
-  // Use a stable string key so createResource doesn't refetch when the parent's guest
-  // object reference changes (e.g. from <Index> data updates every 5 seconds)
-  const discoverySourceKey = createMemo(
-    () => `${props.resourceType}|${targetAgentId()}|${props.resourceId}`,
-  );
-  const [discovery, { refetch, mutate }] = createResource(discoverySourceKey, async () => {
-    const agentId = targetAgentId();
-    if (!agentId) return null;
-    try {
-      return await getDiscovery(props.resourceType, agentId, props.resourceId);
-    } catch {
-      return null;
-    }
-  });
   const suggestedURLReasonText = createMemo(() => {
-    const d = discovery();
-    if (!d) return '';
-    const detail = toSentence(d.suggested_url_source_detail);
+    const current = discovery();
+    if (!current) return '';
+    const detail = toSentence(current.suggested_url_source_detail);
     if (detail) return detail;
-    if (d.suggested_url_source_code)
-      return getDiscoveryURLSuggestionSourceLabel(d.suggested_url_source_code);
+    if (current.suggested_url_source_code) {
+      return getDiscoveryURLSuggestionSourceLabel(current.suggested_url_source_code);
+    }
     return '';
   });
+
   const suggestedURLReasonTitle = createMemo(() => {
-    const d = discovery();
-    if (!d) return '';
-    const label = getDiscoveryURLSuggestionSourceLabel(d.suggested_url_source_code);
-    if (d.suggested_url_source_detail) return `${label}: ${d.suggested_url_source_detail}`;
+    const current = discovery();
+    if (!current) return '';
+    const label = getDiscoveryURLSuggestionSourceLabel(current.suggested_url_source_code);
+    if (current.suggested_url_source_detail) {
+      return `${label}: ${current.suggested_url_source_detail}`;
+    }
     return label;
   });
 
-  // Delay showing loading spinner to prevent flash for fast API calls
-  createEffect(() => {
-    if (discovery.loading) {
-      const timer = setTimeout(() => {
-        if (discovery.loading) {
-          setShowLoadingSpinner(true);
-        }
-      }, 150);
-      onCleanup(() => clearTimeout(timer));
-    } else {
-      setShowLoadingSpinner(false);
+  const confidenceInfo = createMemo(() => {
+    const current = discovery();
+    if (discovery.loading || !current || current.confidence === undefined || current.confidence === null) {
+      return null;
     }
+    return getConfidenceLevel(current.confidence);
   });
-
-  // Live elapsed time timer - updates every second while scanning
-  createEffect(() => {
-    if (isScanning() && scanStartTime()) {
-      const interval = setInterval(() => {
-        const elapsed = Math.floor((Date.now() - scanStartTime()!) / 1000);
-        setLiveElapsedSeconds(elapsed);
-      }, 1000);
-      onCleanup(() => clearInterval(interval));
-    }
-  });
-
-  // Handle triggering a new discovery
-  const handleTriggerDiscovery = async (force = false) => {
-    setIsScanning(true);
-    setHttpScanInProgress(true); // Prevent WebSocket from resetting state
-    setScanProgress(null);
-    setScanError(null);
-    setScanSuccess(false);
-    setScanStartTime(Date.now()); // Start the live timer
-    setLiveElapsedSeconds(0);
-    try {
-      // triggerDiscovery runs the discovery and returns the result directly
-      const agentId = targetAgentId();
-      if (!agentId) {
-        setScanError('Agent identifier unavailable for discovery');
-        return;
-      }
-      const result = await triggerDiscovery(props.resourceType, agentId, props.resourceId, {
-        force,
-        hostname: props.hostname,
-      });
-      // Use the result directly - no need for a separate refetch which can race
-      if (result) {
-        mutate(result);
-      }
-      // Now everything is ready - hide scanning state and show success
-      setHttpScanInProgress(false);
-      setIsScanning(false);
-      setScanProgress(null);
-      setScanStartTime(null); // Stop the live timer
-      setScanSuccess(true);
-      // Clear success after user has seen it
-      setTimeout(() => setScanSuccess(false), 2000);
-    } catch (err) {
-      console.error('Discovery failed:', err);
-      // Extract error message for display
-      const message = err instanceof Error ? err.message : 'Discovery scan failed';
-      // Provide helpful, specific message based on the error and current state
-      if (message.includes('no connected agent')) {
-        // Check if commands are enabled to provide more specific guidance
-        if (props.commandsEnabled === false) {
-          setScanError(
-            'Commands not enabled. Enable "Pulse Commands" in Settings → Unified Agents for this agent.',
-          );
-        } else if (props.commandsEnabled === true) {
-          // Commands enabled but no WebSocket connection - likely token scope issue
-          setScanError(
-            'Agent not connected for command execution. The API token may be missing the "agent:exec" scope. Check Settings → API Tokens.',
-          );
-        } else {
-          // Unknown state - provide general guidance
-          setScanError(
-            'No agent available for command execution. Ensure "Pulse Commands" is enabled in Settings → Unified Agents and the API token has "agent:exec" scope.',
-          );
-        }
-      } else {
-        setScanError(message);
-      }
-      setHttpScanInProgress(false);
-      setIsScanning(false);
-      setScanProgress(null);
-      setScanStartTime(null); // Stop the live timer
-    }
-  };
-
-  // Handle saving notes
-  const handleSaveNotes = async () => {
-    setSaveError(null);
-    const agentId = targetAgentId();
-    if (!agentId) {
-      setSaveError('Agent identifier unavailable for discovery');
-      return;
-    }
-    try {
-      await updateDiscoveryNotes(props.resourceType, agentId, props.resourceId, {
-        user_notes: notesText(),
-      });
-      setEditingNotes(false);
-      await refetch();
-    } catch (err) {
-      setSaveError(err instanceof Error ? err.message : 'Failed to save notes');
-    }
-  };
-
-  // Start editing notes
-  const startEditingNotes = () => {
-    const currentNotes = discovery()?.user_notes || '';
-    setNotesText(currentNotes);
-    setEditingNotes(true);
-  };
-
-  // Subscribe to WebSocket progress updates
-  const resourceId = () => makeResourceId(props.resourceType, targetAgentId(), props.resourceId);
-
-  createEffect(() => {
-    const unsubscribe = eventBus.on('ai_discovery_progress', (progress) => {
-      // Only update if this progress is for our resource
-      if (progress && progress.resource_id === resourceId()) {
-        // Always update progress display (shows current step, percentage, etc.)
-        setScanProgress(progress);
-
-        // If scan completed or failed via WebSocket, handle state update
-        // BUT only if we didn't initiate this scan via HTTP (which handles its own state)
-        if (
-          (progress.status === 'completed' || progress.status === 'failed') &&
-          !httpScanInProgress()
-        ) {
-          setIsScanning(false);
-          // Fetch the updated discovery data
-          // Use a small delay to ensure the backend has persisted the data
-          setTimeout(async () => {
-            const agentId = targetAgentId();
-            if (!agentId) return;
-            try {
-              const result = await getDiscovery(props.resourceType, agentId, props.resourceId);
-              if (result) {
-                mutate(result);
-              }
-            } catch (err) {
-              console.error('Failed to fetch discovery after completion:', err);
-            }
-            setScanProgress(null);
-          }, 500);
-        }
-      }
-    });
-
-    onCleanup(() => {
-      unsubscribe();
-    });
-  });
-
-  const confidenceInfo = () => {
-    if (discovery.loading) return null;
-    const d = discovery();
-    if (!d || d.confidence === undefined || d.confidence === null) return null;
-    return getConfidenceLevel(d.confidence);
-  };
-
-  // Check if discovery has meaningful data (not empty/unknown results)
-  const hasValidDiscovery = () => {
-    const d = discovery();
-    if (!d) return false;
-    // Consider valid if:
-    // - Has a service name that's not empty and not "unknown" (case-insensitive)
-    // - OR has a confidence value above 0
-    // - OR has any discovered ports, facts, paths, etc.
-    const hasServiceName = d.service_name && d.service_name.toLowerCase() !== 'unknown';
-    const hasConfidence = typeof d.confidence === 'number' && d.confidence > 0;
-    const hasPorts = d.ports && d.ports.length > 0;
-    const hasFacts = d.facts && d.facts.length > 0;
-    const hasPaths =
-      (d.config_paths && d.config_paths.length > 0) ||
-      (d.data_paths && d.data_paths.length > 0) ||
-      (d.log_paths && d.log_paths.length > 0);
-    const hasCliAccess = !!d.cli_access;
-
-    return hasServiceName || hasConfidence || hasPorts || hasFacts || hasPaths || hasCliAccess;
-  };
-
-  // Accessor that returns discovery only when valid (for use with Show component)
-  const validDiscovery = () => (!discovery.loading && hasValidDiscovery() ? discovery() : null);
 
   return (
     <div class="space-y-4">

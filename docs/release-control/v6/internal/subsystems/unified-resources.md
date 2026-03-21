@@ -47,8 +47,10 @@ cross-source deduplication.
 25. `frontend-modern/src/components/Infrastructure/ResourceFacetSummary.tsx`
 26. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts`
 27. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`
-28. `frontend-modern/src/features/infrastructure/InfrastructurePageSurface.tsx`
-29. `frontend-modern/src/features/infrastructure/useInfrastructurePageState.ts`
+28. `frontend-modern/src/components/Discovery/DiscoveryTab.tsx`
+29. `frontend-modern/src/components/Discovery/useDiscoveryTabState.ts`
+30. `frontend-modern/src/features/infrastructure/InfrastructurePageSurface.tsx`
+31. `frontend-modern/src/features/infrastructure/useInfrastructurePageState.ts`
 
 ## Shared Boundaries
 
@@ -76,6 +78,7 @@ assembly branch.
 5. Add platform registry, resolution, or host-dedup behavior through `internal/unifiedresources/registry.go`, `internal/unifiedresources/resolve.go`, `internal/unifiedresources/resolved_host_set.go`, `internal/unifiedresources/snapshot_source_filter.go`, `internal/unifiedresources/store.go`, `internal/unifiedresources/kubernetes_capabilities.go`, and `internal/unifiedresources/pbs_rollups.go`
 6. Add canonical governed name-resolution or policy-aware resource lookup behavior through `internal/unifiedresources/resolve.go` and `internal/unifiedresources/resolve_context.go`
 7. Add or change resource drawer timeline/facet presentation through `frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx`, `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts`, `frontend-modern/src/components/Infrastructure/ResourceFacetSummary.tsx`, `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts`, and the governed `internal/api/resources.go` facet/timeline contract together
+8. Add or change discovery-support runtime under the resource drawer through `frontend-modern/src/components/Discovery/DiscoveryTab.tsx` for shell/presentation ownership and `frontend-modern/src/components/Discovery/useDiscoveryTabState.ts` for fetch, websocket-progress, and notes-mutation ownership
 
 ## Forbidden Paths
 
@@ -318,6 +321,10 @@ second peer overview surface.
 The discovery metadata panel now expands directly under the outer support
 disclosure instead of nesting a second bordered card, so the support surface
 reads as one flattened reveal instead of a card inside a card.
+That discovery support surface now also follows the same shell/runtime split
+as the rest of the drawer: `DiscoveryTab.tsx` owns presentation and
+disclosures, while `useDiscoveryTabState.ts` owns API fetches, websocket
+progress, and note/discovery mutations.
 The overview keeps host, service, investigation, and discovery detail as
 collapsed sibling disclosures under the primary summary, so the drawer keeps
 the top-level shape to `Summary` plus `Change history` before any secondary

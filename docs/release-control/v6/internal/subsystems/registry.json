@@ -2912,6 +2912,8 @@
         "internal/unifiedresources/"
       ],
       "owned_files": [
+        "frontend-modern/src/components/Discovery/DiscoveryTab.tsx",
+        "frontend-modern/src/components/Discovery/useDiscoveryTabState.ts",
         "frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts",
         "frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx",
         "frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts",
@@ -2984,6 +2986,8 @@
             "label": "unified resource consumer proof",
             "match_prefixes": [],
             "match_files": [
+              "frontend-modern/src/components/Discovery/DiscoveryTab.tsx",
+              "frontend-modern/src/components/Discovery/useDiscoveryTabState.ts",
               "frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts",
               "frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx",
               "frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts",
