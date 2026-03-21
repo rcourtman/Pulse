@@ -105,7 +105,7 @@ Own canonical runtime payload shapes between backend and frontend.
    and the shared `frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx` and `frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx` cards' infrastructure resource-link default, so the Patrol page, resource drawer, and problem-resource dashboard panels inherit the canonical resource-filter path construction instead of rebuilding infrastructure URLs inline
 8. Route frontend API-client parsed error propagation, API-error-status fallback handling, allowed-status handling, custom status-specific error handling, command-trigger success envelope handling, shared response parsing pipelines, missing-resource lookup handling, metadata CRUD routing, stream event consumption, response status, collection normalization, scalar payload coercion, and structured error normalization through canonical shared helpers under `frontend-modern/src/api/`
 9. Add or change API token scope, assignment, and revocation presentation through `frontend-modern/src/components/Settings/APITokenManager.tsx`, `frontend-modern/src/components/Settings/apiTokenManagerModel.ts`, and `frontend-modern/src/components/Settings/useAPITokenManagerState.ts`
-10. Add or change infrastructure operations token generation, lookup, assignment, the pure unified-agent inventory/install model, and reporting/install presentation through `frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx`, `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`, and `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx`
+10. Add or change infrastructure operations token generation, lookup, assignment, the pure unified-agent inventory/install model, the shared infrastructure-operations state provider/context, and reporting/install presentation through `frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx`, `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`, and `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx`
 11. Keep `internal/api/session_store.go` on a fail-closed auth-persistence boundary: persisted OIDC refresh tokens may only round-trip through encrypted-at-rest session payloads, and any missing-crypto or invalid-ciphertext path must drop the token instead of preserving plaintext-at-rest session state.
 12. Keep tenant AI handler wiring on canonical provider ownership: `internal/api/ai_handlers.go` may wire tenant `ReadState` and tenant-scoped unified-resource providers into AI services, but it must not revive tenant snapshot-provider bridges once Patrol can initialize and verify from those canonical providers directly.
 
@@ -277,6 +277,11 @@ The same shared-boundary rule now applies to `frontend-modern/src/api/agentProfi
 `internal/api/config_setup_handlers.go`, and `internal/api/unified_agent.go`:
 agent install/register/profile control changes must preserve canonical API
 payload behavior instead of drifting into subsystem-local transport rules.
+That same shared boundary now assumes `InfrastructureOperationsController.tsx`
+is only the shell, while `useInfrastructureOperationsState.tsx` owns the API-backed
+state/provider contract and the extracted installer, inventory, and stop-monitoring
+section owners stay render-side consumers of that canonical state instead of
+embedding their own transport calls or ad hoc API parsing.
 That shared `frontend-modern/src/api/agentProfiles.ts` boundary must also stay
 under explicit proof routing on both sides instead of remaining a generic
 frontend-client match on the API-contract side: assignment, delete, unassign,

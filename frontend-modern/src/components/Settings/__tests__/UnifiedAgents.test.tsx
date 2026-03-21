@@ -5,11 +5,14 @@ import { createStore } from 'solid-js/store';
 import { Router, Route } from '@solidjs/router';
 import { UnifiedAgents } from '../UnifiedAgents';
 import infrastructureInstallPanelSource from '../InfrastructureInstallPanel.tsx?raw';
+import infrastructureInstallerSectionSource from '../InfrastructureInstallerSection.tsx?raw';
 import infrastructureOperationsControllerSource from '../InfrastructureOperationsController.tsx?raw';
 import infrastructureOperationsModelSource from '../infrastructureOperationsModel.tsx?raw';
 import infrastructureReportingPanelSource from '../InfrastructureReportingPanel.tsx?raw';
 import infrastructureDirectConnectionsSummaryCardSource from '../InfrastructureDirectConnectionsSummaryCard.tsx?raw';
+import infrastructureInventorySectionSource from '../InfrastructureInventorySection.tsx?raw';
 import infrastructureOperationsStateSource from '../useInfrastructureOperationsState.tsx?raw';
+import infrastructureStopMonitoringDialogSource from '../InfrastructureStopMonitoringDialog.tsx?raw';
 import type {
   Agent,
   ConnectedInfrastructureItem,
@@ -50,9 +53,15 @@ let securityStatusResponse = { requiresAuth: true, apiTokenConfigured: false };
 
 describe('UnifiedAgents ownership guardrails', () => {
   it('routes controller and workspace panels through the shared infrastructure operations state owner', () => {
-    expect(infrastructureOperationsControllerSource).toContain('useInfrastructureOperationsState');
-    expect(infrastructureInstallPanelSource).toContain('useInfrastructureOperationsState');
-    expect(infrastructureReportingPanelSource).toContain('useInfrastructureOperationsState');
+    expect(infrastructureOperationsControllerSource).toContain('InfrastructureOperationsStateProvider');
+    expect(infrastructureOperationsControllerSource).toContain('InfrastructureInstallerSection');
+    expect(infrastructureOperationsControllerSource).toContain('InfrastructureInventorySection');
+    expect(infrastructureOperationsControllerSource).toContain('InfrastructureStopMonitoringDialog');
+    expect(infrastructureInstallPanelSource).toContain('InfrastructureOperationsStateProvider');
+    expect(infrastructureInstallPanelSource).toContain('InfrastructureInstallerSection');
+    expect(infrastructureReportingPanelSource).toContain('InfrastructureOperationsStateProvider');
+    expect(infrastructureReportingPanelSource).toContain('InfrastructureInventorySection');
+    expect(infrastructureReportingPanelSource).toContain('InfrastructureStopMonitoringDialog');
     expect(infrastructureReportingPanelSource).toContain(
       './InfrastructureDirectConnectionsSummaryCard',
     );
@@ -61,9 +70,18 @@ describe('UnifiedAgents ownership guardrails', () => {
       'Direct Proxmox connections',
     );
     expect(infrastructureOperationsStateSource).toContain("./infrastructureOperationsModel");
-    expect(infrastructureOperationsStateSource).toContain('renderInstallerSection');
-    expect(infrastructureOperationsStateSource).toContain('renderInventorySection');
-    expect(infrastructureOperationsStateSource).toContain('renderStopMonitoringDialog');
+    expect(infrastructureOperationsStateSource).toContain(
+      'export const InfrastructureOperationsStateProvider',
+    );
+    expect(infrastructureOperationsStateSource).toContain(
+      'export const useInfrastructureOperationsContext',
+    );
+    expect(infrastructureOperationsStateSource).not.toContain('renderInstallerSection');
+    expect(infrastructureOperationsStateSource).not.toContain('renderInventorySection');
+    expect(infrastructureOperationsStateSource).not.toContain('renderStopMonitoringDialog');
+    expect(infrastructureInstallerSectionSource).toContain('useInfrastructureOperationsContext');
+    expect(infrastructureInventorySectionSource).toContain('useInfrastructureOperationsContext');
+    expect(infrastructureStopMonitoringDialogSource).toContain('useInfrastructureOperationsContext');
     expect(infrastructureOperationsModelSource).toContain('export const getRowReportingSummary');
     expect(infrastructureOperationsModelSource).toContain(
       'export const getPowerShellInstallProfileEnvFromFlags',

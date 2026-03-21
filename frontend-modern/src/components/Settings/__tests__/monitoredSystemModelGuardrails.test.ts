@@ -4,7 +4,12 @@ import agentProfilesPanelStateSource from '../useAgentProfilesPanelState.ts?raw'
 import apiTokenManagerSource from '../APITokenManager.tsx?raw';
 import apiTokenManagerModelSource from '../apiTokenManagerModel.ts?raw';
 import apiTokenManagerStateSource from '../useAPITokenManagerState.ts?raw';
+import infrastructureActiveRowDetailsSource from '../InfrastructureActiveRowDetails.tsx?raw';
+import infrastructureIgnoredRowDetailsSource from '../InfrastructureIgnoredRowDetails.tsx?raw';
+import infrastructureInstallerSectionSource from '../InfrastructureInstallerSection.tsx?raw';
+import infrastructureInventorySectionSource from '../InfrastructureInventorySection.tsx?raw';
 import infrastructureOperationsStateSource from '../useInfrastructureOperationsState.tsx?raw';
+import infrastructureStopMonitoringDialogSource from '../InfrastructureStopMonitoringDialog.tsx?raw';
 import agentLedgerPanelSource from '../MonitoredSystemLedgerPanel.tsx?raw';
 import alertsPageSource from '@/pages/Alerts.tsx?raw';
 import setupCompletionPanelSource from '@/components/SetupWizard/SetupCompletionPanel.tsx?raw';
@@ -96,6 +101,14 @@ const aiSettingsSource = [
   aiSettingsDialogsSource,
   aiSettingsModelSource,
   aiSettingsStateSource,
+].join('\n');
+const infrastructureOperationsSource = [
+  infrastructureOperationsStateSource,
+  infrastructureInstallerSectionSource,
+  infrastructureInventorySectionSource,
+  infrastructureActiveRowDetailsSource,
+  infrastructureIgnoredRowDetailsSource,
+  infrastructureStopMonitoringDialogSource,
 ].join('\n');
 import dashboardGuestPresentationSource from '@/utils/dashboardGuestPresentation.ts?raw';
 import containerUpdatesSource from '@/stores/containerUpdates.ts?raw';
@@ -218,15 +231,15 @@ describe('monitored-system model guardrails', () => {
   it('keeps UnifiedAgents free of v5 merge-workaround patterns', () => {
     expect(infrastructureOperationsStateSource).not.toContain('previousHostTypes');
     expect(infrastructureOperationsStateSource).not.toContain('const allHosts = createMemo(');
-    expect(infrastructureOperationsStateSource).toContain('@/utils/unifiedAgentStatusPresentation');
-    expect(infrastructureOperationsStateSource).not.toContain(
+    expect(infrastructureOperationsSource).toContain('@/utils/unifiedAgentStatusPresentation');
+    expect(infrastructureOperationsSource).not.toContain(
       'const MONITORING_STOPPED_STATUS_LABEL =',
     );
-    expect(infrastructureOperationsStateSource).not.toContain('const ALLOW_RECONNECT_LABEL =');
+    expect(infrastructureOperationsSource).not.toContain('const ALLOW_RECONNECT_LABEL =');
     expect(infrastructureOperationsStateSource).toContain('withPrivilegeEscalation');
-    expect(infrastructureOperationsStateSource).toContain('@/utils/agentCapabilityPresentation');
-    expect(infrastructureOperationsStateSource).not.toContain('const getCapabilityLabel =');
-    expect(infrastructureOperationsStateSource).not.toContain('const getCapabilityBadgeClass =');
+    expect(infrastructureOperationsSource).toContain('@/utils/agentCapabilityPresentation');
+    expect(infrastructureOperationsSource).not.toContain('const getCapabilityLabel =');
+    expect(infrastructureOperationsSource).not.toContain('const getCapabilityBadgeClass =');
     expect(agentCapabilityPresentationSource).toContain("export type AgentCapability = 'agent'");
     expect(agentCapabilityPresentationSource).toContain('export function getAgentCapabilityLabel');
     expect(agentCapabilityPresentationSource).toContain(
@@ -237,10 +250,10 @@ describe('monitored-system model guardrails', () => {
     expect(agentProfilesPanelStateSource).toContain('isConnectedHealthStatus');
     expect(agentProfilesPanelSource).not.toContain('const connectedFromStatus =');
     expect(statusUtilsSource).toContain('export function isConnectedHealthStatus');
-    expect(infrastructureOperationsStateSource).toContain('@/utils/unifiedAgentStatusPresentation');
-    expect(infrastructureOperationsStateSource).not.toContain('const statusBadgeClass =');
-    expect(infrastructureOperationsStateSource).not.toContain('const statusBadgeClasses =');
-    expect(infrastructureOperationsStateSource).toContain(
+    expect(infrastructureOperationsSource).toContain('@/utils/unifiedAgentStatusPresentation');
+    expect(infrastructureOperationsSource).not.toContain('const statusBadgeClass =');
+    expect(infrastructureOperationsSource).not.toContain('const statusBadgeClasses =');
+    expect(infrastructureOperationsSource).toContain(
       'getUnifiedAgentLookupStatusPresentation',
     );
     expect(unifiedAgentStatusPresentationSource).toContain(
@@ -249,14 +262,14 @@ describe('monitored-system model guardrails', () => {
     expect(unifiedAgentStatusPresentationSource).toContain(
       'export function getUnifiedAgentLookupStatusPresentation',
     );
-    expect(infrastructureOperationsStateSource).toContain('getInventorySubjectLabel');
-    expect(infrastructureOperationsStateSource).toContain('getMonitoringStoppedEmptyState');
-    expect(infrastructureOperationsStateSource).toContain('getRemovedUnifiedAgentItemLabel');
-    expect(infrastructureOperationsStateSource).toContain('getUnifiedAgentLastSeenLabel');
-    expect(infrastructureOperationsStateSource).not.toContain('const getInventorySubjectLabel =');
-    expect(infrastructureOperationsStateSource).not.toContain('const getRemovedItemLabel =');
-    expect(infrastructureOperationsStateSource).not.toContain('const lastSeenLabel = () => {');
-    expect(infrastructureOperationsStateSource).not.toContain(
+    expect(infrastructureOperationsSource).toContain('getInventorySubjectLabel');
+    expect(infrastructureOperationsSource).toContain('getMonitoringStoppedEmptyState');
+    expect(infrastructureOperationsSource).toContain('getRemovedUnifiedAgentItemLabel');
+    expect(infrastructureOperationsSource).toContain('getUnifiedAgentLastSeenLabel');
+    expect(infrastructureOperationsSource).not.toContain('const getInventorySubjectLabel =');
+    expect(infrastructureOperationsSource).not.toContain('const getRemovedItemLabel =');
+    expect(infrastructureOperationsSource).not.toContain('const lastSeenLabel = () => {');
+    expect(infrastructureOperationsSource).not.toContain(
       'No monitoring-stopped items match the current filters.',
     );
     expect(unifiedAgentInventoryPresentationSource).toContain(
@@ -289,15 +302,15 @@ describe('monitored-system model guardrails', () => {
     expect(unifiedAgentInventoryPresentationSource).toContain(
       'export function getUnifiedAgentClipboardCopySuccessMessage',
     );
-    expect(infrastructureOperationsStateSource).not.toContain(
+    expect(infrastructureOperationsSource).not.toContain(
       'No host identifiers are available to stop monitoring.',
     );
-    expect(infrastructureOperationsStateSource).not.toContain(
+    expect(infrastructureOperationsSource).not.toContain(
       'Failed to update agent configuration',
     );
-    expect(infrastructureOperationsStateSource).not.toContain('Uninstall command copied');
-    expect(infrastructureOperationsStateSource).not.toContain('Upgrade command copied');
-    expect(infrastructureOperationsStateSource).not.toContain(
+    expect(infrastructureOperationsSource).not.toContain('Uninstall command copied');
+    expect(infrastructureOperationsSource).not.toContain('Upgrade command copied');
+    expect(infrastructureOperationsSource).not.toContain(
       "notificationStore.error('Failed to copy')",
     );
     expect(relaySettingsPanelSource).toContain('getRelayConnectionPresentation');
@@ -336,10 +349,10 @@ describe('monitored-system model guardrails', () => {
     expect(relayOnboardingCardSource).not.toContain('Pair Your Mobile Device');
     expect(relayOnboardingCardSource).not.toContain('Relay is currently disconnected.');
     expect(infrastructureOperationsStateSource).toContain('STORAGE_KEYS.SETUP_HANDOFF');
-    expect(infrastructureOperationsStateSource).toContain(
+    expect(infrastructureInstallerSectionSource).toContain(
       'Security configured. Save these first-run credentials now.',
     );
-    expect(infrastructureOperationsStateSource).toContain(
+    expect(infrastructureInstallerSectionSource).toContain(
       'Generate a scoped install token below before copying agent commands.',
     );
     expect(setupCompletionPanelSource).toContain('@/utils/relayPresentation');

@@ -4,10 +4,15 @@ import settingsShellSource from '../SettingsPageShell.tsx?raw';
 import infrastructureWorkspaceSource from '../InfrastructureWorkspace.tsx?raw';
 import infrastructureWorkspaceModelSource from '../infrastructureWorkspaceModel.ts?raw';
 import infrastructureInstallPanelSource from '../InfrastructureInstallPanel.tsx?raw';
+import infrastructureInstallerSectionSource from '../InfrastructureInstallerSection.tsx?raw';
 import infrastructureOperationsControllerSource from '../InfrastructureOperationsController.tsx?raw';
 import infrastructureOperationsModelSource from '../infrastructureOperationsModel.tsx?raw';
 import infrastructureReportingPanelSource from '../InfrastructureReportingPanel.tsx?raw';
 import infrastructureDirectConnectionsSummaryCardSource from '../InfrastructureDirectConnectionsSummaryCard.tsx?raw';
+import infrastructureInventorySectionSource from '../InfrastructureInventorySection.tsx?raw';
+import infrastructureActiveRowDetailsSource from '../InfrastructureActiveRowDetails.tsx?raw';
+import infrastructureIgnoredRowDetailsSource from '../InfrastructureIgnoredRowDetails.tsx?raw';
+import infrastructureStopMonitoringDialogSource from '../InfrastructureStopMonitoringDialog.tsx?raw';
 import nodeModalModelSource from '../nodeModalModel.ts?raw';
 import nodeModalSource from '../NodeModal.tsx?raw';
 import infrastructureOperationsStateSource from '../useInfrastructureOperationsState.tsx?raw';
@@ -85,8 +90,13 @@ const extractedModules = [
   '../InfrastructureWorkspace.tsx',
   '../infrastructureWorkspaceModel.ts',
   '../InfrastructureInstallPanel.tsx',
+  '../InfrastructureInstallerSection.tsx',
   '../InfrastructureReportingPanel.tsx',
   '../InfrastructureDirectConnectionsSummaryCard.tsx',
+  '../InfrastructureInventorySection.tsx',
+  '../InfrastructureActiveRowDetails.tsx',
+  '../InfrastructureIgnoredRowDetails.tsx',
+  '../InfrastructureStopMonitoringDialog.tsx',
   '../AIProviderConfigurationSection.tsx',
   '../AISettingsDialogs.tsx',
   '../aiSettingsModel.ts',
@@ -374,17 +384,37 @@ describe('Settings architecture guardrails', () => {
     expect(infrastructureWorkspaceSource).not.toContain('createEffect(() =>');
     expect(infrastructureWorkspaceSource).toContain('InfrastructureInstallPanel');
     expect(infrastructureWorkspaceSource).toContain('InfrastructureReportingPanel');
-    expect(infrastructureInstallPanelSource).toContain('useInfrastructureOperationsState');
-    expect(infrastructureReportingPanelSource).toContain('useInfrastructureOperationsState');
+    expect(infrastructureInstallPanelSource).toContain('InfrastructureOperationsStateProvider');
+    expect(infrastructureInstallPanelSource).toContain('InfrastructureInstallerSection');
+    expect(infrastructureReportingPanelSource).toContain('InfrastructureOperationsStateProvider');
+    expect(infrastructureReportingPanelSource).toContain('InfrastructureInventorySection');
+    expect(infrastructureReportingPanelSource).toContain('InfrastructureStopMonitoringDialog');
     expect(infrastructureReportingPanelSource).toContain(
       './InfrastructureDirectConnectionsSummaryCard',
     );
     expect(infrastructureReportingPanelSource).not.toContain('Direct Proxmox connections');
     expect(infrastructureReportingPanelSource).not.toContain('Manage direct connections');
-    expect(infrastructureOperationsControllerSource).toContain('useInfrastructureOperationsState');
+    expect(infrastructureOperationsControllerSource).toContain('InfrastructureOperationsStateProvider');
+    expect(infrastructureOperationsControllerSource).toContain('InfrastructureInstallerSection');
+    expect(infrastructureOperationsControllerSource).toContain('InfrastructureInventorySection');
+    expect(infrastructureOperationsControllerSource).toContain('InfrastructureStopMonitoringDialog');
     expect(infrastructureOperationsStateSource).toContain(
       'export const useInfrastructureOperationsState',
     );
+    expect(infrastructureOperationsStateSource).toContain(
+      'export const InfrastructureOperationsStateProvider',
+    );
+    expect(infrastructureOperationsStateSource).toContain(
+      'export const useInfrastructureOperationsContext',
+    );
+    expect(infrastructureOperationsStateSource).not.toContain('const renderInstallerSection =');
+    expect(infrastructureOperationsStateSource).not.toContain('const renderInventorySection =');
+    expect(infrastructureOperationsStateSource).not.toContain('const renderStopMonitoringDialog =');
+    expect(infrastructureInstallerSectionSource).toContain('useInfrastructureOperationsContext');
+    expect(infrastructureInventorySectionSource).toContain('useInfrastructureOperationsContext');
+    expect(infrastructureStopMonitoringDialogSource).toContain('useInfrastructureOperationsContext');
+    expect(infrastructureActiveRowDetailsSource).toContain('useInfrastructureOperationsContext');
+    expect(infrastructureIgnoredRowDetailsSource).toContain('useInfrastructureOperationsContext');
     expect(infrastructureWorkspaceModelSource).toContain(
       'export const INFRASTRUCTURE_WORKSPACE_TABS',
     );

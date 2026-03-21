@@ -2062,6 +2062,42 @@ class SubsystemLookupTest(unittest.TestCase):
             ],
         )
 
+    def test_lookup_paths_assigns_infrastructure_installer_section_to_agent_lifecycle(self) -> None:
+        result = lookup_paths(
+            ["frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx"]
+        )
+        self.assertEqual(result["unowned_runtime_files"], [])
+        self.assertEqual(
+            {item["subsystem"] for item in result["impacted_subsystems"]},
+            {"agent-lifecycle"},
+        )
+
+        file_entry = result["files"][0]
+        self.assertEqual(file_entry["classification"], "runtime")
+        self.assertIsNone(file_entry["shared_ownership"])
+        self.assertEqual(len(file_entry["matches"]), 1)
+
+        match = file_entry["matches"][0]
+        self.assertEqual(match["subsystem"], "agent-lifecycle")
+        self.assertEqual(
+            match["contract"],
+            "docs/release-control/v6/internal/subsystems/agent-lifecycle.md",
+        )
+        self.assertEqual(match["lane_context"]["lane_id"], "L16")
+        self.assertEqual(
+            match["verification_requirement"]["id"],
+            "unified-agent-settings-surface",
+        )
+        self.assertEqual(
+            match["verification_requirement"]["exact_files"],
+            [
+                "frontend-modern/src/api/__tests__/agentProfiles.test.ts",
+                "frontend-modern/src/api/__tests__/monitoring.test.ts",
+                "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsModel.test.tsx",
+                "frontend-modern/src/components/Settings/__tests__/UnifiedAgents.test.tsx",
+            ],
+        )
+
     def test_lookup_paths_reports_windows_installer_as_shared_boundary(self) -> None:
         result = lookup_paths(["scripts/install.ps1"])
         self.assertEqual(result["unowned_runtime_files"], [])

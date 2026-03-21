@@ -1,8 +1,11 @@
 import type { Component } from 'solid-js';
 import { Show } from 'solid-js';
+import { InfrastructureInstallerSection } from './InfrastructureInstallerSection';
+import { InfrastructureInventorySection } from './InfrastructureInventorySection';
+import { InfrastructureStopMonitoringDialog } from './InfrastructureStopMonitoringDialog';
 import {
+  InfrastructureOperationsStateProvider,
   type InfrastructureOperationsStateOptions,
-  useInfrastructureOperationsState,
 } from './useInfrastructureOperationsState';
 
 export interface InfrastructureOperationsControllerProps extends InfrastructureOperationsStateOptions {
@@ -13,14 +16,20 @@ export interface InfrastructureOperationsControllerProps extends InfrastructureO
 export const InfrastructureOperationsController: Component<
   InfrastructureOperationsControllerProps
 > = (props) => {
-  const state = useInfrastructureOperationsState({ embedded: props.embedded });
-
   return (
-    <div class="space-y-6">
-      <Show when={props.showInventory ?? true}>{state.renderStopMonitoringDialog()}</Show>
-      <Show when={props.showInstaller ?? true}>{state.renderInstallerSection()}</Show>
-      <Show when={props.showInventory ?? true}>{state.renderInventorySection()}</Show>
-    </div>
+    <InfrastructureOperationsStateProvider embedded={props.embedded}>
+      <div class="space-y-6">
+        <Show when={props.showInventory ?? true}>
+          <InfrastructureStopMonitoringDialog />
+        </Show>
+        <Show when={props.showInstaller ?? true}>
+          <InfrastructureInstallerSection />
+        </Show>
+        <Show when={props.showInventory ?? true}>
+          <InfrastructureInventorySection />
+        </Show>
+      </div>
+    </InfrastructureOperationsStateProvider>
   );
 };
 
