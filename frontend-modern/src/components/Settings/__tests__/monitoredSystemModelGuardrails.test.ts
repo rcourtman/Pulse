@@ -144,7 +144,10 @@ import dashboardGuestPresentationSource from '@/utils/dashboardGuestPresentation
 import containerUpdatesSource from '@/stores/containerUpdates.ts?raw';
 import websocketStoreSource from '@/stores/websocket.ts?raw';
 import guestRowSource from '@/components/Dashboard/GuestRow.tsx?raw';
+import guestRowCellsSource from '@/components/Dashboard/GuestRowCells.tsx?raw';
+import guestRowStateSource from '@/components/Dashboard/useGuestRowState.ts?raw';
 import dashboardDiskListSource from '@/components/Dashboard/DiskList.tsx?raw';
+import dashboardDiskListStateSource from '@/components/Dashboard/useDiskListState.ts?raw';
 import guestDrawerSource from '@/components/Dashboard/GuestDrawer.tsx?raw';
 import resourcePickerSource from '../ResourcePicker.tsx?raw';
 import reportableResourceTypesSource from '@/utils/reportableResourceTypes.ts?raw';
@@ -167,6 +170,7 @@ import proxmoxSettingsPanelSource from '../ProxmoxSettingsPanel.tsx?raw';
 import proxmoxSettingsModelSource from '../proxmoxSettingsModel.ts?raw';
 import proxmoxDirectWorkspaceStateSource from '../useProxmoxDirectWorkspaceState.ts?raw';
 import relayOnboardingCardSource from '@/components/Dashboard/RelayOnboardingCard.tsx?raw';
+import relayOnboardingCardStateSource from '@/components/Dashboard/useRelayOnboardingCardState.ts?raw';
 import generalSettingsPanelSource from '../GeneralSettingsPanel.tsx?raw';
 import networkBoundarySettingsSectionSource from '../NetworkBoundarySettingsSection.tsx?raw';
 import networkDiscoverySectionSource from '../NetworkDiscoverySection.tsx?raw';
@@ -401,6 +405,7 @@ describe('monitored-system model guardrails', () => {
     expect(infrastructureSettingsModelSource).toContain('collectConfiguredInfrastructureHosts');
     expect(infrastructureSettingsModelSource).toContain('matchConfiguredNodeToResource');
     expect(relayOnboardingCardSource).toContain('@/utils/relayPresentation');
+    expect(relayOnboardingCardSource).toContain('./useRelayOnboardingCardState');
     expect(relayOnboardingCardSource).toContain('RELAY_ONBOARDING_TITLE');
     expect(relayOnboardingCardSource).toContain('RELAY_ONBOARDING_DESCRIPTION');
     expect(relayOnboardingCardSource).toContain('RELAY_ONBOARDING_UPGRADE_LABEL');
@@ -408,8 +413,16 @@ describe('monitored-system model guardrails', () => {
     expect(relayOnboardingCardSource).toContain('RELAY_ONBOARDING_TRIAL_STARTING_LABEL');
     expect(relayOnboardingCardSource).toContain('RELAY_ONBOARDING_SETUP_LABEL');
     expect(relayOnboardingCardSource).toContain('RELAY_ONBOARDING_DISCONNECTED_LABEL');
+    expect(relayOnboardingCardSource).not.toContain('createSignal(');
+    expect(relayOnboardingCardSource).not.toContain('loadLicenseStatus()');
+    expect(relayOnboardingCardSource).not.toContain('RelayAPI.getStatus()');
+    expect(relayOnboardingCardSource).not.toContain('startProTrial()');
     expect(relayOnboardingCardSource).not.toContain('Pair Your Mobile Device');
     expect(relayOnboardingCardSource).not.toContain('Relay is currently disconnected.');
+    expect(relayOnboardingCardStateSource).toContain('loadLicenseStatus()');
+    expect(relayOnboardingCardStateSource).toContain('RelayAPI.getStatus()');
+    expect(relayOnboardingCardStateSource).toContain('trackPaywallViewed');
+    expect(relayOnboardingCardStateSource).toContain('startProTrial()');
     expect(infrastructureInstallStateSource).toContain('STORAGE_KEYS.SETUP_HANDOFF');
     expect(infrastructureInstallerSectionSource).toContain(
       'Security configured. Save these first-run credentials now.',
@@ -844,9 +857,9 @@ describe('monitored-system model guardrails', () => {
     );
     expect(infrastructureSelectorSource).toContain("resource.type === 'truenas'");
     expect(infrastructureSelectorSource).not.toContain('if (hostLikeResources.length === 0');
-    expect(guestRowSource).toContain('getDashboardGuestBackupStatusPresentation');
-    expect(guestRowSource).toContain('getDashboardGuestBackupTooltip');
-    expect(guestRowSource).toContain('getDashboardGuestNetworkEmptyState');
+    expect(guestRowCellsSource).toContain('getDashboardGuestBackupStatusPresentation');
+    expect(guestRowCellsSource).toContain('getDashboardGuestBackupTooltip');
+    expect(guestRowCellsSource).toContain('getDashboardGuestNetworkEmptyState');
     expect(guestRowSource).toContain('getDashboardGuestDiskStatusMessage');
     expect(guestRowSource).not.toContain('const BACKUP_STATUS_CONFIG: Record<');
     expect(guestRowSource).not.toContain('No backup found');
@@ -854,7 +867,8 @@ describe('monitored-system model guardrails', () => {
     expect(guestRowSource).not.toContain(
       'No filesystems found. VM may be booting or using a Live ISO.',
     );
-    expect(dashboardDiskListSource).toContain('getDashboardGuestDiskStatusMessage');
+    expect(dashboardDiskListSource).toContain('./useDiskListState');
+    expect(dashboardDiskListStateSource).toContain('getDashboardGuestDiskStatusMessage');
     expect(dashboardDiskListSource).not.toContain(
       'No filesystems found. VM may be booting or using a Live ISO.',
     );
@@ -1362,8 +1376,10 @@ describe('monitored-system model guardrails', () => {
     expect(websocketStoreSource).not.toContain('syncWithHostCommand(hostId, command as any)');
     expect(websocketStoreSource).toContain('markDockerRuntimesTokenRevoked');
     expect(websocketStoreSource).toContain("markTokenRevoked('dockerRuntimes', tokenId, agentIds)");
-    expect(guestRowSource).toContain('agentId={getWorkloadDockerHostId(props.guest)}');
-    expect(guestRowSource).not.toContain('hostId={getWorkloadDockerHostId(props.guest)}');
+    expect(guestRowSource).toContain('agentId={dockerHostId()}');
+    expect(guestRowStateSource).toContain('getWorkloadDockerHostId(props.guest)');
+    expect(guestRowSource).not.toContain('hostId={dockerHostId()}');
+    expect(guestRowStateSource).not.toContain('getWorkloadDockerServerId');
     expect(guestDrawerSource).toContain('agentId={discoveryAgentId()}');
     expect(guestDrawerSource).not.toContain('hostId={discoveryHostId()}');
   });

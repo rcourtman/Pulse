@@ -47,23 +47,24 @@ agreement, and cloud-specific enforcement rules.
 25. `frontend-modern/src/AppLayout.tsx`
 26. `frontend-modern/src/useAppRuntimeState.ts`
 27. `frontend-modern/src/components/Dashboard/RelayOnboardingCard.tsx`
-28. `frontend-modern/src/components/Settings/BillingAdminPanel.tsx`
-29. `frontend-modern/src/components/Settings/BillingAdminOrganizationsTable.tsx`
-30. `frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx`
-31. `frontend-modern/src/components/Settings/OrganizationBillingLoadingState.tsx`
-32. `frontend-modern/src/components/Settings/ProLicensePanel.tsx`
-33. `frontend-modern/src/components/Settings/ProLicensePlanSection.tsx`
-34. `frontend-modern/src/components/Settings/CommercialBillingSections.tsx`
-35. `frontend-modern/src/components/Settings/SelfHostedCommercialActivationSection.tsx`
-36. `frontend-modern/src/components/Settings/RelaySettingsPanel.tsx`
-37. `frontend-modern/src/components/Settings/RelayPairingSection.tsx`
-38. `frontend-modern/src/components/Settings/useBillingAdminPanelState.ts`
-39. `frontend-modern/src/components/Settings/useOrganizationBillingPanelState.ts`
-40. `frontend-modern/src/components/Settings/useProLicensePanelState.ts`
-41. `frontend-modern/src/components/Settings/useRelaySettingsPanelState.ts`
-42. `frontend-modern/src/pages/CloudPricing.tsx`
-43. `frontend-modern/src/utils/apiClient.ts`
-44. `frontend-modern/src/utils/commercialBillingModel.ts`
+28. `frontend-modern/src/components/Dashboard/useRelayOnboardingCardState.ts`
+29. `frontend-modern/src/components/Settings/BillingAdminPanel.tsx`
+30. `frontend-modern/src/components/Settings/BillingAdminOrganizationsTable.tsx`
+31. `frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx`
+32. `frontend-modern/src/components/Settings/OrganizationBillingLoadingState.tsx`
+33. `frontend-modern/src/components/Settings/ProLicensePanel.tsx`
+34. `frontend-modern/src/components/Settings/ProLicensePlanSection.tsx`
+35. `frontend-modern/src/components/Settings/CommercialBillingSections.tsx`
+36. `frontend-modern/src/components/Settings/SelfHostedCommercialActivationSection.tsx`
+37. `frontend-modern/src/components/Settings/RelaySettingsPanel.tsx`
+38. `frontend-modern/src/components/Settings/RelayPairingSection.tsx`
+39. `frontend-modern/src/components/Settings/useBillingAdminPanelState.ts`
+40. `frontend-modern/src/components/Settings/useOrganizationBillingPanelState.ts`
+41. `frontend-modern/src/components/Settings/useProLicensePanelState.ts`
+42. `frontend-modern/src/components/Settings/useRelaySettingsPanelState.ts`
+43. `frontend-modern/src/pages/CloudPricing.tsx`
+44. `frontend-modern/src/utils/apiClient.ts`
+45. `frontend-modern/src/utils/commercialBillingModel.ts`
 
 ## Shared Boundaries
 
@@ -88,7 +89,7 @@ agreement, and cloud-specific enforcement rules.
 12. Add or change shared commercial plan/usage presentation through `frontend-modern/src/components/Settings/CommercialBillingSections.tsx` and `frontend-modern/src/utils/commercialBillingModel.ts`
 13. Add or change organization billing and usage presentation through `frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx`, `frontend-modern/src/components/Settings/OrganizationBillingLoadingState.tsx`, and `frontend-modern/src/components/Settings/useOrganizationBillingPanelState.ts`
 14. Add or change self-hosted Pro activation, trial, and entitlement actions through `frontend-modern/src/components/Settings/ProLicensePanel.tsx`, `frontend-modern/src/components/Settings/ProLicensePlanSection.tsx`, `frontend-modern/src/components/Settings/SelfHostedCommercialActivationSection.tsx`, and `frontend-modern/src/components/Settings/useProLicensePanelState.ts`
-15. Add or change paid relay settings and onboarding presentation through `frontend-modern/src/components/Settings/RelaySettingsPanel.tsx`, `frontend-modern/src/components/Settings/RelayPairingSection.tsx`, `frontend-modern/src/components/Settings/useRelaySettingsPanelState.ts`, and `frontend-modern/src/components/Dashboard/RelayOnboardingCard.tsx`
+15. Add or change paid relay settings and onboarding presentation through `frontend-modern/src/components/Settings/RelaySettingsPanel.tsx`, `frontend-modern/src/components/Settings/RelayPairingSection.tsx`, `frontend-modern/src/components/Settings/useRelaySettingsPanelState.ts`, `frontend-modern/src/components/Dashboard/RelayOnboardingCard.tsx`, and `frontend-modern/src/components/Dashboard/useRelayOnboardingCardState.ts`
 16. Add or change cloud plan presentation through `frontend-modern/src/pages/CloudPricing.tsx`
 17. Add contract tests where runtime and pricing need to stay aligned
 18. Add or change hosted browser org-context bootstrap through `frontend-modern/src/App.tsx`, `frontend-modern/src/AppLayout.tsx`, `frontend-modern/src/useAppRuntimeState.ts`, and `frontend-modern/src/utils/apiClient.ts`
@@ -320,6 +321,13 @@ owns relay config/status polling, trial, and pairing runtime, and
 `frontend-modern/src/components/Settings/RelayPairingSection.tsx` owns the QR
 pairing surface. Future relay settings work must extend that split instead of
 pulling polling and QR-generation lifecycle back into the shell component.
+The dashboard relay onboarding surface now follows the same rule:
+`frontend-modern/src/components/Dashboard/RelayOnboardingCard.tsx` is the
+dashboard shell, while
+`frontend-modern/src/components/Dashboard/useRelayOnboardingCardState.ts`
+owns license readiness, relay status polling, snooze state, and trial start
+runtime. Future onboarding changes must extend that split instead of pulling
+license and relay runtime back into the card shell.
 That relay pairing boundary now also includes ephemeral device-token lifecycle:
 when the settings surface generates a mobile pairing QR, it must mint a fresh
 scoped API token for that pairing attempt, fetch the onboarding payload through

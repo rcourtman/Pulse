@@ -216,6 +216,7 @@ import k8sNamespacePresentationSource from '@/utils/k8sNamespacePresentation.ts?
 import k8sStatusPresentationSource from '@/utils/k8sStatusPresentation.ts?raw';
 import raidCardSource from '@/components/shared/cards/RaidCard.tsx?raw';
 import raidPresentationSource from '@/utils/raidPresentation.ts?raw';
+import relayOnboardingCardSource from '@/components/Dashboard/RelayOnboardingCard.tsx?raw';
 import proLicensePanelSource from '@/components/Settings/ProLicensePanel.tsx?raw';
 import proLicensePlanSectionSource from '@/components/Settings/ProLicensePlanSection.tsx?raw';
 import securityPostureSummarySource from '@/components/Settings/SecurityPostureSummary.tsx?raw';
@@ -281,6 +282,7 @@ import storageDomainSource from '@/features/storageBackups/storageDomain.ts?raw'
 import storagePoolDetailPresentationSource from '@/features/storageBackups/storagePoolDetailPresentation.ts?raw';
 import storageBarPresentationSource from '@/features/storageBackups/storageBarPresentation.ts?raw';
 import storagePagePresentationSource from '@/features/storageBackups/storagePagePresentation.ts?raw';
+import relayOnboardingCardStateSource from '@/components/Dashboard/useRelayOnboardingCardState.ts?raw';
 import proLicensePanelStateSource from '@/components/Settings/useProLicensePanelState.ts?raw';
 import storagePageStatusSource from '@/features/storageBackups/storagePageStatus.ts?raw';
 import storageRowPresentationSource from '@/features/storageBackups/rowPresentation.ts?raw';
@@ -1084,6 +1086,12 @@ describe('frontend resource type boundaries', () => {
     expect(organizationBillingStateSource).toContain('@/utils/organizationSettingsPresentation');
     expect(billingAdminPanelSource).toContain('./useBillingAdminPanelState');
     expect(billingAdminPanelSource).toContain('./BillingAdminOrganizationsTable');
+    expect(relayOnboardingCardSource).toContain('./useRelayOnboardingCardState');
+    expect(relayOnboardingCardSource).not.toContain('createSignal(');
+    expect(relayOnboardingCardSource).not.toContain('RelayAPI.getStatus()');
+    expect(relayOnboardingCardStateSource).toContain('RelayAPI.getStatus()');
+    expect(relayOnboardingCardStateSource).toContain('loadLicenseStatus()');
+    expect(relayOnboardingCardStateSource).toContain('startProTrial()');
     expect(organizationBillingPanelSource).not.toContain('normalizeOrgScope(getOrgID())');
     expect(organizationBillingPanelSource).not.toContain('createSignal(');
     expect(billingAdminPanelSource).not.toContain('createSignal(');

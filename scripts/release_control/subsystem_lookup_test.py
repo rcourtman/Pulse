@@ -157,6 +157,27 @@ class SubsystemLookupTest(unittest.TestCase):
             "relay-frontend-surfaces",
         )
 
+    def test_lookup_paths_assigns_relay_onboarding_state_owner_to_cloud_paid(self) -> None:
+        result = lookup_paths(["frontend-modern/src/components/Dashboard/useRelayOnboardingCardState.ts"])
+        self.assertEqual(result["unowned_runtime_files"], [])
+        self.assertEqual(
+            {item["subsystem"] for item in result["impacted_subsystems"]},
+            {"cloud-paid"},
+        )
+        file_entry = result["files"][0]
+        self.assertEqual(file_entry["classification"], "runtime")
+        self.assertEqual(
+            {match["subsystem"] for match in file_entry["matches"]},
+            {"cloud-paid"},
+        )
+        match = file_entry["matches"][0]
+        self.assertEqual(match["contract"], "docs/release-control/v6/internal/subsystems/cloud-paid.md")
+        self.assertEqual(match["lane_context"]["lane_id"], "L3")
+        self.assertEqual(
+            match["verification_requirement"]["id"],
+            "relay-frontend-surfaces",
+        )
+
     def test_lookup_paths_assigns_recovery_route_to_storage_recovery(self) -> None:
         result = lookup_paths(["frontend-modern/src/pages/RecoveryRoute.tsx"])
         self.assertEqual(result["unowned_runtime_files"], [])

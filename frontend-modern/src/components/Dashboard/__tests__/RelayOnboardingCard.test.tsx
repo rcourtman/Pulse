@@ -162,6 +162,20 @@ describe('RelayOnboardingCard', () => {
       });
     });
 
+    it('tracks upgrade clicks from the paywall link without starting a trial', async () => {
+      setupWithoutRelayFeature();
+      render(() => <RelayOnboardingCard />);
+
+      await waitFor(() => {
+        expect(screen.getByText(/Get Relay/)).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByText(/Get Relay/));
+
+      expect(trackUpgradeClickedMock).toHaveBeenCalledWith('dashboard_onboarding', 'relay');
+      expect(startProTrialMock).not.toHaveBeenCalled();
+    });
+
     it('does not render the "Set Up Relay" button', async () => {
       setupWithoutRelayFeature();
       render(() => <RelayOnboardingCard />);
