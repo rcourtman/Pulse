@@ -1856,7 +1856,11 @@ class SubsystemLookupTest(unittest.TestCase):
     def test_lookup_paths_assigns_remaining_settings_shell_panels_to_frontend_primitives(self) -> None:
         runtime_files = [
             "frontend-modern/src/components/Settings/APIAccessPanel.tsx",
+            "frontend-modern/src/components/Settings/AIChatMaintenanceSection.tsx",
+            "frontend-modern/src/components/Settings/AIModelSelectionSection.tsx",
+            "frontend-modern/src/components/Settings/AIRuntimeControlsSection.tsx",
             "frontend-modern/src/components/Settings/AISettings.tsx",
+            "frontend-modern/src/components/Settings/AISettingsStatusAndActions.tsx",
             "frontend-modern/src/components/Settings/AuditLogPanel.tsx",
             "frontend-modern/src/components/Settings/AuditWebhookPanel.tsx",
             "frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx",

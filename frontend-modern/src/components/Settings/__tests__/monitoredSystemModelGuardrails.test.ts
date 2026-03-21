@@ -38,9 +38,13 @@ import alertThresholdsSectionPresentationSource from '@/utils/alertThresholdsSec
 import loginSource from '@/components/Login.tsx?raw';
 import settingsSource from '../Settings.tsx?raw';
 import aiSettingsShellSource from '../AISettings.tsx?raw';
+import aiChatMaintenanceSectionSource from '../AIChatMaintenanceSection.tsx?raw';
 import aiProviderConfigurationSectionSource from '../AIProviderConfigurationSection.tsx?raw';
 import aiSettingsDialogsSource from '../AISettingsDialogs.tsx?raw';
+import aiModelSelectionSectionSource from '../AIModelSelectionSection.tsx?raw';
 import aiSettingsModelSource from '../aiSettingsModel.ts?raw';
+import aiRuntimeControlsSectionSource from '../AIRuntimeControlsSection.tsx?raw';
+import aiSettingsStatusAndActionsSource from '../AISettingsStatusAndActions.tsx?raw';
 import aiSettingsStateSource from '../useAISettingsState.ts?raw';
 import reportingPanelSource from '../ReportingPanel.tsx?raw';
 import reportingPanelModelSource from '../reportingPanelModel.ts?raw';
@@ -111,6 +115,10 @@ import workloadTypePresentationSource from '@/utils/workloadTypePresentation.ts?
 
 const aiSettingsSource = [
   aiSettingsShellSource,
+  aiModelSelectionSectionSource,
+  aiRuntimeControlsSectionSource,
+  aiChatMaintenanceSectionSource,
+  aiSettingsStatusAndActionsSource,
   aiProviderConfigurationSectionSource,
   aiSettingsDialogsSource,
   aiSettingsModelSource,
@@ -414,6 +422,10 @@ describe('monitored-system model guardrails', () => {
     expect(aiSettingsSource).toContain('getAICredentialsClearErrorMessage');
     expect(aiSettingsSource).toContain('getAISettingsToggleErrorMessage');
     expect(aiSettingsShellSource).toContain('@/components/Settings/useAISettingsState');
+    expect(aiSettingsShellSource).toContain('@/components/Settings/AIModelSelectionSection');
+    expect(aiSettingsShellSource).toContain('@/components/Settings/AIRuntimeControlsSection');
+    expect(aiSettingsShellSource).toContain('@/components/Settings/AIChatMaintenanceSection');
+    expect(aiSettingsShellSource).toContain('@/components/Settings/AISettingsStatusAndActions');
     expect(aiSettingsSource).not.toContain('Loading Pulse Assistant settings...');
     expect(aiSettingsSource).not.toContain('Loading chat sessions...');
     expect(aiSettingsSource).not.toContain('No chat sessions yet. Start a chat to create one.');
@@ -427,7 +439,11 @@ describe('monitored-system model guardrails', () => {
     expect(aiSettingsSource).not.toContain('const errorMessages: Record<string, string> =');
     expect(aiSettingsShellSource).not.toContain('const [loading, setLoading] = createSignal(false);');
     expect(aiSettingsShellSource).not.toContain('const handleSave = async (event?: Event) =>');
+    expect(aiSettingsShellSource).not.toContain('Chat Session Maintenance');
+    expect(aiSettingsShellSource).not.toContain('Discovery Settings');
+    expect(aiSettingsShellSource).not.toContain('Pulse Permission Level');
     expect(aiSettingsStateSource).toContain('export const useAISettingsState =');
+    expect(aiSettingsStateSource).toContain('export type AISettingsState =');
     expect(aiSettingsStateSource).toContain('const [loading, setLoading] = createSignal(false);');
     expect(aiSettingsStateSource).toContain('const handleSave = async (event?: Event) =>');
     expect(aiSettingsStateSource).toContain('const handleEnabledToggle = async (newValue: boolean) =>');

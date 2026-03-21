@@ -343,9 +343,13 @@ import runToolCallTraceSource from '@/components/patrol/RunToolCallTrace.tsx?raw
 import diagnosticsPanelSource from '@/components/Settings/DiagnosticsPanel.tsx?raw';
 import diagnosticsPresentationSource from '@/utils/diagnosticsPresentation.ts?raw';
 import aiSettingsShellSource from '@/components/Settings/AISettings.tsx?raw';
+import aiChatMaintenanceSectionSource from '@/components/Settings/AIChatMaintenanceSection.tsx?raw';
 import aiProviderConfigurationSectionSource from '@/components/Settings/AIProviderConfigurationSection.tsx?raw';
 import aiSettingsDialogsSource from '@/components/Settings/AISettingsDialogs.tsx?raw';
+import aiModelSelectionSectionSource from '@/components/Settings/AIModelSelectionSection.tsx?raw';
 import aiSettingsModelSource from '@/components/Settings/aiSettingsModel.ts?raw';
+import aiRuntimeControlsSectionSource from '@/components/Settings/AIRuntimeControlsSection.tsx?raw';
+import aiSettingsStatusAndActionsSource from '@/components/Settings/AISettingsStatusAndActions.tsx?raw';
 import aiSettingsStateSource from '@/components/Settings/useAISettingsState.ts?raw';
 import aiIntelligenceSource from '@/pages/AIIntelligence.tsx?raw';
 import patrolIntelligenceSurfaceSource from '@/features/patrol/PatrolIntelligenceSurface.tsx?raw';
@@ -371,6 +375,10 @@ import infrastructurePageStateSource from '@/features/infrastructure/useInfrastr
 
 const aiSettingsSource = [
   aiSettingsShellSource,
+  aiModelSelectionSectionSource,
+  aiRuntimeControlsSectionSource,
+  aiChatMaintenanceSectionSource,
+  aiSettingsStatusAndActionsSource,
   aiProviderConfigurationSectionSource,
   aiSettingsDialogsSource,
   aiSettingsModelSource,
@@ -2907,6 +2915,10 @@ describe('frontend resource type boundaries', () => {
     expect(aiSettingsSource).toContain('getAICredentialsClearErrorMessage');
     expect(aiSettingsSource).toContain('getAISettingsToggleErrorMessage');
     expect(aiSettingsShellSource).toContain('@/components/Settings/useAISettingsState');
+    expect(aiSettingsShellSource).toContain('@/components/Settings/AIModelSelectionSection');
+    expect(aiSettingsShellSource).toContain('@/components/Settings/AIRuntimeControlsSection');
+    expect(aiSettingsShellSource).toContain('@/components/Settings/AIChatMaintenanceSection');
+    expect(aiSettingsShellSource).toContain('@/components/Settings/AISettingsStatusAndActions');
     expect(aiSettingsSource).not.toContain('Loading Pulse Assistant settings...');
     expect(aiSettingsSource).not.toContain('Loading chat sessions...');
     expect(aiSettingsSource).not.toContain('No chat sessions yet. Start a chat to create one.');
@@ -2923,10 +2935,14 @@ describe('frontend resource type boundaries', () => {
     expect(aiSettingsSource).not.toContain("'Failed to update Pulse Assistant setting'");
     expect(aiSettingsShellSource).not.toContain('const [loading, setLoading] = createSignal(false);');
     expect(aiSettingsShellSource).not.toContain('const handleSave = async (event?: Event) =>');
+    expect(aiSettingsShellSource).not.toContain('Chat Session Maintenance');
+    expect(aiSettingsShellSource).not.toContain('Discovery Settings');
+    expect(aiSettingsShellSource).not.toContain('Pulse Permission Level');
     expect(aiSettingsSource).not.toContain(
       "providerTestResult()?.success ? 'text-green-600' : 'text-red-600'",
     );
     expect(aiSettingsStateSource).toContain('export const useAISettingsState =');
+    expect(aiSettingsStateSource).toContain('export type AISettingsState =');
     expect(aiSettingsStateSource).toContain('const [loading, setLoading] = createSignal(false);');
     expect(aiSettingsStateSource).toContain('const handleSave = async (event?: Event) =>');
     expect(aiSettingsStateSource).toContain('const handleEnabledToggle = async (newValue: boolean) =>');

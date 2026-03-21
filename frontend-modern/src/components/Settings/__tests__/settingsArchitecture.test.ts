@@ -32,9 +32,13 @@ import billingAdminPanelSource from '../BillingAdminPanel.tsx?raw';
 import billingAdminPanelStateSource from '../useBillingAdminPanelState.ts?raw';
 import generalSettingsPanelSource from '../GeneralSettingsPanel.tsx?raw';
 import aiSettingsPanelSource from '../AISettings.tsx?raw';
+import aiChatMaintenanceSectionSource from '../AIChatMaintenanceSection.tsx?raw';
 import aiProviderConfigurationSectionSource from '../AIProviderConfigurationSection.tsx?raw';
 import aiSettingsDialogsSource from '../AISettingsDialogs.tsx?raw';
+import aiModelSelectionSectionSource from '../AIModelSelectionSection.tsx?raw';
 import aiSettingsModelSource from '../aiSettingsModel.ts?raw';
+import aiRuntimeControlsSectionSource from '../AIRuntimeControlsSection.tsx?raw';
+import aiSettingsStatusAndActionsSource from '../AISettingsStatusAndActions.tsx?raw';
 import aiSettingsStateSource from '../useAISettingsState.ts?raw';
 import diagnosticsModelSource from '../diagnosticsModel.ts?raw';
 import diagnosticsPanelSource from '../DiagnosticsPanel.tsx?raw';
@@ -135,6 +139,10 @@ const extractedModules = [
   '../InfrastructureStopMonitoringDialog.tsx',
   '../AIProviderConfigurationSection.tsx',
   '../AISettingsDialogs.tsx',
+  '../AIChatMaintenanceSection.tsx',
+  '../AIModelSelectionSection.tsx',
+  '../AIRuntimeControlsSection.tsx',
+  '../AISettingsStatusAndActions.tsx',
   '../aiSettingsModel.ts',
   '../useAISettingsState.ts',
   '../diagnosticsModel.ts',
@@ -734,13 +742,26 @@ describe('Settings architecture guardrails', () => {
   });
 
   it('keeps AI settings sub-surfaces behind extracted runtime owners', () => {
-    expect(aiSettingsPanelSource).toContain('@/components/Settings/AIProviderConfigurationSection');
+    expect(aiSettingsPanelSource).toContain('@/components/Settings/AIModelSelectionSection');
+    expect(aiSettingsPanelSource).toContain('@/components/Settings/AIRuntimeControlsSection');
+    expect(aiSettingsPanelSource).toContain('@/components/Settings/AIChatMaintenanceSection');
+    expect(aiSettingsPanelSource).toContain('@/components/Settings/AISettingsStatusAndActions');
     expect(aiSettingsPanelSource).toContain('@/components/Settings/AISettingsDialogs');
-    expect(aiSettingsPanelSource).toContain('@/components/Settings/aiSettingsModel');
     expect(aiSettingsPanelSource).toContain('@/components/Settings/useAISettingsState');
     expect(aiSettingsPanelSource).not.toContain('const [loading, setLoading] = createSignal(false);');
     expect(aiSettingsPanelSource).not.toContain('const handleSave = async (event?: Event) =>');
     expect(aiSettingsPanelSource).not.toContain('AIAPI.getSettings()');
+    expect(aiSettingsPanelSource).not.toContain('Chat Session Maintenance');
+    expect(aiSettingsPanelSource).not.toContain('Discovery Settings');
+    expect(aiSettingsPanelSource).not.toContain('Pulse Permission Level');
+    expect(aiModelSelectionSectionSource).toContain('@/components/Settings/AIProviderConfigurationSection');
+    expect(aiModelSelectionSectionSource).toContain('@/components/Settings/aiSettingsModel');
+    expect(aiModelSelectionSectionSource).toContain('Advanced Model Selection');
+    expect(aiRuntimeControlsSectionSource).toContain('Discovery Settings');
+    expect(aiRuntimeControlsSectionSource).toContain('Pulse Permission Level');
+    expect(aiChatMaintenanceSectionSource).toContain('Chat Session Maintenance');
+    expect(aiSettingsStatusAndActionsSource).toContain('Save changes');
+    expect(aiSettingsStatusAndActionsSource).toContain('Test Connection');
     expect(aiProviderConfigurationSectionSource).toContain('@/components/Settings/aiSettingsModel');
     expect(aiSettingsDialogsSource).toContain('@/components/Settings/aiSettingsModel');
     expect(aiSettingsModelSource).toContain('export const AI_PROVIDER_CONFIGS');

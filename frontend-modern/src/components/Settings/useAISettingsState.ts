@@ -879,3 +879,5 @@ export const useAISettingsState = () => {
     upgradeAutofixUrl,
   };
 };
+
+export type AISettingsState = ReturnType<typeof useAISettingsState>;
