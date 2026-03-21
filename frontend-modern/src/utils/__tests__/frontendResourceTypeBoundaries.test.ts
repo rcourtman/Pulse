@@ -86,6 +86,7 @@ import dashboardFilterSource from '@/components/Dashboard/DashboardFilter.tsx?ra
 import dashboardWorkloadTableSource from '@/components/Dashboard/DashboardWorkloadTable.tsx?raw';
 import dashboardFilterModelSource from '@/components/Dashboard/dashboardFilterModel.ts?raw';
 import dashboardGuestMetadataStateSource from '@/components/Dashboard/useDashboardGuestMetadataState.ts?raw';
+import dashboardSelectionStateSource from '@/components/Dashboard/useDashboardSelectionState.ts?raw';
 import dashboardWorkloadRouteStateSource from '@/components/Dashboard/useDashboardWorkloadRouteState.ts?raw';
 import dashboardStateSource from '@/components/Dashboard/useDashboardState.ts?raw';
 import dashboardFilterStateSource from '@/components/Dashboard/useDashboardFilterState.ts?raw';
@@ -517,6 +518,7 @@ describe('frontend resource type boundaries', () => {
     expect(dashboardSource).toContain('DashboardWorkloadTable');
     expect(dashboardSource).not.toContain('const [search, setSearch] = createSignal(');
     expect(dashboardStateSource).toContain('useDashboardGuestMetadataState');
+    expect(dashboardStateSource).toContain('useDashboardSelectionState');
     expect(dashboardStateSource).toContain('useDashboardWorkloadRouteState');
     expect(dashboardWorkloadRouteStateSource).toContain('normalizeWorkloadViewModeParam');
     expect(dashboardSource).not.toContain('function normalizeViewModeParam');
@@ -532,7 +534,15 @@ describe('frontend resource type boundaries', () => {
     expect(dashboardGuestMetadataStateSource).toContain('GuestMetadataAPI.getAllMetadata()');
     expect(dashboardGuestMetadataStateSource).toContain("eventBus.on('org_switched'");
     expect(dashboardStateSource).not.toContain('buildWorkloadsPath({');
+    expect(dashboardStateSource).not.toContain('parseWorkloadsLinkSearch');
+    expect(dashboardStateSource).not.toContain('const [selectedGuestId, setSelectedGuestIdRaw]');
+    expect(dashboardStateSource).not.toContain('const [hoveredWorkloadId, setHoveredWorkloadId]');
     expect(dashboardWorkloadRouteStateSource).toContain('buildWorkloadsPath({');
+    expect(dashboardWorkloadRouteStateSource).toContain('setSelectedNode');
+    expect(dashboardSelectionStateSource).toContain('parseWorkloadsLinkSearch');
+    expect(dashboardSelectionStateSource).toContain('const [selectedGuestId, setSelectedGuestIdRaw]');
+    expect(dashboardSelectionStateSource).toContain('const [hoveredWorkloadId, setHoveredWorkloadId]');
+    expect(dashboardSelectionStateSource).toContain('setHandledResourceId(null)');
     expect(dashboardStateSource).not.toContain('const guestId = () => {');
     expect(dashboardFilterSource).toContain('useDashboardFilterState');
     expect(dashboardFilterSource).not.toContain('const [filtersOpen, setFiltersOpen] =');

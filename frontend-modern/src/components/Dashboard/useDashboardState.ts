@@ -1,5 +1,5 @@
 import { createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
-import { useLocation, useNavigate } from '@solidjs/router';
+import { useNavigate } from '@solidjs/router';
 import type { VM, Container, Node } from '@/types/api';
 import type { WorkloadGuest } from '@/types/workloads';
 import { GUEST_COLUMNS, VIEW_MODE_COLUMNS } from './guestRowModel';
@@ -24,7 +24,6 @@ import {
   getCanonicalWorkloadId,
 } from '@/utils/workloads';
 import { isSummaryTimeRange } from '@/components/shared/summaryTimeRange';
-import { parseWorkloadsLinkSearch } from '@/routing/resourceLinks';
 import {
   filterWorkloads,
   getDiskUsagePercent,
@@ -40,6 +39,7 @@ import {
 } from './workloadSelectors';
 import { useGroupedTableWindowing } from './useGroupedTableWindowing';
 import { useDashboardGuestMetadataState } from './useDashboardGuestMetadataState';
+import { useDashboardSelectionState } from './useDashboardSelectionState';
 import { useDashboardWorkloadRouteState } from './useDashboardWorkloadRouteState';
 import type { WorkloadSummarySnapshot } from '@/components/Workloads/WorkloadsSummary';
 
@@ -63,7 +63,6 @@ const workloadMetricPercent = (value: number | null | undefined): number => {
 };
 
 export function useDashboardState(props: DashboardProps) {
-  const location = useLocation();
   const navigate = useNavigate();
   const ws = useWebSocket();
   const { connected, activeAlerts, initialDataReceived, reconnecting, reconnect } = ws;
@@ -79,46 +78,6 @@ export function useDashboardState(props: DashboardProps) {
   const dashboardDisconnectedState = createMemo(() => getDashboardDisconnectedState(reconnecting()));
 
   const [isSearchLocked, setIsSearchLocked] = createSignal(false);
-  const [selectedGuestId, setSelectedGuestIdRaw] = createSignal<string | null>(null);
-  const [hoveredWorkloadId, setHoveredWorkloadId] = createSignal<string | null>(null);
-  const [handledResourceId, setHandledResourceId] = createSignal<string | null>(null);
-
-  let tableRef: HTMLDivElement | undefined;
-  const [tableBodyRef, setTableBodyRef] = createSignal<HTMLTableSectionElement | null>(null);
-  const setTableWrapperRef = (element: HTMLDivElement | undefined) => {
-    tableRef = element;
-  };
-
-  const setSelectedGuestId = (id: string | null) => {
-    let scroller: HTMLElement | null = tableRef ?? null;
-    while (scroller) {
-      const { overflowY } = getComputedStyle(scroller);
-      if (
-        (overflowY === 'auto' || overflowY === 'scroll') &&
-        scroller.scrollHeight > scroller.clientHeight
-      ) {
-        break;
-      }
-      scroller = scroller.parentElement;
-    }
-    const scrollTop = scroller?.scrollTop ?? 0;
-    setSelectedGuestIdRaw(id);
-    if (scroller) scroller.scrollTop = scrollTop;
-    requestAnimationFrame(() => {
-      if (scroller) scroller.scrollTop = scrollTop;
-    });
-  };
-
-  createEffect(() => {
-    const { resource: resourceId } = parseWorkloadsLinkSearch(location.search);
-    if (!resourceId || resourceId === handledResourceId()) return;
-    setSelectedGuestId(resourceId);
-    const [instance, node, vmid] = resourceId.split(':');
-    if (instance && node && vmid) {
-      setSelectedNode(`${instance}-${node}`);
-    }
-    setHandledResourceId(resourceId);
-  });
 
   const { guestMetadata, handleCustomUrlUpdate } = useDashboardGuestMetadataState();
 
@@ -326,6 +285,19 @@ export function useDashboardState(props: DashboardProps) {
     return filterWorkloads(params);
   });
 
+  const {
+    hoveredWorkloadId,
+    selectedGuestId,
+    setHoveredWorkloadId,
+    setSelectedGuestId,
+    setTableBodyRef,
+    setTableWrapperRef,
+    tableBodyRef,
+  } = useDashboardSelectionState({
+    filteredGuests,
+    setSelectedNode,
+  });
+
   const workloadsSummaryVisibleIds = createMemo<string[]>(() =>
     filteredGuests().map((guest) => getCanonicalWorkloadId(guest)),
   );
@@ -370,15 +342,6 @@ export function useDashboardState(props: DashboardProps) {
       };
     }),
   );
-
-  createEffect(() => {
-    const hoveredId = hoveredWorkloadId();
-    if (!hoveredId) return;
-    const exists = filteredGuests().some((guest) => getCanonicalWorkloadId(guest) === hoveredId);
-    if (!exists) {
-      setHoveredWorkloadId(null);
-    }
-  });
 
   const getGroupLabel = (
     groupKey: string,
