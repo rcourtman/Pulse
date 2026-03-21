@@ -2113,6 +2113,9 @@
       "contract": "docs/release-control/v6/internal/subsystems/organization-settings.md",
       "owned_prefixes": [],
       "owned_files": [
+        "frontend-modern/src/components/Settings/OrganizationAccessLoadingState.tsx",
+        "frontend-modern/src/components/Settings/OrganizationAccessManagementSection.tsx",
+        "frontend-modern/src/components/Settings/OrganizationAccessMembersSection.tsx",
         "frontend-modern/src/components/Settings/OrganizationAccessPanel.tsx",
         "frontend-modern/src/components/Settings/OrganizationIncomingSharesSection.tsx",
         "frontend-modern/src/components/Settings/OrganizationOutgoingSharesSection.tsx",
@@ -2123,6 +2126,7 @@
         "frontend-modern/src/components/Settings/RBACFeatureGateSection.tsx",
         "frontend-modern/src/components/Settings/RolesEditorDialog.tsx",
         "frontend-modern/src/components/Settings/RolesPanel.tsx",
+        "frontend-modern/src/components/Settings/useOrganizationAccessPanelState.ts",
         "frontend-modern/src/components/Settings/useOrganizationSharingPanelState.ts",
         "frontend-modern/src/components/Settings/UserAssignmentsDialog.tsx",
         "frontend-modern/src/components/Settings/UserAssignmentsPanel.tsx",
@@ -2139,6 +2143,7 @@
         "test_prefixes": [],
         "exact_files": [
           "frontend-modern/src/api/__tests__/orgs.test.ts",
+          "frontend-modern/src/components/Settings/__tests__/OrganizationAccessPanel.test.tsx",
           "frontend-modern/src/utils/__tests__/organizationSettingsPresentation.test.ts",
           "internal/models/organization_additional_test.go"
         ],
@@ -2165,6 +2170,9 @@
             "label": "organization settings surface proof",
             "match_prefixes": [],
             "match_files": [
+              "frontend-modern/src/components/Settings/OrganizationAccessLoadingState.tsx",
+              "frontend-modern/src/components/Settings/OrganizationAccessManagementSection.tsx",
+              "frontend-modern/src/components/Settings/OrganizationAccessMembersSection.tsx",
               "frontend-modern/src/components/Settings/OrganizationAccessPanel.tsx",
               "frontend-modern/src/components/Settings/OrganizationIncomingSharesSection.tsx",
               "frontend-modern/src/components/Settings/OrganizationOutgoingSharesSection.tsx",
@@ -2175,6 +2183,7 @@
               "frontend-modern/src/components/Settings/RBACFeatureGateSection.tsx",
               "frontend-modern/src/components/Settings/RolesEditorDialog.tsx",
               "frontend-modern/src/components/Settings/RolesPanel.tsx",
+              "frontend-modern/src/components/Settings/useOrganizationAccessPanelState.ts",
               "frontend-modern/src/components/Settings/useOrganizationSharingPanelState.ts",
               "frontend-modern/src/components/Settings/UserAssignmentsDialog.tsx",
               "frontend-modern/src/components/Settings/UserAssignmentsPanel.tsx",
@@ -2190,6 +2199,7 @@
             "exact_files": [
               "frontend-modern/src/api/__tests__/orgs.test.ts",
               "frontend-modern/src/components/Settings/__tests__/monitoredSystemModelGuardrails.test.ts",
+              "frontend-modern/src/components/Settings/__tests__/OrganizationAccessPanel.test.tsx",
               "frontend-modern/src/components/Settings/__tests__/OrganizationSharingPanel.test.tsx",
               "frontend-modern/src/components/Settings/__tests__/RBACPaywallPanels.test.tsx",
               "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",

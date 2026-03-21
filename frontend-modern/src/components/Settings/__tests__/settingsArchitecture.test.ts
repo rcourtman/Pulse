@@ -48,11 +48,15 @@ import selfHostedCommercialActivationSectionSource from '../SelfHostedCommercial
 import commercialBillingModelSource from '@/utils/commercialBillingModel.ts?raw';
 import organizationOverviewPanelSource from '../OrganizationOverviewPanel.tsx?raw';
 import organizationAccessPanelSource from '../OrganizationAccessPanel.tsx?raw';
+import organizationAccessLoadingStateSource from '../OrganizationAccessLoadingState.tsx?raw';
+import organizationAccessManagementSectionSource from '../OrganizationAccessManagementSection.tsx?raw';
+import organizationAccessMembersSectionSource from '../OrganizationAccessMembersSection.tsx?raw';
 import organizationSharingPanelSource from '../OrganizationSharingPanel.tsx?raw';
 import organizationSharingCreateSectionSource from '../OrganizationSharingCreateSection.tsx?raw';
 import organizationSharingLoadingStateSource from '../OrganizationSharingLoadingState.tsx?raw';
 import organizationOutgoingSharesSectionSource from '../OrganizationOutgoingSharesSection.tsx?raw';
 import organizationIncomingSharesSectionSource from '../OrganizationIncomingSharesSection.tsx?raw';
+import organizationAccessStateSource from '../useOrganizationAccessPanelState.ts?raw';
 import organizationSharingStateSource from '../useOrganizationSharingPanelState.ts?raw';
 import organizationBillingPanelSource from '../OrganizationBillingPanel.tsx?raw';
 import proxmoxDeleteNodeDialogSource from '../ProxmoxDeleteNodeDialog.tsx?raw';
@@ -119,10 +123,14 @@ const extractedModules = [
   '../UpdateInstallGuide.tsx',
   '../ReportingPanel.tsx',
   '../reportingPanelModel.ts',
+  '../OrganizationAccessLoadingState.tsx',
+  '../OrganizationAccessManagementSection.tsx',
+  '../OrganizationAccessMembersSection.tsx',
   '../OrganizationSharingCreateSection.tsx',
   '../OrganizationSharingLoadingState.tsx',
   '../OrganizationOutgoingSharesSection.tsx',
   '../OrganizationIncomingSharesSection.tsx',
+  '../useOrganizationAccessPanelState.ts',
   '../useOrganizationSharingPanelState.ts',
   '../RBACFeatureGateSection.tsx',
   '../RolesEditorDialog.tsx',
@@ -400,6 +408,30 @@ describe('Settings architecture guardrails', () => {
       'getOrganizationIncomingSharesEmptyState',
     );
     expect(organizationSharingLoadingStateSource).toContain('animate-pulse');
+  });
+
+  it('keeps organization access split into shell, state, and section owners', () => {
+    expect(organizationAccessPanelSource).toContain('./useOrganizationAccessPanelState');
+    expect(organizationAccessPanelSource).toContain('./OrganizationAccessLoadingState');
+    expect(organizationAccessPanelSource).toContain('./OrganizationAccessManagementSection');
+    expect(organizationAccessPanelSource).toContain('./OrganizationAccessMembersSection');
+    expect(organizationAccessPanelSource).not.toContain('const loadOrganizationAccess = async');
+    expect(organizationAccessPanelSource).not.toContain('const inviteMember = async');
+    expect(organizationAccessStateSource).toContain('OrgsAPI.updateMemberRole');
+    expect(organizationAccessStateSource).toContain('OrgsAPI.inviteMember');
+    expect(organizationAccessStateSource).toContain('OrgsAPI.removeMember');
+    expect(organizationAccessStateSource).toContain('normalizeOrgScope(getOrgID())');
+    expect(organizationAccessManagementSectionSource).toContain(
+      'getOrganizationAccessManageRequiredMessage',
+    );
+    expect(organizationAccessManagementSectionSource).toContain(
+      'ORGANIZATION_MEMBER_ROLE_OPTIONS',
+    );
+    expect(organizationAccessMembersSectionSource).toContain(
+      'getOrganizationAccessEmptyState',
+    );
+    expect(organizationAccessMembersSectionSource).toContain('formatOrgDate');
+    expect(organizationAccessLoadingStateSource).toContain('animate-pulse');
   });
 
   it('keeps RBAC settings panels split into gate, state, and dialog owners', () => {

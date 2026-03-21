@@ -70,12 +70,16 @@ import discoveryTargetUtilsSource from '@/utils/discoveryTarget.ts?raw';
 import mentionAutocompleteSource from '@/components/AI/Chat/MentionAutocomplete.tsx?raw';
 import commandPaletteSource from '@/components/shared/CommandPaletteModal.tsx?raw';
 import organizationAccessPanelSource from '../OrganizationAccessPanel.tsx?raw';
+import organizationAccessLoadingStateSource from '../OrganizationAccessLoadingState.tsx?raw';
+import organizationAccessManagementSectionSource from '../OrganizationAccessManagementSection.tsx?raw';
+import organizationAccessMembersSectionSource from '../OrganizationAccessMembersSection.tsx?raw';
 import organizationOverviewPanelSource from '../OrganizationOverviewPanel.tsx?raw';
 import organizationSharingPanelSource from '../OrganizationSharingPanel.tsx?raw';
 import organizationSharingCreateSectionSource from '../OrganizationSharingCreateSection.tsx?raw';
 import organizationSharingLoadingStateSource from '../OrganizationSharingLoadingState.tsx?raw';
 import organizationOutgoingSharesSectionSource from '../OrganizationOutgoingSharesSection.tsx?raw';
 import organizationIncomingSharesSectionSource from '../OrganizationIncomingSharesSection.tsx?raw';
+import organizationAccessStateSource from '../useOrganizationAccessPanelState.ts?raw';
 import organizationSharingStateSource from '../useOrganizationSharingPanelState.ts?raw';
 import canonicalResourceTypesSource from '@/utils/canonicalResourceTypes.ts?raw';
 import organizationRolePresentationSource from '@/utils/organizationRolePresentation.ts?raw';
@@ -602,20 +606,51 @@ describe('monitored-system model guardrails', () => {
   });
 
   it('keeps organization role vocabulary on shared utilities', () => {
-    expect(organizationAccessPanelSource).toContain('@/utils/organizationRolePresentation');
-    expect(organizationAccessPanelSource).toContain('@/utils/organizationSettingsPresentation');
+    expect(organizationAccessPanelSource).toContain('./useOrganizationAccessPanelState');
+    expect(organizationAccessPanelSource).toContain('./OrganizationAccessLoadingState');
+    expect(organizationAccessPanelSource).toContain('./OrganizationAccessManagementSection');
+    expect(organizationAccessPanelSource).toContain('./OrganizationAccessMembersSection');
     expect(organizationOverviewPanelSource).toContain('@/utils/organizationSettingsPresentation');
-    expect(organizationAccessPanelSource).toContain('ORGANIZATION_MEMBER_ROLE_OPTIONS');
+    expect(organizationAccessManagementSectionSource).toContain(
+      '@/utils/organizationRolePresentation',
+    );
+    expect(organizationAccessMembersSectionSource).toContain(
+      '@/utils/organizationRolePresentation',
+    );
+    expect(organizationAccessManagementSectionSource).toContain(
+      '@/utils/organizationSettingsPresentation',
+    );
+    expect(organizationAccessMembersSectionSource).toContain(
+      '@/utils/organizationSettingsPresentation',
+    );
+    expect(organizationAccessManagementSectionSource).toContain(
+      'ORGANIZATION_MEMBER_ROLE_OPTIONS',
+    );
+    expect(organizationAccessMembersSectionSource).toContain('ORGANIZATION_MEMBER_ROLE_OPTIONS');
+    expect(organizationAccessMembersSectionSource).toContain('roleBadgeClass');
+    expect(organizationAccessMembersSectionSource).toContain('formatOrgDate');
+    expect(organizationAccessMembersSectionSource).toContain('getOrganizationAccessEmptyState');
+    expect(organizationAccessLoadingStateSource).toContain('animate-pulse');
+    expect(organizationAccessStateSource).toContain('normalizeOrgScope(getOrgID())');
+    expect(organizationAccessStateSource).toContain('OrgsAPI.updateMemberRole');
+    expect(organizationAccessStateSource).toContain('OrgsAPI.inviteMember');
+    expect(organizationAccessStateSource).toContain('OrgsAPI.removeMember');
+    expect(organizationAccessStateSource).toContain('getOrganizationAccessRoleUpdatedMessage');
+    expect(organizationAccessStateSource).toContain('getOrganizationAccessMemberAddedMessage');
+    expect(organizationAccessStateSource).toContain('getOrganizationAccessMemberRemovedMessage');
     expect(organizationAccessPanelSource).not.toContain("{ value: 'viewer', label: 'Viewer' }");
-    expect(organizationAccessPanelSource).not.toContain(
+    expect(organizationAccessStateSource).not.toContain(
       "notificationStore.error('User ID is required')",
     );
-    expect(organizationAccessPanelSource).not.toContain(
+    expect(organizationAccessStateSource).not.toContain(
       "notificationStore.error(error instanceof Error ? error.message : 'Failed to add member')",
     );
-    expect(organizationAccessPanelSource).not.toContain(
+    expect(organizationAccessStateSource).not.toContain(
       "notificationStore.error(error instanceof Error ? error.message : 'Failed to remove member')",
     );
+    expect(organizationAccessStateSource).not.toContain("notificationStore.success(`Updated ");
+    expect(organizationAccessStateSource).not.toContain("notificationStore.success(`Added ");
+    expect(organizationAccessStateSource).not.toContain("notificationStore.success(`Removed ");
     expect(organizationOverviewPanelSource).not.toContain(
       "notificationStore.error('Display name is required')",
     );
@@ -661,7 +696,22 @@ describe('monitored-system model guardrails', () => {
       'export function normalizeOrganizationShareRole',
     );
     expect(organizationSettingsPresentationSource).toContain(
+      'export function getOrganizationAccessManageRequiredMessage',
+    );
+    expect(organizationSettingsPresentationSource).toContain(
+      'export function getOrganizationAccessRoleUpdatedMessage',
+    );
+    expect(organizationSettingsPresentationSource).toContain(
+      'export function getOrganizationAccessMemberAddedMessage',
+    );
+    expect(organizationSettingsPresentationSource).toContain(
+      'export function getOrganizationAccessMemberRemovedMessage',
+    );
+    expect(organizationSettingsPresentationSource).toContain(
       'export function getOrganizationMemberUserIdRequiredMessage',
+    );
+    expect(organizationSettingsPresentationSource).toContain(
+      'export function getOrganizationMemberRoleUpdateErrorMessage',
     );
     expect(organizationSettingsPresentationSource).toContain(
       'export function getOrganizationDisplayNameRequiredMessage',

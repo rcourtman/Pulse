@@ -1,3 +1,5 @@
+import type { OrganizationRole } from '@/api/orgs';
+
 export const ORGANIZATION_SETTINGS_UNAVAILABLE_MESSAGE = 'This feature is not available.';
 export const ORGANIZATION_SETTINGS_UNAVAILABLE_CLASS = 'p-4 text-sm text-slate-500';
 
@@ -53,8 +55,41 @@ export function getOrganizationMemberUserIdRequiredMessage(): string {
   return 'User ID is required';
 }
 
+export function getOrganizationAccessManageRequiredMessage(): string {
+  return 'Admin or owner role required to manage organization access.';
+}
+
+export function getOrganizationAccessRoleUpdatedMessage(
+  userId: string,
+  role: OrganizationRole,
+): string {
+  return `Updated ${userId} to ${role}`;
+}
+
+export function getOrganizationMemberRoleUpdateErrorMessage(message?: string): string {
+  return message || 'Failed to update member role';
+}
+
+export function getOrganizationAccessMemberAddedMessage(
+  userId: string,
+  role: OrganizationRole,
+): string {
+  return `Added ${userId} as ${role}`;
+}
+
 export function getOrganizationAddMemberErrorMessage(message?: string): string {
   return message || 'Failed to add member';
+}
+
+export function getOrganizationMemberRemoveConfirmMessage(
+  userId: string,
+  organizationName: string,
+): string {
+  return `Remove ${userId} from ${organizationName}?`;
+}
+
+export function getOrganizationAccessMemberRemovedMessage(userId: string): string {
+  return `Removed ${userId}`;
 }
 
 export function getOrganizationRemoveMemberErrorMessage(message?: string): string {

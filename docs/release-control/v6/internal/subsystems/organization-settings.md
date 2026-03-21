@@ -25,24 +25,28 @@ create cross-organization shares.
 
 1. `internal/models/organization.go`
 2. `frontend-modern/src/components/Settings/OrganizationAccessPanel.tsx`
-3. `frontend-modern/src/components/Settings/OrganizationOverviewPanel.tsx`
-4. `frontend-modern/src/components/Settings/OrganizationSharingPanel.tsx`
-5. `frontend-modern/src/components/Settings/OrganizationSharingCreateSection.tsx`
-6. `frontend-modern/src/components/Settings/OrganizationSharingLoadingState.tsx`
-7. `frontend-modern/src/components/Settings/OrganizationOutgoingSharesSection.tsx`
-8. `frontend-modern/src/components/Settings/OrganizationIncomingSharesSection.tsx`
-9. `frontend-modern/src/components/Settings/useOrganizationSharingPanelState.ts`
-10. `frontend-modern/src/components/Settings/RolesPanel.tsx`
-11. `frontend-modern/src/components/Settings/RBACFeatureGateSection.tsx`
-12. `frontend-modern/src/components/Settings/RolesEditorDialog.tsx`
-13. `frontend-modern/src/components/Settings/useRBACFeatureGateState.ts`
-14. `frontend-modern/src/components/Settings/useRolesPanelState.ts`
-15. `frontend-modern/src/components/Settings/UserAssignmentsPanel.tsx`
-16. `frontend-modern/src/components/Settings/UserAssignmentsDialog.tsx`
-17. `frontend-modern/src/components/Settings/useUserAssignmentsPanelState.ts`
-18. `frontend-modern/src/utils/orgUtils.ts`
-19. `frontend-modern/src/utils/organizationRolePresentation.ts`
-20. `frontend-modern/src/utils/organizationSettingsPresentation.ts`
+3. `frontend-modern/src/components/Settings/OrganizationAccessLoadingState.tsx`
+4. `frontend-modern/src/components/Settings/OrganizationAccessManagementSection.tsx`
+5. `frontend-modern/src/components/Settings/OrganizationAccessMembersSection.tsx`
+6. `frontend-modern/src/components/Settings/OrganizationOverviewPanel.tsx`
+7. `frontend-modern/src/components/Settings/OrganizationSharingPanel.tsx`
+8. `frontend-modern/src/components/Settings/OrganizationSharingCreateSection.tsx`
+9. `frontend-modern/src/components/Settings/OrganizationSharingLoadingState.tsx`
+10. `frontend-modern/src/components/Settings/OrganizationOutgoingSharesSection.tsx`
+11. `frontend-modern/src/components/Settings/OrganizationIncomingSharesSection.tsx`
+12. `frontend-modern/src/components/Settings/useOrganizationAccessPanelState.ts`
+13. `frontend-modern/src/components/Settings/useOrganizationSharingPanelState.ts`
+14. `frontend-modern/src/components/Settings/RolesPanel.tsx`
+15. `frontend-modern/src/components/Settings/RBACFeatureGateSection.tsx`
+16. `frontend-modern/src/components/Settings/RolesEditorDialog.tsx`
+17. `frontend-modern/src/components/Settings/useRBACFeatureGateState.ts`
+18. `frontend-modern/src/components/Settings/useRolesPanelState.ts`
+19. `frontend-modern/src/components/Settings/UserAssignmentsPanel.tsx`
+20. `frontend-modern/src/components/Settings/UserAssignmentsDialog.tsx`
+21. `frontend-modern/src/components/Settings/useUserAssignmentsPanelState.ts`
+22. `frontend-modern/src/utils/orgUtils.ts`
+23. `frontend-modern/src/utils/organizationRolePresentation.ts`
+24. `frontend-modern/src/utils/organizationSettingsPresentation.ts`
 
 ## Shared Boundaries
 
@@ -51,7 +55,7 @@ create cross-organization shares.
 ## Extension Points
 
 1. Add or change organization role and share semantics through `internal/models/organization.go`
-2. Add or change organization access, overview, sharing, RBAC feature-gating, role-management, or user-assignment presentation through `frontend-modern/src/components/Settings/OrganizationAccessPanel.tsx`, `frontend-modern/src/components/Settings/OrganizationOverviewPanel.tsx`, `frontend-modern/src/components/Settings/OrganizationSharingPanel.tsx`, `frontend-modern/src/components/Settings/OrganizationSharingCreateSection.tsx`, `frontend-modern/src/components/Settings/OrganizationSharingLoadingState.tsx`, `frontend-modern/src/components/Settings/OrganizationOutgoingSharesSection.tsx`, `frontend-modern/src/components/Settings/OrganizationIncomingSharesSection.tsx`, `frontend-modern/src/components/Settings/useOrganizationSharingPanelState.ts`, `frontend-modern/src/components/Settings/RBACFeatureGateSection.tsx`, `frontend-modern/src/components/Settings/RolesPanel.tsx`, `frontend-modern/src/components/Settings/RolesEditorDialog.tsx`, `frontend-modern/src/components/Settings/useRBACFeatureGateState.ts`, `frontend-modern/src/components/Settings/useRolesPanelState.ts`, `frontend-modern/src/components/Settings/UserAssignmentsPanel.tsx`, `frontend-modern/src/components/Settings/UserAssignmentsDialog.tsx`, and `frontend-modern/src/components/Settings/useUserAssignmentsPanelState.ts`
+2. Add or change organization access, overview, sharing, RBAC feature-gating, role-management, or user-assignment presentation through `frontend-modern/src/components/Settings/OrganizationAccessPanel.tsx`, `frontend-modern/src/components/Settings/OrganizationAccessLoadingState.tsx`, `frontend-modern/src/components/Settings/OrganizationAccessManagementSection.tsx`, `frontend-modern/src/components/Settings/OrganizationAccessMembersSection.tsx`, `frontend-modern/src/components/Settings/OrganizationOverviewPanel.tsx`, `frontend-modern/src/components/Settings/OrganizationSharingPanel.tsx`, `frontend-modern/src/components/Settings/OrganizationSharingCreateSection.tsx`, `frontend-modern/src/components/Settings/OrganizationSharingLoadingState.tsx`, `frontend-modern/src/components/Settings/OrganizationOutgoingSharesSection.tsx`, `frontend-modern/src/components/Settings/OrganizationIncomingSharesSection.tsx`, `frontend-modern/src/components/Settings/useOrganizationAccessPanelState.ts`, `frontend-modern/src/components/Settings/useOrganizationSharingPanelState.ts`, `frontend-modern/src/components/Settings/RBACFeatureGateSection.tsx`, `frontend-modern/src/components/Settings/RolesPanel.tsx`, `frontend-modern/src/components/Settings/RolesEditorDialog.tsx`, `frontend-modern/src/components/Settings/useRBACFeatureGateState.ts`, `frontend-modern/src/components/Settings/useRolesPanelState.ts`, `frontend-modern/src/components/Settings/UserAssignmentsPanel.tsx`, `frontend-modern/src/components/Settings/UserAssignmentsDialog.tsx`, and `frontend-modern/src/components/Settings/useUserAssignmentsPanelState.ts`
 3. Route organization transport changes through `frontend-modern/src/api/orgs.ts` and `frontend-modern/src/api/rbac.ts`
 4. Keep backend organization and RBAC handler changes aligned through `internal/api/org_handlers.go`, `internal/api/org_lifecycle_handlers.go`, and `internal/api/enterprise_extension_rbac_admin.go`
 
@@ -116,7 +120,12 @@ sharing views stay aligned with the shared multi-tenant org context contract.
 The organization sharing surface now also sources resource quick-pick labels
 from the shared preferred resource display helper, so governed resources do
 not fall back to raw names inside share creation.
-That sharing surface now also follows the extracted-owner pattern: the panel is
+The organization access surface now follows that extracted-owner pattern too:
+the panel is the shell, `useOrganizationAccessPanelState.ts` owns the
+membership runtime, and the loading, management, and members views each live
+in dedicated section owners instead of collapsing API lifecycle, permission
+gates, and table rendering into one file.
+The sharing surface now follows the same extracted-owner pattern: the panel is
 the shell, `useOrganizationSharingPanelState.ts` owns the API-backed runtime,
 and the loading, create, outgoing, and incoming views each live in dedicated
 section owners instead of staying collapsed into one file.

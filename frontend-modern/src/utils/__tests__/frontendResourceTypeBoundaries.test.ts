@@ -282,12 +282,16 @@ import agentProfilesPanelStateSource from '@/components/Settings/useAgentProfile
 import agentProfilesPresentationSource from '@/utils/agentProfilesPresentation.ts?raw';
 import agentProfileSuggestionPresentationSource from '@/utils/agentProfileSuggestionPresentation.ts?raw';
 import organizationAccessPanelSource from '@/components/Settings/OrganizationAccessPanel.tsx?raw';
+import organizationAccessLoadingStateSource from '@/components/Settings/OrganizationAccessLoadingState.tsx?raw';
+import organizationAccessManagementSectionSource from '@/components/Settings/OrganizationAccessManagementSection.tsx?raw';
+import organizationAccessMembersSectionSource from '@/components/Settings/OrganizationAccessMembersSection.tsx?raw';
 import billingAdminPanelSource from '@/components/Settings/BillingAdminPanel.tsx?raw';
 import organizationBillingPanelSource from '@/components/Settings/OrganizationBillingPanel.tsx?raw';
 import organizationOverviewPanelSource from '@/components/Settings/OrganizationOverviewPanel.tsx?raw';
 import organizationSharingCreateSectionSource from '@/components/Settings/OrganizationSharingCreateSection.tsx?raw';
 import organizationOutgoingSharesSectionSource from '@/components/Settings/OrganizationOutgoingSharesSection.tsx?raw';
 import organizationIncomingSharesSectionSource from '@/components/Settings/OrganizationIncomingSharesSection.tsx?raw';
+import organizationAccessStateSource from '@/components/Settings/useOrganizationAccessPanelState.ts?raw';
 import organizationSharingStateSource from '@/components/Settings/useOrganizationSharingPanelState.ts?raw';
 import organizationRolePresentationSource from '@/utils/organizationRolePresentation.ts?raw';
 import organizationSettingsPresentationSource from '@/utils/organizationSettingsPresentation.ts?raw';
@@ -834,8 +838,15 @@ describe('frontend resource type boundaries', () => {
     expect(upgradePresentationSource).toContain('export const UPGRADE_TRIAL_LABEL');
     expect(upgradePresentationSource).toContain('export const UPGRADE_TRIAL_LINK_CLASS');
     expect(upgradePresentationSource).toContain('export function getUpgradeActionButtonClass');
-    expect(organizationAccessPanelSource).toContain('@/utils/organizationRolePresentation');
-    expect(organizationAccessPanelSource).toContain('ORGANIZATION_MEMBER_ROLE_OPTIONS');
+    expect(organizationAccessManagementSectionSource).toContain(
+      '@/utils/organizationRolePresentation',
+    );
+    expect(organizationAccessMembersSectionSource).toContain(
+      '@/utils/organizationRolePresentation',
+    );
+    expect(organizationAccessManagementSectionSource).toContain(
+      'ORGANIZATION_MEMBER_ROLE_OPTIONS',
+    );
     expect(organizationAccessPanelSource).not.toContain(
       'const roleOptions: Array<{ value: OrganizationRole; label: string }> = [',
     );
@@ -856,11 +867,11 @@ describe('frontend resource type boundaries', () => {
     expect(organizationRolePresentationSource).toContain(
       'export function normalizeOrganizationShareRole',
     );
-    expect(organizationAccessPanelSource).toContain('normalizeOrgScope(getOrgID())');
+    expect(organizationAccessStateSource).toContain('normalizeOrgScope(getOrgID())');
     expect(organizationOverviewPanelSource).toContain('normalizeOrgScope(getOrgID())');
     expect(organizationSharingStateSource).toContain('normalizeOrgScope(getOrgID())');
     expect(organizationBillingPanelSource).toContain('normalizeOrgScope(getOrgID())');
-    expect(organizationAccessPanelSource).toContain('@/utils/organizationSettingsPresentation');
+    expect(organizationAccessStateSource).toContain('@/utils/organizationSettingsPresentation');
     expect(billingAdminPanelSource).toContain('@/utils/organizationSettingsPresentation');
     expect(billingAdminPanelSource).toContain('@/utils/licensePresentation');
     expect(organizationOverviewPanelSource).toContain('@/utils/organizationSettingsPresentation');
@@ -878,7 +889,8 @@ describe('frontend resource type boundaries', () => {
     expect(organizationSharingStateSource).not.toContain(
       'Failed to load organization sharing details',
     );
-    expect(organizationAccessPanelSource).toContain('getOrganizationAccessEmptyState');
+    expect(organizationAccessMembersSectionSource).toContain('getOrganizationAccessEmptyState');
+    expect(organizationAccessLoadingStateSource).toContain('animate-pulse');
     expect(organizationOverviewPanelSource).toContain('getOrganizationOverviewMembersEmptyState');
     expect(organizationOutgoingSharesSectionSource).toContain(
       'getOrganizationOutgoingSharesEmptyState',
@@ -890,7 +902,7 @@ describe('frontend resource type boundaries', () => {
       'getOrganizationShareTargetOrgRequiredMessage',
     );
     expect(organizationSharingStateSource).toContain('getOrganizationShareCreateSuccessMessage');
-    expect(organizationAccessPanelSource).not.toContain('No organization members found.');
+    expect(organizationAccessMembersSectionSource).not.toContain('No organization members found.');
     expect(organizationOverviewPanelSource).not.toContain('No members found.');
     expect(organizationOutgoingSharesSectionSource).not.toContain('No outgoing shares configured.');
     expect(organizationIncomingSharesSectionSource).not.toContain(
@@ -925,6 +937,12 @@ describe('frontend resource type boundaries', () => {
     );
     expect(organizationSettingsPresentationSource).toContain(
       'export function getOrganizationAccessEmptyState',
+    );
+    expect(organizationSettingsPresentationSource).toContain(
+      'export function getOrganizationAccessManageRequiredMessage',
+    );
+    expect(organizationSettingsPresentationSource).toContain(
+      'export function getOrganizationAccessRoleUpdatedMessage',
     );
     expect(organizationSettingsPresentationSource).toContain(
       'export function getOrganizationOverviewMembersEmptyState',

@@ -1,10 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import {
   getOrganizationAccessEmptyState,
+  getOrganizationAccessManageRequiredMessage,
+  getOrganizationAccessMemberAddedMessage,
+  getOrganizationAccessMemberRemovedMessage,
+  getOrganizationAccessRoleUpdatedMessage,
   getOrganizationAddMemberErrorMessage,
   getOrganizationDisplayNameRequiredMessage,
   getOrganizationDisplayNameUpdateErrorMessage,
   getOrganizationIncomingSharesEmptyState,
+  getOrganizationMemberRemoveConfirmMessage,
+  getOrganizationMemberRoleUpdateErrorMessage,
   getOrganizationMemberUserIdRequiredMessage,
   getOrganizationOwnerRoleLockedMessage,
   getOrganizationOutgoingSharesEmptyState,
@@ -74,8 +80,23 @@ describe('organizationSettingsPresentation', () => {
       'Current owner can only remain owner. Transfer ownership instead.',
     );
     expect(getOrganizationMemberUserIdRequiredMessage()).toBe('User ID is required');
+    expect(getOrganizationAccessManageRequiredMessage()).toBe(
+      'Admin or owner role required to manage organization access.',
+    );
+    expect(getOrganizationAccessRoleUpdatedMessage('alice', 'admin')).toBe(
+      'Updated alice to admin',
+    );
+    expect(getOrganizationMemberRoleUpdateErrorMessage()).toBe('Failed to update member role');
+    expect(getOrganizationMemberRoleUpdateErrorMessage('conflict')).toBe('conflict');
+    expect(getOrganizationAccessMemberAddedMessage('alice', 'viewer')).toBe(
+      'Added alice as viewer',
+    );
     expect(getOrganizationAddMemberErrorMessage()).toBe('Failed to add member');
     expect(getOrganizationAddMemberErrorMessage('duplicate')).toBe('duplicate');
+    expect(getOrganizationMemberRemoveConfirmMessage('alice', 'Pulse Org')).toBe(
+      'Remove alice from Pulse Org?',
+    );
+    expect(getOrganizationAccessMemberRemovedMessage('alice')).toBe('Removed alice');
     expect(getOrganizationRemoveMemberErrorMessage()).toBe('Failed to remove member');
     expect(getOrganizationRemoveMemberErrorMessage('forbidden')).toBe('forbidden');
   });
