@@ -29,6 +29,7 @@ import infrastructureConfiguredNodesStateSource from '../useInfrastructureConfig
 import infrastructureDiscoveryRuntimeStateSource from '../useInfrastructureDiscoveryRuntimeState.ts?raw';
 import settingsInfrastructurePanelPropsSource from '../useSettingsInfrastructurePanelProps.ts?raw';
 import nodeModalStateSource from '../useNodeModalState.ts?raw';
+import settingsPanelRegistryContextSource from '../settingsPanelRegistryContext.tsx?raw';
 import settingsPanelRegistryHookSource from '../useSettingsPanelRegistry.tsx?raw';
 import settingsSystemPanelsSource from '../useSettingsSystemPanels.tsx?raw';
 import apiAccessPanelSource from '../APIAccessPanel.tsx?raw';
@@ -138,6 +139,7 @@ const extractedModules = [
   '../useInfrastructureConfiguredNodesState.ts',
   '../useInfrastructureDiscoveryRuntimeState.ts',
   '../useSettingsInfrastructurePanelProps.ts',
+  '../settingsPanelRegistryContext.tsx',
   '../apiTokenManagerModel.ts',
   '../useAPITokenManagerState.ts',
   '../useAuditLogPanelState.ts',
@@ -380,6 +382,7 @@ describe('Settings architecture guardrails', () => {
     expect(accessHookSource).toContain('shouldHideSettingsNavItem');
     expect(accessHookSource).toContain('tabFeatureRequirements');
     expect(panelRegistryHookSource).toContain('createSettingsPanelRegistry');
+    expect(panelRegistryHookSource).toContain('buildSettingsPanelRegistryContext');
     expect(shellHookSource).toContain('SETTINGS_HEADER_META');
     expect(settingsSource).toContain('useSettingsPanelRegistry');
     expect(settingsSource).toContain('useSettingsAccess');
@@ -411,19 +414,22 @@ describe('Settings architecture guardrails', () => {
     expect(settingsSystemPanelsSource).toContain('allowedOrigins:');
     expect(settingsSystemPanelsSource).toContain('backupPollingEnabled:');
     expect(settingsSystemPanelsSource).toContain('handleDiscoveryEnabledChange:');
-    expect(settingsPanelRegistryHookSource).toContain('systemPanels: SettingsSystemPanels');
-    expect(settingsPanelRegistryHookSource).toContain(
+    expect(settingsPanelRegistryHookSource).toContain('buildSettingsPanelRegistryContext');
+    expect(settingsPanelRegistryContextSource).toContain('systemPanels: SettingsSystemPanels');
+    expect(settingsPanelRegistryContextSource).toContain(
       'systemGeneralPanel: params.systemPanels.systemGeneralPanel',
     );
-    expect(settingsPanelRegistryHookSource).toContain(
+    expect(settingsPanelRegistryContextSource).toContain(
       'getNetworkPanelProps: params.systemPanels.getNetworkPanelProps',
     );
-    expect(settingsPanelRegistryHookSource).toContain(
+    expect(settingsPanelRegistryContextSource).toContain(
       'getUpdatesPanelProps: params.systemPanels.getUpdatesPanelProps',
     );
-    expect(settingsPanelRegistryHookSource).toContain(
+    expect(settingsPanelRegistryContextSource).toContain(
       'getRecoveryPanelProps: params.systemPanels.getRecoveryPanelProps',
     );
+    expect(settingsPanelRegistryContextSource).toContain('const systemAiPanel: Component');
+    expect(settingsPanelRegistryContextSource).toContain('const securitySsoPanel: Component');
     expect(settingsPanelRegistryHookSource).not.toContain('pvePollingInterval: params.');
     expect(settingsPanelRegistryHookSource).not.toContain('allowedOrigins: params.');
     expect(settingsPanelRegistryHookSource).not.toContain('backupPollingEnabled: params.');

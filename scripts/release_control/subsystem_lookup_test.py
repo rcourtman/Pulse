@@ -1910,6 +1910,7 @@ class SubsystemLookupTest(unittest.TestCase):
             "frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx",
             "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx",
             "frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx",
+            "frontend-modern/src/components/Settings/settingsPanelRegistryContext.tsx",
             "frontend-modern/src/components/Settings/useDiscoverySettingsState.ts",
             "frontend-modern/src/components/Settings/useSettingsInfrastructurePanelProps.ts",
             "frontend-modern/src/components/Settings/useSettingsPanelRegistry.tsx",

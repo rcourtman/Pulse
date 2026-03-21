@@ -29,6 +29,7 @@ import diagnosticsResultsPanelSource from '@/components/Settings/DiagnosticsResu
 import diagnosticsStateSource from '@/components/Settings/useDiagnosticsPanelState.ts?raw';
 import settingsShellSource from '@/components/Settings/Settings.tsx?raw';
 import settingsPanelRegistrySource from '@/components/Settings/useSettingsPanelRegistry.tsx?raw';
+import settingsPanelRegistryContextSource from '@/components/Settings/settingsPanelRegistryContext.tsx?raw';
 import settingsSystemPanelsSource from '@/components/Settings/useSettingsSystemPanels.tsx?raw';
 import settingsInfrastructurePanelPropsSource from '@/components/Settings/useSettingsInfrastructurePanelProps.ts?raw';
 import discoverySettingsStateSource from '@/components/Settings/useDiscoverySettingsState.ts?raw';
@@ -858,11 +859,14 @@ describe('frontend resource type boundaries', () => {
     expect(settingsShellSource).toContain(
       'const settingsPanelRegistry = useSettingsPanelRegistry({',
     );
+    expect(settingsPanelRegistrySource).toContain('buildSettingsPanelRegistryContext');
     expect(settingsShellSource).not.toContain('getInfrastructurePanelProps: () => ({');
-    expect(settingsPanelRegistrySource).toContain('systemPanels: SettingsSystemPanels');
-    expect(settingsPanelRegistrySource).toContain(
+    expect(settingsPanelRegistryContextSource).toContain('systemPanels: SettingsSystemPanels');
+    expect(settingsPanelRegistryContextSource).toContain(
       'getNetworkPanelProps: params.systemPanels.getNetworkPanelProps',
     );
+    expect(settingsPanelRegistryContextSource).toContain('const systemBillingPanel: Component');
+    expect(settingsPanelRegistryContextSource).toContain('getSecurityAuthPanelProps');
     expect(settingsPanelRegistrySource).not.toContain('allowedOrigins: params.');
     expect(settingsPanelRegistrySource).not.toContain('backupPollingEnabled: params.');
     expect(settingsSystemPanelsSource).toContain('GeneralSettingsPanel');
