@@ -30,6 +30,7 @@ import diagnosticsStateSource from '@/components/Settings/useDiagnosticsPanelSta
 import settingsShellSource from '@/components/Settings/Settings.tsx?raw';
 import settingsPanelRegistrySource from '@/components/Settings/useSettingsPanelRegistry.tsx?raw';
 import settingsSystemPanelsSource from '@/components/Settings/useSettingsSystemPanels.tsx?raw';
+import settingsInfrastructurePanelPropsSource from '@/components/Settings/useSettingsInfrastructurePanelProps.ts?raw';
 import discoverySettingsStateSource from '@/components/Settings/useDiscoverySettingsState.ts?raw';
 import networkBoundarySettingsSectionSource from '@/components/Settings/NetworkBoundarySettingsSection.tsx?raw';
 import networkDiscoverySectionSource from '@/components/Settings/NetworkDiscoverySection.tsx?raw';
@@ -846,13 +847,18 @@ describe('frontend resource type boundaries', () => {
     expect(networkSettingsModelSource).toContain('export type NetworkDiscoverySectionProps');
     expect(networkSettingsModelSource).toContain('export type NetworkBoundarySettingsSectionProps');
     expect(settingsShellSource).toContain('./useDiscoverySettingsState');
+    expect(settingsShellSource).toContain('./useSettingsInfrastructurePanelProps');
     expect(settingsShellSource).toContain('./useSettingsPanelRegistry');
     expect(settingsShellSource).toContain('./useSettingsSystemPanels');
     expect(settingsShellSource).toContain('const discoverySettings = useDiscoverySettingsState()');
     expect(settingsShellSource).toContain('const systemPanels = useSettingsSystemPanels({');
     expect(settingsShellSource).toContain(
+      'const infrastructurePanelProps = useSettingsInfrastructurePanelProps({',
+    );
+    expect(settingsShellSource).toContain(
       'const settingsPanelRegistry = useSettingsPanelRegistry({',
     );
+    expect(settingsShellSource).not.toContain('getInfrastructurePanelProps: () => ({');
     expect(settingsPanelRegistrySource).toContain('systemPanels: SettingsSystemPanels');
     expect(settingsPanelRegistrySource).toContain(
       'getNetworkPanelProps: params.systemPanels.getNetworkPanelProps',
@@ -863,6 +869,10 @@ describe('frontend resource type boundaries', () => {
     expect(settingsSystemPanelsSource).toContain('getSettingsConfigurationLoadingState');
     expect(settingsSystemPanelsSource).toContain('allowedOrigins:');
     expect(settingsSystemPanelsSource).toContain('backupPollingEnabled:');
+    expect(settingsInfrastructurePanelPropsSource).toContain('pbsInstanceFromResource');
+    expect(settingsInfrastructurePanelPropsSource).toContain('pmgInstanceFromResource');
+    expect(settingsInfrastructurePanelPropsSource).toContain('const agentStateResources = createMemo');
+    expect(settingsInfrastructurePanelPropsSource).toContain('getInfrastructurePanelProps');
     expect(discoverySettingsStateSource).toContain('export function useDiscoverySettingsState');
     expect(discoverySettingsStateSource).toContain('normalizeSubnetList');
     expect(discoverySettingsStateSource).toContain('isValidCIDR');

@@ -1878,6 +1878,7 @@
         "frontend-modern/src/components/Settings/useDiagnosticsPanelState.ts",
         "frontend-modern/src/components/Settings/useDiscoverySettingsState.ts",
         "frontend-modern/src/components/Settings/useReportingPanelState.ts",
+        "frontend-modern/src/components/Settings/useSettingsInfrastructurePanelProps.ts",
         "frontend-modern/src/components/Settings/useSettingsPanelRegistry.tsx",
         "frontend-modern/src/components/Settings/useSettingsSystemPanels.tsx",
         "frontend-modern/src/components/Settings/useSSOProvidersState.ts",
@@ -1960,6 +1961,7 @@
               "frontend-modern/src/components/Settings/useAuditWebhookPanelState.ts",
               "frontend-modern/src/components/Settings/useDiagnosticsPanelState.ts",
               "frontend-modern/src/components/Settings/useDiscoverySettingsState.ts",
+              "frontend-modern/src/components/Settings/useSettingsInfrastructurePanelProps.ts",
               "frontend-modern/src/components/Settings/useSettingsPanelRegistry.tsx",
               "frontend-modern/src/components/Settings/useSettingsSystemPanels.tsx",
               "frontend-modern/src/components/Settings/useSSOProvidersState.ts"

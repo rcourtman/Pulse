@@ -27,6 +27,7 @@ import infrastructureSettingsStateSource from '../useInfrastructureSettingsState
 import infrastructureSettingsModelSource from '../infrastructureSettingsModel.ts?raw';
 import infrastructureConfiguredNodesStateSource from '../useInfrastructureConfiguredNodesState.ts?raw';
 import infrastructureDiscoveryRuntimeStateSource from '../useInfrastructureDiscoveryRuntimeState.ts?raw';
+import settingsInfrastructurePanelPropsSource from '../useSettingsInfrastructurePanelProps.ts?raw';
 import nodeModalStateSource from '../useNodeModalState.ts?raw';
 import settingsPanelRegistryHookSource from '../useSettingsPanelRegistry.tsx?raw';
 import settingsSystemPanelsSource from '../useSettingsSystemPanels.tsx?raw';
@@ -136,6 +137,7 @@ const extractedModules = [
   '../infrastructureSettingsModel.ts',
   '../useInfrastructureConfiguredNodesState.ts',
   '../useInfrastructureDiscoveryRuntimeState.ts',
+  '../useSettingsInfrastructurePanelProps.ts',
   '../apiTokenManagerModel.ts',
   '../useAPITokenManagerState.ts',
   '../useAuditLogPanelState.ts',
@@ -239,6 +241,7 @@ const requiredImportSources = [
   './useBackupTransferFlow',
   './useDiscoverySettingsState',
   './useInfrastructureSettingsState',
+  './useSettingsInfrastructurePanelProps',
   './useSettingsAccess',
   './useSettingsPanelRegistry',
   './useSettingsShellState',
@@ -390,10 +393,15 @@ describe('Settings architecture guardrails', () => {
 
   it('keeps settings shell panel assembly split between dedicated system and registry owners', () => {
     expect(settingsSource).toContain('useSettingsSystemPanels');
+    expect(settingsSource).toContain('useSettingsInfrastructurePanelProps');
     expect(settingsSource).toContain('const systemPanels = useSettingsSystemPanels({');
+    expect(settingsSource).toContain(
+      'const infrastructurePanelProps = useSettingsInfrastructurePanelProps({',
+    );
     expect(settingsSource).toContain('const settingsPanelRegistry = useSettingsPanelRegistry({');
     expect(settingsSource).toContain('systemPanels,');
     expect(settingsSource).toContain('const discoverySettings = useDiscoverySettingsState()');
+    expect(settingsSource).not.toContain('getInfrastructurePanelProps: () => ({');
     expect(settingsSystemPanelsSource).toContain('GeneralSettingsPanel');
     expect(settingsSystemPanelsSource).toContain('getSettingsConfigurationLoadingState');
     expect(settingsSystemPanelsSource).toContain('getNetworkPanelProps');
@@ -419,6 +427,10 @@ describe('Settings architecture guardrails', () => {
     expect(settingsPanelRegistryHookSource).not.toContain('pvePollingInterval: params.');
     expect(settingsPanelRegistryHookSource).not.toContain('allowedOrigins: params.');
     expect(settingsPanelRegistryHookSource).not.toContain('backupPollingEnabled: params.');
+    expect(settingsInfrastructurePanelPropsSource).toContain('pbsInstanceFromResource');
+    expect(settingsInfrastructurePanelPropsSource).toContain('pmgInstanceFromResource');
+    expect(settingsInfrastructurePanelPropsSource).toContain('const agentStateResources = createMemo');
+    expect(settingsInfrastructurePanelPropsSource).toContain('getInfrastructurePanelProps');
   });
 
   it('keeps commercial plan and usage sections on a shared billing owner', () => {

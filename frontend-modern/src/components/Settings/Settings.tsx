@@ -10,6 +10,7 @@ import { useBackupTransferFlow } from './useBackupTransferFlow';
 import { useDiscoverySettingsState } from './useDiscoverySettingsState';
 import { useInfrastructureSettingsState } from './useInfrastructureSettingsState';
 import { useSettingsAccess } from './useSettingsAccess';
+import { useSettingsInfrastructurePanelProps } from './useSettingsInfrastructurePanelProps';
 import { useSettingsPanelRegistry } from './useSettingsPanelRegistry';
 import { useSettingsShellState } from './useSettingsShellState';
 import { useSettingsSystemPanels } from './useSettingsSystemPanels';
@@ -18,7 +19,6 @@ import { useSettingsNavigation } from './useSettingsNavigation';
 import { getSettingsLoadingState } from '@/utils/settingsShellPresentation';
 
 import { getLimit, isPro, loadLicenseStatus } from '@/stores/license';
-import { pbsInstanceFromResource, pmgInstanceFromResource } from '@/utils/resourceStateAdapters';
 
 interface SettingsProps {
   darkMode: () => boolean;
@@ -46,18 +46,6 @@ const Settings: Component<SettingsProps> = (props) => {
     searchQuery,
     setSearchQuery,
   } = useSettingsShellState({ activeTab });
-  const pbsInstancesFromResources = createMemo(() =>
-    (state.resources || [])
-      .filter((resource) => resource.type === 'pbs')
-      .map(pbsInstanceFromResource)
-      .filter((instance): instance is NonNullable<typeof instance> => Boolean(instance)),
-  );
-  const pmgInstancesFromResources = createMemo(() =>
-    (state.resources || [])
-      .filter((resource) => resource.type === 'pmg')
-      .map(pmgInstanceFromResource)
-      .filter((instance): instance is NonNullable<typeof instance> => Boolean(instance)),
-  );
   const organizationMonitoredSystemUsage = createMemo(
     () => getLimit('max_monitored_systems')?.current ?? 0,
   );
@@ -121,6 +109,15 @@ const Settings: Component<SettingsProps> = (props) => {
     backupTransferFlow,
     securityStatus,
   });
+  const infrastructurePanelProps = useSettingsInfrastructurePanelProps({
+    selectedAgent,
+    onSelectAgent: handleSelectAgent,
+    resources: () => state.resources ?? [],
+    discoverySettings,
+    systemSettings,
+    infrastructureSettings,
+    securityStatus,
+  });
 
   const activeTabSaveBehavior = createMemo(() => getSettingsTabSaveBehavior(activeTab()));
   const settingsPanelRegistry = useSettingsPanelRegistry({
@@ -141,60 +138,7 @@ const Settings: Component<SettingsProps> = (props) => {
     handleHideLocalLoginChange: systemSettings.handleHideLocalLoginChange,
     versionInfo: systemSettings.versionInfo,
     systemPanels,
-    getInfrastructurePanelProps: () => ({
-      selectedAgent,
-      onSelectAgent: handleSelectAgent,
-      initialLoadComplete: infrastructureSettings.initialLoadComplete,
-      discoveryEnabled: discoverySettings.discoveryEnabled,
-      discoveryMode: discoverySettings.discoveryMode,
-      discoveryScanStatus: infrastructureSettings.discoveryScanStatus,
-      discoveredNodes: infrastructureSettings.discoveredNodes,
-      savingDiscoverySettings: discoverySettings.savingDiscoverySettings,
-      envOverrides: systemSettings.envOverrides,
-      agentStateResources: () =>
-        (state.resources ?? []).filter((resource) => resource.type === 'agent'),
-      pbsInstances: pbsInstancesFromResources,
-      pmgInstances: pmgInstancesFromResources,
-      pveNodes: infrastructureSettings.pveNodes,
-      pbsNodes: infrastructureSettings.pbsNodes,
-      pmgNodes: infrastructureSettings.pmgNodes,
-      temperatureMonitoringEnabled: systemSettings.temperatureMonitoringEnabled,
-      triggerDiscoveryScan: infrastructureSettings.triggerDiscoveryScan,
-      loadDiscoveredNodes: infrastructureSettings.loadDiscoveredNodes,
-      handleDiscoveryEnabledChange: infrastructureSettings.handleDiscoveryEnabledChange,
-      testNodeConnection: infrastructureSettings.testNodeConnection,
-      requestDeleteNode: infrastructureSettings.requestDeleteNode,
-      refreshClusterNodes: infrastructureSettings.refreshClusterNodes,
-      setShowNodeModal: infrastructureSettings.setShowNodeModal,
-      editingNode: infrastructureSettings.editingNode,
-      setEditingNode: infrastructureSettings.setEditingNode,
-      setCurrentNodeType: infrastructureSettings.setCurrentNodeType,
-      modalResetKey: infrastructureSettings.modalResetKey,
-      setModalResetKey: infrastructureSettings.setModalResetKey,
-      isNodeModalVisible: infrastructureSettings.isNodeModalVisible,
-      securityStatus,
-      resolveTemperatureMonitoringEnabled:
-        infrastructureSettings.resolveTemperatureMonitoringEnabled,
-      temperatureMonitoringLocked: systemSettings.temperatureMonitoringLocked,
-      savingTemperatureSetting: systemSettings.savingTemperatureSetting,
-      handleTemperatureMonitoringChange: systemSettings.handleTemperatureMonitoringChange,
-      handleNodeTemperatureMonitoringChange:
-        infrastructureSettings.handleNodeTemperatureMonitoringChange,
-      saveNode: infrastructureSettings.saveNode,
-      showDeleteNodeModal: infrastructureSettings.showDeleteNodeModal,
-      cancelDeleteNode: infrastructureSettings.cancelDeleteNode,
-      deleteNode: infrastructureSettings.deleteNode,
-      deleteNodeLoading: infrastructureSettings.deleteNodeLoading,
-      nodePendingDeleteLabel: infrastructureSettings.nodePendingDeleteLabel,
-      nodePendingDeleteHost: infrastructureSettings.nodePendingDeleteHost,
-      nodePendingDeleteType: infrastructureSettings.nodePendingDeleteType,
-      nodePendingDeleteTypeLabel: infrastructureSettings.nodePendingDeleteTypeLabel,
-      disableDockerUpdateActions: systemSettings.disableDockerUpdateActions,
-      disableDockerUpdateActionsLocked: systemSettings.disableDockerUpdateActionsLocked,
-      savingDockerUpdateActions: systemSettings.savingDockerUpdateActions,
-      handleDisableDockerUpdateActionsChange:
-        systemSettings.handleDisableDockerUpdateActionsChange,
-    }),
+    getInfrastructurePanelProps: infrastructurePanelProps.getInfrastructurePanelProps,
   });
   const activeSettingsPanelEntry = createMemo(() => {
     const currentTab = activeTab();
