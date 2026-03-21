@@ -4,7 +4,10 @@ import { createSignal, onCleanup, onMount } from 'solid-js';
 import type { Resource } from '@/types/resource';
 import { Dashboard } from '../Dashboard';
 import dashboardSource from '../Dashboard.tsx?raw';
+import dashboardStateCardsSource from '../DashboardStateCards.tsx?raw';
+import dashboardStatsStripSource from '../DashboardStatsStrip.tsx?raw';
 import dashboardFilterSource from '../DashboardFilter.tsx?raw';
+import dashboardWorkloadTableSource from '../DashboardWorkloadTable.tsx?raw';
 import dashboardFilterModelSource from '../dashboardFilterModel.ts?raw';
 import dashboardGuestMetadataStateSource from '../useDashboardGuestMetadataState.ts?raw';
 import dashboardWorkloadRouteStateSource from '../useDashboardWorkloadRouteState.ts?raw';
@@ -491,6 +494,9 @@ describe('Dashboard performance contract', () => {
 
     it('keeps hot-path dashboard state in the shared dashboard state owner', () => {
       expect(dashboardSource).toContain('useDashboardState');
+      expect(dashboardSource).toContain('DashboardStateCards');
+      expect(dashboardSource).toContain('DashboardStatsStrip');
+      expect(dashboardSource).toContain('DashboardWorkloadTable');
       expect(dashboardSource).not.toContain('const [search, setSearch] = createSignal(');
       expect(dashboardStateSource).toContain('useDashboardGuestMetadataState');
       expect(dashboardStateSource).toContain('useDashboardWorkloadRouteState');
@@ -514,7 +520,10 @@ describe('Dashboard performance contract', () => {
       expect(dashboardStateSource).not.toContain('const DEFAULT_WINDOW_SIZE =');
       expect(dashboardStateSource).not.toContain('const DEFAULT_ENABLE_THRESHOLD =');
       expect(dashboardStateSource).not.toContain('const DEFAULT_OVERSCAN_ROWS =');
-      expect(dashboardSource).toContain('createMemo(() => getCanonicalWorkloadId(guest()))');
+      expect(dashboardSource).not.toContain('createMemo(() => getCanonicalWorkloadId(guest()))');
+      expect(dashboardWorkloadTableSource).toContain(
+        'createMemo(() => getCanonicalWorkloadId(guest()))',
+      );
       expect(dashboardStateSource).not.toContain('const guestId = () => {');
     });
 
@@ -638,6 +647,21 @@ describe('Dashboard performance contract', () => {
       expect(guestDrawerOverviewSource).toContain('WebInterfaceUrlField');
       expect(guestDrawerOverviewSource).toContain('DiskList');
       expect(guestDrawerOverviewSource).toContain('Filesystems');
+    });
+
+    it('keeps dashboard shell rendering in canonical section owners', () => {
+      expect(dashboardSource).toContain('DashboardStateCards');
+      expect(dashboardSource).toContain('DashboardStatsStrip');
+      expect(dashboardSource).toContain('DashboardWorkloadTable');
+      expect(dashboardSource).not.toContain('TableHeader');
+      expect(dashboardSource).not.toContain('NodeGroupHeader');
+      expect(dashboardStateCardsSource).toContain('dashboardInfrastructureEmptyState().title');
+      expect(dashboardStateCardsSource).toContain('dashboardDisconnectedState().actionLabel');
+      expect(dashboardWorkloadTableSource).toContain('TableHeader');
+      expect(dashboardWorkloadTableSource).toContain('NodeGroupHeader');
+      expect(dashboardWorkloadTableSource).toContain('GuestDrawer');
+      expect(dashboardStatsStripSource).toContain('totalStats().running');
+      expect(dashboardStatsStripSource).toContain('totalStats().stopped');
     });
 
     it('keeps disk-list runtime and derivations in canonical disk-list owners', () => {

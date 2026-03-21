@@ -493,6 +493,7 @@ export function useDashboardWorkloadRouteState(options: DashboardWorkloadRouteSt
     selectedKubernetesNamespace,
     selectedNode,
     setContainerRuntime,
+    setSelectedNode,
     setSelectedKubernetesContext,
     setSelectedKubernetesNamespace,
     setViewMode,

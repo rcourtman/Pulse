@@ -80,7 +80,10 @@ import recoveryTablePresentationSource from '@/utils/recoveryTablePresentation.t
 import recoveryTimelineChartPresentationSource from '@/utils/recoveryTimelineChartPresentation.ts?raw';
 import recoveryTimelinePresentationSource from '@/utils/recoveryTimelinePresentation.ts?raw';
 import dashboardSource from '@/components/Dashboard/Dashboard.tsx?raw';
+import dashboardStateCardsSource from '@/components/Dashboard/DashboardStateCards.tsx?raw';
+import dashboardStatsStripSource from '@/components/Dashboard/DashboardStatsStrip.tsx?raw';
 import dashboardFilterSource from '@/components/Dashboard/DashboardFilter.tsx?raw';
+import dashboardWorkloadTableSource from '@/components/Dashboard/DashboardWorkloadTable.tsx?raw';
 import dashboardFilterModelSource from '@/components/Dashboard/dashboardFilterModel.ts?raw';
 import dashboardGuestMetadataStateSource from '@/components/Dashboard/useDashboardGuestMetadataState.ts?raw';
 import dashboardWorkloadRouteStateSource from '@/components/Dashboard/useDashboardWorkloadRouteState.ts?raw';
@@ -509,13 +512,19 @@ describe('frontend resource type boundaries', () => {
     expect(orgScopeSource).toContain("export const DEFAULT_ORG_SCOPE = 'default'");
     expect(orgScopeSource).toContain('export const normalizeOrgScope');
     expect(dashboardSource).toContain('useDashboardState');
+    expect(dashboardSource).toContain('DashboardStateCards');
+    expect(dashboardSource).toContain('DashboardStatsStrip');
+    expect(dashboardSource).toContain('DashboardWorkloadTable');
     expect(dashboardSource).not.toContain('const [search, setSearch] = createSignal(');
     expect(dashboardStateSource).toContain('useDashboardGuestMetadataState');
     expect(dashboardStateSource).toContain('useDashboardWorkloadRouteState');
     expect(dashboardWorkloadRouteStateSource).toContain('normalizeWorkloadViewModeParam');
     expect(dashboardSource).not.toContain('function normalizeViewModeParam');
     expect(dashboardSource).not.toContain('workloadSummaryGuestId');
-    expect(dashboardSource).toContain('createMemo(() => getCanonicalWorkloadId(guest()))');
+    expect(dashboardSource).not.toContain('createMemo(() => getCanonicalWorkloadId(guest()))');
+    expect(dashboardWorkloadTableSource).toContain(
+      'createMemo(() => getCanonicalWorkloadId(guest()))',
+    );
     expect(dashboardGuestMetadataStateSource).toContain('normalizeOrgScope(getOrgID())');
     expect(dashboardStateSource).not.toContain("const DEFAULT_ORG_SCOPE = 'default'");
     expect(dashboardStateSource).not.toContain('const normalizeOrgScope =');
@@ -634,6 +643,10 @@ describe('frontend resource type boundaries', () => {
     expect(guestDrawerSource).not.toContain('WebInterfaceUrlField');
     expect(guestDrawerOverviewSource).toContain('WebInterfaceUrlField');
     expect(guestDrawerOverviewSource).toContain('DiskList');
+    expect(dashboardStateCardsSource).toContain('dashboardDisconnectedState().actionLabel');
+    expect(dashboardWorkloadTableSource).toContain('NodeGroupHeader');
+    expect(dashboardWorkloadTableSource).toContain('GuestDrawer');
+    expect(dashboardStatsStripSource).toContain('totalStats().running');
     expect(emptyStateSource).toContain('getEmptyStatePresentation');
     expect(emptyStateSource).not.toContain('const iconBgClass: Record<EmptyStateTone, string> =');
     expect(emptyStateSource).not.toContain(

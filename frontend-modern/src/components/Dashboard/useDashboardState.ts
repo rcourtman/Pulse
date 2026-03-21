@@ -199,6 +199,7 @@ export function useDashboardState(props: DashboardProps) {
     selectedKubernetesNamespace,
     selectedNode,
     setContainerRuntime,
+    setSelectedNode,
     setSelectedKubernetesContext,
     setSelectedKubernetesNamespace,
     setViewMode,
@@ -665,3 +666,5 @@ export function useDashboardState(props: DashboardProps) {
     groupingMode,
   } as const;
 }
+
+export type DashboardState = ReturnType<typeof useDashboardState>;
