@@ -58,28 +58,30 @@ regression protection.
 36. `frontend-modern/src/components/Dashboard/GuestDrawerOverview.tsx`
 37. `frontend-modern/src/components/Dashboard/guestDrawerModel.ts`
 38. `frontend-modern/src/components/Dashboard/useGuestDrawerState.ts`
-39. `frontend-modern/src/components/Dashboard/workloadSelectors.ts`
-40. `frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx`
-41. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`
-42. `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts`
-43. `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts`
-44. `frontend-modern/src/components/Dashboard/__tests__/Dashboard.performance.contract.test.tsx`
-45. `frontend-modern/src/components/Dashboard/__tests__/DashboardFilter.test.tsx`
-46. `frontend-modern/src/components/Dashboard/__tests__/useDashboardFilterState.test.ts`
-47. `frontend-modern/src/components/Dashboard/MetricBar.test.tsx`
-48. `frontend-modern/src/components/Dashboard/__tests__/useMetricBarState.test.tsx`
-49. `frontend-modern/src/components/Dashboard/__tests__/EnhancedCPUBar.test.tsx`
-50. `frontend-modern/src/components/Dashboard/__tests__/useEnhancedCPUBarState.test.tsx`
-51. `frontend-modern/src/components/Dashboard/ThresholdSlider.test.tsx`
-52. `frontend-modern/src/components/Dashboard/__tests__/useThresholdSliderState.test.ts`
-53. `frontend-modern/src/components/Dashboard/__tests__/StackedDiskBar.test.tsx`
-54. `frontend-modern/src/components/Dashboard/__tests__/useStackedDiskBarState.test.tsx`
-55. `frontend-modern/src/components/Dashboard/StackedMemoryBar.test.tsx`
-56. `frontend-modern/src/components/Dashboard/__tests__/useStackedMemoryBarState.test.tsx`
-57. `frontend-modern/src/components/Dashboard/__tests__/DiskList.test.tsx`
-58. `frontend-modern/src/components/Dashboard/__tests__/GuestRow.test.tsx`
-59. `frontend-modern/src/components/Dashboard/GuestDrawer.test.tsx`
-60. `frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx`
+39. `frontend-modern/src/components/Dashboard/useGroupedTableWindowing.ts`
+40. `frontend-modern/src/components/Dashboard/workloadSelectors.ts`
+41. `frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx`
+42. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`
+43. `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts`
+44. `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts`
+45. `frontend-modern/src/components/Dashboard/__tests__/Dashboard.performance.contract.test.tsx`
+46. `frontend-modern/src/components/Dashboard/__tests__/DashboardFilter.test.tsx`
+47. `frontend-modern/src/components/Dashboard/__tests__/useDashboardFilterState.test.ts`
+48. `frontend-modern/src/components/Dashboard/MetricBar.test.tsx`
+49. `frontend-modern/src/components/Dashboard/__tests__/useMetricBarState.test.tsx`
+50. `frontend-modern/src/components/Dashboard/__tests__/EnhancedCPUBar.test.tsx`
+51. `frontend-modern/src/components/Dashboard/__tests__/useEnhancedCPUBarState.test.tsx`
+52. `frontend-modern/src/components/Dashboard/ThresholdSlider.test.tsx`
+53. `frontend-modern/src/components/Dashboard/__tests__/useThresholdSliderState.test.ts`
+54. `frontend-modern/src/components/Dashboard/__tests__/StackedDiskBar.test.tsx`
+55. `frontend-modern/src/components/Dashboard/__tests__/useStackedDiskBarState.test.tsx`
+56. `frontend-modern/src/components/Dashboard/StackedMemoryBar.test.tsx`
+57. `frontend-modern/src/components/Dashboard/__tests__/useStackedMemoryBarState.test.tsx`
+58. `frontend-modern/src/components/Dashboard/__tests__/DiskList.test.tsx`
+59. `frontend-modern/src/components/Dashboard/__tests__/GuestRow.test.tsx`
+60. `frontend-modern/src/components/Dashboard/GuestDrawer.test.tsx`
+61. `frontend-modern/src/components/Dashboard/__tests__/useGroupedTableWindowing.test.ts`
+62. `frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx`
 
 ## Shared Boundaries
 
@@ -110,6 +112,7 @@ regression protection.
 17. Extend stacked memory-bar capacity math, balloon/swap derivation, and resize-observer runtime through `frontend-modern/src/components/Dashboard/stackedMemoryBarModel.ts` and `frontend-modern/src/components/Dashboard/useStackedMemoryBarState.ts` rather than rebuilding memory-bar-local state, tooltip shaping, and label-fit logic inside `frontend-modern/src/components/Dashboard/StackedMemoryBar.tsx`
 18. Extend metric-bar width, label-fit logic, and resize-observer runtime through `frontend-modern/src/components/Dashboard/metricBarModel.ts` and `frontend-modern/src/components/Dashboard/useMetricBarState.ts` rather than rebuilding metric-local state and threshold mapping inside `frontend-modern/src/components/Dashboard/MetricBar.tsx`
 19. Extend enhanced CPU bar usage/anomaly presentation and tooltip runtime through `frontend-modern/src/components/Dashboard/enhancedCpuBarModel.ts` and `frontend-modern/src/components/Dashboard/useEnhancedCPUBarState.ts` rather than rebuilding tooltip-local state and CPU-threshold formatting inside `frontend-modern/src/components/Dashboard/EnhancedCPUBar.tsx`
+20. Extend grouped dashboard row windowing, reveal-index clamping, overscan math, and per-group visible-slice derivation through `frontend-modern/src/components/Dashboard/useGroupedTableWindowing.ts` rather than rebuilding scroll handlers, mounted-row budgets, or group-slice math inside `frontend-modern/src/components/Dashboard/useDashboardState.ts`
 
 ## Forbidden Paths
 
@@ -147,6 +150,12 @@ org-scope switching, and metadata refresh, and
 owns workload-route synchronization, deep-link normalization, and route-scoped
 filter contracts. Future dashboard hot-path changes must extend through those
 owners instead of accreting back into `frontend-modern/src/components/Dashboard/Dashboard.tsx`.
+That workload-state owner now also routes grouped row windowing through
+`frontend-modern/src/components/Dashboard/useGroupedTableWindowing.ts`, which
+owns row-window thresholds, overscan behavior, reveal-index clamping, and
+per-group visible-slice derivation. Future dashboard table windowing changes
+must extend through that hook instead of rebuilding scroll math or mounted-row
+budgets inline inside `frontend-modern/src/components/Dashboard/useDashboardState.ts`.
 The dashboard guest-row path now follows the same pattern: the render shell
 stays in `frontend-modern/src/components/Dashboard/GuestRow.tsx`, tooltip-backed
 cell presentation lives in `frontend-modern/src/components/Dashboard/GuestRowCells.tsx`,

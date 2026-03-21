@@ -86,6 +86,7 @@ import dashboardGuestMetadataStateSource from '@/components/Dashboard/useDashboa
 import dashboardWorkloadRouteStateSource from '@/components/Dashboard/useDashboardWorkloadRouteState.ts?raw';
 import dashboardStateSource from '@/components/Dashboard/useDashboardState.ts?raw';
 import dashboardFilterStateSource from '@/components/Dashboard/useDashboardFilterState.ts?raw';
+import groupedTableWindowingSource from '@/components/Dashboard/useGroupedTableWindowing.ts?raw';
 import thresholdSliderModelSource from '@/components/Dashboard/thresholdSliderModel.ts?raw';
 import thresholdSliderStateSource from '@/components/Dashboard/useThresholdSliderState.ts?raw';
 import enhancedCpuBarSource from '@/components/Dashboard/EnhancedCPUBar.tsx?raw';
@@ -541,6 +542,16 @@ describe('frontend resource type boundaries', () => {
     expect(dashboardWorkloadRouteStateSource).toContain('containerRuntimeFilterConfig');
     expect(dashboardWorkloadRouteStateSource).toContain('hostFilterConfig');
     expect(dashboardWorkloadRouteStateSource).toContain('namespaceFilterConfig');
+    expect(dashboardStateSource).toContain('useGroupedTableWindowing');
+    expect(dashboardStateSource).not.toContain('const DEFAULT_WINDOW_SIZE =');
+    expect(dashboardStateSource).not.toContain('const DEFAULT_ENABLE_THRESHOLD =');
+    expect(dashboardStateSource).not.toContain('const DEFAULT_OVERSCAN_ROWS =');
+    expect(groupedTableWindowingSource).toContain('const DEFAULT_WINDOW_SIZE');
+    expect(groupedTableWindowingSource).toContain('const DEFAULT_ENABLE_THRESHOLD');
+    expect(groupedTableWindowingSource).toContain('const DEFAULT_OVERSCAN_ROWS');
+    expect(groupedTableWindowingSource).toContain('getVisibleSlice');
+    expect(groupedTableWindowingSource).toContain('onScroll');
+    expect(groupedTableWindowingSource).toContain('revealIndex');
     expect(thresholdSliderSource).toContain('useThresholdSliderState');
     expect(thresholdSliderSource).not.toContain('const [thumbPosition, setThumbPosition] =');
     expect(thresholdSliderSource).not.toContain('const handleMouseDown = () => {');

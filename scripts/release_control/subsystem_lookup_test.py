@@ -1899,6 +1899,38 @@ class SubsystemLookupTest(unittest.TestCase):
             "dashboard-workload-hot-path",
         )
 
+    def test_lookup_paths_assigns_dashboard_grouped_windowing_runtime_to_performance_and_scalability(
+        self,
+    ) -> None:
+        result = lookup_paths(
+            ["frontend-modern/src/components/Dashboard/useGroupedTableWindowing.ts"]
+        )
+        self.assertEqual(result["unowned_runtime_files"], [])
+        self.assertEqual(
+            {item["subsystem"] for item in result["impacted_subsystems"]},
+            {"performance-and-scalability"},
+        )
+        file_entry = result["files"][0]
+        self.assertEqual(file_entry["classification"], "runtime")
+        self.assertEqual(
+            {match["subsystem"] for match in file_entry["matches"]},
+            {"performance-and-scalability"},
+        )
+        match = file_entry["matches"][0]
+        self.assertEqual(
+            match["contract"],
+            "docs/release-control/v6/internal/subsystems/performance-and-scalability.md",
+        )
+        self.assertEqual(match["lane_context"]["lane_id"], "L10")
+        self.assertEqual(
+            match["verification_requirement"]["id"],
+            "dashboard-workload-hot-path",
+        )
+        self.assertIn(
+            "frontend-modern/src/components/Dashboard/__tests__/useGroupedTableWindowing.test.ts",
+            match["verification_requirement"]["exact_files"],
+        )
+
     def test_lookup_paths_assigns_dashboard_guest_drawer_runtime_to_performance_and_scalability(self) -> None:
         result = lookup_paths(
             [

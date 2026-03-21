@@ -10,6 +10,7 @@ import dashboardGuestMetadataStateSource from '../useDashboardGuestMetadataState
 import dashboardWorkloadRouteStateSource from '../useDashboardWorkloadRouteState.ts?raw';
 import dashboardStateSource from '../useDashboardState.ts?raw';
 import dashboardFilterStateSource from '../useDashboardFilterState.ts?raw';
+import groupedTableWindowingSource from '../useGroupedTableWindowing.ts?raw';
 import thresholdSliderSource from '../ThresholdSlider.tsx?raw';
 import thresholdSliderModelSource from '../thresholdSliderModel.ts?raw';
 import thresholdSliderStateSource from '../useThresholdSliderState.ts?raw';
@@ -504,6 +505,15 @@ describe('Dashboard performance contract', () => {
       expect(dashboardGuestMetadataStateSource).toContain("window.addEventListener('pulse:metadata-changed'");
       expect(dashboardWorkloadRouteStateSource).toContain('buildWorkloadsPath({');
       expect(dashboardWorkloadRouteStateSource).toContain('normalizeWorkloadViewModeParam');
+      expect(groupedTableWindowingSource).toContain('DEFAULT_WINDOW_SIZE');
+      expect(groupedTableWindowingSource).toContain('DEFAULT_ENABLE_THRESHOLD');
+      expect(groupedTableWindowingSource).toContain('DEFAULT_OVERSCAN_ROWS');
+      expect(groupedTableWindowingSource).toContain('getVisibleSlice');
+      expect(groupedTableWindowingSource).toContain('onScroll');
+      expect(groupedTableWindowingSource).toContain('revealIndex');
+      expect(dashboardStateSource).not.toContain('const DEFAULT_WINDOW_SIZE =');
+      expect(dashboardStateSource).not.toContain('const DEFAULT_ENABLE_THRESHOLD =');
+      expect(dashboardStateSource).not.toContain('const DEFAULT_OVERSCAN_ROWS =');
       expect(dashboardSource).toContain('createMemo(() => getCanonicalWorkloadId(guest()))');
       expect(dashboardStateSource).not.toContain('const guestId = () => {');
     });
