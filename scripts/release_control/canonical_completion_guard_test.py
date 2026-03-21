@@ -1890,9 +1890,9 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
             "frontend-modern/src/components/Settings/InfrastructureDirectConnectionsSummaryCard.tsx"
         )
 
-    def test_proxmox_settings_panel_state_change_requires_agent_lifecycle(self):
+    def test_proxmox_direct_workspace_state_change_requires_agent_lifecycle(self):
         self._assert_direct_proxmox_workspace_change_requires_agent_lifecycle(
-            "frontend-modern/src/components/Settings/useProxmoxSettingsPanelState.ts"
+            "frontend-modern/src/components/Settings/useProxmoxDirectWorkspaceState.ts"
         )
 
     def test_infrastructure_installer_section_change_requires_agent_lifecycle(self):

@@ -1405,9 +1405,9 @@ class SubsystemLookupTest(unittest.TestCase):
             ],
         )
 
-    def test_lookup_paths_assigns_proxmox_settings_panel_state_to_agent_lifecycle(self) -> None:
+    def test_lookup_paths_assigns_proxmox_direct_workspace_state_to_agent_lifecycle(self) -> None:
         result = lookup_paths(
-            ["frontend-modern/src/components/Settings/useProxmoxSettingsPanelState.ts"]
+            ["frontend-modern/src/components/Settings/useProxmoxDirectWorkspaceState.ts"]
         )
         self.assertEqual(result["unowned_runtime_files"], [])
         self.assertEqual(

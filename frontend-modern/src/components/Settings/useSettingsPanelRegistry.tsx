@@ -6,7 +6,7 @@ import { AICostDashboard } from '@/components/AI/AICostDashboard';
 import { ProLicensePanel } from './ProLicensePanel';
 import { SSOProvidersPanel } from './SSOProvidersPanel';
 import { createSettingsPanelRegistry } from './settingsPanelRegistry';
-import type { ProxmoxSettingsPanelProps } from './ProxmoxSettingsPanel';
+import type { ProxmoxSettingsPanelProps } from './proxmoxSettingsModel';
 import type { SettingsSystemPanels } from './useSettingsSystemPanels';
 
 interface UseSettingsPanelRegistryParams {

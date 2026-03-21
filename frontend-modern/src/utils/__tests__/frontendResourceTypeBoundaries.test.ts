@@ -208,8 +208,10 @@ import pmgQueuePresentationSource from '@/utils/pmgQueuePresentation.ts?raw';
 import pmgServiceHealthBadgeSource from '@/components/PMG/ServiceHealthBadge.tsx?raw';
 import proxmoxSettingsPanelSource from '@/components/Settings/ProxmoxSettingsPanel.tsx?raw';
 import proxmoxConfiguredNodesTableSource from '@/components/Settings/ProxmoxConfiguredNodesTable.tsx?raw';
+import proxmoxDirectWorkspaceSource from '@/components/Settings/ProxmoxDirectWorkspace.tsx?raw';
 import proxmoxNodeModalStackSource from '@/components/Settings/ProxmoxNodeModalStack.tsx?raw';
-import proxmoxSettingsPanelStateSource from '@/components/Settings/useProxmoxSettingsPanelState.ts?raw';
+import proxmoxSettingsModelSource from '@/components/Settings/proxmoxSettingsModel.ts?raw';
+import proxmoxDirectWorkspaceStateSource from '@/components/Settings/useProxmoxDirectWorkspaceState.ts?raw';
 import infrastructureWorkspaceSource from '@/components/Settings/InfrastructureWorkspace.tsx?raw';
 import infrastructureWorkspaceModelSource from '@/components/Settings/infrastructureWorkspaceModel.ts?raw';
 import proxmoxSettingsPresentationSource from '@/utils/proxmoxSettingsPresentation.ts?raw';
@@ -2264,19 +2266,22 @@ describe('frontend resource type boundaries', () => {
     expect(pmgThreatPresentationSource).toContain('export function getPMGThreatPresentation');
     expect(pmgQueuePresentationSource).toContain('export function getPMGQueueTextClass');
     expect(pmgServiceHealthBadgeSource).toContain('getServiceHealthPresentation');
-    expect(proxmoxSettingsPanelSource).toContain('./useProxmoxSettingsPanelState');
+    expect(proxmoxSettingsPanelSource).toContain('./ProxmoxDirectWorkspace');
     expect(proxmoxSettingsPanelSource).not.toContain('const VARIANT_CONFIG: Record<NodeType');
     expect(proxmoxSettingsPanelSource).not.toContain('const buildDiscoveryPrefillNode =');
-    expect(proxmoxSettingsPanelSource).toContain('./useProxmoxSettingsPanelState');
+    expect(proxmoxDirectWorkspaceSource).toContain('./useProxmoxDirectWorkspaceState');
     expect(proxmoxSettingsPanelSource).not.toContain('const openCreateNode = (type: NodeType) =>');
     expect(proxmoxSettingsPanelSource).not.toContain('const openDiscoveredNode = (server: DiscoveredServer) =>');
     expect(proxmoxConfiguredNodesTableSource).toContain('PveNodesTable');
     expect(proxmoxConfiguredNodesTableSource).toContain('PbsNodesTable');
     expect(proxmoxConfiguredNodesTableSource).toContain('PmgNodesTable');
     expect(proxmoxNodeModalStackSource).toContain('PROXMOX_NODE_TYPES');
-    expect(proxmoxSettingsPanelStateSource).toContain('export function useProxmoxSettingsPanelState');
-    expect(proxmoxSettingsPanelStateSource).toContain('getProxmoxVariantPresentation');
-    expect(proxmoxSettingsPanelStateSource).toContain('buildProxmoxDiscoveryPrefillNode');
+    expect(proxmoxSettingsModelSource).toContain('export interface ProxmoxSettingsPanelProps');
+    expect(proxmoxDirectWorkspaceStateSource).toContain(
+      'export function useProxmoxDirectWorkspaceState',
+    );
+    expect(proxmoxDirectWorkspaceStateSource).toContain('getProxmoxVariantPresentation');
+    expect(proxmoxDirectWorkspaceStateSource).toContain('buildProxmoxDiscoveryPrefillNode');
     expect(proxmoxSettingsPresentationSource).toContain(
       'export const PROXMOX_VARIANT_PRESENTATION',
     );

@@ -179,6 +179,14 @@ diagnostics run/export lifecycle, results rendering, and sanitization/model
 helpers. The shell must not re-accumulate inline API calls, export-download
 plumbing, or diagnostics-card composition.
 
+The settings shell registry now also treats extracted feature prop contracts as
+canonical shell inputs instead of reaching back into feature panels for type
+ownership. `frontend-modern/src/components/Settings/useSettingsPanelRegistry.tsx`
+must consume the direct Proxmox panel contract through
+`frontend-modern/src/components/Settings/proxmoxSettingsModel.ts`, so the
+registry stays a shell/composition owner and does not depend on
+`ProxmoxSettingsPanel.tsx` as though the panel still owned the runtime model.
+
 The operations route now follows the same thin-route pattern as infrastructure,
 storage, and Patrol. `frontend-modern/src/pages/Operations.tsx` stays the route
 shell, `frontend-modern/src/features/operations/OperationsPageSurface.tsx` owns

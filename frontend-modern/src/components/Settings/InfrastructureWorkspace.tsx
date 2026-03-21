@@ -4,13 +4,14 @@ import { Card } from '@/components/shared/Card';
 import { Subtabs } from '@/components/shared/Subtabs';
 import { InfrastructureInstallPanel } from './InfrastructureInstallPanel';
 import { InfrastructureReportingPanel } from './InfrastructureReportingPanel';
-import { ProxmoxSettingsPanel, type ProxmoxSettingsPanelProps } from './ProxmoxSettingsPanel';
+import { ProxmoxSettingsPanel } from './ProxmoxSettingsPanel';
 import {
   INFRASTRUCTURE_WORKSPACE_TABS,
   buildInfrastructureWorkspacePath,
   getInfrastructureWorkspaceViewFromPath,
   type InfrastructureWorkspaceView,
 } from './infrastructureWorkspaceModel';
+import type { ProxmoxSettingsPanelProps } from './proxmoxSettingsModel';
 
 export type InfrastructureWorkspaceProps = ProxmoxSettingsPanelProps;
 

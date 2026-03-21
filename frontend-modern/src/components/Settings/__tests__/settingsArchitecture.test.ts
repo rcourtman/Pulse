@@ -87,11 +87,13 @@ import organizationBillingPanelSource from '../OrganizationBillingPanel.tsx?raw'
 import organizationBillingStateSource from '../useOrganizationBillingPanelState.ts?raw';
 import proxmoxDeleteNodeDialogSource from '../ProxmoxDeleteNodeDialog.tsx?raw';
 import proxmoxConfiguredNodesTableSource from '../ProxmoxConfiguredNodesTable.tsx?raw';
+import proxmoxDirectWorkspaceSource from '../ProxmoxDirectWorkspace.tsx?raw';
 import proxmoxDirectConnectionsCardSource from '../ProxmoxDirectConnectionsCard.tsx?raw';
 import proxmoxDiscoveryResultsCardSource from '../ProxmoxDiscoveryResultsCard.tsx?raw';
 import proxmoxNodeModalStackSource from '../ProxmoxNodeModalStack.tsx?raw';
+import proxmoxSettingsModelSource from '../proxmoxSettingsModel.ts?raw';
 import proxmoxSettingsPanelSource from '../ProxmoxSettingsPanel.tsx?raw';
-import proxmoxSettingsPanelStateSource from '../useProxmoxSettingsPanelState.ts?raw';
+import proxmoxDirectWorkspaceStateSource from '../useProxmoxDirectWorkspaceState.ts?raw';
 import securityOverviewPanelSource from '../SecurityOverviewPanel.tsx?raw';
 import securityAuthPanelSource from '../SecurityAuthPanel.tsx?raw';
 import ssoProvidersPanelSource from '../SSOProvidersPanel.tsx?raw';
@@ -197,12 +199,14 @@ const extractedModules = [
   '../useSSOProvidersState.ts',
   '../ssoProvidersModel.ts',
   '../ProxmoxSettingsPanel.tsx',
+  '../ProxmoxDirectWorkspace.tsx',
   '../ProxmoxConfiguredNodesTable.tsx',
   '../ProxmoxDeleteNodeDialog.tsx',
   '../ProxmoxDirectConnectionsCard.tsx',
   '../ProxmoxDiscoveryResultsCard.tsx',
   '../ProxmoxNodeModalStack.tsx',
-  '../useProxmoxSettingsPanelState.ts',
+  '../proxmoxSettingsModel.ts',
+  '../useProxmoxDirectWorkspaceState.ts',
   '../SettingsDialogs.tsx',
   '../SettingsPageShell.tsx',
   '../useDiscoverySettingsState.ts',
@@ -517,12 +521,18 @@ describe('Settings architecture guardrails', () => {
   });
 
   it('keeps the direct Proxmox settings workspace split into section owners', () => {
-    expect(proxmoxSettingsPanelSource).toContain('./useProxmoxSettingsPanelState');
-    expect(proxmoxSettingsPanelSource).toContain('./ProxmoxConfiguredNodesTable');
-    expect(proxmoxSettingsPanelSource).toContain('./ProxmoxDirectConnectionsCard');
-    expect(proxmoxSettingsPanelSource).toContain('./ProxmoxDiscoveryResultsCard');
-    expect(proxmoxSettingsPanelSource).toContain('./ProxmoxDeleteNodeDialog');
-    expect(proxmoxSettingsPanelSource).toContain('./ProxmoxNodeModalStack');
+    expect(proxmoxSettingsPanelSource).toContain('./ProxmoxDirectWorkspace');
+    expect(proxmoxSettingsPanelSource).toContain('./proxmoxSettingsModel');
+    expect(proxmoxSettingsPanelSource).toContain('CalloutCard');
+    expect(proxmoxSettingsPanelSource).toContain('SettingsSectionNav');
+    expect(proxmoxSettingsPanelSource).not.toContain('./useProxmoxSettingsPanelState');
+    expect(proxmoxSettingsPanelSource).not.toContain('./useProxmoxDirectWorkspaceState');
+    expect(proxmoxDirectWorkspaceSource).toContain('./useProxmoxDirectWorkspaceState');
+    expect(proxmoxDirectWorkspaceSource).toContain('./ProxmoxConfiguredNodesTable');
+    expect(proxmoxDirectWorkspaceSource).toContain('./ProxmoxDirectConnectionsCard');
+    expect(proxmoxDirectWorkspaceSource).toContain('./ProxmoxDiscoveryResultsCard');
+    expect(proxmoxDirectWorkspaceSource).toContain('./ProxmoxDeleteNodeDialog');
+    expect(proxmoxDirectWorkspaceSource).toContain('./ProxmoxNodeModalStack');
     expect(proxmoxSettingsPanelSource).not.toContain('const renderConfiguredTable = () =>');
     expect(proxmoxSettingsPanelSource).not.toContain('const renderNodeModal = (type: NodeType)');
     expect(proxmoxSettingsPanelSource).not.toContain('No discovery matches for this Proxmox type yet.');
@@ -538,8 +548,13 @@ describe('Settings architecture guardrails', () => {
     expect(proxmoxDeleteNodeDialogSource).toContain('What happens next');
     expect(proxmoxNodeModalStackSource).toContain('PROXMOX_NODE_TYPES');
     expect(proxmoxNodeModalStackSource).toContain('<NodeModal');
-    expect(proxmoxSettingsPanelStateSource).toContain('export function useProxmoxSettingsPanelState');
-    expect(proxmoxSettingsPanelStateSource).toContain("notificationStore.info('Refreshing discovery...'");
+    expect(proxmoxSettingsModelSource).toContain('export interface ProxmoxSettingsPanelProps');
+    expect(proxmoxDirectWorkspaceStateSource).toContain(
+      'export function useProxmoxDirectWorkspaceState',
+    );
+    expect(proxmoxDirectWorkspaceStateSource).toContain(
+      "notificationStore.info('Refreshing discovery...'",
+    );
   });
 
   it('keeps organization sharing split into shell, state, and section owners', () => {

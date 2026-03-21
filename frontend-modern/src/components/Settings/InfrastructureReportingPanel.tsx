@@ -3,7 +3,7 @@ import { AgentProfilesPanel } from './AgentProfilesPanel';
 import { InfrastructureDirectConnectionsSummaryCard } from './InfrastructureDirectConnectionsSummaryCard';
 import { InfrastructureInventorySection } from './InfrastructureInventorySection';
 import { InfrastructureStopMonitoringDialog } from './InfrastructureStopMonitoringDialog';
-import type { ProxmoxSettingsPanelProps } from './ProxmoxSettingsPanel';
+import type { ProxmoxSettingsPanelProps } from './proxmoxSettingsModel';
 import { InfrastructureOperationsStateProvider } from './useInfrastructureOperationsState';
 
 interface InfrastructureReportingPanelProps extends ProxmoxSettingsPanelProps {
