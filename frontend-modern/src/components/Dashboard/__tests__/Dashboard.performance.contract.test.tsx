@@ -11,6 +11,9 @@ import dashboardFilterStateSource from '../useDashboardFilterState.ts?raw';
 import thresholdSliderSource from '../ThresholdSlider.tsx?raw';
 import thresholdSliderModelSource from '../thresholdSliderModel.ts?raw';
 import thresholdSliderStateSource from '../useThresholdSliderState.ts?raw';
+import stackedDiskBarSource from '../StackedDiskBar.tsx?raw';
+import stackedDiskBarModelSource from '../stackedDiskBarModel.ts?raw';
+import stackedDiskBarStateSource from '../useStackedDiskBarState.ts?raw';
 import diskListSource from '../DiskList.tsx?raw';
 import diskListModelSource from '../diskListModel.ts?raw';
 import diskListStateSource from '../useDiskListState.ts?raw';
@@ -508,6 +511,18 @@ describe('Dashboard performance contract', () => {
       expect(thresholdSliderModelSource).toContain('export function getThresholdSliderPosition');
       expect(thresholdSliderModelSource).toContain('export function getThresholdSliderTitle');
       expect(thresholdSliderModelSource).toContain('export function getThresholdSliderLabel');
+    });
+
+    it('keeps stacked disk bar runtime and derivations in canonical owners', () => {
+      expect(stackedDiskBarSource).toContain('useStackedDiskBarState');
+      expect(stackedDiskBarSource).not.toContain('const [containerWidth, setContainerWidth] =');
+      expect(stackedDiskBarSource).not.toContain('const tooltipContent = createMemo(() => {');
+      expect(stackedDiskBarSource).not.toContain('const SEGMENT_COLORS =');
+      expect(stackedDiskBarStateSource).toContain('new ResizeObserver');
+      expect(stackedDiskBarStateSource).toContain('useTooltip');
+      expect(stackedDiskBarModelSource).toContain('export function buildStackedDiskBarPresentation');
+      expect(stackedDiskBarModelSource).toContain('const SEGMENT_COLORS');
+      expect(stackedDiskBarModelSource).toContain('tooltipTitle');
     });
 
     it('keeps guest row contract and hot-path state in canonical row owners', () => {

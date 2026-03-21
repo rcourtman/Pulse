@@ -85,6 +85,9 @@ import dashboardStateSource from '@/components/Dashboard/useDashboardState.ts?ra
 import dashboardFilterStateSource from '@/components/Dashboard/useDashboardFilterState.ts?raw';
 import thresholdSliderModelSource from '@/components/Dashboard/thresholdSliderModel.ts?raw';
 import thresholdSliderStateSource from '@/components/Dashboard/useThresholdSliderState.ts?raw';
+import stackedDiskBarSource from '@/components/Dashboard/StackedDiskBar.tsx?raw';
+import stackedDiskBarModelSource from '@/components/Dashboard/stackedDiskBarModel.ts?raw';
+import stackedDiskBarStateSource from '@/components/Dashboard/useStackedDiskBarState.ts?raw';
 import workloadsSummarySource from '@/components/Workloads/WorkloadsSummary.tsx?raw';
 import dashboardRouteSource from '@/pages/Dashboard.tsx?raw';
 import dashboardHelpersSource from '@/pages/DashboardPanels/dashboardHelpers.ts?raw';
@@ -524,6 +527,14 @@ describe('frontend resource type boundaries', () => {
     expect(thresholdSliderModelSource).toContain('export function getThresholdSliderThumbTransform');
     expect(thresholdSliderModelSource).toContain('export function getThresholdSliderTitle');
     expect(thresholdSliderModelSource).toContain('export function getThresholdSliderLabel');
+    expect(stackedDiskBarSource).toContain('useStackedDiskBarState');
+    expect(stackedDiskBarSource).not.toContain('const [containerWidth, setContainerWidth] =');
+    expect(stackedDiskBarSource).not.toContain('const tooltipContent = createMemo(() => {');
+    expect(stackedDiskBarSource).not.toContain('const SEGMENT_COLORS =');
+    expect(stackedDiskBarStateSource).toContain('new ResizeObserver');
+    expect(stackedDiskBarStateSource).toContain('useTooltip');
+    expect(stackedDiskBarModelSource).toContain('export function buildStackedDiskBarPresentation');
+    expect(stackedDiskBarModelSource).toContain('const SEGMENT_COLORS');
     expect(workloadsSummarySource).toContain('normalizeOrgScope(getOrgID())');
     expect(workloadsSummarySource).not.toContain("const DEFAULT_ORG_SCOPE = 'default'");
     expect(workloadsSummarySource).not.toContain('const normalizeOrgScope =');
