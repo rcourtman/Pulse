@@ -1885,6 +1885,11 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
             "frontend-modern/src/components/Settings/infrastructureWorkspaceModel.ts"
         )
 
+    def test_infrastructure_reporting_summary_change_requires_agent_lifecycle(self):
+        self._assert_direct_proxmox_workspace_change_requires_agent_lifecycle(
+            "frontend-modern/src/components/Settings/InfrastructureDirectConnectionsSummaryCard.tsx"
+        )
+
     def test_agent_install_backend_change_requires_lifecycle_and_api_contracts(self):
         required = infer_impacted_subsystems(["internal/api/agent_install_command_shared.go"])
         self.assertEqual(set(required), {"agent-lifecycle", "api-contracts"})

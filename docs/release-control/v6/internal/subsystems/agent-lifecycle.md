@@ -36,25 +36,26 @@ management, and fleet control surfaces.
 12. `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`
 13. `frontend-modern/src/components/Settings/InfrastructureInstallPanel.tsx`
 14. `frontend-modern/src/components/Settings/InfrastructureReportingPanel.tsx`
-15. `frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx`
-16. `frontend-modern/src/components/Settings/infrastructureWorkspaceModel.ts`
-17. `frontend-modern/src/components/Settings/ProxmoxSettingsPanel.tsx`
-18. `frontend-modern/src/components/Settings/ProxmoxDirectConnectionsCard.tsx`
-19. `frontend-modern/src/components/Settings/ProxmoxDiscoveryResultsCard.tsx`
-20. `frontend-modern/src/components/Settings/ProxmoxDeleteNodeDialog.tsx`
-21. `frontend-modern/src/components/Settings/ConfiguredNodeTables.tsx`
-22. `frontend-modern/src/components/Settings/SettingsSectionNav.tsx`
-23. `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx`
-24. `frontend-modern/src/components/Settings/useInfrastructureSettingsState.ts`
-25. `frontend-modern/src/components/Settings/UnifiedAgents.tsx`
-26. `frontend-modern/src/components/Settings/NodeModal.tsx`
-27. `frontend-modern/src/components/Settings/nodeModalModel.ts`
-28. `frontend-modern/src/components/Settings/useNodeModalState.ts`
-29. `frontend-modern/src/components/SetupWizard/SetupCompletionPanel.tsx`
-30. `frontend-modern/src/components/Infrastructure/deploy/ResultsStep.tsx`
-31. `frontend-modern/src/utils/agentProfilesPresentation.ts`
-32. `frontend-modern/src/utils/agentInstallCommand.ts`
-33. `frontend-modern/src/api/nodes.ts`
+15. `frontend-modern/src/components/Settings/InfrastructureDirectConnectionsSummaryCard.tsx`
+16. `frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx`
+17. `frontend-modern/src/components/Settings/infrastructureWorkspaceModel.ts`
+18. `frontend-modern/src/components/Settings/ProxmoxSettingsPanel.tsx`
+19. `frontend-modern/src/components/Settings/ProxmoxDirectConnectionsCard.tsx`
+20. `frontend-modern/src/components/Settings/ProxmoxDiscoveryResultsCard.tsx`
+21. `frontend-modern/src/components/Settings/ProxmoxDeleteNodeDialog.tsx`
+22. `frontend-modern/src/components/Settings/ConfiguredNodeTables.tsx`
+23. `frontend-modern/src/components/Settings/SettingsSectionNav.tsx`
+24. `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx`
+25. `frontend-modern/src/components/Settings/useInfrastructureSettingsState.ts`
+26. `frontend-modern/src/components/Settings/UnifiedAgents.tsx`
+27. `frontend-modern/src/components/Settings/NodeModal.tsx`
+28. `frontend-modern/src/components/Settings/nodeModalModel.ts`
+29. `frontend-modern/src/components/Settings/useNodeModalState.ts`
+30. `frontend-modern/src/components/SetupWizard/SetupCompletionPanel.tsx`
+31. `frontend-modern/src/components/Infrastructure/deploy/ResultsStep.tsx`
+32. `frontend-modern/src/utils/agentProfilesPresentation.ts`
+33. `frontend-modern/src/utils/agentInstallCommand.ts`
+34. `frontend-modern/src/api/nodes.ts`
 
 ## Shared Boundaries
 
@@ -81,7 +82,7 @@ management, and fleet control surfaces.
 3. Add or change runtime-side Unified Agent startup, first-report assembly, and enroll/runtime continuity through `internal/hostagent/`.
 4. Keep legacy Unified Agent compatibility names explicitly secondary when touching shared `internal/api/` runtime helpers: the legacy host-route family and `host-agent:*` scope names may remain as ingress or migration aliases, but they must not retake primary ownership in router state, live runtime scope checks, handler commentary, or operator-facing guidance.
 5. Add or change installer flags, persisted service arguments, or upgrade-safe re-entry behavior through `scripts/install.sh` and `scripts/install.ps1`.
-6. Add or change profile management, the extracted agent profiles runtime owner, the pure unified-agent inventory/install model, the direct Proxmox workspace shell, route model, and section owners, shared frontend install-command assembly, Proxmox setup/install API transport, setup-completion install handoff transport, deploy-fallback manual install transport, and fleet-control presentation through `frontend-modern/src/api/agentProfiles.ts`, `frontend-modern/src/api/nodes.ts`, `frontend-modern/src/components/Settings/AgentProfilesPanel.tsx`, `frontend-modern/src/components/Settings/useAgentProfilesPanelState.ts`, `frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx`, `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`, `frontend-modern/src/components/Settings/InfrastructureInstallPanel.tsx`, `frontend-modern/src/components/Settings/InfrastructureReportingPanel.tsx`, `frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx`, `frontend-modern/src/components/Settings/infrastructureWorkspaceModel.ts`, `frontend-modern/src/components/Settings/ProxmoxSettingsPanel.tsx`, `frontend-modern/src/components/Settings/ProxmoxDirectConnectionsCard.tsx`, `frontend-modern/src/components/Settings/ProxmoxDiscoveryResultsCard.tsx`, `frontend-modern/src/components/Settings/ProxmoxDeleteNodeDialog.tsx`, `frontend-modern/src/components/Settings/ConfiguredNodeTables.tsx`, `frontend-modern/src/components/Settings/SettingsSectionNav.tsx`, `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx`, `frontend-modern/src/components/Settings/useInfrastructureSettingsState.ts`, `frontend-modern/src/components/Settings/NodeModal.tsx`, `frontend-modern/src/components/Settings/nodeModalModel.ts`, `frontend-modern/src/components/Settings/useNodeModalState.ts`, `frontend-modern/src/components/SetupWizard/SetupCompletionPanel.tsx`, `frontend-modern/src/components/Infrastructure/deploy/ResultsStep.tsx`, and `frontend-modern/src/utils/agentInstallCommand.ts`.
+6. Add or change profile management, the extracted agent profiles runtime owner, the pure unified-agent inventory/install model, the direct Proxmox workspace shell, route model, reporting summary owner, and section owners, shared frontend install-command assembly, Proxmox setup/install API transport, setup-completion install handoff transport, deploy-fallback manual install transport, and fleet-control presentation through `frontend-modern/src/api/agentProfiles.ts`, `frontend-modern/src/api/nodes.ts`, `frontend-modern/src/components/Settings/AgentProfilesPanel.tsx`, `frontend-modern/src/components/Settings/useAgentProfilesPanelState.ts`, `frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx`, `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`, `frontend-modern/src/components/Settings/InfrastructureInstallPanel.tsx`, `frontend-modern/src/components/Settings/InfrastructureReportingPanel.tsx`, `frontend-modern/src/components/Settings/InfrastructureDirectConnectionsSummaryCard.tsx`, `frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx`, `frontend-modern/src/components/Settings/infrastructureWorkspaceModel.ts`, `frontend-modern/src/components/Settings/ProxmoxSettingsPanel.tsx`, `frontend-modern/src/components/Settings/ProxmoxDirectConnectionsCard.tsx`, `frontend-modern/src/components/Settings/ProxmoxDiscoveryResultsCard.tsx`, `frontend-modern/src/components/Settings/ProxmoxDeleteNodeDialog.tsx`, `frontend-modern/src/components/Settings/ConfiguredNodeTables.tsx`, `frontend-modern/src/components/Settings/SettingsSectionNav.tsx`, `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx`, `frontend-modern/src/components/Settings/useInfrastructureSettingsState.ts`, `frontend-modern/src/components/Settings/NodeModal.tsx`, `frontend-modern/src/components/Settings/nodeModalModel.ts`, `frontend-modern/src/components/Settings/useNodeModalState.ts`, `frontend-modern/src/components/SetupWizard/SetupCompletionPanel.tsx`, `frontend-modern/src/components/Infrastructure/deploy/ResultsStep.tsx`, and `frontend-modern/src/utils/agentInstallCommand.ts`.
 
 ## Forbidden Paths
 
@@ -152,6 +153,7 @@ The direct Proxmox fallback workspace now also lives explicitly inside this
 lifecycle boundary: `InfrastructureWorkspace.tsx`,
 `infrastructureWorkspaceModel.ts`,
 `InfrastructureInstallPanel.tsx`, `InfrastructureReportingPanel.tsx`,
+`InfrastructureDirectConnectionsSummaryCard.tsx`,
 `ProxmoxSettingsPanel.tsx`, `ProxmoxDirectConnectionsCard.tsx`,
 `ProxmoxDiscoveryResultsCard.tsx`, `ProxmoxDeleteNodeDialog.tsx`,
 `ConfiguredNodeTables.tsx`, `SettingsSectionNav.tsx`, and

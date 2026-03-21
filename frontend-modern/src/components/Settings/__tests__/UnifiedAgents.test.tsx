@@ -8,6 +8,7 @@ import infrastructureInstallPanelSource from '../InfrastructureInstallPanel.tsx?
 import infrastructureOperationsControllerSource from '../InfrastructureOperationsController.tsx?raw';
 import infrastructureOperationsModelSource from '../infrastructureOperationsModel.tsx?raw';
 import infrastructureReportingPanelSource from '../InfrastructureReportingPanel.tsx?raw';
+import infrastructureDirectConnectionsSummaryCardSource from '../InfrastructureDirectConnectionsSummaryCard.tsx?raw';
 import infrastructureOperationsStateSource from '../useInfrastructureOperationsState.tsx?raw';
 import type {
   Agent,
@@ -52,6 +53,13 @@ describe('UnifiedAgents ownership guardrails', () => {
     expect(infrastructureOperationsControllerSource).toContain('useInfrastructureOperationsState');
     expect(infrastructureInstallPanelSource).toContain('useInfrastructureOperationsState');
     expect(infrastructureReportingPanelSource).toContain('useInfrastructureOperationsState');
+    expect(infrastructureReportingPanelSource).toContain(
+      './InfrastructureDirectConnectionsSummaryCard',
+    );
+    expect(infrastructureReportingPanelSource).not.toContain('Direct Proxmox connections');
+    expect(infrastructureDirectConnectionsSummaryCardSource).toContain(
+      'Direct Proxmox connections',
+    );
     expect(infrastructureOperationsStateSource).toContain("./infrastructureOperationsModel");
     expect(infrastructureOperationsStateSource).toContain('renderInstallerSection');
     expect(infrastructureOperationsStateSource).toContain('renderInventorySection');

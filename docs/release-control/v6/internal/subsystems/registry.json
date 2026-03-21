@@ -369,6 +369,7 @@
         "frontend-modern/src/components/Infrastructure/deploy/ResultsStep.tsx",
         "frontend-modern/src/components/Settings/AgentProfilesPanel.tsx",
         "frontend-modern/src/components/Settings/ConfiguredNodeTables.tsx",
+        "frontend-modern/src/components/Settings/InfrastructureDirectConnectionsSummaryCard.tsx",
         "frontend-modern/src/components/Settings/InfrastructureInstallPanel.tsx",
         "frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx",
         "frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx",
@@ -605,6 +606,7 @@
             "match_prefixes": [],
             "match_files": [
               "frontend-modern/src/components/Settings/ConfiguredNodeTables.tsx",
+              "frontend-modern/src/components/Settings/InfrastructureDirectConnectionsSummaryCard.tsx",
               "frontend-modern/src/components/Settings/InfrastructureInstallPanel.tsx",
               "frontend-modern/src/components/Settings/InfrastructureReportingPanel.tsx",
               "frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx",

@@ -7,6 +7,7 @@ import infrastructureInstallPanelSource from '../InfrastructureInstallPanel.tsx?
 import infrastructureOperationsControllerSource from '../InfrastructureOperationsController.tsx?raw';
 import infrastructureOperationsModelSource from '../infrastructureOperationsModel.tsx?raw';
 import infrastructureReportingPanelSource from '../InfrastructureReportingPanel.tsx?raw';
+import infrastructureDirectConnectionsSummaryCardSource from '../InfrastructureDirectConnectionsSummaryCard.tsx?raw';
 import nodeModalModelSource from '../nodeModalModel.ts?raw';
 import nodeModalSource from '../NodeModal.tsx?raw';
 import infrastructureOperationsStateSource from '../useInfrastructureOperationsState.tsx?raw';
@@ -82,6 +83,7 @@ const extractedModules = [
   '../infrastructureWorkspaceModel.ts',
   '../InfrastructureInstallPanel.tsx',
   '../InfrastructureReportingPanel.tsx',
+  '../InfrastructureDirectConnectionsSummaryCard.tsx',
   '../AIProviderConfigurationSection.tsx',
   '../AISettingsDialogs.tsx',
   '../aiSettingsModel.ts',
@@ -356,6 +358,11 @@ describe('Settings architecture guardrails', () => {
     expect(infrastructureWorkspaceSource).toContain('InfrastructureReportingPanel');
     expect(infrastructureInstallPanelSource).toContain('useInfrastructureOperationsState');
     expect(infrastructureReportingPanelSource).toContain('useInfrastructureOperationsState');
+    expect(infrastructureReportingPanelSource).toContain(
+      './InfrastructureDirectConnectionsSummaryCard',
+    );
+    expect(infrastructureReportingPanelSource).not.toContain('Direct Proxmox connections');
+    expect(infrastructureReportingPanelSource).not.toContain('Manage direct connections');
     expect(infrastructureOperationsControllerSource).toContain('useInfrastructureOperationsState');
     expect(infrastructureOperationsStateSource).toContain(
       'export const useInfrastructureOperationsState',
@@ -368,6 +375,12 @@ describe('Settings architecture guardrails', () => {
     );
     expect(infrastructureWorkspaceModelSource).toContain(
       'export function buildInfrastructureWorkspacePath',
+    );
+    expect(infrastructureDirectConnectionsSummaryCardSource).toContain(
+      'Direct Proxmox connections',
+    );
+    expect(infrastructureDirectConnectionsSummaryCardSource).toContain(
+      'Manage direct connections',
     );
     expect(infrastructureInstallPanelSource).not.toContain('<PageHeader');
     expect(infrastructureReportingPanelSource).not.toContain('<PageHeader');
