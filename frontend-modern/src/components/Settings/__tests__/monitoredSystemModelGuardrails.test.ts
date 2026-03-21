@@ -72,6 +72,11 @@ import commandPaletteSource from '@/components/shared/CommandPaletteModal.tsx?ra
 import organizationAccessPanelSource from '../OrganizationAccessPanel.tsx?raw';
 import organizationOverviewPanelSource from '../OrganizationOverviewPanel.tsx?raw';
 import organizationSharingPanelSource from '../OrganizationSharingPanel.tsx?raw';
+import organizationSharingCreateSectionSource from '../OrganizationSharingCreateSection.tsx?raw';
+import organizationSharingLoadingStateSource from '../OrganizationSharingLoadingState.tsx?raw';
+import organizationOutgoingSharesSectionSource from '../OrganizationOutgoingSharesSection.tsx?raw';
+import organizationIncomingSharesSectionSource from '../OrganizationIncomingSharesSection.tsx?raw';
+import organizationSharingStateSource from '../useOrganizationSharingPanelState.ts?raw';
 import canonicalResourceTypesSource from '@/utils/canonicalResourceTypes.ts?raw';
 import organizationRolePresentationSource from '@/utils/organizationRolePresentation.ts?raw';
 import organizationSettingsPresentationSource from '@/utils/organizationSettingsPresentation.ts?raw';
@@ -589,7 +594,7 @@ describe('monitored-system model guardrails', () => {
     expect(apiTypesSource).not.toContain("'qemu'");
     expect(apiTypesSource).not.toContain("'lxc'");
     expect(commandPaletteSource).not.toContain("'lxc'");
-    expect(organizationSharingPanelSource).toContain('@/utils/canonicalResourceTypes');
+    expect(organizationSharingCreateSectionSource).toContain('@/utils/canonicalResourceTypes');
     expect(canonicalResourceTypesSource).toContain('export const CANONICAL_RESOURCE_TYPES =');
     expect(canonicalResourceTypesSource).toContain("'system-container'");
     expect(canonicalResourceTypesSource).toContain("'app-container'");
@@ -617,29 +622,35 @@ describe('monitored-system model guardrails', () => {
     expect(organizationOverviewPanelSource).not.toContain(
       "error instanceof Error ? error.message : 'Failed to update organization name'",
     );
-    expect(organizationSharingPanelSource).toContain('@/utils/organizationRolePresentation');
-    expect(organizationSharingPanelSource).toContain('@/utils/organizationSettingsPresentation');
-    expect(organizationSharingPanelSource).toContain('ORGANIZATION_SHARE_ROLE_OPTIONS');
-    expect(organizationSharingPanelSource).toContain('normalizeOrganizationShareRole');
-    expect(organizationSharingPanelSource).not.toContain(
+    expect(organizationSharingCreateSectionSource).toContain('@/utils/organizationRolePresentation');
+    expect(organizationSharingStateSource).toContain('@/utils/organizationSettingsPresentation');
+    expect(organizationSharingCreateSectionSource).toContain('ORGANIZATION_SHARE_ROLE_OPTIONS');
+    expect(organizationOutgoingSharesSectionSource).toContain('normalizeOrganizationShareRole');
+    expect(organizationIncomingSharesSectionSource).toContain('normalizeOrganizationShareRole');
+    expect(organizationSharingCreateSectionSource).not.toContain(
       'const accessRoleOptions: Array<{ value: ShareAccessRole; label: string }> = [',
     );
-    expect(organizationSharingPanelSource).not.toContain('const normalizeShareRole =');
-    expect(organizationSharingPanelSource).not.toContain(
+    expect(organizationOutgoingSharesSectionSource).not.toContain('const normalizeShareRole =');
+    expect(organizationSharingStateSource).not.toContain(
       "notificationStore.error('Target organization is required')",
     );
-    expect(organizationSharingPanelSource).not.toContain(
+    expect(organizationSharingStateSource).not.toContain(
       "notificationStore.error('Target organization must differ from the current organization')",
     );
-    expect(organizationSharingPanelSource).not.toContain(
+    expect(organizationSharingStateSource).not.toContain(
       "notificationStore.error('Valid resource type and resource ID are required')",
     );
-    expect(organizationSharingPanelSource).not.toContain(
+    expect(organizationSharingStateSource).not.toContain(
       "notificationStore.success('Resource shared successfully')",
     );
-    expect(organizationSharingPanelSource).not.toContain(
+    expect(organizationSharingStateSource).not.toContain(
       "notificationStore.success('Share removed')",
     );
+    expect(organizationSharingPanelSource).toContain('./OrganizationSharingLoadingState');
+    expect(organizationSharingPanelSource).toContain('./OrganizationSharingCreateSection');
+    expect(organizationSharingPanelSource).toContain('./OrganizationOutgoingSharesSection');
+    expect(organizationSharingPanelSource).toContain('./OrganizationIncomingSharesSection');
+    expect(organizationSharingLoadingStateSource).toContain('animate-pulse');
     expect(organizationRolePresentationSource).toContain(
       'export const ORGANIZATION_MEMBER_ROLE_OPTIONS',
     );

@@ -49,6 +49,11 @@ import commercialBillingModelSource from '@/utils/commercialBillingModel.ts?raw'
 import organizationOverviewPanelSource from '../OrganizationOverviewPanel.tsx?raw';
 import organizationAccessPanelSource from '../OrganizationAccessPanel.tsx?raw';
 import organizationSharingPanelSource from '../OrganizationSharingPanel.tsx?raw';
+import organizationSharingCreateSectionSource from '../OrganizationSharingCreateSection.tsx?raw';
+import organizationSharingLoadingStateSource from '../OrganizationSharingLoadingState.tsx?raw';
+import organizationOutgoingSharesSectionSource from '../OrganizationOutgoingSharesSection.tsx?raw';
+import organizationIncomingSharesSectionSource from '../OrganizationIncomingSharesSection.tsx?raw';
+import organizationSharingStateSource from '../useOrganizationSharingPanelState.ts?raw';
 import organizationBillingPanelSource from '../OrganizationBillingPanel.tsx?raw';
 import proxmoxDeleteNodeDialogSource from '../ProxmoxDeleteNodeDialog.tsx?raw';
 import proxmoxConfiguredNodesTableSource from '../ProxmoxConfiguredNodesTable.tsx?raw';
@@ -114,6 +119,11 @@ const extractedModules = [
   '../UpdateInstallGuide.tsx',
   '../ReportingPanel.tsx',
   '../reportingPanelModel.ts',
+  '../OrganizationSharingCreateSection.tsx',
+  '../OrganizationSharingLoadingState.tsx',
+  '../OrganizationOutgoingSharesSection.tsx',
+  '../OrganizationIncomingSharesSection.tsx',
+  '../useOrganizationSharingPanelState.ts',
   '../RBACFeatureGateSection.tsx',
   '../RolesEditorDialog.tsx',
   '../useRBACFeatureGateState.ts',
@@ -368,6 +378,28 @@ describe('Settings architecture guardrails', () => {
     expect(proxmoxNodeModalStackSource).toContain('<NodeModal');
     expect(proxmoxSettingsPanelStateSource).toContain('export function useProxmoxSettingsPanelState');
     expect(proxmoxSettingsPanelStateSource).toContain("notificationStore.info('Refreshing discovery...'");
+  });
+
+  it('keeps organization sharing split into shell, state, and section owners', () => {
+    expect(organizationSharingPanelSource).toContain('./useOrganizationSharingPanelState');
+    expect(organizationSharingPanelSource).toContain('./OrganizationSharingLoadingState');
+    expect(organizationSharingPanelSource).toContain('./OrganizationSharingCreateSection');
+    expect(organizationSharingPanelSource).toContain('./OrganizationOutgoingSharesSection');
+    expect(organizationSharingPanelSource).toContain('./OrganizationIncomingSharesSection');
+    expect(organizationSharingPanelSource).not.toContain('const loadSharingData = async');
+    expect(organizationSharingPanelSource).not.toContain('const createShare = async');
+    expect(organizationSharingStateSource).toContain('OrgsAPI.createShare');
+    expect(organizationSharingStateSource).toContain('OrgsAPI.deleteShare');
+    expect(organizationSharingStateSource).toContain('normalizeOrgScope(getOrgID())');
+    expect(organizationSharingCreateSectionSource).toContain('CANONICAL_RESOURCE_TYPES');
+    expect(organizationSharingCreateSectionSource).toContain('ORGANIZATION_SHARE_ROLE_OPTIONS');
+    expect(organizationOutgoingSharesSectionSource).toContain(
+      'getOrganizationOutgoingSharesEmptyState',
+    );
+    expect(organizationIncomingSharesSectionSource).toContain(
+      'getOrganizationIncomingSharesEmptyState',
+    );
+    expect(organizationSharingLoadingStateSource).toContain('animate-pulse');
   });
 
   it('keeps RBAC settings panels split into gate, state, and dialog owners', () => {

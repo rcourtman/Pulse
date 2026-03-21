@@ -285,7 +285,10 @@ import organizationAccessPanelSource from '@/components/Settings/OrganizationAcc
 import billingAdminPanelSource from '@/components/Settings/BillingAdminPanel.tsx?raw';
 import organizationBillingPanelSource from '@/components/Settings/OrganizationBillingPanel.tsx?raw';
 import organizationOverviewPanelSource from '@/components/Settings/OrganizationOverviewPanel.tsx?raw';
-import organizationSharingPanelSource from '@/components/Settings/OrganizationSharingPanel.tsx?raw';
+import organizationSharingCreateSectionSource from '@/components/Settings/OrganizationSharingCreateSection.tsx?raw';
+import organizationOutgoingSharesSectionSource from '@/components/Settings/OrganizationOutgoingSharesSection.tsx?raw';
+import organizationIncomingSharesSectionSource from '@/components/Settings/OrganizationIncomingSharesSection.tsx?raw';
+import organizationSharingStateSource from '@/components/Settings/useOrganizationSharingPanelState.ts?raw';
 import organizationRolePresentationSource from '@/utils/organizationRolePresentation.ts?raw';
 import organizationSettingsPresentationSource from '@/utils/organizationSettingsPresentation.ts?raw';
 import rbacFeatureGateSectionSource from '@/components/Settings/RBACFeatureGateSection.tsx?raw';
@@ -836,13 +839,14 @@ describe('frontend resource type boundaries', () => {
     expect(organizationAccessPanelSource).not.toContain(
       'const roleOptions: Array<{ value: OrganizationRole; label: string }> = [',
     );
-    expect(organizationSharingPanelSource).toContain('@/utils/organizationRolePresentation');
-    expect(organizationSharingPanelSource).toContain('ORGANIZATION_SHARE_ROLE_OPTIONS');
-    expect(organizationSharingPanelSource).toContain('normalizeOrganizationShareRole');
-    expect(organizationSharingPanelSource).not.toContain(
+    expect(organizationSharingCreateSectionSource).toContain('@/utils/organizationRolePresentation');
+    expect(organizationSharingCreateSectionSource).toContain('ORGANIZATION_SHARE_ROLE_OPTIONS');
+    expect(organizationOutgoingSharesSectionSource).toContain('normalizeOrganizationShareRole');
+    expect(organizationIncomingSharesSectionSource).toContain('normalizeOrganizationShareRole');
+    expect(organizationSharingCreateSectionSource).not.toContain(
       'const accessRoleOptions: Array<{ value: ShareAccessRole; label: string }> = [',
     );
-    expect(organizationSharingPanelSource).not.toContain('const normalizeShareRole =');
+    expect(organizationOutgoingSharesSectionSource).not.toContain('const normalizeShareRole =');
     expect(organizationRolePresentationSource).toContain(
       'export const ORGANIZATION_MEMBER_ROLE_OPTIONS',
     );
@@ -854,13 +858,13 @@ describe('frontend resource type boundaries', () => {
     );
     expect(organizationAccessPanelSource).toContain('normalizeOrgScope(getOrgID())');
     expect(organizationOverviewPanelSource).toContain('normalizeOrgScope(getOrgID())');
-    expect(organizationSharingPanelSource).toContain('normalizeOrgScope(getOrgID())');
+    expect(organizationSharingStateSource).toContain('normalizeOrgScope(getOrgID())');
     expect(organizationBillingPanelSource).toContain('normalizeOrgScope(getOrgID())');
     expect(organizationAccessPanelSource).toContain('@/utils/organizationSettingsPresentation');
     expect(billingAdminPanelSource).toContain('@/utils/organizationSettingsPresentation');
     expect(billingAdminPanelSource).toContain('@/utils/licensePresentation');
     expect(organizationOverviewPanelSource).toContain('@/utils/organizationSettingsPresentation');
-    expect(organizationSharingPanelSource).toContain('@/utils/organizationSettingsPresentation');
+    expect(organizationSharingStateSource).toContain('@/utils/organizationSettingsPresentation');
     expect(organizationBillingPanelSource).toContain('@/utils/organizationSettingsPresentation');
     expect(organizationBillingPanelSource).toContain('@/utils/licensePresentation');
     expect(organizationBillingPanelSource).not.toContain('Grace Period');
@@ -871,30 +875,34 @@ describe('frontend resource type boundaries', () => {
     expect(organizationOverviewPanelSource).not.toContain(
       'Multi-tenant is not enabled on this server',
     );
-    expect(organizationSharingPanelSource).not.toContain(
+    expect(organizationSharingStateSource).not.toContain(
       'Failed to load organization sharing details',
     );
     expect(organizationAccessPanelSource).toContain('getOrganizationAccessEmptyState');
     expect(organizationOverviewPanelSource).toContain('getOrganizationOverviewMembersEmptyState');
-    expect(organizationSharingPanelSource).toContain('getOrganizationOutgoingSharesEmptyState');
-    expect(organizationSharingPanelSource).toContain('getOrganizationIncomingSharesEmptyState');
-    expect(organizationSharingPanelSource).toContain(
+    expect(organizationOutgoingSharesSectionSource).toContain(
+      'getOrganizationOutgoingSharesEmptyState',
+    );
+    expect(organizationIncomingSharesSectionSource).toContain(
+      'getOrganizationIncomingSharesEmptyState',
+    );
+    expect(organizationSharingStateSource).toContain(
       'getOrganizationShareTargetOrgRequiredMessage',
     );
-    expect(organizationSharingPanelSource).toContain('getOrganizationShareCreateSuccessMessage');
+    expect(organizationSharingStateSource).toContain('getOrganizationShareCreateSuccessMessage');
     expect(organizationAccessPanelSource).not.toContain('No organization members found.');
     expect(organizationOverviewPanelSource).not.toContain('No members found.');
-    expect(organizationSharingPanelSource).not.toContain('No outgoing shares configured.');
-    expect(organizationSharingPanelSource).not.toContain(
+    expect(organizationOutgoingSharesSectionSource).not.toContain('No outgoing shares configured.');
+    expect(organizationIncomingSharesSectionSource).not.toContain(
       'No incoming shares from other organizations.',
     );
-    expect(organizationSharingPanelSource).not.toContain(
+    expect(organizationSharingStateSource).not.toContain(
       "notificationStore.error('Target organization is required')",
     );
-    expect(organizationSharingPanelSource).not.toContain(
+    expect(organizationSharingStateSource).not.toContain(
       "notificationStore.success('Resource shared successfully')",
     );
-    expect(organizationSharingPanelSource).not.toContain(
+    expect(organizationSharingStateSource).not.toContain(
       "notificationStore.success('Share removed')",
     );
     expect(organizationBillingPanelSource).not.toContain('This feature is not available.');
