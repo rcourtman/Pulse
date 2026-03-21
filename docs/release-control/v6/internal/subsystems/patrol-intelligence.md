@@ -22,20 +22,21 @@ Patrol-specific presentation helpers.
 ## Canonical Files
 
 1. `frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx`
-2. `frontend-modern/src/pages/AIIntelligence.tsx`
-3. `frontend-modern/src/stores/aiIntelligence.ts`
-4. `frontend-modern/src/types/aiIntelligence.ts`
-5. `frontend-modern/src/components/AI/FindingsPanel.tsx`
-6. `frontend-modern/src/components/Brand/PulsePatrolLogo.tsx`
-7. `frontend-modern/src/components/patrol/`
-8. `frontend-modern/src/utils/aiFindingPresentation.ts`
-9. `frontend-modern/src/utils/approvalRiskPresentation.ts`
-10. `frontend-modern/src/utils/findingAlertIdentity.ts`
-11. `frontend-modern/src/utils/patrolEmptyStatePresentation.ts`
-12. `frontend-modern/src/utils/patrolFormat.ts`
-13. `frontend-modern/src/utils/patrolRunPresentation.ts`
-14. `frontend-modern/src/utils/patrolSummaryPresentation.ts`
-15. `frontend-modern/src/utils/textPresentation.ts`
+2. `frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts`
+3. `frontend-modern/src/pages/AIIntelligence.tsx`
+4. `frontend-modern/src/stores/aiIntelligence.ts`
+5. `frontend-modern/src/types/aiIntelligence.ts`
+6. `frontend-modern/src/components/AI/FindingsPanel.tsx`
+7. `frontend-modern/src/components/Brand/PulsePatrolLogo.tsx`
+8. `frontend-modern/src/components/patrol/`
+9. `frontend-modern/src/utils/aiFindingPresentation.ts`
+10. `frontend-modern/src/utils/approvalRiskPresentation.ts`
+11. `frontend-modern/src/utils/findingAlertIdentity.ts`
+12. `frontend-modern/src/utils/patrolEmptyStatePresentation.ts`
+13. `frontend-modern/src/utils/patrolFormat.ts`
+14. `frontend-modern/src/utils/patrolRunPresentation.ts`
+15. `frontend-modern/src/utils/patrolSummaryPresentation.ts`
+16. `frontend-modern/src/utils/textPresentation.ts`
 
 ## Shared Boundaries
 
@@ -43,7 +44,7 @@ Patrol-specific presentation helpers.
 
 ## Extension Points
 
-1. Add or change Patrol page orchestration through `frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx`, keep `frontend-modern/src/pages/AIIntelligence.tsx` as the route shell, and update `frontend-modern/src/stores/aiIntelligence.ts` together
+1. Add or change Patrol page orchestration through `frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts`, keep `frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx` as the feature render shell, keep `frontend-modern/src/pages/AIIntelligence.tsx` as the route shell, and update `frontend-modern/src/stores/aiIntelligence.ts` together
 2. Add or change Patrol findings, approvals, investigation, or run-history presentation through `frontend-modern/src/components/AI/FindingsPanel.tsx` and `frontend-modern/src/components/patrol/`
 3. Keep Patrol and chat identifier-label presentation aligned through the shared `frontend-modern/src/utils/textPresentation.ts`
 4. Keep Patrol and chat stream-matching / mention dedupe aligned through the shared `frontend-modern/src/utils/chatIdentifiers.ts`
@@ -74,6 +75,13 @@ thin shell that delegates to the feature-owned
 `frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx`, so Patrol
 runtime state and presentation no longer accumulate directly in the route
 component itself.
+The feature surface now also keeps the same shell/runtime split internally:
+`frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx` owns render
+composition and Patrol page presentation, while
+`frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts` owns Patrol
+state, transport, polling, and effect lifecycle. The render shell must not
+re-accumulate Patrol API calls, timer orchestration, or store refresh flow
+inline.
 
 Patrol finding state must now also consume the canonical camelCase
 `alertIdentifier` field and pending-approval expiry metadata end to end.

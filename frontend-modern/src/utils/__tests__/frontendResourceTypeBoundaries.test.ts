@@ -372,6 +372,7 @@ import aiSettingsStatusAndActionsSource from '@/components/Settings/AISettingsSt
 import aiSettingsStateSource from '@/components/Settings/useAISettingsState.ts?raw';
 import aiIntelligenceSource from '@/pages/AIIntelligence.tsx?raw';
 import patrolIntelligenceSurfaceSource from '@/features/patrol/PatrolIntelligenceSurface.tsx?raw';
+import patrolIntelligenceStateSource from '@/features/patrol/usePatrolIntelligenceState.ts?raw';
 import aiQuickstartPresentationSource from '@/utils/aiQuickstartPresentation.ts?raw';
 import aiCostPresentationSource from '@/utils/aiCostPresentation.ts?raw';
 import thresholdSliderPresentationSource from '@/utils/thresholdSliderPresentation.ts?raw';
@@ -3022,6 +3023,7 @@ describe('frontend resource type boundaries', () => {
     );
     expect(aiIntelligenceSource).not.toContain('getPatrolSummaryPresentation');
     expect(aiIntelligenceSource).not.toContain('getAIQuickstartCreditsPresentation');
+    expect(patrolIntelligenceSurfaceSource).toContain("./usePatrolIntelligenceState");
     expect(operationsPageRouteSource).toContain(
       "import { OperationsPageSurface } from '@/features/operations/OperationsPageSurface';",
     );
@@ -3043,6 +3045,10 @@ describe('frontend resource type boundaries', () => {
     expect(systemLogsPanelSource).toContain('./useSystemLogsPanelState');
     expect(patrolIntelligenceSurfaceSource).toContain('getPatrolSummaryPresentation');
     expect(patrolIntelligenceSurfaceSource).toContain('getAIQuickstartCreditsPresentation');
+    expect(patrolIntelligenceStateSource).toContain('export function usePatrolIntelligenceState');
+    expect(patrolIntelligenceStateSource).toContain('getPatrolStatus');
+    expect(patrolIntelligenceStateSource).toContain('usePatrolStream');
+    expect(patrolIntelligenceStateSource).toContain('trackPaywallViewed');
     expect(patrolIntelligenceSurfaceSource).not.toContain(
       "summaryStats().criticalFindings > 0\n                        ? 'bg-red-50 dark:bg-red-900 border-red-200 dark:border-red-800'",
     );

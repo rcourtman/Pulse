@@ -2396,6 +2396,74 @@ class SubsystemLookupTest(unittest.TestCase):
             ],
         )
 
+    def test_lookup_paths_assigns_patrol_surface_to_patrol_intelligence(self) -> None:
+        result = lookup_paths(["frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx"])
+        self.assertEqual(result["unowned_runtime_files"], [])
+        self.assertEqual(
+            {item["subsystem"] for item in result["impacted_subsystems"]},
+            {"patrol-intelligence"},
+        )
+        file_entry = result["files"][0]
+        self.assertEqual(file_entry["classification"], "runtime")
+        self.assertEqual(
+            {match["subsystem"] for match in file_entry["matches"]},
+            {"patrol-intelligence"},
+        )
+        match = file_entry["matches"][0]
+        self.assertEqual(
+            match["contract"],
+            "docs/release-control/v6/internal/subsystems/patrol-intelligence.md",
+        )
+        self.assertEqual(match["lane_context"]["lane_id"], "L6")
+        self.assertEqual(
+            match["verification_requirement"]["id"],
+            "patrol-page-and-state",
+        )
+        self.assertEqual(
+            match["verification_requirement"]["exact_files"],
+            [
+                "frontend-modern/src/components/Brand/__tests__/PulsePatrolLogo.test.tsx",
+                "frontend-modern/src/components/Settings/__tests__/monitoredSystemModelGuardrails.test.ts",
+                "frontend-modern/src/pages/__tests__/AIIntelligence.test.tsx",
+                "frontend-modern/src/stores/__tests__/aiIntelligence.test.ts",
+                "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
+            ],
+        )
+
+    def test_lookup_paths_assigns_patrol_state_hook_to_patrol_intelligence(self) -> None:
+        result = lookup_paths(["frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts"])
+        self.assertEqual(result["unowned_runtime_files"], [])
+        self.assertEqual(
+            {item["subsystem"] for item in result["impacted_subsystems"]},
+            {"patrol-intelligence"},
+        )
+        file_entry = result["files"][0]
+        self.assertEqual(file_entry["classification"], "runtime")
+        self.assertEqual(
+            {match["subsystem"] for match in file_entry["matches"]},
+            {"patrol-intelligence"},
+        )
+        match = file_entry["matches"][0]
+        self.assertEqual(
+            match["contract"],
+            "docs/release-control/v6/internal/subsystems/patrol-intelligence.md",
+        )
+        self.assertEqual(match["lane_context"]["lane_id"], "L6")
+        self.assertEqual(
+            match["verification_requirement"]["id"],
+            "patrol-page-and-state",
+        )
+        self.assertEqual(
+            match["verification_requirement"]["exact_files"],
+            [
+                "frontend-modern/src/components/Brand/__tests__/PulsePatrolLogo.test.tsx",
+                "frontend-modern/src/components/Settings/__tests__/monitoredSystemModelGuardrails.test.ts",
+                "frontend-modern/src/pages/__tests__/AIIntelligence.test.tsx",
+                "frontend-modern/src/stores/__tests__/aiIntelligence.test.ts",
+                "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
+            ],
+        )
+
     def test_lookup_paths_assigns_findings_panel_to_patrol_intelligence(self) -> None:
         result = lookup_paths(["frontend-modern/src/components/AI/FindingsPanel.tsx"])
         self.assertEqual(result["unowned_runtime_files"], [])

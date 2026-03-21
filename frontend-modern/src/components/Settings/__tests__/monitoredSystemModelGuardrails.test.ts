@@ -57,6 +57,7 @@ import updatesSettingsPanelSource from '../UpdatesSettingsPanel.tsx?raw';
 import suggestProfileModalSource from '../SuggestProfileModal.tsx?raw';
 import aiIntelligenceSource from '@/pages/AIIntelligence.tsx?raw';
 import patrolIntelligenceSurfaceSource from '@/features/patrol/PatrolIntelligenceSurface.tsx?raw';
+import patrolIntelligenceStateSource from '@/features/patrol/usePatrolIntelligenceState.ts?raw';
 import aiPatrolSchedulePresentationSource from '@/utils/aiPatrolSchedulePresentation.ts?raw';
 import patrolSummaryPresentationSource from '@/utils/patrolSummaryPresentation.ts?raw';
 import aiCostDashboardSource from '@/components/AI/AICostDashboard.tsx?raw';
@@ -572,8 +573,13 @@ describe('monitored-system model guardrails', () => {
     );
     expect(aiIntelligenceSource).not.toContain('buildPatrolScheduleOptions');
     expect(aiIntelligenceSource).not.toContain('PATROL_NO_ISSUES_LABEL');
+    expect(patrolIntelligenceSurfaceSource).toContain("./usePatrolIntelligenceState");
     expect(patrolIntelligenceSurfaceSource).toContain('buildPatrolScheduleOptions');
     expect(patrolIntelligenceSurfaceSource).toContain('PATROL_NO_ISSUES_LABEL');
+    expect(patrolIntelligenceStateSource).toContain('export function usePatrolIntelligenceState');
+    expect(patrolIntelligenceStateSource).toContain('getPatrolStatus');
+    expect(patrolIntelligenceStateSource).toContain('usePatrolStream');
+    expect(patrolIntelligenceStateSource).toContain('updatePatrolAutonomySettings');
     expect(aiIntelligenceSource).not.toContain('No issues found');
     expect(patrolIntelligenceSurfaceSource).not.toContain('No issues found');
     expect(aiIntelligenceSource).not.toContain('const SCHEDULE_PRESETS =');
@@ -1390,7 +1396,8 @@ describe('monitored-system model guardrails', () => {
     expect(settingsSource).not.toContain('Loading settings...');
     expect(settingsSystemPanelsSource).toContain('getSettingsConfigurationLoadingState');
     expect(settingsSystemPanelsSource).not.toContain('Loading configuration...');
-    expect(settingsPanelRegistrySource).toContain('systemPanels: SettingsSystemPanels');
+    expect(settingsPanelRegistrySource).toContain('createSettingsPanelRegistry');
+    expect(settingsPanelRegistrySource).toContain('buildSettingsPanelRegistryContext(params)');
     expect(settingsPanelRegistrySource).not.toContain('getSettingsConfigurationLoadingState');
     expect(settingsShellPresentationSource).toContain('export function getSettingsLoadingState');
     expect(settingsShellPresentationSource).toContain(

@@ -316,6 +316,15 @@ and the summary-ordering helper in `frontend-modern/src/features/alerts/types.ts
 must stay shared across alert timeline surfaces instead of rebuilding
 page-local event summaries or bespoke incident-card markup.
 
+Feature-owned route surfaces under `frontend-modern/src/features/` must also
+keep their shell/runtime split explicit once a subsystem grows real transport
+or polling lifecycle. The Patrol feature is the current reference shape:
+`frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx` stays the
+render shell while `frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts`
+owns the runtime state machine. Shared shell governance should reinforce that
+pattern instead of letting feature render surfaces re-accumulate API and timer
+orchestration inline.
+
 Shared primitive consumers that split status-dot tone and status-text tone
 must now keep both values routed through the same exported presentation helper.
 Feature cards such as RAID status may not call shadow local aliases that drift

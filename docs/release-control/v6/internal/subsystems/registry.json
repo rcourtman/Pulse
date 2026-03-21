@@ -2405,6 +2405,8 @@
         "frontend-modern/src/components/patrol/RunHistoryEntry.tsx",
         "frontend-modern/src/components/patrol/RunHistoryPanel.tsx",
         "frontend-modern/src/components/patrol/RunToolCallTrace.tsx",
+        "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx",
+        "frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts",
         "frontend-modern/src/pages/AIIntelligence.tsx",
         "frontend-modern/src/stores/aiIntelligence.ts",
         "frontend-modern/src/types/aiIntelligence.ts",
@@ -2433,6 +2435,8 @@
             "match_files": [
               "frontend-modern/src/components/Brand/PulsePatrolLogo.tsx",
               "frontend-modern/src/components/patrol/index.ts",
+              "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx",
+              "frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts",
               "frontend-modern/src/pages/AIIntelligence.tsx",
               "frontend-modern/src/stores/aiIntelligence.ts",
               "frontend-modern/src/types/aiIntelligence.ts"
