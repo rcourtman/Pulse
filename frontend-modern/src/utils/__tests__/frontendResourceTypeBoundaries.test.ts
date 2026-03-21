@@ -108,8 +108,8 @@ import problemResourcesTableSource from '@/features/dashboardOverview/ProblemRes
 import problemResourcePresentationSource from '@/utils/problemResourcePresentation.ts?raw';
 import kpiStripSource from '@/features/dashboardOverview/KPIStrip.tsx?raw';
 import recentAlertsPanelSource from '@/components/Alerts/RecentAlertsPanel.tsx?raw';
-import storagePanelSource from '@/pages/DashboardPanels/StoragePanel.tsx?raw';
-import recoveryStatusPanelSource from '@/pages/DashboardPanels/RecoveryStatusPanel.tsx?raw';
+import storagePanelSource from '@/components/Storage/DashboardStoragePanel.tsx?raw';
+import recoveryStatusPanelSource from '@/components/Recovery/DashboardRecoveryStatusPanel.tsx?raw';
 import guestRowSource from '@/components/Dashboard/GuestRow.tsx?raw';
 import guestRowCellsSource from '@/components/Dashboard/GuestRowCells.tsx?raw';
 import guestRowModelSource from '@/components/Dashboard/guestRowModel.tsx?raw';

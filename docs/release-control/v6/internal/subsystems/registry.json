@@ -2887,6 +2887,8 @@
         "internal/recovery/"
       ],
       "owned_files": [
+        "frontend-modern/src/components/Recovery/DashboardRecoveryStatusPanel.tsx",
+        "frontend-modern/src/components/Storage/DashboardStoragePanel.tsx",
         "frontend-modern/src/features/dashboardOverview/dashboardWidgets.ts",
         "frontend-modern/src/hooks/useDashboardRecovery.ts",
         "frontend-modern/src/hooks/useRecoveryPoints.ts",
@@ -2894,8 +2896,6 @@
         "frontend-modern/src/hooks/useRecoveryPointsSeries.ts",
         "frontend-modern/src/hooks/useRecoveryRollups.ts",
         "frontend-modern/src/pages/Dashboard.tsx",
-        "frontend-modern/src/pages/DashboardPanels/RecoveryStatusPanel.tsx",
-        "frontend-modern/src/pages/DashboardPanels/StoragePanel.tsx",
         "frontend-modern/src/pages/RecoveryRoute.tsx",
         "frontend-modern/src/pages/Storage.tsx",
         "frontend-modern/src/types/recovery.ts",
@@ -2967,12 +2967,12 @@
               "frontend-modern/src/components/Recovery/"
             ],
             "match_files": [
+              "frontend-modern/src/components/Recovery/DashboardRecoveryStatusPanel.tsx",
               "frontend-modern/src/hooks/useDashboardRecovery.ts",
               "frontend-modern/src/hooks/useRecoveryPoints.ts",
               "frontend-modern/src/hooks/useRecoveryPointsFacets.ts",
               "frontend-modern/src/hooks/useRecoveryPointsSeries.ts",
               "frontend-modern/src/hooks/useRecoveryRollups.ts",
-              "frontend-modern/src/pages/DashboardPanels/RecoveryStatusPanel.tsx",
               "frontend-modern/src/pages/RecoveryRoute.tsx",
               "frontend-modern/src/types/recovery.ts",
               "frontend-modern/src/utils/dashboardRecoveryPresentation.ts",
@@ -3008,12 +3008,13 @@
               "frontend-modern/src/features/storageBackups/"
             ],
             "match_files": [
-              "frontend-modern/src/pages/DashboardPanels/StoragePanel.tsx",
+              "frontend-modern/src/components/Storage/DashboardStoragePanel.tsx",
               "frontend-modern/src/pages/Storage.tsx"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
+              "frontend-modern/src/components/Storage/__tests__/DashboardStoragePanel.test.tsx",
               "frontend-modern/src/components/Storage/__tests__/DiskList.test.tsx",
               "frontend-modern/src/components/Storage/__tests__/Storage.test.tsx",
               "frontend-modern/src/components/Storage/__tests__/StorageControls.test.tsx",

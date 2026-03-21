@@ -910,7 +910,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
 
     def test_recovery_status_panel_change_requires_storage_recovery_contract(self):
         required = infer_impacted_subsystems(
-            ["frontend-modern/src/pages/DashboardPanels/RecoveryStatusPanel.tsx"]
+            ["frontend-modern/src/components/Recovery/DashboardRecoveryStatusPanel.tsx"]
         )
         self.assertEqual(set(required), {"storage-recovery"})
         recovery = required["storage-recovery"]
@@ -920,7 +920,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
         )
         self.assertEqual(
             recovery["touched_runtime_files"],
-            ["frontend-modern/src/pages/DashboardPanels/RecoveryStatusPanel.tsx"],
+            ["frontend-modern/src/components/Recovery/DashboardRecoveryStatusPanel.tsx"],
         )
 
     def test_dashboard_recovery_presentation_change_requires_storage_recovery_contract(self):
@@ -940,7 +940,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
 
     def test_storage_panel_change_requires_storage_recovery_contract(self):
         required = infer_impacted_subsystems(
-            ["frontend-modern/src/pages/DashboardPanels/StoragePanel.tsx"]
+            ["frontend-modern/src/components/Storage/DashboardStoragePanel.tsx"]
         )
         self.assertEqual(set(required), {"storage-recovery"})
 
@@ -951,7 +951,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
         )
         self.assertEqual(
             recovery["touched_runtime_files"],
-            ["frontend-modern/src/pages/DashboardPanels/StoragePanel.tsx"],
+            ["frontend-modern/src/components/Storage/DashboardStoragePanel.tsx"],
         )
         self.assertEqual(
             recovery["verification_requirements"],
@@ -960,11 +960,12 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     "id": "storage-product-surface",
                     "label": "storage product surface proof",
                     "touched_runtime_files": [
-                        "frontend-modern/src/pages/DashboardPanels/StoragePanel.tsx"
+                        "frontend-modern/src/components/Storage/DashboardStoragePanel.tsx"
                     ],
                     "allow_same_subsystem_tests": False,
                     "test_prefixes": [],
                     "exact_files": [
+                        "frontend-modern/src/components/Storage/__tests__/DashboardStoragePanel.test.tsx",
                         "frontend-modern/src/components/Storage/__tests__/DiskList.test.tsx",
                         "frontend-modern/src/components/Storage/__tests__/Storage.test.tsx",
                         "frontend-modern/src/components/Storage/__tests__/StorageControls.test.tsx",

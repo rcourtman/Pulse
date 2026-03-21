@@ -437,7 +437,7 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(match["verification_requirement"]["id"], "recovery-product-surface")
 
     def test_lookup_paths_assigns_recovery_status_panel_to_storage_recovery(self) -> None:
-        result = lookup_paths(["frontend-modern/src/pages/DashboardPanels/RecoveryStatusPanel.tsx"])
+        result = lookup_paths(["frontend-modern/src/components/Recovery/DashboardRecoveryStatusPanel.tsx"])
         self.assertEqual(result["unowned_runtime_files"], [])
         self.assertEqual(
             {item["subsystem"] for item in result["impacted_subsystems"]},
@@ -473,7 +473,7 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(match["verification_requirement"]["id"], "recovery-product-surface")
 
     def test_lookup_paths_assigns_storage_panel_to_storage_recovery(self) -> None:
-        result = lookup_paths(["frontend-modern/src/pages/DashboardPanels/StoragePanel.tsx"])
+        result = lookup_paths(["frontend-modern/src/components/Storage/DashboardStoragePanel.tsx"])
         self.assertEqual(result["unowned_runtime_files"], [])
         self.assertEqual(
             {item["subsystem"] for item in result["impacted_subsystems"]},
@@ -492,6 +492,7 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(
             match["verification_requirement"]["exact_files"],
             [
+                "frontend-modern/src/components/Storage/__tests__/DashboardStoragePanel.test.tsx",
                 "frontend-modern/src/components/Storage/__tests__/DiskList.test.tsx",
                 "frontend-modern/src/components/Storage/__tests__/Storage.test.tsx",
                 "frontend-modern/src/components/Storage/__tests__/StorageControls.test.tsx",

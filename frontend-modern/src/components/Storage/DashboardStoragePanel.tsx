@@ -16,13 +16,13 @@ import {
   getDashboardStorageIssueBadges,
 } from '@/utils/dashboardStoragePresentation';
 
-interface StoragePanelProps {
+interface DashboardStoragePanelProps {
   storage: DashboardOverview['storage'];
   storageTrend: TrendData | null;
   loading: boolean;
 }
 
-export function StoragePanel(props: StoragePanelProps) {
+export function DashboardStoragePanel(props: DashboardStoragePanelProps) {
   const capacityPercent = () =>
     computeDashboardStorageCapacityPercent(props.storage.totalUsed, props.storage.totalCapacity);
   const hasTrend = () => !!props.storageTrend && props.storageTrend.points.length >= 2;
@@ -83,4 +83,4 @@ export function StoragePanel(props: StoragePanelProps) {
   );
 }
 
-export default StoragePanel;
+export default DashboardStoragePanel;

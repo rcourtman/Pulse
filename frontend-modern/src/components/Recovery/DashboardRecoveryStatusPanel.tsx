@@ -12,11 +12,11 @@ import {
 } from '@/utils/dashboardRecoveryPresentation';
 import type { DashboardRecoverySummary } from '@/hooks/useDashboardRecovery';
 
-interface RecoveryStatusPanelProps {
+interface DashboardRecoveryStatusPanelProps {
   recovery: DashboardRecoverySummary;
 }
 
-export function RecoveryStatusPanel(props: RecoveryStatusPanelProps) {
+export function DashboardRecoveryStatusPanel(props: DashboardRecoveryStatusPanelProps) {
   const latestAgeMs = createMemo(() => {
     const ts = props.recovery.latestEventTimestamp;
     if (typeof ts !== 'number' || !Number.isFinite(ts)) return null;
@@ -86,4 +86,4 @@ export function RecoveryStatusPanel(props: RecoveryStatusPanelProps) {
   );
 }
 
-export default RecoveryStatusPanel;
+export default DashboardRecoveryStatusPanel;

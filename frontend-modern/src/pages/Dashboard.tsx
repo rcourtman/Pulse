@@ -30,8 +30,9 @@ import {
   TrendCharts,
 } from '@/features/dashboardOverview';
 import { RecentAlertsPanel } from '@/components/Alerts/RecentAlertsPanel';
+import { DashboardRecoveryStatusPanel } from '@/components/Recovery/DashboardRecoveryStatusPanel';
+import { DashboardStoragePanel } from '@/components/Storage/DashboardStoragePanel';
 import type { DashboardWidgetDef, DashboardWidgetId } from '@/features/dashboardOverview/dashboardWidgets';
-import { RecoveryStatusPanel, StoragePanel } from './DashboardPanels';
 export default function Dashboard() {
   const { connected, reconnecting, reconnect, activeAlerts } = useWebSocket();
 
@@ -129,10 +130,10 @@ export default function Dashboard() {
           />
         );
       case 'recovery':
-        return <RecoveryStatusPanel recovery={recoverySummary()} />;
+        return <DashboardRecoveryStatusPanel recovery={recoverySummary()} />;
       case 'storage':
         return (
-          <StoragePanel
+          <DashboardStoragePanel
             storage={overview().storage}
             storageTrend={trends().storage.capacity}
             loading={trends().loading}

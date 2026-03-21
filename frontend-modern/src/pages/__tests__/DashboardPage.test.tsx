@@ -136,6 +136,13 @@ describe('Dashboard page module contract', () => {
     );
   });
 
+  it('routes storage and recovery dashboard widgets through storage-recovery owners', () => {
+    expect(dashboardPageSource).toContain(
+      "from '@/components/Recovery/DashboardRecoveryStatusPanel'",
+    );
+    expect(dashboardPageSource).toContain("from '@/components/Storage/DashboardStoragePanel'");
+  });
+
   it('renders loading skeleton blocks when resources are loading', () => {
     unifiedLoading = true;
 
