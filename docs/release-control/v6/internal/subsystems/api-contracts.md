@@ -48,6 +48,8 @@ Own canonical runtime payload shapes between backend and frontend.
 25. `frontend-modern/src/api/resources.ts`
 26. `frontend-modern/src/api/monitoring.ts`
 27. `internal/api/monitored_system_ledger.go`
+28. `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx`
+29. `frontend-modern/src/components/Settings/useInfrastructureReportingState.tsx`
 
 ## Shared Boundaries
 
@@ -70,16 +72,18 @@ Own canonical runtime payload shapes between backend and frontend.
 17. `frontend-modern/src/components/Settings/NodeModalSetupGuideSection.tsx` shared with `agent-lifecycle`: the node setup guide section is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
 18. `frontend-modern/src/components/Settings/NodeModalStatusFooter.tsx` shared with `agent-lifecycle`: the node setup status/footer section is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
 19. `frontend-modern/src/components/Settings/useAPITokenManagerState.ts` shared with `security-privacy`: the API token settings state hook is both a security/privacy control surface and a canonical API payload contract boundary.
-20. `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx` shared with `agent-lifecycle`: the shared infrastructure operations state hook is both an agent fleet lifecycle control surface and an API token, lookup, assignment, and reporting/install contract boundary.
-21. `frontend-modern/src/components/Settings/useNodeModalState.ts` shared with `agent-lifecycle`: the node setup modal state hook is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
-22. `frontend-modern/src/utils/agentInstallCommand.ts` shared with `agent-lifecycle`: the shared frontend install-command helper is both an agent lifecycle control surface and a canonical API/install transport contract boundary.
-23. `internal/api/agent_install_command_shared.go` shared with `agent-lifecycle`: agent install command assembly is both an agent lifecycle control surface and a canonical API payload contract boundary.
-20. `internal/api/ai_handler.go` shared with `ai-runtime`: Pulse Assistant handlers are both an AI runtime control surface and a canonical API payload contract boundary.
-21. `internal/api/ai_handlers.go` shared with `ai-runtime`: AI settings and remediation handlers are both an AI runtime control surface and a canonical API payload contract boundary.
-22. `internal/api/ai_intelligence_handlers.go` shared with `ai-runtime`: AI intelligence handlers are both an AI runtime control surface and a canonical API payload contract boundary.
-23. `internal/api/config_setup_handlers.go` shared with `agent-lifecycle`: auto-register and setup handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.
-24. `internal/api/licensing_bridge.go` shared with `cloud-paid`: commercial licensing bridge handlers carry both API payload contract and cloud-paid entitlement boundary ownership.
-25. `internal/api/licensing_handlers.go` shared with `cloud-paid`: commercial licensing handlers carry both API payload contract and cloud-paid entitlement boundary ownership.
+20. `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx` shared with `agent-lifecycle`: the infrastructure install state hook is both an agent fleet lifecycle control surface and an API token, lookup, and install transport contract boundary.
+21. `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx` shared with `agent-lifecycle`: the shared infrastructure operations state hook is both an agent fleet lifecycle control surface and an API token, lookup, assignment, and reporting/install contract boundary.
+22. `frontend-modern/src/components/Settings/useInfrastructureReportingState.tsx` shared with `agent-lifecycle`: the infrastructure reporting state hook is both an agent fleet lifecycle control surface and an API-backed assignment, reporting, and reconnect contract boundary.
+23. `frontend-modern/src/components/Settings/useNodeModalState.ts` shared with `agent-lifecycle`: the node setup modal state hook is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
+24. `frontend-modern/src/utils/agentInstallCommand.ts` shared with `agent-lifecycle`: the shared frontend install-command helper is both an agent lifecycle control surface and a canonical API/install transport contract boundary.
+25. `internal/api/agent_install_command_shared.go` shared with `agent-lifecycle`: agent install command assembly is both an agent lifecycle control surface and a canonical API payload contract boundary.
+26. `internal/api/ai_handler.go` shared with `ai-runtime`: Pulse Assistant handlers are both an AI runtime control surface and a canonical API payload contract boundary.
+27. `internal/api/ai_handlers.go` shared with `ai-runtime`: AI settings and remediation handlers are both an AI runtime control surface and a canonical API payload contract boundary.
+28. `internal/api/ai_intelligence_handlers.go` shared with `ai-runtime`: AI intelligence handlers are both an AI runtime control surface and a canonical API payload contract boundary.
+29. `internal/api/config_setup_handlers.go` shared with `agent-lifecycle`: auto-register and setup handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.
+30. `internal/api/licensing_bridge.go` shared with `cloud-paid`: commercial licensing bridge handlers carry both API payload contract and cloud-paid entitlement boundary ownership.
+31. `internal/api/licensing_handlers.go` shared with `cloud-paid`: commercial licensing handlers carry both API payload contract and cloud-paid entitlement boundary ownership.
 26. `internal/api/notifications.go` shared with `notifications`: notification handlers are both a notification delivery control surface and a canonical API payload contract boundary.
 27. `internal/api/payments_webhook_handlers.go` shared with `cloud-paid`: commercial payment webhook handlers carry both API payload contract and cloud-paid billing boundary ownership.
 28. `internal/api/public_signup_handlers.go` shared with `cloud-paid`: hosted signup handlers carry both API payload contract and cloud-paid hosted provisioning boundary ownership.
@@ -113,7 +117,7 @@ Own canonical runtime payload shapes between backend and frontend.
    and the shared `frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx` and `frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx` cards' infrastructure resource-link default, so the Patrol page, resource drawer, and problem-resource dashboard panels inherit the canonical resource-filter path construction instead of rebuilding infrastructure URLs inline
 8. Route frontend API-client parsed error propagation, API-error-status fallback handling, allowed-status handling, custom status-specific error handling, command-trigger success envelope handling, shared response parsing pipelines, missing-resource lookup handling, metadata CRUD routing, stream event consumption, response status, collection normalization, scalar payload coercion, and structured error normalization through canonical shared helpers under `frontend-modern/src/api/`
 9. Add or change API token scope, assignment, and revocation presentation through `frontend-modern/src/components/Settings/APITokenManager.tsx`, `frontend-modern/src/components/Settings/apiTokenManagerModel.ts`, and `frontend-modern/src/components/Settings/useAPITokenManagerState.ts`
-10. Add or change infrastructure operations token generation, lookup, assignment, the pure unified-agent inventory/install model, the shared infrastructure-operations state provider/context, and reporting/install presentation through `frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx`, `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`, and `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx`
+10. Add or change infrastructure operations token generation, lookup, assignment, the pure unified-agent inventory/install model, the split infrastructure install/reporting state owners, the shared infrastructure-operations state provider/context shell, and reporting/install presentation through `frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx`, `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`, `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx`, `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx`, and `frontend-modern/src/components/Settings/useInfrastructureReportingState.tsx`
 11. Keep `internal/api/session_store.go` on a fail-closed auth-persistence boundary: persisted OIDC refresh tokens may only round-trip through encrypted-at-rest session payloads, and any missing-crypto or invalid-ciphertext path must drop the token instead of preserving plaintext-at-rest session state.
 12. Keep tenant AI handler wiring on canonical provider ownership: `internal/api/ai_handlers.go` may wire tenant `ReadState` and tenant-scoped unified-resource providers into AI services, but it must not revive tenant snapshot-provider bridges once Patrol can initialize and verify from those canonical providers directly.
 
@@ -286,7 +290,7 @@ The same shared-boundary rule now applies to `frontend-modern/src/api/agentProfi
 agent install/register/profile control changes must preserve canonical API
 payload behavior instead of drifting into subsystem-local transport rules.
 That same shared boundary now assumes `InfrastructureOperationsController.tsx`
-is only the shell, while `useInfrastructureOperationsState.tsx` owns the API-backed
+is only the shell, while `useInfrastructureOperationsState.tsx` composes `useInfrastructureInstallState.tsx` and `useInfrastructureReportingState.tsx` into the shared API-backed
 state/provider contract and the extracted installer, inventory, and stop-monitoring
 section owners stay render-side consumers of that canonical state instead of
 embedding their own transport calls or ad hoc API parsing.

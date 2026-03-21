@@ -210,8 +210,24 @@
       ]
     },
     {
+      "path": "frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx",
+      "rationale": "the infrastructure install state hook is both an agent fleet lifecycle control surface and an API token, lookup, and install transport contract boundary",
+      "subsystems": [
+        "agent-lifecycle",
+        "api-contracts"
+      ]
+    },
+    {
       "path": "frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx",
       "rationale": "the shared infrastructure operations state hook is both an agent fleet lifecycle control surface and an API token, lookup, assignment, and reporting/install contract boundary",
+      "subsystems": [
+        "agent-lifecycle",
+        "api-contracts"
+      ]
+    },
+    {
+      "path": "frontend-modern/src/components/Settings/useInfrastructureReportingState.tsx",
+      "rationale": "the infrastructure reporting state hook is both an agent fleet lifecycle control surface and an API-backed assignment, reporting, and reconnect contract boundary",
       "subsystems": [
         "agent-lifecycle",
         "api-contracts"
@@ -430,7 +446,9 @@
         "frontend-modern/src/components/Settings/ProxmoxSettingsPanel.tsx",
         "frontend-modern/src/components/Settings/SettingsSectionNav.tsx",
         "frontend-modern/src/components/Settings/useAgentProfilesPanelState.ts",
+        "frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx",
         "frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx",
+        "frontend-modern/src/components/Settings/useInfrastructureReportingState.tsx",
         "frontend-modern/src/components/Settings/useInfrastructureSettingsState.ts",
         "frontend-modern/src/components/Settings/useNodeModalState.ts",
         "frontend-modern/src/components/Settings/useProxmoxDirectWorkspaceState.ts",
@@ -644,7 +662,9 @@
               "frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx",
               "frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx",
               "frontend-modern/src/components/Settings/InfrastructureStopMonitoringDialog.tsx",
-              "frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx"
+              "frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx",
+              "frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx",
+              "frontend-modern/src/components/Settings/useInfrastructureReportingState.tsx"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
@@ -880,7 +900,9 @@
         "frontend-modern/src/components/Settings/NodeModalSetupGuideSection.tsx",
         "frontend-modern/src/components/Settings/NodeModalStatusFooter.tsx",
         "frontend-modern/src/components/Settings/useAPITokenManagerState.ts",
+        "frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx",
         "frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx",
+        "frontend-modern/src/components/Settings/useInfrastructureReportingState.tsx",
         "frontend-modern/src/components/Settings/useNodeModalState.ts",
         "frontend-modern/src/types/api.ts",
         "frontend-modern/src/utils/agentInstallCommand.ts"
@@ -1116,7 +1138,9 @@
             "match_files": [
               "frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx",
               "frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx",
-              "frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx"
+              "frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx",
+              "frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx",
+              "frontend-modern/src/components/Settings/useInfrastructureReportingState.tsx"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],

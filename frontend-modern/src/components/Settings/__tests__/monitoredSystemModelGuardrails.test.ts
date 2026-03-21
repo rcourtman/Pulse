@@ -8,7 +8,9 @@ import infrastructureActiveRowDetailsSource from '../InfrastructureActiveRowDeta
 import infrastructureIgnoredRowDetailsSource from '../InfrastructureIgnoredRowDetails.tsx?raw';
 import infrastructureInstallerSectionSource from '../InfrastructureInstallerSection.tsx?raw';
 import infrastructureInventorySectionSource from '../InfrastructureInventorySection.tsx?raw';
+import infrastructureInstallStateSource from '../useInfrastructureInstallState.tsx?raw';
 import infrastructureOperationsStateSource from '../useInfrastructureOperationsState.tsx?raw';
+import infrastructureReportingStateSource from '../useInfrastructureReportingState.tsx?raw';
 import infrastructureStopMonitoringDialogSource from '../InfrastructureStopMonitoringDialog.tsx?raw';
 import agentLedgerPanelSource from '../MonitoredSystemLedgerPanel.tsx?raw';
 import alertsPageSource from '@/pages/Alerts.tsx?raw';
@@ -125,7 +127,9 @@ const aiSettingsSource = [
   aiSettingsStateSource,
 ].join('\n');
 const infrastructureOperationsSource = [
+  infrastructureInstallStateSource,
   infrastructureOperationsStateSource,
+  infrastructureReportingStateSource,
   infrastructureInstallerSectionSource,
   infrastructureInventorySectionSource,
   infrastructureActiveRowDetailsSource,
@@ -270,6 +274,8 @@ describe('monitored-system model guardrails', () => {
     );
     expect(infrastructureOperationsSource).not.toContain('const ALLOW_RECONNECT_LABEL =');
     expect(infrastructureOperationsStateSource).toContain('withPrivilegeEscalation');
+    expect(infrastructureOperationsStateSource).toContain('./useInfrastructureInstallState');
+    expect(infrastructureOperationsStateSource).toContain('./useInfrastructureReportingState');
     expect(infrastructureOperationsSource).toContain('@/utils/agentCapabilityPresentation');
     expect(infrastructureOperationsSource).not.toContain('const getCapabilityLabel =');
     expect(infrastructureOperationsSource).not.toContain('const getCapabilityBadgeClass =');
@@ -278,8 +284,8 @@ describe('monitored-system model guardrails', () => {
     expect(agentCapabilityPresentationSource).toContain(
       'export function getAgentCapabilityBadgeClass',
     );
-    expect(infrastructureOperationsStateSource).not.toContain('isConnectedHealthStatus');
-    expect(infrastructureOperationsStateSource).not.toContain('const connectedFromStatus =');
+    expect(infrastructureReportingStateSource).not.toContain('isConnectedHealthStatus');
+    expect(infrastructureReportingStateSource).not.toContain('const connectedFromStatus =');
     expect(agentProfilesPanelStateSource).toContain('isConnectedHealthStatus');
     expect(agentProfilesPanelSource).not.toContain('const connectedFromStatus =');
     expect(statusUtilsSource).toContain('export function isConnectedHealthStatus');
@@ -384,7 +390,7 @@ describe('monitored-system model guardrails', () => {
     expect(relayOnboardingCardSource).toContain('RELAY_ONBOARDING_DISCONNECTED_LABEL');
     expect(relayOnboardingCardSource).not.toContain('Pair Your Mobile Device');
     expect(relayOnboardingCardSource).not.toContain('Relay is currently disconnected.');
-    expect(infrastructureOperationsStateSource).toContain('STORAGE_KEYS.SETUP_HANDOFF');
+    expect(infrastructureInstallStateSource).toContain('STORAGE_KEYS.SETUP_HANDOFF');
     expect(infrastructureInstallerSectionSource).toContain(
       'Security configured. Save these first-run credentials now.',
     );

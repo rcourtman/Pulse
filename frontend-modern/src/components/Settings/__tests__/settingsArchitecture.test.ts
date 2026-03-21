@@ -20,7 +20,9 @@ import nodeModalMonitoringSectionSource from '../NodeModalMonitoringSection.tsx?
 import nodeModalSetupGuideSectionSource from '../NodeModalSetupGuideSection.tsx?raw';
 import nodeModalStatusFooterSource from '../NodeModalStatusFooter.tsx?raw';
 import nodeModalSource from '../NodeModal.tsx?raw';
+import infrastructureInstallStateSource from '../useInfrastructureInstallState.tsx?raw';
 import infrastructureOperationsStateSource from '../useInfrastructureOperationsState.tsx?raw';
+import infrastructureReportingStateSource from '../useInfrastructureReportingState.tsx?raw';
 import nodeModalStateSource from '../useNodeModalState.ts?raw';
 import settingsPanelRegistryHookSource from '../useSettingsPanelRegistry.tsx?raw';
 import settingsSystemPanelsSource from '../useSettingsSystemPanels.tsx?raw';
@@ -124,7 +126,9 @@ const extractedModules = [
   '../BackupTransferDialogs.tsx',
   '../InfrastructureOperationsController.tsx',
   '../infrastructureOperationsModel.tsx',
+  '../useInfrastructureInstallState.tsx',
   '../useInfrastructureOperationsState.tsx',
+  '../useInfrastructureReportingState.tsx',
   '../apiTokenManagerModel.ts',
   '../useAPITokenManagerState.ts',
   '../useAuditLogPanelState.ts',
@@ -689,6 +693,8 @@ describe('Settings architecture guardrails', () => {
     expect(infrastructureOperationsStateSource).toContain(
       'export const useInfrastructureOperationsState',
     );
+    expect(infrastructureOperationsStateSource).toContain('./useInfrastructureInstallState');
+    expect(infrastructureOperationsStateSource).toContain('./useInfrastructureReportingState');
     expect(infrastructureOperationsStateSource).toContain(
       'export const InfrastructureOperationsStateProvider',
     );
@@ -698,6 +704,10 @@ describe('Settings architecture guardrails', () => {
     expect(infrastructureOperationsStateSource).not.toContain('const renderInstallerSection =');
     expect(infrastructureOperationsStateSource).not.toContain('const renderInventorySection =');
     expect(infrastructureOperationsStateSource).not.toContain('const renderStopMonitoringDialog =');
+    expect(infrastructureInstallStateSource).toContain('export const useInfrastructureInstallState');
+    expect(infrastructureReportingStateSource).toContain(
+      'export const useInfrastructureReportingState',
+    );
     expect(infrastructureInstallerSectionSource).toContain('useInfrastructureOperationsContext');
     expect(infrastructureInventorySectionSource).toContain('useInfrastructureOperationsContext');
     expect(infrastructureStopMonitoringDialogSource).toContain('useInfrastructureOperationsContext');

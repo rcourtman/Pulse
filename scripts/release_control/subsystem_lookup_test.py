@@ -2391,6 +2391,110 @@ class SubsystemLookupTest(unittest.TestCase):
             ],
         )
 
+    def test_lookup_paths_assigns_infrastructure_install_state_to_shared_agent_lifecycle_and_api_contracts(
+        self,
+    ) -> None:
+        result = lookup_paths(
+            ["frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx"]
+        )
+        self.assertEqual(result["unowned_runtime_files"], [])
+        self.assertEqual(
+            {item["subsystem"] for item in result["impacted_subsystems"]},
+            {"agent-lifecycle", "api-contracts"},
+        )
+        file_entry = result["files"][0]
+        self.assertEqual(file_entry["classification"], "runtime")
+        self.assertEqual(
+            file_entry["shared_ownership"]["subsystems"],
+            ["agent-lifecycle", "api-contracts"],
+        )
+        matches = {match["subsystem"] for match in file_entry["matches"]}
+        self.assertEqual(matches, {"agent-lifecycle", "api-contracts"})
+
+        by_subsystem = {match["subsystem"]: match for match in file_entry["matches"]}
+        api_match = by_subsystem["api-contracts"]
+        lifecycle_match = by_subsystem["agent-lifecycle"]
+
+        self.assertEqual(
+            api_match["verification_requirement"]["id"],
+            "unified-agent-settings-surface",
+        )
+        self.assertEqual(
+            api_match["verification_requirement"]["exact_files"],
+            [
+                "frontend-modern/src/api/__tests__/agentProfiles.test.ts",
+                "frontend-modern/src/api/__tests__/monitoring.test.ts",
+                "frontend-modern/src/api/__tests__/security.test.ts",
+                "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsController.test.tsx",
+                "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsModel.test.tsx",
+            ],
+        )
+        self.assertEqual(
+            lifecycle_match["verification_requirement"]["id"],
+            "unified-agent-settings-surface",
+        )
+        self.assertEqual(
+            lifecycle_match["verification_requirement"]["exact_files"],
+            [
+                "frontend-modern/src/api/__tests__/agentProfiles.test.ts",
+                "frontend-modern/src/api/__tests__/monitoring.test.ts",
+                "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsController.test.tsx",
+                "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsModel.test.tsx",
+            ],
+        )
+
+    def test_lookup_paths_assigns_infrastructure_reporting_state_to_shared_agent_lifecycle_and_api_contracts(
+        self,
+    ) -> None:
+        result = lookup_paths(
+            ["frontend-modern/src/components/Settings/useInfrastructureReportingState.tsx"]
+        )
+        self.assertEqual(result["unowned_runtime_files"], [])
+        self.assertEqual(
+            {item["subsystem"] for item in result["impacted_subsystems"]},
+            {"agent-lifecycle", "api-contracts"},
+        )
+        file_entry = result["files"][0]
+        self.assertEqual(file_entry["classification"], "runtime")
+        self.assertEqual(
+            file_entry["shared_ownership"]["subsystems"],
+            ["agent-lifecycle", "api-contracts"],
+        )
+        matches = {match["subsystem"] for match in file_entry["matches"]}
+        self.assertEqual(matches, {"agent-lifecycle", "api-contracts"})
+
+        by_subsystem = {match["subsystem"]: match for match in file_entry["matches"]}
+        api_match = by_subsystem["api-contracts"]
+        lifecycle_match = by_subsystem["agent-lifecycle"]
+
+        self.assertEqual(
+            api_match["verification_requirement"]["id"],
+            "unified-agent-settings-surface",
+        )
+        self.assertEqual(
+            api_match["verification_requirement"]["exact_files"],
+            [
+                "frontend-modern/src/api/__tests__/agentProfiles.test.ts",
+                "frontend-modern/src/api/__tests__/monitoring.test.ts",
+                "frontend-modern/src/api/__tests__/security.test.ts",
+                "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsController.test.tsx",
+                "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsModel.test.tsx",
+            ],
+        )
+        self.assertEqual(
+            lifecycle_match["verification_requirement"]["id"],
+            "unified-agent-settings-surface",
+        )
+        self.assertEqual(
+            lifecycle_match["verification_requirement"]["exact_files"],
+            [
+                "frontend-modern/src/api/__tests__/agentProfiles.test.ts",
+                "frontend-modern/src/api/__tests__/monitoring.test.ts",
+                "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsController.test.tsx",
+                "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsModel.test.tsx",
+            ],
+        )
+
     def test_lookup_paths_assigns_infrastructure_installer_section_to_agent_lifecycle(self) -> None:
         result = lookup_paths(
             ["frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx"]

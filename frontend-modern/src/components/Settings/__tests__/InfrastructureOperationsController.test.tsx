@@ -11,7 +11,9 @@ import infrastructureOperationsModelSource from '../infrastructureOperationsMode
 import infrastructureReportingPanelSource from '../InfrastructureReportingPanel.tsx?raw';
 import infrastructureDirectConnectionsSummaryCardSource from '../InfrastructureDirectConnectionsSummaryCard.tsx?raw';
 import infrastructureInventorySectionSource from '../InfrastructureInventorySection.tsx?raw';
+import infrastructureInstallStateSource from '../useInfrastructureInstallState.tsx?raw';
 import infrastructureOperationsStateSource from '../useInfrastructureOperationsState.tsx?raw';
+import infrastructureReportingStateSource from '../useInfrastructureReportingState.tsx?raw';
 import infrastructureStopMonitoringDialogSource from '../InfrastructureStopMonitoringDialog.tsx?raw';
 import type {
   Agent,
@@ -70,6 +72,8 @@ describe('InfrastructureOperationsController ownership guardrails', () => {
       'Direct Proxmox connections',
     );
     expect(infrastructureOperationsStateSource).toContain("./infrastructureOperationsModel");
+    expect(infrastructureOperationsStateSource).toContain('./useInfrastructureInstallState');
+    expect(infrastructureOperationsStateSource).toContain('./useInfrastructureReportingState');
     expect(infrastructureOperationsStateSource).toContain(
       'export const InfrastructureOperationsStateProvider',
     );
@@ -79,6 +83,10 @@ describe('InfrastructureOperationsController ownership guardrails', () => {
     expect(infrastructureOperationsStateSource).not.toContain('renderInstallerSection');
     expect(infrastructureOperationsStateSource).not.toContain('renderInventorySection');
     expect(infrastructureOperationsStateSource).not.toContain('renderStopMonitoringDialog');
+    expect(infrastructureInstallStateSource).toContain('export const useInfrastructureInstallState');
+    expect(infrastructureReportingStateSource).toContain(
+      'export const useInfrastructureReportingState',
+    );
     expect(infrastructureInstallerSectionSource).toContain('useInfrastructureOperationsContext');
     expect(infrastructureInventorySectionSource).toContain('useInfrastructureOperationsContext');
     expect(infrastructureStopMonitoringDialogSource).toContain('useInfrastructureOperationsContext');
