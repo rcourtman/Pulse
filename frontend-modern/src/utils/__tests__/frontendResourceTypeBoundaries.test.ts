@@ -85,6 +85,9 @@ import dashboardStateSource from '@/components/Dashboard/useDashboardState.ts?ra
 import dashboardFilterStateSource from '@/components/Dashboard/useDashboardFilterState.ts?raw';
 import thresholdSliderModelSource from '@/components/Dashboard/thresholdSliderModel.ts?raw';
 import thresholdSliderStateSource from '@/components/Dashboard/useThresholdSliderState.ts?raw';
+import enhancedCpuBarSource from '@/components/Dashboard/EnhancedCPUBar.tsx?raw';
+import enhancedCpuBarModelSource from '@/components/Dashboard/enhancedCpuBarModel.ts?raw';
+import enhancedCpuBarStateSource from '@/components/Dashboard/useEnhancedCPUBarState.ts?raw';
 import stackedDiskBarSource from '@/components/Dashboard/StackedDiskBar.tsx?raw';
 import stackedDiskBarModelSource from '@/components/Dashboard/stackedDiskBarModel.ts?raw';
 import stackedDiskBarStateSource from '@/components/Dashboard/useStackedDiskBarState.ts?raw';
@@ -558,6 +561,13 @@ describe('frontend resource type boundaries', () => {
     expect(metricBarStateSource).toContain('new ResizeObserver');
     expect(metricBarModelSource).toContain('export function buildMetricBarPresentation');
     expect(metricBarModelSource).toContain('estimateTextWidth');
+    expect(enhancedCpuBarSource).toContain('useEnhancedCPUBarState');
+    expect(enhancedCpuBarSource).not.toContain('const tip = useTooltip()');
+    expect(enhancedCpuBarSource).not.toContain('const barColor = createMemo(() =>');
+    expect(enhancedCpuBarSource).not.toContain('const anomalyRatio = createMemo(() =>');
+    expect(enhancedCpuBarStateSource).toContain('useTooltip');
+    expect(enhancedCpuBarModelSource).toContain('export function buildEnhancedCPUBarPresentation');
+    expect(enhancedCpuBarModelSource).toContain('tooltipUsageClass');
     expect(workloadsSummarySource).toContain('normalizeOrgScope(getOrgID())');
     expect(workloadsSummarySource).not.toContain("const DEFAULT_ORG_SCOPE = 'default'");
     expect(workloadsSummarySource).not.toContain('const normalizeOrgScope =');

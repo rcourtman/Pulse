@@ -1,60 +1,41 @@
-import { Show, createMemo } from 'solid-js';
-import { formatPercent, formatAnomalyRatio, ANOMALY_SEVERITY_CLASS } from '@/utils/format';
-import { useTooltip } from '@/hooks/useTooltip';
+import { Show } from 'solid-js';
 import { TooltipPortal } from '@/components/shared/TooltipPortal';
-import { getMetricColorClass } from '@/utils/metricThresholds';
-import type { AnomalyReport } from '@/types/aiIntelligence';
-
-interface EnhancedCPUBarProps {
-  usage: number; // CPU Usage % (0-100)
-  loadAverage?: number; // 1-minute load average
-  cores?: number; // Number of cores
-  model?: string; // CPU Model name (for tooltip)
-  resourceId?: string;
-  anomaly?: AnomalyReport | null; // Baseline anomaly if detected
-}
+import { type EnhancedCPUBarProps } from './enhancedCpuBarModel';
+import { useEnhancedCPUBarState } from './useEnhancedCPUBarState';
 
 export function EnhancedCPUBar(props: EnhancedCPUBarProps) {
-  const tip = useTooltip();
-
-  // Bar color based on usage (from centralized thresholds)
-  const barColor = createMemo(() => getMetricColorClass(props.usage, 'cpu'));
-
-  const anomalyRatio = createMemo(() => formatAnomalyRatio(props.anomaly));
+  const state = useEnhancedCPUBarState(props);
+  const presentation = state.presentation;
 
   return (
     <div class="metric-text w-full h-4 flex items-center justify-center">
       <div
         class="relative w-full h-full overflow-hidden bg-surface-hover rounded"
-        onMouseEnter={tip.onMouseEnter}
-        onMouseLeave={tip.onMouseLeave}
+        onMouseEnter={state.handleMouseEnter}
+        onMouseLeave={state.handleMouseLeave}
       >
-        {/* Usage Bar */}
         <div
-          class={`absolute top-0 left-0 h-full transition-all duration-300 ${barColor()}`}
-          style={{ width: `${Math.min(props.usage, 100)}%` }}
+          class={`absolute top-0 left-0 h-full transition-all duration-300 ${presentation().barClass}`}
+          style={{ width: presentation().barWidth }}
         />
 
-        {/* Label with optional anomaly indicator */}
         <span class="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-base-content leading-none pointer-events-none">
-          {formatPercent(props.usage)}
+          {presentation().displayUsage}
           <Show when={props.cores}>
             <span class="hidden sm:inline font-normal text-muted ml-1">({props.cores})</span>
           </Show>
-          {/* Anomaly indicator */}
-          <Show when={props.anomaly && anomalyRatio()}>
+          <Show when={presentation().hasAnomaly}>
             <span
-              class={`ml-1 font-bold animate-pulse ${ANOMALY_SEVERITY_CLASS[props.anomaly!.severity] || 'text-yellow-400'}`}
-              title={props.anomaly!.description}
+              class={`ml-1 font-bold animate-pulse ${presentation().anomalyClass}`}
+              title={presentation().anomalyDescription}
             >
-              {anomalyRatio()}
+              {presentation().anomalyRatio}
             </span>
           </Show>
         </span>
       </div>
 
-      {/* Tooltip */}
-      <TooltipPortal when={tip.show()} x={tip.pos().x} y={tip.pos().y}>
+      <TooltipPortal when={state.tooltipVisible()} x={state.tip.pos().x} y={state.tip.pos().y}>
         <div class="min-w-[160px]">
           <div class="font-medium mb-1 text-slate-300 border-b border-border pb-1">CPU Details</div>
 
@@ -64,15 +45,15 @@ export function EnhancedCPUBar(props: EnhancedCPUBarProps) {
 
           <div class="flex justify-between gap-3 py-0.5">
             <span class="text-slate-400">Usage</span>
-            <span class={`font-medium ${props.usage > 90 ? 'text-red-400' : 'text-base-content'}`}>
-              {formatPercent(props.usage)}
+            <span class={`font-medium ${presentation().tooltipUsageClass}`}>
+              {presentation().displayUsage}
             </span>
           </div>
 
-          <Show when={props.loadAverage !== undefined}>
+          <Show when={presentation().displayLoadAverage !== undefined}>
             <div class="flex justify-between gap-3 py-0.5">
               <span class="text-slate-400">Load (1m)</span>
-              <span class="font-medium text-base-content">{props.loadAverage?.toFixed(2)}</span>
+              <span class="font-medium text-base-content">{presentation().displayLoadAverage}</span>
             </div>
           </Show>
         </div>

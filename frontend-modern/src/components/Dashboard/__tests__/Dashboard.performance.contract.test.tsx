@@ -11,6 +11,9 @@ import dashboardFilterStateSource from '../useDashboardFilterState.ts?raw';
 import thresholdSliderSource from '../ThresholdSlider.tsx?raw';
 import thresholdSliderModelSource from '../thresholdSliderModel.ts?raw';
 import thresholdSliderStateSource from '../useThresholdSliderState.ts?raw';
+import enhancedCpuBarSource from '../EnhancedCPUBar.tsx?raw';
+import enhancedCpuBarModelSource from '../enhancedCpuBarModel.ts?raw';
+import enhancedCpuBarStateSource from '../useEnhancedCPUBarState.ts?raw';
 import stackedDiskBarSource from '../StackedDiskBar.tsx?raw';
 import stackedDiskBarModelSource from '../stackedDiskBarModel.ts?raw';
 import stackedDiskBarStateSource from '../useStackedDiskBarState.ts?raw';
@@ -554,6 +557,19 @@ describe('Dashboard performance contract', () => {
       expect(metricBarModelSource).toContain('export function buildMetricBarPresentation');
       expect(metricBarModelSource).toContain('estimateTextWidth');
       expect(metricBarModelSource).toContain('getMetricColorClass');
+    });
+
+    it('keeps enhanced CPU bar runtime and derivations in canonical owners', () => {
+      expect(enhancedCpuBarSource).toContain('useEnhancedCPUBarState');
+      expect(enhancedCpuBarSource).not.toContain('const tip = useTooltip()');
+      expect(enhancedCpuBarSource).not.toContain('const barColor = createMemo(() =>');
+      expect(enhancedCpuBarSource).not.toContain('const anomalyRatio = createMemo(() =>');
+      expect(enhancedCpuBarStateSource).toContain('useTooltip');
+      expect(enhancedCpuBarModelSource).toContain(
+        'export function buildEnhancedCPUBarPresentation',
+      );
+      expect(enhancedCpuBarModelSource).toContain('getMetricColorClass');
+      expect(enhancedCpuBarModelSource).toContain('tooltipUsageClass');
     });
 
     it('keeps guest row contract and hot-path state in canonical row owners', () => {
