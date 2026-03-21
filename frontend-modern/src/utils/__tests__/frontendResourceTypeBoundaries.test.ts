@@ -287,7 +287,9 @@ import organizationAccessPanelSource from '@/components/Settings/OrganizationAcc
 import organizationAccessLoadingStateSource from '@/components/Settings/OrganizationAccessLoadingState.tsx?raw';
 import organizationAccessManagementSectionSource from '@/components/Settings/OrganizationAccessManagementSection.tsx?raw';
 import organizationAccessMembersSectionSource from '@/components/Settings/OrganizationAccessMembersSection.tsx?raw';
+import billingAdminOrganizationsTableSource from '@/components/Settings/BillingAdminOrganizationsTable.tsx?raw';
 import billingAdminPanelSource from '@/components/Settings/BillingAdminPanel.tsx?raw';
+import billingAdminPanelStateSource from '@/components/Settings/useBillingAdminPanelState.ts?raw';
 import organizationBillingLoadingStateSource from '@/components/Settings/OrganizationBillingLoadingState.tsx?raw';
 import organizationBillingPanelSource from '@/components/Settings/OrganizationBillingPanel.tsx?raw';
 import organizationOverviewLoadingStateSource from '@/components/Settings/OrganizationOverviewLoadingState.tsx?raw';
@@ -880,15 +882,18 @@ describe('frontend resource type boundaries', () => {
     expect(organizationBillingPanelSource).toContain('./OrganizationBillingLoadingState');
     expect(organizationBillingStateSource).toContain('normalizeOrgScope(getOrgID())');
     expect(organizationAccessStateSource).toContain('@/utils/organizationSettingsPresentation');
-    expect(billingAdminPanelSource).toContain('@/utils/organizationSettingsPresentation');
-    expect(billingAdminPanelSource).toContain('@/utils/licensePresentation');
+    expect(billingAdminPanelStateSource).toContain('@/utils/organizationSettingsPresentation');
+    expect(billingAdminOrganizationsTableSource).toContain('@/utils/licensePresentation');
     expect(organizationOverviewStateSource).toContain('@/utils/organizationSettingsPresentation');
     expect(organizationSharingStateSource).toContain('@/utils/organizationSettingsPresentation');
     expect(organizationBillingPanelSource).toContain('@/utils/organizationSettingsPresentation');
     expect(organizationBillingStateSource).toContain('@/utils/licensePresentation');
     expect(organizationBillingStateSource).toContain('@/utils/organizationSettingsPresentation');
+    expect(billingAdminPanelSource).toContain('./useBillingAdminPanelState');
+    expect(billingAdminPanelSource).toContain('./BillingAdminOrganizationsTable');
     expect(organizationBillingPanelSource).not.toContain('normalizeOrgScope(getOrgID())');
     expect(organizationBillingPanelSource).not.toContain('createSignal(');
+    expect(billingAdminPanelSource).not.toContain('createSignal(');
     expect(organizationBillingPanelSource).not.toContain('Grace Period');
     expect(organizationBillingPanelSource).not.toContain('No License');
     expect(organizationAccessPanelSource).not.toContain(
@@ -938,6 +943,9 @@ describe('frontend resource type boundaries', () => {
     expect(billingAdminPanelSource).not.toContain('No trial');
     expect(billingAdminPanelSource).not.toContain('soft-deleted');
     expect(billingAdminPanelSource).not.toContain('Organization billing suspended');
+    expect(billingAdminPanelStateSource).toContain('getBillingAdminStateUpdateSuccessMessage');
+    expect(billingAdminPanelStateSource).toContain('getOrganizationSettingsPanelLoadErrorMessage');
+    expect(billingAdminOrganizationsTableSource).toContain('getBillingAdminTrialStatus');
     expect(organizationSettingsPresentationSource).toContain(
       'export function getOrganizationSettingsLoadErrorMessage',
     );

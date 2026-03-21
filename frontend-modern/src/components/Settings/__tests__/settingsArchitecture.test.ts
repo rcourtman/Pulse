@@ -25,7 +25,9 @@ import auditLogPanelSource from '../AuditLogPanel.tsx?raw';
 import auditLogStateSource from '../useAuditLogPanelState.ts?raw';
 import auditWebhookPanelSource from '../AuditWebhookPanel.tsx?raw';
 import auditWebhookStateSource from '../useAuditWebhookPanelState.ts?raw';
+import billingAdminOrganizationsTableSource from '../BillingAdminOrganizationsTable.tsx?raw';
 import billingAdminPanelSource from '../BillingAdminPanel.tsx?raw';
+import billingAdminPanelStateSource from '../useBillingAdminPanelState.ts?raw';
 import generalSettingsPanelSource from '../GeneralSettingsPanel.tsx?raw';
 import aiSettingsPanelSource from '../AISettings.tsx?raw';
 import aiProviderConfigurationSectionSource from '../AIProviderConfigurationSection.tsx?raw';
@@ -109,6 +111,8 @@ const extractedModules = [
   '../useAPITokenManagerState.ts',
   '../useAuditLogPanelState.ts',
   '../useAuditWebhookPanelState.ts',
+  '../BillingAdminOrganizationsTable.tsx',
+  '../useBillingAdminPanelState.ts',
   '../NodeModal.tsx',
   '../nodeModalModel.ts',
   '../useNodeModalState.ts',
@@ -388,6 +392,18 @@ describe('Settings architecture guardrails', () => {
     expect(relaySettingsPanelStateSource).toContain('QRCode.toDataURL(payload.deep_link');
     expect(relayPairingSectionSource).toContain('getRelayDiagnosticClass');
     expect(relayPairingSectionSource).toContain('Pair New Device');
+  });
+
+  it('keeps hosted billing admin split into shell, runtime, and table owners', () => {
+    expect(billingAdminPanelSource).toContain('./useBillingAdminPanelState');
+    expect(billingAdminPanelSource).toContain('./BillingAdminOrganizationsTable');
+    expect(billingAdminPanelSource).not.toContain('createSignal(');
+    expect(billingAdminPanelSource).not.toContain('BillingAdminAPI.listOrganizations');
+    expect(billingAdminPanelStateSource).toContain('BillingAdminAPI.listOrganizations');
+    expect(billingAdminPanelStateSource).toContain('BillingAdminAPI.putBillingState');
+    expect(billingAdminPanelStateSource).toContain('promisePool');
+    expect(billingAdminOrganizationsTableSource).toContain('PulseDataGrid');
+    expect(billingAdminOrganizationsTableSource).toContain('Billing state JSON');
   });
 
   it('does not re-inline extracted tab and header metadata definitions', () => {

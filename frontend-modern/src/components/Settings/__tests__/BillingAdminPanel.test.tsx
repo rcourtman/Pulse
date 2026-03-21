@@ -2,6 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 
 import { BillingAdminPanel } from '../BillingAdminPanel';
+import billingAdminOrganizationsTableSource from '../BillingAdminOrganizationsTable.tsx?raw';
+import billingAdminPanelSource from '../BillingAdminPanel.tsx?raw';
+import billingAdminPanelStateSource from '../useBillingAdminPanelState.ts?raw';
 
 const listOrganizationsMock = vi.fn();
 const getBillingStateMock = vi.fn();
@@ -113,5 +116,18 @@ describe('BillingAdminPanel', () => {
     const payload = putBillingStateMock.mock.calls[0][1] as Record<string, unknown>;
     expect(payload.subscription_state).toBe('suspended');
     expect(payload.plan_version).toBe('cloud_power');
+  });
+
+  it('keeps hosted billing admin split into shell, runtime, and table owners', () => {
+    expect(billingAdminPanelSource).toContain('./useBillingAdminPanelState');
+    expect(billingAdminPanelSource).toContain('./BillingAdminOrganizationsTable');
+    expect(billingAdminPanelSource).not.toContain('createSignal(');
+    expect(billingAdminPanelSource).not.toContain('BillingAdminAPI.listOrganizations');
+    expect(billingAdminPanelStateSource).toContain('BillingAdminAPI.listOrganizations');
+    expect(billingAdminPanelStateSource).toContain('BillingAdminAPI.getBillingState');
+    expect(billingAdminPanelStateSource).toContain('BillingAdminAPI.putBillingState');
+    expect(billingAdminPanelStateSource).toContain('promisePool');
+    expect(billingAdminOrganizationsTableSource).toContain('PulseDataGrid');
+    expect(billingAdminOrganizationsTableSource).toContain('Billing state JSON');
   });
 });

@@ -48,20 +48,22 @@ agreement, and cloud-specific enforcement rules.
 26. `frontend-modern/src/useAppRuntimeState.ts`
 27. `frontend-modern/src/components/Dashboard/RelayOnboardingCard.tsx`
 28. `frontend-modern/src/components/Settings/BillingAdminPanel.tsx`
-29. `frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx`
-30. `frontend-modern/src/components/Settings/OrganizationBillingLoadingState.tsx`
-31. `frontend-modern/src/components/Settings/ProLicensePanel.tsx`
-32. `frontend-modern/src/components/Settings/ProLicensePlanSection.tsx`
-33. `frontend-modern/src/components/Settings/CommercialBillingSections.tsx`
-34. `frontend-modern/src/components/Settings/SelfHostedCommercialActivationSection.tsx`
-35. `frontend-modern/src/components/Settings/RelaySettingsPanel.tsx`
-36. `frontend-modern/src/components/Settings/RelayPairingSection.tsx`
-37. `frontend-modern/src/components/Settings/useOrganizationBillingPanelState.ts`
-38. `frontend-modern/src/components/Settings/useProLicensePanelState.ts`
-39. `frontend-modern/src/components/Settings/useRelaySettingsPanelState.ts`
-40. `frontend-modern/src/pages/CloudPricing.tsx`
-41. `frontend-modern/src/utils/apiClient.ts`
-42. `frontend-modern/src/utils/commercialBillingModel.ts`
+29. `frontend-modern/src/components/Settings/BillingAdminOrganizationsTable.tsx`
+30. `frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx`
+31. `frontend-modern/src/components/Settings/OrganizationBillingLoadingState.tsx`
+32. `frontend-modern/src/components/Settings/ProLicensePanel.tsx`
+33. `frontend-modern/src/components/Settings/ProLicensePlanSection.tsx`
+34. `frontend-modern/src/components/Settings/CommercialBillingSections.tsx`
+35. `frontend-modern/src/components/Settings/SelfHostedCommercialActivationSection.tsx`
+36. `frontend-modern/src/components/Settings/RelaySettingsPanel.tsx`
+37. `frontend-modern/src/components/Settings/RelayPairingSection.tsx`
+38. `frontend-modern/src/components/Settings/useBillingAdminPanelState.ts`
+39. `frontend-modern/src/components/Settings/useOrganizationBillingPanelState.ts`
+40. `frontend-modern/src/components/Settings/useProLicensePanelState.ts`
+41. `frontend-modern/src/components/Settings/useRelaySettingsPanelState.ts`
+42. `frontend-modern/src/pages/CloudPricing.tsx`
+43. `frontend-modern/src/utils/apiClient.ts`
+44. `frontend-modern/src/utils/commercialBillingModel.ts`
 
 ## Shared Boundaries
 
@@ -82,7 +84,7 @@ agreement, and cloud-specific enforcement rules.
 8. Add or change encrypted activation persistence through `pkg/licensing/persistence.go` and `pkg/licensing/activation_store.go`
 9. Add or change hosted trial token semantics through `pkg/licensing/trial_activation.go`
 10. Add or change hosted signup provisioning through `internal/hosted/provisioner.go`
-11. Add or change hosted billing-admin presentation through `frontend-modern/src/components/Settings/BillingAdminPanel.tsx`
+11. Add or change hosted billing-admin presentation through `frontend-modern/src/components/Settings/BillingAdminPanel.tsx`, `frontend-modern/src/components/Settings/BillingAdminOrganizationsTable.tsx`, and `frontend-modern/src/components/Settings/useBillingAdminPanelState.ts`
 12. Add or change shared commercial plan/usage presentation through `frontend-modern/src/components/Settings/CommercialBillingSections.tsx` and `frontend-modern/src/utils/commercialBillingModel.ts`
 13. Add or change organization billing and usage presentation through `frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx`, `frontend-modern/src/components/Settings/OrganizationBillingLoadingState.tsx`, and `frontend-modern/src/components/Settings/useOrganizationBillingPanelState.ts`
 14. Add or change self-hosted Pro activation, trial, and entitlement actions through `frontend-modern/src/components/Settings/ProLicensePanel.tsx`, `frontend-modern/src/components/Settings/ProLicensePlanSection.tsx`, `frontend-modern/src/components/Settings/SelfHostedCommercialActivationSection.tsx`, and `frontend-modern/src/components/Settings/useProLicensePanelState.ts`
@@ -197,6 +199,15 @@ cloud-paid ownership model as well. Changes to
 `frontend-modern/src/components/Settings/BillingAdminPanel.tsx` must carry this
 contract and the dedicated billing-admin proof file instead of remaining an
 unowned consumer of hosted billing state.
+That hosted billing-admin owner is now intentionally split by responsibility:
+`frontend-modern/src/components/Settings/BillingAdminPanel.tsx` is the
+settings shell, `frontend-modern/src/components/Settings/useBillingAdminPanelState.ts`
+owns the hosted organization list, billing-state cache, preload, and
+subscription update runtime, and
+`frontend-modern/src/components/Settings/BillingAdminOrganizationsTable.tsx`
+owns the tenant grid plus expanded JSON presentation. Future hosted billing
+admin changes must extend that split instead of pulling hosted state and
+mutation flow back into the panel render shell.
 The organization billing settings surface now follows the same rule. Changes
 to `frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx` must
 carry this contract and the dedicated organization-billing proof file instead

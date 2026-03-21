@@ -1093,6 +1093,7 @@
         "frontend-modern/src/App.tsx",
         "frontend-modern/src/AppLayout.tsx",
         "frontend-modern/src/components/Dashboard/RelayOnboardingCard.tsx",
+        "frontend-modern/src/components/Settings/BillingAdminOrganizationsTable.tsx",
         "frontend-modern/src/components/Settings/BillingAdminPanel.tsx",
         "frontend-modern/src/components/Settings/OrganizationBillingLoadingState.tsx",
         "frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx",
@@ -1100,6 +1101,7 @@
         "frontend-modern/src/components/Settings/ProLicensePlanSection.tsx",
         "frontend-modern/src/components/Settings/RelayPairingSection.tsx",
         "frontend-modern/src/components/Settings/RelaySettingsPanel.tsx",
+        "frontend-modern/src/components/Settings/useBillingAdminPanelState.ts",
         "frontend-modern/src/components/Settings/useOrganizationBillingPanelState.ts",
         "frontend-modern/src/components/Settings/useProLicensePanelState.ts",
         "frontend-modern/src/components/Settings/useRelaySettingsPanelState.ts",
@@ -1492,7 +1494,9 @@
             "label": "hosted billing admin surface proof",
             "match_prefixes": [],
             "match_files": [
-              "frontend-modern/src/components/Settings/BillingAdminPanel.tsx"
+              "frontend-modern/src/components/Settings/BillingAdminOrganizationsTable.tsx",
+              "frontend-modern/src/components/Settings/BillingAdminPanel.tsx",
+              "frontend-modern/src/components/Settings/useBillingAdminPanelState.ts"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],

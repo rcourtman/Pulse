@@ -2550,6 +2550,28 @@ class SubsystemLookupTest(unittest.TestCase):
             },
         )
 
+    def test_lookup_paths_assigns_billing_admin_state_owner_to_cloud_paid(self) -> None:
+        result = lookup_paths(
+            ["frontend-modern/src/components/Settings/useBillingAdminPanelState.ts"]
+        )
+        self.assertEqual(result["unowned_runtime_files"], [])
+
+        file_entry = result["files"][0]
+        self.assertEqual(file_entry["classification"], "runtime")
+        self.assertEqual(len(file_entry["matches"]), 1)
+
+        match = file_entry["matches"][0]
+        self.assertEqual(match["subsystem"], "cloud-paid")
+        self.assertEqual(
+            match["contract"],
+            "docs/release-control/v6/internal/subsystems/cloud-paid.md",
+        )
+        self.assertEqual(match["lane_context"]["lane_id"], "L3")
+        self.assertEqual(
+            match["verification_requirement"]["id"],
+            "hosted-billing-admin-surface",
+        )
+
     def test_lookup_paths_keeps_cross_cutting_resolved_decisions_for_lane(self) -> None:
         result = lookup_paths(["internal/monitoring/monitor.go"])
         match = next(
