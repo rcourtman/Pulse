@@ -800,7 +800,8 @@
         "internal/alerts/"
       ],
       "owned_files": [
-        "frontend-modern/src/pages/Alerts.tsx"
+        "frontend-modern/src/pages/Alerts.tsx",
+        "frontend-modern/src/utils/alertOverviewPresentation.ts"
       ],
       "verification": {
         "allow_same_subsystem_tests": true,
@@ -855,13 +856,15 @@
               "frontend-modern/src/features/alerts/"
             ],
             "match_files": [
-              "frontend-modern/src/pages/Alerts.tsx"
+              "frontend-modern/src/pages/Alerts.tsx",
+              "frontend-modern/src/utils/alertOverviewPresentation.ts"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/components/Alerts/__tests__/BulkEditDialog.test.tsx",
               "frontend-modern/src/components/Alerts/__tests__/InvestigateAlertButton.test.tsx",
+              "frontend-modern/src/components/Alerts/__tests__/RecentAlertsPanel.test.tsx",
               "frontend-modern/src/components/Alerts/__tests__/ThresholdsTable.test.tsx",
               "frontend-modern/src/components/Alerts/EmailProviderSelect.test.tsx",
               "frontend-modern/src/components/Alerts/ResourceTable.test.tsx",
@@ -874,7 +877,8 @@
               "frontend-modern/src/features/alerts/__tests__/OverviewTab.total24h.test.tsx",
               "frontend-modern/src/features/alerts/identity.test.ts",
               "frontend-modern/src/features/alerts/thresholds/__tests__/helpers.test.ts",
-              "frontend-modern/src/pages/__tests__/Alerts.helpers.test.ts"
+              "frontend-modern/src/pages/__tests__/Alerts.helpers.test.ts",
+              "frontend-modern/src/utils/__tests__/alertOverviewPresentation.test.ts"
             ]
           },
           {

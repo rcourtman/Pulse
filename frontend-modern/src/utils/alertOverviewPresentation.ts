@@ -30,6 +30,13 @@ export const ALERTS_PAGE_HISTORY_TITLE = 'Alert History';
 export const ALERTS_PAGE_HISTORY_DESCRIPTION =
   'Review previously triggered alerts and their resolution timeline.';
 
+export type DashboardAlertTone = 'default' | 'warning' | 'danger';
+
+export interface DashboardAlertOverview {
+  activeCritical: number;
+  activeWarning: number;
+}
+
 export interface AlertOverviewCardPresentation {
   cardClassName: string;
   iconClassName: string;
@@ -67,6 +74,16 @@ export function getAlertsPageHeaderMeta() {
 
 export function getAlertListEmptyState(showAcknowledged: boolean): string {
   return showAcknowledged ? ALERTS_EMPTY_STATE : 'No unacknowledged alerts';
+}
+
+export function getDashboardAlertTone(overview: DashboardAlertOverview): DashboardAlertTone {
+  if (overview.activeCritical > 0) return 'danger';
+  if (overview.activeWarning > 0) return 'warning';
+  return 'default';
+}
+
+export function getDashboardAlertSummaryText(overview: DashboardAlertOverview): string {
+  return `${overview.activeCritical} critical · ${overview.activeWarning} warning`;
 }
 
 export function getAlertTimelineLoadingState() {

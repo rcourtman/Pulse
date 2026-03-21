@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DashboardOverview } from '@/hooks/useDashboardOverview';
 import type { DashboardRecoverySummary } from '@/hooks/useDashboardRecovery';
 import DashboardPage from '@/pages/Dashboard';
+import dashboardPageSource from '@/pages/Dashboard.tsx?raw';
 
 let unifiedLoading = false;
 let unifiedResources: any[] = [];
@@ -122,6 +123,10 @@ describe('Dashboard page module contract', () => {
 
   it('exports a default component function', () => {
     expect(typeof DashboardPage).toBe('function');
+  });
+
+  it('routes the alerts dashboard widget through the alert-owned surface', () => {
+    expect(dashboardPageSource).toContain("from '@/components/Alerts/RecentAlertsPanel'");
   });
 
   it('renders loading skeleton blocks when resources are loading', () => {

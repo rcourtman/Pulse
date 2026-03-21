@@ -5,7 +5,7 @@ import {
   WORKLOADS_PATH,
   buildStoragePath,
 } from '@/routing/resourceLinks';
-import { getDashboardAlertTone } from '@/utils/dashboardAlertPresentation';
+import { getDashboardAlertTone } from '@/utils/alertOverviewPresentation';
 import { getDashboardKpiPresentation } from '@/utils/dashboardKpiPresentation';
 import { getAlertSeverityTextClass } from '@/utils/alertSeverityPresentation';
 import { formatBytes } from '@/utils/format';

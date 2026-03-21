@@ -25,6 +25,8 @@ import {
   ALERT_TIMELINE_RETRY_LABEL,
   ALERT_TIMELINE_UNAVAILABLE_STATE,
   ALERTS_THRESHOLD_HINT,
+  getDashboardAlertSummaryText,
+  getDashboardAlertTone,
   getAlertOverviewAcknowledgedBadgeClass,
   getAlertOverviewCardPresentation,
   getAlertOverviewPrimaryActionClass,
@@ -44,6 +46,15 @@ import {
 } from '@/utils/alertOverviewPresentation';
 
 describe('alertOverviewPresentation', () => {
+  it('returns canonical dashboard alert tone and summary helpers', () => {
+    expect(getDashboardAlertTone({ activeCritical: 2, activeWarning: 5 })).toBe('danger');
+    expect(getDashboardAlertTone({ activeCritical: 0, activeWarning: 3 })).toBe('warning');
+    expect(getDashboardAlertTone({ activeCritical: 0, activeWarning: 0 })).toBe('default');
+    expect(getDashboardAlertSummaryText({ activeCritical: 2, activeWarning: 3 })).toBe(
+      '2 critical · 3 warning',
+    );
+  });
+
   it('returns canonical alert overview empty-state copy', () => {
     expect(ALERTS_EMPTY_STATE).toBe('No active alerts');
     expect(ALERTS_THRESHOLD_HINT).toBe('Alerts will appear here when thresholds are exceeded');

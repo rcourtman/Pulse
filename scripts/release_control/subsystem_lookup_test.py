@@ -66,6 +66,44 @@ class SubsystemLookupTest(unittest.TestCase):
             "shared-component-guardrails",
         )
 
+    def test_lookup_paths_assigns_recent_alerts_panel_to_alerts(self) -> None:
+        result = lookup_paths(["frontend-modern/src/components/Alerts/RecentAlertsPanel.tsx"])
+        self.assertEqual(result["unowned_runtime_files"], [])
+        self.assertEqual(
+            {item["subsystem"] for item in result["impacted_subsystems"]},
+            {"alerts"},
+        )
+        file_entry = result["files"][0]
+        self.assertEqual(file_entry["classification"], "runtime")
+        self.assertEqual({match["subsystem"] for match in file_entry["matches"]}, {"alerts"})
+        match = file_entry["matches"][0]
+        self.assertEqual(match["contract"], "docs/release-control/v6/internal/subsystems/alerts.md")
+        self.assertEqual(match["lane_context"]["lane_id"], "L6")
+        self.assertEqual(match["verification_requirement"]["id"], "alerts-frontend-surface")
+        self.assertIn(
+            "frontend-modern/src/components/Alerts/__tests__/RecentAlertsPanel.test.tsx",
+            match["verification_requirement"]["exact_files"],
+        )
+
+    def test_lookup_paths_assigns_alert_overview_presentation_to_alerts(self) -> None:
+        result = lookup_paths(["frontend-modern/src/utils/alertOverviewPresentation.ts"])
+        self.assertEqual(result["unowned_runtime_files"], [])
+        self.assertEqual(
+            {item["subsystem"] for item in result["impacted_subsystems"]},
+            {"alerts"},
+        )
+        file_entry = result["files"][0]
+        self.assertEqual(file_entry["classification"], "runtime")
+        self.assertEqual({match["subsystem"] for match in file_entry["matches"]}, {"alerts"})
+        match = file_entry["matches"][0]
+        self.assertEqual(match["contract"], "docs/release-control/v6/internal/subsystems/alerts.md")
+        self.assertEqual(match["lane_context"]["lane_id"], "L6")
+        self.assertEqual(match["verification_requirement"]["id"], "alerts-frontend-surface")
+        self.assertIn(
+            "frontend-modern/src/utils/__tests__/alertOverviewPresentation.test.ts",
+            match["verification_requirement"]["exact_files"],
+        )
+
     def test_lookup_paths_assigns_organization_billing_panel_to_cloud_paid(self) -> None:
         result = lookup_paths(["frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx"])
         self.assertEqual(result["unowned_runtime_files"], [])

@@ -110,7 +110,7 @@ import dashboardCompositionPresentationSource from '@/utils/dashboardComposition
 import problemResourcesTableSource from '@/pages/DashboardPanels/ProblemResourcesTable.tsx?raw';
 import problemResourcePresentationSource from '@/utils/problemResourcePresentation.ts?raw';
 import kpiStripSource from '@/pages/DashboardPanels/KPIStrip.tsx?raw';
-import recentAlertsPanelSource from '@/pages/DashboardPanels/RecentAlertsPanel.tsx?raw';
+import recentAlertsPanelSource from '@/components/Alerts/RecentAlertsPanel.tsx?raw';
 import storagePanelSource from '@/pages/DashboardPanels/StoragePanel.tsx?raw';
 import recoveryStatusPanelSource from '@/pages/DashboardPanels/RecoveryStatusPanel.tsx?raw';
 import guestRowSource from '@/components/Dashboard/GuestRow.tsx?raw';
@@ -131,7 +131,6 @@ import dashboardGuestPresentationSource from '@/utils/dashboardGuestPresentation
 import orgScopeSource from '@/utils/orgScope.ts?raw';
 import workloadsSource from '@/utils/workloads.ts?raw';
 import infrastructureSummaryCacheSource from '@/utils/infrastructureSummaryCache.ts?raw';
-import dashboardAlertPresentationSource from '@/utils/dashboardAlertPresentation.ts?raw';
 import dashboardStoragePresentationSource from '@/utils/dashboardStoragePresentation.ts?raw';
 import dashboardRecoveryPresentationSource from '@/utils/dashboardRecoveryPresentation.ts?raw';
 import dashboardKpiPresentationSource from '@/utils/dashboardKpiPresentation.ts?raw';
@@ -1269,16 +1268,15 @@ describe('frontend resource type boundaries', () => {
     expect(kpiStripSource).not.toContain('const alertsTone =');
     expect(kpiStripSource).not.toContain('border-l-[3px] border-l-blue-500');
     expect(dashboardKpiPresentationSource).toContain('export function getDashboardKpiPresentation');
-    expect(recentAlertsPanelSource).toContain('getAlertSeverityTextClass');
     expect(recentAlertsPanelSource).toContain('getAlertSeverityCompactLabel');
-    expect(recentAlertsPanelSource).toContain('@/utils/dashboardAlertPresentation');
+    expect(recentAlertsPanelSource).toContain('@/utils/alertOverviewPresentation');
+    expect(recentAlertsPanelSource).not.toContain('getAlertSeverityTextClass');
     expect(recentAlertsPanelSource).not.toContain("alert.level === 'critical' ? 'CRIT' : 'WARN'");
     expect(recentAlertsPanelSource).not.toContain('No active alerts');
-    expect(dashboardAlertPresentationSource).toContain('export function getDashboardAlertTone');
-    expect(dashboardAlertPresentationSource).toContain(
+    expect(alertOverviewPresentationSource).toContain('export function getDashboardAlertTone');
+    expect(alertOverviewPresentationSource).toContain(
       'export function getDashboardAlertSummaryText',
     );
-    expect(dashboardAlertPresentationSource).toContain('export const DASHBOARD_ALERTS_EMPTY_STATE');
     expect(storagePanelSource).toContain('@/utils/dashboardStoragePresentation');
     expect(storagePanelSource).not.toContain('No storage resources');
     expect(recoveryStatusPanelSource).toContain('@/utils/dashboardRecoveryPresentation');

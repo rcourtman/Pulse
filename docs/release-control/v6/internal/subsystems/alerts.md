@@ -25,6 +25,8 @@ operator-facing alert routing behavior for live runtime alerts.
 3. `internal/alerts/canonical_metric.go`
 4. `internal/alerts/canonical_lifecycle.go`
 5. `internal/alerts/unified_incidents.go`
+6. `frontend-modern/src/components/Alerts/RecentAlertsPanel.tsx`
+7. `frontend-modern/src/utils/alertOverviewPresentation.ts`
 
 ## Shared Boundaries
 
@@ -154,6 +156,11 @@ Active alert card state, acknowledged badge, and primary/secondary action
 button presentation now route through
 `frontend-modern/src/utils/alertOverviewPresentation.ts` instead of remaining
 inline in `frontend-modern/src/features/alerts/OverviewTab.tsx`.
+Dashboard recent-alert rendering and dashboard alert summary/tone copy now
+route through that same alert overview presentation owner and the alert-owned
+`frontend-modern/src/components/Alerts/RecentAlertsPanel.tsx` surface instead
+of living as a dashboard-page-local panel plus a second dashboard-only alert
+presentation helper.
 
 Alert threshold and schedule surfaces must now also treat
 `discoveryTarget` as optional frontend input and keep grouping-card state on

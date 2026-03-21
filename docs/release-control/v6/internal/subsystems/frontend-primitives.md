@@ -335,11 +335,6 @@ must now keep both values routed through the same exported presentation helper.
 Feature cards such as RAID status may not call shadow local aliases that drift
 from the canonical shared class/variant helpers.
 
-Active alert card state and action-button presentation must also route through
-`frontend-modern/src/utils/alertOverviewPresentation.ts` instead of leaving
-feature-local alert card styling inside
-`frontend-modern/src/features/alerts/OverviewTab.tsx`.
-
 Alert resource display labels used by the thresholds editor and alerts page
 must now route through the shared helper in
 `frontend-modern/src/features/alerts/helpers.ts` instead of rebuilding

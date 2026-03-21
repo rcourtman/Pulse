@@ -5,12 +5,12 @@ import { AlertsAPI } from '@/api/alerts';
 import { formatRelativeTime } from '@/utils/format';
 import { notificationStore } from '@/stores/notifications';
 import {
-  DASHBOARD_ALERTS_EMPTY_STATE,
-} from '@/utils/dashboardAlertPresentation';
+  ALERTS_EMPTY_STATE,
+  getDashboardAlertSummaryText,
+} from '@/utils/alertOverviewPresentation';
 import {
   getAlertSeverityBadgeClass,
   getAlertSeverityCompactLabel,
-  getAlertSeverityTextClass,
 } from '@/utils/alertSeverityPresentation';
 import type { Alert } from '@/types/api';
 import BellIcon from 'lucide-solid/icons/bell';
@@ -41,6 +41,12 @@ export function RecentAlertsPanel(props: RecentAlertsPanelProps) {
   const [ackAllLoading, setAckAllLoading] = createSignal(false);
 
   const unackedAlerts = createMemo(() => props.alerts.filter((a) => !a.acknowledged));
+  const alertSummaryText = createMemo(() =>
+    getDashboardAlertSummaryText({
+      activeCritical: props.criticalCount,
+      activeWarning: props.warningCount,
+    }),
+  );
 
   const handleAck = async (alert: Alert) => {
     setAckLoading(alert.id);
@@ -113,20 +119,11 @@ export function RecentAlertsPanel(props: RecentAlertsPanelProps) {
           when={props.alerts.length > 0}
           fallback={
             <p class="text-xs font-medium text-emerald-700 dark:text-emerald-300 pt-0.5">
-              {DASHBOARD_ALERTS_EMPTY_STATE}
+              {ALERTS_EMPTY_STATE}
             </p>
           }
         >
-          <p class="text-xs text-muted mb-1.5">
-            <span class={`font-mono font-semibold ${getAlertSeverityTextClass('critical')}`}>
-              {props.criticalCount}
-            </span>{' '}
-            critical ·{' '}
-            <span class={`font-mono font-semibold ${getAlertSeverityTextClass('warning')}`}>
-              {props.warningCount}
-            </span>{' '}
-            warning
-          </p>
+          <p class="text-xs text-muted mb-1.5">{alertSummaryText()}</p>
 
           <ul class="space-y-0.5" role="list">
             <For each={recent()}>

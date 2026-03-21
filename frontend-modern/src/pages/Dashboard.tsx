@@ -26,12 +26,12 @@ import {
   ActionRequiredPanel,
   ProblemResourcesTable,
   KPIStrip,
-  RecentAlertsPanel,
   RecoveryStatusPanel,
   StoragePanel,
   TrendCharts,
   DashboardCustomizer,
 } from './DashboardPanels';
+import { RecentAlertsPanel } from '@/components/Alerts/RecentAlertsPanel';
 import type { DashboardWidgetDef, DashboardWidgetId } from './DashboardPanels/dashboardWidgets';
 export default function Dashboard() {
   const { connected, reconnecting, reconnect, activeAlerts } = useWebSocket();

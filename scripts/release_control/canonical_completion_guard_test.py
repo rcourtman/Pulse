@@ -2766,6 +2766,7 @@ index 1111111..2222222 100644
                         "frontend-modern/src/components/Alerts/WebhookConfig.test.tsx",
                         "frontend-modern/src/components/Alerts/__tests__/BulkEditDialog.test.tsx",
                         "frontend-modern/src/components/Alerts/__tests__/InvestigateAlertButton.test.tsx",
+                        "frontend-modern/src/components/Alerts/__tests__/RecentAlertsPanel.test.tsx",
                         "frontend-modern/src/components/Alerts/__tests__/ThresholdsTable.test.tsx",
                         "frontend-modern/src/features/alerts/__tests__/OverviewTab.emptystate.test.tsx",
                         "frontend-modern/src/features/alerts/__tests__/OverviewTab.timelineerror.test.tsx",
@@ -2774,6 +2775,7 @@ index 1111111..2222222 100644
                         "frontend-modern/src/features/alerts/identity.test.ts",
                         "frontend-modern/src/features/alerts/thresholds/__tests__/helpers.test.ts",
                         "frontend-modern/src/pages/__tests__/Alerts.helpers.test.ts",
+                        "frontend-modern/src/utils/__tests__/alertOverviewPresentation.test.ts",
                     ],
                 }
             ],
