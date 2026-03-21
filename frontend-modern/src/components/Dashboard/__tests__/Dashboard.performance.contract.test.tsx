@@ -7,6 +7,7 @@ import dashboardSource from '../Dashboard.tsx?raw';
 import dashboardFilterSource from '../DashboardFilter.tsx?raw';
 import dashboardFilterModelSource from '../dashboardFilterModel.ts?raw';
 import dashboardGuestMetadataStateSource from '../useDashboardGuestMetadataState.ts?raw';
+import dashboardWorkloadRouteStateSource from '../useDashboardWorkloadRouteState.ts?raw';
 import dashboardStateSource from '../useDashboardState.ts?raw';
 import dashboardFilterStateSource from '../useDashboardFilterState.ts?raw';
 import thresholdSliderSource from '../ThresholdSlider.tsx?raw';
@@ -491,14 +492,18 @@ describe('Dashboard performance contract', () => {
       expect(dashboardSource).toContain('useDashboardState');
       expect(dashboardSource).not.toContain('const [search, setSearch] = createSignal(');
       expect(dashboardStateSource).toContain('useDashboardGuestMetadataState');
+      expect(dashboardStateSource).toContain('useDashboardWorkloadRouteState');
       expect(dashboardStateSource).toContain('useGroupedTableWindowing');
       expect(dashboardStateSource).toContain('createWorkloadSortComparator');
       expect(dashboardStateSource).toContain("from './guestRowModel'");
       expect(dashboardStateSource).not.toContain("from './GuestRow'");
       expect(dashboardStateSource).not.toContain('GuestMetadataAPI.getAllMetadata()');
+      expect(dashboardStateSource).not.toContain('buildWorkloadsPath({');
       expect(dashboardGuestMetadataStateSource).toContain('GuestMetadataAPI.getAllMetadata()');
       expect(dashboardGuestMetadataStateSource).toContain("eventBus.on('org_switched'");
       expect(dashboardGuestMetadataStateSource).toContain("window.addEventListener('pulse:metadata-changed'");
+      expect(dashboardWorkloadRouteStateSource).toContain('buildWorkloadsPath({');
+      expect(dashboardWorkloadRouteStateSource).toContain('normalizeWorkloadViewModeParam');
       expect(dashboardSource).toContain('createMemo(() => getCanonicalWorkloadId(guest()))');
       expect(dashboardStateSource).not.toContain('const guestId = () => {');
     });
@@ -513,9 +518,11 @@ describe('Dashboard performance contract', () => {
       expect(dashboardFilterStateSource).toContain('useBreakpoint');
       expect(dashboardFilterModelSource).toContain('export const countActiveDashboardFilters');
       expect(dashboardFilterModelSource).toContain('export const hasActiveDashboardFilters');
-      expect(dashboardStateSource).toContain('containerRuntimeFilterConfig');
-      expect(dashboardStateSource).toContain('hostFilterConfig');
-      expect(dashboardStateSource).toContain('namespaceFilterConfig');
+      expect(dashboardStateSource).toContain('useDashboardWorkloadRouteState');
+      expect(dashboardStateSource).not.toContain('const containerRuntimeFilterConfig = createMemo');
+      expect(dashboardWorkloadRouteStateSource).toContain('containerRuntimeFilterConfig');
+      expect(dashboardWorkloadRouteStateSource).toContain('hostFilterConfig');
+      expect(dashboardWorkloadRouteStateSource).toContain('namespaceFilterConfig');
     });
 
     it('keeps threshold slider runtime and derivations in canonical slider owners', () => {
