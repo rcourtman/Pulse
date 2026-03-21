@@ -47,6 +47,14 @@ export function getOrganizationDisplayNameUpdateErrorMessage(message?: string): 
   return message || 'Failed to update organization name';
 }
 
+export function getOrganizationDisplayNameUpdatedMessage(): string {
+  return 'Organization name updated';
+}
+
+export function getOrganizationOverviewManageRequiredMessage(): string {
+  return 'Admin or owner role required to update organization details.';
+}
+
 export function getOrganizationOwnerRoleLockedMessage(): string {
   return 'Current owner can only remain owner. Transfer ownership instead.';
 }

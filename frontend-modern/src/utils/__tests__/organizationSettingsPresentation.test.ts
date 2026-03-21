@@ -8,10 +8,12 @@ import {
   getOrganizationAddMemberErrorMessage,
   getOrganizationDisplayNameRequiredMessage,
   getOrganizationDisplayNameUpdateErrorMessage,
+  getOrganizationDisplayNameUpdatedMessage,
   getOrganizationIncomingSharesEmptyState,
   getOrganizationMemberRemoveConfirmMessage,
   getOrganizationMemberRoleUpdateErrorMessage,
   getOrganizationMemberUserIdRequiredMessage,
+  getOrganizationOverviewManageRequiredMessage,
   getOrganizationOwnerRoleLockedMessage,
   getOrganizationOutgoingSharesEmptyState,
   getOrganizationOverviewMembersEmptyState,
@@ -76,6 +78,10 @@ describe('organizationSettingsPresentation', () => {
       'Failed to update organization name',
     );
     expect(getOrganizationDisplayNameUpdateErrorMessage('bad request')).toBe('bad request');
+    expect(getOrganizationDisplayNameUpdatedMessage()).toBe('Organization name updated');
+    expect(getOrganizationOverviewManageRequiredMessage()).toBe(
+      'Admin or owner role required to update organization details.',
+    );
     expect(getOrganizationOwnerRoleLockedMessage()).toBe(
       'Current owner can only remain owner. Transfer ownership instead.',
     );

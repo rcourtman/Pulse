@@ -287,11 +287,13 @@ import organizationAccessManagementSectionSource from '@/components/Settings/Org
 import organizationAccessMembersSectionSource from '@/components/Settings/OrganizationAccessMembersSection.tsx?raw';
 import billingAdminPanelSource from '@/components/Settings/BillingAdminPanel.tsx?raw';
 import organizationBillingPanelSource from '@/components/Settings/OrganizationBillingPanel.tsx?raw';
-import organizationOverviewPanelSource from '@/components/Settings/OrganizationOverviewPanel.tsx?raw';
+import organizationOverviewLoadingStateSource from '@/components/Settings/OrganizationOverviewLoadingState.tsx?raw';
+import organizationOverviewMembersSectionSource from '@/components/Settings/OrganizationOverviewMembersSection.tsx?raw';
 import organizationSharingCreateSectionSource from '@/components/Settings/OrganizationSharingCreateSection.tsx?raw';
 import organizationOutgoingSharesSectionSource from '@/components/Settings/OrganizationOutgoingSharesSection.tsx?raw';
 import organizationIncomingSharesSectionSource from '@/components/Settings/OrganizationIncomingSharesSection.tsx?raw';
 import organizationAccessStateSource from '@/components/Settings/useOrganizationAccessPanelState.ts?raw';
+import organizationOverviewStateSource from '@/components/Settings/useOrganizationOverviewPanelState.ts?raw';
 import organizationSharingStateSource from '@/components/Settings/useOrganizationSharingPanelState.ts?raw';
 import organizationRolePresentationSource from '@/utils/organizationRolePresentation.ts?raw';
 import organizationSettingsPresentationSource from '@/utils/organizationSettingsPresentation.ts?raw';
@@ -868,13 +870,13 @@ describe('frontend resource type boundaries', () => {
       'export function normalizeOrganizationShareRole',
     );
     expect(organizationAccessStateSource).toContain('normalizeOrgScope(getOrgID())');
-    expect(organizationOverviewPanelSource).toContain('normalizeOrgScope(getOrgID())');
+    expect(organizationOverviewStateSource).toContain('normalizeOrgScope(getOrgID())');
     expect(organizationSharingStateSource).toContain('normalizeOrgScope(getOrgID())');
     expect(organizationBillingPanelSource).toContain('normalizeOrgScope(getOrgID())');
     expect(organizationAccessStateSource).toContain('@/utils/organizationSettingsPresentation');
     expect(billingAdminPanelSource).toContain('@/utils/organizationSettingsPresentation');
     expect(billingAdminPanelSource).toContain('@/utils/licensePresentation');
-    expect(organizationOverviewPanelSource).toContain('@/utils/organizationSettingsPresentation');
+    expect(organizationOverviewStateSource).toContain('@/utils/organizationSettingsPresentation');
     expect(organizationSharingStateSource).toContain('@/utils/organizationSettingsPresentation');
     expect(organizationBillingPanelSource).toContain('@/utils/organizationSettingsPresentation');
     expect(organizationBillingPanelSource).toContain('@/utils/licensePresentation');
@@ -883,7 +885,7 @@ describe('frontend resource type boundaries', () => {
     expect(organizationAccessPanelSource).not.toContain(
       'Multi-tenant requires an Enterprise license',
     );
-    expect(organizationOverviewPanelSource).not.toContain(
+    expect(organizationOverviewStateSource).not.toContain(
       'Multi-tenant is not enabled on this server',
     );
     expect(organizationSharingStateSource).not.toContain(
@@ -891,7 +893,10 @@ describe('frontend resource type boundaries', () => {
     );
     expect(organizationAccessMembersSectionSource).toContain('getOrganizationAccessEmptyState');
     expect(organizationAccessLoadingStateSource).toContain('animate-pulse');
-    expect(organizationOverviewPanelSource).toContain('getOrganizationOverviewMembersEmptyState');
+    expect(organizationOverviewMembersSectionSource).toContain(
+      'getOrganizationOverviewMembersEmptyState',
+    );
+    expect(organizationOverviewLoadingStateSource).toContain('animate-pulse');
     expect(organizationOutgoingSharesSectionSource).toContain(
       'getOrganizationOutgoingSharesEmptyState',
     );
@@ -903,7 +908,7 @@ describe('frontend resource type boundaries', () => {
     );
     expect(organizationSharingStateSource).toContain('getOrganizationShareCreateSuccessMessage');
     expect(organizationAccessMembersSectionSource).not.toContain('No organization members found.');
-    expect(organizationOverviewPanelSource).not.toContain('No members found.');
+    expect(organizationOverviewMembersSectionSource).not.toContain('No members found.');
     expect(organizationOutgoingSharesSectionSource).not.toContain('No outgoing shares configured.');
     expect(organizationIncomingSharesSectionSource).not.toContain(
       'No incoming shares from other organizations.',
@@ -945,7 +950,13 @@ describe('frontend resource type boundaries', () => {
       'export function getOrganizationAccessRoleUpdatedMessage',
     );
     expect(organizationSettingsPresentationSource).toContain(
+      'export function getOrganizationDisplayNameUpdatedMessage',
+    );
+    expect(organizationSettingsPresentationSource).toContain(
       'export function getOrganizationOverviewMembersEmptyState',
+    );
+    expect(organizationSettingsPresentationSource).toContain(
+      'export function getOrganizationOverviewManageRequiredMessage',
     );
     expect(organizationSettingsPresentationSource).toContain(
       'export function getOrganizationOutgoingSharesEmptyState',

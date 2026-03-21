@@ -47,6 +47,9 @@ import commercialBillingSectionsSource from '../CommercialBillingSections.tsx?ra
 import selfHostedCommercialActivationSectionSource from '../SelfHostedCommercialActivationSection.tsx?raw';
 import commercialBillingModelSource from '@/utils/commercialBillingModel.ts?raw';
 import organizationOverviewPanelSource from '../OrganizationOverviewPanel.tsx?raw';
+import organizationOverviewLoadingStateSource from '../OrganizationOverviewLoadingState.tsx?raw';
+import organizationOverviewDetailsSectionSource from '../OrganizationOverviewDetailsSection.tsx?raw';
+import organizationOverviewMembersSectionSource from '../OrganizationOverviewMembersSection.tsx?raw';
 import organizationAccessPanelSource from '../OrganizationAccessPanel.tsx?raw';
 import organizationAccessLoadingStateSource from '../OrganizationAccessLoadingState.tsx?raw';
 import organizationAccessManagementSectionSource from '../OrganizationAccessManagementSection.tsx?raw';
@@ -57,6 +60,7 @@ import organizationSharingLoadingStateSource from '../OrganizationSharingLoading
 import organizationOutgoingSharesSectionSource from '../OrganizationOutgoingSharesSection.tsx?raw';
 import organizationIncomingSharesSectionSource from '../OrganizationIncomingSharesSection.tsx?raw';
 import organizationAccessStateSource from '../useOrganizationAccessPanelState.ts?raw';
+import organizationOverviewStateSource from '../useOrganizationOverviewPanelState.ts?raw';
 import organizationSharingStateSource from '../useOrganizationSharingPanelState.ts?raw';
 import organizationBillingPanelSource from '../OrganizationBillingPanel.tsx?raw';
 import proxmoxDeleteNodeDialogSource from '../ProxmoxDeleteNodeDialog.tsx?raw';
@@ -123,6 +127,9 @@ const extractedModules = [
   '../UpdateInstallGuide.tsx',
   '../ReportingPanel.tsx',
   '../reportingPanelModel.ts',
+  '../OrganizationOverviewLoadingState.tsx',
+  '../OrganizationOverviewDetailsSection.tsx',
+  '../OrganizationOverviewMembersSection.tsx',
   '../OrganizationAccessLoadingState.tsx',
   '../OrganizationAccessManagementSection.tsx',
   '../OrganizationAccessMembersSection.tsx',
@@ -131,6 +138,7 @@ const extractedModules = [
   '../OrganizationOutgoingSharesSection.tsx',
   '../OrganizationIncomingSharesSection.tsx',
   '../useOrganizationAccessPanelState.ts',
+  '../useOrganizationOverviewPanelState.ts',
   '../useOrganizationSharingPanelState.ts',
   '../RBACFeatureGateSection.tsx',
   '../RolesEditorDialog.tsx',
@@ -432,6 +440,27 @@ describe('Settings architecture guardrails', () => {
     );
     expect(organizationAccessMembersSectionSource).toContain('formatOrgDate');
     expect(organizationAccessLoadingStateSource).toContain('animate-pulse');
+  });
+
+  it('keeps organization overview split into shell, state, and section owners', () => {
+    expect(organizationOverviewPanelSource).toContain('./useOrganizationOverviewPanelState');
+    expect(organizationOverviewPanelSource).toContain('./OrganizationOverviewLoadingState');
+    expect(organizationOverviewPanelSource).toContain('./OrganizationOverviewDetailsSection');
+    expect(organizationOverviewPanelSource).toContain('./OrganizationOverviewMembersSection');
+    expect(organizationOverviewPanelSource).not.toContain('const loadOrganization = async');
+    expect(organizationOverviewPanelSource).not.toContain('const saveDisplayName = async');
+    expect(organizationOverviewStateSource).toContain('OrgsAPI.get');
+    expect(organizationOverviewStateSource).toContain('OrgsAPI.listMembers');
+    expect(organizationOverviewStateSource).toContain('OrgsAPI.update');
+    expect(organizationOverviewStateSource).toContain('normalizeOrgScope(getOrgID())');
+    expect(organizationOverviewDetailsSectionSource).toContain(
+      'getOrganizationOverviewManageRequiredMessage',
+    );
+    expect(organizationOverviewDetailsSectionSource).toContain('formatOrgDate');
+    expect(organizationOverviewMembersSectionSource).toContain(
+      'getOrganizationOverviewMembersEmptyState',
+    );
+    expect(organizationOverviewLoadingStateSource).toContain('animate-pulse');
   });
 
   it('keeps RBAC settings panels split into gate, state, and dialog owners', () => {

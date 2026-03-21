@@ -74,12 +74,16 @@ import organizationAccessLoadingStateSource from '../OrganizationAccessLoadingSt
 import organizationAccessManagementSectionSource from '../OrganizationAccessManagementSection.tsx?raw';
 import organizationAccessMembersSectionSource from '../OrganizationAccessMembersSection.tsx?raw';
 import organizationOverviewPanelSource from '../OrganizationOverviewPanel.tsx?raw';
+import organizationOverviewLoadingStateSource from '../OrganizationOverviewLoadingState.tsx?raw';
+import organizationOverviewDetailsSectionSource from '../OrganizationOverviewDetailsSection.tsx?raw';
+import organizationOverviewMembersSectionSource from '../OrganizationOverviewMembersSection.tsx?raw';
 import organizationSharingPanelSource from '../OrganizationSharingPanel.tsx?raw';
 import organizationSharingCreateSectionSource from '../OrganizationSharingCreateSection.tsx?raw';
 import organizationSharingLoadingStateSource from '../OrganizationSharingLoadingState.tsx?raw';
 import organizationOutgoingSharesSectionSource from '../OrganizationOutgoingSharesSection.tsx?raw';
 import organizationIncomingSharesSectionSource from '../OrganizationIncomingSharesSection.tsx?raw';
 import organizationAccessStateSource from '../useOrganizationAccessPanelState.ts?raw';
+import organizationOverviewStateSource from '../useOrganizationOverviewPanelState.ts?raw';
 import organizationSharingStateSource from '../useOrganizationSharingPanelState.ts?raw';
 import canonicalResourceTypesSource from '@/utils/canonicalResourceTypes.ts?raw';
 import organizationRolePresentationSource from '@/utils/organizationRolePresentation.ts?raw';
@@ -610,7 +614,6 @@ describe('monitored-system model guardrails', () => {
     expect(organizationAccessPanelSource).toContain('./OrganizationAccessLoadingState');
     expect(organizationAccessPanelSource).toContain('./OrganizationAccessManagementSection');
     expect(organizationAccessPanelSource).toContain('./OrganizationAccessMembersSection');
-    expect(organizationOverviewPanelSource).toContain('@/utils/organizationSettingsPresentation');
     expect(organizationAccessManagementSectionSource).toContain(
       '@/utils/organizationRolePresentation',
     );
@@ -651,11 +654,36 @@ describe('monitored-system model guardrails', () => {
     expect(organizationAccessStateSource).not.toContain("notificationStore.success(`Updated ");
     expect(organizationAccessStateSource).not.toContain("notificationStore.success(`Added ");
     expect(organizationAccessStateSource).not.toContain("notificationStore.success(`Removed ");
-    expect(organizationOverviewPanelSource).not.toContain(
+    expect(organizationOverviewPanelSource).toContain('./useOrganizationOverviewPanelState');
+    expect(organizationOverviewPanelSource).toContain('./OrganizationOverviewLoadingState');
+    expect(organizationOverviewPanelSource).toContain('./OrganizationOverviewDetailsSection');
+    expect(organizationOverviewPanelSource).toContain('./OrganizationOverviewMembersSection');
+    expect(organizationOverviewDetailsSectionSource).toContain(
+      '@/utils/organizationSettingsPresentation',
+    );
+    expect(organizationOverviewMembersSectionSource).toContain(
+      '@/utils/organizationSettingsPresentation',
+    );
+    expect(organizationOverviewDetailsSectionSource).toContain('formatOrgDate');
+    expect(organizationOverviewMembersSectionSource).toContain('roleBadgeClass');
+    expect(organizationOverviewMembersSectionSource).toContain('formatOrgDate');
+    expect(organizationOverviewMembersSectionSource).toContain(
+      'getOrganizationOverviewMembersEmptyState',
+    );
+    expect(organizationOverviewLoadingStateSource).toContain('animate-pulse');
+    expect(organizationOverviewStateSource).toContain('normalizeOrgScope(getOrgID())');
+    expect(organizationOverviewStateSource).toContain('OrgsAPI.get');
+    expect(organizationOverviewStateSource).toContain('OrgsAPI.listMembers');
+    expect(organizationOverviewStateSource).toContain('OrgsAPI.update');
+    expect(organizationOverviewStateSource).toContain('getOrganizationDisplayNameUpdatedMessage');
+    expect(organizationOverviewStateSource).not.toContain(
       "notificationStore.error('Display name is required')",
     );
-    expect(organizationOverviewPanelSource).not.toContain(
+    expect(organizationOverviewStateSource).not.toContain(
       "error instanceof Error ? error.message : 'Failed to update organization name'",
+    );
+    expect(organizationOverviewStateSource).not.toContain(
+      "notificationStore.success('Organization name updated')",
     );
     expect(organizationSharingCreateSectionSource).toContain('@/utils/organizationRolePresentation');
     expect(organizationSharingStateSource).toContain('@/utils/organizationSettingsPresentation');
@@ -715,6 +743,12 @@ describe('monitored-system model guardrails', () => {
     );
     expect(organizationSettingsPresentationSource).toContain(
       'export function getOrganizationDisplayNameRequiredMessage',
+    );
+    expect(organizationSettingsPresentationSource).toContain(
+      'export function getOrganizationDisplayNameUpdatedMessage',
+    );
+    expect(organizationSettingsPresentationSource).toContain(
+      'export function getOrganizationOverviewManageRequiredMessage',
     );
   });
 
