@@ -2518,9 +2518,12 @@
       ],
       "owned_files": [
         "frontend-modern/src/components/Dashboard/Dashboard.tsx",
+        "frontend-modern/src/components/Dashboard/GuestDrawer.tsx",
+        "frontend-modern/src/components/Dashboard/guestDrawerModel.ts",
         "frontend-modern/src/components/Dashboard/GuestRow.tsx",
         "frontend-modern/src/components/Dashboard/guestRowModel.tsx",
         "frontend-modern/src/components/Dashboard/useDashboardState.ts",
+        "frontend-modern/src/components/Dashboard/useGuestDrawerState.ts",
         "frontend-modern/src/components/Dashboard/useGuestRowState.ts",
         "frontend-modern/src/components/Dashboard/workloadSelectors.ts",
         "frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts",
@@ -2566,9 +2569,12 @@
             "match_prefixes": [],
             "match_files": [
               "frontend-modern/src/components/Dashboard/Dashboard.tsx",
+              "frontend-modern/src/components/Dashboard/GuestDrawer.tsx",
+              "frontend-modern/src/components/Dashboard/guestDrawerModel.ts",
               "frontend-modern/src/components/Dashboard/GuestRow.tsx",
               "frontend-modern/src/components/Dashboard/guestRowModel.tsx",
               "frontend-modern/src/components/Dashboard/useDashboardState.ts",
+              "frontend-modern/src/components/Dashboard/useGuestDrawerState.ts",
               "frontend-modern/src/components/Dashboard/useGuestRowState.ts",
               "frontend-modern/src/components/Dashboard/workloadSelectors.ts",
               "frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts",
@@ -2582,6 +2588,7 @@
               "frontend-modern/src/components/Dashboard/__tests__/Dashboard.performance.contract.test.tsx",
               "frontend-modern/src/components/Dashboard/__tests__/GuestRow.test.tsx",
               "frontend-modern/src/components/Dashboard/__tests__/workloadSelectors.test.ts",
+              "frontend-modern/src/components/Dashboard/GuestDrawer.test.tsx",
               "frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx"
             ]
           },

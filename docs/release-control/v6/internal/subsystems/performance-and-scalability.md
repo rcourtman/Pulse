@@ -30,14 +30,18 @@ regression protection.
 8. `frontend-modern/src/components/Dashboard/GuestRow.tsx`
 9. `frontend-modern/src/components/Dashboard/guestRowModel.tsx`
 10. `frontend-modern/src/components/Dashboard/useGuestRowState.ts`
-11. `frontend-modern/src/components/Dashboard/workloadSelectors.ts`
-12. `frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx`
-13. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`
-14. `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts`
-15. `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts`
-16. `frontend-modern/src/components/Dashboard/__tests__/Dashboard.performance.contract.test.tsx`
-17. `frontend-modern/src/components/Dashboard/__tests__/GuestRow.test.tsx`
-18. `frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx`
+11. `frontend-modern/src/components/Dashboard/GuestDrawer.tsx`
+12. `frontend-modern/src/components/Dashboard/guestDrawerModel.ts`
+13. `frontend-modern/src/components/Dashboard/useGuestDrawerState.ts`
+14. `frontend-modern/src/components/Dashboard/workloadSelectors.ts`
+15. `frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx`
+16. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`
+17. `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts`
+18. `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts`
+19. `frontend-modern/src/components/Dashboard/__tests__/Dashboard.performance.contract.test.tsx`
+20. `frontend-modern/src/components/Dashboard/__tests__/GuestRow.test.tsx`
+21. `frontend-modern/src/components/Dashboard/GuestDrawer.test.tsx`
+22. `frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx`
 
 ## Shared Boundaries
 
@@ -58,6 +62,7 @@ regression protection.
 7. Render dashboard row identity directly from the shared canonical workload helper so row selection, hover, and fallback metadata lookup stay aligned with the same workload contract
 8. Format infrastructure sensor labels through the shared `frontend-modern/src/utils/textPresentation.ts` presentation helper instead of maintaining a local title-casing implementation in `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts`
 9. Extend dashboard row contract and per-row hot-path derivations through `frontend-modern/src/components/Dashboard/guestRowModel.tsx` and `frontend-modern/src/components/Dashboard/useGuestRowState.ts` rather than rebuilding column metadata, row identity, or anomaly correlation inside `frontend-modern/src/components/Dashboard/GuestRow.tsx`
+10. Extend dashboard drawer derivations and runtime wiring through `frontend-modern/src/components/Dashboard/guestDrawerModel.ts` and `frontend-modern/src/components/Dashboard/useGuestDrawerState.ts` rather than rebuilding canonical guest identity, discovery routing, or drawer-local normalization inside `frontend-modern/src/components/Dashboard/GuestDrawer.tsx`
 
 ## Forbidden Paths
 
@@ -97,6 +102,14 @@ canonical row contract and per-row hot-path derivations live in
 `frontend-modern/src/components/Dashboard/useGuestRowState.ts`. Future row
 identity, column, anomaly-correlation, and link-state changes must extend
 through those owners instead of rebuilding row-local state inside the shell.
+The dashboard guest drawer now follows that same ownership rule: the shell
+stays in `frontend-modern/src/components/Dashboard/GuestDrawer.tsx`, while
+drawer-local normalization, backup/tag formatting, discovery identity wiring,
+and workload-derived navigation state live in
+`frontend-modern/src/components/Dashboard/guestDrawerModel.ts` and
+`frontend-modern/src/components/Dashboard/useGuestDrawerState.ts`. Future
+drawer runtime changes must extend through those owners instead of adding
+more mixed state and helper drift back into the shell.
 
 The unified resource table hot path is now also governed as explicit
 performance-owned runtime, with shared ownership against the unified-resource

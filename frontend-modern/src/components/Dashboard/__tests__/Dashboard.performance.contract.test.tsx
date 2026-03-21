@@ -5,7 +5,10 @@ import type { Resource } from '@/types/resource';
 import { Dashboard } from '../Dashboard';
 import dashboardSource from '../Dashboard.tsx?raw';
 import dashboardStateSource from '../useDashboardState.ts?raw';
+import guestDrawerSource from '../GuestDrawer.tsx?raw';
+import guestDrawerModelSource from '../guestDrawerModel.ts?raw';
 import guestRowSource from '../GuestRow.tsx?raw';
+import guestDrawerStateSource from '../useGuestDrawerState.ts?raw';
 import guestRowModelSource from '../guestRowModel.tsx?raw';
 import guestRowStateSource from '../useGuestRowState.ts?raw';
 import {
@@ -479,6 +482,18 @@ describe('Dashboard performance contract', () => {
       expect(guestRowStateSource).toContain('getCanonicalWorkloadId');
       expect(guestRowStateSource).toContain('buildMetricKey');
       expect(guestRowStateSource).toContain('getWorkloadTypeBadge');
+    });
+
+    it('keeps guest drawer runtime and derivations in canonical drawer owners', () => {
+      expect(guestDrawerSource).toContain('useGuestDrawerState');
+      expect(guestDrawerSource).not.toContain('const guestId = () =>');
+      expect(guestDrawerSource).not.toContain('const infrastructureHref = () =>');
+      expect(guestDrawerStateSource).toContain('getCanonicalWorkloadId');
+      expect(guestDrawerStateSource).toContain('buildInfrastructureHrefForWorkload');
+      expect(guestDrawerStateSource).toContain('getDiscoveryResourceTypeForWorkload');
+      expect(guestDrawerStateSource).toContain('getWebInterfaceTargetLabelForWorkload');
+      expect(guestDrawerModelSource).toContain('export const getGuestDrawerBackupPresentation');
+      expect(guestDrawerModelSource).toContain('export const normalizeGuestDrawerTags');
     });
 
     it('filterWorkloads returns all guests when no filters active', () => {

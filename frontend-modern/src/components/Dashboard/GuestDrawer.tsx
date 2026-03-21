@@ -1,113 +1,39 @@
-import { Component, Show, For, Suspense, createSignal } from 'solid-js';
+import { Component, Show, For, Suspense } from 'solid-js';
 import { useNavigate } from '@solidjs/router';
-import type { WorkloadGuest } from '@/types/workloads';
 import { formatBytes, formatUptime } from '@/utils/format';
 import { DiskList } from './DiskList';
 import { DiscoveryTab } from '../Discovery/DiscoveryTab';
-import {
-  getDiscoveryResourceTypeForWorkload,
-  getCanonicalWorkloadId,
-  getWebInterfaceTargetLabelForWorkload,
-  resolveWorkloadType,
-} from '@/utils/workloads';
-import { buildInfrastructureHrefForWorkload } from './infrastructureLink';
 import { WebInterfaceUrlField } from '@/components/shared/WebInterfaceUrlField';
-import { getDiscoveryLoadingState } from '@/utils/discoveryPresentation';
-import {
-  getDiscoveryHostIdForWorkload,
-  getDiscoveryResourceIdForWorkload,
-} from './workloadSelectors';
-
-type Guest = WorkloadGuest;
-
-interface GuestDrawerProps {
-  guest: Guest;
-  onClose: () => void;
-  customUrl?: string;
-  onCustomUrlChange?: (guestId: string, url: string) => void;
-}
+import { isGuestDrawerVM, type GuestDrawerProps } from './guestDrawerModel';
+import { useGuestDrawerState } from './useGuestDrawerState';
 
 export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
   const navigate = useNavigate();
-  const guestId = () => getCanonicalWorkloadId(props.guest);
-  const infrastructureHref = () => buildInfrastructureHrefForWorkload(props.guest);
+  const {
+    activeTab,
+    agentLabel,
+    agentTitle,
+    backupPresentation,
+    discoveryAgentId,
+    discoveryLoadingState,
+    discoveryResourceId,
+    discoveryResourceType,
+    guestId,
+    hasAgentInfo,
+    hasFilesystemDetails,
+    hasNetworkInterfaces,
+    hasOsInfo,
+    infrastructureHref,
+    ipAddresses,
+    memoryExtraLines,
+    networkInterfaces,
+    normalizedTags,
+    osName,
+    osVersion,
+    switchTab,
+    webInterfaceTargetLabel,
+  } = useGuestDrawerState(props);
 
-  const isVM = (guest: Guest): boolean => {
-    return resolveWorkloadType(guest) === 'vm';
-  };
-
-  const hasOsInfo = () => {
-    // Both VMs and containers can have OS info
-    return (props.guest.osName?.length ?? 0) > 0 || (props.guest.osVersion?.length ?? 0) > 0;
-  };
-
-  const osName = () => {
-    return props.guest.osName || '';
-  };
-
-  const osVersion = () => {
-    return props.guest.osVersion || '';
-  };
-
-  const hasAgentInfo = () => {
-    return !!props.guest.agentVersion;
-  };
-
-  const agentVersion = () => {
-    return props.guest.agentVersion || '';
-  };
-
-  const ipAddresses = () => {
-    return props.guest.ipAddresses || [];
-  };
-
-  const memoryExtraLines = () => {
-    if (!props.guest.memory) return undefined;
-    const lines: string[] = [];
-    const total = props.guest.memory.total ?? 0;
-    if (
-      props.guest.memory.balloon &&
-      props.guest.memory.balloon > 0 &&
-      props.guest.memory.balloon !== total
-    ) {
-      lines.push(`Balloon: ${formatBytes(props.guest.memory.balloon)}`);
-    }
-    if (props.guest.memory.swapTotal && props.guest.memory.swapTotal > 0) {
-      const swapUsed = props.guest.memory.swapUsed ?? 0;
-      lines.push(`Swap: ${formatBytes(swapUsed)} / ${formatBytes(props.guest.memory.swapTotal)}`);
-    }
-    return lines.length > 0 ? lines : undefined;
-  };
-
-  const hasFilesystemDetails = () => {
-    if (!props.guest.disks) return false;
-    return props.guest.disks.length > 0;
-  };
-
-  const networkInterfaces = () => {
-    // Both VMs and containers can have network interfaces
-    return props.guest.networkInterfaces || [];
-  };
-
-  const hasNetworkInterfaces = () => {
-    return networkInterfaces().length > 0;
-  };
-
-  const [activeTab, setActiveTab] = createSignal<'overview' | 'discovery'>('overview');
-
-  // All tabs are always rendered (hidden via CSS) to avoid any DOM
-  // mount/unmount during tab switches. Mounting new components inside
-  // a <For>-rendered table row causes SolidJS to recreate the row,
-  // which detaches the element and resets the scroll container.
-  const switchTab = (tab: 'overview' | 'discovery') => {
-    setActiveTab(tab);
-  };
-  const discoveryAgentId = () => {
-    return getDiscoveryHostIdForWorkload(props.guest);
-  };
-  const discoveryResourceId = () => {
-    return getDiscoveryResourceIdForWorkload(props.guest);
-  };
   return (
     <div class="space-y-3">
       {/* Tabs */}
@@ -179,13 +105,8 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
               <Show when={hasAgentInfo()}>
                 <div class="flex items-center justify-between">
                   <span class="text-muted">Agent</span>
-                  <span
-                    class="font-medium text-base-content truncate ml-2"
-                    title={
-                      isVM(props.guest) ? `QEMU guest agent ${agentVersion()}` : agentVersion()
-                    }
-                  >
-                    {isVM(props.guest) ? `QEMU ${agentVersion()}` : agentVersion()}
+                  <span class="font-medium text-base-content truncate ml-2" title={agentTitle()}>
+                    {agentLabel()}
                   </span>
                 </div>
               </Show>
@@ -252,60 +173,34 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
                 Backup
               </div>
               <div class="space-y-1 text-[11px]">
-                {(() => {
-                  const backupDate = new Date(props.guest.lastBackup);
-                  const now = new Date();
-                  const daysSince = Math.floor(
-                    (now.getTime() - backupDate.getTime()) / (1000 * 60 * 60 * 24),
-                  );
-                  const isOld = daysSince > 7;
-                  const isCritical = daysSince > 30;
-                  return (
+                <Show when={backupPresentation()}>
+                  {(presentation) => (
                     <>
                       <div class="flex items-center justify-between">
                         <span class="text-muted">Last Backup</span>
-                        <span
-                          class={`font-medium ${isCritical ? 'text-red-600 dark:text-red-400' : isOld ? 'text-amber-600 dark:text-amber-400' : 'text-green-600 dark:text-green-400'}`}
-                        >
-                          {daysSince === 0
-                            ? 'Today'
-                            : daysSince === 1
-                              ? 'Yesterday'
-                              : `${daysSince}d ago`}
+                        <span class={`font-medium ${presentation().ageClass}`}>
+                          {presentation().ageLabel}
                         </span>
                       </div>
-                      <div class="text-[10px] text-muted">{backupDate.toLocaleDateString()}</div>
+                      <div class="text-[10px] text-muted">{presentation().dateLabel}</div>
                     </>
-                  );
-                })()}
+                  )}
+                </Show>
               </div>
             </div>
           </Show>
 
           {/* Tags */}
-          <Show
-            when={
-              props.guest.tags &&
-              (Array.isArray(props.guest.tags)
-                ? props.guest.tags.length > 0
-                : props.guest.tags.length > 0)
-            }
-          >
+          <Show when={normalizedTags().length > 0}>
             <div class="rounded border border-border bg-surface p-3 shadow-sm">
               <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
                 Tags
               </div>
               <div class="flex flex-wrap gap-1">
-                <For
-                  each={
-                    Array.isArray(props.guest.tags)
-                      ? props.guest.tags
-                      : props.guest.tags?.split(',') || []
-                  }
-                >
+                <For each={normalizedTags()}>
                   {(tag) => (
                     <span class="inline-block rounded bg-surface-alt px-1.5 py-0.5 text-[10px]">
-                      {tag.trim()}
+                      {tag}
                     </span>
                   )}
                 </For>
@@ -323,7 +218,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
                 <DiskList
                   disks={props.guest.disks || []}
                   diskStatusReason={
-                    isVM(props.guest) ? (props.guest as any).diskStatusReason : undefined
+                    isGuestDrawerVM(props.guest) ? (props.guest as any).diskStatusReason : undefined
                   }
                 />
               </div>
@@ -384,10 +279,10 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
         </div>
 
         <div class="mt-3">
-          <WebInterfaceUrlField
+              <WebInterfaceUrlField
             metadataKind="guest"
             metadataId={guestId()}
-            targetLabel={getWebInterfaceTargetLabelForWorkload(props.guest)}
+            targetLabel={webInterfaceTargetLabel()}
             customUrl={props.customUrl}
             onCustomUrlChange={(url) => props.onCustomUrlChange?.(guestId(), url)}
           />
@@ -405,12 +300,12 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
           fallback={
             <div class="flex items-center justify-center py-8">
               <div class="animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full" />
-              <span class="ml-2 text-sm text-muted">{getDiscoveryLoadingState().text}</span>
+              <span class="ml-2 text-sm text-muted">{discoveryLoadingState.text}</span>
             </div>
           }
         >
           <DiscoveryTab
-            resourceType={getDiscoveryResourceTypeForWorkload(props.guest)}
+            resourceType={discoveryResourceType()}
             agentId={discoveryAgentId()}
             resourceId={discoveryResourceId()}
             hostname={props.guest.name}
