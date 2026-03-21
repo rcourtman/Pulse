@@ -261,7 +261,7 @@ describe('monitored-system model guardrails', () => {
     expect(apiTokenPresentationSource).toContain('export function getAPITokensLoadErrorMessage');
   });
 
-  it('keeps UnifiedAgents free of v5 merge-workaround patterns', () => {
+  it('keeps infrastructure operations free of v5 merge-workaround patterns', () => {
     expect(infrastructureOperationsStateSource).not.toContain('previousHostTypes');
     expect(infrastructureOperationsStateSource).not.toContain('const allHosts = createMemo(');
     expect(infrastructureOperationsSource).toContain('@/utils/unifiedAgentStatusPresentation');

@@ -1321,8 +1321,8 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(
             match["verification_requirement"]["exact_files"],
             [
+                "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsController.test.tsx",
                 "frontend-modern/src/components/Settings/__tests__/InfrastructureWorkspace.test.tsx",
-                "frontend-modern/src/components/Settings/__tests__/UnifiedAgents.test.tsx",
                 "frontend-modern/src/components/Settings/__tests__/monitoredSystemModelGuardrails.test.ts",
                 "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
                 "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
@@ -1357,8 +1357,8 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(
             match["verification_requirement"]["exact_files"],
             [
+                "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsController.test.tsx",
                 "frontend-modern/src/components/Settings/__tests__/InfrastructureWorkspace.test.tsx",
-                "frontend-modern/src/components/Settings/__tests__/UnifiedAgents.test.tsx",
                 "frontend-modern/src/components/Settings/__tests__/monitoredSystemModelGuardrails.test.ts",
                 "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
                 "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
@@ -1397,8 +1397,8 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(
             match["verification_requirement"]["exact_files"],
             [
+                "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsController.test.tsx",
                 "frontend-modern/src/components/Settings/__tests__/InfrastructureWorkspace.test.tsx",
-                "frontend-modern/src/components/Settings/__tests__/UnifiedAgents.test.tsx",
                 "frontend-modern/src/components/Settings/__tests__/monitoredSystemModelGuardrails.test.ts",
                 "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
                 "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
@@ -1433,8 +1433,8 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(
             match["verification_requirement"]["exact_files"],
             [
+                "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsController.test.tsx",
                 "frontend-modern/src/components/Settings/__tests__/InfrastructureWorkspace.test.tsx",
-                "frontend-modern/src/components/Settings/__tests__/UnifiedAgents.test.tsx",
                 "frontend-modern/src/components/Settings/__tests__/monitoredSystemModelGuardrails.test.ts",
                 "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
                 "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
@@ -2330,8 +2330,10 @@ class SubsystemLookupTest(unittest.TestCase):
             ],
         )
 
-    def test_lookup_paths_assigns_unified_agents_to_shared_agent_lifecycle_and_api_contracts(self) -> None:
-        result = lookup_paths(["frontend-modern/src/components/Settings/UnifiedAgents.tsx"])
+    def test_lookup_paths_assigns_infrastructure_operations_controller_to_shared_agent_lifecycle_and_api_contracts(self) -> None:
+        result = lookup_paths(
+            ["frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx"]
+        )
         self.assertEqual(result["unowned_runtime_files"], [])
         self.assertEqual(
             {item["subsystem"] for item in result["impacted_subsystems"]},
@@ -2365,8 +2367,8 @@ class SubsystemLookupTest(unittest.TestCase):
                 "frontend-modern/src/api/__tests__/agentProfiles.test.ts",
                 "frontend-modern/src/api/__tests__/monitoring.test.ts",
                 "frontend-modern/src/api/__tests__/security.test.ts",
+                "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsController.test.tsx",
                 "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsModel.test.tsx",
-                "frontend-modern/src/components/Settings/__tests__/UnifiedAgents.test.tsx",
             ],
         )
 
@@ -2384,8 +2386,8 @@ class SubsystemLookupTest(unittest.TestCase):
             [
                 "frontend-modern/src/api/__tests__/agentProfiles.test.ts",
                 "frontend-modern/src/api/__tests__/monitoring.test.ts",
+                "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsController.test.tsx",
                 "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsModel.test.tsx",
-                "frontend-modern/src/components/Settings/__tests__/UnifiedAgents.test.tsx",
             ],
         )
 
@@ -2420,8 +2422,8 @@ class SubsystemLookupTest(unittest.TestCase):
             [
                 "frontend-modern/src/api/__tests__/agentProfiles.test.ts",
                 "frontend-modern/src/api/__tests__/monitoring.test.ts",
+                "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsController.test.tsx",
                 "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsModel.test.tsx",
-                "frontend-modern/src/components/Settings/__tests__/UnifiedAgents.test.tsx",
             ],
         )
 

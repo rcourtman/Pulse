@@ -241,7 +241,7 @@ export default defineConfig({
             if (/Security|RolesPanel|UserAssignmentsPanel|APIAccessPanel|APITokenManager|ChangePasswordModal|QuickSecuritySetup/.test(id)) {
               return 'settings-auth';
             }
-            if (/Audit|ProLicensePanel|GeneralSettingsPanel|NetworkSettingsPanel|UpdatesSettingsPanel|RecoverySettingsPanel|UnifiedAgents/.test(id)) {
+            if (/Audit|ProLicensePanel|GeneralSettingsPanel|NetworkSettingsPanel|UpdatesSettingsPanel|RecoverySettingsPanel/.test(id)) {
               return 'settings-admin';
             }
             if (/Settings\.tsx|SettingsSectionNav|ResourcePicker|SuggestProfileModal/.test(id)) {

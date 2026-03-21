@@ -3,7 +3,7 @@ import { render, fireEvent, screen, waitFor, cleanup, within } from '@solidjs/te
 import { createSignal } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { Router, Route } from '@solidjs/router';
-import { UnifiedAgents } from '../UnifiedAgents';
+import { InfrastructureOperationsController } from '../InfrastructureOperationsController';
 import infrastructureInstallPanelSource from '../InfrastructureInstallPanel.tsx?raw';
 import infrastructureInstallerSectionSource from '../InfrastructureInstallerSection.tsx?raw';
 import infrastructureOperationsControllerSource from '../InfrastructureOperationsController.tsx?raw';
@@ -51,7 +51,7 @@ const refetchResourcesMock = vi.fn();
 const [mockResources, setMockResources] = createSignal<any[]>([]);
 let securityStatusResponse = { requiresAuth: true, apiTokenConfigured: false };
 
-describe('UnifiedAgents ownership guardrails', () => {
+describe('InfrastructureOperationsController ownership guardrails', () => {
   it('routes controller and workspace panels through the shared infrastructure operations state owner', () => {
     expect(infrastructureOperationsControllerSource).toContain('InfrastructureOperationsStateProvider');
     expect(infrastructureOperationsControllerSource).toContain('InfrastructureInstallerSection');
@@ -502,7 +502,7 @@ const setupComponent = (
 
   return render(() => (
     <Router>
-      <Route path="/" component={() => <UnifiedAgents />} />
+      <Route path="/" component={() => <InfrastructureOperationsController />} />
     </Router>
   ));
 };
@@ -523,7 +523,7 @@ const setupWithResources = (resources: any[], connectedInfrastructure: Connected
 
   return render(() => (
     <Router>
-      <Route path="/" component={() => <UnifiedAgents />} />
+      <Route path="/" component={() => <InfrastructureOperationsController />} />
     </Router>
   ));
 };
@@ -577,7 +577,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('UnifiedAgents token generation', () => {
+describe('InfrastructureOperationsController token generation', () => {
   it('renders the token generation UI when auth is required', async () => {
     setupComponent();
 
@@ -623,7 +623,7 @@ describe('UnifiedAgents token generation', () => {
   });
 });
 
-describe('UnifiedAgents agent lookup', () => {
+describe('InfrastructureOperationsController agent lookup', () => {
   it('performs agent lookup and displays results', async () => {
     createTokenMock.mockResolvedValue({
       token: 'token-123',
@@ -726,7 +726,7 @@ describe('UnifiedAgents agent lookup', () => {
   });
 });
 
-describe('UnifiedAgents managed agents table', () => {
+describe('InfrastructureOperationsController managed agents table', () => {
   it('displays agents in the table', async () => {
     const host = createAgent({ hostname: 'test-server.local', displayName: 'Test Server' });
     setupComponent([host]);
@@ -2133,7 +2133,7 @@ describe('UnifiedAgents managed agents table', () => {
   });
 });
 
-describe('UnifiedAgents platform commands', () => {
+describe('InfrastructureOperationsController platform commands', () => {
   it('shows installation commands for all platforms after token generation', async () => {
     createTokenMock.mockResolvedValue({
       token: 'test-token',

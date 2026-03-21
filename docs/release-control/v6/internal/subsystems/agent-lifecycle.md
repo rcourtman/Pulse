@@ -52,25 +52,24 @@ management, and fleet control surfaces.
 28. `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx`
 29. `frontend-modern/src/components/Settings/useInfrastructureSettingsState.ts`
 30. `frontend-modern/src/components/Settings/useProxmoxDirectWorkspaceState.ts`
-31. `frontend-modern/src/components/Settings/UnifiedAgents.tsx`
-32. `frontend-modern/src/components/Settings/NodeModal.tsx`
-33. `frontend-modern/src/components/Settings/NodeModalAuthenticationSection.tsx`
-34. `frontend-modern/src/components/Settings/NodeModalBasicInfoSection.tsx`
-35. `frontend-modern/src/components/Settings/nodeModalModel.ts`
-36. `frontend-modern/src/components/Settings/NodeModalMonitoringSection.tsx`
-37. `frontend-modern/src/components/Settings/NodeModalSetupGuideSection.tsx`
-38. `frontend-modern/src/components/Settings/NodeModalStatusFooter.tsx`
-39. `frontend-modern/src/components/Settings/useNodeModalState.ts`
-40. `frontend-modern/src/components/SetupWizard/SetupCompletionPanel.tsx`
-41. `frontend-modern/src/components/Infrastructure/deploy/ResultsStep.tsx`
-42. `frontend-modern/src/utils/agentProfilesPresentation.ts`
-43. `frontend-modern/src/utils/agentInstallCommand.ts`
-44. `frontend-modern/src/api/nodes.ts`
-45. `frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx`
-46. `frontend-modern/src/components/Settings/InfrastructureInventorySection.tsx`
-47. `frontend-modern/src/components/Settings/InfrastructureActiveRowDetails.tsx`
-48. `frontend-modern/src/components/Settings/InfrastructureIgnoredRowDetails.tsx`
-49. `frontend-modern/src/components/Settings/InfrastructureStopMonitoringDialog.tsx`
+31. `frontend-modern/src/components/Settings/NodeModal.tsx`
+32. `frontend-modern/src/components/Settings/NodeModalAuthenticationSection.tsx`
+33. `frontend-modern/src/components/Settings/NodeModalBasicInfoSection.tsx`
+34. `frontend-modern/src/components/Settings/nodeModalModel.ts`
+35. `frontend-modern/src/components/Settings/NodeModalMonitoringSection.tsx`
+36. `frontend-modern/src/components/Settings/NodeModalSetupGuideSection.tsx`
+37. `frontend-modern/src/components/Settings/NodeModalStatusFooter.tsx`
+38. `frontend-modern/src/components/Settings/useNodeModalState.ts`
+39. `frontend-modern/src/components/SetupWizard/SetupCompletionPanel.tsx`
+40. `frontend-modern/src/components/Infrastructure/deploy/ResultsStep.tsx`
+41. `frontend-modern/src/utils/agentProfilesPresentation.ts`
+42. `frontend-modern/src/utils/agentInstallCommand.ts`
+43. `frontend-modern/src/api/nodes.ts`
+44. `frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx`
+45. `frontend-modern/src/components/Settings/InfrastructureInventorySection.tsx`
+46. `frontend-modern/src/components/Settings/InfrastructureActiveRowDetails.tsx`
+47. `frontend-modern/src/components/Settings/InfrastructureIgnoredRowDetails.tsx`
+48. `frontend-modern/src/components/Settings/InfrastructureStopMonitoringDialog.tsx`
 
 ## Shared Boundaries
 
@@ -85,15 +84,14 @@ management, and fleet control surfaces.
 9. `frontend-modern/src/components/Settings/NodeModalMonitoringSection.tsx` shared with `api-contracts`: the node setup monitoring section is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
 10. `frontend-modern/src/components/Settings/NodeModalSetupGuideSection.tsx` shared with `api-contracts`: the node setup guide section is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
 11. `frontend-modern/src/components/Settings/NodeModalStatusFooter.tsx` shared with `api-contracts`: the node setup status/footer section is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
-12. `frontend-modern/src/components/Settings/UnifiedAgents.tsx` shared with `api-contracts`: the UnifiedAgents module is a compatibility shim for the canonical infrastructure operations controller and remains on the same shared agent lifecycle and API contract boundary while the old module path exists.
-13. `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx` shared with `api-contracts`: the shared infrastructure operations state hook is both an agent fleet lifecycle control surface and an API token, lookup, assignment, and reporting/install contract boundary.
-14. `frontend-modern/src/components/Settings/useNodeModalState.ts` shared with `api-contracts`: the node setup modal state hook is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
-15. `frontend-modern/src/utils/agentInstallCommand.ts` shared with `api-contracts`: the shared frontend install-command helper is both an agent lifecycle control surface and a canonical API/install transport contract boundary.
-16. `internal/api/agent_install_command_shared.go` shared with `api-contracts`: agent install command assembly is both an agent lifecycle control surface and a canonical API payload contract boundary.
-17. `internal/api/config_setup_handlers.go` shared with `api-contracts`: auto-register and setup handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.
-18. `internal/api/unified_agent.go` shared with `api-contracts`: unified agent download and installer handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.
-19. `scripts/install.ps1` shared with `deployment-installability`: the Windows installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary.
-20. `scripts/install.sh` shared with `deployment-installability`: the shell installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary.
+12. `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx` shared with `api-contracts`: the shared infrastructure operations state hook is both an agent fleet lifecycle control surface and an API token, lookup, assignment, and reporting/install contract boundary.
+13. `frontend-modern/src/components/Settings/useNodeModalState.ts` shared with `api-contracts`: the node setup modal state hook is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
+14. `frontend-modern/src/utils/agentInstallCommand.ts` shared with `api-contracts`: the shared frontend install-command helper is both an agent lifecycle control surface and a canonical API/install transport contract boundary.
+15. `internal/api/agent_install_command_shared.go` shared with `api-contracts`: agent install command assembly is both an agent lifecycle control surface and a canonical API payload contract boundary.
+16. `internal/api/config_setup_handlers.go` shared with `api-contracts`: auto-register and setup handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.
+17. `internal/api/unified_agent.go` shared with `api-contracts`: unified agent download and installer handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.
+18. `scripts/install.ps1` shared with `deployment-installability`: the Windows installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary.
+19. `scripts/install.sh` shared with `deployment-installability`: the shell installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary.
 
 ## Extension Points
 
