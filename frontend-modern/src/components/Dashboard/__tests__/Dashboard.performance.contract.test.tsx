@@ -14,6 +14,9 @@ import thresholdSliderStateSource from '../useThresholdSliderState.ts?raw';
 import stackedDiskBarSource from '../StackedDiskBar.tsx?raw';
 import stackedDiskBarModelSource from '../stackedDiskBarModel.ts?raw';
 import stackedDiskBarStateSource from '../useStackedDiskBarState.ts?raw';
+import stackedMemoryBarSource from '../StackedMemoryBar.tsx?raw';
+import stackedMemoryBarModelSource from '../stackedMemoryBarModel.ts?raw';
+import stackedMemoryBarStateSource from '../useStackedMemoryBarState.ts?raw';
 import diskListSource from '../DiskList.tsx?raw';
 import diskListModelSource from '../diskListModel.ts?raw';
 import diskListStateSource from '../useDiskListState.ts?raw';
@@ -523,6 +526,20 @@ describe('Dashboard performance contract', () => {
       expect(stackedDiskBarModelSource).toContain('export function buildStackedDiskBarPresentation');
       expect(stackedDiskBarModelSource).toContain('const SEGMENT_COLORS');
       expect(stackedDiskBarModelSource).toContain('tooltipTitle');
+    });
+
+    it('keeps stacked memory bar runtime and derivations in canonical owners', () => {
+      expect(stackedMemoryBarSource).toContain('useStackedMemoryBarState');
+      expect(stackedMemoryBarSource).not.toContain('const [containerWidth, setContainerWidth] =');
+      expect(stackedMemoryBarSource).not.toContain('const segments = createMemo(() => {');
+      expect(stackedMemoryBarSource).not.toContain('const MEMORY_COLORS =');
+      expect(stackedMemoryBarStateSource).toContain('new ResizeObserver');
+      expect(stackedMemoryBarStateSource).toContain('useTooltip');
+      expect(stackedMemoryBarModelSource).toContain(
+        'export function buildStackedMemoryBarPresentation',
+      );
+      expect(stackedMemoryBarModelSource).toContain('const MEMORY_COLORS');
+      expect(stackedMemoryBarModelSource).toContain('tooltipRows');
     });
 
     it('keeps guest row contract and hot-path state in canonical row owners', () => {

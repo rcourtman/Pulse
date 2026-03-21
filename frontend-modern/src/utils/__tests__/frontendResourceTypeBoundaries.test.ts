@@ -88,6 +88,9 @@ import thresholdSliderStateSource from '@/components/Dashboard/useThresholdSlide
 import stackedDiskBarSource from '@/components/Dashboard/StackedDiskBar.tsx?raw';
 import stackedDiskBarModelSource from '@/components/Dashboard/stackedDiskBarModel.ts?raw';
 import stackedDiskBarStateSource from '@/components/Dashboard/useStackedDiskBarState.ts?raw';
+import stackedMemoryBarSource from '@/components/Dashboard/StackedMemoryBar.tsx?raw';
+import stackedMemoryBarModelSource from '@/components/Dashboard/stackedMemoryBarModel.ts?raw';
+import stackedMemoryBarStateSource from '@/components/Dashboard/useStackedMemoryBarState.ts?raw';
 import workloadsSummarySource from '@/components/Workloads/WorkloadsSummary.tsx?raw';
 import dashboardRouteSource from '@/pages/Dashboard.tsx?raw';
 import dashboardHelpersSource from '@/pages/DashboardPanels/dashboardHelpers.ts?raw';
@@ -535,6 +538,16 @@ describe('frontend resource type boundaries', () => {
     expect(stackedDiskBarStateSource).toContain('useTooltip');
     expect(stackedDiskBarModelSource).toContain('export function buildStackedDiskBarPresentation');
     expect(stackedDiskBarModelSource).toContain('const SEGMENT_COLORS');
+    expect(stackedMemoryBarSource).toContain('useStackedMemoryBarState');
+    expect(stackedMemoryBarSource).not.toContain('const [containerWidth, setContainerWidth] =');
+    expect(stackedMemoryBarSource).not.toContain('const segments = createMemo(() => {');
+    expect(stackedMemoryBarSource).not.toContain('const MEMORY_COLORS =');
+    expect(stackedMemoryBarStateSource).toContain('new ResizeObserver');
+    expect(stackedMemoryBarStateSource).toContain('useTooltip');
+    expect(stackedMemoryBarModelSource).toContain(
+      'export function buildStackedMemoryBarPresentation',
+    );
+    expect(stackedMemoryBarModelSource).toContain('const MEMORY_COLORS');
     expect(workloadsSummarySource).toContain('normalizeOrgScope(getOrgID())');
     expect(workloadsSummarySource).not.toContain("const DEFAULT_ORG_SCOPE = 'default'");
     expect(workloadsSummarySource).not.toContain('const normalizeOrgScope =');
