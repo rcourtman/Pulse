@@ -112,6 +112,9 @@ import guestRowStateSource from '@/components/Dashboard/useGuestRowState.ts?raw'
 import dashboardDiskListSource from '@/components/Dashboard/DiskList.tsx?raw';
 import dashboardDiskListModelSource from '@/components/Dashboard/diskListModel.ts?raw';
 import dashboardDiskListStateSource from '@/components/Dashboard/useDiskListState.ts?raw';
+import metricBarSource from '@/components/Dashboard/MetricBar.tsx?raw';
+import metricBarModelSource from '@/components/Dashboard/metricBarModel.ts?raw';
+import metricBarStateSource from '@/components/Dashboard/useMetricBarState.ts?raw';
 import guestDrawerSource from '@/components/Dashboard/GuestDrawer.tsx?raw';
 import guestDrawerModelSource from '@/components/Dashboard/guestDrawerModel.ts?raw';
 import guestDrawerStateSource from '@/components/Dashboard/useGuestDrawerState.ts?raw';
@@ -548,6 +551,13 @@ describe('frontend resource type boundaries', () => {
       'export function buildStackedMemoryBarPresentation',
     );
     expect(stackedMemoryBarModelSource).toContain('const MEMORY_COLORS');
+    expect(metricBarSource).toContain('useMetricBarState');
+    expect(metricBarSource).not.toContain('const [containerWidth, setContainerWidth] =');
+    expect(metricBarSource).not.toContain('const progressColorClass = createMemo(() => {');
+    expect(metricBarSource).not.toContain('const showSublabel = createMemo(() => {');
+    expect(metricBarStateSource).toContain('new ResizeObserver');
+    expect(metricBarModelSource).toContain('export function buildMetricBarPresentation');
+    expect(metricBarModelSource).toContain('estimateTextWidth');
     expect(workloadsSummarySource).toContain('normalizeOrgScope(getOrgID())');
     expect(workloadsSummarySource).not.toContain("const DEFAULT_ORG_SCOPE = 'default'");
     expect(workloadsSummarySource).not.toContain('const normalizeOrgScope =');

@@ -20,6 +20,9 @@ import stackedMemoryBarStateSource from '../useStackedMemoryBarState.ts?raw';
 import diskListSource from '../DiskList.tsx?raw';
 import diskListModelSource from '../diskListModel.ts?raw';
 import diskListStateSource from '../useDiskListState.ts?raw';
+import metricBarSource from '../MetricBar.tsx?raw';
+import metricBarModelSource from '../metricBarModel.ts?raw';
+import metricBarStateSource from '../useMetricBarState.ts?raw';
 import guestDrawerSource from '../GuestDrawer.tsx?raw';
 import guestDrawerModelSource from '../guestDrawerModel.ts?raw';
 import guestRowSource from '../GuestRow.tsx?raw';
@@ -540,6 +543,17 @@ describe('Dashboard performance contract', () => {
       );
       expect(stackedMemoryBarModelSource).toContain('const MEMORY_COLORS');
       expect(stackedMemoryBarModelSource).toContain('tooltipRows');
+    });
+
+    it('keeps metric bar runtime and derivations in canonical owners', () => {
+      expect(metricBarSource).toContain('useMetricBarState');
+      expect(metricBarSource).not.toContain('const [containerWidth, setContainerWidth] =');
+      expect(metricBarSource).not.toContain('const progressColorClass = createMemo(() => {');
+      expect(metricBarSource).not.toContain('const showSublabel = createMemo(() => {');
+      expect(metricBarStateSource).toContain('new ResizeObserver');
+      expect(metricBarModelSource).toContain('export function buildMetricBarPresentation');
+      expect(metricBarModelSource).toContain('estimateTextWidth');
+      expect(metricBarModelSource).toContain('getMetricColorClass');
     });
 
     it('keeps guest row contract and hot-path state in canonical row owners', () => {
