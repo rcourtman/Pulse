@@ -12,6 +12,7 @@ import { useInfrastructureSettingsState } from './useInfrastructureSettingsState
 import { useSettingsAccess } from './useSettingsAccess';
 import { useSettingsPanelRegistry } from './useSettingsPanelRegistry';
 import { useSettingsShellState } from './useSettingsShellState';
+import { useSettingsSystemPanels } from './useSettingsSystemPanels';
 import { useSystemSettingsState } from './useSystemSettingsState';
 import { useSettingsNavigation } from './useSettingsNavigation';
 import { getSettingsLoadingState } from '@/utils/settingsShellPresentation';
@@ -61,28 +62,7 @@ const Settings: Component<SettingsProps> = (props) => {
     () => getLimit('max_monitored_systems')?.current ?? 0,
   );
   const organizationGuestUsage = createMemo(() => getLimit('max_guests')?.current ?? 0);
-  const {
-    discoveryEnabled,
-    setDiscoveryEnabled,
-    discoverySubnet,
-    discoveryMode,
-    setDiscoveryMode,
-    discoverySubnetDraft,
-    setDiscoverySubnetDraft,
-    lastCustomSubnet,
-    setLastCustomSubnet,
-    discoverySubnetError,
-    setDiscoverySubnetError,
-    savingDiscoverySettings,
-    setSavingDiscoverySettings,
-    parseSubnetList,
-    normalizeSubnetList,
-    currentDraftSubnetValue,
-    isValidCIDR,
-    applySavedDiscoverySubnet,
-    assignDiscoverySubnetInputRef,
-    getDiscoverySubnetInputRef,
-  } = useDiscoverySettingsState();
+  const discoverySettings = useDiscoverySettingsState();
 
   // Security
   const [showQuickSecuritySetup, setShowQuickSecuritySetup] = createSignal(false);
@@ -93,253 +73,57 @@ const Settings: Component<SettingsProps> = (props) => {
       setActiveTab,
       searchQuery,
     });
-  const {
-    exportPassphrase,
-    setExportPassphrase,
-    useCustomPassphrase,
-    setUseCustomPassphrase,
-    importPassphrase,
-    setImportPassphrase,
-    importFile,
-    setImportFile,
-    showExportDialog,
-    setShowExportDialog,
-    showImportDialog,
-    setShowImportDialog,
-    showApiTokenModal,
-    apiTokenInput,
-    setApiTokenInput,
-    handleExport,
-    handleImport,
-    closeExportDialog,
-    closeImportDialog,
-    closeApiTokenModal,
-    handleApiTokenAuthenticate,
-  } = useBackupTransferFlow({ securityStatus });
-  const {
-    hasUnsavedChanges,
-    setHasUnsavedChanges,
-    pvePollingInterval,
-    setPVEPollingInterval,
-    pvePollingSelection,
-    setPVEPollingSelection,
-    pvePollingCustomSeconds,
-    setPVEPollingCustomSeconds,
-    pvePollingEnvLocked,
-    allowedOrigins,
-    setAllowedOrigins,
-    allowEmbedding,
-    setAllowEmbedding,
-    allowedEmbedOrigins,
-    setAllowedEmbedOrigins,
-    webhookAllowedPrivateCIDRs,
-    setWebhookAllowedPrivateCIDRs,
-    publicURL,
-    setPublicURL,
-    envOverrides,
-    temperatureMonitoringEnabled,
-    temperatureMonitoringLocked,
-    savingTemperatureSetting,
-    setSavingTemperatureSetting,
-    handleTemperatureMonitoringChange,
-    hideLocalLogin,
-    hideLocalLoginLocked,
-    savingHideLocalLogin,
-    handleHideLocalLoginChange,
-    disableDockerUpdateActions,
-    disableDockerUpdateActionsLocked,
-    savingDockerUpdateActions,
-    handleDisableDockerUpdateActionsChange,
-    disableLocalUpgradeMetrics,
-    disableLocalUpgradeMetricsLocked,
-    savingUpgradeMetrics,
-    handleDisableLocalUpgradeMetricsChange,
-    telemetryEnabled,
-    telemetryEnabledLocked,
-    savingTelemetry,
-    handleTelemetryEnabledChange,
-    versionInfo,
-    updateInfo,
-    checkingForUpdates,
-    updateChannel,
-    setUpdateChannel,
-    autoUpdateEnabled,
-    setAutoUpdateEnabled,
-    autoUpdateCheckInterval,
-    setAutoUpdateCheckInterval,
-    autoUpdateTime,
-    setAutoUpdateTime,
-    updatePlan,
-    isInstallingUpdate,
-    showUpdateConfirmation,
-    setShowUpdateConfirmation,
-    backupPollingEnabled,
-    setBackupPollingEnabled,
-    backupPollingInterval,
-    setBackupPollingInterval,
-    backupPollingCustomMinutes,
-    setBackupPollingCustomMinutes,
-    backupPollingUseCustom,
-    setBackupPollingUseCustom,
-    backupPollingEnvLocked,
-    backupIntervalSelectValue,
-    backupIntervalSummary,
-    initializeSystemSettingsState,
-    saveSettings,
-    checkForUpdates,
-    handleInstallUpdate,
-    handleConfirmUpdate,
-  } = useSystemSettingsState({
+  const backupTransferFlow = useBackupTransferFlow({ securityStatus });
+  const systemSettings = useSystemSettingsState({
     activeTab,
     loadSecurityStatus,
-    setDiscoveryEnabled,
-    applySavedDiscoverySubnet,
+    setDiscoveryEnabled: discoverySettings.setDiscoveryEnabled,
+    applySavedDiscoverySubnet: discoverySettings.applySavedDiscoverySubnet,
   });
-  const {
-    discoveredNodes,
-    setShowNodeModal,
-    editingNode,
-    setEditingNode,
-    setCurrentNodeType,
-    modalResetKey,
-    setModalResetKey,
-    initialLoadComplete,
-    discoveryScanStatus,
-    showDeleteNodeModal,
-    deleteNodeLoading,
-    pveNodes,
-    pbsNodes,
-    pmgNodes,
-    isNodeModalVisible,
-    resolveTemperatureMonitoringEnabled,
-    loadDiscoveredNodes,
-    triggerDiscoveryScan,
-    handleDiscoveryEnabledChange,
-    commitDiscoverySubnet,
-    handleDiscoveryModeChange,
-    handleNodeTemperatureMonitoringChange,
-    requestDeleteNode,
-    cancelDeleteNode,
-    deleteNode,
-    testNodeConnection,
-    refreshClusterNodes,
-    nodePendingDeleteLabel,
-    nodePendingDeleteHost,
-    nodePendingDeleteType,
-    nodePendingDeleteTypeLabel,
-    saveNode,
-  } = useInfrastructureSettingsState({
+  const infrastructureSettings = useInfrastructureSettingsState({
     eventBus,
     currentTab,
-    discoveryEnabled,
-    setDiscoveryEnabled,
-    discoverySubnet,
-    discoveryMode,
-    setDiscoveryMode,
-    discoverySubnetDraft,
-    setDiscoverySubnetDraft,
-    lastCustomSubnet,
-    setLastCustomSubnet,
-    setDiscoverySubnetError,
-    savingDiscoverySettings,
-    setSavingDiscoverySettings,
-    envOverrides,
-    normalizeSubnetList,
-    isValidCIDR,
-    applySavedDiscoverySubnet,
-    getDiscoverySubnetInputRef,
-    temperatureMonitoringEnabled,
-    savingTemperatureSetting,
-    setSavingTemperatureSetting,
+    discoveryEnabled: discoverySettings.discoveryEnabled,
+    setDiscoveryEnabled: discoverySettings.setDiscoveryEnabled,
+    discoverySubnet: discoverySettings.discoverySubnet,
+    discoveryMode: discoverySettings.discoveryMode,
+    setDiscoveryMode: discoverySettings.setDiscoveryMode,
+    discoverySubnetDraft: discoverySettings.discoverySubnetDraft,
+    setDiscoverySubnetDraft: discoverySettings.setDiscoverySubnetDraft,
+    lastCustomSubnet: discoverySettings.lastCustomSubnet,
+    setLastCustomSubnet: discoverySettings.setLastCustomSubnet,
+    setDiscoverySubnetError: discoverySettings.setDiscoverySubnetError,
+    savingDiscoverySettings: discoverySettings.savingDiscoverySettings,
+    setSavingDiscoverySettings: discoverySettings.setSavingDiscoverySettings,
+    envOverrides: systemSettings.envOverrides,
+    normalizeSubnetList: discoverySettings.normalizeSubnetList,
+    isValidCIDR: discoverySettings.isValidCIDR,
+    applySavedDiscoverySubnet: discoverySettings.applySavedDiscoverySubnet,
+    getDiscoverySubnetInputRef: discoverySettings.getDiscoverySubnetInputRef,
+    temperatureMonitoringEnabled: systemSettings.temperatureMonitoringEnabled,
+    savingTemperatureSetting: systemSettings.savingTemperatureSetting,
+    setSavingTemperatureSetting: systemSettings.setSavingTemperatureSetting,
     loadSecurityStatus,
-    initializeSystemSettingsState,
+    initializeSystemSettingsState: systemSettings.initializeSystemSettingsState,
+  });
+  const systemPanels = useSettingsSystemPanels({
+    darkMode: props.darkMode,
+    themePreference: props.themePreference,
+    setThemePreference: props.setThemePreference,
+    initialLoadComplete: infrastructureSettings.initialLoadComplete,
+    systemSettings,
+    discoverySettings: {
+      ...discoverySettings,
+      handleDiscoveryEnabledChange: infrastructureSettings.handleDiscoveryEnabledChange,
+      handleDiscoveryModeChange: infrastructureSettings.handleDiscoveryModeChange,
+      commitDiscoverySubnet: infrastructureSettings.commitDiscoverySubnet,
+    },
+    backupTransferFlow,
+    securityStatus,
   });
 
   const activeTabSaveBehavior = createMemo(() => getSettingsTabSaveBehavior(activeTab()));
   const settingsPanelRegistry = useSettingsPanelRegistry({
-    darkMode: props.darkMode,
-    themePreference: props.themePreference,
-    setThemePreference: props.setThemePreference,
-    initialLoadComplete,
-    pvePollingInterval,
-    setPVEPollingInterval,
-    pvePollingSelection,
-    setPVEPollingSelection,
-    pvePollingCustomSeconds,
-    setPVEPollingCustomSeconds,
-    pvePollingEnvLocked,
-    setHasUnsavedChanges,
-    disableLocalUpgradeMetrics,
-    disableLocalUpgradeMetricsLocked,
-    savingUpgradeMetrics,
-    handleDisableLocalUpgradeMetricsChange,
-    telemetryEnabled,
-    telemetryEnabledLocked,
-    savingTelemetry,
-    handleTelemetryEnabledChange,
-    disableDockerUpdateActions,
-    disableDockerUpdateActionsLocked,
-    savingDockerUpdateActions,
-    handleDisableDockerUpdateActionsChange,
-    discoveryEnabled,
-    discoveryMode,
-    discoverySubnetDraft,
-    discoverySubnetError,
-    savingDiscoverySettings,
-    envOverrides,
-    allowedOrigins,
-    setAllowedOrigins,
-    allowEmbedding,
-    setAllowEmbedding,
-    allowedEmbedOrigins,
-    setAllowedEmbedOrigins,
-    webhookAllowedPrivateCIDRs,
-    setWebhookAllowedPrivateCIDRs,
-    publicURL,
-    setPublicURL,
-    handleDiscoveryEnabledChange,
-    handleDiscoveryModeChange,
-    setDiscoveryMode,
-    setDiscoverySubnetDraft,
-    setDiscoverySubnetError,
-    setLastCustomSubnet,
-    commitDiscoverySubnet,
-    parseSubnetList,
-    normalizeSubnetList,
-    isValidCIDR,
-    currentDraftSubnetValue,
-    assignDiscoverySubnetInputRef,
-    versionInfo,
-    updateInfo,
-    checkingForUpdates,
-    updateChannel,
-    setUpdateChannel,
-    autoUpdateEnabled,
-    setAutoUpdateEnabled,
-    autoUpdateCheckInterval,
-    setAutoUpdateCheckInterval,
-    autoUpdateTime,
-    setAutoUpdateTime,
-    checkForUpdates,
-    updatePlan,
-    handleInstallUpdate,
-    isInstallingUpdate,
-    backupPollingEnabled,
-    setBackupPollingEnabled,
-    backupPollingInterval,
-    setBackupPollingInterval,
-    backupPollingCustomMinutes,
-    setBackupPollingCustomMinutes,
-    backupPollingUseCustom,
-    setBackupPollingUseCustom,
-    backupPollingEnvLocked,
-    backupIntervalSelectValue,
-    backupIntervalSummary,
-    showExportDialog,
-    setShowExportDialog,
-    showImportDialog,
-    setShowImportDialog,
-    setUseCustomPassphrase,
     securityStatus,
     securityStatusLoading,
     organizationMonitoredSystemUsage,
@@ -351,56 +135,65 @@ const Settings: Component<SettingsProps> = (props) => {
     setShowQuickSecurityWizard,
     showPasswordModal,
     setShowPasswordModal,
-    hideLocalLogin,
-    hideLocalLoginLocked,
-    savingHideLocalLogin,
-    handleHideLocalLoginChange,
+    hideLocalLogin: systemSettings.hideLocalLogin,
+    hideLocalLoginLocked: systemSettings.hideLocalLoginLocked,
+    savingHideLocalLogin: systemSettings.savingHideLocalLogin,
+    handleHideLocalLoginChange: systemSettings.handleHideLocalLoginChange,
+    versionInfo: systemSettings.versionInfo,
+    systemPanels,
     getInfrastructurePanelProps: () => ({
       selectedAgent,
       onSelectAgent: handleSelectAgent,
-      initialLoadComplete,
-      discoveryEnabled,
-      discoveryMode,
-      discoveryScanStatus,
-      discoveredNodes,
-      savingDiscoverySettings,
-      envOverrides,
+      initialLoadComplete: infrastructureSettings.initialLoadComplete,
+      discoveryEnabled: discoverySettings.discoveryEnabled,
+      discoveryMode: discoverySettings.discoveryMode,
+      discoveryScanStatus: infrastructureSettings.discoveryScanStatus,
+      discoveredNodes: infrastructureSettings.discoveredNodes,
+      savingDiscoverySettings: discoverySettings.savingDiscoverySettings,
+      envOverrides: systemSettings.envOverrides,
       agentStateResources: () =>
         (state.resources ?? []).filter((resource) => resource.type === 'agent'),
       pbsInstances: pbsInstancesFromResources,
       pmgInstances: pmgInstancesFromResources,
-      pveNodes,
-      pbsNodes,
-      pmgNodes,
-      temperatureMonitoringEnabled,
-      triggerDiscoveryScan,
-      loadDiscoveredNodes,
-      handleDiscoveryEnabledChange,
-      testNodeConnection,
-      requestDeleteNode,
-      refreshClusterNodes,
-      setShowNodeModal,
-      editingNode,
-      setEditingNode,
-      setCurrentNodeType,
-      modalResetKey,
-      setModalResetKey,
-      isNodeModalVisible,
+      pveNodes: infrastructureSettings.pveNodes,
+      pbsNodes: infrastructureSettings.pbsNodes,
+      pmgNodes: infrastructureSettings.pmgNodes,
+      temperatureMonitoringEnabled: systemSettings.temperatureMonitoringEnabled,
+      triggerDiscoveryScan: infrastructureSettings.triggerDiscoveryScan,
+      loadDiscoveredNodes: infrastructureSettings.loadDiscoveredNodes,
+      handleDiscoveryEnabledChange: infrastructureSettings.handleDiscoveryEnabledChange,
+      testNodeConnection: infrastructureSettings.testNodeConnection,
+      requestDeleteNode: infrastructureSettings.requestDeleteNode,
+      refreshClusterNodes: infrastructureSettings.refreshClusterNodes,
+      setShowNodeModal: infrastructureSettings.setShowNodeModal,
+      editingNode: infrastructureSettings.editingNode,
+      setEditingNode: infrastructureSettings.setEditingNode,
+      setCurrentNodeType: infrastructureSettings.setCurrentNodeType,
+      modalResetKey: infrastructureSettings.modalResetKey,
+      setModalResetKey: infrastructureSettings.setModalResetKey,
+      isNodeModalVisible: infrastructureSettings.isNodeModalVisible,
       securityStatus,
-      resolveTemperatureMonitoringEnabled,
-      temperatureMonitoringLocked,
-      savingTemperatureSetting,
-      handleTemperatureMonitoringChange,
-      handleNodeTemperatureMonitoringChange,
-      saveNode,
-      showDeleteNodeModal,
-      cancelDeleteNode,
-      deleteNode,
-      deleteNodeLoading,
-      nodePendingDeleteLabel,
-      nodePendingDeleteHost,
-      nodePendingDeleteType,
-      nodePendingDeleteTypeLabel,
+      resolveTemperatureMonitoringEnabled:
+        infrastructureSettings.resolveTemperatureMonitoringEnabled,
+      temperatureMonitoringLocked: systemSettings.temperatureMonitoringLocked,
+      savingTemperatureSetting: systemSettings.savingTemperatureSetting,
+      handleTemperatureMonitoringChange: systemSettings.handleTemperatureMonitoringChange,
+      handleNodeTemperatureMonitoringChange:
+        infrastructureSettings.handleNodeTemperatureMonitoringChange,
+      saveNode: infrastructureSettings.saveNode,
+      showDeleteNodeModal: infrastructureSettings.showDeleteNodeModal,
+      cancelDeleteNode: infrastructureSettings.cancelDeleteNode,
+      deleteNode: infrastructureSettings.deleteNode,
+      deleteNodeLoading: infrastructureSettings.deleteNodeLoading,
+      nodePendingDeleteLabel: infrastructureSettings.nodePendingDeleteLabel,
+      nodePendingDeleteHost: infrastructureSettings.nodePendingDeleteHost,
+      nodePendingDeleteType: infrastructureSettings.nodePendingDeleteType,
+      nodePendingDeleteTypeLabel: infrastructureSettings.nodePendingDeleteTypeLabel,
+      disableDockerUpdateActions: systemSettings.disableDockerUpdateActions,
+      disableDockerUpdateActionsLocked: systemSettings.disableDockerUpdateActionsLocked,
+      savingDockerUpdateActions: systemSettings.savingDockerUpdateActions,
+      handleDisableDockerUpdateActionsChange:
+        systemSettings.handleDisableDockerUpdateActionsChange,
     }),
   });
   const activeSettingsPanelEntry = createMemo(() => {
@@ -416,9 +209,9 @@ const Settings: Component<SettingsProps> = (props) => {
     <>
       <SettingsPageShell
         headerMeta={headerMeta}
-        hasUnsavedChanges={hasUnsavedChanges}
+        hasUnsavedChanges={systemSettings.hasUnsavedChanges}
         activeTabSaveBehavior={activeTabSaveBehavior}
-        saveSettings={saveSettings}
+        saveSettings={systemSettings.saveSettings}
         discardChanges={() => window.location.reload()}
         isMobileMenuOpen={isMobileMenuOpen}
         setIsMobileMenuOpen={setIsMobileMenuOpen}
@@ -448,33 +241,33 @@ const Settings: Component<SettingsProps> = (props) => {
       </SettingsPageShell>
 
       <SettingsDialogs
-        showUpdateConfirmation={showUpdateConfirmation}
-        closeUpdateConfirmation={() => setShowUpdateConfirmation(false)}
-        handleConfirmUpdate={handleConfirmUpdate}
-        versionInfo={versionInfo}
-        updateInfo={updateInfo}
-        updatePlan={updatePlan}
-        isInstallingUpdate={isInstallingUpdate}
+        showUpdateConfirmation={systemSettings.showUpdateConfirmation}
+        closeUpdateConfirmation={() => systemSettings.setShowUpdateConfirmation(false)}
+        handleConfirmUpdate={systemSettings.handleConfirmUpdate}
+        versionInfo={systemSettings.versionInfo}
+        updateInfo={systemSettings.updateInfo}
+        updatePlan={systemSettings.updatePlan}
+        isInstallingUpdate={systemSettings.isInstallingUpdate}
         securityStatus={securityStatus}
-        exportPassphrase={exportPassphrase}
-        setExportPassphrase={setExportPassphrase}
-        useCustomPassphrase={useCustomPassphrase}
-        setUseCustomPassphrase={setUseCustomPassphrase}
-        importPassphrase={importPassphrase}
-        setImportPassphrase={setImportPassphrase}
-        importFile={importFile}
-        setImportFile={setImportFile}
-        showExportDialog={showExportDialog}
-        showImportDialog={showImportDialog}
-        showApiTokenModal={showApiTokenModal}
-        apiTokenInput={apiTokenInput}
-        setApiTokenInput={setApiTokenInput}
-        handleExport={handleExport}
-        handleImport={handleImport}
-        closeExportDialog={closeExportDialog}
-        closeImportDialog={closeImportDialog}
-        closeApiTokenModal={closeApiTokenModal}
-        handleApiTokenAuthenticate={handleApiTokenAuthenticate}
+        exportPassphrase={backupTransferFlow.exportPassphrase}
+        setExportPassphrase={backupTransferFlow.setExportPassphrase}
+        useCustomPassphrase={backupTransferFlow.useCustomPassphrase}
+        setUseCustomPassphrase={backupTransferFlow.setUseCustomPassphrase}
+        importPassphrase={backupTransferFlow.importPassphrase}
+        setImportPassphrase={backupTransferFlow.setImportPassphrase}
+        importFile={backupTransferFlow.importFile}
+        setImportFile={backupTransferFlow.setImportFile}
+        showExportDialog={backupTransferFlow.showExportDialog}
+        showImportDialog={backupTransferFlow.showImportDialog}
+        showApiTokenModal={backupTransferFlow.showApiTokenModal}
+        apiTokenInput={backupTransferFlow.apiTokenInput}
+        setApiTokenInput={backupTransferFlow.setApiTokenInput}
+        handleExport={backupTransferFlow.handleExport}
+        handleImport={backupTransferFlow.handleImport}
+        closeExportDialog={backupTransferFlow.closeExportDialog}
+        closeImportDialog={backupTransferFlow.closeImportDialog}
+        closeApiTokenModal={backupTransferFlow.closeApiTokenModal}
+        handleApiTokenAuthenticate={backupTransferFlow.handleApiTokenAuthenticate}
         showPasswordModal={showPasswordModal}
         closePasswordModal={() => {
           setShowPasswordModal(false);

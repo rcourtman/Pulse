@@ -80,6 +80,14 @@ Security-facing settings remain intentionally shared with `frontend-primitives`
 because shell framing and presentation consistency still belong there, but the
 meaning of those surfaces now lives here so auth posture, token controls, and
 privacy toggles stop borrowing their governance only from adjacent lanes.
+That shared settings boundary now also has an explicit split of responsibilities:
+`frontend-modern/src/components/Settings/useSystemSettingsState.ts` remains the
+canonical owner for telemetry, local-upgrade-metrics, and auth/privacy runtime
+state, while `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx`
+stays a presentation boundary and `frontend-modern/src/components/Settings/useSettingsSystemPanels.tsx`
+may only assemble props for the shared settings shell. Privacy or telemetry
+behavior must not drift into `frontend-modern/src/components/Settings/Settings.tsx`
+or the registry hook just because the shell wiring changed.
 
 The security transport surfaces remain intentionally shared with
 `api-contracts`: token, auth, and telemetry settings payloads are still API

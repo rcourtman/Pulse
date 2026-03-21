@@ -39,7 +39,7 @@ const PVE_POLLING_OPTIONS: FilterOption<number | 'custom'>[] = [
   { value: 'custom', label: 'Custom' },
 ];
 
-interface GeneralSettingsPanelProps {
+export interface GeneralSettingsPanelProps {
   darkMode: Accessor<boolean>;
   themePreference: Accessor<'light' | 'dark' | 'system'>;
   setThemePreference: (pref: 'light' | 'dark' | 'system') => void;

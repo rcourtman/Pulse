@@ -23,7 +23,7 @@ import {
   getUpdatePrimaryStatusLabel,
 } from '@/utils/updatesPresentation';
 
-interface UpdatesSettingsPanelProps {
+export interface UpdatesSettingsPanelProps {
   versionInfo: Accessor<VersionInfo | null>;
   updateInfo: Accessor<UpdateInfo | null>;
   checkingForUpdates: Accessor<boolean>;

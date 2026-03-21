@@ -27,6 +27,10 @@ import updatesSettingsModelSource from '@/components/Settings/updatesSettingsMod
 import diagnosticsModelSource from '@/components/Settings/diagnosticsModel.ts?raw';
 import diagnosticsResultsPanelSource from '@/components/Settings/DiagnosticsResultsPanel.tsx?raw';
 import diagnosticsStateSource from '@/components/Settings/useDiagnosticsPanelState.ts?raw';
+import settingsShellSource from '@/components/Settings/Settings.tsx?raw';
+import settingsPanelRegistrySource from '@/components/Settings/useSettingsPanelRegistry.tsx?raw';
+import settingsSystemPanelsSource from '@/components/Settings/useSettingsSystemPanels.tsx?raw';
+import discoverySettingsStateSource from '@/components/Settings/useDiscoverySettingsState.ts?raw';
 import networkBoundarySettingsSectionSource from '@/components/Settings/NetworkBoundarySettingsSection.tsx?raw';
 import networkDiscoverySectionSource from '@/components/Settings/NetworkDiscoverySection.tsx?raw';
 import networkSettingsPanelSource from '@/components/Settings/NetworkSettingsPanel.tsx?raw';
@@ -826,6 +830,27 @@ describe('frontend resource type boundaries', () => {
     );
     expect(networkSettingsModelSource).toContain('export type NetworkDiscoverySectionProps');
     expect(networkSettingsModelSource).toContain('export type NetworkBoundarySettingsSectionProps');
+    expect(settingsShellSource).toContain('./useDiscoverySettingsState');
+    expect(settingsShellSource).toContain('./useSettingsPanelRegistry');
+    expect(settingsShellSource).toContain('./useSettingsSystemPanels');
+    expect(settingsShellSource).toContain('const discoverySettings = useDiscoverySettingsState()');
+    expect(settingsShellSource).toContain('const systemPanels = useSettingsSystemPanels({');
+    expect(settingsShellSource).toContain(
+      'const settingsPanelRegistry = useSettingsPanelRegistry({',
+    );
+    expect(settingsPanelRegistrySource).toContain('systemPanels: SettingsSystemPanels');
+    expect(settingsPanelRegistrySource).toContain(
+      'getNetworkPanelProps: params.systemPanels.getNetworkPanelProps',
+    );
+    expect(settingsPanelRegistrySource).not.toContain('allowedOrigins: params.');
+    expect(settingsPanelRegistrySource).not.toContain('backupPollingEnabled: params.');
+    expect(settingsSystemPanelsSource).toContain('GeneralSettingsPanel');
+    expect(settingsSystemPanelsSource).toContain('getSettingsConfigurationLoadingState');
+    expect(settingsSystemPanelsSource).toContain('allowedOrigins:');
+    expect(settingsSystemPanelsSource).toContain('backupPollingEnabled:');
+    expect(discoverySettingsStateSource).toContain('export function useDiscoverySettingsState');
+    expect(discoverySettingsStateSource).toContain('normalizeSubnetList');
+    expect(discoverySettingsStateSource).toContain('isValidCIDR');
     expect(reportingPanelSource).toContain('@/utils/upgradePresentation');
     expect(reportingPanelSource).toContain('@/components/Settings/useReportingPanelState');
     expect(reportingPanelSource).toContain('@/components/Settings/reportingPanelModel');

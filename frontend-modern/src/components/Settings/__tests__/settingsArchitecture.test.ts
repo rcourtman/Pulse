@@ -17,6 +17,8 @@ import nodeModalModelSource from '../nodeModalModel.ts?raw';
 import nodeModalSource from '../NodeModal.tsx?raw';
 import infrastructureOperationsStateSource from '../useInfrastructureOperationsState.tsx?raw';
 import nodeModalStateSource from '../useNodeModalState.ts?raw';
+import settingsPanelRegistryHookSource from '../useSettingsPanelRegistry.tsx?raw';
+import settingsSystemPanelsSource from '../useSettingsSystemPanels.tsx?raw';
 import apiAccessPanelSource from '../APIAccessPanel.tsx?raw';
 import apiTokenManagerSource from '../APITokenManager.tsx?raw';
 import apiTokenManagerModelSource from '../apiTokenManagerModel.ts?raw';
@@ -190,6 +192,7 @@ const extractedModules = [
   '../useSettingsShellState.ts',
   '../useSettingsNavigation.ts',
   '../useSettingsPanelRegistry.tsx',
+  '../useSettingsSystemPanels.tsx',
   '../useSystemSettingsState.ts',
   '../useInfrastructureSettingsState.ts',
   '../useBackupTransferFlow.ts',
@@ -206,6 +209,7 @@ const requiredImportSources = [
   './useSettingsAccess',
   './useSettingsPanelRegistry',
   './useSettingsShellState',
+  './useSettingsSystemPanels',
   './useSystemSettingsState',
   './useSettingsNavigation',
 ] as const;
@@ -349,6 +353,39 @@ describe('Settings architecture guardrails', () => {
     expect(settingsSource).not.toContain('<ProxmoxSettingsPanel');
     expect(settingsSource).not.toContain("<Show when={activeTab() === 'system-general'}>");
     expect(settingsSource).not.toContain("<Show when={activeTab() === 'security-webhooks'}>");
+  });
+
+  it('keeps settings shell panel assembly split between dedicated system and registry owners', () => {
+    expect(settingsSource).toContain('useSettingsSystemPanels');
+    expect(settingsSource).toContain('const systemPanels = useSettingsSystemPanels({');
+    expect(settingsSource).toContain('const settingsPanelRegistry = useSettingsPanelRegistry({');
+    expect(settingsSource).toContain('systemPanels,');
+    expect(settingsSource).toContain('const discoverySettings = useDiscoverySettingsState()');
+    expect(settingsSystemPanelsSource).toContain('GeneralSettingsPanel');
+    expect(settingsSystemPanelsSource).toContain('getSettingsConfigurationLoadingState');
+    expect(settingsSystemPanelsSource).toContain('getNetworkPanelProps');
+    expect(settingsSystemPanelsSource).toContain('getUpdatesPanelProps');
+    expect(settingsSystemPanelsSource).toContain('getRecoveryPanelProps');
+    expect(settingsSystemPanelsSource).toContain('pvePollingInterval:');
+    expect(settingsSystemPanelsSource).toContain('allowedOrigins:');
+    expect(settingsSystemPanelsSource).toContain('backupPollingEnabled:');
+    expect(settingsSystemPanelsSource).toContain('handleDiscoveryEnabledChange:');
+    expect(settingsPanelRegistryHookSource).toContain('systemPanels: SettingsSystemPanels');
+    expect(settingsPanelRegistryHookSource).toContain(
+      'systemGeneralPanel: params.systemPanels.systemGeneralPanel',
+    );
+    expect(settingsPanelRegistryHookSource).toContain(
+      'getNetworkPanelProps: params.systemPanels.getNetworkPanelProps',
+    );
+    expect(settingsPanelRegistryHookSource).toContain(
+      'getUpdatesPanelProps: params.systemPanels.getUpdatesPanelProps',
+    );
+    expect(settingsPanelRegistryHookSource).toContain(
+      'getRecoveryPanelProps: params.systemPanels.getRecoveryPanelProps',
+    );
+    expect(settingsPanelRegistryHookSource).not.toContain('pvePollingInterval: params.');
+    expect(settingsPanelRegistryHookSource).not.toContain('allowedOrigins: params.');
+    expect(settingsPanelRegistryHookSource).not.toContain('backupPollingEnabled: params.');
   });
 
   it('keeps commercial plan and usage sections on a shared billing owner', () => {

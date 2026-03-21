@@ -24,6 +24,7 @@ import infrastructureSettingsStateSource from '../useInfrastructureSettingsState
 import infrastructureWorkspaceSource from '../InfrastructureWorkspace.tsx?raw';
 import infrastructureWorkspaceModelSource from '../infrastructureWorkspaceModel.ts?raw';
 import settingsPanelRegistrySource from '../useSettingsPanelRegistry.tsx?raw';
+import settingsSystemPanelsSource from '../useSettingsSystemPanels.tsx?raw';
 import infrastructureSummarySource from '@/components/Infrastructure/InfrastructureSummary.tsx?raw';
 import infrastructureSelectorComponentSource from '@/components/shared/InfrastructureSelector.tsx?raw';
 import workloadsLinkSource from '@/components/Infrastructure/workloadsLink.ts?raw';
@@ -1344,8 +1345,10 @@ describe('monitored-system model guardrails', () => {
     expect(settingsSource).not.toContain('<OIDCPanel');
     expect(settingsSource).toContain('getSettingsLoadingState');
     expect(settingsSource).not.toContain('Loading settings...');
-    expect(settingsPanelRegistrySource).toContain('getSettingsConfigurationLoadingState');
-    expect(settingsPanelRegistrySource).not.toContain('Loading configuration...');
+    expect(settingsSystemPanelsSource).toContain('getSettingsConfigurationLoadingState');
+    expect(settingsSystemPanelsSource).not.toContain('Loading configuration...');
+    expect(settingsPanelRegistrySource).toContain('systemPanels: SettingsSystemPanels');
+    expect(settingsPanelRegistrySource).not.toContain('getSettingsConfigurationLoadingState');
     expect(settingsShellPresentationSource).toContain('export function getSettingsLoadingState');
     expect(settingsShellPresentationSource).toContain(
       'export function getSettingsConfigurationLoadingState',

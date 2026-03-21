@@ -77,6 +77,9 @@ work extends shared components instead of creating new local variants.
 55. `frontend-modern/src/components/Settings/NetworkDiscoverySection.tsx`
 56. `frontend-modern/src/components/Settings/NetworkBoundarySettingsSection.tsx`
 57. `frontend-modern/src/components/Settings/networkSettingsModel.ts`
+58. `frontend-modern/src/components/Settings/useDiscoverySettingsState.ts`
+59. `frontend-modern/src/components/Settings/useSettingsPanelRegistry.tsx`
+60. `frontend-modern/src/components/Settings/useSettingsSystemPanels.tsx`
 
 ## Shared Boundaries
 
@@ -254,6 +257,16 @@ Resource incident panel card and summary-row presentation must also route
 through `frontend-modern/src/utils/alertIncidentPresentation.ts` instead of
 maintaining page-local incident panel styling inside
 `frontend-modern/src/pages/Alerts.tsx`.
+
+The settings shell now also has an explicit three-way ownership split.
+`frontend-modern/src/components/Settings/useDiscoverySettingsState.ts` owns the
+shared discovery draft and subnet-validation state,
+`frontend-modern/src/components/Settings/useSettingsSystemPanels.tsx` owns
+system panel prop assembly for general, network, updates, and recovery, and
+`frontend-modern/src/components/Settings/useSettingsPanelRegistry.tsx` owns
+registry composition only. `frontend-modern/src/components/Settings/Settings.tsx`
+must stay a shell that wires those owners together instead of re-accumulating
+system panel prop maps or discovery draft state inline.
 
 The resource incident panel's collapsed activity summary is now part of that
 same shared primitive boundary. Event-type count chips, visible-event copy,

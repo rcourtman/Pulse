@@ -1864,6 +1864,9 @@ class SubsystemLookupTest(unittest.TestCase):
             "frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx",
             "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx",
             "frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx",
+            "frontend-modern/src/components/Settings/useDiscoverySettingsState.ts",
+            "frontend-modern/src/components/Settings/useSettingsPanelRegistry.tsx",
+            "frontend-modern/src/components/Settings/useSettingsSystemPanels.tsx",
         ]
         result = lookup_paths(runtime_files)
         self.assertEqual(result["unowned_runtime_files"], [])
