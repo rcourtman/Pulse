@@ -62,7 +62,9 @@ import organizationIncomingSharesSectionSource from '../OrganizationIncomingShar
 import organizationAccessStateSource from '../useOrganizationAccessPanelState.ts?raw';
 import organizationOverviewStateSource from '../useOrganizationOverviewPanelState.ts?raw';
 import organizationSharingStateSource from '../useOrganizationSharingPanelState.ts?raw';
+import organizationBillingLoadingStateSource from '../OrganizationBillingLoadingState.tsx?raw';
 import organizationBillingPanelSource from '../OrganizationBillingPanel.tsx?raw';
+import organizationBillingStateSource from '../useOrganizationBillingPanelState.ts?raw';
 import proxmoxDeleteNodeDialogSource from '../ProxmoxDeleteNodeDialog.tsx?raw';
 import proxmoxConfiguredNodesTableSource from '../ProxmoxConfiguredNodesTable.tsx?raw';
 import proxmoxDirectConnectionsCardSource from '../ProxmoxDirectConnectionsCard.tsx?raw';
@@ -137,7 +139,9 @@ const extractedModules = [
   '../OrganizationSharingLoadingState.tsx',
   '../OrganizationOutgoingSharesSection.tsx',
   '../OrganizationIncomingSharesSection.tsx',
+  '../OrganizationBillingLoadingState.tsx',
   '../useOrganizationAccessPanelState.ts',
+  '../useOrganizationBillingPanelState.ts',
   '../useOrganizationOverviewPanelState.ts',
   '../useOrganizationSharingPanelState.ts',
   '../RBACFeatureGateSection.tsx',
@@ -344,11 +348,17 @@ describe('Settings architecture guardrails', () => {
     expect(selfHostedCommercialActivationSectionSource).toContain('License / Activation Key');
     expect(selfHostedCommercialActivationSectionSource).toContain('Start 14-day Pro Trial');
     expect(organizationBillingPanelSource).toContain('./CommercialBillingSections');
-    expect(organizationBillingPanelSource).toContain('buildHostedCommercialPlanModel');
-    expect(organizationBillingPanelSource).toContain('buildHostedCommercialUsageModel');
+    expect(organizationBillingPanelSource).toContain('./OrganizationBillingLoadingState');
+    expect(organizationBillingPanelSource).toContain('./useOrganizationBillingPanelState');
     expect(organizationBillingPanelSource).toContain('CommercialBillingShell');
     expect(organizationBillingPanelSource).toContain('CommercialSection');
     expect(organizationBillingPanelSource).toContain('CommercialUsageMeters');
+    expect(organizationBillingPanelSource).not.toContain('createSignal(');
+    expect(organizationBillingPanelSource).not.toContain('onMount(() =>');
+    expect(organizationBillingStateSource).toContain('buildHostedCommercialPlanModel');
+    expect(organizationBillingStateSource).toContain('buildHostedCommercialUsageModel');
+    expect(organizationBillingStateSource).toContain("eventBus.on('org_switched'");
+    expect(organizationBillingLoadingStateSource).toContain('animate-pulse');
     expect(settingsSource).toContain('organizationMonitoredSystemUsage');
     expect(settingsSource).toContain("getLimit('max_monitored_systems')?.current ?? 0");
     expect(settingsSource).not.toContain('organizationAgentUsage');

@@ -286,6 +286,7 @@ import organizationAccessLoadingStateSource from '@/components/Settings/Organiza
 import organizationAccessManagementSectionSource from '@/components/Settings/OrganizationAccessManagementSection.tsx?raw';
 import organizationAccessMembersSectionSource from '@/components/Settings/OrganizationAccessMembersSection.tsx?raw';
 import billingAdminPanelSource from '@/components/Settings/BillingAdminPanel.tsx?raw';
+import organizationBillingLoadingStateSource from '@/components/Settings/OrganizationBillingLoadingState.tsx?raw';
 import organizationBillingPanelSource from '@/components/Settings/OrganizationBillingPanel.tsx?raw';
 import organizationOverviewLoadingStateSource from '@/components/Settings/OrganizationOverviewLoadingState.tsx?raw';
 import organizationOverviewMembersSectionSource from '@/components/Settings/OrganizationOverviewMembersSection.tsx?raw';
@@ -293,6 +294,7 @@ import organizationSharingCreateSectionSource from '@/components/Settings/Organi
 import organizationOutgoingSharesSectionSource from '@/components/Settings/OrganizationOutgoingSharesSection.tsx?raw';
 import organizationIncomingSharesSectionSource from '@/components/Settings/OrganizationIncomingSharesSection.tsx?raw';
 import organizationAccessStateSource from '@/components/Settings/useOrganizationAccessPanelState.ts?raw';
+import organizationBillingStateSource from '@/components/Settings/useOrganizationBillingPanelState.ts?raw';
 import organizationOverviewStateSource from '@/components/Settings/useOrganizationOverviewPanelState.ts?raw';
 import organizationSharingStateSource from '@/components/Settings/useOrganizationSharingPanelState.ts?raw';
 import organizationRolePresentationSource from '@/utils/organizationRolePresentation.ts?raw';
@@ -872,14 +874,19 @@ describe('frontend resource type boundaries', () => {
     expect(organizationAccessStateSource).toContain('normalizeOrgScope(getOrgID())');
     expect(organizationOverviewStateSource).toContain('normalizeOrgScope(getOrgID())');
     expect(organizationSharingStateSource).toContain('normalizeOrgScope(getOrgID())');
-    expect(organizationBillingPanelSource).toContain('normalizeOrgScope(getOrgID())');
+    expect(organizationBillingPanelSource).toContain('./useOrganizationBillingPanelState');
+    expect(organizationBillingPanelSource).toContain('./OrganizationBillingLoadingState');
+    expect(organizationBillingStateSource).toContain('normalizeOrgScope(getOrgID())');
     expect(organizationAccessStateSource).toContain('@/utils/organizationSettingsPresentation');
     expect(billingAdminPanelSource).toContain('@/utils/organizationSettingsPresentation');
     expect(billingAdminPanelSource).toContain('@/utils/licensePresentation');
     expect(organizationOverviewStateSource).toContain('@/utils/organizationSettingsPresentation');
     expect(organizationSharingStateSource).toContain('@/utils/organizationSettingsPresentation');
     expect(organizationBillingPanelSource).toContain('@/utils/organizationSettingsPresentation');
-    expect(organizationBillingPanelSource).toContain('@/utils/licensePresentation');
+    expect(organizationBillingStateSource).toContain('@/utils/licensePresentation');
+    expect(organizationBillingStateSource).toContain('@/utils/organizationSettingsPresentation');
+    expect(organizationBillingPanelSource).not.toContain('normalizeOrgScope(getOrgID())');
+    expect(organizationBillingPanelSource).not.toContain('createSignal(');
     expect(organizationBillingPanelSource).not.toContain('Grace Period');
     expect(organizationBillingPanelSource).not.toContain('No License');
     expect(organizationAccessPanelSource).not.toContain(
@@ -897,6 +904,7 @@ describe('frontend resource type boundaries', () => {
       'getOrganizationOverviewMembersEmptyState',
     );
     expect(organizationOverviewLoadingStateSource).toContain('animate-pulse');
+    expect(organizationBillingLoadingStateSource).toContain('animate-pulse');
     expect(organizationOutgoingSharesSectionSource).toContain(
       'getOrganizationOutgoingSharesEmptyState',
     );

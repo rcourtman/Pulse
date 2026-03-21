@@ -3,12 +3,15 @@ import { cleanup, render, screen, waitFor } from '@solidjs/testing-library';
 
 import { OrganizationBillingPanel } from '../OrganizationBillingPanel';
 import organizationBillingPanelSource from '../OrganizationBillingPanel.tsx?raw';
+import organizationBillingLoadingStateSource from '../OrganizationBillingLoadingState.tsx?raw';
+import organizationBillingStateSource from '../useOrganizationBillingPanelState.ts?raw';
 
 const getStatusMock = vi.hoisted(() => vi.fn());
 const listOrgsMock = vi.hoisted(() => vi.fn());
 const listMembersMock = vi.hoisted(() => vi.fn());
 const errorMock = vi.hoisted(() => vi.fn());
-const eventBusOnMock = vi.hoisted(() => vi.fn(() => () => {}));
+const eventBusOnMock = vi.hoisted(() => vi.fn());
+const eventBusHandlers = vi.hoisted(() => [] as Array<() => void>);
 
 vi.mock('@/api/license', () => ({
   LicenseAPI: {
@@ -33,7 +36,7 @@ vi.mock('@/stores/license', () => ({
 
 vi.mock('@/stores/events', () => ({
   eventBus: {
-    on: eventBusOnMock,
+    on: eventBusOnMock as unknown as (event: string, handler: () => void) => () => void,
   },
 }));
 
@@ -56,7 +59,11 @@ describe('OrganizationBillingPanel', () => {
     listMembersMock.mockReset();
     errorMock.mockReset();
     eventBusOnMock.mockReset();
-    eventBusOnMock.mockReturnValue(() => {});
+    eventBusHandlers.length = 0;
+    eventBusOnMock.mockImplementation((_event: string, handler: () => void) => {
+      eventBusHandlers.push(handler);
+      return () => {};
+    });
 
     getStatusMock.mockResolvedValue({
       valid: true,
@@ -94,8 +101,30 @@ describe('OrganizationBillingPanel', () => {
     expect(errorMock).not.toHaveBeenCalled();
   });
 
-  it('normalizes org scope through the shared helper', () => {
-    expect(organizationBillingPanelSource).toContain('normalizeOrgScope(getOrgID())');
-    expect(organizationBillingPanelSource).not.toContain("getOrgID() || 'default'");
+  it('reloads billing data when the active organization changes', async () => {
+    render(() => <OrganizationBillingPanel nodeUsage={5} guestUsage={2} />);
+
+    await waitFor(() => {
+      expect(getStatusMock).toHaveBeenCalledTimes(1);
+    });
+
+    eventBusHandlers[0]?.();
+
+    await waitFor(() => {
+      expect(getStatusMock).toHaveBeenCalledTimes(2);
+    });
+    expect(listOrgsMock).toHaveBeenCalledTimes(2);
+    expect(listMembersMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps organization billing runtime split into dedicated state and loading owners', () => {
+    expect(organizationBillingPanelSource).toContain('./useOrganizationBillingPanelState');
+    expect(organizationBillingPanelSource).toContain('./OrganizationBillingLoadingState');
+    expect(organizationBillingPanelSource).not.toContain('createSignal(');
+    expect(organizationBillingPanelSource).not.toContain('onMount(() =>');
+    expect(organizationBillingStateSource).toContain('normalizeOrgScope(getOrgID())');
+    expect(organizationBillingStateSource).toContain("eventBus.on('org_switched'");
+    expect(organizationBillingStateSource).not.toContain("getOrgID() || 'default'");
+    expect(organizationBillingLoadingStateSource).toContain('animate-pulse');
   });
 });
