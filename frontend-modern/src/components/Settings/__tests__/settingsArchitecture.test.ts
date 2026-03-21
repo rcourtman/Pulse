@@ -30,6 +30,7 @@ import infrastructureDiscoveryRuntimeStateSource from '../useInfrastructureDisco
 import settingsInfrastructurePanelPropsSource from '../useSettingsInfrastructurePanelProps.ts?raw';
 import nodeModalStateSource from '../useNodeModalState.ts?raw';
 import settingsPanelRegistryContextSource from '../settingsPanelRegistryContext.tsx?raw';
+import settingsPanelRegistryLoadersSource from '../settingsPanelRegistryLoaders.ts?raw';
 import settingsPanelRegistryHookSource from '../useSettingsPanelRegistry.tsx?raw';
 import settingsSystemPanelsSource from '../useSettingsSystemPanels.tsx?raw';
 import apiAccessPanelSource from '../APIAccessPanel.tsx?raw';
@@ -140,6 +141,7 @@ const extractedModules = [
   '../useInfrastructureDiscoveryRuntimeState.ts',
   '../useSettingsInfrastructurePanelProps.ts',
   '../settingsPanelRegistryContext.tsx',
+  '../settingsPanelRegistryLoaders.ts',
   '../apiTokenManagerModel.ts',
   '../useAPITokenManagerState.ts',
   '../useAuditLogPanelState.ts',
@@ -377,12 +379,16 @@ describe('Settings architecture guardrails', () => {
     const shellHookSource = (await import('../useSettingsShellState.ts?raw')).default;
 
     expect(registrySource).toContain('createSettingsPanelRegistry');
-    expect(registrySource).toContain('InfrastructureWorkspace');
+    expect(registrySource).toContain('SETTINGS_PANEL_REGISTRY_LOADERS');
     expect(registrySource).toContain("'security-webhooks'");
     expect(accessHookSource).toContain('shouldHideSettingsNavItem');
     expect(accessHookSource).toContain('tabFeatureRequirements');
     expect(panelRegistryHookSource).toContain('createSettingsPanelRegistry');
     expect(panelRegistryHookSource).toContain('buildSettingsPanelRegistryContext');
+    expect(settingsPanelRegistryLoadersSource).toContain(
+      'export const SETTINGS_PANEL_REGISTRY_LOADERS',
+    );
+    expect(settingsPanelRegistryLoadersSource).toContain("import('./InfrastructureWorkspace')");
     expect(shellHookSource).toContain('SETTINGS_HEADER_META');
     expect(settingsSource).toContain('useSettingsPanelRegistry');
     expect(settingsSource).toContain('useSettingsAccess');
@@ -678,11 +684,13 @@ describe('Settings architecture guardrails', () => {
 
   it('uses lazy() imports for panel components in settingsPanelRegistry', async () => {
     const source = (await import('../settingsPanelRegistry.ts?raw')).default;
+    const loadersSource = (await import('../settingsPanelRegistryLoaders.ts?raw')).default;
 
-    expect(source).toContain('lazy(');
+    expect(source).toContain('SETTINGS_PANEL_REGISTRY_LOADERS');
+    expect(loadersSource).toContain('lazy(');
 
     const staticImports = Array.from(
-      source.matchAll(
+      loadersSource.matchAll(
         /^import\s+(?!type\b)(?!{[^}]*}\s+from\s+'solid-js').*from\s+'\.\/\w+Panel'/gm,
       ),
     );

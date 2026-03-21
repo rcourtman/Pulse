@@ -1,4 +1,3 @@
-import { lazy } from 'solid-js';
 import type { Component } from 'solid-js';
 import type { NetworkSettingsPanel as NetworkSettingsPanelType } from './NetworkSettingsPanel';
 import type { UpdatesSettingsPanel as UpdatesSettingsPanelType } from './UpdatesSettingsPanel';
@@ -14,42 +13,7 @@ import type { RelaySettingsPanel as RelaySettingsPanelType } from './RelaySettin
 import type { AuditWebhookPanel as AuditWebhookPanelType } from './AuditWebhookPanel';
 import type { InfrastructureWorkspace as InfrastructureWorkspaceType } from './InfrastructureWorkspace';
 import type { SettingsTab } from './settingsTypes';
-
-const NetworkSettingsPanel = lazy(() =>
-  import('./NetworkSettingsPanel').then((m) => ({ default: m.NetworkSettingsPanel })),
-);
-const UpdatesSettingsPanel = lazy(() =>
-  import('./UpdatesSettingsPanel').then((m) => ({ default: m.UpdatesSettingsPanel })),
-);
-const RecoverySettingsPanel = lazy(() =>
-  import('./RecoverySettingsPanel').then((m) => ({ default: m.RecoverySettingsPanel })),
-);
-const RelaySettingsPanel = lazy(() =>
-  import('./RelaySettingsPanel').then((m) => ({ default: m.RelaySettingsPanel })),
-);
-const OrganizationOverviewPanel = lazy(() => import('./OrganizationOverviewPanel'));
-const OrganizationAccessPanel = lazy(() => import('./OrganizationAccessPanel'));
-const OrganizationSharingPanel = lazy(() => import('./OrganizationSharingPanel'));
-const OrganizationBillingPanel = lazy(() => import('./OrganizationBillingPanel'));
-const BillingAdminPanel = lazy(() => import('./BillingAdminPanel'));
-const APIAccessPanel = lazy(() =>
-  import('./APIAccessPanel').then((m) => ({ default: m.APIAccessPanel })),
-);
-const SecurityOverviewPanel = lazy(() =>
-  import('./SecurityOverviewPanel').then((m) => ({ default: m.SecurityOverviewPanel })),
-);
-const SecurityAuthPanel = lazy(() =>
-  import('./SecurityAuthPanel').then((m) => ({ default: m.SecurityAuthPanel })),
-);
-const RolesPanel = lazy(() => import('./RolesPanel'));
-const UserAssignmentsPanel = lazy(() => import('./UserAssignmentsPanel'));
-const AuditLogPanel = lazy(() => import('./AuditLogPanel'));
-const AuditWebhookPanel = lazy(() =>
-  import('./AuditWebhookPanel').then((m) => ({ default: m.AuditWebhookPanel })),
-);
-const InfrastructureWorkspace = lazy(() =>
-  import('./InfrastructureWorkspace').then((m) => ({ default: m.InfrastructureWorkspace })),
-);
+import { SETTINGS_PANEL_REGISTRY_LOADERS } from './settingsPanelRegistryLoaders';
 
 export interface SettingsPanelRegistryEntry {
   component: Component<any>;
@@ -84,79 +48,79 @@ export const createSettingsPanelRegistry = (
   context: SettingsPanelRegistryContext,
 ): SettingsPanelRegistry => ({
   'infrastructure-operations': {
-    component: InfrastructureWorkspace,
+    component: SETTINGS_PANEL_REGISTRY_LOADERS.InfrastructureWorkspace,
     getProps: context.getInfrastructurePanelProps,
   },
   'system-general': {
     component: context.systemGeneralPanel,
   },
   'system-network': {
-    component: NetworkSettingsPanel,
+    component: SETTINGS_PANEL_REGISTRY_LOADERS.NetworkSettingsPanel,
     getProps: context.getNetworkPanelProps,
   },
   'system-updates': {
-    component: UpdatesSettingsPanel,
+    component: SETTINGS_PANEL_REGISTRY_LOADERS.UpdatesSettingsPanel,
     getProps: context.getUpdatesPanelProps,
   },
   'system-recovery': {
-    component: RecoverySettingsPanel,
+    component: SETTINGS_PANEL_REGISTRY_LOADERS.RecoverySettingsPanel,
     getProps: context.getRecoveryPanelProps,
   },
   'system-ai': {
     component: context.systemAiPanel,
   },
   'system-relay': {
-    component: RelaySettingsPanel,
+    component: SETTINGS_PANEL_REGISTRY_LOADERS.RelaySettingsPanel,
     getProps: context.getRelayPanelProps,
   },
   'system-billing': {
     component: context.systemBillingPanel,
   },
   'organization-overview': {
-    component: OrganizationOverviewPanel,
+    component: SETTINGS_PANEL_REGISTRY_LOADERS.OrganizationOverviewPanel,
     getProps: context.getOrganizationOverviewPanelProps,
   },
   'organization-access': {
-    component: OrganizationAccessPanel,
+    component: SETTINGS_PANEL_REGISTRY_LOADERS.OrganizationAccessPanel,
     getProps: context.getOrganizationAccessPanelProps,
   },
   'organization-sharing': {
-    component: OrganizationSharingPanel,
+    component: SETTINGS_PANEL_REGISTRY_LOADERS.OrganizationSharingPanel,
     getProps: context.getOrganizationSharingPanelProps,
   },
   'organization-billing': {
-    component: OrganizationBillingPanel,
+    component: SETTINGS_PANEL_REGISTRY_LOADERS.OrganizationBillingPanel,
     getProps: context.getOrganizationBillingPanelProps,
   },
   'organization-billing-admin': {
-    component: BillingAdminPanel,
+    component: SETTINGS_PANEL_REGISTRY_LOADERS.BillingAdminPanel,
   },
   api: {
-    component: APIAccessPanel,
+    component: SETTINGS_PANEL_REGISTRY_LOADERS.APIAccessPanel,
     getProps: context.getApiAccessPanelProps,
   },
   'security-overview': {
-    component: SecurityOverviewPanel,
+    component: SETTINGS_PANEL_REGISTRY_LOADERS.SecurityOverviewPanel,
     getProps: context.getSecurityOverviewPanelProps,
   },
   'security-auth': {
-    component: SecurityAuthPanel,
+    component: SETTINGS_PANEL_REGISTRY_LOADERS.SecurityAuthPanel,
     getProps: context.getSecurityAuthPanelProps,
   },
   'security-sso': {
     component: context.securitySsoPanel,
   },
   'security-roles': {
-    component: RolesPanel,
+    component: SETTINGS_PANEL_REGISTRY_LOADERS.RolesPanel,
   },
   'security-users': {
-    component: UserAssignmentsPanel,
+    component: SETTINGS_PANEL_REGISTRY_LOADERS.UserAssignmentsPanel,
   },
   'security-audit': {
-    component: AuditLogPanel,
+    component: SETTINGS_PANEL_REGISTRY_LOADERS.AuditLogPanel,
   },
   'security-webhooks': {
-    component: AuditWebhookPanel,
+    component: SETTINGS_PANEL_REGISTRY_LOADERS.AuditWebhookPanel,
     getProps: context.getAuditWebhookPanelProps,
   },
 });

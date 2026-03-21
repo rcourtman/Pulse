@@ -30,6 +30,7 @@ import diagnosticsStateSource from '@/components/Settings/useDiagnosticsPanelSta
 import settingsShellSource from '@/components/Settings/Settings.tsx?raw';
 import settingsPanelRegistrySource from '@/components/Settings/useSettingsPanelRegistry.tsx?raw';
 import settingsPanelRegistryContextSource from '@/components/Settings/settingsPanelRegistryContext.tsx?raw';
+import settingsPanelRegistryLoadersSource from '@/components/Settings/settingsPanelRegistryLoaders.ts?raw';
 import settingsSystemPanelsSource from '@/components/Settings/useSettingsSystemPanels.tsx?raw';
 import settingsInfrastructurePanelPropsSource from '@/components/Settings/useSettingsInfrastructurePanelProps.ts?raw';
 import discoverySettingsStateSource from '@/components/Settings/useDiscoverySettingsState.ts?raw';
@@ -862,6 +863,10 @@ describe('frontend resource type boundaries', () => {
     expect(settingsPanelRegistrySource).toContain('buildSettingsPanelRegistryContext');
     expect(settingsShellSource).not.toContain('getInfrastructurePanelProps: () => ({');
     expect(settingsPanelRegistryContextSource).toContain('systemPanels: SettingsSystemPanels');
+    expect(settingsPanelRegistryLoadersSource).toContain(
+      'export const SETTINGS_PANEL_REGISTRY_LOADERS',
+    );
+    expect(settingsPanelRegistryLoadersSource).toContain("import('./InfrastructureWorkspace')");
     expect(settingsPanelRegistryContextSource).toContain(
       'getNetworkPanelProps: params.systemPanels.getNetworkPanelProps',
     );

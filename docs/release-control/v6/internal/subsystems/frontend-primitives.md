@@ -85,8 +85,9 @@ work extends shared components instead of creating new local variants.
 63. `frontend-modern/src/components/Settings/useDiscoverySettingsState.ts`
 64. `frontend-modern/src/components/Settings/useSettingsInfrastructurePanelProps.ts`
 65. `frontend-modern/src/components/Settings/settingsPanelRegistryContext.tsx`
-66. `frontend-modern/src/components/Settings/useSettingsPanelRegistry.tsx`
-67. `frontend-modern/src/components/Settings/useSettingsSystemPanels.tsx`
+66. `frontend-modern/src/components/Settings/settingsPanelRegistryLoaders.ts`
+67. `frontend-modern/src/components/Settings/useSettingsPanelRegistry.tsx`
+68. `frontend-modern/src/components/Settings/useSettingsSystemPanels.tsx`
 
 ## Shared Boundaries
 
@@ -283,11 +284,13 @@ read-model shaping for the shell,
 system panel prop assembly for general, network, updates, and recovery, and
 `frontend-modern/src/components/Settings/settingsPanelRegistryContext.tsx` owns
 registry context assembly for dispatchable settings tabs while
+`frontend-modern/src/components/Settings/settingsPanelRegistryLoaders.ts` owns
+the lazy settings panel loader table and route-to-panel import boundary, and
 `frontend-modern/src/components/Settings/useSettingsPanelRegistry.tsx` owns the
 final memoized registry composition only. `frontend-modern/src/components/Settings/Settings.tsx`
 must stay a shell that wires those owners together instead of re-accumulating
 infrastructure workspace props, registry context maps, system panel prop maps,
-or discovery draft state inline.
+lazy loader definitions, or discovery draft state inline.
 
 The resource incident panel's collapsed activity summary is now part of that
 same shared primitive boundary. Event-type count chips, visible-event copy,
