@@ -1,8 +1,2 @@
-export { ActionRequiredPanel } from './ActionRequiredPanel';
-export { ProblemResourcesTable } from './ProblemResourcesTable';
-export { KPIStrip } from './KPIStrip';
-export { TrendCharts } from './TrendCharts';
-export { CompositionPanel } from './CompositionPanel';
 export { RecoveryStatusPanel } from './RecoveryStatusPanel';
 export { StoragePanel } from './StoragePanel';
-export { DashboardCustomizer } from './DashboardCustomizer';

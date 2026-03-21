@@ -24,15 +24,14 @@ import type { HistoryTimeRange } from '@/api/charts';
 import type { Alert } from '@/types/api';
 import {
   ActionRequiredPanel,
-  ProblemResourcesTable,
-  KPIStrip,
-  RecoveryStatusPanel,
-  StoragePanel,
-  TrendCharts,
   DashboardCustomizer,
-} from './DashboardPanels';
+  KPIStrip,
+  ProblemResourcesTable,
+  TrendCharts,
+} from '@/features/dashboardOverview';
 import { RecentAlertsPanel } from '@/components/Alerts/RecentAlertsPanel';
-import type { DashboardWidgetDef, DashboardWidgetId } from './DashboardPanels/dashboardWidgets';
+import type { DashboardWidgetDef, DashboardWidgetId } from '@/features/dashboardOverview/dashboardWidgets';
+import { RecoveryStatusPanel, StoragePanel } from './DashboardPanels';
 export default function Dashboard() {
   const { connected, reconnecting, reconnect, activeAlerts } = useWebSocket();
 

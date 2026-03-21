@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import alertsPageSource from '@/pages/Alerts.tsx?raw';
-import problemResourcesTableSource from '@/pages/DashboardPanels/ProblemResourcesTable.tsx?raw';
+import alertsHistoryTabSource from '@/features/alerts/tabs/HistoryTab.tsx?raw';
+import problemResourcesTableSource from '@/features/dashboardOverview/ProblemResourcesTable.tsx?raw';
 import { TYPE_COLUMN_LABEL } from '@/utils/typeColumnContract';
 import { getTypeColumnLabel } from '@/utils/typeColumnPresentation';
 
@@ -17,7 +17,7 @@ describe('typeColumnPresentation', () => {
 
   it('keeps fixed runtime Type headers on the shared label utility', () => {
     expect(problemResourcesTableSource).toContain('getTypeColumnLabel()');
-    expect(alertsPageSource).toContain('getTypeColumnLabel()');
+    expect(alertsHistoryTabSource).toContain('getTypeColumnLabel()');
   });
 
   it('limits runtime Type header label helper imports to the known allowlist', () => {
@@ -33,8 +33,8 @@ describe('typeColumnPresentation', () => {
       .sort();
 
     expect(directTypeLabelHelperUsers).toEqual([
-      '../../pages/Alerts.tsx',
-      '../../pages/DashboardPanels/ProblemResourcesTable.tsx',
+      '../../features/alerts/tabs/HistoryTab.tsx',
+      '../../features/dashboardOverview/ProblemResourcesTable.tsx',
     ]);
   });
 });

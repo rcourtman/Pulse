@@ -210,6 +210,14 @@ and path contract. The operations route must keep its navigation routed through
 the shared `frontend-modern/src/components/shared/Subtabs.tsx` primitive rather
 than rebuilding a bespoke page-local tab bar.
 
+The dashboard overview route now follows that same feature-owner pattern for
+its dashboard-specific summary surfaces. `frontend-modern/src/pages/Dashboard.tsx`
+stays the route shell, while `frontend-modern/src/features/dashboardOverview/`
+owns the dashboard-specific action, KPI, problem-resource, trend, and
+customization surfaces. Lane-owned widgets like recent alerts, storage,
+and recovery must continue to route through their own subsystem owners instead
+of drifting back into a page-local dashboard panel cluster.
+
 The updates settings surface now follows the same presentation-owner rule.
 `frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx` stays the
 top-level settings shell, while

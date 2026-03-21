@@ -296,7 +296,7 @@ class SubsystemLookupTest(unittest.TestCase):
         )
 
     def test_lookup_paths_assigns_dashboard_widgets_to_storage_recovery(self) -> None:
-        result = lookup_paths(["frontend-modern/src/pages/DashboardPanels/dashboardWidgets.ts"])
+        result = lookup_paths(["frontend-modern/src/features/dashboardOverview/dashboardWidgets.ts"])
         self.assertEqual(result["unowned_runtime_files"], [])
         self.assertEqual(
             {item["subsystem"] for item in result["impacted_subsystems"]},
@@ -310,15 +310,39 @@ class SubsystemLookupTest(unittest.TestCase):
         )
         match = file_entry["matches"][0]
         self.assertEqual(match["contract"], "docs/release-control/v6/internal/subsystems/storage-recovery.md")
-        self.assertEqual(match["lane_context"]["lane_id"], "L15")
+
+    def test_lookup_paths_assigns_dashboard_overview_problem_resources_to_frontend_primitives(self) -> None:
+        result = lookup_paths(["frontend-modern/src/features/dashboardOverview/ProblemResourcesTable.tsx"])
+        self.assertEqual(result["unowned_runtime_files"], [])
+        self.assertEqual(
+            {item["subsystem"] for item in result["impacted_subsystems"]},
+            {"frontend-primitives"},
+        )
+        file_entry = result["files"][0]
+        self.assertEqual(file_entry["classification"], "runtime")
+        self.assertEqual(
+            {match["subsystem"] for match in file_entry["matches"]},
+            {"frontend-primitives"},
+        )
+        match = file_entry["matches"][0]
+        self.assertEqual(
+            match["contract"],
+            "docs/release-control/v6/internal/subsystems/frontend-primitives.md",
+        )
+        self.assertEqual(match["lane_context"]["lane_id"], "L8")
         self.assertEqual(
             match["verification_requirement"]["id"],
-            "dashboard-storage-recovery-surface",
+            "dashboard-overview-feature-surface",
         )
         self.assertEqual(
             match["verification_requirement"]["exact_files"],
             [
+                "frontend-modern/src/features/dashboardOverview/__tests__/KPIStrip.test.tsx",
+                "frontend-modern/src/features/dashboardOverview/__tests__/ProblemResourcesTable.test.tsx",
+                "frontend-modern/src/features/dashboardOverview/__tests__/TrendCharts.test.tsx",
                 "frontend-modern/src/pages/__tests__/DashboardPage.test.tsx",
+                "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
+                "frontend-modern/src/utils/__tests__/typeColumnPresentation.test.ts",
             ],
         )
 

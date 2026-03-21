@@ -115,7 +115,7 @@ import recoveryHistoryTableSource from '@/components/Recovery/RecoveryHistoryTab
 import recoveryProtectedInventorySectionSource from '@/components/Recovery/RecoveryProtectedInventorySection.tsx?raw';
 import recoveryHistorySectionStateSource from '@/components/Recovery/useRecoveryHistorySectionState.ts?raw';
 import recoveryTablePresentationSource from '@/utils/recoveryTablePresentation.ts?raw';
-import problemResourcesTableSource from '@/pages/DashboardPanels/ProblemResourcesTable.tsx?raw';
+import problemResourcesTableSource from '@/features/dashboardOverview/ProblemResourcesTable.tsx?raw';
 import workloadTypeBadgesSource from '@/components/shared/workloadTypeBadges.ts?raw';
 import workloadTypePresentationSource from '@/utils/workloadTypePresentation.ts?raw';
 

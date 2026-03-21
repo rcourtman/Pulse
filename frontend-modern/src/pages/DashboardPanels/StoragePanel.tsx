@@ -1,8 +1,12 @@
 import { Match, Switch } from 'solid-js';
 import { Card } from '@/components/shared/Card';
 import { buildStoragePath } from '@/routing/resourceLinks';
+import {
+  formatDashboardDelta,
+  formatDashboardPercent,
+  getDashboardDeltaColorClass,
+} from '@/utils/dashboardMetricPresentation';
 import { formatBytes } from '@/utils/format';
-import { deltaColorClass, formatDelta, formatPercent } from './dashboardHelpers';
 import type { DashboardOverview } from '@/hooks/useDashboardOverview';
 import type { TrendData } from '@/hooks/useDashboardTrends';
 import {
@@ -49,7 +53,7 @@ export function StoragePanel(props: StoragePanelProps) {
                 {formatBytes(props.storage.totalUsed)} / {formatBytes(props.storage.totalCapacity)}
               </p>
               <span class="text-xs font-mono font-semibold text-base-content">
-                {formatPercent(capacityPercent())}
+                {formatDashboardPercent(capacityPercent())}
               </span>
             </div>
 
@@ -66,9 +70,9 @@ export function StoragePanel(props: StoragePanelProps) {
               ))}
               {hasTrend() && (
                 <span
-                  class={`font-mono font-medium ${deltaColorClass(props.storageTrend?.delta ?? null)}`}
+                  class={`font-mono font-medium ${getDashboardDeltaColorClass(props.storageTrend?.delta ?? null)}`}
                 >
-                  24h: {formatDelta(props.storageTrend?.delta ?? null) ?? '—'}
+                  24h: {formatDashboardDelta(props.storageTrend?.delta ?? null) ?? '—'}
                 </span>
               )}
             </div>

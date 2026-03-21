@@ -808,7 +808,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
 
     def test_dashboard_widgets_change_requires_storage_recovery_contract(self):
         required = infer_impacted_subsystems(
-            ["frontend-modern/src/pages/DashboardPanels/dashboardWidgets.ts"]
+            ["frontend-modern/src/features/dashboardOverview/dashboardWidgets.ts"]
         )
         self.assertEqual(set(required), {"storage-recovery"})
 
@@ -819,7 +819,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
         )
         self.assertEqual(
             recovery["touched_runtime_files"],
-            ["frontend-modern/src/pages/DashboardPanels/dashboardWidgets.ts"],
+            ["frontend-modern/src/features/dashboardOverview/dashboardWidgets.ts"],
         )
         self.assertEqual(
             recovery["verification_requirements"],
@@ -828,7 +828,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     "id": "dashboard-storage-recovery-surface",
                     "label": "dashboard storage and recovery surface proof",
                     "touched_runtime_files": [
-                        "frontend-modern/src/pages/DashboardPanels/dashboardWidgets.ts"
+                        "frontend-modern/src/features/dashboardOverview/dashboardWidgets.ts"
                     ],
                     "allow_same_subsystem_tests": False,
                     "test_prefixes": [],

@@ -5,7 +5,7 @@ import {
   getDashboardWidget,
   type DashboardWidgetDef,
   type DashboardWidgetId,
-} from '@/pages/DashboardPanels/dashboardWidgets';
+} from '@/features/dashboardOverview/dashboardWidgets';
 
 type DashboardLayoutState = {
   order: DashboardWidgetId[];

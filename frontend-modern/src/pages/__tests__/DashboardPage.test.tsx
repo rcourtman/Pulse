@@ -129,6 +129,13 @@ describe('Dashboard page module contract', () => {
     expect(dashboardPageSource).toContain("from '@/components/Alerts/RecentAlertsPanel'");
   });
 
+  it('routes dashboard overview panels through the dashboard overview feature owner', () => {
+    expect(dashboardPageSource).toContain("from '@/features/dashboardOverview'");
+    expect(dashboardPageSource).toContain(
+      'ActionRequiredPanel,\n  DashboardCustomizer,\n  KPIStrip,\n  ProblemResourcesTable,\n  TrendCharts,',
+    );
+  });
+
   it('renders loading skeleton blocks when resources are loading', () => {
     unifiedLoading = true;
 

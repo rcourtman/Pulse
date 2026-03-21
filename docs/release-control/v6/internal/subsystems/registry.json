@@ -1902,6 +1902,12 @@
         "frontend-modern/src/components/Settings/useSystemLogsPanelState.ts",
         "frontend-modern/src/components/SetupWizard/SetupCompletionPreview.tsx",
         "frontend-modern/src/components/SetupWizard/SetupWizard.tsx",
+        "frontend-modern/src/features/dashboardOverview/ActionRequiredPanel.tsx",
+        "frontend-modern/src/features/dashboardOverview/DashboardCustomizer.tsx",
+        "frontend-modern/src/features/dashboardOverview/index.ts",
+        "frontend-modern/src/features/dashboardOverview/KPIStrip.tsx",
+        "frontend-modern/src/features/dashboardOverview/ProblemResourcesTable.tsx",
+        "frontend-modern/src/features/dashboardOverview/TrendCharts.tsx",
         "frontend-modern/src/features/operations/operationsPageModel.ts",
         "frontend-modern/src/features/operations/OperationsPageSurface.tsx",
         "frontend-modern/src/pages/Operations.tsx",
@@ -2025,6 +2031,29 @@
               "frontend-modern/src/pages/__tests__/Operations.helpers.test.ts",
               "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
               "frontend-modern/src/utils/__tests__/reportingPresentation.test.ts"
+            ]
+          },
+          {
+            "id": "dashboard-overview-feature-surface",
+            "label": "dashboard overview feature proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/features/dashboardOverview/ActionRequiredPanel.tsx",
+              "frontend-modern/src/features/dashboardOverview/DashboardCustomizer.tsx",
+              "frontend-modern/src/features/dashboardOverview/index.ts",
+              "frontend-modern/src/features/dashboardOverview/KPIStrip.tsx",
+              "frontend-modern/src/features/dashboardOverview/ProblemResourcesTable.tsx",
+              "frontend-modern/src/features/dashboardOverview/TrendCharts.tsx"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/features/dashboardOverview/__tests__/KPIStrip.test.tsx",
+              "frontend-modern/src/features/dashboardOverview/__tests__/ProblemResourcesTable.test.tsx",
+              "frontend-modern/src/features/dashboardOverview/__tests__/TrendCharts.test.tsx",
+              "frontend-modern/src/pages/__tests__/DashboardPage.test.tsx",
+              "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
+              "frontend-modern/src/utils/__tests__/typeColumnPresentation.test.ts"
             ]
           },
           {
@@ -2858,13 +2887,13 @@
         "internal/recovery/"
       ],
       "owned_files": [
+        "frontend-modern/src/features/dashboardOverview/dashboardWidgets.ts",
         "frontend-modern/src/hooks/useDashboardRecovery.ts",
         "frontend-modern/src/hooks/useRecoveryPoints.ts",
         "frontend-modern/src/hooks/useRecoveryPointsFacets.ts",
         "frontend-modern/src/hooks/useRecoveryPointsSeries.ts",
         "frontend-modern/src/hooks/useRecoveryRollups.ts",
         "frontend-modern/src/pages/Dashboard.tsx",
-        "frontend-modern/src/pages/DashboardPanels/dashboardWidgets.ts",
         "frontend-modern/src/pages/DashboardPanels/RecoveryStatusPanel.tsx",
         "frontend-modern/src/pages/DashboardPanels/StoragePanel.tsx",
         "frontend-modern/src/pages/RecoveryRoute.tsx",
@@ -2922,8 +2951,8 @@
             "label": "dashboard storage and recovery surface proof",
             "match_prefixes": [],
             "match_files": [
-              "frontend-modern/src/pages/Dashboard.tsx",
-              "frontend-modern/src/pages/DashboardPanels/dashboardWidgets.ts"
+              "frontend-modern/src/features/dashboardOverview/dashboardWidgets.ts",
+              "frontend-modern/src/pages/Dashboard.tsx"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],

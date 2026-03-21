@@ -40,7 +40,7 @@ querying, and the operator-facing storage health presentation layer.
 15. `frontend-modern/src/hooks/useRecoveryRollups.ts`
 16. `frontend-modern/src/pages/RecoveryRoute.tsx`
 17. `frontend-modern/src/pages/Dashboard.tsx`
-18. `frontend-modern/src/pages/DashboardPanels/dashboardWidgets.ts`
+18. `frontend-modern/src/features/dashboardOverview/dashboardWidgets.ts`
 19. `frontend-modern/src/pages/DashboardPanels/RecoveryStatusPanel.tsx`
 20. `frontend-modern/src/pages/DashboardPanels/StoragePanel.tsx`
 21. `frontend-modern/src/types/recovery.ts`
@@ -221,14 +221,14 @@ coverage only through `frontend-modern/src/pages/RecoveryRoute.tsx`.
 That same rule applies to the dashboard recovery entry points too:
 `frontend-modern/src/hooks/useDashboardRecovery.ts`,
 `frontend-modern/src/pages/Dashboard.tsx`,
-`frontend-modern/src/pages/DashboardPanels/dashboardWidgets.ts`,
+`frontend-modern/src/features/dashboardOverview/dashboardWidgets.ts`,
 `frontend-modern/src/pages/DashboardPanels/RecoveryStatusPanel.tsx`, and
 `frontend-modern/src/utils/dashboardRecoveryPresentation.ts` must stay on
 explicit direct dashboard/recovery proof routing instead of inheriting
 coverage only through the full recovery route or broader dashboard shells.
 The storage dashboard entry point must be treated the same way on the storage
 side: `frontend-modern/src/pages/Dashboard.tsx`,
-`frontend-modern/src/pages/DashboardPanels/dashboardWidgets.ts`, and
+`frontend-modern/src/features/dashboardOverview/dashboardWidgets.ts`, and
 `frontend-modern/src/pages/DashboardPanels/StoragePanel.tsx` must stay on
 explicit direct dashboard/storage proof routing instead of borrowing release-
 control coverage only from the broader storage page and model surfaces.
