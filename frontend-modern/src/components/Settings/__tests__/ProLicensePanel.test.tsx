@@ -3,6 +3,9 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-li
 
 import type { LicenseEntitlements } from '@/api/license';
 import { ProLicensePanel } from '../ProLicensePanel';
+import proLicensePanelSource from '../ProLicensePanel.tsx?raw';
+import proLicensePanelStateSource from '../useProLicensePanelState.ts?raw';
+import proLicensePlanSectionSource from '../ProLicensePlanSection.tsx?raw';
 
 let mockEntitlements: LicenseEntitlements | null = null;
 
@@ -390,5 +393,18 @@ describe('ProLicensePanel', () => {
         'Trial cannot be started while a paid v5 license migration is pending',
       );
     });
+  });
+
+  it('keeps Pro license split into shell, runtime, and plan owners', () => {
+    expect(proLicensePanelSource).toContain('./useProLicensePanelState');
+    expect(proLicensePanelSource).toContain('./ProLicensePlanSection');
+    expect(proLicensePanelSource).toContain('SelfHostedCommercialActivationSection');
+    expect(proLicensePanelSource).not.toContain('createSignal(');
+    expect(proLicensePanelSource).not.toContain('useLocation()');
+    expect(proLicensePanelStateSource).toContain('useLocation');
+    expect(proLicensePanelStateSource).toContain('loadLicenseStatus(true)');
+    expect(proLicensePanelStateSource).toContain('buildSelfHostedCommercialPlanModel');
+    expect(proLicensePlanSectionSource).toContain('getLicenseStatusLoadingState');
+    expect(proLicensePlanSectionSource).toContain('getNoActiveProLicenseState');
   });
 });

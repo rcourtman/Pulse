@@ -172,6 +172,7 @@ import k8sStatusPresentationSource from '@/utils/k8sStatusPresentation.ts?raw';
 import raidCardSource from '@/components/shared/cards/RaidCard.tsx?raw';
 import raidPresentationSource from '@/utils/raidPresentation.ts?raw';
 import proLicensePanelSource from '@/components/Settings/ProLicensePanel.tsx?raw';
+import proLicensePlanSectionSource from '@/components/Settings/ProLicensePlanSection.tsx?raw';
 import securityPostureSummarySource from '@/components/Settings/SecurityPostureSummary.tsx?raw';
 import securityAuthPanelSource from '@/components/Settings/SecurityAuthPanel.tsx?raw';
 import securityWarningSource from '@/components/SecurityWarning.tsx?raw';
@@ -228,6 +229,7 @@ import storageDomainSource from '@/features/storageBackups/storageDomain.ts?raw'
 import storagePoolDetailPresentationSource from '@/features/storageBackups/storagePoolDetailPresentation.ts?raw';
 import storageBarPresentationSource from '@/features/storageBackups/storageBarPresentation.ts?raw';
 import storagePagePresentationSource from '@/features/storageBackups/storagePagePresentation.ts?raw';
+import proLicensePanelStateSource from '@/components/Settings/useProLicensePanelState.ts?raw';
 import storagePageStatusSource from '@/features/storageBackups/storagePageStatus.ts?raw';
 import storageRowPresentationSource from '@/features/storageBackups/rowPresentation.ts?raw';
 import storagePoolRowPresentationSource from '@/features/storageBackups/storagePoolRowPresentation.ts?raw';
@@ -1841,19 +1843,21 @@ describe('frontend resource type boundaries', () => {
     expect(raidCardSource).not.toContain('const deviceToneClass =');
     expect(raidPresentationSource).toContain('export function getRaidStateVariant');
     expect(raidPresentationSource).toContain('export function getRaidDeviceBadgeClass');
-    expect(proLicensePanelSource).toContain('getLicenseSubscriptionStatusPresentation');
-    expect(proLicensePanelSource).toContain('getLicenseStatusLoadingState');
-    expect(proLicensePanelSource).toContain('getNoActiveProLicenseState');
-    expect(proLicensePanelSource).toContain('formatLicensePlanVersion');
-    expect(proLicensePanelSource).toContain('getTrialActivationNotice');
-    expect(proLicensePanelSource).toContain('getCommercialMigrationNotice');
+    expect(proLicensePanelSource).toContain('./useProLicensePanelState');
+    expect(proLicensePanelSource).toContain('./ProLicensePlanSection');
+    expect(proLicensePanelStateSource).toContain('getLicenseSubscriptionStatusPresentation');
+    expect(proLicensePanelStateSource).toContain('formatLicensePlanVersion');
+    expect(proLicensePanelStateSource).toContain('getTrialActivationNotice');
+    expect(proLicensePanelStateSource).toContain('getCommercialMigrationNotice');
+    expect(proLicensePlanSectionSource).toContain('getLicenseStatusLoadingState');
+    expect(proLicensePlanSectionSource).toContain('getNoActiveProLicenseState');
     expect(proLicensePanelSource).not.toContain('Loading license status...');
     expect(proLicensePanelSource).not.toContain('No Pro license is active.');
     expect(proLicensePanelSource).not.toContain('const statusLabel =');
-    expect(proLicensePanelSource).not.toContain('const statusTone =');
-    expect(proLicensePanelSource).not.toContain('const formatTitleCase =');
-    expect(proLicensePanelSource).not.toContain('const commercialMigrationActionText =');
-    expect(proLicensePanelSource).not.toContain('const commercialMigrationNoticeFor =');
+    expect(proLicensePanelStateSource).not.toContain('const statusTone =');
+    expect(proLicensePanelStateSource).not.toContain('const formatTitleCase =');
+    expect(proLicensePanelStateSource).not.toContain('const commercialMigrationActionText =');
+    expect(proLicensePanelStateSource).not.toContain('const commercialMigrationNoticeFor =');
     expect(licensePresentationSource).toContain(
       'export const getLicenseSubscriptionStatusPresentation',
     );

@@ -44,10 +44,12 @@ import recoverySettingsPanelSource from '../RecoverySettingsPanel.tsx?raw';
 import relaySettingsPanelSource from '../RelaySettingsPanel.tsx?raw';
 import relayPairingSectionSource from '../RelayPairingSection.tsx?raw';
 import proLicensePanelSource from '../ProLicensePanel.tsx?raw';
+import proLicensePlanSectionSource from '../ProLicensePlanSection.tsx?raw';
 import commercialBillingSectionsSource from '../CommercialBillingSections.tsx?raw';
 import selfHostedCommercialActivationSectionSource from '../SelfHostedCommercialActivationSection.tsx?raw';
 import commercialBillingModelSource from '@/utils/commercialBillingModel.ts?raw';
 import relaySettingsPanelStateSource from '../useRelaySettingsPanelState.ts?raw';
+import proLicensePanelStateSource from '../useProLicensePanelState.ts?raw';
 import organizationOverviewPanelSource from '../OrganizationOverviewPanel.tsx?raw';
 import organizationOverviewLoadingStateSource from '../OrganizationOverviewLoadingState.tsx?raw';
 import organizationOverviewDetailsSectionSource from '../OrganizationOverviewDetailsSection.tsx?raw';
@@ -131,6 +133,7 @@ const extractedModules = [
   '../UpdateInstallGuide.tsx',
   '../ReportingPanel.tsx',
   '../reportingPanelModel.ts',
+  '../ProLicensePlanSection.tsx',
   '../RelayPairingSection.tsx',
   '../OrganizationOverviewLoadingState.tsx',
   '../OrganizationOverviewDetailsSection.tsx',
@@ -154,6 +157,7 @@ const extractedModules = [
   '../UserAssignmentsDialog.tsx',
   '../useUserAssignmentsPanelState.ts',
   '../updatesSettingsModel.ts',
+  '../useProLicensePanelState.ts',
   '../useRelaySettingsPanelState.ts',
   '../useDiagnosticsPanelState.ts',
   '../useReportingPanelState.ts',
@@ -343,12 +347,18 @@ describe('Settings architecture guardrails', () => {
     expect(commercialBillingModelSource).toContain('buildHostedCommercialPlanModel');
     expect(commercialBillingModelSource).toContain('buildHostedCommercialUsageModel');
     expect(proLicensePanelSource).toContain('./CommercialBillingSections');
-    expect(proLicensePanelSource).toContain('buildSelfHostedCommercialPlanModel');
+    expect(proLicensePanelSource).toContain('./useProLicensePanelState');
+    expect(proLicensePanelSource).toContain('./ProLicensePlanSection');
     expect(proLicensePanelSource).toContain('SelfHostedCommercialActivationSection');
     expect(proLicensePanelSource).toContain('MonitoredSystemLedgerPanel');
     expect(proLicensePanelSource).toContain('CommercialBillingShell');
     expect(proLicensePanelSource).toContain('CommercialSection');
-    expect(proLicensePanelSource).toContain('CommercialStatGrid');
+    expect(proLicensePanelSource).not.toContain('createSignal(');
+    expect(proLicensePanelSource).not.toContain('useLocation()');
+    expect(proLicensePanelStateSource).toContain('buildSelfHostedCommercialPlanModel');
+    expect(proLicensePanelStateSource).toContain('loadLicenseStatus(true)');
+    expect(proLicensePlanSectionSource).toContain('CommercialStatGrid');
+    expect(proLicensePlanSectionSource).toContain('getLicenseStatusLoadingState');
     expect(selfHostedCommercialActivationSectionSource).toContain('License / Activation Key');
     expect(selfHostedCommercialActivationSectionSource).toContain('Start 14-day Pro Trial');
     expect(organizationBillingPanelSource).toContain('./CommercialBillingSections');

@@ -51,15 +51,17 @@ agreement, and cloud-specific enforcement rules.
 29. `frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx`
 30. `frontend-modern/src/components/Settings/OrganizationBillingLoadingState.tsx`
 31. `frontend-modern/src/components/Settings/ProLicensePanel.tsx`
-32. `frontend-modern/src/components/Settings/CommercialBillingSections.tsx`
-33. `frontend-modern/src/components/Settings/SelfHostedCommercialActivationSection.tsx`
-34. `frontend-modern/src/components/Settings/RelaySettingsPanel.tsx`
-35. `frontend-modern/src/components/Settings/RelayPairingSection.tsx`
-36. `frontend-modern/src/components/Settings/useOrganizationBillingPanelState.ts`
-37. `frontend-modern/src/components/Settings/useRelaySettingsPanelState.ts`
-38. `frontend-modern/src/pages/CloudPricing.tsx`
-39. `frontend-modern/src/utils/apiClient.ts`
-40. `frontend-modern/src/utils/commercialBillingModel.ts`
+32. `frontend-modern/src/components/Settings/ProLicensePlanSection.tsx`
+33. `frontend-modern/src/components/Settings/CommercialBillingSections.tsx`
+34. `frontend-modern/src/components/Settings/SelfHostedCommercialActivationSection.tsx`
+35. `frontend-modern/src/components/Settings/RelaySettingsPanel.tsx`
+36. `frontend-modern/src/components/Settings/RelayPairingSection.tsx`
+37. `frontend-modern/src/components/Settings/useOrganizationBillingPanelState.ts`
+38. `frontend-modern/src/components/Settings/useProLicensePanelState.ts`
+39. `frontend-modern/src/components/Settings/useRelaySettingsPanelState.ts`
+40. `frontend-modern/src/pages/CloudPricing.tsx`
+41. `frontend-modern/src/utils/apiClient.ts`
+42. `frontend-modern/src/utils/commercialBillingModel.ts`
 
 ## Shared Boundaries
 
@@ -83,7 +85,7 @@ agreement, and cloud-specific enforcement rules.
 11. Add or change hosted billing-admin presentation through `frontend-modern/src/components/Settings/BillingAdminPanel.tsx`
 12. Add or change shared commercial plan/usage presentation through `frontend-modern/src/components/Settings/CommercialBillingSections.tsx` and `frontend-modern/src/utils/commercialBillingModel.ts`
 13. Add or change organization billing and usage presentation through `frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx`, `frontend-modern/src/components/Settings/OrganizationBillingLoadingState.tsx`, and `frontend-modern/src/components/Settings/useOrganizationBillingPanelState.ts`
-14. Add or change self-hosted Pro activation, trial, and entitlement actions through `frontend-modern/src/components/Settings/ProLicensePanel.tsx` and `frontend-modern/src/components/Settings/SelfHostedCommercialActivationSection.tsx`
+14. Add or change self-hosted Pro activation, trial, and entitlement actions through `frontend-modern/src/components/Settings/ProLicensePanel.tsx`, `frontend-modern/src/components/Settings/ProLicensePlanSection.tsx`, `frontend-modern/src/components/Settings/SelfHostedCommercialActivationSection.tsx`, and `frontend-modern/src/components/Settings/useProLicensePanelState.ts`
 15. Add or change paid relay settings and onboarding presentation through `frontend-modern/src/components/Settings/RelaySettingsPanel.tsx`, `frontend-modern/src/components/Settings/RelayPairingSection.tsx`, `frontend-modern/src/components/Settings/useRelaySettingsPanelState.ts`, and `frontend-modern/src/components/Dashboard/RelayOnboardingCard.tsx`
 16. Add or change cloud plan presentation through `frontend-modern/src/pages/CloudPricing.tsx`
 17. Add contract tests where runtime and pricing need to stay aligned
@@ -248,6 +250,14 @@ The Pro license settings surface now follows the same rule as well. Changes to
 contract and the dedicated Pro-license proof file instead of remaining an
 unowned consumer of activation, trial eligibility, entitlement capability, and
 plan-term presentation.
+That owned Pro-license boundary is now intentionally split by role:
+`frontend-modern/src/components/Settings/ProLicensePanel.tsx` is the settings
+shell, `frontend-modern/src/components/Settings/useProLicensePanelState.ts`
+owns activation, trial, route-scoped notices, and commercial plan runtime
+state, and `frontend-modern/src/components/Settings/ProLicensePlanSection.tsx`
+owns the plan/read-model presentation. Future Pro-license work must extend
+that split instead of pulling route state, entitlement derivation, and retry
+lifecycle back into the shell component.
 That owned presentation boundary includes the settings shell itself: the
 top-level Pulse Pro surface must keep its page-shell title and leading
 SettingsPanel title aligned so commercial activation, trial, and pricing state
