@@ -99,9 +99,15 @@ vi.mock('@/components/shared/workloadTypeBadges', () => ({
   }),
 }));
 
-vi.mock('../infrastructureLink', () => ({
-  buildInfrastructureHrefForWorkload: () => '/infrastructure/node1',
-}));
+vi.mock('@/routing/resourceLinks', async () => {
+  const actual = await vi.importActual<typeof import('@/routing/resourceLinks')>(
+    '@/routing/resourceLinks',
+  );
+  return {
+    ...actual,
+    buildInfrastructureHrefForWorkload: () => '/infrastructure/node1',
+  };
+});
 
 vi.mock('../workloadSelectors', () => ({
   getWorkloadDockerHostId: (guest: WorkloadGuest) => guest.dockerHostId || '',

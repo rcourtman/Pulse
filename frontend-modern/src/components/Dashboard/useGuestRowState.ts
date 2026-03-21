@@ -10,9 +10,9 @@ import {
   getWorkloadMetricsKind,
   resolveWorkloadType,
 } from '@/utils/workloads';
+import { buildInfrastructureHrefForWorkload } from '@/routing/resourceLinks';
 import { getWorkloadTypeBadge } from '@/components/shared/workloadTypeBadges';
 
-import { buildInfrastructureHrefForWorkload } from './infrastructureLink';
 import { getWorkloadDockerHostId } from './workloadSelectors';
 import {
   DEFAULT_FIRST_CELL_INDENT,

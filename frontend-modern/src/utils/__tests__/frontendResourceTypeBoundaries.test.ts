@@ -470,6 +470,7 @@ describe('frontend resource type boundaries', () => {
   it('keeps compatibility handling centralized in shared adapters and edge translators', () => {
     expect(resourceLinksSource).toContain('canonicalizeWorkloadFilterType');
     expect(resourceLinksSource).toContain('normalizeSourcePlatformQueryValue');
+    expect(resourceLinksSource).toContain('export const buildInfrastructureHrefForWorkload');
     expect(resourceLinksSource).not.toContain("normalized === 'docker'");
     expect(resourceLinksSource).not.toContain("normalized === 'k8s'");
     expect(sourcePlatformsSource).toContain('export const normalizeSourcePlatformQueryValue');
@@ -604,6 +605,8 @@ describe('frontend resource type boundaries', () => {
     expect(guestRowSource).not.toContain('function NetworkInfoCell(');
     expect(guestRowSource).not.toContain('function OSInfoCell(');
     expect(guestRowStateSource).toContain('getCanonicalWorkloadId');
+    expect(guestRowStateSource).toContain("from '@/routing/resourceLinks'");
+    expect(guestRowStateSource).not.toContain("./infrastructureLink");
     expect(guestRowModelSource).toContain('export const GUEST_COLUMNS');
     expect(guestRowCellsSource).toContain('function NetworkInfoCell(');
     expect(guestRowCellsSource).toContain('function OSInfoCell(');
@@ -617,6 +620,8 @@ describe('frontend resource type boundaries', () => {
     expect(guestDrawerSource).toContain('useGuestDrawerState');
     expect(guestDrawerSource).toContain('GuestDrawerOverview');
     expect(guestDrawerStateSource).toContain('getCanonicalWorkloadId');
+    expect(guestDrawerStateSource).toContain("from '@/routing/resourceLinks'");
+    expect(guestDrawerStateSource).not.toContain("./infrastructureLink");
     expect(guestDrawerStateSource).toContain('guestOsSummary');
     expect(guestDrawerSource).not.toContain('const guestId = () => {');
     expect(guestDrawerSource).not.toContain('WebInterfaceUrlField');

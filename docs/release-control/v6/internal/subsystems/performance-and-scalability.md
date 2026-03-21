@@ -156,6 +156,11 @@ and the canonical row contract and per-row hot-path derivations live in
 identity, column, cell-tooltip, anomaly-correlation, and link-state changes
 must extend through those owners instead of rebuilding row-local state inside
 the shell.
+That per-row link state now also consumes the shared
+`frontend-modern/src/routing/resourceLinks.ts` workload-to-infrastructure
+helper instead of a dashboard-local routing shim. Future infrastructure-link
+changes for dashboard rows must extend through the shared routing owner rather
+than recreating feature-local path builders.
 That shell now also routes tag-dot rendering through the shared
 `frontend-modern/src/components/shared/TagBadges.tsx` primitive instead of
 keeping a dashboard-local badge helper. Future guest-row tag presentation
@@ -171,6 +176,10 @@ and workload-derived navigation state live in
 `frontend-modern/src/components/Dashboard/useGuestDrawerState.ts`. Future
 drawer runtime and overview-surface changes must extend through those owners
 instead of adding more mixed state and helper drift back into the shell.
+That drawer state now also consumes the same shared
+`frontend-modern/src/routing/resourceLinks.ts` workload-to-infrastructure
+helper, so row and drawer navigation stay aligned without a second
+dashboard-local link-mapping file.
 The dashboard disk list now follows the same pattern: the shell stays in
 `frontend-modern/src/components/Dashboard/DiskList.tsx`, while disk-row
 presentation derivations and fallback tooltip/runtime wiring live in

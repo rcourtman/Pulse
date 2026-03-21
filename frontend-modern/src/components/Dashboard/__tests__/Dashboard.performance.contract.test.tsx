@@ -600,6 +600,8 @@ describe('Dashboard performance contract', () => {
       expect(guestRowModelSource).toContain('export const VIEW_MODE_COLUMNS');
       expect(guestRowStateSource).toContain('getCanonicalWorkloadId');
       expect(guestRowStateSource).toContain('buildMetricKey');
+      expect(guestRowStateSource).toContain("from '@/routing/resourceLinks'");
+      expect(guestRowStateSource).not.toContain("./infrastructureLink");
       expect(guestRowStateSource).toContain('getWorkloadTypeBadge');
       expect(guestRowCellsSource).toContain('export { BackupIndicator');
       expect(guestRowCellsSource).toContain('function NetworkInfoCell(');
@@ -616,6 +618,8 @@ describe('Dashboard performance contract', () => {
       expect(guestDrawerSource).not.toContain('WebInterfaceUrlField');
       expect(guestDrawerStateSource).toContain('getCanonicalWorkloadId');
       expect(guestDrawerStateSource).toContain('buildInfrastructureHrefForWorkload');
+      expect(guestDrawerStateSource).toContain("from '@/routing/resourceLinks'");
+      expect(guestDrawerStateSource).not.toContain("./infrastructureLink");
       expect(guestDrawerStateSource).toContain('getDiscoveryResourceTypeForWorkload');
       expect(guestDrawerStateSource).toContain('getWebInterfaceTargetLabelForWorkload');
       expect(guestDrawerStateSource).toContain('guestOsSummary');

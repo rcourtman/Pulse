@@ -260,6 +260,12 @@ The frontend now also consumes those facet reads through
 `frontend-modern/src/api/resources.ts` and the dedicated resource detail
 drawer, which keeps the presentation surface aligned with the governed API
 contract instead of rebuilding the relationship and timeline inline.
+The canonical routing owner now also lives in
+`frontend-modern/src/routing/resourceLinks.ts`, including the
+workload-to-infrastructure href builder used by dashboard row and drawer
+consumers. Future workload-to-resource navigation changes must extend through
+that shared routing contract instead of reintroducing dashboard-local path
+builders.
 That drawer shell now routes its canonical timeline filter, facet-bundle, and
 resource-intelligence state through
 `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts`,

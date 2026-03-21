@@ -6,8 +6,8 @@ import {
   getDiscoveryResourceTypeForWorkload,
   getWebInterfaceTargetLabelForWorkload,
 } from '@/utils/workloads';
+import { buildInfrastructureHrefForWorkload } from '@/routing/resourceLinks';
 
-import { buildInfrastructureHrefForWorkload } from './infrastructureLink';
 import {
   getDiscoveryHostIdForWorkload,
   getDiscoveryResourceIdForWorkload,
