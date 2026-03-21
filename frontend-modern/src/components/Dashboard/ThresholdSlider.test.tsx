@@ -145,4 +145,20 @@ describe('ThresholdSlider', () => {
     // Rose
     expect(screen.getByText('50°C').closest('.text-rose-500')).toBeInTheDocument();
   });
+
+  it('releases drag scroll lock listeners on unmount', () => {
+    const removeWindowSpy = vi.spyOn(window, 'removeEventListener');
+    const removeDocumentSpy = vi.spyOn(document, 'removeEventListener');
+
+    const { unmount } = render(() => <ThresholdSlider value={50} onChange={vi.fn()} type="disk" />);
+    const input = screen.getByTitle('DISK: 50%');
+
+    fireEvent.mouseDown(input);
+    unmount();
+
+    expect(removeWindowSpy).toHaveBeenCalledWith('scroll', expect.any(Function), {
+      capture: true,
+    });
+    expect(removeDocumentSpy).toHaveBeenCalledWith('mouseup', expect.any(Function));
+  });
 });

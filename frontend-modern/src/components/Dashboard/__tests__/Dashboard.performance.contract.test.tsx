@@ -8,6 +8,9 @@ import dashboardFilterSource from '../DashboardFilter.tsx?raw';
 import dashboardFilterModelSource from '../dashboardFilterModel.ts?raw';
 import dashboardStateSource from '../useDashboardState.ts?raw';
 import dashboardFilterStateSource from '../useDashboardFilterState.ts?raw';
+import thresholdSliderSource from '../ThresholdSlider.tsx?raw';
+import thresholdSliderModelSource from '../thresholdSliderModel.ts?raw';
+import thresholdSliderStateSource from '../useThresholdSliderState.ts?raw';
 import diskListSource from '../DiskList.tsx?raw';
 import diskListModelSource from '../diskListModel.ts?raw';
 import diskListStateSource from '../useDiskListState.ts?raw';
@@ -492,6 +495,19 @@ describe('Dashboard performance contract', () => {
       expect(dashboardStateSource).toContain('containerRuntimeFilterConfig');
       expect(dashboardStateSource).toContain('hostFilterConfig');
       expect(dashboardStateSource).toContain('namespaceFilterConfig');
+    });
+
+    it('keeps threshold slider runtime and derivations in canonical slider owners', () => {
+      expect(thresholdSliderSource).toContain('useThresholdSliderState');
+      expect(thresholdSliderSource).not.toContain('const [thumbPosition, setThumbPosition] =');
+      expect(thresholdSliderSource).not.toContain('const handleMouseDown = () => {');
+      expect(thresholdSliderSource).not.toContain('formatTemperature(');
+      expect(thresholdSliderStateSource).toContain('window.addEventListener');
+      expect(thresholdSliderStateSource).toContain('document.addEventListener');
+      expect(thresholdSliderStateSource).toContain('onCleanup');
+      expect(thresholdSliderModelSource).toContain('export function getThresholdSliderPosition');
+      expect(thresholdSliderModelSource).toContain('export function getThresholdSliderTitle');
+      expect(thresholdSliderModelSource).toContain('export function getThresholdSliderLabel');
     });
 
     it('keeps guest row contract and hot-path state in canonical row owners', () => {

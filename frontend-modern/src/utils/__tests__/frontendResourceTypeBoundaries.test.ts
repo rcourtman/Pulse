@@ -83,6 +83,8 @@ import dashboardFilterSource from '@/components/Dashboard/DashboardFilter.tsx?ra
 import dashboardFilterModelSource from '@/components/Dashboard/dashboardFilterModel.ts?raw';
 import dashboardStateSource from '@/components/Dashboard/useDashboardState.ts?raw';
 import dashboardFilterStateSource from '@/components/Dashboard/useDashboardFilterState.ts?raw';
+import thresholdSliderModelSource from '@/components/Dashboard/thresholdSliderModel.ts?raw';
+import thresholdSliderStateSource from '@/components/Dashboard/useThresholdSliderState.ts?raw';
 import workloadsSummarySource from '@/components/Workloads/WorkloadsSummary.tsx?raw';
 import dashboardRouteSource from '@/pages/Dashboard.tsx?raw';
 import dashboardHelpersSource from '@/pages/DashboardPanels/dashboardHelpers.ts?raw';
@@ -511,6 +513,17 @@ describe('frontend resource type boundaries', () => {
     expect(dashboardStateSource).toContain('containerRuntimeFilterConfig');
     expect(dashboardStateSource).toContain('hostFilterConfig');
     expect(dashboardStateSource).toContain('namespaceFilterConfig');
+    expect(thresholdSliderSource).toContain('useThresholdSliderState');
+    expect(thresholdSliderSource).not.toContain('const [thumbPosition, setThumbPosition] =');
+    expect(thresholdSliderSource).not.toContain('const handleMouseDown = () => {');
+    expect(thresholdSliderSource).not.toContain('formatTemperature(');
+    expect(thresholdSliderStateSource).toContain('window.addEventListener');
+    expect(thresholdSliderStateSource).toContain('document.addEventListener');
+    expect(thresholdSliderStateSource).toContain('onCleanup');
+    expect(thresholdSliderModelSource).toContain('export function getThresholdSliderPosition');
+    expect(thresholdSliderModelSource).toContain('export function getThresholdSliderThumbTransform');
+    expect(thresholdSliderModelSource).toContain('export function getThresholdSliderTitle');
+    expect(thresholdSliderModelSource).toContain('export function getThresholdSliderLabel');
     expect(workloadsSummarySource).toContain('normalizeOrgScope(getOrgID())');
     expect(workloadsSummarySource).not.toContain("const DEFAULT_ORG_SCOPE = 'default'");
     expect(workloadsSummarySource).not.toContain('const normalizeOrgScope =');

@@ -30,27 +30,32 @@ regression protection.
 8. `frontend-modern/src/components/Dashboard/DashboardFilter.tsx`
 9. `frontend-modern/src/components/Dashboard/dashboardFilterModel.ts`
 10. `frontend-modern/src/components/Dashboard/useDashboardFilterState.ts`
-11. `frontend-modern/src/components/Dashboard/DiskList.tsx`
-12. `frontend-modern/src/components/Dashboard/diskListModel.ts`
-13. `frontend-modern/src/components/Dashboard/useDiskListState.ts`
-14. `frontend-modern/src/components/Dashboard/GuestRow.tsx`
-15. `frontend-modern/src/components/Dashboard/guestRowModel.tsx`
-16. `frontend-modern/src/components/Dashboard/useGuestRowState.ts`
-17. `frontend-modern/src/components/Dashboard/GuestDrawer.tsx`
-18. `frontend-modern/src/components/Dashboard/guestDrawerModel.ts`
-19. `frontend-modern/src/components/Dashboard/useGuestDrawerState.ts`
-20. `frontend-modern/src/components/Dashboard/workloadSelectors.ts`
-21. `frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx`
-22. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`
-23. `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts`
-24. `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts`
-25. `frontend-modern/src/components/Dashboard/__tests__/Dashboard.performance.contract.test.tsx`
-26. `frontend-modern/src/components/Dashboard/__tests__/DashboardFilter.test.tsx`
-27. `frontend-modern/src/components/Dashboard/__tests__/useDashboardFilterState.test.ts`
-28. `frontend-modern/src/components/Dashboard/__tests__/DiskList.test.tsx`
-29. `frontend-modern/src/components/Dashboard/__tests__/GuestRow.test.tsx`
-30. `frontend-modern/src/components/Dashboard/GuestDrawer.test.tsx`
-31. `frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx`
+11. `frontend-modern/src/components/Dashboard/ThresholdSlider.tsx`
+12. `frontend-modern/src/components/Dashboard/thresholdSliderModel.ts`
+13. `frontend-modern/src/components/Dashboard/useThresholdSliderState.ts`
+14. `frontend-modern/src/components/Dashboard/DiskList.tsx`
+15. `frontend-modern/src/components/Dashboard/diskListModel.ts`
+16. `frontend-modern/src/components/Dashboard/useDiskListState.ts`
+17. `frontend-modern/src/components/Dashboard/GuestRow.tsx`
+18. `frontend-modern/src/components/Dashboard/guestRowModel.tsx`
+19. `frontend-modern/src/components/Dashboard/useGuestRowState.ts`
+20. `frontend-modern/src/components/Dashboard/GuestDrawer.tsx`
+21. `frontend-modern/src/components/Dashboard/guestDrawerModel.ts`
+22. `frontend-modern/src/components/Dashboard/useGuestDrawerState.ts`
+23. `frontend-modern/src/components/Dashboard/workloadSelectors.ts`
+24. `frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx`
+25. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`
+26. `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts`
+27. `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts`
+28. `frontend-modern/src/components/Dashboard/__tests__/Dashboard.performance.contract.test.tsx`
+29. `frontend-modern/src/components/Dashboard/__tests__/DashboardFilter.test.tsx`
+30. `frontend-modern/src/components/Dashboard/__tests__/useDashboardFilterState.test.ts`
+31. `frontend-modern/src/components/Dashboard/ThresholdSlider.test.tsx`
+32. `frontend-modern/src/components/Dashboard/__tests__/useThresholdSliderState.test.ts`
+33. `frontend-modern/src/components/Dashboard/__tests__/DiskList.test.tsx`
+34. `frontend-modern/src/components/Dashboard/__tests__/GuestRow.test.tsx`
+35. `frontend-modern/src/components/Dashboard/GuestDrawer.test.tsx`
+36. `frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx`
 
 ## Shared Boundaries
 
@@ -74,6 +79,7 @@ regression protection.
 10. Extend dashboard drawer derivations and runtime wiring through `frontend-modern/src/components/Dashboard/guestDrawerModel.ts` and `frontend-modern/src/components/Dashboard/useGuestDrawerState.ts` rather than rebuilding canonical guest identity, discovery routing, or drawer-local normalization inside `frontend-modern/src/components/Dashboard/GuestDrawer.tsx`
 11. Extend dashboard disk-list derivations and fallback runtime wiring through `frontend-modern/src/components/Dashboard/diskListModel.ts` and `frontend-modern/src/components/Dashboard/useDiskListState.ts` rather than rebuilding usage math, progress-state mapping, or tooltip fallback logic inside `frontend-modern/src/components/Dashboard/DiskList.tsx`
 12. Extend dashboard filter defaults, active-filter counting, reset semantics, and mobile toolbar state through `frontend-modern/src/components/Dashboard/dashboardFilterModel.ts` and `frontend-modern/src/components/Dashboard/useDashboardFilterState.ts`, and keep dashboard-owned filter-config assembly in `frontend-modern/src/components/Dashboard/useDashboardState.ts`, rather than rebuilding filter-local state inside `frontend-modern/src/components/Dashboard/DashboardFilter.tsx` or inline config IIFEs in `frontend-modern/src/components/Dashboard/Dashboard.tsx`
+13. Extend threshold-slider value-position math, title/label derivation, and drag scroll-lock runtime through `frontend-modern/src/components/Dashboard/thresholdSliderModel.ts` and `frontend-modern/src/components/Dashboard/useThresholdSliderState.ts` rather than rebuilding slider-local state and pointer lifecycle inside `frontend-modern/src/components/Dashboard/ThresholdSlider.tsx`
 
 ## Forbidden Paths
 
@@ -138,6 +144,14 @@ The dashboard-owned filter-config assembly now lives in
 filter runtime changes must extend through those owners instead of
 reintroducing dashboard-local state, reset drift, or inline config assembly
 into the shell.
+The dashboard threshold slider now follows that same pattern: the shell stays
+in `frontend-modern/src/components/Dashboard/ThresholdSlider.tsx`, while
+slider bounds math, thumb-position transforms, and title/label derivations
+live in `frontend-modern/src/components/Dashboard/thresholdSliderModel.ts`
+and drag scroll-lock lifecycle lives in
+`frontend-modern/src/components/Dashboard/useThresholdSliderState.ts`.
+Future slider runtime changes must extend through those owners instead of
+reintroducing mixed drag state and formatting logic into the shell.
 
 The unified resource table hot path is now also governed as explicit
 performance-owned runtime, with shared ownership against the unified-resource
