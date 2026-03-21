@@ -74,6 +74,9 @@ work extends shared components instead of creating new local variants.
 52. `frontend-modern/src/features/operations/operationsPageModel.ts`
 53. `frontend-modern/src/pages/Operations.tsx`
 54. `frontend-modern/src/pages/__tests__/Operations.helpers.test.ts`
+55. `frontend-modern/src/components/Settings/NetworkDiscoverySection.tsx`
+56. `frontend-modern/src/components/Settings/NetworkBoundarySettingsSection.tsx`
+57. `frontend-modern/src/components/Settings/networkSettingsModel.ts`
 
 ## Shared Boundaries
 
@@ -364,8 +367,11 @@ being re-inlined into the shell.
 `frontend-modern/src/components/Settings/AuditLogPanel.tsx`,
 `frontend-modern/src/components/Settings/AuditWebhookPanel.tsx`,
 `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx`,
-`frontend-modern/src/components/Settings/NetworkSettingsPanel.tsx` must keep
-`frontend-modern/src/components/Settings/SecurityAuthPanel.tsx` must keep
+`frontend-modern/src/components/Settings/NetworkSettingsPanel.tsx`,
+`frontend-modern/src/components/Settings/NetworkDiscoverySection.tsx`,
+`frontend-modern/src/components/Settings/NetworkBoundarySettingsSection.tsx`,
+`frontend-modern/src/components/Settings/networkSettingsModel.ts`,
+`frontend-modern/src/components/Settings/SecurityAuthPanel.tsx`,
 `frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx`,
 `frontend-modern/src/components/Settings/RecoverySettingsPanel.tsx`,
 `frontend-modern/src/components/Settings/SSOProvidersPanel.tsx`,
@@ -377,6 +383,14 @@ is the shell, `useSSOProvidersState.ts` owns the reactive/API lifecycle, and
 `frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx` must keep
 page-shell titles, descriptions, and lead panel framing aligned instead of
 letting navigation/header labels drift away from the actual settings surface.
+`frontend-modern/src/components/Settings/NetworkSettingsPanel.tsx` is now a
+shell only. `frontend-modern/src/components/Settings/NetworkDiscoverySection.tsx`
+owns discovery controls and shared subnet presets, while
+`frontend-modern/src/components/Settings/NetworkBoundarySettingsSection.tsx`
+owns the public URL, CORS, embedding, and webhook-boundary UI. Shared prop
+contracts for that surface must extend
+`frontend-modern/src/components/Settings/networkSettingsModel.ts` instead of
+re-expanding the shell or reintroducing page-local section types.
 First-session runtime framing is now part of that same owned primitive story.
 `frontend-modern/src/components/SetupWizard/SetupWizard.tsx` must stay on the
 real two-step runtime shape (`Welcome`, then `Security`) and hand successful

@@ -37,7 +37,10 @@ import aiSettingsStateSource from '../useAISettingsState.ts?raw';
 import diagnosticsModelSource from '../diagnosticsModel.ts?raw';
 import diagnosticsPanelSource from '../DiagnosticsPanel.tsx?raw';
 import diagnosticsResultsPanelSource from '../DiagnosticsResultsPanel.tsx?raw';
+import networkBoundarySettingsSectionSource from '../NetworkBoundarySettingsSection.tsx?raw';
+import networkDiscoverySectionSource from '../NetworkDiscoverySection.tsx?raw';
 import networkSettingsPanelSource from '../NetworkSettingsPanel.tsx?raw';
+import networkSettingsModelSource from '../networkSettingsModel.ts?raw';
 import copyCommandBlockSource from '../CopyCommandBlock.tsx?raw';
 import updateInstallGuideSource from '../UpdateInstallGuide.tsx?raw';
 import updatesSettingsModelSource from '../updatesSettingsModel.ts?raw';
@@ -135,6 +138,9 @@ const extractedModules = [
   '../diagnosticsModel.ts',
   '../DiagnosticsPanel.tsx',
   '../DiagnosticsResultsPanel.tsx',
+  '../NetworkBoundarySettingsSection.tsx',
+  '../NetworkDiscoverySection.tsx',
+  '../networkSettingsModel.ts',
   '../CopyCommandBlock.tsx',
   '../UpdateInstallGuide.tsx',
   '../ReportingPanel.tsx',
@@ -417,6 +423,26 @@ describe('Settings architecture guardrails', () => {
     expect(systemLogsPanelStateSource).toContain('new EventSource');
     expect(systemLogsPanelStateSource).toContain("apiFetchJSON('/api/logs/level'");
     expect(systemLogsPanelStateSource).toContain('notificationStore.success');
+  });
+
+  it('keeps network settings split into shell, section, and model owners', () => {
+    expect(networkSettingsPanelSource).toContain('./NetworkDiscoverySection');
+    expect(networkSettingsPanelSource).toContain('./NetworkBoundarySettingsSection');
+    expect(networkSettingsPanelSource).toContain('./networkSettingsModel');
+    expect(networkSettingsPanelSource).not.toContain('COMMON_DISCOVERY_SUBNETS');
+    expect(networkSettingsPanelSource).not.toContain('Dashboard URL for Notifications');
+    expect(networkSettingsPanelSource).not.toContain('Allowed Private IP Ranges for Webhooks');
+    expect(networkDiscoverySectionSource).toContain('COMMON_DISCOVERY_SUBNETS');
+    expect(networkDiscoverySectionSource).toContain('title="Network discovery"');
+    expect(networkDiscoverySectionSource).toContain('Configuration priority');
+    expect(networkBoundarySettingsSectionSource).toContain('Dashboard URL for Notifications');
+    expect(networkBoundarySettingsSectionSource).toContain(
+      'Allowed Private IP Ranges for Webhooks',
+    );
+    expect(networkBoundarySettingsSectionSource).toContain('EnvironmentOverrideAlert');
+    expect(networkSettingsModelSource).toContain('export interface NetworkSettingsPanelProps');
+    expect(networkSettingsModelSource).toContain('export type NetworkDiscoverySectionProps');
+    expect(networkSettingsModelSource).toContain('export type NetworkBoundarySettingsSectionProps');
   });
 
   it('does not re-inline extracted tab and header metadata definitions', () => {

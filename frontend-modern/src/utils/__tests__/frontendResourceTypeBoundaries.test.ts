@@ -27,6 +27,10 @@ import updatesSettingsModelSource from '@/components/Settings/updatesSettingsMod
 import diagnosticsModelSource from '@/components/Settings/diagnosticsModel.ts?raw';
 import diagnosticsResultsPanelSource from '@/components/Settings/DiagnosticsResultsPanel.tsx?raw';
 import diagnosticsStateSource from '@/components/Settings/useDiagnosticsPanelState.ts?raw';
+import networkBoundarySettingsSectionSource from '@/components/Settings/NetworkBoundarySettingsSection.tsx?raw';
+import networkDiscoverySectionSource from '@/components/Settings/NetworkDiscoverySection.tsx?raw';
+import networkSettingsPanelSource from '@/components/Settings/NetworkSettingsPanel.tsx?raw';
+import networkSettingsModelSource from '@/components/Settings/networkSettingsModel.ts?raw';
 import reportingPresentationSource from '@/utils/reportingPresentation.ts?raw';
 import updatesPresentationSource from '@/utils/updatesPresentation.ts?raw';
 import environmentLockBadgeSource from '@/components/shared/EnvironmentLockBadge.tsx?raw';
@@ -814,6 +818,14 @@ describe('frontend resource type boundaries', () => {
     );
     expect(systemSettingsPresentationSource).toContain('export function getBackupIntervalSummary');
     expect(systemSettingsPresentationSource).toContain('export const COMMON_DISCOVERY_SUBNETS');
+    expect(networkSettingsPanelSource).toContain('./NetworkDiscoverySection');
+    expect(networkSettingsPanelSource).toContain('./NetworkBoundarySettingsSection');
+    expect(networkDiscoverySectionSource).toContain('COMMON_DISCOVERY_SUBNETS');
+    expect(networkBoundarySettingsSectionSource).toContain(
+      'Allowed Private IP Ranges for Webhooks',
+    );
+    expect(networkSettingsModelSource).toContain('export type NetworkDiscoverySectionProps');
+    expect(networkSettingsModelSource).toContain('export type NetworkBoundarySettingsSectionProps');
     expect(reportingPanelSource).toContain('@/utils/upgradePresentation');
     expect(reportingPanelSource).toContain('@/components/Settings/useReportingPanelState');
     expect(reportingPanelSource).toContain('@/components/Settings/reportingPanelModel');
