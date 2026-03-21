@@ -32,6 +32,12 @@ export function useGuestDrawerState(props: GuestDrawerProps) {
   const infrastructureHref = createMemo(() => buildInfrastructureHrefForWorkload(props.guest));
   const osName = createMemo(() => props.guest.osName || '');
   const osVersion = createMemo(() => props.guest.osVersion || '');
+  const guestOsSummary = createMemo(() => {
+    const name = osName().trim();
+    const version = osVersion().trim();
+    if (name && version) return `${name} • ${version}`;
+    return name || version;
+  });
   const hasOsInfo = createMemo(() => hasGuestDrawerOsInfo(props.guest));
   const agentLabel = createMemo(() => getGuestDrawerAgentLabel(props.guest));
   const agentTitle = createMemo(() => getGuestDrawerAgentTitle(props.guest));
@@ -68,6 +74,7 @@ export function useGuestDrawerState(props: GuestDrawerProps) {
     discoveryResourceId,
     discoveryResourceType,
     guestId,
+    guestOsSummary,
     hasAgentInfo,
     hasFilesystemDetails,
     hasNetworkInterfaces,

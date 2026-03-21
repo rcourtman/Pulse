@@ -1806,6 +1806,7 @@ class SubsystemLookupTest(unittest.TestCase):
         result = lookup_paths(
             [
                 "frontend-modern/src/components/Dashboard/GuestDrawer.tsx",
+                "frontend-modern/src/components/Dashboard/GuestDrawerOverview.tsx",
                 "frontend-modern/src/components/Dashboard/guestDrawerModel.ts",
                 "frontend-modern/src/components/Dashboard/useGuestDrawerState.ts",
             ]

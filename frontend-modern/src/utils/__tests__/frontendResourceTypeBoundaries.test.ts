@@ -120,6 +120,7 @@ import metricBarSource from '@/components/Dashboard/MetricBar.tsx?raw';
 import metricBarModelSource from '@/components/Dashboard/metricBarModel.ts?raw';
 import metricBarStateSource from '@/components/Dashboard/useMetricBarState.ts?raw';
 import guestDrawerSource from '@/components/Dashboard/GuestDrawer.tsx?raw';
+import guestDrawerOverviewSource from '@/components/Dashboard/GuestDrawerOverview.tsx?raw';
 import guestDrawerModelSource from '@/components/Dashboard/guestDrawerModel.ts?raw';
 import guestDrawerStateSource from '@/components/Dashboard/useGuestDrawerState.ts?raw';
 import dashboardGuestPresentationSource from '@/utils/dashboardGuestPresentation.ts?raw';
@@ -594,8 +595,13 @@ describe('frontend resource type boundaries', () => {
     expect(guestRowCellsSource).toContain('useTooltip');
     expect(guestRowSource).not.toContain('buildGuestId');
     expect(guestDrawerSource).toContain('useGuestDrawerState');
+    expect(guestDrawerSource).toContain('GuestDrawerOverview');
     expect(guestDrawerStateSource).toContain('getCanonicalWorkloadId');
+    expect(guestDrawerStateSource).toContain('guestOsSummary');
     expect(guestDrawerSource).not.toContain('const guestId = () => {');
+    expect(guestDrawerSource).not.toContain('WebInterfaceUrlField');
+    expect(guestDrawerOverviewSource).toContain('WebInterfaceUrlField');
+    expect(guestDrawerOverviewSource).toContain('DiskList');
     expect(emptyStateSource).toContain('getEmptyStatePresentation');
     expect(emptyStateSource).not.toContain('const iconBgClass: Record<EmptyStateTone, string> =');
     expect(emptyStateSource).not.toContain(

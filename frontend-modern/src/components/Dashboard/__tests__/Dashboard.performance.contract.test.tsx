@@ -27,6 +27,7 @@ import metricBarSource from '../MetricBar.tsx?raw';
 import metricBarModelSource from '../metricBarModel.ts?raw';
 import metricBarStateSource from '../useMetricBarState.ts?raw';
 import guestDrawerSource from '../GuestDrawer.tsx?raw';
+import guestDrawerOverviewSource from '../GuestDrawerOverview.tsx?raw';
 import guestDrawerModelSource from '../guestDrawerModel.ts?raw';
 import guestRowSource from '../GuestRow.tsx?raw';
 import guestRowCellsSource from '../GuestRowCells.tsx?raw';
@@ -594,14 +595,21 @@ describe('Dashboard performance contract', () => {
 
     it('keeps guest drawer runtime and derivations in canonical drawer owners', () => {
       expect(guestDrawerSource).toContain('useGuestDrawerState');
+      expect(guestDrawerSource).toContain('GuestDrawerOverview');
       expect(guestDrawerSource).not.toContain('const guestId = () =>');
       expect(guestDrawerSource).not.toContain('const infrastructureHref = () =>');
+      expect(guestDrawerSource).not.toContain('Filesystems');
+      expect(guestDrawerSource).not.toContain('WebInterfaceUrlField');
       expect(guestDrawerStateSource).toContain('getCanonicalWorkloadId');
       expect(guestDrawerStateSource).toContain('buildInfrastructureHrefForWorkload');
       expect(guestDrawerStateSource).toContain('getDiscoveryResourceTypeForWorkload');
       expect(guestDrawerStateSource).toContain('getWebInterfaceTargetLabelForWorkload');
+      expect(guestDrawerStateSource).toContain('guestOsSummary');
       expect(guestDrawerModelSource).toContain('export const getGuestDrawerBackupPresentation');
       expect(guestDrawerModelSource).toContain('export const normalizeGuestDrawerTags');
+      expect(guestDrawerOverviewSource).toContain('WebInterfaceUrlField');
+      expect(guestDrawerOverviewSource).toContain('DiskList');
+      expect(guestDrawerOverviewSource).toContain('Filesystems');
     });
 
     it('keeps disk-list runtime and derivations in canonical disk-list owners', () => {
