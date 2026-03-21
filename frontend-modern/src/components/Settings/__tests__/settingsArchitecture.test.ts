@@ -87,6 +87,8 @@ import diagnosticsStateSource from '../useDiagnosticsPanelState.ts?raw';
 import reportingPanelModelSource from '../reportingPanelModel.ts?raw';
 import reportingPanelSource from '../ReportingPanel.tsx?raw';
 import reportingPanelStateSource from '../useReportingPanelState.ts?raw';
+import systemLogsPanelSource from '../SystemLogsPanel.tsx?raw';
+import systemLogsPanelStateSource from '../useSystemLogsPanelState.ts?raw';
 import rbacFeatureGateSectionSource from '../RBACFeatureGateSection.tsx?raw';
 import rbacFeatureGateStateSource from '../useRBACFeatureGateState.ts?raw';
 import rolesPanelSource from '../RolesPanel.tsx?raw';
@@ -165,6 +167,7 @@ const extractedModules = [
   '../useRelaySettingsPanelState.ts',
   '../useDiagnosticsPanelState.ts',
   '../useReportingPanelState.ts',
+  '../useSystemLogsPanelState.ts',
   '../useSSOProvidersState.ts',
   '../ssoProvidersModel.ts',
   '../ProxmoxSettingsPanel.tsx',
@@ -404,6 +407,16 @@ describe('Settings architecture guardrails', () => {
     expect(billingAdminPanelStateSource).toContain('promisePool');
     expect(billingAdminOrganizationsTableSource).toContain('PulseDataGrid');
     expect(billingAdminOrganizationsTableSource).toContain('Billing state JSON');
+  });
+
+  it('keeps system logs split into shell and runtime owners', () => {
+    expect(systemLogsPanelSource).toContain('./useSystemLogsPanelState');
+    expect(systemLogsPanelSource).not.toContain('createSignal(');
+    expect(systemLogsPanelSource).not.toContain('new EventSource(');
+    expect(systemLogsPanelSource).not.toContain("apiFetchJSON('/api/logs/level'");
+    expect(systemLogsPanelStateSource).toContain('new EventSource');
+    expect(systemLogsPanelStateSource).toContain("apiFetchJSON('/api/logs/level'");
+    expect(systemLogsPanelStateSource).toContain('notificationStore.success');
   });
 
   it('does not re-inline extracted tab and header metadata definitions', () => {

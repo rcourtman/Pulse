@@ -347,6 +347,7 @@ import thresholdSliderPresentationSource from '@/utils/thresholdSliderPresentati
 import emptyStatePresentationSource from '@/utils/emptyStatePresentation.ts?raw';
 import reportingPanelSource from '@/components/Settings/ReportingPanel.tsx?raw';
 import systemLogsPanelSource from '@/components/Settings/SystemLogsPanel.tsx?raw';
+import systemLogsPanelStateSource from '@/components/Settings/useSystemLogsPanelState.ts?raw';
 import systemLogsPresentationSource from '@/utils/systemLogsPresentation.ts?raw';
 import patrolEmptyStatePresentationSource from '@/utils/patrolEmptyStatePresentation.ts?raw';
 import patrolRunPresentationSource from '@/utils/patrolRunPresentation.ts?raw';
@@ -2915,6 +2916,7 @@ describe('frontend resource type boundaries', () => {
     expect(operationsPageModelSource).toContain('export function buildOperationsPath');
     expect(reportingPanelSource).toContain('OperationsPanel');
     expect(systemLogsPanelSource).toContain('OperationsPanel');
+    expect(systemLogsPanelSource).toContain('./useSystemLogsPanelState');
     expect(patrolIntelligenceSurfaceSource).toContain('getPatrolSummaryPresentation');
     expect(patrolIntelligenceSurfaceSource).toContain('getAIQuickstartCreditsPresentation');
     expect(patrolIntelligenceSurfaceSource).not.toContain(
@@ -2965,11 +2967,16 @@ describe('frontend resource type boundaries', () => {
     expect(patrolRunPresentationSource).toContain('export function getToolCallsUnavailableState');
     expect(systemLogsPanelSource).toContain('getSystemLogLineClass');
     expect(systemLogsPanelSource).toContain('getSystemLogStreamPresentation');
+    expect(systemLogsPanelSource).not.toContain('notificationStore.success');
+    expect(systemLogsPanelSource).not.toContain('new EventSource(');
     expect(systemLogsPanelSource).not.toContain("log.includes('ERR')");
     expect(systemLogsPanelSource).not.toContain("isPaused() ? 'Stream Paused' : 'Live'");
     expect(systemLogsPanelSource).not.toContain(
       "'bg-amber-100 text-amber-600 dark:bg-amber-900 dark:text-amber-400'",
     );
+    expect(systemLogsPanelStateSource).toContain("window.location.href = '/api/logs/download'");
+    expect(systemLogsPanelStateSource).toContain('notificationStore.success');
+    expect(systemLogsPanelStateSource).toContain('new EventSource');
     expect(systemLogsPresentationSource).toContain('export function getSystemLogLineClass');
     expect(systemLogsPresentationSource).toContain(
       'export function getSystemLogStreamPresentation',

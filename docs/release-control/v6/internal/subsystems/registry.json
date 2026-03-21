@@ -1769,6 +1769,7 @@
         "frontend-modern/src/components/Settings/useDiagnosticsPanelState.ts",
         "frontend-modern/src/components/Settings/useReportingPanelState.ts",
         "frontend-modern/src/components/Settings/useSSOProvidersState.ts",
+        "frontend-modern/src/components/Settings/useSystemLogsPanelState.ts",
         "frontend-modern/src/components/SetupWizard/SetupCompletionPreview.tsx",
         "frontend-modern/src/components/SetupWizard/SetupWizard.tsx",
         "frontend-modern/src/features/operations/operationsPageModel.ts",
@@ -1856,6 +1857,7 @@
               "frontend-modern/src/components/Settings/reportingPanelModel.ts",
               "frontend-modern/src/components/Settings/SystemLogsPanel.tsx",
               "frontend-modern/src/components/Settings/useReportingPanelState.ts",
+              "frontend-modern/src/components/Settings/useSystemLogsPanelState.ts",
               "frontend-modern/src/features/operations/operationsPageModel.ts",
               "frontend-modern/src/features/operations/OperationsPageSurface.tsx",
               "frontend-modern/src/pages/Operations.tsx",
@@ -1867,6 +1869,7 @@
               "frontend-modern/src/__tests__/App.architecture.test.ts",
               "frontend-modern/src/components/Settings/__tests__/reportingPanelModel.test.ts",
               "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
+              "frontend-modern/src/components/Settings/__tests__/SystemLogsPanel.test.tsx",
               "frontend-modern/src/pages/__tests__/Operations.helpers.test.ts",
               "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
               "frontend-modern/src/utils/__tests__/reportingPresentation.test.ts"

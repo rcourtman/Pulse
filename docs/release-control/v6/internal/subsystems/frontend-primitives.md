@@ -68,10 +68,12 @@ work extends shared components instead of creating new local variants.
 46. `frontend-modern/src/components/SetupWizard/__tests__/SetupCompletionPreview.test.tsx`
 47. `frontend-modern/src/components/shared/MonitoredSystemLimitWarningBanner.tsx`
 48. `frontend-modern/src/components/Settings/SystemLogsPanel.tsx`
-49. `frontend-modern/src/features/operations/OperationsPageSurface.tsx`
-50. `frontend-modern/src/features/operations/operationsPageModel.ts`
-51. `frontend-modern/src/pages/Operations.tsx`
-52. `frontend-modern/src/pages/__tests__/Operations.helpers.test.ts`
+49. `frontend-modern/src/components/Settings/useSystemLogsPanelState.ts`
+50. `frontend-modern/src/components/Settings/__tests__/SystemLogsPanel.test.tsx`
+51. `frontend-modern/src/features/operations/OperationsPageSurface.tsx`
+52. `frontend-modern/src/features/operations/operationsPageModel.ts`
+53. `frontend-modern/src/pages/Operations.tsx`
+54. `frontend-modern/src/pages/__tests__/Operations.helpers.test.ts`
 
 ## Shared Boundaries
 
@@ -115,6 +117,13 @@ The subsystem registry now also requires explicit proof-policy coverage for all
 shared runtime files, and shared-component guardrails fail if raw table
 composition is reintroduced in new shared components outside the canonical
 allowlist.
+The system logs operations surface now follows the same shell/runtime split as
+the other modernized settings panels: `frontend-modern/src/components/Settings/SystemLogsPanel.tsx`
+owns the operations framing and presentation helpers, while
+`frontend-modern/src/components/Settings/useSystemLogsPanelState.ts` owns the
+stream lifecycle, buffering, level updates, and download action. Future system
+logs work must extend that split instead of pulling `EventSource`, API calls,
+or notification flow back into the panel render shell.
 Top-level route files are now also expected to stay thin when a feature owns
 the real product surface. `frontend-modern/src/pages/Infrastructure.tsx` now
 acts only as the route boundary, while

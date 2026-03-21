@@ -2638,6 +2638,28 @@ class SubsystemLookupTest(unittest.TestCase):
             ],
         )
 
+    def test_lookup_paths_assigns_system_logs_runtime_owner_to_frontend_primitives(self) -> None:
+        result = lookup_paths(
+            ["frontend-modern/src/components/Settings/useSystemLogsPanelState.ts"]
+        )
+        self.assertEqual(result["unowned_runtime_files"], [])
+
+        file_entry = result["files"][0]
+        self.assertEqual(file_entry["classification"], "runtime")
+        self.assertEqual(len(file_entry["matches"]), 1)
+
+        match = file_entry["matches"][0]
+        self.assertEqual(match["subsystem"], "frontend-primitives")
+        self.assertEqual(
+            match["contract"],
+            "docs/release-control/v6/internal/subsystems/frontend-primitives.md",
+        )
+        self.assertEqual(match["lane_context"]["lane_id"], "L8")
+        self.assertEqual(
+            match["verification_requirement"]["id"],
+            "route-shell-and-operations",
+        )
+
     def test_lookup_paths_assigns_unified_resource_metrics_targets_runtime(self) -> None:
         result = lookup_paths(["internal/unifiedresources/metrics_targets.go"])
         self.assertEqual(result["unowned_runtime_files"], [])
