@@ -27,7 +27,7 @@ import {
   PVE_POLLING_MIN_SECONDS,
   PVE_POLLING_PRESETS,
 } from '@/utils/systemSettingsPresentation';
-import { getSettingsTabSaveBehavior } from './settingsTabs';
+import { getSettingsTabSaveBehavior } from './settingsTabSaveBehavior';
 import type { SettingsTab } from './settingsTypes';
 
 interface UseSystemSettingsStateParams {

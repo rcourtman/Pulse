@@ -5,7 +5,7 @@ import { useWebSocket } from '@/App';
 import { SettingsDialogs } from './SettingsDialogs';
 import { SettingsPageShell } from './SettingsPageShell';
 import { eventBus } from '@/stores/events';
-import { getSettingsTabSaveBehavior } from './settingsTabs';
+import { getSettingsTabSaveBehavior } from './settingsTabSaveBehavior';
 import { useBackupTransferFlow } from './useBackupTransferFlow';
 import { useDiscoverySettingsState } from './useDiscoverySettingsState';
 import { useInfrastructureSettingsState } from './useInfrastructureSettingsState';

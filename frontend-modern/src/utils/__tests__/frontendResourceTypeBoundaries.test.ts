@@ -31,6 +31,9 @@ import settingsShellSource from '@/components/Settings/Settings.tsx?raw';
 import settingsPanelRegistrySource from '@/components/Settings/useSettingsPanelRegistry.tsx?raw';
 import settingsPanelRegistryContextSource from '@/components/Settings/settingsPanelRegistryContext.tsx?raw';
 import settingsPanelRegistryLoadersSource from '@/components/Settings/settingsPanelRegistryLoaders.ts?raw';
+import settingsNavCatalogSource from '@/components/Settings/settingsNavCatalog.ts?raw';
+import settingsNavVisibilitySource from '@/components/Settings/settingsNavVisibility.ts?raw';
+import settingsTabSaveBehaviorSource from '@/components/Settings/settingsTabSaveBehavior.ts?raw';
 import settingsSystemPanelsSource from '@/components/Settings/useSettingsSystemPanels.tsx?raw';
 import settingsInfrastructurePanelPropsSource from '@/components/Settings/useSettingsInfrastructurePanelProps.ts?raw';
 import discoverySettingsStateSource from '@/components/Settings/useDiscoverySettingsState.ts?raw';
@@ -851,6 +854,7 @@ describe('frontend resource type boundaries', () => {
     expect(settingsShellSource).toContain('./useDiscoverySettingsState');
     expect(settingsShellSource).toContain('./useSettingsInfrastructurePanelProps');
     expect(settingsShellSource).toContain('./useSettingsPanelRegistry');
+    expect(settingsShellSource).toContain('./settingsTabSaveBehavior');
     expect(settingsShellSource).toContain('./useSettingsSystemPanels');
     expect(settingsShellSource).toContain('const discoverySettings = useDiscoverySettingsState()');
     expect(settingsShellSource).toContain('const systemPanels = useSettingsSystemPanels({');
@@ -872,6 +876,9 @@ describe('frontend resource type boundaries', () => {
     );
     expect(settingsPanelRegistryContextSource).toContain('const systemBillingPanel: Component');
     expect(settingsPanelRegistryContextSource).toContain('getSecurityAuthPanelProps');
+    expect(settingsNavCatalogSource).toContain('export const SETTINGS_NAV_GROUPS');
+    expect(settingsNavVisibilitySource).toContain('shouldHideSettingsNavItem');
+    expect(settingsTabSaveBehaviorSource).toContain('getSettingsNavItem(tab)?.saveBehavior');
     expect(settingsPanelRegistrySource).not.toContain('allowedOrigins: params.');
     expect(settingsPanelRegistrySource).not.toContain('backupPollingEnabled: params.');
     expect(settingsSystemPanelsSource).toContain('GeneralSettingsPanel');

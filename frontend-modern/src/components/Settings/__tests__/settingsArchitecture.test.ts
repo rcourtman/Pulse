@@ -27,10 +27,13 @@ import infrastructureSettingsStateSource from '../useInfrastructureSettingsState
 import infrastructureSettingsModelSource from '../infrastructureSettingsModel.ts?raw';
 import infrastructureConfiguredNodesStateSource from '../useInfrastructureConfiguredNodesState.ts?raw';
 import infrastructureDiscoveryRuntimeStateSource from '../useInfrastructureDiscoveryRuntimeState.ts?raw';
+import settingsNavCatalogSource from '../settingsNavCatalog.ts?raw';
+import settingsNavVisibilitySource from '../settingsNavVisibility.ts?raw';
 import settingsInfrastructurePanelPropsSource from '../useSettingsInfrastructurePanelProps.ts?raw';
 import nodeModalStateSource from '../useNodeModalState.ts?raw';
 import settingsPanelRegistryContextSource from '../settingsPanelRegistryContext.tsx?raw';
 import settingsPanelRegistryLoadersSource from '../settingsPanelRegistryLoaders.ts?raw';
+import settingsTabSaveBehaviorSource from '../settingsTabSaveBehavior.ts?raw';
 import settingsPanelRegistryHookSource from '../useSettingsPanelRegistry.tsx?raw';
 import settingsSystemPanelsSource from '../useSettingsSystemPanels.tsx?raw';
 import apiAccessPanelSource from '../APIAccessPanel.tsx?raw';
@@ -126,7 +129,9 @@ import { SETTINGS_HEADER_META } from '../settingsHeaderMeta';
 
 const extractedModules = [
   '../settingsTypes.ts',
-  '../settingsTabs.ts',
+  '../settingsNavCatalog.ts',
+  '../settingsNavVisibility.ts',
+  '../settingsTabSaveBehavior.ts',
   '../DockerRuntimeSettingsCard.tsx',
   '../settingsHeaderMeta.ts',
   '../settingsFeatureGates.ts',
@@ -239,7 +244,7 @@ const extractedModules = [
 ] as const;
 
 const requiredImportSources = [
-  './settingsTabs',
+  './settingsTabSaveBehavior',
   './SettingsDialogs',
   './SettingsPageShell',
   './useBackupTransferFlow',
@@ -382,6 +387,9 @@ describe('Settings architecture guardrails', () => {
     expect(registrySource).toContain('SETTINGS_PANEL_REGISTRY_LOADERS');
     expect(registrySource).toContain("'security-webhooks'");
     expect(accessHookSource).toContain('shouldHideSettingsNavItem');
+    expect(accessHookSource).toContain('SETTINGS_NAV_GROUPS');
+    expect(accessHookSource).toContain('./settingsNavCatalog');
+    expect(accessHookSource).toContain('./settingsNavVisibility');
     expect(accessHookSource).toContain('tabFeatureRequirements');
     expect(panelRegistryHookSource).toContain('createSettingsPanelRegistry');
     expect(panelRegistryHookSource).toContain('buildSettingsPanelRegistryContext');
@@ -393,6 +401,7 @@ describe('Settings architecture guardrails', () => {
     expect(settingsSource).toContain('useSettingsPanelRegistry');
     expect(settingsSource).toContain('useSettingsAccess');
     expect(settingsSource).toContain('useSettingsShellState');
+    expect(settingsSource).toContain('getSettingsTabSaveBehavior');
     expect(settingsSource).toContain('activeSettingsPanelEntry');
     expect(settingsSource).toContain('<Dynamic component={entry().component}');
     expect(settingsSource).not.toContain('<ProxmoxSettingsPanel');
@@ -403,6 +412,7 @@ describe('Settings architecture guardrails', () => {
   it('keeps settings shell panel assembly split between dedicated system and registry owners', () => {
     expect(settingsSource).toContain('useSettingsSystemPanels');
     expect(settingsSource).toContain('useSettingsInfrastructurePanelProps');
+    expect(settingsSource).toContain('./settingsTabSaveBehavior');
     expect(settingsSource).toContain('const systemPanels = useSettingsSystemPanels({');
     expect(settingsSource).toContain(
       'const infrastructurePanelProps = useSettingsInfrastructurePanelProps({',
@@ -443,6 +453,11 @@ describe('Settings architecture guardrails', () => {
     expect(settingsInfrastructurePanelPropsSource).toContain('pmgInstanceFromResource');
     expect(settingsInfrastructurePanelPropsSource).toContain('const agentStateResources = createMemo');
     expect(settingsInfrastructurePanelPropsSource).toContain('getInfrastructurePanelProps');
+    expect(settingsNavCatalogSource).toContain('export const SETTINGS_NAV_GROUPS');
+    expect(settingsNavCatalogSource).toContain('export function getSettingsNavItem');
+    expect(settingsNavVisibilitySource).toContain('export function shouldHideSettingsNavItem');
+    expect(settingsNavVisibilitySource).toContain('export function isSettingsNavItemLocked');
+    expect(settingsTabSaveBehaviorSource).toContain('getSettingsNavItem(tab)?.saveBehavior');
   });
 
   it('keeps commercial plan and usage sections on a shared billing owner', () => {

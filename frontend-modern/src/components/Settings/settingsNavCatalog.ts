@@ -11,20 +11,15 @@ import Sliders from 'lucide-solid/icons/sliders-horizontal';
 import RefreshCw from 'lucide-solid/icons/refresh-cw';
 import Clock from 'lucide-solid/icons/clock';
 import Sparkles from 'lucide-solid/icons/sparkles';
-
 import Globe from 'lucide-solid/icons/globe';
-import { PulseLogoIcon } from '@/components/icons/PulseLogoIcon';
 import BadgeCheck from 'lucide-solid/icons/badge-check';
-import type { SecurityStatusSettingsCapabilities } from '@/types/config';
-
 import Building2 from 'lucide-solid/icons/building-2';
 import Share2 from 'lucide-solid/icons/share-2';
 import CreditCard from 'lucide-solid/icons/credit-card';
-import { isTabLocked } from './settingsFeatureGates';
-import type { SettingsNavGroup, SettingsNavItem } from './settingsTypes';
-import type { SettingsTab } from './settingsTypes';
+import { PulseLogoIcon } from '@/components/icons/PulseLogoIcon';
+import type { SettingsNavGroup, SettingsNavItem, SettingsTab } from './settingsTypes';
 
-export const baseTabGroups: SettingsNavGroup[] = [
+export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
   {
     id: 'infrastructure',
     label: 'Infrastructure',
@@ -201,68 +196,10 @@ export const baseTabGroups: SettingsNavGroup[] = [
   },
 ];
 
-export interface SettingsNavVisibilityContext {
-  hasFeature: (feature: string) => boolean;
-  licenseLoaded: () => boolean;
-  hostedModeEnabled?: boolean;
-  settingsCapabilities?: Partial<SecurityStatusSettingsCapabilities> | null;
-  settingsCapabilitiesResolved?: boolean;
-}
-
-const navItemsByTab = new Map<SettingsTab, SettingsNavItem>(
-  baseTabGroups.flatMap((group) => group.items.map((item) => [item.id, item] as const)),
+const settingsNavItemsByTab = new Map<SettingsTab, SettingsNavItem>(
+  SETTINGS_NAV_GROUPS.flatMap((group) => group.items.map((item) => [item.id, item] as const)),
 );
 
 export function getSettingsNavItem(tab: SettingsTab): SettingsNavItem | undefined {
-  return navItemsByTab.get(tab);
-}
-
-export function getSettingsTabSaveBehavior(tab: SettingsTab): SettingsNavItem['saveBehavior'] {
-  return navItemsByTab.get(tab)?.saveBehavior;
-}
-
-function hasRequiredFeatures(
-  item: SettingsNavItem | undefined,
-  hasFeature: (feature: string) => boolean,
-): boolean {
-  const requiredFeatures = item?.features ?? [];
-  return requiredFeatures.every((feature) => hasFeature(feature));
-}
-
-export function shouldHideSettingsNavItem(
-  tab: SettingsTab,
-  context: SettingsNavVisibilityContext,
-): boolean {
-  const item = navItemsByTab.get(tab);
-  if (!item) return false;
-
-  if (item.hostedOnly && !context.hostedModeEnabled) {
-    return true;
-  }
-
-  if (
-    item.requiredCapability &&
-    context.settingsCapabilitiesResolved &&
-    context.settingsCapabilities?.[item.requiredCapability] !== true
-  ) {
-    return true;
-  }
-
-  if (item.hideWhenUnavailable && !hasRequiredFeatures(item, context.hasFeature)) {
-    return true;
-  }
-
-  return false;
-}
-
-export function isSettingsNavItemLocked(
-  tab: SettingsTab,
-  context: SettingsNavVisibilityContext,
-): boolean {
-  const item = navItemsByTab.get(tab);
-  if (!item || item.hideWhenUnavailable) {
-    return false;
-  }
-
-  return isTabLocked(tab, context.hasFeature, context.licenseLoaded);
+  return settingsNavItemsByTab.get(tab);
 }

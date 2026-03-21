@@ -5,7 +5,8 @@ import { hasFeature, isHostedModeEnabled, licenseLoaded } from '@/stores/license
 import { DEFAULT_SETTINGS_TAB } from './settingsRouting';
 import { tabFeatureRequirements } from './settingsFeatureGates';
 import { SETTINGS_HEADER_META } from './settingsHeaderMeta';
-import { baseTabGroups, getSettingsNavItem, shouldHideSettingsNavItem } from './settingsTabs';
+import { getSettingsNavItem, SETTINGS_NAV_GROUPS } from './settingsNavCatalog';
+import { shouldHideSettingsNavItem } from './settingsNavVisibility';
 import type { SettingsTab } from './settingsTypes';
 
 interface UseSettingsAccessParams {
@@ -27,7 +28,7 @@ export function useSettingsAccess({
     const settingsCapabilities = securityStatus()?.settingsCapabilities ?? null;
     const settingsCapabilitiesResolved = securityStatus() !== null;
 
-    return baseTabGroups
+    return SETTINGS_NAV_GROUPS
       .map((group) => ({
         ...group,
         items: group.items.filter(

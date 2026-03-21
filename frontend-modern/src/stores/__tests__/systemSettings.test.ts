@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
+  areSystemSettingsLoaded,
   markSystemSettingsLoadedWithDefaults,
   shouldDisableLocalUpgradeMetrics,
   shouldHideDockerUpdateActions,
@@ -34,6 +35,17 @@ describe('systemSettings store', () => {
     });
 
     markSystemSettingsLoadedWithDefaults();
+    expect(shouldHideDockerUpdateActions()).toBe(false);
+    expect(shouldReduceProUpsellNoise()).toBe(false);
+    expect(shouldDisableLocalUpgradeMetrics()).toBe(false);
+  });
+
+  it('keeps privacy and upgrade metrics defaults safe when flags are omitted', () => {
+    updateSystemSettingsFromResponse({
+      autoUpdateEnabled: false,
+    });
+
+    expect(areSystemSettingsLoaded()).toBe(true);
     expect(shouldHideDockerUpdateActions()).toBe(false);
     expect(shouldReduceProUpsellNoise()).toBe(false);
     expect(shouldDisableLocalUpgradeMetrics()).toBe(false);

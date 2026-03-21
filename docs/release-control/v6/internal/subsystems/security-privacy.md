@@ -88,6 +88,14 @@ stays a presentation boundary and `frontend-modern/src/components/Settings/useSe
 may only assemble props for the shared settings shell. Privacy or telemetry
 behavior must not drift into `frontend-modern/src/components/Settings/Settings.tsx`
 or the registry hook just because the shell wiring changed.
+That shell split now also applies to tab-save coordination: the dedicated
+`frontend-modern/src/components/Settings/settingsTabSaveBehavior.ts` owner may
+decide which settings tabs participate in shell-level save prompts, but it must
+remain pure shell metadata. Telemetry, local-upgrade-metrics, and auth/privacy
+state transitions stay canonically owned by
+`frontend-modern/src/components/Settings/useSystemSettingsState.ts` and the
+backing `frontend-modern/src/stores/systemSettings.ts` trust surface, not by
+settings navigation metadata or other frontend-primitives owners.
 
 The security transport surfaces remain intentionally shared with
 `api-contracts`: token, auth, and telemetry settings payloads are still API

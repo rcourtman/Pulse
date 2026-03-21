@@ -1,7 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { deriveTabFromPath, settingsTabPath, type SettingsTab } from '../settingsRouting';
 import { getTabLockReason, isTabLocked } from '../settingsFeatureGates';
-import { getSettingsTabSaveBehavior, shouldHideSettingsNavItem } from '../settingsTabs';
+import { shouldHideSettingsNavItem } from '../settingsNavVisibility';
+import { getSettingsTabSaveBehavior } from '../settingsTabSaveBehavior';
 import { updateDisableLocalUpgradeMetricsSetting } from '@/stores/systemSettings';
 
 const canonicalTabPaths = {
