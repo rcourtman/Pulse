@@ -81,7 +81,7 @@ vi.mock('../StackedMemoryBar', () => ({
   ),
 }));
 
-vi.mock('../TagBadges', () => ({
+vi.mock('@/components/shared/TagBadges', () => ({
   TagBadges: (props: { tags: string[] }) => (
     <div data-testid="tag-badges" data-count={props.tags.length} />
   ),

@@ -9,7 +9,7 @@ import type {
 import { formatUptime, formatRelativeTime } from '@/utils/format';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { Card } from '@/components/shared/Card';
-import { TagBadges } from '@/components/Dashboard/TagBadges';
+import { TagBadges } from '@/components/shared/TagBadges';
 import { SystemInfoCard } from '@/components/shared/cards/SystemInfoCard';
 import { HardwareCard } from '@/components/shared/cards/HardwareCard';
 import { RootDiskCard } from '@/components/shared/cards/RootDiskCard';

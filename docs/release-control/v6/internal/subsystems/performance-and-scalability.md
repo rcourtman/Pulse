@@ -156,6 +156,11 @@ and the canonical row contract and per-row hot-path derivations live in
 identity, column, cell-tooltip, anomaly-correlation, and link-state changes
 must extend through those owners instead of rebuilding row-local state inside
 the shell.
+That shell now also routes tag-dot rendering through the shared
+`frontend-modern/src/components/shared/TagBadges.tsx` primitive instead of
+keeping a dashboard-local badge helper. Future guest-row tag presentation
+changes must extend through that shared owner rather than reintroducing a
+dashboard-only tag-badge variant.
 The dashboard guest drawer now follows that same ownership rule: the shell
 stays in `frontend-modern/src/components/Dashboard/GuestDrawer.tsx`, the
 overview card surface lives in

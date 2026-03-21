@@ -196,6 +196,12 @@ The same surfaces now also render recent changes through the shared
 `frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx`
 card, so canonical timeline wording and ordering stay governed by one
 frontend feed instead of separate page-local loops.
+The unified-resource detail drawer now also routes resource-tag presentation
+through the shared `frontend-modern/src/components/shared/TagBadges.tsx`
+primitive instead of importing a dashboard-local badge helper into the
+resource surface. Future drawer tag presentation changes must extend through
+that shared primitive boundary rather than recreating tag-dot logic inside the
+drawer or pulling feature-local badge components across subsystem lines.
 The same shared agent-resource module now also owns the canonical cluster-name
 helpers, so Kubernetes context prefixes, Proxmox cluster labels, and
 cluster-name fetch keys stay aligned instead of each surface rebuilding its

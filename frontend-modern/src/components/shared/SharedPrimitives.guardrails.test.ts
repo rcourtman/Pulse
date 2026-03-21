@@ -3,7 +3,10 @@ import calloutCardSource from '@/components/shared/CalloutCard.tsx?raw';
 import filterButtonGroupSource from '@/components/shared/FilterButtonGroup.tsx?raw';
 import monitoredSystemLimitWarningBannerSource from '@/components/shared/MonitoredSystemLimitWarningBanner.tsx?raw';
 import selectionCardGroupSource from '@/components/shared/SelectionCardGroup.tsx?raw';
-import aiSettingsSource from '@/components/Settings/AISettings.tsx?raw';
+import tagBadgesSource from '@/components/shared/TagBadges.tsx?raw';
+import guestRowSource from '@/components/Dashboard/GuestRow.tsx?raw';
+import resourceDetailDrawerSource from '@/components/Infrastructure/ResourceDetailDrawer.tsx?raw';
+import aiSettingsDialogsSource from '@/components/Settings/AISettingsDialogs.tsx?raw';
 import generalSettingsPanelSource from '@/components/Settings/GeneralSettingsPanel.tsx?raw';
 import proxmoxSettingsPanelSource from '@/components/Settings/ProxmoxSettingsPanel.tsx?raw';
 import reportingPanelSource from '@/components/Settings/ReportingPanel.tsx?raw';
@@ -54,9 +57,9 @@ describe('shared primitive guardrails', () => {
     expect(selectionCardGroupSource).toContain(
       "type SelectionCardGroupVariant = 'compact' | 'detail'",
     );
-    expect(aiSettingsSource).toContain('SelectionCardGroup');
-    expect(aiSettingsSource).toContain('variant="compact"');
-    expect(aiSettingsSource).not.toContain(
+    expect(aiSettingsDialogsSource).toContain('SelectionCardGroup');
+    expect(aiSettingsDialogsSource).toContain('variant="compact"');
+    expect(aiSettingsDialogsSource).not.toContain(
       'class={`p-3 rounded-md border-2 transition-all text-center',
     );
     expect(updatesSettingsPanelSource).toContain('SelectionCardGroup');
@@ -90,6 +93,16 @@ describe('shared primitive guardrails', () => {
     );
     expect(monitoredSystemLimitWarningBannerSource).not.toContain(
       'Install v6 Unified Agents',
+    );
+  });
+
+  it('keeps shared tag badges in the shared primitive boundary', () => {
+    expect(tagBadgesSource).toContain("from '@/components/shared/Tooltip'");
+    expect(guestRowSource).toContain("from '@/components/shared/TagBadges'");
+    expect(guestRowSource).not.toContain("from './TagBadges'");
+    expect(resourceDetailDrawerSource).toContain("from '@/components/shared/TagBadges'");
+    expect(resourceDetailDrawerSource).not.toContain(
+      "from '@/components/Dashboard/TagBadges'",
     );
   });
 });

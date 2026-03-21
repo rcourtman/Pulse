@@ -42,6 +42,30 @@ class SubsystemLookupTest(unittest.TestCase):
         result = lookup_paths(["README.md"])
         self.assertEqual(result["unowned_runtime_files"], ["README.md"])
 
+    def test_lookup_paths_assigns_shared_tag_badges_to_frontend_primitives(self) -> None:
+        result = lookup_paths(["frontend-modern/src/components/shared/TagBadges.tsx"])
+        self.assertEqual(result["unowned_runtime_files"], [])
+        self.assertEqual(
+            {item["subsystem"] for item in result["impacted_subsystems"]},
+            {"frontend-primitives"},
+        )
+        file_entry = result["files"][0]
+        self.assertEqual(file_entry["classification"], "runtime")
+        self.assertEqual(
+            {match["subsystem"] for match in file_entry["matches"]},
+            {"frontend-primitives"},
+        )
+        match = file_entry["matches"][0]
+        self.assertEqual(
+            match["contract"],
+            "docs/release-control/v6/internal/subsystems/frontend-primitives.md",
+        )
+        self.assertEqual(match["lane_context"]["lane_id"], "L8")
+        self.assertEqual(
+            match["verification_requirement"]["id"],
+            "shared-component-guardrails",
+        )
+
     def test_lookup_paths_assigns_organization_billing_panel_to_cloud_paid(self) -> None:
         result = lookup_paths(["frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx"])
         self.assertEqual(result["unowned_runtime_files"], [])

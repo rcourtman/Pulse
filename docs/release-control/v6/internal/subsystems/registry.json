@@ -2088,6 +2088,7 @@
               "frontend-modern/src/components/shared/__tests__/PulseDataGrid.test.tsx",
               "frontend-modern/src/components/shared/__tests__/SearchField.test.tsx",
               "frontend-modern/src/components/shared/__tests__/SearchInput.test.tsx",
+              "frontend-modern/src/components/shared/__tests__/TagBadges.test.tsx",
               "frontend-modern/src/components/shared/__tests__/WhatsNewModal.test.tsx",
               "frontend-modern/src/components/shared/ColumnPicker.test.tsx",
               "frontend-modern/src/components/shared/FilterToolbar.test.tsx",

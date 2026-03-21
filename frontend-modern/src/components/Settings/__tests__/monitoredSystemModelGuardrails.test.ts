@@ -507,8 +507,8 @@ describe('monitored-system model guardrails', () => {
     expect(aiSettingsPresentationSource).toContain('export function getAISettingsLoadingState');
     expect(aiSettingsPresentationSource).toContain('export function getAISettingsLoadErrorMessage');
     expect(aiSettingsPresentationSource).toContain('export function getAISettingsRetryLabel');
-    expect(aiSettingsSource).toContain('SelectionCardGroup');
-    expect(aiSettingsSource).toContain('variant="compact"');
+    expect(aiSettingsDialogsSource).toContain('SelectionCardGroup');
+    expect(aiSettingsDialogsSource).toContain('variant="compact"');
     expect(updatesSettingsPanelSource).toContain('SelectionCardGroup');
     expect(updatesSettingsPanelSource).toContain('variant="detail"');
     expect(aiSettingsPresentationSource).toContain('export function getAIChatSessionsLoadingState');

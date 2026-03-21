@@ -137,6 +137,11 @@ The subsystem registry now also requires explicit proof-policy coverage for all
 shared runtime files, and shared-component guardrails fail if raw table
 composition is reintroduced in new shared components outside the canonical
 allowlist.
+`frontend-modern/src/components/shared/TagBadges.tsx` is now also the
+canonical tag-badge primitive. Dashboard workload rows and the unified-resource
+detail drawer must import that shared owner instead of keeping a dashboard-local
+tag badge variant or importing a feature-local path into infrastructure
+surfaces.
 The system logs operations surface now follows the same shell/runtime split as
 the other modernized settings panels: `frontend-modern/src/components/Settings/SystemLogsPanel.tsx`
 owns the operations framing and presentation helpers, while

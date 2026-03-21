@@ -3,6 +3,7 @@ import { fireEvent, render, screen, within } from '@solidjs/testing-library';
 
 import discoveryTabSource from '@/components/Discovery/DiscoveryTab.tsx?raw';
 import discoveryTabStateSource from '@/components/Discovery/useDiscoveryTabState.ts?raw';
+import resourceDetailDrawerSource from '@/components/Infrastructure/ResourceDetailDrawer.tsx?raw';
 import type { Resource } from '@/types/resource';
 import { ResourceDetailDrawer } from '@/components/Infrastructure/ResourceDetailDrawer';
 
@@ -108,6 +109,10 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(discoveryTabSource).not.toContain('getConnectedAgents(');
     expect(discoveryTabSource).not.toContain('triggerDiscovery(');
     expect(discoveryTabSource).not.toContain('updateDiscoveryNotes(');
+    expect(resourceDetailDrawerSource).toContain("from '@/components/shared/TagBadges'");
+    expect(resourceDetailDrawerSource).not.toContain(
+      "from '@/components/Dashboard/TagBadges'",
+    );
   });
 
   it('keeps compact timeline summary chips in overview while showing one embedded change history section', async () => {

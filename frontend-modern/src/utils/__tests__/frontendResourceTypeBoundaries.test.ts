@@ -11,6 +11,7 @@ import resourceBadgesSource from '@/components/Infrastructure/resourceBadges.ts?
 import infrastructureSummaryTableSource from '@/components/shared/InfrastructureSummaryTable.tsx?raw';
 import resourceBadgePresentationSource from '@/utils/resourceBadgePresentation.ts?raw';
 import workloadTypeBadgesSource from '@/components/shared/workloadTypeBadges.ts?raw';
+import tagBadgesSource from '@/components/shared/TagBadges.tsx?raw';
 import emptyStateSource from '@/components/shared/EmptyState.tsx?raw';
 import webInterfaceUrlFieldSource from '@/components/shared/WebInterfaceUrlField.tsx?raw';
 import workloadTypePresentationSource from '@/utils/workloadTypePresentation.ts?raw';
@@ -597,6 +598,8 @@ describe('frontend resource type boundaries', () => {
     expect(storageSummarySource).not.toContain("getOrgID() || 'default'");
     expect(guestRowSource).toContain('useGuestRowState');
     expect(guestRowSource).toContain("from './GuestRowCells'");
+    expect(guestRowSource).toContain("from '@/components/shared/TagBadges'");
+    expect(guestRowSource).not.toContain("from './TagBadges'");
     expect(guestRowSource).not.toContain('const guestId = createMemo(');
     expect(guestRowSource).not.toContain('function NetworkInfoCell(');
     expect(guestRowSource).not.toContain('function OSInfoCell(');
@@ -606,6 +609,11 @@ describe('frontend resource type boundaries', () => {
     expect(guestRowCellsSource).toContain('function OSInfoCell(');
     expect(guestRowCellsSource).toContain('useTooltip');
     expect(guestRowSource).not.toContain('buildGuestId');
+    expect(tagBadgesSource).toContain("from '@/components/shared/Tooltip'");
+    expect(resourceDetailDrawerShellSource).toContain("from '@/components/shared/TagBadges'");
+    expect(resourceDetailDrawerShellSource).not.toContain(
+      "from '@/components/Dashboard/TagBadges'",
+    );
     expect(guestDrawerSource).toContain('useGuestDrawerState');
     expect(guestDrawerSource).toContain('GuestDrawerOverview');
     expect(guestDrawerStateSource).toContain('getCanonicalWorkloadId');

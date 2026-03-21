@@ -3,7 +3,6 @@ import { useNavigate } from '@solidjs/router';
 import type { VM } from '@/types/api';
 import type { WorkloadGuest } from '@/types/workloads';
 import { formatUptime, formatSpeed, getShortImageName } from '@/utils/format';
-import { TagBadges } from './TagBadges';
 import { StackedDiskBar } from './StackedDiskBar';
 import { StackedMemoryBar } from './StackedMemoryBar';
 import {
@@ -15,6 +14,7 @@ import {
 } from './GuestRowCells';
 
 import { StatusDot } from '@/components/shared/StatusDot';
+import { TagBadges } from '@/components/shared/TagBadges';
 import { resolveWorkloadType } from '@/utils/workloads';
 import { EnhancedCPUBar } from '@/components/Dashboard/EnhancedCPUBar';
 import { UpdateButton } from '@/components/shared/ContainerUpdateBadge';
