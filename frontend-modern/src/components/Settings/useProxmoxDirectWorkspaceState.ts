@@ -6,7 +6,7 @@ import {
 } from '@/utils/proxmoxSettingsPresentation';
 import type { NodeConfig, NodeConfigWithStatus } from '@/types/nodes';
 import type { ProxmoxSettingsPanelProps } from './proxmoxSettingsModel';
-import type { DiscoveredServer, NodeType } from './useInfrastructureSettingsState';
+import type { DiscoveredServer, NodeType } from './infrastructureSettingsModel';
 
 export function useProxmoxDirectWorkspaceState(props: ProxmoxSettingsPanelProps) {
   const [prefillNode, setPrefillNode] = createSignal<Partial<NodeConfig> | null>(null);

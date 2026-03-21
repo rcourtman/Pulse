@@ -1998,6 +1998,135 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
             "frontend-modern/src/components/Settings/useInfrastructureSettingsState.ts"
         )
 
+    def test_infrastructure_settings_model_change_requires_agent_lifecycle(self):
+        self._assert_direct_proxmox_workspace_change_requires_agent_lifecycle(
+            "frontend-modern/src/components/Settings/infrastructureSettingsModel.ts"
+        )
+
+    def test_infrastructure_configured_nodes_state_change_requires_lifecycle_and_api_contracts(
+        self,
+    ):
+        required = infer_impacted_subsystems(
+            ["frontend-modern/src/components/Settings/useInfrastructureConfiguredNodesState.ts"]
+        )
+        self.assertEqual(set(required), {"agent-lifecycle", "api-contracts"})
+
+        lifecycle = required["agent-lifecycle"]
+        self.assertEqual(
+            lifecycle["touched_runtime_files"],
+            ["frontend-modern/src/components/Settings/useInfrastructureConfiguredNodesState.ts"],
+        )
+        self.assertEqual(
+            lifecycle["verification_requirements"],
+            [
+                {
+                    "id": "direct-proxmox-workspace-surface",
+                    "label": "direct Proxmox workspace lifecycle proof",
+                    "touched_runtime_files": [
+                        "frontend-modern/src/components/Settings/useInfrastructureConfiguredNodesState.ts"
+                    ],
+                    "allow_same_subsystem_tests": False,
+                    "test_prefixes": [],
+                    "exact_files": [
+                        "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsController.test.tsx",
+                        "frontend-modern/src/components/Settings/__tests__/InfrastructureWorkspace.test.tsx",
+                        "frontend-modern/src/components/Settings/__tests__/monitoredSystemModelGuardrails.test.ts",
+                        "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
+                        "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
+                    ],
+                }
+            ],
+        )
+
+        api_contracts = required["api-contracts"]
+        self.assertEqual(
+            api_contracts["touched_runtime_files"],
+            ["frontend-modern/src/components/Settings/useInfrastructureConfiguredNodesState.ts"],
+        )
+        self.assertEqual(
+            api_contracts["verification_requirements"],
+            [
+                {
+                    "id": "unified-agent-settings-surface",
+                    "label": "infrastructure operations API proof",
+                    "touched_runtime_files": [
+                        "frontend-modern/src/components/Settings/useInfrastructureConfiguredNodesState.ts"
+                    ],
+                    "allow_same_subsystem_tests": False,
+                    "test_prefixes": [],
+                    "exact_files": [
+                        "frontend-modern/src/api/__tests__/agentProfiles.test.ts",
+                        "frontend-modern/src/api/__tests__/monitoring.test.ts",
+                        "frontend-modern/src/api/__tests__/security.test.ts",
+                        "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsController.test.tsx",
+                        "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsModel.test.tsx",
+                    ],
+                }
+            ],
+        )
+
+    def test_infrastructure_discovery_runtime_state_change_requires_lifecycle_and_api_contracts(
+        self,
+    ):
+        required = infer_impacted_subsystems(
+            ["frontend-modern/src/components/Settings/useInfrastructureDiscoveryRuntimeState.ts"]
+        )
+        self.assertEqual(set(required), {"agent-lifecycle", "api-contracts"})
+
+        lifecycle = required["agent-lifecycle"]
+        self.assertEqual(
+            lifecycle["touched_runtime_files"],
+            ["frontend-modern/src/components/Settings/useInfrastructureDiscoveryRuntimeState.ts"],
+        )
+        self.assertEqual(
+            lifecycle["verification_requirements"],
+            [
+                {
+                    "id": "direct-proxmox-workspace-surface",
+                    "label": "direct Proxmox workspace lifecycle proof",
+                    "touched_runtime_files": [
+                        "frontend-modern/src/components/Settings/useInfrastructureDiscoveryRuntimeState.ts"
+                    ],
+                    "allow_same_subsystem_tests": False,
+                    "test_prefixes": [],
+                    "exact_files": [
+                        "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsController.test.tsx",
+                        "frontend-modern/src/components/Settings/__tests__/InfrastructureWorkspace.test.tsx",
+                        "frontend-modern/src/components/Settings/__tests__/monitoredSystemModelGuardrails.test.ts",
+                        "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
+                        "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
+                    ],
+                }
+            ],
+        )
+
+        api_contracts = required["api-contracts"]
+        self.assertEqual(
+            api_contracts["touched_runtime_files"],
+            ["frontend-modern/src/components/Settings/useInfrastructureDiscoveryRuntimeState.ts"],
+        )
+        self.assertEqual(
+            api_contracts["verification_requirements"],
+            [
+                {
+                    "id": "unified-agent-settings-surface",
+                    "label": "infrastructure operations API proof",
+                    "touched_runtime_files": [
+                        "frontend-modern/src/components/Settings/useInfrastructureDiscoveryRuntimeState.ts"
+                    ],
+                    "allow_same_subsystem_tests": False,
+                    "test_prefixes": [],
+                    "exact_files": [
+                        "frontend-modern/src/api/__tests__/agentProfiles.test.ts",
+                        "frontend-modern/src/api/__tests__/monitoring.test.ts",
+                        "frontend-modern/src/api/__tests__/security.test.ts",
+                        "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsController.test.tsx",
+                        "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsModel.test.tsx",
+                    ],
+                }
+            ],
+        )
+
     def test_infrastructure_workspace_model_change_requires_agent_lifecycle(self):
         self._assert_direct_proxmox_workspace_change_requires_agent_lifecycle(
             "frontend-modern/src/components/Settings/infrastructureWorkspaceModel.ts"

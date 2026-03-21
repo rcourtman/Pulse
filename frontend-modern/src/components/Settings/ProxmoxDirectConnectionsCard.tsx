@@ -7,7 +7,7 @@ import type { ToggleChangeEvent } from '@/components/shared/Toggle';
 import { getSettingsConfigurationLoadingState } from '@/utils/settingsShellPresentation';
 import type { ProxmoxVariantPresentation } from '@/utils/proxmoxSettingsPresentation';
 import type { NodeConfigWithStatus } from '@/types/nodes';
-import type { DiscoveredServer, NodeType } from './useInfrastructureSettingsState';
+import type { DiscoveredServer, NodeType } from './infrastructureSettingsModel';
 
 interface ProxmoxDirectConnectionsCardProps {
   activeAgent: NodeType;

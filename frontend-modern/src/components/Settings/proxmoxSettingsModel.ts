@@ -7,7 +7,7 @@ import type {
   DiscoveredServer,
   DiscoveryScanStatus,
   NodeType,
-} from './useInfrastructureSettingsState';
+} from './infrastructureSettingsModel';
 
 export type DiscoveryMode = 'auto' | 'custom';
 

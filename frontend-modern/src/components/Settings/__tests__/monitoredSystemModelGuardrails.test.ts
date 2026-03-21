@@ -11,6 +11,9 @@ import infrastructureInventorySectionSource from '../InfrastructureInventorySect
 import infrastructureInstallStateSource from '../useInfrastructureInstallState.tsx?raw';
 import infrastructureOperationsStateSource from '../useInfrastructureOperationsState.tsx?raw';
 import infrastructureReportingStateSource from '../useInfrastructureReportingState.tsx?raw';
+import infrastructureSettingsModelSource from '../infrastructureSettingsModel.ts?raw';
+import infrastructureConfiguredNodesStateSource from '../useInfrastructureConfiguredNodesState.ts?raw';
+import infrastructureDiscoveryRuntimeStateSource from '../useInfrastructureDiscoveryRuntimeState.ts?raw';
 import infrastructureStopMonitoringDialogSource from '../InfrastructureStopMonitoringDialog.tsx?raw';
 import agentLedgerPanelSource from '../MonitoredSystemLedgerPanel.tsx?raw';
 import alertsPageSource from '@/pages/Alerts.tsx?raw';
@@ -160,6 +163,7 @@ import proxmoxDirectConnectionsCardSource from '../ProxmoxDirectConnectionsCard.
 import proxmoxDiscoveryResultsCardSource from '../ProxmoxDiscoveryResultsCard.tsx?raw';
 import proxmoxNodeModalStackSource from '../ProxmoxNodeModalStack.tsx?raw';
 import proxmoxSettingsPanelSource from '../ProxmoxSettingsPanel.tsx?raw';
+import proxmoxSettingsModelSource from '../proxmoxSettingsModel.ts?raw';
 import proxmoxDirectWorkspaceStateSource from '../useProxmoxDirectWorkspaceState.ts?raw';
 import relayOnboardingCardSource from '@/components/Dashboard/RelayOnboardingCard.tsx?raw';
 import generalSettingsPanelSource from '../GeneralSettingsPanel.tsx?raw';
@@ -380,6 +384,21 @@ describe('monitored-system model guardrails', () => {
     expect(proxmoxDeleteNodeDialogSource).toContain('SectionHeader');
     expect(proxmoxNodeModalStackSource).toContain('<NodeModal');
     expect(proxmoxDirectWorkspaceStateSource).toContain('buildProxmoxDiscoveryPrefillNode');
+    expect(proxmoxSettingsModelSource).toContain('./infrastructureSettingsModel');
+    expect(infrastructureSettingsStateSource).toContain('./useInfrastructureConfiguredNodesState');
+    expect(infrastructureSettingsStateSource).toContain('./useInfrastructureDiscoveryRuntimeState');
+    expect(infrastructureSettingsStateSource).not.toContain('NodesAPI.getNodes');
+    expect(infrastructureSettingsStateSource).not.toContain('SettingsAPI.updateSystemSettings');
+    expect(infrastructureConfiguredNodesStateSource).toContain('NodesAPI.getNodes');
+    expect(infrastructureConfiguredNodesStateSource).toContain('NodesAPI.deleteNode');
+    expect(infrastructureConfiguredNodesStateSource).toContain('NodesAPI.refreshClusterNodes');
+    expect(infrastructureConfiguredNodesStateSource).not.toContain("apiFetch('/api/discover'");
+    expect(infrastructureDiscoveryRuntimeStateSource).toContain("apiFetch('/api/discover'");
+    expect(infrastructureDiscoveryRuntimeStateSource).toContain('SettingsAPI.updateSystemSettings');
+    expect(infrastructureDiscoveryRuntimeStateSource).toContain("eventBus.on('discovery_status'");
+    expect(infrastructureDiscoveryRuntimeStateSource).not.toContain('NodesAPI.getNodes');
+    expect(infrastructureSettingsModelSource).toContain('collectConfiguredInfrastructureHosts');
+    expect(infrastructureSettingsModelSource).toContain('matchConfiguredNodeToResource');
     expect(relayOnboardingCardSource).toContain('@/utils/relayPresentation');
     expect(relayOnboardingCardSource).toContain('RELAY_ONBOARDING_TITLE');
     expect(relayOnboardingCardSource).toContain('RELAY_ONBOARDING_DESCRIPTION');
@@ -1380,28 +1399,32 @@ describe('monitored-system model guardrails', () => {
     expect(settingsSource).not.toContain(
       "stateHosts={(state.resources ?? []).filter((r) => r.type === 'host')}",
     );
-    expect(infrastructureSettingsStateSource).toContain(
+    expect(infrastructureDiscoveryRuntimeStateSource).toContain(
       '@/utils/infrastructureSettingsPresentation',
     );
-    expect(infrastructureSettingsStateSource).toContain('getDiscoveryScanStartErrorMessage');
-    expect(infrastructureSettingsStateSource).toContain('getDiscoverySettingUpdateErrorMessage');
-    expect(infrastructureSettingsStateSource).toContain('getDiscoverySubnetUpdateErrorMessage');
-    expect(infrastructureSettingsStateSource).toContain(
+    expect(infrastructureDiscoveryRuntimeStateSource).toContain('getDiscoveryScanStartErrorMessage');
+    expect(infrastructureDiscoveryRuntimeStateSource).toContain(
+      'getDiscoverySettingUpdateErrorMessage',
+    );
+    expect(infrastructureDiscoveryRuntimeStateSource).toContain(
+      'getDiscoverySubnetUpdateErrorMessage',
+    );
+    expect(infrastructureConfiguredNodesStateSource).toContain(
       'getNodeTemperatureMonitoringUpdateErrorMessage',
     );
-    expect(infrastructureSettingsStateSource).not.toContain(
+    expect(infrastructureDiscoveryRuntimeStateSource).not.toContain(
       "notificationStore.error('Failed to start discovery scan')",
     );
-    expect(infrastructureSettingsStateSource).not.toContain(
+    expect(infrastructureDiscoveryRuntimeStateSource).not.toContain(
       "notificationStore.error('Failed to update discovery setting')",
     );
-    expect(infrastructureSettingsStateSource).not.toContain(
+    expect(infrastructureDiscoveryRuntimeStateSource).not.toContain(
       "notificationStore.error('Failed to update discovery subnet')",
     );
-    expect(infrastructureSettingsStateSource).not.toContain(
+    expect(infrastructureConfiguredNodesStateSource).not.toContain(
       "notificationStore.error(error instanceof Error ? error.message : 'Failed to update temperature monitoring setting')",
     );
-    expect(infrastructureSettingsStateSource).not.toContain(
+    expect(infrastructureConfiguredNodesStateSource).not.toContain(
       "notificationStore.error(error instanceof Error ? error.message : 'Failed to delete node')",
     );
     expect(infrastructureSettingsStateSource).not.toContain("byType('host')");

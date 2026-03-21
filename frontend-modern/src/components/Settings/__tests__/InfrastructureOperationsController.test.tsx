@@ -14,6 +14,8 @@ import infrastructureInventorySectionSource from '../InfrastructureInventorySect
 import infrastructureInstallStateSource from '../useInfrastructureInstallState.tsx?raw';
 import infrastructureOperationsStateSource from '../useInfrastructureOperationsState.tsx?raw';
 import infrastructureReportingStateSource from '../useInfrastructureReportingState.tsx?raw';
+import infrastructureConfiguredNodesStateSource from '../useInfrastructureConfiguredNodesState.ts?raw';
+import infrastructureDiscoveryRuntimeStateSource from '../useInfrastructureDiscoveryRuntimeState.ts?raw';
 import infrastructureStopMonitoringDialogSource from '../InfrastructureStopMonitoringDialog.tsx?raw';
 import type {
   Agent,
@@ -86,6 +88,19 @@ describe('InfrastructureOperationsController ownership guardrails', () => {
     expect(infrastructureInstallStateSource).toContain('export const useInfrastructureInstallState');
     expect(infrastructureReportingStateSource).toContain(
       'export const useInfrastructureReportingState',
+    );
+    expect(infrastructureConfiguredNodesStateSource).toContain(
+      'export const useInfrastructureConfiguredNodesState',
+    );
+    expect(infrastructureConfiguredNodesStateSource).toContain('NodesAPI.getNodes');
+    expect(infrastructureConfiguredNodesStateSource).toContain('NodesAPI.updateNode');
+    expect(infrastructureConfiguredNodesStateSource).toContain('NodesAPI.deleteNode');
+    expect(infrastructureDiscoveryRuntimeStateSource).toContain(
+      'export const useInfrastructureDiscoveryRuntimeState',
+    );
+    expect(infrastructureDiscoveryRuntimeStateSource).toContain("apiFetch('/api/discover'");
+    expect(infrastructureDiscoveryRuntimeStateSource).toContain(
+      'SettingsAPI.updateSystemSettings',
     );
     expect(infrastructureInstallerSectionSource).toContain('useInfrastructureOperationsContext');
     expect(infrastructureInventorySectionSource).toContain('useInfrastructureOperationsContext');

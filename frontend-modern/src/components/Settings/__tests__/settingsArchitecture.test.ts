@@ -23,6 +23,10 @@ import nodeModalSource from '../NodeModal.tsx?raw';
 import infrastructureInstallStateSource from '../useInfrastructureInstallState.tsx?raw';
 import infrastructureOperationsStateSource from '../useInfrastructureOperationsState.tsx?raw';
 import infrastructureReportingStateSource from '../useInfrastructureReportingState.tsx?raw';
+import infrastructureSettingsStateSource from '../useInfrastructureSettingsState.ts?raw';
+import infrastructureSettingsModelSource from '../infrastructureSettingsModel.ts?raw';
+import infrastructureConfiguredNodesStateSource from '../useInfrastructureConfiguredNodesState.ts?raw';
+import infrastructureDiscoveryRuntimeStateSource from '../useInfrastructureDiscoveryRuntimeState.ts?raw';
 import nodeModalStateSource from '../useNodeModalState.ts?raw';
 import settingsPanelRegistryHookSource from '../useSettingsPanelRegistry.tsx?raw';
 import settingsSystemPanelsSource from '../useSettingsSystemPanels.tsx?raw';
@@ -129,6 +133,9 @@ const extractedModules = [
   '../useInfrastructureInstallState.tsx',
   '../useInfrastructureOperationsState.tsx',
   '../useInfrastructureReportingState.tsx',
+  '../infrastructureSettingsModel.ts',
+  '../useInfrastructureConfiguredNodesState.ts',
+  '../useInfrastructureDiscoveryRuntimeState.ts',
   '../apiTokenManagerModel.ts',
   '../useAPITokenManagerState.ts',
   '../useAuditLogPanelState.ts',
@@ -553,6 +560,7 @@ describe('Settings architecture guardrails', () => {
     expect(proxmoxNodeModalStackSource).toContain('PROXMOX_NODE_TYPES');
     expect(proxmoxNodeModalStackSource).toContain('<NodeModal');
     expect(proxmoxSettingsModelSource).toContain('export interface ProxmoxSettingsPanelProps');
+    expect(proxmoxSettingsModelSource).toContain('./infrastructureSettingsModel');
     expect(proxmoxDirectWorkspaceStateSource).toContain(
       'export function useProxmoxDirectWorkspaceState',
     );
@@ -744,6 +752,37 @@ describe('Settings architecture guardrails', () => {
       'export const rowFromConnectedInfrastructureItem',
     );
     expect(infrastructureOperationsModelSource).toContain('export const buildCommandsByPlatform');
+  });
+
+  it('keeps infrastructure settings split into composition, node, discovery, and model owners', () => {
+    expect(infrastructureSettingsStateSource).toContain('./useInfrastructureConfiguredNodesState');
+    expect(infrastructureSettingsStateSource).toContain('./useInfrastructureDiscoveryRuntimeState');
+    expect(infrastructureSettingsStateSource).toContain("from './infrastructureSettingsModel'");
+    expect(infrastructureSettingsStateSource).not.toContain('NodesAPI.getNodes');
+    expect(infrastructureSettingsStateSource).not.toContain('SettingsAPI.updateSystemSettings');
+    expect(infrastructureSettingsStateSource).not.toContain("const [nodes, setNodes] = createSignal");
+    expect(infrastructureSettingsStateSource).not.toContain(
+      "const [discoveredNodes, setDiscoveredNodes] = createSignal",
+    );
+    expect(infrastructureConfiguredNodesStateSource).toContain('export const useInfrastructureConfiguredNodesState');
+    expect(infrastructureConfiguredNodesStateSource).toContain('NodesAPI.getNodes');
+    expect(infrastructureConfiguredNodesStateSource).toContain('NodesAPI.updateNode');
+    expect(infrastructureConfiguredNodesStateSource).toContain('NodesAPI.deleteNode');
+    expect(infrastructureConfiguredNodesStateSource).toContain('NodesAPI.refreshClusterNodes');
+    expect(infrastructureConfiguredNodesStateSource).not.toContain("apiFetch('/api/discover'");
+    expect(infrastructureConfiguredNodesStateSource).not.toContain('SettingsAPI.updateSystemSettings');
+    expect(infrastructureDiscoveryRuntimeStateSource).toContain(
+      'export const useInfrastructureDiscoveryRuntimeState',
+    );
+    expect(infrastructureDiscoveryRuntimeStateSource).toContain("apiFetch('/api/discover'");
+    expect(infrastructureDiscoveryRuntimeStateSource).toContain('SettingsAPI.updateSystemSettings');
+    expect(infrastructureDiscoveryRuntimeStateSource).toContain("eventBus.on('discovery_updated'");
+    expect(infrastructureDiscoveryRuntimeStateSource).not.toContain('NodesAPI.getNodes');
+    expect(infrastructureSettingsModelSource).toContain('export interface DiscoveredServer');
+    expect(infrastructureSettingsModelSource).toContain('export type NodeType =');
+    expect(infrastructureSettingsModelSource).toContain(
+      'export const matchConfiguredNodeToResource =',
+    );
   });
 
   it('keeps the API token manager shell behind extracted state and model owners', () => {

@@ -4,7 +4,7 @@ import Loader from 'lucide-solid/icons/loader';
 import { Card } from '@/components/shared/Card';
 import { formatRelativeTime } from '@/utils/format';
 import type { ProxmoxVariantPresentation } from '@/utils/proxmoxSettingsPresentation';
-import type { DiscoveryScanStatus, DiscoveredServer } from './useInfrastructureSettingsState';
+import type { DiscoveryScanStatus, DiscoveredServer } from './infrastructureSettingsModel';
 
 interface ProxmoxDiscoveryResultsCardProps {
   activeConfig: ProxmoxVariantPresentation;

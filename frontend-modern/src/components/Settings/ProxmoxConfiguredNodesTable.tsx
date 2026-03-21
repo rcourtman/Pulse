@@ -3,7 +3,7 @@ import type { Resource } from '@/types/resource';
 import type { PBSInstance, PMGInstance } from '@/types/api';
 import type { NodeConfigWithStatus } from '@/types/nodes';
 import { PveNodesTable, PbsNodesTable, PmgNodesTable } from './ConfiguredNodeTables';
-import type { NodeType } from './useInfrastructureSettingsState';
+import type { NodeType } from './infrastructureSettingsModel';
 
 interface ProxmoxConfiguredNodesTableProps {
   activeAgent: NodeType;

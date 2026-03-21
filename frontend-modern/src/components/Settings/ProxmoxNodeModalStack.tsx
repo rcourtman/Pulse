@@ -2,7 +2,7 @@ import { Show, type Component } from 'solid-js';
 import type { NodeConfig, NodeConfigWithStatus } from '@/types/nodes';
 import type { SecurityStatus as SecurityStatusInfo } from '@/types/config';
 import { NodeModal } from './NodeModal';
-import type { NodeType } from './useInfrastructureSettingsState';
+import type { NodeType } from './infrastructureSettingsModel';
 
 interface ProxmoxNodeModalStackProps {
   modalResetKey: number;

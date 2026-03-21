@@ -210,6 +210,22 @@
       ]
     },
     {
+      "path": "frontend-modern/src/components/Settings/useInfrastructureConfiguredNodesState.ts",
+      "rationale": "the direct-node infrastructure settings state hook is both an agent lifecycle control surface and a shared Proxmox node API contract boundary",
+      "subsystems": [
+        "agent-lifecycle",
+        "api-contracts"
+      ]
+    },
+    {
+      "path": "frontend-modern/src/components/Settings/useInfrastructureDiscoveryRuntimeState.ts",
+      "rationale": "the infrastructure discovery runtime state hook is both an agent lifecycle control surface and a shared discovery/settings API contract boundary",
+      "subsystems": [
+        "agent-lifecycle",
+        "api-contracts"
+      ]
+    },
+    {
       "path": "frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx",
       "rationale": "the infrastructure install state hook is both an agent fleet lifecycle control surface and an API token, lookup, and install transport contract boundary",
       "subsystems": [
@@ -426,6 +442,7 @@
         "frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx",
         "frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx",
         "frontend-modern/src/components/Settings/InfrastructureReportingPanel.tsx",
+        "frontend-modern/src/components/Settings/infrastructureSettingsModel.ts",
         "frontend-modern/src/components/Settings/InfrastructureStopMonitoringDialog.tsx",
         "frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx",
         "frontend-modern/src/components/Settings/infrastructureWorkspaceModel.ts",
@@ -446,6 +463,8 @@
         "frontend-modern/src/components/Settings/ProxmoxSettingsPanel.tsx",
         "frontend-modern/src/components/Settings/SettingsSectionNav.tsx",
         "frontend-modern/src/components/Settings/useAgentProfilesPanelState.ts",
+        "frontend-modern/src/components/Settings/useInfrastructureConfiguredNodesState.ts",
+        "frontend-modern/src/components/Settings/useInfrastructureDiscoveryRuntimeState.ts",
         "frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx",
         "frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx",
         "frontend-modern/src/components/Settings/useInfrastructureReportingState.tsx",
@@ -684,6 +703,7 @@
               "frontend-modern/src/components/Settings/InfrastructureDirectConnectionsSummaryCard.tsx",
               "frontend-modern/src/components/Settings/InfrastructureInstallPanel.tsx",
               "frontend-modern/src/components/Settings/InfrastructureReportingPanel.tsx",
+              "frontend-modern/src/components/Settings/infrastructureSettingsModel.ts",
               "frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx",
               "frontend-modern/src/components/Settings/infrastructureWorkspaceModel.ts",
               "frontend-modern/src/components/Settings/ProxmoxConfiguredNodesTable.tsx",
@@ -695,6 +715,8 @@
               "frontend-modern/src/components/Settings/proxmoxSettingsModel.ts",
               "frontend-modern/src/components/Settings/ProxmoxSettingsPanel.tsx",
               "frontend-modern/src/components/Settings/SettingsSectionNav.tsx",
+              "frontend-modern/src/components/Settings/useInfrastructureConfiguredNodesState.ts",
+              "frontend-modern/src/components/Settings/useInfrastructureDiscoveryRuntimeState.ts",
               "frontend-modern/src/components/Settings/useInfrastructureSettingsState.ts",
               "frontend-modern/src/components/Settings/useProxmoxDirectWorkspaceState.ts"
             ],
@@ -900,6 +922,8 @@
         "frontend-modern/src/components/Settings/NodeModalSetupGuideSection.tsx",
         "frontend-modern/src/components/Settings/NodeModalStatusFooter.tsx",
         "frontend-modern/src/components/Settings/useAPITokenManagerState.ts",
+        "frontend-modern/src/components/Settings/useInfrastructureConfiguredNodesState.ts",
+        "frontend-modern/src/components/Settings/useInfrastructureDiscoveryRuntimeState.ts",
         "frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx",
         "frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx",
         "frontend-modern/src/components/Settings/useInfrastructureReportingState.tsx",
@@ -1138,6 +1162,8 @@
             "match_files": [
               "frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx",
               "frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx",
+              "frontend-modern/src/components/Settings/useInfrastructureConfiguredNodesState.ts",
+              "frontend-modern/src/components/Settings/useInfrastructureDiscoveryRuntimeState.ts",
               "frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx",
               "frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx",
               "frontend-modern/src/components/Settings/useInfrastructureReportingState.tsx"
