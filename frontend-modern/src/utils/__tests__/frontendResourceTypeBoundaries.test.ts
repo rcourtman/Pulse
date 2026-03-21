@@ -81,6 +81,7 @@ import recoveryTimelinePresentationSource from '@/utils/recoveryTimelinePresenta
 import dashboardSource from '@/components/Dashboard/Dashboard.tsx?raw';
 import dashboardFilterSource from '@/components/Dashboard/DashboardFilter.tsx?raw';
 import dashboardFilterModelSource from '@/components/Dashboard/dashboardFilterModel.ts?raw';
+import dashboardGuestMetadataStateSource from '@/components/Dashboard/useDashboardGuestMetadataState.ts?raw';
 import dashboardStateSource from '@/components/Dashboard/useDashboardState.ts?raw';
 import dashboardFilterStateSource from '@/components/Dashboard/useDashboardFilterState.ts?raw';
 import thresholdSliderModelSource from '@/components/Dashboard/thresholdSliderModel.ts?raw';
@@ -509,13 +510,17 @@ describe('frontend resource type boundaries', () => {
     expect(orgScopeSource).toContain('export const normalizeOrgScope');
     expect(dashboardSource).toContain('useDashboardState');
     expect(dashboardSource).not.toContain('const [search, setSearch] = createSignal(');
+    expect(dashboardStateSource).toContain('useDashboardGuestMetadataState');
     expect(dashboardStateSource).toContain('normalizeWorkloadViewModeParam');
     expect(dashboardSource).not.toContain('function normalizeViewModeParam');
     expect(dashboardSource).not.toContain('workloadSummaryGuestId');
     expect(dashboardSource).toContain('createMemo(() => getCanonicalWorkloadId(guest()))');
-    expect(dashboardStateSource).toContain('normalizeOrgScope(getOrgID())');
+    expect(dashboardGuestMetadataStateSource).toContain('normalizeOrgScope(getOrgID())');
     expect(dashboardStateSource).not.toContain("const DEFAULT_ORG_SCOPE = 'default'");
     expect(dashboardStateSource).not.toContain('const normalizeOrgScope =');
+    expect(dashboardStateSource).not.toContain('GuestMetadataAPI.getAllMetadata()');
+    expect(dashboardGuestMetadataStateSource).toContain('GuestMetadataAPI.getAllMetadata()');
+    expect(dashboardGuestMetadataStateSource).toContain("eventBus.on('org_switched'");
     expect(dashboardStateSource).not.toContain('const guestId = () => {');
     expect(dashboardFilterSource).toContain('useDashboardFilterState');
     expect(dashboardFilterSource).not.toContain('const [filtersOpen, setFiltersOpen] =');

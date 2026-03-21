@@ -6,6 +6,7 @@ import { Dashboard } from '../Dashboard';
 import dashboardSource from '../Dashboard.tsx?raw';
 import dashboardFilterSource from '../DashboardFilter.tsx?raw';
 import dashboardFilterModelSource from '../dashboardFilterModel.ts?raw';
+import dashboardGuestMetadataStateSource from '../useDashboardGuestMetadataState.ts?raw';
 import dashboardStateSource from '../useDashboardState.ts?raw';
 import dashboardFilterStateSource from '../useDashboardFilterState.ts?raw';
 import thresholdSliderSource from '../ThresholdSlider.tsx?raw';
@@ -480,7 +481,8 @@ describe('Dashboard performance contract', () => {
 
     it('routes org scope normalization through the shared helper', () => {
       expect(dashboardSource).toContain('useDashboardState');
-      expect(dashboardStateSource).toContain('normalizeOrgScope(getOrgID())');
+      expect(dashboardStateSource).toContain('useDashboardGuestMetadataState');
+      expect(dashboardGuestMetadataStateSource).toContain('normalizeOrgScope(getOrgID())');
       expect(dashboardStateSource).not.toContain("const DEFAULT_ORG_SCOPE = 'default'");
       expect(dashboardStateSource).not.toContain('const normalizeOrgScope =');
     });
@@ -488,10 +490,15 @@ describe('Dashboard performance contract', () => {
     it('keeps hot-path dashboard state in the shared dashboard state owner', () => {
       expect(dashboardSource).toContain('useDashboardState');
       expect(dashboardSource).not.toContain('const [search, setSearch] = createSignal(');
+      expect(dashboardStateSource).toContain('useDashboardGuestMetadataState');
       expect(dashboardStateSource).toContain('useGroupedTableWindowing');
       expect(dashboardStateSource).toContain('createWorkloadSortComparator');
       expect(dashboardStateSource).toContain("from './guestRowModel'");
       expect(dashboardStateSource).not.toContain("from './GuestRow'");
+      expect(dashboardStateSource).not.toContain('GuestMetadataAPI.getAllMetadata()');
+      expect(dashboardGuestMetadataStateSource).toContain('GuestMetadataAPI.getAllMetadata()');
+      expect(dashboardGuestMetadataStateSource).toContain("eventBus.on('org_switched'");
+      expect(dashboardGuestMetadataStateSource).toContain("window.addEventListener('pulse:metadata-changed'");
       expect(dashboardSource).toContain('createMemo(() => getCanonicalWorkloadId(guest()))');
       expect(dashboardStateSource).not.toContain('const guestId = () => {');
     });

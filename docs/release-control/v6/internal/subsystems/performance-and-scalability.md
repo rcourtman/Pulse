@@ -27,57 +27,58 @@ regression protection.
 5. `internal/api/slo_bench_test.go`
 6. `frontend-modern/src/components/Dashboard/Dashboard.tsx`
 7. `frontend-modern/src/components/Dashboard/useDashboardState.ts`
-8. `frontend-modern/src/components/Dashboard/DashboardFilter.tsx`
-9. `frontend-modern/src/components/Dashboard/dashboardFilterModel.ts`
-10. `frontend-modern/src/components/Dashboard/useDashboardFilterState.ts`
-11. `frontend-modern/src/components/Dashboard/ThresholdSlider.tsx`
-12. `frontend-modern/src/components/Dashboard/thresholdSliderModel.ts`
-13. `frontend-modern/src/components/Dashboard/useThresholdSliderState.ts`
-14. `frontend-modern/src/components/Dashboard/StackedDiskBar.tsx`
-15. `frontend-modern/src/components/Dashboard/stackedDiskBarModel.ts`
-16. `frontend-modern/src/components/Dashboard/useStackedDiskBarState.ts`
-17. `frontend-modern/src/components/Dashboard/StackedMemoryBar.tsx`
-18. `frontend-modern/src/components/Dashboard/stackedMemoryBarModel.ts`
-19. `frontend-modern/src/components/Dashboard/useStackedMemoryBarState.ts`
-20. `frontend-modern/src/components/Dashboard/MetricBar.tsx`
-21. `frontend-modern/src/components/Dashboard/metricBarModel.ts`
-22. `frontend-modern/src/components/Dashboard/useMetricBarState.ts`
-23. `frontend-modern/src/components/Dashboard/EnhancedCPUBar.tsx`
-24. `frontend-modern/src/components/Dashboard/enhancedCpuBarModel.ts`
-25. `frontend-modern/src/components/Dashboard/useEnhancedCPUBarState.ts`
-26. `frontend-modern/src/components/Dashboard/DiskList.tsx`
-27. `frontend-modern/src/components/Dashboard/diskListModel.ts`
-28. `frontend-modern/src/components/Dashboard/useDiskListState.ts`
-29. `frontend-modern/src/components/Dashboard/GuestRow.tsx`
-30. `frontend-modern/src/components/Dashboard/GuestRowCells.tsx`
-31. `frontend-modern/src/components/Dashboard/guestRowModel.tsx`
-32. `frontend-modern/src/components/Dashboard/useGuestRowState.ts`
-33. `frontend-modern/src/components/Dashboard/GuestDrawer.tsx`
-34. `frontend-modern/src/components/Dashboard/GuestDrawerOverview.tsx`
-35. `frontend-modern/src/components/Dashboard/guestDrawerModel.ts`
-36. `frontend-modern/src/components/Dashboard/useGuestDrawerState.ts`
-37. `frontend-modern/src/components/Dashboard/workloadSelectors.ts`
-38. `frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx`
-39. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`
-40. `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts`
-41. `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts`
-42. `frontend-modern/src/components/Dashboard/__tests__/Dashboard.performance.contract.test.tsx`
-43. `frontend-modern/src/components/Dashboard/__tests__/DashboardFilter.test.tsx`
-44. `frontend-modern/src/components/Dashboard/__tests__/useDashboardFilterState.test.ts`
-45. `frontend-modern/src/components/Dashboard/MetricBar.test.tsx`
-46. `frontend-modern/src/components/Dashboard/__tests__/useMetricBarState.test.tsx`
-47. `frontend-modern/src/components/Dashboard/__tests__/EnhancedCPUBar.test.tsx`
-48. `frontend-modern/src/components/Dashboard/__tests__/useEnhancedCPUBarState.test.tsx`
-49. `frontend-modern/src/components/Dashboard/ThresholdSlider.test.tsx`
-50. `frontend-modern/src/components/Dashboard/__tests__/useThresholdSliderState.test.ts`
-51. `frontend-modern/src/components/Dashboard/__tests__/StackedDiskBar.test.tsx`
-52. `frontend-modern/src/components/Dashboard/__tests__/useStackedDiskBarState.test.tsx`
-53. `frontend-modern/src/components/Dashboard/StackedMemoryBar.test.tsx`
-54. `frontend-modern/src/components/Dashboard/__tests__/useStackedMemoryBarState.test.tsx`
-55. `frontend-modern/src/components/Dashboard/__tests__/DiskList.test.tsx`
-56. `frontend-modern/src/components/Dashboard/__tests__/GuestRow.test.tsx`
-57. `frontend-modern/src/components/Dashboard/GuestDrawer.test.tsx`
-58. `frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx`
+8. `frontend-modern/src/components/Dashboard/useDashboardGuestMetadataState.ts`
+9. `frontend-modern/src/components/Dashboard/DashboardFilter.tsx`
+10. `frontend-modern/src/components/Dashboard/dashboardFilterModel.ts`
+11. `frontend-modern/src/components/Dashboard/useDashboardFilterState.ts`
+12. `frontend-modern/src/components/Dashboard/ThresholdSlider.tsx`
+13. `frontend-modern/src/components/Dashboard/thresholdSliderModel.ts`
+14. `frontend-modern/src/components/Dashboard/useThresholdSliderState.ts`
+15. `frontend-modern/src/components/Dashboard/StackedDiskBar.tsx`
+16. `frontend-modern/src/components/Dashboard/stackedDiskBarModel.ts`
+17. `frontend-modern/src/components/Dashboard/useStackedDiskBarState.ts`
+18. `frontend-modern/src/components/Dashboard/StackedMemoryBar.tsx`
+19. `frontend-modern/src/components/Dashboard/stackedMemoryBarModel.ts`
+20. `frontend-modern/src/components/Dashboard/useStackedMemoryBarState.ts`
+21. `frontend-modern/src/components/Dashboard/MetricBar.tsx`
+22. `frontend-modern/src/components/Dashboard/metricBarModel.ts`
+23. `frontend-modern/src/components/Dashboard/useMetricBarState.ts`
+24. `frontend-modern/src/components/Dashboard/EnhancedCPUBar.tsx`
+25. `frontend-modern/src/components/Dashboard/enhancedCpuBarModel.ts`
+26. `frontend-modern/src/components/Dashboard/useEnhancedCPUBarState.ts`
+27. `frontend-modern/src/components/Dashboard/DiskList.tsx`
+28. `frontend-modern/src/components/Dashboard/diskListModel.ts`
+29. `frontend-modern/src/components/Dashboard/useDiskListState.ts`
+30. `frontend-modern/src/components/Dashboard/GuestRow.tsx`
+31. `frontend-modern/src/components/Dashboard/GuestRowCells.tsx`
+32. `frontend-modern/src/components/Dashboard/guestRowModel.tsx`
+33. `frontend-modern/src/components/Dashboard/useGuestRowState.ts`
+34. `frontend-modern/src/components/Dashboard/GuestDrawer.tsx`
+35. `frontend-modern/src/components/Dashboard/GuestDrawerOverview.tsx`
+36. `frontend-modern/src/components/Dashboard/guestDrawerModel.ts`
+37. `frontend-modern/src/components/Dashboard/useGuestDrawerState.ts`
+38. `frontend-modern/src/components/Dashboard/workloadSelectors.ts`
+39. `frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx`
+40. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`
+41. `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts`
+42. `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts`
+43. `frontend-modern/src/components/Dashboard/__tests__/Dashboard.performance.contract.test.tsx`
+44. `frontend-modern/src/components/Dashboard/__tests__/DashboardFilter.test.tsx`
+45. `frontend-modern/src/components/Dashboard/__tests__/useDashboardFilterState.test.ts`
+46. `frontend-modern/src/components/Dashboard/MetricBar.test.tsx`
+47. `frontend-modern/src/components/Dashboard/__tests__/useMetricBarState.test.tsx`
+48. `frontend-modern/src/components/Dashboard/__tests__/EnhancedCPUBar.test.tsx`
+49. `frontend-modern/src/components/Dashboard/__tests__/useEnhancedCPUBarState.test.tsx`
+50. `frontend-modern/src/components/Dashboard/ThresholdSlider.test.tsx`
+51. `frontend-modern/src/components/Dashboard/__tests__/useThresholdSliderState.test.ts`
+52. `frontend-modern/src/components/Dashboard/__tests__/StackedDiskBar.test.tsx`
+53. `frontend-modern/src/components/Dashboard/__tests__/useStackedDiskBarState.test.tsx`
+54. `frontend-modern/src/components/Dashboard/StackedMemoryBar.test.tsx`
+55. `frontend-modern/src/components/Dashboard/__tests__/useStackedMemoryBarState.test.tsx`
+56. `frontend-modern/src/components/Dashboard/__tests__/DiskList.test.tsx`
+57. `frontend-modern/src/components/Dashboard/__tests__/GuestRow.test.tsx`
+58. `frontend-modern/src/components/Dashboard/GuestDrawer.test.tsx`
+59. `frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx`
 
 ## Shared Boundaries
 
@@ -100,12 +101,13 @@ regression protection.
 9. Extend dashboard row contract and per-row hot-path derivations through `frontend-modern/src/components/Dashboard/guestRowModel.tsx` and `frontend-modern/src/components/Dashboard/useGuestRowState.ts`, and extend tooltip-backed row cell presentation through `frontend-modern/src/components/Dashboard/GuestRowCells.tsx`, rather than rebuilding column metadata, row identity, cell tooltips, or anomaly correlation inside `frontend-modern/src/components/Dashboard/GuestRow.tsx`
 10. Extend dashboard drawer derivations and runtime wiring through `frontend-modern/src/components/Dashboard/guestDrawerModel.ts` and `frontend-modern/src/components/Dashboard/useGuestDrawerState.ts`, and extend drawer overview rendering through `frontend-modern/src/components/Dashboard/GuestDrawerOverview.tsx`, rather than rebuilding canonical guest identity, discovery routing, or drawer-local normalization inside `frontend-modern/src/components/Dashboard/GuestDrawer.tsx`
 11. Extend dashboard disk-list derivations and fallback runtime wiring through `frontend-modern/src/components/Dashboard/diskListModel.ts` and `frontend-modern/src/components/Dashboard/useDiskListState.ts` rather than rebuilding usage math, progress-state mapping, or tooltip fallback logic inside `frontend-modern/src/components/Dashboard/DiskList.tsx`
-12. Extend dashboard filter defaults, active-filter counting, reset semantics, and mobile toolbar state through `frontend-modern/src/components/Dashboard/dashboardFilterModel.ts` and `frontend-modern/src/components/Dashboard/useDashboardFilterState.ts`, and keep dashboard-owned filter-config assembly in `frontend-modern/src/components/Dashboard/useDashboardState.ts`, rather than rebuilding filter-local state inside `frontend-modern/src/components/Dashboard/DashboardFilter.tsx` or inline config IIFEs in `frontend-modern/src/components/Dashboard/Dashboard.tsx`
-13. Extend threshold-slider value-position math, title/label derivation, and drag scroll-lock runtime through `frontend-modern/src/components/Dashboard/thresholdSliderModel.ts` and `frontend-modern/src/components/Dashboard/useThresholdSliderState.ts` rather than rebuilding slider-local state and pointer lifecycle inside `frontend-modern/src/components/Dashboard/ThresholdSlider.tsx`
-14. Extend stacked disk-bar capacity math, segment/tooltip derivation, and resize-observer runtime through `frontend-modern/src/components/Dashboard/stackedDiskBarModel.ts` and `frontend-modern/src/components/Dashboard/useStackedDiskBarState.ts` rather than rebuilding disk-bar-local state, mode branching, and tooltip shaping inside `frontend-modern/src/components/Dashboard/StackedDiskBar.tsx`
-15. Extend stacked memory-bar capacity math, balloon/swap derivation, and resize-observer runtime through `frontend-modern/src/components/Dashboard/stackedMemoryBarModel.ts` and `frontend-modern/src/components/Dashboard/useStackedMemoryBarState.ts` rather than rebuilding memory-bar-local state, tooltip shaping, and label-fit logic inside `frontend-modern/src/components/Dashboard/StackedMemoryBar.tsx`
-16. Extend metric-bar width, label-fit logic, and resize-observer runtime through `frontend-modern/src/components/Dashboard/metricBarModel.ts` and `frontend-modern/src/components/Dashboard/useMetricBarState.ts` rather than rebuilding metric-local state and threshold mapping inside `frontend-modern/src/components/Dashboard/MetricBar.tsx`
-17. Extend enhanced CPU bar usage/anomaly presentation and tooltip runtime through `frontend-modern/src/components/Dashboard/enhancedCpuBarModel.ts` and `frontend-modern/src/components/Dashboard/useEnhancedCPUBarState.ts` rather than rebuilding tooltip-local state and CPU-threshold formatting inside `frontend-modern/src/components/Dashboard/EnhancedCPUBar.tsx`
+12. Extend dashboard guest metadata cache persistence, metadata refresh, org-scope switching, and optimistic custom-URL updates through `frontend-modern/src/components/Dashboard/useDashboardGuestMetadataState.ts` rather than rebuilding dashboard-local storage caches, event listeners, or guest metadata API wiring inside `frontend-modern/src/components/Dashboard/useDashboardState.ts`
+13. Extend dashboard filter defaults, active-filter counting, reset semantics, and mobile toolbar state through `frontend-modern/src/components/Dashboard/dashboardFilterModel.ts` and `frontend-modern/src/components/Dashboard/useDashboardFilterState.ts`, and keep dashboard-owned filter-config assembly in `frontend-modern/src/components/Dashboard/useDashboardState.ts`, rather than rebuilding filter-local state inside `frontend-modern/src/components/Dashboard/DashboardFilter.tsx` or inline config IIFEs in `frontend-modern/src/components/Dashboard/Dashboard.tsx`
+14. Extend threshold-slider value-position math, title/label derivation, and drag scroll-lock runtime through `frontend-modern/src/components/Dashboard/thresholdSliderModel.ts` and `frontend-modern/src/components/Dashboard/useThresholdSliderState.ts` rather than rebuilding slider-local state and pointer lifecycle inside `frontend-modern/src/components/Dashboard/ThresholdSlider.tsx`
+15. Extend stacked disk-bar capacity math, segment/tooltip derivation, and resize-observer runtime through `frontend-modern/src/components/Dashboard/stackedDiskBarModel.ts` and `frontend-modern/src/components/Dashboard/useStackedDiskBarState.ts` rather than rebuilding disk-bar-local state, mode branching, and tooltip shaping inside `frontend-modern/src/components/Dashboard/StackedDiskBar.tsx`
+16. Extend stacked memory-bar capacity math, balloon/swap derivation, and resize-observer runtime through `frontend-modern/src/components/Dashboard/stackedMemoryBarModel.ts` and `frontend-modern/src/components/Dashboard/useStackedMemoryBarState.ts` rather than rebuilding memory-bar-local state, tooltip shaping, and label-fit logic inside `frontend-modern/src/components/Dashboard/StackedMemoryBar.tsx`
+17. Extend metric-bar width, label-fit logic, and resize-observer runtime through `frontend-modern/src/components/Dashboard/metricBarModel.ts` and `frontend-modern/src/components/Dashboard/useMetricBarState.ts` rather than rebuilding metric-local state and threshold mapping inside `frontend-modern/src/components/Dashboard/MetricBar.tsx`
+18. Extend enhanced CPU bar usage/anomaly presentation and tooltip runtime through `frontend-modern/src/components/Dashboard/enhancedCpuBarModel.ts` and `frontend-modern/src/components/Dashboard/useEnhancedCPUBarState.ts` rather than rebuilding tooltip-local state and CPU-threshold formatting inside `frontend-modern/src/components/Dashboard/EnhancedCPUBar.tsx`
 
 ## Forbidden Paths
 
@@ -133,10 +135,13 @@ The dashboard workload selector path and the dashboard runtime that consumes it
 are now part of the protected performance surface rather than proof-only
 context. Future hot-path filter/group/sort/windowing changes must route through
 the explicit dashboard performance proof policy in the subsystem registry.
-That runtime state owner now lives in
-`frontend-modern/src/components/Dashboard/useDashboardState.ts`, so guest
-metadata persistence, workload-route synchronization, grouping/windowing, and
-filter/sort state must extend through that owner instead of accreting back into
+That runtime is now intentionally split by concern:
+`frontend-modern/src/components/Dashboard/useDashboardState.ts` owns workload
+route synchronization, grouping/windowing, and filter/sort state, while
+`frontend-modern/src/components/Dashboard/useDashboardGuestMetadataState.ts`
+owns guest metadata cache persistence, optimistic custom-URL updates,
+org-scope switching, and metadata refresh. Future dashboard hot-path changes
+must extend through those owners instead of accreting back into
 `frontend-modern/src/components/Dashboard/Dashboard.tsx`.
 The dashboard guest-row path now follows the same pattern: the render shell
 stays in `frontend-modern/src/components/Dashboard/GuestRow.tsx`, tooltip-backed
