@@ -136,8 +136,14 @@ import relayOnboardingCardSource from '@/components/Dashboard/RelayOnboardingCar
 import generalSettingsPanelSource from '../GeneralSettingsPanel.tsx?raw';
 import networkSettingsPanelSource from '../NetworkSettingsPanel.tsx?raw';
 import recoverySettingsPanelSource from '../RecoverySettingsPanel.tsx?raw';
+import rbacFeatureGateSectionSource from '../RBACFeatureGateSection.tsx?raw';
+import rbacFeatureGateStateSource from '../useRBACFeatureGateState.ts?raw';
 import rolesPanelSource from '../RolesPanel.tsx?raw';
+import rolesEditorDialogSource from '../RolesEditorDialog.tsx?raw';
+import rolesPanelStateSource from '../useRolesPanelState.ts?raw';
 import userAssignmentsPanelSource from '../UserAssignmentsPanel.tsx?raw';
+import userAssignmentsDialogSource from '../UserAssignmentsDialog.tsx?raw';
+import userAssignmentsPanelStateSource from '../useUserAssignmentsPanelState.ts?raw';
 import ssoProvidersPanelSource from '../SSOProvidersPanel.tsx?raw';
 import ssoProvidersStateSource from '../useSSOProvidersState.ts?raw';
 import ssoProvidersModelSource from '../ssoProvidersModel.ts?raw';
@@ -529,8 +535,7 @@ describe('monitored-system model guardrails', () => {
     expect(aiCostPresentationSource).toContain('export const AI_COST_EMPTY_STATE');
     expect(aiCostPresentationSource).toContain('export const AI_COST_DAILY_USD_EMPTY_STATE');
     expect(aiCostPresentationSource).toContain('export const AI_COST_DAILY_TOKEN_EMPTY_STATE');
-    expect(rolesPanelSource).toContain('@/utils/upgradePresentation');
-    expect(userAssignmentsPanelSource).toContain('@/utils/upgradePresentation');
+    expect(rbacFeatureGateSectionSource).toContain('@/utils/upgradePresentation');
     expect(agentProfilesPanelStateSource).toContain('@/utils/upgradePresentation');
     expect(auditLogPanelSource).toContain('@/utils/upgradePresentation');
     expect(ssoProvidersPanelSource).toContain('@/utils/upgradePresentation');
@@ -964,12 +969,11 @@ describe('monitored-system model guardrails', () => {
   });
 
   it('keeps RBAC permission vocabulary on shared utilities', () => {
-    expect(rolesPanelSource).toContain('@/utils/rbacPermissions');
     expect(rolesPanelSource).toContain('@/utils/rbacPresentation');
-    expect(rolesPanelSource).toContain('RBAC_PERMISSION_ACTIONS');
-    expect(rolesPanelSource).toContain('RBAC_PERMISSION_RESOURCES');
-    expect(rolesPanelSource).toContain('createDefaultRBACPermission');
-    expect(rolesPanelSource).toContain('getRBACFeatureGateCopy');
+    expect(rolesPanelSource).toContain('./RBACFeatureGateSection');
+    expect(rolesPanelSource).toContain('./RolesEditorDialog');
+    expect(rolesPanelSource).toContain('./useRolesPanelState');
+    expect(rbacFeatureGateStateSource).toContain('getRBACFeatureGateCopy');
     expect(rolesPanelSource).toContain('getRolesEmptyState');
     expect(rolesPanelSource).not.toContain(
       "const ACTIONS = ['read', 'write', 'delete', 'admin', '*']",
@@ -982,6 +986,7 @@ describe('monitored-system model guardrails', () => {
     expect(rbacPermissionsSource).toContain('export const RBAC_PERMISSION_ACTIONS');
     expect(rbacPermissionsSource).toContain('export const RBAC_PERMISSION_RESOURCES');
     expect(rbacPermissionsSource).toContain('export function createDefaultRBACPermission');
+    expect(rolesPanelStateSource).toContain('@/utils/rbacPermissions');
     expect(rbacPresentationSource).toContain('export function getRBACFeatureGateCopy');
     expect(rbacPresentationSource).toContain('export function getRolesEmptyState');
     expect(rbacPresentationSource).toContain('export function getRolesLoadErrorMessage');
@@ -989,12 +994,23 @@ describe('monitored-system model guardrails', () => {
     expect(rbacPresentationSource).toContain('export function getUserAssignmentsLoadErrorMessage');
     expect(rbacPresentationSource).toContain('export function getUserAssignmentsEmptyStateCopy');
     expect(userAssignmentsPanelSource).toContain('@/utils/rbacPresentation');
-    expect(userAssignmentsPanelSource).toContain('getRBACFeatureGateCopy');
+    expect(userAssignmentsPanelSource).toContain('./RBACFeatureGateSection');
+    expect(userAssignmentsPanelSource).toContain('./UserAssignmentsDialog');
+    expect(userAssignmentsPanelSource).toContain('./useUserAssignmentsPanelState');
+    expect(rbacFeatureGateStateSource).toContain('getRBACFeatureGateCopy');
     expect(userAssignmentsPanelSource).toContain('getUserAssignmentsEmptyStateCopy');
-    expect(userAssignmentsPanelSource).toContain('getUserAssignmentsLoadErrorMessage');
-    expect(userAssignmentsPanelSource).toContain('getUserAssignmentsUpdateErrorMessage');
-    expect(rolesPanelSource).toContain('getRolesLoadErrorMessage');
-    expect(rolesPanelSource).toContain('getRolesRequiredFieldsMessage');
+    expect(userAssignmentsPanelStateSource).toContain('getUserAssignmentsLoadErrorMessage');
+    expect(userAssignmentsPanelStateSource).toContain('getUserAssignmentsUpdateErrorMessage');
+    expect(rolesPanelStateSource).toContain('getRolesLoadErrorMessage');
+    expect(rolesPanelStateSource).toContain('getRolesRequiredFieldsMessage');
+    expect(rolesEditorDialogSource).toContain('RBAC_PERMISSION_ACTIONS');
+    expect(rolesEditorDialogSource).toContain('RBAC_PERMISSION_RESOURCES');
+    expect(rbacFeatureGateSectionSource).toContain('trackUpgradeClicked');
+    expect(rbacFeatureGateStateSource).toContain('trackPaywallViewed');
+    expect(rbacFeatureGateStateSource).toContain('startProTrial');
+    expect(userAssignmentsDialogSource).toContain('Effective Permissions Preview');
+    expect(userAssignmentsPanelStateSource).toContain('RBACAPI.getUsers');
+    expect(userAssignmentsPanelStateSource).toContain('RBACAPI.updateUserRoles');
     expect(rolesPanelSource).not.toContain("notificationStore.error('Failed to load roles')");
     expect(rolesPanelSource).not.toContain("notificationStore.error('Failed to save role')");
     expect(userAssignmentsPanelSource).not.toContain(

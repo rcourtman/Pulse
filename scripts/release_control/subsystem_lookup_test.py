@@ -1913,6 +1913,54 @@ class SubsystemLookupTest(unittest.TestCase):
             ],
         )
 
+    def test_lookup_paths_assigns_roles_panel_state_to_organization_settings(self) -> None:
+        result = lookup_paths(["frontend-modern/src/components/Settings/useRolesPanelState.ts"])
+        self.assertEqual(result["unowned_runtime_files"], [])
+        self.assertEqual(
+            {item["subsystem"] for item in result["impacted_subsystems"]},
+            {"organization-settings"},
+        )
+        file_entry = result["files"][0]
+        self.assertEqual(file_entry["classification"], "runtime")
+        self.assertEqual(
+            {match["subsystem"] for match in file_entry["matches"]},
+            {"organization-settings"},
+        )
+        match = file_entry["matches"][0]
+        self.assertEqual(
+            match["contract"],
+            "docs/release-control/v6/internal/subsystems/organization-settings.md",
+        )
+        self.assertEqual(match["lane_context"]["lane_id"], "L14")
+        self.assertEqual(
+            match["verification_requirement"]["id"],
+            "organization-settings-surface",
+        )
+
+    def test_lookup_paths_assigns_user_assignments_dialog_to_organization_settings(self) -> None:
+        result = lookup_paths(["frontend-modern/src/components/Settings/UserAssignmentsDialog.tsx"])
+        self.assertEqual(result["unowned_runtime_files"], [])
+        self.assertEqual(
+            {item["subsystem"] for item in result["impacted_subsystems"]},
+            {"organization-settings"},
+        )
+        file_entry = result["files"][0]
+        self.assertEqual(file_entry["classification"], "runtime")
+        self.assertEqual(
+            {match["subsystem"] for match in file_entry["matches"]},
+            {"organization-settings"},
+        )
+        match = file_entry["matches"][0]
+        self.assertEqual(
+            match["contract"],
+            "docs/release-control/v6/internal/subsystems/organization-settings.md",
+        )
+        self.assertEqual(match["lane_context"]["lane_id"], "L14")
+        self.assertEqual(
+            match["verification_requirement"]["id"],
+            "organization-settings-surface",
+        )
+
     def test_lookup_paths_assigns_organization_model_to_organization_settings(self) -> None:
         result = lookup_paths(["internal/models/organization.go"])
         self.assertEqual(result["unowned_runtime_files"], [])

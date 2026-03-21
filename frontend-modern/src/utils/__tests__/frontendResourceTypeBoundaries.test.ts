@@ -288,6 +288,8 @@ import organizationOverviewPanelSource from '@/components/Settings/OrganizationO
 import organizationSharingPanelSource from '@/components/Settings/OrganizationSharingPanel.tsx?raw';
 import organizationRolePresentationSource from '@/utils/organizationRolePresentation.ts?raw';
 import organizationSettingsPresentationSource from '@/utils/organizationSettingsPresentation.ts?raw';
+import rbacFeatureGateSectionSource from '@/components/Settings/RBACFeatureGateSection.tsx?raw';
+import rbacFeatureGateStateSource from '@/components/Settings/useRBACFeatureGateState.ts?raw';
 
 const recoverySource = [
   recoveryComponentSource,
@@ -298,6 +300,7 @@ const recoverySource = [
   recoveryHistorySectionStateSource,
 ].join('\n');
 import rolesPanelSource from '@/components/Settings/RolesPanel.tsx?raw';
+import rolesPanelStateSource from '@/components/Settings/useRolesPanelState.ts?raw';
 import auditWebhookPanelSource from '@/components/Settings/AuditWebhookPanel.tsx?raw';
 import auditWebhookStateSource from '@/components/Settings/useAuditWebhookPanelState.ts?raw';
 import auditWebhookPresentationSource from '@/utils/auditWebhookPresentation.ts?raw';
@@ -309,6 +312,7 @@ import ssoProvidersStateSource from '@/components/Settings/useSSOProvidersState.
 import ssoProvidersModelSource from '@/components/Settings/ssoProvidersModel.ts?raw';
 import ssoProviderPresentationSource from '@/utils/ssoProviderPresentation.ts?raw';
 import userAssignmentsPanelSource from '@/components/Settings/UserAssignmentsPanel.tsx?raw';
+import userAssignmentsPanelStateSource from '@/components/Settings/useUserAssignmentsPanelState.ts?raw';
 import investigationMessagesSource from '@/components/patrol/InvestigationMessages.tsx?raw';
 import investigationSectionSource from '@/components/patrol/InvestigationSection.tsx?raw';
 import runHistoryPanelSource from '@/components/patrol/RunHistoryPanel.tsx?raw';
@@ -803,8 +807,14 @@ describe('frontend resource type boundaries', () => {
     expect(reportingPanelSource).not.toContain('>Upgrade to Pro<');
     expect(reportingPanelSource).not.toContain('>Start free trial<');
     expect(reportingPanelSource).not.toContain('window.URL.createObjectURL');
-    expect(rolesPanelSource).toContain('@/utils/upgradePresentation');
-    expect(userAssignmentsPanelSource).toContain('@/utils/upgradePresentation');
+    expect(rolesPanelSource).toContain('./RBACFeatureGateSection');
+    expect(rolesPanelSource).toContain('./useRolesPanelState');
+    expect(userAssignmentsPanelSource).toContain('./RBACFeatureGateSection');
+    expect(userAssignmentsPanelSource).toContain('./useUserAssignmentsPanelState');
+    expect(rbacFeatureGateSectionSource).toContain('@/utils/upgradePresentation');
+    expect(rbacFeatureGateSectionSource).toContain('getUpgradeActionButtonClass');
+    expect(rolesPanelStateSource).toContain('getRolesLoadErrorMessage');
+    expect(userAssignmentsPanelStateSource).toContain('getUserAssignmentsLoadErrorMessage');
     expect(agentProfilesPanelSource).toContain('./useAgentProfilesPanelState');
     expect(agentProfilesPanelStateSource).toContain('@/utils/upgradePresentation');
     expect(agentProfilesPanelSource).toContain('@/utils/agentProfilesPresentation');
@@ -921,17 +931,17 @@ describe('frontend resource type boundaries', () => {
     expect(rbacPermissionsSource).toContain('export const RBAC_PERMISSION_RESOURCES');
     expect(rbacPermissionsSource).toContain('export function createDefaultRBACPermission');
     expect(rolesPanelSource).toContain('@/utils/rbacPresentation');
-    expect(rolesPanelSource).toContain('getRBACFeatureGateCopy');
     expect(rolesPanelSource).toContain('getRolesEmptyState');
     expect(rolesPanelSource).not.toContain('Custom Roles (Pro)');
     expect(rolesPanelSource).not.toContain('No roles available.');
+    expect(rbacFeatureGateStateSource).toContain('getRBACFeatureGateCopy');
     expect(userAssignmentsPanelSource).toContain('@/utils/rbacPresentation');
-    expect(userAssignmentsPanelSource).toContain('getRBACFeatureGateCopy');
     expect(userAssignmentsPanelSource).toContain('getUserAssignmentsEmptyStateCopy');
     expect(userAssignmentsPanelSource).not.toContain('Centralized Access Control (Pro)');
     expect(userAssignmentsPanelSource).not.toContain('No users yet');
     expect(userAssignmentsPanelSource).not.toContain('Configure SSO in Security settings');
     expect(userAssignmentsPanelSource).not.toContain('Users sync on first login');
+    expect(rbacFeatureGateStateSource).toContain('getRBACFeatureGateCopy');
     expect(rbacPresentationSource).toContain('export function getRBACFeatureGateCopy');
     expect(rbacPresentationSource).toContain('export function getRolesEmptyState');
     expect(rbacPresentationSource).toContain('export function getUserAssignmentsEmptyStateCopy');

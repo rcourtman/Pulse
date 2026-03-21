@@ -66,8 +66,14 @@ import diagnosticsStateSource from '../useDiagnosticsPanelState.ts?raw';
 import reportingPanelModelSource from '../reportingPanelModel.ts?raw';
 import reportingPanelSource from '../ReportingPanel.tsx?raw';
 import reportingPanelStateSource from '../useReportingPanelState.ts?raw';
+import rbacFeatureGateSectionSource from '../RBACFeatureGateSection.tsx?raw';
+import rbacFeatureGateStateSource from '../useRBACFeatureGateState.ts?raw';
 import rolesPanelSource from '../RolesPanel.tsx?raw';
+import rolesEditorDialogSource from '../RolesEditorDialog.tsx?raw';
+import rolesPanelStateSource from '../useRolesPanelState.ts?raw';
 import userAssignmentsPanelSource from '../UserAssignmentsPanel.tsx?raw';
+import userAssignmentsDialogSource from '../UserAssignmentsDialog.tsx?raw';
+import userAssignmentsPanelStateSource from '../useUserAssignmentsPanelState.ts?raw';
 import { SETTINGS_HEADER_META } from '../settingsHeaderMeta';
 
 const extractedModules = [
@@ -108,6 +114,12 @@ const extractedModules = [
   '../UpdateInstallGuide.tsx',
   '../ReportingPanel.tsx',
   '../reportingPanelModel.ts',
+  '../RBACFeatureGateSection.tsx',
+  '../RolesEditorDialog.tsx',
+  '../useRBACFeatureGateState.ts',
+  '../useRolesPanelState.ts',
+  '../UserAssignmentsDialog.tsx',
+  '../useUserAssignmentsPanelState.ts',
   '../updatesSettingsModel.ts',
   '../useDiagnosticsPanelState.ts',
   '../useReportingPanelState.ts',
@@ -356,6 +368,28 @@ describe('Settings architecture guardrails', () => {
     expect(proxmoxNodeModalStackSource).toContain('<NodeModal');
     expect(proxmoxSettingsPanelStateSource).toContain('export function useProxmoxSettingsPanelState');
     expect(proxmoxSettingsPanelStateSource).toContain("notificationStore.info('Refreshing discovery...'");
+  });
+
+  it('keeps RBAC settings panels split into gate, state, and dialog owners', () => {
+    expect(rolesPanelSource).toContain('./RBACFeatureGateSection');
+    expect(rolesPanelSource).toContain('./RolesEditorDialog');
+    expect(rolesPanelSource).toContain('./useRolesPanelState');
+    expect(rolesPanelSource).not.toContain('const handleStartTrial = async');
+    expect(rolesPanelSource).not.toContain('const loadRoles = async');
+    expect(userAssignmentsPanelSource).toContain('./RBACFeatureGateSection');
+    expect(userAssignmentsPanelSource).toContain('./UserAssignmentsDialog');
+    expect(userAssignmentsPanelSource).toContain('./useUserAssignmentsPanelState');
+    expect(userAssignmentsPanelSource).not.toContain('const handleStartTrial = async');
+    expect(userAssignmentsPanelSource).not.toContain('const loadData = async');
+    expect(rbacFeatureGateSectionSource).toContain('trackUpgradeClicked');
+    expect(rbacFeatureGateStateSource).toContain('trackPaywallViewed');
+    expect(rbacFeatureGateStateSource).toContain('startProTrial');
+    expect(rolesEditorDialogSource).toContain('RBAC_PERMISSION_ACTIONS');
+    expect(rolesPanelStateSource).toContain('RBACAPI.getRoles');
+    expect(rolesPanelStateSource).toContain('RBACAPI.saveRole');
+    expect(userAssignmentsDialogSource).toContain('Effective Permissions Preview');
+    expect(userAssignmentsPanelStateSource).toContain('RBACAPI.getUsers');
+    expect(userAssignmentsPanelStateSource).toContain('RBACAPI.updateUserRoles');
   });
 
   it('uses lazy() imports for panel components in settingsPanelRegistry', async () => {

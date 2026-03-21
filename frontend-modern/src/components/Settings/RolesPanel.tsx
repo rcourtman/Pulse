@@ -1,216 +1,18 @@
-import { Component, createEffect, createMemo, createSignal, onMount, Show, For } from 'solid-js';
+import { Component, For, Show } from 'solid-js';
 import SettingsPanel from '@/components/shared/SettingsPanel';
-import { RBACAPI } from '@/api/rbac';
-import type { Role, Permission } from '@/types/rbac';
-import { notificationStore } from '@/stores/notifications';
-import { logger } from '@/utils/logger';
-import { Dialog } from '@/components/shared/Dialog';
-import {
-  getUpgradeActionUrlOrFallback,
-  hasFeature,
-  loadLicenseStatus,
-  licenseLoaded,
-  startProTrial,
-  entitlements,
-} from '@/stores/license';
-import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/upgradeMetrics';
-import {
-  createDefaultRBACPermission,
-  RBAC_PERMISSION_ACTIONS,
-  RBAC_PERMISSION_RESOURCES,
-} from '@/utils/rbacPermissions';
-import {
-  getRBACFeatureGateCopy,
-  getRolesDeleteErrorMessage,
-  getRolesEmptyState,
-  getRolesLoadErrorMessage,
-  getRolesRequiredFieldsMessage,
-  getRolesSaveErrorMessage,
-} from '@/utils/rbacPresentation';
-import {
-  getProTrialStartedMessage,
-  getTrialAlreadyUsedMessage,
-  getTrialStartErrorMessage,
-  getUpgradeActionButtonClass,
-  UPGRADE_ACTION_LABEL,
-  UPGRADE_TRIAL_LABEL,
-  UPGRADE_TRIAL_LINK_CLASS,
-} from '@/utils/upgradePresentation';
+import { RBACFeatureGateSection } from './RBACFeatureGateSection';
+import { RolesEditorDialog } from './RolesEditorDialog';
+import { useRolesPanelState } from './useRolesPanelState';
+import { getRolesEmptyState } from '@/utils/rbacPresentation';
 import Plus from 'lucide-solid/icons/plus';
 import Pencil from 'lucide-solid/icons/pencil';
 import Trash2 from 'lucide-solid/icons/trash-2';
 import Shield from 'lucide-solid/icons/shield';
 import BadgeCheck from 'lucide-solid/icons/badge-check';
-import X from 'lucide-solid/icons/x';
 import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
 
 export const RolesPanel: Component = () => {
-  const [roles, setRoles] = createSignal<Role[]>([]);
-  const [loading, setLoading] = createSignal(true);
-  const [showModal, setShowModal] = createSignal(false);
-  const [editingRole, setEditingRole] = createSignal<Role | null>(null);
-  const [saving, setSaving] = createSignal(false);
-  const [startingTrial, setStartingTrial] = createSignal(false);
-  const featureGateCopy = () => getRBACFeatureGateCopy('roles');
-
-  const canStartTrial = () => entitlements()?.trial_eligible !== false;
-
-  const handleStartTrial = async () => {
-    if (startingTrial()) return;
-    setStartingTrial(true);
-    try {
-      const result = await startProTrial();
-      if (result?.outcome === 'redirect') {
-        window.location.href = result.actionUrl;
-        return;
-      }
-      notificationStore.success(getProTrialStartedMessage());
-    } catch (err) {
-      const statusCode = (err as { status?: number } | null)?.status;
-      if (statusCode === 409) {
-        notificationStore.error(getTrialAlreadyUsedMessage());
-      } else {
-        notificationStore.error(
-          getTrialStartErrorMessage(err instanceof Error ? err.message : undefined),
-        );
-      }
-    } finally {
-      setStartingTrial(false);
-    }
-  };
-
-  // Form state
-  const [formId, setFormId] = createSignal('');
-  const [formName, setFormName] = createSignal('');
-  const [formDescription, setFormDescription] = createSignal('');
-  const [formPermissions, setFormPermissions] = createSignal<Permission[]>([]);
-  const rbacEnabled = createMemo(() => licenseLoaded() && hasFeature('rbac'));
-
-  const loadRoles = async () => {
-    if (!rbacEnabled()) {
-      setRoles([]);
-      setLoading(false);
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const data = await RBACAPI.getRoles();
-      setRoles(data || []);
-    } catch (err) {
-      if (err instanceof Error && /feature not included in license/i.test(err.message)) {
-        setRoles([]);
-        return;
-      }
-      logger.error('Failed to load roles', err);
-      notificationStore.error(getRolesLoadErrorMessage());
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  onMount(() => {
-    void loadLicenseStatus();
-  });
-
-  createEffect(() => {
-    if (!licenseLoaded()) {
-      setLoading(true);
-      return;
-    }
-    if (!hasFeature('rbac')) {
-      setRoles([]);
-      setLoading(false);
-      return;
-    }
-    void loadRoles();
-  });
-
-  createEffect((wasPaywallVisible) => {
-    const isPaywallVisible = licenseLoaded() && !hasFeature('rbac') && !loading();
-    if (isPaywallVisible && !wasPaywallVisible) {
-      trackPaywallViewed('rbac', 'settings_roles_panel');
-    }
-    return isPaywallVisible;
-  }, false);
-
-  const handleCreate = () => {
-    setEditingRole(null);
-    setFormId('');
-    setFormName('');
-    setFormDescription('');
-    setFormPermissions([createDefaultRBACPermission()]);
-    setShowModal(true);
-  };
-
-  const handleEdit = (role: Role) => {
-    if (role.isBuiltIn) return;
-    setEditingRole(role);
-    setFormId(role.id);
-    setFormName(role.name);
-    setFormDescription(role.description);
-    setFormPermissions([...role.permissions]);
-    setShowModal(true);
-  };
-
-  const handleDelete = async (role: Role) => {
-    if (role.isBuiltIn) return;
-    if (!confirm(`Are you sure you want to delete the role "${role.name}"?`)) return;
-
-    try {
-      await RBACAPI.deleteRole(role.id);
-      notificationStore.success(`Role "${role.name}" deleted`);
-      await loadRoles();
-    } catch (err) {
-      logger.error('Failed to delete role', err);
-      notificationStore.error(getRolesDeleteErrorMessage());
-    }
-  };
-
-  const handleSave = async () => {
-    const id = formId().trim().toLowerCase().replace(/\s+/g, '-');
-    const name = formName().trim();
-    if (!id || !name) {
-      notificationStore.error(getRolesRequiredFieldsMessage());
-      return;
-    }
-
-    setSaving(true);
-    try {
-      const role: Role = {
-        id,
-        name,
-        description: formDescription(),
-        permissions: formPermissions(),
-        createdAt: editingRole()?.createdAt,
-      };
-      await RBACAPI.saveRole(role);
-      notificationStore.success(`Role "${name}" saved`);
-      setShowModal(false);
-      await loadRoles();
-    } catch (err) {
-      logger.error('Failed to save role', err);
-      notificationStore.error(getRolesSaveErrorMessage());
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const addPermission = () => {
-    setFormPermissions([...formPermissions(), createDefaultRBACPermission()]);
-  };
-
-  const removePermission = (index: number) => {
-    const perms = [...formPermissions()];
-    perms.splice(index, 1);
-    setFormPermissions(perms);
-  };
-
-  const updatePermission = (index: number, field: keyof Permission, value: string) => {
-    const perms = [...formPermissions()];
-    perms[index] = { ...perms[index], [field]: value };
-    setFormPermissions(perms);
-  };
+  const state = useRolesPanelState();
 
   return (
     <div class="space-y-6">
@@ -221,8 +23,8 @@ export const RolesPanel: Component = () => {
         action={
           <button
             type="button"
-            onClick={handleCreate}
-            disabled={!rbacEnabled()}
+            onClick={state.openCreateRole}
+            disabled={!state.featureGate.rbacEnabled()}
             class="inline-flex w-full sm:w-auto min-h-10 sm:min-h-9 items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-700"
           >
             <Plus class="w-4 h-4" />
@@ -232,50 +34,26 @@ export const RolesPanel: Component = () => {
         noPadding
         bodyClass="divide-y divide-border"
       >
-        <Show when={licenseLoaded() && !hasFeature('rbac') && !loading()}>
-          <div class="bg-surface-alt p-4 sm:p-6 transition-colors border-b border-border-subtle">
-            <div class="flex flex-col sm:flex-row items-center gap-4">
-              <div class="flex-1 text-center sm:text-left">
-                <h4 class="text-base font-semibold text-base-content">{featureGateCopy().title}</h4>
-                <p class="text-sm text-muted mt-1">
-                  {featureGateCopy().body}
-                </p>
-              </div>
-              <div class="flex flex-col sm:flex-row items-center gap-2">
-                <a
-                  href={getUpgradeActionUrlOrFallback('rbac')}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class={getUpgradeActionButtonClass()}
-                  onClick={() => trackUpgradeClicked('settings_roles_panel', 'rbac')}
-                >
-                  {UPGRADE_ACTION_LABEL}
-                </a>
-                <Show when={canStartTrial()}>
-                  <button
-                    type="button"
-                    onClick={handleStartTrial}
-                    disabled={startingTrial()}
-                    class={UPGRADE_TRIAL_LINK_CLASS}
-                  >
-                    {UPGRADE_TRIAL_LABEL}
-                  </button>
-                </Show>
-              </div>
-            </div>
-          </div>
+        <Show when={state.featureGate.paywallVisible()}>
+          <RBACFeatureGateSection
+            canStartTrial={state.featureGate.canStartTrial()}
+            copy={state.featureGate.featureGateCopy()}
+            paywallLocation="settings_roles_panel"
+            startingTrial={state.featureGate.startingTrial()}
+            onStartTrial={state.featureGate.handleStartTrial}
+          />
         </Show>
 
-        <Show when={loading()}>
+        <Show when={state.loading()}>
           <div class="flex items-center justify-center py-8">
             <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500" />
           </div>
         </Show>
 
-        <Show when={!loading() && rbacEnabled()}>
+        <Show when={!state.loading() && state.featureGate.rbacEnabled()}>
           <div class="w-full overflow-x-auto">
             <PulseDataGrid
-              data={roles()}
+              data={state.roles()}
               columns={[
                 {
                   key: 'role',
@@ -316,7 +94,7 @@ export const RolesPanel: Component = () => {
                       <Show when={!role.isBuiltIn}>
                         <button
                           type="button"
-                          onClick={() => handleEdit(role)}
+                          onClick={() => state.openEditRole(role)}
                           class="p-1.5 rounded-md text-slate-500 hover:text-blue-600 hover:bg-surface-hover dark:hover:text-blue-300"
                           title="Edit role"
                         >
@@ -324,7 +102,7 @@ export const RolesPanel: Component = () => {
                         </button>
                         <button
                           type="button"
-                          onClick={() => handleDelete(role)}
+                          onClick={() => state.handleDeleteRole(role)}
                           class="p-1.5 rounded-md text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-900"
                           title="Delete role"
                         >
@@ -347,138 +125,23 @@ export const RolesPanel: Component = () => {
         </Show>
       </SettingsPanel>
 
-      {/* Role Modal */}
-      <Show when={showModal()}>
-        <Dialog
-          isOpen={true}
-          onClose={() => setShowModal(false)}
-          panelClass="max-w-2xl"
-          closeOnBackdrop={false}
-          ariaLabel={editingRole() ? 'Edit role' : 'New role'}
-        >
-          <div class="w-full max-h-[92vh] overflow-hidden">
-            <div class="flex items-start justify-between gap-3 px-4 sm:px-6 py-4 border-b border-border">
-              <h3 class="text-lg font-semibold text-base-content">
-                {editingRole() ? 'Edit Role' : 'New Role'}
-              </h3>
-              <button
-                type="button"
-                onClick={() => setShowModal(false)}
-                class="p-1.5 rounded-md text-slate-500 hover:text-base-content hover:bg-surface-hover"
-              >
-                <X class="w-5 h-5" />
-              </button>
-            </div>
-
-            <div class="px-4 sm:px-6 py-4 space-y-4 max-h-[70vh] overflow-y-auto">
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div class="space-y-1">
-                  <label class="block text-sm font-medium text-base-content">Role ID</label>
-                  <input
-                    type="text"
-                    value={formId()}
-                    onInput={(e) => setFormId(e.currentTarget.value)}
-                    placeholder="e.g., custom-auditor"
-                    disabled={!!editingRole()}
-                    class="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:border-blue-400 dark:focus:ring-blue-900 disabled:opacity-50"
-                  />
-                </div>
-                <div class="space-y-1">
-                  <label class="block text-sm font-medium text-base-content">Role Name</label>
-                  <input
-                    type="text"
-                    value={formName()}
-                    onInput={(e) => setFormName(e.currentTarget.value)}
-                    placeholder="e.g., Custom Auditor"
-                    class="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:border-blue-400 dark:focus:ring-blue-900"
-                  />
-                </div>
-              </div>
-              <div class="space-y-1">
-                <label class="block text-sm font-medium text-base-content">Description</label>
-                <input
-                  type="text"
-                  value={formDescription()}
-                  onInput={(e) => setFormDescription(e.currentTarget.value)}
-                  placeholder="Brief description of this role's purpose"
-                  class="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:border-blue-400 dark:focus:ring-blue-900"
-                />
-              </div>
-
-              <div class="space-y-3 pt-2">
-                <div class="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <label class="block text-sm font-medium text-base-content">Permissions</label>
-                  <button
-                    type="button"
-                    onClick={addPermission}
-                    class="text-xs font-medium text-blue-600 hover:text-blue-700 dark:text-blue-300 flex items-center gap-1"
-                  >
-                    <Plus class="w-3 h-3" /> Add Permission
-                  </button>
-                </div>
-
-                <div class="space-y-2">
-                  <For each={formPermissions()}>
-                    {(perm, index) => (
-                      <div class="flex flex-col sm:flex-row sm:items-center gap-2">
-                        <select
-                          value={perm.action}
-                          onChange={(e) =>
-                            updatePermission(index(), 'action', e.currentTarget.value)
-                          }
-                          class="w-full sm:flex-1 rounded-md border border-border bg-surface px-2 py-1.5 text-sm text-base-content"
-                        >
-                          <For each={RBAC_PERMISSION_ACTIONS}>
-                            {(action) => <option value={action}>{action}</option>}
-                          </For>
-                        </select>
-                        <span class="hidden sm:inline text-slate-400 text-sm">:</span>
-                        <select
-                          value={perm.resource}
-                          onChange={(e) =>
-                            updatePermission(index(), 'resource', e.currentTarget.value)
-                          }
-                          class="w-full sm:flex-1 rounded-md border bg-surface px-2 py-1.5 text-sm text-base-content"
-                        >
-                          <For each={RBAC_PERMISSION_RESOURCES}>
-                            {(resource) => <option value={resource}>{resource}</option>}
-                          </For>
-                        </select>
-                        <button
-                          type="button"
-                          onClick={() => removePermission(index())}
-                          disabled={formPermissions().length <= 1}
-                          class="self-end sm:self-auto p-1.5 text-slate-400 hover:text-red-500 disabled:opacity-30"
-                        >
-                          <Trash2 class="w-4 h-4" />
-                        </button>
-                      </div>
-                    )}
-                  </For>
-                </div>
-              </div>
-            </div>
-
-            <div class="grid grid-cols-1 sm:flex sm:items-center sm:justify-end gap-3 px-4 sm:px-6 py-4 border-t border-border">
-              <button
-                type="button"
-                onClick={() => setShowModal(false)}
-                class="w-full sm:w-auto rounded-md px-4 py-2 text-sm font-medium text-base-content hover:bg-surface-hover"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleSave}
-                disabled={saving() || !formName().trim()}
-                class="inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {saving() ? 'Saving...' : editingRole() ? 'Update Role' : 'Create Role'}
-              </button>
-            </div>
-          </div>
-        </Dialog>
-      </Show>
+      <RolesEditorDialog
+        editingRole={state.editingRole()}
+        formDescription={state.formDescription()}
+        formId={state.formId()}
+        formName={state.formName()}
+        formPermissions={state.formPermissions()}
+        isOpen={state.showModal()}
+        saving={state.saving()}
+        onAddPermission={state.addPermission}
+        onClose={state.closeModal}
+        onFormDescriptionInput={state.setFormDescription}
+        onFormIdInput={state.setFormId}
+        onFormNameInput={state.setFormName}
+        onRemovePermission={state.removePermission}
+        onSave={state.handleSaveRole}
+        onUpdatePermission={state.updatePermission}
+      />
     </div>
   );
 };
