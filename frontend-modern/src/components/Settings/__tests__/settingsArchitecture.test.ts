@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import settingsSource from '../Settings.tsx?raw';
+import settingsDialogsSource from '../SettingsDialogs.tsx?raw';
 import settingsShellSource from '../SettingsPageShell.tsx?raw';
 import infrastructureWorkspaceSource from '../InfrastructureWorkspace.tsx?raw';
 import infrastructureWorkspaceModelSource from '../infrastructureWorkspaceModel.ts?raw';
@@ -34,6 +35,7 @@ import settingsNavCatalogSource from '../settingsNavCatalog.ts?raw';
 import settingsNavVisibilitySource from '../settingsNavVisibility.ts?raw';
 import settingsInfrastructurePanelPropsSource from '../useSettingsInfrastructurePanelProps.ts?raw';
 import settingsNavigationHookSource from '../useSettingsNavigation.ts?raw';
+import settingsShellStateSource from '../useSettingsShellState.ts?raw';
 import nodeModalStateSource from '../useNodeModalState.ts?raw';
 import settingsPanelRegistryContextSource from '../settingsPanelRegistryContext.tsx?raw';
 import settingsPanelRegistryLoadersSource from '../settingsPanelRegistryLoaders.ts?raw';
@@ -468,6 +470,12 @@ describe('Settings architecture guardrails', () => {
     expect(settingsNavigationHookSource).toContain('settingsTabPath');
     expect(settingsRoutingSource).toContain("from './settingsNavigationModel'");
     expect(settingsTypesSource).toContain("from './settingsNavigationModel'");
+    expect(settingsDialogsSource).toContain('UpdateConfirmationModal');
+    expect(settingsDialogsSource).toContain('BackupTransferDialogs');
+    expect(settingsDialogsSource).toContain('ChangePasswordModal');
+    expect(settingsShellStateSource).toContain('SETTINGS_HEADER_META');
+    expect(settingsShellStateSource).toContain('sidebarCollapsed');
+    expect(settingsShellStateSource).toContain('showPasswordModal');
     expect(settingsNavCatalogSource).toContain('export const SETTINGS_NAV_GROUPS');
     expect(settingsNavCatalogSource).toContain('export function getSettingsNavItem');
     expect(settingsNavVisibilitySource).toContain('export function shouldHideSettingsNavItem');

@@ -22,18 +22,18 @@ work extends shared components instead of creating new local variants.
 
 1. `frontend-modern/src/components/shared/`
 2. `frontend-modern/src/components/Settings/Settings.tsx`
-3. `frontend-modern/src/components/Settings/SettingsPageShell.tsx`
-4. `frontend-modern/src/components/Settings/settingsPanelRegistry.ts`
-5. `frontend-modern/src/components/Settings/APIAccessPanel.tsx`
-6. `frontend-modern/src/components/Settings/AIChatMaintenanceSection.tsx`
-7. `frontend-modern/src/components/Settings/AIModelSelectionSection.tsx`
-8. `frontend-modern/src/components/Settings/AIProviderConfigurationSection.tsx`
-9. `frontend-modern/src/components/Settings/AIRuntimeControlsSection.tsx`
-10. `frontend-modern/src/components/Settings/AISettings.tsx`
-11. `frontend-modern/src/components/Settings/AISettingsDialogs.tsx`
-12. `frontend-modern/src/components/Settings/AISettingsStatusAndActions.tsx`
-13. `frontend-modern/src/components/Settings/aiSettingsModel.ts`
-14. `frontend-modern/src/components/Settings/APIAccessPanel.tsx`
+3. `frontend-modern/src/components/Settings/SettingsDialogs.tsx`
+4. `frontend-modern/src/components/Settings/SettingsPageShell.tsx`
+5. `frontend-modern/src/components/Settings/settingsPanelRegistry.ts`
+6. `frontend-modern/src/components/Settings/APIAccessPanel.tsx`
+7. `frontend-modern/src/components/Settings/AIChatMaintenanceSection.tsx`
+8. `frontend-modern/src/components/Settings/AIModelSelectionSection.tsx`
+9. `frontend-modern/src/components/Settings/AIProviderConfigurationSection.tsx`
+10. `frontend-modern/src/components/Settings/AIRuntimeControlsSection.tsx`
+11. `frontend-modern/src/components/Settings/AISettings.tsx`
+12. `frontend-modern/src/components/Settings/AISettingsDialogs.tsx`
+13. `frontend-modern/src/components/Settings/AISettingsStatusAndActions.tsx`
+14. `frontend-modern/src/components/Settings/aiSettingsModel.ts`
 15. `frontend-modern/src/components/Settings/AuditLogPanel.tsx`
 16. `frontend-modern/src/components/Settings/useAuditLogPanelState.ts`
 17. `frontend-modern/src/components/Settings/AuditWebhookPanel.tsx`
@@ -48,54 +48,52 @@ work extends shared components instead of creating new local variants.
 26. `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx`
 27. `frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx`
 28. `frontend-modern/src/components/Settings/settingsHeaderMeta.ts`
-29. `frontend-modern/src/components/Settings/SettingsPageShell.tsx`
-30. `frontend-modern/src/components/Settings/settingsPanelRegistry.ts`
-31. `frontend-modern/src/components/Settings/SSOProvidersPanel.tsx`
-32. `frontend-modern/src/components/Settings/useAISettingsState.ts`
-33. `frontend-modern/src/components/Settings/useDiagnosticsPanelState.ts`
-34. `frontend-modern/src/components/Settings/useSSOProvidersState.ts`
-35. `frontend-modern/src/components/Settings/ssoProvidersModel.ts`
-36. `frontend-modern/src/components/Settings/UpdateInstallGuide.tsx`
-37. `frontend-modern/src/components/Settings/updatesSettingsModel.ts`
-38. `frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx`
-39. `frontend-modern/src/components/Settings/ReportingPanel.tsx`
-40. `frontend-modern/src/components/Settings/reportingPanelModel.ts`
-41. `frontend-modern/src/components/Settings/useReportingPanelState.ts`
-42. `frontend-modern/src/utils/reportingPresentation.ts`
-43. `frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts`
-44. `tests/integration/tests/15-settings-shell-consistency.spec.ts`
-45. `frontend-modern/src/components/shared/PageControls.guardrails.test.ts`
-46. `frontend-modern/src/components/shared/TypeColumn.guardrails.test.ts`
-47. `frontend-modern/src/features/`
-48. `frontend-modern/src/components/SetupWizard/SetupWizard.tsx`
-49. `frontend-modern/src/components/SetupWizard/SetupCompletionPreview.tsx`
-50. `frontend-modern/src/components/SetupWizard/__tests__/SetupWizard.test.tsx`
-51. `frontend-modern/src/components/SetupWizard/__tests__/SetupCompletionPreview.test.tsx`
-52. `frontend-modern/src/components/shared/MonitoredSystemLimitWarningBanner.tsx`
-53. `frontend-modern/src/components/Settings/SystemLogsPanel.tsx`
-54. `frontend-modern/src/components/Settings/useSystemLogsPanelState.ts`
-55. `frontend-modern/src/components/Settings/__tests__/SystemLogsPanel.test.tsx`
-56. `frontend-modern/src/features/operations/OperationsPageSurface.tsx`
-57. `frontend-modern/src/features/operations/operationsPageModel.ts`
-58. `frontend-modern/src/pages/Operations.tsx`
-59. `frontend-modern/src/pages/__tests__/Operations.helpers.test.ts`
-60. `frontend-modern/src/components/Settings/NetworkDiscoverySection.tsx`
-61. `frontend-modern/src/components/Settings/NetworkBoundarySettingsSection.tsx`
-62. `frontend-modern/src/components/Settings/networkSettingsModel.ts`
-63. `frontend-modern/src/components/Settings/useDiscoverySettingsState.ts`
-64. `frontend-modern/src/components/Settings/useSettingsInfrastructurePanelProps.ts`
-65. `frontend-modern/src/components/Settings/settingsPanelRegistryContext.tsx`
-66. `frontend-modern/src/components/Settings/settingsPanelRegistryLoaders.ts`
-67. `frontend-modern/src/components/Settings/settingsNavigationModel.ts`
-68. `frontend-modern/src/components/Settings/settingsNavCatalog.ts`
-69. `frontend-modern/src/components/Settings/settingsNavigationModel.ts`
-70. `frontend-modern/src/components/Settings/settingsNavVisibility.ts`
-71. `frontend-modern/src/components/Settings/settingsRouting.ts`
-72. `frontend-modern/src/components/Settings/settingsTabSaveBehavior.ts`
-73. `frontend-modern/src/components/Settings/settingsTypes.ts`
-74. `frontend-modern/src/components/Settings/useSettingsNavigation.ts`
-75. `frontend-modern/src/components/Settings/useSettingsPanelRegistry.tsx`
-76. `frontend-modern/src/components/Settings/useSettingsSystemPanels.tsx`
+29. `frontend-modern/src/components/Settings/SSOProvidersPanel.tsx`
+30. `frontend-modern/src/components/Settings/useAISettingsState.ts`
+31. `frontend-modern/src/components/Settings/useDiagnosticsPanelState.ts`
+32. `frontend-modern/src/components/Settings/useSettingsShellState.ts`
+33. `frontend-modern/src/components/Settings/useSSOProvidersState.ts`
+34. `frontend-modern/src/components/Settings/ssoProvidersModel.ts`
+35. `frontend-modern/src/components/Settings/UpdateInstallGuide.tsx`
+36. `frontend-modern/src/components/Settings/updatesSettingsModel.ts`
+37. `frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx`
+38. `frontend-modern/src/components/Settings/ReportingPanel.tsx`
+39. `frontend-modern/src/components/Settings/reportingPanelModel.ts`
+40. `frontend-modern/src/components/Settings/useReportingPanelState.ts`
+41. `frontend-modern/src/utils/reportingPresentation.ts`
+42. `frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts`
+43. `tests/integration/tests/15-settings-shell-consistency.spec.ts`
+44. `frontend-modern/src/components/shared/PageControls.guardrails.test.ts`
+45. `frontend-modern/src/components/shared/TypeColumn.guardrails.test.ts`
+46. `frontend-modern/src/features/`
+47. `frontend-modern/src/components/SetupWizard/SetupWizard.tsx`
+48. `frontend-modern/src/components/SetupWizard/SetupCompletionPreview.tsx`
+49. `frontend-modern/src/components/SetupWizard/__tests__/SetupWizard.test.tsx`
+50. `frontend-modern/src/components/SetupWizard/__tests__/SetupCompletionPreview.test.tsx`
+51. `frontend-modern/src/components/shared/MonitoredSystemLimitWarningBanner.tsx`
+52. `frontend-modern/src/components/Settings/SystemLogsPanel.tsx`
+53. `frontend-modern/src/components/Settings/useSystemLogsPanelState.ts`
+54. `frontend-modern/src/components/Settings/__tests__/SystemLogsPanel.test.tsx`
+55. `frontend-modern/src/features/operations/OperationsPageSurface.tsx`
+56. `frontend-modern/src/features/operations/operationsPageModel.ts`
+57. `frontend-modern/src/pages/Operations.tsx`
+58. `frontend-modern/src/pages/__tests__/Operations.helpers.test.ts`
+59. `frontend-modern/src/components/Settings/NetworkDiscoverySection.tsx`
+60. `frontend-modern/src/components/Settings/NetworkBoundarySettingsSection.tsx`
+61. `frontend-modern/src/components/Settings/networkSettingsModel.ts`
+62. `frontend-modern/src/components/Settings/useDiscoverySettingsState.ts`
+63. `frontend-modern/src/components/Settings/useSettingsInfrastructurePanelProps.ts`
+64. `frontend-modern/src/components/Settings/settingsPanelRegistryContext.tsx`
+65. `frontend-modern/src/components/Settings/settingsPanelRegistryLoaders.ts`
+66. `frontend-modern/src/components/Settings/settingsNavigationModel.ts`
+67. `frontend-modern/src/components/Settings/settingsNavCatalog.ts`
+68. `frontend-modern/src/components/Settings/settingsNavVisibility.ts`
+69. `frontend-modern/src/components/Settings/settingsRouting.ts`
+70. `frontend-modern/src/components/Settings/settingsTabSaveBehavior.ts`
+71. `frontend-modern/src/components/Settings/settingsTypes.ts`
+72. `frontend-modern/src/components/Settings/useSettingsNavigation.ts`
+73. `frontend-modern/src/components/Settings/useSettingsPanelRegistry.tsx`
+74. `frontend-modern/src/components/Settings/useSettingsSystemPanels.tsx`
 
 ## Shared Boundaries
 
@@ -297,6 +295,8 @@ settings navigation model. `settingsNavCatalog.ts` owns settings navigation
 metadata and item lookup, `settingsNavVisibility.ts` owns
 feature/capability visibility and lock policy for settings navigation,
 `useSettingsNavigation.ts` owns reactive URL sync and canonical tab-selection
+state, `SettingsDialogs.tsx` owns shared settings modal composition,
+`useSettingsShellState.ts` owns shell-local sidebar/search/password-modal
 state, and `settingsTabSaveBehavior.ts` owns settings tab save-behavior lookup,
 `frontend-modern/src/components/Settings/useSettingsSystemPanels.tsx` owns
 system panel prop assembly for general, network, updates, and recovery, and

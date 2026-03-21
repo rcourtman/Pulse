@@ -28,6 +28,7 @@ import diagnosticsModelSource from '@/components/Settings/diagnosticsModel.ts?ra
 import diagnosticsResultsPanelSource from '@/components/Settings/DiagnosticsResultsPanel.tsx?raw';
 import diagnosticsStateSource from '@/components/Settings/useDiagnosticsPanelState.ts?raw';
 import settingsShellSource from '@/components/Settings/Settings.tsx?raw';
+import settingsDialogsSource from '@/components/Settings/SettingsDialogs.tsx?raw';
 import settingsPanelRegistrySource from '@/components/Settings/useSettingsPanelRegistry.tsx?raw';
 import settingsPanelRegistryContextSource from '@/components/Settings/settingsPanelRegistryContext.tsx?raw';
 import settingsPanelRegistryLoadersSource from '@/components/Settings/settingsPanelRegistryLoaders.ts?raw';
@@ -35,6 +36,7 @@ import settingsNavigationModelSource from '@/components/Settings/settingsNavigat
 import settingsRoutingSource from '@/components/Settings/settingsRouting.ts?raw';
 import settingsTypesSource from '@/components/Settings/settingsTypes.ts?raw';
 import settingsNavigationHookSource from '@/components/Settings/useSettingsNavigation.ts?raw';
+import settingsShellStateSource from '@/components/Settings/useSettingsShellState.ts?raw';
 import settingsNavCatalogSource from '@/components/Settings/settingsNavCatalog.ts?raw';
 import settingsNavVisibilitySource from '@/components/Settings/settingsNavVisibility.ts?raw';
 import settingsTabSaveBehaviorSource from '@/components/Settings/settingsTabSaveBehavior.ts?raw';
@@ -888,6 +890,10 @@ describe('frontend resource type boundaries', () => {
     expect(settingsNavigationHookSource).toContain('settingsTabPath');
     expect(settingsRoutingSource).toContain("from './settingsNavigationModel'");
     expect(settingsTypesSource).toContain("from './settingsNavigationModel'");
+    expect(settingsDialogsSource).toContain('UpdateConfirmationModal');
+    expect(settingsDialogsSource).toContain('BackupTransferDialogs');
+    expect(settingsShellStateSource).toContain('SETTINGS_HEADER_META');
+    expect(settingsShellStateSource).toContain('setSidebarCollapsed');
     expect(settingsNavCatalogSource).toContain('export const SETTINGS_NAV_GROUPS');
     expect(settingsNavVisibilitySource).toContain('shouldHideSettingsNavItem');
     expect(settingsTabSaveBehaviorSource).toContain('getSettingsNavItem(tab)?.saveBehavior');
