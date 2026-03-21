@@ -1826,6 +1826,36 @@ class SubsystemLookupTest(unittest.TestCase):
                 "docs/release-control/v6/internal/subsystems/performance-and-scalability.md",
             )
             self.assertEqual(match["lane_context"]["lane_id"], "L10")
+
+    def test_lookup_paths_assigns_dashboard_disk_list_runtime_to_performance_and_scalability(self) -> None:
+        result = lookup_paths(
+            [
+                "frontend-modern/src/components/Dashboard/DiskList.tsx",
+                "frontend-modern/src/components/Dashboard/diskListModel.ts",
+                "frontend-modern/src/components/Dashboard/useDiskListState.ts",
+            ]
+        )
+        self.assertEqual(result["unowned_runtime_files"], [])
+        self.assertEqual(
+            {item["subsystem"] for item in result["impacted_subsystems"]},
+            {"performance-and-scalability"},
+        )
+        for file_entry in result["files"]:
+            self.assertEqual(file_entry["classification"], "runtime")
+            self.assertEqual(
+                {match["subsystem"] for match in file_entry["matches"]},
+                {"performance-and-scalability"},
+            )
+            match = file_entry["matches"][0]
+            self.assertEqual(
+                match["contract"],
+                "docs/release-control/v6/internal/subsystems/performance-and-scalability.md",
+            )
+            self.assertEqual(match["lane_context"]["lane_id"], "L10")
+            self.assertEqual(
+                match["verification_requirement"]["id"],
+                "dashboard-workload-hot-path",
+            )
             self.assertEqual(
                 match["verification_requirement"]["id"],
                 "dashboard-workload-hot-path",

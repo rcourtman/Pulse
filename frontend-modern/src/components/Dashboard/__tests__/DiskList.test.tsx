@@ -1,6 +1,10 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { render, screen, cleanup } from '@solidjs/testing-library';
 import { DiskList } from '../DiskList';
+import {
+  buildDashboardDiskPresentation,
+  getDashboardDiskUsagePercent,
+} from '../diskListModel';
 import type { Disk } from '@/types/api';
 
 function makeDisk(overrides: Partial<Disk> = {}): Disk {
@@ -129,6 +133,11 @@ describe('DiskList', () => {
   });
 
   describe('usage calculation', () => {
+    it('derives usage percent through the canonical disk-list model', () => {
+      const disk = makeDisk({ used: 26843545600, total: 107374182400 });
+      expect(getDashboardDiskUsagePercent(disk)).toBe(25);
+    });
+
     it('calculates usage percent correctly', () => {
       // 25 GB used / 100 GB total = 25%
       const disk = makeDisk({ used: 26843545600, total: 107374182400 });
@@ -272,6 +281,16 @@ describe('DiskList', () => {
   });
 
   describe('disk type display', () => {
+    it('builds disk presentation through the canonical disk-list model', () => {
+      const presentation = buildDashboardDiskPresentation(
+        makeDisk({ mountpoint: undefined, device: undefined, type: 'ext4' }),
+        0,
+      );
+      expect(presentation.label).toBe('Unknown');
+      expect(presentation.labelTitle).toBeUndefined();
+      expect(presentation.typeLabel).toBe('EXT4');
+    });
+
     it('uppercases disk type', () => {
       const disk = makeDisk({ type: 'ext4' });
       render(() => <DiskList disks={[disk]} />);

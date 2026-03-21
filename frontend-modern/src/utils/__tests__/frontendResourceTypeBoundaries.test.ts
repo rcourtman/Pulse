@@ -99,6 +99,8 @@ import guestRowSource from '@/components/Dashboard/GuestRow.tsx?raw';
 import guestRowModelSource from '@/components/Dashboard/guestRowModel.tsx?raw';
 import guestRowStateSource from '@/components/Dashboard/useGuestRowState.ts?raw';
 import dashboardDiskListSource from '@/components/Dashboard/DiskList.tsx?raw';
+import dashboardDiskListModelSource from '@/components/Dashboard/diskListModel.ts?raw';
+import dashboardDiskListStateSource from '@/components/Dashboard/useDiskListState.ts?raw';
 import guestDrawerSource from '@/components/Dashboard/GuestDrawer.tsx?raw';
 import guestDrawerModelSource from '@/components/Dashboard/guestDrawerModel.ts?raw';
 import guestDrawerStateSource from '@/components/Dashboard/useGuestDrawerState.ts?raw';
@@ -3222,7 +3224,12 @@ describe('frontend resource type boundaries', () => {
     expect(guestRowSource).not.toContain(
       'No filesystems found. VM may be booting or using a Live ISO.',
     );
-    expect(dashboardDiskListSource).toContain('getDashboardGuestDiskStatusMessage');
+    expect(dashboardDiskListSource).toContain('useDiskListState');
+    expect(dashboardDiskListSource).not.toContain('getDashboardGuestDiskStatusMessage');
+    expect(dashboardDiskListSource).not.toContain('const getUsagePercent =');
+    expect(dashboardDiskListStateSource).toContain('getDashboardGuestDiskStatusMessage');
+    expect(dashboardDiskListModelSource).toContain('export const buildDashboardDiskPresentation');
+    expect(dashboardDiskListModelSource).toContain('export const getDashboardDiskUsagePercent');
     expect(dashboardDiskListSource).not.toContain(
       'No filesystems found. VM may be booting or using a Live ISO.',
     );

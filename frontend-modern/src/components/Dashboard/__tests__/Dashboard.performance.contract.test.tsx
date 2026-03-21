@@ -5,6 +5,9 @@ import type { Resource } from '@/types/resource';
 import { Dashboard } from '../Dashboard';
 import dashboardSource from '../Dashboard.tsx?raw';
 import dashboardStateSource from '../useDashboardState.ts?raw';
+import diskListSource from '../DiskList.tsx?raw';
+import diskListModelSource from '../diskListModel.ts?raw';
+import diskListStateSource from '../useDiskListState.ts?raw';
 import guestDrawerSource from '../GuestDrawer.tsx?raw';
 import guestDrawerModelSource from '../guestDrawerModel.ts?raw';
 import guestRowSource from '../GuestRow.tsx?raw';
@@ -494,6 +497,15 @@ describe('Dashboard performance contract', () => {
       expect(guestDrawerStateSource).toContain('getWebInterfaceTargetLabelForWorkload');
       expect(guestDrawerModelSource).toContain('export const getGuestDrawerBackupPresentation');
       expect(guestDrawerModelSource).toContain('export const normalizeGuestDrawerTags');
+    });
+
+    it('keeps disk-list runtime and derivations in canonical disk-list owners', () => {
+      expect(diskListSource).toContain('useDiskListState');
+      expect(diskListSource).not.toContain('const getUsagePercent =');
+      expect(diskListSource).not.toContain('const getDiskStatusTooltip =');
+      expect(diskListStateSource).toContain('getDashboardGuestDiskStatusMessage');
+      expect(diskListModelSource).toContain('export const buildDashboardDiskPresentation');
+      expect(diskListModelSource).toContain('export const getDashboardDiskUsagePercent');
     });
 
     it('filterWorkloads returns all guests when no filters active', () => {

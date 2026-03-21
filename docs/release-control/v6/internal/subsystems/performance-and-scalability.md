@@ -27,21 +27,25 @@ regression protection.
 5. `internal/api/slo_bench_test.go`
 6. `frontend-modern/src/components/Dashboard/Dashboard.tsx`
 7. `frontend-modern/src/components/Dashboard/useDashboardState.ts`
-8. `frontend-modern/src/components/Dashboard/GuestRow.tsx`
-9. `frontend-modern/src/components/Dashboard/guestRowModel.tsx`
-10. `frontend-modern/src/components/Dashboard/useGuestRowState.ts`
-11. `frontend-modern/src/components/Dashboard/GuestDrawer.tsx`
-12. `frontend-modern/src/components/Dashboard/guestDrawerModel.ts`
-13. `frontend-modern/src/components/Dashboard/useGuestDrawerState.ts`
-14. `frontend-modern/src/components/Dashboard/workloadSelectors.ts`
-15. `frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx`
-16. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`
-17. `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts`
-18. `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts`
-19. `frontend-modern/src/components/Dashboard/__tests__/Dashboard.performance.contract.test.tsx`
-20. `frontend-modern/src/components/Dashboard/__tests__/GuestRow.test.tsx`
-21. `frontend-modern/src/components/Dashboard/GuestDrawer.test.tsx`
-22. `frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx`
+8. `frontend-modern/src/components/Dashboard/DiskList.tsx`
+9. `frontend-modern/src/components/Dashboard/diskListModel.ts`
+10. `frontend-modern/src/components/Dashboard/useDiskListState.ts`
+11. `frontend-modern/src/components/Dashboard/GuestRow.tsx`
+12. `frontend-modern/src/components/Dashboard/guestRowModel.tsx`
+13. `frontend-modern/src/components/Dashboard/useGuestRowState.ts`
+14. `frontend-modern/src/components/Dashboard/GuestDrawer.tsx`
+15. `frontend-modern/src/components/Dashboard/guestDrawerModel.ts`
+16. `frontend-modern/src/components/Dashboard/useGuestDrawerState.ts`
+17. `frontend-modern/src/components/Dashboard/workloadSelectors.ts`
+18. `frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx`
+19. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`
+20. `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts`
+21. `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts`
+22. `frontend-modern/src/components/Dashboard/__tests__/Dashboard.performance.contract.test.tsx`
+23. `frontend-modern/src/components/Dashboard/__tests__/DiskList.test.tsx`
+24. `frontend-modern/src/components/Dashboard/__tests__/GuestRow.test.tsx`
+25. `frontend-modern/src/components/Dashboard/GuestDrawer.test.tsx`
+26. `frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx`
 
 ## Shared Boundaries
 
@@ -63,6 +67,7 @@ regression protection.
 8. Format infrastructure sensor labels through the shared `frontend-modern/src/utils/textPresentation.ts` presentation helper instead of maintaining a local title-casing implementation in `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts`
 9. Extend dashboard row contract and per-row hot-path derivations through `frontend-modern/src/components/Dashboard/guestRowModel.tsx` and `frontend-modern/src/components/Dashboard/useGuestRowState.ts` rather than rebuilding column metadata, row identity, or anomaly correlation inside `frontend-modern/src/components/Dashboard/GuestRow.tsx`
 10. Extend dashboard drawer derivations and runtime wiring through `frontend-modern/src/components/Dashboard/guestDrawerModel.ts` and `frontend-modern/src/components/Dashboard/useGuestDrawerState.ts` rather than rebuilding canonical guest identity, discovery routing, or drawer-local normalization inside `frontend-modern/src/components/Dashboard/GuestDrawer.tsx`
+11. Extend dashboard disk-list derivations and fallback runtime wiring through `frontend-modern/src/components/Dashboard/diskListModel.ts` and `frontend-modern/src/components/Dashboard/useDiskListState.ts` rather than rebuilding usage math, progress-state mapping, or tooltip fallback logic inside `frontend-modern/src/components/Dashboard/DiskList.tsx`
 
 ## Forbidden Paths
 
@@ -110,6 +115,13 @@ and workload-derived navigation state live in
 `frontend-modern/src/components/Dashboard/useGuestDrawerState.ts`. Future
 drawer runtime changes must extend through those owners instead of adding
 more mixed state and helper drift back into the shell.
+The dashboard disk list now follows the same pattern: the shell stays in
+`frontend-modern/src/components/Dashboard/DiskList.tsx`, while disk-row
+presentation derivations and fallback tooltip/runtime wiring live in
+`frontend-modern/src/components/Dashboard/diskListModel.ts` and
+`frontend-modern/src/components/Dashboard/useDiskListState.ts`. Future disk
+usage math, threshold-color routing, and fallback handling must extend
+through those owners instead of accreting back into the shell.
 
 The unified resource table hot path is now also governed as explicit
 performance-owned runtime, with shared ownership against the unified-resource
