@@ -2775,6 +2775,7 @@ index 1111111..2222222 100644
                         "frontend-modern/src/features/alerts/__tests__/helpers.test.ts",
                         "frontend-modern/src/features/alerts/identity.test.ts",
                         "frontend-modern/src/features/alerts/thresholds/__tests__/helpers.test.ts",
+                        "frontend-modern/src/features/alerts/thresholds/hooks/__tests__/useThresholdsTableState.test.tsx",
                         "frontend-modern/src/pages/__tests__/Alerts.helpers.test.ts",
                         "frontend-modern/src/utils/__tests__/alertOverviewPresentation.test.ts",
                     ],

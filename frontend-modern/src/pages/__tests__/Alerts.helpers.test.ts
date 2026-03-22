@@ -7,6 +7,7 @@ import alertScheduleTabSource from '@/features/alerts/tabs/ScheduleTab.tsx?raw';
 import alertThresholdsTabSource from '@/features/alerts/tabs/ThresholdsTab.tsx?raw';
 import thresholdsTableSource from '@/components/Alerts/ThresholdsTable.tsx?raw';
 import thresholdsDataHookSource from '@/features/alerts/thresholds/hooks/useThresholdsData.ts?raw';
+import thresholdsTableStateHookSource from '@/features/alerts/thresholds/hooks/useThresholdsTableState.ts?raw';
 
 import {
   ALERT_TAB_SEGMENTS,
@@ -189,10 +190,13 @@ describe('tab path helpers', () => {
     expect(alertScheduleTabSource).toContain('getAlertConfigQuietHourSuppressOptions');
     expect(alertThresholdsTabSource).toContain('ThresholdsTable');
     expect(thresholdsTableSource).toContain(
-      "import { useThresholdsData } from '@/features/alerts/thresholds/hooks/useThresholdsData';",
+      "import { useThresholdsTableState } from '@/features/alerts/thresholds/hooks/useThresholdsTableState';",
     );
-    expect(thresholdsTableSource).not.toContain('const nodesWithOverrides = createMemo');
+    expect(thresholdsTableSource).not.toContain('const [searchTerm, setSearchTerm] = createSignal');
+    expect(thresholdsTableSource).not.toContain('const handleTabClick =');
     expect(thresholdsDataHookSource).toContain('export function useThresholdsData');
+    expect(thresholdsTableStateHookSource).toContain('export function useThresholdsTableState');
+    expect(thresholdsTableStateHookSource).toContain('useThresholdsData(props, editingId, searchTerm)');
   });
 });
 

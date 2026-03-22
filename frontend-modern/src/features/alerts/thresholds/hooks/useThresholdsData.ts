@@ -2,8 +2,6 @@ import { createMemo } from 'solid-js';
 import { unwrap } from 'solid-js/store';
 import { requiresGovernedResourceDisplay } from '@/types/resource';
 import type { Resource } from '@/types/resource';
-import type { GroupHeaderMeta } from '@/components/Alerts/ResourceTable';
-import type { Resource as TableResource } from '@/components/Alerts/ResourceTable';
 import {
   getAgentDiscoveryResourceId,
   isAppContainerDiscoveryResourceType,
@@ -27,6 +25,7 @@ import {
 } from '../constants';
 import type { PMGThresholdDefaults, SnapshotAlertConfig, BackupAlertConfig } from '@/types/alerts';
 import type { ThresholdsTableProps, Override } from '../types';
+import type { GroupHeaderMeta, Resource as TableResource } from '../tableTypes';
 
 export function useThresholdsData(
   props: ThresholdsTableProps,

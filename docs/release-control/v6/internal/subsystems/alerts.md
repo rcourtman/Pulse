@@ -115,10 +115,13 @@ so governed agent, guest, and storage rows do not leak raw names when the
 threshold editor saves or re-renders them.
 That threshold editor data shaping now lives under
 `frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsData.ts`,
-with `frontend-modern/src/components/Alerts/ThresholdsTable.tsx` limited to
-table interaction and presentation. New threshold row grouping, override-ID
-compatibility, and resource normalization logic should land in the hook rather
-than being rebuilt inside the table component.
+while `frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsTableState.ts`
+owns threshold-table route sync, edit state, bulk-edit flow, and override
+mutation control. `frontend-modern/src/components/Alerts/ThresholdsTable.tsx`
+is now limited to table interaction and presentation. New threshold row
+grouping, override-ID compatibility, resource normalization, or thresholds-table
+controller logic should land in those hooks rather than being rebuilt inside
+the table component.
 The alert resource thresholds editor now follows the same shape: shared metric
 normalization, bounds, value-resolution, and override-label logic live in
 `frontend-modern/src/components/Alerts/alertResourceTableModel.ts`, while

@@ -35,7 +35,6 @@ import {
   ALERT_BULK_EDIT_CLEAR_LABEL,
   getAlertBulkEditOpenLabel,
 } from '@/utils/alertBulkEditPresentation';
-import type { ResourcePolicy } from '@/types/resource';
 import {
   ALERT_RESOURCE_TABLE_SLIDER_METRICS,
   alertResourceSupportsMetric,
@@ -52,58 +51,12 @@ import {
   type AlertResourceThresholdMap,
 } from './alertResourceTableModel';
 import { useAlertResourceTableState } from './useAlertResourceTableState';
+import type { GroupHeaderMeta, Resource } from '@/features/alerts/thresholds/tableTypes';
+
+export type { GroupHeaderMeta, Resource } from '@/features/alerts/thresholds/tableTypes';
 
 const OFFLINE_ALERTS_TOOLTIP =
   'Toggle default behavior for powered-off or connectivity alerts for this resource type.';
-
-export interface Resource {
-  id: string;
-  name: string;
-  displayName?: string;
-  policy?: ResourcePolicy;
-  aiSafeSummary?: string;
-  rawName?: string;
-  node?: string;
-  instance?: string;
-  host?: string;
-  type?: string;
-  resourceType?: string;
-  subtitle?: string;
-  thresholds?: AlertResourceThresholdMap;
-  defaults?: AlertResourceThresholdMap;
-  disabled?: boolean;
-  disableConnectivity?: boolean;
-  poweredOffSeverity?: 'warning' | 'critical';
-  hasOverride?: boolean;
-  status?: string;
-  vmid?: number;
-  cpu?: number;
-  memory?: number;
-  uptime?: number;
-  clusterName?: string;
-  isClusterMember?: boolean;
-  delaySeconds?: number;
-  editScope?: 'snapshot' | 'backup';
-  isEnabled?: boolean;
-  toggleEnabled?: () => void;
-  toggleTitleEnabled?: string;
-  toggleTitleDisabled?: string;
-  editable?: boolean;
-  note?: string;
-  backup?: any;
-  snapshot?: any;
-  [key: string]: unknown;
-}
-
-export interface GroupHeaderMeta {
-  type?: 'agent' | 'node' | 'default';
-  displayName?: string;
-  rawName?: string;
-  host?: string;
-  status?: string;
-  clusterName?: string;
-  isClusterMember?: boolean;
-}
 
 interface ResourceTableProps {
   title: string;

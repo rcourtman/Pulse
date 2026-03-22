@@ -85,6 +85,27 @@ class SubsystemLookupTest(unittest.TestCase):
             match["verification_requirement"]["exact_files"],
         )
 
+    def test_lookup_paths_assigns_thresholds_table_state_hook_to_alerts(self) -> None:
+        result = lookup_paths(
+            ["frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsTableState.ts"]
+        )
+        self.assertEqual(result["unowned_runtime_files"], [])
+        self.assertEqual(
+            {item["subsystem"] for item in result["impacted_subsystems"]},
+            {"alerts"},
+        )
+        file_entry = result["files"][0]
+        self.assertEqual(file_entry["classification"], "runtime")
+        self.assertEqual({match["subsystem"] for match in file_entry["matches"]}, {"alerts"})
+        match = file_entry["matches"][0]
+        self.assertEqual(match["contract"], "docs/release-control/v6/internal/subsystems/alerts.md")
+        self.assertEqual(match["lane_context"]["lane_id"], "L6")
+        self.assertEqual(match["verification_requirement"]["id"], "alerts-frontend-surface")
+        self.assertIn(
+            "frontend-modern/src/features/alerts/thresholds/hooks/__tests__/useThresholdsTableState.test.tsx",
+            match["verification_requirement"]["exact_files"],
+        )
+
     def test_lookup_paths_assigns_alert_overview_presentation_to_alerts(self) -> None:
         result = lookup_paths(["frontend-modern/src/utils/alertOverviewPresentation.ts"])
         self.assertEqual(result["unowned_runtime_files"], [])
