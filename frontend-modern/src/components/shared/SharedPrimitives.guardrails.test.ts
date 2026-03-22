@@ -5,7 +5,7 @@ import monitoredSystemLimitWarningBannerSource from '@/components/shared/Monitor
 import selectionCardGroupSource from '@/components/shared/SelectionCardGroup.tsx?raw';
 import tagBadgesSource from '@/components/shared/TagBadges.tsx?raw';
 import guestRowSource from '@/components/Dashboard/GuestRow.tsx?raw';
-import resourceDetailDrawerSource from '@/components/Infrastructure/ResourceDetailDrawer.tsx?raw';
+import resourceDetailDrawerOverviewSource from '@/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx?raw';
 import aiSettingsDialogsSource from '@/components/Settings/AISettingsDialogs.tsx?raw';
 import generalSettingsPanelSource from '@/components/Settings/GeneralSettingsPanel.tsx?raw';
 import proxmoxSettingsPanelSource from '@/components/Settings/ProxmoxSettingsPanel.tsx?raw';
@@ -100,8 +100,8 @@ describe('shared primitive guardrails', () => {
     expect(tagBadgesSource).toContain("from '@/components/shared/Tooltip'");
     expect(guestRowSource).toContain("from '@/components/shared/TagBadges'");
     expect(guestRowSource).not.toContain("from './TagBadges'");
-    expect(resourceDetailDrawerSource).toContain("from '@/components/shared/TagBadges'");
-    expect(resourceDetailDrawerSource).not.toContain(
+    expect(resourceDetailDrawerOverviewSource).toContain("from '@/components/shared/TagBadges'");
+    expect(resourceDetailDrawerOverviewSource).not.toContain(
       "from '@/components/Dashboard/TagBadges'",
     );
   });

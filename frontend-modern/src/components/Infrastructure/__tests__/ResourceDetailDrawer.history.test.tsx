@@ -3,7 +3,8 @@ import { fireEvent, render, screen, within } from '@solidjs/testing-library';
 
 import discoveryTabSource from '@/components/Discovery/DiscoveryTab.tsx?raw';
 import discoveryTabStateSource from '@/components/Discovery/useDiscoveryTabState.ts?raw';
-import resourceDetailDrawerSource from '@/components/Infrastructure/ResourceDetailDrawer.tsx?raw';
+import resourceDetailDrawerShellSource from '@/components/Infrastructure/ResourceDetailDrawer.tsx?raw';
+import resourceDetailDrawerOverviewSource from '@/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx?raw';
 import type { Resource } from '@/types/resource';
 import { ResourceDetailDrawer } from '@/components/Infrastructure/ResourceDetailDrawer';
 
@@ -109,10 +110,15 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(discoveryTabSource).not.toContain('getConnectedAgents(');
     expect(discoveryTabSource).not.toContain('triggerDiscovery(');
     expect(discoveryTabSource).not.toContain('updateDiscoveryNotes(');
-    expect(resourceDetailDrawerSource).toContain("from '@/components/shared/TagBadges'");
-    expect(resourceDetailDrawerSource).not.toContain(
+    expect(resourceDetailDrawerOverviewSource).toContain("from '@/components/shared/TagBadges'");
+    expect(resourceDetailDrawerOverviewSource).not.toContain(
       "from '@/components/Dashboard/TagBadges'",
     );
+    expect(resourceDetailDrawerShellSource).toContain(
+      "from './ResourceDetailDrawerOverviewTab'",
+    );
+    expect(resourceDetailDrawerShellSource).toContain("from './ResourceDetailDrawerDebugTab'");
+    expect(resourceDetailDrawerShellSource).not.toContain('Change history');
   });
 
   it('keeps compact timeline summary chips in overview while showing one embedded change history section', async () => {

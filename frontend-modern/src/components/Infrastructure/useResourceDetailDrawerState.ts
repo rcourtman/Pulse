@@ -181,6 +181,7 @@ export interface UseResourceDetailDrawerStateResult {
   >;
   hasRuntimeOperationalContext: Accessor<boolean>;
   sourceSections: Accessor<Array<{ id: string; label: string; payload: unknown }>>;
+  sourceStatus: Accessor<NonNullable<PlatformData['sourceStatus']>>;
   identityMatchInfo: Accessor<unknown>;
   debugJson: Accessor<string>;
   tabs: Accessor<Array<{ id: DrawerTab; label: string }>>;
@@ -910,6 +911,7 @@ export const useResourceDetailDrawerState = (
     relatedLinks,
     hasRuntimeOperationalContext,
     sourceSections,
+    sourceStatus,
     identityMatchInfo,
     debugJson,
     tabs,

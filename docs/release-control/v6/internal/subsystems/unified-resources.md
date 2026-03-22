@@ -44,13 +44,16 @@ cross-source deduplication.
 22. `internal/unifiedresources/privacy.go`
 23. `internal/unifiedresources/actions.go`
 24. `frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx`
-25. `frontend-modern/src/components/Infrastructure/ResourceFacetSummary.tsx`
-26. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts`
-27. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`
-28. `frontend-modern/src/components/Discovery/DiscoveryTab.tsx`
-29. `frontend-modern/src/components/Discovery/useDiscoveryTabState.ts`
-30. `frontend-modern/src/features/infrastructure/InfrastructurePageSurface.tsx`
-31. `frontend-modern/src/features/infrastructure/useInfrastructurePageState.ts`
+25. `frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx`
+26. `frontend-modern/src/components/Infrastructure/ResourceDetailDrawerDebugTab.tsx`
+27. `frontend-modern/src/components/Infrastructure/ResourceDetailDrawerSupportDisclosure.tsx`
+28. `frontend-modern/src/components/Infrastructure/ResourceFacetSummary.tsx`
+29. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts`
+30. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`
+31. `frontend-modern/src/components/Discovery/DiscoveryTab.tsx`
+32. `frontend-modern/src/components/Discovery/useDiscoveryTabState.ts`
+33. `frontend-modern/src/features/infrastructure/InfrastructurePageSurface.tsx`
+34. `frontend-modern/src/features/infrastructure/useInfrastructurePageState.ts`
 
 ## Shared Boundaries
 
@@ -77,7 +80,7 @@ assembly branch.
 4. Add metrics-target normalization or synthetic metrics support through `internal/unifiedresources/metrics_targets.go` and `internal/unifiedresources/metrics.go`
 5. Add platform registry, resolution, or host-dedup behavior through `internal/unifiedresources/registry.go`, `internal/unifiedresources/resolve.go`, `internal/unifiedresources/resolved_host_set.go`, `internal/unifiedresources/snapshot_source_filter.go`, `internal/unifiedresources/store.go`, `internal/unifiedresources/kubernetes_capabilities.go`, and `internal/unifiedresources/pbs_rollups.go`
 6. Add canonical governed name-resolution or policy-aware resource lookup behavior through `internal/unifiedresources/resolve.go` and `internal/unifiedresources/resolve_context.go`
-7. Add or change resource drawer timeline/facet presentation through `frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx`, `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts`, `frontend-modern/src/components/Infrastructure/ResourceFacetSummary.tsx`, `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts`, and the governed `internal/api/resources.go` facet/timeline contract together
+7. Add or change resource drawer timeline/facet presentation through `frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx`, `frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx`, `frontend-modern/src/components/Infrastructure/ResourceDetailDrawerDebugTab.tsx`, `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts`, `frontend-modern/src/components/Infrastructure/ResourceFacetSummary.tsx`, `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts`, and the governed `internal/api/resources.go` facet/timeline contract together
 8. Add or change discovery-support runtime under the resource drawer through `frontend-modern/src/components/Discovery/DiscoveryTab.tsx` for shell/presentation ownership and `frontend-modern/src/components/Discovery/useDiscoveryTabState.ts` for fetch, websocket-progress, and notes-mutation ownership
 
 ## Forbidden Paths
@@ -131,6 +134,11 @@ hints.
 Those same relationship changes now summarize the actual edge(s) in `from` and
 `to`, so the canonical timeline keeps the relationship transition readable without
 needing the drawer to reconstruct an edge summary from raw endpoints.
+The infrastructure resource drawer now follows the explicit shell/state/render
+split used elsewhere in v6: `ResourceDetailDrawer.tsx` owns composition,
+`useResourceDetailDrawerState.ts` owns runtime state and fetch orchestration,
+and the overview/debug render-heavy surfaces live in dedicated drawer-local
+owners instead of staying inline in the shell.
 The backend AI and Patrol context renderers now derive their canonical change
 kind, source type, source adapter, actor, reason, and related-resource
 fragments from `internal/unifiedresources/change_presentation.go`, so the

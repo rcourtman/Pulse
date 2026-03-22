@@ -243,6 +243,8 @@ import licensePresentationSource from '@/utils/licensePresentation.ts?raw';
 import securityScorePresentationSource from '@/utils/securityScorePresentation.ts?raw';
 import securityAuthPresentationSource from '@/utils/securityAuthPresentation.ts?raw';
 import resourceDetailDrawerShellSource from '@/components/Infrastructure/ResourceDetailDrawer.tsx?raw';
+import resourceDetailDrawerOverviewSource from '@/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx?raw';
+import resourceDetailDrawerDebugSource from '@/components/Infrastructure/ResourceDetailDrawerDebugTab.tsx?raw';
 import infrastructureSummarySource from '@/components/Infrastructure/InfrastructureSummary.tsx?raw';
 import resourceDetailMappersSource from '@/components/Infrastructure/resourceDetailMappers.ts?raw';
 import resourceDetailDrawerStateSource from '@/components/Infrastructure/useResourceDetailDrawerState.ts?raw';
@@ -518,6 +520,8 @@ const aiSettingsSource = [
 
 const resourceDetailDrawerSource = [
   resourceDetailDrawerShellSource,
+  resourceDetailDrawerOverviewSource,
+  resourceDetailDrawerDebugSource,
   resourceDetailDrawerStateSource,
 ].join('\n');
 
@@ -861,10 +865,14 @@ describe('frontend resource type boundaries', () => {
     expect(guestRowCellsSource).toContain('useTooltip');
     expect(guestRowSource).not.toContain('buildGuestId');
     expect(tagBadgesSource).toContain("from '@/components/shared/Tooltip'");
-    expect(resourceDetailDrawerShellSource).toContain("from '@/components/shared/TagBadges'");
-    expect(resourceDetailDrawerShellSource).not.toContain(
+    expect(resourceDetailDrawerOverviewSource).toContain("from '@/components/shared/TagBadges'");
+    expect(resourceDetailDrawerOverviewSource).not.toContain(
       "from '@/components/Dashboard/TagBadges'",
     );
+    expect(resourceDetailDrawerShellSource).toContain(
+      "from './ResourceDetailDrawerOverviewTab'",
+    );
+    expect(resourceDetailDrawerShellSource).toContain("from './ResourceDetailDrawerDebugTab'");
     expect(guestDrawerSource).toContain('useGuestDrawerState');
     expect(guestDrawerSource).toContain('GuestDrawerOverview');
     expect(guestDrawerStateSource).toContain('getCanonicalWorkloadId');
