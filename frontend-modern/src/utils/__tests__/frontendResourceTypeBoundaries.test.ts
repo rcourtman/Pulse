@@ -339,6 +339,7 @@ import alertScheduleTabSource from '@/features/alerts/tabs/ScheduleTab.tsx?raw';
 import alertThresholdsTabSource from '@/features/alerts/tabs/ThresholdsTab.tsx?raw';
 import thresholdsTableSource from '@/components/Alerts/ThresholdsTable.tsx?raw';
 import thresholdsDataHookSource from '@/features/alerts/thresholds/hooks/useThresholdsData.ts?raw';
+import thresholdsRecoveryDefaultsStateHookSource from '@/features/alerts/thresholds/hooks/useThresholdsRecoveryDefaultsState.ts?raw';
 import thresholdsTableStateHookSource from '@/features/alerts/thresholds/hooks/useThresholdsTableState.ts?raw';
 import thresholdsOverrideMutationsHookSource from '@/features/alerts/thresholds/hooks/useThresholdsOverrideMutations.ts?raw';
 import alertIncidentPresentationSource from '@/utils/alertIncidentPresentation.ts?raw';
@@ -2888,11 +2889,19 @@ describe('frontend resource type boundaries', () => {
     expect(thresholdsTableStateHookSource).toContain('export function useThresholdsTableState');
     expect(thresholdsTableStateHookSource).toContain('useCollapsedSections()');
     expect(thresholdsTableStateHookSource).toContain('useThresholdsData(props, editingId, searchTerm)');
+    expect(thresholdsTableStateHookSource).toContain('useThresholdsRecoveryDefaultsState(props)');
     expect(thresholdsTableStateHookSource).toContain('useThresholdsOverrideMutations');
     expect(thresholdsTableStateHookSource).not.toContain('const saveEdit = (resourceId: string) => {');
     expect(thresholdsTableStateHookSource).not.toContain(
       'const toggleNodeConnectivity = (resourceId: string, forceState?: boolean) => {',
     );
+    expect(thresholdsDataHookSource).not.toContain('const sanitizeSnapshotConfig =');
+    expect(thresholdsDataHookSource).not.toContain('const sanitizeBackupConfig =');
+    expect(thresholdsRecoveryDefaultsStateHookSource).toContain(
+      'export function useThresholdsRecoveryDefaultsState',
+    );
+    expect(thresholdsRecoveryDefaultsStateHookSource).toContain('const sanitizeSnapshotConfig =');
+    expect(thresholdsRecoveryDefaultsStateHookSource).toContain('const sanitizeBackupConfig =');
     expect(thresholdsOverrideMutationsHookSource).toContain(
       'export function useThresholdsOverrideMutations',
     );

@@ -40,6 +40,7 @@ import type {
 } from '@/features/alerts/thresholds/tableTypes';
 import { useCollapsedSections } from '@/components/Alerts/Thresholds/hooks/useCollapsedSections';
 import { useThresholdsData } from './useThresholdsData';
+import { useThresholdsRecoveryDefaultsState } from './useThresholdsRecoveryDefaultsState';
 import { useThresholdsOverrideMutations } from './useThresholdsOverrideMutations';
 
 const HELP_BANNER_KEY = 'pulse-thresholds-help-dismissed';
@@ -189,16 +190,6 @@ export function useThresholdsTableState(props: ThresholdsTableProps) {
     dockerContainersFlat,
     totalDockerContainers,
     dockerHostGroupMeta,
-    snapshotFactoryConfig,
-    sanitizeSnapshotConfig,
-    backupFactoryConfig,
-    sanitizeBackupConfig,
-    snapshotDefaultsRecord,
-    snapshotFactoryDefaultsRecord,
-    backupDefaultsRecord,
-    backupFactoryDefaultsRecord,
-    snapshotOverridesCount,
-    backupOverridesCount,
     guestsGroupedByNode,
     guestsFlat,
     guestGroupHeaderMeta,
@@ -208,6 +199,19 @@ export function useThresholdsTableState(props: ThresholdsTableProps) {
     storageWithOverrides,
     storageGroupedByNode,
   } = useThresholdsData(props, editingId, searchTerm);
+
+  const {
+    backupDefaultsRecord,
+    backupFactoryConfig,
+    backupFactoryDefaultsRecord,
+    backupOverridesCount,
+    sanitizeBackupConfig,
+    sanitizeSnapshotConfig,
+    snapshotDefaultsRecord,
+    snapshotFactoryConfig,
+    snapshotFactoryDefaultsRecord,
+    snapshotOverridesCount,
+  } = useThresholdsRecoveryDefaultsState(props);
 
   const countOverrides = (resources: TableResource[] | undefined) =>
     resources?.filter(

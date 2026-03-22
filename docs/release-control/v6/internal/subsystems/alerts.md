@@ -132,6 +132,8 @@ so governed agent, guest, and storage rows do not leak raw names when the
 threshold editor saves or re-renders them.
 That threshold editor data shaping now lives under
 `frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsData.ts`,
+backup and snapshot default sanitization plus factory-drift policy now live in
+`frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsRecoveryDefaultsState.ts`,
 while `frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsTableState.ts`
 owns threshold-table route sync, section collapse state, search/edit shell
 state, and bulk-edit dialog control. Override persistence, bulk threshold

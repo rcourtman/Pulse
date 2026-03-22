@@ -236,9 +236,12 @@ inline.
 The thresholds editor now follows that same split more tightly:
 `frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsTableState.ts`
 must stay the table-shell owner for route sync and local UI state, while
+`frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsRecoveryDefaultsState.ts`
+owns backup/snapshot default sanitization and factory-drift policy, and
 `frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsOverrideMutations.ts`
 owns override save/bulk/toggle persistence and alert-removal side effects. The
-table-shell hook should not re-accumulate raw override mutation logic inline.
+table-shell hook should not re-accumulate raw override mutation logic or
+recovery-threshold defaults policy inline.
 
 The updates settings surface now follows the same presentation-owner rule.
 `frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx` stays the
@@ -430,6 +433,7 @@ is now explicitly a feature consumer rather than the data or controller owner.
 Canonical threshold row shaping, override-ID compatibility, grouped resource
 normalization, and thresholds-table controller state live in
 `frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsData.ts`,
+`frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsRecoveryDefaultsState.ts`,
 `frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsTableState.ts`,
 so future cleanup should extend those feature hooks instead of rebuilding
 resource normalization or thresholds-table runtime state inside the table

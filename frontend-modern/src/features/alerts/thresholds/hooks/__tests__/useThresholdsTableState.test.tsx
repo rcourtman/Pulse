@@ -30,10 +30,6 @@ vi.mock('../useThresholdsData', () => ({
     agentDisksGroupedByAgent: () => ({}),
     agentDisksWithOverrides: () => [],
     agentsWithOverrides: () => [],
-    backupDefaultsRecord: () => ({}),
-    backupFactoryConfig: () => ({ enabled: false }),
-    backupFactoryDefaultsRecord: () => ({}),
-    backupOverridesCount: () => 0,
     dockerContainersFlat: () => [],
     dockerContainersGroupedByHost: () => ({}),
     dockerHostGroupMeta: () => ({}),
@@ -45,15 +41,24 @@ vi.mock('../useThresholdsData', () => ({
     pbsServersWithOverrides: () => [],
     pmgGlobalDefaults: () => ({}),
     pmgServersWithOverrides: () => [],
+    storageGroupedByNode: () => ({}),
+    storageWithOverrides: () => [],
+    totalDockerContainers: () => 0,
+  }),
+}));
+
+vi.mock('../useThresholdsRecoveryDefaultsState', () => ({
+  useThresholdsRecoveryDefaultsState: () => ({
+    backupDefaultsRecord: () => ({}),
+    backupFactoryConfig: () => ({ enabled: false }),
+    backupFactoryDefaultsRecord: () => ({}),
+    backupOverridesCount: () => 0,
     sanitizeBackupConfig: <T,>(value: T) => value,
     sanitizeSnapshotConfig: <T,>(value: T) => value,
     snapshotDefaultsRecord: () => ({}),
     snapshotFactoryConfig: () => ({ enabled: false }),
     snapshotFactoryDefaultsRecord: () => ({}),
     snapshotOverridesCount: () => 0,
-    storageGroupedByNode: () => ({}),
-    storageWithOverrides: () => [],
-    totalDockerContainers: () => 0,
   }),
 }));
 
