@@ -466,6 +466,18 @@ for override projection and thresholds-facing resource selectors, and
 notification destination reload and persistence.
 `frontend-modern/src/features/alerts/useAlertWebhookDestinationsState.ts` now
 owns webhook runtime, and
+`frontend-modern/src/components/Alerts/ResourceTable.tsx` now follows the same
+shell rule: the shell only picks desktop vs mobile render ownership and bulk-edit
+composition, while
+`frontend-modern/src/components/Alerts/AlertResourceTableDesktop.tsx`,
+`frontend-modern/src/components/Alerts/AlertResourceTableMobile.tsx`, and
+`frontend-modern/src/components/Alerts/AlertResourceGroupHeader.tsx` own the
+render-heavy table/card/group-header surfaces. Shared runtime state remains in
+`frontend-modern/src/components/Alerts/useAlertResourceTableState.ts`, shared row
+rendering remains in
+`frontend-modern/src/components/Alerts/AlertResourceTableRow.tsx`, and shared
+metric normalization remains in
+`frontend-modern/src/components/Alerts/alertResourceTableModel.ts`.
 `frontend-modern/src/features/alerts/useAlertDestinationsTabState.ts` now owns
 destination test actions plus retry orchestration while
 `frontend-modern/src/features/alerts/tabs/DestinationsTab.tsx` stays the

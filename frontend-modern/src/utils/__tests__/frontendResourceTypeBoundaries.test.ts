@@ -359,6 +359,9 @@ import alertIncidentPresentationSource from '@/utils/alertIncidentPresentation.t
 import alertHistoryPresentationSource from '@/utils/alertHistoryPresentation.ts?raw';
 import bulkEditDialogSource from '@/components/Alerts/BulkEditDialog.tsx?raw';
 import alertResourceTableModelSource from '@/components/Alerts/alertResourceTableModel.ts?raw';
+import alertResourceGroupHeaderSource from '@/components/Alerts/AlertResourceGroupHeader.tsx?raw';
+import alertResourceTableDesktopSource from '@/components/Alerts/AlertResourceTableDesktop.tsx?raw';
+import alertResourceTableMobileSource from '@/components/Alerts/AlertResourceTableMobile.tsx?raw';
 import alertResourceTableRowSource from '@/components/Alerts/AlertResourceTableRow.tsx?raw';
 import alertResourceTableSource from '@/components/Alerts/ResourceTable.tsx?raw';
 import alertResourceTableStateSource from '@/components/Alerts/useAlertResourceTableState.ts?raw';
@@ -3947,8 +3950,8 @@ describe('frontend resource type boundaries', () => {
 
   it('keeps alert resource table vocabulary in a shared presentation utility', () => {
     expect(alertResourceTableSource).toContain('useAlertResourceTableState');
-    expect(alertResourceTableSource).toContain('AlertResourceTableRow');
-    expect(alertResourceTableSource).toContain('normalizeAlertResourceMetricKey');
+    expect(alertResourceTableSource).toContain('AlertResourceTableDesktop');
+    expect(alertResourceTableSource).toContain('AlertResourceTableMobile');
     expect(alertResourceTableSource).not.toContain('const flattenResources = (): Resource[] => {');
     expect(alertResourceTableSource).not.toContain(
       'const normalizeMetricKey = (column: string): string => {',
@@ -3956,13 +3959,6 @@ describe('frontend resource type boundaries', () => {
     expect(alertResourceTableSource).not.toContain(
       'const metricBounds = (metric: string): { min: number; max: number } => {',
     );
-    expect(alertResourceTableSource).toContain('getAlertResourceTableEmptyState');
-    expect(alertResourceTableSource).toContain('getAlertResourceTableNoResultsState');
-    expect(alertResourceTableSource).toContain('getAlertResourceTableCustomBadgeLabel');
-    expect(alertResourceTableSource).toContain('getAlertResourceTableMetricPlaceholder');
-    expect(alertResourceTableSource).toContain('getAlertResourceTableResetFactoryDefaultsLabel');
-    expect(alertResourceTableSource).toContain('getAlertResourceTableAlertDelayLabel');
-    expect(alertResourceTableSource).toContain('getAlertResourceTableMetricInputTitle');
     expect(alertResourceTableSource).not.toContain('No resources available.');
     expect(alertResourceTableSource).not.toContain('No {props.title.toLowerCase()} found');
     expect(alertResourceTableSource).not.toContain('Add a note about this override (optional)');
@@ -4007,6 +4003,29 @@ describe('frontend resource type boundaries', () => {
     expect(alertResourceTableStateSource).toContain('export function useAlertResourceTableState');
     expect(alertResourceTableStateSource).toContain('toggleAll');
     expect(alertResourceTableStateSource).toContain('clearSelectedIds');
+    expect(alertResourceGroupHeaderSource).toContain(
+      'export function AlertResourceGroupHeader',
+    );
+    expect(alertResourceGroupHeaderSource).toContain('meta?.clusterName');
+    expect(alertResourceTableDesktopSource).toContain(
+      'export function AlertResourceTableDesktop',
+    );
+    expect(alertResourceTableDesktopSource).toContain('AlertResourceTableRow');
+    expect(alertResourceTableDesktopSource).toContain('AlertResourceGroupHeader');
+    expect(alertResourceTableDesktopSource).toContain('getAlertResourceTableCustomBadgeLabel');
+    expect(alertResourceTableDesktopSource).toContain('getAlertResourceTableResetFactoryDefaultsLabel');
+    expect(alertResourceTableDesktopSource).toContain('getAlertResourceTableAlertDelayLabel');
+    expect(alertResourceTableDesktopSource).toContain('getAlertResourceTableMetricInputTitle');
+    expect(alertResourceTableDesktopSource).toContain('getAlertResourceTableEmptyState');
+    expect(alertResourceTableDesktopSource).toContain('getAlertResourceTableNoResultsState');
+    expect(alertResourceTableMobileSource).toContain(
+      'export function AlertResourceTableMobile',
+    );
+    expect(alertResourceTableMobileSource).toContain('AlertResourceGroupHeader');
+    expect(alertResourceTableMobileSource).toContain('buildAlertResourceEditPayload');
+    expect(alertResourceTableMobileSource).toContain('getAlertResourceTableCustomBadgeLabel');
+    expect(alertResourceTableMobileSource).toContain('getAlertResourceTableMetricPlaceholder');
+    expect(alertResourceTableMobileSource).toContain('getAlertResourceTableEmptyState');
     expect(alertResourceTableRowSource).toContain('export function AlertResourceTableRow');
     expect(alertResourceTableRowSource).toContain('alertResourceSupportsMetric');
     expect(alertResourceTableRowSource).toContain('getAlertResourceTableOverrideNotePlaceholder');

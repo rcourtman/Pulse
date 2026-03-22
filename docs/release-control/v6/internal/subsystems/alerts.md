@@ -161,13 +161,21 @@ thresholds-table controller logic, or per-tab runtime should land in those
 feature hooks and tab owners rather than being rebuilt inside the shell.
 The alert resource thresholds editor now follows the same shape: shared metric
 normalization, bounds, value-resolution, and override-label logic live in
-`frontend-modern/src/components/Alerts/alertResourceTableModel.ts`, render-heavy
+`frontend-modern/src/components/Alerts/alertResourceTableModel.ts`, shared group
+header presentation lives in
+`frontend-modern/src/components/Alerts/AlertResourceGroupHeader.tsx`, desktop
+table ownership lives in
+`frontend-modern/src/components/Alerts/AlertResourceTableDesktop.tsx`, mobile
+card ownership lives in
+`frontend-modern/src/components/Alerts/AlertResourceTableMobile.tsx`, render-heavy
 desktop row ownership lives in
-`frontend-modern/src/components/Alerts/AlertResourceTableRow.tsx`, and
-selection state, delay-row toggling, and inline metric-input focus live in
-`frontend-modern/src/components/Alerts/useAlertResourceTableState.ts`. Future
+`frontend-modern/src/components/Alerts/AlertResourceTableRow.tsx`, and selection
+state, delay-row toggling, and inline metric-input focus live in
+`frontend-modern/src/components/Alerts/useAlertResourceTableState.ts`.
+`frontend-modern/src/components/Alerts/ResourceTable.tsx` is now limited to the
+shell boundary for breakpoint selection and bulk-edit composition. Future
 resource-table threshold semantics should land in those owners instead of
-being rebuilt inline in `frontend-modern/src/components/Alerts/ResourceTable.tsx`.
+being rebuilt inline in the shell.
 
 Alert incident timeline event cards now route through
 `frontend-modern/src/components/Alerts/IncidentTimelineEventCard.tsx`,

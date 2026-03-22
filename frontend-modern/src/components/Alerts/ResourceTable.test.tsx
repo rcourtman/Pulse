@@ -2,6 +2,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { ALERT_BULK_EDIT_CLEAR_LABEL } from '@/utils/alertBulkEditPresentation';
 import resourceTableSource from '@/components/Alerts/ResourceTable.tsx?raw';
+import alertResourceGroupHeaderSource from '@/components/Alerts/AlertResourceGroupHeader.tsx?raw';
+import alertResourceTableDesktopSource from '@/components/Alerts/AlertResourceTableDesktop.tsx?raw';
+import alertResourceTableMobileSource from '@/components/Alerts/AlertResourceTableMobile.tsx?raw';
 import alertResourceTableRowSource from '@/components/Alerts/AlertResourceTableRow.tsx?raw';
 import alertResourceTableModelSource from '@/components/Alerts/alertResourceTableModel.ts?raw';
 import alertResourceTableStateSource from '@/components/Alerts/useAlertResourceTableState.ts?raw';
@@ -271,13 +274,26 @@ describe('ResourceTable', () => {
   describe('table ownership model', () => {
     it('keeps table state and metric rules in dedicated owners', () => {
       expect(resourceTableSource).toContain('useAlertResourceTableState');
-      expect(resourceTableSource).toContain('AlertResourceTableRow');
+      expect(resourceTableSource).toContain('AlertResourceTableDesktop');
+      expect(resourceTableSource).toContain('AlertResourceTableMobile');
       expect(resourceTableSource).not.toContain('const flattenResources = (): Resource[] => {');
       expect(resourceTableSource).not.toContain(
         'const normalizeMetricKey = (column: string): string => {',
       );
       expect(resourceTableSource).not.toContain(
         "if (resource.type === 'agent' && ['diskRead', 'diskWrite', 'networkIn', 'networkOut'].includes(",
+      );
+      expect(alertResourceTableDesktopSource).toContain(
+        'export function AlertResourceTableDesktop',
+      );
+      expect(alertResourceTableDesktopSource).toContain('AlertResourceTableRow');
+      expect(alertResourceTableDesktopSource).toContain('AlertResourceGroupHeader');
+      expect(alertResourceTableMobileSource).toContain(
+        'export function AlertResourceTableMobile',
+      );
+      expect(alertResourceTableMobileSource).toContain('AlertResourceGroupHeader');
+      expect(alertResourceGroupHeaderSource).toContain(
+        'export function AlertResourceGroupHeader',
       );
       expect(alertResourceTableRowSource).toContain('export function AlertResourceTableRow');
       expect(alertResourceTableRowSource).toContain('alertResourceSupportsMetric');
