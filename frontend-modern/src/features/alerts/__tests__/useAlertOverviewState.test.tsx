@@ -109,7 +109,7 @@ describe('useAlertOverviewState', () => {
 
     await result.handleBulkAcknowledge();
 
-    expect(AlertsAPI.bulkAcknowledge).toHaveBeenCalledWith(['warning', 'old']);
+    expect(AlertsAPI.bulkAcknowledge).toHaveBeenCalledWith(['old']);
     expect(updateAlert).toHaveBeenCalledWith(
       'warning',
       expect.objectContaining({ acknowledged: true }),

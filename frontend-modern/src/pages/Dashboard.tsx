@@ -121,14 +121,7 @@ export default function Dashboard() {
           />
         );
       case 'alerts':
-        return (
-          <RecentAlertsPanel
-            alerts={alertsList()}
-            criticalCount={overview().alerts.activeCritical}
-            warningCount={overview().alerts.activeWarning}
-            totalCount={overview().alerts.total}
-          />
-        );
+        return <RecentAlertsPanel alerts={alertsList()} />;
       case 'recovery':
         return <DashboardRecoveryStatusPanel recovery={recoverySummary()} />;
       case 'storage':

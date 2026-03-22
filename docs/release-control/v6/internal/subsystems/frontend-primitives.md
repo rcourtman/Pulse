@@ -218,6 +218,15 @@ customization surfaces. Lane-owned widgets like recent alerts, storage,
 and recovery must continue to route through their own subsystem owners instead
 of drifting back into a page-local dashboard panel cluster.
 
+Feature-owned alert shells under `frontend-modern/src/features/alerts/` now
+also treat shared action runtime as a first-class feature owner instead of
+rebuilding it per surface. The overview shell and dashboard recent-alerts panel
+must both compose
+`frontend-modern/src/features/alerts/useAlertAcknowledgementState.ts` for
+acknowledge/restore behavior rather than keeping duplicate API and notification
+logic inline in `useAlertOverviewState.ts` or
+`frontend-modern/src/components/Alerts/RecentAlertsPanel.tsx`.
+
 The updates settings surface now follows the same presentation-owner rule.
 `frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx` stays the
 top-level settings shell, while

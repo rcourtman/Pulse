@@ -1,9 +1,7 @@
-import { For, Show, createMemo, createSignal } from 'solid-js';
+import { For, Show, createMemo } from 'solid-js';
 import { Card } from '@/components/shared/Card';
 import { ALERTS_OVERVIEW_PATH, AI_PATROL_PATH } from '@/routing/resourceLinks';
-import { AlertsAPI } from '@/api/alerts';
 import { formatRelativeTime } from '@/utils/format';
-import { notificationStore } from '@/stores/notifications';
 import {
   ALERTS_EMPTY_STATE,
   getDashboardAlertSummaryText,
@@ -13,15 +11,14 @@ import {
   getAlertSeverityCompactLabel,
 } from '@/utils/alertSeverityPresentation';
 import type { Alert } from '@/types/api';
+import { getCanonicalAlertId } from '@/features/alerts/identity';
+import { useAlertAcknowledgementState } from '@/features/alerts/useAlertAcknowledgementState';
 import BellIcon from 'lucide-solid/icons/bell';
 
 const MAX_SHOWN = 8;
 
 interface RecentAlertsPanelProps {
   alerts: Alert[];
-  criticalCount: number;
-  warningCount: number;
-  totalCount: number;
 }
 
 function sortByStartTimeDesc(alerts: Alert[]): Alert[] {
@@ -35,49 +32,31 @@ function sortByStartTimeDesc(alerts: Alert[]): Alert[] {
 }
 
 export function RecentAlertsPanel(props: RecentAlertsPanelProps) {
-  const recent = createMemo(() => sortByStartTimeDesc(props.alerts).slice(0, MAX_SHOWN));
-
-  const [ackLoading, setAckLoading] = createSignal<string | null>(null);
-  const [ackAllLoading, setAckAllLoading] = createSignal(false);
-
-  const unackedAlerts = createMemo(() => props.alerts.filter((a) => !a.acknowledged));
+  const {
+    effectiveAlerts,
+    unacknowledgedAlerts,
+    processingAlerts,
+    bulkAckProcessing,
+    handleAlertAcknowledgement,
+    handleBulkAcknowledge,
+  } = useAlertAcknowledgementState({
+    alerts: () => props.alerts,
+  });
+  const recent = createMemo(() => sortByStartTimeDesc(effectiveAlerts()).slice(0, MAX_SHOWN));
+  const activeCriticalCount = createMemo(
+    () =>
+      effectiveAlerts().filter((alert) => !alert.acknowledged && alert.level === 'critical').length,
+  );
+  const activeWarningCount = createMemo(
+    () =>
+      effectiveAlerts().filter((alert) => !alert.acknowledged && alert.level === 'warning').length,
+  );
   const alertSummaryText = createMemo(() =>
     getDashboardAlertSummaryText({
-      activeCritical: props.criticalCount,
-      activeWarning: props.warningCount,
+      activeCritical: activeCriticalCount(),
+      activeWarning: activeWarningCount(),
     }),
   );
-
-  const handleAck = async (alert: Alert) => {
-    setAckLoading(alert.id);
-    try {
-      await AlertsAPI.acknowledge(alert.id);
-      notificationStore.success('Alert acknowledged');
-    } catch (err) {
-      notificationStore.error((err as Error).message || 'Failed to acknowledge');
-    } finally {
-      setAckLoading(null);
-    }
-  };
-
-  const handleAckAll = async () => {
-    const ids = unackedAlerts().map((a) => a.id);
-    if (ids.length === 0) return;
-    setAckAllLoading(true);
-    try {
-      const result = await AlertsAPI.bulkAcknowledge(ids);
-      const failCount = result.results.filter((r) => !r.success).length;
-      if (failCount === 0) {
-        notificationStore.success(`${ids.length} alert${ids.length !== 1 ? 's' : ''} acknowledged`);
-      } else {
-        notificationStore.error(`${failCount} of ${ids.length} alerts failed to acknowledge`);
-      }
-    } catch (err) {
-      notificationStore.error((err as Error).message || 'Failed to acknowledge alerts');
-    } finally {
-      setAckAllLoading(false);
-    }
-  };
 
   return (
     <Card padding="none" tone="default" class="border-border-subtle overflow-hidden">
@@ -87,14 +66,16 @@ export function RecentAlertsPanel(props: RecentAlertsPanelProps) {
           <h2 class="text-sm font-semibold text-base-content">Alerts</h2>
         </div>
         <div class="flex items-center gap-2">
-          <Show when={unackedAlerts().length > 1}>
+          <Show when={unacknowledgedAlerts().length > 1}>
             <button
               type="button"
-              onClick={handleAckAll}
-              disabled={ackAllLoading()}
+              onClick={() => {
+                void handleBulkAcknowledge();
+              }}
+              disabled={bulkAckProcessing()}
               class="text-[10px] font-medium text-base-content bg-surface-alt hover:bg-surface-hover disabled:opacity-50 px-2 py-0.5 rounded transition-colors"
             >
-              {ackAllLoading() ? 'Acking...' : 'Ack All'}
+              {bulkAckProcessing() ? 'Acking...' : 'Ack All'}
             </button>
           </Show>
           <a
@@ -140,11 +121,13 @@ export function RecentAlertsPanel(props: RecentAlertsPanelProps) {
                   <Show when={!alert.acknowledged}>
                     <button
                       type="button"
-                      onClick={() => handleAck(alert)}
-                      disabled={ackLoading() === alert.id}
+                      onClick={() => {
+                        void handleAlertAcknowledgement(alert);
+                      }}
+                      disabled={processingAlerts().has(getCanonicalAlertId(alert))}
                       class="shrink-0 px-1.5 py-0.5 text-[10px] font-medium text-base-content bg-surface-alt hover:bg-surface-hover disabled:opacity-50 rounded transition-colors"
                     >
-                      {ackLoading() === alert.id ? '...' : 'Ack'}
+                      {processingAlerts().has(getCanonicalAlertId(alert)) ? '...' : 'Ack'}
                     </button>
                   </Show>
                 </li>

@@ -327,6 +327,7 @@ import alertOverviewTabSource from '@/features/alerts/OverviewTab.tsx?raw';
 import alertsConfigurationSurfaceSource from '@/features/alerts/AlertsConfigurationSurface.tsx?raw';
 import alertsConfigurationStateSource from '@/features/alerts/useAlertsConfigurationState.ts?raw';
 import alertDestinationsStateSource from '@/features/alerts/useAlertDestinationsState.ts?raw';
+import alertAcknowledgementStateSource from '@/features/alerts/useAlertAcknowledgementState.ts?raw';
 import alertHistoryStateSource from '@/features/alerts/useAlertHistoryState.ts?raw';
 import alertIncidentTimelineStateSource from '@/features/alerts/useAlertIncidentTimelineState.ts?raw';
 import alertOverviewStateSource from '@/features/alerts/useAlertOverviewState.ts?raw';
@@ -3657,9 +3658,17 @@ describe('frontend resource type boundaries', () => {
     expect(alertOverviewTabSource).not.toContain('No incident timeline available.');
     expect(alertOverviewTabSource).not.toContain('Failed to load timeline.');
     expect(alertOverviewStateSource).toContain('export function useAlertOverviewState');
-    expect(alertOverviewStateSource).toContain('AlertsAPI.bulkAcknowledge');
-    expect(alertOverviewStateSource).toContain('AlertsAPI.acknowledge');
-    expect(alertOverviewStateSource).toContain('AlertsAPI.unacknowledge');
+    expect(alertOverviewStateSource).toContain('useAlertAcknowledgementState');
+    expect(alertOverviewStateSource).not.toContain('AlertsAPI.bulkAcknowledge');
+    expect(alertOverviewStateSource).not.toContain('AlertsAPI.acknowledge');
+    expect(alertOverviewStateSource).not.toContain('AlertsAPI.unacknowledge');
+    expect(alertAcknowledgementStateSource).toContain('export function useAlertAcknowledgementState');
+    expect(alertAcknowledgementStateSource).toContain('AlertsAPI.bulkAcknowledge');
+    expect(alertAcknowledgementStateSource).toContain('AlertsAPI.acknowledge');
+    expect(alertAcknowledgementStateSource).toContain('AlertsAPI.unacknowledge');
+    expect(recentAlertsPanelSource).toContain('useAlertAcknowledgementState');
+    expect(recentAlertsPanelSource).not.toContain('AlertsAPI.bulkAcknowledge');
+    expect(recentAlertsPanelSource).not.toContain('AlertsAPI.acknowledge');
     expect(alertOverviewPresentationSource).toContain(
       'export function getAlertTimelineLoadingState',
     );

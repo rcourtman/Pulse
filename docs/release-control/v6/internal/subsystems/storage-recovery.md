@@ -236,7 +236,11 @@ That route shell now also composes the recent-alerts widget directly from the
 alert-owned `frontend-modern/src/components/Alerts/RecentAlertsPanel.tsx`
 surface instead of via a dashboard-panels-local alert implementation, so the
 dashboard route stays storage/recovery-owned while alert widget runtime remains
-owned by the alerts subsystem.
+owned by the alerts subsystem. That route handoff must stay thin: the dashboard
+page should pass the live alert list into `RecentAlertsPanel` and let the
+alert-owned surface derive its own summary and acknowledgement state instead of
+rebuilding alert summary counts or alert-action runtime inside the
+storage/recovery-governed dashboard route.
 The shared recovery type contract must be pinned the same way:
 `frontend-modern/src/types/recovery.ts` must stay on the explicit
 `recovery-product-surface` proof path instead of riding indirectly on route or

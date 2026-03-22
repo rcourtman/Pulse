@@ -177,12 +177,19 @@ Active alert card state, acknowledged badge, and primary/secondary action
 button presentation now route through
 `frontend-modern/src/utils/alertOverviewPresentation.ts` instead of remaining
 inline in `frontend-modern/src/features/alerts/OverviewTab.tsx`.
-The canonical overview runtime owner is now
-`frontend-modern/src/features/alerts/useAlertOverviewState.ts`, which owns the
-derived alert read-model, Last 24 Hours stat refresh, and single/bulk
-acknowledge control flow for `frontend-modern/src/features/alerts/OverviewTab.tsx`.
-Future overview action or stat behavior should extend that hook instead of
-putting acknowledge mutations and timer state back into the tab shell.
+The canonical shared alert-acknowledgement runtime owner is now
+`frontend-modern/src/features/alerts/useAlertAcknowledgementState.ts`, which
+owns optimistic single/bulk acknowledge control flow, restore behavior, and
+notification feedback for both
+`frontend-modern/src/features/alerts/useAlertOverviewState.ts` and
+`frontend-modern/src/components/Alerts/RecentAlertsPanel.tsx`.
+`frontend-modern/src/features/alerts/useAlertOverviewState.ts` now owns the
+derived alert read-model and Last 24 Hours stat refresh for
+`frontend-modern/src/features/alerts/OverviewTab.tsx`, while composing that
+shared acknowledgement owner instead of keeping its own alert mutation fork.
+Future overview or dashboard recent-alert action behavior should extend that
+shared acknowledgement hook instead of putting acknowledge mutations back into
+either render shell.
 Dashboard recent-alert rendering and dashboard alert summary/tone copy now
 route through that same alert overview presentation owner and the alert-owned
 `frontend-modern/src/components/Alerts/RecentAlertsPanel.tsx` surface instead

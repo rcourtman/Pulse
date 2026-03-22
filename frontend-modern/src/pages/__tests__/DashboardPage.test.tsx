@@ -127,6 +127,9 @@ describe('Dashboard page module contract', () => {
 
   it('routes the alerts dashboard widget through the alert-owned surface', () => {
     expect(dashboardPageSource).toContain("from '@/components/Alerts/RecentAlertsPanel'");
+    expect(dashboardPageSource).toContain('return <RecentAlertsPanel alerts={alertsList()} />;');
+    expect(dashboardPageSource).not.toContain('criticalCount={overview().alerts.activeCritical}');
+    expect(dashboardPageSource).not.toContain('warningCount={overview().alerts.activeWarning}');
   });
 
   it('routes dashboard overview panels through the dashboard overview feature owner', () => {
