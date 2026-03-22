@@ -451,6 +451,14 @@ using the shared contract in
 Future Proxmox thresholds presentation changes should extend those section
 surfaces rather than restoring mixed JSX ownership to
 `frontend-modern/src/components/Alerts/ThresholdsTableProxmoxTab.tsx`.
+The Docker tab now follows that same composition pattern through
+`frontend-modern/src/components/Alerts/ThresholdsTableDockerIgnoredPrefixesSection.tsx`,
+`frontend-modern/src/components/Alerts/ThresholdsTableDockerServiceGapSection.tsx`,
+`frontend-modern/src/components/Alerts/ThresholdsTableDockerHostsSection.tsx`,
+and `frontend-modern/src/components/Alerts/ThresholdsTableDockerContainersSection.tsx`.
+Future Docker thresholds presentation changes should extend those section
+surfaces rather than restoring mixed JSX ownership to
+`frontend-modern/src/components/Alerts/ThresholdsTableDockerTab.tsx`.
 Canonical threshold row shaping now routes through
 `frontend-modern/src/features/alerts/thresholds/thresholdsResourceModel.ts`
 plus the family-owned feature hooks

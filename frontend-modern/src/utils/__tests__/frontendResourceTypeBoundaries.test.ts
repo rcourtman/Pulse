@@ -351,6 +351,10 @@ import alertScheduleTabSource from '@/features/alerts/tabs/ScheduleTab.tsx?raw';
 import alertThresholdsTabSource from '@/features/alerts/tabs/ThresholdsTab.tsx?raw';
 import thresholdsTableSource from '@/components/Alerts/ThresholdsTable.tsx?raw';
 import thresholdsTableAgentsTabSource from '@/components/Alerts/ThresholdsTableAgentsTab.tsx?raw';
+import thresholdsTableDockerContainersSectionSource from '@/components/Alerts/ThresholdsTableDockerContainersSection.tsx?raw';
+import thresholdsTableDockerHostsSectionSource from '@/components/Alerts/ThresholdsTableDockerHostsSection.tsx?raw';
+import thresholdsTableDockerIgnoredPrefixesSectionSource from '@/components/Alerts/ThresholdsTableDockerIgnoredPrefixesSection.tsx?raw';
+import thresholdsTableDockerServiceGapSectionSource from '@/components/Alerts/ThresholdsTableDockerServiceGapSection.tsx?raw';
 import thresholdsTableDockerTabSource from '@/components/Alerts/ThresholdsTableDockerTab.tsx?raw';
 import thresholdsTablePMGTabSource from '@/components/Alerts/ThresholdsTablePMGTab.tsx?raw';
 import thresholdsTableProxmoxBackupsSectionSource from '@/components/Alerts/ThresholdsTableProxmoxBackupsSection.tsx?raw';
@@ -2978,8 +2982,28 @@ describe('frontend resource type boundaries', () => {
     expect(thresholdsTableAgentsTabSource).toContain('export function ThresholdsTableAgentsTab');
     expect(thresholdsTableAgentsTabSource).toContain('agentDisksGroupedByAgent()');
     expect(thresholdsTableDockerTabSource).toContain('export function ThresholdsTableDockerTab');
-    expect(thresholdsTableDockerTabSource).toContain('dockerIgnoredPrefixesPresentation.title');
-    expect(thresholdsTableDockerTabSource).toContain('serviceGapValidationMessage()');
+    expect(thresholdsTableDockerTabSource).toContain('ThresholdsTableDockerIgnoredPrefixesSection');
+    expect(thresholdsTableDockerTabSource).toContain('ThresholdsTableDockerServiceGapSection');
+    expect(thresholdsTableDockerTabSource).toContain('ThresholdsTableDockerHostsSection');
+    expect(thresholdsTableDockerTabSource).toContain('ThresholdsTableDockerContainersSection');
+    expect(thresholdsTableDockerTabSource).not.toContain('dockerIgnoredPrefixesPresentation.title');
+    expect(thresholdsTableDockerTabSource).not.toContain('serviceGapValidationMessage()');
+    expect(thresholdsTableDockerIgnoredPrefixesSectionSource).toContain(
+      'export function ThresholdsTableDockerIgnoredPrefixesSection',
+    );
+    expect(thresholdsTableDockerIgnoredPrefixesSectionSource).toContain(
+      'dockerIgnoredPrefixesPresentation.title',
+    );
+    expect(thresholdsTableDockerServiceGapSectionSource).toContain(
+      'export function ThresholdsTableDockerServiceGapSection',
+    );
+    expect(thresholdsTableDockerServiceGapSectionSource).toContain('serviceGapValidationMessage()');
+    expect(thresholdsTableDockerHostsSectionSource).toContain(
+      'export function ThresholdsTableDockerHostsSection',
+    );
+    expect(thresholdsTableDockerContainersSectionSource).toContain(
+      'export function ThresholdsTableDockerContainersSection',
+    );
     expect(thresholdsTableSectionPropsSource).toContain('export interface ThresholdsTableSectionProps');
     expect(thresholdsTableProxmoxNodesSectionSource).toContain(
       'export function ThresholdsTableProxmoxNodesSection',

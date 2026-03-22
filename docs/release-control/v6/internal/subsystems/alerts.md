@@ -172,6 +172,14 @@ with the shared section contract in
 Future Proxmox thresholds presentation work should extend those section owners
 instead of expanding `frontend-modern/src/components/Alerts/ThresholdsTableProxmoxTab.tsx`
 back into a mixed render surface.
+The Docker tab now follows that same section-owner shape through
+`frontend-modern/src/components/Alerts/ThresholdsTableDockerIgnoredPrefixesSection.tsx`,
+`frontend-modern/src/components/Alerts/ThresholdsTableDockerServiceGapSection.tsx`,
+`frontend-modern/src/components/Alerts/ThresholdsTableDockerHostsSection.tsx`,
+and `frontend-modern/src/components/Alerts/ThresholdsTableDockerContainersSection.tsx`.
+Future Docker thresholds presentation work should extend those section owners
+instead of expanding `frontend-modern/src/components/Alerts/ThresholdsTableDockerTab.tsx`
+back into a mixed render surface.
 The alert resource thresholds editor now follows the same shape: shared metric
 normalization, bounds, value-resolution, and override-label logic live in
 `frontend-modern/src/components/Alerts/alertResourceTableModel.ts`, shared group
