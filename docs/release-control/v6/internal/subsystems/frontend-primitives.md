@@ -432,7 +432,12 @@ expanding the top-level page file again, and history-table behavior or
 thresholds-table adapter logic should stay feature-owned unless it graduates
 into a shared primitive used by more than one alert surface.
 Within that thresholds surface, `frontend-modern/src/components/Alerts/ThresholdsTable.tsx`
-is now explicitly a feature consumer rather than the data or controller owner.
+is now explicitly a shell consumer rather than the data or controller owner,
+and the tab render owners live in
+`frontend-modern/src/components/Alerts/ThresholdsTableProxmoxTab.tsx`,
+`frontend-modern/src/components/Alerts/ThresholdsTablePMGTab.tsx`,
+`frontend-modern/src/components/Alerts/ThresholdsTableAgentsTab.tsx`, and
+`frontend-modern/src/components/Alerts/ThresholdsTableDockerTab.tsx`.
 Canonical threshold row shaping now routes through
 `frontend-modern/src/features/alerts/thresholds/thresholdsResourceModel.ts`
 plus the family-owned feature hooks
@@ -443,9 +448,9 @@ plus the family-owned feature hooks
 with `frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsData.ts`
 limited to composing them. Thresholds-table controller state lives in
 `frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsTableState.ts`,
-so future cleanup should extend those feature hooks instead of rebuilding
-resource normalization or thresholds-table runtime state inside the table
-component.
+so future cleanup should extend those feature hooks or tab owners instead of
+rebuilding resource normalization, tab render surfaces, or thresholds-table
+runtime state inside the shell component.
 
 The alerts page now also applies the same shell-versus-feature rule to
 configuration orchestration. `frontend-modern/src/pages/Alerts.tsx` is the page

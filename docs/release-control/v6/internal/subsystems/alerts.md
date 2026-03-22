@@ -150,10 +150,15 @@ application, powered-off/connectivity state transitions, and alert-removal side
 effects now route through
 `frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsOverrideMutations.ts`.
 `frontend-modern/src/components/Alerts/ThresholdsTable.tsx` is now limited to
-table interaction and presentation. New threshold row grouping,
-override-ID compatibility, resource normalization, or thresholds-table
-controller logic should land in those threshold model and family hooks rather
-than being rebuilt inside the table component.
+shell composition for search/help/nav plus bulk-edit dialog flow, while the
+tab render owners live in
+`frontend-modern/src/components/Alerts/ThresholdsTableProxmoxTab.tsx`,
+`frontend-modern/src/components/Alerts/ThresholdsTablePMGTab.tsx`,
+`frontend-modern/src/components/Alerts/ThresholdsTableAgentsTab.tsx`, and
+`frontend-modern/src/components/Alerts/ThresholdsTableDockerTab.tsx`. New
+threshold row grouping, override-ID compatibility, resource normalization,
+thresholds-table controller logic, or per-tab runtime should land in those
+feature hooks and tab owners rather than being rebuilt inside the shell.
 The alert resource thresholds editor now follows the same shape: shared metric
 normalization, bounds, value-resolution, and override-label logic live in
 `frontend-modern/src/components/Alerts/alertResourceTableModel.ts`, render-heavy

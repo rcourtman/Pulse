@@ -20,6 +20,10 @@ import alertScheduleTabSource from '@/features/alerts/tabs/ScheduleTab.tsx?raw';
 import alertThresholdsTabSource from '@/features/alerts/tabs/ThresholdsTab.tsx?raw';
 import recentAlertsPanelSource from '@/components/Alerts/RecentAlertsPanel.tsx?raw';
 import thresholdsTableSource from '@/components/Alerts/ThresholdsTable.tsx?raw';
+import thresholdsTableAgentsTabSource from '@/components/Alerts/ThresholdsTableAgentsTab.tsx?raw';
+import thresholdsTableDockerTabSource from '@/components/Alerts/ThresholdsTableDockerTab.tsx?raw';
+import thresholdsTablePMGTabSource from '@/components/Alerts/ThresholdsTablePMGTab.tsx?raw';
+import thresholdsTableProxmoxTabSource from '@/components/Alerts/ThresholdsTableProxmoxTab.tsx?raw';
 import thresholdsDataHookSource from '@/features/alerts/thresholds/hooks/useThresholdsData.ts?raw';
 import thresholdsHostDataHookSource from '@/features/alerts/thresholds/hooks/useThresholdsHostData.ts?raw';
 import thresholdsDockerDataHookSource from '@/features/alerts/thresholds/hooks/useThresholdsDockerData.ts?raw';
@@ -339,8 +343,24 @@ describe('tab path helpers', () => {
     expect(thresholdsTableSource).toContain(
       "import { useThresholdsTableState } from '@/features/alerts/thresholds/hooks/useThresholdsTableState';",
     );
+    expect(thresholdsTableSource).toContain("import { ThresholdsTableProxmoxTab } from './ThresholdsTableProxmoxTab';");
+    expect(thresholdsTableSource).toContain("import { ThresholdsTablePMGTab } from './ThresholdsTablePMGTab';");
+    expect(thresholdsTableSource).toContain("import { ThresholdsTableAgentsTab } from './ThresholdsTableAgentsTab';");
+    expect(thresholdsTableSource).toContain("import { ThresholdsTableDockerTab } from './ThresholdsTableDockerTab';");
     expect(thresholdsTableSource).not.toContain('const [searchTerm, setSearchTerm] = createSignal');
     expect(thresholdsTableSource).not.toContain('const handleTabClick =');
+    expect(thresholdsTableSource).not.toContain("groupedResources={state.guestsGroupedByNode()}");
+    expect(thresholdsTableSource).not.toContain('dockerIgnoredPrefixesPresentation.title');
+    expect(thresholdsTableProxmoxTabSource).toContain('export function ThresholdsTableProxmoxTab');
+    expect(thresholdsTableProxmoxTabSource).toContain('backupOrphanedPresentation');
+    expect(thresholdsTableProxmoxTabSource).toContain("sectionTitles.guestFiltering");
+    expect(thresholdsTablePMGTabSource).toContain('export function ThresholdsTablePMGTab');
+    expect(thresholdsTablePMGTabSource).toContain('pmgGlobalDefaults()');
+    expect(thresholdsTableAgentsTabSource).toContain('export function ThresholdsTableAgentsTab');
+    expect(thresholdsTableAgentsTabSource).toContain('agentDisksGroupedByAgent()');
+    expect(thresholdsTableDockerTabSource).toContain('export function ThresholdsTableDockerTab');
+    expect(thresholdsTableDockerTabSource).toContain('dockerIgnoredPrefixesPresentation.title');
+    expect(thresholdsTableDockerTabSource).toContain('serviceGapValidationMessage()');
     expect(thresholdsDataHookSource).toContain('export function useThresholdsData');
     expect(thresholdsDataHookSource).toContain('useThresholdsHostData(inputs)');
     expect(thresholdsDataHookSource).toContain('useThresholdsDockerData(inputs)');

@@ -582,3 +582,5 @@ export function useThresholdsTableState(props: ThresholdsTableProps) {
     getAlertThresholdsSearchPlaceholder,
   } as const;
 }
+
+export type ThresholdsTableState = ReturnType<typeof useThresholdsTableState>;
