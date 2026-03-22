@@ -352,6 +352,7 @@ import alertResourceTableRowSource from '@/components/Alerts/AlertResourceTableR
 import alertResourceTableSource from '@/components/Alerts/ResourceTable.tsx?raw';
 import alertResourceTableStateSource from '@/components/Alerts/useAlertResourceTableState.ts?raw';
 import emailProviderSelectSource from '@/components/Alerts/EmailProviderSelect.tsx?raw';
+import emailProviderSelectStateSource from '@/components/Alerts/useEmailProviderSelectState.ts?raw';
 import webhookConfigSource from '@/components/Alerts/WebhookConfig.tsx?raw';
 import webhookConfigFormSource from '@/components/Alerts/WebhookConfigForm.tsx?raw';
 import webhookConfigListSource from '@/components/Alerts/WebhookConfigList.tsx?raw';
@@ -3969,11 +3970,15 @@ describe('frontend resource type boundaries', () => {
   });
 
   it('keeps alert email provider vocabulary and placeholders in a shared presentation utility', () => {
+    expect(emailProviderSelectSource).toContain('useEmailProviderSelectState');
     expect(emailProviderSelectSource).toContain('getAlertEmailProviderOptionLabel');
     expect(emailProviderSelectSource).toContain('getAlertEmailSetupInstructionsToggleLabel');
     expect(emailProviderSelectSource).toContain('getAlertEmailRecipientsPlaceholder');
     expect(emailProviderSelectSource).toContain('getAlertEmailAdvancedToggleLabel');
     expect(emailProviderSelectSource).toContain('getAlertEmailTestButtonLabel');
+    expect(emailProviderSelectSource).not.toContain('NotificationsAPI.getEmailProviders');
+    expect(emailProviderSelectSource).not.toContain('interface EmailProvider {');
+    expect(emailProviderSelectSource).not.toContain('interface EmailConfig {');
     expect(emailProviderSelectSource).not.toContain('Manual configuration');
     expect(emailProviderSelectSource).not.toContain('smtp.example.com');
     expect(emailProviderSelectSource).not.toContain('noreply@example.com');
@@ -3987,6 +3992,9 @@ describe('frontend resource type boundaries', () => {
       'export function getAlertEmailRecipientsPlaceholder',
     );
     expect(alertEmailPresentationSource).toContain('export function getAlertEmailTestButtonLabel');
+    expect(emailProviderSelectStateSource).toContain('export function useEmailProviderSelectState');
+    expect(emailProviderSelectStateSource).toContain('NotificationsAPI.getEmailProviders');
+    expect(emailProviderSelectStateSource).toContain("provider.name === 'SendGrid'");
   });
 
   it('keeps alert bulk-edit dialog labels in a shared presentation utility', () => {

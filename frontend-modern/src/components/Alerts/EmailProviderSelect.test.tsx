@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { createSignal } from 'solid-js';
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
+import type { UIEmailConfig } from '@/features/alerts/types';
 
 // --- Mock setup (must be before component import) ---
 const getEmailProvidersMock = vi.fn();
@@ -22,24 +24,7 @@ import { EmailProviderSelect } from './EmailProviderSelect';
 import { logger } from '@/utils/logger';
 
 // --- Helpers ---
-interface EmailConfig {
-  enabled: boolean;
-  provider: string;
-  server: string;
-  port: number;
-  from: string;
-  username: string;
-  password: string;
-  to: string[];
-  tls: boolean;
-  startTLS: boolean;
-  replyTo: string;
-  maxRetries: number;
-  retryDelay: number;
-  rateLimit: number;
-}
-
-function makeConfig(overrides: Partial<EmailConfig> = {}): EmailConfig {
+function makeConfig(overrides: Partial<UIEmailConfig> = {}): UIEmailConfig {
   return {
     enabled: true,
     provider: '',
@@ -613,6 +598,28 @@ describe('EmailProviderSelect', () => {
     // Desktop always shows instructions; mobile hides them, so count drops
     const afterHide = screen.getAllByText('Use an App Password from your Google Account settings.');
     expect(afterHide.length).toBeLessThan(instructionTexts.length);
+  });
+
+  it('resets the mobile instructions toggle after switching back to manual configuration', async () => {
+    const Wrapper = () => {
+      const [config, setConfig] = createSignal(makeConfig({ provider: 'Gmail' }));
+      return <EmailProviderSelect config={config()} onChange={setConfig} onTest={onTestMock} />;
+    };
+
+    render(() => <Wrapper />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Gmail (smtp.gmail.com:587)')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('Show setup instructions'));
+    expect(screen.getByText('Hide setup instructions')).toBeInTheDocument();
+
+    const providerSelect = screen.getAllByRole('combobox')[0] as HTMLSelectElement;
+    fireEvent.change(providerSelect, { target: { value: '' } });
+
+    expect(screen.queryByText('Hide setup instructions')).not.toBeInTheDocument();
+    expect(screen.queryByText('Show setup instructions')).not.toBeInTheDocument();
   });
 
   // --- Test Email Button ---

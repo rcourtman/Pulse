@@ -258,6 +258,12 @@ transport hook, the config model, the override-projection hook, or the
 destinations runtime hook based on which subsystem actually owns the behavior
 instead of letting the broader configuration hook absorb all three concerns
 again.
+The email destination provider picker now follows that same split:
+`frontend-modern/src/components/Alerts/useEmailProviderSelectState.ts` owns
+provider-catalog loading and provider-default application, while
+`frontend-modern/src/components/Alerts/EmailProviderSelect.tsx` stays the
+render shell and consumes the canonical `UIEmailConfig` feature type instead of
+keeping a second local email-config interface.
 
 Alert filter metadata and grouped header consumers must also preserve the
 canonical `agent` and `node` header boundary when reusing shared filter

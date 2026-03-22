@@ -1,6 +1,5 @@
-import { createSignal, createEffect, Show, For } from 'solid-js';
-import { NotificationsAPI } from '@/api/notifications';
-import { logger } from '@/utils/logger';
+import { Show, For } from 'solid-js';
+import type { UIEmailConfig } from '@/features/alerts/types';
 import {
   ALERT_EMAIL_FROM_ADDRESS_LABEL,
   ALERT_EMAIL_FROM_ADDRESS_PLACEHOLDER,
@@ -33,85 +32,19 @@ import {
   getAlertEmailUsernamePlaceholder,
 } from '@/utils/alertEmailPresentation';
 import { formField, labelClass, controlClass, formHelpText } from '@/components/shared/Form';
+import {
+  useEmailProviderSelectState,
+  type EmailProviderSelectStateProps,
+} from './useEmailProviderSelectState';
 
-interface EmailProvider {
-  name: string;
-  smtpHost: string;
-  smtpPort: number;
-  tls: boolean;
-  startTLS: boolean;
-  authRequired: boolean;
-  instructions: string;
-}
-
-interface EmailConfig {
-  enabled: boolean;
-  provider: string;
-  server: string;
-  port: number;
-  from: string;
-  username: string;
-  password: string;
-  to: string[];
-  tls: boolean;
-  startTLS: boolean;
-  replyTo: string;
-  maxRetries: number;
-  retryDelay: number;
-  rateLimit: number;
-}
-
-interface EmailProviderSelectProps {
-  config: EmailConfig;
-  onChange: (config: EmailConfig) => void;
+interface EmailProviderSelectProps extends EmailProviderSelectStateProps {
+  config: UIEmailConfig;
   onTest: () => void;
   testing?: boolean;
 }
 
 export function EmailProviderSelect(props: EmailProviderSelectProps) {
-  const [providers, setProviders] = createSignal<EmailProvider[]>([]);
-  const [showAdvanced, setShowAdvanced] = createSignal(false);
-  const [showInstructions, setShowInstructions] = createSignal(false);
-
-  // Load email providers once
-  createEffect(async () => {
-    try {
-      const data = await NotificationsAPI.getEmailProviders();
-      setProviders(data);
-    } catch (err) {
-      logger.error('Failed to load email providers', err);
-    }
-  });
-
-  const applyProvider = (provider: EmailProvider | undefined) => {
-    if (!provider) {
-      props.onChange({ ...props.config, provider: '' });
-      setShowInstructions(false);
-      return;
-    }
-
-    props.onChange({
-      ...props.config,
-      provider: provider.name,
-      server: provider.smtpHost,
-      port: provider.smtpPort,
-      tls: provider.tls,
-      startTLS: provider.startTLS,
-      username: provider.name === 'SendGrid' ? 'apikey' : props.config.username,
-    });
-    setShowInstructions(true);
-  };
-
-  const handleProviderChange = (value: string) => {
-    if (!value) {
-      applyProvider(undefined);
-      return;
-    }
-    const provider = providers().find((p) => p.name === value);
-    applyProvider(provider);
-  };
-
-  const currentProvider = () => providers().find((p) => p.name === props.config.provider);
+  const state = useEmailProviderSelectState(props);
   const instructionBoxClass =
     'mt-2 rounded border border-blue-200 bg-blue-50 px-3 py-2 text-xs leading-relaxed text-blue-900 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-200';
 
@@ -122,11 +55,11 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
         <div class="flex w-full flex-wrap items-center gap-2 sm:flex-nowrap">
           <select
             value={props.config.provider}
-            onChange={(e) => handleProviderChange(e.currentTarget.value)}
+            onChange={(e) => state.handleProviderChange(e.currentTarget.value)}
             class={`${controlClass('px-2 py-1.5')} sm:w-auto sm:min-w-[180px]`}
           >
             <option value="">{ALERT_EMAIL_MANUAL_CONFIGURATION_LABEL}</option>
-            <For each={providers()}>
+            <For each={state.providers()}>
               {(provider) => (
                 <option value={provider.name}>{getAlertEmailProviderOptionLabel(provider)}</option>
               )}
@@ -136,8 +69,8 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
             <button
               type="button"
               onClick={() => {
-                const provider = currentProvider();
-                if (provider) applyProvider(provider);
+                const provider = state.currentProvider();
+                if (provider) state.applyProviderDefaults(provider);
               }}
               class="text-xs font-medium text-blue-600 hover:underline dark:text-blue-400"
             >
@@ -147,21 +80,21 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
         </div>
       </div>
 
-      <Show when={currentProvider()}>
+      <Show when={state.currentProvider()}>
         <div class="sm:hidden w-full">
           <button
             type="button"
-            onClick={() => setShowInstructions(!showInstructions())}
+            onClick={state.toggleShowInstructions}
             class="text-xs font-medium text-blue-600 hover:underline dark:text-blue-300"
           >
-            {getAlertEmailSetupInstructionsToggleLabel(showInstructions())}
+            {getAlertEmailSetupInstructionsToggleLabel(state.showInstructions())}
           </button>
-          <Show when={showInstructions()}>
-            <div class={instructionBoxClass}>{currentProvider()!.instructions}</div>
+          <Show when={state.showInstructions()}>
+            <div class={instructionBoxClass}>{state.currentProvider()!.instructions}</div>
           </Show>
         </div>
         <div class="hidden w-full sm:block">
-          <div class={instructionBoxClass}>{currentProvider()!.instructions}</div>
+          <div class={instructionBoxClass}>{state.currentProvider()!.instructions}</div>
         </div>
       </Show>
 
@@ -270,13 +203,13 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
       <div class="border-t border-border pt-3">
         <button
           type="button"
-          onClick={() => setShowAdvanced(!showAdvanced())}
+          onClick={state.toggleShowAdvanced}
           class="text-xs font-semibold uppercase tracking-wide transition-colors hover:text-muted"
         >
-          {getAlertEmailAdvancedToggleLabel(showAdvanced())}
+          {getAlertEmailAdvancedToggleLabel(state.showAdvanced())}
         </button>
 
-        <Show when={showAdvanced()}>
+        <Show when={state.showAdvanced()}>
           <div class="mt-3 space-y-3 text-xs text-base-content">
             <div class="grid gap-3 sm:grid-cols-3">
               <div class="flex items-center gap-2">

@@ -457,6 +457,12 @@ webhook runtime and destination test actions while
 render shell. Future cleanup should extend the transport hook, config model,
 override hook, or destinations runtime hook based on the true owner, not move
 config control flow back into the top-level page shell.
+The alert email provider picker now also follows the shell/runtime split:
+`frontend-modern/src/components/Alerts/useEmailProviderSelectState.ts` owns
+provider-catalog loading and provider-default application, while
+`frontend-modern/src/components/Alerts/EmailProviderSelect.tsx` stays the
+render shell and should not re-accumulate `NotificationsAPI.getEmailProviders`
+or a second local email-config contract inline.
 The same rule now also covers cross-tab incident timelines: the shared runtime
 owner is `frontend-modern/src/features/alerts/useAlertIncidentTimelineState.ts`,
 while `frontend-modern/src/features/alerts/OverviewTab.tsx` and
