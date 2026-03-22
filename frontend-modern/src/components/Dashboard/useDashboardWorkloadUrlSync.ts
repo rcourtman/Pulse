@@ -16,11 +16,7 @@ import {
 } from '@/routing/resourceLinks';
 import { areSearchParamsEquivalent } from '@/utils/searchParams';
 import { normalizeWorkloadViewModeParam } from '@/utils/workloads';
-
-interface WorkloadNodeOption {
-  value: string;
-  label: string;
-}
+import type { DashboardWorkloadNodeOption } from './dashboardWorkloadRouteModel';
 
 export interface DashboardWorkloadUrlSyncOptions {
   containerRuntime: Accessor<string>;
@@ -39,7 +35,7 @@ export interface DashboardWorkloadUrlSyncOptions {
   setViewMode: Setter<ViewMode>;
   showFilters: Accessor<boolean>;
   viewMode: Accessor<ViewMode>;
-  workloadNodeOptions: Accessor<WorkloadNodeOption[]>;
+  workloadNodeOptions: Accessor<DashboardWorkloadNodeOption[]>;
 }
 
 export function useDashboardWorkloadUrlSync(options: DashboardWorkloadUrlSyncOptions) {
