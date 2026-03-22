@@ -14,6 +14,7 @@ import dashboardFilterModelSource from '../dashboardFilterModel.ts?raw';
 import dashboardGuestMetadataStateSource from '../useDashboardGuestMetadataState.ts?raw';
 import dashboardSelectionStateSource from '../useDashboardSelectionState.ts?raw';
 import dashboardWorkloadRouteStateSource from '../useDashboardWorkloadRouteState.ts?raw';
+import dashboardWorkloadUrlSyncSource from '../useDashboardWorkloadUrlSync.ts?raw';
 import dashboardStateSource from '../useDashboardState.ts?raw';
 import dashboardFilterStateSource from '../useDashboardFilterState.ts?raw';
 import groupedTableWindowingSource from '../useGroupedTableWindowing.ts?raw';
@@ -516,9 +517,17 @@ describe('Dashboard performance contract', () => {
       expect(dashboardGuestMetadataStateSource).toContain('GuestMetadataAPI.getAllMetadata()');
       expect(dashboardGuestMetadataStateSource).toContain("eventBus.on('org_switched'");
       expect(dashboardGuestMetadataStateSource).toContain("window.addEventListener('pulse:metadata-changed'");
-      expect(dashboardWorkloadRouteStateSource).toContain('buildWorkloadsPath({');
-      expect(dashboardWorkloadRouteStateSource).toContain('normalizeWorkloadViewModeParam');
+      expect(dashboardWorkloadRouteStateSource).toContain('useDashboardWorkloadUrlSync');
+      expect(dashboardWorkloadRouteStateSource).not.toContain('buildWorkloadsPath({');
+      expect(dashboardWorkloadRouteStateSource).not.toContain('normalizeWorkloadViewModeParam');
+      expect(dashboardWorkloadRouteStateSource).not.toContain('const [handledTypeParam, setHandledTypeParam]');
       expect(dashboardWorkloadRouteStateSource).toContain('setSelectedNode');
+      expect(dashboardWorkloadUrlSyncSource).toContain('buildWorkloadsPath({');
+      expect(dashboardWorkloadUrlSyncSource).toContain('normalizeWorkloadViewModeParam');
+      expect(dashboardWorkloadUrlSyncSource).toContain(
+        'const [handledTypeParam, setHandledTypeParam]',
+      );
+      expect(dashboardWorkloadUrlSyncSource).toContain('parseWorkloadsLinkSearch');
       expect(dashboardSelectionStateSource).toContain('parseWorkloadsLinkSearch');
       expect(dashboardSelectionStateSource).toContain('const [selectedGuestId, setSelectedGuestIdRaw]');
       expect(dashboardSelectionStateSource).toContain('const [hoveredWorkloadId, setHoveredWorkloadId]');
@@ -554,6 +563,7 @@ describe('Dashboard performance contract', () => {
       expect(dashboardFilterModelSource).toContain('export const hasActiveDashboardFilters');
       expect(dashboardStateSource).toContain('useDashboardWorkloadRouteState');
       expect(dashboardStateSource).not.toContain('const containerRuntimeFilterConfig = createMemo');
+      expect(dashboardWorkloadRouteStateSource).toContain('useDashboardWorkloadUrlSync');
       expect(dashboardWorkloadRouteStateSource).toContain('containerRuntimeFilterConfig');
       expect(dashboardWorkloadRouteStateSource).toContain('hostFilterConfig');
       expect(dashboardWorkloadRouteStateSource).toContain('namespaceFilterConfig');
