@@ -1,7 +1,12 @@
-import { createEffect, createSignal, type Accessor, type Setter } from 'solid-js';
+import { createSignal, type Accessor, type Setter } from 'solid-js';
 import type { WorkloadGuest, ViewMode } from '@/types/workloads';
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import { deserializeDashboardWorkloadViewMode } from './dashboardWorkloadRouteModel';
+import {
+  DASHBOARD_WORKLOAD_ROUTE_RESET_STATE,
+  deserializeDashboardContainerRuntime,
+  resolveDashboardWorkloadNodeSelection,
+} from './dashboardWorkloadRouteStateModel';
 import { useDashboardWorkloadFilterOptions } from './useDashboardWorkloadFilterOptions';
 import { useDashboardWorkloadUrlSync } from './useDashboardWorkloadUrlSync';
 
@@ -29,49 +34,40 @@ export function useDashboardWorkloadRouteState(options: DashboardWorkloadRouteSt
     'dashboardContainerRuntime',
     '',
     {
-      deserialize: (raw) => (typeof raw === 'string' ? raw : ''),
+      deserialize: deserializeDashboardContainerRuntime,
       serialize: (value) => value,
     },
   );
-  const [workloadsRouteActive, setWorkloadsRouteActive] = createSignal(false);
 
   const handleNodeSelect = (nodeId: string | null, nodeType: 'pve' | 'pbs' | 'pmg' | null) => {
-    if (nodeType === 'pve' || nodeType === null) {
-      setSelectedHostHint(null);
-      setSelectedNode(nodeId);
-      if (nodeId && !options.showFilters()) {
-        options.setShowFilters(true);
-      }
+    const selection = resolveDashboardWorkloadNodeSelection({
+      nodeId,
+      nodeType,
+      showFilters: options.showFilters(),
+    });
+    if (!selection.shouldApply) return;
+    setSelectedHostHint(selection.selectedHostHint);
+    setSelectedNode(selection.selectedNode);
+    if (selection.shouldShowFilters) {
+      options.setShowFilters(true);
     }
   };
 
   const resetWorkloadRouteFilters = () => {
-    setSelectedNode(null);
-    setSelectedHostHint(null);
-    setSelectedKubernetesContext(null);
-    setSelectedKubernetesNamespace(null);
-    setContainerRuntime('');
-    setViewMode('all');
+    setSelectedNode(DASHBOARD_WORKLOAD_ROUTE_RESET_STATE.selectedNode);
+    setSelectedHostHint(DASHBOARD_WORKLOAD_ROUTE_RESET_STATE.selectedHostHint);
+    setSelectedKubernetesContext(DASHBOARD_WORKLOAD_ROUTE_RESET_STATE.selectedKubernetesContext);
+    setSelectedKubernetesNamespace(
+      DASHBOARD_WORKLOAD_ROUTE_RESET_STATE.selectedKubernetesNamespace,
+    );
+    setContainerRuntime(DASHBOARD_WORKLOAD_ROUTE_RESET_STATE.containerRuntime);
+    setViewMode(DASHBOARD_WORKLOAD_ROUTE_RESET_STATE.viewMode);
   };
-
-  const filterOptions = useDashboardWorkloadFilterOptions({
-    allGuests: options.allGuests,
-    isWorkloadsRoute: workloadsRouteActive,
-    viewMode,
-    containerRuntime,
-    selectedNode,
-    selectedKubernetesContext,
-    selectedKubernetesNamespace,
-    setContainerRuntime,
-    setSelectedKubernetesContext,
-    handleNodeSelect,
-    setSelectedKubernetesNamespace,
-  });
 
   const { isWorkloadsRoute } = useDashboardWorkloadUrlSync({
     containerRuntime,
-    containerRuntimeOptions: filterOptions.containerRuntimeOptions,
-    kubernetesNamespaceOptions: filterOptions.kubernetesNamespaceOptions,
+    containerRuntimeOptions: () => filterOptions.containerRuntimeOptions(),
+    kubernetesNamespaceOptions: () => filterOptions.kubernetesNamespaceOptions(),
     selectedHostHint,
     selectedKubernetesContext,
     selectedKubernetesNamespace,
@@ -85,10 +81,21 @@ export function useDashboardWorkloadRouteState(options: DashboardWorkloadRouteSt
     setViewMode,
     showFilters: options.showFilters,
     viewMode,
-    workloadNodeOptions: filterOptions.workloadNodeOptions,
+    workloadNodeOptions: () => filterOptions.workloadNodeOptions(),
   });
-  createEffect(() => {
-    setWorkloadsRouteActive(isWorkloadsRoute());
+
+  const filterOptions = useDashboardWorkloadFilterOptions({
+    allGuests: options.allGuests,
+    isWorkloadsRoute,
+    viewMode,
+    containerRuntime,
+    selectedNode,
+    selectedKubernetesContext,
+    selectedKubernetesNamespace,
+    setContainerRuntime,
+    setSelectedKubernetesContext,
+    handleNodeSelect,
+    setSelectedKubernetesNamespace,
   });
 
   const {

@@ -17,6 +17,7 @@ import dashboardSelectionStateSource from '../useDashboardSelectionState.ts?raw'
 import dashboardWorkloadDerivedStateSource from '../useDashboardWorkloadDerivedState.ts?raw';
 import dashboardWorkloadFilterOptionsSource from '../useDashboardWorkloadFilterOptions.ts?raw';
 import dashboardWorkloadRouteModelSource from '../dashboardWorkloadRouteModel.ts?raw';
+import dashboardWorkloadRouteStateModelSource from '../dashboardWorkloadRouteStateModel.ts?raw';
 import dashboardWorkloadUrlSyncModelSource from '../dashboardWorkloadUrlSyncModel.ts?raw';
 import dashboardWorkloadRouteStateSource from '../useDashboardWorkloadRouteState.ts?raw';
 import dashboardWorkloadUrlSyncSource from '../useDashboardWorkloadUrlSync.ts?raw';
@@ -538,11 +539,23 @@ describe('Dashboard performance contract', () => {
       expect(dashboardWorkloadRouteStateSource).not.toContain('buildWorkloadsPath({');
       expect(dashboardWorkloadRouteStateSource).not.toContain('normalizeWorkloadViewModeParam');
       expect(dashboardWorkloadRouteStateSource).not.toContain('const [handledTypeParam, setHandledTypeParam]');
+      expect(dashboardWorkloadRouteStateSource).not.toContain(
+        "const [workloadsRouteActive, setWorkloadsRouteActive] = createSignal(false)",
+      );
       expect(dashboardWorkloadRouteStateSource).not.toContain('const workloadNodeOptions = createMemo');
       expect(dashboardWorkloadRouteStateSource).not.toContain(
         'const containerRuntimeFilterConfig = createMemo',
       );
-      expect(dashboardWorkloadRouteStateSource).toContain('setSelectedNode');
+      expect(dashboardWorkloadRouteStateSource).toContain(
+        "from './dashboardWorkloadRouteStateModel'",
+      );
+      expect(dashboardWorkloadRouteStateSource).toContain(
+        'resolveDashboardWorkloadNodeSelection({',
+      );
+      expect(dashboardWorkloadRouteStateSource).toContain(
+        'DASHBOARD_WORKLOAD_ROUTE_RESET_STATE',
+      );
+      expect(dashboardWorkloadRouteStateSource).toContain('isWorkloadsRoute,');
       expect(dashboardWorkloadFilterOptionsSource).toContain(
         'buildDashboardWorkloadNodeOptions(options.allGuests())',
       );
@@ -558,6 +571,15 @@ describe('Dashboard performance contract', () => {
       );
       expect(dashboardWorkloadRouteModelSource).toContain(
         "normalizeWorkloadViewModeParam(raw) ?? 'all'",
+      );
+      expect(dashboardWorkloadRouteStateModelSource).toContain(
+        'export const DASHBOARD_WORKLOAD_ROUTE_RESET_STATE',
+      );
+      expect(dashboardWorkloadRouteStateModelSource).toContain(
+        'export const resolveDashboardWorkloadNodeSelection',
+      );
+      expect(dashboardWorkloadRouteStateModelSource).toContain(
+        'export const deserializeDashboardContainerRuntime',
       );
       expect(dashboardWorkloadUrlSyncSource).not.toContain('buildWorkloadsPath({');
       expect(dashboardWorkloadUrlSyncSource).not.toContain('normalizeWorkloadViewModeParam');

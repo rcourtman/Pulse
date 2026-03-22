@@ -93,6 +93,7 @@ import dashboardSelectionStateSource from '@/components/Dashboard/useDashboardSe
 import dashboardWorkloadDerivedStateSource from '@/components/Dashboard/useDashboardWorkloadDerivedState.ts?raw';
 import dashboardWorkloadFilterOptionsSource from '@/components/Dashboard/useDashboardWorkloadFilterOptions.ts?raw';
 import dashboardWorkloadRouteModelSource from '@/components/Dashboard/dashboardWorkloadRouteModel.ts?raw';
+import dashboardWorkloadRouteStateModelSource from '@/components/Dashboard/dashboardWorkloadRouteStateModel.ts?raw';
 import dashboardWorkloadUrlSyncModelSource from '@/components/Dashboard/dashboardWorkloadUrlSyncModel.ts?raw';
 import dashboardWorkloadRouteStateSource from '@/components/Dashboard/useDashboardWorkloadRouteState.ts?raw';
 import dashboardWorkloadUrlSyncSource from '@/components/Dashboard/useDashboardWorkloadUrlSync.ts?raw';
@@ -567,6 +568,16 @@ describe('frontend resource type boundaries', () => {
       'const containerRuntimeFilterConfig = createMemo',
     );
     expect(dashboardWorkloadRouteStateSource).not.toContain('const [handledTypeParam, setHandledTypeParam]');
+    expect(dashboardWorkloadRouteStateSource).not.toContain(
+      "const [workloadsRouteActive, setWorkloadsRouteActive] = createSignal(false)",
+    );
+    expect(dashboardWorkloadRouteStateSource).toContain(
+      "from './dashboardWorkloadRouteStateModel'",
+    );
+    expect(dashboardWorkloadRouteStateSource).toContain(
+      'resolveDashboardWorkloadNodeSelection({',
+    );
+    expect(dashboardWorkloadRouteStateSource).toContain('DASHBOARD_WORKLOAD_ROUTE_RESET_STATE');
     expect(dashboardWorkloadUrlSyncSource).not.toContain('buildWorkloadsPath({');
     expect(dashboardWorkloadUrlSyncSource).not.toContain('normalizeWorkloadViewModeParam');
     expect(dashboardWorkloadUrlSyncSource).not.toContain('parseWorkloadsLinkSearch');
@@ -612,6 +623,15 @@ describe('frontend resource type boundaries', () => {
     expect(dashboardWorkloadRouteModelSource).toContain(
       "normalizeWorkloadViewModeParam(raw) ?? 'all'",
     );
+    expect(dashboardWorkloadRouteStateModelSource).toContain(
+      'export const DASHBOARD_WORKLOAD_ROUTE_RESET_STATE',
+    );
+    expect(dashboardWorkloadRouteStateModelSource).toContain(
+      'export const resolveDashboardWorkloadNodeSelection',
+    );
+    expect(dashboardWorkloadRouteStateModelSource).toContain(
+      'export const deserializeDashboardContainerRuntime',
+    );
     expect(dashboardWorkloadDerivedStateSource).toContain('groupWorkloads(');
     expect(dashboardWorkloadDerivedStateSource).toContain('computeWorkloadStats(');
     expect(dashboardWorkloadDerivedStateSource).toContain('computeWorkloadIOEmphasis(');
@@ -622,7 +642,7 @@ describe('frontend resource type boundaries', () => {
     expect(dashboardWorkloadRouteModelSource).toContain("from './workloadTopology'");
     expect(dashboardWorkloadRouteModelSource).toContain('workloadNodeScopeId');
     expect(dashboardWorkloadRouteModelSource).toContain('getKubernetesContextKey');
-    expect(dashboardWorkloadRouteStateSource).toContain('setSelectedNode');
+    expect(dashboardWorkloadRouteStateSource).toContain('isWorkloadsRoute,');
     expect(dashboardSelectionStateSource).toContain('parseWorkloadsLinkSearch');
     expect(dashboardSelectionStateSource).toContain('const [selectedGuestId, setSelectedGuestIdRaw]');
     expect(dashboardSelectionStateSource).toContain('const [hoveredWorkloadId, setHoveredWorkloadId]');
