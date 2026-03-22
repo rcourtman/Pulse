@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import alertsPageSource from '@/pages/Alerts.tsx?raw';
 import alertsConfigurationSurfaceSource from '@/features/alerts/AlertsConfigurationSurface.tsx?raw';
 import alertsConfigurationStateSource from '@/features/alerts/useAlertsConfigurationState.ts?raw';
+import alertOverridesStateSource from '@/features/alerts/useAlertOverridesState.ts?raw';
 import alertDestinationsStateSource from '@/features/alerts/useAlertDestinationsState.ts?raw';
 import alertAcknowledgementStateSource from '@/features/alerts/useAlertAcknowledgementState.ts?raw';
 import alertHistoryStateSource from '@/features/alerts/useAlertHistoryState.ts?raw';
@@ -193,9 +194,19 @@ describe('tab path helpers', () => {
     expect(alertsConfigurationStateSource).toContain('export function useAlertsConfigurationState');
     expect(alertsConfigurationStateSource).toContain('AlertsAPI.getConfig');
     expect(alertsConfigurationStateSource).toContain('useAlertDestinationsState');
+    expect(alertsConfigurationStateSource).toContain('useAlertOverridesState');
     expect(alertsConfigurationStateSource).not.toContain('NotificationsAPI.getEmailConfig');
     expect(alertsConfigurationStateSource).not.toContain('NotificationsAPI.updateEmailConfig');
     expect(alertsConfigurationStateSource).toContain("eventBus.on('org_switched'");
+    expect(alertsConfigurationStateSource).not.toContain(
+      'const [rawOverridesConfig, setRawOverridesConfig] = createSignal',
+    );
+    expect(alertsConfigurationStateSource).not.toContain('const hostOverrideIdCandidates =');
+    expect(alertsConfigurationStateSource).not.toContain('const allGuests = createMemo');
+    expect(alertOverridesStateSource).toContain('export function useAlertOverridesState');
+    expect(alertOverridesStateSource).toContain('getActionableAgentIdFromResource');
+    expect(alertOverridesStateSource).toContain('pbsInstanceFromResource');
+    expect(alertOverridesStateSource).toContain('props.setOverviewOverrides(overrides())');
     expect(alertDestinationsStateSource).toContain('export function useAlertDestinationsState');
     expect(alertDestinationsStateSource).toContain('NotificationsAPI.getEmailConfig');
     expect(alertDestinationsStateSource).toContain('NotificationsAPI.updateEmailConfig');

@@ -235,12 +235,15 @@ living inline in `frontend-modern/src/pages/Alerts.tsx`. The page shell owns
 navigation, activation chrome, and cross-surface routing; the configuration
 surface is now a shell that composes the destinations, schedule, and thresholds
 tabs. The canonical alert-policy runtime owner is now
-`frontend-modern/src/features/alerts/useAlertsConfigurationState.ts`, while
-notification destination reload and persistence now route through
-`frontend-modern/src/features/alerts/useAlertDestinationsState.ts`. Future
-config cleanup should extend the alert-policy hook or the destinations hook
-based on which subsystem actually owns the behavior instead of letting the
-broader configuration hook absorb both concerns again.
+`frontend-modern/src/features/alerts/useAlertsConfigurationState.ts` for
+config transport, defaults, and save/load orchestration,
+`frontend-modern/src/features/alerts/useAlertOverridesState.ts` for raw
+override normalization plus resource-backed override projection, and
+`frontend-modern/src/features/alerts/useAlertDestinationsState.ts` for
+notification destination reload and persistence. Future config cleanup should
+extend the config transport hook, the override-projection hook, or the
+destinations hook based on which subsystem actually owns the behavior instead
+of letting the broader configuration hook absorb all three concerns again.
 
 Alert filter metadata and grouped header consumers must also preserve the
 canonical `agent` and `node` header boundary when reusing shared filter
