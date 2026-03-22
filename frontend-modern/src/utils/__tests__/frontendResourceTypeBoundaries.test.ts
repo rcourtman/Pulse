@@ -2938,11 +2938,6 @@ describe('frontend resource type boundaries', () => {
       'export function useThresholdsOverrideMutations',
     );
     expect(thresholdsOverrideMutationsHookSource).toContain('matchesAlertIdentifier');
-    expect(alertScheduleTabSource).toContain('getAlertGroupingCardClass');
-    expect(alertScheduleTabSource).toContain('getAlertGroupingCheckboxClass');
-    expect(alertScheduleTabSource).toContain('getAlertQuietDayButtonClass');
-    expect(alertScheduleTabSource).toContain('getAlertQuietSuppressCardClass');
-    expect(alertScheduleTabSource).toContain('getAlertQuietSuppressCheckboxClass');
     expect(alertsPageSource).not.toContain('getAlertConfigUnsavedChangesLabel');
     expect(alertsConfigurationSurfaceSource).toContain('getAlertConfigUnsavedChangesLabel');
     expect(alertsConfigurationSurfaceSource).toContain('getAlertConfigSaveChangesLabel');
@@ -2952,18 +2947,17 @@ describe('frontend resource type boundaries', () => {
     expect(alertsPageSource).toContain('getAlertConfigLeaveConfirmation');
     expect(alertScheduleTabSource).toContain('getAlertConfigResetDefaultsLabel');
     expect(alertScheduleTabSource).toContain('getAlertConfigResetDefaultsTitle');
-    expect(alertScheduleTabSource).toContain('getAlertConfigToggleStatusLabel');
-    expect(alertScheduleTabSource).toContain('getAlertConfigSummaryQuietHours');
-    expect(alertScheduleTabSource).toContain('getAlertConfigSummarySuppressing');
-    expect(alertScheduleTabSource).toContain('getAlertConfigSummaryCooldown');
-    expect(alertScheduleTabSource).toContain('getAlertConfigSummaryGrouping');
-    expect(alertScheduleTabSource).toContain('getAlertConfigSummaryRecoveryEnabled');
-    expect(alertScheduleTabSource).toContain('getAlertConfigSummaryEscalation');
     expect(alertScheduleTabSource).toContain('getAlertConfigQuietHourSuppressOptions');
-    expect(alertScheduleTabSource).toContain('ALERT_CONFIG_COOLDOWN_PERIOD_LABEL');
-    expect(alertScheduleTabSource).toContain('ALERT_CONFIG_COOLDOWN_MAX_ALERTS_LABEL');
-    expect(alertScheduleTabSource).toContain('ALERT_CONFIG_GROUPING_WINDOW_LABEL');
-    expect(alertScheduleTabSource).toContain('ALERT_CONFIG_GROUPING_STRATEGY_LABEL');
+    expect(alertScheduleTabSource).toContain('AlertQuietHoursSection');
+    expect(alertScheduleTabSource).toContain('AlertCooldownSection');
+    expect(alertScheduleTabSource).toContain('AlertGroupingSection');
+    expect(alertScheduleTabSource).toContain('AlertRecoverySection');
+    expect(alertScheduleTabSource).toContain('AlertEscalationSection');
+    expect(alertScheduleTabSource).toContain('AlertScheduleSummarySection');
+    expect(alertScheduleTabSource).not.toContain('ALERT_CONFIG_COOLDOWN_PERIOD_LABEL');
+    expect(alertScheduleTabSource).not.toContain('ALERT_CONFIG_COOLDOWN_MAX_ALERTS_LABEL');
+    expect(alertScheduleTabSource).not.toContain('ALERT_CONFIG_GROUPING_WINDOW_LABEL');
+    expect(alertScheduleTabSource).not.toContain('ALERT_CONFIG_GROUPING_STRATEGY_LABEL');
     expect(alertsPageSource).not.toContain('const statusClasses =');
     expect(alertsPageSource).not.toContain('const levelClasses =');
     expect(alertsPageSource).not.toContain("alert.source === 'ai' ? 'Patrol' : 'Alert'");
@@ -3896,8 +3890,8 @@ describe('frontend resource type boundaries', () => {
     expect(alertDestinationsTabSource).toContain('AlertEmailDestinationsSection');
     expect(alertDestinationsTabSource).toContain('AlertWebhookDestinationsSection');
     expect(alertScheduleTabSource).toContain('getAlertConfigQuietHourSuppressOptions');
-    expect(alertScheduleTabSource).toContain('getAlertGroupingCardClass');
-    expect(alertScheduleTabSource).toContain('getAlertQuietDayButtonClass');
+    expect(alertScheduleTabSource).toContain('AlertGroupingSection');
+    expect(alertScheduleTabSource).toContain('AlertQuietHoursSection');
   });
 
   it('keeps alert resource table vocabulary in a shared presentation utility', () => {

@@ -271,6 +271,12 @@ provider-catalog loading and provider-default application, while
 `frontend-modern/src/components/Alerts/EmailProviderSelect.tsx` stays the
 render shell and consumes the canonical `UIEmailConfig` feature type instead of
 keeping a second local email-config interface.
+The alert scheduling surface now follows the same shell/section split:
+`frontend-modern/src/features/alerts/useAlertScheduleState.ts` owns schedule
+runtime and default/reset policy, while
+`frontend-modern/src/features/alerts/tabs/ScheduleTab.tsx` stays the shell and
+composes the dedicated quiet-hours, cooldown, grouping, recovery, escalation,
+and summary section owners instead of carrying those panels inline.
 
 Alert filter metadata and grouped header consumers must also preserve the
 canonical `agent` and `node` header boundary when reusing shared filter

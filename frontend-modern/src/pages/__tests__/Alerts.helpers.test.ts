@@ -309,6 +309,15 @@ describe('tab path helpers', () => {
     expect(alertScheduleStateSource).toContain('createDefaultGrouping');
     expect(alertScheduleStateSource).toContain('createDefaultEscalation');
     expect(alertScheduleTabSource).toContain('getAlertConfigQuietHourSuppressOptions');
+    expect(alertScheduleTabSource).toContain('AlertQuietHoursSection');
+    expect(alertScheduleTabSource).toContain('AlertCooldownSection');
+    expect(alertScheduleTabSource).toContain('AlertGroupingSection');
+    expect(alertScheduleTabSource).toContain('AlertRecoverySection');
+    expect(alertScheduleTabSource).toContain('AlertEscalationSection');
+    expect(alertScheduleTabSource).toContain('AlertScheduleSummarySection');
+    expect(alertScheduleTabSource).not.toContain('ALERT_CONFIG_COOLDOWN_TITLE');
+    expect(alertScheduleTabSource).not.toContain('ALERT_CONFIG_QUIET_HOURS_TITLE');
+    expect(alertScheduleTabSource).not.toContain('ALERT_CONFIG_ESCALATION_TITLE');
     expect(alertThresholdsTabSource).toContain('ThresholdsTable');
     expect(thresholdsTableSource).toContain(
       "import { useThresholdsTableState } from '@/features/alerts/thresholds/hooks/useThresholdsTableState';",

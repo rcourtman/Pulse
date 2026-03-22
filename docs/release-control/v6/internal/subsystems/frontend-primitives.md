@@ -467,6 +467,11 @@ provider-catalog loading and provider-default application, while
 `frontend-modern/src/components/Alerts/EmailProviderSelect.tsx` stays the
 render shell and should not re-accumulate `NotificationsAPI.getEmailProviders`
 or a second local email-config contract inline.
+The alert scheduling surface now follows the same shell-versus-section split:
+`frontend-modern/src/features/alerts/tabs/ScheduleTab.tsx` should compose the
+dedicated quiet-hours, cooldown, grouping, recovery, escalation, and summary
+section owners while `frontend-modern/src/features/alerts/useAlertScheduleState.ts`
+remains the canonical runtime owner.
 The same rule now also covers cross-tab incident timelines: the shared runtime
 owner is `frontend-modern/src/features/alerts/useAlertIncidentTimelineState.ts`,
 while `frontend-modern/src/features/alerts/OverviewTab.tsx` and
