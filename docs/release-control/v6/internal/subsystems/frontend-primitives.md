@@ -515,10 +515,16 @@ Alert history runtime now follows that same pattern. The shell stays in
 `frontend-modern/src/features/alerts/useAlertHistoryState.ts` owns history
 fetch, persistent filters, resource-incident panel state, and history-clear
 behavior, while `frontend-modern/src/features/alerts/alertHistoryModel.ts`
-owns grouped/trend derivation and the bucket/range analytics contract. Future
-alert-history control flow should extend the hook, and pure history analytics
-should extend the model, rather than rebuilding either concern in the tab
-shell.
+owns grouped/trend derivation and the bucket/range analytics contract. The
+render-heavy surfaces now route through
+`frontend-modern/src/features/alerts/AlertHistoryFrequencyCard.tsx`,
+`frontend-modern/src/features/alerts/AlertHistoryFiltersCard.tsx`,
+`frontend-modern/src/features/alerts/AlertResourceIncidentsPanel.tsx`,
+`frontend-modern/src/features/alerts/AlertHistoryTableSection.tsx`, and
+`frontend-modern/src/features/alerts/AlertHistoryAdministrationCard.tsx`.
+Future alert-history control flow should extend the hook, pure history analytics
+should extend the model, and section rendering should extend those owners
+rather than rebuilding any of those concerns in the tab shell.
 Top-level settings surfaces must route through `Settings.tsx`,
 `SettingsPageShell.tsx`, and
 `frontend-modern/src/components/shared/SettingsPanel.tsx` instead of

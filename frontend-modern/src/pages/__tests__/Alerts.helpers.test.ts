@@ -8,6 +8,11 @@ import alertDestinationsStateSource from '@/features/alerts/useAlertDestinations
 import alertDestinationsTabStateSource from '@/features/alerts/useAlertDestinationsTabState.ts?raw';
 import alertWebhookDestinationsStateSource from '@/features/alerts/useAlertWebhookDestinationsState.ts?raw';
 import alertAcknowledgementStateSource from '@/features/alerts/useAlertAcknowledgementState.ts?raw';
+import alertHistoryAdministrationCardSource from '@/features/alerts/AlertHistoryAdministrationCard.tsx?raw';
+import alertHistoryFiltersCardSource from '@/features/alerts/AlertHistoryFiltersCard.tsx?raw';
+import alertHistoryFrequencyCardSource from '@/features/alerts/AlertHistoryFrequencyCard.tsx?raw';
+import alertHistoryTableSectionSource from '@/features/alerts/AlertHistoryTableSection.tsx?raw';
+import alertResourceIncidentsPanelSource from '@/features/alerts/AlertResourceIncidentsPanel.tsx?raw';
 import alertHistoryStateSource from '@/features/alerts/useAlertHistoryState.ts?raw';
 import alertHistoryModelSource from '@/features/alerts/alertHistoryModel.ts?raw';
 import alertIncidentTimelineStateSource from '@/features/alerts/useAlertIncidentTimelineState.ts?raw';
@@ -257,6 +262,11 @@ describe('tab path helpers', () => {
     );
     expect(alertsPageSource).not.toContain('function HistoryTab(');
     expect(alertHistoryTabSource).toContain('useAlertHistoryState');
+    expect(alertHistoryTabSource).toContain('AlertHistoryFrequencyCard');
+    expect(alertHistoryTabSource).toContain('AlertHistoryFiltersCard');
+    expect(alertHistoryTabSource).toContain('AlertResourceIncidentsPanel');
+    expect(alertHistoryTabSource).toContain('AlertHistoryTableSection');
+    expect(alertHistoryTabSource).toContain('AlertHistoryAdministrationCard');
     expect(alertDestinationsTabSource).toContain('useAlertDestinationsTabState');
     expect(alertDestinationsTabSource).toContain('AlertDestinationsLoadingState');
     expect(alertDestinationsTabSource).toContain('AlertDestinationsLoadErrorCard');
@@ -269,7 +279,6 @@ describe('tab path helpers', () => {
     expect(alertDestinationsTabSource).not.toContain('ALERT_DESTINATIONS_EMAIL_PANEL_TITLE');
     expect(alertDestinationsTabSource).not.toContain('ALERT_DESTINATIONS_APPRISE_PANEL_TITLE');
     expect(alertDestinationsTabSource).not.toContain('getAlertWebhooksSectionTitle');
-    expect(alertHistoryTabSource).toContain('IncidentTimelinePanel');
     expect(alertHistoryTabSource).not.toContain('useAlertIncidentTimelineState');
     expect(alertHistoryTabSource).not.toContain('AlertsAPI.getHistory');
     expect(alertHistoryTabSource).not.toContain('AlertsAPI.getIncidentsForResource');
@@ -280,7 +289,25 @@ describe('tab path helpers', () => {
     expect(alertHistoryTabSource).not.toContain('const saveIncidentNote = async');
     expect(alertHistoryTabSource).not.toContain('usePersistentSignal(');
     expect(alertHistoryTabSource).not.toContain("const [searchTerm, setSearchTerm] = createSignal");
+    expect(alertHistoryFrequencyCardSource).toContain('export function AlertHistoryFrequencyCard');
+    expect(alertHistoryFrequencyCardSource).toContain('getAlertFrequencySelectionPresentation');
+    expect(alertHistoryFrequencyCardSource).toContain('getAlertBucketCountLabel');
+    expect(alertHistoryFiltersCardSource).toContain('export function AlertHistoryFiltersCard');
+    expect(alertHistoryFiltersCardSource).toContain('getAlertHistorySearchPlaceholder');
+    expect(alertResourceIncidentsPanelSource).toContain('export function AlertResourceIncidentsPanel');
+    expect(alertResourceIncidentsPanelSource).toContain('IncidentEventFilters');
+    expect(alertResourceIncidentsPanelSource).toContain('IncidentTimelineEventCard');
+    expect(alertHistoryTableSectionSource).toContain('export function AlertHistoryTableSection');
+    expect(alertHistoryTableSectionSource).toContain('IncidentTimelinePanel');
+    expect(alertHistoryTableSectionSource).toContain('InvestigateAlertButton');
+    expect(alertHistoryAdministrationCardSource).toContain(
+      'export function AlertHistoryAdministrationCard',
+    );
+    expect(alertHistoryAdministrationCardSource).toContain(
+      'getAlertAdministrationClearHistoryLabel',
+    );
     expect(alertHistoryStateSource).toContain('export function useAlertHistoryState');
+    expect(alertHistoryStateSource).toContain('export type AlertHistoryState');
     expect(alertHistoryStateSource).toContain('AlertsAPI.getHistory');
     expect(alertHistoryStateSource).toContain('AlertsAPI.getIncidentsForResource');
     expect(alertHistoryStateSource).toContain('AlertsAPI.clearHistory');

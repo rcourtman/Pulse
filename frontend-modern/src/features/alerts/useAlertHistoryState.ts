@@ -323,3 +323,5 @@ export function useAlertHistoryState(props: UseAlertHistoryStateProps) {
     clearAlertHistory,
   };
 }
+
+export type AlertHistoryState = ReturnType<typeof useAlertHistoryState>;

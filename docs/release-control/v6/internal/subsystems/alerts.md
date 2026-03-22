@@ -254,11 +254,17 @@ alert-history fetch, persistent filter state, resource-incident panel loading,
 and history-clear flow, while the pure analytics model for history-item
 projection, trend buckets, group labels, axis ticks, and selected bucket
 detail now lives in
-`frontend-modern/src/features/alerts/alertHistoryModel.ts`. Future alert
-history control-flow work should extend the feature hook, while new grouping or
-trend semantics should extend the history model instead of putting data fetch
-or resource-incident state back into
-`frontend-modern/src/features/alerts/tabs/HistoryTab.tsx`.
+`frontend-modern/src/features/alerts/alertHistoryModel.ts`. The tab shell in
+`frontend-modern/src/features/alerts/tabs/HistoryTab.tsx` now composes
+`frontend-modern/src/features/alerts/AlertHistoryFrequencyCard.tsx`,
+`frontend-modern/src/features/alerts/AlertHistoryFiltersCard.tsx`,
+`frontend-modern/src/features/alerts/AlertResourceIncidentsPanel.tsx`,
+`frontend-modern/src/features/alerts/AlertHistoryTableSection.tsx`, and
+`frontend-modern/src/features/alerts/AlertHistoryAdministrationCard.tsx`.
+Future alert-history control-flow work should extend the feature hook, new
+grouping or trend semantics should extend the history model, and render-heavy
+history surfaces should extend those section owners instead of putting fetch,
+resource-incident state, or table rendering back into the shell.
 
 Alert configuration load/save state, notification config reloads, and threshold
 override normalization now route through
