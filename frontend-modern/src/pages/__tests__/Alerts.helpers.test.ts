@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import alertsPageSource from '@/pages/Alerts.tsx?raw';
 import alertsConfigurationSurfaceSource from '@/features/alerts/AlertsConfigurationSurface.tsx?raw';
 import alertsConfigurationStateSource from '@/features/alerts/useAlertsConfigurationState.ts?raw';
+import alertsConfigurationModelSource from '@/features/alerts/alertsConfigurationModel.ts?raw';
 import alertOverridesStateSource from '@/features/alerts/useAlertOverridesState.ts?raw';
 import alertDestinationsStateSource from '@/features/alerts/useAlertDestinationsState.ts?raw';
 import alertDestinationsTabStateSource from '@/features/alerts/useAlertDestinationsTabState.ts?raw';
@@ -196,16 +197,32 @@ describe('tab path helpers', () => {
     expect(alertsConfigurationSurfaceSource).not.toContain("eventBus.on('org_switched'");
     expect(alertsConfigurationStateSource).toContain('export function useAlertsConfigurationState');
     expect(alertsConfigurationStateSource).toContain('AlertsAPI.getConfig');
+    expect(alertsConfigurationStateSource).toContain('createDefaultAlertsConfigurationSnapshot');
+    expect(alertsConfigurationStateSource).toContain('readAlertsConfigurationSnapshot');
+    expect(alertsConfigurationStateSource).toContain('buildAlertsConfigurationPayload');
     expect(alertsConfigurationStateSource).toContain('useAlertDestinationsState');
     expect(alertsConfigurationStateSource).toContain('useAlertOverridesState');
     expect(alertsConfigurationStateSource).not.toContain('NotificationsAPI.getEmailConfig');
     expect(alertsConfigurationStateSource).not.toContain('NotificationsAPI.updateEmailConfig');
     expect(alertsConfigurationStateSource).toContain("eventBus.on('org_switched'");
+    expect(alertsConfigurationStateSource).not.toContain('const createHysteresisThreshold =');
+    expect(alertsConfigurationStateSource).not.toContain('const normalizeGap =');
     expect(alertsConfigurationStateSource).not.toContain(
       'const [rawOverridesConfig, setRawOverridesConfig] = createSignal',
     );
     expect(alertsConfigurationStateSource).not.toContain('const hostOverrideIdCandidates =');
     expect(alertsConfigurationStateSource).not.toContain('const allGuests = createMemo');
+    expect(alertsConfigurationModelSource).toContain(
+      'export function createDefaultAlertsConfigurationSnapshot',
+    );
+    expect(alertsConfigurationModelSource).toContain(
+      'export function readAlertsConfigurationSnapshot',
+    );
+    expect(alertsConfigurationModelSource).toContain(
+      'export function buildAlertsConfigurationPayload',
+    );
+    expect(alertsConfigurationModelSource).toContain('const createHysteresisThreshold =');
+    expect(alertsConfigurationModelSource).toContain('const normalizeGap =');
     expect(alertOverridesStateSource).toContain('export function useAlertOverridesState');
     expect(alertOverridesStateSource).toContain('getActionableAgentIdFromResource');
     expect(alertOverridesStateSource).toContain('pbsInstanceFromResource');

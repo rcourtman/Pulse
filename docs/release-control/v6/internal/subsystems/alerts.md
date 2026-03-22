@@ -243,6 +243,9 @@ surface is now a shell that composes the destinations, schedule, and thresholds
 tabs. The canonical alert-policy runtime owner is now
 `frontend-modern/src/features/alerts/useAlertsConfigurationState.ts` for
 config transport, defaults, and save/load orchestration,
+`frontend-modern/src/features/alerts/alertsConfigurationModel.ts` for backend
+config normalization, factory defaults, docker-gap validation, and save-payload
+serialization,
 `frontend-modern/src/features/alerts/useAlertOverridesState.ts` for raw
 override normalization plus resource-backed override projection, and
 `frontend-modern/src/features/alerts/useAlertDestinationsState.ts` for
@@ -251,9 +254,10 @@ notification destination reload and persistence.
 webhook load/mutate/test flow plus destination test actions, while
 `frontend-modern/src/features/alerts/tabs/DestinationsTab.tsx` stays the
 destinations render shell. Future config cleanup should extend the config
-transport hook, the override-projection hook, or the destinations runtime hook
-based on which subsystem actually owns the behavior instead of letting the
-broader configuration hook absorb all three concerns again.
+transport hook, the config model, the override-projection hook, or the
+destinations runtime hook based on which subsystem actually owns the behavior
+instead of letting the broader configuration hook absorb all three concerns
+again.
 
 Alert filter metadata and grouped header consumers must also preserve the
 canonical `agent` and `node` header boundary when reusing shared filter
