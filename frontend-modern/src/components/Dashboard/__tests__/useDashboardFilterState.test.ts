@@ -71,7 +71,7 @@ describe('useDashboardFilterState', () => {
     expect(viewMode()).toBe('all');
     expect(statusMode()).toBe('all');
     expect(groupingMode()).toBe('grouped');
-    expect(sortKey()).toBe('name');
+    expect(sortKey()).toBe('type');
     expect(sortDirection()).toBe('asc');
     expect(hostOnChange).toHaveBeenCalledWith('');
     expect(namespaceOnChange).toHaveBeenCalledWith('');

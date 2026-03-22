@@ -11,6 +11,7 @@ import dashboardWorkloadTableSource from '../DashboardWorkloadTable.tsx?raw';
 import workloadPanelSource from '../WorkloadPanel.tsx?raw';
 import workloadTableHeaderSource from '../WorkloadTableHeader.tsx?raw';
 import dashboardFilterModelSource from '../dashboardFilterModel.ts?raw';
+import dashboardControlsStateSource from '../useDashboardControlsState.ts?raw';
 import dashboardGuestMetadataStateSource from '../useDashboardGuestMetadataState.ts?raw';
 import dashboardSelectionStateSource from '../useDashboardSelectionState.ts?raw';
 import dashboardWorkloadDerivedStateSource from '../useDashboardWorkloadDerivedState.ts?raw';
@@ -503,13 +504,16 @@ describe('Dashboard performance contract', () => {
       expect(dashboardSource).toContain('DashboardStatsStrip');
       expect(dashboardSource).toContain('DashboardWorkloadTable');
       expect(dashboardSource).not.toContain('const [search, setSearch] = createSignal(');
+      expect(dashboardStateSource).toContain('useDashboardControlsState');
       expect(dashboardStateSource).toContain('useDashboardGuestMetadataState');
       expect(dashboardStateSource).toContain('useDashboardSelectionState');
       expect(dashboardStateSource).toContain('useDashboardWorkloadDerivedState');
       expect(dashboardStateSource).toContain('useDashboardWorkloadRouteState');
       expect(dashboardStateSource).toContain('createWorkloadSortComparator');
       expect(dashboardStateSource).toContain('filterWorkloads(params)');
-      expect(dashboardStateSource).toContain("from './guestRowModel'");
+      expect(dashboardStateSource).not.toContain('useBreakpoint');
+      expect(dashboardStateSource).not.toContain('useColumnVisibility');
+      expect(dashboardStateSource).not.toContain('blurFocusedTypeToSearch');
       expect(dashboardStateSource).not.toContain("from './GuestRow'");
       expect(dashboardStateSource).not.toContain('GuestMetadataAPI.getAllMetadata()');
       expect(dashboardStateSource).not.toContain('buildWorkloadsPath({');
@@ -536,6 +540,11 @@ describe('Dashboard performance contract', () => {
         'const [handledTypeParam, setHandledTypeParam]',
       );
       expect(dashboardWorkloadUrlSyncSource).toContain('parseWorkloadsLinkSearch');
+      expect(dashboardControlsStateSource).toContain('useBreakpoint');
+      expect(dashboardControlsStateSource).toContain('useColumnVisibility');
+      expect(dashboardControlsStateSource).toContain('usePersistentSignal');
+      expect(dashboardControlsStateSource).toContain('blurFocusedTypeToSearch');
+      expect(dashboardControlsStateSource).toContain('DEFAULT_DASHBOARD_SORT_KEY');
       expect(dashboardWorkloadDerivedStateSource).toContain('groupWorkloads(');
       expect(dashboardWorkloadDerivedStateSource).toContain('computeWorkloadStats(');
       expect(dashboardWorkloadDerivedStateSource).toContain('computeWorkloadIOEmphasis(');
@@ -573,8 +582,10 @@ describe('Dashboard performance contract', () => {
       expect(dashboardFilterStateSource).toContain('countActiveDashboardFilters');
       expect(dashboardFilterStateSource).not.toContain('props.containerRuntimeFilter?.onChange');
       expect(dashboardFilterStateSource).toContain('useBreakpoint');
+      expect(dashboardFilterStateSource).toContain('DEFAULT_DASHBOARD_SORT_KEY');
       expect(dashboardFilterModelSource).toContain('export const countActiveDashboardFilters');
       expect(dashboardFilterModelSource).toContain('export const hasActiveDashboardFilters');
+      expect(dashboardFilterModelSource).toContain("DEFAULT_DASHBOARD_SORT_KEY: DashboardSortKey = 'type'");
       expect(dashboardStateSource).toContain('useDashboardWorkloadRouteState');
       expect(dashboardStateSource).toContain('filterWorkloads(params)');
       expect(dashboardStateSource).not.toContain('const containerRuntimeFilterConfig = createMemo');

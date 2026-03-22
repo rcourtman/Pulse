@@ -1,17 +1,11 @@
-import { createEffect, createMemo, createSignal } from 'solid-js';
+import { createEffect, createMemo } from 'solid-js';
 import { useNavigate } from '@solidjs/router';
 import type { VM, Container, Node } from '@/types/api';
 import type { WorkloadGuest } from '@/types/workloads';
-import { GUEST_COLUMNS, VIEW_MODE_COLUMNS } from './guestRowModel';
 import { useWebSocket } from '@/App';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
-import { useColumnVisibility } from '@/hooks/useColumnVisibility';
-import { useBreakpoint } from '@/hooks/useBreakpoint';
-import { blurFocusedTypeToSearch } from '@/hooks/useTypeToSearch';
 import { useWorkloads } from '@/hooks/useWorkloads';
-import { STORAGE_KEYS } from '@/utils/localStorage';
-import { aiChatStore } from '@/stores/aiChat';
 import { useKioskMode } from '@/hooks/useKioskMode';
 import {
   getDashboardDisconnectedState,
@@ -19,13 +13,16 @@ import {
   getDashboardInfrastructureEmptyState,
   getDashboardLoadingState,
 } from '@/utils/dashboardEmptyStatePresentation';
-import { isSummaryTimeRange } from '@/components/shared/summaryTimeRange';
 import { getCanonicalWorkloadId } from '@/utils/workloads';
 import {
   createWorkloadSortComparator,
   filterWorkloads,
   type FilterWorkloadsParams,
 } from './workloadSelectors';
+import {
+  type DashboardSortKey,
+} from './dashboardFilterModel';
+import { useDashboardControlsState } from './useDashboardControlsState';
 import { useDashboardGuestMetadataState } from './useDashboardGuestMetadataState';
 import { useDashboardSelectionState } from './useDashboardSelectionState';
 import { useDashboardWorkloadDerivedState } from './useDashboardWorkloadDerivedState';
@@ -38,26 +35,16 @@ export interface DashboardProps {
   useWorkloads?: boolean;
 }
 
-type StatusMode = 'all' | 'running' | 'degraded' | 'stopped';
-type GroupingMode = 'grouped' | 'flat';
-export type WorkloadSortKey = keyof WorkloadGuest | 'diskIo' | 'netIo';
+export type WorkloadSortKey = DashboardSortKey;
 
 export function useDashboardState(props: DashboardProps) {
   const navigate = useNavigate();
   const ws = useWebSocket();
   const { connected, activeAlerts, initialDataReceived, reconnecting, reconnect } = ws;
-  const { isMobile } = useBreakpoint();
   const alertsActivation = useAlertsActivation();
   const alertsEnabled = createMemo(() => alertsActivation.activationState() === 'active');
-  const [search, setSearch] = createSignal('');
 
   const kioskMode = useKioskMode();
-  const dashboardInfrastructureEmptyState = createMemo(() => getDashboardInfrastructureEmptyState());
-  const dashboardGuestsEmptyState = createMemo(() => getDashboardGuestsEmptyState(search()));
-  const dashboardLoadingState = createMemo(() => getDashboardLoadingState(reconnecting()));
-  const dashboardDisconnectedState = createMemo(() => getDashboardDisconnectedState(reconnecting()));
-
-  const [isSearchLocked, setIsSearchLocked] = createSignal(false);
 
   const { guestMetadata, handleCustomUrlUpdate } = useDashboardGuestMetadataState();
 
@@ -80,25 +67,6 @@ export function useDashboardState(props: DashboardProps) {
     workloadsEnabled() ? dedupeGuests(workloads.workloads()) : [],
   );
 
-  const [statusMode, setStatusMode] = usePersistentSignal<StatusMode>(
-    'dashboardStatusMode',
-    'all',
-    {
-      deserialize: (raw) =>
-        raw === 'all' || raw === 'running' || raw === 'degraded' || raw === 'stopped'
-          ? (raw as StatusMode)
-          : 'all',
-    },
-  );
-
-  const [groupingMode, setGroupingMode] = usePersistentSignal<GroupingMode>(
-    'dashboardGroupingMode',
-    'grouped',
-    {
-      deserialize: (raw) => (raw === 'grouped' || raw === 'flat' ? raw : 'grouped'),
-    },
-  );
-
   const [showFilters, setShowFilters] = usePersistentSignal<boolean>(
     'dashboardShowFilters',
     false,
@@ -107,21 +75,6 @@ export function useDashboardState(props: DashboardProps) {
       serialize: (value) => String(value),
     },
   );
-  const [workloadsSummaryRange, setWorkloadsSummaryRange] = usePersistentSignal(
-    STORAGE_KEYS.WORKLOADS_SUMMARY_RANGE,
-    '1h',
-    {
-      deserialize: (raw) => (isSummaryTimeRange(raw) ? raw : '1h'),
-    },
-  );
-  const [workloadsSummaryCollapsed, setWorkloadsSummaryCollapsed] = usePersistentSignal<boolean>(
-    STORAGE_KEYS.WORKLOADS_SUMMARY_COLLAPSED,
-    false,
-    { deserialize: (raw) => raw === 'true' },
-  );
-
-  const [sortKey, setSortKey] = createSignal<WorkloadSortKey | null>('type');
-  const [sortDirection, setSortDirection] = createSignal<'asc' | 'desc'>('asc');
 
   const {
     containerRuntime,
@@ -151,32 +104,48 @@ export function useDashboardState(props: DashboardProps) {
     setShowFilters,
   });
 
-  const relevantColumns = createMemo(() => {
-    const base = VIEW_MODE_COLUMNS[viewMode()];
-    if (!base) return null;
-    if (groupingMode() === 'grouped' && base.has('node')) {
-      const filtered = new Set(base);
-      filtered.delete('node');
-      return filtered;
-    }
-    return base;
+  const {
+    columnVisibility,
+    dashboardFilterColumnVisibility,
+    groupingMode,
+    handleBeforeAutoFocus,
+    handleSort,
+    handleTagClick,
+    isMobile,
+    isSearchLocked,
+    mobileVisibleColumnIds,
+    mobileVisibleColumns,
+    search,
+    setGroupingMode,
+    setSearch,
+    setSortDirection,
+    setSortKey,
+    setStatusMode,
+    sortDirection,
+    sortKey,
+    statusMode,
+    totalColumns,
+    visibleColumns,
+    workloadsSummaryCollapsed,
+    workloadsSummaryRange,
+    setWorkloadsSummaryCollapsed,
+    setWorkloadsSummaryRange,
+  } = useDashboardControlsState({
+    containerRuntime,
+    resetWorkloadRouteFilters,
+    selectedHostHint,
+    selectedKubernetesContext,
+    selectedKubernetesNamespace,
+    selectedNode,
+    setShowFilters,
+    showFilters,
+    viewMode,
   });
-  const columnVisibility = useColumnVisibility(
-    STORAGE_KEYS.DASHBOARD_HIDDEN_COLUMNS,
-    GUEST_COLUMNS,
-    ['os', 'ip'],
-    relevantColumns,
-  );
-  const visibleColumns = columnVisibility.visibleColumns;
-  const visibleColumnIds = createMemo(() => visibleColumns().map((column) => column.id));
-  const mobileEssentialColumns = new Set(['name', 'cpu', 'memory', 'disk', 'link']);
-  const mobileVisibleColumns = createMemo(() =>
-    isMobile() ? visibleColumns().filter((column) => mobileEssentialColumns.has(column.id)) : visibleColumns(),
-  );
-  const mobileVisibleColumnIds = createMemo(() =>
-    isMobile() ? mobileVisibleColumns().map((column) => column.id) : visibleColumnIds(),
-  );
-  const totalColumns = createMemo(() => mobileVisibleColumns().length);
+
+  const dashboardInfrastructureEmptyState = createMemo(() => getDashboardInfrastructureEmptyState());
+  const dashboardGuestsEmptyState = createMemo(() => getDashboardGuestsEmptyState(search()));
+  const dashboardLoadingState = createMemo(() => getDashboardLoadingState(reconnecting()));
+  const dashboardDisconnectedState = createMemo(() => getDashboardDisconnectedState(reconnecting()));
 
   let lastConnected = connected();
   createEffect(() => {
@@ -187,63 +156,9 @@ export function useDashboardState(props: DashboardProps) {
     lastConnected = isConnected;
   });
 
-  const handleSort = (key: WorkloadSortKey) => {
-    if (sortKey() === key) {
-      setSortDirection(sortDirection() === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortKey(key);
-      if (
-        key === 'cpu' ||
-        key === 'memory' ||
-        key === 'disk' ||
-        key === 'diskIo' ||
-        key === 'netIo' ||
-        key === 'uptime'
-      ) {
-        setSortDirection('desc');
-      } else {
-        setSortDirection('asc');
-      }
-    }
-  };
-
   const guestSortComparator = createMemo(() =>
     createWorkloadSortComparator(sortKey() || '', sortDirection()),
   );
-
-  createEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        const hasActiveFilters =
-          search().trim() ||
-          sortKey() !== 'type' ||
-          sortDirection() !== 'asc' ||
-          selectedNode() !== null ||
-          selectedHostHint() !== null ||
-          selectedKubernetesContext() !== null ||
-          selectedKubernetesNamespace() !== null ||
-          containerRuntime().trim() !== '' ||
-          viewMode() !== 'all' ||
-          statusMode() !== 'all';
-
-        if (hasActiveFilters) {
-          setSearch('');
-          setIsSearchLocked(false);
-          setSortKey('type');
-          setSortDirection('asc');
-          resetWorkloadRouteFilters();
-          setStatusMode('all');
-
-          blurFocusedTypeToSearch();
-        } else {
-          setShowFilters(!showFilters());
-        }
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  });
 
   const filteredGuests = createMemo(() => {
     const params: FilterWorkloadsParams = {
@@ -297,56 +212,6 @@ export function useDashboardState(props: DashboardProps) {
     selectedGuestId,
     tableBodyRef,
   });
-
-  const handleBeforeAutoFocus = () => {
-    if (aiChatStore.focusInput()) return true;
-    if (!showFilters()) setShowFilters(true);
-    return false;
-  };
-
-  const handleTagClick = (tag: string) => {
-    const currentSearch = search().trim();
-    const tagFilter = `tags:${tag}`;
-
-    if (currentSearch.includes(tagFilter)) {
-      let newSearch = currentSearch;
-
-      if (currentSearch === tagFilter) {
-        newSearch = '';
-      } else if (currentSearch.startsWith(tagFilter + ',')) {
-        newSearch = currentSearch.replace(tagFilter + ',', '').trim();
-      } else if (currentSearch.endsWith(', ' + tagFilter)) {
-        newSearch = currentSearch.replace(', ' + tagFilter, '').trim();
-      } else if (currentSearch.includes(', ' + tagFilter + ',')) {
-        newSearch = currentSearch.replace(', ' + tagFilter + ',', ',').trim();
-      } else if (currentSearch.includes(tagFilter + ', ')) {
-        newSearch = currentSearch.replace(tagFilter + ', ', '').trim();
-      }
-
-      setSearch(newSearch);
-      if (!newSearch) {
-        setIsSearchLocked(false);
-      }
-    } else {
-      if (!currentSearch || isSearchLocked()) {
-        setSearch(tagFilter);
-        setIsSearchLocked(false);
-      } else {
-        setSearch(`${currentSearch}, ${tagFilter}`);
-      }
-
-      if (!showFilters()) {
-        setShowFilters(true);
-      }
-    }
-  };
-
-  const dashboardFilterColumnVisibility = createMemo(() => ({
-    availableColumns: columnVisibility.availableToggles(),
-    isColumnHidden: columnVisibility.isHiddenByUser,
-    onColumnToggle: columnVisibility.toggle,
-    onColumnReset: columnVisibility.resetToDefaults,
-  }));
 
   return {
     activeAlerts,

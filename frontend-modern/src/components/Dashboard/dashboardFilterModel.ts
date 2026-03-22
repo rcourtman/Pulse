@@ -1,8 +1,9 @@
 import type { ColumnDef } from '@/hooks/useColumnVisibility';
-import type { ViewMode } from '@/types/workloads';
+import type { ViewMode, WorkloadGuest } from '@/types/workloads';
 
 export type DashboardStatusMode = 'all' | 'running' | 'degraded' | 'stopped';
 export type DashboardGroupingMode = 'grouped' | 'flat';
+export type DashboardSortKey = keyof WorkloadGuest | 'diskIo' | 'netIo';
 
 export interface DashboardFilterSelectOption {
   value: string;
@@ -26,8 +27,8 @@ export interface DashboardFilterProps {
   setStatusMode: (value: DashboardStatusMode) => void;
   groupingMode: () => DashboardGroupingMode;
   setGroupingMode: (value: DashboardGroupingMode) => void;
-  setSortKey: (value: string) => void;
-  setSortDirection: (value: string) => void;
+  setSortKey: (value: DashboardSortKey) => void;
+  setSortDirection: (value: 'asc' | 'desc') => void;
   onBeforeAutoFocus?: () => boolean;
   columnVisibility?: {
     availableColumns: ColumnDef[];
@@ -54,7 +55,7 @@ export interface HasActiveDashboardFiltersOptions extends CountActiveDashboardFi
   groupingMode: DashboardGroupingMode;
 }
 
-export const DEFAULT_DASHBOARD_SORT_KEY = 'name';
+export const DEFAULT_DASHBOARD_SORT_KEY: DashboardSortKey = 'type';
 export const DEFAULT_DASHBOARD_SORT_DIRECTION = 'asc';
 export const DEFAULT_DASHBOARD_VIEW_MODE: ViewMode = 'all';
 export const DEFAULT_DASHBOARD_STATUS_MODE: DashboardStatusMode = 'all';
