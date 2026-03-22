@@ -100,25 +100,6 @@ describe('useAlertDestinationsTabState', () => {
     ] as never);
     vi.mocked(NotificationsAPI.testNotification).mockResolvedValue({ success: true } as never);
     vi.mocked(NotificationsAPI.testWebhook).mockResolvedValue({ success: true } as never);
-    vi.mocked(NotificationsAPI.createWebhook).mockResolvedValue({
-      enabled: true,
-      headers: {},
-      id: 'hook-2',
-      method: 'POST',
-      name: 'Pager',
-      service: 'slack',
-      url: 'https://hooks.example.test/pager',
-    } as never);
-    vi.mocked(NotificationsAPI.updateWebhook).mockResolvedValue({
-      enabled: false,
-      headers: {},
-      id: 'hook-2',
-      method: 'POST',
-      name: 'Pager Updated',
-      service: 'slack',
-      url: 'https://hooks.example.test/pager',
-    } as never);
-    vi.mocked(NotificationsAPI.deleteWebhook).mockResolvedValue({ success: true } as never);
 
     const { result } = renderHook(() =>
       useAlertDestinationsTabState({
@@ -153,37 +134,9 @@ describe('useAlertDestinationsTabState', () => {
       }),
     );
 
-    await result.addWebhook({
-      enabled: true,
-      headers: {},
-      method: 'POST',
-      name: 'Pager',
-      service: 'slack',
-      url: 'https://hooks.example.test/pager',
-    });
-    expect(result.webhooks().map((hook) => hook.id)).toEqual(['hook-1', 'hook-2']);
-
-    await result.updateWebhook({
-      enabled: true,
-      headers: {},
-      id: 'hook-2',
-      method: 'POST',
-      name: 'Pager',
-      service: 'slack',
-      url: 'https://hooks.example.test/pager',
-    });
-    expect(result.webhooks().find((hook) => hook.id === 'hook-2')).toEqual(
-      expect.objectContaining({ enabled: false, name: 'Pager Updated' }),
-    );
-
-    await result.testWebhook('hook-2');
-    expect(NotificationsAPI.testNotification).toHaveBeenCalledWith({
-      type: 'webhook',
-      webhookId: 'hook-2',
-    });
-
-    await result.deleteWebhook('hook-1');
-    expect(result.webhooks().map((hook) => hook.id)).toEqual(['hook-2']);
+    expect(result.webhooks()).toEqual([
+      expect.objectContaining({ id: 'hook-1', service: 'generic' }),
+    ]);
 
     result.updateApprise({ mode: 'http', serverUrl: 'https://apprise.internal' });
     expect(result.appriseState()).toEqual(
@@ -193,7 +146,7 @@ describe('useAlertDestinationsTabState', () => {
     result.handleRetry();
     expect(onRetryLoad).toHaveBeenCalledTimes(1);
     await waitFor(() => expect(NotificationsAPI.getWebhooks).toHaveBeenCalledTimes(2));
-    expect(notificationStore.success).toHaveBeenCalled();
+    expect(notificationStore.success).toHaveBeenCalledTimes(2);
     expect(showErrorWithDetail).not.toHaveBeenCalled();
   });
 });

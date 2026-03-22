@@ -1,6 +1,6 @@
-import { createMemo, createSignal, onMount, type Accessor } from 'solid-js';
+import { createMemo, createSignal, type Accessor } from 'solid-js';
 
-import { NotificationsAPI, type AppriseConfig, type Webhook } from '@/api/notifications';
+import { NotificationsAPI, type AppriseConfig } from '@/api/notifications';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import { showErrorWithDetail } from '@/utils/toast';
@@ -10,17 +10,11 @@ import {
   getAlertDestinationsAppriseValidationError,
   getAlertDestinationsEmailTestFailure,
   getAlertDestinationsEmailTestSuccess,
-  getAlertDestinationsWebhookLoadError,
 } from '@/utils/alertDestinationsPresentation';
-import {
-  getAlertWebhookMutationFailure,
-  getAlertWebhookMutationSuccess,
-  getAlertWebhookTestFailure,
-  getAlertWebhookTestSuccess,
-} from '@/utils/alertWebhookPresentation';
 
 import { parseAppriseTargets } from './helpers';
 import type { UIAppriseConfig, UIEmailConfig } from './types';
+import { useAlertWebhookDestinationsState } from './useAlertWebhookDestinationsState';
 
 export interface AlertDestinationsTabStateProps {
   emailConfig: Accessor<UIEmailConfig>;
@@ -32,23 +26,15 @@ export interface AlertDestinationsTabStateProps {
   onRetryLoad: () => void;
 }
 
-const normalizeWebhook = (webhook: Webhook): Webhook => ({
-  ...webhook,
-  service: webhook.service || 'generic',
-});
-
 export function useAlertDestinationsTabState(props: AlertDestinationsTabStateProps) {
-  const [webhooks, setWebhooks] = createSignal<Webhook[]>([]);
-  const [webhookLoadError, setWebhookLoadError] = createSignal<string | null>(null);
-  const [isLoadingWebhooks, setIsLoadingWebhooks] = createSignal(true);
   const [testingEmail, setTestingEmail] = createSignal(false);
   const [testingApprise, setTestingApprise] = createSignal(false);
-  const [testingWebhook, setTestingWebhook] = createSignal<string | null>(null);
+  const webhookState = useAlertWebhookDestinationsState();
 
   const isLoading = createMemo(
-    () => props.isLoadingDestinations() || isLoadingWebhooks() || props.isRetrying(),
+    () => props.isLoadingDestinations() || webhookState.isLoadingWebhooks() || props.isRetrying(),
   );
-  const hasLoadError = createMemo(() => props.configLoadError() || webhookLoadError());
+  const hasLoadError = createMemo(() => props.configLoadError() || webhookState.webhookLoadError());
   const appriseState = createMemo(() => props.appriseConfig());
 
   const updateApprise = (partial: Partial<UIAppriseConfig>) => {
@@ -72,24 +58,6 @@ export function useAlertDestinationsTabState(props: AlertDestinationsTabStatePro
       skipTlsVerify: config.skipTlsVerify,
     };
   };
-
-  const loadWebhooks = async () => {
-    setWebhookLoadError(null);
-    setIsLoadingWebhooks(true);
-    try {
-      const hooks = await NotificationsAPI.getWebhooks();
-      setWebhooks(hooks.map(normalizeWebhook));
-    } catch (error) {
-      logger.error('Failed to load webhooks:', error);
-      setWebhookLoadError(getAlertDestinationsWebhookLoadError());
-    } finally {
-      setIsLoadingWebhooks(false);
-    }
-  };
-
-  onMount(() => {
-    void loadWebhooks();
-  });
 
   const testEmailConfig = async () => {
     setTestingEmail(true);
@@ -143,88 +111,21 @@ export function useAlertDestinationsTabState(props: AlertDestinationsTabStatePro
     }
   };
 
-  const testWebhook = async (webhookId: string, webhookData?: Omit<Webhook, 'id'>) => {
-    setTestingWebhook(webhookId);
-    try {
-      if (webhookData) {
-        await NotificationsAPI.testWebhook(webhookData);
-      } else {
-        await NotificationsAPI.testNotification({ type: 'webhook', webhookId });
-      }
-      notificationStore.success(getAlertWebhookTestSuccess());
-    } catch (error) {
-      const message = error instanceof Error ? error.message : getAlertWebhookTestFailure();
-      const detail = (error as Error & { detail?: string })?.detail;
-      showErrorWithDetail(message, detail);
-    } finally {
-      setTestingWebhook(null);
-    }
-  };
-
-  const addWebhook = async (webhook: Omit<Webhook, 'id'>) => {
-    try {
-      const created = await NotificationsAPI.createWebhook(webhook);
-      setWebhooks((current) => [...current, normalizeWebhook(created)]);
-      notificationStore.success(getAlertWebhookMutationSuccess('add'));
-    } catch (error) {
-      logger.error('Failed to add webhook:', error);
-      notificationStore.error(
-        error instanceof Error ? error.message : getAlertWebhookMutationFailure('add'),
-      );
-    }
-  };
-
-  const updateWebhook = async (webhook: Webhook) => {
-    try {
-      const updated = await NotificationsAPI.updateWebhook(webhook.id, webhook);
-      setWebhooks((current) =>
-        current.map((entry) => (entry.id === webhook.id ? normalizeWebhook(updated) : entry)),
-      );
-      notificationStore.success(getAlertWebhookMutationSuccess('update'));
-    } catch (error) {
-      logger.error('Failed to update webhook:', error);
-      notificationStore.error(
-        error instanceof Error ? error.message : getAlertWebhookMutationFailure('update'),
-      );
-    }
-  };
-
-  const deleteWebhook = async (id: string) => {
-    try {
-      await NotificationsAPI.deleteWebhook(id);
-      setWebhooks((current) => current.filter((entry) => entry.id !== id));
-      notificationStore.success(getAlertWebhookMutationSuccess('delete'));
-    } catch (error) {
-      logger.error('Failed to delete webhook:', error);
-      notificationStore.error(
-        error instanceof Error ? error.message : getAlertWebhookMutationFailure('delete'),
-      );
-    }
-  };
-
   const handleRetry = () => {
     props.onRetryLoad();
-    void loadWebhooks();
+    void webhookState.loadWebhooks();
   };
 
   return {
-    addWebhook,
     appriseState,
-    deleteWebhook,
     handleRetry,
     hasLoadError,
     isLoading,
-    isLoadingWebhooks,
-    loadWebhooks,
     testApprise,
     testEmailConfig,
-    testWebhook,
     testingApprise,
     testingEmail,
-    testingWebhook,
     updateApprise,
-    updateWebhook,
-    webhookLoadError,
-    webhooks,
+    ...webhookState,
   };
 }

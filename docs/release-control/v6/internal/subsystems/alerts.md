@@ -250,13 +250,16 @@ serialization,
 override normalization plus resource-backed override projection, and
 `frontend-modern/src/features/alerts/useAlertDestinationsState.ts` for
 notification destination reload and persistence.
+`frontend-modern/src/features/alerts/useAlertWebhookDestinationsState.ts` now
+owns webhook load/mutate/test flow,
 `frontend-modern/src/features/alerts/useAlertDestinationsTabState.ts` now owns
-webhook load/mutate/test flow plus destination test actions, while
+destination test actions plus retry orchestration around that webhook runtime,
+while
 `frontend-modern/src/features/alerts/tabs/DestinationsTab.tsx` stays the
 destinations render shell. Future config cleanup should extend the config
 transport hook, the config model, the override-projection hook, or the
 destinations runtime hook based on which subsystem actually owns the behavior
-instead of letting the broader configuration hook absorb all three concerns
+instead of letting the broader configuration hook absorb all four concerns
 again.
 The email destination provider picker now follows that same split:
 `frontend-modern/src/components/Alerts/useEmailProviderSelectState.ts` owns

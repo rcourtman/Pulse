@@ -451,8 +451,10 @@ serialization, `frontend-modern/src/features/alerts/useAlertOverridesState.ts`
 for override projection and thresholds-facing resource selectors, and
 `frontend-modern/src/features/alerts/useAlertDestinationsState.ts` for
 notification destination reload and persistence.
+`frontend-modern/src/features/alerts/useAlertWebhookDestinationsState.ts` now
+owns webhook runtime, and
 `frontend-modern/src/features/alerts/useAlertDestinationsTabState.ts` now owns
-webhook runtime and destination test actions while
+destination test actions plus retry orchestration while
 `frontend-modern/src/features/alerts/tabs/DestinationsTab.tsx` stays the
 render shell. Future cleanup should extend the transport hook, config model,
 override hook, or destinations runtime hook based on the true owner, not move
