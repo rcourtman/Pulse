@@ -256,8 +256,12 @@ owns webhook load/mutate/test flow,
 destination test actions plus retry orchestration around that webhook runtime,
 while
 `frontend-modern/src/features/alerts/tabs/DestinationsTab.tsx` stays the
-destinations render shell. Future config cleanup should extend the config
-transport hook, the config model, the override-projection hook, or the
+destinations render shell and composes
+`frontend-modern/src/features/alerts/AlertEmailDestinationsSection.tsx`,
+`frontend-modern/src/features/alerts/AlertAppriseDestinationsSection.tsx`,
+`frontend-modern/src/features/alerts/AlertWebhookDestinationsSection.tsx`, and
+the dedicated load/error wrappers. Future config cleanup should extend the
+config transport hook, the config model, the override-projection hook, or the
 destinations runtime hook based on which subsystem actually owns the behavior
 instead of letting the broader configuration hook absorb all four concerns
 again.

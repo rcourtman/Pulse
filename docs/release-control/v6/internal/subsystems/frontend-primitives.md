@@ -456,9 +456,11 @@ owns webhook runtime, and
 `frontend-modern/src/features/alerts/useAlertDestinationsTabState.ts` now owns
 destination test actions plus retry orchestration while
 `frontend-modern/src/features/alerts/tabs/DestinationsTab.tsx` stays the
-render shell. Future cleanup should extend the transport hook, config model,
-override hook, or destinations runtime hook based on the true owner, not move
-config control flow back into the top-level page shell.
+render shell and should compose the dedicated email, Apprise, webhook, and
+load/error section owners instead of carrying those panels inline. Future
+cleanup should extend the transport hook, config model, override hook, or
+destinations runtime hook based on the true owner, not move config control
+flow back into the top-level page shell.
 The alert email provider picker now also follows the shell/runtime split:
 `frontend-modern/src/components/Alerts/useEmailProviderSelectState.ts` owns
 provider-catalog loading and provider-default application, while

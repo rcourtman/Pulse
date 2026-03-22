@@ -248,9 +248,17 @@ describe('tab path helpers', () => {
     expect(alertsPageSource).not.toContain('function HistoryTab(');
     expect(alertHistoryTabSource).toContain('useAlertHistoryState');
     expect(alertDestinationsTabSource).toContain('useAlertDestinationsTabState');
+    expect(alertDestinationsTabSource).toContain('AlertDestinationsLoadingState');
+    expect(alertDestinationsTabSource).toContain('AlertDestinationsLoadErrorCard');
+    expect(alertDestinationsTabSource).toContain('AlertEmailDestinationsSection');
+    expect(alertDestinationsTabSource).toContain('AlertAppriseDestinationsSection');
+    expect(alertDestinationsTabSource).toContain('AlertWebhookDestinationsSection');
     expect(alertDestinationsTabSource).not.toContain('NotificationsAPI.getWebhooks');
     expect(alertDestinationsTabSource).not.toContain('NotificationsAPI.testNotification');
     expect(alertDestinationsTabSource).not.toContain('NotificationsAPI.createWebhook');
+    expect(alertDestinationsTabSource).not.toContain('ALERT_DESTINATIONS_EMAIL_PANEL_TITLE');
+    expect(alertDestinationsTabSource).not.toContain('ALERT_DESTINATIONS_APPRISE_PANEL_TITLE');
+    expect(alertDestinationsTabSource).not.toContain('getAlertWebhooksSectionTitle');
     expect(alertHistoryTabSource).toContain('IncidentTimelinePanel');
     expect(alertHistoryTabSource).not.toContain('useAlertIncidentTimelineState');
     expect(alertHistoryTabSource).not.toContain('AlertsAPI.getHistory');

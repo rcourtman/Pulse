@@ -2823,15 +2823,18 @@ describe('frontend resource type boundaries', () => {
     expect(alertWebhookDestinationsStateSource).toContain(
       'getAlertDestinationsWebhookLoadError',
     );
-    expect(alertDestinationsTabSource).toContain('getAlertDestinationsLoadErrorBanner');
-    expect(alertDestinationsTabSource).toContain('getAlertDestinationsAppriseTargetsHelp');
-    expect(alertDestinationsTabSource).toContain('getAlertDestinationsAppriseTestLabel');
-    expect(alertDestinationsTabSource).toContain('getAlertDestinationsRetryLabel');
-    expect(alertDestinationsTabSource).toContain('getAlertDestinationsStatusLabel');
     expect(alertDestinationsTabSource).toContain('useAlertDestinationsTabState');
+    expect(alertDestinationsTabSource).toContain('AlertDestinationsLoadingState');
+    expect(alertDestinationsTabSource).toContain('AlertDestinationsLoadErrorCard');
+    expect(alertDestinationsTabSource).toContain('AlertEmailDestinationsSection');
+    expect(alertDestinationsTabSource).toContain('AlertAppriseDestinationsSection');
+    expect(alertDestinationsTabSource).toContain('AlertWebhookDestinationsSection');
     expect(alertDestinationsTabSource).not.toContain('NotificationsAPI.getWebhooks');
     expect(alertDestinationsTabSource).not.toContain('NotificationsAPI.testNotification');
     expect(alertDestinationsTabSource).not.toContain('NotificationsAPI.createWebhook');
+    expect(alertDestinationsTabSource).not.toContain('ALERT_DESTINATIONS_EMAIL_PANEL_TITLE');
+    expect(alertDestinationsTabSource).not.toContain('ALERT_DESTINATIONS_APPRISE_PANEL_TITLE');
+    expect(alertDestinationsTabSource).not.toContain('getAlertWebhooksSectionTitle');
     expect(alertsPageSource).toContain(
       "import { HistoryTab } from '@/features/alerts/tabs/HistoryTab';",
     );
@@ -3890,8 +3893,8 @@ describe('frontend resource type boundaries', () => {
     expect(alertsPageSource).not.toContain('function ScheduleTab(');
     expect(alertDestinationsTabSource).toContain('useAlertDestinationsTabState');
     expect(alertDestinationsTabSource).not.toContain('NotificationsAPI.getWebhooks');
-    expect(alertDestinationsTabSource).toContain('EmailProviderSelect');
-    expect(alertDestinationsTabSource).toContain('WebhookConfig');
+    expect(alertDestinationsTabSource).toContain('AlertEmailDestinationsSection');
+    expect(alertDestinationsTabSource).toContain('AlertWebhookDestinationsSection');
     expect(alertScheduleTabSource).toContain('getAlertConfigQuietHourSuppressOptions');
     expect(alertScheduleTabSource).toContain('getAlertGroupingCardClass');
     expect(alertScheduleTabSource).toContain('getAlertQuietDayButtonClass');
