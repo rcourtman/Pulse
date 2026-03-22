@@ -438,6 +438,19 @@ and the tab render owners live in
 `frontend-modern/src/components/Alerts/ThresholdsTablePMGTab.tsx`,
 `frontend-modern/src/components/Alerts/ThresholdsTableAgentsTab.tsx`, and
 `frontend-modern/src/components/Alerts/ThresholdsTableDockerTab.tsx`.
+The Proxmox tab is itself now a shell that composes
+`frontend-modern/src/components/Alerts/ThresholdsTableProxmoxNodesSection.tsx`,
+`frontend-modern/src/components/Alerts/ThresholdsTableProxmoxPBSSection.tsx`,
+`frontend-modern/src/components/Alerts/ThresholdsTableProxmoxGuestsSection.tsx`,
+`frontend-modern/src/components/Alerts/ThresholdsTableProxmoxGuestFilteringSection.tsx`,
+`frontend-modern/src/components/Alerts/ThresholdsTableProxmoxBackupsSection.tsx`,
+`frontend-modern/src/components/Alerts/ThresholdsTableProxmoxSnapshotsSection.tsx`,
+and `frontend-modern/src/components/Alerts/ThresholdsTableProxmoxStorageSection.tsx`
+using the shared contract in
+`frontend-modern/src/features/alerts/thresholds/thresholdsTableSectionProps.ts`.
+Future Proxmox thresholds presentation changes should extend those section
+surfaces rather than restoring mixed JSX ownership to
+`frontend-modern/src/components/Alerts/ThresholdsTableProxmoxTab.tsx`.
 Canonical threshold row shaping now routes through
 `frontend-modern/src/features/alerts/thresholds/thresholdsResourceModel.ts`
 plus the family-owned feature hooks

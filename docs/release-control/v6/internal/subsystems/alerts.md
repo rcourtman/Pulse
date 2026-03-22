@@ -159,6 +159,19 @@ tab render owners live in
 threshold row grouping, override-ID compatibility, resource normalization,
 thresholds-table controller logic, or per-tab runtime should land in those
 feature hooks and tab owners rather than being rebuilt inside the shell.
+Within the Proxmox tab, render-heavy ownership now further routes through
+`frontend-modern/src/components/Alerts/ThresholdsTableProxmoxNodesSection.tsx`,
+`frontend-modern/src/components/Alerts/ThresholdsTableProxmoxPBSSection.tsx`,
+`frontend-modern/src/components/Alerts/ThresholdsTableProxmoxGuestsSection.tsx`,
+`frontend-modern/src/components/Alerts/ThresholdsTableProxmoxGuestFilteringSection.tsx`,
+`frontend-modern/src/components/Alerts/ThresholdsTableProxmoxBackupsSection.tsx`,
+`frontend-modern/src/components/Alerts/ThresholdsTableProxmoxSnapshotsSection.tsx`,
+and `frontend-modern/src/components/Alerts/ThresholdsTableProxmoxStorageSection.tsx`
+with the shared section contract in
+`frontend-modern/src/features/alerts/thresholds/thresholdsTableSectionProps.ts`.
+Future Proxmox thresholds presentation work should extend those section owners
+instead of expanding `frontend-modern/src/components/Alerts/ThresholdsTableProxmoxTab.tsx`
+back into a mixed render surface.
 The alert resource thresholds editor now follows the same shape: shared metric
 normalization, bounds, value-resolution, and override-label logic live in
 `frontend-modern/src/components/Alerts/alertResourceTableModel.ts`, shared group

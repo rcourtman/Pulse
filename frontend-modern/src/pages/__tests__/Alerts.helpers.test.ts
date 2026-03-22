@@ -31,6 +31,13 @@ import thresholdsTableSource from '@/components/Alerts/ThresholdsTable.tsx?raw';
 import thresholdsTableAgentsTabSource from '@/components/Alerts/ThresholdsTableAgentsTab.tsx?raw';
 import thresholdsTableDockerTabSource from '@/components/Alerts/ThresholdsTableDockerTab.tsx?raw';
 import thresholdsTablePMGTabSource from '@/components/Alerts/ThresholdsTablePMGTab.tsx?raw';
+import thresholdsTableProxmoxBackupsSectionSource from '@/components/Alerts/ThresholdsTableProxmoxBackupsSection.tsx?raw';
+import thresholdsTableProxmoxGuestFilteringSectionSource from '@/components/Alerts/ThresholdsTableProxmoxGuestFilteringSection.tsx?raw';
+import thresholdsTableProxmoxGuestsSectionSource from '@/components/Alerts/ThresholdsTableProxmoxGuestsSection.tsx?raw';
+import thresholdsTableProxmoxNodesSectionSource from '@/components/Alerts/ThresholdsTableProxmoxNodesSection.tsx?raw';
+import thresholdsTableProxmoxPBSSectionSource from '@/components/Alerts/ThresholdsTableProxmoxPBSSection.tsx?raw';
+import thresholdsTableProxmoxSnapshotsSectionSource from '@/components/Alerts/ThresholdsTableProxmoxSnapshotsSection.tsx?raw';
+import thresholdsTableProxmoxStorageSectionSource from '@/components/Alerts/ThresholdsTableProxmoxStorageSection.tsx?raw';
 import thresholdsTableProxmoxTabSource from '@/components/Alerts/ThresholdsTableProxmoxTab.tsx?raw';
 import thresholdsDataHookSource from '@/features/alerts/thresholds/hooks/useThresholdsData.ts?raw';
 import thresholdsHostDataHookSource from '@/features/alerts/thresholds/hooks/useThresholdsHostData.ts?raw';
@@ -41,6 +48,7 @@ import thresholdsRecoveryDefaultsStateHookSource from '@/features/alerts/thresho
 import thresholdsTableStateHookSource from '@/features/alerts/thresholds/hooks/useThresholdsTableState.ts?raw';
 import thresholdsOverrideMutationsHookSource from '@/features/alerts/thresholds/hooks/useThresholdsOverrideMutations.ts?raw';
 import thresholdsResourceModelSource from '@/features/alerts/thresholds/thresholdsResourceModel.ts?raw';
+import thresholdsTableSectionPropsSource from '@/features/alerts/thresholds/thresholdsTableSectionProps.ts?raw';
 
 import {
   ALERT_TAB_SEGMENTS,
@@ -396,8 +404,32 @@ describe('tab path helpers', () => {
     expect(thresholdsTableSource).not.toContain("groupedResources={state.guestsGroupedByNode()}");
     expect(thresholdsTableSource).not.toContain('dockerIgnoredPrefixesPresentation.title');
     expect(thresholdsTableProxmoxTabSource).toContain('export function ThresholdsTableProxmoxTab');
-    expect(thresholdsTableProxmoxTabSource).toContain('backupOrphanedPresentation');
-    expect(thresholdsTableProxmoxTabSource).toContain("sectionTitles.guestFiltering");
+    expect(thresholdsTableProxmoxTabSource).toContain('ThresholdsTableProxmoxNodesSection');
+    expect(thresholdsTableProxmoxTabSource).toContain('ThresholdsTableProxmoxPBSSection');
+    expect(thresholdsTableProxmoxTabSource).toContain('ThresholdsTableProxmoxGuestsSection');
+    expect(thresholdsTableProxmoxTabSource).toContain('ThresholdsTableProxmoxGuestFilteringSection');
+    expect(thresholdsTableProxmoxTabSource).toContain('ThresholdsTableProxmoxBackupsSection');
+    expect(thresholdsTableProxmoxTabSource).toContain('ThresholdsTableProxmoxSnapshotsSection');
+    expect(thresholdsTableProxmoxTabSource).toContain('ThresholdsTableProxmoxStorageSection');
+    expect(thresholdsTableProxmoxTabSource).not.toContain('backupOrphanedPresentation');
+    expect(thresholdsTableProxmoxTabSource).not.toContain("sectionTitles.guestFiltering");
+    expect(thresholdsTableSectionPropsSource).toContain('export interface ThresholdsTableSectionProps');
+    expect(thresholdsTableProxmoxNodesSectionSource).toContain('export function ThresholdsTableProxmoxNodesSection');
+    expect(thresholdsTableProxmoxPBSSectionSource).toContain('export function ThresholdsTableProxmoxPBSSection');
+    expect(thresholdsTableProxmoxGuestsSectionSource).toContain('export function ThresholdsTableProxmoxGuestsSection');
+    expect(thresholdsTableProxmoxGuestFilteringSectionSource).toContain(
+      'export function ThresholdsTableProxmoxGuestFilteringSection',
+    );
+    expect(thresholdsTableProxmoxBackupsSectionSource).toContain(
+      'export function ThresholdsTableProxmoxBackupsSection',
+    );
+    expect(thresholdsTableProxmoxBackupsSectionSource).toContain('backupOrphanedPresentation');
+    expect(thresholdsTableProxmoxSnapshotsSectionSource).toContain(
+      'export function ThresholdsTableProxmoxSnapshotsSection',
+    );
+    expect(thresholdsTableProxmoxStorageSectionSource).toContain(
+      'export function ThresholdsTableProxmoxStorageSection',
+    );
     expect(thresholdsTablePMGTabSource).toContain('export function ThresholdsTablePMGTab');
     expect(thresholdsTablePMGTabSource).toContain('pmgGlobalDefaults()');
     expect(thresholdsTableAgentsTabSource).toContain('export function ThresholdsTableAgentsTab');
