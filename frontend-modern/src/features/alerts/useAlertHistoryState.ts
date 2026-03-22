@@ -5,7 +5,7 @@ import { AlertsAPI } from '@/api/alerts';
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import { eventBus } from '@/stores/events';
 import { notificationStore } from '@/stores/notifications';
-import type { Alert, Incident } from '@/types/api';
+import type { Alert } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import { logger } from '@/utils/logger';
@@ -13,7 +13,6 @@ import {
   getAlertAdministrationClearHistoryError,
   getAlertAdministrationClearHistoryConfirmation,
 } from '@/utils/alertAdministrationPresentation';
-import { getAlertResourceIncidentLoadFailure } from '@/utils/alertIncidentPresentation';
 
 import {
   applyAlertHistoryWindow,
@@ -33,7 +32,7 @@ import {
   type HistoryItem,
 } from './alertHistoryModel';
 import { useAlertIncidentTimelineState } from './useAlertIncidentTimelineState';
-import { INCIDENT_EVENT_TYPES } from './types';
+import { useAlertResourceIncidentsState } from './useAlertResourceIncidentsState';
 
 export interface UseAlertHistoryStateProps {
   activeAlerts: Accessor<Record<string, Alert>>;
@@ -61,21 +60,8 @@ export function useAlertHistoryState(props: UseAlertHistoryStateProps) {
   const [alertHistory, setAlertHistory] = createSignal<Alert[]>([]);
   const [loading, setLoading] = createSignal(true);
   const [selectedBarIndex, setSelectedBarIndex] = createSignal<number | null>(null);
-  const [resourceIncidentPanel, setResourceIncidentPanel] = createSignal<{
-    resourceId: string;
-    resourceName: string;
-  } | null>(null);
-  const [resourceIncidents, setResourceIncidents] = createSignal<Record<string, Incident[]>>({});
-  const [resourceIncidentLoading, setResourceIncidentLoading] = createSignal<
-    Record<string, boolean>
-  >({});
-  const [expandedResourceIncidentIds, setExpandedResourceIncidentIds] = createSignal<Set<string>>(
-    new Set(),
-  );
-  const [resourceIncidentEventFilters, setResourceIncidentEventFilters] = createSignal<Set<string>>(
-    new Set(INCIDENT_EVENT_TYPES),
-  );
   const [filtersOpen, setFiltersOpen] = createSignal(false);
+  const resourceIncidentsState = useAlertResourceIncidentsState();
 
   const {
     incidentTimelines,
@@ -150,10 +136,7 @@ export function useAlertHistoryState(props: UseAlertHistoryStateProps) {
     const unsubscribeOrgSwitched = eventBus.on('org_switched', () => {
       setAlertHistory([]);
       setSelectedBarIndex(null);
-      setResourceIncidentPanel(null);
-      setResourceIncidents({});
-      setResourceIncidentLoading({});
-      setExpandedResourceIncidentIds(new Set<string>());
+      resourceIncidentsState.resetResourceIncidentsState();
       resetState();
       void fetchHistory(timeFilter());
     });
@@ -173,49 +156,6 @@ export function useAlertHistoryState(props: UseAlertHistoryStateProps) {
     }
     void fetchHistory(range);
   });
-
-  const loadResourceIncidents = async (resourceId: string, limit = 10) => {
-    if (!resourceId) return;
-
-    setResourceIncidentLoading((prev) => ({ ...prev, [resourceId]: true }));
-    try {
-      const incidents = await AlertsAPI.getIncidentsForResource(resourceId, limit);
-      setResourceIncidents((prev) => ({ ...prev, [resourceId]: incidents }));
-    } catch (error) {
-      logger.error(getAlertResourceIncidentLoadFailure(), error);
-      notificationStore.error(getAlertResourceIncidentLoadFailure());
-    } finally {
-      setResourceIncidentLoading((prev) => ({ ...prev, [resourceId]: false }));
-    }
-  };
-
-  const openResourceIncidentPanel = async (resourceId: string, resourceName: string) => {
-    if (!resourceId) return;
-
-    setResourceIncidentPanel({ resourceId, resourceName });
-    setExpandedResourceIncidentIds(new Set<string>());
-    if (!(resourceId in resourceIncidents())) {
-      await loadResourceIncidents(resourceId);
-    }
-  };
-
-  const refreshResourceIncidentPanel = async () => {
-    const selection = resourceIncidentPanel();
-    if (!selection) return;
-    await loadResourceIncidents(selection.resourceId);
-  };
-
-  const toggleResourceIncidentDetails = (incidentId: string) => {
-    setExpandedResourceIncidentIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(incidentId)) {
-        next.delete(incidentId);
-      } else {
-        next.add(incidentId);
-      }
-      return next;
-    });
-  };
 
   const allHistoryData = createMemo<HistoryItem[]>(() => {
     return buildAlertHistoryItems({
@@ -285,13 +225,13 @@ export function useAlertHistoryState(props: UseAlertHistoryStateProps) {
     loading,
     selectedBarIndex,
     setSelectedBarIndex,
-    resourceIncidentPanel,
-    setResourceIncidentPanel,
-    resourceIncidents,
-    resourceIncidentLoading,
-    expandedResourceIncidentIds,
-    resourceIncidentEventFilters,
-    setResourceIncidentEventFilters,
+    resourceIncidentPanel: resourceIncidentsState.resourceIncidentPanel,
+    setResourceIncidentPanel: resourceIncidentsState.setResourceIncidentPanel,
+    resourceIncidents: resourceIncidentsState.resourceIncidents,
+    resourceIncidentLoading: resourceIncidentsState.resourceIncidentLoading,
+    expandedResourceIncidentIds: resourceIncidentsState.expandedResourceIncidentIds,
+    resourceIncidentEventFilters: resourceIncidentsState.resourceIncidentEventFilters,
+    setResourceIncidentEventFilters: resourceIncidentsState.setResourceIncidentEventFilters,
     filtersOpen,
     setFiltersOpen,
     activeFilterCount,
@@ -307,9 +247,9 @@ export function useAlertHistoryState(props: UseAlertHistoryStateProps) {
     toggleIncidentTimeline,
     setIncidentNoteDraft,
     saveIncidentNote,
-    openResourceIncidentPanel,
-    refreshResourceIncidentPanel,
-    toggleResourceIncidentDetails,
+    openResourceIncidentPanel: resourceIncidentsState.openResourceIncidentPanel,
+    refreshResourceIncidentPanel: resourceIncidentsState.refreshResourceIncidentPanel,
+    toggleResourceIncidentDetails: resourceIncidentsState.toggleResourceIncidentDetails,
     alertData,
     groupedAlerts,
     alertTrends,

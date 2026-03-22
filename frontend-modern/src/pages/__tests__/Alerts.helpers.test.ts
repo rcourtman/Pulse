@@ -16,6 +16,7 @@ import alertHistoryTableGroupRowSource from '@/features/alerts/AlertHistoryTable
 import alertHistoryTableSectionSource from '@/features/alerts/AlertHistoryTableSection.tsx?raw';
 import alertResourceIncidentsPanelSource from '@/features/alerts/AlertResourceIncidentsPanel.tsx?raw';
 import alertHistoryStateSource from '@/features/alerts/useAlertHistoryState.ts?raw';
+import alertResourceIncidentsStateSource from '@/features/alerts/useAlertResourceIncidentsState.ts?raw';
 import alertHistoryModelSource from '@/features/alerts/alertHistoryModel.ts?raw';
 import alertIncidentTimelineStateSource from '@/features/alerts/useAlertIncidentTimelineState.ts?raw';
 import alertOverviewActiveAlertsSectionSource from '@/features/alerts/AlertOverviewActiveAlertsSection.tsx?raw';
@@ -336,9 +337,10 @@ describe('tab path helpers', () => {
     expect(alertHistoryStateSource).toContain('export function useAlertHistoryState');
     expect(alertHistoryStateSource).toContain('export type AlertHistoryState');
     expect(alertHistoryStateSource).toContain('AlertsAPI.getHistory');
-    expect(alertHistoryStateSource).toContain('AlertsAPI.getIncidentsForResource');
     expect(alertHistoryStateSource).toContain('AlertsAPI.clearHistory');
+    expect(alertHistoryStateSource).toContain('useAlertResourceIncidentsState');
     expect(alertHistoryStateSource).toContain('useAlertIncidentTimelineState');
+    expect(alertHistoryStateSource).not.toContain('AlertsAPI.getIncidentsForResource');
     expect(alertHistoryStateSource).toContain('buildAlertHistoryItems');
     expect(alertHistoryStateSource).toContain('buildAlertTrends');
     expect(alertHistoryStateSource).toContain('groupAlertHistoryItems');
@@ -350,6 +352,10 @@ describe('tab path helpers', () => {
     expect(alertHistoryModelSource).toContain('export function buildAlertTrends');
     expect(alertHistoryModelSource).toContain('export function groupAlertHistoryItems');
     expect(alertHistoryModelSource).toContain('export const MS_PER_HOUR');
+    expect(alertResourceIncidentsStateSource).toContain(
+      'export function useAlertResourceIncidentsState',
+    );
+    expect(alertResourceIncidentsStateSource).toContain('AlertsAPI.getIncidentsForResource');
     expect(alertIncidentTimelineStateSource).toContain(
       'export function useAlertIncidentTimelineState',
     );

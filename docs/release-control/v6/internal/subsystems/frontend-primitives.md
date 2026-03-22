@@ -551,10 +551,12 @@ back into a mixed shell.
 Alert history runtime now follows that same pattern. The shell stays in
 `frontend-modern/src/features/alerts/tabs/HistoryTab.tsx`, while
 `frontend-modern/src/features/alerts/useAlertHistoryState.ts` owns history
-fetch, persistent filters, resource-incident panel state, and history-clear
-behavior, while `frontend-modern/src/features/alerts/alertHistoryModel.ts`
-owns grouped/trend derivation and the bucket/range analytics contract. The
-render-heavy surfaces now route through
+fetch, persistent filters, history-clear behavior, and composition of the
+derived history owners. Resource-incident panel runtime now lives in
+`frontend-modern/src/features/alerts/useAlertResourceIncidentsState.ts`, while
+`frontend-modern/src/features/alerts/alertHistoryModel.ts` owns grouped/trend
+derivation and the bucket/range analytics contract. The render-heavy surfaces
+now route through
 `frontend-modern/src/features/alerts/AlertHistoryFrequencyCard.tsx`,
 `frontend-modern/src/features/alerts/AlertHistoryFiltersCard.tsx`,
 `frontend-modern/src/features/alerts/AlertResourceIncidentsPanel.tsx`,
