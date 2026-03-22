@@ -89,6 +89,7 @@ import workloadTableHeaderSource from '@/components/Dashboard/WorkloadTableHeade
 import dashboardFilterModelSource from '@/components/Dashboard/dashboardFilterModel.ts?raw';
 import dashboardGuestMetadataStateSource from '@/components/Dashboard/useDashboardGuestMetadataState.ts?raw';
 import dashboardSelectionStateSource from '@/components/Dashboard/useDashboardSelectionState.ts?raw';
+import dashboardWorkloadDerivedStateSource from '@/components/Dashboard/useDashboardWorkloadDerivedState.ts?raw';
 import dashboardWorkloadRouteStateSource from '@/components/Dashboard/useDashboardWorkloadRouteState.ts?raw';
 import dashboardWorkloadUrlSyncSource from '@/components/Dashboard/useDashboardWorkloadUrlSync.ts?raw';
 import dashboardStateSource from '@/components/Dashboard/useDashboardState.ts?raw';
@@ -522,7 +523,9 @@ describe('frontend resource type boundaries', () => {
     expect(dashboardSource).not.toContain('const [search, setSearch] = createSignal(');
     expect(dashboardStateSource).toContain('useDashboardGuestMetadataState');
     expect(dashboardStateSource).toContain('useDashboardSelectionState');
+    expect(dashboardStateSource).toContain('useDashboardWorkloadDerivedState');
     expect(dashboardStateSource).toContain('useDashboardWorkloadRouteState');
+    expect(dashboardStateSource).toContain('filterWorkloads(params)');
     expect(dashboardWorkloadRouteStateSource).toContain('useDashboardWorkloadUrlSync');
     expect(dashboardWorkloadRouteStateSource).not.toContain('normalizeWorkloadViewModeParam');
     expect(dashboardSource).not.toContain('function normalizeViewModeParam');
@@ -544,6 +547,11 @@ describe('frontend resource type boundaries', () => {
     expect(dashboardStateSource).not.toContain('parseWorkloadsLinkSearch');
     expect(dashboardStateSource).not.toContain('const [selectedGuestId, setSelectedGuestIdRaw]');
     expect(dashboardStateSource).not.toContain('const [hoveredWorkloadId, setHoveredWorkloadId]');
+    expect(dashboardStateSource).not.toContain('groupWorkloads(');
+    expect(dashboardStateSource).not.toContain('computeWorkloadStats(');
+    expect(dashboardStateSource).not.toContain('computeWorkloadIOEmphasis(');
+    expect(dashboardStateSource).not.toContain('buildNodeByInstance(');
+    expect(dashboardStateSource).not.toContain('buildGuestParentNodeMap(');
     expect(dashboardWorkloadRouteStateSource).not.toContain('buildWorkloadsPath({');
     expect(dashboardWorkloadRouteStateSource).not.toContain('const [handledTypeParam, setHandledTypeParam]');
     expect(dashboardWorkloadUrlSyncSource).toContain('buildWorkloadsPath({');
@@ -552,6 +560,11 @@ describe('frontend resource type boundaries', () => {
       'const [handledTypeParam, setHandledTypeParam]',
     );
     expect(dashboardWorkloadUrlSyncSource).toContain('parseWorkloadsLinkSearch');
+    expect(dashboardWorkloadDerivedStateSource).toContain('groupWorkloads(');
+    expect(dashboardWorkloadDerivedStateSource).toContain('computeWorkloadStats(');
+    expect(dashboardWorkloadDerivedStateSource).toContain('computeWorkloadIOEmphasis(');
+    expect(dashboardWorkloadDerivedStateSource).toContain('buildNodeByInstance(');
+    expect(dashboardWorkloadDerivedStateSource).toContain('buildGuestParentNodeMap(');
     expect(dashboardWorkloadRouteStateSource).toContain('setSelectedNode');
     expect(dashboardSelectionStateSource).toContain('parseWorkloadsLinkSearch');
     expect(dashboardSelectionStateSource).toContain('const [selectedGuestId, setSelectedGuestIdRaw]');
@@ -568,11 +581,12 @@ describe('frontend resource type boundaries', () => {
     expect(dashboardFilterModelSource).toContain('export const countActiveDashboardFilters');
     expect(dashboardFilterModelSource).toContain('export const hasActiveDashboardFilters');
     expect(dashboardStateSource).not.toContain('const containerRuntimeFilterConfig = createMemo');
+    expect(dashboardStateSource).not.toContain('useGroupedTableWindowing');
     expect(dashboardWorkloadRouteStateSource).toContain('useDashboardWorkloadUrlSync');
     expect(dashboardWorkloadRouteStateSource).toContain('containerRuntimeFilterConfig');
     expect(dashboardWorkloadRouteStateSource).toContain('hostFilterConfig');
     expect(dashboardWorkloadRouteStateSource).toContain('namespaceFilterConfig');
-    expect(dashboardStateSource).toContain('useGroupedTableWindowing');
+    expect(dashboardWorkloadDerivedStateSource).toContain('useGroupedTableWindowing');
     expect(dashboardStateSource).not.toContain('const DEFAULT_WINDOW_SIZE =');
     expect(dashboardStateSource).not.toContain('const DEFAULT_ENABLE_THRESHOLD =');
     expect(dashboardStateSource).not.toContain('const DEFAULT_OVERSCAN_ROWS =');

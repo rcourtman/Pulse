@@ -13,6 +13,7 @@ import workloadTableHeaderSource from '../WorkloadTableHeader.tsx?raw';
 import dashboardFilterModelSource from '../dashboardFilterModel.ts?raw';
 import dashboardGuestMetadataStateSource from '../useDashboardGuestMetadataState.ts?raw';
 import dashboardSelectionStateSource from '../useDashboardSelectionState.ts?raw';
+import dashboardWorkloadDerivedStateSource from '../useDashboardWorkloadDerivedState.ts?raw';
 import dashboardWorkloadRouteStateSource from '../useDashboardWorkloadRouteState.ts?raw';
 import dashboardWorkloadUrlSyncSource from '../useDashboardWorkloadUrlSync.ts?raw';
 import dashboardStateSource from '../useDashboardState.ts?raw';
@@ -504,9 +505,10 @@ describe('Dashboard performance contract', () => {
       expect(dashboardSource).not.toContain('const [search, setSearch] = createSignal(');
       expect(dashboardStateSource).toContain('useDashboardGuestMetadataState');
       expect(dashboardStateSource).toContain('useDashboardSelectionState');
+      expect(dashboardStateSource).toContain('useDashboardWorkloadDerivedState');
       expect(dashboardStateSource).toContain('useDashboardWorkloadRouteState');
-      expect(dashboardStateSource).toContain('useGroupedTableWindowing');
       expect(dashboardStateSource).toContain('createWorkloadSortComparator');
+      expect(dashboardStateSource).toContain('filterWorkloads(params)');
       expect(dashboardStateSource).toContain("from './guestRowModel'");
       expect(dashboardStateSource).not.toContain("from './GuestRow'");
       expect(dashboardStateSource).not.toContain('GuestMetadataAPI.getAllMetadata()');
@@ -514,6 +516,12 @@ describe('Dashboard performance contract', () => {
       expect(dashboardStateSource).not.toContain('parseWorkloadsLinkSearch');
       expect(dashboardStateSource).not.toContain('const [selectedGuestId, setSelectedGuestIdRaw]');
       expect(dashboardStateSource).not.toContain('const [hoveredWorkloadId, setHoveredWorkloadId]');
+      expect(dashboardStateSource).not.toContain('groupWorkloads(');
+      expect(dashboardStateSource).not.toContain('computeWorkloadStats(');
+      expect(dashboardStateSource).not.toContain('computeWorkloadIOEmphasis(');
+      expect(dashboardStateSource).not.toContain('buildNodeByInstance(');
+      expect(dashboardStateSource).not.toContain('buildGuestParentNodeMap(');
+      expect(dashboardStateSource).not.toContain('useGroupedTableWindowing');
       expect(dashboardGuestMetadataStateSource).toContain('GuestMetadataAPI.getAllMetadata()');
       expect(dashboardGuestMetadataStateSource).toContain("eventBus.on('org_switched'");
       expect(dashboardGuestMetadataStateSource).toContain("window.addEventListener('pulse:metadata-changed'");
@@ -528,6 +536,12 @@ describe('Dashboard performance contract', () => {
         'const [handledTypeParam, setHandledTypeParam]',
       );
       expect(dashboardWorkloadUrlSyncSource).toContain('parseWorkloadsLinkSearch');
+      expect(dashboardWorkloadDerivedStateSource).toContain('groupWorkloads(');
+      expect(dashboardWorkloadDerivedStateSource).toContain('computeWorkloadStats(');
+      expect(dashboardWorkloadDerivedStateSource).toContain('computeWorkloadIOEmphasis(');
+      expect(dashboardWorkloadDerivedStateSource).toContain('buildNodeByInstance(');
+      expect(dashboardWorkloadDerivedStateSource).toContain('buildGuestParentNodeMap(');
+      expect(dashboardWorkloadDerivedStateSource).toContain('useGroupedTableWindowing');
       expect(dashboardSelectionStateSource).toContain('parseWorkloadsLinkSearch');
       expect(dashboardSelectionStateSource).toContain('const [selectedGuestId, setSelectedGuestIdRaw]');
       expect(dashboardSelectionStateSource).toContain('const [hoveredWorkloadId, setHoveredWorkloadId]');
@@ -562,11 +576,14 @@ describe('Dashboard performance contract', () => {
       expect(dashboardFilterModelSource).toContain('export const countActiveDashboardFilters');
       expect(dashboardFilterModelSource).toContain('export const hasActiveDashboardFilters');
       expect(dashboardStateSource).toContain('useDashboardWorkloadRouteState');
+      expect(dashboardStateSource).toContain('filterWorkloads(params)');
       expect(dashboardStateSource).not.toContain('const containerRuntimeFilterConfig = createMemo');
+      expect(dashboardStateSource).not.toContain('useGroupedTableWindowing');
       expect(dashboardWorkloadRouteStateSource).toContain('useDashboardWorkloadUrlSync');
       expect(dashboardWorkloadRouteStateSource).toContain('containerRuntimeFilterConfig');
       expect(dashboardWorkloadRouteStateSource).toContain('hostFilterConfig');
       expect(dashboardWorkloadRouteStateSource).toContain('namespaceFilterConfig');
+      expect(dashboardWorkloadDerivedStateSource).toContain('useGroupedTableWindowing');
     });
 
     it('keeps threshold slider runtime and derivations in canonical slider owners', () => {
