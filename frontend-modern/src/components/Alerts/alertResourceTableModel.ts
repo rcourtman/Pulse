@@ -223,7 +223,10 @@ export function alertResourceSupportsMetric(
   metric: string,
 ): boolean {
   if (!resourceType) return true;
-  if (resourceType === 'node' && ['diskRead', 'diskWrite', 'networkIn', 'networkOut'].includes(metric)) {
+  if (
+    ['node', 'agent'].includes(resourceType) &&
+    ['diskRead', 'diskWrite', 'networkIn', 'networkOut'].includes(metric)
+  ) {
     return false;
   }
   if (resourceType === 'pbs') {

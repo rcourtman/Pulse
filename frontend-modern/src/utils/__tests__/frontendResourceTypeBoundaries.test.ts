@@ -336,6 +336,7 @@ import alertIncidentPresentationSource from '@/utils/alertIncidentPresentation.t
 import alertHistoryPresentationSource from '@/utils/alertHistoryPresentation.ts?raw';
 import bulkEditDialogSource from '@/components/Alerts/BulkEditDialog.tsx?raw';
 import alertResourceTableModelSource from '@/components/Alerts/alertResourceTableModel.ts?raw';
+import alertResourceTableRowSource from '@/components/Alerts/AlertResourceTableRow.tsx?raw';
 import alertResourceTableSource from '@/components/Alerts/ResourceTable.tsx?raw';
 import alertResourceTableStateSource from '@/components/Alerts/useAlertResourceTableState.ts?raw';
 import emailProviderSelectSource from '@/components/Alerts/EmailProviderSelect.tsx?raw';
@@ -3765,6 +3766,7 @@ describe('frontend resource type boundaries', () => {
 
   it('keeps alert resource table vocabulary in a shared presentation utility', () => {
     expect(alertResourceTableSource).toContain('useAlertResourceTableState');
+    expect(alertResourceTableSource).toContain('AlertResourceTableRow');
     expect(alertResourceTableSource).toContain('normalizeAlertResourceMetricKey');
     expect(alertResourceTableSource).not.toContain('const flattenResources = (): Resource[] => {');
     expect(alertResourceTableSource).not.toContain(
@@ -3777,11 +3779,9 @@ describe('frontend resource type boundaries', () => {
     expect(alertResourceTableSource).toContain('getAlertResourceTableNoResultsState');
     expect(alertResourceTableSource).toContain('getAlertResourceTableCustomBadgeLabel');
     expect(alertResourceTableSource).toContain('getAlertResourceTableMetricPlaceholder');
-    expect(alertResourceTableSource).toContain('getAlertResourceTableOverrideNotePlaceholder');
     expect(alertResourceTableSource).toContain('getAlertResourceTableResetFactoryDefaultsLabel');
     expect(alertResourceTableSource).toContain('getAlertResourceTableAlertDelayLabel');
     expect(alertResourceTableSource).toContain('getAlertResourceTableMetricInputTitle');
-    expect(alertResourceTableSource).toContain('getAlertResourceTableEditMetricTitle');
     expect(alertResourceTableSource).not.toContain('No resources available.');
     expect(alertResourceTableSource).not.toContain('No {props.title.toLowerCase()} found');
     expect(alertResourceTableSource).not.toContain('Add a note about this override (optional)');
@@ -3790,6 +3790,9 @@ describe('frontend resource type boundaries', () => {
     expect(alertResourceTableSource).not.toContain('Alert Delay (s)');
     expect(alertResourceTableSource).not.toContain('Click to edit this metric');
     expect(alertResourceTableSource).not.toContain('Set to -1 to disable alerts for this metric');
+    expect(alertResourceTableSource).not.toContain(
+      "if (resource.type === 'agent' && ['diskRead', 'diskWrite', 'networkIn', 'networkOut'].includes(",
+    );
     expect(alertResourceTablePresentationSource).toContain(
       'export const ALERT_RESOURCE_TABLE_EMPTY_STATE',
     );
@@ -3823,11 +3826,19 @@ describe('frontend resource type boundaries', () => {
     expect(alertResourceTableStateSource).toContain('export function useAlertResourceTableState');
     expect(alertResourceTableStateSource).toContain('toggleAll');
     expect(alertResourceTableStateSource).toContain('clearSelectedIds');
+    expect(alertResourceTableRowSource).toContain('export function AlertResourceTableRow');
+    expect(alertResourceTableRowSource).toContain('alertResourceSupportsMetric');
+    expect(alertResourceTableRowSource).toContain('getAlertResourceTableOverrideNotePlaceholder');
+    expect(alertResourceTableRowSource).toContain('getAlertResourceTableMetricInputTitle');
+    expect(alertResourceTableRowSource).toContain('getAlertResourceTableEditMetricTitle');
     expect(alertResourceTableModelSource).toContain(
       'export function normalizeAlertResourceMetricKey',
     );
     expect(alertResourceTableModelSource).toContain(
       'export function getAlertResourceMetricDisplayValue',
+    );
+    expect(alertResourceTableModelSource).toContain(
+      'export function alertResourceSupportsMetric',
     );
     expect(alertResourceTableModelSource).toContain(
       'export function buildAlertResourceEditPayload',

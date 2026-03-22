@@ -13,13 +13,11 @@ import {
   TableCell,
 } from '@/components/shared/Table';
 import { SectionHeader } from '@/components/shared/SectionHeader';
-import { ThresholdSlider } from '@/components/Dashboard/ThresholdSlider';
 import { HelpIcon } from '@/components/shared/HelpIcon';
 import RotateCcw from 'lucide-solid/icons/rotate-ccw';
 import {
   getAlertResourceTableAlertDelayLabel,
   getAlertResourceTableCustomBadgeLabel,
-  getAlertResourceTableEditMetricTitle,
   getAlertResourceTableEditNotePlaceholder,
   getAlertResourceTableEmptyState,
   getAlertResourceTableMetricInputTitle,
@@ -27,7 +25,6 @@ import {
   getAlertResourceTableNoResultsState,
   getAlertResourceTableOfflineStateOrder,
   getAlertResourceTableOfflineStatePresentation,
-  getAlertResourceTableOverrideNotePlaceholder,
   getAlertResourceTableResetFactoryDefaultsLabel,
   getAlertResourceTableRevertToDefaultsLabel,
 } from '@/utils/alertResourceTablePresentation';
@@ -36,7 +33,6 @@ import {
   getAlertBulkEditOpenLabel,
 } from '@/utils/alertBulkEditPresentation';
 import {
-  ALERT_RESOURCE_TABLE_SLIDER_METRICS,
   alertResourceSupportsMetric,
   buildAlertResourceEditPayload,
   getAlertResourceColumnHeaderTooltip,
@@ -52,6 +48,7 @@ import {
 } from './alertResourceTableModel';
 import { useAlertResourceTableState } from './useAlertResourceTableState';
 import type { GroupHeaderMeta, Resource } from '@/features/alerts/thresholds/tableTypes';
+import { AlertResourceTableRow } from './AlertResourceTableRow';
 
 export type { GroupHeaderMeta, Resource } from '@/features/alerts/thresholds/tableTypes';
 
@@ -195,13 +192,6 @@ export function ResourceTable(props: ResourceTableProps) {
     props.onSaveEdit(resourceId);
     setActiveMetricInput(null);
   };
-  const updateEditingThreshold = (metric: string, value: number | undefined) => {
-    props.setEditingThresholds({
-      ...props.editingThresholds(),
-      [metric]: value,
-    });
-  };
-
   const MetricValueWithHeat = (metricProps: {
     resourceId: string;
     metric: string;
@@ -275,6 +265,38 @@ export function ResourceTable(props: ResourceTableProps) {
       </button>
     );
   };
+
+  const renderDesktopRow = (resource: Resource) => (
+    <AlertResourceTableRow
+      resource={resource}
+      columns={props.columns}
+      editingId={props.editingId}
+      editingThresholds={props.editingThresholds}
+      setEditingThresholds={props.setEditingThresholds}
+      formatMetricValue={props.formatMetricValue}
+      hasActiveAlert={props.hasActiveAlert}
+      onEdit={props.onEdit}
+      onSaveEdit={props.onSaveEdit}
+      onCancelEdit={props.onCancelEdit}
+      onRemoveOverride={props.onRemoveOverride}
+      onToggleDisabled={props.onToggleDisabled}
+      onToggleNodeConnectivity={props.onToggleNodeConnectivity}
+      showOfflineAlertsColumn={props.showOfflineAlertsColumn}
+      globalOfflineSeverity={props.globalOfflineSeverity}
+      onSetOfflineState={props.onSetOfflineState}
+      onToggleBackup={props.onToggleBackup}
+      onToggleSnapshot={props.onToggleSnapshot}
+      globalDisableFlag={props.globalDisableFlag}
+      globalDisableOfflineFlag={props.globalDisableOfflineFlag}
+      editingNote={props.editingNote}
+      setEditingNote={props.setEditingNote}
+      activeMetricInput={activeMetricInput}
+      setActiveMetricInput={setActiveMetricInput}
+      showBulkSelection={Boolean(props.onBulkEdit)}
+      selected={selectedIds().has(resource.id)}
+      onToggleSelection={(checked) => toggleSelection(resource.id, checked)}
+    />
+  );
 
   const renderMobileView = () => (
     <div class="space-y-4">
@@ -959,489 +981,7 @@ export function ResourceTable(props: ResourceTableProps) {
                         </TableRow>
                         {/* Resources in this group */}
                         <For each={resources}>
-                          {(resource) => {
-                            const isEditing = () => props.editingId() === resource.id;
-                            const thresholds = () => getThresholds(resource, isEditing());
-                            const displayValue = (metric: string) =>
-                              getDisplayValue(resource, metric, isEditing());
-                            const isOverridden = (metric: string) =>
-                              isAlertResourceMetricOverridden(resource, metric);
-
-                            return (
-                              <TableRow
-                                class={`transition-colors ${resource.disabled || props.globalDisableFlag?.() ? 'opacity-40' : ''} ${resource.hasOverride ? 'bg-sky-50/50 hover:bg-sky-50/80 dark:bg-sky-900/20 dark:hover:bg-sky-900/30 border-l-[3px] border-l-sky-400 dark:border-l-sky-500' : 'hover:bg-surface-hover'}`}
-                              >
-                                {/* Bulk Edit Checkbox column */}
-                                <Show when={props.onBulkEdit}>
-                                  <TableCell class="p-1 px-2 text-center align-middle border-r border-border">
-                                    <input
-                                      type="checkbox"
-                                      checked={selectedIds().has(resource.id)}
-                                      onChange={(e) =>
-                                        toggleSelection(resource.id, e.currentTarget.checked)
-                                      }
-                                      class="rounded border-border text-sky-600 focus:ring-sky-500 transition-shadow cursor-pointer"
-                                      aria-label={`Select ${getResourceLabel(resource)}`}
-                                    />
-                                  </TableCell>
-                                </Show>
-
-                                {/* Alert toggle column */}
-                                <TableCell class="p-1 px-2 text-center align-middle">
-                                  <Show when={props.onToggleDisabled}>
-                                    {(() => {
-                                      const globallyDisabled = props.globalDisableFlag?.() ?? false;
-                                      const isChecked = !globallyDisabled && !resource.disabled;
-                                      return (
-                                        <div class="flex items-center justify-center">
-                                          <TogglePrimitive
-                                            size="sm"
-                                            checked={isChecked}
-                                            disabled={globallyDisabled}
-                                            onToggle={() =>
-                                              !globallyDisabled &&
-                                              props.onToggleDisabled?.(resource.id)
-                                            }
-                                            class="my-[1px]"
-                                            title={
-                                              globallyDisabled
-                                                ? 'Alerts disabled globally'
-                                                : resource.disabled
-                                                  ? 'Click to enable alerts'
-                                                  : 'Click to disable alerts'
-                                            }
-                                            ariaLabel={
-                                              isChecked
-                                                ? 'Alerts enabled for this resource'
-                                                : 'Alerts disabled for this resource'
-                                            }
-                                          />
-                                        </div>
-                                      );
-                                    })()}
-                                  </Show>
-                                </TableCell>
-                                <TableCell class="p-1 px-2">
-                                  <div class="flex items-center gap-2 min-w-0">
-                                    <Show
-                                      when={resource.type === 'agent'}
-                                      fallback={
-                                        <span
-                                          class={`text-sm font-medium truncate flex-nowrap ${resource.disabled ? 'text-slate-500 ' : 'text-base-content'}`}
-                                        >
-                                          {getResourceLabel(resource)}
-                                        </span>
-                                      }
-                                    >
-                                      <div
-                                        class="flex items-center gap-3 min-w-0"
-                                        title={resource.status || undefined}
-                                      >
-                                        <Show
-                                          when={resource.host}
-                                          fallback={
-                                            <span
-                                              class={`text-sm font-medium truncate flex-nowrap ${resource.disabled ? 'text-slate-500 ' : 'text-base-content'}`}
-                                            >
-                                              {getResourceLabel(resource)}
-                                            </span>
-                                          }
-                                        >
-                                          {(host) => (
-                                            <a
-                                              href={host() as string}
-                                              target="_blank"
-                                              rel="noopener noreferrer"
-                                              onClick={(e) => e.stopPropagation()}
-                                              class={`text-sm font-medium truncate flex-nowrap transition-colors duration-150 ${
-                                                resource.disabled
-                                                  ? 'text-slate-500 '
-                                                  : 'text-base-content hover:text-sky-600 dark:hover:text-sky-400'
-                                              }`}
-                                              title={`Open ${getResourceLabel(resource)} web interface`}
-                                            >
-                                              {getResourceLabel(resource)}
-                                            </a>
-                                          )}
-                                        </Show>
-                                        <Show when={resource.clusterName}>
-                                          <span class="rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
-                                            {resource.clusterName}
-                                          </span>
-                                        </Show>
-                                        <Show when={resource.type === 'storage' && resource.node}>
-                                          <span class="rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300">
-                                            {resource.node}
-                                          </span>
-                                        </Show>
-                                      </div>
-                                    </Show>
-                                    <Show when={resource.subtitle}>
-                                      <span class="text-xs text-muted">
-                                        {resource.subtitle as string}
-                                      </span>
-                                    </Show>
-                                    <Show
-                                      when={resource.hasOverride || resource.disableConnectivity}
-                                    >
-                                      <span class="text-xs px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
-                                        {getAlertResourceTableCustomBadgeLabel()}
-                                      </span>
-                                    </Show>
-                                    <Show when={isEditing()}>
-                                      <div class="mt-2 w-full">
-                                        <label class="sr-only" for={`note-${resource.id}`}>
-                                          Override note
-                                        </label>
-                                        <textarea
-                                          id={`note-${resource.id}`}
-                                          class="w-full rounded border border-border bg-surface px-2 py-1 text-xs text-base-content focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                          rows={2}
-                                          placeholder={getAlertResourceTableOverrideNotePlaceholder()}
-                                          value={props.editingNote()}
-                                          onInput={(e) =>
-                                            props.setEditingNote(e.currentTarget.value)
-                                          }
-                                        />
-                                      </div>
-                                    </Show>
-                                    <Show when={!isEditing() && resource.note}>
-                                      <p class="mt-2 text-xs italic text-muted break-words">
-                                        {resource.note as string}
-                                      </p>
-                                    </Show>
-                                  </div>
-                                </TableCell>
-                                {/* Metric columns - dynamically rendered based on resource type */}
-                                <For each={props.columns}>
-                                  {(column) => {
-                                    const metric = normalizeAlertResourceMetricKey(column);
-                                    const showMetric = () =>
-                                      alertResourceSupportsMetric(resource.type, metric);
-                                    const bounds = getAlertResourceMetricBounds(metric);
-                                    const isDisabled = () => thresholds()?.[metric] === -1;
-                                    const isSpecialToggle =
-                                      metric === 'backup' || metric === 'snapshot';
-
-                                    if (isSpecialToggle) {
-                                      const config =
-                                        metric === 'backup' ? resource.backup : resource.snapshot;
-                                      const isEnabled = config?.enabled ?? true;
-                                      const onToggle =
-                                        metric === 'backup'
-                                          ? props.onToggleBackup
-                                          : props.onToggleSnapshot;
-                                      const titlePrefix =
-                                        metric === 'backup' ? 'Backup' : 'Snapshot';
-
-                                      return (
-                                        <TableCell class="p-1 px-2 text-center align-middle">
-                                          <Show
-                                            when={onToggle}
-                                            fallback={<span class="text-sm text-slate-400">-</span>}
-                                          >
-                                            <div class="flex items-center justify-center">
-                                              <StatusBadge
-                                                isEnabled={isEnabled}
-                                                onToggle={() => onToggle?.(resource.id)}
-                                                titleEnabled={`${titlePrefix} alerts enabled. Click to disable for this resource.`}
-                                                titleDisabled={`${titlePrefix} alerts disabled. Click to enable for this resource.`}
-                                              />
-                                            </div>
-                                          </Show>
-                                        </TableCell>
-                                      );
-                                    }
-
-                                    const openMetricEditor = (e: MouseEvent) => {
-                                      startEditing(resource, metric, e);
-                                    };
-
-                                    return (
-                                      <TableCell class="p-1 px-2 text-center align-middle">
-                                        <Show
-                                          when={showMetric()}
-                                          fallback={<span class="text-sm text-muted">-</span>}
-                                        >
-                                          <Show
-                                            when={isEditing()}
-                                            fallback={
-                                              <div
-                                                onClick={(event) => {
-                                                  openMetricEditor(event);
-                                                }}
-                                                class="cursor-pointer hover:bg-surface-hover rounded px-1 py-0.5 transition-colors"
-                                                title={getAlertResourceTableEditMetricTitle()}
-                                              >
-                                                <MetricValueWithHeat
-                                                  resourceId={resource.id}
-                                                  metric={metric}
-                                                  value={displayValue(metric)}
-                                                  isOverridden={isOverridden(metric)}
-                                                />
-                                              </div>
-                                            }
-                                          >
-                                            <div class="flex w-full items-center gap-3">
-                                              <Show when={ALERT_RESOURCE_TABLE_SLIDER_METRICS.has(metric)}>
-                                                {(() => {
-                                                  const isTemperatureMetric =
-                                                    metric === 'temperature' ||
-                                                    metric === 'diskTemperature';
-                                                  const sliderMin = Math.max(0, bounds.min);
-                                                  const sliderMax = isTemperatureMetric
-                                                    ? Math.max(
-                                                        sliderMin,
-                                                        bounds.max > 0 ? bounds.max : 120,
-                                                      )
-                                                    : bounds.max;
-                                                  const defaultSliderValue = () => {
-                                                    if (metric === 'disk') return 90;
-                                                    if (metric === 'memory') return 85;
-                                                    if (metric === 'temperature') return 80;
-                                                    if (metric === 'diskTemperature') return 55;
-                                                    return 80;
-                                                  };
-                                                  const currentSliderValue = () => {
-                                                    const editingVal =
-                                                      props.editingThresholds()?.[metric];
-                                                    if (
-                                                      typeof editingVal === 'number' &&
-                                                      editingVal >= 0
-                                                    ) {
-                                                      return Math.round(editingVal);
-                                                    }
-                                                    const displayVal = displayValue(metric);
-                                                    if (
-                                                      typeof displayVal === 'number' &&
-                                                      displayVal >= 0
-                                                    ) {
-                                                      return Math.round(displayVal);
-                                                    }
-                                                    return defaultSliderValue();
-                                                  };
-                                                  return (
-                                                    <div class="w-36">
-                                                      <ThresholdSlider
-                                                        value={Math.max(
-                                                          sliderMin,
-                                                          Math.min(sliderMax, currentSliderValue()),
-                                                        )}
-                                                        onChange={(val) => {
-                                                          props.setEditingThresholds({
-                                                            ...props.editingThresholds(),
-                                                            [metric]: val,
-                                                          });
-                                                        }}
-                                                        type={
-                                                          isTemperatureMetric
-                                                            ? 'temperature'
-                                                            : (metric as 'cpu' | 'memory' | 'disk')
-                                                        }
-                                                        min={sliderMin}
-                                                        max={sliderMax}
-                                                        disabled={isDisabled()}
-                                                      />
-                                                    </div>
-                                                  );
-                                                })()}
-                                              </Show>
-                                              <div class="flex items-center justify-center">
-                                                <input
-                                                  type="number"
-                                                  min={bounds.min}
-                                                  max={bounds.max}
-                                                  step={getAlertResourceMetricStep(metric)}
-                                                  value={thresholds()?.[metric] ?? ''}
-                                                  placeholder={getAlertResourceTableMetricPlaceholder(
-                                                    isDisabled(),
-                                                  )}
-                                                  title={getAlertResourceTableMetricInputTitle(
-                                                    isDisabled(),
-                                                  )}
-                                                  ref={(el) => {
-                                                    if (
-                                                      isEditing() &&
-                                                      activeMetricInput()?.resourceId ===
-                                                        resource.id &&
-                                                      activeMetricInput()?.metric === metric
-                                                    ) {
-                                                      queueMicrotask(() => {
-                                                        el.focus();
-                                                        el.select();
-                                                      });
-                                                    }
-                                                  }}
-                                                  onInput={(e) => {
-                                                    const raw = e.currentTarget.value;
-                                                    if (raw === '') {
-                                                      updateEditingThreshold(metric, undefined);
-                                                      return;
-                                                    }
-                                                    const val = parseFloat(raw);
-                                                    if (!Number.isNaN(val)) {
-                                                      updateEditingThreshold(metric, val);
-                                                    }
-                                                  }}
-                                                  onBlur={() => {
-                                                    if (props.editingId() === resource.id) {
-                                                      saveEditing(resource.id);
-                                                    }
-                                                  }}
-                                                  class={`w-16 px-2 py-0.5 text-sm text-center border rounded ${
-                                                    isDisabled()
-                                                      ? 'bg-surface-alt text-slate-400 border-border'
-                                                      : ' text-base-content border-border'
-                                                  }`}
-                                                />
-                                              </div>
-                                            </div>
-                                          </Show>
-                                        </Show>
-                                      </TableCell>
-                                    );
-                                  }}
-                                </For>
-
-                                {/* Offline Alerts column - Connectivity/powered-off alerts */}
-                                <Show when={props.showOfflineAlertsColumn}>
-                                  <TableCell class="p-1 px-2 text-center align-middle">
-                                    {(() => {
-                                      const disabledGlobally = props.globalDisableFlag?.() ?? false;
-                                      const supportsTriState =
-                                        typeof props.onSetOfflineState === 'function' &&
-                                        (resource.type === 'guest' ||
-                                          resource.type === 'dockerContainer');
-
-                                      if (supportsTriState) {
-                                        const defaultDisabled =
-                                          props.globalDisableOfflineFlag?.() ?? false;
-                                        const defaultSeverity =
-                                          props.globalOfflineSeverity ?? 'warning';
-
-                                        let state: OfflineState;
-                                        if (resource.disableConnectivity) {
-                                          state = 'off';
-                                        } else if (resource.poweredOffSeverity) {
-                                          state = resource.poweredOffSeverity;
-                                        } else if (defaultDisabled) {
-                                          state = 'off';
-                                        } else {
-                                          state =
-                                            defaultSeverity === 'critical' ? 'critical' : 'warning';
-                                        }
-
-                                        return renderOfflineStateButton(
-                                          state,
-                                          disabledGlobally,
-                                          () => {
-                                            if (disabledGlobally) return;
-                                            const next = nextOfflineState(state);
-                                            props.onSetOfflineState?.(resource.id, next);
-                                          },
-                                        );
-                                      }
-
-                                      if (!props.onToggleNodeConnectivity) {
-                                        return <span class="text-sm text-slate-400">-</span>;
-                                      }
-
-                                      const globalOfflineDisabled =
-                                        props.globalDisableOfflineFlag?.() ?? false;
-                                      return renderToggleBadge({
-                                        isEnabled:
-                                          !globalOfflineDisabled && !resource.disableConnectivity,
-                                        disabled: disabledGlobally,
-                                        onToggle: () => {
-                                          if (disabledGlobally) return;
-                                          props.onToggleNodeConnectivity?.(resource.id);
-                                        },
-                                        titleEnabled:
-                                          'Offline alerts enabled. Click to disable for this resource.',
-                                        titleDisabled:
-                                          'Offline alerts disabled. Click to enable for this resource.',
-                                        titleWhenDisabled: 'Offline alerts controlled globally',
-                                      });
-                                    })()}
-                                  </TableCell>
-                                </Show>
-
-                                {/* Actions column */}
-                                <TableCell class="p-1 px-2">
-                                  <div class="flex items-center justify-center gap-1">
-                                    <Show
-                                      when={!isEditing()}
-                                      fallback={
-                                        <button
-                                          type="button"
-                                          onClick={cancelEditing}
-                                          class="p-1 hover:text-muted"
-                                          title="Cancel editing"
-                                          aria-label="Cancel editing"
-                                        >
-                                          <svg
-                                            class="w-4 h-4"
-                                            fill="none"
-                                            stroke="currentColor"
-                                            viewBox="0 0 24 24"
-                                          >
-                                            <path
-                                              stroke-linecap="round"
-                                              stroke-linejoin="round"
-                                              stroke-width="2"
-                                              d="M6 18L18 6M6 6l12 12"
-                                            />
-                                          </svg>
-                                        </button>
-                                      }
-                                    >
-                                      <Show when={resource.type !== 'dockerHost'}>
-                                        <button
-                                          type="button"
-                                          onClick={() => startEditing(resource)}
-                                          class="p-1 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
-                                          title="Edit thresholds"
-                                          aria-label={`Edit thresholds for ${getResourceLabel(resource)}`}
-                                        >
-                                          <svg
-                                            class="w-4 h-4"
-                                            fill="none"
-                                            stroke="currentColor"
-                                            viewBox="0 0 24 24"
-                                          >
-                                            <path
-                                              stroke-linecap="round"
-                                              stroke-linejoin="round"
-                                              stroke-width="2"
-                                              d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                                            />
-                                          </svg>
-                                        </button>
-                                      </Show>
-                                      <Show
-                                        when={
-                                          resource.hasOverride ||
-                                          ((resource.type === 'agent' ||
-                                            resource.type === 'dockerHost') &&
-                                            resource.disableConnectivity)
-                                        }
-                                      >
-                                        <button
-                                          type="button"
-                                          onClick={() => props.onRemoveOverride(resource.id)}
-                                          class="p-1 hover:text-muted transition-colors"
-                                          title={getAlertResourceTableRevertToDefaultsLabel()}
-                                          aria-label={`Revert to defaults for ${getResourceLabel(resource)}`}
-                                        >
-                                          <RotateCcw class="w-4 h-4" />
-                                        </button>
-                                      </Show>
-                                    </Show>
-                                  </div>
-                                </TableCell>
-                              </TableRow>
-                            );
-                          }}
+                          {(resource) => renderDesktopRow(resource)}
                         </For>
                       </>
                     );
@@ -1453,367 +993,7 @@ export function ResourceTable(props: ResourceTableProps) {
                   when={props.resources && props.resources.length === 0}
                   fallback={
                     <For each={props.resources}>
-                      {(resource) => {
-                        const isEditing = () => props.editingId() === resource.id;
-                        const thresholds = () => getThresholds(resource, isEditing());
-                        const displayValue = (metric: string) =>
-                          getDisplayValue(resource, metric, isEditing());
-                        const isOverridden = (metric: string) =>
-                          isAlertResourceMetricOverridden(resource, metric);
-
-                        return (
-                          <TableRow
-                            class={`transition-colors ${resource.disabled || props.globalDisableFlag?.() ? 'opacity-40' : ''} ${resource.hasOverride ? 'bg-sky-50/50 hover:bg-sky-50/80 dark:bg-sky-900/20 dark:hover:bg-sky-900/30 border-l-[3px] border-l-sky-400 dark:border-l-sky-500' : 'hover:bg-surface-hover'}`}
-                          >
-                            {/* Bulk Edit Checkbox column */}
-                            <Show when={props.onBulkEdit}>
-                              <TableCell class="p-1 px-2 text-center align-middle border-r border-border">
-                                <input
-                                  type="checkbox"
-                                  checked={selectedIds().has(resource.id)}
-                                  onChange={(e) =>
-                                    toggleSelection(resource.id, e.currentTarget.checked)
-                                  }
-                                  class="rounded border-border text-sky-600 focus:ring-sky-500 transition-shadow cursor-pointer"
-                                  aria-label={`Select ${getResourceLabel(resource)}`}
-                                />
-                              </TableCell>
-                            </Show>
-
-                            {/* Alert toggle column */}
-                            <TableCell class="p-1 px-2 text-center align-middle">
-                              <Show when={props.onToggleDisabled}>
-                                {(() => {
-                                  const globallyDisabled = props.globalDisableFlag?.() ?? false;
-                                  const isChecked = !globallyDisabled && !resource.disabled;
-                                  return (
-                                    <div class="flex items-center justify-center">
-                                      <TogglePrimitive
-                                        size="sm"
-                                        checked={isChecked}
-                                        disabled={globallyDisabled}
-                                        onToggle={() =>
-                                          !globallyDisabled && props.onToggleDisabled?.(resource.id)
-                                        }
-                                        class="my-[1px]"
-                                        title={
-                                          globallyDisabled
-                                            ? 'Alerts disabled globally'
-                                            : resource.disabled
-                                              ? 'Click to enable alerts'
-                                              : 'Click to disable alerts'
-                                        }
-                                        ariaLabel={
-                                          isChecked
-                                            ? 'Alerts enabled for this resource'
-                                            : 'Alerts disabled for this resource'
-                                        }
-                                      />
-                                    </div>
-                                  );
-                                })()}
-                              </Show>
-                            </TableCell>
-                            <TableCell class="p-1 px-2">
-                              <Show
-                                when={resource.type === 'agent'}
-                                fallback={
-                                  <div class="flex items-center gap-2 min-w-0">
-                                    <span
-                                      class={`text-sm font-medium truncate flex-nowrap ${resource.disabled ? 'text-slate-500 ' : 'text-base-content'}`}
-                                    >
-                                      {getResourceLabel(resource)}
-                                    </span>
-                                    <Show
-                                      when={resource.hasOverride || resource.disableConnectivity}
-                                    >
-                                      <span class="text-xs px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
-                                        {getAlertResourceTableCustomBadgeLabel()}
-                                      </span>
-                                    </Show>
-                                  </div>
-                                }
-                              >
-                                <div
-                                  class="flex items-center gap-3 min-w-0"
-                                  title={resource.status || undefined}
-                                >
-                                  <Show
-                                    when={resource.host}
-                                    fallback={
-                                      <span
-                                        class={`text-sm font-medium truncate flex-nowrap ${resource.disabled ? 'text-slate-500 ' : 'text-base-content'}`}
-                                      >
-                                        {getResourceLabel(resource)}
-                                      </span>
-                                    }
-                                  >
-                                    {(host) => (
-                                      <a
-                                        href={host() as string}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        onClick={(e) => e.stopPropagation()}
-                                        class={`text-sm font-medium truncate flex-nowrap transition-colors duration-150 ${
-                                          resource.disabled
-                                            ? 'text-slate-500 '
-                                            : 'text-base-content hover:text-sky-600 dark:hover:text-sky-400'
-                                        }`}
-                                        title={`Open ${getResourceLabel(resource)} web interface`}
-                                      >
-                                        {getResourceLabel(resource)}
-                                      </a>
-                                    )}
-                                  </Show>
-                                  <Show when={resource.clusterName}>
-                                    <span class="rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
-                                      {resource.clusterName}
-                                    </span>
-                                  </Show>
-                                  <Show when={resource.hasOverride || resource.disableConnectivity}>
-                                    <span class="text-xs px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
-                                      {getAlertResourceTableCustomBadgeLabel()}
-                                    </span>
-                                  </Show>
-                                </div>
-                              </Show>
-                            </TableCell>
-                            {/* Metric columns - dynamically rendered based on resource type */}
-                            <For each={props.columns}>
-                              {(column) => {
-                                const metric = normalizeAlertResourceMetricKey(column);
-
-                                // Check if this metric applies to this resource type
-                                const showMetric = () => {
-                                  if (
-                                    resource.type === 'agent' &&
-                                    ['diskRead', 'diskWrite', 'networkIn', 'networkOut'].includes(
-                                      metric,
-                                    )
-                                  ) {
-                                    return false;
-                                  }
-                                  if (resource.type === 'pbs') {
-                                    // PBS only has CPU and Memory metrics
-                                    return ['cpu', 'memory'].includes(metric);
-                                  }
-                                  if (resource.type === 'storage') {
-                                    return metric === 'usage';
-                                  }
-                                  return true;
-                                };
-
-                                const isDisabled = () => thresholds()?.[metric] === -1;
-
-                                const openMetricEditor = (e: MouseEvent) => {
-                                  startEditing(resource, metric, e);
-                                };
-
-                                return (
-                                  <TableCell class="p-1 px-2 text-center align-middle">
-                                    <Show
-                                      when={showMetric()}
-                                      fallback={<span class="text-sm text-muted">-</span>}
-                                    >
-                                      <Show
-                                        when={isEditing()}
-                                        fallback={
-                                          <div
-                                            onClick={openMetricEditor}
-                                            class="cursor-pointer hover:bg-surface-hover rounded px-1 py-0.5 transition-colors"
-                                            title={getAlertResourceTableEditMetricTitle()}
-                                          >
-                                            <MetricValueWithHeat
-                                              resourceId={resource.id}
-                                              metric={metric}
-                                              value={displayValue(metric)}
-                                              isOverridden={isOverridden(metric)}
-                                            />
-                                          </div>
-                                        }
-                                      >
-                                        <div class="flex items-center justify-center">
-                                          <input
-                                            type="number"
-                                            min="-1"
-                                            max={
-                                              metric.includes('disk') ||
-                                              metric.includes('memory') ||
-                                              metric.includes('cpu') ||
-                                              metric === 'usage'
-                                                ? 100
-                                                : 10000
-                                            }
-                                            step={getAlertResourceMetricStep(metric)}
-                                            value={thresholds()?.[metric] ?? ''}
-                                            placeholder={getAlertResourceTableMetricPlaceholder(
-                                              isDisabled(),
-                                            )}
-                                            title={getAlertResourceTableMetricInputTitle(
-                                              isDisabled(),
-                                            )}
-                                            ref={(el) => {
-                                              if (
-                                                isEditing() &&
-                                                activeMetricInput()?.resourceId === resource.id &&
-                                                activeMetricInput()?.metric === metric
-                                              ) {
-                                                queueMicrotask(() => {
-                                                  el.focus();
-                                                  el.select();
-                                                });
-                                              }
-                                            }}
-                                            onInput={(e) => {
-                                              const raw = e.currentTarget.value;
-                                              if (raw === '') {
-                                                updateEditingThreshold(metric, undefined);
-                                                return;
-                                              }
-                                              const val = parseFloat(raw);
-                                              if (!Number.isNaN(val)) {
-                                                updateEditingThreshold(metric, val);
-                                              }
-                                            }}
-                                            onBlur={() => {
-                                              if (props.editingId() === resource.id) {
-                                                saveEditing(resource.id);
-                                              }
-                                            }}
-                                            class={`w-16 px-2 py-0.5 text-sm text-center border rounded ${
-                                              isDisabled()
-                                                ? 'bg-surface-alt text-slate-400 border-border'
-                                                : ' text-base-content border-border'
-                                            }`}
-                                          />
-                                        </div>
-                                      </Show>
-                                    </Show>
-                                  </TableCell>
-                                );
-                              }}
-                            </For>
-
-                            {/* Offline Alerts column - Connectivity/powered-off alerts */}
-                            <Show when={props.showOfflineAlertsColumn}>
-                              <TableCell class="p-1 px-2 text-center align-middle">
-                                <Show when={props.onToggleNodeConnectivity}>
-                                  {(() => {
-                                    const defaultOfflineDisabled =
-                                      props.globalDisableOfflineFlag?.() ?? false;
-                                    const isEnabled = !(
-                                      resource.disableConnectivity || defaultOfflineDisabled
-                                    );
-                                    const disabledGlobally = props.globalDisableFlag?.() ?? false;
-                                    return (
-                                      <StatusBadge
-                                        isEnabled={isEnabled}
-                                        disabled={disabledGlobally}
-                                        onToggle={() =>
-                                          props.onToggleNodeConnectivity?.(resource.id)
-                                        }
-                                        titleEnabled="Offline alerts enabled. Click to disable for this resource."
-                                        titleDisabled="Offline alerts disabled. Click to enable for this resource."
-                                        titleWhenDisabled="Offline alerts controlled globally"
-                                      />
-                                    );
-                                  })()}
-                                </Show>
-                              </TableCell>
-                            </Show>
-
-                            {/* Actions column */}
-                            <TableCell class="p-1 px-2">
-                              <div class="flex items-center justify-center gap-1">
-                                <Show when={typeof resource.toggleEnabled === 'function'}>
-                                  <StatusBadge
-                                    size="sm"
-                                    isEnabled={resource.isEnabled ?? true}
-                                    onToggle={resource.toggleEnabled}
-                                    titleEnabled={resource.toggleTitleEnabled}
-                                    titleDisabled={resource.toggleTitleDisabled}
-                                  />
-                                </Show>
-                                <Show
-                                  when={
-                                    resource.editable !== false &&
-                                    typeof props.onEdit === 'function'
-                                  }
-                                  fallback={<span class="text-xs text-muted">—</span>}
-                                >
-                                  <Show
-                                    when={!isEditing()}
-                                    fallback={
-                                      <button
-                                        type="button"
-                                        onClick={cancelEditing}
-                                        class="p-1 hover:text-muted"
-                                        title="Cancel editing"
-                                        aria-label="Cancel editing"
-                                      >
-                                        <svg
-                                          class="w-4 h-4"
-                                          fill="none"
-                                          stroke="currentColor"
-                                          viewBox="0 0 24 24"
-                                        >
-                                          <path
-                                            stroke-linecap="round"
-                                            stroke-linejoin="round"
-                                            stroke-width="2"
-                                            d="M6 18L18 6M6 6l12 12"
-                                          />
-                                        </svg>
-                                      </button>
-                                    }
-                                  >
-                                    <div class="flex items-center gap-1">
-                                      <button
-                                        type="button"
-                                        onClick={() => startEditing(resource)}
-                                        class="p-1 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
-                                        title="Edit thresholds"
-                                        aria-label={`Edit thresholds for ${getResourceLabel(resource)}`}
-                                      >
-                                        <svg
-                                          class="w-4 h-4"
-                                          fill="none"
-                                          stroke="currentColor"
-                                          viewBox="0 0 24 24"
-                                        >
-                                          <path
-                                            stroke-linecap="round"
-                                            stroke-linejoin="round"
-                                            stroke-width="2"
-                                            d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                                          />
-                                        </svg>
-                                      </button>
-                                      <Show
-                                        when={
-                                          resource.hasOverride ||
-                                          (resource.type === 'agent' &&
-                                            resource.disableConnectivity)
-                                        }
-                                      >
-                                        <button
-                                          type="button"
-                                          onClick={() => props.onRemoveOverride(resource.id)}
-                                          class="p-1 hover:text-base-content transition-colors"
-                                          title={getAlertResourceTableRevertToDefaultsLabel()}
-                                          aria-label={`Revert to defaults for ${getResourceLabel(resource)}`}
-                                        >
-                                          <RotateCcw class="w-4 h-4" />
-                                        </button>
-                                      </Show>
-                                    </div>
-                                  </Show>
-                                </Show>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      }}
+                      {(resource) => renderDesktopRow(resource)}
                     </For>
                   }
                 >

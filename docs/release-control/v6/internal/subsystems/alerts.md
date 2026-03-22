@@ -124,7 +124,9 @@ controller logic should land in those hooks rather than being rebuilt inside
 the table component.
 The alert resource thresholds editor now follows the same shape: shared metric
 normalization, bounds, value-resolution, and override-label logic live in
-`frontend-modern/src/components/Alerts/alertResourceTableModel.ts`, while
+`frontend-modern/src/components/Alerts/alertResourceTableModel.ts`, render-heavy
+desktop row ownership lives in
+`frontend-modern/src/components/Alerts/AlertResourceTableRow.tsx`, and
 selection state, delay-row toggling, and inline metric-input focus live in
 `frontend-modern/src/components/Alerts/useAlertResourceTableState.ts`. Future
 resource-table threshold semantics should land in those owners instead of

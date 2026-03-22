@@ -2,9 +2,11 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { ALERT_BULK_EDIT_CLEAR_LABEL } from '@/utils/alertBulkEditPresentation';
 import resourceTableSource from '@/components/Alerts/ResourceTable.tsx?raw';
+import alertResourceTableRowSource from '@/components/Alerts/AlertResourceTableRow.tsx?raw';
 import alertResourceTableModelSource from '@/components/Alerts/alertResourceTableModel.ts?raw';
 import alertResourceTableStateSource from '@/components/Alerts/useAlertResourceTableState.ts?raw';
 import {
+  alertResourceSupportsMetric,
   buildAlertResourceEditPayload,
   getAlertResourceMetricDisplayValue,
   normalizeAlertResourceMetricKey,
@@ -269,10 +271,16 @@ describe('ResourceTable', () => {
   describe('table ownership model', () => {
     it('keeps table state and metric rules in dedicated owners', () => {
       expect(resourceTableSource).toContain('useAlertResourceTableState');
+      expect(resourceTableSource).toContain('AlertResourceTableRow');
       expect(resourceTableSource).not.toContain('const flattenResources = (): Resource[] => {');
       expect(resourceTableSource).not.toContain(
         'const normalizeMetricKey = (column: string): string => {',
       );
+      expect(resourceTableSource).not.toContain(
+        "if (resource.type === 'agent' && ['diskRead', 'diskWrite', 'networkIn', 'networkOut'].includes(",
+      );
+      expect(alertResourceTableRowSource).toContain('export function AlertResourceTableRow');
+      expect(alertResourceTableRowSource).toContain('alertResourceSupportsMetric');
       expect(alertResourceTableStateSource).toContain('export function useAlertResourceTableState');
       expect(alertResourceTableModelSource).toContain(
         'export function normalizeAlertResourceMetricKey',
@@ -280,10 +288,15 @@ describe('ResourceTable', () => {
       expect(alertResourceTableModelSource).toContain(
         'export function getAlertResourceMetricDisplayValue',
       );
+      expect(alertResourceTableModelSource).toContain(
+        'export function alertResourceSupportsMetric',
+      );
     });
 
     it('resolves metric values and edit payloads through the shared model', () => {
       expect(normalizeAlertResourceMetricKey('CPU %')).toBe('cpu');
+      expect(alertResourceSupportsMetric('agent', 'networkIn')).toBe(false);
+      expect(alertResourceSupportsMetric('pbs', 'disk')).toBe(false);
       expect(
         getAlertResourceMetricDisplayValue(
           makeResource({
