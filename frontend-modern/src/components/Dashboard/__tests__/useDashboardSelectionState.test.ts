@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { WorkloadGuest } from '@/types/workloads';
 
+import { resolveDashboardResourceSelection } from '../dashboardSelectionModel';
 import { useDashboardSelectionState } from '../useDashboardSelectionState';
 
 let locationSearch = '?resource=cluster-a:node-1:101';
@@ -43,6 +44,7 @@ describe('useDashboardSelectionState', () => {
 
     expect(result.selectedGuestId()).toBe('cluster-a:node-1:101');
     expect(setSelectedNode).toHaveBeenCalledWith('cluster-a-node-1');
+    expect(resolveDashboardResourceSelection(locationSearch)?.selectedNode).toBe('cluster-a-node-1');
   });
 
   it('clears stale hovered workload ids when filtered guests change', () => {

@@ -89,6 +89,7 @@ import workloadTableHeaderSource from '@/components/Dashboard/WorkloadTableHeade
 import dashboardFilterModelSource from '@/components/Dashboard/dashboardFilterModel.ts?raw';
 import dashboardControlsStateSource from '@/components/Dashboard/useDashboardControlsState.ts?raw';
 import dashboardGuestMetadataStateSource from '@/components/Dashboard/useDashboardGuestMetadataState.ts?raw';
+import dashboardSelectionModelSource from '@/components/Dashboard/dashboardSelectionModel.ts?raw';
 import dashboardSelectionStateSource from '@/components/Dashboard/useDashboardSelectionState.ts?raw';
 import dashboardWorkloadDerivedStateSource from '@/components/Dashboard/useDashboardWorkloadDerivedState.ts?raw';
 import dashboardWorkloadFilterOptionsSource from '@/components/Dashboard/useDashboardWorkloadFilterOptions.ts?raw';
@@ -668,10 +669,16 @@ describe('frontend resource type boundaries', () => {
     expect(dashboardWorkloadRouteModelSource).toContain('workloadNodeScopeId');
     expect(dashboardWorkloadRouteModelSource).toContain('getKubernetesContextKey');
     expect(dashboardWorkloadRouteStateSource).toContain('isWorkloadsRoute,');
-    expect(dashboardSelectionStateSource).toContain('parseWorkloadsLinkSearch');
     expect(dashboardSelectionStateSource).toContain('const [selectedGuestId, setSelectedGuestIdRaw]');
     expect(dashboardSelectionStateSource).toContain('const [hoveredWorkloadId, setHoveredWorkloadId]');
     expect(dashboardSelectionStateSource).toContain('setHandledResourceId(null)');
+    expect(dashboardSelectionStateSource).toContain("from './dashboardSelectionModel'");
+    expect(dashboardSelectionStateSource).not.toContain('parseWorkloadsLinkSearch');
+    expect(dashboardSelectionStateSource).not.toContain('getCanonicalWorkloadId');
+    expect(dashboardSelectionModelSource).toContain('parseWorkloadsLinkSearch(search)');
+    expect(dashboardSelectionModelSource).toContain('getCanonicalWorkloadId');
+    expect(dashboardSelectionModelSource).toContain('resolveDashboardResourceSelection');
+    expect(dashboardSelectionModelSource).toContain('dashboardHasHoveredWorkload');
     expect(dashboardStateSource).not.toContain('const guestId = () => {');
     expect(dashboardFilterSource).toContain('useDashboardFilterState');
     expect(dashboardFilterSource).not.toContain('const [filtersOpen, setFiltersOpen] =');

@@ -1,10 +1,11 @@
 import { useLocation } from '@solidjs/router';
 import { createEffect, createSignal, type Accessor } from 'solid-js';
 
-import { parseWorkloadsLinkSearch } from '@/routing/resourceLinks';
-import { getCanonicalWorkloadId } from '@/utils/workloads';
-
 import type { WorkloadGuest } from '@/types/workloads';
+import {
+  dashboardHasHoveredWorkload,
+  resolveDashboardResourceSelection,
+} from './dashboardSelectionModel';
 
 interface UseDashboardSelectionStateOptions {
   filteredGuests: Accessor<WorkloadGuest[]>;
@@ -48,21 +49,20 @@ export function useDashboardSelectionState(options: UseDashboardSelectionStateOp
   };
 
   createEffect(() => {
-    const { resource: resourceId } = parseWorkloadsLinkSearch(location.search);
-
-    if (!resourceId) {
+    const selection = resolveDashboardResourceSelection(location.search);
+    if (!selection) {
       if (handledResourceId() !== null) {
         setHandledResourceId(null);
       }
       return;
     }
 
+    const { resourceId, selectedNode } = selection;
     if (resourceId === handledResourceId()) return;
 
     setSelectedGuestId(resourceId);
-    const [instance, node, vmid] = resourceId.split(':');
-    if (instance && node && vmid) {
-      options.setSelectedNode(`${instance}-${node}`);
+    if (selectedNode) {
+      options.setSelectedNode(selectedNode);
     }
     setHandledResourceId(resourceId);
   });
@@ -70,10 +70,7 @@ export function useDashboardSelectionState(options: UseDashboardSelectionStateOp
   createEffect(() => {
     const hoveredId = hoveredWorkloadId();
     if (!hoveredId) return;
-    const exists = options
-      .filteredGuests()
-      .some((guest) => getCanonicalWorkloadId(guest) === hoveredId);
-    if (!exists) {
+    if (!dashboardHasHoveredWorkload(options.filteredGuests(), hoveredId)) {
       setHoveredWorkloadId(null);
     }
   });
