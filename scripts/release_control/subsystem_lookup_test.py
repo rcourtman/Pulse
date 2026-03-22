@@ -1940,6 +1940,7 @@ class SubsystemLookupTest(unittest.TestCase):
     ) -> None:
         result = lookup_paths(
             [
+                "frontend-modern/src/components/Dashboard/dashboardWorkloadFilterConfigModel.ts",
                 "frontend-modern/src/components/Dashboard/dashboardWorkloadRouteModel.ts",
                 "frontend-modern/src/components/Dashboard/dashboardWorkloadRouteStateModel.ts",
                 "frontend-modern/src/components/Dashboard/dashboardWorkloadUrlSyncModel.ts",

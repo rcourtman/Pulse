@@ -2558,6 +2558,7 @@
         "frontend-modern/src/components/Dashboard/dashboardFilterModel.ts",
         "frontend-modern/src/components/Dashboard/DashboardStateCards.tsx",
         "frontend-modern/src/components/Dashboard/DashboardStatsStrip.tsx",
+        "frontend-modern/src/components/Dashboard/dashboardWorkloadFilterConfigModel.ts",
         "frontend-modern/src/components/Dashboard/dashboardWorkloadRouteModel.ts",
         "frontend-modern/src/components/Dashboard/dashboardWorkloadRouteStateModel.ts",
         "frontend-modern/src/components/Dashboard/DashboardWorkloadTable.tsx",
@@ -2616,6 +2617,7 @@
         "exact_files": [
           "frontend-modern/src/components/Dashboard/__tests__/Dashboard.performance.contract.test.tsx",
           "frontend-modern/src/components/Dashboard/__tests__/DashboardFilter.test.tsx",
+          "frontend-modern/src/components/Dashboard/__tests__/dashboardWorkloadFilterConfigModel.test.ts",
           "frontend-modern/src/components/Dashboard/__tests__/dashboardWorkloadRouteModel.test.ts",
           "frontend-modern/src/components/Dashboard/__tests__/dashboardWorkloadRouteStateModel.test.ts",
           "frontend-modern/src/components/Dashboard/__tests__/dashboardWorkloadUrlSyncModel.test.ts",
@@ -2667,6 +2669,7 @@
               "frontend-modern/src/components/Dashboard/dashboardFilterModel.ts",
               "frontend-modern/src/components/Dashboard/DashboardStateCards.tsx",
               "frontend-modern/src/components/Dashboard/DashboardStatsStrip.tsx",
+              "frontend-modern/src/components/Dashboard/dashboardWorkloadFilterConfigModel.ts",
               "frontend-modern/src/components/Dashboard/dashboardWorkloadRouteModel.ts",
               "frontend-modern/src/components/Dashboard/dashboardWorkloadRouteStateModel.ts",
               "frontend-modern/src/components/Dashboard/DashboardWorkloadTable.tsx",
@@ -2721,6 +2724,7 @@
             "exact_files": [
               "frontend-modern/src/components/Dashboard/__tests__/Dashboard.performance.contract.test.tsx",
               "frontend-modern/src/components/Dashboard/__tests__/DashboardFilter.test.tsx",
+              "frontend-modern/src/components/Dashboard/__tests__/dashboardWorkloadFilterConfigModel.test.ts",
               "frontend-modern/src/components/Dashboard/__tests__/dashboardWorkloadRouteModel.test.ts",
               "frontend-modern/src/components/Dashboard/__tests__/dashboardWorkloadRouteStateModel.test.ts",
               "frontend-modern/src/components/Dashboard/__tests__/dashboardWorkloadUrlSyncModel.test.ts",

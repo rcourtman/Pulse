@@ -3,14 +3,16 @@ import { createMemo, type Accessor } from 'solid-js';
 import type { WorkloadGuest, ViewMode } from '@/types/workloads';
 import type { DashboardToolbarFilterConfig } from './dashboardFilterModel';
 import {
-  buildDashboardContainerRuntimeFilterConfig,
   buildDashboardContainerRuntimeOptions,
-  buildDashboardHostFilterConfig,
   buildDashboardKubernetesContextOptions,
   buildDashboardKubernetesNamespaceOptions,
-  buildDashboardNamespaceFilterConfig,
   buildDashboardWorkloadNodeOptions,
 } from './dashboardWorkloadRouteModel';
+import {
+  buildDashboardContainerRuntimeFilterConfig,
+  buildDashboardHostFilterConfig,
+  buildDashboardNamespaceFilterConfig,
+} from './dashboardWorkloadFilterConfigModel';
 
 interface DashboardWorkloadFilterOptionsOptions {
   allGuests: Accessor<WorkloadGuest[]>;

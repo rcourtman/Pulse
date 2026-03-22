@@ -16,6 +16,7 @@ import dashboardGuestMetadataStateSource from '../useDashboardGuestMetadataState
 import dashboardSelectionStateSource from '../useDashboardSelectionState.ts?raw';
 import dashboardWorkloadDerivedStateSource from '../useDashboardWorkloadDerivedState.ts?raw';
 import dashboardWorkloadFilterOptionsSource from '../useDashboardWorkloadFilterOptions.ts?raw';
+import dashboardWorkloadFilterConfigModelSource from '../dashboardWorkloadFilterConfigModel.ts?raw';
 import dashboardWorkloadRouteModelSource from '../dashboardWorkloadRouteModel.ts?raw';
 import dashboardWorkloadRouteStateModelSource from '../dashboardWorkloadRouteStateModel.ts?raw';
 import dashboardWorkloadUrlSyncModelSource from '../dashboardWorkloadUrlSyncModel.ts?raw';
@@ -557,7 +558,13 @@ describe('Dashboard performance contract', () => {
       );
       expect(dashboardWorkloadRouteStateSource).toContain('isWorkloadsRoute,');
       expect(dashboardWorkloadFilterOptionsSource).toContain(
+        "from './dashboardWorkloadFilterConfigModel'",
+      );
+      expect(dashboardWorkloadFilterOptionsSource).toContain(
         'buildDashboardWorkloadNodeOptions(options.allGuests())',
+      );
+      expect(dashboardWorkloadFilterOptionsSource).not.toContain(
+        'const onContextChange = (value: string) =>',
       );
       expect(dashboardWorkloadFilterOptionsSource).toContain(
         'buildDashboardContainerRuntimeFilterConfig({',
@@ -566,11 +573,29 @@ describe('Dashboard performance contract', () => {
       expect(dashboardWorkloadFilterOptionsSource).toContain(
         'buildDashboardNamespaceFilterConfig({',
       );
+      expect(dashboardWorkloadFilterConfigModelSource).toContain(
+        'export const buildDashboardContainerRuntimeFilterConfig',
+      );
+      expect(dashboardWorkloadFilterConfigModelSource).toContain(
+        'export const buildDashboardHostFilterConfig',
+      );
+      expect(dashboardWorkloadFilterConfigModelSource).toContain(
+        'export const buildDashboardNamespaceFilterConfig',
+      );
       expect(dashboardWorkloadRouteModelSource).toContain(
         'export const deserializeDashboardWorkloadViewMode',
       );
       expect(dashboardWorkloadRouteModelSource).toContain(
         "normalizeWorkloadViewModeParam(raw) ?? 'all'",
+      );
+      expect(dashboardWorkloadRouteModelSource).not.toContain(
+        'export const buildDashboardContainerRuntimeFilterConfig',
+      );
+      expect(dashboardWorkloadRouteModelSource).not.toContain(
+        'export const buildDashboardHostFilterConfig',
+      );
+      expect(dashboardWorkloadRouteModelSource).not.toContain(
+        'export const buildDashboardNamespaceFilterConfig',
       );
       expect(dashboardWorkloadRouteStateModelSource).toContain(
         'export const DASHBOARD_WORKLOAD_ROUTE_RESET_STATE',

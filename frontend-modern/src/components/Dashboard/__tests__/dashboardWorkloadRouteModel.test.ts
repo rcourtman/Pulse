@@ -1,13 +1,10 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import type { WorkloadGuest } from '@/types/workloads';
 import {
-  buildDashboardContainerRuntimeFilterConfig,
   buildDashboardContainerRuntimeOptions,
-  buildDashboardHostFilterConfig,
   buildDashboardKubernetesContextOptions,
   buildDashboardKubernetesNamespaceOptions,
-  buildDashboardNamespaceFilterConfig,
   buildDashboardWorkloadNodeOptions,
   deserializeDashboardWorkloadViewMode,
 } from '../dashboardWorkloadRouteModel';
@@ -94,106 +91,60 @@ describe('dashboardWorkloadRouteModel', () => {
       'kube-system',
     ]);
   });
-
-  it('builds container runtime options and runtime filter config only for app-container mode', () => {
-    const runtimeOptions = buildDashboardContainerRuntimeOptions([
-      makeGuest({
-        id: 'docker-a',
-        type: 'app-container',
-        workloadType: 'app-container',
-        containerRuntime: 'docker',
-      }),
-      makeGuest({
-        id: 'docker-b',
-        type: 'app-container',
-        workloadType: 'app-container',
-        containerRuntime: 'containerd',
-      }),
-      makeGuest({
-        id: 'docker-c',
-        type: 'app-container',
-        workloadType: 'app-container',
-        containerRuntime: 'docker',
-      }),
-    ]);
-    const onChange = vi.fn();
-
-    expect(runtimeOptions).toEqual(['containerd', 'docker']);
+  it('builds container runtime options from canonical app-container guests', () => {
     expect(
-      buildDashboardContainerRuntimeFilterConfig({
-        isWorkloadsRoute: true,
-        viewMode: 'app-container',
-        containerRuntime: 'docker',
-        runtimeOptions,
-        onChange,
-      }),
-    ).toMatchObject({
-      id: 'workloads-container-runtime-filter',
-      label: 'Runtime',
-      value: 'docker',
-    });
-    expect(
-      buildDashboardContainerRuntimeFilterConfig({
-        isWorkloadsRoute: true,
-        viewMode: 'vm',
-        containerRuntime: 'docker',
-        runtimeOptions,
-        onChange,
-      }),
-    ).toBeUndefined();
+      buildDashboardContainerRuntimeOptions([
+        makeGuest({
+          id: 'docker-a',
+          type: 'app-container',
+          workloadType: 'app-container',
+          containerRuntime: 'docker',
+        }),
+        makeGuest({
+          id: 'docker-b',
+          type: 'app-container',
+          workloadType: 'app-container',
+          containerRuntime: 'containerd',
+        }),
+        makeGuest({
+          id: 'docker-c',
+          type: 'app-container',
+          workloadType: 'app-container',
+          containerRuntime: 'docker',
+        }),
+      ]),
+    ).toEqual(['containerd', 'docker']);
   });
 
-  it('builds host and namespace toolbar filter configs from the canonical option owners', () => {
-    const onContextChange = vi.fn();
-    const onNodeChange = vi.fn();
-    const onNamespaceChange = vi.fn();
-
-    expect(
-      buildDashboardHostFilterConfig({
-        isWorkloadsRoute: true,
-        viewMode: 'pod',
-        selectedKubernetesContext: 'prod',
-        kubernetesContextOptions: ['prod', 'stage'],
-        selectedNode: null,
-        workloadNodeOptions: [],
-        onContextChange,
-        onNodeChange,
+  it('builds kubernetes namespace options with the selected context scope applied', () => {
+    const guests = [
+      makeGuest({
+        id: 'pod-a',
+        type: 'pod',
+        workloadType: 'pod',
+        contextLabel: 'prod',
+        namespace: 'default',
       }),
-    ).toMatchObject({
-      id: 'workloads-k8s-context-filter',
-      label: 'Cluster',
-      value: 'prod',
-    });
-
-    expect(
-      buildDashboardHostFilterConfig({
-        isWorkloadsRoute: true,
-        viewMode: 'vm',
-        selectedKubernetesContext: null,
-        kubernetesContextOptions: [],
-        selectedNode: 'cluster-a-node-a',
-        workloadNodeOptions: [{ value: 'cluster-a-node-a', label: 'node-a' }],
-        onContextChange,
-        onNodeChange,
+      makeGuest({
+        id: 'pod-b',
+        type: 'pod',
+        workloadType: 'pod',
+        contextLabel: 'prod',
+        namespace: 'kube-system',
       }),
-    ).toMatchObject({
-      id: 'workloads-node-filter',
-      label: 'Node',
-      value: 'cluster-a-node-a',
-    });
-
-    expect(
-      buildDashboardNamespaceFilterConfig({
-        isWorkloadsRoute: true,
-        viewMode: 'pod',
-        selectedNamespace: 'default',
-        namespaceOptions: ['default', 'kube-system'],
-        onChange: onNamespaceChange,
+      makeGuest({
+        id: 'pod-c',
+        type: 'pod',
+        workloadType: 'pod',
+        contextLabel: 'stage',
+        namespace: 'observability',
       }),
-    ).toMatchObject({
-      id: 'workloads-k8s-namespace-filter',
-      label: 'Namespace',
-      value: 'default',
-    });
+    ];
+
+    expect(buildDashboardKubernetesNamespaceOptions(guests, 'prod')).toEqual([
+      'default',
+      'kube-system',
+    ]);
+    expect(buildDashboardKubernetesNamespaceOptions(guests, 'stage')).toEqual(['observability']);
   });
 });
