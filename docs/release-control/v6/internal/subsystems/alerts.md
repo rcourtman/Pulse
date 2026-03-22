@@ -292,7 +292,9 @@ detail now lives in
 `frontend-modern/src/features/alerts/AlertHistoryFrequencyCard.tsx`,
 `frontend-modern/src/features/alerts/AlertHistoryFiltersCard.tsx`,
 `frontend-modern/src/features/alerts/AlertResourceIncidentsPanel.tsx`,
-`frontend-modern/src/features/alerts/AlertHistoryTableSection.tsx`, and
+`frontend-modern/src/features/alerts/AlertHistoryTableSection.tsx`,
+`frontend-modern/src/features/alerts/AlertHistoryTableGroupRow.tsx`,
+`frontend-modern/src/features/alerts/AlertHistoryTableAlertRow.tsx`, and
 `frontend-modern/src/features/alerts/AlertHistoryAdministrationCard.tsx`.
 Future alert-history control-flow work should extend the feature hook, new
 grouping or trend semantics should extend the history model, and render-heavy

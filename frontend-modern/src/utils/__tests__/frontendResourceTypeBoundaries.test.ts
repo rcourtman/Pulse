@@ -335,6 +335,8 @@ import alertAcknowledgementStateSource from '@/features/alerts/useAlertAcknowled
 import alertHistoryAdministrationCardSource from '@/features/alerts/AlertHistoryAdministrationCard.tsx?raw';
 import alertHistoryFiltersCardSource from '@/features/alerts/AlertHistoryFiltersCard.tsx?raw';
 import alertHistoryFrequencyCardSource from '@/features/alerts/AlertHistoryFrequencyCard.tsx?raw';
+import alertHistoryTableAlertRowSource from '@/features/alerts/AlertHistoryTableAlertRow.tsx?raw';
+import alertHistoryTableGroupRowSource from '@/features/alerts/AlertHistoryTableGroupRow.tsx?raw';
 import alertHistoryTableSectionSource from '@/features/alerts/AlertHistoryTableSection.tsx?raw';
 import alertResourceIncidentsPanelSource from '@/features/alerts/AlertResourceIncidentsPanel.tsx?raw';
 import alertHistoryStateSource from '@/features/alerts/useAlertHistoryState.ts?raw';
@@ -2803,8 +2805,10 @@ describe('frontend resource type boundaries', () => {
       'export function getDeployInstallCommandLoadingState',
     );
     expect(deployStatusPresentationSource).toContain('export const getDeployStatusPresentation');
-    expect(alertHistoryTableSectionSource).toContain('getAlertHistoryStatusPresentation');
-    expect(alertHistoryTableSectionSource).toContain('getAlertIncidentLevelBadgeClass');
+    expect(alertHistoryTableSectionSource).toContain('AlertHistoryTableGroupRow');
+    expect(alertHistoryTableSectionSource).toContain('AlertHistoryTableAlertRow');
+    expect(alertHistoryTableAlertRowSource).toContain('getAlertHistoryStatusPresentation');
+    expect(alertHistoryTableAlertRowSource).toContain('getAlertIncidentLevelBadgeClass');
     expect(alertsPageSource).toContain(
       "import { AlertsConfigurationSurface } from '@/features/alerts/AlertsConfigurationSurface';",
     );
@@ -2910,13 +2914,18 @@ describe('frontend resource type boundaries', () => {
     expect(alertResourceIncidentsPanelSource).not.toContain('getAlertIncidentTimelineEventCardClass');
     expect(alertResourceIncidentsPanelSource).not.toContain('getAlertIncidentTimelineDetailClass');
     expect(alertResourceIncidentsPanelSource).not.toContain('getAlertIncidentTimelineCommandClass');
-    expect(alertHistoryTableSectionSource).toContain('getAlertHistoryStatusPresentation');
-    expect(alertHistoryTableSectionSource).toContain('getAlertHistorySourcePresentation');
-    expect(alertHistoryTableSectionSource).toContain('getAlertHistoryResourceTypeBadgeClass');
-    expect(alertHistoryTableSectionSource).toContain('IncidentTimelinePanel');
-    expect(alertHistoryTableSectionSource).toContain('InvestigateAlertButton');
+    expect(alertHistoryTableSectionSource).toContain('AlertHistoryTableGroupRow');
+    expect(alertHistoryTableSectionSource).toContain('AlertHistoryTableAlertRow');
     expect(alertHistoryTableSectionSource).toContain('getAlertHistoryEmptyState');
     expect(alertHistoryTableSectionSource).toContain('getAlertHistoryLoadingState');
+    expect(alertHistoryTableSectionSource).not.toContain('IncidentTimelinePanel');
+    expect(alertHistoryTableSectionSource).not.toContain('InvestigateAlertButton');
+    expect(alertHistoryTableGroupRowSource).toContain('getGroupSummaryLabel');
+    expect(alertHistoryTableAlertRowSource).toContain('getAlertHistoryStatusPresentation');
+    expect(alertHistoryTableAlertRowSource).toContain('getAlertHistorySourcePresentation');
+    expect(alertHistoryTableAlertRowSource).toContain('getAlertHistoryResourceTypeBadgeClass');
+    expect(alertHistoryTableAlertRowSource).toContain('IncidentTimelinePanel');
+    expect(alertHistoryTableAlertRowSource).toContain('InvestigateAlertButton');
     expect(alertHistoryAdministrationCardSource).toContain('getAlertAdministrationSectionTitle');
     expect(alertHistoryAdministrationCardSource).toContain(
       'getAlertAdministrationSectionDescription',

@@ -11,6 +11,8 @@ import alertAcknowledgementStateSource from '@/features/alerts/useAlertAcknowled
 import alertHistoryAdministrationCardSource from '@/features/alerts/AlertHistoryAdministrationCard.tsx?raw';
 import alertHistoryFiltersCardSource from '@/features/alerts/AlertHistoryFiltersCard.tsx?raw';
 import alertHistoryFrequencyCardSource from '@/features/alerts/AlertHistoryFrequencyCard.tsx?raw';
+import alertHistoryTableAlertRowSource from '@/features/alerts/AlertHistoryTableAlertRow.tsx?raw';
+import alertHistoryTableGroupRowSource from '@/features/alerts/AlertHistoryTableGroupRow.tsx?raw';
 import alertHistoryTableSectionSource from '@/features/alerts/AlertHistoryTableSection.tsx?raw';
 import alertResourceIncidentsPanelSource from '@/features/alerts/AlertResourceIncidentsPanel.tsx?raw';
 import alertHistoryStateSource from '@/features/alerts/useAlertHistoryState.ts?raw';
@@ -315,8 +317,15 @@ describe('tab path helpers', () => {
     expect(alertResourceIncidentsPanelSource).toContain('IncidentEventFilters');
     expect(alertResourceIncidentsPanelSource).toContain('IncidentTimelineEventCard');
     expect(alertHistoryTableSectionSource).toContain('export function AlertHistoryTableSection');
-    expect(alertHistoryTableSectionSource).toContain('IncidentTimelinePanel');
-    expect(alertHistoryTableSectionSource).toContain('InvestigateAlertButton');
+    expect(alertHistoryTableSectionSource).toContain('AlertHistoryTableGroupRow');
+    expect(alertHistoryTableSectionSource).toContain('AlertHistoryTableAlertRow');
+    expect(alertHistoryTableSectionSource).not.toContain('IncidentTimelinePanel');
+    expect(alertHistoryTableSectionSource).not.toContain('InvestigateAlertButton');
+    expect(alertHistoryTableGroupRowSource).toContain('export function AlertHistoryTableGroupRow');
+    expect(alertHistoryTableGroupRowSource).toContain('getGroupSummaryLabel');
+    expect(alertHistoryTableAlertRowSource).toContain('export function AlertHistoryTableAlertRow');
+    expect(alertHistoryTableAlertRowSource).toContain('IncidentTimelinePanel');
+    expect(alertHistoryTableAlertRowSource).toContain('InvestigateAlertButton');
     expect(alertHistoryAdministrationCardSource).toContain(
       'export function AlertHistoryAdministrationCard',
     );

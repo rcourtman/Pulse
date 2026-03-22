@@ -554,7 +554,9 @@ render-heavy surfaces now route through
 `frontend-modern/src/features/alerts/AlertHistoryFrequencyCard.tsx`,
 `frontend-modern/src/features/alerts/AlertHistoryFiltersCard.tsx`,
 `frontend-modern/src/features/alerts/AlertResourceIncidentsPanel.tsx`,
-`frontend-modern/src/features/alerts/AlertHistoryTableSection.tsx`, and
+`frontend-modern/src/features/alerts/AlertHistoryTableSection.tsx`,
+`frontend-modern/src/features/alerts/AlertHistoryTableGroupRow.tsx`,
+`frontend-modern/src/features/alerts/AlertHistoryTableAlertRow.tsx`, and
 `frontend-modern/src/features/alerts/AlertHistoryAdministrationCard.tsx`.
 Future alert-history control flow should extend the hook, pure history analytics
 should extend the model, and section rendering should extend those owners
