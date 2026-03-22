@@ -1,4 +1,4 @@
-import { createEffect, createMemo, onCleanup, type Accessor } from 'solid-js';
+import { createMemo, type Accessor } from 'solid-js';
 
 import type { Node } from '@/types/api';
 import type { WorkloadGuest } from '@/types/workloads';
@@ -17,6 +17,7 @@ import {
   buildNodeByInstance,
   buildGuestParentNodeMap,
 } from './workloadTopology';
+import { useDashboardWorkloadViewportSync } from './useDashboardWorkloadViewportSync';
 import { useGroupedTableWindowing } from './useGroupedTableWindowing';
 
 type GroupingMode = 'grouped' | 'flat';
@@ -212,38 +213,16 @@ export function useDashboardWorkloadDerivedState(
     groupedWindowing.isWindowed()
       ? Math.max(
           0,
-          (options.filteredGuests().length - groupedWindowing.endIndex()) *
-            DASHBOARD_TABLE_ESTIMATED_ROW_HEIGHT,
+          (options.filteredGuests().length - groupedWindowing.endIndex()) * 32,
         )
       : 0,
   );
 
-  const syncGuestWindowToViewport = () => {
-    if (!groupedWindowing.isWindowed() || typeof window === 'undefined') return;
-    const body = options.tableBodyRef();
-    if (!body) return;
-    const rect = body.getBoundingClientRect();
-    const scrollTop = Math.max(0, -rect.top);
-    groupedWindowing.onScroll(scrollTop, window.innerHeight, DASHBOARD_TABLE_ESTIMATED_ROW_HEIGHT);
-  };
-
-  createEffect(() => {
-    if (typeof window === 'undefined') return;
-    options.filteredGuests().length;
-    if (!groupedWindowing.isWindowed()) return;
-    if (!options.tableBodyRef()) return;
-
-    const handleViewportChange = () => {
-      syncGuestWindowToViewport();
-    };
-
-    handleViewportChange();
-    window.addEventListener('scroll', handleViewportChange, { passive: true });
-    window.addEventListener('resize', handleViewportChange);
-    onCleanup(() => {
-      window.removeEventListener('scroll', handleViewportChange);
-      window.removeEventListener('resize', handleViewportChange);
-    });
+  useDashboardWorkloadViewportSync({
+    filteredGuestCount: () => options.filteredGuests().length,
+    groupedWindowing,
+    rowHeight: DASHBOARD_TABLE_ESTIMATED_ROW_HEIGHT,
+    tableBodyRef: options.tableBodyRef,
   });
 
   const totalStats = createMemo(() => computeWorkloadStats(options.filteredGuests()));

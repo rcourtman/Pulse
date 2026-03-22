@@ -105,6 +105,8 @@ regression protection.
 83. `frontend-modern/src/components/Dashboard/GuestDrawer.test.tsx`
 84. `frontend-modern/src/components/Dashboard/__tests__/useGroupedTableWindowing.test.ts`
 85. `frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx`
+86. `frontend-modern/src/components/Dashboard/useDashboardWorkloadViewportSync.ts`
+87. `frontend-modern/src/components/Dashboard/__tests__/useDashboardWorkloadViewportSync.test.tsx`
 
 ## Shared Boundaries
 
@@ -130,7 +132,7 @@ regression protection.
 12. Extend dashboard guest metadata cache persistence, metadata refresh, org-scope switching, and optimistic custom-URL updates through `frontend-modern/src/components/Dashboard/useDashboardGuestMetadataState.ts` rather than rebuilding dashboard-local storage caches, event listeners, or guest metadata API wiring inside `frontend-modern/src/components/Dashboard/useDashboardState.ts`
 13. Extend dashboard deep-link selection and hovered-row continuity semantics through `frontend-modern/src/components/Dashboard/dashboardSelectionModel.ts`, and extend table scroll preservation plus reactive selection state through `frontend-modern/src/components/Dashboard/useDashboardSelectionState.ts`, rather than rebuilding resource-query parsing, selected-row scroll pinning, or hovered-row invalidation inside `frontend-modern/src/components/Dashboard/useDashboardState.ts`
 14. Extend dashboard workload route ownership, route-driven option catalogs, and toolbar filter config through `frontend-modern/src/components/Dashboard/useDashboardWorkloadRouteState.ts`, `frontend-modern/src/components/Dashboard/useDashboardWorkloadFilterOptions.ts`, `frontend-modern/src/components/Dashboard/dashboardWorkloadRouteModel.ts`, `frontend-modern/src/components/Dashboard/dashboardWorkloadFilterConfigModel.ts`, and `frontend-modern/src/components/Dashboard/dashboardWorkloadRouteStateModel.ts`, and extend query-param synchronization plus managed workload URL semantics through `frontend-modern/src/components/Dashboard/useDashboardWorkloadUrlSync.ts` and `frontend-modern/src/components/Dashboard/dashboardWorkloadUrlSyncModel.ts`, rather than rebuilding route sync, alias parsing, option derivation, toolbar callback/config wiring, reset policy, node-selection compatibility rules, param precedence, or managed workload URLs inside `frontend-modern/src/components/Dashboard/useDashboardState.ts`
-15. Extend grouped dashboard workload derivation, summary fallbacks, and grouped/windowed table presentation through `frontend-modern/src/components/Dashboard/useDashboardWorkloadDerivedState.ts`, and extend node parent mapping through `frontend-modern/src/components/Dashboard/workloadTopology.ts`, rather than rebuilding grouped selectors, summary snapshot math, or topology lookups inside `frontend-modern/src/components/Dashboard/useDashboardState.ts`
+15. Extend grouped dashboard workload derivation, summary fallbacks, and grouped/windowed table presentation through `frontend-modern/src/components/Dashboard/useDashboardWorkloadDerivedState.ts`, extend viewport-driven grouped table synchronization through `frontend-modern/src/components/Dashboard/useDashboardWorkloadViewportSync.ts`, and extend node parent mapping through `frontend-modern/src/components/Dashboard/workloadTopology.ts`, rather than rebuilding grouped selectors, summary snapshot math, scroll listeners, or topology lookups inside `frontend-modern/src/components/Dashboard/useDashboardState.ts`
 16. Extend dashboard control defaults, persistent view preferences, keyboard reset behavior, column-visibility ownership, and tag-search flow through `frontend-modern/src/components/Dashboard/useDashboardControlsState.ts` and `frontend-modern/src/components/Dashboard/dashboardFilterModel.ts` rather than rebuilding sort/search/grouping state, reset drift, or column-toggle plumbing inside `frontend-modern/src/components/Dashboard/useDashboardState.ts`
 17. Extend dashboard filter active-count, reset semantics, and mobile toolbar state through `frontend-modern/src/components/Dashboard/dashboardFilterModel.ts` and `frontend-modern/src/components/Dashboard/useDashboardFilterState.ts`, rather than rebuilding filter-local state inside `frontend-modern/src/components/Dashboard/DashboardFilter.tsx`
 18. Extend threshold-slider value-position math, title/label derivation, and drag scroll-lock runtime through `frontend-modern/src/components/Dashboard/thresholdSliderModel.ts` and `frontend-modern/src/components/Dashboard/useThresholdSliderState.ts` rather than rebuilding slider-local state and pointer lifecycle inside `frontend-modern/src/components/Dashboard/ThresholdSlider.tsx`
@@ -138,7 +140,7 @@ regression protection.
 20. Extend stacked memory-bar capacity math, balloon/swap derivation, and resize-observer runtime through `frontend-modern/src/components/Dashboard/stackedMemoryBarModel.ts` and `frontend-modern/src/components/Dashboard/useStackedMemoryBarState.ts` rather than rebuilding memory-bar-local state, tooltip shaping, and label-fit logic inside `frontend-modern/src/components/Dashboard/StackedMemoryBar.tsx`
 21. Extend metric-bar width, label-fit logic, and resize-observer runtime through `frontend-modern/src/components/Dashboard/metricBarModel.ts` and `frontend-modern/src/components/Dashboard/useMetricBarState.ts` rather than rebuilding metric-local state and threshold mapping inside `frontend-modern/src/components/Dashboard/MetricBar.tsx`
 22. Extend enhanced CPU bar usage/anomaly presentation and tooltip runtime through `frontend-modern/src/components/Dashboard/enhancedCpuBarModel.ts` and `frontend-modern/src/components/Dashboard/useEnhancedCPUBarState.ts` rather than rebuilding tooltip-local state and CPU-threshold formatting inside `frontend-modern/src/components/Dashboard/EnhancedCPUBar.tsx`
-23. Extend grouped dashboard row windowing, reveal-index clamping, overscan math, and per-group visible-slice derivation through `frontend-modern/src/components/Dashboard/useGroupedTableWindowing.ts` rather than rebuilding scroll handlers, mounted-row budgets, or group-slice math inside `frontend-modern/src/components/Dashboard/useDashboardWorkloadDerivedState.ts`
+23. Extend grouped dashboard row windowing, reveal-index clamping, overscan math, and per-group visible-slice derivation through `frontend-modern/src/components/Dashboard/useGroupedTableWindowing.ts`, and extend viewport event wiring through `frontend-modern/src/components/Dashboard/useDashboardWorkloadViewportSync.ts` rather than rebuilding scroll handlers, mounted-row budgets, viewport listeners, or group-slice math inside `frontend-modern/src/components/Dashboard/useDashboardWorkloadDerivedState.ts`
 24. Extend dashboard shell rendering through `frontend-modern/src/components/Dashboard/DashboardStateCards.tsx`, `frontend-modern/src/components/Dashboard/DashboardWorkloadTable.tsx`, and `frontend-modern/src/components/Dashboard/DashboardStatsStrip.tsx` rather than accreting loading cards, workload table markup, or stats-strip presentation back into `frontend-modern/src/components/Dashboard/Dashboard.tsx`
 25. Extend dashboard workload table shell ownership through `frontend-modern/src/components/Dashboard/WorkloadTableHeader.tsx` and `frontend-modern/src/components/Dashboard/WorkloadPanel.tsx` rather than rebuilding sortable header markup, grouped node rows, row expansion, or guest-drawer rendering inside `frontend-modern/src/components/Dashboard/DashboardWorkloadTable.tsx`
 
@@ -178,6 +180,9 @@ behavior, column visibility, and summary display preferences, while
 `frontend-modern/src/components/Dashboard/useDashboardWorkloadDerivedState.ts`
 owns grouped workload derivation, summary fallbacks, parent-node mapping,
 and grouped/windowed table math, while
+`frontend-modern/src/components/Dashboard/useDashboardWorkloadViewportSync.ts`
+owns grouped workload viewport synchronization and the scroll/resize listener
+lifecycle, while
 `frontend-modern/src/components/Dashboard/useDashboardGuestMetadataState.ts`
 owns guest metadata cache persistence, optimistic custom-URL updates,
 org-scope switching, and metadata refresh, and
@@ -191,6 +196,12 @@ owns row-window thresholds, overscan behavior, reveal-index clamping, and
 per-group visible-slice derivation. Future dashboard table windowing changes
 must extend through that hook instead of rebuilding scroll math or mounted-row
 budgets inline inside `frontend-modern/src/components/Dashboard/useDashboardWorkloadDerivedState.ts`.
+Viewport-driven grouped table synchronization now also routes through
+`frontend-modern/src/components/Dashboard/useDashboardWorkloadViewportSync.ts`,
+which owns the dashboard table body measurement and the scroll/resize listener
+lifecycle. Future viewport sync changes must extend through that hook rather
+than rebuilding browser-event wiring or table-body geometry reads inside
+`frontend-modern/src/components/Dashboard/useDashboardWorkloadDerivedState.ts`.
 The dashboard guest-row path now follows the same pattern: the render shell
 stays in `frontend-modern/src/components/Dashboard/GuestRow.tsx`, tooltip-backed
 cell presentation lives in `frontend-modern/src/components/Dashboard/GuestRowCells.tsx`,

@@ -92,6 +92,7 @@ import dashboardGuestMetadataStateSource from '@/components/Dashboard/useDashboa
 import dashboardSelectionModelSource from '@/components/Dashboard/dashboardSelectionModel.ts?raw';
 import dashboardSelectionStateSource from '@/components/Dashboard/useDashboardSelectionState.ts?raw';
 import dashboardWorkloadDerivedStateSource from '@/components/Dashboard/useDashboardWorkloadDerivedState.ts?raw';
+import dashboardWorkloadViewportSyncSource from '@/components/Dashboard/useDashboardWorkloadViewportSync.ts?raw';
 import dashboardWorkloadFilterOptionsSource from '@/components/Dashboard/useDashboardWorkloadFilterOptions.ts?raw';
 import dashboardWorkloadFilterConfigModelSource from '@/components/Dashboard/dashboardWorkloadFilterConfigModel.ts?raw';
 import dashboardWorkloadRouteModelSource from '@/components/Dashboard/dashboardWorkloadRouteModel.ts?raw';
@@ -698,6 +699,9 @@ describe('frontend resource type boundaries', () => {
     expect(dashboardWorkloadRouteStateSource).toContain('hostFilterConfig');
     expect(dashboardWorkloadRouteStateSource).toContain('namespaceFilterConfig');
     expect(dashboardWorkloadDerivedStateSource).toContain('useGroupedTableWindowing');
+    expect(dashboardWorkloadDerivedStateSource).toContain('useDashboardWorkloadViewportSync');
+    expect(dashboardWorkloadDerivedStateSource).not.toContain('window.addEventListener');
+    expect(dashboardWorkloadDerivedStateSource).not.toContain('getBoundingClientRect');
     expect(dashboardStateSource).not.toContain('const DEFAULT_WINDOW_SIZE =');
     expect(dashboardStateSource).not.toContain('const DEFAULT_ENABLE_THRESHOLD =');
     expect(dashboardStateSource).not.toContain('const DEFAULT_OVERSCAN_ROWS =');
@@ -707,6 +711,10 @@ describe('frontend resource type boundaries', () => {
     expect(groupedTableWindowingSource).toContain('getVisibleSlice');
     expect(groupedTableWindowingSource).toContain('onScroll');
     expect(groupedTableWindowingSource).toContain('revealIndex');
+    expect(dashboardWorkloadViewportSyncSource).toContain('window.addEventListener');
+    expect(dashboardWorkloadViewportSyncSource).toContain('window.removeEventListener');
+    expect(dashboardWorkloadViewportSyncSource).toContain('getBoundingClientRect');
+    expect(dashboardWorkloadViewportSyncSource).toContain('groupedWindowing.onScroll');
     expect(workloadTopologySource).toContain('export const workloadNodeScopeId');
     expect(workloadTopologySource).toContain('export const getKubernetesContextKey');
     expect(workloadTopologySource).toContain('export const getWorkloadDockerHostId');

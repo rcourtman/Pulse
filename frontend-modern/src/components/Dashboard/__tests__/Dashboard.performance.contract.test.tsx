@@ -21,6 +21,7 @@ import dashboardWorkloadFilterConfigModelSource from '../dashboardWorkloadFilter
 import dashboardWorkloadRouteModelSource from '../dashboardWorkloadRouteModel.ts?raw';
 import dashboardWorkloadRouteStateModelSource from '../dashboardWorkloadRouteStateModel.ts?raw';
 import dashboardWorkloadUrlSyncModelSource from '../dashboardWorkloadUrlSyncModel.ts?raw';
+import dashboardWorkloadViewportSyncSource from '../useDashboardWorkloadViewportSync.ts?raw';
 import dashboardWorkloadRouteStateSource from '../useDashboardWorkloadRouteState.ts?raw';
 import dashboardWorkloadUrlSyncSource from '../useDashboardWorkloadUrlSync.ts?raw';
 import dashboardStateSource from '../useDashboardState.ts?raw';
@@ -646,6 +647,13 @@ describe('Dashboard performance contract', () => {
       expect(dashboardWorkloadDerivedStateSource).toContain('buildNodeByInstance(');
       expect(dashboardWorkloadDerivedStateSource).toContain('buildGuestParentNodeMap(');
       expect(dashboardWorkloadDerivedStateSource).toContain('useGroupedTableWindowing');
+      expect(dashboardWorkloadDerivedStateSource).toContain('useDashboardWorkloadViewportSync');
+      expect(dashboardWorkloadDerivedStateSource).not.toContain('window.addEventListener');
+      expect(dashboardWorkloadDerivedStateSource).not.toContain('getBoundingClientRect');
+      expect(dashboardWorkloadViewportSyncSource).toContain('window.addEventListener');
+      expect(dashboardWorkloadViewportSyncSource).toContain('window.removeEventListener');
+      expect(dashboardWorkloadViewportSyncSource).toContain('getBoundingClientRect');
+      expect(dashboardWorkloadViewportSyncSource).toContain('groupedWindowing.onScroll');
       expect(dashboardWorkloadRouteStateSource).not.toContain("from './workloadTopology'");
       expect(dashboardWorkloadRouteModelSource).toContain("from './workloadTopology'");
       expect(dashboardWorkloadRouteModelSource).toContain('workloadNodeScopeId');
@@ -701,6 +709,7 @@ describe('Dashboard performance contract', () => {
       expect(dashboardWorkloadRouteStateSource).toContain('hostFilterConfig');
       expect(dashboardWorkloadRouteStateSource).toContain('namespaceFilterConfig');
       expect(dashboardWorkloadDerivedStateSource).toContain('useGroupedTableWindowing');
+      expect(dashboardWorkloadDerivedStateSource).toContain('useDashboardWorkloadViewportSync');
     });
 
     it('keeps threshold slider runtime and derivations in canonical slider owners', () => {
