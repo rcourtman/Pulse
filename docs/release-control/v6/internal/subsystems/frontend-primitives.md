@@ -465,6 +465,10 @@ and `frontend-modern/src/components/Alerts/ThresholdsTableAgentDisksSection.tsx`
 Future agent thresholds presentation changes should extend those section
 surfaces rather than restoring mixed JSX ownership to
 `frontend-modern/src/components/Alerts/ThresholdsTableAgentsTab.tsx`.
+The thresholds tab adapter contract now lives in
+`frontend-modern/src/features/alerts/thresholds/thresholdsTabModel.ts`, so
+`frontend-modern/src/features/alerts/tabs/ThresholdsTab.tsx` stays a thin shell
+instead of carrying a duplicate table adapter contract inline.
 Canonical threshold row shaping now routes through
 `frontend-modern/src/features/alerts/thresholds/thresholdsResourceModel.ts`
 plus the family-owned feature hooks

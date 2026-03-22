@@ -28,6 +28,7 @@ import alertHistoryTabSource from '@/features/alerts/tabs/HistoryTab.tsx?raw';
 import alertOverviewTabSource from '@/features/alerts/OverviewTab.tsx?raw';
 import alertScheduleTabSource from '@/features/alerts/tabs/ScheduleTab.tsx?raw';
 import alertThresholdsTabSource from '@/features/alerts/tabs/ThresholdsTab.tsx?raw';
+import thresholdsTabModelSource from '@/features/alerts/thresholds/thresholdsTabModel.ts?raw';
 import recentAlertsPanelSource from '@/components/Alerts/RecentAlertsPanel.tsx?raw';
 import thresholdsTableSource from '@/components/Alerts/ThresholdsTable.tsx?raw';
 import thresholdsTableAgentDisksSectionSource from '@/components/Alerts/ThresholdsTableAgentDisksSection.tsx?raw';
@@ -407,6 +408,12 @@ describe('tab path helpers', () => {
     expect(alertScheduleTabSource).not.toContain('ALERT_CONFIG_QUIET_HOURS_TITLE');
     expect(alertScheduleTabSource).not.toContain('ALERT_CONFIG_ESCALATION_TITLE');
     expect(alertThresholdsTabSource).toContain('ThresholdsTable');
+    expect(alertThresholdsTabSource).toContain('buildThresholdsTableProps');
+    expect(alertThresholdsTabSource).not.toContain('pmgThresholds={props.pmgThresholds}');
+    expect(thresholdsTabModelSource).toContain('export interface ThresholdsTabProps');
+    expect(thresholdsTabModelSource).toContain('export function buildThresholdsTableProps');
+    expect(thresholdsTabModelSource).toContain('guestDefaults: props.guestDefaults()');
+    expect(thresholdsTabModelSource).not.toContain('hasUnsavedChanges');
     expect(thresholdsTableSource).toContain(
       "import { useThresholdsTableState } from '@/features/alerts/thresholds/hooks/useThresholdsTableState';",
     );

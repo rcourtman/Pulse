@@ -136,7 +136,6 @@ export function AlertsConfigurationSurface(props: AlertsConfigurationSurfaceProp
           setPMGThresholds={state.setPMGThresholds}
           activeAlerts={props.activeAlerts}
           setHasUnsavedChanges={props.setHasUnsavedChanges}
-          hasUnsavedChanges={props.hasUnsavedChanges}
           removeAlerts={props.removeAlerts}
           disableAllNodes={state.disableAllNodes}
           setDisableAllNodes={state.setDisableAllNodes}

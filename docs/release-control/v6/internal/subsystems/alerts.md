@@ -149,6 +149,11 @@ state, and bulk-edit dialog control. Override persistence, bulk threshold
 application, powered-off/connectivity state transitions, and alert-removal side
 effects now route through
 `frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsOverrideMutations.ts`.
+The thresholds tab adapter contract now lives in
+`frontend-modern/src/features/alerts/thresholds/thresholdsTabModel.ts`, so
+`frontend-modern/src/features/alerts/tabs/ThresholdsTab.tsx` stays a shell
+instead of carrying a duplicate table-prop interface and hand-mapped adapter
+layer.
 `frontend-modern/src/components/Alerts/ThresholdsTable.tsx` is now limited to
 shell composition for search/help/nav plus bulk-edit dialog flow, while the
 tab render owners live in

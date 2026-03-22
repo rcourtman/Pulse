@@ -351,6 +351,7 @@ import alertDestinationsTabSource from '@/features/alerts/tabs/DestinationsTab.t
 import alertHistoryTabSource from '@/features/alerts/tabs/HistoryTab.tsx?raw';
 import alertScheduleTabSource from '@/features/alerts/tabs/ScheduleTab.tsx?raw';
 import alertThresholdsTabSource from '@/features/alerts/tabs/ThresholdsTab.tsx?raw';
+import thresholdsTabModelSource from '@/features/alerts/thresholds/thresholdsTabModel.ts?raw';
 import thresholdsTableSource from '@/components/Alerts/ThresholdsTable.tsx?raw';
 import thresholdsTableAgentDisksSectionSource from '@/components/Alerts/ThresholdsTableAgentDisksSection.tsx?raw';
 import thresholdsTableAgentsTabSource from '@/components/Alerts/ThresholdsTableAgentsTab.tsx?raw';
@@ -2967,7 +2968,12 @@ describe('frontend resource type boundaries', () => {
     expect(alertThresholdsTabSource).toContain(
       "import { ThresholdsTable } from '@/components/Alerts/ThresholdsTable';",
     );
-    expect(alertThresholdsTabSource).toContain('pmgThresholds={props.pmgThresholds}');
+    expect(alertThresholdsTabSource).toContain('buildThresholdsTableProps');
+    expect(alertThresholdsTabSource).not.toContain('pmgThresholds={props.pmgThresholds}');
+    expect(thresholdsTabModelSource).toContain('export interface ThresholdsTabProps');
+    expect(thresholdsTabModelSource).toContain('export function buildThresholdsTableProps');
+    expect(thresholdsTabModelSource).toContain('guestDefaults: props.guestDefaults()');
+    expect(thresholdsTabModelSource).not.toContain('hasUnsavedChanges');
     expect(thresholdsTableSource).toContain(
       "import { useThresholdsTableState } from '@/features/alerts/thresholds/hooks/useThresholdsTableState';",
     );
