@@ -7,8 +7,8 @@ import {
 import type { WorkloadGuest, ViewMode } from '@/types/workloads';
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import { resolveWorkloadType } from '@/utils/workloads';
-import { getKubernetesContextKey, workloadNodeScopeId } from './workloadSelectors';
 import type { DashboardToolbarFilterConfig } from './dashboardFilterModel';
+import { getKubernetesContextKey, workloadNodeScopeId } from './workloadTopology';
 import { useDashboardWorkloadUrlSync } from './useDashboardWorkloadUrlSync';
 
 export interface DashboardWorkloadRouteStateOptions {

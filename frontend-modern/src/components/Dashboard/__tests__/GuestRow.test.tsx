@@ -109,7 +109,7 @@ vi.mock('@/routing/resourceLinks', async () => {
   };
 });
 
-vi.mock('../workloadSelectors', () => ({
+vi.mock('../workloadTopology', () => ({
   getWorkloadDockerHostId: (guest: WorkloadGuest) => guest.dockerHostId || '',
 }));
 

@@ -13,7 +13,7 @@ import {
 import { buildInfrastructureHrefForWorkload } from '@/routing/resourceLinks';
 import { getWorkloadTypeBadge } from '@/components/shared/workloadTypeBadges';
 
-import { getWorkloadDockerHostId } from './workloadSelectors';
+import { getWorkloadDockerHostId } from './workloadTopology';
 import {
   DEFAULT_FIRST_CELL_INDENT,
   EMPTY_IO_EMPHASIS,

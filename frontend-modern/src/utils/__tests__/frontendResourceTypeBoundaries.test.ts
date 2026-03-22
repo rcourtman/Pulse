@@ -95,6 +95,7 @@ import dashboardWorkloadRouteStateSource from '@/components/Dashboard/useDashboa
 import dashboardWorkloadUrlSyncSource from '@/components/Dashboard/useDashboardWorkloadUrlSync.ts?raw';
 import dashboardStateSource from '@/components/Dashboard/useDashboardState.ts?raw';
 import dashboardFilterStateSource from '@/components/Dashboard/useDashboardFilterState.ts?raw';
+import workloadTopologySource from '@/components/Dashboard/workloadTopology.ts?raw';
 import groupedTableWindowingSource from '@/components/Dashboard/useGroupedTableWindowing.ts?raw';
 import thresholdSliderModelSource from '@/components/Dashboard/thresholdSliderModel.ts?raw';
 import thresholdSliderStateSource from '@/components/Dashboard/useThresholdSliderState.ts?raw';
@@ -573,8 +574,12 @@ describe('frontend resource type boundaries', () => {
     expect(dashboardWorkloadDerivedStateSource).toContain('groupWorkloads(');
     expect(dashboardWorkloadDerivedStateSource).toContain('computeWorkloadStats(');
     expect(dashboardWorkloadDerivedStateSource).toContain('computeWorkloadIOEmphasis(');
+    expect(dashboardWorkloadDerivedStateSource).toContain("from './workloadTopology'");
     expect(dashboardWorkloadDerivedStateSource).toContain('buildNodeByInstance(');
     expect(dashboardWorkloadDerivedStateSource).toContain('buildGuestParentNodeMap(');
+    expect(dashboardWorkloadRouteStateSource).toContain("from './workloadTopology'");
+    expect(dashboardWorkloadRouteStateSource).toContain('workloadNodeScopeId');
+    expect(dashboardWorkloadRouteStateSource).toContain('getKubernetesContextKey');
     expect(dashboardWorkloadRouteStateSource).toContain('setSelectedNode');
     expect(dashboardSelectionStateSource).toContain('parseWorkloadsLinkSearch');
     expect(dashboardSelectionStateSource).toContain('const [selectedGuestId, setSelectedGuestIdRaw]');
@@ -608,6 +613,13 @@ describe('frontend resource type boundaries', () => {
     expect(groupedTableWindowingSource).toContain('getVisibleSlice');
     expect(groupedTableWindowingSource).toContain('onScroll');
     expect(groupedTableWindowingSource).toContain('revealIndex');
+    expect(workloadTopologySource).toContain('export const workloadNodeScopeId');
+    expect(workloadTopologySource).toContain('export const getKubernetesContextKey');
+    expect(workloadTopologySource).toContain('export const getWorkloadDockerHostId');
+    expect(workloadTopologySource).toContain('export const getDiscoveryHostIdForWorkload');
+    expect(workloadTopologySource).toContain('export const getDiscoveryResourceIdForWorkload');
+    expect(workloadTopologySource).toContain('export const buildNodeByInstance');
+    expect(workloadTopologySource).toContain('export const buildGuestParentNodeMap');
     expect(thresholdSliderSource).toContain('useThresholdSliderState');
     expect(thresholdSliderSource).not.toContain('const [thumbPosition, setThumbPosition] =');
     expect(thresholdSliderSource).not.toContain('const handleMouseDown = () => {');

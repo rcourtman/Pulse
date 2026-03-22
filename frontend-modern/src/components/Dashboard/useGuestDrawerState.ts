@@ -11,7 +11,7 @@ import { buildInfrastructureHrefForWorkload } from '@/routing/resourceLinks';
 import {
   getDiscoveryHostIdForWorkload,
   getDiscoveryResourceIdForWorkload,
-} from './workloadSelectors';
+} from './workloadTopology';
 import {
   getGuestDrawerAgentLabel,
   getGuestDrawerAgentTitle,

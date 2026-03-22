@@ -12,9 +12,11 @@ import {
   groupWorkloads,
   computeWorkloadStats,
   computeWorkloadIOEmphasis,
+} from './workloadSelectors';
+import {
   buildNodeByInstance,
   buildGuestParentNodeMap,
-} from './workloadSelectors';
+} from './workloadTopology';
 import { useGroupedTableWindowing } from './useGroupedTableWindowing';
 
 type GroupingMode = 'grouped' | 'flat';

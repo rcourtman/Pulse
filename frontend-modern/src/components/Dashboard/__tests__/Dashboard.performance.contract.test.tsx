@@ -46,13 +46,14 @@ import guestRowCellsSource from '../GuestRowCells.tsx?raw';
 import guestDrawerStateSource from '../useGuestDrawerState.ts?raw';
 import guestRowModelSource from '../guestRowModel.tsx?raw';
 import guestRowStateSource from '../useGuestRowState.ts?raw';
+import workloadTopologySource from '../workloadTopology.ts?raw';
 import {
   filterWorkloads,
   createWorkloadSortComparator,
   groupWorkloads,
   computeWorkloadStats,
-  getKubernetesContextKey,
 } from '../workloadSelectors';
+import { getKubernetesContextKey } from '../workloadTopology';
 import { filterResources } from '@/components/Infrastructure/infrastructureSelectors';
 import { getCanonicalWorkloadId, normalizeWorkloadViewModeParam } from '@/utils/workloads';
 
@@ -548,9 +549,13 @@ describe('Dashboard performance contract', () => {
       expect(dashboardWorkloadDerivedStateSource).toContain('groupWorkloads(');
       expect(dashboardWorkloadDerivedStateSource).toContain('computeWorkloadStats(');
       expect(dashboardWorkloadDerivedStateSource).toContain('computeWorkloadIOEmphasis(');
+      expect(dashboardWorkloadDerivedStateSource).toContain("from './workloadTopology'");
       expect(dashboardWorkloadDerivedStateSource).toContain('buildNodeByInstance(');
       expect(dashboardWorkloadDerivedStateSource).toContain('buildGuestParentNodeMap(');
       expect(dashboardWorkloadDerivedStateSource).toContain('useGroupedTableWindowing');
+      expect(dashboardWorkloadRouteStateSource).toContain("from './workloadTopology'");
+      expect(dashboardWorkloadRouteStateSource).toContain('workloadNodeScopeId');
+      expect(dashboardWorkloadRouteStateSource).toContain('getKubernetesContextKey');
       expect(dashboardSelectionStateSource).toContain('parseWorkloadsLinkSearch');
       expect(dashboardSelectionStateSource).toContain('const [selectedGuestId, setSelectedGuestIdRaw]');
       expect(dashboardSelectionStateSource).toContain('const [hoveredWorkloadId, setHoveredWorkloadId]');
@@ -673,6 +678,7 @@ describe('Dashboard performance contract', () => {
       expect(guestRowStateSource).toContain('getCanonicalWorkloadId');
       expect(guestRowStateSource).toContain('buildMetricKey');
       expect(guestRowStateSource).toContain("from '@/routing/resourceLinks'");
+      expect(guestRowStateSource).toContain("from './workloadTopology'");
       expect(guestRowStateSource).not.toContain("./infrastructureLink");
       expect(guestRowStateSource).toContain('getWorkloadTypeBadge');
       expect(guestRowCellsSource).toContain('export { BackupIndicator');
@@ -691,6 +697,7 @@ describe('Dashboard performance contract', () => {
       expect(guestDrawerStateSource).toContain('getCanonicalWorkloadId');
       expect(guestDrawerStateSource).toContain('buildInfrastructureHrefForWorkload');
       expect(guestDrawerStateSource).toContain("from '@/routing/resourceLinks'");
+      expect(guestDrawerStateSource).toContain("from './workloadTopology'");
       expect(guestDrawerStateSource).not.toContain("./infrastructureLink");
       expect(guestDrawerStateSource).toContain('getDiscoveryResourceTypeForWorkload');
       expect(guestDrawerStateSource).toContain('getWebInterfaceTargetLabelForWorkload');
@@ -700,6 +707,11 @@ describe('Dashboard performance contract', () => {
       expect(guestDrawerOverviewSource).toContain('WebInterfaceUrlField');
       expect(guestDrawerOverviewSource).toContain('DiskList');
       expect(guestDrawerOverviewSource).toContain('Filesystems');
+      expect(workloadTopologySource).toContain('export const workloadNodeScopeId');
+      expect(workloadTopologySource).toContain('export const getKubernetesContextKey');
+      expect(workloadTopologySource).toContain('export const getWorkloadDockerHostId');
+      expect(workloadTopologySource).toContain('export const buildNodeByInstance');
+      expect(workloadTopologySource).toContain('export const buildGuestParentNodeMap');
     });
 
     it('keeps dashboard shell rendering in canonical section owners', () => {
