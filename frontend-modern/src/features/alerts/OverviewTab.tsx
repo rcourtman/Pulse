@@ -1,12 +1,13 @@
 import { InvestigateAlertButton } from '@/components/Alerts/InvestigateAlertButton';
 
-import { createSignal, createMemo, onCleanup, For, Show, createEffect } from 'solid-js';
+import { createSignal, onCleanup, For, Show, createEffect } from 'solid-js';
 import { useLocation } from '@solidjs/router';
 
 import type { Alert } from '@/types/api';
 import type { Override } from './types';
 import { alertTypeDisplayLabel } from './helpers';
 import { getCanonicalAlertId } from './identity';
+import { useAlertOverviewState } from './useAlertOverviewState';
 import { useAlertIncidentTimelineState } from './useAlertIncidentTimelineState';
 import { Card } from '@/components/shared/Card';
 import { SectionHeader } from '@/components/shared/SectionHeader';
@@ -21,8 +22,7 @@ import {
   getAlertOverviewSecondaryActionClass,
   getAlertOverviewStartedAtClass,
 } from '@/utils/alertOverviewPresentation';
-
-// Overview Tab - Shows current alert status
+ 
 export function OverviewTab(props: {
   overrides: Override[];
   activeAlerts: Record<string, Alert>;
@@ -37,9 +37,20 @@ export function OverviewTab(props: {
 }) {
   const location = useLocation();
   let hashScrollRafId: number | undefined;
-  const pendingProcessingResetTimeouts = new Set<number>();
-  // Loading states for buttons
-  const [processingAlerts, setProcessingAlerts] = createSignal<Set<string>>(new Set());
+  const [lastHashScrolled, setLastHashScrolled] = createSignal<string | null>(null);
+  const {
+    alertStats,
+    filteredAlerts,
+    processingAlerts,
+    bulkAckProcessing,
+    handleAlertAcknowledgement,
+    handleBulkAcknowledge,
+  } = useAlertOverviewState({
+    activeAlerts: () => props.activeAlerts,
+    overrides: () => props.overrides,
+    showAcknowledged: props.showAcknowledged,
+    updateAlert: props.updateAlert,
+  });
   const {
     incidentTimelines,
     incidentLoading,
@@ -54,63 +65,6 @@ export function OverviewTab(props: {
     setIncidentNoteDraft,
     saveIncidentNote,
   } = useAlertIncidentTimelineState();
-  const [lastHashScrolled, setLastHashScrolled] = createSignal<string | null>(null);
-  // Tick every 60s so the "Last 24 Hours" count stays fresh as alerts age out
-  const [tick, setTick] = createSignal(Date.now());
-  const tickInterval = setInterval(() => setTick(Date.now()), 60_000);
-  onCleanup(() => clearInterval(tickInterval));
-  const processingReleaseTimers = new Map<string, ReturnType<typeof setTimeout>>();
-
-  const clearProcessingReleaseTimer = (alertIdentifier: string) => {
-    const timer = processingReleaseTimers.get(alertIdentifier);
-    if (timer === undefined) {
-      return;
-    }
-    clearTimeout(timer);
-    processingReleaseTimers.delete(alertIdentifier);
-  };
-
-  onCleanup(() => {
-    processingReleaseTimers.forEach((timer) => clearTimeout(timer));
-    processingReleaseTimers.clear();
-  });
-
-  // Get alert stats from actual active alerts
-  const alertStats = createMemo(() => {
-    // Access the store properly for reactivity
-    const alertIds = Object.keys(props.activeAlerts);
-    const alerts = alertIds.map((id) => props.activeAlerts[id]);
-    return {
-      active: alerts.filter((a) => !a.acknowledged).length,
-      acknowledged: alerts.filter((a) => a.acknowledged).length,
-      total24h: alerts.filter((a) => {
-        const age = tick() - new Date(a.startTime).getTime();
-        return age >= 0 && age < 86_400_000;
-      }).length,
-      overrides: props.overrides.length,
-    };
-  });
-
-  const filteredAlerts = createMemo(() => {
-    const alerts = Object.values(props.activeAlerts);
-    // Sort: unacknowledged first, then by start time (newest first)
-    return alerts
-      .filter((alert) => props.showAcknowledged() || !alert.acknowledged)
-      .sort((a, b) => {
-        // Acknowledged status comparison first
-        if (a.acknowledged !== b.acknowledged) {
-          return a.acknowledged ? 1 : -1; // Unacknowledged first
-        }
-        // Then by time
-        return new Date(b.startTime).getTime() - new Date(a.startTime).getTime();
-      });
-  });
-
-  const unacknowledgedAlerts = createMemo(() =>
-    Object.values(props.activeAlerts).filter((alert) => !alert.acknowledged),
-  );
-
-  const [bulkAckProcessing, setBulkAckProcessing] = createSignal(false);
 
   const scrollToAlertHash = () => {
     const hash = location.hash;
@@ -147,10 +101,6 @@ export function OverviewTab(props: {
       cancelAnimationFrame(hashScrollRafId);
       hashScrollRafId = undefined;
     }
-    pendingProcessingResetTimeouts.forEach((timeoutId) => {
-      window.clearTimeout(timeoutId);
-    });
-    pendingProcessingResetTimeouts.clear();
   });
 
   return (
@@ -319,44 +269,8 @@ export function OverviewTab(props: {
                   type="button"
                   class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-md border border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900 text-blue-700 dark:text-blue-200 transition-colors hover:bg-blue-100 dark:hover:bg-blue-900 disabled:opacity-60 disabled:cursor-not-allowed"
                   disabled={bulkAckProcessing()}
-                  onClick={async () => {
-                    if (bulkAckProcessing()) return;
-                    const pending = unacknowledgedAlerts();
-                    if (pending.length === 0) {
-                      return;
-                    }
-                    setBulkAckProcessing(true);
-                    try {
-                      const result = await AlertsAPI.bulkAcknowledge(
-                        pending.map((alert) => getCanonicalAlertId(alert)),
-                      );
-                      const successes = result.results.filter((r) => r.success);
-                      const failures = result.results.filter((r) => !r.success);
-
-                      successes.forEach((res) => {
-                        props.updateAlert(res.alertIdentifier, {
-                          acknowledged: true,
-                          ackTime: new Date().toISOString(),
-                        });
-                      });
-
-                      if (successes.length > 0) {
-                        notificationStore.success(
-                          `Acknowledged ${successes.length} ${successes.length === 1 ? 'alert' : 'alerts'}.`,
-                        );
-                      }
-
-                      if (failures.length > 0) {
-                        notificationStore.error(
-                          `Failed to acknowledge ${failures.length} ${failures.length === 1 ? 'alert' : 'alerts'}.`,
-                        );
-                      }
-                    } catch (error) {
-                      logger.error('Bulk acknowledge failed', error);
-                      notificationStore.error('Failed to acknowledge alerts');
-                    } finally {
-                      setBulkAckProcessing(false);
-                    }
+                  onClick={() => {
+                    void handleBulkAcknowledge();
                   }}
                 >
                   {bulkAckProcessing()
@@ -454,62 +368,7 @@ export function OverviewTab(props: {
                         onClick={async (e) => {
                           e.preventDefault();
                           e.stopPropagation();
-
-                          const alertIdentifier = getCanonicalAlertId(alert);
-
-                          // Prevent double-clicks
-                          if (processingAlerts().has(alertIdentifier)) return;
-
-                          setProcessingAlerts(
-                            (prev) => new Set(prev).add(alertIdentifier),
-                          );
-
-                          // Store current state to avoid race conditions
-                          const wasAcknowledged = alert.acknowledged;
-
-                          try {
-                            if (wasAcknowledged) {
-                              // Call API first, only update local state if successful
-                              await AlertsAPI.unacknowledge(alertIdentifier);
-                              // Only update local state after successful API call
-                              props.updateAlert(alertIdentifier, {
-                                acknowledged: false,
-                                ackTime: undefined,
-                                ackUser: undefined,
-                              });
-                              notificationStore.success('Alert restored');
-                            } else {
-                              // Call API first, only update local state if successful
-                              await AlertsAPI.acknowledge(alertIdentifier);
-                              // Only update local state after successful API call
-                              props.updateAlert(alertIdentifier, {
-                                acknowledged: true,
-                                ackTime: new Date().toISOString(),
-                              });
-                              notificationStore.success('Alert acknowledged');
-                            }
-                          } catch (err) {
-                            logger.error(
-                              `Failed to ${wasAcknowledged ? 'unacknowledge' : 'acknowledge'} alert:`,
-                              err,
-                            );
-                            notificationStore.error(
-                              `Failed to ${wasAcknowledged ? 'restore' : 'acknowledge'} alert`,
-                            );
-                            // Don't update local state on error - let WebSocket keep the correct state
-                          } finally {
-                            // Keep button disabled for longer to prevent race conditions with WebSocket updates
-                            clearProcessingReleaseTimer(alertIdentifier);
-                            const timer = setTimeout(() => {
-                              processingReleaseTimers.delete(alertIdentifier);
-                              setProcessingAlerts((prev) => {
-                                const next = new Set(prev);
-                                next.delete(alertIdentifier);
-                                return next;
-                              });
-                            }, 1500); // 1.5 seconds to allow server to process and WebSocket to sync
-                            processingReleaseTimers.set(alertIdentifier, timer);
-                          }
+                          await handleAlertAcknowledgement(alert);
                         }}
                       >
                         {processingAlerts().has(getCanonicalAlertId(alert))

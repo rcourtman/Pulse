@@ -5,8 +5,10 @@ import alertsConfigurationStateSource from '@/features/alerts/useAlertsConfigura
 import alertDestinationsStateSource from '@/features/alerts/useAlertDestinationsState.ts?raw';
 import alertHistoryStateSource from '@/features/alerts/useAlertHistoryState.ts?raw';
 import alertIncidentTimelineStateSource from '@/features/alerts/useAlertIncidentTimelineState.ts?raw';
+import alertOverviewStateSource from '@/features/alerts/useAlertOverviewState.ts?raw';
 import alertDestinationsTabSource from '@/features/alerts/tabs/DestinationsTab.tsx?raw';
 import alertHistoryTabSource from '@/features/alerts/tabs/HistoryTab.tsx?raw';
+import alertOverviewTabSource from '@/features/alerts/OverviewTab.tsx?raw';
 import alertScheduleTabSource from '@/features/alerts/tabs/ScheduleTab.tsx?raw';
 import alertThresholdsTabSource from '@/features/alerts/tabs/ThresholdsTab.tsx?raw';
 import thresholdsTableSource from '@/components/Alerts/ThresholdsTable.tsx?raw';
@@ -221,6 +223,14 @@ describe('tab path helpers', () => {
     );
     expect(alertIncidentTimelineStateSource).toContain('AlertsAPI.getIncidentTimeline');
     expect(alertIncidentTimelineStateSource).toContain('AlertsAPI.addIncidentNote');
+    expect(alertOverviewTabSource).toContain('useAlertOverviewState');
+    expect(alertOverviewTabSource).not.toContain('AlertsAPI.bulkAcknowledge');
+    expect(alertOverviewTabSource).not.toContain('AlertsAPI.acknowledge');
+    expect(alertOverviewTabSource).not.toContain('AlertsAPI.unacknowledge');
+    expect(alertOverviewStateSource).toContain('export function useAlertOverviewState');
+    expect(alertOverviewStateSource).toContain('AlertsAPI.bulkAcknowledge');
+    expect(alertOverviewStateSource).toContain('AlertsAPI.acknowledge');
+    expect(alertOverviewStateSource).toContain('AlertsAPI.unacknowledge');
     expect(alertScheduleTabSource).toContain('getAlertConfigQuietHourSuppressOptions');
     expect(alertThresholdsTabSource).toContain('ThresholdsTable');
     expect(thresholdsTableSource).toContain(

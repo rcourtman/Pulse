@@ -177,6 +177,12 @@ Active alert card state, acknowledged badge, and primary/secondary action
 button presentation now route through
 `frontend-modern/src/utils/alertOverviewPresentation.ts` instead of remaining
 inline in `frontend-modern/src/features/alerts/OverviewTab.tsx`.
+The canonical overview runtime owner is now
+`frontend-modern/src/features/alerts/useAlertOverviewState.ts`, which owns the
+derived alert read-model, Last 24 Hours stat refresh, and single/bulk
+acknowledge control flow for `frontend-modern/src/features/alerts/OverviewTab.tsx`.
+Future overview action or stat behavior should extend that hook instead of
+putting acknowledge mutations and timer state back into the tab shell.
 Dashboard recent-alert rendering and dashboard alert summary/tone copy now
 route through that same alert overview presentation owner and the alert-owned
 `frontend-modern/src/components/Alerts/RecentAlertsPanel.tsx` surface instead

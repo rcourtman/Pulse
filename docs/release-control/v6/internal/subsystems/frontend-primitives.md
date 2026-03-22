@@ -429,6 +429,12 @@ while `frontend-modern/src/features/alerts/OverviewTab.tsx` and
 surface composition. Future incident timeline fetch, note-save, or expansion
 control flow should extend that feature hook rather than forking back into
 either tab surface.
+Overview alert runtime now follows that same shell-versus-runtime split. The
+shell stays in `frontend-modern/src/features/alerts/OverviewTab.tsx`, while
+`frontend-modern/src/features/alerts/useAlertOverviewState.ts` owns derived
+alert stats, filtered ordering, and single/bulk acknowledge runtime behavior.
+Future overview control flow should extend that hook rather than restoring
+action timers or acknowledge mutations to the tab shell.
 Alert history runtime now follows that same pattern. The shell stays in
 `frontend-modern/src/features/alerts/tabs/HistoryTab.tsx`, while
 `frontend-modern/src/features/alerts/useAlertHistoryState.ts` owns history

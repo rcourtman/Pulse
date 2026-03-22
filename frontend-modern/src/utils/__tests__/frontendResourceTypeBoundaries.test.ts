@@ -329,6 +329,7 @@ import alertsConfigurationStateSource from '@/features/alerts/useAlertsConfigura
 import alertDestinationsStateSource from '@/features/alerts/useAlertDestinationsState.ts?raw';
 import alertHistoryStateSource from '@/features/alerts/useAlertHistoryState.ts?raw';
 import alertIncidentTimelineStateSource from '@/features/alerts/useAlertIncidentTimelineState.ts?raw';
+import alertOverviewStateSource from '@/features/alerts/useAlertOverviewState.ts?raw';
 import alertDestinationsTabSource from '@/features/alerts/tabs/DestinationsTab.tsx?raw';
 import alertHistoryTabSource from '@/features/alerts/tabs/HistoryTab.tsx?raw';
 import alertScheduleTabSource from '@/features/alerts/tabs/ScheduleTab.tsx?raw';
@@ -3612,6 +3613,7 @@ describe('frontend resource type boundaries', () => {
   it('keeps alert incident timeline state copy in a shared presentation utility', () => {
     expect(alertOverviewTabSource).toContain('IncidentTimelinePanel');
     expect(alertOverviewTabSource).toContain('useAlertIncidentTimelineState');
+    expect(alertOverviewTabSource).toContain('useAlertOverviewState');
     expect(alertIncidentEventFiltersSource).toContain('getAlertIncidentEventFilterContainerClass');
     expect(alertIncidentEventFiltersSource).toContain('getAlertIncidentEventFilterChipClass');
     expect(alertIncidentEventFiltersSource).toContain(
@@ -3644,6 +3646,9 @@ describe('frontend resource type boundaries', () => {
     expect(alertOverviewTabSource).toContain('getAlertOverviewStartedAtClass');
     expect(alertOverviewTabSource).toContain('getAlertOverviewPrimaryActionClass');
     expect(alertOverviewTabSource).toContain('getAlertOverviewSecondaryActionClass');
+    expect(alertOverviewTabSource).not.toContain('AlertsAPI.bulkAcknowledge');
+    expect(alertOverviewTabSource).not.toContain('AlertsAPI.acknowledge');
+    expect(alertOverviewTabSource).not.toContain('AlertsAPI.unacknowledge');
     expect(alertOverviewTabSource).not.toContain('AlertsAPI.getIncidentTimeline');
     expect(alertOverviewTabSource).not.toContain('AlertsAPI.addIncidentNote');
     expect(alertOverviewTabSource).not.toContain('Loading timeline...');
@@ -3651,6 +3656,10 @@ describe('frontend resource type boundaries', () => {
     expect(alertOverviewTabSource).not.toContain('No timeline events yet.');
     expect(alertOverviewTabSource).not.toContain('No incident timeline available.');
     expect(alertOverviewTabSource).not.toContain('Failed to load timeline.');
+    expect(alertOverviewStateSource).toContain('export function useAlertOverviewState');
+    expect(alertOverviewStateSource).toContain('AlertsAPI.bulkAcknowledge');
+    expect(alertOverviewStateSource).toContain('AlertsAPI.acknowledge');
+    expect(alertOverviewStateSource).toContain('AlertsAPI.unacknowledge');
     expect(alertOverviewPresentationSource).toContain(
       'export function getAlertTimelineLoadingState',
     );
