@@ -18,6 +18,7 @@ import recentAlertsPanelSource from '@/components/Alerts/RecentAlertsPanel.tsx?r
 import thresholdsTableSource from '@/components/Alerts/ThresholdsTable.tsx?raw';
 import thresholdsDataHookSource from '@/features/alerts/thresholds/hooks/useThresholdsData.ts?raw';
 import thresholdsTableStateHookSource from '@/features/alerts/thresholds/hooks/useThresholdsTableState.ts?raw';
+import thresholdsOverrideMutationsHookSource from '@/features/alerts/thresholds/hooks/useThresholdsOverrideMutations.ts?raw';
 
 import {
   ALERT_TAB_SEGMENTS,
@@ -275,6 +276,15 @@ describe('tab path helpers', () => {
     expect(thresholdsDataHookSource).toContain('export function useThresholdsData');
     expect(thresholdsTableStateHookSource).toContain('export function useThresholdsTableState');
     expect(thresholdsTableStateHookSource).toContain('useThresholdsData(props, editingId, searchTerm)');
+    expect(thresholdsTableStateHookSource).toContain('useThresholdsOverrideMutations');
+    expect(thresholdsTableStateHookSource).not.toContain('const saveEdit = (resourceId: string) => {');
+    expect(thresholdsTableStateHookSource).not.toContain(
+      'const toggleNodeConnectivity = (resourceId: string, forceState?: boolean) => {',
+    );
+    expect(thresholdsOverrideMutationsHookSource).toContain(
+      'export function useThresholdsOverrideMutations',
+    );
+    expect(thresholdsOverrideMutationsHookSource).toContain('matchesAlertIdentifier');
   });
 });
 

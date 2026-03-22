@@ -233,6 +233,12 @@ schedule render shell, while
 reset/update policy and canonical default application. The tab should not
 re-accumulate quiet-hours, cooldown, grouping, or escalation mutation logic
 inline.
+The thresholds editor now follows that same split more tightly:
+`frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsTableState.ts`
+must stay the table-shell owner for route sync and local UI state, while
+`frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsOverrideMutations.ts`
+owns override save/bulk/toggle persistence and alert-removal side effects. The
+table-shell hook should not re-accumulate raw override mutation logic inline.
 
 The updates settings surface now follows the same presentation-owner rule.
 `frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx` stays the

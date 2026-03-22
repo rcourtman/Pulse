@@ -133,10 +133,14 @@ threshold editor saves or re-renders them.
 That threshold editor data shaping now lives under
 `frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsData.ts`,
 while `frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsTableState.ts`
-owns threshold-table route sync, edit state, bulk-edit flow, and override
-mutation control. `frontend-modern/src/components/Alerts/ThresholdsTable.tsx`
-is now limited to table interaction and presentation. New threshold row
-grouping, override-ID compatibility, resource normalization, or thresholds-table
+owns threshold-table route sync, section collapse state, search/edit shell
+state, and bulk-edit dialog control. Override persistence, bulk threshold
+application, powered-off/connectivity state transitions, and alert-removal side
+effects now route through
+`frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsOverrideMutations.ts`.
+`frontend-modern/src/components/Alerts/ThresholdsTable.tsx` is now limited to
+table interaction and presentation. New threshold row grouping,
+override-ID compatibility, resource normalization, or thresholds-table
 controller logic should land in those hooks rather than being rebuilt inside
 the table component.
 The alert resource thresholds editor now follows the same shape: shared metric

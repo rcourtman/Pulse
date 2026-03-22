@@ -340,6 +340,7 @@ import alertThresholdsTabSource from '@/features/alerts/tabs/ThresholdsTab.tsx?r
 import thresholdsTableSource from '@/components/Alerts/ThresholdsTable.tsx?raw';
 import thresholdsDataHookSource from '@/features/alerts/thresholds/hooks/useThresholdsData.ts?raw';
 import thresholdsTableStateHookSource from '@/features/alerts/thresholds/hooks/useThresholdsTableState.ts?raw';
+import thresholdsOverrideMutationsHookSource from '@/features/alerts/thresholds/hooks/useThresholdsOverrideMutations.ts?raw';
 import alertIncidentPresentationSource from '@/utils/alertIncidentPresentation.ts?raw';
 import alertHistoryPresentationSource from '@/utils/alertHistoryPresentation.ts?raw';
 import bulkEditDialogSource from '@/components/Alerts/BulkEditDialog.tsx?raw';
@@ -2887,6 +2888,15 @@ describe('frontend resource type boundaries', () => {
     expect(thresholdsTableStateHookSource).toContain('export function useThresholdsTableState');
     expect(thresholdsTableStateHookSource).toContain('useCollapsedSections()');
     expect(thresholdsTableStateHookSource).toContain('useThresholdsData(props, editingId, searchTerm)');
+    expect(thresholdsTableStateHookSource).toContain('useThresholdsOverrideMutations');
+    expect(thresholdsTableStateHookSource).not.toContain('const saveEdit = (resourceId: string) => {');
+    expect(thresholdsTableStateHookSource).not.toContain(
+      'const toggleNodeConnectivity = (resourceId: string, forceState?: boolean) => {',
+    );
+    expect(thresholdsOverrideMutationsHookSource).toContain(
+      'export function useThresholdsOverrideMutations',
+    );
+    expect(thresholdsOverrideMutationsHookSource).toContain('matchesAlertIdentifier');
     expect(alertScheduleTabSource).toContain('getAlertGroupingCardClass');
     expect(alertScheduleTabSource).toContain('getAlertGroupingCheckboxClass');
     expect(alertScheduleTabSource).toContain('getAlertQuietDayButtonClass');
