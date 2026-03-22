@@ -1941,8 +1941,10 @@ class SubsystemLookupTest(unittest.TestCase):
         result = lookup_paths(
             [
                 "frontend-modern/src/components/Dashboard/dashboardWorkloadRouteModel.ts",
+                "frontend-modern/src/components/Dashboard/dashboardWorkloadUrlSyncModel.ts",
                 "frontend-modern/src/components/Dashboard/useDashboardWorkloadFilterOptions.ts",
                 "frontend-modern/src/components/Dashboard/useDashboardWorkloadRouteState.ts",
+                "frontend-modern/src/components/Dashboard/useDashboardWorkloadUrlSync.ts",
             ]
         )
         self.assertEqual(result["unowned_runtime_files"], [])

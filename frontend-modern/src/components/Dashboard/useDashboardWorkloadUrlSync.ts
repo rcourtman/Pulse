@@ -1,4 +1,5 @@
 import {
+  createMemo,
   createEffect,
   createSignal,
   onCleanup,
@@ -9,14 +10,15 @@ import {
 import { useLocation, useNavigate } from '@solidjs/router';
 import type { ViewMode } from '@/types/workloads';
 import {
-  buildWorkloadsPath,
-  parseWorkloadsLinkSearch,
   WORKLOADS_PATH,
-  WORKLOADS_QUERY_PARAMS,
 } from '@/routing/resourceLinks';
-import { areSearchParamsEquivalent } from '@/utils/searchParams';
-import { normalizeWorkloadViewModeParam } from '@/utils/workloads';
 import type { DashboardWorkloadNodeOption } from './dashboardWorkloadRouteModel';
+import {
+  parseDashboardWorkloadUrlParams,
+  resolveDashboardManagedWorkloadsNavigateTarget,
+  resolveDashboardWorkloadRuntimeParam,
+  resolveDashboardWorkloadTypeParam,
+} from './dashboardWorkloadUrlSyncModel';
 
 export interface DashboardWorkloadUrlSyncOptions {
   containerRuntime: Accessor<string>;
@@ -42,6 +44,7 @@ export function useDashboardWorkloadUrlSync(options: DashboardWorkloadUrlSyncOpt
   const navigate = useNavigate();
   const location = useLocation();
   const isWorkloadsRoute = () => location.pathname === WORKLOADS_PATH;
+  const workloadUrlParams = createMemo(() => parseDashboardWorkloadUrlParams(location.search));
 
   const [handledTypeParam, setHandledTypeParam] = createSignal('');
   const [handledRuntimeParam, setHandledRuntimeParam] = createSignal('');
@@ -143,9 +146,8 @@ export function useDashboardWorkloadUrlSync(options: DashboardWorkloadUrlSyncOpt
   });
 
   createEffect(() => {
-    const parsed = parseWorkloadsLinkSearch(location.search);
-    const typeParam = parsed.type;
-    const normalizedType = typeParam ?? '';
+    const parsed = workloadUrlParams();
+    const normalizedType = parsed.type;
     if (normalizedType === handledTypeParam()) return;
 
     if (!normalizedType) {
@@ -153,14 +155,8 @@ export function useDashboardWorkloadUrlSync(options: DashboardWorkloadUrlSyncOpt
       return;
     }
 
-    const hasK8sScope =
-      Boolean((parsed.context ?? '').trim()) || Boolean((parsed.namespace ?? '').trim());
-    const nextMode = normalizeWorkloadViewModeParam(normalizedType);
+    const nextMode = resolveDashboardWorkloadTypeParam(parsed);
     if (!nextMode) {
-      setHandledTypeParam(normalizedType);
-      return;
-    }
-    if (hasK8sScope && nextMode !== 'pod') {
       setHandledTypeParam(normalizedType);
       return;
     }
@@ -170,8 +166,7 @@ export function useDashboardWorkloadUrlSync(options: DashboardWorkloadUrlSyncOpt
   });
 
   createEffect(() => {
-    const { context: contextParam } = parseWorkloadsLinkSearch(location.search);
-    const normalized = contextParam ?? '';
+    const normalized = workloadUrlParams().context;
     if (normalized === handledContextParam()) return;
 
     if (normalized) {
@@ -191,8 +186,7 @@ export function useDashboardWorkloadUrlSync(options: DashboardWorkloadUrlSyncOpt
   });
 
   createEffect(() => {
-    const { namespace: namespaceParam } = parseWorkloadsLinkSearch(location.search);
-    const normalized = namespaceParam ?? '';
+    const normalized = workloadUrlParams().namespace;
     if (normalized === handledNamespaceParam()) return;
 
     if (normalized) {
@@ -212,8 +206,7 @@ export function useDashboardWorkloadUrlSync(options: DashboardWorkloadUrlSyncOpt
   });
 
   createEffect(() => {
-    const { agent: agentParam } = parseWorkloadsLinkSearch(location.search);
-    const normalized = agentParam ?? '';
+    const normalized = workloadUrlParams().agent;
     if (normalized === handledAgentParam()) return;
 
     if (normalized) {
@@ -233,34 +226,21 @@ export function useDashboardWorkloadUrlSync(options: DashboardWorkloadUrlSyncOpt
   });
 
   createEffect(() => {
-    const parsed = parseWorkloadsLinkSearch(location.search);
-    const urlRuntime = parsed.runtime ?? '';
+    const parsed = workloadUrlParams();
+    const urlRuntime = parsed.runtime;
     if (urlRuntime === handledRuntimeParam()) return;
 
-    const urlContext = parsed.context ?? '';
-    const hasContext = Boolean(urlContext.trim());
-    const hasNamespace = Boolean((parsed.namespace ?? '').trim());
-    const urlType = parsed.type ?? '';
-    const nextMode = normalizeWorkloadViewModeParam(urlType);
-    const runtimeRelevant =
-      !hasContext && !hasNamespace && (nextMode === 'app-container' || !urlType.trim());
-
-    if (!runtimeRelevant) {
+    const resolution = resolveDashboardWorkloadRuntimeParam(parsed);
+    if (!resolution.shouldApply) {
       setHandledRuntimeParam(urlRuntime);
       return;
     }
 
-    if (!urlRuntime.trim()) {
-      options.setContainerRuntime('');
-      setHandledRuntimeParam('');
-      return;
+    if (resolution.forceViewMode && options.viewMode() !== resolution.forceViewMode) {
+      options.setViewMode(resolution.forceViewMode);
     }
-
-    if (options.viewMode() !== 'app-container') {
-      options.setViewMode('app-container');
-    }
-    options.setContainerRuntime(urlRuntime);
-    if (!options.showFilters()) {
+    options.setContainerRuntime(resolution.runtime);
+    if (resolution.runtime && !options.showFilters()) {
       options.setShowFilters(true);
     }
     setHandledRuntimeParam(urlRuntime);
@@ -269,13 +249,13 @@ export function useDashboardWorkloadUrlSync(options: DashboardWorkloadUrlSyncOpt
   createEffect(() => {
     if (!isWorkloadsRoute()) return;
 
-    const parsed = parseWorkloadsLinkSearch(location.search);
-    const urlType = parsed.type ?? '';
-    const urlRuntime = parsed.runtime ?? '';
-    const urlContext = parsed.context ?? '';
-    const urlNamespace = parsed.namespace ?? '';
-    const urlAgent = parsed.agent ?? '';
-    const urlResource = parsed.resource ?? '';
+    const parsed = workloadUrlParams();
+    const urlType = parsed.type;
+    const urlRuntime = parsed.runtime;
+    const urlContext = parsed.context;
+    const urlNamespace = parsed.namespace;
+    const urlAgent = parsed.agent;
+    const urlResource = parsed.resource;
 
     if (handledTypeParam() !== urlType) return;
     if (handledRuntimeParam() !== urlRuntime) return;
@@ -284,40 +264,16 @@ export function useDashboardWorkloadUrlSync(options: DashboardWorkloadUrlSyncOpt
     if (handledAgentParam() !== urlAgent) return;
     if (urlResource) return;
 
-    const currentParams = new URLSearchParams(location.search);
-    const nextParams = new URLSearchParams(location.search);
-    const nextType = options.viewMode() === 'all' ? '' : options.viewMode();
-    const nextRuntime =
-      options.viewMode() === 'app-container' ? options.containerRuntime().trim() : '';
-    const nextContext =
-      options.viewMode() === 'pod' ? (options.selectedKubernetesContext() ?? '') : '';
-    const nextNamespace =
-      options.viewMode() === 'pod' ? (options.selectedKubernetesNamespace() ?? '') : '';
-    const nextAgent =
-      options.viewMode() === 'pod'
-        ? ''
-        : (options.selectedNode() ?? options.selectedHostHint() ?? '');
-
-    const managedPath = buildWorkloadsPath({
-      type: nextType || null,
-      runtime: nextRuntime || null,
-      context: nextContext || null,
-      namespace: nextNamespace || null,
-      agent: nextAgent || null,
+    const nextPath = resolveDashboardManagedWorkloadsNavigateTarget({
+      currentSearch: location.search,
+      viewMode: options.viewMode(),
+      containerRuntime: options.containerRuntime(),
+      selectedKubernetesContext: options.selectedKubernetesContext(),
+      selectedKubernetesNamespace: options.selectedKubernetesNamespace(),
+      selectedNode: options.selectedNode(),
+      selectedHostHint: options.selectedHostHint(),
     });
-    const managedUrl = new URL(managedPath, 'http://pulse.local');
-    nextParams.delete(WORKLOADS_QUERY_PARAMS.type);
-    nextParams.delete(WORKLOADS_QUERY_PARAMS.runtime);
-    nextParams.delete(WORKLOADS_QUERY_PARAMS.context);
-    nextParams.delete(WORKLOADS_QUERY_PARAMS.namespace);
-    nextParams.delete(WORKLOADS_QUERY_PARAMS.agent);
-    managedUrl.searchParams.forEach((value, key) => {
-      nextParams.set(key, value);
-    });
-
-    if (!areSearchParamsEquivalent(currentParams, nextParams)) {
-      const nextSearch = nextParams.toString();
-      const nextPath = nextSearch ? `${WORKLOADS_PATH}?${nextSearch}` : WORKLOADS_PATH;
+    if (nextPath) {
       scheduleUrlSyncNavigate(nextPath);
     }
   });

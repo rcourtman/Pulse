@@ -93,6 +93,7 @@ import dashboardSelectionStateSource from '@/components/Dashboard/useDashboardSe
 import dashboardWorkloadDerivedStateSource from '@/components/Dashboard/useDashboardWorkloadDerivedState.ts?raw';
 import dashboardWorkloadFilterOptionsSource from '@/components/Dashboard/useDashboardWorkloadFilterOptions.ts?raw';
 import dashboardWorkloadRouteModelSource from '@/components/Dashboard/dashboardWorkloadRouteModel.ts?raw';
+import dashboardWorkloadUrlSyncModelSource from '@/components/Dashboard/dashboardWorkloadUrlSyncModel.ts?raw';
 import dashboardWorkloadRouteStateSource from '@/components/Dashboard/useDashboardWorkloadRouteState.ts?raw';
 import dashboardWorkloadUrlSyncSource from '@/components/Dashboard/useDashboardWorkloadUrlSync.ts?raw';
 import dashboardStateSource from '@/components/Dashboard/useDashboardState.ts?raw';
@@ -566,13 +567,29 @@ describe('frontend resource type boundaries', () => {
       'const containerRuntimeFilterConfig = createMemo',
     );
     expect(dashboardWorkloadRouteStateSource).not.toContain('const [handledTypeParam, setHandledTypeParam]');
-    expect(dashboardWorkloadUrlSyncSource).toContain('buildWorkloadsPath({');
-    expect(dashboardWorkloadUrlSyncSource).toContain('normalizeWorkloadViewModeParam');
+    expect(dashboardWorkloadUrlSyncSource).not.toContain('buildWorkloadsPath({');
+    expect(dashboardWorkloadUrlSyncSource).not.toContain('normalizeWorkloadViewModeParam');
+    expect(dashboardWorkloadUrlSyncSource).not.toContain('parseWorkloadsLinkSearch');
     expect(dashboardWorkloadUrlSyncSource).toContain("from './dashboardWorkloadRouteModel'");
+    expect(dashboardWorkloadUrlSyncSource).toContain("from './dashboardWorkloadUrlSyncModel'");
     expect(dashboardWorkloadUrlSyncSource).toContain(
       'const [handledTypeParam, setHandledTypeParam]',
     );
-    expect(dashboardWorkloadUrlSyncSource).toContain('parseWorkloadsLinkSearch');
+    expect(dashboardWorkloadUrlSyncSource).toContain('parseDashboardWorkloadUrlParams');
+    expect(dashboardWorkloadUrlSyncSource).toContain(
+      'resolveDashboardManagedWorkloadsNavigateTarget({',
+    );
+    expect(dashboardWorkloadUrlSyncModelSource).toContain('parseWorkloadsLinkSearch(search)');
+    expect(dashboardWorkloadUrlSyncModelSource).toContain('buildWorkloadsPath({');
+    expect(dashboardWorkloadUrlSyncModelSource).toContain(
+      'resolveDashboardManagedWorkloadsNavigateTarget',
+    );
+    expect(dashboardWorkloadUrlSyncModelSource).toContain(
+      'resolveDashboardWorkloadRuntimeParam',
+    );
+    expect(dashboardWorkloadUrlSyncModelSource).toContain(
+      'normalizeWorkloadViewModeParam(params.type)',
+    );
     expect(dashboardControlsStateSource).toContain('useBreakpoint');
     expect(dashboardControlsStateSource).toContain('useColumnVisibility');
     expect(dashboardControlsStateSource).toContain('usePersistentSignal');

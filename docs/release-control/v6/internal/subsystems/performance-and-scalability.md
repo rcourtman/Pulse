@@ -71,32 +71,34 @@ regression protection.
 49. `frontend-modern/src/components/Dashboard/workloadSelectors.ts`
 50. `frontend-modern/src/components/Dashboard/workloadTopology.ts`
 51. `frontend-modern/src/components/Dashboard/dashboardWorkloadRouteModel.ts`
-52. `frontend-modern/src/components/Dashboard/useDashboardWorkloadFilterOptions.ts`
-53. `frontend-modern/src/components/Dashboard/__tests__/dashboardWorkloadRouteModel.test.ts`
-54. `frontend-modern/src/components/Dashboard/__tests__/workloadTopology.test.ts`
-55. `frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx`
-56. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`
-57. `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts`
-58. `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts`
-59. `frontend-modern/src/components/Dashboard/__tests__/Dashboard.performance.contract.test.tsx`
-60. `frontend-modern/src/components/Dashboard/__tests__/DashboardFilter.test.tsx`
-61. `frontend-modern/src/components/Dashboard/__tests__/useDashboardFilterState.test.ts`
-62. `frontend-modern/src/components/Dashboard/__tests__/useDashboardSelectionState.test.ts`
-63. `frontend-modern/src/components/Dashboard/MetricBar.test.tsx`
-64. `frontend-modern/src/components/Dashboard/__tests__/useMetricBarState.test.tsx`
-65. `frontend-modern/src/components/Dashboard/__tests__/EnhancedCPUBar.test.tsx`
-66. `frontend-modern/src/components/Dashboard/__tests__/useEnhancedCPUBarState.test.tsx`
-67. `frontend-modern/src/components/Dashboard/ThresholdSlider.test.tsx`
-68. `frontend-modern/src/components/Dashboard/__tests__/useThresholdSliderState.test.ts`
-69. `frontend-modern/src/components/Dashboard/__tests__/StackedDiskBar.test.tsx`
-70. `frontend-modern/src/components/Dashboard/__tests__/useStackedDiskBarState.test.tsx`
-71. `frontend-modern/src/components/Dashboard/StackedMemoryBar.test.tsx`
-72. `frontend-modern/src/components/Dashboard/__tests__/useStackedMemoryBarState.test.tsx`
-73. `frontend-modern/src/components/Dashboard/__tests__/DiskList.test.tsx`
-74. `frontend-modern/src/components/Dashboard/__tests__/GuestRow.test.tsx`
-75. `frontend-modern/src/components/Dashboard/GuestDrawer.test.tsx`
-76. `frontend-modern/src/components/Dashboard/__tests__/useGroupedTableWindowing.test.ts`
-77. `frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx`
+52. `frontend-modern/src/components/Dashboard/dashboardWorkloadUrlSyncModel.ts`
+53. `frontend-modern/src/components/Dashboard/useDashboardWorkloadFilterOptions.ts`
+54. `frontend-modern/src/components/Dashboard/__tests__/dashboardWorkloadRouteModel.test.ts`
+55. `frontend-modern/src/components/Dashboard/__tests__/dashboardWorkloadUrlSyncModel.test.ts`
+56. `frontend-modern/src/components/Dashboard/__tests__/workloadTopology.test.ts`
+57. `frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx`
+58. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`
+59. `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts`
+60. `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts`
+61. `frontend-modern/src/components/Dashboard/__tests__/Dashboard.performance.contract.test.tsx`
+62. `frontend-modern/src/components/Dashboard/__tests__/DashboardFilter.test.tsx`
+63. `frontend-modern/src/components/Dashboard/__tests__/useDashboardFilterState.test.ts`
+64. `frontend-modern/src/components/Dashboard/__tests__/useDashboardSelectionState.test.ts`
+65. `frontend-modern/src/components/Dashboard/MetricBar.test.tsx`
+66. `frontend-modern/src/components/Dashboard/__tests__/useMetricBarState.test.tsx`
+67. `frontend-modern/src/components/Dashboard/__tests__/EnhancedCPUBar.test.tsx`
+68. `frontend-modern/src/components/Dashboard/__tests__/useEnhancedCPUBarState.test.tsx`
+69. `frontend-modern/src/components/Dashboard/ThresholdSlider.test.tsx`
+70. `frontend-modern/src/components/Dashboard/__tests__/useThresholdSliderState.test.ts`
+71. `frontend-modern/src/components/Dashboard/__tests__/StackedDiskBar.test.tsx`
+72. `frontend-modern/src/components/Dashboard/__tests__/useStackedDiskBarState.test.tsx`
+73. `frontend-modern/src/components/Dashboard/StackedMemoryBar.test.tsx`
+74. `frontend-modern/src/components/Dashboard/__tests__/useStackedMemoryBarState.test.tsx`
+75. `frontend-modern/src/components/Dashboard/__tests__/DiskList.test.tsx`
+76. `frontend-modern/src/components/Dashboard/__tests__/GuestRow.test.tsx`
+77. `frontend-modern/src/components/Dashboard/GuestDrawer.test.tsx`
+78. `frontend-modern/src/components/Dashboard/__tests__/useGroupedTableWindowing.test.ts`
+79. `frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx`
 
 ## Shared Boundaries
 
@@ -121,7 +123,7 @@ regression protection.
 11. Extend dashboard disk-list derivations and fallback runtime wiring through `frontend-modern/src/components/Dashboard/diskListModel.ts` and `frontend-modern/src/components/Dashboard/useDiskListState.ts` rather than rebuilding usage math, progress-state mapping, or tooltip fallback logic inside `frontend-modern/src/components/Dashboard/DiskList.tsx`
 12. Extend dashboard guest metadata cache persistence, metadata refresh, org-scope switching, and optimistic custom-URL updates through `frontend-modern/src/components/Dashboard/useDashboardGuestMetadataState.ts` rather than rebuilding dashboard-local storage caches, event listeners, or guest metadata API wiring inside `frontend-modern/src/components/Dashboard/useDashboardState.ts`
 13. Extend dashboard deep-link selection, hovered-row continuity, and table scroll preservation through `frontend-modern/src/components/Dashboard/useDashboardSelectionState.ts` rather than rebuilding resource-query parsing, selected-row scroll pinning, or hovered-row invalidation inside `frontend-modern/src/components/Dashboard/useDashboardState.ts`
-14. Extend dashboard workload route ownership, route-driven option catalogs, and toolbar filter config through `frontend-modern/src/components/Dashboard/useDashboardWorkloadRouteState.ts`, `frontend-modern/src/components/Dashboard/useDashboardWorkloadFilterOptions.ts`, and `frontend-modern/src/components/Dashboard/dashboardWorkloadRouteModel.ts`, and extend query-param synchronization through `frontend-modern/src/components/Dashboard/useDashboardWorkloadUrlSync.ts`, rather than rebuilding route sync, alias parsing, option derivation, or managed workload URLs inside `frontend-modern/src/components/Dashboard/useDashboardState.ts`
+14. Extend dashboard workload route ownership, route-driven option catalogs, and toolbar filter config through `frontend-modern/src/components/Dashboard/useDashboardWorkloadRouteState.ts`, `frontend-modern/src/components/Dashboard/useDashboardWorkloadFilterOptions.ts`, and `frontend-modern/src/components/Dashboard/dashboardWorkloadRouteModel.ts`, and extend query-param synchronization plus managed workload URL semantics through `frontend-modern/src/components/Dashboard/useDashboardWorkloadUrlSync.ts` and `frontend-modern/src/components/Dashboard/dashboardWorkloadUrlSyncModel.ts`, rather than rebuilding route sync, alias parsing, option derivation, param precedence, or managed workload URLs inside `frontend-modern/src/components/Dashboard/useDashboardState.ts`
 15. Extend grouped dashboard workload derivation, summary fallbacks, and grouped/windowed table presentation through `frontend-modern/src/components/Dashboard/useDashboardWorkloadDerivedState.ts`, and extend node parent mapping through `frontend-modern/src/components/Dashboard/workloadTopology.ts`, rather than rebuilding grouped selectors, summary snapshot math, or topology lookups inside `frontend-modern/src/components/Dashboard/useDashboardState.ts`
 16. Extend dashboard control defaults, persistent view preferences, keyboard reset behavior, column-visibility ownership, and tag-search flow through `frontend-modern/src/components/Dashboard/useDashboardControlsState.ts` and `frontend-modern/src/components/Dashboard/dashboardFilterModel.ts` rather than rebuilding sort/search/grouping state, reset drift, or column-toggle plumbing inside `frontend-modern/src/components/Dashboard/useDashboardState.ts`
 17. Extend dashboard filter active-count, reset semantics, and mobile toolbar state through `frontend-modern/src/components/Dashboard/dashboardFilterModel.ts` and `frontend-modern/src/components/Dashboard/useDashboardFilterState.ts`, rather than rebuilding filter-local state inside `frontend-modern/src/components/Dashboard/DashboardFilter.tsx`
