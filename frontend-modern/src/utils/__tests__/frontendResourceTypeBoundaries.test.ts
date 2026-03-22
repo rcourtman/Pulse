@@ -328,6 +328,7 @@ import alertsConfigurationSurfaceSource from '@/features/alerts/AlertsConfigurat
 import alertsConfigurationStateSource from '@/features/alerts/useAlertsConfigurationState.ts?raw';
 import alertsConfigurationSnapshotStateSource from '@/features/alerts/useAlertsConfigurationSnapshotState.ts?raw';
 import alertsConfigurationModelSource from '@/features/alerts/alertsConfigurationModel.ts?raw';
+import alertOverridesModelSource from '@/features/alerts/alertOverridesModel.ts?raw';
 import alertOverridesStateSource from '@/features/alerts/useAlertOverridesState.ts?raw';
 import alertDestinationsStateSource from '@/features/alerts/useAlertDestinationsState.ts?raw';
 import alertDestinationsTabStateSource from '@/features/alerts/useAlertDestinationsTabState.ts?raw';
@@ -2862,9 +2863,16 @@ describe('frontend resource type boundaries', () => {
     expect(alertsConfigurationModelSource).toContain('const createHysteresisThreshold =');
     expect(alertsConfigurationModelSource).toContain('const normalizeGap =');
     expect(alertOverridesStateSource).toContain('export function useAlertOverridesState');
-    expect(alertOverridesStateSource).toContain('getActionableAgentIdFromResource');
     expect(alertOverridesStateSource).toContain('pbsInstanceFromResource');
+    expect(alertOverridesStateSource).toContain('buildProjectedOverrides');
+    expect(alertOverridesStateSource).not.toContain('getActionableAgentIdFromResource');
+    expect(alertOverridesStateSource).not.toContain('const hostOverrideIdCandidates =');
     expect(alertOverridesStateSource).toContain('props.setOverviewOverrides(overrides())');
+    expect(alertOverridesModelSource).toContain('export const normalizeRawOverridesConfig =');
+    expect(alertOverridesModelSource).toContain('export const hostOverrideIdCandidates =');
+    expect(alertOverridesModelSource).toContain('export const dockerHostOverrideIdCandidates =');
+    expect(alertOverridesModelSource).toContain('export const buildProjectedOverrides =');
+    expect(alertOverridesModelSource).toContain('getActionableAgentIdFromResource');
     expect(alertDestinationsStateSource).toContain('getAlertDestinationsConfigLoadError');
     expect(alertDestinationsStateSource).toContain('NotificationsAPI.getEmailConfig');
     expect(alertDestinationsStateSource).toContain('NotificationsAPI.updateEmailConfig');

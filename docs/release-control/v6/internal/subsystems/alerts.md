@@ -328,8 +328,10 @@ ownership,
 `frontend-modern/src/features/alerts/alertsConfigurationModel.ts` for backend
 config normalization, factory defaults, docker-gap validation, and save-payload
 serialization,
-`frontend-modern/src/features/alerts/useAlertOverridesState.ts` for raw
-override normalization plus resource-backed override projection, and
+`frontend-modern/src/features/alerts/alertOverridesModel.ts` for raw override
+normalization plus resource-backed override projection, and
+`frontend-modern/src/features/alerts/useAlertOverridesState.ts` for reactive
+override state, derived resource lists, and overview handoff, and
 `frontend-modern/src/features/alerts/useAlertDestinationsState.ts` for
 notification destination reload and persistence.
 `frontend-modern/src/features/alerts/useAlertWebhookDestinationsState.ts` now

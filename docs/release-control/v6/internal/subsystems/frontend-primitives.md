@@ -498,8 +498,10 @@ for the default-backed mutable configuration snapshot plus apply/capture/reset
 ownership,
 `frontend-modern/src/features/alerts/alertsConfigurationModel.ts` for config
 normalization, factory defaults, docker-gap validation, and payload
-serialization, `frontend-modern/src/features/alerts/useAlertOverridesState.ts`
-for override projection and thresholds-facing resource selectors, and
+serialization, `frontend-modern/src/features/alerts/alertOverridesModel.ts`
+for override normalization and resource-backed projection, and
+`frontend-modern/src/features/alerts/useAlertOverridesState.ts`
+for reactive override state and thresholds-facing resource selectors, and
 `frontend-modern/src/features/alerts/useAlertDestinationsState.ts` for
 notification destination reload and persistence.
 `frontend-modern/src/features/alerts/useAlertWebhookDestinationsState.ts` now
