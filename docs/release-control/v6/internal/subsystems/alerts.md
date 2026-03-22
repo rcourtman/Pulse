@@ -102,6 +102,14 @@ The alerts schedule surface now also routes quiet-hour suppress-category card
 styling through `frontend-modern/src/utils/alertSchedulePresentation.ts`
 instead of leaving that selectable-card presentation inline in
 `frontend-modern/src/pages/Alerts.tsx`.
+That schedule surface now also follows the same shell/runtime split as the
+other feature tabs: `frontend-modern/src/features/alerts/tabs/ScheduleTab.tsx`
+stays the render shell, while
+`frontend-modern/src/features/alerts/useAlertScheduleState.ts` owns schedule
+reset behavior, quiet-hours day/category toggles, cooldown/grouping/escalation
+update policy, and the canonical defaults handoff. Future schedule control-flow
+work should extend that hook instead of rebuilding those mutations inline in
+the tab shell.
 
 Incident-event filter chip and filter-action styling now routes through
 `frontend-modern/src/utils/alertIncidentPresentation.ts` for both

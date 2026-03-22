@@ -68,22 +68,17 @@ import {
 } from '@/utils/alertSchedulePresentation';
 
 import {
-  createDefaultCooldown,
-  createDefaultEscalation,
-  createDefaultGrouping,
-  createDefaultQuietHours,
-  createDefaultResolveNotifications,
-  fallbackMaxAlertsPerHour,
-} from '../helpers';
+  ALERT_SCHEDULE_DAYS,
+  ALERT_SCHEDULE_TIMEZONES,
+  useAlertScheduleState,
+} from '../useAlertScheduleState';
 import type {
   CooldownConfig,
   EscalationConfig,
-  EscalationLevel,
   EscalationNotifyTarget,
   GroupingConfig,
   QuietHoursConfig,
 } from '../types';
-import { fallbackCooldownMinutes } from '../types';
 
 export interface ScheduleTabProps {
   setHasUnsavedChanges: (value: boolean) => void;
@@ -99,99 +94,9 @@ export interface ScheduleTabProps {
   setEscalation: (value: EscalationConfig) => void;
 }
 
-const timezones = [
-  'UTC',
-  'Africa/Cairo',
-  'Africa/Johannesburg',
-  'Africa/Lagos',
-  'Africa/Nairobi',
-  'America/Anchorage',
-  'America/Argentina/Buenos_Aires',
-  'America/Bogota',
-  'America/Caracas',
-  'America/Chicago',
-  'America/Denver',
-  'America/Halifax',
-  'America/Lima',
-  'America/Los_Angeles',
-  'America/Mexico_City',
-  'America/New_York',
-  'America/Phoenix',
-  'America/Santiago',
-  'America/Sao_Paulo',
-  'America/St_Johns',
-  'America/Toronto',
-  'America/Vancouver',
-  'Asia/Bangkok',
-  'Asia/Dhaka',
-  'Asia/Dubai',
-  'Asia/Hong_Kong',
-  'Asia/Jakarta',
-  'Asia/Jerusalem',
-  'Asia/Karachi',
-  'Asia/Kolkata',
-  'Asia/Kuala_Lumpur',
-  'Asia/Manila',
-  'Asia/Riyadh',
-  'Asia/Seoul',
-  'Asia/Shanghai',
-  'Asia/Singapore',
-  'Asia/Taipei',
-  'Asia/Tehran',
-  'Asia/Tokyo',
-  'Australia/Adelaide',
-  'Australia/Brisbane',
-  'Australia/Melbourne',
-  'Australia/Perth',
-  'Australia/Sydney',
-  'Europe/Amsterdam',
-  'Europe/Athens',
-  'Europe/Berlin',
-  'Europe/Brussels',
-  'Europe/Budapest',
-  'Europe/Copenhagen',
-  'Europe/Dublin',
-  'Europe/Helsinki',
-  'Europe/Istanbul',
-  'Europe/Lisbon',
-  'Europe/London',
-  'Europe/Madrid',
-  'Europe/Moscow',
-  'Europe/Oslo',
-  'Europe/Paris',
-  'Europe/Prague',
-  'Europe/Rome',
-  'Europe/Stockholm',
-  'Europe/Vienna',
-  'Europe/Warsaw',
-  'Europe/Zurich',
-  'Pacific/Auckland',
-  'Pacific/Fiji',
-  'Pacific/Guam',
-  'Pacific/Honolulu',
-];
-
-const days = [
-  { id: 'monday', label: 'M', fullLabel: 'Monday' },
-  { id: 'tuesday', label: 'T', fullLabel: 'Tuesday' },
-  { id: 'wednesday', label: 'W', fullLabel: 'Wednesday' },
-  { id: 'thursday', label: 'T', fullLabel: 'Thursday' },
-  { id: 'friday', label: 'F', fullLabel: 'Friday' },
-  { id: 'saturday', label: 'S', fullLabel: 'Saturday' },
-  { id: 'sunday', label: 'S', fullLabel: 'Sunday' },
-];
-
 export function ScheduleTab(props: ScheduleTabProps) {
   const quietHourSuppressOptions = getAlertConfigQuietHourSuppressOptions();
-
-  const resetToDefaults = () => {
-    props.setQuietHours(createDefaultQuietHours());
-    props.setCooldown(createDefaultCooldown());
-    props.setGrouping(createDefaultGrouping());
-    props.setNotifyOnResolve(createDefaultResolveNotifications());
-    props.setEscalation(createDefaultEscalation());
-    props.setHasUnsavedChanges(true);
-  };
+  const scheduleState = useAlertScheduleState(props);
 
   return (
     <div class="space-y-6">
@@ -204,7 +109,7 @@ export function ScheduleTab(props: ScheduleTabProps) {
         </div>
         <button
           type="button"
-          onClick={resetToDefaults}
+          onClick={scheduleState.resetToDefaults}
           class="inline-flex items-center gap-2 self-start rounded-md border border-border bg-surface px-3 py-2 text-sm font-medium shadow-sm transition-colors hover:bg-surface-hover"
           title={getAlertConfigResetDefaultsTitle()}
         >
@@ -233,11 +138,7 @@ export function ScheduleTab(props: ScheduleTabProps) {
             <Toggle
               checked={props.quietHours().enabled}
               onChange={(event) => {
-                props.setQuietHours({
-                  ...props.quietHours(),
-                  enabled: event.currentTarget.checked,
-                });
-                props.setHasUnsavedChanges(true);
+                scheduleState.setQuietHoursEnabled(event.currentTarget.checked);
               }}
               containerClass="sm:self-start"
               label={
@@ -260,11 +161,7 @@ export function ScheduleTab(props: ScheduleTabProps) {
                     type="time"
                     value={props.quietHours().start}
                     onChange={(event) => {
-                      props.setQuietHours({
-                        ...props.quietHours(),
-                        start: event.currentTarget.value,
-                      });
-                      props.setHasUnsavedChanges(true);
+                      scheduleState.setQuietHoursStart(event.currentTarget.value);
                     }}
                     class={controlClass('font-mono')}
                   />
@@ -277,11 +174,7 @@ export function ScheduleTab(props: ScheduleTabProps) {
                     type="time"
                     value={props.quietHours().end}
                     onChange={(event) => {
-                      props.setQuietHours({
-                        ...props.quietHours(),
-                        end: event.currentTarget.value,
-                      });
-                      props.setHasUnsavedChanges(true);
+                      scheduleState.setQuietHoursEnd(event.currentTarget.value);
                     }}
                     class={controlClass('font-mono')}
                   />
@@ -293,15 +186,13 @@ export function ScheduleTab(props: ScheduleTabProps) {
                   <select
                     value={props.quietHours().timezone}
                     onChange={(event) => {
-                      props.setQuietHours({
-                        ...props.quietHours(),
-                        timezone: event.currentTarget.value,
-                      });
-                      props.setHasUnsavedChanges(true);
+                      scheduleState.setQuietHoursTimezone(event.currentTarget.value);
                     }}
                     class={controlClass('pr-8')}
                   >
-                    <For each={timezones}>{(timezone) => <option value={timezone}>{timezone}</option>}</For>
+                    <For each={ALERT_SCHEDULE_TIMEZONES}>
+                      {(timezone) => <option value={timezone}>{timezone}</option>}
+                    </For>
                   </select>
                 </div>
               </div>
@@ -311,17 +202,12 @@ export function ScheduleTab(props: ScheduleTabProps) {
                   Quiet days
                 </span>
                 <div class="grid grid-cols-7 gap-1">
-                  <For each={days}>
+                  <For each={ALERT_SCHEDULE_DAYS}>
                     {(day) => (
                       <button
                         type="button"
                         onClick={() => {
-                          const currentDays = props.quietHours().days;
-                          props.setQuietHours({
-                            ...props.quietHours(),
-                            days: { ...currentDays, [day.id]: !currentDays[day.id] },
-                          });
-                          props.setHasUnsavedChanges(true);
+                          scheduleState.toggleQuietDay(day.id);
                         }}
                         title={day.fullLabel}
                         class={getAlertQuietDayButtonClass(props.quietHours().days[day.id])}
@@ -333,29 +219,11 @@ export function ScheduleTab(props: ScheduleTabProps) {
                 </div>
                 <p class="mt-2 text-xs text-muted">
                   <Show
-                    when={
-                      props.quietHours().days.monday &&
-                      props.quietHours().days.tuesday &&
-                      props.quietHours().days.wednesday &&
-                      props.quietHours().days.thursday &&
-                      props.quietHours().days.friday &&
-                      !props.quietHours().days.saturday &&
-                      !props.quietHours().days.sunday
-                    }
+                    when={scheduleState.weekdaysOnly()}
                   >
                     Weekdays only
                   </Show>
-                  <Show
-                    when={
-                      !props.quietHours().days.monday &&
-                      !props.quietHours().days.tuesday &&
-                      !props.quietHours().days.wednesday &&
-                      !props.quietHours().days.thursday &&
-                      !props.quietHours().days.friday &&
-                      props.quietHours().days.saturday &&
-                      props.quietHours().days.sunday
-                    }
-                  >
+                  <Show when={scheduleState.weekendsOnly()}>
                     Weekends only
                   </Show>
                 </p>
@@ -380,14 +248,10 @@ export function ScheduleTab(props: ScheduleTabProps) {
                           type="checkbox"
                           checked={props.quietHours().suppress[option.key]}
                           onChange={(event) => {
-                            props.setQuietHours({
-                              ...props.quietHours(),
-                              suppress: {
-                                ...props.quietHours().suppress,
-                                [option.key]: event.currentTarget.checked,
-                              },
-                            });
-                            props.setHasUnsavedChanges(true);
+                            scheduleState.setQuietSuppressCategory(
+                              option.key,
+                              event.currentTarget.checked,
+                            );
                           }}
                           class="sr-only"
                         />
@@ -432,18 +296,7 @@ export function ScheduleTab(props: ScheduleTabProps) {
             <Toggle
               checked={props.cooldown().enabled}
               onChange={(event) => {
-                const enabled = event.currentTarget.checked;
-                const current = props.cooldown();
-                const next: CooldownConfig = {
-                  ...current,
-                  enabled,
-                };
-                if (enabled) {
-                  next.minutes = fallbackCooldownMinutes(current.minutes);
-                  next.maxAlerts = fallbackMaxAlertsPerHour(current.maxAlerts);
-                }
-                props.setCooldown(next);
-                props.setHasUnsavedChanges(true);
+                scheduleState.setCooldownEnabled(event.currentTarget.checked);
               }}
               containerClass="sm:self-start"
               label={
@@ -469,12 +322,7 @@ export function ScheduleTab(props: ScheduleTabProps) {
                       max="120"
                       value={props.cooldown().minutes}
                       onChange={(event) => {
-                        const value = Number.parseInt(event.currentTarget.value, 10);
-                        props.setCooldown({
-                          ...props.cooldown(),
-                          minutes: Number.isNaN(value) ? props.cooldown().minutes : value,
-                        });
-                        props.setHasUnsavedChanges(true);
+                        scheduleState.setCooldownMinutes(event.currentTarget.value);
                       }}
                       class={controlClass('pr-16')}
                     />
@@ -496,12 +344,7 @@ export function ScheduleTab(props: ScheduleTabProps) {
                       max="10"
                       value={props.cooldown().maxAlerts}
                       onChange={(event) => {
-                        const value = Number.parseInt(event.currentTarget.value, 10);
-                        props.setCooldown({
-                          ...props.cooldown(),
-                          maxAlerts: Number.isNaN(value) ? props.cooldown().maxAlerts : value,
-                        });
-                        props.setHasUnsavedChanges(true);
+                        scheduleState.setCooldownMaxAlerts(event.currentTarget.value);
                       }}
                       class={controlClass('pr-16')}
                     />
@@ -523,11 +366,7 @@ export function ScheduleTab(props: ScheduleTabProps) {
             <Toggle
               checked={props.grouping().enabled}
               onChange={(event) => {
-                props.setGrouping({
-                  ...props.grouping(),
-                  enabled: event.currentTarget.checked,
-                });
-                props.setHasUnsavedChanges(true);
+                scheduleState.setGroupingEnabled(event.currentTarget.checked);
               }}
               containerClass="sm:self-start"
               label={
@@ -552,11 +391,7 @@ export function ScheduleTab(props: ScheduleTabProps) {
                     max="30"
                     value={props.grouping().window}
                     onChange={(event) => {
-                      props.setGrouping({
-                        ...props.grouping(),
-                        window: Number.parseInt(event.currentTarget.value, 10),
-                      });
-                      props.setHasUnsavedChanges(true);
+                      scheduleState.setGroupingWindow(event.currentTarget.value);
                     }}
                     class="flex-1"
                   />
@@ -577,11 +412,7 @@ export function ScheduleTab(props: ScheduleTabProps) {
                       type="checkbox"
                       checked={props.grouping().byNode}
                       onChange={(event) => {
-                        props.setGrouping({
-                          ...props.grouping(),
-                          byNode: event.currentTarget.checked,
-                        });
-                        props.setHasUnsavedChanges(true);
+                        scheduleState.setGroupingByNode(event.currentTarget.checked);
                       }}
                       class="sr-only"
                     />
@@ -608,11 +439,7 @@ export function ScheduleTab(props: ScheduleTabProps) {
                       type="checkbox"
                       checked={props.grouping().byGuest}
                       onChange={(event) => {
-                        props.setGrouping({
-                          ...props.grouping(),
-                          byGuest: event.currentTarget.checked,
-                        });
-                        props.setHasUnsavedChanges(true);
+                        scheduleState.setGroupingByGuest(event.currentTarget.checked);
                       }}
                       class="sr-only"
                     />
@@ -646,8 +473,7 @@ export function ScheduleTab(props: ScheduleTabProps) {
             <Toggle
               checked={props.notifyOnResolve()}
               onChange={(event) => {
-                props.setNotifyOnResolve(event.currentTarget.checked);
-                props.setHasUnsavedChanges(true);
+                scheduleState.setNotifyOnResolveEnabled(event.currentTarget.checked);
               }}
               containerClass="sm:self-start"
               label={
@@ -669,11 +495,7 @@ export function ScheduleTab(props: ScheduleTabProps) {
             <Toggle
               checked={props.escalation().enabled}
               onChange={(event) => {
-                props.setEscalation({
-                  ...props.escalation(),
-                  enabled: event.currentTarget.checked,
-                });
-                props.setHasUnsavedChanges(true);
+                scheduleState.setEscalationEnabled(event.currentTarget.checked);
               }}
               containerClass="sm:self-start"
               label={
@@ -702,17 +524,10 @@ export function ScheduleTab(props: ScheduleTabProps) {
                           max="180"
                           value={level.after}
                           onChange={(event) => {
-                            const nextLevels = [...props.escalation().levels];
-                            const parsed = Number.parseInt(event.currentTarget.value, 10);
-                            nextLevels[index()] = {
-                              ...level,
-                              after: Number.isNaN(parsed) ? level.after : parsed,
-                            };
-                            props.setEscalation({
-                              ...props.escalation(),
-                              levels: nextLevels,
-                            });
-                            props.setHasUnsavedChanges(true);
+                            scheduleState.setEscalationAfter(
+                              index(),
+                              event.currentTarget.value,
+                            );
                           }}
                           class={`${controlClass('px-2 py-1 text-sm')} w-20`}
                         />
@@ -727,16 +542,10 @@ export function ScheduleTab(props: ScheduleTabProps) {
                         <select
                           value={level.notify}
                           onChange={(event) => {
-                            const nextLevels = [...props.escalation().levels];
-                            nextLevels[index()] = {
-                              ...level,
-                              notify: event.currentTarget.value as EscalationNotifyTarget,
-                            };
-                            props.setEscalation({
-                              ...props.escalation(),
-                              levels: nextLevels,
-                            });
-                            props.setHasUnsavedChanges(true);
+                            scheduleState.setEscalationNotify(
+                              index(),
+                              event.currentTarget.value as EscalationNotifyTarget,
+                            );
                           }}
                           class={`${controlClass('px-2 py-1 text-sm')} flex-1`}
                         >
@@ -751,15 +560,7 @@ export function ScheduleTab(props: ScheduleTabProps) {
                     <button
                       type="button"
                       onClick={() => {
-                        const nextLevels = props.escalation().levels.filter(
-                          (_level: EscalationLevel, currentIndex: number) =>
-                            currentIndex !== index(),
-                        );
-                        props.setEscalation({
-                          ...props.escalation(),
-                          levels: nextLevels,
-                        });
-                        props.setHasUnsavedChanges(true);
+                        scheduleState.removeEscalationLevel(index());
                       }}
                       class="rounded-md p-1.5 text-red-600 transition-colors hover:bg-red-100 dark:hover:bg-red-900"
                       title={ALERT_CONFIG_ESCALATION_REMOVE_TITLE}
@@ -780,17 +581,7 @@ export function ScheduleTab(props: ScheduleTabProps) {
               <button
                 type="button"
                 onClick={() => {
-                  const lastLevel = props.escalation().levels[props.escalation().levels.length - 1];
-                  const nextAfter =
-                    typeof lastLevel?.after === 'number' ? lastLevel.after + 30 : 15;
-                  props.setEscalation({
-                    ...props.escalation(),
-                    levels: [
-                      ...props.escalation().levels,
-                      { after: nextAfter, notify: 'all' as EscalationNotifyTarget },
-                    ],
-                  });
-                  props.setHasUnsavedChanges(true);
+                  scheduleState.addEscalationLevel();
                 }}
                 class="flex w-full items-center justify-center gap-2 rounded-md border-2 border-dashed border-border py-2 text-sm text-muted transition-all hover:border-slate-400 hover:bg-surface-hover"
               >

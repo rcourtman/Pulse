@@ -7,6 +7,7 @@ import alertAcknowledgementStateSource from '@/features/alerts/useAlertAcknowled
 import alertHistoryStateSource from '@/features/alerts/useAlertHistoryState.ts?raw';
 import alertIncidentTimelineStateSource from '@/features/alerts/useAlertIncidentTimelineState.ts?raw';
 import alertOverviewStateSource from '@/features/alerts/useAlertOverviewState.ts?raw';
+import alertScheduleStateSource from '@/features/alerts/useAlertScheduleState.ts?raw';
 import alertDestinationsTabSource from '@/features/alerts/tabs/DestinationsTab.tsx?raw';
 import alertHistoryTabSource from '@/features/alerts/tabs/HistoryTab.tsx?raw';
 import alertOverviewTabSource from '@/features/alerts/OverviewTab.tsx?raw';
@@ -241,6 +242,18 @@ describe('tab path helpers', () => {
     expect(recentAlertsPanelSource).toContain('useAlertAcknowledgementState');
     expect(recentAlertsPanelSource).not.toContain('AlertsAPI.bulkAcknowledge');
     expect(recentAlertsPanelSource).not.toContain('AlertsAPI.acknowledge');
+    expect(alertScheduleTabSource).toContain('useAlertScheduleState');
+    expect(alertScheduleTabSource).not.toContain('createDefaultQuietHours');
+    expect(alertScheduleTabSource).not.toContain('createDefaultCooldown');
+    expect(alertScheduleTabSource).not.toContain('createDefaultGrouping');
+    expect(alertScheduleTabSource).not.toContain('createDefaultEscalation');
+    expect(alertScheduleTabSource).not.toContain('const timezones = [');
+    expect(alertScheduleTabSource).not.toContain('const days = [');
+    expect(alertScheduleStateSource).toContain('export function useAlertScheduleState');
+    expect(alertScheduleStateSource).toContain('createDefaultQuietHours');
+    expect(alertScheduleStateSource).toContain('createDefaultCooldown');
+    expect(alertScheduleStateSource).toContain('createDefaultGrouping');
+    expect(alertScheduleStateSource).toContain('createDefaultEscalation');
     expect(alertScheduleTabSource).toContain('getAlertConfigQuietHourSuppressOptions');
     expect(alertThresholdsTabSource).toContain('ThresholdsTable');
     expect(thresholdsTableSource).toContain(

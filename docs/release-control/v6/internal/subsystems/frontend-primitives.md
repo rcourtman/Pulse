@@ -226,6 +226,13 @@ must both compose
 acknowledge/restore behavior rather than keeping duplicate API and notification
 logic inline in `useAlertOverviewState.ts` or
 `frontend-modern/src/components/Alerts/RecentAlertsPanel.tsx`.
+The same feature-owner rule now applies to the alert scheduling surface:
+`frontend-modern/src/features/alerts/tabs/ScheduleTab.tsx` must remain the
+schedule render shell, while
+`frontend-modern/src/features/alerts/useAlertScheduleState.ts` owns schedule
+reset/update policy and canonical default application. The tab should not
+re-accumulate quiet-hours, cooldown, grouping, or escalation mutation logic
+inline.
 
 The updates settings surface now follows the same presentation-owner rule.
 `frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx` stays the
