@@ -236,11 +236,15 @@ primitive.
 
 The history tab itself now follows the same shell-versus-runtime rule. The
 canonical history runtime owner is
-`frontend-modern/src/features/alerts/useAlertHistoryState.ts`, which owns alert
-history fetch, persistent filter state, trend-bucket derivation, grouped-row
-projection, resource-incident panel loading, and history-clear flow. Future
-alert history control-flow work should extend that feature hook instead of
-putting data fetch or resource-incident state back into
+`frontend-modern/src/features/alerts/useAlertHistoryState.ts`, which now owns
+alert-history fetch, persistent filter state, resource-incident panel loading,
+and history-clear flow, while the pure analytics model for history-item
+projection, trend buckets, group labels, axis ticks, and selected bucket
+detail now lives in
+`frontend-modern/src/features/alerts/alertHistoryModel.ts`. Future alert
+history control-flow work should extend the feature hook, while new grouping or
+trend semantics should extend the history model instead of putting data fetch
+or resource-incident state back into
 `frontend-modern/src/features/alerts/tabs/HistoryTab.tsx`.
 
 Alert configuration load/save state, notification config reloads, and threshold

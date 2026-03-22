@@ -9,6 +9,7 @@ import alertDestinationsTabStateSource from '@/features/alerts/useAlertDestinati
 import alertWebhookDestinationsStateSource from '@/features/alerts/useAlertWebhookDestinationsState.ts?raw';
 import alertAcknowledgementStateSource from '@/features/alerts/useAlertAcknowledgementState.ts?raw';
 import alertHistoryStateSource from '@/features/alerts/useAlertHistoryState.ts?raw';
+import alertHistoryModelSource from '@/features/alerts/alertHistoryModel.ts?raw';
 import alertIncidentTimelineStateSource from '@/features/alerts/useAlertIncidentTimelineState.ts?raw';
 import alertOverviewStateSource from '@/features/alerts/useAlertOverviewState.ts?raw';
 import alertScheduleStateSource from '@/features/alerts/useAlertScheduleState.ts?raw';
@@ -280,6 +281,17 @@ describe('tab path helpers', () => {
     expect(alertHistoryStateSource).toContain('AlertsAPI.getIncidentsForResource');
     expect(alertHistoryStateSource).toContain('AlertsAPI.clearHistory');
     expect(alertHistoryStateSource).toContain('useAlertIncidentTimelineState');
+    expect(alertHistoryStateSource).toContain('buildAlertHistoryItems');
+    expect(alertHistoryStateSource).toContain('buildAlertTrends');
+    expect(alertHistoryStateSource).toContain('groupAlertHistoryItems');
+    expect(alertHistoryStateSource).not.toContain('const formatDuration =');
+    expect(alertHistoryStateSource).not.toContain('const formatBucketRange =');
+    expect(alertHistoryStateSource).not.toContain('const formatAxisTickLabel =');
+    expect(alertHistoryStateSource).not.toContain('const monthNames = [');
+    expect(alertHistoryModelSource).toContain('export function buildAlertHistoryItems');
+    expect(alertHistoryModelSource).toContain('export function buildAlertTrends');
+    expect(alertHistoryModelSource).toContain('export function groupAlertHistoryItems');
+    expect(alertHistoryModelSource).toContain('export const MS_PER_HOUR');
     expect(alertIncidentTimelineStateSource).toContain(
       'export function useAlertIncidentTimelineState',
     );

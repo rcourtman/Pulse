@@ -66,6 +66,7 @@ import {
 import { getAlertSeverityDotClass } from '@/utils/alertSeverityPresentation';
 import { getTypeColumnLabel } from '@/utils/typeColumnPresentation';
 
+import { MS_PER_HOUR } from '../alertHistoryModel';
 import { useAlertHistoryState } from '../useAlertHistoryState';
 import { filterIncidentEvents, summarizeIncidentEvents } from '../types';
 
