@@ -4,6 +4,7 @@ import alertsConfigurationSurfaceSource from '@/features/alerts/AlertsConfigurat
 import alertsConfigurationStateSource from '@/features/alerts/useAlertsConfigurationState.ts?raw';
 import alertOverridesStateSource from '@/features/alerts/useAlertOverridesState.ts?raw';
 import alertDestinationsStateSource from '@/features/alerts/useAlertDestinationsState.ts?raw';
+import alertDestinationsTabStateSource from '@/features/alerts/useAlertDestinationsTabState.ts?raw';
 import alertAcknowledgementStateSource from '@/features/alerts/useAlertAcknowledgementState.ts?raw';
 import alertHistoryStateSource from '@/features/alerts/useAlertHistoryState.ts?raw';
 import alertIncidentTimelineStateSource from '@/features/alerts/useAlertIncidentTimelineState.ts?raw';
@@ -212,12 +213,19 @@ describe('tab path helpers', () => {
     expect(alertDestinationsStateSource).toContain('export function useAlertDestinationsState');
     expect(alertDestinationsStateSource).toContain('NotificationsAPI.getEmailConfig');
     expect(alertDestinationsStateSource).toContain('NotificationsAPI.updateEmailConfig');
+    expect(alertDestinationsTabStateSource).toContain('export function useAlertDestinationsTabState');
+    expect(alertDestinationsTabStateSource).toContain('NotificationsAPI.getWebhooks');
+    expect(alertDestinationsTabStateSource).toContain('NotificationsAPI.testNotification');
+    expect(alertDestinationsTabStateSource).toContain('NotificationsAPI.createWebhook');
     expect(alertsPageSource).toContain(
       "import { HistoryTab } from '@/features/alerts/tabs/HistoryTab';",
     );
     expect(alertsPageSource).not.toContain('function HistoryTab(');
     expect(alertHistoryTabSource).toContain('useAlertHistoryState');
-    expect(alertDestinationsTabSource).toContain('NotificationsAPI.getWebhooks');
+    expect(alertDestinationsTabSource).toContain('useAlertDestinationsTabState');
+    expect(alertDestinationsTabSource).not.toContain('NotificationsAPI.getWebhooks');
+    expect(alertDestinationsTabSource).not.toContain('NotificationsAPI.testNotification');
+    expect(alertDestinationsTabSource).not.toContain('NotificationsAPI.createWebhook');
     expect(alertHistoryTabSource).toContain('IncidentTimelinePanel');
     expect(alertHistoryTabSource).not.toContain('useAlertIncidentTimelineState');
     expect(alertHistoryTabSource).not.toContain('AlertsAPI.getHistory');

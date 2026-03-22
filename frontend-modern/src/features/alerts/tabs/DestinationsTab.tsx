@@ -1,7 +1,6 @@
-import { createSignal, onMount, Show } from 'solid-js';
+import { Show } from 'solid-js';
 import AlertTriangleIcon from 'lucide-solid/icons/alert-triangle';
 
-import { NotificationsAPI, type Webhook } from '@/api/notifications';
 import { EmailProviderSelect } from '@/components/Alerts/EmailProviderSelect';
 import { WebhookConfig } from '@/components/Alerts/WebhookConfig';
 import { Card } from '@/components/shared/Card';
@@ -13,9 +12,6 @@ import {
 } from '@/components/shared/Form';
 import { SettingsPanel } from '@/components/shared/SettingsPanel';
 import { Toggle } from '@/components/shared/Toggle';
-import { notificationStore } from '@/stores/notifications';
-import { logger } from '@/utils/logger';
-import { showErrorWithDetail } from '@/utils/toast';
 import {
   ALERT_DESTINATIONS_APPRISE_API_KEY_HEADER_HELP,
   ALERT_DESTINATIONS_APPRISE_API_KEY_HEADER_LABEL,
@@ -48,180 +44,30 @@ import {
   ALERT_DESTINATIONS_EMAIL_PANEL_DESCRIPTION,
   ALERT_DESTINATIONS_EMAIL_PANEL_TITLE,
   getAlertDestinationsAppriseTargetsHelp,
-  getAlertDestinationsAppriseTestFailure,
   getAlertDestinationsAppriseTestLabel,
-  getAlertDestinationsAppriseTestSuccess,
-  getAlertDestinationsAppriseValidationError,
-  getAlertDestinationsEmailTestFailure,
-  getAlertDestinationsEmailTestSuccess,
   getAlertDestinationsLoadErrorBanner,
   getAlertDestinationsRetryLabel,
   getAlertDestinationsStatusLabel,
-  getAlertDestinationsWebhookLoadError,
 } from '@/utils/alertDestinationsPresentation';
 import {
-  getAlertWebhookMutationFailure,
-  getAlertWebhookMutationSuccess,
-  getAlertWebhookTestFailure,
-  getAlertWebhookTestSuccess,
   getAlertWebhooksSectionDescription,
   getAlertWebhooksSectionTitle,
 } from '@/utils/alertWebhookPresentation';
 
-import { parseAppriseTargets } from '../helpers';
-import type { AppriseConfig } from '@/api/notifications';
-import type { UIAppriseConfig, UIEmailConfig } from '../types';
+import { useAlertDestinationsTabState, type AlertDestinationsTabStateProps } from '../useAlertDestinationsTabState';
 
-export interface DestinationsTabProps {
+export interface DestinationsTabProps extends AlertDestinationsTabStateProps {
   setHasUnsavedChanges: (value: boolean) => void;
-  emailConfig: () => UIEmailConfig;
-  setEmailConfig: (config: UIEmailConfig) => void;
-  appriseConfig: () => UIAppriseConfig;
-  setAppriseConfig: (config: UIAppriseConfig) => void;
-  configLoadError: () => string | null;
-  isRetrying: () => boolean;
-  isLoadingDestinations: () => boolean;
-  onRetryLoad: () => void;
+  setEmailConfig: (config: ReturnType<AlertDestinationsTabStateProps['emailConfig']>) => void;
 }
 
 export function DestinationsTab(props: DestinationsTabProps) {
-  const [webhooks, setWebhooks] = createSignal<Webhook[]>([]);
-  const [webhookLoadError, setWebhookLoadError] = createSignal<string | null>(null);
-  const [isLoadingWebhooks, setIsLoadingWebhooks] = createSignal(true);
-  const [testingEmail, setTestingEmail] = createSignal(false);
-  const [testingApprise, setTestingApprise] = createSignal(false);
-  const [testingWebhook, setTestingWebhook] = createSignal<string | null>(null);
-
-  const isLoading = () =>
-    props.isLoadingDestinations() || isLoadingWebhooks() || props.isRetrying();
-  const appriseState = () => props.appriseConfig();
-
-  const updateApprise = (partial: Partial<UIAppriseConfig>) => {
-    props.setAppriseConfig({ ...props.appriseConfig(), ...partial });
-  };
-
-  const buildAppriseRequestConfig = (): AppriseConfig => {
-    const config = appriseState();
-    const serverUrl = (config.serverUrl || '').trim();
-    const apiKeyHeader = (config.apiKeyHeader || '').trim() || 'X-API-KEY';
-    return {
-      enabled: config.enabled,
-      mode: config.mode,
-      targets: parseAppriseTargets(config.targetsText),
-      cliPath: config.cliPath?.trim() || 'apprise',
-      timeoutSeconds: config.timeoutSeconds,
-      serverUrl,
-      configKey: config.configKey.trim(),
-      apiKey: config.apiKey,
-      apiKeyHeader,
-      skipTlsVerify: config.skipTlsVerify,
-    };
-  };
-
-  const loadWebhooks = async () => {
-    setWebhookLoadError(null);
-    setIsLoadingWebhooks(true);
-    try {
-      const hooks = await NotificationsAPI.getWebhooks();
-      setWebhooks(
-        hooks.map((hook) => ({
-          ...hook,
-          service: hook.service || 'generic',
-        })),
-      );
-    } catch (error) {
-      logger.error('Failed to load webhooks:', error);
-      setWebhookLoadError(getAlertDestinationsWebhookLoadError());
-    } finally {
-      setIsLoadingWebhooks(false);
-    }
-  };
-
-  onMount(() => {
-    void loadWebhooks();
-  });
-
-  const testEmailConfig = async () => {
-    setTestingEmail(true);
-    try {
-      await NotificationsAPI.testNotification({
-        type: 'email',
-        config: { ...props.emailConfig() } as Record<string, unknown>,
-      });
-      notificationStore.success(getAlertDestinationsEmailTestSuccess());
-    } catch (error) {
-      logger.error(getAlertDestinationsEmailTestFailure(), error);
-      const message =
-        error instanceof Error ? error.message : getAlertDestinationsEmailTestFailure();
-      const detail = (error as Error & { detail?: string })?.detail;
-      showErrorWithDetail(message, detail);
-    } finally {
-      setTestingEmail(false);
-    }
-  };
-
-  const testApprise = async () => {
-    setTestingApprise(true);
-    try {
-      const config = buildAppriseRequestConfig();
-
-      if (!config.enabled) {
-        throw new Error(getAlertDestinationsAppriseValidationError('disabled'));
-      }
-
-      const targets = config.targets || [];
-      if (config.mode === 'cli' && targets.length === 0) {
-        throw new Error(getAlertDestinationsAppriseValidationError('missingTargets'));
-      }
-      if (config.mode === 'http' && !config.serverUrl) {
-        throw new Error(getAlertDestinationsAppriseValidationError('missingServerUrl'));
-      }
-
-      await NotificationsAPI.testNotification({
-        type: 'apprise',
-        config,
-      });
-      notificationStore.success(getAlertDestinationsAppriseTestSuccess());
-    } catch (error) {
-      logger.error(getAlertDestinationsAppriseTestFailure(), error);
-      const message =
-        error instanceof Error ? error.message : getAlertDestinationsAppriseTestFailure();
-      const detail = (error as Error & { detail?: string })?.detail;
-      showErrorWithDetail(message, detail);
-    } finally {
-      setTestingApprise(false);
-    }
-  };
-
-  const testWebhook = async (webhookId: string, webhookData?: Omit<Webhook, 'id'>) => {
-    setTestingWebhook(webhookId);
-    try {
-      if (webhookData) {
-        await NotificationsAPI.testWebhook(webhookData);
-      } else {
-        await NotificationsAPI.testNotification({ type: 'webhook', webhookId });
-      }
-      notificationStore.success(getAlertWebhookTestSuccess());
-    } catch (error) {
-      const message = error instanceof Error ? error.message : getAlertWebhookTestFailure();
-      const detail = (error as Error & { detail?: string })?.detail;
-      showErrorWithDetail(message, detail);
-    } finally {
-      setTestingWebhook(null);
-    }
-  };
-
-  const hasLoadError = () => props.configLoadError() || webhookLoadError();
-
-  const handleRetry = () => {
-    props.onRetryLoad();
-    void loadWebhooks();
-  };
+  const state = useAlertDestinationsTabState(props);
 
   return (
     <div class="flex w-full max-w-full flex-col gap-6 md:gap-8">
       <Show
-        when={!isLoading()}
+        when={!state.isLoading()}
         fallback={
           <div class="flex w-full flex-col gap-6 animate-pulse pointer-events-none select-none md:gap-8">
             <div class="rounded-lg border border-border bg-surface p-6 space-y-4">
@@ -265,21 +111,21 @@ export function DestinationsTab(props: DestinationsTabProps) {
           </div>
         }
       >
-        <Show when={hasLoadError()}>
+        <Show when={state.hasLoadError()}>
           <Card tone="danger" padding="sm" class="border-red-200 dark:border-red-800 sm:p-4">
             <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div class="flex items-center gap-2 text-red-800 dark:text-red-200">
                 <AlertTriangleIcon class="h-4 w-4 flex-shrink-0" />
                 <span class="text-sm font-medium">
                   {getAlertDestinationsLoadErrorBanner(
-                    props.configLoadError() || webhookLoadError() || '',
+                    props.configLoadError() || state.webhookLoadError() || '',
                   )}
                 </span>
               </div>
               <button
                 class="flex-shrink-0 rounded-md border border-red-300 bg-transparent px-3 py-1.5 text-sm font-medium text-red-800 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-red-700 dark:text-red-200 dark:hover:bg-red-900/30"
                 disabled={props.isRetrying()}
-                onClick={handleRetry}
+                onClick={state.handleRetry}
               >
                 {getAlertDestinationsRetryLabel(props.isRetrying())}
               </button>
@@ -320,8 +166,8 @@ export function DestinationsTab(props: DestinationsTabProps) {
                 props.setEmailConfig(config);
                 props.setHasUnsavedChanges(true);
               }}
-              onTest={testEmailConfig}
-              testing={testingEmail()}
+              onTest={state.testEmailConfig}
+              testing={state.testingEmail()}
             />
           </div>
         </SettingsPanel>
@@ -332,23 +178,23 @@ export function DestinationsTab(props: DestinationsTabProps) {
           action={
             <div class="flex items-center gap-3 sm:self-start">
               <Toggle
-                checked={appriseState().enabled}
+                checked={state.appriseState().enabled}
                 onChange={(event) => {
-                  updateApprise({ enabled: event.currentTarget.checked });
+                  state.updateApprise({ enabled: event.currentTarget.checked });
                   props.setHasUnsavedChanges(true);
                 }}
                 label={
                   <span class="text-xs font-medium text-muted">
-                    {getAlertDestinationsStatusLabel(appriseState().enabled)}
+                    {getAlertDestinationsStatusLabel(state.appriseState().enabled)}
                   </span>
                 }
               />
               <button
                 class="rounded-md border border-border px-3 py-2 text-sm font-medium text-base-content transition hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={!appriseState().enabled || testingApprise()}
-                onClick={testApprise}
+                disabled={!state.appriseState().enabled || state.testingApprise()}
+                onClick={state.testApprise}
               >
-                {getAlertDestinationsAppriseTestLabel(testingApprise())}
+                {getAlertDestinationsAppriseTestLabel(state.testingApprise())}
               </button>
             </div>
           }
@@ -362,9 +208,9 @@ export function DestinationsTab(props: DestinationsTabProps) {
               </label>
               <select
                 class={formControl}
-                value={appriseState().mode}
+                value={state.appriseState().mode}
                 onInput={(event) => {
-                  updateApprise({ mode: event.currentTarget.value as 'cli' | 'http' });
+                  state.updateApprise({ mode: event.currentTarget.value as 'cli' | 'http' });
                   props.setHasUnsavedChanges(true);
                 }}
               >
@@ -381,30 +227,30 @@ export function DestinationsTab(props: DestinationsTabProps) {
               <textarea
                 rows={4}
                 class={`${formControl} min-h-[120px] font-mono`}
-                value={appriseState().targetsText}
+                value={state.appriseState().targetsText}
                 placeholder={ALERT_DESTINATIONS_APPRISE_TARGETS_PLACEHOLDER}
                 onInput={(event) => {
-                  updateApprise({ targetsText: event.currentTarget.value });
+                  state.updateApprise({ targetsText: event.currentTarget.value });
                   props.setHasUnsavedChanges(true);
                 }}
               />
               <p class={formHelpText}>
-                {getAlertDestinationsAppriseTargetsHelp(appriseState().mode)}
+                {getAlertDestinationsAppriseTargetsHelp(state.appriseState().mode)}
               </p>
             </div>
 
-            <Show when={appriseState().mode === 'cli'}>
+            <Show when={state.appriseState().mode === 'cli'}>
               <div class={formField}>
                 <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
                   {ALERT_DESTINATIONS_APPRISE_CLI_PATH_LABEL}
                 </label>
                 <input
                   type="text"
-                  value={appriseState().cliPath}
+                  value={state.appriseState().cliPath}
                   class={formControl}
                   placeholder={ALERT_DESTINATIONS_APPRISE_CLI_PATH_PLACEHOLDER}
                   onInput={(event) => {
-                    updateApprise({ cliPath: event.currentTarget.value });
+                    state.updateApprise({ cliPath: event.currentTarget.value });
                     props.setHasUnsavedChanges(true);
                   }}
                 />
@@ -412,7 +258,7 @@ export function DestinationsTab(props: DestinationsTabProps) {
               </div>
             </Show>
 
-            <Show when={appriseState().mode === 'http'}>
+            <Show when={state.appriseState().mode === 'http'}>
               <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div class={`${formField} sm:col-span-2`}>
                   <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
@@ -420,11 +266,11 @@ export function DestinationsTab(props: DestinationsTabProps) {
                   </label>
                   <input
                     type="text"
-                    value={appriseState().serverUrl}
+                    value={state.appriseState().serverUrl}
                     class={formControl}
                     placeholder={ALERT_DESTINATIONS_APPRISE_SERVER_URL_PLACEHOLDER}
                     onInput={(event) => {
-                      updateApprise({ serverUrl: event.currentTarget.value });
+                      state.updateApprise({ serverUrl: event.currentTarget.value });
                       props.setHasUnsavedChanges(true);
                     }}
                   />
@@ -436,11 +282,11 @@ export function DestinationsTab(props: DestinationsTabProps) {
                   </label>
                   <input
                     type="text"
-                    value={appriseState().configKey}
+                    value={state.appriseState().configKey}
                     class={formControl}
                     placeholder={ALERT_DESTINATIONS_APPRISE_CONFIG_KEY_PLACEHOLDER}
                     onInput={(event) => {
-                      updateApprise({ configKey: event.currentTarget.value });
+                      state.updateApprise({ configKey: event.currentTarget.value });
                       props.setHasUnsavedChanges(true);
                     }}
                   />
@@ -452,11 +298,11 @@ export function DestinationsTab(props: DestinationsTabProps) {
                   </label>
                   <input
                     type="password"
-                    value={appriseState().apiKey}
+                    value={state.appriseState().apiKey}
                     class={formControl}
                     placeholder={ALERT_DESTINATIONS_APPRISE_API_KEY_PLACEHOLDER}
                     onInput={(event) => {
-                      updateApprise({ apiKey: event.currentTarget.value });
+                      state.updateApprise({ apiKey: event.currentTarget.value });
                       props.setHasUnsavedChanges(true);
                     }}
                   />
@@ -468,11 +314,11 @@ export function DestinationsTab(props: DestinationsTabProps) {
                   </label>
                   <input
                     type="text"
-                    value={appriseState().apiKeyHeader}
+                    value={state.appriseState().apiKeyHeader}
                     class={formControl}
                     placeholder={ALERT_DESTINATIONS_APPRISE_API_KEY_HEADER_PLACEHOLDER}
                     onInput={(event) => {
-                      updateApprise({ apiKeyHeader: event.currentTarget.value });
+                      state.updateApprise({ apiKeyHeader: event.currentTarget.value });
                       props.setHasUnsavedChanges(true);
                     }}
                   />
@@ -486,9 +332,9 @@ export function DestinationsTab(props: DestinationsTabProps) {
                     <input
                       type="checkbox"
                       class="h-4 w-4 rounded border border-border"
-                      checked={appriseState().skipTlsVerify}
+                      checked={state.appriseState().skipTlsVerify}
                       onChange={(event) => {
-                        updateApprise({ skipTlsVerify: event.currentTarget.checked });
+                        state.updateApprise({ skipTlsVerify: event.currentTarget.checked });
                         props.setHasUnsavedChanges(true);
                       }}
                     />
@@ -509,12 +355,12 @@ export function DestinationsTab(props: DestinationsTabProps) {
                 type="number"
                 min="5"
                 max="120"
-                value={appriseState().timeoutSeconds}
+                value={state.appriseState().timeoutSeconds}
                 class={formControl}
                 onInput={(event) => {
                   const raw = event.currentTarget.valueAsNumber;
                   const safe = Number.isNaN(raw) ? 15 : Math.min(120, Math.max(5, Math.trunc(raw)));
-                  updateApprise({ timeoutSeconds: safe });
+                  state.updateApprise({ timeoutSeconds: safe });
                   props.setHasUnsavedChanges(true);
                 }}
               />
@@ -527,51 +373,18 @@ export function DestinationsTab(props: DestinationsTabProps) {
           title={getAlertWebhooksSectionTitle()}
           description={getAlertWebhooksSectionDescription()}
           action={
-            <span class="whitespace-nowrap text-xs text-muted">{webhooks().length} configured</span>
+            <span class="whitespace-nowrap text-xs text-muted">{state.webhooks().length} configured</span>
           }
           class="min-w-0"
           bodyClass="space-y-4"
         >
           <WebhookConfig
-            webhooks={webhooks()}
-            onAdd={async (webhook) => {
-              try {
-                const created = await NotificationsAPI.createWebhook(webhook);
-                setWebhooks([...webhooks(), created]);
-                notificationStore.success(getAlertWebhookMutationSuccess('add'));
-              } catch (error) {
-                logger.error('Failed to add webhook:', error);
-                notificationStore.error(
-                  error instanceof Error ? error.message : getAlertWebhookMutationFailure('add'),
-                );
-              }
-            }}
-            onUpdate={async (webhook) => {
-              try {
-                const updated = await NotificationsAPI.updateWebhook(webhook.id!, webhook);
-                setWebhooks(webhooks().map((current) => (current.id === webhook.id ? updated : current)));
-                notificationStore.success(getAlertWebhookMutationSuccess('update'));
-              } catch (error) {
-                logger.error('Failed to update webhook:', error);
-                notificationStore.error(
-                  error instanceof Error ? error.message : getAlertWebhookMutationFailure('update'),
-                );
-              }
-            }}
-            onDelete={async (id) => {
-              try {
-                await NotificationsAPI.deleteWebhook(id);
-                setWebhooks(webhooks().filter((current) => current.id !== id));
-                notificationStore.success(getAlertWebhookMutationSuccess('delete'));
-              } catch (error) {
-                logger.error('Failed to delete webhook:', error);
-                notificationStore.error(
-                  error instanceof Error ? error.message : getAlertWebhookMutationFailure('delete'),
-                );
-              }
-            }}
-            onTest={testWebhook}
-            testing={testingWebhook()}
+            webhooks={state.webhooks()}
+            onAdd={state.addWebhook}
+            onUpdate={state.updateWebhook}
+            onDelete={state.deleteWebhook}
+            onTest={state.testWebhook}
+            testing={state.testingWebhook()}
           />
         </SettingsPanel>
       </Show>

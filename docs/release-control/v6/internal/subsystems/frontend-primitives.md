@@ -447,9 +447,13 @@ is the feature shell. The canonical runtime owner is now
 config transport, `frontend-modern/src/features/alerts/useAlertOverridesState.ts`
 for override projection and thresholds-facing resource selectors, and
 `frontend-modern/src/features/alerts/useAlertDestinationsState.ts` for
-notification destination reload and persistence. Future cleanup should extend
-the transport hook, override hook, or destinations hook based on the true
-owner, not move config control flow back into the top-level page shell.
+notification destination reload and persistence.
+`frontend-modern/src/features/alerts/useAlertDestinationsTabState.ts` now owns
+webhook runtime and destination test actions while
+`frontend-modern/src/features/alerts/tabs/DestinationsTab.tsx` stays the
+render shell. Future cleanup should extend the transport hook, override hook,
+or destinations runtime hook based on the true owner, not move config control
+flow back into the top-level page shell.
 The same rule now also covers cross-tab incident timelines: the shared runtime
 owner is `frontend-modern/src/features/alerts/useAlertIncidentTimelineState.ts`,
 while `frontend-modern/src/features/alerts/OverviewTab.tsx` and

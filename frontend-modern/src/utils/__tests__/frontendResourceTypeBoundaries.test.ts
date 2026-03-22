@@ -328,6 +328,7 @@ import alertsConfigurationSurfaceSource from '@/features/alerts/AlertsConfigurat
 import alertsConfigurationStateSource from '@/features/alerts/useAlertsConfigurationState.ts?raw';
 import alertOverridesStateSource from '@/features/alerts/useAlertOverridesState.ts?raw';
 import alertDestinationsStateSource from '@/features/alerts/useAlertDestinationsState.ts?raw';
+import alertDestinationsTabStateSource from '@/features/alerts/useAlertDestinationsTabState.ts?raw';
 import alertAcknowledgementStateSource from '@/features/alerts/useAlertAcknowledgementState.ts?raw';
 import alertHistoryStateSource from '@/features/alerts/useAlertHistoryState.ts?raw';
 import alertIncidentTimelineStateSource from '@/features/alerts/useAlertIncidentTimelineState.ts?raw';
@@ -2790,19 +2791,20 @@ describe('frontend resource type boundaries', () => {
     expect(alertDestinationsStateSource).toContain('getAlertDestinationsConfigLoadError');
     expect(alertDestinationsStateSource).toContain('NotificationsAPI.getEmailConfig');
     expect(alertDestinationsStateSource).toContain('NotificationsAPI.updateEmailConfig');
-    expect(alertDestinationsTabSource).toContain('getAlertDestinationsWebhookLoadError');
+    expect(alertDestinationsTabStateSource).toContain('export function useAlertDestinationsTabState');
+    expect(alertDestinationsTabStateSource).toContain('NotificationsAPI.getWebhooks');
+    expect(alertDestinationsTabStateSource).toContain('NotificationsAPI.testNotification');
+    expect(alertDestinationsTabStateSource).toContain('NotificationsAPI.createWebhook');
+    expect(alertDestinationsTabStateSource).toContain('getAlertDestinationsWebhookLoadError');
     expect(alertDestinationsTabSource).toContain('getAlertDestinationsLoadErrorBanner');
     expect(alertDestinationsTabSource).toContain('getAlertDestinationsAppriseTargetsHelp');
     expect(alertDestinationsTabSource).toContain('getAlertDestinationsAppriseTestLabel');
-    expect(alertDestinationsTabSource).toContain('getAlertDestinationsAppriseValidationError');
-    expect(alertDestinationsTabSource).toContain('getAlertDestinationsEmailTestSuccess');
-    expect(alertDestinationsTabSource).toContain('getAlertDestinationsEmailTestFailure');
-    expect(alertDestinationsTabSource).toContain('getAlertDestinationsAppriseTestSuccess');
-    expect(alertDestinationsTabSource).toContain('getAlertDestinationsAppriseTestFailure');
     expect(alertDestinationsTabSource).toContain('getAlertDestinationsRetryLabel');
     expect(alertDestinationsTabSource).toContain('getAlertDestinationsStatusLabel');
-    expect(alertDestinationsTabSource).toContain('getAlertWebhookTestSuccess');
-    expect(alertDestinationsTabSource).toContain('getAlertWebhookTestFailure');
+    expect(alertDestinationsTabSource).toContain('useAlertDestinationsTabState');
+    expect(alertDestinationsTabSource).not.toContain('NotificationsAPI.getWebhooks');
+    expect(alertDestinationsTabSource).not.toContain('NotificationsAPI.testNotification');
+    expect(alertDestinationsTabSource).not.toContain('NotificationsAPI.createWebhook');
     expect(alertsPageSource).toContain(
       "import { HistoryTab } from '@/features/alerts/tabs/HistoryTab';",
     );
@@ -3858,7 +3860,8 @@ describe('frontend resource type boundaries', () => {
     expect(alertsConfigurationSurfaceSource).toContain('useAlertsConfigurationState');
     expect(alertsPageSource).not.toContain('function DestinationsTab(');
     expect(alertsPageSource).not.toContain('function ScheduleTab(');
-    expect(alertDestinationsTabSource).toContain('NotificationsAPI.getWebhooks');
+    expect(alertDestinationsTabSource).toContain('useAlertDestinationsTabState');
+    expect(alertDestinationsTabSource).not.toContain('NotificationsAPI.getWebhooks');
     expect(alertDestinationsTabSource).toContain('EmailProviderSelect');
     expect(alertDestinationsTabSource).toContain('WebhookConfig');
     expect(alertScheduleTabSource).toContain('getAlertConfigQuietHourSuppressOptions');
