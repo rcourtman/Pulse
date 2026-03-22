@@ -116,3 +116,5 @@ export function useAlertIncidentTimelineState() {
     saveIncidentNote,
   };
 }
+
+export type AlertIncidentTimelineState = ReturnType<typeof useAlertIncidentTimelineState>;

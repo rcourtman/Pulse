@@ -67,3 +67,5 @@ export function useAlertOverviewState(props: UseAlertOverviewStateProps) {
     handleBulkAcknowledge,
   };
 }
+
+export type AlertOverviewState = ReturnType<typeof useAlertOverviewState>;

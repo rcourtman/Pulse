@@ -510,6 +510,13 @@ shell stays in `frontend-modern/src/features/alerts/OverviewTab.tsx`, while
 alert stats, filtered ordering, and single/bulk acknowledge runtime behavior.
 Future overview control flow should extend that hook rather than restoring
 action timers or acknowledge mutations to the tab shell.
+Render-heavy overview ownership now lives in
+`frontend-modern/src/features/alerts/AlertOverviewStatsCards.tsx`,
+`frontend-modern/src/features/alerts/AlertOverviewActiveAlertsSection.tsx`,
+and `frontend-modern/src/features/alerts/AlertOverviewAlertCard.tsx`, so
+future card-list or timeline-card presentation work should extend those
+surfaces rather than expanding `frontend-modern/src/features/alerts/OverviewTab.tsx`
+back into a mixed shell.
 Alert history runtime now follows that same pattern. The shell stays in
 `frontend-modern/src/features/alerts/tabs/HistoryTab.tsx`, while
 `frontend-modern/src/features/alerts/useAlertHistoryState.ts` owns history

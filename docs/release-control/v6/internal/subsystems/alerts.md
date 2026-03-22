@@ -226,6 +226,12 @@ shared acknowledgement owner instead of keeping its own alert mutation fork.
 Future overview or dashboard recent-alert action behavior should extend that
 shared acknowledgement hook instead of putting acknowledge mutations back into
 either render shell.
+Render-heavy alert overview ownership now routes through
+`frontend-modern/src/features/alerts/AlertOverviewStatsCards.tsx`,
+`frontend-modern/src/features/alerts/AlertOverviewActiveAlertsSection.tsx`,
+and `frontend-modern/src/features/alerts/AlertOverviewAlertCard.tsx` instead
+of rebuilding stats-card, active-alert, and timeline-card presentation inline
+inside `frontend-modern/src/features/alerts/OverviewTab.tsx`.
 Dashboard recent-alert rendering and dashboard alert summary/tone copy now
 route through that same alert overview presentation owner and the alert-owned
 `frontend-modern/src/components/Alerts/RecentAlertsPanel.tsx` surface instead
