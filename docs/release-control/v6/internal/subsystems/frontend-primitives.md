@@ -240,9 +240,13 @@ must stay the table-shell owner for route sync and local UI state, while
 stays the composition shell for threshold resource-family projectors,
 `frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsRecoveryDefaultsState.ts`
 owns backup/snapshot default sanitization and factory-drift policy, and
+`frontend-modern/src/features/alerts/thresholds/thresholdsOverrideMutationModel.ts`
+owns pure override upsert/hysteresis/state-strip helpers,
 `frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsOverrideMutations.ts`
-owns override save/bulk/toggle persistence and alert-removal side effects. The
-table-shell hook should not re-accumulate raw override mutation logic,
+owns threshold-save and backup/snapshot override persistence, and
+`frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsAvailabilityMutations.ts`
+owns availability-state policy and alert-removal side effects. The table-shell
+hook should not re-accumulate raw override mutation logic,
 recovery-threshold defaults policy, or resource-family projection engines
 inline.
 

@@ -57,7 +57,9 @@ import thresholdsGuestDataHookSource from '@/features/alerts/thresholds/hooks/us
 import thresholdsInfrastructureDataHookSource from '@/features/alerts/thresholds/hooks/useThresholdsInfrastructureData.ts?raw';
 import thresholdsRecoveryDefaultsStateHookSource from '@/features/alerts/thresholds/hooks/useThresholdsRecoveryDefaultsState.ts?raw';
 import thresholdsTableStateHookSource from '@/features/alerts/thresholds/hooks/useThresholdsTableState.ts?raw';
+import thresholdsAvailabilityMutationsHookSource from '@/features/alerts/thresholds/hooks/useThresholdsAvailabilityMutations.ts?raw';
 import thresholdsOverrideMutationsHookSource from '@/features/alerts/thresholds/hooks/useThresholdsOverrideMutations.ts?raw';
+import thresholdsOverrideMutationModelSource from '@/features/alerts/thresholds/thresholdsOverrideMutationModel.ts?raw';
 import thresholdsResourceModelSource from '@/features/alerts/thresholds/thresholdsResourceModel.ts?raw';
 import thresholdsTableSectionPropsSource from '@/features/alerts/thresholds/thresholdsTableSectionProps.ts?raw';
 
@@ -531,6 +533,7 @@ describe('tab path helpers', () => {
     expect(thresholdsTableStateHookSource).toContain('useThresholdsData(props, editingId, searchTerm)');
     expect(thresholdsTableStateHookSource).toContain('useThresholdsRecoveryDefaultsState(props)');
     expect(thresholdsTableStateHookSource).toContain('useThresholdsOverrideMutations');
+    expect(thresholdsTableStateHookSource).toContain('useThresholdsAvailabilityMutations');
     expect(thresholdsTableStateHookSource).not.toContain('const saveEdit = (resourceId: string) => {');
     expect(thresholdsTableStateHookSource).not.toContain(
       'const toggleNodeConnectivity = (resourceId: string, forceState?: boolean) => {',
@@ -545,7 +548,29 @@ describe('tab path helpers', () => {
     expect(thresholdsOverrideMutationsHookSource).toContain(
       'export function useThresholdsOverrideMutations',
     );
-    expect(thresholdsOverrideMutationsHookSource).toContain('matchesAlertIdentifier');
+    expect(thresholdsOverrideMutationsHookSource).toContain('const saveEdit = (resourceId: string) => {');
+    expect(thresholdsOverrideMutationsHookSource).toContain(
+      'const handleSaveBulkEdit = (thresholds: Record<string, number | undefined>) => {',
+    );
+    expect(thresholdsOverrideMutationsHookSource).not.toContain('matchesAlertIdentifier');
+    expect(thresholdsOverrideMutationsHookSource).not.toContain(
+      'const toggleNodeConnectivity = (resourceId: string, forceState?: boolean) => {',
+    );
+    expect(thresholdsAvailabilityMutationsHookSource).toContain(
+      'export function useThresholdsAvailabilityMutations',
+    );
+    expect(thresholdsAvailabilityMutationsHookSource).toContain('matchesAlertIdentifier');
+    expect(thresholdsAvailabilityMutationsHookSource).toContain(
+      'const toggleNodeConnectivity = (resourceId: string, forceState?: boolean) => {',
+    );
+    expect(thresholdsAvailabilityMutationsHookSource).toContain(
+      'const setOfflineState = (resourceId: string, state: OfflineState) => {',
+    );
+    expect(thresholdsOverrideMutationModelSource).toContain('export const upsertOverride =');
+    expect(thresholdsOverrideMutationModelSource).toContain(
+      'export const withThresholdEntries =',
+    );
+    expect(thresholdsOverrideMutationModelSource).toContain('export const stripStateKeys =');
   });
 });
 

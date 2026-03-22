@@ -145,10 +145,15 @@ backup and snapshot default sanitization plus factory-drift policy now live in
 `frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsRecoveryDefaultsState.ts`,
 while `frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsTableState.ts`
 owns threshold-table route sync, section collapse state, search/edit shell
-state, and bulk-edit dialog control. Override persistence, bulk threshold
-application, powered-off/connectivity state transitions, and alert-removal side
+state, and bulk-edit dialog control. Pure override upsert and hysteresis-entry
+helpers now live in
+`frontend-modern/src/features/alerts/thresholds/thresholdsOverrideMutationModel.ts`.
+Threshold edit persistence, bulk threshold application, and backup/snapshot
+override toggles now route through
+`frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsOverrideMutations.ts`,
+while powered-off/connectivity state transitions plus alert-removal side
 effects now route through
-`frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsOverrideMutations.ts`.
+`frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsAvailabilityMutations.ts`.
 The thresholds tab adapter contract now lives in
 `frontend-modern/src/features/alerts/thresholds/thresholdsTabModel.ts`, so
 `frontend-modern/src/features/alerts/tabs/ThresholdsTab.tsx` stays a shell

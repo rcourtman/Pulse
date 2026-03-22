@@ -5,7 +5,6 @@ import type {
   BackupAlertConfig,
   SnapshotAlertConfig,
 } from '@/types/alerts';
-import { matchesAlertIdentifier } from '@/features/alerts/identity';
 import {
   DEFAULT_SNAPSHOT_WARNING,
   DEFAULT_SNAPSHOT_CRITICAL,
@@ -17,10 +16,14 @@ import {
 import type {
   Override,
   OverrideType,
-  OfflineState,
   ThresholdsTableProps,
 } from '@/features/alerts/thresholds/types';
 import type { Resource as TableResource } from '@/features/alerts/thresholds/tableTypes';
+import {
+  removeOverrideState,
+  upsertOverride,
+  withThresholdEntries,
+} from '@/features/alerts/thresholds/thresholdsOverrideMutationModel';
 
 interface ThresholdsOverrideMutationResources {
   nodesWithOverrides: Accessor<TableResource[]>;
@@ -48,43 +51,6 @@ interface ThresholdsOverrideMutationProps {
     updater: SnapshotAlertConfig | ((prev: SnapshotAlertConfig) => SnapshotAlertConfig),
   ) => void;
 }
-
-const upsertOverride = (overrides: Override[], override: Override): Override[] => {
-  const existingIndex = overrides.findIndex((entry) => entry.id === override.id);
-  if (existingIndex >= 0) {
-    const nextOverrides = [...overrides];
-    nextOverrides[existingIndex] = override;
-    return nextOverrides;
-  }
-
-  return [...overrides, override];
-};
-
-const withThresholdEntries = (
-  rawConfig: RawOverrideConfig,
-  thresholds: Record<string, number | undefined>,
-): RawOverrideConfig => {
-  const next = { ...rawConfig };
-
-  Object.entries(thresholds).forEach(([metric, value]) => {
-    if (value !== undefined && value !== null) {
-      next[metric] = {
-        clear: Math.max(0, value - 5),
-        trigger: value,
-      };
-    }
-  });
-
-  return next;
-};
-
-const stripStateKeys = (thresholds: Record<string, number>): Record<string, number> => {
-  const next = { ...thresholds };
-  delete (next as Record<string, unknown>).disabled;
-  delete (next as Record<string, unknown>).disableConnectivity;
-  delete (next as Record<string, unknown>).poweredOffSeverity;
-  return next;
-};
 
 export function useThresholdsOverrideMutations({
   props,
@@ -114,10 +80,13 @@ export function useThresholdsOverrideMutations({
   const allThresholdResources = () => [...proxmoxResources(), ...guestLikeResources()];
 
   const removeOverride = (resourceId: string) => {
-    props.setOverrides(props.overrides().filter((override) => override.id !== resourceId));
-    const newRawConfig = { ...props.rawOverridesConfig() };
-    delete newRawConfig[resourceId];
-    props.setRawOverridesConfig(newRawConfig);
+    const { nextOverrides, nextRawConfig } = removeOverrideState(
+      props.overrides(),
+      props.rawOverridesConfig(),
+      resourceId,
+    );
+    props.setOverrides(nextOverrides);
+    props.setRawOverridesConfig(nextRawConfig);
     props.setHasUnsavedChanges(true);
   };
 
@@ -435,268 +404,11 @@ export function useThresholdsOverrideMutations({
     props.setHasUnsavedChanges(true);
   };
 
-  const toggleDisabled = (resourceId: string, forceState?: boolean) => {
-    const resource = [
-      ...guestLikeResources(),
-      ...resources.storageWithOverrides(),
-      ...resources.pbsServersWithOverrides(),
-      ...resources.agentsWithOverrides(),
-      ...resources.agentDisksWithOverrides(),
-    ].find((entry) => entry.id === resourceId);
-
-    if (
-      !resource ||
-      (resource.type !== 'guest' &&
-        resource.type !== 'storage' &&
-        resource.type !== 'pbs' &&
-        resource.type !== 'dockerContainer' &&
-        resource.type !== 'agent' &&
-        resource.type !== 'agentDisk')
-    ) {
-      return;
-    }
-
-    const existingOverride = props.overrides().find((override) => override.id === resourceId);
-    const currentDisabledState = resource.disabled;
-    const newDisabledState = forceState !== undefined ? forceState : !currentDisabledState;
-    const cleanThresholds = stripStateKeys({ ...(existingOverride?.thresholds || {}) });
-
-    if (!newDisabledState && (!existingOverride || Object.keys(cleanThresholds).length === 0)) {
-      removeOverride(resourceId);
-    } else {
-      const override: Override = {
-        id: resourceId,
-        name: resource.name,
-        type: resource.type as OverrideType,
-        resourceType: resource.resourceType,
-        vmid: 'vmid' in resource ? resource.vmid : undefined,
-        node: 'node' in resource ? resource.node : undefined,
-        instance: 'instance' in resource ? resource.instance : undefined,
-        disabled: newDisabledState,
-        disableConnectivity: existingOverride?.disableConnectivity,
-        poweredOffSeverity: existingOverride?.poweredOffSeverity,
-        backup: existingOverride?.backup,
-        snapshot: existingOverride?.snapshot,
-        thresholds: cleanThresholds,
-      };
-
-      props.setOverrides(upsertOverride(props.overrides(), override));
-
-      let hysteresisThresholds: RawOverrideConfig = withThresholdEntries({}, override.thresholds);
-      if (newDisabledState) hysteresisThresholds.disabled = true;
-      if (override.backup) hysteresisThresholds.backup = override.backup;
-      if (override.snapshot) hysteresisThresholds.snapshot = override.snapshot;
-      if (override.disableConnectivity) hysteresisThresholds.disableConnectivity = true;
-      if (override.poweredOffSeverity) {
-        hysteresisThresholds.poweredOffSeverity = override.poweredOffSeverity;
-      }
-
-      const nextRawConfig = { ...props.rawOverridesConfig() };
-      if (Object.keys(hysteresisThresholds).length === 0) {
-        delete nextRawConfig[resourceId];
-      } else {
-        nextRawConfig[resourceId] = hysteresisThresholds;
-      }
-      props.setRawOverridesConfig(nextRawConfig);
-    }
-
-    if (newDisabledState && props.removeAlerts) {
-      if (resource.type === 'guest') {
-        props.removeAlerts(
-          (alert) => alert.resourceId === resourceId && alert.type === 'powered-off',
-        );
-      } else if (resource.type === 'pbs') {
-        const offlineId = `pbs-offline-${resourceId}`;
-        props.removeAlerts(
-          (alert) =>
-            alert.resourceId === resourceId &&
-            (matchesAlertIdentifier(alert, offlineId) || alert.type === 'offline'),
-        );
-      } else if (resource.type === 'dockerContainer') {
-        props.removeAlerts(
-          (alert) =>
-            alert.resourceId === resourceId &&
-            (alert.type === 'docker-container-state' || alert.type === 'docker-container-health'),
-        );
-      }
-    }
-
-    props.setHasUnsavedChanges(true);
-  };
-
-  const toggleNodeConnectivity = (resourceId: string, forceState?: boolean) => {
-    const resource = [
-      ...resources.nodesWithOverrides(),
-      ...resources.pbsServersWithOverrides(),
-      ...resources.guestsFlat(),
-      ...resources.agentsWithOverrides(),
-      ...resources.dockerHostsWithOverrides(),
-    ].find((entry) => entry.id === resourceId);
-
-    if (
-      !resource ||
-      (resource.type !== 'agent' &&
-        resource.type !== 'pbs' &&
-        resource.type !== 'guest' &&
-        resource.type !== 'dockerHost')
-    ) {
-      return;
-    }
-
-    const existingOverride = props.overrides().find((override) => override.id === resourceId);
-    const currentDisableConnectivity = resource.disableConnectivity;
-    const newDisableConnectivity =
-      forceState !== undefined ? forceState : !currentDisableConnectivity;
-    const cleanThresholds = stripStateKeys({ ...(existingOverride?.thresholds || {}) });
-
-    if (!newDisableConnectivity && Object.keys(cleanThresholds).length === 0) {
-      removeOverride(resourceId);
-    } else {
-      const override: Override = {
-        id: resourceId,
-        name: resource.name,
-        type: resource.type as OverrideType,
-        resourceType: resource.resourceType,
-        disableConnectivity: newDisableConnectivity,
-        disabled: existingOverride?.disabled,
-        poweredOffSeverity: existingOverride?.poweredOffSeverity,
-        backup: existingOverride?.backup,
-        snapshot: existingOverride?.snapshot,
-        thresholds: cleanThresholds,
-      };
-
-      props.setOverrides(upsertOverride(props.overrides(), override));
-
-      let hysteresisThresholds: RawOverrideConfig = withThresholdEntries({}, cleanThresholds);
-      if (newDisableConnectivity) {
-        hysteresisThresholds.disableConnectivity = true;
-      }
-      if (override.backup) hysteresisThresholds.backup = override.backup;
-      if (override.snapshot) hysteresisThresholds.snapshot = override.snapshot;
-      if (override.disabled) hysteresisThresholds.disabled = true;
-      if (override.poweredOffSeverity) {
-        hysteresisThresholds.poweredOffSeverity = override.poweredOffSeverity;
-      }
-
-      const nextRawConfig = { ...props.rawOverridesConfig() };
-      if (Object.keys(hysteresisThresholds).length === 0) {
-        delete nextRawConfig[resourceId];
-      } else {
-        nextRawConfig[resourceId] = hysteresisThresholds;
-      }
-      props.setRawOverridesConfig(nextRawConfig);
-    }
-
-    props.setHasUnsavedChanges(true);
-
-    if (props.removeAlerts && resource.type === 'dockerHost') {
-      const offlineId = `docker-host-offline-${resourceId}`;
-      const resourceKey = `docker:${resourceId}`;
-      props.removeAlerts(
-        (alert) => matchesAlertIdentifier(alert, offlineId) || alert.resourceId === resourceKey,
-      );
-    }
-  };
-
-  const setOfflineState = (resourceId: string, state: OfflineState) => {
-    const resource = guestLikeResources().find((entry) => entry.id === resourceId);
-    if (!resource) return;
-
-    const isDockerContainer = resource.type === 'dockerContainer';
-    const defaultDisabled = isDockerContainer
-      ? props.dockerDisableConnectivity()
-      : props.guestDisableConnectivity();
-    const defaultSeverity = isDockerContainer
-      ? props.dockerPoweredOffSeverity()
-      : props.guestPoweredOffSeverity();
-
-    const existingOverride = props.overrides().find((override) => override.id === resourceId);
-    const cleanThresholds = stripStateKeys({ ...(existingOverride?.thresholds || {}) });
-
-    const newDisableConnectivity = state === 'off';
-    const newSeverity: 'warning' | 'critical' | undefined =
-      state === 'off' ? undefined : state === 'critical' ? 'critical' : 'warning';
-
-    const overrideDisabled = existingOverride?.disabled || false;
-    const hasThresholds = Object.keys(cleanThresholds).length > 0;
-    const differsFromDefaults =
-      newDisableConnectivity !== defaultDisabled ||
-      (!newDisableConnectivity && newSeverity !== defaultSeverity);
-
-    if (
-      !differsFromDefaults &&
-      !hasThresholds &&
-      !overrideDisabled &&
-      !existingOverride?.disableConnectivity
-    ) {
-      if (existingOverride) {
-        removeOverride(resourceId);
-      }
-      return;
-    }
-
-    const override: Override = {
-      id: resourceId,
-      name: resource.name,
-      type: resource.type as OverrideType,
-      resourceType: resource.resourceType,
-      vmid: 'vmid' in resource ? resource.vmid : undefined,
-      node: 'node' in resource ? resource.node : undefined,
-      instance: 'instance' in resource ? resource.instance : undefined,
-      disabled: overrideDisabled,
-      disableConnectivity: newDisableConnectivity,
-      poweredOffSeverity: newDisableConnectivity ? undefined : newSeverity,
-      backup: existingOverride?.backup,
-      snapshot: existingOverride?.snapshot,
-      thresholds: cleanThresholds,
-    };
-
-    props.setOverrides(upsertOverride(props.overrides(), override));
-
-    let hysteresisThresholds: RawOverrideConfig = withThresholdEntries({}, cleanThresholds);
-    if (overrideDisabled) hysteresisThresholds.disabled = true;
-    if (newDisableConnectivity) {
-      hysteresisThresholds.disableConnectivity = true;
-    } else {
-      if (defaultDisabled) hysteresisThresholds.disableConnectivity = false;
-      if (newSeverity) hysteresisThresholds.poweredOffSeverity = newSeverity;
-    }
-    if (override.backup) hysteresisThresholds.backup = override.backup;
-    if (override.snapshot) hysteresisThresholds.snapshot = override.snapshot;
-
-    const nextRawConfig = { ...props.rawOverridesConfig() };
-    if (Object.keys(hysteresisThresholds).length > 0) {
-      nextRawConfig[resourceId] = hysteresisThresholds;
-    } else {
-      delete nextRawConfig[resourceId];
-    }
-
-    props.setRawOverridesConfig(nextRawConfig);
-    props.setHasUnsavedChanges(true);
-
-    if (props.removeAlerts && newDisableConnectivity) {
-      if (resource.type === 'guest') {
-        props.removeAlerts(
-          (alert) => alert.resourceId === resourceId && alert.type === 'powered-off',
-        );
-      } else if (resource.type === 'dockerContainer') {
-        props.removeAlerts(
-          (alert) =>
-            alert.resourceId === resourceId &&
-            (alert.type === 'docker-container-state' || alert.type === 'docker-container-health'),
-        );
-      }
-    }
-  };
-
   return {
     handleSaveBulkEdit,
     removeOverride,
     saveEdit,
-    setOfflineState,
     toggleBackup,
-    toggleDisabled,
-    toggleNodeConnectivity,
     toggleSnapshot,
   } as const;
 }

@@ -39,6 +39,7 @@ import type {
   ThresholdsActiveTab,
 } from '@/features/alerts/thresholds/tableTypes';
 import { useCollapsedSections } from '@/components/Alerts/Thresholds/hooks/useCollapsedSections';
+import { useThresholdsAvailabilityMutations } from './useThresholdsAvailabilityMutations';
 import { useThresholdsData } from './useThresholdsData';
 import { useThresholdsRecoveryDefaultsState } from './useThresholdsRecoveryDefaultsState';
 import { useThresholdsOverrideMutations } from './useThresholdsOverrideMutations';
@@ -392,10 +393,7 @@ export function useThresholdsTableState(props: ThresholdsTableProps) {
     handleSaveBulkEdit: persistBulkEdit,
     removeOverride,
     saveEdit,
-    setOfflineState,
     toggleBackup,
-    toggleDisabled,
-    toggleNodeConnectivity,
     toggleSnapshot,
   } = useThresholdsOverrideMutations({
     props,
@@ -417,6 +415,22 @@ export function useThresholdsTableState(props: ThresholdsTableProps) {
     updateBackupDefaults,
     updateSnapshotDefaults,
   });
+
+  const { setOfflineState, toggleDisabled, toggleNodeConnectivity } =
+    useThresholdsAvailabilityMutations({
+      props,
+      resources: {
+        nodesWithOverrides,
+        agentsWithOverrides,
+        agentDisksWithOverrides,
+        dockerHostsWithOverrides,
+        guestsFlat,
+        dockerContainersFlat,
+        pbsServersWithOverrides,
+        storageWithOverrides,
+      },
+      removeOverride,
+    });
 
   const handleBulkEdit = (ids: string[], columns: string[]) => {
     setBulkEditIds(ids);
