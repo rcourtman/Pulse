@@ -325,6 +325,7 @@ import alertResourceTablePresentationSource from '@/utils/alertResourceTablePres
 import alertWebhookPresentationSource from '@/utils/alertWebhookPresentation.ts?raw';
 import alertOverviewTabSource from '@/features/alerts/OverviewTab.tsx?raw';
 import alertsConfigurationSurfaceSource from '@/features/alerts/AlertsConfigurationSurface.tsx?raw';
+import alertsConfigurationStateSource from '@/features/alerts/useAlertsConfigurationState.ts?raw';
 import alertDestinationsTabSource from '@/features/alerts/tabs/DestinationsTab.tsx?raw';
 import alertHistoryTabSource from '@/features/alerts/tabs/HistoryTab.tsx?raw';
 import alertScheduleTabSource from '@/features/alerts/tabs/ScheduleTab.tsx?raw';
@@ -2760,7 +2761,13 @@ describe('frontend resource type boundaries', () => {
       "import { AlertsConfigurationSurface } from '@/features/alerts/AlertsConfigurationSurface';",
     );
     expect(alertsPageSource).not.toContain('getAlertDestinationsConfigLoadError');
-    expect(alertsConfigurationSurfaceSource).toContain('getAlertDestinationsConfigLoadError');
+    expect(alertsConfigurationSurfaceSource).toContain('useAlertsConfigurationState');
+    expect(alertsConfigurationSurfaceSource).not.toContain('AlertsAPI.getConfig');
+    expect(alertsConfigurationStateSource).toContain('getAlertDestinationsConfigLoadError');
+    expect(alertsConfigurationStateSource).toContain('AlertsAPI.getConfig');
+    expect(alertsConfigurationStateSource).toContain('NotificationsAPI.getEmailConfig');
+    expect(alertsConfigurationStateSource).toContain('NotificationsAPI.updateEmailConfig');
+    expect(alertsConfigurationStateSource).toContain("eventBus.on('org_switched'");
     expect(alertDestinationsTabSource).toContain('getAlertDestinationsWebhookLoadError');
     expect(alertDestinationsTabSource).toContain('getAlertDestinationsLoadErrorBanner');
     expect(alertDestinationsTabSource).toContain('getAlertDestinationsAppriseTargetsHelp');
@@ -2854,9 +2861,9 @@ describe('frontend resource type boundaries', () => {
     expect(alertsPageSource).not.toContain('getAlertConfigUnsavedChangesLabel');
     expect(alertsConfigurationSurfaceSource).toContain('getAlertConfigUnsavedChangesLabel');
     expect(alertsConfigurationSurfaceSource).toContain('getAlertConfigSaveChangesLabel');
-    expect(alertsConfigurationSurfaceSource).toContain('getAlertConfigDiscardedSuccess');
-    expect(alertsConfigurationSurfaceSource).toContain('getAlertConfigReloadFailure');
     expect(alertsConfigurationSurfaceSource).toContain('getAlertConfigDiscardLabel');
+    expect(alertsConfigurationStateSource).toContain('getAlertConfigDiscardedSuccess');
+    expect(alertsConfigurationStateSource).toContain('getAlertConfigReloadFailure');
     expect(alertsPageSource).toContain('getAlertConfigLeaveConfirmation');
     expect(alertScheduleTabSource).toContain('getAlertConfigResetDefaultsLabel');
     expect(alertScheduleTabSource).toContain('getAlertConfigResetDefaultsTitle');
@@ -3757,6 +3764,7 @@ describe('frontend resource type boundaries', () => {
     expect(alertsConfigurationSurfaceSource).toContain(
       "import { ScheduleTab } from './tabs/ScheduleTab';",
     );
+    expect(alertsConfigurationSurfaceSource).toContain('useAlertsConfigurationState');
     expect(alertsPageSource).not.toContain('function DestinationsTab(');
     expect(alertsPageSource).not.toContain('function ScheduleTab(');
     expect(alertDestinationsTabSource).toContain('NotificationsAPI.getWebhooks');

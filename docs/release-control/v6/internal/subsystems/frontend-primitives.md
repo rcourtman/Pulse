@@ -416,10 +416,12 @@ component.
 The alerts page now also applies the same shell-versus-feature rule to
 configuration orchestration. `frontend-modern/src/pages/Alerts.tsx` is the page
 shell, while `frontend-modern/src/features/alerts/AlertsConfigurationSurface.tsx`
+is the feature shell. The canonical runtime owner is now
+`frontend-modern/src/features/alerts/useAlertsConfigurationState.ts`, which
 owns alert config load/save behavior, notification-config reloads, defaults,
-and threshold-override normalization for the destinations, schedule, and
-thresholds tabs. Future cleanup should continue by moving page-local config
-control flow into that feature surface or a narrower shared primitive, not back
+derived resource mapping, and threshold-override normalization for the
+destinations, schedule, and thresholds tabs. Future cleanup should extend that
+feature hook or a narrower shared primitive, not move config control flow back
 into the top-level page shell.
 Top-level settings surfaces must route through `Settings.tsx`,
 `SettingsPageShell.tsx`, and

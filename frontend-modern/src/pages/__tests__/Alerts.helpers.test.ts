@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import alertsPageSource from '@/pages/Alerts.tsx?raw';
 import alertsConfigurationSurfaceSource from '@/features/alerts/AlertsConfigurationSurface.tsx?raw';
+import alertsConfigurationStateSource from '@/features/alerts/useAlertsConfigurationState.ts?raw';
 import alertDestinationsTabSource from '@/features/alerts/tabs/DestinationsTab.tsx?raw';
 import alertHistoryTabSource from '@/features/alerts/tabs/HistoryTab.tsx?raw';
 import alertScheduleTabSource from '@/features/alerts/tabs/ScheduleTab.tsx?raw';
@@ -176,10 +177,16 @@ describe('tab path helpers', () => {
     expect(alertsConfigurationSurfaceSource).toContain(
       "import { ThresholdsTab } from './tabs/ThresholdsTab';",
     );
-    expect(alertsConfigurationSurfaceSource).toContain('AlertsAPI.getConfig');
-    expect(alertsConfigurationSurfaceSource).toContain('NotificationsAPI.getEmailConfig');
-    expect(alertsConfigurationSurfaceSource).toContain('NotificationsAPI.updateEmailConfig');
-    expect(alertsConfigurationSurfaceSource).toContain("eventBus.on('org_switched'");
+    expect(alertsConfigurationSurfaceSource).toContain('useAlertsConfigurationState');
+    expect(alertsConfigurationSurfaceSource).not.toContain('AlertsAPI.getConfig');
+    expect(alertsConfigurationSurfaceSource).not.toContain('NotificationsAPI.getEmailConfig');
+    expect(alertsConfigurationSurfaceSource).not.toContain('NotificationsAPI.updateEmailConfig');
+    expect(alertsConfigurationSurfaceSource).not.toContain("eventBus.on('org_switched'");
+    expect(alertsConfigurationStateSource).toContain('export function useAlertsConfigurationState');
+    expect(alertsConfigurationStateSource).toContain('AlertsAPI.getConfig');
+    expect(alertsConfigurationStateSource).toContain('NotificationsAPI.getEmailConfig');
+    expect(alertsConfigurationStateSource).toContain('NotificationsAPI.updateEmailConfig');
+    expect(alertsConfigurationStateSource).toContain("eventBus.on('org_switched'");
     expect(alertsPageSource).toContain(
       "import { HistoryTab } from '@/features/alerts/tabs/HistoryTab';",
     );

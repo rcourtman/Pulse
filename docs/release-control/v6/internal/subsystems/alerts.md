@@ -196,8 +196,11 @@ override normalization now route through
 `frontend-modern/src/features/alerts/AlertsConfigurationSurface.tsx` instead of
 living inline in `frontend-modern/src/pages/Alerts.tsx`. The page shell owns
 navigation, activation chrome, and cross-surface routing; the configuration
-surface owns the alert config controller and composes the destinations,
-schedule, and thresholds tabs beneath that feature boundary.
+surface is now a shell that composes the destinations, schedule, and thresholds
+tabs, while `frontend-modern/src/features/alerts/useAlertsConfigurationState.ts`
+owns alert config load/save behavior, notification-config reloads, defaults,
+override normalization, and derived resource mapping beneath that feature
+boundary.
 
 Alert filter metadata and grouped header consumers must also preserve the
 canonical `agent` and `node` header boundary when reusing shared filter
