@@ -8,6 +8,8 @@ import dashboardStateCardsSource from '../DashboardStateCards.tsx?raw';
 import dashboardStatsStripSource from '../DashboardStatsStrip.tsx?raw';
 import dashboardFilterSource from '../DashboardFilter.tsx?raw';
 import dashboardWorkloadTableSource from '../DashboardWorkloadTable.tsx?raw';
+import workloadPanelSource from '../WorkloadPanel.tsx?raw';
+import workloadTableHeaderSource from '../WorkloadTableHeader.tsx?raw';
 import dashboardFilterModelSource from '../dashboardFilterModel.ts?raw';
 import dashboardGuestMetadataStateSource from '../useDashboardGuestMetadataState.ts?raw';
 import dashboardSelectionStateSource from '../useDashboardSelectionState.ts?raw';
@@ -531,7 +533,10 @@ describe('Dashboard performance contract', () => {
       expect(dashboardStateSource).not.toContain('const DEFAULT_ENABLE_THRESHOLD =');
       expect(dashboardStateSource).not.toContain('const DEFAULT_OVERSCAN_ROWS =');
       expect(dashboardSource).not.toContain('createMemo(() => getCanonicalWorkloadId(guest()))');
-      expect(dashboardWorkloadTableSource).toContain(
+      expect(workloadPanelSource).toContain(
+        'createMemo(() => getCanonicalWorkloadId(guest()))',
+      );
+      expect(dashboardWorkloadTableSource).not.toContain(
         'createMemo(() => getCanonicalWorkloadId(guest()))',
       );
       expect(dashboardStateSource).not.toContain('const guestId = () => {');
@@ -665,11 +670,20 @@ describe('Dashboard performance contract', () => {
       expect(dashboardSource).toContain('DashboardWorkloadTable');
       expect(dashboardSource).not.toContain('TableHeader');
       expect(dashboardSource).not.toContain('NodeGroupHeader');
+      expect(dashboardWorkloadTableSource).toContain('WorkloadTableHeader');
+      expect(dashboardWorkloadTableSource).toContain('WorkloadPanel');
+      expect(dashboardWorkloadTableSource).not.toContain('<TableHead');
+      expect(dashboardWorkloadTableSource).not.toContain('NodeGroupHeader');
+      expect(dashboardWorkloadTableSource).not.toContain('GuestDrawer');
+      expect(workloadTableHeaderSource).toContain('TableHead');
+      expect(workloadTableHeaderSource).toContain("col.sortKey as WorkloadSortKey");
+      expect(workloadTableHeaderSource).not.toContain('NodeGroupHeader');
+      expect(workloadPanelSource).toContain('NodeGroupHeader');
+      expect(workloadPanelSource).toContain('GuestDrawer');
+      expect(workloadPanelSource).toContain('createMemo(() => getCanonicalWorkloadId(guest()))');
+      expect(workloadPanelSource).not.toContain('TableHead');
       expect(dashboardStateCardsSource).toContain('dashboardInfrastructureEmptyState().title');
       expect(dashboardStateCardsSource).toContain('dashboardDisconnectedState().actionLabel');
-      expect(dashboardWorkloadTableSource).toContain('TableHeader');
-      expect(dashboardWorkloadTableSource).toContain('NodeGroupHeader');
-      expect(dashboardWorkloadTableSource).toContain('GuestDrawer');
       expect(dashboardStatsStripSource).toContain('totalStats().running');
       expect(dashboardStatsStripSource).toContain('totalStats().stopped');
     });

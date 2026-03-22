@@ -84,6 +84,8 @@ import dashboardStateCardsSource from '@/components/Dashboard/DashboardStateCard
 import dashboardStatsStripSource from '@/components/Dashboard/DashboardStatsStrip.tsx?raw';
 import dashboardFilterSource from '@/components/Dashboard/DashboardFilter.tsx?raw';
 import dashboardWorkloadTableSource from '@/components/Dashboard/DashboardWorkloadTable.tsx?raw';
+import workloadPanelSource from '@/components/Dashboard/WorkloadPanel.tsx?raw';
+import workloadTableHeaderSource from '@/components/Dashboard/WorkloadTableHeader.tsx?raw';
 import dashboardFilterModelSource from '@/components/Dashboard/dashboardFilterModel.ts?raw';
 import dashboardGuestMetadataStateSource from '@/components/Dashboard/useDashboardGuestMetadataState.ts?raw';
 import dashboardSelectionStateSource from '@/components/Dashboard/useDashboardSelectionState.ts?raw';
@@ -524,7 +526,10 @@ describe('frontend resource type boundaries', () => {
     expect(dashboardSource).not.toContain('function normalizeViewModeParam');
     expect(dashboardSource).not.toContain('workloadSummaryGuestId');
     expect(dashboardSource).not.toContain('createMemo(() => getCanonicalWorkloadId(guest()))');
-    expect(dashboardWorkloadTableSource).toContain(
+    expect(workloadPanelSource).toContain(
+      'createMemo(() => getCanonicalWorkloadId(guest()))',
+    );
+    expect(dashboardWorkloadTableSource).not.toContain(
       'createMemo(() => getCanonicalWorkloadId(guest()))',
     );
     expect(dashboardGuestMetadataStateSource).toContain('normalizeOrgScope(getOrgID())');
@@ -654,8 +659,18 @@ describe('frontend resource type boundaries', () => {
     expect(guestDrawerOverviewSource).toContain('WebInterfaceUrlField');
     expect(guestDrawerOverviewSource).toContain('DiskList');
     expect(dashboardStateCardsSource).toContain('dashboardDisconnectedState().actionLabel');
-    expect(dashboardWorkloadTableSource).toContain('NodeGroupHeader');
-    expect(dashboardWorkloadTableSource).toContain('GuestDrawer');
+    expect(dashboardWorkloadTableSource).toContain('WorkloadTableHeader');
+    expect(dashboardWorkloadTableSource).toContain('WorkloadPanel');
+    expect(dashboardWorkloadTableSource).not.toContain('<TableHead');
+    expect(dashboardWorkloadTableSource).not.toContain('NodeGroupHeader');
+    expect(dashboardWorkloadTableSource).not.toContain('GuestDrawer');
+    expect(workloadTableHeaderSource).toContain('TableHead');
+    expect(workloadTableHeaderSource).toContain("col.sortKey as WorkloadSortKey");
+    expect(workloadTableHeaderSource).not.toContain('NodeGroupHeader');
+    expect(workloadPanelSource).toContain('NodeGroupHeader');
+    expect(workloadPanelSource).toContain('GuestDrawer');
+    expect(workloadPanelSource).toContain('createMemo(() => getCanonicalWorkloadId(guest()))');
+    expect(workloadPanelSource).not.toContain('TableHead');
     expect(dashboardStatsStripSource).toContain('totalStats().running');
     expect(emptyStateSource).toContain('getEmptyStatePresentation');
     expect(emptyStateSource).not.toContain('const iconBgClass: Record<EmptyStateTone, string> =');
