@@ -236,12 +236,15 @@ inline.
 The thresholds editor now follows that same split more tightly:
 `frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsTableState.ts`
 must stay the table-shell owner for route sync and local UI state, while
+`frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsData.ts`
+stays the composition shell for threshold resource-family projectors,
 `frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsRecoveryDefaultsState.ts`
 owns backup/snapshot default sanitization and factory-drift policy, and
 `frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsOverrideMutations.ts`
 owns override save/bulk/toggle persistence and alert-removal side effects. The
-table-shell hook should not re-accumulate raw override mutation logic or
-recovery-threshold defaults policy inline.
+table-shell hook should not re-accumulate raw override mutation logic,
+recovery-threshold defaults policy, or resource-family projection engines
+inline.
 
 The updates settings surface now follows the same presentation-owner rule.
 `frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx` stays the
@@ -430,10 +433,15 @@ thresholds-table adapter logic should stay feature-owned unless it graduates
 into a shared primitive used by more than one alert surface.
 Within that thresholds surface, `frontend-modern/src/components/Alerts/ThresholdsTable.tsx`
 is now explicitly a feature consumer rather than the data or controller owner.
-Canonical threshold row shaping, override-ID compatibility, grouped resource
-normalization, and thresholds-table controller state live in
-`frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsData.ts`,
-`frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsRecoveryDefaultsState.ts`,
+Canonical threshold row shaping now routes through
+`frontend-modern/src/features/alerts/thresholds/thresholdsResourceModel.ts`
+plus the family-owned feature hooks
+`frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsHostData.ts`,
+`frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsDockerData.ts`,
+`frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsGuestData.ts`,
+`frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsInfrastructureData.ts`,
+with `frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsData.ts`
+limited to composing them. Thresholds-table controller state lives in
 `frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsTableState.ts`,
 so future cleanup should extend those feature hooks instead of rebuilding
 resource normalization or thresholds-table runtime state inside the table

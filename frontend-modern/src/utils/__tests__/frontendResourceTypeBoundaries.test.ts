@@ -342,9 +342,14 @@ import alertScheduleTabSource from '@/features/alerts/tabs/ScheduleTab.tsx?raw';
 import alertThresholdsTabSource from '@/features/alerts/tabs/ThresholdsTab.tsx?raw';
 import thresholdsTableSource from '@/components/Alerts/ThresholdsTable.tsx?raw';
 import thresholdsDataHookSource from '@/features/alerts/thresholds/hooks/useThresholdsData.ts?raw';
+import thresholdsHostDataHookSource from '@/features/alerts/thresholds/hooks/useThresholdsHostData.ts?raw';
+import thresholdsDockerDataHookSource from '@/features/alerts/thresholds/hooks/useThresholdsDockerData.ts?raw';
+import thresholdsGuestDataHookSource from '@/features/alerts/thresholds/hooks/useThresholdsGuestData.ts?raw';
+import thresholdsInfrastructureDataHookSource from '@/features/alerts/thresholds/hooks/useThresholdsInfrastructureData.ts?raw';
 import thresholdsRecoveryDefaultsStateHookSource from '@/features/alerts/thresholds/hooks/useThresholdsRecoveryDefaultsState.ts?raw';
 import thresholdsTableStateHookSource from '@/features/alerts/thresholds/hooks/useThresholdsTableState.ts?raw';
 import thresholdsOverrideMutationsHookSource from '@/features/alerts/thresholds/hooks/useThresholdsOverrideMutations.ts?raw';
+import thresholdsResourceModelSource from '@/features/alerts/thresholds/thresholdsResourceModel.ts?raw';
 import alertIncidentPresentationSource from '@/utils/alertIncidentPresentation.ts?raw';
 import alertHistoryPresentationSource from '@/utils/alertHistoryPresentation.ts?raw';
 import bulkEditDialogSource from '@/components/Alerts/BulkEditDialog.tsx?raw';
@@ -2918,6 +2923,21 @@ describe('frontend resource type boundaries', () => {
     expect(thresholdsTableSource).not.toContain('const [searchTerm, setSearchTerm] = createSignal');
     expect(thresholdsTableSource).not.toContain('const handleTabClick =');
     expect(thresholdsDataHookSource).toContain('export function useThresholdsData');
+    expect(thresholdsDataHookSource).toContain('useThresholdsHostData(inputs)');
+    expect(thresholdsDataHookSource).toContain('useThresholdsDockerData(inputs)');
+    expect(thresholdsDataHookSource).toContain('useThresholdsGuestData(inputs)');
+    expect(thresholdsDataHookSource).toContain('useThresholdsInfrastructureData(inputs)');
+    expect(thresholdsDataHookSource).not.toContain('const hostOverrideIdCandidates =');
+    expect(thresholdsDataHookSource).not.toContain('const dockerContainersGroupedByHost = createMemo');
+    expect(thresholdsHostDataHookSource).toContain('export function useThresholdsHostData');
+    expect(thresholdsDockerDataHookSource).toContain('export function useThresholdsDockerData');
+    expect(thresholdsGuestDataHookSource).toContain('export function useThresholdsGuestData');
+    expect(thresholdsInfrastructureDataHookSource).toContain(
+      'export function useThresholdsInfrastructureData',
+    );
+    expect(thresholdsResourceModelSource).toContain('export function hostOverrideIdCandidates');
+    expect(thresholdsResourceModelSource).toContain('export function buildNodeHeaderMeta');
+    expect(thresholdsResourceModelSource).toContain('export const normalizeStorageStatus');
     expect(thresholdsTableStateHookSource).toContain('export function useThresholdsTableState');
     expect(thresholdsTableStateHookSource).toContain('useCollapsedSections()');
     expect(thresholdsTableStateHookSource).toContain('useThresholdsData(props, editingId, searchTerm)');

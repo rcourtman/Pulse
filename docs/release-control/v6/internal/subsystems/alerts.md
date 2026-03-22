@@ -130,8 +130,17 @@ Alert threshold tables now route their visible resource row labels, search
 labels, and persisted override display names through the same shared helper
 so governed agent, guest, and storage rows do not leak raw names when the
 threshold editor saves or re-renders them.
-That threshold editor data shaping now lives under
-`frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsData.ts`,
+That threshold editor data shaping now routes through
+`frontend-modern/src/features/alerts/thresholds/thresholdsResourceModel.ts`
+for shared override-ID compatibility, grouped resource normalization, and
+storage status policy, while
+`frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsData.ts`
+stays the composition owner for the family-specific threshold projectors in
+`frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsHostData.ts`,
+`frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsDockerData.ts`,
+`frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsGuestData.ts`,
+and
+`frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsInfrastructureData.ts`.
 backup and snapshot default sanitization plus factory-drift policy now live in
 `frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsRecoveryDefaultsState.ts`,
 while `frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsTableState.ts`
@@ -143,8 +152,8 @@ effects now route through
 `frontend-modern/src/components/Alerts/ThresholdsTable.tsx` is now limited to
 table interaction and presentation. New threshold row grouping,
 override-ID compatibility, resource normalization, or thresholds-table
-controller logic should land in those hooks rather than being rebuilt inside
-the table component.
+controller logic should land in those threshold model and family hooks rather
+than being rebuilt inside the table component.
 The alert resource thresholds editor now follows the same shape: shared metric
 normalization, bounds, value-resolution, and override-label logic live in
 `frontend-modern/src/components/Alerts/alertResourceTableModel.ts`, render-heavy
