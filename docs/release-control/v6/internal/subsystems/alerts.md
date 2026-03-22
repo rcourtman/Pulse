@@ -332,8 +332,10 @@ serialization,
 normalization plus resource-backed override projection, and
 `frontend-modern/src/features/alerts/useAlertOverridesState.ts` for reactive
 override state, derived resource lists, and overview handoff, and
+`frontend-modern/src/features/alerts/alertDestinationsModel.ts` for email and
+Apprise config normalization plus outbound payload shaping, and
 `frontend-modern/src/features/alerts/useAlertDestinationsState.ts` for
-notification destination reload and persistence.
+notification destination reload and persistence orchestration.
 `frontend-modern/src/features/alerts/useAlertWebhookDestinationsState.ts` now
 owns webhook load/mutate/test flow,
 `frontend-modern/src/features/alerts/useAlertDestinationsTabState.ts` now owns

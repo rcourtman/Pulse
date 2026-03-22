@@ -330,6 +330,7 @@ import alertsConfigurationSnapshotStateSource from '@/features/alerts/useAlertsC
 import alertsConfigurationModelSource from '@/features/alerts/alertsConfigurationModel.ts?raw';
 import alertOverridesModelSource from '@/features/alerts/alertOverridesModel.ts?raw';
 import alertOverridesStateSource from '@/features/alerts/useAlertOverridesState.ts?raw';
+import alertDestinationsModelSource from '@/features/alerts/alertDestinationsModel.ts?raw';
 import alertDestinationsStateSource from '@/features/alerts/useAlertDestinationsState.ts?raw';
 import alertDestinationsTabStateSource from '@/features/alerts/useAlertDestinationsTabState.ts?raw';
 import alertWebhookDestinationsStateSource from '@/features/alerts/useAlertWebhookDestinationsState.ts?raw';
@@ -2876,6 +2877,16 @@ describe('frontend resource type boundaries', () => {
     expect(alertDestinationsStateSource).toContain('getAlertDestinationsConfigLoadError');
     expect(alertDestinationsStateSource).toContain('NotificationsAPI.getEmailConfig');
     expect(alertDestinationsStateSource).toContain('NotificationsAPI.updateEmailConfig');
+    expect(alertDestinationsStateSource).toContain('buildEmailConfigPayload');
+    expect(alertDestinationsStateSource).toContain('buildAppriseConfigPayload');
+    expect(alertDestinationsStateSource).toContain('normalizeAppriseConfig');
+    expect(alertDestinationsStateSource).not.toContain('formatAppriseTargets');
+    expect(alertDestinationsStateSource).not.toContain('parseAppriseTargets');
+    expect(alertDestinationsModelSource).toContain('export function normalizeAppriseConfig');
+    expect(alertDestinationsModelSource).toContain('export function buildEmailConfigPayload');
+    expect(alertDestinationsModelSource).toContain('export function buildAppriseConfigPayload');
+    expect(alertDestinationsModelSource).toContain('formatAppriseTargets');
+    expect(alertDestinationsModelSource).toContain('parseAppriseTargets');
     expect(alertDestinationsTabStateSource).toContain('export function useAlertDestinationsTabState');
     expect(alertDestinationsTabStateSource).toContain('NotificationsAPI.testNotification');
     expect(alertDestinationsTabStateSource).toContain('useAlertWebhookDestinationsState');

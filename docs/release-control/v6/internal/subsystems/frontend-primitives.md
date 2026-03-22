@@ -502,8 +502,10 @@ serialization, `frontend-modern/src/features/alerts/alertOverridesModel.ts`
 for override normalization and resource-backed projection, and
 `frontend-modern/src/features/alerts/useAlertOverridesState.ts`
 for reactive override state and thresholds-facing resource selectors, and
+`frontend-modern/src/features/alerts/alertDestinationsModel.ts` for
+destination config normalization and payload shaping, and
 `frontend-modern/src/features/alerts/useAlertDestinationsState.ts` for
-notification destination reload and persistence.
+notification destination reload and persistence orchestration.
 `frontend-modern/src/features/alerts/useAlertWebhookDestinationsState.ts` now
 owns webhook runtime, and
 `frontend-modern/src/components/Alerts/ResourceTable.tsx` now follows the same

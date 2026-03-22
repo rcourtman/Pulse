@@ -1,40 +1,24 @@
 import { createEffect, createSignal } from 'solid-js';
 import type { Accessor } from 'solid-js';
 
-import type { AppriseConfig, EmailConfig } from '@/api/notifications';
 import { NotificationsAPI } from '@/api/notifications';
 import { getAlertDestinationsConfigLoadError } from '@/utils/alertDestinationsPresentation';
 import { logger } from '@/utils/logger';
 
 import {
+  buildAppriseConfigPayload,
+  buildEmailConfigPayload,
+  normalizeAppriseConfig,
+  normalizeEmailConfigFromAPI,
+} from './alertDestinationsModel';
+import {
   createDefaultAppriseConfig,
   createDefaultEmailConfig,
-  formatAppriseTargets,
-  normalizeEmailConfigFromAPI,
-  parseAppriseTargets,
 } from './helpers';
 import type { AlertTab, UIAppriseConfig, UIEmailConfig } from './types';
 
 interface AlertDestinationsStateOptions {
   activeTab: Accessor<AlertTab>;
-}
-
-function normalizeAppriseConfig(config: Partial<AppriseConfig> | null | undefined): UIAppriseConfig {
-  return {
-    enabled: config?.enabled ?? false,
-    mode: config?.mode === 'http' ? 'http' : 'cli',
-    targetsText: formatAppriseTargets(config?.targets),
-    cliPath: config?.cliPath || 'apprise',
-    timeoutSeconds:
-      typeof config?.timeoutSeconds === 'number' && config.timeoutSeconds > 0
-        ? config.timeoutSeconds
-        : 15,
-    serverUrl: config?.serverUrl || '',
-    configKey: config?.configKey || '',
-    apiKey: config?.apiKey || '',
-    apiKeyHeader: config?.apiKeyHeader || 'X-API-KEY',
-    skipTlsVerify: Boolean(config?.skipTlsVerify),
-  };
 }
 
 export function useAlertDestinationsState(options: AlertDestinationsStateOptions) {
@@ -100,33 +84,11 @@ export function useAlertDestinationsState(options: AlertDestinationsStateOptions
   };
 
   const saveDestinations = async () => {
-    const currentEmailConfig = emailConfig();
-    await NotificationsAPI.updateEmailConfig({
-      enabled: currentEmailConfig.enabled,
-      provider: currentEmailConfig.provider,
-      server: currentEmailConfig.server,
-      port: currentEmailConfig.port,
-      username: currentEmailConfig.username,
-      password: currentEmailConfig.password,
-      from: currentEmailConfig.from,
-      to: currentEmailConfig.to,
-      tls: currentEmailConfig.tls,
-      startTLS: currentEmailConfig.startTLS,
-    } as EmailConfig);
+    await NotificationsAPI.updateEmailConfig(buildEmailConfigPayload(emailConfig()));
 
-    const currentAppriseConfig = appriseConfig();
-    const updatedApprise = await NotificationsAPI.updateAppriseConfig({
-      enabled: currentAppriseConfig.enabled,
-      mode: currentAppriseConfig.mode,
-      targets: parseAppriseTargets(currentAppriseConfig.targetsText),
-      cliPath: currentAppriseConfig.cliPath,
-      timeoutSeconds: currentAppriseConfig.timeoutSeconds,
-      serverUrl: currentAppriseConfig.serverUrl,
-      configKey: currentAppriseConfig.configKey,
-      apiKey: currentAppriseConfig.apiKey,
-      apiKeyHeader: currentAppriseConfig.apiKeyHeader,
-      skipTlsVerify: currentAppriseConfig.skipTlsVerify,
-    } as AppriseConfig);
+    const updatedApprise = await NotificationsAPI.updateAppriseConfig(
+      buildAppriseConfigPayload(appriseConfig()),
+    );
 
     setAppriseConfig(normalizeAppriseConfig(updatedApprise));
   };
