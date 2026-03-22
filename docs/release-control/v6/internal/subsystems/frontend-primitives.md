@@ -459,6 +459,12 @@ and `frontend-modern/src/components/Alerts/ThresholdsTableDockerContainersSectio
 Future Docker thresholds presentation changes should extend those section
 surfaces rather than restoring mixed JSX ownership to
 `frontend-modern/src/components/Alerts/ThresholdsTableDockerTab.tsx`.
+The agents tab now follows that same composition pattern through
+`frontend-modern/src/components/Alerts/ThresholdsTableAgentsResourcesSection.tsx`
+and `frontend-modern/src/components/Alerts/ThresholdsTableAgentDisksSection.tsx`.
+Future agent thresholds presentation changes should extend those section
+surfaces rather than restoring mixed JSX ownership to
+`frontend-modern/src/components/Alerts/ThresholdsTableAgentsTab.tsx`.
 Canonical threshold row shaping now routes through
 `frontend-modern/src/features/alerts/thresholds/thresholdsResourceModel.ts`
 plus the family-owned feature hooks

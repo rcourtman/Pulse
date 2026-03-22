@@ -28,7 +28,9 @@ import alertScheduleTabSource from '@/features/alerts/tabs/ScheduleTab.tsx?raw';
 import alertThresholdsTabSource from '@/features/alerts/tabs/ThresholdsTab.tsx?raw';
 import recentAlertsPanelSource from '@/components/Alerts/RecentAlertsPanel.tsx?raw';
 import thresholdsTableSource from '@/components/Alerts/ThresholdsTable.tsx?raw';
+import thresholdsTableAgentDisksSectionSource from '@/components/Alerts/ThresholdsTableAgentDisksSection.tsx?raw';
 import thresholdsTableAgentsTabSource from '@/components/Alerts/ThresholdsTableAgentsTab.tsx?raw';
+import thresholdsTableAgentsResourcesSectionSource from '@/components/Alerts/ThresholdsTableAgentsResourcesSection.tsx?raw';
 import thresholdsTableDockerContainersSectionSource from '@/components/Alerts/ThresholdsTableDockerContainersSection.tsx?raw';
 import thresholdsTableDockerHostsSectionSource from '@/components/Alerts/ThresholdsTableDockerHostsSection.tsx?raw';
 import thresholdsTableDockerIgnoredPrefixesSectionSource from '@/components/Alerts/ThresholdsTableDockerIgnoredPrefixesSection.tsx?raw';
@@ -437,7 +439,16 @@ describe('tab path helpers', () => {
     expect(thresholdsTablePMGTabSource).toContain('export function ThresholdsTablePMGTab');
     expect(thresholdsTablePMGTabSource).toContain('pmgGlobalDefaults()');
     expect(thresholdsTableAgentsTabSource).toContain('export function ThresholdsTableAgentsTab');
-    expect(thresholdsTableAgentsTabSource).toContain('agentDisksGroupedByAgent()');
+    expect(thresholdsTableAgentsTabSource).toContain('ThresholdsTableAgentsResourcesSection');
+    expect(thresholdsTableAgentsTabSource).toContain('ThresholdsTableAgentDisksSection');
+    expect(thresholdsTableAgentsTabSource).not.toContain('agentDisksGroupedByAgent()');
+    expect(thresholdsTableAgentsResourcesSectionSource).toContain(
+      'export function ThresholdsTableAgentsResourcesSection',
+    );
+    expect(thresholdsTableAgentDisksSectionSource).toContain(
+      'export function ThresholdsTableAgentDisksSection',
+    );
+    expect(thresholdsTableAgentDisksSectionSource).toContain('agentDisksGroupedByAgent()');
     expect(thresholdsTableDockerTabSource).toContain('export function ThresholdsTableDockerTab');
     expect(thresholdsTableDockerTabSource).toContain('ThresholdsTableDockerIgnoredPrefixesSection');
     expect(thresholdsTableDockerTabSource).toContain('ThresholdsTableDockerServiceGapSection');
