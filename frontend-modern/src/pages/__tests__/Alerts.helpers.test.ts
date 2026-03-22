@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import alertsPageSource from '@/pages/Alerts.tsx?raw';
 import alertsConfigurationSurfaceSource from '@/features/alerts/AlertsConfigurationSurface.tsx?raw';
 import alertsConfigurationStateSource from '@/features/alerts/useAlertsConfigurationState.ts?raw';
+import alertsConfigurationSnapshotStateSource from '@/features/alerts/useAlertsConfigurationSnapshotState.ts?raw';
 import alertsConfigurationModelSource from '@/features/alerts/alertsConfigurationModel.ts?raw';
 import alertOverridesStateSource from '@/features/alerts/useAlertOverridesState.ts?raw';
 import alertDestinationsStateSource from '@/features/alerts/useAlertDestinationsState.ts?raw';
@@ -238,6 +239,7 @@ describe('tab path helpers', () => {
     expect(alertsConfigurationStateSource).toContain('readAlertsConfigurationSnapshot');
     expect(alertsConfigurationStateSource).toContain('buildAlertsConfigurationPayload');
     expect(alertsConfigurationStateSource).toContain('useAlertDestinationsState');
+    expect(alertsConfigurationStateSource).toContain('useAlertsConfigurationSnapshotState');
     expect(alertsConfigurationStateSource).toContain('useAlertOverridesState');
     expect(alertsConfigurationStateSource).not.toContain('NotificationsAPI.getEmailConfig');
     expect(alertsConfigurationStateSource).not.toContain('NotificationsAPI.updateEmailConfig');
@@ -247,8 +249,21 @@ describe('tab path helpers', () => {
     expect(alertsConfigurationStateSource).not.toContain(
       'const [rawOverridesConfig, setRawOverridesConfig] = createSignal',
     );
+    expect(alertsConfigurationStateSource).not.toContain(
+      'const [scheduleQuietHours, setScheduleQuietHours] = createSignal',
+    );
     expect(alertsConfigurationStateSource).not.toContain('const hostOverrideIdCandidates =');
     expect(alertsConfigurationStateSource).not.toContain('const allGuests = createMemo');
+    expect(alertsConfigurationSnapshotStateSource).toContain(
+      'export function useAlertsConfigurationSnapshotState',
+    );
+    expect(alertsConfigurationSnapshotStateSource).toContain(
+      'const [scheduleQuietHours, setScheduleQuietHours] = createSignal',
+    );
+    expect(alertsConfigurationSnapshotStateSource).toContain('applyConfigurationSnapshot');
+    expect(alertsConfigurationSnapshotStateSource).toContain('captureConfigurationSnapshot');
+    expect(alertsConfigurationSnapshotStateSource).toContain('resetGuestDefaults');
+    expect(alertsConfigurationSnapshotStateSource).toContain('FACTORY_GUEST_DEFAULTS');
     expect(alertsConfigurationModelSource).toContain(
       'export function createDefaultAlertsConfigurationSnapshot',
     );

@@ -316,7 +316,10 @@ navigation, activation chrome, and cross-surface routing; the configuration
 surface is now a shell that composes the destinations, schedule, and thresholds
 tabs. The canonical alert-policy runtime owner is now
 `frontend-modern/src/features/alerts/useAlertsConfigurationState.ts` for
-config transport, defaults, and save/load orchestration,
+config transport, notification-config reloads, and save/load orchestration,
+`frontend-modern/src/features/alerts/useAlertsConfigurationSnapshotState.ts`
+for default-backed mutable config snapshot state plus apply/capture/reset
+ownership,
 `frontend-modern/src/features/alerts/alertsConfigurationModel.ts` for backend
 config normalization, factory defaults, docker-gap validation, and save-payload
 serialization,

@@ -488,7 +488,10 @@ configuration orchestration. `frontend-modern/src/pages/Alerts.tsx` is the page
 shell, while `frontend-modern/src/features/alerts/AlertsConfigurationSurface.tsx`
 is the feature shell. The canonical runtime owner is now
 `frontend-modern/src/features/alerts/useAlertsConfigurationState.ts` for alert
-config transport,
+config transport and org-switch reload orchestration,
+`frontend-modern/src/features/alerts/useAlertsConfigurationSnapshotState.ts`
+for the default-backed mutable configuration snapshot plus apply/capture/reset
+ownership,
 `frontend-modern/src/features/alerts/alertsConfigurationModel.ts` for config
 normalization, factory defaults, docker-gap validation, and payload
 serialization, `frontend-modern/src/features/alerts/useAlertOverridesState.ts`
