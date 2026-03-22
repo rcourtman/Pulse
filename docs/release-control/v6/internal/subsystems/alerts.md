@@ -76,6 +76,15 @@ backend webhook template registry, rather than keeping a second frontend-only
 list of services, labels, descriptions, and mention-copy metadata.
 The WebhookConfig editor now imports the shared webhook template API type
 directly so it does not retain a local duplicate shape for chooser metadata.
+That webhook editor now also keeps runtime ownership in
+`frontend-modern/src/components/Alerts/useWebhookConfigState.ts`, while
+`frontend-modern/src/components/Alerts/WebhookConfigList.tsx` owns the
+existing-webhook list surface and
+`frontend-modern/src/components/Alerts/WebhookConfigForm.tsx` owns the
+add/edit form surface. Future webhook template loading, form normalization,
+custom-field preset handling, or webhook editor state transitions should land
+in those owners instead of being rebuilt inline in
+`frontend-modern/src/components/Alerts/WebhookConfig.tsx`.
 
 Alert spec validation still accepts the explicit migration-bridge resource
 types (`node`, `agent-disk`, `docker-host`, `backup-subject`,

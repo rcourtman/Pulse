@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
+import webhookConfigSource from '@/components/Alerts/WebhookConfig.tsx?raw';
+import webhookConfigFormSource from '@/components/Alerts/WebhookConfigForm.tsx?raw';
+import webhookConfigListSource from '@/components/Alerts/WebhookConfigList.tsx?raw';
+import webhookConfigStateSource from '@/components/Alerts/useWebhookConfigState.ts?raw';
 
 // --- Mock setup (must be before component import) ---
 const getWebhookTemplatesMock = vi.fn();
@@ -117,6 +121,22 @@ describe('WebhookConfig', () => {
 
   afterEach(() => {
     cleanup();
+  });
+
+  it('keeps webhook runtime state and section owners out of the shell', () => {
+    expect(webhookConfigSource).toContain('useWebhookConfigState');
+    expect(webhookConfigSource).toContain('WebhookConfigList');
+    expect(webhookConfigSource).toContain('WebhookConfigForm');
+    expect(webhookConfigSource).not.toContain('NotificationsAPI.getWebhookTemplates');
+    expect(webhookConfigSource).not.toContain('const saveWebhook = () => {');
+    expect(webhookConfigSource).not.toContain('const editWebhook = (webhook: Webhook) => {');
+    expect(webhookConfigSource).not.toContain('const toggleAllWebhooks = (enabled: boolean) => {');
+    expect(webhookConfigListSource).toContain('getAlertWebhookSummaryLabel');
+    expect(webhookConfigListSource).toContain('getAlertWebhookToggleAllLabel');
+    expect(webhookConfigFormSource).toContain('getAlertWebhookServices');
+    expect(webhookConfigFormSource).toContain('getAlertWebhookSubmitLabel');
+    expect(webhookConfigStateSource).toContain('NotificationsAPI.getWebhookTemplates');
+    expect(webhookConfigStateSource).toContain('normalizeAlertWebhookCustomFields');
   });
 
   // --- Rendering existing webhooks ---

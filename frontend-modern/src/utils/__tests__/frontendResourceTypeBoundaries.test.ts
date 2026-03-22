@@ -341,6 +341,9 @@ import alertResourceTableSource from '@/components/Alerts/ResourceTable.tsx?raw'
 import alertResourceTableStateSource from '@/components/Alerts/useAlertResourceTableState.ts?raw';
 import emailProviderSelectSource from '@/components/Alerts/EmailProviderSelect.tsx?raw';
 import webhookConfigSource from '@/components/Alerts/WebhookConfig.tsx?raw';
+import webhookConfigFormSource from '@/components/Alerts/WebhookConfigForm.tsx?raw';
+import webhookConfigListSource from '@/components/Alerts/WebhookConfigList.tsx?raw';
+import webhookConfigStateSource from '@/components/Alerts/useWebhookConfigState.ts?raw';
 import alertActivationPresentationSource from '@/utils/alertActivationPresentation.ts?raw';
 import alertFrequencyPresentationSource from '@/utils/alertFrequencyPresentation.ts?raw';
 import alertSeverityPresentationSource from '@/utils/alertSeverityPresentation.ts?raw';
@@ -3884,20 +3887,15 @@ describe('frontend resource type boundaries', () => {
   });
 
   it('keeps alert webhook service vocabulary and action copy in a shared presentation utility', () => {
-    expect(webhookConfigSource).toContain('getAlertWebhookServices(templates())');
-    expect(webhookConfigSource).toContain('getAlertWebhookServiceLabelFromTemplates');
-    expect(webhookConfigSource).toContain('getAlertWebhookCustomFieldInputs');
-    expect(webhookConfigSource).toContain('normalizeAlertWebhookCustomFields');
-    expect(webhookConfigSource).toContain('getAlertWebhookSummaryLabel');
-    expect(webhookConfigSource).toContain('getAlertWebhookToggleAllLabel');
-    expect(webhookConfigSource).toContain('getAlertWebhookToggleLabel');
-    expect(webhookConfigSource).toContain('getAlertWebhookNamePlaceholder');
-    expect(webhookConfigSource).toContain('getAlertWebhookUrlPlaceholder');
-    expect(webhookConfigSource).toContain('getAlertWebhookMentionPlaceholderFromTemplates');
-    expect(webhookConfigSource).toContain('getAlertWebhookMentionHelpFromTemplates');
-    expect(webhookConfigSource).toContain('hasAlertWebhookMentionSupportFromTemplates');
-    expect(webhookConfigSource).toContain('getAlertWebhookTestLabel');
-    expect(webhookConfigSource).toContain('getAlertWebhookSubmitLabel');
+    expect(webhookConfigSource).toContain('useWebhookConfigState');
+    expect(webhookConfigSource).toContain('WebhookConfigList');
+    expect(webhookConfigSource).toContain('WebhookConfigForm');
+    expect(webhookConfigSource).not.toContain('NotificationsAPI.getWebhookTemplates');
+    expect(webhookConfigSource).not.toContain('const saveWebhook = () => {');
+    expect(webhookConfigSource).not.toContain('const editWebhook = (webhook: Webhook) => {');
+    expect(webhookConfigSource).not.toContain(
+      'const toggleAllWebhooks = (enabled: boolean) => {',
+    );
     expect(webhookConfigSource).not.toContain('Custom webhook endpoint');
     expect(webhookConfigSource).not.toContain('Discord server webhook');
     expect(webhookConfigSource).not.toContain('My Webhook');
@@ -3915,6 +3913,24 @@ describe('frontend resource type boundaries', () => {
     expect(webhookConfigSource).not.toContain('Enable All');
     expect(webhookConfigSource).not.toContain('Disable All');
     expect(webhookConfigSource).not.toContain('Enable this webhook');
+    expect(webhookConfigListSource).toContain('getAlertWebhookServiceLabelFromTemplates');
+    expect(webhookConfigListSource).toContain('getAlertWebhookSummaryLabel');
+    expect(webhookConfigListSource).toContain('getAlertWebhookToggleAllLabel');
+    expect(webhookConfigListSource).toContain('getAlertWebhookToggleLabel');
+    expect(webhookConfigListSource).toContain('getAlertWebhookTestLabel');
+    expect(webhookConfigFormSource).toContain('getAlertWebhookServices');
+    expect(webhookConfigFormSource).toContain('getAlertWebhookNamePlaceholder');
+    expect(webhookConfigFormSource).toContain('getAlertWebhookUrlPlaceholder');
+    expect(webhookConfigFormSource).toContain(
+      'getAlertWebhookMentionPlaceholderFromTemplates',
+    );
+    expect(webhookConfigFormSource).toContain('getAlertWebhookMentionHelpFromTemplates');
+    expect(webhookConfigFormSource).toContain('hasAlertWebhookMentionSupportFromTemplates');
+    expect(webhookConfigFormSource).toContain('getAlertWebhookTestLabel');
+    expect(webhookConfigFormSource).toContain('getAlertWebhookSubmitLabel');
+    expect(webhookConfigStateSource).toContain('NotificationsAPI.getWebhookTemplates');
+    expect(webhookConfigStateSource).toContain('getAlertWebhookCustomFieldInputs');
+    expect(webhookConfigStateSource).toContain('normalizeAlertWebhookCustomFields');
     expect(alertWebhookPresentationSource).toContain(
       'export function getAlertWebhookServiceLabelFromTemplates',
     );
