@@ -23,20 +23,24 @@ Patrol-specific presentation helpers.
 
 1. `frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx`
 2. `frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts`
-3. `frontend-modern/src/pages/AIIntelligence.tsx`
-4. `frontend-modern/src/stores/aiIntelligence.ts`
-5. `frontend-modern/src/types/aiIntelligence.ts`
-6. `frontend-modern/src/components/AI/FindingsPanel.tsx`
-7. `frontend-modern/src/components/Brand/PulsePatrolLogo.tsx`
-8. `frontend-modern/src/components/patrol/`
-9. `frontend-modern/src/utils/aiFindingPresentation.ts`
-10. `frontend-modern/src/utils/approvalRiskPresentation.ts`
-11. `frontend-modern/src/utils/findingAlertIdentity.ts`
-12. `frontend-modern/src/utils/patrolEmptyStatePresentation.ts`
-13. `frontend-modern/src/utils/patrolFormat.ts`
-14. `frontend-modern/src/utils/patrolRunPresentation.ts`
-15. `frontend-modern/src/utils/patrolSummaryPresentation.ts`
-16. `frontend-modern/src/utils/textPresentation.ts`
+3. `frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx`
+4. `frontend-modern/src/features/patrol/PatrolIntelligenceBanners.tsx`
+5. `frontend-modern/src/features/patrol/PatrolIntelligenceSummary.tsx`
+6. `frontend-modern/src/features/patrol/PatrolIntelligenceWorkspace.tsx`
+7. `frontend-modern/src/pages/AIIntelligence.tsx`
+8. `frontend-modern/src/stores/aiIntelligence.ts`
+9. `frontend-modern/src/types/aiIntelligence.ts`
+10. `frontend-modern/src/components/AI/FindingsPanel.tsx`
+11. `frontend-modern/src/components/Brand/PulsePatrolLogo.tsx`
+12. `frontend-modern/src/components/patrol/`
+13. `frontend-modern/src/utils/aiFindingPresentation.ts`
+14. `frontend-modern/src/utils/approvalRiskPresentation.ts`
+15. `frontend-modern/src/utils/findingAlertIdentity.ts`
+16. `frontend-modern/src/utils/patrolEmptyStatePresentation.ts`
+17. `frontend-modern/src/utils/patrolFormat.ts`
+18. `frontend-modern/src/utils/patrolRunPresentation.ts`
+19. `frontend-modern/src/utils/patrolSummaryPresentation.ts`
+20. `frontend-modern/src/utils/textPresentation.ts`
 
 ## Shared Boundaries
 
@@ -44,7 +48,7 @@ Patrol-specific presentation helpers.
 
 ## Extension Points
 
-1. Add or change Patrol page orchestration through `frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts`, keep `frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx` as the feature render shell, keep `frontend-modern/src/pages/AIIntelligence.tsx` as the route shell, and update `frontend-modern/src/stores/aiIntelligence.ts` together
+1. Add or change Patrol page orchestration through `frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts`, keep `frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx` as the feature shell, keep the Patrol-owned section files under `frontend-modern/src/features/patrol/` as the heavy render owners, keep `frontend-modern/src/pages/AIIntelligence.tsx` as the route shell, and update `frontend-modern/src/stores/aiIntelligence.ts` together
 2. Add or change Patrol findings, approvals, investigation, or run-history presentation through `frontend-modern/src/components/AI/FindingsPanel.tsx` and `frontend-modern/src/components/patrol/`
 3. Keep Patrol and chat identifier-label presentation aligned through the shared `frontend-modern/src/utils/textPresentation.ts`
 4. Keep Patrol and chat stream-matching / mention dedupe aligned through the shared `frontend-modern/src/utils/chatIdentifiers.ts`
@@ -76,12 +80,14 @@ thin shell that delegates to the feature-owned
 runtime state and presentation no longer accumulate directly in the route
 component itself.
 The feature surface now also keeps the same shell/runtime split internally:
-`frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx` owns render
-composition and Patrol page presentation, while
+`frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx` owns feature
+composition, the Patrol-owned section files under
+`frontend-modern/src/features/patrol/` own the header, banner, summary, and
+workspace render surfaces, and
 `frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts` owns Patrol
-state, transport, polling, and effect lifecycle. The render shell must not
-re-accumulate Patrol API calls, timer orchestration, or store refresh flow
-inline.
+state, transport, polling, and effect lifecycle. The shell and section surfaces
+must not re-accumulate Patrol API calls, timer orchestration, or store refresh
+flow inline.
 
 Patrol finding state must now also consume the canonical camelCase
 `alertIdentifier` field and pending-approval expiry metadata end to end.

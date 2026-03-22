@@ -745,3 +745,5 @@ export function usePatrolIntelligenceState() {
     upgradeUrl,
   };
 }
+
+export type PatrolIntelligenceState = ReturnType<typeof usePatrolIntelligenceState>;
