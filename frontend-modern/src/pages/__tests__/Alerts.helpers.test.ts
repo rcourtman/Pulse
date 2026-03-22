@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import alertsPageSource from '@/pages/Alerts.tsx?raw';
 import alertsConfigurationSurfaceSource from '@/features/alerts/AlertsConfigurationSurface.tsx?raw';
 import alertsConfigurationStateSource from '@/features/alerts/useAlertsConfigurationState.ts?raw';
+import alertIncidentTimelineStateSource from '@/features/alerts/useAlertIncidentTimelineState.ts?raw';
 import alertDestinationsTabSource from '@/features/alerts/tabs/DestinationsTab.tsx?raw';
 import alertHistoryTabSource from '@/features/alerts/tabs/HistoryTab.tsx?raw';
 import alertScheduleTabSource from '@/features/alerts/tabs/ScheduleTab.tsx?raw';
@@ -191,9 +192,19 @@ describe('tab path helpers', () => {
       "import { HistoryTab } from '@/features/alerts/tabs/HistoryTab';",
     );
     expect(alertsPageSource).not.toContain('function HistoryTab(');
+    expect(alertHistoryTabSource).toContain('useAlertIncidentTimelineState');
     expect(alertDestinationsTabSource).toContain('NotificationsAPI.getWebhooks');
     expect(alertHistoryTabSource).toContain('AlertsAPI.getHistory');
     expect(alertHistoryTabSource).toContain('IncidentTimelinePanel');
+    expect(alertHistoryTabSource).not.toContain('AlertsAPI.getIncidentTimeline');
+    expect(alertHistoryTabSource).not.toContain('AlertsAPI.addIncidentNote');
+    expect(alertHistoryTabSource).not.toContain('const loadIncidentTimeline = async');
+    expect(alertHistoryTabSource).not.toContain('const saveIncidentNote = async');
+    expect(alertIncidentTimelineStateSource).toContain(
+      'export function useAlertIncidentTimelineState',
+    );
+    expect(alertIncidentTimelineStateSource).toContain('AlertsAPI.getIncidentTimeline');
+    expect(alertIncidentTimelineStateSource).toContain('AlertsAPI.addIncidentNote');
     expect(alertScheduleTabSource).toContain('getAlertConfigQuietHourSuppressOptions');
     expect(alertThresholdsTabSource).toContain('ThresholdsTable');
     expect(thresholdsTableSource).toContain(

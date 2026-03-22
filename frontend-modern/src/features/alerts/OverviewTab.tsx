@@ -2,18 +2,15 @@ import { InvestigateAlertButton } from '@/components/Alerts/InvestigateAlertButt
 
 import { createSignal, createMemo, onCleanup, For, Show, createEffect } from 'solid-js';
 import { useLocation } from '@solidjs/router';
-import type { Incident } from '@/types/api';
 
-import { AlertsAPI } from '@/api/alerts';
 import type { Alert } from '@/types/api';
 import type { Override } from './types';
 import { alertTypeDisplayLabel } from './helpers';
 import { getCanonicalAlertId } from './identity';
+import { useAlertIncidentTimelineState } from './useAlertIncidentTimelineState';
 import { Card } from '@/components/shared/Card';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { IncidentTimelinePanel } from '@/components/Alerts/IncidentTimelinePanel';
-import { notificationStore } from '@/stores/notifications';
-import { logger } from '@/utils/logger';
 import {
   ALERTS_EMPTY_STATE,
   ALERTS_THRESHOLD_HINT,
@@ -24,7 +21,6 @@ import {
   getAlertOverviewSecondaryActionClass,
   getAlertOverviewStartedAtClass,
 } from '@/utils/alertOverviewPresentation';
-import { INCIDENT_EVENT_TYPES } from './types';
 
 // Overview Tab - Shows current alert status
 export function OverviewTab(props: {
@@ -44,17 +40,20 @@ export function OverviewTab(props: {
   const pendingProcessingResetTimeouts = new Set<number>();
   // Loading states for buttons
   const [processingAlerts, setProcessingAlerts] = createSignal<Set<string>>(new Set());
-  const [incidentTimelines, setIncidentTimelines] = createSignal<Record<string, Incident | null>>(
-    {},
-  );
-  const [incidentLoading, setIncidentLoading] = createSignal<Record<string, boolean>>({});
-  const [incidentErrors, setIncidentErrors] = createSignal<Record<string, boolean>>({});
-  const [expandedIncidents, setExpandedIncidents] = createSignal<Set<string>>(new Set());
-  const [incidentNoteDrafts, setIncidentNoteDrafts] = createSignal<Record<string, string>>({});
-  const [incidentNoteSaving, setIncidentNoteSaving] = createSignal<Set<string>>(new Set());
-  const [incidentEventFilters, setIncidentEventFilters] = createSignal<Set<string>>(
-    new Set(INCIDENT_EVENT_TYPES),
-  );
+  const {
+    incidentTimelines,
+    incidentLoading,
+    incidentErrors,
+    expandedIncidents,
+    incidentNoteDrafts,
+    incidentNoteSaving,
+    eventFilters: incidentEventFilters,
+    setEventFilters: setIncidentEventFilters,
+    loadIncidentTimeline,
+    toggleIncidentTimeline,
+    setIncidentNoteDraft,
+    saveIncidentNote,
+  } = useAlertIncidentTimelineState();
   const [lastHashScrolled, setLastHashScrolled] = createSignal<string | null>(null);
   // Tick every 60s so the "Last 24 Hours" count stays fresh as alerts age out
   const [tick, setTick] = createSignal(Date.now());
@@ -75,60 +74,6 @@ export function OverviewTab(props: {
     processingReleaseTimers.forEach((timer) => clearTimeout(timer));
     processingReleaseTimers.clear();
   });
-
-  const loadIncidentTimeline = async (alertIdentifier: string, startedAt?: string) => {
-    setIncidentLoading((prev) => ({ ...prev, [alertIdentifier]: true }));
-    try {
-      const timeline = await AlertsAPI.getIncidentTimeline(alertIdentifier, startedAt);
-      setIncidentTimelines((prev) => ({ ...prev, [alertIdentifier]: timeline }));
-      setIncidentErrors((prev) => ({ ...prev, [alertIdentifier]: false }));
-    } catch (error) {
-      logger.error('Failed to load incident timeline', error);
-      notificationStore.error('Failed to load incident timeline');
-      setIncidentErrors((prev) => ({ ...prev, [alertIdentifier]: true }));
-    } finally {
-      setIncidentLoading((prev) => ({ ...prev, [alertIdentifier]: false }));
-    }
-  };
-
-  const toggleIncidentTimeline = async (alertIdentifier: string, startedAt?: string) => {
-    const expanded = expandedIncidents();
-    const next = new Set(expanded);
-    if (next.has(alertIdentifier)) {
-      next.delete(alertIdentifier);
-      setExpandedIncidents(next);
-      return;
-    }
-    next.add(alertIdentifier);
-    setExpandedIncidents(next);
-    if (!(alertIdentifier in incidentTimelines())) {
-      await loadIncidentTimeline(alertIdentifier, startedAt);
-    }
-  };
-
-  const saveIncidentNote = async (alertIdentifier: string, startedAt?: string) => {
-    const note = (incidentNoteDrafts()[alertIdentifier] || '').trim();
-    if (!note) {
-      return;
-    }
-    setIncidentNoteSaving((prev) => new Set(prev).add(alertIdentifier));
-    try {
-      const incidentId = incidentTimelines()[alertIdentifier]?.id;
-      await AlertsAPI.addIncidentNote({ alertIdentifier, incidentId, note });
-      setIncidentNoteDrafts((prev) => ({ ...prev, [alertIdentifier]: '' }));
-      await loadIncidentTimeline(alertIdentifier, startedAt);
-      notificationStore.success('Incident note saved');
-    } catch (error) {
-      logger.error('Failed to save incident note', error);
-      notificationStore.error('Failed to save incident note');
-    } finally {
-      setIncidentNoteSaving((prev) => {
-        const next = new Set(prev);
-        next.delete(alertIdentifier);
-        return next;
-      });
-    }
-  };
 
   // Get alert stats from actual active alerts
   const alertStats = createMemo(() => {
@@ -608,10 +553,7 @@ export function OverviewTab(props: {
                         eventCardVariant="alt"
                         noteDraft={incidentNoteDrafts()[getCanonicalAlertId(alert)] || ''}
                         onNoteDraftChange={(value) =>
-                          setIncidentNoteDrafts((prev) => ({
-                            ...prev,
-                            [getCanonicalAlertId(alert)]: value,
-                          }))
+                          setIncidentNoteDraft(getCanonicalAlertId(alert), value)
                         }
                         noteSaving={incidentNoteSaving().has(getCanonicalAlertId(alert))}
                         onSaveNote={() => {

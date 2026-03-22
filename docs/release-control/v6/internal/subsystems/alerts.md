@@ -154,6 +154,13 @@ Expanded alert incident detail now also routes through
 overview surface and the history table share the same loading/error states,
 canonical timeline meta row, note editor, and event-filter controls instead
 of maintaining two independent incident-detail implementations.
+That shared timeline runtime state now routes through
+`frontend-modern/src/features/alerts/useAlertIncidentTimelineState.ts`, which
+owns incident timeline fetch, expansion state, note-save flow, and shared
+event-filter state for both `frontend-modern/src/features/alerts/OverviewTab.tsx`
+and `frontend-modern/src/features/alerts/tabs/HistoryTab.tsx`. Future incident
+timeline control flow should land in that feature hook instead of being
+forked back into either alert surface.
 
 Resource incident panel cards, summary rows, and toggle-button presentation
 now also route through `frontend-modern/src/utils/alertIncidentPresentation.ts`

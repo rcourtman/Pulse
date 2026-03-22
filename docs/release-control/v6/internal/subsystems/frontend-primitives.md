@@ -423,6 +423,13 @@ derived resource mapping, and threshold-override normalization for the
 destinations, schedule, and thresholds tabs. Future cleanup should extend that
 feature hook or a narrower shared primitive, not move config control flow back
 into the top-level page shell.
+The same rule now also covers cross-tab incident timelines: the shared runtime
+owner is `frontend-modern/src/features/alerts/useAlertIncidentTimelineState.ts`,
+while `frontend-modern/src/features/alerts/OverviewTab.tsx` and
+`frontend-modern/src/features/alerts/tabs/HistoryTab.tsx` stay focused on
+surface composition. Future incident timeline fetch, note-save, or expansion
+control flow should extend that feature hook rather than forking back into
+either tab surface.
 Top-level settings surfaces must route through `Settings.tsx`,
 `SettingsPageShell.tsx`, and
 `frontend-modern/src/components/shared/SettingsPanel.tsx` instead of

@@ -326,6 +326,7 @@ import alertWebhookPresentationSource from '@/utils/alertWebhookPresentation.ts?
 import alertOverviewTabSource from '@/features/alerts/OverviewTab.tsx?raw';
 import alertsConfigurationSurfaceSource from '@/features/alerts/AlertsConfigurationSurface.tsx?raw';
 import alertsConfigurationStateSource from '@/features/alerts/useAlertsConfigurationState.ts?raw';
+import alertIncidentTimelineStateSource from '@/features/alerts/useAlertIncidentTimelineState.ts?raw';
 import alertDestinationsTabSource from '@/features/alerts/tabs/DestinationsTab.tsx?raw';
 import alertHistoryTabSource from '@/features/alerts/tabs/HistoryTab.tsx?raw';
 import alertScheduleTabSource from '@/features/alerts/tabs/ScheduleTab.tsx?raw';
@@ -2785,6 +2786,8 @@ describe('frontend resource type boundaries', () => {
       "import { HistoryTab } from '@/features/alerts/tabs/HistoryTab';",
     );
     expect(alertsPageSource).not.toContain('function HistoryTab(');
+    expect(alertOverviewTabSource).toContain('useAlertIncidentTimelineState');
+    expect(alertHistoryTabSource).toContain('useAlertIncidentTimelineState');
     expect(alertHistoryTabSource).toContain('getAlertHistoryStatusPresentation');
     expect(alertHistoryTabSource).toContain('getAlertHistorySourcePresentation');
     expect(alertHistoryTabSource).toContain('getAlertHistoryResourceTypeBadgeClass');
@@ -2818,6 +2821,8 @@ describe('frontend resource type boundaries', () => {
     expect(alertHistoryTabSource).toContain('getAlertAdministrationClearHistoryLabel');
     expect(alertHistoryTabSource).toContain('getAlertAdministrationClearHistoryError');
     expect(alertHistoryTabSource).toContain('getAlertAdministrationClearHistoryConfirmation');
+    expect(alertHistoryTabSource).not.toContain('AlertsAPI.getIncidentTimeline');
+    expect(alertHistoryTabSource).not.toContain('AlertsAPI.addIncidentNote');
     expect(alertsPageSource).toContain('getAlertActivationPresentation');
     expect(alertsPageSource).toContain('getAlertActivationSuccess');
     expect(alertsPageSource).toContain('getAlertActivationFailure');
@@ -3591,11 +3596,19 @@ describe('frontend resource type boundaries', () => {
 
   it('keeps alert incident timeline state copy in a shared presentation utility', () => {
     expect(alertOverviewTabSource).toContain('IncidentTimelinePanel');
+    expect(alertOverviewTabSource).toContain('useAlertIncidentTimelineState');
     expect(alertIncidentEventFiltersSource).toContain('getAlertIncidentEventFilterContainerClass');
     expect(alertIncidentEventFiltersSource).toContain('getAlertIncidentEventFilterChipClass');
     expect(alertIncidentEventFiltersSource).toContain(
       'getAlertIncidentEventFilterActionButtonClass',
     );
+    expect(alertIncidentTimelineStateSource).toContain(
+      'export function useAlertIncidentTimelineState',
+    );
+    expect(alertIncidentTimelineStateSource).toContain('AlertsAPI.getIncidentTimeline');
+    expect(alertIncidentTimelineStateSource).toContain('AlertsAPI.addIncidentNote');
+    expect(alertIncidentTimelineStateSource).toContain('getAlertResourceIncidentTimelineFailure');
+    expect(alertIncidentTimelineStateSource).toContain('getAlertResourceIncidentNoteSavedLabel');
     expect(alertIncidentTimelinePanelSource).toContain('getAlertTimelineLoadingState');
     expect(alertIncidentTimelinePanelSource).toContain('getAlertTimelineFilterEmptyState');
     expect(alertIncidentTimelinePanelSource).toContain('getAlertTimelineEmptyState');
@@ -3616,6 +3629,8 @@ describe('frontend resource type boundaries', () => {
     expect(alertOverviewTabSource).toContain('getAlertOverviewStartedAtClass');
     expect(alertOverviewTabSource).toContain('getAlertOverviewPrimaryActionClass');
     expect(alertOverviewTabSource).toContain('getAlertOverviewSecondaryActionClass');
+    expect(alertOverviewTabSource).not.toContain('AlertsAPI.getIncidentTimeline');
+    expect(alertOverviewTabSource).not.toContain('AlertsAPI.addIncidentNote');
     expect(alertOverviewTabSource).not.toContain('Loading timeline...');
     expect(alertOverviewTabSource).not.toContain('No timeline events match the selected filters.');
     expect(alertOverviewTabSource).not.toContain('No timeline events yet.');

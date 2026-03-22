@@ -65,12 +65,9 @@ import {
   getAlertResourceIncidentFilteredEventsEmptyState,
   getAlertResourceIncidentLoadFailure,
   getAlertResourceIncidentLoadingState,
-  getAlertResourceIncidentNoteSaveFailure,
-  getAlertResourceIncidentNoteSavedLabel,
   getAlertResourceIncidentPanelTitle,
   getAlertResourceIncidentRefreshLabel,
   getAlertResourceIncidentSummaryRowClass,
-  getAlertResourceIncidentTimelineFailure,
   getAlertResourceIncidentToggleButtonClass,
   getAlertResourceIncidentToggleLabel,
   getAlertResourceIncidentTruncatedEventsLabel,
@@ -83,6 +80,7 @@ import {
   alertTypeDisplayLabel,
   unifiedTypeToAlertDisplayType,
 } from '../helpers';
+import { useAlertIncidentTimelineState } from '../useAlertIncidentTimelineState';
 import {
   filterIncidentEvents,
   INCIDENT_EVENT_TYPES,
@@ -134,22 +132,26 @@ export function HistoryTab(props: HistoryTabProps) {
   const [expandedResourceIncidentIds, setExpandedResourceIncidentIds] = createSignal<Set<string>>(
     new Set(),
   );
-  const [historyIncidentEventFilters, setHistoryIncidentEventFilters] = createSignal<Set<string>>(
-    new Set(INCIDENT_EVENT_TYPES),
-  );
   const [resourceIncidentEventFilters, setResourceIncidentEventFilters] = createSignal<Set<string>>(
     new Set(INCIDENT_EVENT_TYPES),
   );
-  const [incidentTimelines, setIncidentTimelines] = createSignal<Record<string, Incident | null>>(
-    {},
-  );
-  const [incidentLoading, setIncidentLoading] = createSignal<Record<string, boolean>>({});
-  const [incidentErrors, setIncidentErrors] = createSignal<Record<string, boolean>>({});
-  const [expandedIncidents, setExpandedIncidents] = createSignal<Set<string>>(new Set());
-  const [incidentNoteDrafts, setIncidentNoteDrafts] = createSignal<Record<string, string>>({});
-  const [incidentNoteSaving, setIncidentNoteSaving] = createSignal<Set<string>>(new Set());
   const { isMobile } = useBreakpoint();
   const [filtersOpen, setFiltersOpen] = createSignal(false);
+  const {
+    incidentTimelines,
+    incidentLoading,
+    incidentErrors,
+    expandedIncidents,
+    incidentNoteDrafts,
+    incidentNoteSaving,
+    eventFilters: historyIncidentEventFilters,
+    setEventFilters: setHistoryIncidentEventFilters,
+    resetState: resetIncidentTimelineState,
+    loadIncidentTimeline,
+    toggleIncidentTimeline,
+    setIncidentNoteDraft,
+    saveIncidentNote,
+  } = useAlertIncidentTimelineState();
 
   const activeFilterCount = createMemo(() => {
     let count = 0;
@@ -241,12 +243,7 @@ export function HistoryTab(props: HistoryTabProps) {
       setResourceIncidents({});
       setResourceIncidentLoading({});
       setExpandedResourceIncidentIds(new Set<string>());
-      setIncidentTimelines({});
-      setIncidentLoading({});
-      setIncidentErrors({});
-      setExpandedIncidents(new Set<string>());
-      setIncidentNoteDrafts({});
-      setIncidentNoteSaving(new Set<string>());
+      resetIncidentTimelineState();
       void fetchHistory(timeFilter());
     });
 
@@ -699,72 +696,6 @@ export function HistoryTab(props: HistoryTabProps) {
       rangeHours: bucketCount * bucketSizeHours,
     };
   });
-
-  const loadIncidentTimeline = async (
-    rowKey: string,
-    alertIdentifier: string,
-    startedAt?: string,
-  ) => {
-    setIncidentLoading((prev) => ({ ...prev, [rowKey]: true }));
-    try {
-      const timeline = await AlertsAPI.getIncidentTimeline(alertIdentifier, startedAt);
-      setIncidentTimelines((prev) => ({ ...prev, [rowKey]: timeline }));
-      setIncidentErrors((prev) => ({ ...prev, [rowKey]: false }));
-    } catch (error) {
-      logger.error(getAlertResourceIncidentTimelineFailure(), error);
-      notificationStore.error(getAlertResourceIncidentTimelineFailure());
-      setIncidentErrors((prev) => ({ ...prev, [rowKey]: true }));
-    } finally {
-      setIncidentLoading((prev) => ({ ...prev, [rowKey]: false }));
-    }
-  };
-
-  const toggleIncidentTimeline = async (
-    rowKey: string,
-    alertIdentifier: string,
-    startedAt?: string,
-  ) => {
-    const expanded = expandedIncidents();
-    const next = new Set(expanded);
-    if (next.has(rowKey)) {
-      next.delete(rowKey);
-      setExpandedIncidents(next);
-      return;
-    }
-    next.add(rowKey);
-    setExpandedIncidents(next);
-    if (!(rowKey in incidentTimelines())) {
-      await loadIncidentTimeline(rowKey, alertIdentifier, startedAt);
-    }
-  };
-
-  const saveIncidentNote = async (
-    rowKey: string,
-    alertIdentifier: string,
-    startedAt?: string,
-  ) => {
-    const note = (incidentNoteDrafts()[rowKey] || '').trim();
-    if (!note) {
-      return;
-    }
-    setIncidentNoteSaving((prev) => new Set(prev).add(rowKey));
-    try {
-      const incidentId = incidentTimelines()[rowKey]?.id;
-      await AlertsAPI.addIncidentNote({ alertIdentifier, incidentId, note });
-      setIncidentNoteDrafts((prev) => ({ ...prev, [rowKey]: '' }));
-      await loadIncidentTimeline(rowKey, alertIdentifier, startedAt);
-      notificationStore.success(getAlertResourceIncidentNoteSavedLabel());
-    } catch (error) {
-      logger.error(getAlertResourceIncidentNoteSaveFailure(), error);
-      notificationStore.error(getAlertResourceIncidentNoteSaveFailure());
-    } finally {
-      setIncidentNoteSaving((prev) => {
-        const next = new Set(prev);
-        next.delete(rowKey);
-        return next;
-      });
-    }
-  };
 
   const bucketDurationLabel = createMemo(() => {
     const bucketHours = alertTrends().bucketSize;
@@ -1549,10 +1480,7 @@ export function HistoryTab(props: HistoryTabProps) {
                                           eventCardVariant="surface"
                                           noteDraft={incidentNoteDrafts()[rowKey] || ''}
                                           onNoteDraftChange={(value) =>
-                                            setIncidentNoteDrafts((prev) => ({
-                                              ...prev,
-                                              [rowKey]: value,
-                                            }))
+                                            setIncidentNoteDraft(rowKey, value)
                                           }
                                           noteSaving={incidentNoteSaving().has(rowKey)}
                                           onSaveNote={() => {
