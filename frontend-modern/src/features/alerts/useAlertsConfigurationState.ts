@@ -2,11 +2,9 @@ import { createEffect, createMemo, createSignal, onCleanup, onMount } from 'soli
 import type { Accessor } from 'solid-js';
 
 import { AlertsAPI } from '@/api/alerts';
-import { NotificationsAPI } from '@/api/notifications';
 import { eventBus } from '@/stores/events';
 import { notificationStore } from '@/stores/notifications';
 import type { Alert, PBSInstance, PMGInstance } from '@/types/api';
-import type { AppriseConfig, EmailConfig } from '@/api/notifications';
 import type {
   ActivationState,
   BackupAlertConfig,
@@ -19,7 +17,6 @@ import {
   getAlertConfigReloadFailure,
   getAlertConfigSaveSuccess,
 } from '@/utils/alertConfigPresentation';
-import { getAlertDestinationsConfigLoadError } from '@/utils/alertDestinationsPresentation';
 import { getActionableAgentIdFromResource, hasAgentFacet } from '@/utils/agentResources';
 import { isAppContainerDiscoveryResourceType } from '@/utils/discoveryTarget';
 import { logger } from '@/utils/logger';
@@ -27,9 +24,7 @@ import { pbsInstanceFromResource, pmgInstanceFromResource } from '@/utils/resour
 
 import {
   clampMaxAlertsPerHour,
-  createDefaultAppriseConfig,
   createDefaultCooldown,
-  createDefaultEmailConfig,
   createDefaultEscalation,
   createDefaultGrouping,
   createDefaultQuietHours,
@@ -37,15 +32,13 @@ import {
   DEFAULT_DELAY_SECONDS,
   extractTriggerValues,
   fallbackMaxAlertsPerHour,
-  formatAppriseTargets,
   getAlertResourceDisplayLabel,
   getTriggerValue,
   guessNumericId,
-  normalizeEmailConfigFromAPI,
   normalizeMetricDelayMap,
-  parseAppriseTargets,
   platformData,
 } from './helpers';
+import { useAlertDestinationsState } from './useAlertDestinationsState';
 import type {
   AlertTab,
   CooldownConfig,
@@ -54,8 +47,6 @@ import type {
   GroupingConfig,
   Override,
   QuietHoursConfig,
-  UIAppriseConfig,
-  UIEmailConfig,
 } from './types';
 import { GROUPING_WINDOW_DEFAULT_SECONDS, clampCooldownMinutes } from './types';
 
@@ -138,16 +129,10 @@ export const FACTORY_BACKUP_DEFAULTS: BackupAlertConfig = {
 
 export function useAlertsConfigurationState(props: AlertsConfigurationSurfaceProps) {
   const [isReloadingConfig, setIsReloadingConfig] = createSignal(false);
-  const [isLoadingDestinations, setIsLoadingDestinations] = createSignal(false);
-  const [destConfigLoadError, setDestConfigLoadError] = createSignal<string | null>(null);
   const [overrides, setOverrides] = createSignal<Override[]>([]);
   const [rawOverridesConfig, setRawOverridesConfig] = createSignal<
     Record<string, RawOverrideConfig>
   >({});
-  const [emailConfig, setEmailConfig] = createSignal<UIEmailConfig>(createDefaultEmailConfig());
-  const [appriseConfig, setAppriseConfig] = createSignal<UIAppriseConfig>(
-    createDefaultAppriseConfig(),
-  );
   const [scheduleQuietHours, setScheduleQuietHours] =
     createSignal<QuietHoursConfig>(createDefaultQuietHours());
   const [scheduleCooldown, setScheduleCooldown] =
@@ -236,6 +221,7 @@ export function useAlertsConfigurationState(props: AlertsConfigurationSurfacePro
   const [disableAllPBSOffline, setDisableAllPBSOffline] = createSignal(false);
   const [disableAllPMGOffline, setDisableAllPMGOffline] = createSignal(false);
   const [disableAllDockerHostsOffline, setDisableAllDockerHostsOffline] = createSignal(false);
+  const destinationsState = useAlertDestinationsState({ activeTab: props.activeTab });
 
   const pd = platformData;
   const asRecord = (value: unknown): Record<string, unknown> | undefined =>
@@ -645,7 +631,7 @@ export function useAlertsConfigurationState(props: AlertsConfigurationSurfacePro
   const loadAlertConfiguration = async (options: { notify?: boolean } = {}) => {
     setIsReloadingConfig(true);
     props.setHasUnsavedChanges(false);
-    setDestConfigLoadError(null);
+    destinationsState.resetDestinations();
 
     setGuestDefaults({ ...FACTORY_GUEST_DEFAULTS });
     setGuestDisableConnectivity(false);
@@ -674,8 +660,6 @@ export function useAlertsConfigurationState(props: AlertsConfigurationSurfacePro
     setScheduleGrouping(createDefaultGrouping());
     setScheduleEscalation(createDefaultEscalation());
     setNotifyOnResolve(createDefaultResolveNotifications());
-    setEmailConfig(createDefaultEmailConfig());
-    setAppriseConfig(createDefaultAppriseConfig());
     setBackupDefaults({ ...FACTORY_BACKUP_DEFAULTS });
     setSnapshotDefaults({ ...FACTORY_SNAPSHOT_DEFAULTS });
 
@@ -971,42 +955,13 @@ export function useAlertsConfigurationState(props: AlertsConfigurationSurfacePro
         }
       }
 
-      try {
-        const emailConfigData = await NotificationsAPI.getEmailConfig();
-        setEmailConfig(normalizeEmailConfigFromAPI(emailConfigData));
-      } catch (emailError) {
-        logger.error('Failed to load email configuration:', emailError);
-        setDestConfigLoadError(getAlertDestinationsConfigLoadError());
-      }
-
-      try {
-        const appriseData = await NotificationsAPI.getAppriseConfig();
-        setAppriseConfig({
-          enabled: appriseData.enabled ?? false,
-          mode: appriseData.mode === 'http' ? 'http' : 'cli',
-          targetsText: formatAppriseTargets(appriseData.targets),
-          cliPath: appriseData.cliPath || 'apprise',
-          timeoutSeconds:
-            typeof appriseData.timeoutSeconds === 'number' && appriseData.timeoutSeconds > 0
-              ? appriseData.timeoutSeconds
-              : 15,
-          serverUrl: appriseData.serverUrl || '',
-          configKey: appriseData.configKey || '',
-          apiKey: appriseData.apiKey || '',
-          apiKeyHeader: appriseData.apiKeyHeader || 'X-API-KEY',
-          skipTlsVerify: Boolean(appriseData.skipTlsVerify),
-        });
-      } catch (appriseError) {
-        logger.error('Failed to load Apprise configuration:', appriseError);
-        setDestConfigLoadError(getAlertDestinationsConfigLoadError());
-      }
+      await destinationsState.loadDestinations();
 
       if (options.notify) {
         notificationStore.success(getAlertConfigDiscardedSuccess());
       }
     } catch (error) {
       logger.error('Failed to load alert configuration:', error);
-      setDestConfigLoadError(getAlertDestinationsConfigLoadError());
       if (options.notify) {
         notificationStore.error(getAlertConfigReloadFailure());
       }
@@ -1193,48 +1148,7 @@ export function useAlertsConfigurationState(props: AlertsConfigurationSurfacePro
 
     await AlertsAPI.updateConfig(alertConfig);
 
-    const currentEmailConfig = emailConfig();
-    await NotificationsAPI.updateEmailConfig({
-      enabled: currentEmailConfig.enabled,
-      provider: currentEmailConfig.provider,
-      server: currentEmailConfig.server,
-      port: currentEmailConfig.port,
-      username: currentEmailConfig.username,
-      password: currentEmailConfig.password,
-      from: currentEmailConfig.from,
-      to: currentEmailConfig.to,
-      tls: currentEmailConfig.tls,
-      startTLS: currentEmailConfig.startTLS,
-    } as EmailConfig);
-
-    const currentAppriseConfig = appriseConfig();
-    const updatedApprise = await NotificationsAPI.updateAppriseConfig({
-      enabled: currentAppriseConfig.enabled,
-      mode: currentAppriseConfig.mode,
-      targets: parseAppriseTargets(currentAppriseConfig.targetsText),
-      cliPath: currentAppriseConfig.cliPath,
-      timeoutSeconds: currentAppriseConfig.timeoutSeconds,
-      serverUrl: currentAppriseConfig.serverUrl,
-      configKey: currentAppriseConfig.configKey,
-      apiKey: currentAppriseConfig.apiKey,
-      apiKeyHeader: currentAppriseConfig.apiKeyHeader,
-      skipTlsVerify: currentAppriseConfig.skipTlsVerify,
-    } as AppriseConfig);
-    setAppriseConfig({
-      enabled: updatedApprise.enabled ?? false,
-      mode: updatedApprise.mode === 'http' ? 'http' : 'cli',
-      targetsText: formatAppriseTargets(updatedApprise.targets),
-      cliPath: updatedApprise.cliPath || 'apprise',
-      timeoutSeconds:
-        typeof updatedApprise.timeoutSeconds === 'number' && updatedApprise.timeoutSeconds > 0
-          ? updatedApprise.timeoutSeconds
-          : 15,
-      serverUrl: updatedApprise.serverUrl || '',
-      configKey: updatedApprise.configKey || '',
-      apiKey: updatedApprise.apiKey || '',
-      apiKeyHeader: updatedApprise.apiKeyHeader || 'X-API-KEY',
-      skipTlsVerify: Boolean(updatedApprise.skipTlsVerify),
-    });
+    await destinationsState.saveDestinations();
     props.setHasUnsavedChanges(false);
     notificationStore.success(getAlertConfigSaveSuccess());
   };
@@ -1249,70 +1163,18 @@ export function useAlertsConfigurationState(props: AlertsConfigurationSurfacePro
     });
   });
 
-  let destReloadVersion = 0;
-  createEffect(() => {
-    if (props.activeTab() !== 'destinations') {
-      return;
-    }
-
-    const thisVersion = ++destReloadVersion;
-    setIsLoadingDestinations(true);
-
-    const emailPromise = NotificationsAPI.getEmailConfig().then((emailConfigData) => {
-      if (thisVersion === destReloadVersion) {
-        setEmailConfig(normalizeEmailConfigFromAPI(emailConfigData));
-      }
-    });
-
-    const apprisePromise = NotificationsAPI.getAppriseConfig().then((appriseData) => {
-      if (thisVersion === destReloadVersion) {
-        setAppriseConfig({
-          enabled: appriseData.enabled ?? false,
-          mode: appriseData.mode === 'http' ? 'http' : 'cli',
-          targetsText: formatAppriseTargets(appriseData.targets),
-          cliPath: appriseData.cliPath || 'apprise',
-          timeoutSeconds:
-            typeof appriseData.timeoutSeconds === 'number' && appriseData.timeoutSeconds > 0
-              ? appriseData.timeoutSeconds
-              : 15,
-          serverUrl: appriseData.serverUrl || '',
-          configKey: appriseData.configKey || '',
-          apiKey: appriseData.apiKey || '',
-          apiKeyHeader: appriseData.apiKeyHeader || 'X-API-KEY',
-          skipTlsVerify: Boolean(appriseData.skipTlsVerify),
-        });
-      }
-    });
-
-    void Promise.allSettled([emailPromise, apprisePromise]).then((results) => {
-      if (thisVersion !== destReloadVersion) return;
-      const failed = results.some((result) => result.status === 'rejected');
-      if (failed) {
-        results
-          .filter((result): result is PromiseRejectedResult => result.status === 'rejected')
-          .forEach((result) => {
-            logger.error('Failed to reload notification configuration:', result.reason);
-          });
-        setDestConfigLoadError(getAlertDestinationsConfigLoadError());
-      } else {
-        setDestConfigLoadError(null);
-      }
-      setIsLoadingDestinations(false);
-    });
-  });
-
   return {
     isReloadingConfig,
-    isLoadingDestinations,
-    destConfigLoadError,
+    isLoadingDestinations: destinationsState.isLoadingDestinations,
+    destConfigLoadError: destinationsState.destConfigLoadError,
     overrides,
     setOverrides,
     rawOverridesConfig,
     setRawOverridesConfig,
-    emailConfig,
-    setEmailConfig,
-    appriseConfig,
-    setAppriseConfig,
+    emailConfig: destinationsState.emailConfig,
+    setEmailConfig: destinationsState.setEmailConfig,
+    appriseConfig: destinationsState.appriseConfig,
+    setAppriseConfig: destinationsState.setAppriseConfig,
     scheduleQuietHours,
     setScheduleQuietHours,
     scheduleCooldown,

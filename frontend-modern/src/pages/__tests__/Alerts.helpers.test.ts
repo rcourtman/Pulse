@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import alertsPageSource from '@/pages/Alerts.tsx?raw';
 import alertsConfigurationSurfaceSource from '@/features/alerts/AlertsConfigurationSurface.tsx?raw';
 import alertsConfigurationStateSource from '@/features/alerts/useAlertsConfigurationState.ts?raw';
+import alertDestinationsStateSource from '@/features/alerts/useAlertDestinationsState.ts?raw';
 import alertIncidentTimelineStateSource from '@/features/alerts/useAlertIncidentTimelineState.ts?raw';
 import alertDestinationsTabSource from '@/features/alerts/tabs/DestinationsTab.tsx?raw';
 import alertHistoryTabSource from '@/features/alerts/tabs/HistoryTab.tsx?raw';
@@ -185,9 +186,13 @@ describe('tab path helpers', () => {
     expect(alertsConfigurationSurfaceSource).not.toContain("eventBus.on('org_switched'");
     expect(alertsConfigurationStateSource).toContain('export function useAlertsConfigurationState');
     expect(alertsConfigurationStateSource).toContain('AlertsAPI.getConfig');
-    expect(alertsConfigurationStateSource).toContain('NotificationsAPI.getEmailConfig');
-    expect(alertsConfigurationStateSource).toContain('NotificationsAPI.updateEmailConfig');
+    expect(alertsConfigurationStateSource).toContain('useAlertDestinationsState');
+    expect(alertsConfigurationStateSource).not.toContain('NotificationsAPI.getEmailConfig');
+    expect(alertsConfigurationStateSource).not.toContain('NotificationsAPI.updateEmailConfig');
     expect(alertsConfigurationStateSource).toContain("eventBus.on('org_switched'");
+    expect(alertDestinationsStateSource).toContain('export function useAlertDestinationsState');
+    expect(alertDestinationsStateSource).toContain('NotificationsAPI.getEmailConfig');
+    expect(alertDestinationsStateSource).toContain('NotificationsAPI.updateEmailConfig');
     expect(alertsPageSource).toContain(
       "import { HistoryTab } from '@/features/alerts/tabs/HistoryTab';",
     );

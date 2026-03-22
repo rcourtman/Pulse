@@ -326,6 +326,7 @@ import alertWebhookPresentationSource from '@/utils/alertWebhookPresentation.ts?
 import alertOverviewTabSource from '@/features/alerts/OverviewTab.tsx?raw';
 import alertsConfigurationSurfaceSource from '@/features/alerts/AlertsConfigurationSurface.tsx?raw';
 import alertsConfigurationStateSource from '@/features/alerts/useAlertsConfigurationState.ts?raw';
+import alertDestinationsStateSource from '@/features/alerts/useAlertDestinationsState.ts?raw';
 import alertIncidentTimelineStateSource from '@/features/alerts/useAlertIncidentTimelineState.ts?raw';
 import alertDestinationsTabSource from '@/features/alerts/tabs/DestinationsTab.tsx?raw';
 import alertHistoryTabSource from '@/features/alerts/tabs/HistoryTab.tsx?raw';
@@ -2764,11 +2765,14 @@ describe('frontend resource type boundaries', () => {
     expect(alertsPageSource).not.toContain('getAlertDestinationsConfigLoadError');
     expect(alertsConfigurationSurfaceSource).toContain('useAlertsConfigurationState');
     expect(alertsConfigurationSurfaceSource).not.toContain('AlertsAPI.getConfig');
-    expect(alertsConfigurationStateSource).toContain('getAlertDestinationsConfigLoadError');
     expect(alertsConfigurationStateSource).toContain('AlertsAPI.getConfig');
-    expect(alertsConfigurationStateSource).toContain('NotificationsAPI.getEmailConfig');
-    expect(alertsConfigurationStateSource).toContain('NotificationsAPI.updateEmailConfig');
+    expect(alertsConfigurationStateSource).toContain('useAlertDestinationsState');
+    expect(alertsConfigurationStateSource).not.toContain('NotificationsAPI.getEmailConfig');
+    expect(alertsConfigurationStateSource).not.toContain('NotificationsAPI.updateEmailConfig');
     expect(alertsConfigurationStateSource).toContain("eventBus.on('org_switched'");
+    expect(alertDestinationsStateSource).toContain('getAlertDestinationsConfigLoadError');
+    expect(alertDestinationsStateSource).toContain('NotificationsAPI.getEmailConfig');
+    expect(alertDestinationsStateSource).toContain('NotificationsAPI.updateEmailConfig');
     expect(alertDestinationsTabSource).toContain('getAlertDestinationsWebhookLoadError');
     expect(alertDestinationsTabSource).toContain('getAlertDestinationsLoadErrorBanner');
     expect(alertDestinationsTabSource).toContain('getAlertDestinationsAppriseTargetsHelp');

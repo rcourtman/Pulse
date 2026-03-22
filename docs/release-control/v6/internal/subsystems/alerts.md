@@ -204,10 +204,13 @@ override normalization now route through
 living inline in `frontend-modern/src/pages/Alerts.tsx`. The page shell owns
 navigation, activation chrome, and cross-surface routing; the configuration
 surface is now a shell that composes the destinations, schedule, and thresholds
-tabs, while `frontend-modern/src/features/alerts/useAlertsConfigurationState.ts`
-owns alert config load/save behavior, notification-config reloads, defaults,
-override normalization, and derived resource mapping beneath that feature
-boundary.
+tabs. The canonical alert-policy runtime owner is now
+`frontend-modern/src/features/alerts/useAlertsConfigurationState.ts`, while
+notification destination reload and persistence now route through
+`frontend-modern/src/features/alerts/useAlertDestinationsState.ts`. Future
+config cleanup should extend the alert-policy hook or the destinations hook
+based on which subsystem actually owns the behavior instead of letting the
+broader configuration hook absorb both concerns again.
 
 Alert filter metadata and grouped header consumers must also preserve the
 canonical `agent` and `node` header boundary when reusing shared filter

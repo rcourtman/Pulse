@@ -417,12 +417,11 @@ The alerts page now also applies the same shell-versus-feature rule to
 configuration orchestration. `frontend-modern/src/pages/Alerts.tsx` is the page
 shell, while `frontend-modern/src/features/alerts/AlertsConfigurationSurface.tsx`
 is the feature shell. The canonical runtime owner is now
-`frontend-modern/src/features/alerts/useAlertsConfigurationState.ts`, which
-owns alert config load/save behavior, notification-config reloads, defaults,
-derived resource mapping, and threshold-override normalization for the
-destinations, schedule, and thresholds tabs. Future cleanup should extend that
-feature hook or a narrower shared primitive, not move config control flow back
-into the top-level page shell.
+`frontend-modern/src/features/alerts/useAlertsConfigurationState.ts` for alert
+policy state, while `frontend-modern/src/features/alerts/useAlertDestinationsState.ts`
+owns notification destination reload and persistence. Future cleanup should
+extend the alert-policy hook or the destinations hook based on the true owner,
+not move config control flow back into the top-level page shell.
 The same rule now also covers cross-tab incident timelines: the shared runtime
 owner is `frontend-modern/src/features/alerts/useAlertIncidentTimelineState.ts`,
 while `frontend-modern/src/features/alerts/OverviewTab.tsx` and
