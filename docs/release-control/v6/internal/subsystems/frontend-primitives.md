@@ -429,6 +429,12 @@ while `frontend-modern/src/features/alerts/OverviewTab.tsx` and
 surface composition. Future incident timeline fetch, note-save, or expansion
 control flow should extend that feature hook rather than forking back into
 either tab surface.
+Alert history runtime now follows that same pattern. The shell stays in
+`frontend-modern/src/features/alerts/tabs/HistoryTab.tsx`, while
+`frontend-modern/src/features/alerts/useAlertHistoryState.ts` owns history
+fetch, persistent filters, grouped/trend derivation, resource-incident panel
+state, and history-clear behavior. Future alert-history control flow should
+extend that hook rather than rebuilding fetch and panel state in the tab shell.
 Top-level settings surfaces must route through `Settings.tsx`,
 `SettingsPageShell.tsx`, and
 `frontend-modern/src/components/shared/SettingsPanel.tsx` instead of

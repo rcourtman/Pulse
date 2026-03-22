@@ -198,6 +198,15 @@ runtime presentation, tab-local interaction logic, and any history-table
 presentation or thresholds-table adapter logic that does not belong in a shared
 primitive.
 
+The history tab itself now follows the same shell-versus-runtime rule. The
+canonical history runtime owner is
+`frontend-modern/src/features/alerts/useAlertHistoryState.ts`, which owns alert
+history fetch, persistent filter state, trend-bucket derivation, grouped-row
+projection, resource-incident panel loading, and history-clear flow. Future
+alert history control-flow work should extend that feature hook instead of
+putting data fetch or resource-incident state back into
+`frontend-modern/src/features/alerts/tabs/HistoryTab.tsx`.
+
 Alert configuration load/save state, notification config reloads, and threshold
 override normalization now route through
 `frontend-modern/src/features/alerts/AlertsConfigurationSurface.tsx` instead of
