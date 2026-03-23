@@ -467,9 +467,12 @@ Inside `Change history`, the event list now renders directly in the parent
 section instead of inside a second bordered `Event log` card, so the timeline
 reads like one inspection surface rather than a card nested under its own
 section title.
-The `Change history` filter controls now stack vertically instead of using a
-paired filter grid, so the timeline reads like a simple inspection surface
-rather than a two-field form on wider screens.
+The `Change history` filter controls now stay behind an explicit `Filter
+history` reveal until the operator asks for them or activates a filter, so the
+timeline reads as the primary inspection surface instead of opening on a form.
+When that reveal is open, the controls still stack vertically instead of using
+a paired filter grid, so the filter state reads as one subordinate control
+column instead of a competing secondary layout.
 When filters are active, the filtered facet bundle drives both the summary
 chips and the event log, so the header and the list stay aligned instead of
 showing stale unfiltered counts above filtered results.

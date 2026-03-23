@@ -136,6 +136,7 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(resourceDetailDrawerStateSource).toContain(
       "from './useResourceDetailDrawerDockerActionsState'",
     );
+    expect(resourceDetailDrawerStateSource).toContain('const [showHistoryFilters, setShowHistoryFilters]');
     expect(resourceDetailDrawerStateSource).not.toContain('createResource(');
     expect(resourceDetailDrawerStateSource).not.toContain('MonitoringAPI.');
     expect(resourceDetailDrawerHistoryStateSource).toContain('createResource(');
@@ -193,6 +194,7 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(resourceDetailDrawerOverviewSource).not.toContain('MonitoringAPI.');
     expect(resourceDetailDrawerOverviewSource).toContain('drawer.queueDockerUpdateCheck');
     expect(resourceDetailDrawerOverviewSource).toContain('drawer.queueDockerUpdateAll');
+    expect(resourceDetailDrawerOverviewSource).toContain('Filter history');
     expect(resourceDetailDrawerOverviewSource).not.toContain(
       'const modeLabel = formatSourceType(resource.sourceType);',
     );
@@ -813,6 +815,10 @@ describe('ResourceDetailDrawer change history section', () => {
     const panel = within(historyPanel);
     expect(await panel.findByText('Changes loaded')).toBeInTheDocument();
     expect(panel.getByText('CPU spike detected')).toBeInTheDocument();
+    expect(panel.queryByLabelText('Change kind')).toBeNull();
+    expect(panel.getByRole('button', { name: 'Filter history' })).toBeInTheDocument();
+
+    fireEvent.click(panel.getByRole('button', { name: 'Filter history' }));
 
     fireEvent.change(panel.getByLabelText('Change kind'), {
       target: { value: 'restart' },
@@ -833,6 +839,8 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(await panel.findByText('Timeline 2')).toBeInTheDocument();
     expect(panel.queryByText('Filtered changes loaded')).toBeNull();
     expect(panel.getByText('CPU spike detected')).toBeInTheDocument();
+    expect(panel.queryByLabelText('Change kind')).toBeNull();
+    expect(panel.getByRole('button', { name: 'Filter history' })).toBeInTheDocument();
   });
 
   it('filters timeline entries by source adapter', async () => {
@@ -967,6 +975,9 @@ describe('ResourceDetailDrawer change history section', () => {
     const panel = within(historyPanel);
     expect(await panel.findByText('Changes loaded')).toBeInTheDocument();
     expect(panel.getByText('CPU spike detected')).toBeInTheDocument();
+    expect(panel.queryByLabelText('Source adapter')).toBeNull();
+
+    fireEvent.click(panel.getByRole('button', { name: 'Filter history' }));
 
     fireEvent.change(panel.getByLabelText('Source adapter'), {
       target: { value: 'docker_adapter' },

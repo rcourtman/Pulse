@@ -284,75 +284,102 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
             </div>
             <div class="text-right text-[10px] text-muted">
               <div>{drawer.historyLoadingLabel()}</div>
-              <Show when={drawer.hasTimelineFilters()}>
-                <div class="mt-0.5 text-blue-700 dark:text-blue-300">Change filters active</div>
-              </Show>
+              <div class="mt-1 flex flex-wrap justify-end gap-2">
+                <Show when={drawer.hasTimelineFilters()}>
+                  <div class="text-blue-700 dark:text-blue-300">Change filters active</div>
+                </Show>
+                <Show
+                  when={!drawer.showHistoryFilters() && !drawer.hasTimelineFilters()}
+                  fallback={
+                    <Show when={drawer.showHistoryFilters() && !drawer.hasTimelineFilters()}>
+                      <button
+                        type="button"
+                        class="rounded-md border border-border bg-surface-hover px-2.5 py-1 text-[10px] font-semibold text-base-content hover:bg-surface"
+                        onClick={() => drawer.setShowHistoryFilters(false)}
+                      >
+                        Hide filters
+                      </button>
+                    </Show>
+                  }
+                >
+                  <button
+                    type="button"
+                    class="rounded-md border border-border bg-surface-hover px-2.5 py-1 text-[10px] font-semibold text-base-content hover:bg-surface"
+                    onClick={() => drawer.setShowHistoryFilters(true)}
+                  >
+                    Filter history
+                  </button>
+                </Show>
+              </div>
             </div>
           </div>
-          <div class="mt-3 space-y-2">
-            <label class="space-y-1 text-[10px]">
-              <span class="text-muted">Change kind</span>
-              <select
-                class="w-full rounded border border-border bg-base px-2 py-1 text-[11px] text-base-content"
-                value={drawer.timelineKindFilter()}
-                onChange={(event) =>
-                  drawer.setTimelineKindFilter(
-                    (event.currentTarget.value || '') as ResourceChangeKind | '',
-                  )
-                }
-              >
-                <For each={timelineKindOptions}>
-                  {(option) => <option value={option.value}>{option.label}</option>}
-                </For>
-              </select>
-            </label>
-            <label class="space-y-1 text-[10px]">
-              <span class="text-muted">Source type</span>
-              <select
-                class="w-full rounded border border-border bg-base px-2 py-1 text-[11px] text-base-content"
-                value={drawer.timelineSourceTypeFilter()}
-                onChange={(event) =>
-                  drawer.setTimelineSourceTypeFilter(
-                    (event.currentTarget.value || '') as ResourceChangeSourceType | '',
-                  )
-                }
-              >
-                <For each={timelineSourceTypeOptions}>
-                  {(option) => <option value={option.value}>{option.label}</option>}
-                </For>
-              </select>
-            </label>
-            <label class="space-y-1 text-[10px]">
-              <span class="text-muted">Source adapter</span>
-              <select
-                class="w-full rounded border border-border bg-base px-2 py-1 text-[11px] text-base-content"
-                value={drawer.timelineSourceAdapterFilter()}
-                onChange={(event) =>
-                  drawer.setTimelineSourceAdapterFilter(
-                    (event.currentTarget.value || '') as ResourceChangeSourceAdapter | '',
-                  )
-                }
-              >
-                <For each={timelineSourceAdapterOptions}>
-                  {(option) => <option value={option.value}>{option.label}</option>}
-                </For>
-              </select>
-            </label>
-          </div>
+          <Show when={drawer.showHistoryFilters() || drawer.hasTimelineFilters()}>
+            <div class="mt-3 space-y-2">
+              <label class="space-y-1 text-[10px]">
+                <span class="text-muted">Change kind</span>
+                <select
+                  class="w-full rounded border border-border bg-base px-2 py-1 text-[11px] text-base-content"
+                  value={drawer.timelineKindFilter()}
+                  onChange={(event) =>
+                    drawer.setTimelineKindFilter(
+                      (event.currentTarget.value || '') as ResourceChangeKind | '',
+                    )
+                  }
+                >
+                  <For each={timelineKindOptions}>
+                    {(option) => <option value={option.value}>{option.label}</option>}
+                  </For>
+                </select>
+              </label>
+              <label class="space-y-1 text-[10px]">
+                <span class="text-muted">Source type</span>
+                <select
+                  class="w-full rounded border border-border bg-base px-2 py-1 text-[11px] text-base-content"
+                  value={drawer.timelineSourceTypeFilter()}
+                  onChange={(event) =>
+                    drawer.setTimelineSourceTypeFilter(
+                      (event.currentTarget.value || '') as ResourceChangeSourceType | '',
+                    )
+                  }
+                >
+                  <For each={timelineSourceTypeOptions}>
+                    {(option) => <option value={option.value}>{option.label}</option>}
+                  </For>
+                </select>
+              </label>
+              <label class="space-y-1 text-[10px]">
+                <span class="text-muted">Source adapter</span>
+                <select
+                  class="w-full rounded border border-border bg-base px-2 py-1 text-[11px] text-base-content"
+                  value={drawer.timelineSourceAdapterFilter()}
+                  onChange={(event) =>
+                    drawer.setTimelineSourceAdapterFilter(
+                      (event.currentTarget.value || '') as ResourceChangeSourceAdapter | '',
+                    )
+                  }
+                >
+                  <For each={timelineSourceAdapterOptions}>
+                    {(option) => <option value={option.value}>{option.label}</option>}
+                  </For>
+                </select>
+              </label>
 
-          <Show when={drawer.hasTimelineFilters()}>
-            <div class="mt-2 flex justify-end">
-              <button
-                type="button"
-                class="rounded-md border border-border bg-surface-hover px-2.5 py-1 text-[10px] font-semibold text-base-content hover:bg-surface"
-                onClick={() => {
-                  drawer.setTimelineKindFilter('');
-                  drawer.setTimelineSourceTypeFilter('');
-                  drawer.setTimelineSourceAdapterFilter('');
-                }}
-              >
-                Clear filters
-              </button>
+              <Show when={drawer.hasTimelineFilters()}>
+                <div class="flex justify-end">
+                  <button
+                    type="button"
+                    class="rounded-md border border-border bg-surface-hover px-2.5 py-1 text-[10px] font-semibold text-base-content hover:bg-surface"
+                    onClick={() => {
+                      drawer.setTimelineKindFilter('');
+                      drawer.setTimelineSourceTypeFilter('');
+                      drawer.setTimelineSourceAdapterFilter('');
+                      drawer.setShowHistoryFilters(false);
+                    }}
+                  >
+                    Clear filters
+                  </button>
+                </div>
+              </Show>
             </div>
           </Show>
 
