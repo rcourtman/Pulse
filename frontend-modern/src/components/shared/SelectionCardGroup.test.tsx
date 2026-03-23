@@ -1,10 +1,35 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SelectionCardGroup } from './SelectionCardGroup';
+import selectionCardGroupSource from './SelectionCardGroup.tsx?raw';
+import selectionCardGroupModelSource from './selectionCardGroupModel.ts?raw';
+import selectionCardGroupStateSource from './useSelectionCardGroupState.ts?raw';
 
 describe('SelectionCardGroup', () => {
   afterEach(() => {
     cleanup();
+  });
+
+  it('keeps shell, runtime, and model owners split', () => {
+    expect(selectionCardGroupSource).toContain('useSelectionCardGroupState');
+    expect(selectionCardGroupSource).toContain('getSelectionCardGroupClass');
+    expect(selectionCardGroupSource).toContain('getSelectionCardButtonClass');
+    expect(selectionCardGroupSource).toContain('getSelectionCardTitleClass');
+    expect(selectionCardGroupSource).not.toContain('resolveSelectionCardTone');
+    expect(selectionCardGroupSource).not.toContain('props.onChange(option.value)');
+    expect(selectionCardGroupSource).not.toContain('groupClassByVariant');
+
+    expect(selectionCardGroupStateSource).toContain('export function useSelectionCardGroupState');
+    expect(selectionCardGroupStateSource).toContain('createMemo');
+    expect(selectionCardGroupStateSource).toContain('resolveSelectionCardTone');
+    expect(selectionCardGroupStateSource).toContain('props.disabled || option.disabled');
+    expect(selectionCardGroupStateSource).toContain('props.onChange(option.value)');
+
+    expect(selectionCardGroupModelSource).toContain('resolveSelectionCardGroupVariant');
+    expect(selectionCardGroupModelSource).toContain('resolveSelectionCardTone');
+    expect(selectionCardGroupModelSource).toContain('getSelectionCardButtonClass');
+    expect(selectionCardGroupModelSource).toContain('getSelectionCardTitleClass');
+    expect(selectionCardGroupModelSource).toContain("compact: 'grid grid-cols-2 gap-2'");
   });
 
   it('routes compact card selection changes through the shared primitive', () => {
@@ -30,6 +55,28 @@ describe('SelectionCardGroup', () => {
 
     fireEvent.click(openAIButton);
     expect(onChange).toHaveBeenCalledWith('openai');
+  });
+
+  it('blocks disabled selection changes in the runtime owner', () => {
+    const onChange = vi.fn();
+
+    render(() => (
+      <SelectionCardGroup
+        options={[
+          { value: 'stable', title: 'Stable' },
+          { value: 'rc', title: 'Release Candidate', disabled: true },
+        ]}
+        value="stable"
+        onChange={onChange}
+        variant="detail"
+      />
+    ));
+
+    const rcButton = screen.getByRole('button', { name: /release candidate/i });
+    expect(rcButton).toBeDisabled();
+
+    fireEvent.click(rcButton);
+    expect(onChange).not.toHaveBeenCalled();
   });
 
   it('supports detail cards with success tone styling', () => {

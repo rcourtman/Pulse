@@ -60,6 +60,7 @@ import infrastructureSummaryTableStateSource from '@/components/shared/useInfras
 import monitoredSystemLimitWarningBannerSource from '@/components/shared/MonitoredSystemLimitWarningBanner.tsx?raw';
 import monitoredSystemLimitWarningBannerModelSource from '@/components/shared/monitoredSystemLimitWarningBannerModel.ts?raw';
 import selectionCardGroupSource from '@/components/shared/SelectionCardGroup.tsx?raw';
+import selectionCardGroupModelSource from '@/components/shared/selectionCardGroupModel.ts?raw';
 import tagBadgesSource from '@/components/shared/TagBadges.tsx?raw';
 import commandPaletteStateSource from '@/components/shared/useCommandPaletteState.ts?raw';
 import activeUseTrialNudgeStateSource from '@/components/shared/useActiveUseTrialNudgeState.ts?raw';
@@ -87,6 +88,7 @@ import tooltipStateSource from '@/components/shared/useTooltipState.ts?raw';
 import trialBannerStateSource from '@/components/shared/useTrialBannerState.ts?raw';
 import interactiveSparklineStateSource from '@/components/shared/useInteractiveSparklineState.ts?raw';
 import monitoredSystemLimitWarningBannerStateSource from '@/components/shared/useMonitoredSystemLimitWarningBannerState.ts?raw';
+import selectionCardGroupStateSource from '@/components/shared/useSelectionCardGroupState.ts?raw';
 import webInterfaceUrlFieldSource from '@/components/shared/WebInterfaceUrlField.tsx?raw';
 import webInterfaceUrlFieldModelSource from '@/components/shared/webInterfaceUrlFieldModel.ts?raw';
 import webInterfaceUrlFieldStateSource from '@/components/shared/useWebInterfaceUrlFieldState.ts?raw';
@@ -152,9 +154,20 @@ describe('shared primitive guardrails', () => {
   });
 
   it('routes selectable settings cards through SelectionCardGroup', () => {
-    expect(selectionCardGroupSource).toContain(
-      "type SelectionCardGroupVariant = 'compact' | 'detail'",
-    );
+    expect(selectionCardGroupSource).toContain('useSelectionCardGroupState');
+    expect(selectionCardGroupSource).toContain('getSelectionCardGroupClass');
+    expect(selectionCardGroupSource).toContain('getSelectionCardButtonClass');
+    expect(selectionCardGroupSource).toContain('getSelectionCardTitleClass');
+    expect(selectionCardGroupSource).not.toContain('resolveSelectionCardTone');
+    expect(selectionCardGroupSource).not.toContain('props.onChange(option.value)');
+    expect(selectionCardGroupStateSource).toContain('export function useSelectionCardGroupState');
+    expect(selectionCardGroupStateSource).toContain('createMemo');
+    expect(selectionCardGroupStateSource).toContain('resolveSelectionCardTone');
+    expect(selectionCardGroupStateSource).toContain('props.onChange(option.value)');
+    expect(selectionCardGroupModelSource).toContain('resolveSelectionCardGroupVariant');
+    expect(selectionCardGroupModelSource).toContain('resolveSelectionCardTone');
+    expect(selectionCardGroupModelSource).toContain('getSelectionCardButtonClass');
+    expect(selectionCardGroupModelSource).toContain("compact: 'grid grid-cols-2 gap-2'");
     expect(aiSettingsDialogsSource).toContain('SelectionCardGroup');
     expect(aiSettingsDialogsSource).toContain('variant="compact"');
     expect(aiSettingsDialogsSource).not.toContain(

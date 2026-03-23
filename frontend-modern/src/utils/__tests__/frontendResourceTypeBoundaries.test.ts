@@ -63,6 +63,8 @@ import infrastructureSummaryTableRowSource from '@/components/shared/Infrastruct
 import interactiveSparklineSource from '@/components/shared/InteractiveSparkline.tsx?raw';
 import interactiveSparklineModelSource from '@/components/shared/interactiveSparklineModel.ts?raw';
 import infrastructureSelectorModelSource from '@/components/shared/infrastructureSelectorModel.ts?raw';
+import selectionCardGroupSource from '@/components/shared/SelectionCardGroup.tsx?raw';
+import selectionCardGroupModelSource from '@/components/shared/selectionCardGroupModel.ts?raw';
 import sharedInfrastructureSummaryTableModelSource from '@/components/shared/infrastructureSummaryTableModel.ts?raw';
 import commandPaletteStateSource from '@/components/shared/useCommandPaletteState.ts?raw';
 import activeUseTrialNudgeStateSource from '@/components/shared/useActiveUseTrialNudgeState.ts?raw';
@@ -89,6 +91,7 @@ import trialBannerStateSource from '@/components/shared/useTrialBannerState.ts?r
 import interactiveSparklineStateSource from '@/components/shared/useInteractiveSparklineState.ts?raw';
 import monitoredSystemLimitWarningBannerStateSource from '@/components/shared/useMonitoredSystemLimitWarningBannerState.ts?raw';
 import infrastructureSummaryTableStateSource from '@/components/shared/useInfrastructureSummaryTableState.ts?raw';
+import selectionCardGroupStateSource from '@/components/shared/useSelectionCardGroupState.ts?raw';
 import resourceBadgePresentationSource from '@/utils/resourceBadgePresentation.ts?raw';
 import workloadTypeBadgesSource from '@/components/shared/workloadTypeBadges.ts?raw';
 import tagBadgesSource from '@/components/shared/TagBadges.tsx?raw';
@@ -2865,6 +2868,20 @@ describe('frontend resource type boundaries', () => {
     expect(statusBadgeModelSource).toContain('getStatusBadgeLabel');
     expect(statusBadgeModelSource).toContain('getStatusBadgeTitle');
     expect(statusBadgeModelSource).toContain("labelEnabled ?? 'Enabled'");
+    expect(selectionCardGroupSource).toContain('useSelectionCardGroupState');
+    expect(selectionCardGroupSource).toContain('getSelectionCardGroupClass');
+    expect(selectionCardGroupSource).toContain('getSelectionCardButtonClass');
+    expect(selectionCardGroupSource).toContain('getSelectionCardTitleClass');
+    expect(selectionCardGroupSource).not.toContain('resolveSelectionCardTone');
+    expect(selectionCardGroupSource).not.toContain('props.onChange(option.value)');
+    expect(selectionCardGroupStateSource).toContain('createMemo');
+    expect(selectionCardGroupStateSource).toContain('resolveSelectionCardTone');
+    expect(selectionCardGroupStateSource).toContain('props.disabled || option.disabled');
+    expect(selectionCardGroupStateSource).toContain('props.onChange(option.value)');
+    expect(selectionCardGroupModelSource).toContain('resolveSelectionCardGroupVariant');
+    expect(selectionCardGroupModelSource).toContain('resolveSelectionCardTone');
+    expect(selectionCardGroupModelSource).toContain('getSelectionCardButtonClass');
+    expect(selectionCardGroupModelSource).toContain("compact: 'grid grid-cols-2 gap-2'");
     expect(monitoredSystemLimitWarningBannerSource).toContain(
       'useMonitoredSystemLimitWarningBannerState',
     );

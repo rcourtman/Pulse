@@ -279,6 +279,14 @@ owns variant resolution plus disabled selection/change runtime, and
 variant class catalog, compact-label policy, and segmented button class
 selection. Future filter-button-group work should extend those owners instead
 of pushing label truncation or segmented variant policy back into the shell.
+The shared selection-card primitive now follows that same owner split.
+`frontend-modern/src/components/shared/SelectionCardGroup.tsx` stays the render
+shell, `frontend-modern/src/components/shared/useSelectionCardGroupState.ts`
+owns variant resolution plus disabled selection/change runtime, and
+`frontend-modern/src/components/shared/selectionCardGroupModel.ts` owns the
+tone fallback, group/button class catalog, and title/description presentation
+policy. Future selection-card-group work should extend those owners instead of
+pushing tone or active-card presentation logic back into the shell.
 The shared dialog now follows that same owner split.
 `frontend-modern/src/components/shared/Dialog.tsx` stays the render shell,
 `frontend-modern/src/components/shared/useDialogState.ts` owns focus trap,
