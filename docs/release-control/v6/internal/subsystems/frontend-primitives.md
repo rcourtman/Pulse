@@ -239,6 +239,15 @@ popover-position lifecycle, and global click/escape listeners, and
 resolution, icon sizing, missing-content warnings, and popover-position math.
 Future help-icon work should extend those owners instead of pushing registry
 lookups or DOM listener lifecycle back into the shared shell.
+The shared mobile nav now follows that same owner split.
+`frontend-modern/src/components/shared/MobileNavBar.tsx` stays the render
+shell, `frontend-modern/src/components/shared/useMobileNavBarState.ts` owns
+fade signals, scroll and resize listeners, active-tab centering, and click
+handoff lifecycle, and
+`frontend-modern/src/components/shared/mobileNavBarModel.ts` owns platform and
+utility tab ordering, alert badge counts, fade-state derivation, and tab
+button class policy. Future mobile-nav work should extend those owners instead
+of pushing tab-order or DOM lifecycle logic back into the shared shell.
 
 The audit log settings surface now follows that same owner split.
 `frontend-modern/src/components/Settings/AuditLogPanel.tsx` stays the canonical

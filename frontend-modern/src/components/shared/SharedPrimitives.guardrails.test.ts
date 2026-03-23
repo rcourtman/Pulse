@@ -9,6 +9,8 @@ import helpIconSource from '@/components/shared/HelpIcon.tsx?raw';
 import helpIconModelSource from '@/components/shared/helpIconModel.ts?raw';
 import historyChartSource from '@/components/shared/HistoryChart.tsx?raw';
 import historyChartModelSource from '@/components/shared/historyChartModel.ts?raw';
+import mobileNavBarSource from '@/components/shared/MobileNavBar.tsx?raw';
+import mobileNavBarModelSource from '@/components/shared/mobileNavBarModel.ts?raw';
 import infrastructureSelectorSource from '@/components/shared/InfrastructureSelector.tsx?raw';
 import interactiveSparklineSource from '@/components/shared/InteractiveSparkline.tsx?raw';
 import interactiveSparklineModelSource from '@/components/shared/interactiveSparklineModel.ts?raw';
@@ -24,6 +26,7 @@ import containerUpdateButtonStateSource from '@/components/shared/useContainerUp
 import densityMapStateSource from '@/components/shared/useDensityMapState.ts?raw';
 import helpIconStateSource from '@/components/shared/useHelpIconState.ts?raw';
 import historyChartStateSource from '@/components/shared/useHistoryChartState.ts?raw';
+import mobileNavBarStateSource from '@/components/shared/useMobileNavBarState.ts?raw';
 import infrastructureSelectorStateSource from '@/components/shared/useInfrastructureSelectorState.ts?raw';
 import interactiveSparklineStateSource from '@/components/shared/useInteractiveSparklineState.ts?raw';
 import webInterfaceUrlFieldSource from '@/components/shared/WebInterfaceUrlField.tsx?raw';
@@ -286,5 +289,24 @@ describe('shared primitive guardrails', () => {
     expect(helpIconModelSource).toContain('resolveHelpContent');
     expect(helpIconModelSource).toContain('calculateHelpPopoverPosition');
     expect(helpIconModelSource).toContain('helpIconSizeClasses');
+  });
+
+  it('keeps mobile nav on shell, runtime, and model owners', () => {
+    expect(mobileNavBarSource).toContain('useMobileNavBarState');
+    expect(mobileNavBarSource).toContain('getMobileNavTabButtonClass');
+    expect(mobileNavBarSource).not.toContain('createSignal');
+    expect(mobileNavBarSource).not.toContain('requestAnimationFrame');
+    expect(mobileNavBarSource).not.toContain('new Set(priority)');
+
+    expect(mobileNavBarStateSource).toContain('createSignal');
+    expect(mobileNavBarStateSource).toContain('window.addEventListener');
+    expect(mobileNavBarStateSource).toContain('requestAnimationFrame');
+    expect(mobileNavBarStateSource).toContain('scrollIntoView');
+    expect(mobileNavBarStateSource).toContain('export function useMobileNavBarState');
+
+    expect(mobileNavBarModelSource).toContain('buildOrderedMobileNavPlatformTabs');
+    expect(mobileNavBarModelSource).toContain('buildOrderedMobileNavUtilityTabs');
+    expect(mobileNavBarModelSource).toContain('getMobileNavAlertBadgeCounts');
+    expect(mobileNavBarModelSource).toContain('getMobileNavFadeState');
   });
 });
