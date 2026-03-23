@@ -585,6 +585,7 @@ import patrolIntelligenceBannersSource from '@/features/patrol/PatrolIntelligenc
 import patrolIntelligenceHeaderSource from '@/features/patrol/PatrolIntelligenceHeader.tsx?raw';
 import patrolIntelligenceSummarySource from '@/features/patrol/PatrolIntelligenceSummary.tsx?raw';
 import patrolIntelligenceSurfaceSource from '@/features/patrol/PatrolIntelligenceSurface.tsx?raw';
+import patrolInvestigationContextModelSource from '@/features/patrol/patrolInvestigationContextModel.ts?raw';
 import patrolIntelligenceStateSource from '@/features/patrol/usePatrolIntelligenceState.ts?raw';
 import patrolIntelligenceWorkspaceSource from '@/features/patrol/PatrolIntelligenceWorkspace.tsx?raw';
 import aiQuickstartPresentationSource from '@/utils/aiQuickstartPresentation.ts?raw';
@@ -4324,6 +4325,14 @@ describe('frontend resource type boundaries', () => {
     expect(patrolIntelligenceStateSource).toContain('getPatrolStatus');
     expect(patrolIntelligenceStateSource).toContain('usePatrolStream');
     expect(patrolIntelligenceStateSource).toContain('trackPaywallViewed');
+    expect(patrolIntelligenceStateSource).toContain(
+      "import { buildPatrolInvestigationContextSummary } from './patrolInvestigationContextModel';",
+    );
+    expect(patrolIntelligenceStateSource).not.toContain('governed resource${');
+    expect(patrolInvestigationContextModelSource).toContain(
+      'export function buildPatrolInvestigationContextSummary',
+    );
+    expect(patrolInvestigationContextModelSource).toContain('governed resource');
     expect(patrolIntelligenceHeaderSource).toContain('buildPatrolScheduleOptions');
     expect(patrolIntelligenceHeaderSource).toContain('getAIQuickstartCreditsPresentation');
     expect(patrolIntelligenceSummarySource).toContain('getPatrolSummaryPresentation');

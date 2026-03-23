@@ -29,6 +29,7 @@ import {
   startProTrial,
 } from '@/stores/license';
 import { getCanonicalScopeResourceIds } from '@/utils/patrolFormat';
+import { buildPatrolInvestigationContextSummary } from './patrolInvestigationContextModel';
 import {
   getProTrialStartedMessage,
   getTrialAlreadyUsedMessage,
@@ -448,39 +449,19 @@ export function usePatrolIntelligenceState() {
 
   const intelligenceSummary = createMemo(() => aiIntelligenceStore.intelligenceSummary);
   const policyPosture = createMemo(() => intelligenceSummary()?.policy_posture);
-  const correlationTotal = createMemo(
-    () =>
-      aiIntelligenceStore.correlations?.count ??
-      aiIntelligenceStore.correlations?.correlations?.length ??
-      0,
+  const investigationContext = createMemo(() =>
+    buildPatrolInvestigationContextSummary({
+      recentChangesCount:
+        intelligenceSummary()?.recent_changes_count ?? intelligenceSummary()?.recent_changes?.length,
+      correlations: aiIntelligenceStore.correlations,
+      policyPosture: policyPosture(),
+    }),
   );
+  const correlationTotal = createMemo(() => investigationContext().correlationCount);
   const correlations = createMemo(() => aiIntelligenceStore.correlations?.correlations ?? []);
-  const recentChangeCount = createMemo(
-    () =>
-      intelligenceSummary()?.recent_changes_count ?? intelligenceSummary()?.recent_changes?.length ?? 0,
-  );
-  const hasInvestigationContext = createMemo(
-    () =>
-      recentChangeCount() > 0 ||
-      correlationTotal() > 0 ||
-      (policyPosture()?.total_resources ?? 0) > 0,
-  );
-  const investigationContextSummary = createMemo(() => {
-    const parts: string[] = [];
-    if (recentChangeCount() > 0) {
-      parts.push(`${recentChangeCount()} recent change${recentChangeCount() === 1 ? '' : 's'}`);
-    }
-    if (correlationTotal() > 0) {
-      parts.push(`${correlationTotal()} correlation${correlationTotal() === 1 ? '' : 's'}`);
-    }
-    const governedResources = policyPosture()?.total_resources ?? 0;
-    if (governedResources > 0) {
-      parts.push(
-        `${governedResources} governed resource${governedResources === 1 ? '' : 's'}`,
-      );
-    }
-    return parts.join(' · ');
-  });
+  const recentChangeCount = createMemo(() => investigationContext().recentChangeCount);
+  const hasInvestigationContext = createMemo(() => investigationContext().hasContext);
+  const investigationContextSummary = createMemo(() => investigationContext().summaryText);
 
   const liveRunRecord = createMemo<PatrolRunRecord | null>(() => {
     if (!shouldShowLiveRun()) return null;

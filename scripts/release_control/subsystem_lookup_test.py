@@ -3521,6 +3521,29 @@ class SubsystemLookupTest(unittest.TestCase):
             ],
         )
 
+    def test_lookup_paths_assigns_patrol_investigation_context_model_to_patrol_intelligence(
+        self,
+    ) -> None:
+        result = lookup_paths(
+            ["frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts"]
+        )
+        self.assertEqual(result["unowned_runtime_files"], [])
+        self.assertEqual(
+            {item["subsystem"] for item in result["impacted_subsystems"]},
+            {"patrol-intelligence"},
+        )
+        file_entry = result["files"][0]
+        self.assertEqual(file_entry["classification"], "runtime")
+        self.assertEqual(
+            {match["subsystem"] for match in file_entry["matches"]},
+            {"patrol-intelligence"},
+        )
+        match = file_entry["matches"][0]
+        self.assertEqual(
+            match["verification_requirement"]["id"],
+            "patrol-page-and-state",
+        )
+
     def test_lookup_paths_assigns_findings_panel_to_patrol_intelligence(self) -> None:
         result = lookup_paths(["frontend-modern/src/components/AI/FindingsPanel.tsx"])
         self.assertEqual(result["unowned_runtime_files"], [])

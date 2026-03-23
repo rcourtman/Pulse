@@ -27,20 +27,21 @@ Patrol-specific presentation helpers.
 4. `frontend-modern/src/features/patrol/PatrolIntelligenceBanners.tsx`
 5. `frontend-modern/src/features/patrol/PatrolIntelligenceSummary.tsx`
 6. `frontend-modern/src/features/patrol/PatrolIntelligenceWorkspace.tsx`
-7. `frontend-modern/src/pages/AIIntelligence.tsx`
-8. `frontend-modern/src/stores/aiIntelligence.ts`
-9. `frontend-modern/src/types/aiIntelligence.ts`
-10. `frontend-modern/src/components/AI/FindingsPanel.tsx`
-11. `frontend-modern/src/components/Brand/PulsePatrolLogo.tsx`
-12. `frontend-modern/src/components/patrol/`
-13. `frontend-modern/src/utils/aiFindingPresentation.ts`
-14. `frontend-modern/src/utils/approvalRiskPresentation.ts`
-15. `frontend-modern/src/utils/findingAlertIdentity.ts`
-16. `frontend-modern/src/utils/patrolEmptyStatePresentation.ts`
-17. `frontend-modern/src/utils/patrolFormat.ts`
-18. `frontend-modern/src/utils/patrolRunPresentation.ts`
-19. `frontend-modern/src/utils/patrolSummaryPresentation.ts`
-20. `frontend-modern/src/utils/textPresentation.ts`
+7. `frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts`
+8. `frontend-modern/src/pages/AIIntelligence.tsx`
+9. `frontend-modern/src/stores/aiIntelligence.ts`
+10. `frontend-modern/src/types/aiIntelligence.ts`
+11. `frontend-modern/src/components/AI/FindingsPanel.tsx`
+12. `frontend-modern/src/components/Brand/PulsePatrolLogo.tsx`
+13. `frontend-modern/src/components/patrol/`
+14. `frontend-modern/src/utils/aiFindingPresentation.ts`
+15. `frontend-modern/src/utils/approvalRiskPresentation.ts`
+16. `frontend-modern/src/utils/findingAlertIdentity.ts`
+17. `frontend-modern/src/utils/patrolEmptyStatePresentation.ts`
+18. `frontend-modern/src/utils/patrolFormat.ts`
+19. `frontend-modern/src/utils/patrolRunPresentation.ts`
+20. `frontend-modern/src/utils/patrolSummaryPresentation.ts`
+21. `frontend-modern/src/utils/textPresentation.ts`
 
 ## Shared Boundaries
 
@@ -48,7 +49,7 @@ Patrol-specific presentation helpers.
 
 ## Extension Points
 
-1. Add or change Patrol page orchestration through `frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts`, keep `frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx` as the feature shell, keep the Patrol-owned section files under `frontend-modern/src/features/patrol/` as the heavy render owners, keep `frontend-modern/src/pages/AIIntelligence.tsx` as the route shell, and update `frontend-modern/src/stores/aiIntelligence.ts` together
+1. Add or change Patrol page orchestration through `frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts`, keep `frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts` as the canonical investigation-context derivation owner, keep `frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx` as the feature shell, keep the Patrol-owned section files under `frontend-modern/src/features/patrol/` as the heavy render owners, keep `frontend-modern/src/pages/AIIntelligence.tsx` as the route shell, and update `frontend-modern/src/stores/aiIntelligence.ts` together
 2. Add or change Patrol findings, approvals, investigation, or run-history presentation through `frontend-modern/src/components/AI/FindingsPanel.tsx` and `frontend-modern/src/components/patrol/`
 3. Keep Patrol and chat identifier-label presentation aligned through the shared `frontend-modern/src/utils/textPresentation.ts`
 4. Keep Patrol and chat stream-matching / mention dedupe aligned through the shared `frontend-modern/src/utils/chatIdentifiers.ts`
@@ -184,6 +185,11 @@ rendering recent changes, learned correlations, and policy posture as
 secondary investigation context behind an explicit disclosure, so expansion
 lane concepts stay available for deeper investigation without reading as the
 headline Patrol product story.
+That secondary investigation-context summary now also routes through the
+dedicated `frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts`
+owner, so the Patrol hook composes one canonical payload-to-summary derivation
+instead of rebuilding recent-change, correlation, and governed-resource count
+copy inline.
 The Patrol page's run-history tab label is now also tightened to `Runs`, while
 the underlying run-history panel remains canonical for snapshot filtering and
 tool-call inspection. That copy change is intentional: run history is support

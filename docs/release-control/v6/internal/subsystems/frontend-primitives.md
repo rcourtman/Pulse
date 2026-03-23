@@ -621,10 +621,12 @@ keep their shell/runtime split explicit once a subsystem grows real transport
 or polling lifecycle. The Patrol feature is the current reference shape:
 `frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx` stays the
 feature shell, `frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts`
-owns the runtime state machine, and the Patrol-owned header/banner/summary/workspace
-section files under `frontend-modern/src/features/patrol/` own the heavy render
-surfaces. Shared shell governance should reinforce that pattern instead of
-letting feature render surfaces re-accumulate API and timer orchestration inline.
+owns the runtime state machine, `frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts`
+owns the pure investigation-context summary derivation, and the Patrol-owned
+header/banner/summary/workspace section files under
+`frontend-modern/src/features/patrol/` own the heavy render surfaces. Shared
+shell governance should reinforce that pattern instead of letting feature render
+surfaces re-accumulate API and timer orchestration inline.
 
 Shared primitive consumers that split status-dot tone and status-text tone
 must now keep both values routed through the same exported presentation helper.
