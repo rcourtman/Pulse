@@ -214,6 +214,14 @@ signals, canvas draw lifecycle, and resize handling, and
 math, hover target selection, tooltip time formatting, and density-cell
 opacity rules. Future density-map work should extend those owners instead of
 pushing canvas lifecycle or chart math back into the shared shell.
+The shared active-use trial nudge now follows that same owner split.
+`frontend-modern/src/components/shared/ActiveUseTrialNudge.tsx` stays the
+render shell, `frontend-modern/src/components/shared/useActiveUseTrialNudgeState.ts`
+owns first-seen persistence, snooze state, hourly age refresh, and trial-start
+runtime, and `frontend-modern/src/components/shared/activeUseTrialNudgeModel.ts`
+owns the eligibility policy, age threshold, and nudge copy/config. Future
+active-use trial work should extend those owners instead of pushing storage
+policy, timers, or commercial action flow back into the shared shell.
 The shared dialog now follows that same owner split.
 `frontend-modern/src/components/shared/Dialog.tsx` stays the render shell,
 `frontend-modern/src/components/shared/useDialogState.ts` owns focus trap,

@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import calloutCardSource from '@/components/shared/CalloutCard.tsx?raw';
 import commandPaletteModalSource from '@/components/shared/CommandPaletteModal.tsx?raw';
 import commandPaletteModelSource from '@/components/shared/commandPaletteModel.ts?raw';
+import activeUseTrialNudgeSource from '@/components/shared/ActiveUseTrialNudge.tsx?raw';
+import activeUseTrialNudgeModelSource from '@/components/shared/activeUseTrialNudgeModel.ts?raw';
 import collapsibleSearchInputSource from '@/components/shared/CollapsibleSearchInput.tsx?raw';
 import collapsibleSearchInputModelSource from '@/components/shared/collapsibleSearchInputModel.ts?raw';
 import containerUpdateBadgeSource from '@/components/shared/ContainerUpdateBadge.tsx?raw';
@@ -46,6 +48,7 @@ import monitoredSystemLimitWarningBannerSource from '@/components/shared/Monitor
 import selectionCardGroupSource from '@/components/shared/SelectionCardGroup.tsx?raw';
 import tagBadgesSource from '@/components/shared/TagBadges.tsx?raw';
 import commandPaletteStateSource from '@/components/shared/useCommandPaletteState.ts?raw';
+import activeUseTrialNudgeStateSource from '@/components/shared/useActiveUseTrialNudgeState.ts?raw';
 import collapsibleSearchInputStateSource from '@/components/shared/useCollapsibleSearchInputState.ts?raw';
 import containerUpdateButtonStateSource from '@/components/shared/useContainerUpdateButtonState.ts?raw';
 import densityMapStateSource from '@/components/shared/useDensityMapState.ts?raw';
@@ -145,6 +148,32 @@ describe('shared primitive guardrails', () => {
     expect(commandPaletteModelSource).toContain('buildCommandPaletteCommands');
     expect(commandPaletteModelSource).toContain('normalizeCommandPaletteQuery');
     expect(commandPaletteModelSource).toContain('filterCommandPaletteCommands');
+  });
+
+  it('keeps active use trial nudge on shell, runtime, and model owners', () => {
+    expect(activeUseTrialNudgeSource).toContain('useActiveUseTrialNudgeState');
+    expect(activeUseTrialNudgeSource).toContain('ACTIVE_USE_TRIAL_NUDGE_TITLE');
+    expect(activeUseTrialNudgeSource).not.toContain('createSignal');
+    expect(activeUseTrialNudgeSource).not.toContain('createMemo');
+    expect(activeUseTrialNudgeSource).not.toContain('startProTrial');
+    expect(activeUseTrialNudgeSource).not.toContain('localStorage');
+    expect(activeUseTrialNudgeSource).not.toContain('setInterval');
+
+    expect(activeUseTrialNudgeStateSource).toContain(
+      'export function useActiveUseTrialNudgeState',
+    );
+    expect(activeUseTrialNudgeStateSource).toContain('createSignal');
+    expect(activeUseTrialNudgeStateSource).toContain('createMemo');
+    expect(activeUseTrialNudgeStateSource).toContain('window.localStorage');
+    expect(activeUseTrialNudgeStateSource).toContain('setInterval');
+    expect(activeUseTrialNudgeStateSource).toContain('startProTrial');
+    expect(activeUseTrialNudgeStateSource).toContain('snoozeUpsell');
+
+    expect(activeUseTrialNudgeModelSource).toContain('ACTIVE_USE_TRIAL_NUDGE_SNOOZE_KEY');
+    expect(activeUseTrialNudgeModelSource).toContain('ACTIVE_USE_TRIAL_NUDGE_FIRST_SEEN_KEY');
+    expect(activeUseTrialNudgeModelSource).toContain('isActiveUseTrialNudgeEligible');
+    expect(activeUseTrialNudgeModelSource).toContain('isActiveUseTrialNudgeOldEnough');
+    expect(activeUseTrialNudgeModelSource).toContain('ACTIVE_USE_TRIAL_NUDGE_TITLE');
   });
 
   it('routes settings info callouts through CalloutCard', () => {
