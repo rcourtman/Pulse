@@ -64,20 +64,26 @@ cross-source deduplication.
 42. `frontend-modern/src/features/infrastructure/InfrastructurePageSurface.tsx`
 43. `frontend-modern/src/features/infrastructure/useInfrastructurePageRouteState.ts`
 44. `frontend-modern/src/features/infrastructure/useInfrastructurePageState.ts`
+45. `frontend-modern/src/components/Infrastructure/InfrastructureSummary.tsx`
+46. `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`
+47. `frontend-modern/src/components/Infrastructure/infrastructureSummaryModel.ts`
 
 ## Shared Boundaries
 
 1. `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts` shared with `performance-and-scalability`: the infrastructure selector pipeline is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-2. `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts` shared with `performance-and-scalability`: resource detail mappers are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-3. `frontend-modern/src/components/Infrastructure/UnifiedResourceHostTableCard.tsx` shared with `performance-and-scalability`: the unified resource host table card is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-4. `frontend-modern/src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx` shared with `performance-and-scalability`: the unified resource PBS section is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-5. `frontend-modern/src/components/Infrastructure/UnifiedResourcePMGTableSection.tsx` shared with `performance-and-scalability`: the unified resource PMG section is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-6. `frontend-modern/src/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx` shared with `performance-and-scalability`: the unified resource service infrastructure card is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-7. `frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx` shared with `performance-and-scalability`: the unified resource table is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-8. `frontend-modern/src/components/Infrastructure/unifiedResourceTableModel.ts` shared with `performance-and-scalability`: unified resource service row shaping and I/O emphasis are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-9. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts` shared with `performance-and-scalability`: unified resource table state, grouping, and windowing are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-10. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts` shared with `performance-and-scalability`: unified resource table viewport sync and selected-row reveal are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-11. `internal/api/resources.go` shared with `api-contracts`: the unified resource endpoint is both a backend payload contract surface and a unified-resource runtime boundary.
+2. `frontend-modern/src/components/Infrastructure/InfrastructureSummary.tsx` shared with `performance-and-scalability`: the infrastructure summary surface is both a canonical unified-resource consumer and a fleet-scale summary chart hot-path boundary.
+3. `frontend-modern/src/components/Infrastructure/infrastructureSummaryModel.ts` shared with `performance-and-scalability`: infrastructure summary chart matching and series derivation are both a canonical unified-resource consumer surface and a fleet-scale summary chart hot-path boundary.
+4. `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts` shared with `performance-and-scalability`: resource detail mappers are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
+5. `frontend-modern/src/components/Infrastructure/UnifiedResourceHostTableCard.tsx` shared with `performance-and-scalability`: the unified resource host table card is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
+6. `frontend-modern/src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx` shared with `performance-and-scalability`: the unified resource PBS section is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
+7. `frontend-modern/src/components/Infrastructure/UnifiedResourcePMGTableSection.tsx` shared with `performance-and-scalability`: the unified resource PMG section is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
+8. `frontend-modern/src/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx` shared with `performance-and-scalability`: the unified resource service infrastructure card is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
+9. `frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx` shared with `performance-and-scalability`: the unified resource table is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
+10. `frontend-modern/src/components/Infrastructure/unifiedResourceTableModel.ts` shared with `performance-and-scalability`: unified resource service row shaping and I/O emphasis are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
+11. `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts` shared with `performance-and-scalability`: infrastructure summary chart polling, cache hydration, and summary-state orchestration are both a canonical unified-resource consumer surface and a fleet-scale summary chart hot-path boundary.
+12. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts` shared with `performance-and-scalability`: unified resource table state, grouping, and windowing are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
+13. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts` shared with `performance-and-scalability`: unified resource table viewport sync and selected-row reveal are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
+14. `internal/api/resources.go` shared with `api-contracts`: the unified resource endpoint is both a backend payload contract surface and a unified-resource runtime boundary.
 
 ## Extension Points
 
@@ -159,6 +165,12 @@ canonical drawer derivation layer,
 `useResourceDetailDrawerDockerActionsState.ts` owns Docker action runtime, and
 the overview/debug render-heavy surfaces live in dedicated drawer-local owners
 instead of staying inline in the shell.
+The infrastructure summary surface now follows the same shell/runtime/model
+shape: `InfrastructureSummary.tsx` is the render shell,
+`useInfrastructureSummaryState.ts` owns chart polling, cache hydration,
+org-scope lifecycle, and focused-summary state, and
+`infrastructureSummaryModel.ts` owns chart matching plus summary-series
+derivation.
 The backend AI and Patrol context renderers now derive their canonical change
 kind, source type, source adapter, actor, reason, and related-resource
 fragments from `internal/unifiedresources/change_presentation.go`, so the
@@ -306,6 +318,14 @@ while Docker update mutations route through
 and `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts`
 stays the composition owner, so unified-resource history, investigation, and
 drawer-local action runtime no longer accumulate inline beside the model layer.
+The infrastructure summary path now routes chart polling, cache hydration, and
+org-scope lifecycle through
+`frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`,
+while chart matching and summary-series derivation route through
+`frontend-modern/src/components/Infrastructure/infrastructureSummaryModel.ts`
+and `frontend-modern/src/components/Infrastructure/InfrastructureSummary.tsx`
+stays the render shell, so summary charts are no longer an unowned mixed
+resource consumer surface.
 The shared `ResourceFacetSummary` consumer now omits capability and
 relationship badges from the default table/detail surface entirely, while the
 backend contract keeps capability and relationship data on the owned resource

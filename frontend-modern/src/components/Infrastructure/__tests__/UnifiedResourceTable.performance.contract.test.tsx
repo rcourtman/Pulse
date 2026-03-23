@@ -9,6 +9,9 @@ import unifiedResourceTableSource from '@/components/Infrastructure/UnifiedResou
 import unifiedResourceTableStateSource from '@/components/Infrastructure/useUnifiedResourceTableState.ts?raw';
 import unifiedResourceTableViewportSyncSource from '@/components/Infrastructure/useUnifiedResourceTableViewportSync.ts?raw';
 import unifiedResourceTableModelSource from '@/components/Infrastructure/unifiedResourceTableModel.ts?raw';
+import infrastructureSummarySource from '@/components/Infrastructure/InfrastructureSummary.tsx?raw';
+import infrastructureSummaryStateSource from '@/components/Infrastructure/useInfrastructureSummaryState.ts?raw';
+import infrastructureSummaryModelSource from '@/components/Infrastructure/infrastructureSummaryModel.ts?raw';
 import {
   buildStatusOptions,
   filterResources,
@@ -198,6 +201,25 @@ describe('UnifiedResourceTable performance contract', () => {
       expect(unifiedResourceTableModelSource).toContain('export const getPBSTableRow');
       expect(unifiedResourceTableModelSource).toContain('export const getPMGTableRow');
       expect(unifiedResourceTableModelSource).toContain('export const getOutlierEmphasis');
+    });
+
+    it('keeps infrastructure summary fetch runtime out of the render shell', () => {
+      expect(infrastructureSummarySource).toContain('useInfrastructureSummaryState');
+      expect(infrastructureSummarySource).not.toContain('fetchInfrastructureSummaryAndCache');
+      expect(infrastructureSummarySource).not.toContain('readInfrastructureSummaryCache');
+      expect(infrastructureSummarySource).not.toContain('setInterval(');
+      expect(infrastructureSummarySource).not.toContain('AbortController');
+      expect(infrastructureSummaryStateSource).toContain('fetchInfrastructureSummaryAndCache');
+      expect(infrastructureSummaryStateSource).toContain('readInfrastructureSummaryCache');
+      expect(infrastructureSummaryStateSource).toContain('setInterval(');
+      expect(infrastructureSummaryStateSource).toContain('AbortController');
+      expect(infrastructureSummaryStateSource).toContain("eventBus.on('org_switched'");
+      expect(infrastructureSummaryModelSource).toContain(
+        'export function buildInfrastructureSummarySeries',
+      );
+      expect(infrastructureSummaryModelSource).toContain(
+        'export function combineResourceThroughputSeries',
+      );
     });
 
     it('keeps source filtering on the shared canonical source-platform helper', () => {

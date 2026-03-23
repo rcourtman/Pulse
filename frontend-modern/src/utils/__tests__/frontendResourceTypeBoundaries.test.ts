@@ -246,6 +246,8 @@ import resourceDetailDrawerShellSource from '@/components/Infrastructure/Resourc
 import resourceDetailDrawerOverviewSource from '@/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx?raw';
 import resourceDetailDrawerDebugSource from '@/components/Infrastructure/ResourceDetailDrawerDebugTab.tsx?raw';
 import infrastructureSummarySource from '@/components/Infrastructure/InfrastructureSummary.tsx?raw';
+import infrastructureSummaryStateSource from '@/components/Infrastructure/useInfrastructureSummaryState.ts?raw';
+import infrastructureSummaryModelSource from '@/components/Infrastructure/infrastructureSummaryModel.ts?raw';
 import resourceDetailMappersSource from '@/components/Infrastructure/resourceDetailMappers.ts?raw';
 import resourceDetailDrawerHistoryStateSource from '@/components/Infrastructure/useResourceDetailDrawerHistoryState.ts?raw';
 import resourceDetailDrawerDerivedStateSource from '@/components/Infrastructure/useResourceDetailDrawerDerivedState.ts?raw';
@@ -854,8 +856,12 @@ describe('frontend resource type boundaries', () => {
     expect(useWorkloadsSource).not.toContain('const normalizeOrgScope =');
     expect(useUnifiedResourcesSource).toContain('normalizeOrgScope(getOrgID())');
     expect(useUnifiedResourcesSource).not.toContain('const normalizeOrgScope =');
-    expect(infrastructureSummarySource).toContain('normalizeOrgScope(getOrgID())');
-    expect(infrastructureSummarySource).not.toContain("getOrgID() || 'default'");
+    expect(infrastructureSummarySource).toContain('useInfrastructureSummaryState');
+    expect(infrastructureSummarySource).not.toContain('fetchInfrastructureSummaryAndCache');
+    expect(infrastructureSummarySource).not.toContain('setInterval(');
+    expect(infrastructureSummarySource).not.toContain('AbortController');
+    expect(infrastructureSummaryStateSource).toContain('normalizeOrgScope(getOrgID())');
+    expect(infrastructureSummaryStateSource).not.toContain("getOrgID() || 'default'");
     expect(storageSummarySource).toContain('normalizeOrgScope(getOrgID())');
     expect(storageSummarySource).not.toContain("getOrgID() || 'default'");
     expect(guestRowSource).toContain('useGuestRowState');
@@ -2581,14 +2587,14 @@ describe('frontend resource type boundaries', () => {
     expect(aiChatSource).not.toContain('const normalizeMentionKeyPart =');
     expect(chatIdentifiersSource).toContain('normalizeChatMentionKeyPart');
     expect(chatIdentifiersSource).toContain('normalizeChatToolName');
-    expect(infrastructureSummarySource).toContain('getNormalizedIdentityLookupVariants');
+    expect(infrastructureSummaryModelSource).toContain('getNormalizedIdentityLookupVariants');
     expect(infrastructureSummaryTableSource).toContain('getNormalizedIdentityLookupVariants');
     expect(resourceIdentitySource).toContain('getNormalizedIdentityLookupVariants');
     expect(stringUtilsSource).toContain('export const asTrimmedString');
     expect(resourceIdentitySource).not.toContain(
       'const asTrimmedString = (value: unknown): string | undefined => {',
     );
-    expect(infrastructureSummarySource).not.toContain(
+    expect(infrastructureSummaryModelSource).not.toContain(
       'const asTrimmedString = (value: unknown): string | null => {',
     );
     expect(infrastructureSummaryTableSource).not.toContain(

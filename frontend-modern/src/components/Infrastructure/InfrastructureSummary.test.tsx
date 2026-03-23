@@ -1,7 +1,8 @@
 import { createSignal } from 'solid-js';
 import { render, waitFor, cleanup } from '@solidjs/testing-library';
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
-import { InfrastructureSummary, __resetInMemoryChartCacheForTests } from './InfrastructureSummary';
+import { InfrastructureSummary } from './InfrastructureSummary';
+import { __resetInMemoryChartCacheForTests } from './useInfrastructureSummaryState';
 import type { Resource } from '@/types/resource';
 import type { TimeRange } from '@/api/charts';
 import { __resetInfrastructureSummaryFetchesForTests } from '@/utils/infrastructureSummaryCache';
