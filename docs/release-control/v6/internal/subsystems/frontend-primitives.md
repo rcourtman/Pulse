@@ -222,6 +222,11 @@ and hover state, and `frontend-modern/src/components/shared/historyChartModel.ts
 owns tooltip formatting, scale and axis math, and closest-point selection.
 Future history-chart work should extend those owners instead of pushing fetch,
 license, or canvas math back into the shared component shell.
+The remaining header, overlay, and tooltip render surfaces now live in
+`frontend-modern/src/components/shared/HistoryChartHeader.tsx`,
+`frontend-modern/src/components/shared/HistoryChartOverlay.tsx`, and
+`frontend-modern/src/components/shared/HistoryChartTooltip.tsx` instead of
+re-accumulating those sections inline in the shell.
 The shared container update badge now follows that same owner split.
 `frontend-modern/src/components/shared/ContainerUpdateBadge.tsx` stays the
 render surface for the badge, icon, and update button shells,

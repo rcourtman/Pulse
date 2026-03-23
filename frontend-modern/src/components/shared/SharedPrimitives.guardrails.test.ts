@@ -9,8 +9,11 @@ import densityMapModelSource from '@/components/shared/densityMapModel.ts?raw';
 import filterButtonGroupSource from '@/components/shared/FilterButtonGroup.tsx?raw';
 import helpIconSource from '@/components/shared/HelpIcon.tsx?raw';
 import helpIconModelSource from '@/components/shared/helpIconModel.ts?raw';
+import historyChartHeaderSource from '@/components/shared/HistoryChartHeader.tsx?raw';
+import historyChartOverlaySource from '@/components/shared/HistoryChartOverlay.tsx?raw';
 import historyChartSource from '@/components/shared/HistoryChart.tsx?raw';
 import historyChartModelSource from '@/components/shared/historyChartModel.ts?raw';
+import historyChartTooltipSource from '@/components/shared/HistoryChartTooltip.tsx?raw';
 import infrastructureDetailsDrawerSource from '@/components/shared/InfrastructureDetailsDrawer.tsx?raw';
 import infrastructureDetailsDrawerModelSource from '@/components/shared/infrastructureDetailsDrawerModel.ts?raw';
 import mobileNavBarSource from '@/components/shared/MobileNavBar.tsx?raw';
@@ -247,19 +250,39 @@ describe('shared primitive guardrails', () => {
 
   it('keeps history chart on shell, runtime, and model owners', () => {
     expect(historyChartSource).toContain('useHistoryChartState');
+    expect(historyChartSource).toContain('HistoryChartHeader');
+    expect(historyChartSource).toContain('HistoryChartOverlay');
+    expect(historyChartSource).toContain('HistoryChartTooltip');
     expect(historyChartSource).not.toContain('ChartsAPI.getMetricsHistory');
     expect(historyChartSource).not.toContain('calculateOptimalPoints');
     expect(historyChartSource).not.toContain('setupCanvasDPR');
     expect(historyChartSource).not.toContain('createSignal');
+    expect(historyChartSource).not.toContain('Collecting data... History will appear here.');
+    expect(historyChartSource).not.toContain('Unlock {chart.lockTierLabel()} Features');
 
     expect(historyChartStateSource).toContain('ChartsAPI.getMetricsHistory');
     expect(historyChartStateSource).toContain('calculateOptimalPoints');
     expect(historyChartStateSource).toContain('setupCanvasDPR');
     expect(historyChartStateSource).toContain('export function useHistoryChartState');
+    expect(historyChartStateSource).toContain('HISTORY_CHART_RANGES');
 
     expect(historyChartModelSource).toContain('formatHistoryChartTooltipValue');
+    expect(historyChartModelSource).toContain('HISTORY_CHART_RANGES');
     expect(historyChartModelSource).toContain('getHistoryChartScale');
     expect(historyChartModelSource).toContain('findHistoryChartClosestPoint');
+
+    expect(historyChartHeaderSource).toContain('formatHistoryChartTooltipValue');
+    expect(historyChartHeaderSource).not.toContain('ChartsAPI.getMetricsHistory');
+    expect(historyChartHeaderSource).not.toContain('setupCanvasDPR');
+
+    expect(historyChartOverlaySource).toContain('Collecting data... History will appear here.');
+    expect(historyChartOverlaySource).toContain('Unlock {props.chart.lockTierLabel()} Features');
+    expect(historyChartOverlaySource).not.toContain('ChartsAPI.getMetricsHistory');
+    expect(historyChartOverlaySource).not.toContain('setupCanvasDPR');
+
+    expect(historyChartTooltipSource).toContain('formatHistoryChartTooltipValue');
+    expect(historyChartTooltipSource).toContain('new Date(point().timestamp).toLocaleString()');
+    expect(historyChartTooltipSource).not.toContain('ChartsAPI.getMetricsHistory');
   });
 
   it('keeps container update badge on shell, runtime, and model owners', () => {

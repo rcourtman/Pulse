@@ -25,6 +25,7 @@ import {
   getTrialTryAgainLaterMessage,
 } from '@/utils/upgradePresentation';
 import {
+  HISTORY_CHART_RANGES,
   createHistoryChartGeometry,
   findHistoryChartClosestPoint,
   formatHistoryChartTimeLabel,
@@ -417,7 +418,7 @@ export function useHistoryChartState(props: HistoryChartProps, refs: HistoryChar
     lockDays,
     lockTierLabel,
     range,
-    ranges: ['24h', '7d', '30d', '90d'] as HistoryTimeRange[],
+    ranges: HISTORY_CHART_RANGES,
     source,
     startingTrial,
     trackUpgradeClicked,
