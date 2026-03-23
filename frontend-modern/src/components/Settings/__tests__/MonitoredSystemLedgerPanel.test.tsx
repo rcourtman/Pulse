@@ -75,6 +75,9 @@ describe('MonitoredSystemLedgerPanel', () => {
           name: 'host-1',
           type: 'host',
           status: 'online',
+          status_explanation: {
+            summary: 'All included top-level collection paths currently report online status.',
+          },
           last_seen: '2026-01-01T00:00:00Z',
           source: 'agent',
           explanation: {
@@ -134,6 +137,9 @@ describe('MonitoredSystemLedgerPanel', () => {
           name: 'server-a',
           type: 'host',
           status: 'online',
+          status_explanation: {
+            summary: 'All included top-level collection paths currently report online status.',
+          },
           last_seen: '2026-01-01T00:00:00Z',
           source: 'agent',
           explanation: {
@@ -153,6 +159,10 @@ describe('MonitoredSystemLedgerPanel', () => {
           name: 'server-b',
           type: 'pbs-server',
           status: 'offline',
+          status_explanation: {
+            summary:
+              'At least one included top-level collection path is offline or disconnected, so Pulse marks this monitored system as offline.',
+          },
           last_seen: '2026-01-02T00:00:00Z',
           source: 'pbs',
           explanation: {
@@ -207,6 +217,12 @@ describe('MonitoredSystemLedgerPanel', () => {
         'Counts as one monitored system because Pulse merged 2 top-level views into one canonical system using shared machine identity.',
       ),
     ).toBeInTheDocument();
+    expect(screen.getByText('Current status')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'At least one included top-level collection path is offline or disconnected, so Pulse marks this monitored system as offline.',
+      ),
+    ).toBeInTheDocument();
     expect(screen.getByText('Included collection paths')).toBeInTheDocument();
     expect(screen.getByText('server-b host (host, agent)')).toBeInTheDocument();
     expect(
@@ -221,6 +237,9 @@ describe('MonitoredSystemLedgerPanel', () => {
           name: 'server-a',
           type: 'host',
           status: 'online',
+          status_explanation: {
+            summary: 'All included top-level collection paths currently report online status.',
+          },
           last_seen: '2026-01-01T00:00:00Z',
           source: 'agent',
         },
@@ -239,6 +258,9 @@ describe('MonitoredSystemLedgerPanel', () => {
 
     expect(
       screen.getByText('Pulse counts this top-level collection path as one monitored system.'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('All included top-level collection paths currently report online status.'),
     ).toBeInTheDocument();
     expect(screen.queryByText('Included collection paths')).not.toBeInTheDocument();
   });

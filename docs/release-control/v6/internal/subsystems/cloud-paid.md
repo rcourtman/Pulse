@@ -209,6 +209,12 @@ That same disclosure copy must stay professional and customer-facing. The
 settings ledger may expose counting details and included collection paths, but
 it must avoid informal debug-style labels or ad hoc wording that makes the
 commercial usage surface feel provisional.
+That same governed ledger support surface now also owns backend-authored status
+explanation copy beside the monitored-system status label. The frontend details
+view may normalize a safe default when that field is absent during mixed-version
+rollouts, but it must render the canonical backend explanation when present
+instead of inventing page-local wording for what warning, offline, or unknown
+means on a counted monitored system.
 Frontend billing/admin surfaces must not synthesize `plan_version` from
 subscription lifecycle state. When a hosted billing record lacks a plan label,
 the UI must preserve that absence instead of fabricating values like `active`

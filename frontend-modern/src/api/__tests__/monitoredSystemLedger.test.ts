@@ -36,6 +36,9 @@ describe('MonitoredSystemLedgerAPI', () => {
           name: 'server-1',
           type: 'host',
           status: 'online',
+          status_explanation: {
+            summary: 'All included top-level collection paths currently report online status.',
+          },
           last_seen: '2026-01-01T00:00:00Z',
           source: 'agent',
           explanation: {
@@ -59,6 +62,7 @@ describe('MonitoredSystemLedgerAPI', () => {
     const result = await MonitoredSystemLedgerAPI.getLedger();
 
     expect(result.systems[0]?.explanation.summary).toContain('Counts as one monitored system');
+    expect(result.systems[0]?.status_explanation?.summary).toContain('currently report online');
     expect(result.systems[0]?.explanation.reasons).toHaveLength(1);
     expect(result.systems[0]?.explanation.surfaces).toHaveLength(1);
   });
@@ -81,6 +85,7 @@ describe('MonitoredSystemLedgerAPI', () => {
     const result = await MonitoredSystemLedgerAPI.getLedger();
 
     expect(result.systems[0]?.explanation.summary).toContain('counts this top-level collection path');
+    expect(result.systems[0]?.status_explanation?.summary).toContain('currently report online');
     expect(result.systems[0]?.explanation.reasons).toEqual([]);
     expect(result.systems[0]?.explanation.surfaces).toEqual([]);
   });

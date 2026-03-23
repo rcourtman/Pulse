@@ -577,9 +577,12 @@ func TestContract_MonitoredSystemLedgerJSONSnapshot(t *testing.T) {
 	payload := MonitoredSystemLedgerResponse{
 		Systems: []MonitoredSystemLedgerEntry{
 			{
-				Name:     "Tower",
-				Type:     "host",
-				Status:   "warning",
+				Name:   "Tower",
+				Type:   "host",
+				Status: "warning",
+				StatusExplanation: MonitoredSystemLedgerStatusExplanation{
+					Summary: "At least one included top-level collection path is degraded or stale, so Pulse marks this monitored system as warning.",
+				},
 				LastSeen: "2026-03-18T17:30:00Z",
 				Source:   "agent",
 				Explanation: MonitoredSystemLedgerExplanation{
@@ -616,6 +619,9 @@ func TestContract_MonitoredSystemLedgerJSONSnapshot(t *testing.T) {
 				"name":"Tower",
 				"type":"host",
 				"status":"warning",
+				"status_explanation":{
+					"summary":"At least one included top-level collection path is degraded or stale, so Pulse marks this monitored system as warning."
+				},
 				"last_seen":"2026-03-18T17:30:00Z",
 				"source":"agent",
 				"explanation":{

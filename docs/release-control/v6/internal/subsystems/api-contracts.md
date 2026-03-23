@@ -239,6 +239,10 @@ status enum end to end. Backend normalization may fail closed for unsupported
 values, but it must not flatten governed `warning` state to `unknown`, because
 the billing and inventory surfaces need the real top-level runtime status the
 unified-resource resolver computed.
+That same contract now also owns the backend-authored status explanation paired
+with that enum, and the monitored-system ledger details surface must render it
+alongside the counting explanation instead of inventing page-local wording for
+what online, warning, offline, or unknown means.
 That client contract must also fail closed when older or partial payloads omit
 the nested explanation object: the frontend may normalize missing explanation
 fields to empty reasons/surfaces plus a safe default summary, but it must not

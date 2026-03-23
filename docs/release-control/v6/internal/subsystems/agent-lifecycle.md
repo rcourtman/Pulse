@@ -230,6 +230,10 @@ That shared ledger read must also preserve canonical grouped system status,
 including `warning`, so lifecycle-adjacent operator surfaces do not mislabel
 live agent-backed infrastructure as `Unknown` when the unified-resource layer
 already resolved a governed degraded state.
+That same ledger read now also carries backend-owned status explanation copy,
+and lifecycle-adjacent details must render it beside the counting rationale so
+operators can interpret warning, offline, and unknown states without inventing
+local status semantics.
 Lifecycle-adjacent workspace copy must also keep the same commercial framing:
 infrastructure operations may point operators to Pulse Pro for billing, but it
 must describe that boundary in monitored-system, plan-limit, and license-status

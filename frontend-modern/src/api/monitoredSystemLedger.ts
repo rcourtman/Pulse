@@ -20,10 +20,15 @@ export interface MonitoredSystemLedgerExplanation {
   surfaces: MonitoredSystemLedgerExplanationSurface[];
 }
 
+export interface MonitoredSystemLedgerStatusExplanation {
+  summary: string;
+}
+
 export interface MonitoredSystemLedgerEntry {
   name: string;
   type: string;
   status: MonitoredSystemLedgerStatus;
+  status_explanation?: MonitoredSystemLedgerStatusExplanation;
   last_seen: string; // RFC3339 or empty
   source: string;
   explanation?: MonitoredSystemLedgerExplanation;
@@ -51,9 +56,13 @@ function normalizeMonitoredSystemLedgerEntry(
   entry: MonitoredSystemLedgerEntry,
 ): MonitoredSystemLedgerEntry {
   const explanation = entry.explanation;
+  const status = normalizeMonitoredSystemLedgerStatus(entry.status);
   return {
     ...entry,
-    status: normalizeMonitoredSystemLedgerStatus(entry.status),
+    status,
+    status_explanation: {
+      summary: entry.status_explanation?.summary ?? defaultMonitoredSystemStatusExplanation(status),
+    },
     explanation: {
       summary:
         explanation?.summary ??
@@ -75,5 +84,18 @@ function normalizeMonitoredSystemLedgerStatus(
       return status.trim().toLowerCase() as MonitoredSystemLedgerStatus;
     default:
       return 'unknown';
+  }
+}
+
+function defaultMonitoredSystemStatusExplanation(status: MonitoredSystemLedgerStatus): string {
+  switch (status) {
+    case 'online':
+      return 'All included top-level collection paths currently report online status.';
+    case 'warning':
+      return 'At least one included top-level collection path is degraded or stale.';
+    case 'offline':
+      return 'At least one included top-level collection path is offline or disconnected.';
+    default:
+      return 'Pulse cannot determine a canonical runtime status for this monitored system yet.';
   }
 }

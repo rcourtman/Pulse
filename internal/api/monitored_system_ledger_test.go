@@ -10,9 +10,12 @@ import (
 
 func TestMonitoredSystemLedgerEntryTypes(t *testing.T) {
 	entry := MonitoredSystemLedgerEntry{
-		Name:     "server-1",
-		Type:     "host",
-		Status:   "online",
+		Name:   "server-1",
+		Type:   "host",
+		Status: "online",
+		StatusExplanation: MonitoredSystemLedgerStatusExplanation{
+			Summary: "All included top-level collection paths currently report online status.",
+		},
 		LastSeen: "2025-01-01T00:00:00Z",
 		Source:   "agent",
 		Explanation: MonitoredSystemLedgerExplanation{
@@ -35,6 +38,9 @@ func TestMonitoredSystemLedgerEntryTypes(t *testing.T) {
 	}
 	if decoded.Name != "server-1" || decoded.Type != "host" || decoded.Status != "online" {
 		t.Errorf("round-trip mismatch: %+v", decoded)
+	}
+	if decoded.StatusExplanation.Summary == "" {
+		t.Errorf("status explanation mismatch: %+v", decoded.StatusExplanation)
 	}
 	if decoded.Source != "agent" {
 		t.Errorf("source mismatch: got %q", decoded.Source)
@@ -75,6 +81,25 @@ func TestFormatLastSeen(t *testing.T) {
 	got := formatLastSeen(ts)
 	if got != "2025-06-15T10:30:00Z" {
 		t.Errorf("formatLastSeen = %q, want 2025-06-15T10:30:00Z", got)
+	}
+}
+
+func TestMonitoredSystemLedgerStatusExplanation(t *testing.T) {
+	tests := []struct {
+		status string
+		want   string
+	}{
+		{"online", "All included top-level collection paths currently report online status."},
+		{"warning", "At least one included top-level collection path is degraded or stale, so Pulse marks this monitored system as warning."},
+		{"offline", "At least one included top-level collection path is offline or disconnected, so Pulse marks this monitored system as offline."},
+		{"unknown", "Pulse cannot determine a canonical runtime status for this monitored system yet."},
+	}
+
+	for _, tt := range tests {
+		got := monitoredSystemLedgerStatusExplanation(tt.status)
+		if got.Summary != tt.want {
+			t.Errorf("monitoredSystemLedgerStatusExplanation(%q) = %q, want %q", tt.status, got.Summary, tt.want)
+		}
 	}
 }
 
@@ -136,9 +161,12 @@ func TestHandleMonitoredSystemLedgerHTTP(t *testing.T) {
 	resp := MonitoredSystemLedgerResponse{
 		Systems: []MonitoredSystemLedgerEntry{
 			{
-				Name:     "test-host",
-				Type:     "host",
-				Status:   "online",
+				Name:   "test-host",
+				Type:   "host",
+				Status: "online",
+				StatusExplanation: MonitoredSystemLedgerStatusExplanation{
+					Summary: "All included top-level collection paths currently report online status.",
+				},
 				LastSeen: "2025-01-01T00:00:00Z",
 				Source:   "agent",
 				Explanation: MonitoredSystemLedgerExplanation{
@@ -174,6 +202,9 @@ func TestHandleMonitoredSystemLedgerHTTP(t *testing.T) {
 	}
 	if decoded.Systems[0].Name != "test-host" || decoded.Systems[0].Type != "host" {
 		t.Errorf("unexpected system: %+v", decoded.Systems[0])
+	}
+	if decoded.Systems[0].StatusExplanation.Summary == "" {
+		t.Errorf("expected status explanation summary, got %+v", decoded.Systems[0].StatusExplanation)
 	}
 	if decoded.Systems[0].Explanation.Summary == "" {
 		t.Errorf("expected explanation summary, got %+v", decoded.Systems[0].Explanation)

@@ -13,12 +13,17 @@ import (
 // MonitoredSystemLedgerEntry represents a single counted top-level monitored
 // system.
 type MonitoredSystemLedgerEntry struct {
-	Name        string                           `json:"name"`
-	Type        string                           `json:"type"`
-	Status      string                           `json:"status"`    // "online", "offline", "unknown"
-	LastSeen    string                           `json:"last_seen"` // RFC3339 or empty
-	Source      string                           `json:"source"`
-	Explanation MonitoredSystemLedgerExplanation `json:"explanation"`
+	Name              string                                 `json:"name"`
+	Type              string                                 `json:"type"`
+	Status            string                                 `json:"status"` // "online", "warning", "offline", "unknown"
+	StatusExplanation MonitoredSystemLedgerStatusExplanation `json:"status_explanation"`
+	LastSeen          string                                 `json:"last_seen"` // RFC3339 or empty
+	Source            string                                 `json:"source"`
+	Explanation       MonitoredSystemLedgerExplanation       `json:"explanation"`
+}
+
+type MonitoredSystemLedgerStatusExplanation struct {
+	Summary string `json:"summary"`
 }
 
 type MonitoredSystemLedgerExplanation struct {
@@ -97,13 +102,15 @@ func (r *Router) handleMonitoredSystemLedger(w http.ResponseWriter, req *http.Re
 
 	entries := make([]MonitoredSystemLedgerEntry, 0, len(systems))
 	for _, system := range systems {
+		status := normalizeStatus(string(system.Status))
 		entries = append(entries, MonitoredSystemLedgerEntry{
-			Name:        system.Name,
-			Type:        system.Type,
-			Status:      normalizeStatus(string(system.Status)),
-			LastSeen:    formatLastSeen(system.LastSeen),
-			Source:      system.Source,
-			Explanation: monitoredSystemLedgerExplanation(system.Explanation),
+			Name:              system.Name,
+			Type:              system.Type,
+			Status:            status,
+			StatusExplanation: monitoredSystemLedgerStatusExplanation(status),
+			LastSeen:          formatLastSeen(system.LastSeen),
+			Source:            system.Source,
+			Explanation:       monitoredSystemLedgerExplanation(system.Explanation),
 		})
 	}
 
@@ -128,6 +135,27 @@ func normalizeStatus(s string) string {
 		return s
 	default:
 		return "unknown"
+	}
+}
+
+func monitoredSystemLedgerStatusExplanation(status string) MonitoredSystemLedgerStatusExplanation {
+	switch status {
+	case "online":
+		return MonitoredSystemLedgerStatusExplanation{
+			Summary: "All included top-level collection paths currently report online status.",
+		}
+	case "warning":
+		return MonitoredSystemLedgerStatusExplanation{
+			Summary: "At least one included top-level collection path is degraded or stale, so Pulse marks this monitored system as warning.",
+		}
+	case "offline":
+		return MonitoredSystemLedgerStatusExplanation{
+			Summary: "At least one included top-level collection path is offline or disconnected, so Pulse marks this monitored system as offline.",
+		}
+	default:
+		return MonitoredSystemLedgerStatusExplanation{
+			Summary: "Pulse cannot determine a canonical runtime status for this monitored system yet.",
+		}
 	}
 }
 

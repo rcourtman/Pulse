@@ -14,6 +14,7 @@ import { MonitoredSystemLedgerAPI } from '@/api/monitoredSystemLedger';
 import type {
   MonitoredSystemLedgerEntry,
   MonitoredSystemLedgerExplanation,
+  MonitoredSystemLedgerStatusExplanation,
 } from '@/api/monitoredSystemLedger';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import {
@@ -42,6 +43,14 @@ function systemExplanation(system: MonitoredSystemLedgerEntry): MonitoredSystemL
       'Pulse counts this top-level collection path as one monitored system.',
     reasons: system.explanation?.reasons ?? [],
     surfaces: system.explanation?.surfaces ?? [],
+  };
+}
+
+function systemStatusExplanation(system: MonitoredSystemLedgerEntry): MonitoredSystemLedgerStatusExplanation {
+  return {
+    summary:
+      system.status_explanation?.summary ??
+      'Pulse cannot determine a canonical runtime status for this monitored system yet.',
   };
 }
 
@@ -145,6 +154,7 @@ export function MonitoredSystemLedgerPanel(props: MonitoredSystemLedgerPanelProp
                   const explanationID = `monitored-system-explanation-${index()}`;
                   const expanded = () => expandedSystemKey() === key;
                   const explanation = systemExplanation(system);
+                  const statusExplanation = systemStatusExplanation(system);
                   return (
                     <TableRow>
                       <TableCell>
@@ -164,6 +174,12 @@ export function MonitoredSystemLedgerPanel(props: MonitoredSystemLedgerPanelProp
                               id={explanationID}
                               class="space-y-2 rounded-md border border-border bg-surface px-3 py-2 text-xs text-muted"
                             >
+                              <div class="space-y-1">
+                                <p class="font-medium text-base-content">Current status</p>
+                                <p class="whitespace-normal text-base-content">
+                                  {statusExplanation.summary}
+                                </p>
+                              </div>
                               <p class="whitespace-normal text-base-content">
                                 {explanation.summary}
                               </p>

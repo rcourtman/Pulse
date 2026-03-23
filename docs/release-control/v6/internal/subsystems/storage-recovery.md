@@ -151,6 +151,10 @@ That adjacent ledger read must also preserve canonical grouped system status,
 including `warning`, so recovery- and storage-adjacent support views do not
 flatten governed degraded state into a fake `unknown` label when the shared
 unified-resource resolver already computed the top-level status.
+That same adjacent ledger read now also carries backend-owned status
+explanation copy, and support-facing details must render it beside the
+counting rationale so operators can interpret warning, offline, and unknown
+states without inventing page-local status wording.
 The same API resource serializer also refreshes canonical identity and policy
 metadata through the shared unified-resource helper before it writes resource
 payloads, so storage and recovery links inherit the same canonical metadata
