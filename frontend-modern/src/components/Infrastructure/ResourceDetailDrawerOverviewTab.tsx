@@ -1070,12 +1070,12 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
             />
 
             <SupportDisclosure
-              title="Discovery context"
+              title="Discovery"
               summary={drawer.discoveryContextSummary()}
               expanded={drawer.showDiscoveryContext()}
               onToggle={() => drawer.setShowDiscoveryContext((value) => !value)}
-              showLabel="Show metadata"
-              hideLabel="Hide metadata"
+              showLabel="Open discovery"
+              hideLabel="Hide discovery"
               class="h-full"
               dataTestId="resource-discovery-context"
             >

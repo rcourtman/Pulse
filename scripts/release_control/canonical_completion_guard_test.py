@@ -503,6 +503,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                         "frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx",
                         "frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.workloads-link.test.tsx",
                         "frontend-modern/src/components/Infrastructure/__tests__/infrastructureSelectors.test.ts",
+                        "frontend-modern/src/components/Infrastructure/__tests__/resourceDetailDrawerOperationalModel.test.ts",
                         "frontend-modern/src/components/Infrastructure/__tests__/resourceDetailMappers.test.ts",
                         "frontend-modern/src/features/infrastructure/__tests__/InfrastructurePageSurface.guardrails.test.ts",
                         "frontend-modern/src/hooks/__tests__/useDashboardTrends.test.ts",

@@ -309,11 +309,11 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(screen.queryByText('Container Updates')).toBeNull();
     expect(screen.queryByText('Check Updates')).toBeNull();
     expect(screen.queryByText('Show update controls')).toBeNull();
-    expect(screen.getByText('Discovery context')).toBeInTheDocument();
+    expect(screen.getByText('Discovery')).toBeInTheDocument();
     expect(
       screen.queryByText('Supporting metadata only. The web interface path above stays primary.'),
     ).toBeNull();
-    expect(screen.getByRole('button', { name: 'Show metadata' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open discovery' })).toBeInTheDocument();
     expect(
       screen
         .getByTestId('resource-discovery-context')

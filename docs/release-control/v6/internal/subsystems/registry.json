@@ -3208,6 +3208,7 @@
         "frontend-modern/src/components/Infrastructure/infrastructureSummaryModel.ts",
         "frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx",
         "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerDebugTab.tsx",
+        "frontend-modern/src/components/Infrastructure/resourceDetailDrawerOperationalModel.ts",
         "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx",
         "frontend-modern/src/components/Infrastructure/resourceDetailDrawerServiceModel.ts",
         "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerSupportDisclosure.tsx",
@@ -3234,6 +3235,7 @@
         "frontend-modern/src/pages/Infrastructure.tsx",
         "frontend-modern/src/routing/resourceLinks.ts",
         "frontend-modern/src/types/resource.ts",
+        "frontend-modern/src/utils/resourceIdentity.ts",
         "internal/api/resources.go"
       ],
       "verification": {
@@ -3250,6 +3252,7 @@
             "label": "canonical identity proof",
             "match_prefixes": [],
             "match_files": [
+              "frontend-modern/src/utils/resourceIdentity.ts",
               "internal/unifiedresources/canonical_identity.go",
               "internal/unifiedresources/identity.go",
               "internal/unifiedresources/ids.go",
@@ -3260,6 +3263,7 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
+              "frontend-modern/src/utils/__tests__/resourceIdentity.test.ts",
               "internal/unifiedresources/canonical_identity_test.go",
               "internal/unifiedresources/canonical_ids_types_test.go",
               "internal/unifiedresources/code_standards_test.go",
@@ -3299,6 +3303,7 @@
               "frontend-modern/src/components/Infrastructure/infrastructureSummaryModel.ts",
               "frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx",
               "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerDebugTab.tsx",
+              "frontend-modern/src/components/Infrastructure/resourceDetailDrawerOperationalModel.ts",
               "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx",
               "frontend-modern/src/components/Infrastructure/resourceDetailDrawerServiceModel.ts",
               "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerSupportDisclosure.tsx",
@@ -3325,6 +3330,7 @@
               "frontend-modern/src/pages/Infrastructure.tsx",
               "frontend-modern/src/routing/resourceLinks.ts",
               "frontend-modern/src/types/resource.ts",
+              "frontend-modern/src/utils/resourceIdentity.ts",
               "internal/api/resources.go"
             ],
             "allow_same_subsystem_tests": false,
@@ -3332,6 +3338,7 @@
             "exact_files": [
               "frontend-modern/src/components/Infrastructure/__tests__/infrastructureSelectors.test.ts",
               "frontend-modern/src/components/Infrastructure/__tests__/ResourceDetailDrawer.history.test.tsx",
+              "frontend-modern/src/components/Infrastructure/__tests__/resourceDetailDrawerOperationalModel.test.ts",
               "frontend-modern/src/components/Infrastructure/__tests__/resourceDetailMappers.test.ts",
               "frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx",
               "frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.workloads-link.test.tsx",

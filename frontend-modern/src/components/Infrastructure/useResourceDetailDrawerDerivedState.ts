@@ -327,6 +327,10 @@ export const useResourceDetailDrawerDerivedState = (
     const config = discoveryConfig();
     if (!config) return null;
 
+    if (config.resourceType === 'agent') {
+      return null;
+    }
+
     const discoveryMode =
       config.resourceType === 'agent'
         ? 'Host discovery'

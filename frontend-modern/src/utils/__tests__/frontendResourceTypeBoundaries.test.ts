@@ -988,7 +988,7 @@ describe('frontend resource type boundaries', () => {
     expect(resourceDetailDrawerStateSource).not.toContain('createResource(');
     expect(resourceDetailDrawerStateSource).not.toContain('MonitoringAPI.');
     expect(resourceDetailDrawerHistoryStateSource).toContain('createResource(');
-    expect(resourceDetailDrawerDerivedStateSource).toContain('buildWorkloadsHref');
+    expect(resourceDetailDrawerDerivedStateSource).toContain('buildRelatedLinks');
     expect(resourceDetailDrawerDerivedStateSource).toContain(
       "from './resourceDetailDrawerServiceModel'",
     );
