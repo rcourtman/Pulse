@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
+import { createMemo, createSignal } from 'solid-js';
 import type { Resource } from '@/types/resource';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { getPreferredResourceDisplayName } from '@/utils/resourceIdentity';
@@ -10,6 +10,7 @@ import {
   type ResourceGroup,
 } from '@/components/Infrastructure/infrastructureSelectors';
 import { useTableWindowing } from './useTableWindowing';
+import { useUnifiedResourceTableViewportSync } from './useUnifiedResourceTableViewportSync';
 
 export interface UnifiedResourceTableProps {
   resources: Resource[];
@@ -54,8 +55,6 @@ export function useUnifiedResourceTableState(props: UnifiedResourceTableProps) {
   const { isMobile, isVisible } = useBreakpoint();
   const [sortKey, setSortKey] = createSignal<SortKey>('default');
   const [sortDirection, setSortDirection] = createSignal<'asc' | 'desc'>('asc');
-  const [hostBodyRef, setHostBodyRef] = createSignal<HTMLTableSectionElement | null>(null);
-  const rowRefs = new Map<string, HTMLTableRowElement>();
 
   const split = createMemo(() => splitPrimaryAndServiceResources(props.resources));
   const primaryResources = createMemo(() => split().primaryResources);
@@ -133,15 +132,12 @@ export function useUnifiedResourceTableState(props: UnifiedResourceTableProps) {
         )
       : 0,
   );
-
-  const syncHostWindowToViewport = () => {
-    if (!hostWindowing.isWindowed() || typeof window === 'undefined') return;
-    const body = hostBodyRef();
-    if (!body) return;
-    const rect = body.getBoundingClientRect();
-    const scrollTop = Math.max(0, -rect.top);
-    hostWindowing.onScroll(scrollTop, window.innerHeight, HOST_TABLE_ESTIMATED_ROW_HEIGHT);
-  };
+  const viewportSync = useUnifiedResourceTableViewportSync({
+    expandedResourceId: () => props.expandedResourceId,
+    totalCount: () => hostTableItems().length,
+    estimatedRowHeight: HOST_TABLE_ESTIMATED_ROW_HEIGHT,
+    hostWindowing,
+  });
 
   const sortedPBSResources = createMemo(() =>
     sortResources(
@@ -182,44 +178,6 @@ export function useUnifiedResourceTableState(props: UnifiedResourceTableProps) {
   const toggleExpand = (resourceId: string) => {
     props.onExpandedResourceChange(props.expandedResourceId === resourceId ? null : resourceId);
   };
-
-  const registerRowRef = (resourceId: string, element?: HTMLTableRowElement) => {
-    if (element) {
-      rowRefs.set(resourceId, element);
-      return;
-    }
-    rowRefs.delete(resourceId);
-  };
-
-  createEffect(() => {
-    const selectedId = props.expandedResourceId;
-    if (!selectedId) return;
-    hostWindowing.startIndex();
-    hostWindowing.endIndex();
-    const row = rowRefs.get(selectedId);
-    if (row) {
-      row.scrollIntoView({ block: 'center', behavior: 'smooth' });
-    }
-  });
-
-  createEffect(() => {
-    if (typeof window === 'undefined') return;
-    hostTableItems().length;
-    if (!hostWindowing.isWindowed()) return;
-    if (!hostBodyRef()) return;
-
-    const handleViewportChange = () => {
-      syncHostWindowToViewport();
-    };
-
-    handleViewportChange();
-    window.addEventListener('scroll', handleViewportChange, { passive: true });
-    window.addEventListener('resize', handleViewportChange);
-    onCleanup(() => {
-      window.removeEventListener('scroll', handleViewportChange);
-      window.removeEventListener('resize', handleViewportChange);
-    });
-  });
 
   const resourceColumnStyle = createMemo(() =>
     isMobile() ? { width: '100%', 'min-width': '120px' } : { 'min-width': '220px' },
@@ -292,8 +250,7 @@ export function useUnifiedResourceTableState(props: UnifiedResourceTableProps) {
     sortedPBSResources,
     sortedPMGResources,
     ioScale,
-    registerRowRef,
-    setHostBodyRef,
+    ...viewportSync,
     resourceColumnStyle,
     metricColumnStyle,
     ioColumnStyle,

@@ -84,8 +84,9 @@ regression protection.
 62. `frontend-modern/src/components/Dashboard/__tests__/workloadTopology.test.ts`
 63. `frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx`
 64. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`
-65. `frontend-modern/src/components/Infrastructure/UnifiedResourceHostTableCard.tsx`
-66. `frontend-modern/src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx`
+65. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts`
+66. `frontend-modern/src/components/Infrastructure/UnifiedResourceHostTableCard.tsx`
+67. `frontend-modern/src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx`
 67. `frontend-modern/src/components/Infrastructure/UnifiedResourcePMGTableSection.tsx`
 68. `frontend-modern/src/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx`
 69. `frontend-modern/src/components/Infrastructure/unifiedResourceTableModel.ts`
@@ -124,7 +125,8 @@ regression protection.
 7. `frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx` shared with `unified-resources`: the unified resource table is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
 8. `frontend-modern/src/components/Infrastructure/unifiedResourceTableModel.ts` shared with `unified-resources`: unified resource service row shaping and I/O emphasis are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
 9. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts` shared with `unified-resources`: unified resource table state, grouping, and windowing are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-10. `internal/api/slo.go` shared with `api-contracts`: the SLO endpoint is both an API contract surface and a protected performance hot-path boundary.
+10. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts` shared with `unified-resources`: unified resource table viewport sync and selected-row reveal are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
+11. `internal/api/slo.go` shared with `api-contracts`: the SLO endpoint is both an API contract surface and a protected performance hot-path boundary.
 
 ## Extension Points
 
@@ -311,10 +313,12 @@ The unified resource table hot path is now also governed as explicit
 performance-owned runtime, with shared ownership against the unified-resource
 consumer boundary. The remaining performance work is no longer top-level
 ownership ambiguity on the main dashboard or infrastructure tables.
-The table's sort, grouping, row-windowing, and viewport-sync owner now lives
-in `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`,
-so future hot-path table-state changes must route through that state owner
-instead of rebuilding selector and scroll coordination inside the render shell.
+The table's sort, grouping, and row-windowing owner now lives in
+`frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`,
+while viewport-sync and selected-row reveal behavior now live in
+`frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts`,
+so future hot-path table-state changes must not fold selector and scroll
+coordination back into one mixed owner or the render shell.
 That hot-path contract now includes policy badge rendering on resource rows.
 It now also includes the compact resource-facet summary chips rendered next
 to policy metadata, and those chips must stay within the same bounded

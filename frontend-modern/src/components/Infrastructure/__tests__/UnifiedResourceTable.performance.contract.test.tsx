@@ -7,6 +7,7 @@ import { formatSensorName } from '@/components/Infrastructure/resourceDetailMapp
 import { getPreferredResourceDisplayName } from '@/utils/resourceIdentity';
 import unifiedResourceTableSource from '@/components/Infrastructure/UnifiedResourceTable.tsx?raw';
 import unifiedResourceTableStateSource from '@/components/Infrastructure/useUnifiedResourceTableState.ts?raw';
+import unifiedResourceTableViewportSyncSource from '@/components/Infrastructure/useUnifiedResourceTableViewportSync.ts?raw';
 import unifiedResourceTableModelSource from '@/components/Infrastructure/unifiedResourceTableModel.ts?raw';
 import {
   buildStatusOptions,
@@ -187,6 +188,13 @@ describe('UnifiedResourceTable performance contract', () => {
       expect(unifiedResourceTableSource).not.toContain('const getPBSTableRow =');
       expect(unifiedResourceTableStateSource).toContain('splitPrimaryAndServiceResources');
       expect(unifiedResourceTableStateSource).toContain('useTableWindowing');
+      expect(unifiedResourceTableStateSource).toContain('useUnifiedResourceTableViewportSync');
+      expect(unifiedResourceTableStateSource).not.toContain('window.addEventListener');
+      expect(unifiedResourceTableStateSource).not.toContain('getBoundingClientRect');
+      expect(unifiedResourceTableViewportSyncSource).toContain('window.addEventListener');
+      expect(unifiedResourceTableViewportSyncSource).toContain('getBoundingClientRect');
+      expect(unifiedResourceTableViewportSyncSource).toContain('scrollIntoView');
+      expect(unifiedResourceTableViewportSyncSource).toContain('hostWindowing.onScroll');
       expect(unifiedResourceTableModelSource).toContain('export const getPBSTableRow');
       expect(unifiedResourceTableModelSource).toContain('export const getPMGTableRow');
       expect(unifiedResourceTableModelSource).toContain('export const getOutlierEmphasis');

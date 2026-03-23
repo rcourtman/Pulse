@@ -57,11 +57,12 @@ cross-source deduplication.
 35. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerHistoryState.ts`
 36. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts`
 37. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`
-38. `frontend-modern/src/components/Discovery/DiscoveryTab.tsx`
-39. `frontend-modern/src/components/Discovery/useDiscoveryTabState.ts`
-40. `frontend-modern/src/features/infrastructure/InfrastructurePageSurface.tsx`
-41. `frontend-modern/src/features/infrastructure/useInfrastructurePageRouteState.ts`
-42. `frontend-modern/src/features/infrastructure/useInfrastructurePageState.ts`
+38. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts`
+39. `frontend-modern/src/components/Discovery/DiscoveryTab.tsx`
+40. `frontend-modern/src/components/Discovery/useDiscoveryTabState.ts`
+41. `frontend-modern/src/features/infrastructure/InfrastructurePageSurface.tsx`
+42. `frontend-modern/src/features/infrastructure/useInfrastructurePageRouteState.ts`
+43. `frontend-modern/src/features/infrastructure/useInfrastructurePageState.ts`
 
 ## Shared Boundaries
 
@@ -74,7 +75,8 @@ cross-source deduplication.
 7. `frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx` shared with `performance-and-scalability`: the unified resource table is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
 8. `frontend-modern/src/components/Infrastructure/unifiedResourceTableModel.ts` shared with `performance-and-scalability`: unified resource service row shaping and I/O emphasis are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
 9. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts` shared with `performance-and-scalability`: unified resource table state, grouping, and windowing are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-10. `internal/api/resources.go` shared with `api-contracts`: the unified resource endpoint is both a backend payload contract surface and a unified-resource runtime boundary.
+10. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts` shared with `performance-and-scalability`: unified resource table viewport sync and selected-row reveal are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
+11. `internal/api/resources.go` shared with `api-contracts`: the unified resource endpoint is both a backend payload contract surface and a unified-resource runtime boundary.
 
 ## Extension Points
 
@@ -237,8 +239,10 @@ the label locally.
 The unified resource table now routes sort state, grouped host/service
 projection, canonical resource-label resolution, and row-windowing through
 `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`,
-so the shared consumer model is owned by one state boundary instead of
-staying interleaved with the render shell.
+while viewport reveal and scroll synchronization now route through
+`frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts`,
+so the shared consumer model is no longer interleaving selector derivation and
+DOM viewport coordination inside one state boundary.
 The canonical unified-resource change and relationship presenters now also
 share the same elapsed-time and "ago" wording utilities, so `observed`,
 `last seen`, and `ago` fragments stay consistent without each formatter

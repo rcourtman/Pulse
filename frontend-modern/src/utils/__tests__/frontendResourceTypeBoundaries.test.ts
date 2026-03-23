@@ -252,6 +252,7 @@ import resourceDetailDrawerDerivedStateSource from '@/components/Infrastructure/
 import resourceDetailDrawerStateSource from '@/components/Infrastructure/useResourceDetailDrawerState.ts?raw';
 import unifiedResourceTableSource from '@/components/Infrastructure/UnifiedResourceTable.tsx?raw';
 import unifiedResourceTableStateSource from '@/components/Infrastructure/useUnifiedResourceTableState.ts?raw';
+import unifiedResourceTableViewportSyncSource from '@/components/Infrastructure/useUnifiedResourceTableViewportSync.ts?raw';
 import unifiedResourceTableModelSource from '@/components/Infrastructure/unifiedResourceTableModel.ts?raw';
 import useUnifiedResourcesSource from '@/hooks/useUnifiedResources.ts?raw';
 import useWorkloadsSource from '@/hooks/useWorkloads.ts?raw';
@@ -2604,6 +2605,12 @@ describe('frontend resource type boundaries', () => {
     expect(unifiedResourceTableModelSource).toContain('export const getOutlierEmphasis');
     expect(unifiedResourceTableStateSource).toContain('splitPrimaryAndServiceResources');
     expect(unifiedResourceTableStateSource).toContain('useTableWindowing');
+    expect(unifiedResourceTableStateSource).toContain('useUnifiedResourceTableViewportSync');
+    expect(unifiedResourceTableStateSource).not.toContain('window.addEventListener');
+    expect(unifiedResourceTableStateSource).not.toContain('getBoundingClientRect');
+    expect(unifiedResourceTableViewportSyncSource).toContain('window.addEventListener');
+    expect(unifiedResourceTableViewportSyncSource).toContain('getBoundingClientRect');
+    expect(unifiedResourceTableViewportSyncSource).toContain('scrollIntoView');
     expect(exploreStatusBlockSource).toContain('getAIExploreStatusPresentation');
     expect(exploreStatusBlockSource).not.toContain('const phaseLabel =');
     expect(exploreStatusBlockSource).not.toContain('const phaseClasses =');
