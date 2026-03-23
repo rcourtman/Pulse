@@ -55,14 +55,15 @@ cross-source deduplication.
 33. `frontend-modern/src/components/Infrastructure/unifiedResourceTableModel.ts`
 34. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts`
 35. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerHistoryState.ts`
-36. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts`
-37. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`
-38. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts`
-39. `frontend-modern/src/components/Discovery/DiscoveryTab.tsx`
-40. `frontend-modern/src/components/Discovery/useDiscoveryTabState.ts`
-41. `frontend-modern/src/features/infrastructure/InfrastructurePageSurface.tsx`
-42. `frontend-modern/src/features/infrastructure/useInfrastructurePageRouteState.ts`
-43. `frontend-modern/src/features/infrastructure/useInfrastructurePageState.ts`
+36. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDockerActionsState.ts`
+37. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts`
+38. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`
+39. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts`
+40. `frontend-modern/src/components/Discovery/DiscoveryTab.tsx`
+41. `frontend-modern/src/components/Discovery/useDiscoveryTabState.ts`
+42. `frontend-modern/src/features/infrastructure/InfrastructurePageSurface.tsx`
+43. `frontend-modern/src/features/infrastructure/useInfrastructurePageRouteState.ts`
+44. `frontend-modern/src/features/infrastructure/useInfrastructurePageState.ts`
 
 ## Shared Boundaries
 
@@ -154,9 +155,10 @@ split used elsewhere in v6: `ResourceDetailDrawer.tsx` owns composition,
 `useResourceDetailDrawerState.ts` owns composition of drawer-local state,
 `useResourceDetailDrawerHistoryState.ts` owns facet/intelligence/timeline
 runtime orchestration, `useResourceDetailDrawerDerivedState.ts` owns the
-canonical drawer derivation layer, and the overview/debug render-heavy
-surfaces live in dedicated drawer-local owners instead of staying inline in
-the shell.
+canonical drawer derivation layer,
+`useResourceDetailDrawerDockerActionsState.ts` owns Docker action runtime, and
+the overview/debug render-heavy surfaces live in dedicated drawer-local owners
+instead of staying inline in the shell.
 The backend AI and Patrol context renderers now derive their canonical change
 kind, source type, source adapter, actor, reason, and related-resource
 fragments from `internal/unifiedresources/change_presentation.go`, so the
@@ -299,9 +301,11 @@ resource-intelligence state through
 `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerHistoryState.ts`,
 while canonical identity, source, service, and debug derivations route through
 `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts`
+while Docker update mutations route through
+`frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDockerActionsState.ts`,
 and `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts`
-stays the composition owner, so unified-resource history and investigation
-orchestration no longer accumulate inline beside the drawer-local model layer.
+stays the composition owner, so unified-resource history, investigation, and
+drawer-local action runtime no longer accumulate inline beside the model layer.
 The shared `ResourceFacetSummary` consumer now omits capability and
 relationship badges from the default table/detail surface entirely, while the
 backend contract keeps capability and relationship data on the owned resource

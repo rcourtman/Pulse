@@ -4,6 +4,7 @@ import {
 } from 'solid-js';
 import type { Resource } from '@/types/resource';
 import { createLocalStorageBooleanSignal, STORAGE_KEYS } from '@/utils/localStorage';
+import { useResourceDetailDrawerDockerActionsState } from './useResourceDetailDrawerDockerActionsState';
 import { useResourceDetailDrawerHistoryState } from './useResourceDetailDrawerHistoryState';
 import { useResourceDetailDrawerDerivedState } from './useResourceDetailDrawerDerivedState';
 
@@ -25,13 +26,8 @@ export const useResourceDetailDrawerState = (options: UseResourceDetailDrawerSta
   const [showDiscoveryContext, setShowDiscoveryContext] = createSignal(false);
   const [showHostDetails, setShowHostDetails] = createSignal(false);
   const [showServiceDetails, setShowServiceDetails] = createSignal(false);
-  const [showDockerUpdateControls, setShowDockerUpdateControls] = createSignal(false);
   const [showPbsJobDetail, setShowPbsJobDetail] = createSignal(false);
   const [showPmgMailFlowDetail, setShowPmgMailFlowDetail] = createSignal(false);
-  const [dockerActionError, setDockerActionError] = createSignal('');
-  const [dockerActionNote, setDockerActionNote] = createSignal('');
-  const [confirmUpdateAll, setConfirmUpdateAll] = createSignal(false);
-  const [dockerActionBusy, setDockerActionBusy] = createSignal(false);
   const [k8sDeploymentsPrefillNamespace, setK8sDeploymentsPrefillNamespace] = createSignal('');
 
   const history = useResourceDetailDrawerHistoryState({ resource });
@@ -40,6 +36,10 @@ export const useResourceDetailDrawerState = (options: UseResourceDetailDrawerSta
     resolveResourceLabel: resolveResourceLabelInput,
     debugEnabled,
     resourceIntelligence: history.resourceIntelligence,
+  });
+  const dockerActions = useResourceDetailDrawerDockerActionsState({
+    dockerHostSourceId: derived.dockerHostSourceId,
+    dockerUpdatesAvailable: derived.dockerUpdatesAvailable,
   });
 
   createEffect(() => {
@@ -96,24 +96,15 @@ export const useResourceDetailDrawerState = (options: UseResourceDetailDrawerSta
     setShowHostDetails,
     showServiceDetails,
     setShowServiceDetails,
-    showDockerUpdateControls,
-    setShowDockerUpdateControls,
     showPbsJobDetail,
     setShowPbsJobDetail,
     showPmgMailFlowDetail,
     setShowPmgMailFlowDetail,
-    dockerActionError,
-    setDockerActionError,
-    dockerActionNote,
-    setDockerActionNote,
-    confirmUpdateAll,
-    setConfirmUpdateAll,
-    dockerActionBusy,
-    setDockerActionBusy,
     k8sDeploymentsPrefillNamespace,
     setK8sDeploymentsPrefillNamespace,
     ...history,
     ...derived,
+    ...dockerActions,
     handleCopyJson,
   };
 };

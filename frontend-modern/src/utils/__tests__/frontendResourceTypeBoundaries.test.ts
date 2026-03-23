@@ -249,6 +249,7 @@ import infrastructureSummarySource from '@/components/Infrastructure/Infrastruct
 import resourceDetailMappersSource from '@/components/Infrastructure/resourceDetailMappers.ts?raw';
 import resourceDetailDrawerHistoryStateSource from '@/components/Infrastructure/useResourceDetailDrawerHistoryState.ts?raw';
 import resourceDetailDrawerDerivedStateSource from '@/components/Infrastructure/useResourceDetailDrawerDerivedState.ts?raw';
+import resourceDetailDrawerDockerActionsStateSource from '@/components/Infrastructure/useResourceDetailDrawerDockerActionsState.ts?raw';
 import resourceDetailDrawerStateSource from '@/components/Infrastructure/useResourceDetailDrawerState.ts?raw';
 import unifiedResourceTableSource from '@/components/Infrastructure/UnifiedResourceTable.tsx?raw';
 import unifiedResourceTableStateSource from '@/components/Infrastructure/useUnifiedResourceTableState.ts?raw';
@@ -883,9 +884,20 @@ describe('frontend resource type boundaries', () => {
     expect(resourceDetailDrawerShellSource).toContain("from './ResourceDetailDrawerDebugTab'");
     expect(resourceDetailDrawerStateSource).toContain("from './useResourceDetailDrawerHistoryState'");
     expect(resourceDetailDrawerStateSource).toContain("from './useResourceDetailDrawerDerivedState'");
+    expect(resourceDetailDrawerStateSource).toContain(
+      "from './useResourceDetailDrawerDockerActionsState'",
+    );
     expect(resourceDetailDrawerStateSource).not.toContain('createResource(');
+    expect(resourceDetailDrawerStateSource).not.toContain('MonitoringAPI.');
     expect(resourceDetailDrawerHistoryStateSource).toContain('createResource(');
     expect(resourceDetailDrawerDerivedStateSource).toContain('buildWorkloadsHref');
+    expect(resourceDetailDrawerOverviewSource).not.toContain('MonitoringAPI.');
+    expect(resourceDetailDrawerOverviewSource).toContain('drawer.queueDockerUpdateCheck');
+    expect(resourceDetailDrawerOverviewSource).toContain('drawer.queueDockerUpdateAll');
+    expect(resourceDetailDrawerDockerActionsStateSource).toContain('MonitoringAPI.checkDockerUpdates');
+    expect(resourceDetailDrawerDockerActionsStateSource).toContain(
+      'MonitoringAPI.updateAllDockerContainers',
+    );
     expect(guestDrawerSource).toContain('useGuestDrawerState');
     expect(guestDrawerSource).toContain('GuestDrawerOverview');
     expect(guestDrawerStateSource).toContain('getCanonicalWorkloadId');

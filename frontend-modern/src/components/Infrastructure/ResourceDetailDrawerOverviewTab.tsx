@@ -17,7 +17,6 @@ import { DisksCard } from '@/components/shared/cards/DisksCard';
 import { TemperaturesCard } from '@/components/shared/cards/TemperaturesCard';
 import { RaidCard } from '@/components/shared/cards/RaidCard';
 import { DiscoveryTab } from '@/components/Discovery/DiscoveryTab';
-import { MonitoringAPI } from '@/api/monitoring';
 import { WebInterfaceUrlField } from '@/components/shared/WebInterfaceUrlField';
 import { getServiceHealthPresentation } from '@/utils/serviceHealthPresentation';
 import {
@@ -639,24 +638,7 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                             drawer.dockerHostCommandActive() ||
                             drawer.dockerHostSourceId() === null
                           }
-                          onClick={async () => {
-                            drawer.setDockerActionError('');
-                            drawer.setDockerActionNote('');
-                            drawer.setConfirmUpdateAll(false);
-                            const hostId = drawer.dockerHostSourceId();
-                            if (!hostId) return;
-                            try {
-                              drawer.setDockerActionBusy(true);
-                              await MonitoringAPI.checkDockerUpdates(hostId);
-                              drawer.setDockerActionNote('Check queued.');
-                            } catch (err) {
-                              drawer.setDockerActionError(
-                                (err as Error)?.message || 'Failed to queue check',
-                              );
-                            } finally {
-                              drawer.setDockerActionBusy(false);
-                            }
-                          }}
+                          onClick={drawer.queueDockerUpdateCheck}
                           class="rounded-md border border-border bg-surface px-2.5 py-1 text-[11px] font-semibold text-base-content hover:bg-surface-hover disabled:opacity-60"
                           title={
                             drawer.dockerUpdateActionsLoading() ? 'Loading settings...' : undefined
@@ -675,33 +657,7 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                             drawer.dockerHostSourceId() === null ||
                             drawer.dockerUpdatesAvailable() <= 0
                           }
-                          onClick={async () => {
-                            drawer.setDockerActionError('');
-                            drawer.setDockerActionNote('');
-                            const hostId = drawer.dockerHostSourceId();
-                            if (!hostId) return;
-
-                            if (!drawer.confirmUpdateAll()) {
-                              drawer.setConfirmUpdateAll(true);
-                              drawer.setDockerActionNote(
-                                `Click again to update ${drawer.dockerUpdatesAvailable()} containers.`,
-                              );
-                              return;
-                            }
-
-                            try {
-                              drawer.setDockerActionBusy(true);
-                              await MonitoringAPI.updateAllDockerContainers(hostId);
-                              drawer.setDockerActionNote('Update queued.');
-                            } catch (err) {
-                              drawer.setDockerActionError(
-                                (err as Error)?.message || 'Failed to queue update',
-                              );
-                            } finally {
-                              drawer.setDockerActionBusy(false);
-                              drawer.setConfirmUpdateAll(false);
-                            }
-                          }}
+                          onClick={drawer.queueDockerUpdateAll}
                           class="rounded-md border border-sky-200 bg-sky-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-sky-700 disabled:opacity-60 disabled:hover:bg-sky-600 dark:border-sky-700 dark:bg-sky-600 dark:hover:bg-sky-500 dark:disabled:hover:bg-sky-600"
                           title={
                             drawer.dockerUpdateActionsDisabled()
@@ -719,7 +675,7 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
 
                   <button
                     type="button"
-                    onClick={() => drawer.setShowDockerUpdateControls((value) => !value)}
+                    onClick={drawer.toggleDockerUpdateControls}
                     class="inline-flex items-center rounded-md border border-sky-200 bg-surface px-2.5 py-1 text-[10px] font-medium text-sky-700 transition-colors hover:bg-base dark:border-sky-700 dark:text-sky-300"
                   >
                     {drawer.showDockerUpdateControls() ? 'Hide actions' : 'Show actions'}
