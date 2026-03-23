@@ -250,9 +250,25 @@ export const getPreferredNormalizedPlatformId = (resource: APINormalizedIdentity
 export const getPrimaryResourceIdentityRows = (resource: Resource): ResourceIdentityRow[] => {
   const canonical = getCanonicalIdentityRecord(resource);
   const rows: ResourceIdentityRow[] = [];
+  const primaryIdentity = getPrimaryResourceIdentity(resource);
   const hostname = asTrimmedString(canonical?.hostname) || resource.identity?.hostname;
   if (hostname) {
     rows.push({ label: 'Hostname', value: hostname });
+  }
+  const redundantPrimaryIdentityValues = dedupeTrimmedValues([
+    asTrimmedString(resource.displayName),
+    asTrimmedString(canonical?.displayName),
+    asTrimmedString(resource.name),
+    hostname,
+    asTrimmedString(resource.platformId),
+  ]);
+  if (
+    primaryIdentity &&
+    !redundantPrimaryIdentityValues.some(
+      (value) => value.toLowerCase() === primaryIdentity.toLowerCase(),
+    )
+  ) {
+    rows.push({ label: 'Primary ID', value: primaryIdentity });
   }
   if (resource.identity?.machineId) {
     rows.push({ label: 'Machine ID', value: resource.identity.machineId });

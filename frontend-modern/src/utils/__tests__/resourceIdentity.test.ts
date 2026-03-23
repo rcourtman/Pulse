@@ -80,10 +80,10 @@ describe('resourceIdentity', () => {
       'legacy-host.local',
     ]);
     expect(getPreferredResourceHostname(resource)).toBe('tower.local');
-    expect(getPrimaryResourceIdentityRows(resource)[0]).toEqual({
-      label: 'Hostname',
-      value: 'tower.local',
-    });
+    expect(getPrimaryResourceIdentityRows(resource)).toEqual([
+      { label: 'Hostname', value: 'tower.local' },
+      { label: 'Primary ID', value: 'node:instance-pve1' },
+    ]);
   });
 
   it('uses actionable linked identities before falling back to unified ids', () => {
@@ -161,6 +161,7 @@ describe('resourceIdentity', () => {
       ),
     ).toEqual([
       { label: 'Hostname', value: 'tower.local' },
+      { label: 'Primary ID', value: 'docker-host:docker-host-1' },
       { label: 'Machine ID', value: 'machine-1' },
       { label: 'Cluster', value: 'cluster-a' },
       { label: 'Parent', value: 'parent-1' },

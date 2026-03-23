@@ -61,9 +61,6 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
               {drawer.displayName()}
             </div>
           </div>
-          <div class="text-[11px] text-muted truncate" title={drawer.headerIdentity()}>
-            {drawer.headerIdentity()}
-          </div>
           <div class="flex flex-wrap gap-1.5" data-testid="resource-header-badges">
             <For each={drawer.headerBadges()}>
               {(badge) => (

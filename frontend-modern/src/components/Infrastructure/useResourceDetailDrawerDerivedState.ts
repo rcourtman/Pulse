@@ -11,7 +11,6 @@ import {
   getUnifiedSourceBadges,
 } from '@/utils/resourceBadgePresentation';
 import {
-  getPrimaryResourceIdentity,
   getPrimaryResourceIdentityRows,
   getResourceIdentityAliases,
   getPreferredResourceClusterName,
@@ -271,7 +270,6 @@ export const useResourceDetailDrawerDerivedState = (
     });
   });
 
-  const headerIdentity = createMemo(() => getPrimaryResourceIdentity(resource));
   const relatedLinks = createMemo(() => buildRelatedLinks(resource, displayName()));
   const hasRuntimeOperationalContext = createMemo(
     () => buildHasRuntimeOperationalContext(kubernetesCapabilityBadges(), relatedLinks()),
@@ -408,7 +406,6 @@ export const useResourceDetailDrawerDerivedState = (
     hostDetailSummary,
     hasServiceDetails,
     serviceDetailsSummary,
-    headerIdentity,
     relatedLinks,
     hasRuntimeOperationalContext,
     sourceSections,

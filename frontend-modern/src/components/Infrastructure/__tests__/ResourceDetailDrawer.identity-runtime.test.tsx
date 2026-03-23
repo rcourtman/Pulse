@@ -117,7 +117,7 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
       },
     });
 
-    const { getByTestId, getByText, queryByRole } = render(() => (
+    const { container, getByTestId, getByText, queryByRole } = render(() => (
       <ResourceDetailDrawer resource={resource} />
     ));
 
@@ -131,6 +131,7 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     expect(getByTestId('resource-current-state-section').querySelector('.border-dashed')).toBeNull();
     expect(queryByRole('button', { name: 'Show details' })).toBeNull();
     expect(() => getByText('Runtime')).toThrow();
+    expect(container.querySelector('.text-\\[11px\\].text-muted.truncate')).toBeNull();
     const headerBadges = getByTestId('resource-header-badges');
     expect(within(headerBadges).getAllByText('Agent')).toHaveLength(1);
     expect(within(headerBadges).getByText('PVE')).toBeInTheDocument();
@@ -337,6 +338,29 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     expect(sparseRender.getByText('No identity metadata yet.')).toBeInTheDocument();
   });
 
+  it('moves the primary identity into the identity card instead of the header subtitle', () => {
+    const resource = baseResource({
+      displayName: 'delly',
+      name: 'delly',
+      platformId: 'delly',
+      canonicalIdentity: {
+        displayName: 'delly',
+        hostname: 'delly',
+        primaryId: 'node:homelab-delly',
+        aliases: ['node:homelab-delly', 'delly'],
+      },
+      identity: {
+        hostname: 'delly',
+      },
+    });
+
+    const { container, getByText } = render(() => <ResourceDetailDrawer resource={resource} />);
+
+    expect(container.querySelector('.text-\\[11px\\].text-muted.truncate')).toBeNull();
+    expect(getByText('Primary ID')).toBeInTheDocument();
+    expect(getByText('Primary ID').parentElement?.textContent).toContain('node:homelab-delly');
+  });
+
   it('shows canonical metrics target identity for docker-backed host resources', () => {
     const resource = baseResource({
       id: 'hash-docker-resource',
@@ -370,7 +394,8 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     expect(getAllByText('docker-host:docker-host-1').length).toBeGreaterThan(1);
     expect(getByText('Aliases')).toBeInTheDocument();
     expect(getAllByText('docker-host-1').length).toBeGreaterThan(0);
-    expect(container.querySelector('.text-\\[11px\\].text-muted.truncate')?.textContent).toBe(
+    expect(container.querySelector('.text-\\[11px\\].text-muted.truncate')).toBeNull();
+    expect(getByText('Primary ID').parentElement?.textContent).toContain(
       'docker-host:docker-host-1',
     );
   });
