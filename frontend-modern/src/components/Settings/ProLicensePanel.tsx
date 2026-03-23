@@ -6,6 +6,7 @@ import { CommercialBillingShell, CommercialSection } from './CommercialBillingSe
 import { ProLicensePlanSection } from './ProLicensePlanSection';
 import { SelfHostedCommercialActivationSection } from './SelfHostedCommercialActivationSection';
 import { useProLicensePanelState } from './useProLicensePanelState';
+import { SELF_HOSTED_MONITORED_SYSTEMS_DESCRIPTION } from '@/utils/selfHostedPlans';
 
 export const ProLicensePanel: Component = () => {
   const state = useProLicensePanelState();
@@ -51,7 +52,7 @@ export const ProLicensePanel: Component = () => {
 
           <CommercialSection
             title="Usage"
-            description="Self-hosted plans are sold by monitored systems. Child resources like VMs, containers, pods, disks, and backups do not count separately."
+            description={SELF_HOSTED_MONITORED_SYSTEMS_DESCRIPTION}
           >
             <MonitoredSystemLedgerPanel embedded />
           </CommercialSection>

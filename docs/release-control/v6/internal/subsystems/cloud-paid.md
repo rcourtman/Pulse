@@ -52,19 +52,23 @@ agreement, and cloud-specific enforcement rules.
 30. `frontend-modern/src/components/Settings/BillingAdminOrganizationsTable.tsx`
 31. `frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx`
 32. `frontend-modern/src/components/Settings/OrganizationBillingLoadingState.tsx`
-33. `frontend-modern/src/components/Settings/ProLicensePanel.tsx`
-34. `frontend-modern/src/components/Settings/ProLicensePlanSection.tsx`
-35. `frontend-modern/src/components/Settings/CommercialBillingSections.tsx`
-36. `frontend-modern/src/components/Settings/SelfHostedCommercialActivationSection.tsx`
-37. `frontend-modern/src/components/Settings/RelaySettingsPanel.tsx`
-38. `frontend-modern/src/components/Settings/RelayPairingSection.tsx`
-39. `frontend-modern/src/components/Settings/useBillingAdminPanelState.ts`
-40. `frontend-modern/src/components/Settings/useOrganizationBillingPanelState.ts`
-41. `frontend-modern/src/components/Settings/useProLicensePanelState.ts`
-42. `frontend-modern/src/components/Settings/useRelaySettingsPanelState.ts`
-43. `frontend-modern/src/pages/CloudPricing.tsx`
-44. `frontend-modern/src/utils/apiClient.ts`
-45. `frontend-modern/src/utils/commercialBillingModel.ts`
+33. `frontend-modern/src/components/Settings/MonitoredSystemLedgerPanel.tsx`
+34. `frontend-modern/src/components/Settings/ProLicensePanel.tsx`
+35. `frontend-modern/src/components/Settings/ProLicensePlanSection.tsx`
+36. `frontend-modern/src/components/Settings/CommercialBillingSections.tsx`
+37. `frontend-modern/src/components/Settings/SelfHostedCommercialActivationSection.tsx`
+38. `frontend-modern/src/components/Settings/RelaySettingsPanel.tsx`
+39. `frontend-modern/src/components/Settings/RelayPairingSection.tsx`
+40. `frontend-modern/src/components/Settings/useBillingAdminPanelState.ts`
+41. `frontend-modern/src/components/Settings/useOrganizationBillingPanelState.ts`
+42. `frontend-modern/src/components/Settings/useProLicensePanelState.ts`
+43. `frontend-modern/src/components/Settings/useRelaySettingsPanelState.ts`
+44. `frontend-modern/src/pages/CloudPricing.tsx`
+45. `frontend-modern/src/pages/PricingV6.tsx`
+46. `frontend-modern/src/utils/apiClient.ts`
+47. `frontend-modern/src/utils/cloudPlans.ts`
+48. `frontend-modern/src/utils/commercialBillingModel.ts`
+49. `frontend-modern/src/utils/selfHostedPlans.ts`
 
 ## Shared Boundaries
 
@@ -299,6 +303,14 @@ the monitored-system model as well. `ProLicensePanel.tsx`,
 retail capacity as monitored systems rather than agents for Community, Relay,
 Pro, and Pro+, while leaving Cloud/MSP pricing semantics unchanged and
 preserving grandfathered v5 continuity copy as an explicit boundary policy.
+That same pricing boundary now also owns the shared frontend plan-definition
+models. `frontend-modern/src/utils/cloudPlans.ts` and
+`frontend-modern/src/utils/selfHostedPlans.ts` are the canonical frontend
+sources for cloud and self-hosted plan copy, limits, and comparison metadata,
+while `frontend-modern/src/pages/CloudPricing.tsx`,
+`frontend-modern/src/pages/HostedSignup.tsx`, `frontend-modern/src/pages/PricingV6.tsx`,
+and the self-hosted billing settings surfaces must consume those shared owners
+instead of redefining retail plan facts or counted-unit policy locally.
 That contract applies to both plan summary labels and upgrade/paywall copy:
 current v6 self-hosted pricing may not drift back to the older `$49/yr Relay`,
 `$99/yr Pro`, or monitored-system-count marketing drift that contradicts the

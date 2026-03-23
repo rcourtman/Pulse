@@ -483,7 +483,10 @@ class SubsystemLookupTest(unittest.TestCase):
         )
         self.assertEqual(
             match["verification_requirement"]["exact_files"],
-            ["frontend-modern/src/components/Settings/__tests__/ProLicensePanel.test.tsx"],
+            [
+                "frontend-modern/src/components/Settings/__tests__/MonitoredSystemLedgerPanel.test.tsx",
+                "frontend-modern/src/components/Settings/__tests__/ProLicensePanel.test.tsx",
+            ],
         )
 
     def test_lookup_paths_assigns_pro_license_state_owner_to_cloud_paid(self) -> None:
@@ -506,6 +509,60 @@ class SubsystemLookupTest(unittest.TestCase):
             match["verification_requirement"]["id"],
             "pro-license-surface",
         )
+
+    def test_lookup_paths_assigns_monitored_system_ledger_panel_to_cloud_paid(self) -> None:
+        result = lookup_paths(["frontend-modern/src/components/Settings/MonitoredSystemLedgerPanel.tsx"])
+        self.assertEqual(result["unowned_runtime_files"], [])
+        self.assertEqual(
+            {item["subsystem"] for item in result["impacted_subsystems"]},
+            {"cloud-paid"},
+        )
+        file_entry = result["files"][0]
+        self.assertEqual(file_entry["classification"], "runtime")
+        self.assertEqual(
+            {match["subsystem"] for match in file_entry["matches"]},
+            {"cloud-paid"},
+        )
+        match = file_entry["matches"][0]
+        self.assertEqual(match["contract"], "docs/release-control/v6/internal/subsystems/cloud-paid.md")
+        self.assertEqual(match["lane_context"]["lane_id"], "L3")
+        self.assertEqual(match["verification_requirement"]["id"], "pro-license-surface")
+
+    def test_lookup_paths_assigns_pricing_v6_to_cloud_paid(self) -> None:
+        result = lookup_paths(["frontend-modern/src/pages/PricingV6.tsx"])
+        self.assertEqual(result["unowned_runtime_files"], [])
+        self.assertEqual(
+            {item["subsystem"] for item in result["impacted_subsystems"]},
+            {"cloud-paid"},
+        )
+        file_entry = result["files"][0]
+        self.assertEqual(file_entry["classification"], "runtime")
+        self.assertEqual(
+            {match["subsystem"] for match in file_entry["matches"]},
+            {"cloud-paid"},
+        )
+        match = file_entry["matches"][0]
+        self.assertEqual(match["contract"], "docs/release-control/v6/internal/subsystems/cloud-paid.md")
+        self.assertEqual(match["lane_context"]["lane_id"], "L3")
+        self.assertEqual(match["verification_requirement"]["id"], "pricing-pages")
+
+    def test_lookup_paths_assigns_self_hosted_plan_model_to_cloud_paid(self) -> None:
+        result = lookup_paths(["frontend-modern/src/utils/selfHostedPlans.ts"])
+        self.assertEqual(result["unowned_runtime_files"], [])
+        self.assertEqual(
+            {item["subsystem"] for item in result["impacted_subsystems"]},
+            {"cloud-paid"},
+        )
+        file_entry = result["files"][0]
+        self.assertEqual(file_entry["classification"], "runtime")
+        self.assertEqual(
+            {match["subsystem"] for match in file_entry["matches"]},
+            {"cloud-paid"},
+        )
+        match = file_entry["matches"][0]
+        self.assertEqual(match["contract"], "docs/release-control/v6/internal/subsystems/cloud-paid.md")
+        self.assertEqual(match["lane_context"]["lane_id"], "L3")
+        self.assertEqual(match["verification_requirement"]["id"], "commercial-plan-models")
 
     def test_lookup_paths_assigns_relay_settings_state_owner_to_cloud_paid(self) -> None:
         result = lookup_paths(["frontend-modern/src/components/Settings/useRelaySettingsPanelState.ts"])

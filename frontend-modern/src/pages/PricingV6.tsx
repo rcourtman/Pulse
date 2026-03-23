@@ -18,220 +18,13 @@ import {
 } from '@/stores/license';
 import { showToast } from '@/utils/toast';
 import { logger } from '@/utils/logger';
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-type TierColumn = 'community' | 'relay' | 'pro' | 'proPlus';
-
-type FeatureRow = {
-  key: string;
-  name: string;
-  community: boolean | string;
-  relay: boolean | string;
-  pro: boolean | string;
-  proPlus: boolean | string;
-};
-
-// ---------------------------------------------------------------------------
-// Tier pricing data
-// ---------------------------------------------------------------------------
-
-const TIERS = {
-  community: {
-    name: 'Community',
-    price: 'Free forever',
-    subline: 'Monitor up to 5 systems for free',
-    highlights: [
-      'Real-time monitoring',
-      '7-day metric history',
-      'AI Patrol (BYOK + 25 quickstart credits)',
-      'Update alerts',
-      'Basic SSO (OIDC)',
-      'Community support',
-    ],
-  },
-  relay: {
-    name: 'Relay',
-    price: '$4.99/month',
-    subline: 'or $39/year',
-    highlights: [
-      'Everything in Community',
-      'Remote access via Relay',
-      'Mobile app access',
-      'Push notifications',
-      'Custom URL (yourlab.pulserelay.pro)',
-      '8 monitored systems · 14-day history',
-    ],
-  },
-  pro: {
-    name: 'Pro',
-    price: '$8.99/month',
-    subline: 'or $79/year',
-    highlights: [
-      'Everything in Relay',
-      'AI Auto-Fix & investigation',
-      'AI alert analysis',
-      'Kubernetes AI analysis',
-      '90-day metric history',
-      'RBAC, audit logging, SAML SSO',
-      'Agent profiles · PDF/CSV reports',
-      '15 monitored systems',
-    ],
-  },
-  proPlus: {
-    name: 'Pro+',
-    price: '$14.99/month',
-    subline: 'or $129/year',
-    highlights: ['Everything in Pro', '50 monitored systems'],
-  },
-} as const;
-
-// ---------------------------------------------------------------------------
-// Feature comparison matrix for self-hosted tiers (Community → Pro+).
-// Based on ENTITLEMENT_MATRIX.md with display-only rows (hosts, history) added
-// and enterprise-only rows (multi_user, white_label, multi_tenant, unlimited) omitted.
-// ---------------------------------------------------------------------------
-
-const FEATURE_ROWS: FeatureRow[] = [
-  // -- Monitoring & basics --
-  {
-    key: 'monitoring',
-    name: 'Real-time Monitoring',
-    community: true,
-    relay: true,
-    pro: true,
-    proPlus: true,
-  },
-  {
-    key: 'hosts',
-    name: 'Monitored Systems',
-    community: '5',
-    relay: '8',
-    pro: '15',
-    proPlus: '50',
-  },
-  {
-    key: 'history',
-    name: 'Metric History',
-    community: '7 days',
-    relay: '14 days',
-    pro: '90 days',
-    proPlus: '90 days',
-  },
-  {
-    key: 'update_alerts',
-    name: 'Update Alerts (Container/Package)',
-    community: true,
-    relay: true,
-    pro: true,
-    proPlus: true,
-  },
-  { key: 'sso', name: 'Basic SSO (OIDC)', community: true, relay: true, pro: true, proPlus: true },
-
-  // -- Relay features --
-  {
-    key: 'relay',
-    name: 'Remote Access (Relay)',
-    community: false,
-    relay: true,
-    pro: true,
-    proPlus: true,
-  },
-  {
-    key: 'mobile_app',
-    name: 'Mobile App Access',
-    community: false,
-    relay: true,
-    pro: true,
-    proPlus: true,
-  },
-  {
-    key: 'push_notifications',
-    name: 'Push Notifications',
-    community: false,
-    relay: true,
-    pro: true,
-    proPlus: true,
-  },
-
-  // -- AI features --
-  {
-    key: 'ai_patrol',
-    name: 'AI Patrol (Background Health Checks)',
-    community: true,
-    relay: true,
-    pro: true,
-    proPlus: true,
-  },
-  {
-    key: 'ai_autofix',
-    name: 'AI Patrol Auto-Fix',
-    community: false,
-    relay: false,
-    pro: true,
-    proPlus: true,
-  },
-  {
-    key: 'ai_alerts',
-    name: 'AI Alert Analysis',
-    community: false,
-    relay: false,
-    pro: true,
-    proPlus: true,
-  },
-  {
-    key: 'kubernetes_ai',
-    name: 'Kubernetes AI Analysis',
-    community: false,
-    relay: false,
-    pro: true,
-    proPlus: true,
-  },
-
-  // -- Team & compliance --
-  {
-    key: 'rbac',
-    name: 'Role-Based Access Control (RBAC)',
-    community: false,
-    relay: false,
-    pro: true,
-    proPlus: true,
-  },
-  {
-    key: 'audit_logging',
-    name: 'Audit Logging',
-    community: false,
-    relay: false,
-    pro: true,
-    proPlus: true,
-  },
-  {
-    key: 'advanced_sso',
-    name: 'Advanced SSO (SAML/Multi-Provider)',
-    community: false,
-    relay: false,
-    pro: true,
-    proPlus: true,
-  },
-  {
-    key: 'agent_profiles',
-    name: 'Centralized Agent Profiles',
-    community: false,
-    relay: false,
-    pro: true,
-    proPlus: true,
-  },
-  {
-    key: 'advanced_reporting',
-    name: 'PDF/CSV Reporting',
-    community: false,
-    relay: false,
-    pro: true,
-    proPlus: true,
-  },
-];
+import {
+  SELF_HOSTED_FEATURE_ROWS,
+  SELF_HOSTED_PLAN_BY_TIER,
+  type SelfHostedFeatureRow,
+  type SelfHostedPlanDefinition,
+  type SelfHostedTierKey,
+} from '@/utils/selfHostedPlans';
 
 // ---------------------------------------------------------------------------
 // Shared sub-components
@@ -263,7 +56,11 @@ function TierCtaLabel(props: { children: string }) {
   );
 }
 
-function CheckCell(props: { value: boolean | string; tier: TierColumn; featureKey: string }) {
+function CheckCell(props: {
+  value: boolean | string;
+  tier: SelfHostedTierKey;
+  featureKey: string;
+}) {
   if (typeof props.value === 'string') {
     const label = `${props.tier} tier: ${props.value}`;
     return (
@@ -314,7 +111,7 @@ function BulletList(props: { items: readonly string[] }) {
 // ---------------------------------------------------------------------------
 
 function TierCard(props: {
-  tier: (typeof TIERS)[keyof typeof TIERS];
+  tier: SelfHostedPlanDefinition;
   cta: () => import('solid-js').JSX.Element;
   highlighted?: boolean;
   badge?: string;
@@ -530,16 +327,16 @@ export default function PricingV6() {
 
       {/* Tier cards — 4 columns on desktop, 2 on tablet, 1 on mobile */}
       <div class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <TierCard tier={TIERS.community} cta={communityCta} />
-        <TierCard tier={TIERS.relay} cta={relayCta} />
+        <TierCard tier={SELF_HOSTED_PLAN_BY_TIER.community} cta={communityCta} />
+        <TierCard tier={SELF_HOSTED_PLAN_BY_TIER.relay} cta={relayCta} />
         <TierCard
-          tier={TIERS.pro}
+          tier={SELF_HOSTED_PLAN_BY_TIER.pro}
           cta={proTrialOrUpgrade}
           highlighted
           badge="Most Popular"
           message={trialMessage()}
         />
-        <TierCard tier={TIERS.proPlus} cta={proPlusCta} />
+        <TierCard tier={SELF_HOSTED_PLAN_BY_TIER.proPlus} cta={proPlusCta} />
       </div>
 
       {/* Upsell links */}
@@ -595,8 +392,8 @@ export default function PricingV6() {
               </TableRow>
             </TableHeader>
             <TableBody class="bg-surface divide-y divide-border-subtle">
-              <For each={FEATURE_ROWS}>
-                {(row) => (
+              <For each={SELF_HOSTED_FEATURE_ROWS}>
+                {(row: SelfHostedFeatureRow) => (
                   <TableRow>
                     <TableCell class="px-4 py-2">
                       <div class="text-sm font-medium text-base-content">{row.name}</div>

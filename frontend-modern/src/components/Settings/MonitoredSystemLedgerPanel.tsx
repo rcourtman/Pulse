@@ -18,6 +18,10 @@ import {
   getMonitoredSystemLedgerLoadingState,
 } from '@/utils/unifiedAgentInventoryPresentation';
 import { PulseLogoIcon } from '@/components/icons/PulseLogoIcon';
+import {
+  SELF_HOSTED_MONITORED_SYSTEM_LEDGER_DESCRIPTION,
+  SELF_HOSTED_MONITORED_SYSTEMS_DESCRIPTION,
+} from '@/utils/selfHostedPlans';
 
 interface MonitoredSystemLedgerPanelProps {
   embedded?: boolean;
@@ -58,8 +62,7 @@ export function MonitoredSystemLedgerPanel(props: MonitoredSystemLedgerPanelProp
           </Show>
         </div>
         <p class="text-xs text-muted">
-          Pulse sells monitored systems, not everything underneath them. VMs, containers, pods,
-          disks, backups, and other child resources do not count separately.
+          {SELF_HOSTED_MONITORED_SYSTEMS_DESCRIPTION}
         </p>
       </div>
 
@@ -152,7 +155,7 @@ export function MonitoredSystemLedgerPanel(props: MonitoredSystemLedgerPanelProp
   return (
     <SettingsPanel
       title="Monitored System Ledger"
-      description="Review the monitored systems currently counting toward your Pulse Pro allocation."
+      description={SELF_HOSTED_MONITORED_SYSTEM_LEDGER_DESCRIPTION}
       icon={<PulseLogoIcon class="w-5 h-5" />}
       bodyClass="space-y-4"
     >

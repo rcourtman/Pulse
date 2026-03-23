@@ -148,15 +148,15 @@ describe('ProLicensePanel', () => {
       expect(screen.getByText('Plan Terms')).toBeInTheDocument();
     });
 
-    expect(screen.getByText('5 / 12')).toBeInTheDocument();
-    expect(screen.getByText('7')).toBeInTheDocument();
-    expect(screen.getAllByText('Active').length).toBeGreaterThan(0);
-    expect(screen.getByText('V5 Lifetime Grandfathered')).toBeInTheDocument();
-    expect(screen.getByText('Included Monitored Systems')).toBeInTheDocument();
-    expect(
-      screen.getByText(/self-hosted plans are sold by monitored systems/i),
-    ).toBeInTheDocument();
-  });
+      expect(screen.getByText('5 / 12')).toBeInTheDocument();
+      expect(screen.getByText('7')).toBeInTheDocument();
+      expect(screen.getAllByText('Active').length).toBeGreaterThan(0);
+      expect(screen.getByText('V5 Lifetime Grandfathered')).toBeInTheDocument();
+      expect(screen.getByText('Included Monitored Systems')).toBeInTheDocument();
+      expect(
+        screen.getAllByText(/a monitored system is a top-level machine or cluster/i).length,
+      ).toBeGreaterThan(0);
+    });
 
   it('shows recurring grandfathered pricing continuity for migrated v5 Pro plans', async () => {
     const tests = [

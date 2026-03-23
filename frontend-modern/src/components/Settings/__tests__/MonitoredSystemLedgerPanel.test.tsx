@@ -147,6 +147,9 @@ describe('MonitoredSystemLedgerPanel', () => {
         'Review the monitored systems currently counting toward your Pulse Pro allocation.',
       ),
     ).toBeInTheDocument();
+    expect(
+      screen.getByText(/a monitored system is a top-level machine or cluster pulse actively monitors/i),
+    ).toBeInTheDocument();
     expect(screen.getByText('server-b')).toBeInTheDocument();
     expect(screen.getByText('2 / 10')).toBeInTheDocument();
     expect(screen.queryByText('Failed to load monitored system ledger.')).not.toBeInTheDocument();
