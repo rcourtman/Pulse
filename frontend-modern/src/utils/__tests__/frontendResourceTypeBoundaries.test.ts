@@ -542,9 +542,11 @@ import remediationStatusSource from '@/components/patrol/RemediationStatus.tsx?r
 import remediationPresentationSource from '@/utils/remediationPresentation.ts?raw';
 import aiChatPresentationSource from '@/utils/aiChatPresentation.ts?raw';
 import infrastructureDetailsDrawerSource from '@/components/shared/InfrastructureDetailsDrawer.tsx?raw';
+import infrastructureDetailsDrawerModelSource from '@/components/shared/infrastructureDetailsDrawerModel.ts?raw';
 import infrastructurePageSurfaceSource from '@/features/infrastructure/InfrastructurePageSurface.tsx?raw';
 import infrastructurePageStateSource from '@/features/infrastructure/useInfrastructurePageState.ts?raw';
 import infrastructurePageRouteStateSource from '@/features/infrastructure/useInfrastructurePageRouteState.ts?raw';
+import infrastructureDetailsDrawerStateSource from '@/components/shared/useInfrastructureDetailsDrawerState.ts?raw';
 
 const aiSettingsSource = [
   aiSettingsShellSource,
@@ -2747,6 +2749,32 @@ describe('frontend resource type boundaries', () => {
     expect(mobileNavBarModelSource).toContain('buildOrderedMobileNavUtilityTabs');
     expect(mobileNavBarModelSource).toContain('getMobileNavAlertBadgeCounts');
     expect(mobileNavBarModelSource).toContain('getMobileNavFadeState');
+    expect(infrastructureDetailsDrawerSource).toContain('useInfrastructureDetailsDrawerState');
+    expect(infrastructureDetailsDrawerSource).toContain(
+      'resolveInfrastructureDetailsDrawerMetadataId',
+    );
+    expect(infrastructureDetailsDrawerSource).toContain(
+      'resolveInfrastructureDetailsDrawerDiscoveryHostname',
+    );
+    expect(infrastructureDetailsDrawerSource).not.toContain('createSignal');
+    expect(infrastructureDetailsDrawerSource).not.toContain('getInfrastructureMetadataId');
+    expect(infrastructureDetailsDrawerSource).not.toContain(
+      'getInfrastructureDiscoveryHostname',
+    );
+    expect(infrastructureDetailsDrawerStateSource).toContain('createSignal');
+    expect(infrastructureDetailsDrawerStateSource).toContain(
+      "type InfrastructureDetailsDrawerTab = 'overview' | 'discovery'",
+    );
+    expect(infrastructureDetailsDrawerModelSource).toContain(
+      'resolveInfrastructureDetailsDrawerMetadataId',
+    );
+    expect(infrastructureDetailsDrawerModelSource).toContain(
+      'resolveInfrastructureDetailsDrawerDiscoveryHostname',
+    );
+    expect(infrastructureDetailsDrawerModelSource).toContain('getInfrastructureMetadataId');
+    expect(infrastructureDetailsDrawerModelSource).toContain(
+      'getInfrastructureDiscoveryHostname',
+    );
     expect(useUnifiedResourcesSource).not.toContain('normalizeResourcePolicyAISafeSummary(');
     expect(useUnifiedResourcesSource).not.toContain('normalizeResourcePolicy(');
     expect(useUnifiedResourcesSource).not.toContain('const resolvePolicySensitivity =');

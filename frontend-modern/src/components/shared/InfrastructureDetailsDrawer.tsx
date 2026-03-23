@@ -1,5 +1,4 @@
-import { Component, Suspense, createSignal } from 'solid-js';
-import type { Agent, Node } from '@/types/api';
+import { Component, Suspense } from 'solid-js';
 import { DiscoveryTab } from '../Discovery/DiscoveryTab';
 import { SystemInfoCard } from '@/components/shared/cards/SystemInfoCard';
 import { HardwareCard } from '@/components/shared/cards/HardwareCard';
@@ -9,56 +8,55 @@ import { DisksCard } from '@/components/shared/cards/DisksCard';
 import { WebInterfaceUrlField } from '@/components/shared/WebInterfaceUrlField';
 import { getDiscoveryLoadingState } from '@/utils/discoveryPresentation';
 import {
-  getInfrastructureDiscoveryHostname,
-  getInfrastructureMetadataId,
-} from '@/utils/resourceIdentity';
-
-interface InfrastructureDetailsDrawerProps {
-  node: Node;
-  agent?: Agent;
-  customUrl?: string; // Proxmox hosts do not typically override this URL, but the field still supports it.
-  onCustomUrlChange?: (agentId: string, url: string) => void;
-}
+  resolveInfrastructureDetailsDrawerDiscoveryHostname,
+  resolveInfrastructureDetailsDrawerMetadataId,
+  type InfrastructureDetailsDrawerProps,
+} from './infrastructureDetailsDrawerModel';
+import { useInfrastructureDetailsDrawerState } from './useInfrastructureDetailsDrawerState';
 
 export const InfrastructureDetailsDrawer: Component<InfrastructureDetailsDrawerProps> = (props) => {
-  const [activeTab, setActiveTab] = createSignal<'overview' | 'discovery'>('overview');
-  const metadataId = () => getInfrastructureMetadataId(props.node, props.agent);
-  const discoveryHostname = () => getInfrastructureDiscoveryHostname(props.node, props.agent);
-
-  const switchTab = (tab: 'overview' | 'discovery') => {
-    setActiveTab(tab);
-  };
+  const drawer = useInfrastructureDetailsDrawerState();
+  const metadataId = () => resolveInfrastructureDetailsDrawerMetadataId(props.node, props.agent);
+  const discoveryHostname = () =>
+    resolveInfrastructureDetailsDrawerDiscoveryHostname(props.node, props.agent);
 
   return (
     <div class="space-y-3">
       {/* Tabs */}
       <div class="flex items-center gap-6 border-b border-border px-1 mb-1">
         <button
-          onClick={() => switchTab('overview')}
+          onClick={() => drawer.setActiveTab('overview')}
           class={`pb-2 text-sm font-medium transition-colors relative ${
-            activeTab() === 'overview' ? 'text-blue-600 dark:text-blue-400' : ' hover:text-muted'
+            drawer.activeTab() === 'overview'
+              ? 'text-blue-600 dark:text-blue-400'
+              : ' hover:text-muted'
           }`}
         >
           Overview
-          {activeTab() === 'overview' && (
+          {drawer.activeTab() === 'overview' && (
             <div class="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 dark:bg-blue-400 rounded-t-full" />
           )}
         </button>
         <button
-          onClick={() => switchTab('discovery')}
+          onClick={() => drawer.setActiveTab('discovery')}
           class={`pb-2 text-sm font-medium transition-colors relative ${
-            activeTab() === 'discovery' ? 'text-blue-600 dark:text-blue-400' : ' hover:text-muted'
+            drawer.activeTab() === 'discovery'
+              ? 'text-blue-600 dark:text-blue-400'
+              : ' hover:text-muted'
           }`}
         >
           Discovery
-          {activeTab() === 'discovery' && (
+          {drawer.activeTab() === 'discovery' && (
             <div class="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 dark:bg-blue-400 rounded-t-full" />
           )}
         </button>
       </div>
 
       {/* Overview Tab */}
-      <div class={activeTab() === 'overview' ? '' : 'hidden'} style={{ 'overflow-anchor': 'none' }}>
+      <div
+        class={drawer.activeTab() === 'overview' ? '' : 'hidden'}
+        style={{ 'overflow-anchor': 'none' }}
+      >
         <div class="flex flex-wrap gap-3 [&>*]:flex-1 [&>*]:basis-[calc(25%-0.75rem)] [&>*]:min-w-[200px] [&>*]:max-w-full [&>*]:overflow-hidden">
           <SystemInfoCard variant="node" node={props.node} />
           <HardwareCard variant="node" node={props.node} />
@@ -79,7 +77,7 @@ export const InfrastructureDetailsDrawer: Component<InfrastructureDetailsDrawerP
 
       {/* Discovery Tab */}
       <div
-        class={activeTab() === 'discovery' ? '' : 'hidden'}
+        class={drawer.activeTab() === 'discovery' ? '' : 'hidden'}
         style={{ 'overflow-anchor': 'none' }}
       >
         <Suspense

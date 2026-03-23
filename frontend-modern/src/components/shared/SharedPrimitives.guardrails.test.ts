@@ -11,6 +11,8 @@ import helpIconSource from '@/components/shared/HelpIcon.tsx?raw';
 import helpIconModelSource from '@/components/shared/helpIconModel.ts?raw';
 import historyChartSource from '@/components/shared/HistoryChart.tsx?raw';
 import historyChartModelSource from '@/components/shared/historyChartModel.ts?raw';
+import infrastructureDetailsDrawerSource from '@/components/shared/InfrastructureDetailsDrawer.tsx?raw';
+import infrastructureDetailsDrawerModelSource from '@/components/shared/infrastructureDetailsDrawerModel.ts?raw';
 import mobileNavBarSource from '@/components/shared/MobileNavBar.tsx?raw';
 import mobileNavBarModelSource from '@/components/shared/mobileNavBarModel.ts?raw';
 import infrastructureSelectorSource from '@/components/shared/InfrastructureSelector.tsx?raw';
@@ -31,6 +33,7 @@ import containerUpdateButtonStateSource from '@/components/shared/useContainerUp
 import densityMapStateSource from '@/components/shared/useDensityMapState.ts?raw';
 import helpIconStateSource from '@/components/shared/useHelpIconState.ts?raw';
 import historyChartStateSource from '@/components/shared/useHistoryChartState.ts?raw';
+import infrastructureDetailsDrawerStateSource from '@/components/shared/useInfrastructureDetailsDrawerState.ts?raw';
 import mobileNavBarStateSource from '@/components/shared/useMobileNavBarState.ts?raw';
 import infrastructureSelectorStateSource from '@/components/shared/useInfrastructureSelectorState.ts?raw';
 import pulseDataGridStateSource from '@/components/shared/usePulseDataGridState.ts?raw';
@@ -311,6 +314,40 @@ describe('shared primitive guardrails', () => {
     expect(helpIconModelSource).toContain('resolveHelpContent');
     expect(helpIconModelSource).toContain('calculateHelpPopoverPosition');
     expect(helpIconModelSource).toContain('helpIconSizeClasses');
+  });
+
+  it('keeps infrastructure details drawer on shell, runtime, and model owners', () => {
+    expect(infrastructureDetailsDrawerSource).toContain('useInfrastructureDetailsDrawerState');
+    expect(infrastructureDetailsDrawerSource).toContain(
+      'resolveInfrastructureDetailsDrawerMetadataId',
+    );
+    expect(infrastructureDetailsDrawerSource).toContain(
+      'resolveInfrastructureDetailsDrawerDiscoveryHostname',
+    );
+    expect(infrastructureDetailsDrawerSource).not.toContain('createSignal');
+    expect(infrastructureDetailsDrawerSource).not.toContain('getInfrastructureMetadataId');
+    expect(infrastructureDetailsDrawerSource).not.toContain(
+      'getInfrastructureDiscoveryHostname',
+    );
+
+    expect(infrastructureDetailsDrawerStateSource).toContain(
+      'export function useInfrastructureDetailsDrawerState',
+    );
+    expect(infrastructureDetailsDrawerStateSource).toContain('createSignal');
+    expect(infrastructureDetailsDrawerStateSource).toContain(
+      "type InfrastructureDetailsDrawerTab = 'overview' | 'discovery'",
+    );
+
+    expect(infrastructureDetailsDrawerModelSource).toContain(
+      'resolveInfrastructureDetailsDrawerMetadataId',
+    );
+    expect(infrastructureDetailsDrawerModelSource).toContain(
+      'resolveInfrastructureDetailsDrawerDiscoveryHostname',
+    );
+    expect(infrastructureDetailsDrawerModelSource).toContain('getInfrastructureMetadataId');
+    expect(infrastructureDetailsDrawerModelSource).toContain(
+      'getInfrastructureDiscoveryHostname',
+    );
   });
 
   it('keeps mobile nav on shell, runtime, and model owners', () => {

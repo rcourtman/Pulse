@@ -189,6 +189,15 @@ resource-family counts, agent-backed node-summary projection, unified-node and
 PBS-instance projection, and recovery backup-count derivation. Future
 infrastructure-selector work should extend those owners instead of pushing
 resource aggregation or selection lifecycle back into the shared shell.
+The shared infrastructure details drawer now follows that same owner split.
+`frontend-modern/src/components/shared/InfrastructureDetailsDrawer.tsx` stays
+the render shell, `frontend-modern/src/components/shared/useInfrastructureDetailsDrawerState.ts`
+owns tab-selection runtime, and
+`frontend-modern/src/components/shared/infrastructureDetailsDrawerModel.ts`
+owns canonical metadata-id and discovery-hostname derivation. Future
+infrastructure-details-drawer work should extend those owners instead of
+pushing tab state or resource-identity normalization back into the shared
+shell.
 The shared interactive sparkline now follows that same split.
 `frontend-modern/src/components/shared/InteractiveSparkline.tsx` stays the
 render shell, `frontend-modern/src/components/shared/useInteractiveSparklineState.ts`

@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@solidjs/testing-library';
+import infrastructureDetailsDrawerSource from '@/components/shared/InfrastructureDetailsDrawer.tsx?raw';
+import infrastructureDetailsDrawerModelSource from '@/components/shared/infrastructureDetailsDrawerModel.ts?raw';
+import infrastructureDetailsDrawerStateSource from '@/components/shared/useInfrastructureDetailsDrawerState.ts?raw';
 import { InfrastructureDetailsDrawer } from '@/components/shared/InfrastructureDetailsDrawer';
 import type { Node, Agent } from '@/types/api';
 
@@ -73,6 +76,38 @@ const makeAgent = (overrides: Partial<Agent> = {}): Agent => ({
 });
 
 describe('InfrastructureDetailsDrawer', () => {
+  it('keeps infrastructure details drawer on shell, runtime, and model owners', () => {
+    expect(infrastructureDetailsDrawerSource).toContain('useInfrastructureDetailsDrawerState');
+    expect(infrastructureDetailsDrawerSource).toContain(
+      'resolveInfrastructureDetailsDrawerMetadataId',
+    );
+    expect(infrastructureDetailsDrawerSource).toContain(
+      'resolveInfrastructureDetailsDrawerDiscoveryHostname',
+    );
+    expect(infrastructureDetailsDrawerSource).not.toContain('createSignal');
+    expect(infrastructureDetailsDrawerSource).not.toContain('getInfrastructureMetadataId');
+    expect(infrastructureDetailsDrawerSource).not.toContain(
+      'getInfrastructureDiscoveryHostname',
+    );
+
+    expect(infrastructureDetailsDrawerStateSource).toContain(
+      'export function useInfrastructureDetailsDrawerState',
+    );
+    expect(infrastructureDetailsDrawerStateSource).toContain('createSignal');
+    expect(infrastructureDetailsDrawerStateSource).toContain("type InfrastructureDetailsDrawerTab = 'overview' | 'discovery'");
+
+    expect(infrastructureDetailsDrawerModelSource).toContain(
+      'resolveInfrastructureDetailsDrawerMetadataId',
+    );
+    expect(infrastructureDetailsDrawerModelSource).toContain(
+      'resolveInfrastructureDetailsDrawerDiscoveryHostname',
+    );
+    expect(infrastructureDetailsDrawerModelSource).toContain('getInfrastructureMetadataId');
+    expect(infrastructureDetailsDrawerModelSource).toContain(
+      'getInfrastructureDiscoveryHostname',
+    );
+  });
+
   it('uses linkedAgentId when no agent object is provided', async () => {
     discoveryTabMock.mockClear();
     webInterfaceUrlFieldMock.mockClear();
