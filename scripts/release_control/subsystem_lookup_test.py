@@ -3526,6 +3526,7 @@ class SubsystemLookupTest(unittest.TestCase):
                 "frontend-modern/src/components/Settings/__tests__/monitoredSystemModelGuardrails.test.ts",
                 "frontend-modern/src/pages/__tests__/AIIntelligence.test.tsx",
                 "frontend-modern/src/stores/__tests__/aiIntelligence.test.ts",
+                "frontend-modern/src/stores/__tests__/aiIntelligenceSummaryModel.test.ts",
                 "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
             ],
         )
@@ -3560,6 +3561,7 @@ class SubsystemLookupTest(unittest.TestCase):
                 "frontend-modern/src/components/Settings/__tests__/monitoredSystemModelGuardrails.test.ts",
                 "frontend-modern/src/pages/__tests__/AIIntelligence.test.tsx",
                 "frontend-modern/src/stores/__tests__/aiIntelligence.test.ts",
+                "frontend-modern/src/stores/__tests__/aiIntelligenceSummaryModel.test.ts",
                 "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
             ],
         )
@@ -3594,6 +3596,7 @@ class SubsystemLookupTest(unittest.TestCase):
                 "frontend-modern/src/components/Settings/__tests__/monitoredSystemModelGuardrails.test.ts",
                 "frontend-modern/src/pages/__tests__/AIIntelligence.test.tsx",
                 "frontend-modern/src/stores/__tests__/aiIntelligence.test.ts",
+                "frontend-modern/src/stores/__tests__/aiIntelligenceSummaryModel.test.ts",
                 "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
             ],
         )
@@ -3616,6 +3619,34 @@ class SubsystemLookupTest(unittest.TestCase):
             {"patrol-intelligence"},
         )
         match = file_entry["matches"][0]
+        self.assertEqual(
+            match["verification_requirement"]["id"],
+            "patrol-page-and-state",
+        )
+
+    def test_lookup_paths_assigns_ai_intelligence_summary_model_to_patrol_intelligence(
+        self,
+    ) -> None:
+        result = lookup_paths(
+            ["frontend-modern/src/stores/aiIntelligenceSummaryModel.ts"]
+        )
+        self.assertEqual(result["unowned_runtime_files"], [])
+        self.assertEqual(
+            {item["subsystem"] for item in result["impacted_subsystems"]},
+            {"patrol-intelligence"},
+        )
+        file_entry = result["files"][0]
+        self.assertEqual(file_entry["classification"], "runtime")
+        self.assertEqual(
+            {match["subsystem"] for match in file_entry["matches"]},
+            {"patrol-intelligence"},
+        )
+        match = file_entry["matches"][0]
+        self.assertEqual(
+            match["contract"],
+            "docs/release-control/v6/internal/subsystems/patrol-intelligence.md",
+        )
+        self.assertEqual(match["lane_context"]["lane_id"], "L6")
         self.assertEqual(
             match["verification_requirement"]["id"],
             "patrol-page-and-state",

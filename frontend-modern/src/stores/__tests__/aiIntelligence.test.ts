@@ -138,6 +138,68 @@ describe('aiIntelligenceStore', () => {
     expect(aiIntelligenceStore.intelligenceSummary?.policy_posture?.routing_counts?.['local-only']).toBe(1);
   });
 
+  it('normalizes the canonical intelligence summary at the store boundary', async () => {
+    vi.mocked(AIAPI.getIntelligenceSummary).mockResolvedValueOnce({
+      timestamp: '2026-03-01T00:00:00Z',
+      overall_health: {
+        score: 87,
+        grade: 'B',
+        trend: 'stable',
+        factors: [],
+        prediction: 'Stable',
+      },
+      findings_count: {
+        critical: 0,
+        warning: 0,
+        watch: 0,
+        info: 0,
+        total: 0,
+      },
+      predictions_count: 0,
+      recent_changes_count: Number.NaN,
+      recent_changes: [
+        {
+          id: 'change-1',
+          observedAt: '2026-03-01T00:00:00Z',
+          resourceId: 'vm-100',
+          kind: 'config_update',
+          sourceType: 'pulse_diff',
+          confidence: 'high',
+        },
+      ],
+      policy_posture: {
+        total_resources: Number.NaN,
+        sensitivity_counts: {
+          public: Number.NaN,
+        },
+        routing_counts: {
+          'cloud-summary': 1,
+          'local-only': 1,
+        },
+      },
+      learning: {
+        resources_with_knowledge: 0,
+        total_notes: 0,
+        resources_with_baselines: 0,
+        patterns_detected: 0,
+        correlations_learned: 0,
+        incidents_tracked: 0,
+      },
+    });
+
+    await aiIntelligenceStore.loadIntelligenceSummary();
+
+    expect(aiIntelligenceStore.intelligenceSummary?.recent_changes_count).toBe(1);
+    expect(aiIntelligenceStore.intelligenceSummary?.policy_posture).toEqual({
+      total_resources: 2,
+      sensitivity_counts: {},
+      routing_counts: {
+        'cloud-summary': 1,
+        'local-only': 1,
+      },
+    });
+  });
+
   it('loads the canonical correlations response', async () => {
     vi.mocked(AIAPI.getCorrelations).mockResolvedValueOnce({
       correlations: [

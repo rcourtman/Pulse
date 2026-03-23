@@ -29,6 +29,7 @@ import type {
   CorrelationsResponse,
   IntelligenceSummary,
 } from '@/types/aiIntelligence';
+import { normalizeIntelligenceSummary } from './aiIntelligenceSummaryModel';
 
 // ============================================
 // Enum validation helpers
@@ -535,7 +536,7 @@ export const aiIntelligenceStore = {
   async loadIntelligenceSummary() {
     try {
       const summary = await AIAPI.getIntelligenceSummary();
-      setIntelligenceSummary(summary);
+      setIntelligenceSummary(normalizeIntelligenceSummary(summary));
       return summary;
     } catch (e) {
       logger.error('Failed to load intelligence summary:', e);

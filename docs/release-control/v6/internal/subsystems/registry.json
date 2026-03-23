@@ -2573,6 +2573,7 @@
         "frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts",
         "frontend-modern/src/pages/AIIntelligence.tsx",
         "frontend-modern/src/stores/aiIntelligence.ts",
+        "frontend-modern/src/stores/aiIntelligenceSummaryModel.ts",
         "frontend-modern/src/types/aiIntelligence.ts",
         "frontend-modern/src/utils/aiFindingPresentation.ts",
         "frontend-modern/src/utils/approvalRiskPresentation.ts",
@@ -2588,7 +2589,8 @@
         "exact_files": [
           "frontend-modern/src/components/AI/__tests__/FindingsPanel.test.ts",
           "frontend-modern/src/pages/__tests__/AIIntelligence.test.tsx",
-          "frontend-modern/src/stores/__tests__/aiIntelligence.test.ts"
+          "frontend-modern/src/stores/__tests__/aiIntelligence.test.ts",
+          "frontend-modern/src/stores/__tests__/aiIntelligenceSummaryModel.test.ts"
         ],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
@@ -2608,6 +2610,7 @@
               "frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts",
               "frontend-modern/src/pages/AIIntelligence.tsx",
               "frontend-modern/src/stores/aiIntelligence.ts",
+              "frontend-modern/src/stores/aiIntelligenceSummaryModel.ts",
               "frontend-modern/src/types/aiIntelligence.ts"
             ],
             "allow_same_subsystem_tests": false,
@@ -2617,6 +2620,7 @@
               "frontend-modern/src/components/Settings/__tests__/monitoredSystemModelGuardrails.test.ts",
               "frontend-modern/src/pages/__tests__/AIIntelligence.test.tsx",
               "frontend-modern/src/stores/__tests__/aiIntelligence.test.ts",
+              "frontend-modern/src/stores/__tests__/aiIntelligenceSummaryModel.test.ts",
               "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts"
             ]
           },

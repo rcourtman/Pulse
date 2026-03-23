@@ -451,8 +451,7 @@ export function usePatrolIntelligenceState() {
   const policyPosture = createMemo(() => intelligenceSummary()?.policy_posture);
   const investigationContext = createMemo(() =>
     buildPatrolInvestigationContextSummary({
-      recentChangesCount:
-        intelligenceSummary()?.recent_changes_count ?? intelligenceSummary()?.recent_changes?.length,
+      recentChangesCount: intelligenceSummary()?.recent_changes_count,
       correlations: aiIntelligenceStore.correlations,
       policyPosture: policyPosture(),
     }),

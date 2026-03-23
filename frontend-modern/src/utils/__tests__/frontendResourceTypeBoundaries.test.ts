@@ -581,6 +581,8 @@ import aiRuntimeControlsSectionSource from '@/components/Settings/AIRuntimeContr
 import aiSettingsStatusAndActionsSource from '@/components/Settings/AISettingsStatusAndActions.tsx?raw';
 import aiSettingsStateSource from '@/components/Settings/useAISettingsState.ts?raw';
 import aiIntelligenceSource from '@/pages/AIIntelligence.tsx?raw';
+import aiIntelligenceStoreSource from '@/stores/aiIntelligence.ts?raw';
+import aiIntelligenceSummaryModelSource from '@/stores/aiIntelligenceSummaryModel.ts?raw';
 import patrolIntelligenceBannersSource from '@/features/patrol/PatrolIntelligenceBanners.tsx?raw';
 import patrolIntelligenceHeaderSource from '@/features/patrol/PatrolIntelligenceHeader.tsx?raw';
 import patrolIntelligenceSummarySource from '@/features/patrol/PatrolIntelligenceSummary.tsx?raw';
@@ -4325,9 +4327,20 @@ describe('frontend resource type boundaries', () => {
     expect(patrolIntelligenceStateSource).toContain('getPatrolStatus');
     expect(patrolIntelligenceStateSource).toContain('usePatrolStream');
     expect(patrolIntelligenceStateSource).toContain('trackPaywallViewed');
+    expect(aiIntelligenceStoreSource).toContain(
+      "import { normalizeIntelligenceSummary } from './aiIntelligenceSummaryModel';",
+    );
+    expect(aiIntelligenceStoreSource).toContain(
+      'setIntelligenceSummary(normalizeIntelligenceSummary(summary));',
+    );
+    expect(aiIntelligenceStoreSource).not.toContain('setIntelligenceSummary(summary);');
+    expect(aiIntelligenceSummaryModelSource).toContain(
+      'export function normalizeIntelligenceSummary',
+    );
     expect(patrolIntelligenceStateSource).toContain(
       "import { buildPatrolInvestigationContextSummary } from './patrolInvestigationContextModel';",
     );
+    expect(patrolIntelligenceStateSource).not.toContain('recent_changes?.length');
     expect(patrolIntelligenceStateSource).not.toContain('governed resource${');
     expect(patrolInvestigationContextModelSource).toContain(
       'export function buildPatrolInvestigationContextSummary',
