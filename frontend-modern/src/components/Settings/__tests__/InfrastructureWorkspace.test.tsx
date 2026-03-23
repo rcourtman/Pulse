@@ -58,7 +58,7 @@ describe('InfrastructureWorkspace', () => {
     expect(screen.getByText('Infrastructure operations')).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Billing, installed-agent allocation, and Pulse Pro entitlement state live in Pulse Pro, not here.',
+        'Billing, monitored-system limits, and Pulse Pro license status live in Pulse Pro, not here.',
       ),
     ).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Install on a host' })).toHaveAttribute(

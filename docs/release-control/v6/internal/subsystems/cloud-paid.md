@@ -328,7 +328,13 @@ instead of redefining retail plan facts or counted-unit policy locally.
 That same counted-unit boundary also owns the disclosure rule for retail copy:
 default billing and pricing surfaces should use concise monitored-system copy,
 while the full counted-unit definition appears only behind explicit disclosure
-such as `What counts?` instead of sitting as always-visible explanatory chrome.
+such as `View counting rules` instead of sitting as always-visible explanatory
+chrome.
+Those same billing-facing surfaces must also describe the commercial contract in
+customer terms: monitored systems, plan limits, subscription status, and
+license status. They must not revive legacy `installed-agent` wording or vague
+internal nouns like `allocation` once the monitored-system billing model is the
+canonical product truth.
 The self-hosted pricing page should therefore stay focused on plan cards,
 upgrade paths, and the comparison table rather than rendering a separate
 counted-unit explainer card beneath the tier grid.

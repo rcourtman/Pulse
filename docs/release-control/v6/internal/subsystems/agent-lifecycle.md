@@ -224,6 +224,10 @@ show the counted monitored systems coming from agent-backed infrastructure, but
 the shared API helper must expose the canonical unified-resource grouping
 explanation instead of rebuilding count reasons from install or registration
 state.
+Lifecycle-adjacent workspace copy must also keep the same commercial framing:
+infrastructure operations may point operators to Pulse Pro for billing, but it
+must describe that boundary in monitored-system, plan-limit, and license-status
+terms rather than reviving legacy agent-allocation language.
 That same boundary now also assumes canonical resource payloads preserve
 shared facet totals through `facetCounts`, so the resource list and detail
 surfaces can keep row summaries aligned without re-inferring totals from

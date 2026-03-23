@@ -22,15 +22,15 @@ export interface SelfHostedFeatureRow {
 export const SELF_HOSTED_MONITORED_SYSTEMS_BRIEF =
   'Billing is based on monitored systems. Child resources are included.';
 
-export const SELF_HOSTED_MONITORED_SYSTEMS_DISCLOSURE_LABEL = 'What counts?';
+export const SELF_HOSTED_MONITORED_SYSTEMS_DISCLOSURE_LABEL = 'View counting rules';
 
-export const SELF_HOSTED_MONITORED_SYSTEMS_HIDE_LABEL = 'Hide details';
+export const SELF_HOSTED_MONITORED_SYSTEMS_HIDE_LABEL = 'Hide counting rules';
 
 export const SELF_HOSTED_MONITORED_SYSTEMS_DEFINITION =
   'A monitored system is a top-level machine or cluster Pulse actively monitors. Each system counts once no matter how Pulse collects it. Child resources like VMs, containers, pods, disks, backups, and services are included.';
 
 export const SELF_HOSTED_MONITORED_SYSTEM_LEDGER_DESCRIPTION =
-  'Review the monitored systems currently counting toward your Pulse Pro allocation.';
+  'Review the monitored systems currently counted against your Pulse Pro plan limit.';
 
 export const SELF_HOSTED_PLAN_DEFINITIONS: readonly SelfHostedPlanDefinition[] = [
   {

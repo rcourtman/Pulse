@@ -183,15 +183,15 @@ describe('MonitoredSystemLedgerPanel', () => {
     expect(screen.getByText('Monitored System Ledger')).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Review the monitored systems currently counting toward your Pulse Pro allocation.',
+        'Review the monitored systems currently counted against your Pulse Pro plan limit.',
       ),
     ).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'What counts?' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'View counting rules' })).toBeInTheDocument();
     expect(
       screen.queryByText(/a monitored system is a top-level machine or cluster pulse actively monitors/i),
     ).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'What counts?' }));
+    fireEvent.click(screen.getByRole('button', { name: 'View counting rules' }));
 
     expect(
       screen.getByText(/a monitored system is a top-level machine or cluster pulse actively monitors/i),

@@ -1039,6 +1039,21 @@ describe('Settings architecture guardrails', () => {
     expect(SETTINGS_HEADER_META['infrastructure-operations'].description).toContain('Pulse Pro');
   });
 
+  it('keeps billing-related shell framing on monitored-system commercial terms', () => {
+    expect(SETTINGS_HEADER_META['infrastructure-operations'].description).toContain(
+      'monitored-system limits',
+    );
+    expect(SETTINGS_HEADER_META['infrastructure-operations'].description).not.toContain(
+      'installed-agent',
+    );
+    expect(SETTINGS_HEADER_META['system-billing'].description).toContain('license status');
+    expect(SETTINGS_HEADER_META['system-billing'].description).not.toContain('allocation');
+    expect(SETTINGS_HEADER_META['organization-billing'].description).toContain(
+      'subscription status',
+    );
+    expect(SETTINGS_HEADER_META['organization-billing'].description).toContain('plan limits');
+  });
+
   it('keeps shell titles aligned with the leading settings panel on key top-level surfaces', () => {
     for (const { tab, title, source } of canonicalShellTitleExpectations) {
       expect(SETTINGS_HEADER_META[tab].title, `${tab} should keep its shell title canonical`).toBe(

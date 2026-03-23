@@ -15,7 +15,7 @@ export const ProLicensePanel: Component = () => {
     <div class="space-y-6">
       <CommercialBillingShell
         title="Pulse Pro"
-        description="Manage self-hosted billing, monitored-system limits, and the activation state that controls paid features."
+        description="Manage self-hosted billing, monitored-system limits, and Pulse Pro license status."
         icon={<ShieldCheck class="w-5 h-5" />}
         action={
           <button

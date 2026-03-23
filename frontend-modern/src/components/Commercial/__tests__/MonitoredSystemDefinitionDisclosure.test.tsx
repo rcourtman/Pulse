@@ -10,7 +10,7 @@ describe('MonitoredSystemDefinitionDisclosure', () => {
     ));
 
     expect(screen.getByText('Billing is based on monitored systems.')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'What counts?' })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: 'View counting rules' })).toHaveAttribute(
       'aria-expanded',
       'false',
     );
@@ -18,9 +18,9 @@ describe('MonitoredSystemDefinitionDisclosure', () => {
       screen.queryByText(/a monitored system is a top-level machine or cluster/i),
     ).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'What counts?' }));
+    fireEvent.click(screen.getByRole('button', { name: 'View counting rules' }));
 
-    expect(screen.getByRole('button', { name: 'Hide details' })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: 'Hide counting rules' })).toHaveAttribute(
       'aria-expanded',
       'true',
     );

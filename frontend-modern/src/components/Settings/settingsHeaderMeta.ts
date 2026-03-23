@@ -9,7 +9,7 @@ export const SETTINGS_HEADER_META: SettingsHeaderMetaMap = {
   'infrastructure-operations': {
     title: 'Infrastructure Operations',
     description:
-      'Bring infrastructure into Pulse, manage direct Proxmox connections, and control which systems are actively reporting. Billing and installed-agent allocation live in Pulse Pro.',
+      'Bring infrastructure into Pulse, manage direct Proxmox connections, and control which systems are actively reporting. Billing and monitored-system limits live in Pulse Pro.',
   },
   'system-general': {
     title: 'General',
@@ -39,7 +39,7 @@ export const SETTINGS_HEADER_META: SettingsHeaderMetaMap = {
   'system-billing': {
     title: 'Pulse Pro',
     description:
-      'Manage self-hosted Pulse Pro billing, installed-agent allocation, and the activation state that controls paid features.',
+      'Manage self-hosted Pulse Pro billing, monitored-system limits, and license status for paid features.',
   },
   'organization-overview': {
     title: 'Organization Overview',
@@ -56,7 +56,7 @@ export const SETTINGS_HEADER_META: SettingsHeaderMetaMap = {
   'organization-billing': {
     title: 'Billing & Usage',
     description:
-      'Review your organization plan, usage against limits, and the allocation state that controls paid access.',
+      'Review your organization plan, usage against plan limits, and subscription status for paid access.',
   },
   'organization-billing-admin': {
     title: 'Billing Admin',

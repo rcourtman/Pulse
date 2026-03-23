@@ -68,7 +68,7 @@ describe('PricingV6', () => {
     expect(
       screen.queryByText('Billing is based on monitored systems. Child resources are included.'),
     ).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'What counts?' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'View counting rules' })).not.toBeInTheDocument();
   });
 
   it('imports the shared self-hosted pricing model instead of redefining it locally', () => {

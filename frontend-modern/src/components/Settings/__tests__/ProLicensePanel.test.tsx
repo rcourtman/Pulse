@@ -160,7 +160,7 @@ describe('ProLicensePanel', () => {
       screen.queryByText(/a monitored system is a top-level machine or cluster/i),
     ).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'What counts?' }));
+    fireEvent.click(screen.getByRole('button', { name: 'View counting rules' }));
 
     expect(
       screen.getByText(/a monitored system is a top-level machine or cluster/i),

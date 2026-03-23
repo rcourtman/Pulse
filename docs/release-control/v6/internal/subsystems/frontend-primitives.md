@@ -668,6 +668,10 @@ shared banner or shared settings shell is explaining self-hosted plan caps,
 the operator-facing commercial term must follow the monitored-system model even
 if explicit legacy-v5 compatibility helpers still decode older alias fields at
 import boundaries.
+That same settings-shell framing must stay in customer language. Shared headers
+and descriptions should talk about monitored-system limits, plan limits, and
+subscription or license status instead of reviving legacy `installed-agent`
+terms or vague internal nouns like `allocation`.
 That banner boundary now also owns the canonical monitored-system naming
 surface directly: the shared warning component path and exported symbol are
 `MonitoredSystemLimitWarningBanner`, and future work may not reintroduce an

@@ -33,8 +33,8 @@ export const InfrastructureWorkspace: Component<InfrastructureWorkspaceProps> = 
             connections, and control which infrastructure surfaces are actively reporting.
           </p>
           <p class="text-sm text-muted">
-            Billing, installed-agent allocation, and Pulse Pro entitlement state live in Pulse
-            Pro, not here.
+            Billing, monitored-system limits, and Pulse Pro license status live in Pulse Pro,
+            not here.
           </p>
         </div>
       </Card>
