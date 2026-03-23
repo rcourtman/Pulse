@@ -195,6 +195,16 @@ and hover state, and `frontend-modern/src/components/shared/historyChartModel.ts
 owns tooltip formatting, scale and axis math, and closest-point selection.
 Future history-chart work should extend those owners instead of pushing fetch,
 license, or canvas math back into the shared component shell.
+The shared container update badge now follows that same owner split.
+`frontend-modern/src/components/shared/ContainerUpdateBadge.tsx` stays the
+render surface for the badge, icon, and update button shells,
+`frontend-modern/src/components/shared/useContainerUpdateButtonState.ts` owns
+Docker update mutation flow, persistent update-store state, settings gating,
+and button lifecycle, and
+`frontend-modern/src/components/shared/containerUpdateBadgeModel.ts` owns badge
+and button tooltip formatting, class selection, and label/state presentation.
+Future container-update work should extend those owners instead of pushing
+store wiring, settings reads, or mutation flow back into the shared shell.
 
 The audit log settings surface now follows that same owner split.
 `frontend-modern/src/components/Settings/AuditLogPanel.tsx` stays the canonical

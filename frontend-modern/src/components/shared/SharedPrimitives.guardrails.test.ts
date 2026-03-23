@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import calloutCardSource from '@/components/shared/CalloutCard.tsx?raw';
+import containerUpdateBadgeSource from '@/components/shared/ContainerUpdateBadge.tsx?raw';
+import containerUpdateBadgeModelSource from '@/components/shared/containerUpdateBadgeModel.ts?raw';
 import filterButtonGroupSource from '@/components/shared/FilterButtonGroup.tsx?raw';
 import historyChartSource from '@/components/shared/HistoryChart.tsx?raw';
 import historyChartModelSource from '@/components/shared/historyChartModel.ts?raw';
@@ -12,6 +14,7 @@ import infrastructureSummaryTableStateSource from '@/components/shared/useInfras
 import monitoredSystemLimitWarningBannerSource from '@/components/shared/MonitoredSystemLimitWarningBanner.tsx?raw';
 import selectionCardGroupSource from '@/components/shared/SelectionCardGroup.tsx?raw';
 import tagBadgesSource from '@/components/shared/TagBadges.tsx?raw';
+import containerUpdateButtonStateSource from '@/components/shared/useContainerUpdateButtonState.ts?raw';
 import historyChartStateSource from '@/components/shared/useHistoryChartState.ts?raw';
 import interactiveSparklineStateSource from '@/components/shared/useInteractiveSparklineState.ts?raw';
 import guestRowSource from '@/components/Dashboard/GuestRow.tsx?raw';
@@ -179,5 +182,24 @@ describe('shared primitive guardrails', () => {
     expect(historyChartModelSource).toContain('formatHistoryChartTooltipValue');
     expect(historyChartModelSource).toContain('getHistoryChartScale');
     expect(historyChartModelSource).toContain('findHistoryChartClosestPoint');
+  });
+
+  it('keeps container update badge on shell, runtime, and model owners', () => {
+    expect(containerUpdateBadgeSource).toContain('useContainerUpdateButtonState');
+    expect(containerUpdateBadgeSource).toContain('getUpdateButtonClass');
+    expect(containerUpdateBadgeSource).not.toContain('MonitoringAPI.updateDockerContainer');
+    expect(containerUpdateBadgeSource).not.toContain('markContainerQueued');
+    expect(containerUpdateBadgeSource).not.toContain('createSignal');
+
+    expect(containerUpdateButtonStateSource).toContain('MonitoringAPI.updateDockerContainer');
+    expect(containerUpdateButtonStateSource).toContain('markContainerQueued');
+    expect(containerUpdateButtonStateSource).toContain('createSignal');
+    expect(containerUpdateButtonStateSource).toContain(
+      'export function useContainerUpdateButtonState',
+    );
+
+    expect(containerUpdateBadgeModelSource).toContain('getUpdateButtonClass');
+    expect(containerUpdateBadgeModelSource).toContain('getUpdateButtonTooltip');
+    expect(containerUpdateBadgeModelSource).toContain('hasContainerUpdate');
   });
 });
