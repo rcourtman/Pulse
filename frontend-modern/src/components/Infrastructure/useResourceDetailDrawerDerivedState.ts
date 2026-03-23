@@ -355,11 +355,12 @@ export const useResourceDetailDrawerDerivedState = (
   });
 
   const identityAliasValues = createMemo(() => getResourceIdentityAliases(resource));
+  const identityIpValues = createMemo(() => resource.identity?.ips ?? []);
   const primaryIdentityRows = createMemo(() => getPrimaryResourceIdentityRows(resource));
   const identityCardHasRichData = createMemo(
     () =>
       primaryIdentityRows().length > 0 ||
-      (resource.identity?.ips?.length || 0) > 0 ||
+      identityIpValues().length > 0 ||
       (resource.tags?.length || 0) > 0 ||
       identityAliasValues().length > 0,
   );
@@ -368,12 +369,6 @@ export const useResourceDetailDrawerDerivedState = (
   );
   const hasAliasOverflow = createMemo(
     () => identityAliasValues().length > ALIAS_COLLAPSE_THRESHOLD,
-  );
-  const hasIdentitySupportContext = createMemo(
-    () =>
-      (resource.identity?.ips?.length ?? 0) > 0 ||
-      (resource.tags?.length ?? 0) > 0 ||
-      identityAliasValues().length > 0,
   );
   const hasMergedSources = createMemo(() => mergedSources().length > 1);
   const discoveryConfig = createMemo(() => toDiscoveryConfig(resource));
@@ -585,12 +580,12 @@ export const useResourceDetailDrawerDerivedState = (
     mergedSources,
     sourceStatus,
     sourceSummary,
+    identityIpValues,
     identityAliasValues,
     primaryIdentityRows,
     identityCardHasRichData,
     aliasPreviewValues,
     hasAliasOverflow,
-    hasIdentitySupportContext,
     hasMergedSources,
     discoveryConfig,
     discoveryContextSummary,

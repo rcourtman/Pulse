@@ -432,13 +432,15 @@ while deeper machine detail remains available on demand.
 That host-details section now reads as a simple vertical stack of detail cards
 instead of a wrapped card grid, so the opened state stays linear instead of
 feeling like a second dashboard.
-Within that summary shell, current-state facts now stay in the primary summary
-while platform IDs, quick links, platform-signal badges, aliases, IPs, and
-tags render inline as supporting rows, so first read remains status-first and
-identity-first instead of mixing state with hidden supporting action surfaces.
-Those rows stay label-first and only expand when a specific value, like alias
-overflow, needs its own reveal, so the summary answers the main resource
-question before deeper metadata appears.
+Within that summary shell, current-state facts now stay operational: platform
+IDs, quick links, and platform-signal badges remain with runtime status,
+while aliases, IPs, and tags live only under the dedicated `Identity` card.
+That keeps first read status-first while still preserving canonical identity
+metadata on the same top-level summary surface instead of mixing identity
+support details into current-state chrome.
+The identity-side rows stay label-first and only expand when a specific value,
+like alias overflow, needs its own reveal, so the summary answers the main
+resource question before deeper metadata appears.
 When the identity side has no owned rows or supporting labels yet, the sparse
 fallback now stays terse (`No identity metadata yet.`) so empty state chrome
 does not read heavier than the data it is standing in for.

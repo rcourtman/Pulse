@@ -149,7 +149,7 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                   </span>
                 </div>
               </Show>
-              <Show when={drawer.hasRuntimeOperationalContext() || drawer.hasIdentitySupportContext()}>
+              <Show when={drawer.hasRuntimeOperationalContext()}>
                 <div class="mt-2 rounded border border-dashed border-border bg-surface-hover p-3">
                   <div class="space-y-2.5">
                     <Show when={drawer.hasRuntimeOperationalContext()}>
@@ -199,74 +199,6 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                         </Show>
                       </div>
                     </Show>
-                    <Show when={drawer.hasIdentitySupportContext()}>
-                      <div class="space-y-1.5">
-                        <Show when={resource.identity?.ips && resource.identity.ips.length > 0}>
-                          <div class="flex flex-col gap-1">
-                            <span class="text-muted">IP Addresses</span>
-                            <div class="flex flex-wrap gap-1">
-                              <For each={resource.identity?.ips ?? []}>
-                                {(ip) => (
-                                  <span
-                                    class="inline-flex items-center rounded bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700 dark:bg-blue-900 dark:text-blue-200"
-                                    title={ip}
-                                  >
-                                    {ip}
-                                  </span>
-                                )}
-                              </For>
-                            </div>
-                          </div>
-                        </Show>
-                        <Show when={resource.tags && resource.tags.length > 0}>
-                          <div class="flex items-center justify-between gap-2">
-                            <span class="text-muted">Tags</span>
-                            <TagBadges tags={resource.tags} maxVisible={6} />
-                          </div>
-                        </Show>
-                        <Show when={drawer.identityAliasValues().length > 0}>
-                          <Show
-                            when={drawer.hasAliasOverflow()}
-                            fallback={
-                              <div class="flex flex-col gap-1">
-                                <span class="text-muted">Aliases</span>
-                                <div class="flex flex-wrap gap-1">
-                                  <For each={drawer.aliasPreviewValues()}>
-                                    {(value) => (
-                                      <span
-                                        class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px]"
-                                        title={value}
-                                      >
-                                        {value}
-                                      </span>
-                                    )}
-                                  </For>
-                                </div>
-                              </div>
-                            }
-                          >
-                            <details class="rounded border border-border bg-surface px-2 py-1.5">
-                              <summary class="flex cursor-pointer list-none items-center justify-between text-[10px] font-medium text-muted">
-                                <span>Aliases</span>
-                                <span class="text-muted">{drawer.identityAliasValues().length}</span>
-                              </summary>
-                              <div class="mt-2 flex flex-wrap gap-1 border-t border-border pt-2">
-                                <For each={drawer.identityAliasValues()}>
-                                  {(value) => (
-                                    <span
-                                      class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px]"
-                                      title={value}
-                                    >
-                                      {value}
-                                    </span>
-                                  )}
-                                </For>
-                              </div>
-                            </details>
-                          </Show>
-                        </Show>
-                      </div>
-                    </Show>
                   </div>
                 </div>
               </Show>
@@ -288,6 +220,70 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                   </div>
                 )}
               </For>
+              <Show when={drawer.identityIpValues().length > 0}>
+                <div class="flex flex-col gap-1">
+                  <span class="text-muted">IP Addresses</span>
+                  <div class="flex flex-wrap gap-1">
+                    <For each={drawer.identityIpValues()}>
+                      {(ip) => (
+                        <span
+                          class="inline-flex items-center rounded bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700 dark:bg-blue-900 dark:text-blue-200"
+                          title={ip}
+                        >
+                          {ip}
+                        </span>
+                      )}
+                    </For>
+                  </div>
+                </div>
+              </Show>
+              <Show when={resource.tags && resource.tags.length > 0}>
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-muted">Tags</span>
+                  <TagBadges tags={resource.tags} maxVisible={6} />
+                </div>
+              </Show>
+              <Show when={drawer.identityAliasValues().length > 0}>
+                <Show
+                  when={drawer.hasAliasOverflow()}
+                  fallback={
+                    <div class="flex flex-col gap-1">
+                      <span class="text-muted">Aliases</span>
+                      <div class="flex flex-wrap gap-1">
+                        <For each={drawer.aliasPreviewValues()}>
+                          {(value) => (
+                            <span
+                              class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px]"
+                              title={value}
+                            >
+                              {value}
+                            </span>
+                          )}
+                        </For>
+                      </div>
+                    </div>
+                  }
+                >
+                  <details class="rounded border border-border bg-surface px-2 py-1.5">
+                    <summary class="flex cursor-pointer list-none items-center justify-between text-[10px] font-medium text-muted">
+                      <span>Aliases</span>
+                      <span class="text-muted">{drawer.identityAliasValues().length}</span>
+                    </summary>
+                    <div class="mt-2 flex flex-wrap gap-1 border-t border-border pt-2">
+                      <For each={drawer.identityAliasValues()}>
+                        {(value) => (
+                          <span
+                            class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px]"
+                            title={value}
+                          >
+                            {value}
+                          </span>
+                        )}
+                      </For>
+                    </div>
+                  </details>
+                </Show>
+              </Show>
               <Show when={!drawer.identityCardHasRichData()}>
                 <div class="rounded border border-dashed bg-surface-hover px-2 py-1.5 text-[10px] ">
                   No identity metadata yet.

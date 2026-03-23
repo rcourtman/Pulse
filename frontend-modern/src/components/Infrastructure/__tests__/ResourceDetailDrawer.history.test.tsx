@@ -275,6 +275,8 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(
       screen.getByTestId('resource-change-history-section').querySelector('.mt-3.grid.gap-2'),
     ).toBeNull();
+    const currentStateSection = screen.getByTestId('resource-current-state-section');
+    const identitySection = screen.getByTestId('resource-identity-section');
     expect(screen.queryByText('Host details')).toBeNull();
     expect(screen.queryByText('Service details')).toBeNull();
     expect(screen.queryByText('Supporting context')).toBeNull();
@@ -306,7 +308,8 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(screen.queryByText('Details')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Show details' })).toBeNull();
     expect(screen.getByText('Platform ID')).toBeInTheDocument();
-    expect(screen.getByText('Tags')).toBeInTheDocument();
+    expect(within(identitySection).getByText('Tags')).toBeInTheDocument();
+    expect(within(currentStateSection).queryByText('Tags')).toBeNull();
     expect(
       within(changeHistorySection).queryByText('Filterable event history for this resource.'),
     ).toBeNull();
@@ -420,7 +423,8 @@ describe('ResourceDetailDrawer change history section', () => {
 
     render(() => <ResourceDetailDrawer resource={resource} />);
 
-    expect(screen.getByText('Aliases')).toBeInTheDocument();
+    expect(within(screen.getByTestId('resource-identity-section')).getByText('Aliases')).toBeInTheDocument();
+    expect(within(screen.getByTestId('resource-current-state-section')).queryByText('Aliases')).toBeNull();
   });
 
   it('renders timeline history without surfacing unsupported capability or relationship facets', async () => {
