@@ -131,7 +131,7 @@ export default function HostedSignup() {
     <div class="space-y-6">
       <PageHeader
         title={`Pulse Cloud ${selectedPlan().name}`}
-        description={`Start ${selectedPlan().name} Cloud with ${selectedPlan().monitoredSystems} monitored systems included and get a magic-link sign-in email.`}
+        description={`${selectedPlan().name} Cloud includes ${selectedPlan().monitoredSystems} monitored systems and ${selectedPlan().support.toLowerCase()} support.`}
       />
 
       <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -140,9 +140,7 @@ export default function HostedSignup() {
             Create {selectedPlan().name} Hosted Workspace
           </h2>
           <p class="text-sm text-muted">
-            This signup is locked to the {selectedPlan().name} Cloud plan:{' '}
-            {selectedPlan().monitoredSystems} monitored systems, {selectedPlan().support} support,
-            and managed hosting included.
+            You&apos;re creating a {selectedPlan().name} Cloud workspace.
           </p>
 
           <form class="space-y-3" onSubmit={submitSignup}>
@@ -215,7 +213,7 @@ export default function HostedSignup() {
 
         <Card padding="lg" class="space-y-4">
           <h2 class="text-lg font-semibold text-base-content">
-            {selectedPlan().name} Cloud Summary
+            Plan Summary
           </h2>
           <div class="rounded-md border border-border bg-surface-alt p-4">
             <div class="flex items-baseline justify-between gap-3">
@@ -236,14 +234,11 @@ export default function HostedSignup() {
               </div>
             </dl>
           </div>
-          <h3 class="text-sm font-semibold text-base-content">What Happens Next</h3>
+          <h3 class="text-sm font-semibold text-base-content">After Signup</h3>
           <ol class="list-decimal space-y-2 pl-5 text-sm text-base-content">
-            <li>Your hosted organization is created for the {selectedPlan().name} Cloud tier.</li>
+            <li>Your workspace is created for the {selectedPlan().name} Cloud plan.</li>
             <li>You receive a magic-link email to complete sign-in.</li>
-            <li>
-              Your workspace is managed from the Pulse Cloud control plane and routed to your tenant
-              URL.
-            </li>
+            <li>Open your workspace and start connecting systems.</li>
           </ol>
 
           <div class="border-t border-border pt-4">

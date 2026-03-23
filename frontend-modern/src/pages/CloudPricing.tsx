@@ -7,13 +7,12 @@ import { onMount } from 'solid-js';
 import { CLOUD_PLAN_DEFINITIONS, type CloudPlanDefinition } from '@/utils/cloudPlans';
 
 const INCLUDED_IN_ALL = [
-  'All Pro features (AI patrol, auto-fix, RBAC, audit logging, SAML SSO)',
-  'Managed hosting — deploy nothing, upgrade nothing',
+  'All Pro features',
+  'Managed hosting',
   'Daily backups',
   'Secure agent connectivity via Relay',
-  'Mobile app access + push notifications',
-  'Isolated container per workspace',
-  'Subdomain at <id>.cloud.pulserelay.pro',
+  'Mobile app access and push notifications',
+  'Dedicated workspace URL',
 ];
 
 // ---------------------------------------------------------------------------
@@ -120,7 +119,7 @@ export default function CloudPricing() {
     <div class="space-y-8">
       <PageHeader
         title="Pulse Cloud"
-        description="Managed hosting. Deploy nothing, monitor everything."
+        description="Managed Pulse hosting with Pro features included."
       />
 
       <FoundingBanner />
@@ -147,15 +146,11 @@ export default function CloudPricing() {
 
       {/* How it works */}
       <Card padding="lg">
-        <h2 class="text-base font-semibold text-base-content">How Cloud works</h2>
+        <h2 class="text-base font-semibold text-base-content">Setup</h2>
         <ol class="mt-3 list-decimal space-y-2 pl-5 text-sm text-base-content">
-          <li>Sign up with your email. No credit card required for trial.</li>
-          <li>Your isolated Pulse workspace is provisioned in under 60 seconds.</li>
-          <li>
-            Install the Pulse agent on any Linux machine with one command. It connects back securely
-            over Relay — no inbound firewall rules needed.
-          </li>
-          <li>Monitor, get AI findings, and set up alerts. No maintenance ever.</li>
+          <li>Create your workspace. No credit card is required for the trial.</li>
+          <li>Install the Pulse agent on any Linux machine.</li>
+          <li>Connect systems, review findings, and configure alerts.</li>
         </ol>
       </Card>
 

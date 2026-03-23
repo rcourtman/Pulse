@@ -319,6 +319,11 @@ such as `What counts?` instead of sitting as always-visible explanatory chrome.
 The self-hosted pricing page should therefore stay focused on plan cards,
 upgrade paths, and the comparison table rather than rendering a separate
 counted-unit explainer card beneath the tier grid.
+Hosted commercial pages follow the same presentation rule: `CloudPricing.tsx`
+and `HostedSignup.tsx` should describe plan scope and setup in concise product
+language, not in implementation-detail terms such as internal workspace
+provisioning guarantees, control-plane routing mechanics, or narrated
+deployment internals.
 That contract applies to both plan summary labels and upgrade/paywall copy:
 current v6 self-hosted pricing may not drift back to the older `$49/yr Relay`,
 `$99/yr Pro`, or monitored-system-count marketing drift that contradicts the

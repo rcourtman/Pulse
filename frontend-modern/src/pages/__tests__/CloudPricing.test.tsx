@@ -32,5 +32,10 @@ describe('CloudPricing', () => {
       'href',
       '/cloud/signup?tier=max',
     );
+    expect(screen.getByText('Setup')).toBeInTheDocument();
+    expect(
+      screen.queryByText(/provisioned in under 60 seconds/i),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/no maintenance ever/i)).not.toBeInTheDocument();
   });
 });

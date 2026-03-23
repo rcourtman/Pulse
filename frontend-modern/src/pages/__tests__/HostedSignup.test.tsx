@@ -59,7 +59,10 @@ describe('HostedSignup', () => {
     ));
 
     expect(await screen.findByText('Create Power Hosted Workspace')).toBeInTheDocument();
-    expect(screen.getByText(/30 monitored systems included/i)).toBeInTheDocument();
+    expect(screen.getByText(/power cloud includes 30 monitored systems/i)).toBeInTheDocument();
+    expect(screen.getByText("You're creating a Power Cloud workspace.")).toBeInTheDocument();
+    expect(screen.getByText('Plan Summary')).toBeInTheDocument();
+    expect(screen.getByText('After Signup')).toBeInTheDocument();
 
     fireEvent.input(screen.getByLabelText('Work Email'), {
       target: { value: 'owner@example.com' },
