@@ -39,6 +39,8 @@ import searchInputSource from '@/components/shared/SearchInput.tsx?raw';
 import searchInputModelSource from '@/components/shared/searchInputModel.ts?raw';
 import scrollToTopButtonSource from '@/components/shared/ScrollToTopButton.tsx?raw';
 import scrollToTopButtonModelSource from '@/components/shared/scrollToTopButtonModel.ts?raw';
+import statusBadgeSource from '@/components/shared/StatusBadge.tsx?raw';
+import statusBadgeModelSource from '@/components/shared/statusBadgeModel.ts?raw';
 import toggleSource from '@/components/shared/Toggle.tsx?raw';
 import toggleModelSource from '@/components/shared/toggleModel.ts?raw';
 import searchTipsPopoverSource from '@/components/shared/SearchTipsPopover.tsx?raw';
@@ -76,6 +78,7 @@ import whatsNewModalStateSource from '@/components/shared/useWhatsNewModalState.
 import searchFieldStateSource from '@/components/shared/useSearchFieldState.ts?raw';
 import searchInputStateSource from '@/components/shared/useSearchInputState.ts?raw';
 import scrollToTopButtonStateSource from '@/components/shared/useScrollToTopButtonState.ts?raw';
+import statusBadgeStateSource from '@/components/shared/useStatusBadgeState.ts?raw';
 import toggleStateSource from '@/components/shared/useToggleState.ts?raw';
 import searchTipsPopoverStateSource from '@/components/shared/useSearchTipsPopoverState.ts?raw';
 import tooltipStateSource from '@/components/shared/useTooltipState.ts?raw';
@@ -303,6 +306,27 @@ describe('shared primitive guardrails', () => {
     expect(toggleModelSource).toContain('getToggleTrackClass');
     expect(toggleModelSource).toContain('getToggleKnobClass');
     expect(toggleModelSource).toContain('ToggleChangeEvent');
+  });
+
+  it('keeps status badge on shell, runtime, and model owners', () => {
+    expect(statusBadgeSource).toContain('useStatusBadgeState');
+    expect(statusBadgeSource).toContain('getStatusBadgeClass');
+    expect(statusBadgeSource).toContain('getStatusBadgeLabel');
+    expect(statusBadgeSource).toContain('getStatusBadgeTitle');
+    expect(statusBadgeSource).not.toContain('cursor-not-allowed');
+    expect(statusBadgeSource).not.toContain('props.onToggle?.()');
+    expect(statusBadgeSource).not.toContain('labelEnabled ??');
+
+    expect(statusBadgeStateSource).toContain('export function useStatusBadgeState');
+    expect(statusBadgeStateSource).toContain('Boolean(props.disabled)');
+    expect(statusBadgeStateSource).toContain('props.onToggle?.()');
+    expect(statusBadgeStateSource).toContain('if (isDisabled())');
+
+    expect(statusBadgeModelSource).toContain('STATUS_BADGE_PADDING_BY_SIZE');
+    expect(statusBadgeModelSource).toContain('getStatusBadgeClass');
+    expect(statusBadgeModelSource).toContain('getStatusBadgeLabel');
+    expect(statusBadgeModelSource).toContain('getStatusBadgeTitle');
+    expect(statusBadgeModelSource).toContain("labelEnabled ?? 'Enabled'");
   });
 
   it('routes settings info callouts through CalloutCard', () => {

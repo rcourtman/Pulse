@@ -263,6 +263,14 @@ plus the synthetic toggle change-event runtime, and
 track/knob/container class policy, and the canonical toggle event type.
 Future toggle work should extend those owners instead of pushing synthetic
 event behavior or size/class policy back into the shell.
+The shared status badge now follows that same owner split.
+`frontend-modern/src/components/shared/StatusBadge.tsx` stays the render shell,
+`frontend-modern/src/components/shared/useStatusBadgeState.ts` owns disabled
+gating and click runtime, and
+`frontend-modern/src/components/shared/statusBadgeModel.ts` owns size padding,
+label/title fallback policy, and status-badge class selection. Future status
+badge work should extend those owners instead of pushing label/title policy or
+disabled click handling back into the shell.
 The shared dialog now follows that same owner split.
 `frontend-modern/src/components/shared/Dialog.tsx` stays the render shell,
 `frontend-modern/src/components/shared/useDialogState.ts` owns focus trap,
