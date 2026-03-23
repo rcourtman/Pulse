@@ -88,176 +88,154 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
 
   return (
     <div class="space-y-3">
-      <div data-testid="resource-summary-section">
-        <div class="text-[11px] font-medium uppercase tracking-wide text-base-content">Summary</div>
-        <div class="mt-3 grid gap-3 sm:grid-cols-2">
-          <Card data-testid="resource-current-state-section" padding="sm" class="h-full shadow-sm">
-            <div class="mb-2 text-[10px] font-medium uppercase tracking-wide text-base-content">
-              Current state
+      <div data-testid="resource-summary-section" class="grid gap-3 sm:grid-cols-2">
+        <Card data-testid="resource-current-state-section" padding="sm" class="h-full shadow-sm">
+          <div class="mb-2 text-[10px] font-medium uppercase tracking-wide text-base-content">
+            Current state
+          </div>
+          <div class="space-y-1.5 text-[11px]">
+            <div class="flex items-center justify-between gap-2">
+              <span class="text-muted">State</span>
+              <span class="font-medium text-base-content capitalize">
+                {resource.status || 'unknown'}
+              </span>
             </div>
-            <div class="space-y-1.5 text-[11px]">
+            <Show when={resource.uptime}>
               <div class="flex items-center justify-between gap-2">
-                <span class="text-muted">State</span>
-                <span class="font-medium text-base-content capitalize">
-                  {resource.status || 'unknown'}
+                <span class="text-muted">Uptime</span>
+                <span class="font-medium text-base-content">
+                  {formatUptime(resource.uptime ?? 0)}
                 </span>
               </div>
-              <Show when={resource.uptime}>
-                <div class="flex items-center justify-between gap-2">
-                  <span class="text-muted">Uptime</span>
-                  <span class="font-medium text-base-content">
-                    {formatUptime(resource.uptime ?? 0)}
-                  </span>
-                </div>
-              </Show>
-              <Show when={resource.lastSeen}>
-                <div class="flex items-center justify-between gap-2">
-                  <span class="text-muted">Last Seen</span>
-                  <span class="font-medium text-base-content" title={drawer.lastSeenAbsolute()}>
-                    {drawer.lastSeen() || '—'}
-                  </span>
-                </div>
-              </Show>
-              <Show when={drawer.sourceSummary()}>
-                <div class="flex items-center justify-between gap-2">
-                  <span class="text-muted">Sources</span>
-                  <span
-                    class={`font-medium ${drawer.sourceSummary()!.className}`}
-                    title={drawer.sourceSummary()!.title}
-                  >
-                    {drawer.sourceSummary()!.label}
-                  </span>
-                </div>
-              </Show>
-              <Show when={(resource.alerts?.length || 0) > 0}>
-                <div class="flex items-center justify-between gap-2">
-                  <span class="text-muted">Alerts</span>
-                  <span class="font-medium text-amber-600 dark:text-amber-400">
-                    {formatInteger(resource.alerts?.length)}
-                  </span>
-                </div>
-              </Show>
-              <Show when={showPlatformId && !drawer.hasRuntimeOperationalContext()}>
-                <div class="flex items-center justify-between gap-2">
-                  <span class="text-muted">Platform ID</span>
-                  <span class="font-medium text-base-content truncate" title={resource.platformId}>
-                    {resource.platformId}
-                  </span>
-                </div>
-              </Show>
-              <Show when={drawer.hasRuntimeOperationalContext()}>
-                <div class="mt-2 space-y-1.5">
-                  <Show when={showPlatformId}>
-                    <div class="flex items-center justify-between gap-2">
-                      <span class="text-muted">Platform ID</span>
-                      <span class="font-medium text-base-content truncate" title={resource.platformId}>
-                        {resource.platformId}
-                      </span>
-                    </div>
-                  </Show>
-                  <Show when={drawer.kubernetesCapabilityBadges().length > 0}>
-                    <div class="flex flex-col gap-1">
-                      <span class="text-muted">Platform signals</span>
-                      <div class="flex flex-wrap gap-1">
-                        <For each={drawer.kubernetesCapabilityBadges()}>
-                          {(badge) => (
-                            <span class={badge.classes} title={badge.title}>
-                              {badge.label}
-                            </span>
-                          )}
-                        </For>
-                      </div>
-                    </div>
-                  </Show>
-                  <Show when={drawer.relatedLinks().length > 0}>
-                    <div class="flex flex-col gap-1">
-                      <span class="text-muted">Quick links</span>
-                      <div class="flex flex-wrap gap-2">
-                        <For each={drawer.relatedLinks()}>
-                          {(link) => (
-                            <a
-                              href={link.href}
-                              aria-label={link.ariaLabel}
-                              class="inline-flex items-center rounded border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-200 dark:hover:bg-blue-900"
-                            >
-                              {link.compactLabel}
-                            </a>
-                          )}
-                        </For>
-                      </div>
-                    </div>
-                  </Show>
-                </div>
-              </Show>
-            </div>
-          </Card>
-
-          <Card data-testid="resource-identity-section" padding="sm" class="h-full shadow-sm">
-            <div class="mb-2 text-[10px] font-medium uppercase tracking-wide text-base-content">
-              Identity
-            </div>
-            <div class="space-y-1.5 text-[11px]">
-              <For each={drawer.primaryIdentityRows()}>
-                {(row) => (
+            </Show>
+            <Show when={resource.lastSeen}>
+              <div class="flex items-center justify-between gap-2">
+                <span class="text-muted">Last Seen</span>
+                <span class="font-medium text-base-content" title={drawer.lastSeenAbsolute()}>
+                  {drawer.lastSeen() || '—'}
+                </span>
+              </div>
+            </Show>
+            <Show when={drawer.sourceSummary()}>
+              <div class="flex items-center justify-between gap-2">
+                <span class="text-muted">Sources</span>
+                <span
+                  class={`font-medium ${drawer.sourceSummary()!.className}`}
+                  title={drawer.sourceSummary()!.title}
+                >
+                  {drawer.sourceSummary()!.label}
+                </span>
+              </div>
+            </Show>
+            <Show when={(resource.alerts?.length || 0) > 0}>
+              <div class="flex items-center justify-between gap-2">
+                <span class="text-muted">Alerts</span>
+                <span class="font-medium text-amber-600 dark:text-amber-400">
+                  {formatInteger(resource.alerts?.length)}
+                </span>
+              </div>
+            </Show>
+            <Show when={showPlatformId && !drawer.hasRuntimeOperationalContext()}>
+              <div class="flex items-center justify-between gap-2">
+                <span class="text-muted">Platform ID</span>
+                <span class="font-medium text-base-content truncate" title={resource.platformId}>
+                  {resource.platformId}
+                </span>
+              </div>
+            </Show>
+            <Show when={drawer.hasRuntimeOperationalContext()}>
+              <div class="mt-2 space-y-1.5">
+                <Show when={showPlatformId}>
                   <div class="flex items-center justify-between gap-2">
-                    <span class="text-muted">{row.label}</span>
-                    <span class="font-medium text-base-content truncate" title={row.value}>
-                      {row.value}
+                    <span class="text-muted">Platform ID</span>
+                    <span class="font-medium text-base-content truncate" title={resource.platformId}>
+                      {resource.platformId}
                     </span>
                   </div>
-                )}
-              </For>
-              <Show when={drawer.identityIpValues().length > 0}>
-                <div class="flex flex-col gap-1">
-                  <span class="text-muted">IP Addresses</span>
-                  <div class="flex flex-wrap gap-1">
-                    <For each={drawer.identityIpValues()}>
-                      {(ip) => (
-                        <span
-                          class="inline-flex items-center rounded bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700 dark:bg-blue-900 dark:text-blue-200"
-                          title={ip}
-                        >
-                          {ip}
-                        </span>
-                      )}
-                    </For>
-                  </div>
-                </div>
-              </Show>
-              <Show when={resource.tags && resource.tags.length > 0}>
-                <div class="flex items-center justify-between gap-2">
-                  <span class="text-muted">Tags</span>
-                  <TagBadges tags={resource.tags} maxVisible={6} />
-                </div>
-              </Show>
-              <Show when={drawer.identityAliasValues().length > 0}>
-                <Show
-                  when={drawer.hasAliasOverflow()}
-                  fallback={
-                    <div class="flex flex-col gap-1">
-                      <span class="text-muted">Aliases</span>
-                      <div class="flex flex-wrap gap-1">
-                        <For each={drawer.aliasPreviewValues()}>
-                          {(value) => (
-                            <span
-                              class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px]"
-                              title={value}
-                            >
-                              {value}
-                            </span>
-                          )}
-                        </For>
-                      </div>
+                </Show>
+                <Show when={drawer.kubernetesCapabilityBadges().length > 0}>
+                  <div class="flex flex-col gap-1">
+                    <span class="text-muted">Platform signals</span>
+                    <div class="flex flex-wrap gap-1">
+                      <For each={drawer.kubernetesCapabilityBadges()}>
+                        {(badge) => (
+                          <span class={badge.classes} title={badge.title}>
+                            {badge.label}
+                          </span>
+                        )}
+                      </For>
                     </div>
-                  }
-                >
-                  <details class="rounded border border-border bg-surface px-2 py-1.5">
-                    <summary class="flex cursor-pointer list-none items-center justify-between text-[10px] font-medium text-muted">
-                      <span>Aliases</span>
-                      <span class="text-muted">{drawer.identityAliasValues().length}</span>
-                    </summary>
-                    <div class="mt-2 flex flex-wrap gap-1 border-t border-border pt-2">
-                      <For each={drawer.identityAliasValues()}>
+                  </div>
+                </Show>
+                <Show when={drawer.relatedLinks().length > 0}>
+                  <div class="flex flex-col gap-1">
+                    <span class="text-muted">Quick links</span>
+                    <div class="flex flex-wrap gap-2">
+                      <For each={drawer.relatedLinks()}>
+                        {(link) => (
+                          <a
+                            href={link.href}
+                            aria-label={link.ariaLabel}
+                            class="inline-flex items-center rounded border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-200 dark:hover:bg-blue-900"
+                          >
+                            {link.compactLabel}
+                          </a>
+                        )}
+                      </For>
+                    </div>
+                  </div>
+                </Show>
+              </div>
+            </Show>
+          </div>
+        </Card>
+
+        <Card data-testid="resource-identity-section" padding="sm" class="h-full shadow-sm">
+          <div class="mb-2 text-[10px] font-medium uppercase tracking-wide text-base-content">
+            Identity
+          </div>
+          <div class="space-y-1.5 text-[11px]">
+            <For each={drawer.primaryIdentityRows()}>
+              {(row) => (
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-muted">{row.label}</span>
+                  <span class="font-medium text-base-content truncate" title={row.value}>
+                    {row.value}
+                  </span>
+                </div>
+              )}
+            </For>
+            <Show when={drawer.identityIpValues().length > 0}>
+              <div class="flex flex-col gap-1">
+                <span class="text-muted">IP Addresses</span>
+                <div class="flex flex-wrap gap-1">
+                  <For each={drawer.identityIpValues()}>
+                    {(ip) => (
+                      <span
+                        class="inline-flex items-center rounded bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700 dark:bg-blue-900 dark:text-blue-200"
+                        title={ip}
+                      >
+                        {ip}
+                      </span>
+                    )}
+                  </For>
+                </div>
+              </div>
+            </Show>
+            <Show when={resource.tags && resource.tags.length > 0}>
+              <div class="flex items-center justify-between gap-2">
+                <span class="text-muted">Tags</span>
+                <TagBadges tags={resource.tags} maxVisible={6} />
+              </div>
+            </Show>
+            <Show when={drawer.identityAliasValues().length > 0}>
+              <Show
+                when={drawer.hasAliasOverflow()}
+                fallback={
+                  <div class="flex flex-col gap-1">
+                    <span class="text-muted">Aliases</span>
+                    <div class="flex flex-wrap gap-1">
+                      <For each={drawer.aliasPreviewValues()}>
                         {(value) => (
                           <span
                             class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px]"
@@ -268,17 +246,36 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                         )}
                       </For>
                     </div>
-                  </details>
-                </Show>
+                  </div>
+                }
+              >
+                <details class="rounded border border-border bg-surface px-2 py-1.5">
+                  <summary class="flex cursor-pointer list-none items-center justify-between text-[10px] font-medium text-muted">
+                    <span>Aliases</span>
+                    <span class="text-muted">{drawer.identityAliasValues().length}</span>
+                  </summary>
+                  <div class="mt-2 flex flex-wrap gap-1 border-t border-border pt-2">
+                    <For each={drawer.identityAliasValues()}>
+                      {(value) => (
+                        <span
+                          class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px]"
+                          title={value}
+                        >
+                          {value}
+                        </span>
+                      )}
+                    </For>
+                  </div>
+                </details>
               </Show>
-              <Show when={!drawer.identityCardHasRichData()}>
-                <div class="rounded border border-dashed bg-surface-hover px-2 py-1.5 text-[10px] ">
-                  No identity metadata yet.
-                </div>
-              </Show>
-            </div>
-          </Card>
-        </div>
+            </Show>
+            <Show when={!drawer.identityCardHasRichData()}>
+              <div class="rounded border border-dashed bg-surface-hover px-2 py-1.5 text-[10px] ">
+                No identity metadata yet.
+              </div>
+            </Show>
+          </div>
+        </Card>
       </div>
 
       <div

@@ -281,7 +281,7 @@ describe('ResourceDetailDrawer change history section', () => {
     await screen.findByText('Changes loaded');
     const changeHistorySection = screen.getByTestId('resource-change-history-section');
     expect(screen.queryByRole('button', { name: 'Discovery' })).toBeNull();
-    expect(screen.getByText('Summary')).toBeInTheDocument();
+    expect(screen.queryByText('Summary')).toBeNull();
     expect(screen.getByText('Current state')).toBeInTheDocument();
     expect(screen.queryByText('Runtime')).toBeNull();
     expect(screen.getByText('Change history')).toBeInTheDocument();
@@ -294,10 +294,9 @@ describe('ResourceDetailDrawer change history section', () => {
         .length,
     ).toBe(0);
     const summarySection = screen.getByTestId('resource-summary-section');
-    expect(summarySection.querySelector('.mt-3.grid.gap-3')).toBeTruthy();
-    expect(
-      summarySection.querySelector('.mt-3.grid.gap-3')?.classList.contains('sm:grid-cols-2'),
-    ).toBe(true);
+    expect(summarySection.classList.contains('grid')).toBe(true);
+    expect(summarySection.classList.contains('gap-3')).toBe(true);
+    expect(summarySection.classList.contains('sm:grid-cols-2')).toBe(true);
     expect(
       screen.getByTestId('resource-current-state-section').classList.contains('rounded-md'),
     ).toBe(true);

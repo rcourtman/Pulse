@@ -410,30 +410,31 @@ detail behind the reveal.
 Change-related summary badges now belong to the `Change history` section
 instead of the `Runtime` card, so current-state facts and timeline context do
 not compete for the same ownership on first read.
-The overview now begins with one primary `Summary` shell instead of separate
-peer `Runtime` and `Identity` cards, so current state and canonical identity
-read as one first-screen answer rather than two adjacent mini-surfaces.
-That summary now uses the same shared `Card` primitive as the workload drawers,
+The overview now begins directly with paired `Current state` and `Identity`
+cards instead of a wrapper section title or separate peer runtime shell, so
+current state and canonical identity read as one first-screen answer rather
+than layered labels around adjacent mini-surfaces.
+Those cards now use the same shared `Card` primitive as the workload drawers,
 with a responsive two-column grid on wider screens, so the first read stays
 compact while each side still has a consistent bounded card.
 The drawer header now stays focused on canonical identity and source/type
 badges only, while workload/service drill-down links and Kubernetes platform
-signals live with the summary shell, so the top strip does not compete with
-the resource name, status, or primary identity line.
+signals live with the current-state card, so the top strip does not compete
+with the resource name, status, or primary identity line.
 That header badge row now also deduplicates identical visible labels, so
 agent-backed nodes do not repeat `Agent` when both the canonical resource type
 and a merged source resolve to the same badge text.
-The summary shell's `Quick links` row now only promotes runtime-scoped
+The current-state card's `Quick links` row now only promotes runtime-scoped
 workloads drill-down routes, so ordinary host drawers do not surface a generic
 host-wide `Workloads` jump that reads like default navigation chrome instead of
 resource-specific operational context.
 That same `Current state` card now only shows `Mode` when the resource carries
 an actual canonical source mode, so ordinary hosts do not surface an empty or
 meaningless mode row when no source-type contract is present.
-Inside that summary, the operational and supporting context rows stay inline
+Inside that top card pair, the operational and supporting context rows stay inline
 instead of sitting in a collapsed `Details` disclosure or nested bordered
 cards, so the first read stays like one linear sheet rather than a stack of
-cards inside the summary.
+cards inside the overview shell.
 Discovery support now also lives inside an overview-only `Analysis`
 instead of a peer drawer tab, so supplemental discovery detail stays available
 without claiming the same navigation weight as runtime, identity, or
@@ -454,9 +455,9 @@ as the rest of the drawer: `DiscoveryTab.tsx` owns presentation and
 disclosures, while `useDiscoveryTabState.ts` owns API fetches, websocket
 progress, and note/discovery mutations.
 The overview keeps host, service, investigation, and discovery detail as
-collapsed sibling disclosures under the primary summary, so the drawer keeps
-the top-level shape to `Summary` plus `Change history` before any secondary
-operational context appears.
+collapsed sibling disclosures under the primary card pair, so the drawer keeps
+the top-level shape to current-state/identity plus `Change history` before any
+secondary operational context appears.
 The `Change history` filter controls now stack vertically instead of using a
 paired filter grid, so the timeline reads like a simple inspection surface
 rather than a two-field form on wider screens.
