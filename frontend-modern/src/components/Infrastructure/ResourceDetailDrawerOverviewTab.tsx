@@ -389,120 +389,113 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
             </div>
           </Show>
 
-          <div class="mt-3 rounded border border-border bg-surface p-3">
-            <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
-              Event log
-            </div>
-            <Show
-              when={drawer.sortedResourceTimeline().length > 0}
-              fallback={
-                <div class="rounded border border-dashed border-border bg-surface-hover px-2 py-2 text-[10px] text-muted">
-                  No events yet.
-                </div>
-              }
-            >
-              <div class="space-y-2">
-                <For each={drawer.sortedResourceTimeline()}>
-                  {(change) => {
-                    const kindPresentation = getResourceChangeKindPresentation(change.kind);
-                    const sourceTypePresentation = getResourceChangeSourceTypePresentation(
-                      change.sourceType,
-                    );
-                    const sourceAdapterPresentation = change.sourceAdapter
-                      ? getResourceChangeSourceAdapterPresentation(change.sourceAdapter)
-                      : null;
+          <Show
+            when={drawer.sortedResourceTimeline().length > 0}
+            fallback={
+              <div class="mt-3 rounded border border-dashed border-border bg-surface-hover px-2 py-2 text-[10px] text-muted">
+                No events yet.
+              </div>
+            }
+          >
+            <div class="mt-3 space-y-2">
+              <For each={drawer.sortedResourceTimeline()}>
+                {(change) => {
+                  const kindPresentation = getResourceChangeKindPresentation(change.kind);
+                  const sourceTypePresentation = getResourceChangeSourceTypePresentation(
+                    change.sourceType,
+                  );
+                  const sourceAdapterPresentation = change.sourceAdapter
+                    ? getResourceChangeSourceAdapterPresentation(change.sourceAdapter)
+                    : null;
 
-                    return (
-                      <div class="rounded border border-border bg-surface-hover px-2 py-1.5 text-[10px]">
-                        <div class="flex items-start justify-between gap-3">
-                          <div class="min-w-0">
-                            <div class="font-medium text-base-content">
-                              {kindPresentation.label}
-                            </div>
-                            <div class="mt-0.5 text-muted">
-                              {formatRelativeTime(change.observedAt)}
-                              <Show when={change.occurredAt}>
-                                <span class="mx-1">•</span>
-                                <span>Occurred {formatRelativeTime(change.occurredAt)}</span>
-                              </Show>
-                            </div>
+                  return (
+                    <div class="rounded border border-border bg-surface-hover px-2 py-1.5 text-[10px]">
+                      <div class="flex items-start justify-between gap-3">
+                        <div class="min-w-0">
+                          <div class="font-medium text-base-content">{kindPresentation.label}</div>
+                          <div class="mt-0.5 text-muted">
+                            {formatRelativeTime(change.observedAt)}
+                            <Show when={change.occurredAt}>
+                              <span class="mx-1">•</span>
+                              <span>Occurred {formatRelativeTime(change.occurredAt)}</span>
+                            </Show>
                           </div>
-                          <span class="text-muted">{sourceTypePresentation.label}</span>
                         </div>
-                        <div class="mt-1 space-y-1">
-                          <div class="flex items-center justify-between gap-2">
-                            <span class="text-muted">Confidence</span>
-                            <span class="font-medium text-base-content">
-                              {formatConfidenceLabel(change.confidence)}
-                            </span>
-                          </div>
-                          <div class="flex items-center justify-between gap-2">
-                            <span class="text-muted">Adapter</span>
-                            <span class="font-medium text-base-content">
-                              {sourceAdapterPresentation?.label || '—'}
-                            </span>
-                          </div>
-                          <Show when={change.actor}>
-                            <div class="flex items-center justify-between gap-2">
-                              <span class="text-muted">Actor</span>
-                              <span class="font-medium text-base-content">{change.actor}</span>
-                            </div>
-                          </Show>
-                          <Show when={change.from || change.to}>
-                            <div class="flex items-center justify-between gap-2">
-                              <span class="text-muted">Transition</span>
-                              <span class="font-medium text-base-content">
-                                {change.from || '—'} → {change.to || '—'}
-                              </span>
-                            </div>
-                          </Show>
+                        <span class="text-muted">{sourceTypePresentation.label}</span>
+                      </div>
+                      <div class="mt-1 space-y-1">
+                        <div class="flex items-center justify-between gap-2">
+                          <span class="text-muted">Confidence</span>
+                          <span class="font-medium text-base-content">
+                            {formatConfidenceLabel(change.confidence)}
+                          </span>
                         </div>
-                        <Show when={change.reason}>
-                          <div class="mt-1 rounded border border-border bg-base px-2 py-1 text-[10px] text-base-content">
-                            {change.reason}
+                        <div class="flex items-center justify-between gap-2">
+                          <span class="text-muted">Adapter</span>
+                          <span class="font-medium text-base-content">
+                            {sourceAdapterPresentation?.label || '—'}
+                          </span>
+                        </div>
+                        <Show when={change.actor}>
+                          <div class="flex items-center justify-between gap-2">
+                            <span class="text-muted">Actor</span>
+                            <span class="font-medium text-base-content">{change.actor}</span>
                           </div>
                         </Show>
-                        <Show when={hasMetadataEntries(change.metadata)}>
-                          <details class="mt-1 rounded border border-border bg-base px-2 py-1">
-                            <summary class="cursor-pointer list-none text-[10px] font-medium text-muted">
-                              Metadata
-                            </summary>
-                            <pre class="mt-2 overflow-auto whitespace-pre-wrap break-words text-[10px] text-base-content">
-                              {JSON.stringify(change.metadata ?? {}, null, 2)}
-                            </pre>
-                          </details>
-                        </Show>
-                        <Show when={change.relatedResources && change.relatedResources.length > 0}>
-                          <div class="mt-1 flex flex-wrap items-center gap-1 text-muted">
-                            <span>Related:</span>
-                            <For each={change.relatedResources ?? []}>
-                              {(relatedResource) => {
-                                const label = drawer.resolveResourceLabel(relatedResource);
-                                const href = buildInfrastructureResourceHref(relatedResource);
-                                return href ? (
-                                  <a
-                                    class="inline-flex rounded bg-surface px-1.5 py-0.5 text-[10px] text-blue-700 hover:underline dark:text-blue-300"
-                                    href={href}
-                                    aria-label={`Open related resource ${label} in Infrastructure`}
-                                  >
-                                    {label}
-                                  </a>
-                                ) : (
-                                  <span class="inline-flex rounded bg-surface px-1.5 py-0.5 text-[10px] text-base-content">
-                                    {label}
-                                  </span>
-                                );
-                              }}
-                            </For>
+                        <Show when={change.from || change.to}>
+                          <div class="flex items-center justify-between gap-2">
+                            <span class="text-muted">Transition</span>
+                            <span class="font-medium text-base-content">
+                              {change.from || '—'} → {change.to || '—'}
+                            </span>
                           </div>
                         </Show>
                       </div>
-                    );
-                  }}
-                </For>
-              </div>
-            </Show>
-          </div>
+                      <Show when={change.reason}>
+                        <div class="mt-1 rounded border border-border bg-base px-2 py-1 text-[10px] text-base-content">
+                          {change.reason}
+                        </div>
+                      </Show>
+                      <Show when={hasMetadataEntries(change.metadata)}>
+                        <details class="mt-1 rounded border border-border bg-base px-2 py-1">
+                          <summary class="cursor-pointer list-none text-[10px] font-medium text-muted">
+                            Metadata
+                          </summary>
+                          <pre class="mt-2 overflow-auto whitespace-pre-wrap break-words text-[10px] text-base-content">
+                            {JSON.stringify(change.metadata ?? {}, null, 2)}
+                          </pre>
+                        </details>
+                      </Show>
+                      <Show when={change.relatedResources && change.relatedResources.length > 0}>
+                        <div class="mt-1 flex flex-wrap items-center gap-1 text-muted">
+                          <span>Related:</span>
+                          <For each={change.relatedResources ?? []}>
+                            {(relatedResource) => {
+                              const label = drawer.resolveResourceLabel(relatedResource);
+                              const href = buildInfrastructureResourceHref(relatedResource);
+                              return href ? (
+                                <a
+                                  class="inline-flex rounded bg-surface px-1.5 py-0.5 text-[10px] text-blue-700 hover:underline dark:text-blue-300"
+                                  href={href}
+                                  aria-label={`Open related resource ${label} in Infrastructure`}
+                                >
+                                  {label}
+                                </a>
+                              ) : (
+                                <span class="inline-flex rounded bg-surface px-1.5 py-0.5 text-[10px] text-base-content">
+                                  {label}
+                                </span>
+                              );
+                            }}
+                          </For>
+                        </div>
+                      </Show>
+                    </div>
+                  );
+                }}
+              </For>
+            </div>
+          </Show>
         </div>
 
         <Show when={drawer.hasServiceDetails()}>

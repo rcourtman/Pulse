@@ -567,7 +567,7 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(panel.getByText('Routine restart requested')).toBeInTheDocument();
     expect(panel.queryByText('Recent activity')).toBeNull();
     expect(panel.queryByText('Filterable event history for this resource.')).toBeNull();
-    expect(panel.getByText('Event log')).toBeInTheDocument();
+    expect(panel.queryByText('Event log')).toBeNull();
     expect(
       panel.getByRole('link', { name: 'Open related resource PVE Node 1 in Infrastructure' }),
     ).toHaveAttribute('href', '/infrastructure?resource=node%3Apve-1');

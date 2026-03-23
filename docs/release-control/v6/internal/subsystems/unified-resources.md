@@ -458,6 +458,10 @@ The overview keeps host, service, investigation, and discovery detail as
 collapsed sibling disclosures under the primary card pair, so the drawer keeps
 the top-level shape to current-state/identity plus `Change history` before any
 secondary operational context appears.
+Inside `Change history`, the event list now renders directly in the parent
+section instead of inside a second bordered `Event log` card, so the timeline
+reads like one inspection surface rather than a card nested under its own
+section title.
 The `Change history` filter controls now stack vertically instead of using a
 paired filter grid, so the timeline reads like a simple inspection surface
 rather than a two-field form on wider screens.
