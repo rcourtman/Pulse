@@ -1075,6 +1075,10 @@ describe('frontend resource type boundaries', () => {
     expect(recoverySurfaceStateSource).toContain('useRecoveryPoints');
     expect(recoverySurfaceStateSource).toContain('useRecoveryPointsFacets');
     expect(recoverySurfaceStateSource).toContain('useRecoveryPointsSeries');
+    expect(recoveryComponentSource.indexOf('<RecoveryActivitySection')).toBeGreaterThan(-1);
+    expect(recoveryComponentSource.indexOf('<RecoveryActivitySection')).toBeLessThan(
+      recoveryComponentSource.indexOf('<Show when={!recoveryPoints.response.error}>'),
+    );
     expect(recoverySource).toContain('getRecoveryFilterChipPresentation');
     expect(recoverySource).not.toContain('const titleize =');
     expect(recoverySource).toContain(

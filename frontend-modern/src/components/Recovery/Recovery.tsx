@@ -456,6 +456,48 @@ const Recovery: Component = () => {
         setVerificationFilter={setVerificationFilter}
       />
 
+      <RecoveryActivitySection
+        activitySummary={activitySummary}
+        activeClusterLabel={activeClusterLabel}
+        activeNamespaceLabel={activeNamespaceLabel}
+        activeNodeLabel={activeNodeLabel}
+        chartRangeDays={chartRangeDays}
+        clearClusterFilter={() => {
+          setClusterFilter('all');
+          setCurrentPage(1);
+        }}
+        clearFocusedRollup={() => setRollupId('')}
+        clearNamespaceFilter={() => {
+          setNamespaceFilter('all');
+          setCurrentPage(1);
+        }}
+        clearNodeFilter={() => {
+          setNodeFilter('all');
+          setCurrentPage(1);
+        }}
+        clearSelectedDate={() => {
+          setSelectedDateKey(null);
+          setCurrentPage(1);
+        }}
+        hasFocusedRollup={() => rollupId().trim().length > 0}
+        isMobile={isMobile()}
+        loading={() => recoverySeries.response.loading}
+        overallRollupsSummary={overallRollupsSummary}
+        selectedDateKey={selectedDateKey}
+        selectedDateLabel={selectedDateLabel}
+        selectedHistorySubjectLabel={selectedHistorySubjectLabel}
+        setChartRangeDays={(range) => {
+          setChartRangeDays(range);
+          setSelectedDateKey(null);
+          setCurrentPage(1);
+        }}
+        timeline={timeline}
+        toggleSelectedDate={(key) => {
+          setSelectedDateKey((previous) => (previous === key ? null : key));
+          setCurrentPage(1);
+        }}
+      />
+
       <div ref={historySectionRef} class="order-1 flex flex-col gap-4">
         <Show when={!recoveryPoints.response.loading && recoveryPoints.response.error}>
           <Card padding="sm">
@@ -469,48 +511,6 @@ const Recovery: Component = () => {
         </Show>
 
         <Show when={!recoveryPoints.response.error}>
-          <RecoveryActivitySection
-            activitySummary={activitySummary}
-            activeClusterLabel={activeClusterLabel}
-            activeNamespaceLabel={activeNamespaceLabel}
-            activeNodeLabel={activeNodeLabel}
-            chartRangeDays={chartRangeDays}
-            clearClusterFilter={() => {
-              setClusterFilter('all');
-              setCurrentPage(1);
-            }}
-            clearFocusedRollup={() => setRollupId('')}
-            clearNamespaceFilter={() => {
-              setNamespaceFilter('all');
-              setCurrentPage(1);
-            }}
-            clearNodeFilter={() => {
-              setNodeFilter('all');
-              setCurrentPage(1);
-            }}
-            clearSelectedDate={() => {
-              setSelectedDateKey(null);
-              setCurrentPage(1);
-            }}
-            hasFocusedRollup={() => rollupId().trim().length > 0}
-            isMobile={isMobile()}
-            loading={() => recoverySeries.response.loading}
-            overallRollupsSummary={overallRollupsSummary}
-            selectedDateKey={selectedDateKey}
-            selectedDateLabel={selectedDateLabel}
-            selectedHistorySubjectLabel={selectedHistorySubjectLabel}
-            setChartRangeDays={(range) => {
-              setChartRangeDays(range);
-              setSelectedDateKey(null);
-              setCurrentPage(1);
-            }}
-            timeline={timeline}
-            toggleSelectedDate={(key) => {
-              setSelectedDateKey((previous) => (previous === key ? null : key));
-              setCurrentPage(1);
-            }}
-          />
-
           <RecoveryHistorySection
             activeAdvancedFilterCount={activeAdvancedFilterCount}
             artifactColumnVisibility={artifactColumnVisibility}

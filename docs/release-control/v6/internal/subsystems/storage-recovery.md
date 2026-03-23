@@ -304,6 +304,11 @@ all honor the same provider, cluster, node, namespace, workload-scope,
 verification, and route-backed free-text `q` filter so the protected-items
 list cannot drift from the timeline and facet state under the same active
 recovery view.
+That same recovery product surface keeps the activity timeline available even
+when point-history loading fails: `frontend-modern/src/components/Recovery/Recovery.tsx`
+must continue to render `RecoveryActivitySection` and the point-history error
+card side by side so operators can still inspect backup cadence and active
+filter context while recovery-point transport is degraded.
 That shared unified-resource dependency now also includes policy-governed
 resource metadata on the frontend decode path: storage and recovery surfaces
 that route through `frontend-modern/src/hooks/useUnifiedResources.ts` must

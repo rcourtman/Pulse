@@ -277,7 +277,10 @@ export const RecoveryActivitySection: Component<RecoveryActivitySectionProps> = 
               </div>
 
               <div class="relative h-44">
-                <div class="absolute inset-x-0 bottom-4 top-0 flex items-end gap-[3px]">
+                <div
+                  data-testid="recovery-activity-bars"
+                  class="absolute inset-x-0 bottom-4 top-0 flex items-stretch gap-[3px]"
+                >
                   <For each={props.timeline().points}>
                     {(point) => {
                       const total = point.total;
@@ -292,7 +295,7 @@ export const RecoveryActivitySection: Component<RecoveryActivitySectionProps> = 
                       const isSelected = props.selectedDateKey() === point.key;
 
                       return (
-                        <div class="flex-1">
+                        <div class="flex-1 self-stretch">
                           <button
                             type="button"
                             class={`h-full w-full rounded-sm ${getRecoveryTimelineColumnButtonClass(isSelected)}`}
