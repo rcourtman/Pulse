@@ -270,6 +270,14 @@ selection, and `frontend-modern/src/components/shared/commandPaletteModel.ts`
 owns canonical command construction plus query normalization and filtering
 policy. Future command-palette work should extend those owners instead of
 pushing route construction or search policy back into the shared shell.
+The shared search field now follows that same owner split.
+`frontend-modern/src/components/shared/SearchField.tsx` stays the render shell,
+`frontend-modern/src/components/shared/useSearchFieldState.ts` owns focused-
+Escape clear/blur behavior and input-ref lifecycle, and
+`frontend-modern/src/components/shared/searchFieldModel.ts` owns clear/shortcut
+visibility rules plus trailing-control padding policy. Future search-field work
+should extend those owners instead of pushing event behavior or layout policy
+back into the shared shell.
 The shared pulse data grid now follows that same owner split.
 `frontend-modern/src/components/shared/PulseDataGrid.tsx` stays the render
 shell, `frontend-modern/src/components/shared/usePulseDataGridState.ts` owns

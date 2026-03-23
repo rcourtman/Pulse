@@ -26,6 +26,8 @@ import mobileNavBarModelSource from '@/components/shared/mobileNavBarModel.ts?ra
 import infrastructureSelectorSource from '@/components/shared/InfrastructureSelector.tsx?raw';
 import pulseDataGridSource from '@/components/shared/PulseDataGrid.tsx?raw';
 import pulseDataGridModelSource from '@/components/shared/pulseDataGridModel.ts?raw';
+import searchFieldSource from '@/components/shared/SearchField.tsx?raw';
+import searchFieldModelSource from '@/components/shared/searchFieldModel.ts?raw';
 import infrastructureSummaryTableSource from '@/components/shared/InfrastructureSummaryTable.tsx?raw';
 import infrastructureSummaryTableRowSource from '@/components/shared/InfrastructureSummaryTableRow.tsx?raw';
 import interactiveSparklineSource from '@/components/shared/InteractiveSparkline.tsx?raw';
@@ -39,6 +41,7 @@ import historyChartStateSource from '@/components/shared/useHistoryChartState.ts
 import mobileNavBarStateSource from '@/components/shared/useMobileNavBarState.ts?raw';
 import infrastructureSelectorStateSource from '@/components/shared/useInfrastructureSelectorState.ts?raw';
 import pulseDataGridStateSource from '@/components/shared/usePulseDataGridState.ts?raw';
+import searchFieldStateSource from '@/components/shared/useSearchFieldState.ts?raw';
 import interactiveSparklineStateSource from '@/components/shared/useInteractiveSparklineState.ts?raw';
 import infrastructureSummaryTableStateSource from '@/components/shared/useInfrastructureSummaryTableState.ts?raw';
 import resourceBadgePresentationSource from '@/utils/resourceBadgePresentation.ts?raw';
@@ -2655,6 +2658,16 @@ describe('frontend resource type boundaries', () => {
     expect(pulseDataGridModelSource).toContain('getPulseDataGridAlignClass');
     expect(pulseDataGridModelSource).toContain('isPulseDataGridInteractiveTarget');
     expect(pulseDataGridModelSource).toContain('target.closest(');
+    expect(searchFieldSource).toContain('useSearchFieldState');
+    expect(searchFieldSource).not.toContain('let inputEl: HTMLInputElement');
+    expect(searchFieldSource).not.toContain("if (props.hasTrailingControls) return 'pr-14 sm:pr-20'");
+    expect(searchFieldSource).not.toContain("if (e.key === 'Escape'");
+    expect(searchFieldStateSource).toContain('let inputEl: HTMLInputElement');
+    expect(searchFieldStateSource).toContain("if (event.key === 'Escape'");
+    expect(searchFieldStateSource).toContain('inputEl?.blur()');
+    expect(searchFieldModelSource).toContain('shouldShowSearchFieldShortcutHint');
+    expect(searchFieldModelSource).toContain('shouldShowSearchFieldClearButton');
+    expect(searchFieldModelSource).toContain('getSearchFieldInputPaddingRightClass');
     expect(infrastructureSummaryModelSource).not.toContain(
       'const asTrimmedString = (value: unknown): string | null => {',
     );

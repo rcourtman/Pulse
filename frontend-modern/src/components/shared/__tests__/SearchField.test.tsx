@@ -1,11 +1,32 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createSignal } from 'solid-js';
+import searchFieldSource from '@/components/shared/SearchField.tsx?raw';
+import searchFieldModelSource from '@/components/shared/searchFieldModel.ts?raw';
+import searchFieldStateSource from '@/components/shared/useSearchFieldState.ts?raw';
 import { SearchField } from '@/components/shared/SearchField';
 
 describe('SearchField', () => {
   afterEach(() => {
     cleanup();
+  });
+
+  it('keeps search field on shell, runtime, and model owners', () => {
+    expect(searchFieldSource).toContain('useSearchFieldState');
+    expect(searchFieldSource).not.toContain('let inputEl: HTMLInputElement');
+    expect(searchFieldSource).not.toContain("if (props.hasTrailingControls) return 'pr-14 sm:pr-20'");
+    expect(searchFieldSource).not.toContain("if (e.key === 'Escape'");
+
+    expect(searchFieldStateSource).toContain('export function useSearchFieldState');
+    expect(searchFieldStateSource).toContain('let inputEl: HTMLInputElement');
+    expect(searchFieldStateSource).toContain("if (event.key === 'Escape'");
+    expect(searchFieldStateSource).toContain('inputEl?.blur()');
+    expect(searchFieldStateSource).toContain('getSearchFieldInputPaddingRightClass');
+
+    expect(searchFieldModelSource).toContain('shouldShowSearchFieldShortcutHint');
+    expect(searchFieldModelSource).toContain('shouldShowSearchFieldClearButton');
+    expect(searchFieldModelSource).toContain('getSearchFieldInputPaddingRightClass');
+    expect(searchFieldModelSource).toContain("return 'pr-14 sm:pr-20'");
   });
 
   it('renders the shortcut hint when empty', () => {

@@ -1,76 +1,29 @@
 import { Component, Show } from 'solid-js';
+import { type SearchFieldProps } from './searchFieldModel';
+import { useSearchFieldState } from './useSearchFieldState';
 
-type SearchFieldKeyboardEvent = KeyboardEvent & {
-  currentTarget: HTMLInputElement;
-  target: Element;
-};
-
-type SearchFieldFocusEvent = FocusEvent & {
-  currentTarget: HTMLInputElement;
-  target: Element;
-};
-
-type SearchFieldMouseEvent = MouseEvent & {
-  currentTarget: HTMLButtonElement;
-  target: Element;
-};
-
-export interface SearchFieldProps {
-  value: string;
-  onChange: (value: string) => void;
-  placeholder?: string;
-  title?: string;
-  inputRef?: (el: HTMLInputElement) => void;
-  class?: string;
-  inputClass?: string;
-  disabled?: boolean;
-  onKeyDown?: (event: SearchFieldKeyboardEvent) => void;
-  onBlur?: (event: SearchFieldFocusEvent) => void;
-  showClearButton?: boolean;
-  clearOnFocusedEscape?: boolean;
-  shortcutHint?: string;
-  hasTrailingControls?: boolean;
-  trailingControls?: import('solid-js').JSX.Element;
-  onClearMouseDown?: (event: SearchFieldMouseEvent) => void;
-}
+export type {
+  SearchFieldFocusEvent,
+  SearchFieldKeyboardEvent,
+  SearchFieldMouseEvent,
+  SearchFieldProps,
+} from './searchFieldModel';
 
 export const SearchField: Component<SearchFieldProps> = (props) => {
-  let inputEl: HTMLInputElement | undefined;
-
-  const showShortcutHint = () => Boolean(props.shortcutHint && !props.value);
-  const showClearButton = () =>
-    (props.showClearButton ?? true) && Boolean(props.value) && !props.disabled;
-
-  const inputPaddingRight = () => {
-    if (props.hasTrailingControls) return 'pr-14 sm:pr-20';
-    if (showShortcutHint()) return 'pr-20 sm:pr-24';
-    if (showClearButton()) return 'pr-8';
-    return 'pr-8';
-  };
+  const search = useSearchFieldState(props);
 
   return (
     <div class={`relative w-full ${props.class ?? ''}`}>
       <input
-        ref={(el) => {
-          inputEl = el;
-          props.inputRef?.(el);
-        }}
+        ref={search.setInputRef}
         type="text"
         placeholder={props.placeholder ?? 'Search...'}
         value={props.value}
         disabled={props.disabled}
         onInput={(e) => props.onChange(e.currentTarget.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Escape' && (props.clearOnFocusedEscape ?? true)) {
-            if (props.value) {
-              props.onChange('');
-            }
-            inputEl?.blur();
-          }
-          props.onKeyDown?.(e);
-        }}
-        onBlur={(e) => props.onBlur?.(e)}
-        class={`w-full pl-8 sm:pl-9 ${inputPaddingRight()} py-1.5 sm:py-2 text-sm border border-border rounded-md
+        onKeyDown={search.handleKeyDown}
+        onBlur={search.handleBlur}
+        class={`w-full pl-8 sm:pl-9 ${search.inputPaddingRight()} py-1.5 sm:py-2 text-sm border border-border rounded-md
  bg-surface text-base-content placeholder-muted
  focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:focus:border-blue-400 outline-none transition-all disabled:opacity-60 disabled:cursor-not-allowed ${props.inputClass ?? ''}`}
         title={props.title}
@@ -89,12 +42,12 @@ export const SearchField: Component<SearchFieldProps> = (props) => {
         />
       </svg>
       <div class="absolute inset-y-0 right-2 flex items-center gap-1">
-        <Show when={showShortcutHint()}>
+        <Show when={search.showShortcutHint()}>
           <span class="pointer-events-none hidden items-center rounded border border-border bg-surface-alt px-1.5 py-0.5 text-[10px] font-semibold text-muted sm:inline-flex">
             {props.shortcutHint}
           </span>
         </Show>
-        <Show when={showClearButton()}>
+        <Show when={search.showClearButton()}>
           <button
             type="button"
             class="p-1 rounded-full bg-surface-hover text-muted hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900 dark:hover:text-red-400 transition-all duration-150 active:scale-90"
