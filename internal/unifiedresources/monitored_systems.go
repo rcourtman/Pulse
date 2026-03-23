@@ -42,15 +42,35 @@ type MonitoredSystemGroupingSurface struct {
 	Source string
 }
 
+// MonitoredSystemStatusExplanation explains why Pulse chose the canonical
+// monitored-system runtime status.
+type MonitoredSystemStatusExplanation struct {
+	Summary string
+	Reasons []MonitoredSystemStatusReason
+}
+
+// MonitoredSystemStatusReason captures one canonical degraded-status signal
+// that contributed to the monitored-system runtime status.
+type MonitoredSystemStatusReason struct {
+	Kind     string
+	Name     string
+	Type     string
+	Source   string
+	Status   string
+	LastSeen time.Time
+	Summary  string
+}
+
 // MonitoredSystemRecord describes a counted top-level monitored system after
 // canonical cross-view deduplication.
 type MonitoredSystemRecord struct {
-	Name        string
-	Type        string
-	Status      ResourceStatus
-	LastSeen    time.Time
-	Source      string
-	Explanation MonitoredSystemGroupingExplanation
+	Name              string
+	Type              string
+	Status            ResourceStatus
+	StatusExplanation MonitoredSystemStatusExplanation
+	LastSeen          time.Time
+	Source            string
+	Explanation       MonitoredSystemGroupingExplanation
 }
 
 // MonitoredSystemCount returns the number of top-level monitored systems after
@@ -152,13 +172,15 @@ func resolveMonitoredSystemTopLevelSystems(rs ReadState) TopLevelSystemResolver 
 
 func monitoredSystemRecord(group monitoredSystemGroup) MonitoredSystemRecord {
 	resource := preferredMonitoredSystemResource(group.resources)
+	status := monitoredSystemStatus(group.resources)
 	record := MonitoredSystemRecord{
-		Name:        monitoredSystemDisplayName(group.resources, resource),
-		Type:        monitoredSystemType(resource),
-		Status:      monitoredSystemStatus(group.resources),
-		LastSeen:    monitoredSystemLastSeen(group.resources),
-		Source:      monitoredSystemSource(group.resources),
-		Explanation: normalizeMonitoredSystemGroupingExplanation(group.explanation),
+		Name:              monitoredSystemDisplayName(group.resources, resource),
+		Type:              monitoredSystemType(resource),
+		Status:            status,
+		StatusExplanation: monitoredSystemStatusExplanation(group.resources, status),
+		LastSeen:          monitoredSystemLastSeen(group.resources),
+		Source:            monitoredSystemSource(group.resources),
+		Explanation:       normalizeMonitoredSystemGroupingExplanation(group.explanation),
 	}
 	if record.Name == "" {
 		record.Name = "Unnamed system"
@@ -168,6 +190,10 @@ func monitoredSystemRecord(group monitoredSystemGroup) MonitoredSystemRecord {
 	}
 	if record.Status == "" {
 		record.Status = StatusUnknown
+	}
+	record.StatusExplanation = normalizeMonitoredSystemStatusExplanation(record.StatusExplanation)
+	if record.StatusExplanation.Summary == "" {
+		record.StatusExplanation.Summary = monitoredSystemStatusSummary(record.Status, record.StatusExplanation.Reasons)
 	}
 	if record.Source == "" {
 		record.Source = "unknown"
@@ -186,6 +212,15 @@ func normalizeMonitoredSystemGroupingExplanation(
 	}
 	if explanation.Surfaces == nil {
 		explanation.Surfaces = []MonitoredSystemGroupingSurface{}
+	}
+	return explanation
+}
+
+func normalizeMonitoredSystemStatusExplanation(
+	explanation MonitoredSystemStatusExplanation,
+) MonitoredSystemStatusExplanation {
+	if explanation.Reasons == nil {
+		explanation.Reasons = []MonitoredSystemStatusReason{}
 	}
 	return explanation
 }
@@ -412,6 +447,170 @@ func monitoredSystemStatus(resources []*Resource) ResourceStatus {
 	return best
 }
 
+func monitoredSystemStatusExplanation(
+	resources []*Resource,
+	status ResourceStatus,
+) MonitoredSystemStatusExplanation {
+	reasons := monitoredSystemStatusReasons(resources)
+	return normalizeMonitoredSystemStatusExplanation(MonitoredSystemStatusExplanation{
+		Summary: monitoredSystemStatusSummary(status, reasons),
+		Reasons: reasons,
+	})
+}
+
+func monitoredSystemStatusReasons(resources []*Resource) []MonitoredSystemStatusReason {
+	reasons := make([]MonitoredSystemStatusReason, 0)
+	for _, resource := range resources {
+		reasons = append(reasons, monitoredSystemResourceStatusReasons(resource)...)
+	}
+	sort.Slice(reasons, func(i, j int) bool {
+		if monitoredSystemStatusReasonPriority(reasons[i]) != monitoredSystemStatusReasonPriority(reasons[j]) {
+			return monitoredSystemStatusReasonPriority(reasons[i]) < monitoredSystemStatusReasonPriority(reasons[j])
+		}
+		if reasons[i].Name != reasons[j].Name {
+			return reasons[i].Name < reasons[j].Name
+		}
+		if reasons[i].Type != reasons[j].Type {
+			return reasons[i].Type < reasons[j].Type
+		}
+		if reasons[i].Source != reasons[j].Source {
+			return reasons[i].Source < reasons[j].Source
+		}
+		if !reasons[i].LastSeen.Equal(reasons[j].LastSeen) {
+			return reasons[i].LastSeen.Before(reasons[j].LastSeen)
+		}
+		return reasons[i].Summary < reasons[j].Summary
+	})
+	if reasons == nil {
+		return []MonitoredSystemStatusReason{}
+	}
+	return reasons
+}
+
+func monitoredSystemResourceStatusReasons(resource *Resource) []MonitoredSystemStatusReason {
+	if resource == nil {
+		return nil
+	}
+
+	name := monitoredSystemResourceDisplayName(resource)
+	if name == "" {
+		name = "Unnamed source"
+	}
+
+	resourceType := monitoredSystemType(resource)
+	if resourceType == "" {
+		resourceType = "system"
+	}
+
+	reasons := make([]MonitoredSystemStatusReason, 0)
+	if len(resource.SourceStatus) > 0 {
+		sourceKeys := make([]DataSource, 0, len(resource.SourceStatus))
+		for source := range resource.SourceStatus {
+			sourceKeys = append(sourceKeys, source)
+		}
+		sort.Slice(sourceKeys, func(i, j int) bool {
+			return sourceKeys[i] < sourceKeys[j]
+		})
+
+		for _, source := range sourceKeys {
+			sourceStatus := resource.SourceStatus[source]
+			normalizedStatus := normalizeMonitoredSystemSourceStatus(sourceStatus.Status)
+			if normalizedStatus == "online" {
+				continue
+			}
+			reasons = append(reasons, MonitoredSystemStatusReason{
+				Kind:     "source-" + normalizedStatus,
+				Name:     name,
+				Type:     resourceType,
+				Source:   string(source),
+				Status:   normalizedStatus,
+				LastSeen: sourceStatus.LastSeen,
+				Summary:  monitoredSystemSourceStatusReasonSummary(name, source, normalizedStatus, sourceStatus.LastSeen),
+			})
+		}
+	}
+
+	if len(reasons) > 0 {
+		return reasons
+	}
+
+	normalizedStatus := normalizeMonitoredSystemSourceStatus(string(resource.Status))
+	if normalizedStatus == "online" {
+		return nil
+	}
+
+	source := monitoredSystemPrimarySource(resource)
+	if source == "" {
+		source = "unknown"
+	}
+	return []MonitoredSystemStatusReason{
+		{
+			Kind:     "surface-" + normalizedStatus,
+			Name:     name,
+			Type:     resourceType,
+			Source:   source,
+			Status:   normalizedStatus,
+			LastSeen: resource.LastSeen,
+			Summary:  monitoredSystemSurfaceStatusReasonSummary(name, resourceType, source, normalizedStatus, resource.LastSeen),
+		},
+	}
+}
+
+func normalizeMonitoredSystemSourceStatus(status string) string {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "online":
+		return "online"
+	case "stale", "warning":
+		return "stale"
+	case "offline":
+		return "offline"
+	default:
+		return "unknown"
+	}
+}
+
+func monitoredSystemStatusSummary(status ResourceStatus, reasons []MonitoredSystemStatusReason) string {
+	switch status {
+	case StatusOnline:
+		return "All included top-level collection paths currently report online status."
+	case StatusWarning:
+		switch {
+		case monitoredSystemHasReasonStatus(reasons, "stale"):
+			return "At least one included source is stale, so Pulse marks this monitored system as warning."
+		case monitoredSystemHasReasonStatus(reasons, "offline"):
+			return "At least one included source is offline or disconnected, but the canonical grouped status currently resolves to warning."
+		default:
+			return "At least one included top-level collection path is degraded, so Pulse marks this monitored system as warning."
+		}
+	case StatusOffline:
+		return "At least one included source is offline or disconnected, so Pulse marks this monitored system as offline."
+	default:
+		return "Pulse cannot determine a canonical runtime status for this monitored system yet."
+	}
+}
+
+func monitoredSystemHasReasonStatus(reasons []MonitoredSystemStatusReason, status string) bool {
+	for _, reason := range reasons {
+		if reason.Status == status {
+			return true
+		}
+	}
+	return false
+}
+
+func monitoredSystemStatusReasonPriority(reason MonitoredSystemStatusReason) int {
+	switch reason.Status {
+	case "offline":
+		return 0
+	case "stale":
+		return 1
+	case "unknown":
+		return 2
+	default:
+		return 3
+	}
+}
+
 func monitoredSystemStatusPriority(status ResourceStatus) int {
 	switch status {
 	case StatusWarning:
@@ -425,6 +624,63 @@ func monitoredSystemStatusPriority(status ResourceStatus) int {
 	default:
 		return 4
 	}
+}
+
+func monitoredSystemSourceStatusReasonSummary(
+	name string,
+	source DataSource,
+	status string,
+	lastSeen time.Time,
+) string {
+	subject := name
+	if strings.TrimSpace(subject) == "" {
+		subject = "this monitored system"
+	}
+
+	summary := monitoredSystemStatusSourceLabel(string(source)) + " data for " + subject
+	switch status {
+	case "stale":
+		summary += " is stale"
+	case "offline":
+		summary += " is offline or disconnected"
+	default:
+		summary += " does not report a canonical status yet"
+	}
+
+	if !lastSeen.IsZero() {
+		summary += " (last reported " + lastSeen.UTC().Format(time.RFC3339) + ")."
+		return summary
+	}
+	return summary + "."
+}
+
+func monitoredSystemSurfaceStatusReasonSummary(
+	name string,
+	resourceType string,
+	source string,
+	status string,
+	lastSeen time.Time,
+) string {
+	subject := name
+	if strings.TrimSpace(subject) == "" {
+		subject = "This monitored system"
+	}
+
+	summary := monitoredSystemGroupingTypeLabel(resourceType) + " view for " + subject + " currently reports "
+	switch status {
+	case "stale":
+		summary += "warning"
+	case "offline":
+		summary += "offline"
+	default:
+		summary += "unknown"
+	}
+	summary += " status from " + monitoredSystemStatusSourceLabel(source)
+	if !lastSeen.IsZero() {
+		summary += " (last reported " + lastSeen.UTC().Format(time.RFC3339) + ")."
+		return summary
+	}
+	return summary + "."
 }
 
 func monitoredSystemLastSeen(resources []*Resource) time.Time {
@@ -486,6 +742,29 @@ func monitoredSystemPrimarySource(resource *Resource) string {
 		return string(resource.Sources[0])
 	}
 	return ""
+}
+
+func monitoredSystemStatusSourceLabel(value string) string {
+	switch strings.TrimSpace(value) {
+	case "agent":
+		return "Agent"
+	case "docker":
+		return "Docker"
+	case "kubernetes":
+		return "Kubernetes"
+	case "pbs":
+		return "PBS"
+	case "pmg":
+		return "PMG"
+	case "proxmox":
+		return "Proxmox"
+	case "truenas":
+		return "TrueNAS"
+	case "", "unknown":
+		return "Unknown source"
+	default:
+		return strings.TrimSpace(value)
+	}
 }
 
 func cloneStringSet(in map[string]struct{}) map[string]struct{} {

@@ -370,6 +370,12 @@ storage-adjacent API wiring may consume the canonical monitored-system ledger
 and monitored-system cap helpers, but it must not revive deleted agent-era
 helper names or imply that API-backed infrastructure sits outside the counted
 system model.
+That same shared `internal/api/` dependency now also assumes monitored-system
+ledger status details stay canonical and source-aware: storage- or recovery-
+adjacent consumers may read the ledger’s nested status explanation, but they
+must preserve the backend-provided reason list for stale or offline grouped
+sources instead of reducing those mixed fresh/stale system states back to a
+generic label.
 That same shared `internal/api/` dependency now also assumes self-hosted
 commercial counting is canonical at the top-level monitored-system boundary:
 shared setup, deploy, entitlement, and API-backed monitoring helpers may not

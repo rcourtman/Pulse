@@ -6,6 +6,8 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 func TestMonitoredSystemLedgerEntryTypes(t *testing.T) {
@@ -15,6 +17,7 @@ func TestMonitoredSystemLedgerEntryTypes(t *testing.T) {
 		Status: "online",
 		StatusExplanation: MonitoredSystemLedgerStatusExplanation{
 			Summary: "All included top-level collection paths currently report online status.",
+			Reasons: []MonitoredSystemLedgerStatusReason{},
 		},
 		LastSeen: "2025-01-01T00:00:00Z",
 		Source:   "agent",
@@ -41,6 +44,9 @@ func TestMonitoredSystemLedgerEntryTypes(t *testing.T) {
 	}
 	if decoded.StatusExplanation.Summary == "" {
 		t.Errorf("status explanation mismatch: %+v", decoded.StatusExplanation)
+	}
+	if decoded.StatusExplanation.Reasons == nil {
+		t.Errorf("status explanation reasons mismatch: %+v", decoded.StatusExplanation)
 	}
 	if decoded.Source != "agent" {
 		t.Errorf("source mismatch: got %q", decoded.Source)
@@ -85,21 +91,31 @@ func TestFormatLastSeen(t *testing.T) {
 }
 
 func TestMonitoredSystemLedgerStatusExplanation(t *testing.T) {
-	tests := []struct {
-		status string
-		want   string
-	}{
-		{"online", "All included top-level collection paths currently report online status."},
-		{"warning", "At least one included top-level collection path is degraded or stale, so Pulse marks this monitored system as warning."},
-		{"offline", "At least one included top-level collection path is offline or disconnected, so Pulse marks this monitored system as offline."},
-		{"unknown", "Pulse cannot determine a canonical runtime status for this monitored system yet."},
+	got := monitoredSystemLedgerStatusExplanation(unifiedresources.MonitoredSystemStatusExplanation{
+		Summary: "At least one included source is stale, so Pulse marks this monitored system as warning.",
+		Reasons: []unifiedresources.MonitoredSystemStatusReason{
+			{
+				Kind:     "source-stale",
+				Name:     "Tower",
+				Type:     "host",
+				Source:   "agent",
+				Status:   "stale",
+				LastSeen: time.Date(2026, 3, 23, 11, 55, 0, 0, time.UTC),
+				Summary:  "Agent data for Tower is stale (last reported 2026-03-23T11:55:00Z).",
+			},
+		},
+	}, "warning")
+	if got.Summary != "At least one included source is stale, so Pulse marks this monitored system as warning." {
+		t.Fatalf("unexpected status summary: %+v", got)
 	}
-
-	for _, tt := range tests {
-		got := monitoredSystemLedgerStatusExplanation(tt.status)
-		if got.Summary != tt.want {
-			t.Errorf("monitoredSystemLedgerStatusExplanation(%q) = %q, want %q", tt.status, got.Summary, tt.want)
-		}
+	if len(got.Reasons) != 1 {
+		t.Fatalf("expected one status reason, got %+v", got)
+	}
+	if got.Reasons[0].Status != "stale" {
+		t.Fatalf("expected stale status reason, got %+v", got.Reasons[0])
+	}
+	if got.Reasons[0].LastSeen != "2026-03-23T11:55:00Z" {
+		t.Fatalf("expected formatted reason last_seen, got %+v", got.Reasons[0])
 	}
 }
 
@@ -141,11 +157,17 @@ func TestMonitoredSystemLedgerNilSystemsBecomesEmptyArray(t *testing.T) {
 func TestMonitoredSystemLedgerEntryNormalizeCollections(t *testing.T) {
 	entry := MonitoredSystemLedgerEntry{
 		Name: "server-1",
+		StatusExplanation: MonitoredSystemLedgerStatusExplanation{
+			Summary: "Pulse cannot determine a canonical runtime status for this monitored system yet.",
+		},
 		Explanation: MonitoredSystemLedgerExplanation{
 			Summary: "Counts as one monitored system because Pulse sees one top-level host view from agent.",
 		},
 	}.NormalizeCollections()
 
+	if entry.StatusExplanation.Reasons == nil {
+		t.Fatal("expected status explanation reasons to normalize to an empty slice")
+	}
 	if entry.Explanation.Reasons == nil {
 		t.Fatal("expected explanation reasons to normalize to an empty slice")
 	}
@@ -166,6 +188,7 @@ func TestHandleMonitoredSystemLedgerHTTP(t *testing.T) {
 				Status: "online",
 				StatusExplanation: MonitoredSystemLedgerStatusExplanation{
 					Summary: "All included top-level collection paths currently report online status.",
+					Reasons: []MonitoredSystemLedgerStatusReason{},
 				},
 				LastSeen: "2025-01-01T00:00:00Z",
 				Source:   "agent",
@@ -205,6 +228,9 @@ func TestHandleMonitoredSystemLedgerHTTP(t *testing.T) {
 	}
 	if decoded.Systems[0].StatusExplanation.Summary == "" {
 		t.Errorf("expected status explanation summary, got %+v", decoded.Systems[0].StatusExplanation)
+	}
+	if decoded.Systems[0].StatusExplanation.Reasons == nil {
+		t.Errorf("expected status explanation reasons, got %+v", decoded.Systems[0].StatusExplanation)
 	}
 	if decoded.Systems[0].Explanation.Summary == "" {
 		t.Errorf("expected explanation summary, got %+v", decoded.Systems[0].Explanation)

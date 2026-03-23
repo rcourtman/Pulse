@@ -215,6 +215,10 @@ view may normalize a safe default when that field is absent during mixed-version
 rollouts, but it must render the canonical backend explanation when present
 instead of inventing page-local wording for what warning, offline, or unknown
 means on a counted monitored system.
+That same cloud-paid surface must now also render the canonical status reason
+list when present, so customers can see exactly which grouped source or
+top-level surface degraded and when it last reported rather than only reading
+generic status copy beside a fresh aggregate `Last Seen` value.
 Frontend billing/admin surfaces must not synthesize `plan_version` from
 subscription lifecycle state. When a hosted billing record lacks a plan label,
 the UI must preserve that absence instead of fabricating values like `active`

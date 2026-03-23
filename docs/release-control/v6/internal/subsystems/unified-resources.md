@@ -171,6 +171,14 @@ grouping reasons plus included top-level surfaces, and fall back to an
 explicit standalone explanation when no cross-source merge occurred. Support
 and billing surfaces must consume that shared explanation contract instead of
 reconstructing count reasons from API-local heuristics.
+That same monitored-system contract now also owns canonical runtime-status
+explanations. When a grouped monitored system resolves to warning, offline, or
+unknown, unified resources must expose the shared summary plus structured
+degraded-status reasons derived from the grouped top-level resources and their
+source freshness state, including which source or surface degraded and the
+corresponding last-seen timestamp. Billing and support surfaces must consume
+that shared reason list instead of trying to infer why a fresh overall
+`last_seen` can still coincide with warning status.
 
 The unified-resource runtime now also owns the durable change timeline for the
 canonical resource view. `internal/unifiedresources/monitor_adapter.go` feeds

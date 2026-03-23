@@ -22,6 +22,23 @@ export interface MonitoredSystemLedgerExplanation {
 
 export interface MonitoredSystemLedgerStatusExplanation {
   summary: string;
+  reasons: MonitoredSystemLedgerStatusReason[];
+}
+
+export type MonitoredSystemLedgerStatusReasonStatus =
+  | 'online'
+  | 'stale'
+  | 'offline'
+  | 'unknown';
+
+export interface MonitoredSystemLedgerStatusReason {
+  kind: string;
+  name: string;
+  type: string;
+  source: string;
+  status: MonitoredSystemLedgerStatusReasonStatus;
+  last_seen: string;
+  summary: string;
 }
 
 export interface MonitoredSystemLedgerEntry {
@@ -62,6 +79,7 @@ function normalizeMonitoredSystemLedgerEntry(
     status,
     status_explanation: {
       summary: entry.status_explanation?.summary ?? defaultMonitoredSystemStatusExplanation(status),
+      reasons: (entry.status_explanation?.reasons ?? []).map(normalizeMonitoredSystemLedgerStatusReason),
     },
     explanation: {
       summary:
@@ -92,10 +110,34 @@ function defaultMonitoredSystemStatusExplanation(status: MonitoredSystemLedgerSt
     case 'online':
       return 'All included top-level collection paths currently report online status.';
     case 'warning':
-      return 'At least one included top-level collection path is degraded or stale.';
+      return 'At least one included top-level collection path is degraded, so Pulse marks this monitored system as warning.';
     case 'offline':
-      return 'At least one included top-level collection path is offline or disconnected.';
+      return 'At least one included source is offline or disconnected, so Pulse marks this monitored system as offline.';
     default:
       return 'Pulse cannot determine a canonical runtime status for this monitored system yet.';
+  }
+}
+
+function normalizeMonitoredSystemLedgerStatusReason(
+  reason: MonitoredSystemLedgerStatusReason,
+): MonitoredSystemLedgerStatusReason {
+  return {
+    ...reason,
+    status: normalizeMonitoredSystemLedgerStatusReasonStatus(reason.status),
+    last_seen: reason.last_seen ?? '',
+  };
+}
+
+function normalizeMonitoredSystemLedgerStatusReasonStatus(
+  status: MonitoredSystemLedgerStatusReasonStatus | string | null | undefined,
+): MonitoredSystemLedgerStatusReasonStatus {
+  switch ((status ?? '').trim().toLowerCase()) {
+    case 'online':
+    case 'stale':
+    case 'offline':
+    case 'unknown':
+      return status.trim().toLowerCase() as MonitoredSystemLedgerStatusReasonStatus;
+    default:
+      return 'unknown';
   }
 }

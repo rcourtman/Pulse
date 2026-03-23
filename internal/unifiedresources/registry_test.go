@@ -261,6 +261,70 @@ func TestResourceRegistry_MonitoredSystemsSummarizeCanonicalTopLevelViews(t *tes
 	}
 }
 
+func TestMonitoredSystemsExplainsStaleGroupedSourceWhileLastSeenStaysFresh(t *testing.T) {
+	rr := NewRegistry(nil)
+	now := time.Date(2026, 3, 23, 12, 0, 0, 0, time.UTC)
+
+	agentResource := topLevelTestAgent("agent-host", "tower.local", "machine-1", "agent-1")
+	agentResource.LastSeen = now.Add(-5 * time.Minute)
+	dockerResource := topLevelTestDockerHost("docker-host", "tower.local", "docker-runtime-1", "agent-1")
+	dockerResource.LastSeen = now.Add(-10 * time.Second)
+
+	rr.IngestRecords(SourceAgent, []IngestRecord{
+		{
+			SourceID: "agent-host",
+			Resource: agentResource,
+		},
+	})
+	rr.IngestRecords(SourceDocker, []IngestRecord{
+		{
+			SourceID: "docker-host",
+			Resource: dockerResource,
+		},
+	})
+
+	rr.MarkStale(now, map[DataSource]time.Duration{
+		SourceAgent:  60 * time.Second,
+		SourceDocker: 60 * time.Second,
+	})
+
+	systems := MonitoredSystems(rr)
+	if len(systems) != 1 {
+		t.Fatalf("MonitoredSystems() returned %d systems, want 1", len(systems))
+	}
+
+	system := systems[0]
+	if system.Status != StatusWarning {
+		t.Fatalf("expected grouped monitored system status warning, got %+v", system)
+	}
+	if !system.LastSeen.Equal(dockerResource.LastSeen) {
+		t.Fatalf("expected grouped last_seen %s, got %s", dockerResource.LastSeen, system.LastSeen)
+	}
+	if system.StatusExplanation.Summary == "" {
+		t.Fatal("expected grouped monitored system status explanation summary")
+	}
+	if len(system.StatusExplanation.Reasons) != 1 {
+		t.Fatalf("expected one stale grouped-source reason, got %+v", system.StatusExplanation.Reasons)
+	}
+
+	reason := system.StatusExplanation.Reasons[0]
+	if reason.Kind != "source-stale" {
+		t.Fatalf("expected stale source reason kind, got %+v", reason)
+	}
+	if reason.Source != string(SourceAgent) {
+		t.Fatalf("expected agent source reason, got %+v", reason)
+	}
+	if reason.Status != "stale" {
+		t.Fatalf("expected stale reason status, got %+v", reason)
+	}
+	if !reason.LastSeen.Equal(agentResource.LastSeen) {
+		t.Fatalf("expected stale reason last_seen %s, got %s", agentResource.LastSeen, reason.LastSeen)
+	}
+	if reason.Summary == "" {
+		t.Fatalf("expected stale reason summary, got %+v", reason)
+	}
+}
+
 func TestResourceRegistry_IngestRecords_UnknownSource(t *testing.T) {
 	rr := NewRegistry(nil)
 	now := time.Date(2026, 2, 20, 12, 0, 0, 0, time.UTC)

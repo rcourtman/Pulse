@@ -581,7 +581,18 @@ func TestContract_MonitoredSystemLedgerJSONSnapshot(t *testing.T) {
 				Type:   "host",
 				Status: "warning",
 				StatusExplanation: MonitoredSystemLedgerStatusExplanation{
-					Summary: "At least one included top-level collection path is degraded or stale, so Pulse marks this monitored system as warning.",
+					Summary: "At least one included source is stale, so Pulse marks this monitored system as warning.",
+					Reasons: []MonitoredSystemLedgerStatusReason{
+						{
+							Kind:     "source-stale",
+							Name:     "Tower",
+							Type:     "host",
+							Source:   "agent",
+							Status:   "stale",
+							LastSeen: "2026-03-18T17:25:00Z",
+							Summary:  "Agent data for Tower is stale (last reported 2026-03-18T17:25:00Z).",
+						},
+					},
 				},
 				LastSeen: "2026-03-18T17:30:00Z",
 				Source:   "agent",
@@ -620,7 +631,18 @@ func TestContract_MonitoredSystemLedgerJSONSnapshot(t *testing.T) {
 				"type":"host",
 				"status":"warning",
 				"status_explanation":{
-					"summary":"At least one included top-level collection path is degraded or stale, so Pulse marks this monitored system as warning."
+					"summary":"At least one included source is stale, so Pulse marks this monitored system as warning.",
+					"reasons":[
+						{
+							"kind":"source-stale",
+							"name":"Tower",
+							"type":"host",
+							"source":"agent",
+							"status":"stale",
+							"last_seen":"2026-03-18T17:25:00Z",
+							"summary":"Agent data for Tower is stale (last reported 2026-03-18T17:25:00Z)."
+						}
+					]
 				},
 				"last_seen":"2026-03-18T17:30:00Z",
 				"source":"agent",

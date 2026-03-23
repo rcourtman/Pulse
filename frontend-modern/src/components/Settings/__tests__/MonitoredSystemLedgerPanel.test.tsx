@@ -77,6 +77,7 @@ describe('MonitoredSystemLedgerPanel', () => {
           status: 'online',
           status_explanation: {
             summary: 'All included top-level collection paths currently report online status.',
+            reasons: [],
           },
           last_seen: '2026-01-01T00:00:00Z',
           source: 'agent',
@@ -139,6 +140,7 @@ describe('MonitoredSystemLedgerPanel', () => {
           status: 'online',
           status_explanation: {
             summary: 'All included top-level collection paths currently report online status.',
+            reasons: [],
           },
           last_seen: '2026-01-01T00:00:00Z',
           source: 'agent',
@@ -161,7 +163,19 @@ describe('MonitoredSystemLedgerPanel', () => {
           status: 'offline',
           status_explanation: {
             summary:
-              'At least one included top-level collection path is offline or disconnected, so Pulse marks this monitored system as offline.',
+              'At least one included source is offline or disconnected, so Pulse marks this monitored system as offline.',
+            reasons: [
+              {
+                kind: 'source-offline',
+                name: 'server-b',
+                type: 'pbs-server',
+                source: 'pbs',
+                status: 'offline',
+                last_seen: '2026-01-01T23:55:00Z',
+                summary:
+                  'PBS data for server-b is offline or disconnected (last reported 2026-01-01T23:55:00Z).',
+              },
+            ],
           },
           last_seen: '2026-01-02T00:00:00Z',
           source: 'pbs',
@@ -220,7 +234,12 @@ describe('MonitoredSystemLedgerPanel', () => {
     expect(screen.getByText('Current status')).toBeInTheDocument();
     expect(
       screen.getByText(
-        'At least one included top-level collection path is offline or disconnected, so Pulse marks this monitored system as offline.',
+        'At least one included source is offline or disconnected, so Pulse marks this monitored system as offline.',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'PBS data for server-b is offline or disconnected (last reported 2026-01-01T23:55:00Z).',
       ),
     ).toBeInTheDocument();
     expect(screen.getByText('Included collection paths')).toBeInTheDocument();
@@ -239,6 +258,7 @@ describe('MonitoredSystemLedgerPanel', () => {
           status: 'online',
           status_explanation: {
             summary: 'All included top-level collection paths currently report online status.',
+            reasons: [],
           },
           last_seen: '2026-01-01T00:00:00Z',
           source: 'agent',

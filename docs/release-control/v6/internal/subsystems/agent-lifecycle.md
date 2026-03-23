@@ -234,6 +234,10 @@ That same ledger read now also carries backend-owned status explanation copy,
 and lifecycle-adjacent details must render it beside the counting rationale so
 operators can interpret warning, offline, and unknown states without inventing
 local status semantics.
+Those status details are now structured as well: lifecycle-adjacent consumers
+must preserve the canonical reason list from the ledger read so operators can
+see which grouped source or surface degraded and when it last reported,
+instead of only seeing a generic warning/offline paragraph.
 Lifecycle-adjacent workspace copy must also keep the same commercial framing:
 infrastructure operations may point operators to Pulse Pro for billing, but it
 must describe that boundary in monitored-system, plan-limit, and license-status

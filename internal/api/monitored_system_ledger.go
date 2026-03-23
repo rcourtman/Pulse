@@ -23,7 +23,18 @@ type MonitoredSystemLedgerEntry struct {
 }
 
 type MonitoredSystemLedgerStatusExplanation struct {
-	Summary string `json:"summary"`
+	Summary string                              `json:"summary"`
+	Reasons []MonitoredSystemLedgerStatusReason `json:"reasons"`
+}
+
+type MonitoredSystemLedgerStatusReason struct {
+	Kind     string `json:"kind"`
+	Name     string `json:"name"`
+	Type     string `json:"type"`
+	Source   string `json:"source"`
+	Status   string `json:"status"`
+	LastSeen string `json:"last_seen"`
+	Summary  string `json:"summary"`
 }
 
 type MonitoredSystemLedgerExplanation struct {
@@ -66,6 +77,9 @@ func (r MonitoredSystemLedgerResponse) NormalizeCollections() MonitoredSystemLed
 }
 
 func (e MonitoredSystemLedgerEntry) NormalizeCollections() MonitoredSystemLedgerEntry {
+	if e.StatusExplanation.Reasons == nil {
+		e.StatusExplanation.Reasons = []MonitoredSystemLedgerStatusReason{}
+	}
 	if e.Explanation.Reasons == nil {
 		e.Explanation.Reasons = []MonitoredSystemLedgerExplanationReason{}
 	}
@@ -107,7 +121,7 @@ func (r *Router) handleMonitoredSystemLedger(w http.ResponseWriter, req *http.Re
 			Name:              system.Name,
 			Type:              system.Type,
 			Status:            status,
-			StatusExplanation: monitoredSystemLedgerStatusExplanation(status),
+			StatusExplanation: monitoredSystemLedgerStatusExplanation(system.StatusExplanation, status),
 			LastSeen:          formatLastSeen(system.LastSeen),
 			Source:            system.Source,
 			Explanation:       monitoredSystemLedgerExplanation(system.Explanation),
@@ -138,24 +152,53 @@ func normalizeStatus(s string) string {
 	}
 }
 
-func monitoredSystemLedgerStatusExplanation(status string) MonitoredSystemLedgerStatusExplanation {
+func monitoredSystemLedgerStatusExplanation(
+	explanation unifiedresources.MonitoredSystemStatusExplanation,
+	status string,
+) MonitoredSystemLedgerStatusExplanation {
+	reasons := make([]MonitoredSystemLedgerStatusReason, 0, len(explanation.Reasons))
+	for _, reason := range explanation.Reasons {
+		reasons = append(reasons, MonitoredSystemLedgerStatusReason{
+			Kind:     reason.Kind,
+			Name:     reason.Name,
+			Type:     reason.Type,
+			Source:   reason.Source,
+			Status:   normalizeMonitoredSystemLedgerReasonStatus(reason.Status),
+			LastSeen: formatLastSeen(reason.LastSeen),
+			Summary:  reason.Summary,
+		})
+	}
+
+	summary := explanation.Summary
+	if summary == "" {
+		summary = defaultMonitoredSystemLedgerStatusSummary(status)
+	}
+
+	return MonitoredSystemLedgerStatusExplanation{
+		Summary: summary,
+		Reasons: reasons,
+	}
+}
+
+func defaultMonitoredSystemLedgerStatusSummary(status string) string {
 	switch status {
 	case "online":
-		return MonitoredSystemLedgerStatusExplanation{
-			Summary: "All included top-level collection paths currently report online status.",
-		}
+		return "All included top-level collection paths currently report online status."
 	case "warning":
-		return MonitoredSystemLedgerStatusExplanation{
-			Summary: "At least one included top-level collection path is degraded or stale, so Pulse marks this monitored system as warning.",
-		}
+		return "At least one included top-level collection path is degraded, so Pulse marks this monitored system as warning."
 	case "offline":
-		return MonitoredSystemLedgerStatusExplanation{
-			Summary: "At least one included top-level collection path is offline or disconnected, so Pulse marks this monitored system as offline.",
-		}
+		return "At least one included source is offline or disconnected, so Pulse marks this monitored system as offline."
 	default:
-		return MonitoredSystemLedgerStatusExplanation{
-			Summary: "Pulse cannot determine a canonical runtime status for this monitored system yet.",
-		}
+		return "Pulse cannot determine a canonical runtime status for this monitored system yet."
+	}
+}
+
+func normalizeMonitoredSystemLedgerReasonStatus(status string) string {
+	switch status {
+	case "online", "stale", "offline", "unknown":
+		return status
+	default:
+		return "unknown"
 	}
 }
 

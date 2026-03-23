@@ -243,6 +243,11 @@ That same contract now also owns the backend-authored status explanation paired
 with that enum, and the monitored-system ledger details surface must render it
 alongside the counting explanation instead of inventing page-local wording for
 what online, warning, offline, or unknown means.
+That nested status explanation is now a structured contract, not summary-only
+copy: `/api/license/monitored-system-ledger` must preserve the canonical
+summary plus the ordered reason list from unified resources, including the
+degraded source or surface, its status, and its last-seen timestamp, so mixed
+fresh/stale grouped systems remain explainable through one governed API shape.
 That client contract must also fail closed when older or partial payloads omit
 the nested explanation object: the frontend may normalize missing explanation
 fields to empty reasons/surfaces plus a safe default summary, but it must not

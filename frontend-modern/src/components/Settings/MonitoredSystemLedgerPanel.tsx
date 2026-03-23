@@ -51,6 +51,7 @@ function systemStatusExplanation(system: MonitoredSystemLedgerEntry): MonitoredS
     summary:
       system.status_explanation?.summary ??
       'Pulse cannot determine a canonical runtime status for this monitored system yet.',
+    reasons: system.status_explanation?.reasons ?? [],
   };
 }
 
@@ -179,6 +180,13 @@ export function MonitoredSystemLedgerPanel(props: MonitoredSystemLedgerPanelProp
                                 <p class="whitespace-normal text-base-content">
                                   {statusExplanation.summary}
                                 </p>
+                                <Show when={statusExplanation.reasons.length > 0}>
+                                  <ul class="space-y-1 whitespace-normal text-base-content">
+                                    <For each={statusExplanation.reasons}>
+                                      {(reason) => <li>{reason.summary}</li>}
+                                    </For>
+                                  </ul>
+                                </Show>
                               </div>
                               <p class="whitespace-normal text-base-content">
                                 {explanation.summary}
