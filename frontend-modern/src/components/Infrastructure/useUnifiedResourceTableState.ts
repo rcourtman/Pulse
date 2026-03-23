@@ -1,16 +1,32 @@
 import { createMemo, createSignal } from 'solid-js';
 import type { Resource } from '@/types/resource';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
-import { getPreferredResourceDisplayName } from '@/utils/resourceIdentity';
 import {
   splitPrimaryAndServiceResources,
   sortResources,
   groupResources,
   computeIOScale,
-  type ResourceGroup,
 } from '@/components/Infrastructure/infrastructureSelectors';
 import { useTableWindowing } from './useTableWindowing';
 import { useUnifiedResourceTableViewportSync } from './useUnifiedResourceTableViewportSync';
+import {
+  buildHostRowIndexById,
+  buildHostTableItems,
+  buildResourceLabelById,
+  getHostRevealTargetIndex,
+  getHostSpacerHeights,
+  getNextUnifiedResourceTableSortState,
+  getUnifiedResourceTableColumnStyles,
+  getUnifiedResourceTableSortIndicator,
+  getUnifiedSources,
+  getVisibleHostTableItems,
+  HOST_TABLE_ESTIMATED_ROW_HEIGHT,
+  HOST_TABLE_WINDOW_SIZE,
+  shouldShowUnifiedResourceHostTable,
+  sortServiceResources,
+  type HostTableItem,
+  type UnifiedResourceTableSortKey as SortKey,
+} from './unifiedResourceTableStateModel';
 
 export interface UnifiedResourceTableProps {
   resources: Resource[];
@@ -22,34 +38,6 @@ export interface UnifiedResourceTableProps {
   groupingMode?: 'grouped' | 'flat';
   onDeployCluster?: (clusterId: string, clusterName: string) => void;
 }
-
-type SortKey =
-  | 'default'
-  | 'name'
-  | 'uptime'
-  | 'cpu'
-  | 'memory'
-  | 'disk'
-  | 'network'
-  | 'diskio'
-  | 'source'
-  | 'temp';
-
-type HostTableHeaderItem = {
-  type: 'header';
-  group: ResourceGroup;
-};
-
-type HostTableResourceItem = {
-  type: 'row';
-  group: ResourceGroup;
-  resource: Resource;
-};
-
-export type HostTableItem = HostTableHeaderItem | HostTableResourceItem;
-
-const HOST_TABLE_ESTIMATED_ROW_HEIGHT = 40;
-const HOST_TABLE_WINDOW_SIZE = 137;
 
 export function useUnifiedResourceTableState(props: UnifiedResourceTableProps) {
   const { isMobile, isVisible } = useBreakpoint();
@@ -63,51 +51,22 @@ export function useUnifiedResourceTableState(props: UnifiedResourceTableProps) {
   const sortedResources = createMemo(() =>
     sortResources(primaryResources(), sortKey(), sortDirection()),
   );
-  const resourceLabelById = createMemo(() => {
-    const map = new Map<string, string>();
-    for (const resource of props.resources) {
-      map.set(resource.id, getPreferredResourceDisplayName(resource));
-    }
-    return map;
-  });
+  const resourceLabelById = createMemo(() => buildResourceLabelById(props.resources));
   const resolveResourceLabel = (resourceId: string): string | undefined =>
     resourceLabelById().get(resourceId);
 
-  const groupedResources = createMemo<ResourceGroup[]>(() =>
-    groupResources(sortedResources(), props.groupingMode ?? 'grouped'),
+  const groupedResources = createMemo(() => groupResources(sortedResources(), props.groupingMode ?? 'grouped'));
+  const hostTableItems = createMemo<HostTableItem[]>(() =>
+    buildHostTableItems(groupedResources(), props.groupingMode),
   );
-
-  const hostTableItems = createMemo<HostTableItem[]>(() => {
-    const items: HostTableItem[] = [];
-    const showGroupHeaders = props.groupingMode === 'grouped';
-
-    for (const group of groupedResources()) {
-      if (showGroupHeaders) {
-        items.push({ type: 'header', group });
-      }
-      for (const resource of group.resources) {
-        items.push({ type: 'row', group, resource });
-      }
-    }
-
-    return items;
-  });
-
-  const hostRowIndexById = createMemo(() => {
-    const map = new Map<string, number>();
-    hostTableItems().forEach((item, index) => {
-      if (item.type === 'row') {
-        map.set(item.resource.id, index);
-      }
-    });
-    return map;
-  });
-
-  const hostRevealTargetIndex = createMemo<number | null>(() => {
-    const targetId = props.expandedResourceId ?? props.highlightedResourceId ?? null;
-    if (!targetId) return null;
-    return hostRowIndexById().get(targetId) ?? null;
-  });
+  const hostRowIndexById = createMemo(() => buildHostRowIndexById(hostTableItems()));
+  const hostRevealTargetIndex = createMemo<number | null>(() =>
+    getHostRevealTargetIndex(
+      hostRowIndexById(),
+      props.expandedResourceId,
+      props.highlightedResourceId,
+    ),
+  );
 
   const hostWindowing = useTableWindowing({
     totalCount: () => hostTableItems().length,
@@ -115,22 +74,22 @@ export function useUnifiedResourceTableState(props: UnifiedResourceTableProps) {
     revealIndex: hostRevealTargetIndex,
   });
 
-  const visibleHostTableItems = createMemo(() => {
-    if (!hostWindowing.isWindowed()) return hostTableItems();
-    return hostTableItems().slice(hostWindowing.startIndex(), hostWindowing.endIndex());
-  });
-
-  const hostTopSpacerHeight = createMemo(() =>
-    hostWindowing.isWindowed() ? hostWindowing.startIndex() * HOST_TABLE_ESTIMATED_ROW_HEIGHT : 0,
+  const visibleHostTableItems = createMemo(() =>
+    getVisibleHostTableItems(
+      hostTableItems(),
+      hostWindowing.isWindowed(),
+      hostWindowing.startIndex(),
+      hostWindowing.endIndex(),
+    ),
   );
-
-  const hostBottomSpacerHeight = createMemo(() =>
-    hostWindowing.isWindowed()
-      ? Math.max(
-          0,
-          (hostTableItems().length - hostWindowing.endIndex()) * HOST_TABLE_ESTIMATED_ROW_HEIGHT,
-        )
-      : 0,
+  const hostSpacerHeights = createMemo(() =>
+    getHostSpacerHeights(
+      hostTableItems().length,
+      hostWindowing.startIndex(),
+      hostWindowing.endIndex(),
+      hostWindowing.isWindowed(),
+      HOST_TABLE_ESTIMATED_ROW_HEIGHT,
+    ),
   );
   const viewportSync = useUnifiedResourceTableViewportSync({
     expandedResourceId: () => props.expandedResourceId,
@@ -139,103 +98,28 @@ export function useUnifiedResourceTableState(props: UnifiedResourceTableProps) {
     hostWindowing,
   });
 
-  const sortedPBSResources = createMemo(() =>
-    sortResources(
-      serviceResources().filter((resource) => resource.type === 'pbs'),
-      'default',
-      'asc',
-    ),
-  );
-  const sortedPMGResources = createMemo(() =>
-    sortResources(
-      serviceResources().filter((resource) => resource.type === 'pmg'),
-      'default',
-      'asc',
-    ),
-  );
+  const sortedPBSResources = createMemo(() => sortServiceResources(serviceResources(), 'pbs'));
+  const sortedPMGResources = createMemo(() => sortServiceResources(serviceResources(), 'pmg'));
 
   const ioScale = createMemo(() => computeIOScale(primaryResources()));
 
   const handleSort = (key: Exclude<SortKey, 'default'>) => {
-    if (sortKey() === key) {
-      if (sortDirection() === 'asc') {
-        setSortDirection('desc');
-      } else {
-        setSortKey('default');
-        setSortDirection('asc');
-      }
-    } else {
-      setSortKey(key);
-      setSortDirection(key === 'name' || key === 'source' ? 'asc' : 'desc');
-    }
+    const nextSort = getNextUnifiedResourceTableSortState(sortKey(), sortDirection(), key);
+    setSortKey(nextSort.key);
+    setSortDirection(nextSort.direction);
   };
 
-  const renderSortIndicator = (key: SortKey) => {
-    if (sortKey() !== key) return null;
-    return sortDirection() === 'asc' ? '▲' : '▼';
-  };
+  const renderSortIndicator = (key: SortKey) =>
+    getUnifiedResourceTableSortIndicator(sortKey(), sortDirection(), key);
 
   const toggleExpand = (resourceId: string) => {
     props.onExpandedResourceChange(props.expandedResourceId === resourceId ? null : resourceId);
   };
 
-  const resourceColumnStyle = createMemo(() =>
-    isMobile() ? { width: '100%', 'min-width': '120px' } : { 'min-width': '220px' },
+  const columnStyles = createMemo(() => getUnifiedResourceTableColumnStyles(isMobile()));
+  const showHostTable = createMemo(() =>
+    shouldShowUnifiedResourceHostTable(primaryResources().length, serviceResources().length),
   );
-  const metricColumnStyle = createMemo(() =>
-    isMobile()
-      ? { width: '70px', 'min-width': '65px' }
-      : { 'min-width': '140px', 'max-width': '180px' },
-  );
-  const ioColumnStyle = createMemo(() =>
-    isMobile()
-      ? { width: '180px', 'min-width': '180px' }
-      : { width: '160px', 'min-width': '160px', 'max-width': '180px' },
-  );
-  const sourceColumnStyle = createMemo(() =>
-    isMobile()
-      ? { width: '140px', 'min-width': '140px' }
-      : { width: '160px', 'min-width': '160px' },
-  );
-  const uptimeColumnStyle = createMemo(() =>
-    isMobile()
-      ? { width: '70px', 'min-width': '70px', 'max-width': '80px' }
-      : { width: '80px', 'min-width': '80px', 'max-width': '80px' },
-  );
-  const tempColumnStyle = createMemo(() =>
-    isMobile()
-      ? { width: '50px', 'min-width': '50px', 'max-width': '60px' }
-      : { width: '60px', 'min-width': '60px', 'max-width': '70px' },
-  );
-
-  const showHostTable = createMemo(
-    () => primaryResources().length > 0 || serviceResources().length === 0,
-  );
-  const serviceCountColumnStyle = createMemo(() =>
-    isMobile()
-      ? { width: '80px', 'min-width': '80px', 'max-width': '90px' }
-      : { width: '110px', 'min-width': '110px', 'max-width': '130px' },
-  );
-  const serviceQueueColumnStyle = createMemo(() =>
-    isMobile()
-      ? { width: '88px', 'min-width': '88px', 'max-width': '104px' }
-      : { width: '120px', 'min-width': '120px', 'max-width': '140px' },
-  );
-  const serviceHealthColumnStyle = createMemo(() =>
-    isMobile()
-      ? { width: '100px', 'min-width': '100px', 'max-width': '120px' }
-      : { width: '140px', 'min-width': '140px', 'max-width': '170px' },
-  );
-  const serviceActionColumnStyle = createMemo(() =>
-    isMobile()
-      ? { width: '82px', 'min-width': '82px', 'max-width': '96px' }
-      : { width: '120px', 'min-width': '120px', 'max-width': '140px' },
-  );
-
-  const getUnifiedSources = (resource: Resource): string[] => {
-    const platformData = resource.platformData as { sources?: string[] } | undefined;
-    return platformData?.sources ?? [];
-  };
 
   return {
     isMobile,
@@ -244,24 +128,24 @@ export function useUnifiedResourceTableState(props: UnifiedResourceTableProps) {
     renderSortIndicator,
     resolveResourceLabel,
     visibleHostTableItems,
-    hostTopSpacerHeight,
-    hostBottomSpacerHeight,
+    hostTopSpacerHeight: () => hostSpacerHeights().top,
+    hostBottomSpacerHeight: () => hostSpacerHeights().bottom,
     hostWindowing,
     sortedPBSResources,
     sortedPMGResources,
     ioScale,
     ...viewportSync,
-    resourceColumnStyle,
-    metricColumnStyle,
-    ioColumnStyle,
-    sourceColumnStyle,
-    uptimeColumnStyle,
-    tempColumnStyle,
+    resourceColumnStyle: () => columnStyles().resourceColumnStyle,
+    metricColumnStyle: () => columnStyles().metricColumnStyle,
+    ioColumnStyle: () => columnStyles().ioColumnStyle,
+    sourceColumnStyle: () => columnStyles().sourceColumnStyle,
+    uptimeColumnStyle: () => columnStyles().uptimeColumnStyle,
+    tempColumnStyle: () => columnStyles().tempColumnStyle,
     showHostTable,
-    serviceCountColumnStyle,
-    serviceQueueColumnStyle,
-    serviceHealthColumnStyle,
-    serviceActionColumnStyle,
+    serviceCountColumnStyle: () => columnStyles().serviceCountColumnStyle,
+    serviceQueueColumnStyle: () => columnStyles().serviceQueueColumnStyle,
+    serviceHealthColumnStyle: () => columnStyles().serviceHealthColumnStyle,
+    serviceActionColumnStyle: () => columnStyles().serviceActionColumnStyle,
     toggleExpand,
     getUnifiedSources,
   };

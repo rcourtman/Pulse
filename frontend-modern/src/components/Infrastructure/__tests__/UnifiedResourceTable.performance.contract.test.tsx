@@ -9,6 +9,7 @@ import unifiedResourceTableSource from '@/components/Infrastructure/UnifiedResou
 import unifiedResourceTableStateSource from '@/components/Infrastructure/useUnifiedResourceTableState.ts?raw';
 import unifiedResourceTableViewportSyncSource from '@/components/Infrastructure/useUnifiedResourceTableViewportSync.ts?raw';
 import unifiedResourceTableModelSource from '@/components/Infrastructure/unifiedResourceTableModel.ts?raw';
+import unifiedResourceTableStateModelSource from '@/components/Infrastructure/unifiedResourceTableStateModel.ts?raw';
 import infrastructureSummarySource from '@/components/Infrastructure/InfrastructureSummary.tsx?raw';
 import infrastructureSummaryStateSource from '@/components/Infrastructure/useInfrastructureSummaryState.ts?raw';
 import infrastructureSummaryModelSource from '@/components/Infrastructure/infrastructureSummaryModel.ts?raw';
@@ -194,9 +195,14 @@ describe('UnifiedResourceTable performance contract', () => {
       expect(unifiedResourceTableSource).not.toContain('const sortedPBSResources = createMemo(() =>');
       expect(unifiedResourceTableSource).not.toContain('const getOutlierEmphasis =');
       expect(unifiedResourceTableSource).not.toContain('const getPBSTableRow =');
-      expect(unifiedResourceTableStateSource).toContain('splitPrimaryAndServiceResources');
+      expect(unifiedResourceTableStateSource).toContain("from './unifiedResourceTableStateModel'");
+      expect(unifiedResourceTableStateSource).toContain('buildHostTableItems');
+      expect(unifiedResourceTableStateSource).toContain('getUnifiedResourceTableColumnStyles');
       expect(unifiedResourceTableStateSource).toContain('useTableWindowing');
       expect(unifiedResourceTableStateSource).toContain('useUnifiedResourceTableViewportSync');
+      expect(unifiedResourceTableStateSource).not.toContain('const resourceColumnStyle = createMemo(() =>');
+      expect(unifiedResourceTableStateSource).not.toContain("const showGroupHeaders = props.groupingMode === 'grouped'");
+      expect(unifiedResourceTableStateSource).not.toContain('const items: HostTableItem[] = [];');
       expect(unifiedResourceTableStateSource).not.toContain('window.addEventListener');
       expect(unifiedResourceTableStateSource).not.toContain('getBoundingClientRect');
       expect(unifiedResourceTableViewportSyncSource).toContain('window.addEventListener');
@@ -206,6 +212,13 @@ describe('UnifiedResourceTable performance contract', () => {
       expect(unifiedResourceTableModelSource).toContain('export const getPBSTableRow');
       expect(unifiedResourceTableModelSource).toContain('export const getPMGTableRow');
       expect(unifiedResourceTableModelSource).toContain('export const getOutlierEmphasis');
+      expect(unifiedResourceTableStateModelSource).toContain('export const buildHostTableItems');
+      expect(unifiedResourceTableStateModelSource).toContain(
+        'export const getUnifiedResourceTableColumnStyles',
+      );
+      expect(unifiedResourceTableStateModelSource).toContain(
+        'export const getNextUnifiedResourceTableSortState',
+      );
     });
 
     it('keeps infrastructure summary fetch runtime out of the render shell', () => {

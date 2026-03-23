@@ -138,6 +138,14 @@
       ]
     },
     {
+      "path": "frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts",
+      "rationale": "unified resource table state derivation, sort-cycle policy, service sorting, and responsive column layout are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary",
+      "subsystems": [
+        "performance-and-scalability",
+        "unified-resources"
+      ]
+    },
+    {
       "path": "frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts",
       "rationale": "infrastructure summary chart polling, cache hydration, and summary-state orchestration are both a canonical unified-resource consumer surface and a fleet-scale summary chart hot-path boundary",
       "subsystems": [
@@ -2706,6 +2714,7 @@
         "frontend-modern/src/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx",
         "frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx",
         "frontend-modern/src/components/Infrastructure/unifiedResourceTableModel.ts",
+        "frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts",
         "frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts",
         "frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts",
         "frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts",
@@ -2830,6 +2839,7 @@
               "frontend-modern/src/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx",
               "frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx",
               "frontend-modern/src/components/Infrastructure/unifiedResourceTableModel.ts",
+              "frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts",
               "frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts",
               "frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts",
               "frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts"
@@ -2863,7 +2873,8 @@
               "frontend-modern/src/components/Dashboard/MetricBar.test.tsx",
               "frontend-modern/src/components/Dashboard/StackedMemoryBar.test.tsx",
               "frontend-modern/src/components/Dashboard/ThresholdSlider.test.tsx",
-              "frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx"
+              "frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx",
+              "frontend-modern/src/components/Infrastructure/__tests__/unifiedResourceTableStateModel.test.ts"
             ]
           },
           {
@@ -3221,6 +3232,7 @@
         "frontend-modern/src/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx",
         "frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx",
         "frontend-modern/src/components/Infrastructure/unifiedResourceTableModel.ts",
+        "frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts",
         "frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts",
         "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts",
         "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDockerActionsState.ts",
@@ -3317,6 +3329,7 @@
               "frontend-modern/src/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx",
               "frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx",
               "frontend-modern/src/components/Infrastructure/unifiedResourceTableModel.ts",
+              "frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts",
               "frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts",
               "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts",
               "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDockerActionsState.ts",
@@ -3345,6 +3358,7 @@
               "frontend-modern/src/components/Infrastructure/__tests__/resourceDetailMappers.test.ts",
               "frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx",
               "frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.workloads-link.test.tsx",
+              "frontend-modern/src/components/Infrastructure/__tests__/unifiedResourceTableStateModel.test.ts",
               "frontend-modern/src/features/infrastructure/__tests__/InfrastructurePageSurface.guardrails.test.ts",
               "frontend-modern/src/hooks/__tests__/useDashboardTrends.test.ts",
               "frontend-modern/src/hooks/__tests__/useUnifiedResources.test.ts",
