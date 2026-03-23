@@ -117,7 +117,7 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
       },
     });
 
-    const { getByRole, getByText, queryByRole } = render(() => (
+    const { getByRole, getByTestId, getByText, queryByRole } = render(() => (
       <ResourceDetailDrawer resource={resource} />
     ));
 
@@ -129,6 +129,7 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     expect(getByText('Hybrid')).toBeInTheDocument();
     expect(() => getByText('Platform ID')).toThrow();
     expect(getByText('Quick links')).toBeInTheDocument();
+    expect(getByTestId('resource-current-state-section').querySelector('.border-dashed')).toBeNull();
     expect(queryByRole('button', { name: 'Show details' })).toBeNull();
     expect(() => getByText('Runtime')).toThrow();
     expect(getByRole('link', { name: 'Open related workloads for host-1' })).toHaveTextContent(

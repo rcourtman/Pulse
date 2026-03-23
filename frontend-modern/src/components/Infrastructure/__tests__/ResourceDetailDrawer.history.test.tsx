@@ -322,6 +322,7 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(screen.queryByText('Details')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Show details' })).toBeNull();
     expect(screen.queryByText('Platform ID')).toBeNull();
+    expect(currentStateSection.querySelector('.border-dashed')).toBeNull();
     expect(within(identitySection).getByText('Tags')).toBeInTheDocument();
     expect(within(currentStateSection).queryByText('Tags')).toBeNull();
     expect(

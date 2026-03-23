@@ -68,6 +68,7 @@ cross-source deduplication.
 46. `frontend-modern/src/components/Infrastructure/InfrastructureSummary.tsx`
 47. `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`
 48. `frontend-modern/src/components/Infrastructure/infrastructureSummaryModel.ts`
+49. `frontend-modern/src/utils/resourceIdentity.ts`
 
 ## Shared Boundaries
 
@@ -555,6 +556,10 @@ resource label no longer need to re-encode the governed summary boundary by
 hand. Settings quick-picks, infrastructure selectors, and the connected-
 infrastructure / monitored-system projections now all stay on that same
 preferred-label helper instead of carrying a separate raw-name fallback fork.
+That same helper also owns platform-id redundancy suppression for
+infrastructure drawers, so surfaces only render platform IDs when they add
+identity context beyond the canonical display name or hostname instead of
+repeating the same identifier chrome in both runtime and identity sections.
 The shared workloads-link helper now also uses that preferred-label helper
 for Kubernetes-cluster navigation fallbacks, so drawer/table navigation
 context stays inside the same governed resource-label boundary instead of
