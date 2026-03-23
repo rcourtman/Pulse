@@ -201,6 +201,10 @@ count decisions. Commercial usage UI may show grouped monitored systems, but
 it must render the canonical backend explanation for why one or more
 top-level views counted as a single monitored system instead of inventing
 support copy or merge heuristics in the frontend.
+That billing support surface must also remain readable while mixed-version
+clients and servers roll forward: missing explanation payloads may degrade to a
+safe generic explanation, but the monitored-system ledger must never fail the
+page or hide counted systems because the nested support details are absent.
 Frontend billing/admin surfaces must not synthesize `plan_version` from
 subscription lifecycle state. When a hosted billing record lacks a plan label,
 the UI must preserve that absence instead of fabricating values like `active`

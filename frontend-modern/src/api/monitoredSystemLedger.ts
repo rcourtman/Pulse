@@ -24,7 +24,7 @@ export interface MonitoredSystemLedgerEntry {
   status: string; // "online" | "offline" | "unknown"
   last_seen: string; // RFC3339 or empty
   source: string;
-  explanation: MonitoredSystemLedgerExplanation;
+  explanation?: MonitoredSystemLedgerExplanation;
 }
 
 export interface MonitoredSystemLedgerResponse {
@@ -37,6 +37,26 @@ export class MonitoredSystemLedgerAPI {
   private static readonly baseUrl = '/api/license/monitored-system-ledger';
 
   static async getLedger(): Promise<MonitoredSystemLedgerResponse> {
-    return apiFetchJSON<MonitoredSystemLedgerResponse>(this.baseUrl);
+    const response = await apiFetchJSON<MonitoredSystemLedgerResponse>(this.baseUrl);
+    return {
+      ...response,
+      systems: (response.systems ?? []).map(normalizeMonitoredSystemLedgerEntry),
+    };
   }
+}
+
+function normalizeMonitoredSystemLedgerEntry(
+  entry: MonitoredSystemLedgerEntry,
+): MonitoredSystemLedgerEntry {
+  const explanation = entry.explanation;
+  return {
+    ...entry,
+    explanation: {
+      summary:
+        explanation?.summary ??
+        'Pulse counts this top-level collection path as one monitored system.',
+      reasons: explanation?.reasons ?? [],
+      surfaces: explanation?.surfaces ?? [],
+    },
+  };
 }

@@ -209,4 +209,33 @@ describe('MonitoredSystemLedgerPanel', () => {
     expect(screen.getByText('server-b host (host, agent)')).toBeInTheDocument();
     expect(screen.queryByText('Failed to load monitored system ledger.')).not.toBeInTheDocument();
   });
+
+  it('does not crash when explanation payload is missing', async () => {
+    getLedgerMock.mockResolvedValue({
+      systems: [
+        {
+          name: 'server-a',
+          type: 'host',
+          status: 'online',
+          last_seen: '2026-01-01T00:00:00Z',
+          source: 'agent',
+        },
+      ],
+      total: 1,
+      limit: 10,
+    } as MonitoredSystemLedgerResponse);
+
+    render(() => <MonitoredSystemLedgerPanel />);
+
+    await waitFor(() => {
+      expect(screen.getByText('server-a')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Why this counts' }));
+
+    expect(
+      screen.getByText('Pulse counts this top-level collection path as one monitored system.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Included views')).not.toBeInTheDocument();
+  });
 });

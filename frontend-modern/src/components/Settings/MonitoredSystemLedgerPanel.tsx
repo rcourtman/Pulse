@@ -11,7 +11,10 @@ import {
 } from '@/components/shared/Table';
 import { formatRelativeTime } from '@/utils/format';
 import { MonitoredSystemLedgerAPI } from '@/api/monitoredSystemLedger';
-import type { MonitoredSystemLedgerEntry } from '@/api/monitoredSystemLedger';
+import type {
+  MonitoredSystemLedgerEntry,
+  MonitoredSystemLedgerExplanation,
+} from '@/api/monitoredSystemLedger';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import {
   getMonitoredSystemLedgerErrorState,
@@ -30,6 +33,16 @@ interface MonitoredSystemLedgerPanelProps {
 function usagePercent(total: number, limit: number): number {
   if (limit <= 0) return 0;
   return Math.min(100, Math.round((total / limit) * 100));
+}
+
+function systemExplanation(system: MonitoredSystemLedgerEntry): MonitoredSystemLedgerExplanation {
+  return {
+    summary:
+      system.explanation?.summary ??
+      'Pulse counts this top-level collection path as one monitored system.',
+    reasons: system.explanation?.reasons ?? [],
+    surfaces: system.explanation?.surfaces ?? [],
+  };
 }
 
 export function MonitoredSystemLedgerPanel(props: MonitoredSystemLedgerPanelProps = {}) {
@@ -131,6 +144,7 @@ export function MonitoredSystemLedgerPanel(props: MonitoredSystemLedgerPanelProp
                   const key = systemKey(system, index());
                   const explanationID = `monitored-system-explanation-${index()}`;
                   const expanded = () => expandedSystemKey() === key;
+                  const explanation = systemExplanation(system);
                   return (
                     <TableRow>
                       <TableCell>
@@ -151,20 +165,20 @@ export function MonitoredSystemLedgerPanel(props: MonitoredSystemLedgerPanelProp
                               class="space-y-2 rounded-md border border-border bg-surface px-3 py-2 text-xs text-muted"
                             >
                               <p class="whitespace-normal text-base-content">
-                                {system.explanation.summary}
+                                {explanation.summary}
                               </p>
-                              <Show when={system.explanation.reasons.length > 0}>
+                              <Show when={explanation.reasons.length > 0}>
                                 <ul class="space-y-1 whitespace-normal">
-                                  <For each={system.explanation.reasons}>
+                                  <For each={explanation.reasons}>
                                     {(reason) => <li>{reason.summary}</li>}
                                   </For>
                                 </ul>
                               </Show>
-                              <Show when={system.explanation.surfaces.length > 0}>
+                              <Show when={explanation.surfaces.length > 0}>
                                 <div class="space-y-1">
                                   <p class="font-medium text-base-content">Included views</p>
                                   <ul class="space-y-1 whitespace-normal">
-                                    <For each={system.explanation.surfaces}>
+                                    <For each={explanation.surfaces}>
                                       {(surface) => (
                                         <li>
                                           {surface.name} ({surface.type}, {surface.source})

@@ -230,6 +230,10 @@ shared monitored-system explanation summary, sanitized grouping reasons, and
 included top-level surfaces exactly as the unified-resource resolver computed
 them, while the frontend client stays in lockstep with that nested payload
 shape.
+That client contract must also fail closed when older or partial payloads omit
+the nested explanation object: the frontend may normalize missing explanation
+fields to empty reasons/surfaces plus a safe default summary, but it must not
+crash or invent non-canonical grouping details.
 Action-plan stale-plan protection on those audit records now uses the canonical
 `resourceVersion`, `policyVersion`, and `planHash` fields only, so the
 response contract stays deterministic without extra version baggage.
