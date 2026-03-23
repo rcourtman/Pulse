@@ -353,6 +353,29 @@ describe('ResourceDetailDrawer change history section', () => {
     ).toBeNull();
   });
 
+  it('keeps default internal cloud-summary posture out of the investigation context drawer block', async () => {
+    const resource = baseResource({
+      id: 'agent-default-policy',
+      name: 'default-policy-host',
+      displayName: 'Default Policy Host',
+      policy: {
+        sensitivity: 'internal',
+        routing: {
+          scope: 'cloud-summary',
+        },
+      },
+      aiSafeSummary: 'agent resource; status online; sources agent',
+    });
+
+    render(() => <ResourceDetailDrawer resource={resource} />);
+
+    await screen.findByText('Investigation context');
+    fireEvent.click(screen.getByRole('button', { name: 'Show context' }));
+
+    expect(screen.queryByText('Data Governance')).toBeNull();
+    expect(screen.queryByText('AI-Safe Summary')).toBeNull();
+  });
+
   it('keeps details label-first without a summary sentence', () => {
     facetBundleMock.getFacetBundle.mockResolvedValueOnce({
       capabilities: [],

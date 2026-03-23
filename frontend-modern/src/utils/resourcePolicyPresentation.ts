@@ -108,15 +108,18 @@ export const getResourcePolicyBadges = (policy?: ResourcePolicy): PolicyBadgePre
   return [sensitivityPresentation[policy.sensitivity], routingPresentation[policy.routing.scope]];
 };
 
+export const hasDefaultResourcePolicyPosture = (policy?: ResourcePolicy): boolean =>
+  Boolean(
+    policy &&
+      policy.sensitivity === 'internal' &&
+      policy.routing.scope === 'cloud-summary' &&
+      (policy.routing.redact?.length ?? 0) === 0,
+  );
+
 export const getResourcePolicyTableBadges = (policy?: ResourcePolicy): PolicyBadgePresentation[] => {
   if (!policy) return [];
 
-  const hasDefaultPolicyPosture =
-    policy.sensitivity === 'internal' &&
-    policy.routing.scope === 'cloud-summary' &&
-    (policy.routing.redact?.length ?? 0) === 0;
-
-  if (hasDefaultPolicyPosture) {
+  if (hasDefaultResourcePolicyPosture(policy)) {
     return [];
   }
 

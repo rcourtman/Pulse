@@ -205,6 +205,10 @@ stay available in the drawer and AI/governance surfaces without being promoted
 to always-on row chrome. Inline row badges are reserved for non-default policy
 states so the canonical resource surface does not imply that every host carries
 an operator-actionable governance exception.
+The resource drawer now applies the same rule to its investigation-context
+governance block: the default posture remains part of the canonical policy
+contract, but the drawer only surfaces the governance section when the policy
+state is non-default or otherwise consequential to operator understanding.
 The shared routing policy itself now stays intentionally minimal: it carries
 only the routing scope and the redaction hints derived from canonical
 sensitivity, and the cloud-summary decision is derived from that scope

@@ -24,6 +24,7 @@ import {
   getResourcePolicyDisplayLabel,
   getResourcePolicyRedactionLabels,
   getResourceRoutingScopeLabel,
+  hasDefaultResourcePolicyPosture,
 } from '@/utils/resourcePolicyPresentation';
 import type { ResourceIntelligence } from '@/types/aiIntelligence';
 import {
@@ -79,7 +80,9 @@ export const useResourceDetailDrawerDerivedState = (
       : (resource.aiSafeSummary?.trim() ?? ''),
   );
   const hasGovernanceData = createMemo(
-    () => policyBadges().length > 0 || Boolean(governanceSummary()),
+    () =>
+      !hasDefaultResourcePolicyPosture(resource.policy) &&
+      (policyBadges().length > 0 || Boolean(governanceSummary())),
   );
 
   const agentMeta = createMemo(

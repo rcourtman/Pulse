@@ -4,6 +4,7 @@ import {
   RESOURCE_POLICY_REDACTION_ORDER,
   RESOURCE_POLICY_ROUTING_ORDER,
   RESOURCE_POLICY_SENSITIVITY_ORDER,
+  hasDefaultResourcePolicyPosture,
   getResourcePolicyTableBadges,
   getResourcePolicyDisplayLabel,
   getResourcePolicyRedactionSummaries,
@@ -37,6 +38,15 @@ describe('resourcePolicyPresentation utils', () => {
 
   it('suppresses the default internal cloud-summary posture in table rows', () => {
     expect(
+      hasDefaultResourcePolicyPosture({
+        sensitivity: 'internal',
+        routing: {
+          scope: 'cloud-summary',
+        },
+      }),
+    ).toBe(true);
+
+    expect(
       getResourcePolicyTableBadges({
         sensitivity: 'internal',
         routing: {
@@ -54,6 +64,16 @@ describe('resourcePolicyPresentation utils', () => {
         },
       }).map((badge) => badge.label),
     ).toEqual(['Sensitive', 'Local First']);
+
+    expect(
+      hasDefaultResourcePolicyPosture({
+        sensitivity: 'sensitive',
+        routing: {
+          scope: 'local-first',
+          redact: ['hostname'],
+        },
+      }),
+    ).toBe(false);
   });
 
   it('uses the governed aiSafeSummary for redacted resources', () => {
