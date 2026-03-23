@@ -14,6 +14,8 @@ import historyChartModelSource from '@/components/shared/historyChartModel.ts?ra
 import mobileNavBarSource from '@/components/shared/MobileNavBar.tsx?raw';
 import mobileNavBarModelSource from '@/components/shared/mobileNavBarModel.ts?raw';
 import infrastructureSelectorSource from '@/components/shared/InfrastructureSelector.tsx?raw';
+import pulseDataGridSource from '@/components/shared/PulseDataGrid.tsx?raw';
+import pulseDataGridModelSource from '@/components/shared/pulseDataGridModel.ts?raw';
 import interactiveSparklineSource from '@/components/shared/InteractiveSparkline.tsx?raw';
 import interactiveSparklineModelSource from '@/components/shared/interactiveSparklineModel.ts?raw';
 import infrastructureSummaryTableSource from '@/components/shared/InfrastructureSummaryTable.tsx?raw';
@@ -31,6 +33,7 @@ import helpIconStateSource from '@/components/shared/useHelpIconState.ts?raw';
 import historyChartStateSource from '@/components/shared/useHistoryChartState.ts?raw';
 import mobileNavBarStateSource from '@/components/shared/useMobileNavBarState.ts?raw';
 import infrastructureSelectorStateSource from '@/components/shared/useInfrastructureSelectorState.ts?raw';
+import pulseDataGridStateSource from '@/components/shared/usePulseDataGridState.ts?raw';
 import interactiveSparklineStateSource from '@/components/shared/useInteractiveSparklineState.ts?raw';
 import webInterfaceUrlFieldSource from '@/components/shared/WebInterfaceUrlField.tsx?raw';
 import webInterfaceUrlFieldModelSource from '@/components/shared/webInterfaceUrlFieldModel.ts?raw';
@@ -327,5 +330,23 @@ describe('shared primitive guardrails', () => {
     expect(mobileNavBarModelSource).toContain('buildOrderedMobileNavUtilityTabs');
     expect(mobileNavBarModelSource).toContain('getMobileNavAlertBadgeCounts');
     expect(mobileNavBarModelSource).toContain('getMobileNavFadeState');
+  });
+
+  it('keeps pulse data grid on shell, runtime, and model owners', () => {
+    expect(pulseDataGridSource).toContain('usePulseDataGridState');
+    expect(pulseDataGridSource).toContain('getPulseDataGridAlignClass');
+    expect(pulseDataGridSource).toContain('isPulseDataGridInteractiveTarget');
+    expect(pulseDataGridSource).not.toContain('useBreakpoint');
+    expect(pulseDataGridSource).not.toContain('createStore');
+    expect(pulseDataGridSource).not.toContain('target.closest(');
+
+    expect(pulseDataGridStateSource).toContain('export function usePulseDataGridState');
+    expect(pulseDataGridStateSource).toContain('useBreakpoint');
+    expect(pulseDataGridStateSource).toContain('createStore');
+    expect(pulseDataGridStateSource).toContain('reconcile(');
+
+    expect(pulseDataGridModelSource).toContain('export const getPulseDataGridAlignClass');
+    expect(pulseDataGridModelSource).toContain('export const isPulseDataGridInteractiveTarget');
+    expect(pulseDataGridModelSource).toContain('target.closest(');
   });
 });

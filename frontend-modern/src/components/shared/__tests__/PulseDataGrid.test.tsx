@@ -1,6 +1,9 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import pulseDataGridSource from '@/components/shared/PulseDataGrid.tsx?raw';
+import pulseDataGridModelSource from '@/components/shared/pulseDataGridModel.ts?raw';
+import pulseDataGridStateSource from '@/components/shared/usePulseDataGridState.ts?raw';
 import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
 
 type TestRow = {
@@ -11,6 +14,24 @@ type TestRow = {
 describe('PulseDataGrid', () => {
   afterEach(() => {
     cleanup();
+  });
+
+  it('keeps the shared pulse data grid on shell, runtime, and model owners', () => {
+    expect(pulseDataGridSource).toContain('usePulseDataGridState');
+    expect(pulseDataGridSource).toContain('getPulseDataGridAlignClass');
+    expect(pulseDataGridSource).toContain('isPulseDataGridInteractiveTarget');
+    expect(pulseDataGridSource).not.toContain('useBreakpoint');
+    expect(pulseDataGridSource).not.toContain('createStore');
+    expect(pulseDataGridSource).not.toContain('target.closest(');
+
+    expect(pulseDataGridStateSource).toContain('export function usePulseDataGridState');
+    expect(pulseDataGridStateSource).toContain('useBreakpoint');
+    expect(pulseDataGridStateSource).toContain('createStore');
+    expect(pulseDataGridStateSource).toContain('reconcile(');
+
+    expect(pulseDataGridModelSource).toContain('export const getPulseDataGridAlignClass');
+    expect(pulseDataGridModelSource).toContain('export const isPulseDataGridInteractiveTarget');
+    expect(pulseDataGridModelSource).toContain('target.closest(');
   });
 
   it('triggers the row handler when a non-interactive cell is clicked', () => {

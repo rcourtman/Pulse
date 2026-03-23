@@ -1,6 +1,4 @@
-import { JSX, For, Show, createEffect, createMemo, splitProps } from 'solid-js';
-import { createStore, reconcile } from 'solid-js/store';
-import { useBreakpoint } from '@/hooks/useBreakpoint';
+import { For, Show, createMemo, splitProps } from 'solid-js';
 import {
   Table,
   TableHeader,
@@ -9,60 +7,14 @@ import {
   TableHead,
   TableCell,
 } from '@/components/shared/Table';
+import {
+  getPulseDataGridAlignClass,
+  isPulseDataGridInteractiveTarget,
+  type PulseDataGridProps,
+} from './pulseDataGridModel';
+import { usePulseDataGridState } from './usePulseDataGridState';
 
-export interface TableColumn<T> {
-  key: keyof T | string;
-  label: string;
-  /** Custom render function for the cell content. Useful for badges, links, or complex nested data */
-  render?: (row: T) => JSX.Element;
-  /** Optional alignment for the header and cell content */
-  align?: 'left' | 'center' | 'right';
-  /** Optional fixed width or width class */
-  width?: string;
-  /** Hidden on mobile via CSS class */
-  hiddenOnMobile?: boolean;
-}
-
-export interface PulseDataGridProps<T> {
-  /** The rows of data to display */
-  data: T[];
-  /** Definitions for each column */
-  columns: TableColumn<T>[];
-
-  /**
-   * A unique identifier function for each row to help SolidJS optimize rendering.
-   * Typically `(row) => row.id`
-   */
-  keyExtractor: (row: T) => string | number;
-
-  /** Triggers when a row is clicked. */
-  onRowClick?: (row: T) => void;
-
-  /** What to display when the data array is empty */
-  emptyState?: JSX.Element;
-
-  /** Set to true to show a loading state */
-  isLoading?: boolean;
-
-  /** Determines if the current row should be expanded */
-  isRowExpanded?: (row: T) => boolean;
-
-  /** Render function for the expanded content of a row */
-  expandedRender?: (row: T) => JSX.Element;
-
-  /** Minimum width on desktop before horizontal scrolling kicks in */
-  desktopMinWidth?: string;
-
-  /**
-   * Minimum width on mobile.
-   * Defaults to '100%' so the table flexes into horizontal scroll natively
-   * without artificially breaking the screen width.
-   */
-  mobileMinWidth?: string;
-
-  /** Custom classes applied to the root container */
-  class?: string;
-}
+export type { PulseDataGridProps, TableColumn } from './pulseDataGridModel';
 
 /**
  * A standardized, responsive datagrid component for Pulse.
@@ -85,51 +37,7 @@ export function PulseDataGrid<T>(props: PulseDataGridProps<T>) {
     'class',
   ]);
 
-  const { isMobile } = useBreakpoint();
-  type StableRow = {
-    __pulseKey: string | number;
-    value: T;
-  };
-  const [stableRows, setStableRows] = createStore<StableRow[]>([]);
-
-  const effectiveMinWidth = createMemo(() => {
-    if (isMobile()) {
-      return local.mobileMinWidth ?? '100%';
-    }
-    return local.desktopMinWidth ?? '800px';
-  });
-
-  const getAlignClass = (align?: 'left' | 'center' | 'right') => {
-    switch (align) {
-      case 'center':
-        return 'text-center justify-center';
-      case 'right':
-        return 'text-right justify-end';
-      case 'left':
-      default:
-        return 'text-left justify-start';
-    }
-  };
-
-  const isInteractiveTarget = (target: EventTarget | null) =>
-    target instanceof Element &&
-    Boolean(
-      target.closest(
-        'button, a, input, select, textarea, summary, [role="button"], [data-row-action]',
-      ),
-    );
-
-  createEffect(() => {
-    setStableRows(
-      reconcile(
-        local.data.map((row) => ({
-          __pulseKey: local.keyExtractor(row),
-          value: row,
-        })),
-        { key: '__pulseKey' },
-      ),
-    );
-  });
+  const grid = usePulseDataGridState(local);
 
   return (
     <div class={`overflow-hidden rounded-md border border-border bg-surface ${local.class || ''}`}>
@@ -143,7 +51,7 @@ export function PulseDataGrid<T>(props: PulseDataGridProps<T>) {
       >
         <style>{`.overflow-x-auto::-webkit-scrollbar { display: none; }`}</style>
 
-        <Table class="w-full border-collapse" style={{ 'min-width': effectiveMinWidth() }}>
+        <Table class="w-full border-collapse" style={{ 'min-width': grid.effectiveMinWidth() }}>
           <TableHeader class="bg-surface-alt border-b border-border">
             <TableRow>
               <For each={local.columns}>
@@ -152,7 +60,7 @@ export function PulseDataGrid<T>(props: PulseDataGridProps<T>) {
                     class={`
                                             px-3 sm:px-4 py-2.5 
                                             text-[11px] sm:text-xs font-semibold uppercase tracking-wider whitespace-nowrap text-muted
-                                            ${getAlignClass(col.align)}
+                                            ${getPulseDataGridAlignClass(col.align)}
                                             ${col.hiddenOnMobile ? 'hidden sm:table-cell' : ''}
                                         `}
                     style={col.width ? { width: col.width } : {}}
@@ -165,7 +73,7 @@ export function PulseDataGrid<T>(props: PulseDataGridProps<T>) {
           </TableHeader>
           <TableBody class="divide-y divide-border transition-colors">
             <Show when={!local.isLoading && local.data.length > 0}>
-              <For each={stableRows}>
+              <For each={grid.stableRows}>
                 {(stableRow) => {
                   const row = () => stableRow.value;
                   const expanded = createMemo(() => local.isRowExpanded?.(row()));
@@ -182,7 +90,7 @@ export function PulseDataGrid<T>(props: PulseDataGridProps<T>) {
                                                     }
                                                 `}
                         onClick={(event) => {
-                          if (isInteractiveTarget(event.target)) {
+                          if (isPulseDataGridInteractiveTarget(event.target)) {
                             return;
                           }
                           local.onRowClick?.(row());
@@ -194,7 +102,7 @@ export function PulseDataGrid<T>(props: PulseDataGridProps<T>) {
                               class={`
                                                                 px-3 sm:px-4 py-2 sm:py-3.5 
                                                                 text-sm text-base-content align-middle
-                                                                ${getAlignClass(col.align)}
+                                                                ${getPulseDataGridAlignClass(col.align)}
                                                                 ${col.hiddenOnMobile ? 'hidden sm:table-cell' : ''}
                                                             `}
                             >

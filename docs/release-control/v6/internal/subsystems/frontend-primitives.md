@@ -256,6 +256,14 @@ selection, and `frontend-modern/src/components/shared/commandPaletteModel.ts`
 owns canonical command construction plus query normalization and filtering
 policy. Future command-palette work should extend those owners instead of
 pushing route construction or search policy back into the shared shell.
+The shared pulse data grid now follows that same owner split.
+`frontend-modern/src/components/shared/PulseDataGrid.tsx` stays the render
+shell, `frontend-modern/src/components/shared/usePulseDataGridState.ts` owns
+breakpoint-driven min-width selection and stable-row reconciliation, and
+`frontend-modern/src/components/shared/pulseDataGridModel.ts` owns alignment
+class policy plus interactive-target row-click protection. Future pulse-data-
+grid work should extend those owners instead of pushing breakpoint lifecycle or
+interaction policy back into the shared shell.
 
 The audit log settings surface now follows that same owner split.
 `frontend-modern/src/components/Settings/AuditLogPanel.tsx` stays the canonical
