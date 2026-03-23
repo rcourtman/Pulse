@@ -9,6 +9,9 @@ import investigateAlertButtonSource from '@/components/Alerts/InvestigateAlertBu
 import alertTargetTypesSource from '@/utils/alertTargetTypes.ts?raw';
 import resourceBadgesSource from '@/components/Infrastructure/resourceBadges.ts?raw';
 import infrastructureSummaryTableSource from '@/components/shared/InfrastructureSummaryTable.tsx?raw';
+import infrastructureSummaryTableRowSource from '@/components/shared/InfrastructureSummaryTableRow.tsx?raw';
+import sharedInfrastructureSummaryTableModelSource from '@/components/shared/infrastructureSummaryTableModel.ts?raw';
+import infrastructureSummaryTableStateSource from '@/components/shared/useInfrastructureSummaryTableState.ts?raw';
 import resourceBadgePresentationSource from '@/utils/resourceBadgePresentation.ts?raw';
 import workloadTypeBadgesSource from '@/components/shared/workloadTypeBadges.ts?raw';
 import tagBadgesSource from '@/components/shared/TagBadges.tsx?raw';
@@ -2588,7 +2591,9 @@ describe('frontend resource type boundaries', () => {
     expect(chatIdentifiersSource).toContain('normalizeChatMentionKeyPart');
     expect(chatIdentifiersSource).toContain('normalizeChatToolName');
     expect(infrastructureSummaryModelSource).toContain('getNormalizedIdentityLookupVariants');
-    expect(infrastructureSummaryTableSource).toContain('getNormalizedIdentityLookupVariants');
+    expect(sharedInfrastructureSummaryTableModelSource).toContain(
+      'getNormalizedIdentityLookupVariants',
+    );
     expect(resourceIdentitySource).toContain('getNormalizedIdentityLookupVariants');
     expect(stringUtilsSource).toContain('export const asTrimmedString');
     expect(resourceIdentitySource).not.toContain(
@@ -2597,8 +2602,24 @@ describe('frontend resource type boundaries', () => {
     expect(infrastructureSummaryModelSource).not.toContain(
       'const asTrimmedString = (value: unknown): string | null => {',
     );
-    expect(infrastructureSummaryTableSource).not.toContain(
+    expect(sharedInfrastructureSummaryTableModelSource).not.toContain(
       'const asTrimmedString = (value: unknown): string | undefined => {',
+    );
+    expect(infrastructureSummaryTableSource).toContain('useInfrastructureSummaryTableState');
+    expect(infrastructureSummaryTableSource).toContain('InfrastructureSummaryTableRow');
+    expect(infrastructureSummaryTableSource).not.toContain('useWebSocket');
+    expect(infrastructureSummaryTableSource).not.toContain('useAlertsActivation');
+    expect(infrastructureSummaryTableSource).not.toContain('createSignal');
+    expect(infrastructureSummaryTableSource).not.toContain('getAgentLikeIdentityAliases');
+    expect(infrastructureSummaryTableStateSource).toContain('useWebSocket');
+    expect(infrastructureSummaryTableStateSource).toContain('useAlertsActivation');
+    expect(infrastructureSummaryTableStateSource).toContain(
+      'export function useInfrastructureSummaryTableState',
+    );
+    expect(infrastructureSummaryTableRowSource).toContain('InfrastructureDetailsDrawer');
+    expect(infrastructureSummaryTableRowSource).toContain('getAlertStyles');
+    expect(sharedInfrastructureSummaryTableModelSource).toContain(
+      'resolveInfrastructureSummaryLinkedAgent',
     );
     expect(useUnifiedResourcesSource).not.toContain('normalizeResourcePolicyAISafeSummary(');
     expect(useUnifiedResourcesSource).not.toContain('normalizeResourcePolicy(');

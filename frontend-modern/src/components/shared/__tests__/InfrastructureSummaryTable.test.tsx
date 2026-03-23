@@ -2,6 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, waitFor } from '@solidjs/testing-library';
 import { InfrastructureSummaryTable } from '@/components/shared/InfrastructureSummaryTable';
 import type { Agent, Node } from '@/types/api';
+import infrastructureSummaryTableSource from '@/components/shared/InfrastructureSummaryTable.tsx?raw';
+import infrastructureSummaryTableRowSource from '@/components/shared/InfrastructureSummaryTableRow.tsx?raw';
+import infrastructureSummaryTableModelSource from '@/components/shared/infrastructureSummaryTableModel.ts?raw';
+import infrastructureSummaryTableStateSource from '@/components/shared/useInfrastructureSummaryTableState.ts?raw';
 import resourceIdentitySource from '@/utils/resourceIdentity.ts?raw';
 
 const enhancedCpuBarMock = vi.fn();
@@ -96,6 +100,21 @@ const makeAgent = (overrides: Partial<Agent> = {}): Agent => ({
 });
 
 describe('InfrastructureSummaryTable', () => {
+  it('keeps the shared table on shell, runtime, and model owners', () => {
+    expect(infrastructureSummaryTableSource).toContain('useInfrastructureSummaryTableState');
+    expect(infrastructureSummaryTableSource).toContain('InfrastructureSummaryTableRow');
+    expect(infrastructureSummaryTableSource).not.toContain('useWebSocket');
+    expect(infrastructureSummaryTableSource).not.toContain('useAlertsActivation');
+    expect(infrastructureSummaryTableStateSource).toContain('useWebSocket');
+    expect(infrastructureSummaryTableStateSource).toContain('useAlertsActivation');
+    expect(infrastructureSummaryTableModelSource).toContain(
+      'resolveInfrastructureSummaryLinkedAgent',
+    );
+    expect(infrastructureSummaryTableModelSource).toContain('sortInfrastructureSummaryItems');
+    expect(infrastructureSummaryTableRowSource).toContain('InfrastructureDetailsDrawer');
+    expect(infrastructureSummaryTableRowSource).toContain('getAlertStyles');
+  });
+
   it('uses the shared normalized identity lookup helper', () => {
     expect(resourceIdentitySource).toContain('getNormalizedIdentityLookupVariants');
     expect(resourceIdentitySource).not.toContain(

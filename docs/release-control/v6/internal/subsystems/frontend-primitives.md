@@ -168,6 +168,17 @@ identifier-variant logic.
 Those same surfaces also share the trimmed-string helper from
 `frontend-modern/src/utils/stringUtils.ts` so shared components do not keep
 their own copy of the same whitespace-trimming identity logic.
+The shared infrastructure summary table now also follows the same
+shell/runtime/model shape as the rest of the modernized primitives.
+`frontend-modern/src/components/shared/InfrastructureSummaryTable.tsx` stays
+the table shell, `frontend-modern/src/components/shared/useInfrastructureSummaryTableState.ts`
+owns alert wiring, sort state, breakpoint state, and expanded-row lifecycle,
+`frontend-modern/src/components/shared/infrastructureSummaryTableModel.ts`
+owns sorting, count, identity-alias, and linked-agent derivation, and
+`frontend-modern/src/components/shared/InfrastructureSummaryTableRow.tsx`
+owns the per-row render/runtime surface. Future work should extend those
+owners instead of pushing websocket, alert, or identity plumbing back into the
+shared table shell.
 
 The audit log settings surface now follows that same owner split.
 `frontend-modern/src/components/Settings/AuditLogPanel.tsx` stays the canonical

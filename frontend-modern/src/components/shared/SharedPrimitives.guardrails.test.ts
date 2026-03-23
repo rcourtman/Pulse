@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import calloutCardSource from '@/components/shared/CalloutCard.tsx?raw';
 import filterButtonGroupSource from '@/components/shared/FilterButtonGroup.tsx?raw';
+import infrastructureSummaryTableSource from '@/components/shared/InfrastructureSummaryTable.tsx?raw';
+import infrastructureSummaryTableRowSource from '@/components/shared/InfrastructureSummaryTableRow.tsx?raw';
+import infrastructureSummaryTableModelSource from '@/components/shared/infrastructureSummaryTableModel.ts?raw';
+import infrastructureSummaryTableStateSource from '@/components/shared/useInfrastructureSummaryTableState.ts?raw';
 import monitoredSystemLimitWarningBannerSource from '@/components/shared/MonitoredSystemLimitWarningBanner.tsx?raw';
 import selectionCardGroupSource from '@/components/shared/SelectionCardGroup.tsx?raw';
 import tagBadgesSource from '@/components/shared/TagBadges.tsx?raw';
@@ -32,6 +36,7 @@ describe('shared primitive guardrails', () => {
 
     expect(rawTableUsers).toEqual([
       './InfrastructureSummaryTable.tsx',
+      './InfrastructureSummaryTableRow.tsx',
       './PulseDataGrid.tsx',
     ]);
   });
@@ -104,5 +109,34 @@ describe('shared primitive guardrails', () => {
     expect(resourceDetailDrawerOverviewSource).not.toContain(
       "from '@/components/Dashboard/TagBadges'",
     );
+  });
+
+  it('keeps infrastructure summary table on shell, runtime, and model owners', () => {
+    expect(infrastructureSummaryTableSource).toContain('useInfrastructureSummaryTableState');
+    expect(infrastructureSummaryTableSource).toContain('InfrastructureSummaryTableRow');
+    expect(infrastructureSummaryTableSource).not.toContain('useWebSocket');
+    expect(infrastructureSummaryTableSource).not.toContain('useAlertsActivation');
+    expect(infrastructureSummaryTableSource).not.toContain('createSignal');
+    expect(infrastructureSummaryTableSource).not.toContain('getNormalizedIdentityLookupVariants');
+    expect(infrastructureSummaryTableSource).not.toContain('getAgentLikeIdentityAliases');
+
+    expect(infrastructureSummaryTableStateSource).toContain('useWebSocket');
+    expect(infrastructureSummaryTableStateSource).toContain('useAlertsActivation');
+    expect(infrastructureSummaryTableStateSource).toContain('export function useInfrastructureSummaryTableState');
+    expect(infrastructureSummaryTableStateSource).toContain('createSignal');
+
+    expect(infrastructureSummaryTableModelSource).toContain('getNormalizedIdentityLookupVariants');
+    expect(infrastructureSummaryTableModelSource).toContain('getAgentLikeIdentityAliases');
+    expect(infrastructureSummaryTableModelSource).toContain(
+      'export const resolveInfrastructureSummaryLinkedAgent',
+    );
+    expect(infrastructureSummaryTableModelSource).toContain(
+      'export const sortInfrastructureSummaryItems',
+    );
+
+    expect(infrastructureSummaryTableRowSource).toContain('InfrastructureDetailsDrawer');
+    expect(infrastructureSummaryTableRowSource).toContain('getAlertStyles');
+    expect(infrastructureSummaryTableRowSource).not.toContain('useWebSocket');
+    expect(infrastructureSummaryTableRowSource).not.toContain('useAlertsActivation');
   });
 });

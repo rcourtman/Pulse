@@ -2168,8 +2168,11 @@
             "match_prefixes": [],
             "match_files": [
               "frontend-modern/src/components/shared/InfrastructureSummaryTable.tsx",
+              "frontend-modern/src/components/shared/infrastructureSummaryTableModel.ts",
+              "frontend-modern/src/components/shared/InfrastructureSummaryTableRow.tsx",
               "frontend-modern/src/components/shared/PulseDataGrid.tsx",
-              "frontend-modern/src/components/shared/Table.tsx"
+              "frontend-modern/src/components/shared/Table.tsx",
+              "frontend-modern/src/components/shared/useInfrastructureSummaryTableState.ts"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
