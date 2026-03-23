@@ -46,11 +46,19 @@ export interface MonitoredSystemLedgerEntry {
   type: string;
   status: MonitoredSystemLedgerStatus;
   status_explanation?: MonitoredSystemLedgerStatusExplanation;
+  latest_included_signal?: MonitoredSystemLedgerLatestSignal;
   latest_included_signal_at: string; // freshest included observation, RFC3339 or empty
   latest_included_signal_source?: string;
   last_seen?: string; // deprecated compatibility alias
   source: string;
   explanation?: MonitoredSystemLedgerExplanation;
+}
+
+export interface MonitoredSystemLedgerLatestSignal {
+  name: string;
+  type: string;
+  source?: string;
+  at: string;
 }
 
 export interface MonitoredSystemLedgerResponse {
@@ -76,13 +84,17 @@ function normalizeMonitoredSystemLedgerEntry(
 ): MonitoredSystemLedgerEntry {
   const explanation = entry.explanation;
   const status = normalizeMonitoredSystemLedgerStatus(entry.status);
+  const latestIncludedSignal = normalizeMonitoredSystemLedgerLatestSignal(
+    entry.latest_included_signal,
+    entry,
+  );
   return {
     ...entry,
     status,
-    latest_included_signal_at:
-      entry.latest_included_signal_at?.trim() || entry.last_seen?.trim() || '',
+    latest_included_signal: latestIncludedSignal,
+    latest_included_signal_at: latestIncludedSignal.at,
     latest_included_signal_source: normalizeMonitoredSystemLedgerSource(
-      entry.latest_included_signal_source ?? (entry.source !== 'multiple' ? entry.source : ''),
+      latestIncludedSignal.source,
     ),
     status_explanation: {
       summary: entry.status_explanation?.summary ?? defaultMonitoredSystemStatusExplanation(status),
@@ -164,4 +176,18 @@ function normalizeMonitoredSystemLedgerSource(
     default:
       return undefined;
   }
+}
+
+function normalizeMonitoredSystemLedgerLatestSignal(
+  signal: MonitoredSystemLedgerLatestSignal | undefined,
+  entry: MonitoredSystemLedgerEntry,
+): MonitoredSystemLedgerLatestSignal {
+  return {
+    name: signal?.name?.trim() || entry.name || 'Unnamed source',
+    type: signal?.type?.trim() || entry.type || 'system',
+    source: normalizeMonitoredSystemLedgerSource(
+      signal?.source ?? entry.latest_included_signal_source ?? (entry.source !== 'multiple' ? entry.source : ''),
+    ),
+    at: signal?.at?.trim() || entry.latest_included_signal_at?.trim() || entry.last_seen?.trim() || '',
+  };
 }

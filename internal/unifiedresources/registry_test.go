@@ -300,8 +300,17 @@ func TestMonitoredSystemsExplainsStaleGroupedSourceWhileLastSeenStaysFresh(t *te
 	if !system.LastSeen.Equal(dockerResource.LastSeen) {
 		t.Fatalf("expected grouped last_seen %s, got %s", dockerResource.LastSeen, system.LastSeen)
 	}
-	if system.LatestIncludedSignalSource != string(SourceDocker) {
+	if system.LatestIncludedSignal.Source != string(SourceDocker) {
 		t.Fatalf("expected latest included signal source docker, got %+v", system)
+	}
+	if system.LatestIncludedSignal.Name != "tower.local" {
+		t.Fatalf("expected latest included signal name tower.local, got %+v", system)
+	}
+	if system.LatestIncludedSignal.Type != "docker-host" {
+		t.Fatalf("expected latest included signal type docker-host, got %+v", system)
+	}
+	if !system.LatestIncludedSignal.At.Equal(dockerResource.LastSeen) {
+		t.Fatalf("expected latest included signal at %s, got %+v", dockerResource.LastSeen, system)
 	}
 	if system.StatusExplanation.Summary == "" {
 		t.Fatal("expected grouped monitored system status explanation summary")

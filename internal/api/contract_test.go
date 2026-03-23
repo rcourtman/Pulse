@@ -594,6 +594,12 @@ func TestContract_MonitoredSystemLedgerJSONSnapshot(t *testing.T) {
 						},
 					},
 				},
+				LatestIncludedSignal: MonitoredSystemLedgerLatestSignal{
+					Name:   "Tower",
+					Type:   "host",
+					Source: "agent",
+					At:     "2026-03-18T17:30:00Z",
+				},
 				LatestIncludedSignalAt:     "2026-03-18T17:30:00Z",
 				LatestIncludedSignalSource: "agent",
 				LastSeen:                   "2026-03-18T17:30:00Z",
@@ -645,6 +651,12 @@ func TestContract_MonitoredSystemLedgerJSONSnapshot(t *testing.T) {
 							"summary":"Agent data for Tower is stale (last reported 2026-03-18T17:25:00Z)."
 						}
 					]
+				},
+				"latest_included_signal":{
+					"name":"Tower",
+					"type":"host",
+					"source":"agent",
+					"at":"2026-03-18T17:30:00Z"
 				},
 				"latest_included_signal_at":"2026-03-18T17:30:00Z",
 				"latest_included_signal_source":"agent",

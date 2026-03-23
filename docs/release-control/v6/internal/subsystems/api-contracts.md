@@ -252,15 +252,12 @@ That canonical summary must also carry the mixed-source freshness explanation
 when the freshest grouped observation came from a different source than the
 degraded one, so API consumers can show a fresh `Last Seen` value without
 making warning or offline state look contradictory.
-That same timestamp is now canonically exposed as
-`latest_included_signal_at`; `last_seen` remains a compatibility alias only
-during rollout. It represents the freshest included grouped observation, not a
-claim that every grouped source reported successfully at that time, and API
-consumers must preserve that meaning in their labeling and presentation.
-That canonical signal contract now also includes
-`latest_included_signal_source`, so consumers can attribute the freshest
-included grouped observation to the source that produced it instead of
-guessing from the broader grouped `source` field.
+That freshest grouped observation is now canonically exposed as the structured
+`latest_included_signal` object. Its `at`, `source`, `name`, and `type` fields
+identify exactly which included top-level surface reported most recently.
+`latest_included_signal_at`, `latest_included_signal_source`, and `last_seen`
+remain rollout compatibility fields only; consumers should treat the object as
+the primary contract and preserve its meaning in presentation.
 That client contract must also fail closed when older or partial payloads omit
 the nested explanation object: the frontend may normalize missing explanation
 fields to empty reasons/surfaces plus a safe default summary, but it must not

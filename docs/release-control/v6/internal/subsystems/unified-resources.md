@@ -184,11 +184,11 @@ grouped source reported more recently than the degraded one, so consumers do
 not present a fresh `Last Seen` timestamp beside warning or offline state
 without the canonical explanation of which grouped source is still reporting
 and which one drifted stale or disconnected.
-That same monitored-system contract now also owns attribution for the freshest
-included grouped signal. Unified resources must expose not just the timestamp
-of that latest included observation but also the canonical source that
-produced it, so consumers can say which grouped source most recently reported
-instead of showing an unowned aggregate timestamp.
+That same monitored-system contract now also owns the structured freshest-
+signal model. Unified resources must expose the latest included grouped signal
+as one canonical object carrying its timestamp, source, display name, and type
+so consumers can say exactly which top-level grouped surface most recently
+reported instead of reconstructing attribution from separate fields.
 
 The unified-resource runtime now also owns the durable change timeline for the
 canonical resource view. `internal/unifiedresources/monitor_adapter.go` feeds

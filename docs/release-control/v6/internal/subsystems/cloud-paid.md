@@ -219,15 +219,14 @@ That same cloud-paid surface must now also render the canonical status reason
 list when present, so customers can see exactly which grouped source or
 top-level surface degraded and when it last reported rather than only reading
 generic status copy beside a fresh aggregate `Last Seen` value.
-That same settings surface must also label the aggregate monitored-system
-signal timestamp by its real meaning. The canonical API field is now
-`latest_included_signal_at`, while `last_seen` is compatibility-only during
-rollout; it represents the freshest included grouped observation, not a
+That same settings surface must also label the monitored-system signal by its
+real meaning. The canonical API shape is now the structured
+`latest_included_signal` object, while `latest_included_signal_at`,
+`latest_included_signal_source`, and `last_seen` are rollout compatibility
+fields only. It represents the freshest included grouped observation, not a
 guarantee that every grouped source is healthy, so the UI must not present it
-with single-source `Last Seen` wording.
-That same cloud-paid surface should also show the canonical
-`latest_included_signal_source` attribution when present, so a customer can
-see which grouped source most recently reported instead of reading an
+with single-source `Last Seen` wording. When the canonical object is present,
+the surface should use its source/name/type attribution instead of showing an
 unqualified aggregate timestamp.
 Frontend billing/admin surfaces must not synthesize `plan_version` from
 subscription lifecycle state. When a hosted billing record lacks a plan label,

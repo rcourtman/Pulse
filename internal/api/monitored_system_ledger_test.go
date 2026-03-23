@@ -19,6 +19,12 @@ func TestMonitoredSystemLedgerEntryTypes(t *testing.T) {
 			Summary: "All included top-level collection paths currently report online status.",
 			Reasons: []MonitoredSystemLedgerStatusReason{},
 		},
+		LatestIncludedSignal: MonitoredSystemLedgerLatestSignal{
+			Name:   "server-1",
+			Type:   "host",
+			Source: "agent",
+			At:     "2025-01-01T00:00:00Z",
+		},
 		LatestIncludedSignalAt:     "2025-01-01T00:00:00Z",
 		LatestIncludedSignalSource: "agent",
 		LastSeen:                   "2025-01-01T00:00:00Z",
@@ -52,6 +58,9 @@ func TestMonitoredSystemLedgerEntryTypes(t *testing.T) {
 	}
 	if decoded.LatestIncludedSignalAt != "2025-01-01T00:00:00Z" {
 		t.Errorf("latest included signal mismatch: %+v", decoded)
+	}
+	if decoded.LatestIncludedSignal.Name != "server-1" || decoded.LatestIncludedSignal.Type != "host" || decoded.LatestIncludedSignal.At != "2025-01-01T00:00:00Z" {
+		t.Errorf("latest included signal payload mismatch: %+v", decoded.LatestIncludedSignal)
 	}
 	if decoded.LatestIncludedSignalSource != "agent" {
 		t.Errorf("latest included signal source mismatch: %+v", decoded)
@@ -198,6 +207,12 @@ func TestHandleMonitoredSystemLedgerHTTP(t *testing.T) {
 					Summary: "All included top-level collection paths currently report online status.",
 					Reasons: []MonitoredSystemLedgerStatusReason{},
 				},
+				LatestIncludedSignal: MonitoredSystemLedgerLatestSignal{
+					Name:   "test-host",
+					Type:   "host",
+					Source: "agent",
+					At:     "2025-01-01T00:00:00Z",
+				},
 				LatestIncludedSignalAt:     "2025-01-01T00:00:00Z",
 				LatestIncludedSignalSource: "agent",
 				LastSeen:                   "2025-01-01T00:00:00Z",
@@ -244,6 +259,9 @@ func TestHandleMonitoredSystemLedgerHTTP(t *testing.T) {
 	}
 	if decoded.Systems[0].LatestIncludedSignalAt != "2025-01-01T00:00:00Z" {
 		t.Errorf("expected latest included signal timestamp, got %+v", decoded.Systems[0])
+	}
+	if decoded.Systems[0].LatestIncludedSignal.Source != "agent" {
+		t.Errorf("expected latest included signal payload, got %+v", decoded.Systems[0].LatestIncludedSignal)
 	}
 	if decoded.Systems[0].LatestIncludedSignalSource != "agent" {
 		t.Errorf("expected latest included signal source, got %+v", decoded.Systems[0])

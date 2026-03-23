@@ -40,6 +40,12 @@ describe('MonitoredSystemLedgerAPI', () => {
             summary: 'All included top-level collection paths currently report online status.',
             reasons: [],
           },
+          latest_included_signal: {
+            name: 'server-1',
+            type: 'host',
+            source: 'agent',
+            at: '2026-01-01T00:00:00Z',
+          },
           latest_included_signal_at: '2026-01-01T00:00:00Z',
           latest_included_signal_source: 'agent',
           last_seen: '2026-01-01T00:00:00Z',
@@ -78,6 +84,11 @@ describe('MonitoredSystemLedgerAPI', () => {
           name: 'server-1',
           type: 'host',
           status: 'online',
+          latest_included_signal: {
+            name: 'server-1',
+            type: 'host',
+            at: '2026-01-01T00:00:00Z',
+          },
           latest_included_signal_at: '2026-01-01T00:00:00Z',
           last_seen: '2026-01-01T00:00:00Z',
           source: 'agent',
@@ -103,6 +114,12 @@ describe('MonitoredSystemLedgerAPI', () => {
           name: 'server-1',
           type: 'host',
           status: 'warning',
+          latest_included_signal: {
+            name: 'server-1',
+            type: 'host',
+            source: 'agent',
+            at: '2026-01-01T00:00:00Z',
+          },
           latest_included_signal_at: '2026-01-01T00:00:00Z',
           latest_included_signal_source: 'agent',
           last_seen: '2026-01-01T00:00:00Z',
@@ -125,6 +142,12 @@ describe('MonitoredSystemLedgerAPI', () => {
           name: 'Tower',
           type: 'host',
           status: 'warning',
+          latest_included_signal: {
+            name: 'tower.local',
+            type: 'docker-host',
+            source: 'docker',
+            at: '2026-03-23T11:59:50Z',
+          },
           latest_included_signal_at: '2026-03-23T11:59:50Z',
           latest_included_signal_source: 'docker',
           last_seen: '2026-03-23T11:59:50Z',
@@ -139,9 +162,15 @@ describe('MonitoredSystemLedgerAPI', () => {
 
     expect(result.systems[0]?.latest_included_signal_at).toBe('2026-03-23T11:59:50Z');
     expect(result.systems[0]?.latest_included_signal_source).toBe('docker');
+    expect(result.systems[0]?.latest_included_signal).toEqual({
+      name: 'tower.local',
+      type: 'docker-host',
+      source: 'docker',
+      at: '2026-03-23T11:59:50Z',
+    });
   });
 
-  it('falls back to the deprecated last_seen alias for older payloads', async () => {
+  it('falls back to legacy latest signal fields for older payloads', async () => {
     vi.mocked(apiFetchJSON).mockResolvedValueOnce({
       systems: [
         {
@@ -160,6 +189,12 @@ describe('MonitoredSystemLedgerAPI', () => {
 
     expect(result.systems[0]?.latest_included_signal_at).toBe('2026-03-23T11:59:50Z');
     expect(result.systems[0]?.latest_included_signal_source).toBeUndefined();
+    expect(result.systems[0]?.latest_included_signal).toEqual({
+      name: 'Tower',
+      type: 'host',
+      source: undefined,
+      at: '2026-03-23T11:59:50Z',
+    });
   });
 
   it('preserves canonical status explanation reasons from the API contract', async () => {
@@ -182,6 +217,12 @@ describe('MonitoredSystemLedgerAPI', () => {
                 summary: 'Agent data for Tower is stale (last reported 2026-03-23T11:55:00Z).',
               },
             ],
+          },
+          latest_included_signal: {
+            name: 'tower.local',
+            type: 'docker-host',
+            source: 'docker',
+            at: '2026-03-23T11:59:50Z',
           },
           latest_included_signal_at: '2026-03-23T11:59:50Z',
           latest_included_signal_source: 'docker',
@@ -215,6 +256,12 @@ describe('MonitoredSystemLedgerAPI', () => {
           name: 'server-1',
           type: 'host',
           status: 'degraded',
+          latest_included_signal: {
+            name: 'server-1',
+            type: 'host',
+            source: 'agent',
+            at: '2026-01-01T00:00:00Z',
+          },
           latest_included_signal_at: '2026-01-01T00:00:00Z',
           latest_included_signal_source: 'agent',
           last_seen: '2026-01-01T00:00:00Z',

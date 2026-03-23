@@ -77,11 +77,11 @@ function monitoredSystemSourceLabel(source: string | undefined): string {
 }
 
 function latestIncludedSignalLabel(system: MonitoredSystemLedgerEntry): string {
-  if (!system.latest_included_signal_at) {
+  if (!system.latest_included_signal?.at) {
     return '—';
   }
-  const relative = formatRelativeTime(system.latest_included_signal_at, { compact: true });
-  const source = monitoredSystemSourceLabel(system.latest_included_signal_source);
+  const relative = formatRelativeTime(system.latest_included_signal.at, { compact: true });
+  const source = monitoredSystemSourceLabel(system.latest_included_signal.source);
   if (source === '') {
     return relative;
   }

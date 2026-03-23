@@ -17,11 +17,19 @@ type MonitoredSystemLedgerEntry struct {
 	Type                       string                                 `json:"type"`
 	Status                     string                                 `json:"status"` // "online", "warning", "offline", "unknown"
 	StatusExplanation          MonitoredSystemLedgerStatusExplanation `json:"status_explanation"`
+	LatestIncludedSignal       MonitoredSystemLedgerLatestSignal      `json:"latest_included_signal"`
 	LatestIncludedSignalAt     string                                 `json:"latest_included_signal_at"` // freshest included observation, RFC3339 or empty
 	LatestIncludedSignalSource string                                 `json:"latest_included_signal_source,omitempty"`
 	LastSeen                   string                                 `json:"last_seen,omitempty"` // deprecated compatibility alias for latest_included_signal_at
 	Source                     string                                 `json:"source"`
 	Explanation                MonitoredSystemLedgerExplanation       `json:"explanation"`
+}
+
+type MonitoredSystemLedgerLatestSignal struct {
+	Name   string `json:"name"`
+	Type   string `json:"type"`
+	Source string `json:"source"`
+	At     string `json:"at"`
 }
 
 type MonitoredSystemLedgerStatusExplanation struct {
@@ -79,6 +87,12 @@ func (r MonitoredSystemLedgerResponse) NormalizeCollections() MonitoredSystemLed
 }
 
 func (e MonitoredSystemLedgerEntry) NormalizeCollections() MonitoredSystemLedgerEntry {
+	if e.LatestIncludedSignal.Name == "" {
+		e.LatestIncludedSignal.Name = "Unnamed source"
+	}
+	if e.LatestIncludedSignal.Type == "" {
+		e.LatestIncludedSignal.Type = "system"
+	}
 	if e.StatusExplanation.Reasons == nil {
 		e.StatusExplanation.Reasons = []MonitoredSystemLedgerStatusReason{}
 	}
@@ -124,8 +138,9 @@ func (r *Router) handleMonitoredSystemLedger(w http.ResponseWriter, req *http.Re
 			Type:                       system.Type,
 			Status:                     status,
 			StatusExplanation:          monitoredSystemLedgerStatusExplanation(system.StatusExplanation, status),
+			LatestIncludedSignal:       monitoredSystemLedgerLatestSignal(system.LatestIncludedSignal),
 			LatestIncludedSignalAt:     formatLastSeen(system.LastSeen),
-			LatestIncludedSignalSource: normalizeMonitoredSystemLedgerSource(system.LatestIncludedSignalSource),
+			LatestIncludedSignalSource: normalizeMonitoredSystemLedgerSource(system.LatestIncludedSignal.Source),
 			LastSeen:                   formatLastSeen(system.LastSeen),
 			Source:                     system.Source,
 			Explanation:                monitoredSystemLedgerExplanation(system.Explanation),
@@ -212,6 +227,17 @@ func normalizeMonitoredSystemLedgerSource(source string) string {
 		return source
 	default:
 		return ""
+	}
+}
+
+func monitoredSystemLedgerLatestSignal(
+	signal unifiedresources.MonitoredSystemLatestSignal,
+) MonitoredSystemLedgerLatestSignal {
+	return MonitoredSystemLedgerLatestSignal{
+		Name:   signal.Name,
+		Type:   signal.Type,
+		Source: normalizeMonitoredSystemLedgerSource(signal.Source),
+		At:     formatLastSeen(signal.At),
 	}
 }
 
