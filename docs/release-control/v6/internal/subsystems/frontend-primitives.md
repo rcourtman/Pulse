@@ -222,6 +222,14 @@ runtime, and `frontend-modern/src/components/shared/activeUseTrialNudgeModel.ts`
 owns the eligibility policy, age threshold, and nudge copy/config. Future
 active-use trial work should extend those owners instead of pushing storage
 policy, timers, or commercial action flow back into the shared shell.
+The shared trial banner now follows that same owner split.
+`frontend-modern/src/components/shared/TrialBanner.tsx` stays the render
+shell, `frontend-modern/src/components/shared/useTrialBannerState.ts` owns
+entitlement load, snooze lifecycle, and upgrade-link runtime, and
+`frontend-modern/src/components/shared/trialBannerModel.ts` owns day-count
+normalization, tone policy, and display labels. Future trial-banner work
+should extend those owners instead of pushing entitlement orchestration,
+snooze state, or tone math back into the shared shell.
 The shared dialog now follows that same owner split.
 `frontend-modern/src/components/shared/Dialog.tsx` stays the render shell,
 `frontend-modern/src/components/shared/useDialogState.ts` owns focus trap,

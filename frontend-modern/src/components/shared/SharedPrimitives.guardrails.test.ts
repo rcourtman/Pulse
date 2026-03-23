@@ -37,6 +37,8 @@ import searchTipsPopoverSource from '@/components/shared/SearchTipsPopover.tsx?r
 import searchTipsPopoverModelSource from '@/components/shared/searchTipsPopoverModel.ts?raw';
 import tooltipSource from '@/components/shared/Tooltip.tsx?raw';
 import tooltipModelSource from '@/components/shared/tooltipModel.ts?raw';
+import trialBannerSource from '@/components/shared/TrialBanner.tsx?raw';
+import trialBannerModelSource from '@/components/shared/trialBannerModel.ts?raw';
 import interactiveSparklineSource from '@/components/shared/InteractiveSparkline.tsx?raw';
 import interactiveSparklineModelSource from '@/components/shared/interactiveSparklineModel.ts?raw';
 import infrastructureSummaryTableSource from '@/components/shared/InfrastructureSummaryTable.tsx?raw';
@@ -64,6 +66,7 @@ import searchFieldStateSource from '@/components/shared/useSearchFieldState.ts?r
 import searchInputStateSource from '@/components/shared/useSearchInputState.ts?raw';
 import searchTipsPopoverStateSource from '@/components/shared/useSearchTipsPopoverState.ts?raw';
 import tooltipStateSource from '@/components/shared/useTooltipState.ts?raw';
+import trialBannerStateSource from '@/components/shared/useTrialBannerState.ts?raw';
 import interactiveSparklineStateSource from '@/components/shared/useInteractiveSparklineState.ts?raw';
 import webInterfaceUrlFieldSource from '@/components/shared/WebInterfaceUrlField.tsx?raw';
 import webInterfaceUrlFieldModelSource from '@/components/shared/webInterfaceUrlFieldModel.ts?raw';
@@ -174,6 +177,30 @@ describe('shared primitive guardrails', () => {
     expect(activeUseTrialNudgeModelSource).toContain('isActiveUseTrialNudgeEligible');
     expect(activeUseTrialNudgeModelSource).toContain('isActiveUseTrialNudgeOldEnough');
     expect(activeUseTrialNudgeModelSource).toContain('ACTIVE_USE_TRIAL_NUDGE_TITLE');
+  });
+
+  it('keeps trial banner on shell, runtime, and model owners', () => {
+    expect(trialBannerSource).toContain('useTrialBannerState');
+    expect(trialBannerSource).toContain('TRIAL_BANNER_TITLE');
+    expect(trialBannerSource).not.toContain('createSignal');
+    expect(trialBannerSource).not.toContain('createMemo');
+    expect(trialBannerSource).not.toContain('loadLicenseStatus');
+    expect(trialBannerSource).not.toContain('licenseStatus');
+    expect(trialBannerSource).not.toContain('getUpgradeActionUrlOrFallback');
+
+    expect(trialBannerStateSource).toContain('export function useTrialBannerState');
+    expect(trialBannerStateSource).toContain('createSignal');
+    expect(trialBannerStateSource).toContain('createMemo');
+    expect(trialBannerStateSource).toContain('loadLicenseStatus');
+    expect(trialBannerStateSource).toContain('licenseStatus');
+    expect(trialBannerStateSource).toContain('getUpgradeActionUrlOrFallback');
+    expect(trialBannerStateSource).toContain('snoozeUpsell');
+
+    expect(trialBannerModelSource).toContain('TRIAL_BANNER_SNOOZE_KEY');
+    expect(trialBannerModelSource).toContain('normalizeTrialBannerDaysRemaining');
+    expect(trialBannerModelSource).toContain('getTrialBannerToneClass');
+    expect(trialBannerModelSource).toContain('getTrialBannerStatusLabel');
+    expect(trialBannerModelSource).toContain('TRIAL_BANNER_UPGRADE_LABEL');
   });
 
   it('routes settings info callouts through CalloutCard', () => {
