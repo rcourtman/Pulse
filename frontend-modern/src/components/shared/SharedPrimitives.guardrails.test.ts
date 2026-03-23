@@ -37,6 +37,8 @@ import searchFieldSource from '@/components/shared/SearchField.tsx?raw';
 import searchFieldModelSource from '@/components/shared/searchFieldModel.ts?raw';
 import searchInputSource from '@/components/shared/SearchInput.tsx?raw';
 import searchInputModelSource from '@/components/shared/searchInputModel.ts?raw';
+import scrollToTopButtonSource from '@/components/shared/ScrollToTopButton.tsx?raw';
+import scrollToTopButtonModelSource from '@/components/shared/scrollToTopButtonModel.ts?raw';
 import searchTipsPopoverSource from '@/components/shared/SearchTipsPopover.tsx?raw';
 import searchTipsPopoverModelSource from '@/components/shared/searchTipsPopoverModel.ts?raw';
 import tooltipSource from '@/components/shared/Tooltip.tsx?raw';
@@ -71,6 +73,7 @@ import pulseDataGridStateSource from '@/components/shared/usePulseDataGridState.
 import whatsNewModalStateSource from '@/components/shared/useWhatsNewModalState.ts?raw';
 import searchFieldStateSource from '@/components/shared/useSearchFieldState.ts?raw';
 import searchInputStateSource from '@/components/shared/useSearchInputState.ts?raw';
+import scrollToTopButtonStateSource from '@/components/shared/useScrollToTopButtonState.ts?raw';
 import searchTipsPopoverStateSource from '@/components/shared/useSearchTipsPopoverState.ts?raw';
 import tooltipStateSource from '@/components/shared/useTooltipState.ts?raw';
 import trialBannerStateSource from '@/components/shared/useTrialBannerState.ts?raw';
@@ -253,6 +256,29 @@ describe('shared primitive guardrails', () => {
     expect(tagInputModelSource).toContain('getTagInputPlaceholder');
     expect(tagInputModelSource).toContain('getNextTagsAfterRemove');
     expect(tagInputModelSource).toContain('getTagInputRemoveTitle');
+  });
+
+  it('keeps scroll-to-top button on shell, runtime, and model owners', () => {
+    expect(scrollToTopButtonSource).toContain('useScrollToTopButtonState');
+    expect(scrollToTopButtonSource).toContain('SCROLL_TO_TOP_BUTTON_ARIA_LABEL');
+    expect(scrollToTopButtonSource).toContain('getScrollToTopButtonClass');
+    expect(scrollToTopButtonSource).not.toContain('createSignal');
+    expect(scrollToTopButtonSource).not.toContain('onMount');
+    expect(scrollToTopButtonSource).not.toContain('scrollHeight');
+    expect(scrollToTopButtonSource).not.toContain('SCROLL_THRESHOLD');
+
+    expect(scrollToTopButtonStateSource).toContain('export function useScrollToTopButtonState');
+    expect(scrollToTopButtonStateSource).toContain('createSignal');
+    expect(scrollToTopButtonStateSource).toContain('onMount');
+    expect(scrollToTopButtonStateSource).toContain('addEventListener');
+    expect(scrollToTopButtonStateSource).toContain("scrollTo({ top: 0, behavior: 'smooth' })");
+    expect(scrollToTopButtonStateSource).toContain('findNearestScrollableAncestor');
+
+    expect(scrollToTopButtonModelSource).toContain('SCROLL_TO_TOP_BUTTON_THRESHOLD');
+    expect(scrollToTopButtonModelSource).toContain('SCROLL_TO_TOP_BUTTON_ARIA_LABEL');
+    expect(scrollToTopButtonModelSource).toContain('findNearestScrollableAncestor');
+    expect(scrollToTopButtonModelSource).toContain('isScrollToTopButtonVisible');
+    expect(scrollToTopButtonModelSource).toContain('getScrollToTopButtonClass');
   });
 
   it('routes settings info callouts through CalloutCard', () => {
