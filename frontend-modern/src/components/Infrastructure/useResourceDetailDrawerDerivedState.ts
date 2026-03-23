@@ -4,6 +4,7 @@ import { requiresGovernedResourceDisplay } from '@/types/resource';
 import { formatAbsoluteTime, formatRelativeTime } from '@/utils/format';
 import { getAgentStatusIndicator } from '@/utils/status';
 import {
+  dedupeResourceBadges,
   getPlatformBadge,
   getSourceBadge,
   getTypeBadge,
@@ -79,6 +80,12 @@ export const useResourceDetailDrawerDerivedState = (
     getUnifiedSourceBadges(platformData()?.sources ?? []),
   );
   const hasUnifiedSources = createMemo(() => unifiedSourceBadges().length > 0);
+  const headerBadges = createMemo(() =>
+    dedupeResourceBadges([
+      typeBadge(),
+      ...(hasUnifiedSources() ? unifiedSourceBadges() : [platformBadge(), sourceBadge()]),
+    ]),
+  );
   const policyBadges = createMemo(() => getResourcePolicyBadges(resource.policy));
   const policyRedactions = createMemo(() => getResourcePolicyRedactionLabels(resource.policy));
   const governanceSummary = createMemo(() =>
@@ -487,6 +494,7 @@ export const useResourceDetailDrawerDerivedState = (
     platformData,
     unifiedSourceBadges,
     hasUnifiedSources,
+    headerBadges,
     policyBadges,
     policyRedactions,
     governanceSummary,

@@ -67,6 +67,19 @@ export function getUnifiedSourceBadges(sources?: string[] | null): ResourceBadge
   });
 }
 
+export function dedupeResourceBadges(
+  badges: Array<ResourceBadge | null | undefined>,
+): ResourceBadge[] {
+  const seen = new Set<string>();
+  return badges.filter((badge): badge is ResourceBadge => {
+    if (!badge) return false;
+    const normalizedLabel = badge.label.trim().toLowerCase();
+    if (!normalizedLabel || seen.has(normalizedLabel)) return false;
+    seen.add(normalizedLabel);
+    return true;
+  });
+}
+
 export function getContainerRuntimeBadge(
   platformType?: PlatformType,
   platformData?: Record<string, unknown> | null,

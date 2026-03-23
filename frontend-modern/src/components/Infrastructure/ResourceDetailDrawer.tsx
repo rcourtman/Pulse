@@ -64,43 +64,14 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
           <div class="text-[11px] text-muted truncate" title={drawer.headerIdentity()}>
             {drawer.headerIdentity()}
           </div>
-          <div class="flex flex-wrap gap-1.5">
-            <Show when={drawer.typeBadge()}>
+          <div class="flex flex-wrap gap-1.5" data-testid="resource-header-badges">
+            <For each={drawer.headerBadges()}>
               {(badge) => (
-                <span class={badge().classes} title={badge().title}>
-                  {badge().label}
+                <span class={badge.classes} title={badge.title}>
+                  {badge.label}
                 </span>
               )}
-            </Show>
-            <Show
-              when={drawer.hasUnifiedSources()}
-              fallback={
-                <>
-                  <Show when={drawer.platformBadge()}>
-                    {(badge) => (
-                      <span class={badge().classes} title={badge().title}>
-                        {badge().label}
-                      </span>
-                    )}
-                  </Show>
-                  <Show when={drawer.sourceBadge()}>
-                    {(badge) => (
-                      <span class={badge().classes} title={badge().title}>
-                        {badge().label}
-                      </span>
-                    )}
-                  </Show>
-                </>
-              }
-            >
-              <For each={drawer.unifiedSourceBadges()}>
-                {(badge) => (
-                  <span class={badge.classes} title={badge.title}>
-                    {badge.label}
-                  </span>
-                )}
-              </For>
-            </Show>
+            </For>
           </div>
         </div>
 

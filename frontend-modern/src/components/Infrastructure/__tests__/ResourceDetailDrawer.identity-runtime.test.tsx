@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, waitFor } from '@solidjs/testing-library';
+import { fireEvent, render, waitFor, within } from '@solidjs/testing-library';
 
 import type { Resource } from '@/types/resource';
 import {
@@ -135,6 +135,9 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     expect(getByRole('link', { name: 'Open related workloads for host-1' })).toHaveTextContent(
       'Workloads',
     );
+    const headerBadges = getByTestId('resource-header-badges');
+    expect(within(headerBadges).getAllByText('Agent')).toHaveLength(1);
+    expect(within(headerBadges).getByText('PVE')).toBeInTheDocument();
   });
 
   it('keeps discovery as secondary overview context instead of a peer tab', async () => {

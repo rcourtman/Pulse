@@ -409,6 +409,9 @@ The drawer header now stays focused on canonical identity and source/type
 badges only, while workload/service drill-down links and Kubernetes platform
 signals live with the summary shell, so the top strip does not compete with
 the resource name, status, or primary identity line.
+That header badge row now also deduplicates identical visible labels, so
+agent-backed nodes do not repeat `Agent` when both the canonical resource type
+and a merged source resolve to the same badge text.
 Inside that summary, the operational and supporting context rows stay inline
 instead of sitting in a collapsed `Details` disclosure or nested bordered
 cards, so the first read stays like one linear sheet rather than a stack of
