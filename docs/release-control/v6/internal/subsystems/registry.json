@@ -2082,6 +2082,7 @@
         "frontend-modern/src/features/operations/operationsPageModel.ts",
         "frontend-modern/src/features/operations/OperationsPageSurface.tsx",
         "frontend-modern/src/pages/Operations.tsx",
+        "frontend-modern/src/utils/aiSettingsPresentation.ts",
         "frontend-modern/src/utils/reportingPresentation.ts",
         "frontend-modern/src/utils/ssoProviderPresentation.ts",
         "frontend-modern/src/utils/systemSettingsPresentation.ts"
@@ -2206,6 +2207,19 @@
               "frontend-modern/src/pages/__tests__/Operations.helpers.test.ts",
               "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
               "frontend-modern/src/utils/__tests__/reportingPresentation.test.ts"
+            ]
+          },
+          {
+            "id": "ai-settings-presentation-helper",
+            "label": "AI settings presentation helper proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/utils/aiSettingsPresentation.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/utils/__tests__/aiSettingsPresentation.test.ts"
             ]
           },
           {

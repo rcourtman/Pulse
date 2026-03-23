@@ -5,16 +5,16 @@ export interface AISettingsReadinessPresentation {
 }
 
 const AI_OAUTH_ERROR_MESSAGES: Record<string, string> = {
-  missing_params: 'OAuth callback missing required parameters',
-  invalid_state: 'Invalid OAuth state - please try again',
-  token_exchange_failed: 'Failed to complete authentication with Claude',
-  save_failed: 'Failed to save OAuth credentials',
+  missing_params: 'The authentication callback is missing required parameters.',
+  invalid_state: 'The authentication session is no longer valid. Try again.',
+  token_exchange_failed: 'Unable to complete authentication with Claude.',
+  save_failed: 'Unable to save OAuth credentials.',
 };
 
-export const AI_SETTINGS_LOAD_MODELS_ERROR = 'Failed to load models';
-export const AI_SETTINGS_LOAD_CHAT_SESSIONS_ERROR = 'Failed to load chat sessions.';
+export const AI_SETTINGS_LOAD_MODELS_ERROR = 'Unable to load models.';
+export const AI_SETTINGS_LOAD_CHAT_SESSIONS_ERROR = 'Unable to load chat sessions.';
 export const AI_SETTINGS_LOAD_FAILURE_MESSAGE =
-  'Failed to load Pulse Assistant settings. Your configuration could not be retrieved.';
+  'Unable to load Pulse Assistant settings. Your configuration could not be retrieved.';
 export const AI_SETTINGS_LOAD_RETRY_LABEL = 'Retry';
 
 export function getAIProviderTestResultTextClass(success: boolean): string {
@@ -42,7 +42,7 @@ export function getAISettingsReadinessPresentation(
 }
 
 export function getAIOAuthErrorMessage(errorCode: string): string {
-  return AI_OAUTH_ERROR_MESSAGES[errorCode] || `OAuth error: ${errorCode}`;
+  return AI_OAUTH_ERROR_MESSAGES[errorCode] || `Authentication error: ${errorCode}`;
 }
 
 export function getAISettingsLoadingState() {
@@ -83,30 +83,30 @@ export function getAIChatSessionsEmptyState() {
 
 export function getAISessionSummarizeErrorMessage(message?: string | null) {
   const detail = (message || '').trim();
-  return detail || 'Failed to summarize session.';
+  return detail || 'Unable to summarize the session.';
 }
 
 export function getAISessionDiffErrorMessage(message?: string | null) {
   const detail = (message || '').trim();
-  return detail || 'Failed to get session diff.';
+  return detail || 'Unable to load the session diff.';
 }
 
 export function getAISessionRevertErrorMessage(message?: string | null) {
   const detail = (message || '').trim();
-  return detail || 'Failed to revert session.';
+  return detail || 'Unable to revert the session.';
 }
 
 export function getAISettingsSaveErrorMessage(message?: string | null) {
   const detail = (message || '').trim();
-  return detail || 'Failed to save Pulse Assistant settings';
+  return detail || 'Unable to save Pulse Assistant settings.';
 }
 
 export function getAICredentialsClearErrorMessage(message?: string | null) {
   const detail = (message || '').trim();
-  return detail || 'Failed to clear credentials';
+  return detail || 'Unable to clear credentials.';
 }
 
 export function getAISettingsToggleErrorMessage(message?: string | null) {
   const detail = (message || '').trim();
-  return detail || 'Failed to update Pulse Assistant setting';
+  return detail || 'Unable to update Pulse Assistant settings.';
 }

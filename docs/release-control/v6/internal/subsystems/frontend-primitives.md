@@ -56,6 +56,7 @@ work extends shared components instead of creating new local variants.
 34. `frontend-modern/src/components/Settings/ssoProvidersModel.ts`
 35. `frontend-modern/src/utils/ssoProviderPresentation.ts`
 36. `frontend-modern/src/utils/systemSettingsPresentation.ts`
+37. `frontend-modern/src/utils/aiSettingsPresentation.ts`
 37. `frontend-modern/src/components/Settings/UpdateInstallGuide.tsx`
 38. `frontend-modern/src/components/Settings/updatesSettingsModel.ts`
 39. `frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx`
@@ -878,6 +879,10 @@ maintenance routes through `AIChatMaintenanceSection.tsx`, and readiness plus
 save/test actions route through `AISettingsStatusAndActions.tsx`. Future AI
 settings work must extend those section owners instead of re-inlining large
 runtime subsections into the shell.
+That same AI settings boundary now also owns
+`frontend-modern/src/utils/aiSettingsPresentation.ts`, so shared loading,
+empty, OAuth, and action/error copy for the settings shell stays on one
+governed helper instead of drifting back into section-local strings.
 `frontend-modern/src/components/Settings/AuditLogPanel.tsx`,
 `frontend-modern/src/components/Settings/AuditWebhookPanel.tsx`,
 `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx`,

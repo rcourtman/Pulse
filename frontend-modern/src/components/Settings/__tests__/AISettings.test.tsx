@@ -280,7 +280,7 @@ describe('AISettings load failure error state', () => {
     renderComponent();
 
     await waitFor(() => {
-      expect(screen.getByText(/Failed to load Pulse Assistant settings/)).toBeInTheDocument();
+      expect(screen.getByText(/Unable to load Pulse Assistant settings/)).toBeInTheDocument();
     });
 
     // Retry button should be present
@@ -296,7 +296,7 @@ describe('AISettings load failure error state', () => {
     renderComponent();
 
     await waitFor(() => {
-      expect(screen.getByText(/Failed to load Pulse Assistant settings/)).toBeInTheDocument();
+      expect(screen.getByText(/Unable to load Pulse Assistant settings/)).toBeInTheDocument();
     });
 
     // Now mock a successful response for retry
@@ -316,7 +316,7 @@ describe('AISettings load failure error state', () => {
     });
 
     // Error banner should be gone
-    expect(screen.queryByText(/Failed to load Pulse Assistant settings/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Unable to load Pulse Assistant settings/)).not.toBeInTheDocument();
 
     // Verify retry actually called getSettings again
     expect(getSettingsMock).toHaveBeenCalledTimes(2);

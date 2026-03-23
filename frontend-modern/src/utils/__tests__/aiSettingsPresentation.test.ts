@@ -42,16 +42,16 @@ describe('aiSettingsPresentation', () => {
 
   it('returns canonical OAuth callback error messages', () => {
     expect(getAIOAuthErrorMessage('missing_params')).toBe(
-      'OAuth callback missing required parameters',
+      'The authentication callback is missing required parameters.',
     );
     expect(getAIOAuthErrorMessage('invalid_state')).toBe(
-      'Invalid OAuth state - please try again',
+      'The authentication session is no longer valid. Try again.',
     );
     expect(getAIOAuthErrorMessage('token_exchange_failed')).toBe(
-      'Failed to complete authentication with Claude',
+      'Unable to complete authentication with Claude.',
     );
-    expect(getAIOAuthErrorMessage('save_failed')).toBe('Failed to save OAuth credentials');
-    expect(getAIOAuthErrorMessage('other')).toBe('OAuth error: other');
+    expect(getAIOAuthErrorMessage('save_failed')).toBe('Unable to save OAuth credentials.');
+    expect(getAIOAuthErrorMessage('other')).toBe('Authentication error: other');
   });
 
   it('returns canonical ai settings loading and chat-session copy', () => {
@@ -59,7 +59,7 @@ describe('aiSettingsPresentation', () => {
       text: 'Loading Pulse Assistant settings...',
     });
     expect(getAISettingsLoadErrorMessage()).toBe(
-      'Failed to load Pulse Assistant settings. Your configuration could not be retrieved.',
+      'Unable to load Pulse Assistant settings. Your configuration could not be retrieved.',
     );
     expect(getAISettingsRetryLabel()).toBe('Retry');
     expect(getAIChatSessionsLoadingState()).toEqual({
@@ -68,24 +68,24 @@ describe('aiSettingsPresentation', () => {
     expect(getAIChatSessionsEmptyState()).toEqual({
       text: 'No chat sessions yet. Start a chat to create one.',
     });
-    expect(getAIModelsLoadErrorMessage()).toBe('Failed to load models');
+    expect(getAIModelsLoadErrorMessage()).toBe('Unable to load models.');
     expect(getAIModelsLoadErrorMessage('Network request failed')).toBe('Network request failed');
-    expect(getAIChatSessionsLoadErrorMessage()).toBe('Failed to load chat sessions.');
+    expect(getAIChatSessionsLoadErrorMessage()).toBe('Unable to load chat sessions.');
     expect(getAIChatSessionsLoadErrorMessage('Session API offline')).toBe('Session API offline');
   });
 
   it('returns canonical ai settings operational failure copy', () => {
-    expect(getAISessionSummarizeErrorMessage()).toBe('Failed to summarize session.');
+    expect(getAISessionSummarizeErrorMessage()).toBe('Unable to summarize the session.');
     expect(getAISessionSummarizeErrorMessage('provider offline')).toBe('provider offline');
-    expect(getAISessionDiffErrorMessage()).toBe('Failed to get session diff.');
+    expect(getAISessionDiffErrorMessage()).toBe('Unable to load the session diff.');
     expect(getAISessionDiffErrorMessage('git unavailable')).toBe('git unavailable');
-    expect(getAISessionRevertErrorMessage()).toBe('Failed to revert session.');
+    expect(getAISessionRevertErrorMessage()).toBe('Unable to revert the session.');
     expect(getAISessionRevertErrorMessage('conflict')).toBe('conflict');
-    expect(getAISettingsSaveErrorMessage()).toBe('Failed to save Pulse Assistant settings');
+    expect(getAISettingsSaveErrorMessage()).toBe('Unable to save Pulse Assistant settings.');
     expect(getAISettingsSaveErrorMessage('bad request')).toBe('bad request');
-    expect(getAICredentialsClearErrorMessage()).toBe('Failed to clear credentials');
+    expect(getAICredentialsClearErrorMessage()).toBe('Unable to clear credentials.');
     expect(getAICredentialsClearErrorMessage('permission denied')).toBe('permission denied');
-    expect(getAISettingsToggleErrorMessage()).toBe('Failed to update Pulse Assistant setting');
+    expect(getAISettingsToggleErrorMessage()).toBe('Unable to update Pulse Assistant settings.');
     expect(getAISettingsToggleErrorMessage('rate limited')).toBe('rate limited');
   });
 });
