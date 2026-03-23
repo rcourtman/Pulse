@@ -26,6 +26,8 @@ import workloadTypeBadgesSource from '@/components/shared/workloadTypeBadges.ts?
 import tagBadgesSource from '@/components/shared/TagBadges.tsx?raw';
 import emptyStateSource from '@/components/shared/EmptyState.tsx?raw';
 import webInterfaceUrlFieldSource from '@/components/shared/WebInterfaceUrlField.tsx?raw';
+import webInterfaceUrlFieldModelSource from '@/components/shared/webInterfaceUrlFieldModel.ts?raw';
+import webInterfaceUrlFieldStateSource from '@/components/shared/useWebInterfaceUrlFieldState.ts?raw';
 import workloadTypePresentationSource from '@/utils/workloadTypePresentation.ts?raw';
 import sourcePlatformsSource from '@/utils/sourcePlatforms.ts?raw';
 import storageSourcesSource from '@/utils/storageSources.ts?raw';
@@ -2723,8 +2725,12 @@ describe('frontend resource type boundaries', () => {
     expect(discoveryTabSource).not.toContain(
       'No notes yet. Add notes to document important information.',
     );
-    expect(webInterfaceUrlFieldSource).toContain('getDiscoverySuggestedURLFallback');
+    expect(webInterfaceUrlFieldSource).toContain('useWebInterfaceUrlFieldState');
     expect(webInterfaceUrlFieldSource).not.toContain('No suggested URL found');
+    expect(webInterfaceUrlFieldSource).not.toContain('GuestMetadataAPI.getMetadata');
+    expect(webInterfaceUrlFieldStateSource).toContain('GuestMetadataAPI.getMetadata');
+    expect(webInterfaceUrlFieldStateSource).toContain('AgentMetadataAPI.updateMetadata');
+    expect(webInterfaceUrlFieldModelSource).toContain('getWebInterfaceSuggestedUrlFallback');
     expect(discoveryPresentationSource).toContain(
       'export function getDiscoveryAnalysisProviderBadgeClass',
     );

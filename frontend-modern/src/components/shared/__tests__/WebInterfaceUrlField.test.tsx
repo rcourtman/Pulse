@@ -1,5 +1,8 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import webInterfaceUrlFieldSource from '@/components/shared/WebInterfaceUrlField.tsx?raw';
+import webInterfaceUrlFieldModelSource from '@/components/shared/webInterfaceUrlFieldModel.ts?raw';
+import webInterfaceUrlFieldStateSource from '@/components/shared/useWebInterfaceUrlFieldState.ts?raw';
 
 vi.mock('@/api/guestMetadata', () => ({
   GuestMetadataAPI: {
@@ -22,6 +25,23 @@ describe('WebInterfaceUrlField', () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
+  });
+
+  it('keeps the URL field on shell, runtime, and model owners', () => {
+    expect(webInterfaceUrlFieldSource).toContain('useWebInterfaceUrlFieldState');
+    expect(webInterfaceUrlFieldSource).not.toContain('GuestMetadataAPI.getMetadata');
+    expect(webInterfaceUrlFieldSource).not.toContain('AgentMetadataAPI.updateMetadata');
+    expect(webInterfaceUrlFieldSource).not.toContain('validateWebInterfaceCustomUrl');
+    expect(webInterfaceUrlFieldSource).not.toContain('createSignal');
+
+    expect(webInterfaceUrlFieldStateSource).toContain('GuestMetadataAPI.getMetadata');
+    expect(webInterfaceUrlFieldStateSource).toContain('AgentMetadataAPI.updateMetadata');
+    expect(webInterfaceUrlFieldStateSource).toContain('createSignal');
+    expect(webInterfaceUrlFieldStateSource).toContain('export function useWebInterfaceUrlFieldState');
+
+    expect(webInterfaceUrlFieldModelSource).toContain('validateWebInterfaceCustomUrl');
+    expect(webInterfaceUrlFieldModelSource).toContain('getWebInterfaceSuggestedUrlFallback');
+    expect(webInterfaceUrlFieldModelSource).toContain('shouldShowWebInterfaceSuggestedUrl');
   });
 
   it('renders URL controls for a metadata target', async () => {

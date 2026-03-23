@@ -17,6 +17,9 @@ import tagBadgesSource from '@/components/shared/TagBadges.tsx?raw';
 import containerUpdateButtonStateSource from '@/components/shared/useContainerUpdateButtonState.ts?raw';
 import historyChartStateSource from '@/components/shared/useHistoryChartState.ts?raw';
 import interactiveSparklineStateSource from '@/components/shared/useInteractiveSparklineState.ts?raw';
+import webInterfaceUrlFieldSource from '@/components/shared/WebInterfaceUrlField.tsx?raw';
+import webInterfaceUrlFieldModelSource from '@/components/shared/webInterfaceUrlFieldModel.ts?raw';
+import webInterfaceUrlFieldStateSource from '@/components/shared/useWebInterfaceUrlFieldState.ts?raw';
 import guestRowSource from '@/components/Dashboard/GuestRow.tsx?raw';
 import resourceDetailDrawerOverviewSource from '@/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx?raw';
 import aiSettingsDialogsSource from '@/components/Settings/AISettingsDialogs.tsx?raw';
@@ -201,5 +204,24 @@ describe('shared primitive guardrails', () => {
     expect(containerUpdateBadgeModelSource).toContain('getUpdateButtonClass');
     expect(containerUpdateBadgeModelSource).toContain('getUpdateButtonTooltip');
     expect(containerUpdateBadgeModelSource).toContain('hasContainerUpdate');
+  });
+
+  it('keeps web interface URL field on shell, runtime, and model owners', () => {
+    expect(webInterfaceUrlFieldSource).toContain('useWebInterfaceUrlFieldState');
+    expect(webInterfaceUrlFieldSource).not.toContain('GuestMetadataAPI.getMetadata');
+    expect(webInterfaceUrlFieldSource).not.toContain('AgentMetadataAPI.updateMetadata');
+    expect(webInterfaceUrlFieldSource).not.toContain('validateWebInterfaceCustomUrl');
+    expect(webInterfaceUrlFieldSource).not.toContain('createSignal');
+
+    expect(webInterfaceUrlFieldStateSource).toContain('GuestMetadataAPI.getMetadata');
+    expect(webInterfaceUrlFieldStateSource).toContain('AgentMetadataAPI.updateMetadata');
+    expect(webInterfaceUrlFieldStateSource).toContain('createSignal');
+    expect(webInterfaceUrlFieldStateSource).toContain(
+      'export function useWebInterfaceUrlFieldState',
+    );
+
+    expect(webInterfaceUrlFieldModelSource).toContain('validateWebInterfaceCustomUrl');
+    expect(webInterfaceUrlFieldModelSource).toContain('getWebInterfaceSuggestedUrlFallback');
+    expect(webInterfaceUrlFieldModelSource).toContain('shouldShowWebInterfaceSuggestedUrl');
   });
 });
