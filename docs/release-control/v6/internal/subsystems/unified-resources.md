@@ -459,14 +459,15 @@ That access-side analysis surface still follows the same shell/runtime split as
 the rest of the drawer: `DiscoveryTab.tsx` owns presentation and disclosures,
 while `useDiscoveryTabState.ts` owns API fetches, websocket progress, and
 note/discovery mutations.
-The overview keeps access, host, service, and investigation detail as
-collapsed sibling disclosures under the primary card pair, so the drawer keeps
+The overview keeps access, investigation detail, service detail, and host
+detail as collapsed sibling disclosures under the primary card pair, so the
+drawer keeps
 the top-level shape to current-state/identity plus `Change history` before any
 secondary operational context appears.
 That secondary hierarchy now renders in two layers: a full-width `Change
-history` surface first, followed by a separate support-disclosure grid for
-access, host, service, and context, so timeline inspection stays visually
-primary instead of competing with the support cards for equal width.
+history` surface first, followed by a separate support-disclosure grid ordered
+as `Access`, `Context`, `Service`, and `Host`, so the operator sees links and
+investigation context before deeper technical drill-down cards.
 Inside `Change history`, the event list now renders directly in the parent
 section instead of inside a second bordered `Event log` card, so the timeline
 reads like one inspection surface rather than a card nested under its own

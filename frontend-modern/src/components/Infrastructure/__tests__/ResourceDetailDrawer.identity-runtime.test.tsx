@@ -235,6 +235,14 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     expect(
       getByTestId('resource-support-sections').classList.contains('flex-wrap'),
     ).toBe(true);
+    expect(
+      Array.from(getByTestId('resource-support-sections').children).map((node) =>
+        node.getAttribute('data-testid'),
+      ),
+    ).toEqual([
+      'resource-access-section',
+      'resource-host-details-section',
+    ]);
     expect(getByTestId('resource-host-details-section').querySelector('.mt-3.flex.flex-wrap')).toBeTruthy();
     expect(
       getByTestId('resource-host-details-section').querySelector('.mt-3.flex.flex-wrap')?.classList.contains('[&>*]:min-w-[220px]'),

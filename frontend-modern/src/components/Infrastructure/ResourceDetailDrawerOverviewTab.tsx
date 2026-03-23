@@ -520,6 +520,224 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
             class="flex flex-wrap gap-3 [&>*]:flex-1 [&>*]:basis-[calc(50%-0.375rem)] [&>*]:min-w-[260px] [&>*]:max-w-full [&>*]:overflow-hidden"
           >
 
+        <Show when={drawer.hasAccessContext()}>
+          <SupportDisclosure
+            title="Access"
+            summary={drawer.accessSummary()}
+            expanded={drawer.showAccessContext()}
+            onToggle={() => drawer.setShowAccessContext((value) => !value)}
+            showLabel="Show access"
+            hideLabel="Hide access"
+            class="h-full"
+            contentClass="mt-3 space-y-3"
+            dataTestId="resource-access-section"
+          >
+            <Show when={drawer.relatedLinks().length > 0}>
+              <div class="space-y-1">
+                <div class="text-[10px] font-medium uppercase tracking-wide text-base-content">
+                  Links
+                </div>
+                <div class="flex flex-wrap gap-2">
+                  <For each={drawer.relatedLinks()}>
+                    {(link) => (
+                      <a
+                        href={link.href}
+                        aria-label={link.ariaLabel}
+                        class="inline-flex items-center rounded border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-200 dark:hover:bg-blue-900"
+                      >
+                        {link.compactLabel}
+                      </a>
+                    )}
+                  </For>
+                </div>
+              </div>
+            </Show>
+
+            <Show when={drawer.discoveryConfig()}>
+              {(config) => (
+                <div class="space-y-3">
+                  <WebInterfaceUrlField
+                    metadataKind={config().metadataKind}
+                    metadataId={config().metadataId}
+                    targetLabel={config().targetLabel}
+                    title="Web interface"
+                    embedded
+                  />
+
+                  <div class="space-y-2 border-t border-border pt-3" data-testid="resource-access-analysis">
+                    <div class="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <div class="text-[10px] font-medium uppercase tracking-wide text-base-content">
+                          Analysis
+                        </div>
+                        <Show when={drawer.discoveryContextSummary()}>
+                          <div class="mt-1 text-[10px] text-base-content">
+                            {drawer.discoveryContextSummary()}
+                          </div>
+                        </Show>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => drawer.setShowDiscoveryContext((value) => !value)}
+                        class="inline-flex items-center rounded-md border border-border bg-surface px-2.5 py-1 text-[10px] font-medium text-base-content transition-colors hover:bg-base"
+                      >
+                        {drawer.showDiscoveryContext() ? 'Hide analysis' : 'Open analysis'}
+                      </button>
+                    </div>
+
+                    <Show when={drawer.showDiscoveryContext()}>
+                      <Suspense
+                        fallback={
+                          <div class="flex items-center justify-center py-8">
+                            <div class="animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full" />
+                            <span class="ml-2 text-sm text-muted">{getDiscoveryLoadingState().text}</span>
+                          </div>
+                        }
+                      >
+                        <DiscoveryTab
+                          resourceType={config().resourceType}
+                          agentId={config().agentId}
+                          resourceId={config().resourceId}
+                          hostname={config().hostname}
+                        />
+                      </Suspense>
+                    </Show>
+                  </div>
+                </div>
+              )}
+            </Show>
+          </SupportDisclosure>
+        </Show>
+
+        <Show when={drawer.hasInvestigationContext()}>
+          <SupportDisclosure
+            title="Context"
+            summary={drawer.investigationContextSummary()}
+            expanded={drawer.showInvestigationContext()}
+            onToggle={() => drawer.setShowInvestigationContext((value) => !value)}
+            showLabel="Show context"
+            hideLabel="Hide context"
+            class="h-full"
+            contentClass="mt-3 space-y-3"
+            dataTestId="resource-investigation-context"
+          >
+            <Show when={drawer.resourceIntelligence()}>
+              {(intel) => (
+                <div class="space-y-1.5 text-[11px]">
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="text-muted uppercase tracking-wide">AI</span>
+                  </div>
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="text-muted">Health</span>
+                    <span class="font-semibold text-base-content">
+                      {intel().health.grade} · {Math.round(intel().health.score)}/100
+                    </span>
+                  </div>
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="text-muted">Trend</span>
+                    <span class="font-semibold capitalize text-base-content">
+                      {intel().health.trend}
+                    </span>
+                  </div>
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="text-muted">Notes</span>
+                    <span class="font-semibold text-base-content">{intel().note_count}</span>
+                  </div>
+                  <ResourceChangeSummary
+                    class="space-y-0"
+                    title="Latest canonical change"
+                    changes={intel().recent_changes}
+                    resolveResourceLabel={drawer.resolveResourceLabel}
+                    maxChanges={1}
+                    compact
+                  />
+                  <Show when={drawer.hasCorrelationContext()}>
+                    <div data-testid="resource-correlation-context" class="space-y-1.5">
+                      <div class="flex flex-wrap items-center justify-between gap-2">
+                        <span class="text-[10px] font-medium uppercase tracking-wide text-base-content">
+                          Correlations
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => drawer.setShowCorrelationContext((value) => !value)}
+                          class="inline-flex items-center rounded-md border border-border bg-surface px-2.5 py-1 text-[10px] font-medium text-base-content transition-colors hover:bg-surface-hover"
+                        >
+                          {drawer.showCorrelationContext() ? 'Hide correlations' : 'Show correlations'}
+                        </button>
+                      </div>
+
+                      <Show when={drawer.showCorrelationContext()}>
+                        <div class="pt-1">
+                          <ResourceCorrelationSummary
+                            title="Correlations"
+                            dependencies={drawer.resourceDependencies()}
+                            dependents={drawer.resourceDependents()}
+                            correlations={drawer.resourceCorrelations()}
+                            resolveResourceLabel={drawer.resolveResourceLabel}
+                            showLastSeen
+                          />
+                        </div>
+                      </Show>
+                    </div>
+                  </Show>
+                </div>
+              )}
+            </Show>
+
+            <Show when={drawer.hasGovernanceData()}>
+              <div class="space-y-1.5 text-[11px]">
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-muted uppercase tracking-wide">Governance</span>
+                </div>
+                <Show when={resource.policy}>
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="text-muted">Sensitivity</span>
+                    <span class="font-semibold text-base-content">
+                      {getResourceSensitivityLabel(resource.policy?.sensitivity)}
+                    </span>
+                  </div>
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="text-muted">Routing</span>
+                    <span class="font-semibold text-base-content">
+                      {getResourceRoutingScopeLabel(resource.policy?.routing.scope)}
+                    </span>
+                  </div>
+                </Show>
+                <Show when={drawer.policyRedactions().length > 0 || drawer.governanceSummary()}>
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="text-muted">Redactions</span>
+                    <span class="font-semibold text-base-content">
+                      {drawer.policyRedactions().length}
+                    </span>
+                  </div>
+                </Show>
+                <Show when={drawer.policyRedactions().length > 0}>
+                  <div class="flex flex-col gap-1">
+                    <span class="text-muted">Redaction labels</span>
+                    <div class="flex flex-wrap gap-1">
+                      <For each={drawer.policyRedactions()}>
+                        {(label) => (
+                          <span class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px]">
+                            {label}
+                          </span>
+                        )}
+                      </For>
+                    </div>
+                  </div>
+                </Show>
+                <Show when={drawer.governanceSummary()}>
+                  <div class="flex flex-col gap-1">
+                    <span class="text-muted">AI-Safe Summary</span>
+                    <div class="rounded border border-border bg-surface-hover px-2 py-1.5 text-[10px] text-base-content">
+                      {drawer.governanceSummary()}
+                    </div>
+                  </div>
+                </Show>
+              </div>
+            </Show>
+          </SupportDisclosure>
+        </Show>
+
         <Show when={drawer.hasServiceDetails()}>
           <SupportDisclosure
             title="Service"
@@ -936,223 +1154,6 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
           </SupportDisclosure>
         </Show>
 
-        <Show when={drawer.hasAccessContext()}>
-          <SupportDisclosure
-            title="Access"
-            summary={drawer.accessSummary()}
-            expanded={drawer.showAccessContext()}
-            onToggle={() => drawer.setShowAccessContext((value) => !value)}
-            showLabel="Show access"
-            hideLabel="Hide access"
-            class="h-full"
-            contentClass="mt-3 space-y-3"
-            dataTestId="resource-access-section"
-          >
-            <Show when={drawer.relatedLinks().length > 0}>
-              <div class="space-y-1">
-                <div class="text-[10px] font-medium uppercase tracking-wide text-base-content">
-                  Links
-                </div>
-                <div class="flex flex-wrap gap-2">
-                  <For each={drawer.relatedLinks()}>
-                    {(link) => (
-                      <a
-                        href={link.href}
-                        aria-label={link.ariaLabel}
-                        class="inline-flex items-center rounded border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-200 dark:hover:bg-blue-900"
-                      >
-                        {link.compactLabel}
-                      </a>
-                    )}
-                  </For>
-                </div>
-              </div>
-            </Show>
-
-            <Show when={drawer.discoveryConfig()}>
-              {(config) => (
-                <div class="space-y-3">
-                  <WebInterfaceUrlField
-                    metadataKind={config().metadataKind}
-                    metadataId={config().metadataId}
-                    targetLabel={config().targetLabel}
-                    title="Web interface"
-                    embedded
-                  />
-
-                  <div class="space-y-2 border-t border-border pt-3" data-testid="resource-access-analysis">
-                    <div class="flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <div class="text-[10px] font-medium uppercase tracking-wide text-base-content">
-                          Analysis
-                        </div>
-                        <Show when={drawer.discoveryContextSummary()}>
-                          <div class="mt-1 text-[10px] text-base-content">
-                            {drawer.discoveryContextSummary()}
-                          </div>
-                        </Show>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => drawer.setShowDiscoveryContext((value) => !value)}
-                        class="inline-flex items-center rounded-md border border-border bg-surface px-2.5 py-1 text-[10px] font-medium text-base-content transition-colors hover:bg-base"
-                      >
-                        {drawer.showDiscoveryContext() ? 'Hide analysis' : 'Open analysis'}
-                      </button>
-                    </div>
-
-                    <Show when={drawer.showDiscoveryContext()}>
-                      <Suspense
-                        fallback={
-                          <div class="flex items-center justify-center py-8">
-                            <div class="animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full" />
-                            <span class="ml-2 text-sm text-muted">{getDiscoveryLoadingState().text}</span>
-                          </div>
-                        }
-                      >
-                        <DiscoveryTab
-                          resourceType={config().resourceType}
-                          agentId={config().agentId}
-                          resourceId={config().resourceId}
-                          hostname={config().hostname}
-                        />
-                      </Suspense>
-                    </Show>
-                  </div>
-                </div>
-              )}
-            </Show>
-          </SupportDisclosure>
-        </Show>
-
-        <Show when={drawer.hasInvestigationContext()}>
-          <SupportDisclosure
-            title="Context"
-            summary={drawer.investigationContextSummary()}
-            expanded={drawer.showInvestigationContext()}
-            onToggle={() => drawer.setShowInvestigationContext((value) => !value)}
-            showLabel="Show context"
-            hideLabel="Hide context"
-            class="h-full"
-            contentClass="mt-3 space-y-3"
-            dataTestId="resource-investigation-context"
-          >
-            <Show when={drawer.resourceIntelligence()}>
-              {(intel) => (
-                <div class="space-y-1.5 text-[11px]">
-                  <div class="flex items-center justify-between gap-2">
-                    <span class="text-muted uppercase tracking-wide">AI</span>
-                  </div>
-                  <div class="flex items-center justify-between gap-2">
-                    <span class="text-muted">Health</span>
-                    <span class="font-semibold text-base-content">
-                      {intel().health.grade} · {Math.round(intel().health.score)}/100
-                    </span>
-                  </div>
-                  <div class="flex items-center justify-between gap-2">
-                    <span class="text-muted">Trend</span>
-                    <span class="font-semibold capitalize text-base-content">
-                      {intel().health.trend}
-                    </span>
-                  </div>
-                  <div class="flex items-center justify-between gap-2">
-                    <span class="text-muted">Notes</span>
-                    <span class="font-semibold text-base-content">{intel().note_count}</span>
-                  </div>
-                  <ResourceChangeSummary
-                    class="space-y-0"
-                    title="Latest canonical change"
-                    changes={intel().recent_changes}
-                    resolveResourceLabel={drawer.resolveResourceLabel}
-                    maxChanges={1}
-                    compact
-                  />
-                  <Show when={drawer.hasCorrelationContext()}>
-                    <div data-testid="resource-correlation-context" class="space-y-1.5">
-                      <div class="flex flex-wrap items-center justify-between gap-2">
-                        <span class="text-[10px] font-medium uppercase tracking-wide text-base-content">
-                          Correlations
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => drawer.setShowCorrelationContext((value) => !value)}
-                          class="inline-flex items-center rounded-md border border-border bg-surface px-2.5 py-1 text-[10px] font-medium text-base-content transition-colors hover:bg-surface-hover"
-                        >
-                          {drawer.showCorrelationContext() ? 'Hide correlations' : 'Show correlations'}
-                        </button>
-                      </div>
-
-                      <Show when={drawer.showCorrelationContext()}>
-                        <div class="pt-1">
-                          <ResourceCorrelationSummary
-                            title="Correlations"
-                            dependencies={drawer.resourceDependencies()}
-                            dependents={drawer.resourceDependents()}
-                            correlations={drawer.resourceCorrelations()}
-                            resolveResourceLabel={drawer.resolveResourceLabel}
-                            showLastSeen
-                          />
-                        </div>
-                      </Show>
-                    </div>
-                  </Show>
-                </div>
-              )}
-            </Show>
-
-            <Show when={drawer.hasGovernanceData()}>
-              <div class="space-y-1.5 text-[11px]">
-                <div class="flex items-center justify-between gap-2">
-                  <span class="text-muted uppercase tracking-wide">Governance</span>
-                </div>
-                <Show when={resource.policy}>
-                  <div class="flex items-center justify-between gap-2">
-                    <span class="text-muted">Sensitivity</span>
-                    <span class="font-semibold text-base-content">
-                      {getResourceSensitivityLabel(resource.policy?.sensitivity)}
-                    </span>
-                  </div>
-                  <div class="flex items-center justify-between gap-2">
-                    <span class="text-muted">Routing</span>
-                    <span class="font-semibold text-base-content">
-                      {getResourceRoutingScopeLabel(resource.policy?.routing.scope)}
-                    </span>
-                  </div>
-                </Show>
-                <Show when={drawer.policyRedactions().length > 0 || drawer.governanceSummary()}>
-                  <div class="flex items-center justify-between gap-2">
-                    <span class="text-muted">Redactions</span>
-                    <span class="font-semibold text-base-content">
-                      {drawer.policyRedactions().length}
-                    </span>
-                  </div>
-                </Show>
-                <Show when={drawer.policyRedactions().length > 0}>
-                  <div class="flex flex-col gap-1">
-                    <span class="text-muted">Redaction labels</span>
-                    <div class="flex flex-wrap gap-1">
-                      <For each={drawer.policyRedactions()}>
-                        {(label) => (
-                          <span class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px]">
-                            {label}
-                          </span>
-                        )}
-                      </For>
-                    </div>
-                  </div>
-                </Show>
-                <Show when={drawer.governanceSummary()}>
-                  <div class="flex flex-col gap-1">
-                    <span class="text-muted">AI-Safe Summary</span>
-                    <div class="rounded border border-border bg-surface-hover px-2 py-1.5 text-[10px] text-base-content">
-                      {drawer.governanceSummary()}
-                    </div>
-                  </div>
-                </Show>
-              </div>
-            </Show>
-          </SupportDisclosure>
-        </Show>
           </div>
         </Show>
       </div>

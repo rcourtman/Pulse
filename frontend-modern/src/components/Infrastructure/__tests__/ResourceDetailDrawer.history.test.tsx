@@ -381,6 +381,14 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(within(changeHistorySection).queryByText('Recent activity')).toBeNull();
     expect(screen.queryByText('Events')).toBeNull();
     expect(screen.getAllByText('Timeline 3')).toHaveLength(1);
+    expect(
+      Array.from(screen.getByTestId('resource-support-sections').children).map((node) =>
+        node.getAttribute('data-testid'),
+      ),
+    ).toEqual([
+      'resource-access-section',
+      'resource-investigation-context',
+    ]);
     expect(screen.getAllByText('Restart 2')).toHaveLength(1);
     expect(screen.getAllByText('Anomaly 1')).toHaveLength(1);
     expect(screen.getAllByText('Platform event 1')).toHaveLength(1);
@@ -635,6 +643,14 @@ describe('ResourceDetailDrawer change history section', () => {
     render(() => <ResourceDetailDrawer resource={resource} />);
 
     expect(screen.getByText('Service')).toBeInTheDocument();
+    expect(
+      Array.from(screen.getByTestId('resource-support-sections').children).map((node) =>
+        node.getAttribute('data-testid'),
+      ),
+    ).toEqual([
+      'resource-access-section',
+      'resource-service-details-section',
+    ]);
     fireEvent.click(screen.getByRole('button', { name: 'Show service' }));
     const serviceDetails = within(screen.getByTestId('resource-service-details-section'));
     expect(
