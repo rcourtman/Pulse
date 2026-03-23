@@ -124,6 +124,11 @@ sharing views stay aligned with the shared multi-tenant org context contract.
 The organization sharing surface now also sources resource quick-pick labels
 from the shared preferred resource display helper, so governed resources do
 not fall back to raw names inside share creation.
+Organization settings empty, unavailable, and load-error states are part of
+that same presentation boundary: the shared organization presentation helpers
+must describe server capability and settings availability directly, rather than
+falling back to generic `feature not available` or transport-style `failed to
+load` copy.
 The organization access surface now follows that extracted-owner pattern too:
 the panel is the shell, `useOrganizationAccessPanelState.ts` owns the
 membership runtime, and the loading, management, and members views each live

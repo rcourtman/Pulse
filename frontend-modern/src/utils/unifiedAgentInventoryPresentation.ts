@@ -47,15 +47,15 @@ export function getMonitoringStoppedEmptyState(hasFilters: boolean): string {
 
 export function getMonitoredSystemLedgerLoadingState() {
   return {
-    text: 'Loading monitored system ledger...',
+    text: 'Loading monitored system usage…',
   } as const;
 }
 
 export function getMonitoredSystemLedgerErrorState() {
   return {
-    title: 'Failed to load monitored system ledger.',
-    retryingLabel: 'Retrying…',
-    retryLabel: 'Retry',
+    title: 'Monitored system usage is temporarily unavailable.',
+    retryingLabel: 'Trying again…',
+    retryLabel: 'Try again',
   } as const;
 }
 

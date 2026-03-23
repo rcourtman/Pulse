@@ -1,12 +1,14 @@
 import { segmentedButtonClass } from '@/utils/segmentedButton';
 
-export const AI_COST_EMPTY_STATE = 'No usage data yet.';
-export const AI_COST_DAILY_USD_EMPTY_STATE = 'No daily USD trend yet.';
-export const AI_COST_DAILY_TOKEN_EMPTY_STATE = 'No daily token trend yet.';
+export const AI_COST_EMPTY_STATE = 'Usage data will appear here once activity is recorded.';
+export const AI_COST_DAILY_USD_EMPTY_STATE =
+  'Daily cost trend will appear here once activity is recorded.';
+export const AI_COST_DAILY_TOKEN_EMPTY_STATE =
+  'Daily token trend will appear here once activity is recorded.';
 
 export function getAICostLoadingState() {
   return {
-    text: 'Loading usage…',
+    text: 'Loading usage data…',
   } as const;
 }
 

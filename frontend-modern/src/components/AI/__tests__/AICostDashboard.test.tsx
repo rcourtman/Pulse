@@ -487,10 +487,12 @@ describe('AICostDashboard', () => {
     );
     renderDashboard();
 
-    // While loading, we see "Loading usage…"
-    expect(screen.getByText('Loading usage…')).toBeInTheDocument();
-    // The "No usage data yet" message should NOT appear while loading
-    expect(screen.queryByText('No usage data yet.')).not.toBeInTheDocument();
+    // While loading, we see the shared usage-loading copy.
+    expect(screen.getByText('Loading usage data…')).toBeInTheDocument();
+    // The empty state should not appear while loading.
+    expect(
+      screen.queryByText('Usage data will appear here once activity is recorded.'),
+    ).not.toBeInTheDocument();
 
     // Now resolve — data appears
     resolvePromise!(baseSummary());
@@ -711,11 +713,13 @@ describe('AICostDashboard', () => {
     expect(svgs.length).toBeGreaterThanOrEqual(2);
   });
 
-  it('shows "No daily token trend yet" when less than 2 daily totals', async () => {
+  it('shows the shared daily token empty state when less than 2 daily totals', async () => {
     getCostSummaryMock.mockResolvedValue(baseSummary({ daily_totals: [] }));
     renderDashboard();
     await waitFor(() => {
-      expect(screen.getByText('No daily token trend yet.')).toBeInTheDocument();
+      expect(
+        screen.getByText('Daily token trend will appear here once activity is recorded.'),
+      ).toBeInTheDocument();
     });
   });
 

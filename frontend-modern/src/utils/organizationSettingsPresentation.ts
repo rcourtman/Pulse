@@ -1,6 +1,7 @@
 import type { OrganizationRole } from '@/api/orgs';
 
-export const ORGANIZATION_SETTINGS_UNAVAILABLE_MESSAGE = 'This feature is not available.';
+export const ORGANIZATION_SETTINGS_UNAVAILABLE_MESSAGE =
+  'Organization settings are not available on this server.';
 export const ORGANIZATION_SETTINGS_UNAVAILABLE_CLASS = 'p-4 text-sm text-slate-500';
 
 export type OrganizationSettingsLoadContext =
@@ -11,11 +12,11 @@ export type OrganizationSettingsLoadContext =
   | 'billing-admin';
 
 const ORGANIZATION_SETTINGS_LOAD_FALLBACKS: Record<OrganizationSettingsLoadContext, string> = {
-  access: 'Failed to load organization access settings',
-  overview: 'Failed to load organization details',
-  sharing: 'Failed to load organization sharing details',
-  billing: 'Failed to load billing and plan details',
-  'billing-admin': 'Failed to list organizations',
+  access: 'Unable to load organization access settings.',
+  overview: 'Unable to load organization details.',
+  sharing: 'Unable to load organization sharing details.',
+  billing: 'Unable to load billing and plan details.',
+  'billing-admin': 'Unable to load the organization list.',
 };
 
 export function getOrganizationSettingsLoadErrorMessage(
@@ -23,10 +24,10 @@ export function getOrganizationSettingsLoadErrorMessage(
   context: OrganizationSettingsLoadContext,
 ): string {
   if (message.includes('402')) {
-    return 'Multi-tenant requires an Enterprise license';
+    return 'Organization settings require an Enterprise license.';
   }
   if (message.includes('501')) {
-    return 'Multi-tenant is not enabled on this server';
+    return 'Organization settings are not enabled on this server.';
   }
   return ORGANIZATION_SETTINGS_LOAD_FALLBACKS[context];
 }

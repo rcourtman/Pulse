@@ -44,12 +44,12 @@ describe('unifiedAgentInventoryPresentation', () => {
 
   it('returns canonical monitored-system ledger loading and error copy', () => {
     expect(getMonitoredSystemLedgerLoadingState()).toEqual({
-      text: 'Loading monitored system ledger...',
+      text: 'Loading monitored system usage…',
     });
     expect(getMonitoredSystemLedgerErrorState()).toEqual({
-      title: 'Failed to load monitored system ledger.',
-      retryingLabel: 'Retrying…',
-      retryLabel: 'Retry',
+      title: 'Monitored system usage is temporarily unavailable.',
+      retryingLabel: 'Trying again…',
+      retryLabel: 'Try again',
     });
   });
 

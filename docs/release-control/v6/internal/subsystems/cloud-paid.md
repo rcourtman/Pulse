@@ -335,6 +335,10 @@ customer terms: monitored systems, plan limits, subscription status, and
 license status. They must not revive legacy `installed-agent` wording or vague
 internal nouns like `allocation` once the monitored-system billing model is the
 canonical product truth.
+Loading, empty, and temporary-unavailable states on monitored-system usage
+surfaces follow that same rule: they should use calm customer-facing status
+language such as usage loading or usage unavailable with a clear retry action,
+not raw transport phrasing like `failed to load`.
 The self-hosted pricing page should therefore stay focused on plan cards,
 upgrade paths, and the comparison table rather than rendering a separate
 counted-unit explainer card beneath the tier grid.

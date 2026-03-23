@@ -34,23 +34,25 @@ import {
 
 describe('organizationSettingsPresentation', () => {
   it('returns canonical multi-tenant fallback presentation', () => {
-    expect(ORGANIZATION_SETTINGS_UNAVAILABLE_MESSAGE).toBe('This feature is not available.');
+    expect(ORGANIZATION_SETTINGS_UNAVAILABLE_MESSAGE).toBe(
+      'Organization settings are not available on this server.',
+    );
     expect(ORGANIZATION_SETTINGS_UNAVAILABLE_CLASS).toContain('text-slate-500');
   });
 
   it('normalizes organization settings load errors', () => {
     expect(getOrganizationSettingsLoadErrorMessage('request failed 402', 'access')).toBe(
-      'Multi-tenant requires an Enterprise license',
+      'Organization settings require an Enterprise license.',
     );
     expect(getOrganizationSettingsLoadErrorMessage('request failed 501', 'access')).toBe(
-      'Multi-tenant is not enabled on this server',
+      'Organization settings are not enabled on this server.',
     );
     const expectedFallbacks: Record<OrganizationSettingsLoadContext, string> = {
-      access: 'Failed to load organization access settings',
-      overview: 'Failed to load organization details',
-      sharing: 'Failed to load organization sharing details',
-      billing: 'Failed to load billing and plan details',
-      'billing-admin': 'Failed to list organizations',
+      access: 'Unable to load organization access settings.',
+      overview: 'Unable to load organization details.',
+      sharing: 'Unable to load organization sharing details.',
+      billing: 'Unable to load billing and plan details.',
+      'billing-admin': 'Unable to load the organization list.',
     };
 
     for (const [context, fallback] of Object.entries(expectedFallbacks)) {

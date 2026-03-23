@@ -15,11 +15,15 @@ describe('aiCostPresentation', () => {
   });
 
   it('exports canonical AI cost empty-state copy', () => {
-    expect(AI_COST_EMPTY_STATE).toBe('No usage data yet.');
-    expect(AI_COST_DAILY_USD_EMPTY_STATE).toBe('No daily USD trend yet.');
-    expect(AI_COST_DAILY_TOKEN_EMPTY_STATE).toBe('No daily token trend yet.');
+    expect(AI_COST_EMPTY_STATE).toBe('Usage data will appear here once activity is recorded.');
+    expect(AI_COST_DAILY_USD_EMPTY_STATE).toBe(
+      'Daily cost trend will appear here once activity is recorded.',
+    );
+    expect(AI_COST_DAILY_TOKEN_EMPTY_STATE).toBe(
+      'Daily token trend will appear here once activity is recorded.',
+    );
     expect(getAICostLoadingState()).toEqual({
-      text: 'Loading usage…',
+      text: 'Loading usage data…',
     });
   });
 });

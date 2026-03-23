@@ -53,10 +53,10 @@ describe('MonitoredSystemLedgerPanel', () => {
     render(() => <MonitoredSystemLedgerPanel />);
 
     await waitFor(() => {
-      expect(screen.getByText('Failed to load monitored system ledger.')).toBeInTheDocument();
+      expect(screen.getByText('Monitored system usage is temporarily unavailable.')).toBeInTheDocument();
     });
 
-    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
   });
 
   it('recovers from error when Retry is clicked and API succeeds', async () => {
@@ -65,7 +65,7 @@ describe('MonitoredSystemLedgerPanel', () => {
     render(() => <MonitoredSystemLedgerPanel />);
 
     await waitFor(() => {
-      expect(screen.getByText('Failed to load monitored system ledger.')).toBeInTheDocument();
+      expect(screen.getByText('Monitored system usage is temporarily unavailable.')).toBeInTheDocument();
     });
 
     // Now make API succeed on retry
@@ -95,13 +95,15 @@ describe('MonitoredSystemLedgerPanel', () => {
       limit: 5,
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
 
     await waitFor(() => {
       expect(screen.getByText('host-1')).toBeInTheDocument();
     });
 
-    expect(screen.queryByText('Failed to load monitored system ledger.')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('Monitored system usage is temporarily unavailable.'),
+    ).not.toBeInTheDocument();
   });
 
   it('keeps Retry button visible on repeated failures', async () => {
@@ -110,19 +112,19 @@ describe('MonitoredSystemLedgerPanel', () => {
     render(() => <MonitoredSystemLedgerPanel />);
 
     await waitFor(() => {
-      expect(screen.getByText('Failed to load monitored system ledger.')).toBeInTheDocument();
+      expect(screen.getByText('Monitored system usage is temporarily unavailable.')).toBeInTheDocument();
     });
 
     const callsBefore = getLedgerMock.mock.calls.length;
 
-    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
 
     await waitFor(() => {
-      expect(screen.getByText('Failed to load monitored system ledger.')).toBeInTheDocument();
+      expect(screen.getByText('Monitored system usage is temporarily unavailable.')).toBeInTheDocument();
     });
 
     expect(getLedgerMock.mock.calls.length).toBeGreaterThan(callsBefore);
-    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
   });
 
   it('renders ledger data on successful load', async () => {
@@ -207,7 +209,9 @@ describe('MonitoredSystemLedgerPanel', () => {
     ).toBeInTheDocument();
     expect(screen.getByText('Included collection paths')).toBeInTheDocument();
     expect(screen.getByText('server-b host (host, agent)')).toBeInTheDocument();
-    expect(screen.queryByText('Failed to load monitored system ledger.')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('Monitored system usage is temporarily unavailable.'),
+    ).not.toBeInTheDocument();
   });
 
   it('does not crash when explanation payload is missing', async () => {
