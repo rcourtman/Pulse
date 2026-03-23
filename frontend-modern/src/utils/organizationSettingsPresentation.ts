@@ -45,11 +45,11 @@ export function getOrganizationDisplayNameRequiredMessage(): string {
 }
 
 export function getOrganizationDisplayNameUpdateErrorMessage(message?: string): string {
-  return message || 'Failed to update organization name';
+  return message || 'Unable to update the organization name.';
 }
 
 export function getOrganizationDisplayNameUpdatedMessage(): string {
-  return 'Organization name updated';
+  return 'Organization name has been updated.';
 }
 
 export function getOrganizationOverviewManageRequiredMessage(): string {
@@ -72,22 +72,22 @@ export function getOrganizationAccessRoleUpdatedMessage(
   userId: string,
   role: OrganizationRole,
 ): string {
-  return `Updated ${userId} to ${role}`;
+  return `Updated ${userId} to the ${role} role.`;
 }
 
 export function getOrganizationMemberRoleUpdateErrorMessage(message?: string): string {
-  return message || 'Failed to update member role';
+  return message || 'Unable to update the member role.';
 }
 
 export function getOrganizationAccessMemberAddedMessage(
   userId: string,
   role: OrganizationRole,
 ): string {
-  return `Added ${userId} as ${role}`;
+  return `Added ${userId} as ${role}.`;
 }
 
 export function getOrganizationAddMemberErrorMessage(message?: string): string {
-  return message || 'Failed to add member';
+  return message || 'Unable to add the member.';
 }
 
 export function getOrganizationMemberRemoveConfirmMessage(
@@ -98,11 +98,11 @@ export function getOrganizationMemberRemoveConfirmMessage(
 }
 
 export function getOrganizationAccessMemberRemovedMessage(userId: string): string {
-  return `Removed ${userId}`;
+  return `Removed ${userId} from the organization.`;
 }
 
 export function getOrganizationRemoveMemberErrorMessage(message?: string): string {
-  return message || 'Failed to remove member';
+  return message || 'Unable to remove the member.';
 }
 
 export function getOrganizationOutgoingSharesEmptyState(): string {
@@ -130,17 +130,17 @@ export function getOrganizationShareTargetOrgDifferentMessage(): string {
 }
 
 export function getOrganizationShareCreateSuccessMessage(): string {
-  return 'Resource shared successfully';
+  return 'Resource has been shared.';
 }
 
 export function getOrganizationShareCreateErrorMessage(message?: string): string {
-  return message || 'Failed to create share';
+  return message || 'Unable to create the share.';
 }
 
 export function getOrganizationShareDeleteSuccessMessage(): string {
-  return 'Share removed';
+  return 'Share has been removed.';
 }
 
 export function getOrganizationShareDeleteErrorMessage(message?: string): string {
-  return message || 'Failed to delete share';
+  return message || 'Unable to remove the share.';
 }

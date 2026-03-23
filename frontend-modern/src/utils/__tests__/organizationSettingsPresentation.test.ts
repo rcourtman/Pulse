@@ -77,10 +77,12 @@ describe('organizationSettingsPresentation', () => {
   it('returns canonical organization admin validation and error copy', () => {
     expect(getOrganizationDisplayNameRequiredMessage()).toBe('Display name is required');
     expect(getOrganizationDisplayNameUpdateErrorMessage()).toBe(
-      'Failed to update organization name',
+      'Unable to update the organization name.',
     );
     expect(getOrganizationDisplayNameUpdateErrorMessage('bad request')).toBe('bad request');
-    expect(getOrganizationDisplayNameUpdatedMessage()).toBe('Organization name updated');
+    expect(getOrganizationDisplayNameUpdatedMessage()).toBe(
+      'Organization name has been updated.',
+    );
     expect(getOrganizationOverviewManageRequiredMessage()).toBe(
       'Admin or owner role required to update organization details.',
     );
@@ -92,20 +94,24 @@ describe('organizationSettingsPresentation', () => {
       'Admin or owner role required to manage organization access.',
     );
     expect(getOrganizationAccessRoleUpdatedMessage('alice', 'admin')).toBe(
-      'Updated alice to admin',
+      'Updated alice to the admin role.',
     );
-    expect(getOrganizationMemberRoleUpdateErrorMessage()).toBe('Failed to update member role');
+    expect(getOrganizationMemberRoleUpdateErrorMessage()).toBe(
+      'Unable to update the member role.',
+    );
     expect(getOrganizationMemberRoleUpdateErrorMessage('conflict')).toBe('conflict');
     expect(getOrganizationAccessMemberAddedMessage('alice', 'viewer')).toBe(
-      'Added alice as viewer',
+      'Added alice as viewer.',
     );
-    expect(getOrganizationAddMemberErrorMessage()).toBe('Failed to add member');
+    expect(getOrganizationAddMemberErrorMessage()).toBe('Unable to add the member.');
     expect(getOrganizationAddMemberErrorMessage('duplicate')).toBe('duplicate');
     expect(getOrganizationMemberRemoveConfirmMessage('alice', 'Pulse Org')).toBe(
       'Remove alice from Pulse Org?',
     );
-    expect(getOrganizationAccessMemberRemovedMessage('alice')).toBe('Removed alice');
-    expect(getOrganizationRemoveMemberErrorMessage()).toBe('Failed to remove member');
+    expect(getOrganizationAccessMemberRemovedMessage('alice')).toBe(
+      'Removed alice from the organization.',
+    );
+    expect(getOrganizationRemoveMemberErrorMessage()).toBe('Unable to remove the member.');
     expect(getOrganizationRemoveMemberErrorMessage('forbidden')).toBe('forbidden');
   });
 
@@ -118,11 +124,11 @@ describe('organizationSettingsPresentation', () => {
     expect(getOrganizationShareTargetOrgDifferentMessage()).toBe(
       'Target organization must differ from the current organization',
     );
-    expect(getOrganizationShareCreateSuccessMessage()).toBe('Resource shared successfully');
-    expect(getOrganizationShareCreateErrorMessage()).toBe('Failed to create share');
+    expect(getOrganizationShareCreateSuccessMessage()).toBe('Resource has been shared.');
+    expect(getOrganizationShareCreateErrorMessage()).toBe('Unable to create the share.');
     expect(getOrganizationShareCreateErrorMessage('duplicate')).toBe('duplicate');
-    expect(getOrganizationShareDeleteSuccessMessage()).toBe('Share removed');
-    expect(getOrganizationShareDeleteErrorMessage()).toBe('Failed to delete share');
+    expect(getOrganizationShareDeleteSuccessMessage()).toBe('Share has been removed.');
+    expect(getOrganizationShareDeleteErrorMessage()).toBe('Unable to remove the share.');
     expect(getOrganizationShareDeleteErrorMessage('forbidden')).toBe('forbidden');
   });
 });

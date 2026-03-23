@@ -129,6 +129,10 @@ that same presentation boundary: the shared organization presentation helpers
 must describe server capability and settings availability directly, rather than
 falling back to generic `feature not available` or transport-style `failed to
 load` copy.
+The same helper also owns organization action notifications and confirmations:
+success and failure messages for renaming, membership changes, and sharing
+operations should stay specific and customer-facing, not terse operator jargon
+or bare transport wording.
 The organization access surface now follows that extracted-owner pattern too:
 the panel is the shell, `useOrganizationAccessPanelState.ts` owns the
 membership runtime, and the loading, management, and members views each live
