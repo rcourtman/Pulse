@@ -12,11 +12,19 @@ import { eventBus } from '@/stores/events';
 import {
   type InfrastructureSummaryProps,
   type InfrastructureSummarySparkMetric,
+  buildInfrastructureDisplaySeries,
+  buildInfrastructureEmptyHistoryLabel,
+  buildInfrastructureEmptyMessage,
+  buildInfrastructureMetricSeries,
   buildInfrastructureResourceCounts,
   buildInfrastructureSummarySeries,
   buildInfrastructureWorkloadStats,
+  getFocusedInfrastructureResourceName,
   getAverageDiskCapacity,
-  hasInfrastructureNetworkCapability,
+  getSingleDisplayedOnlineInfrastructureResource,
+  hasInfrastructureSeriesData,
+  isInfrastructureAwaitingFirstSample,
+  shouldShowInfrastructureNetworkCard,
 } from './infrastructureSummaryModel';
 
 // In-memory full-resolution cache keyed by "org::range".
@@ -229,83 +237,56 @@ export function useInfrastructureSummaryState(props: InfrastructureSummaryProps)
   );
 
   const displaySeries = createMemo(() => {
-    const focused = props.focusedResourceId;
-    const allSeries = resourceSeries();
-    if (!focused) return allSeries;
-    const match = allSeries.find((series) => series.id === focused);
-    return match ? [match] : allSeries;
+    return buildInfrastructureDisplaySeries(resourceSeries(), props.focusedResourceId);
   });
 
   const focusedResourceName = createMemo(() => {
-    const focused = props.focusedResourceId;
-    if (!focused) return null;
-    const match = resourceSeries().find((series) => series.id === focused);
-    return match?.name ?? null;
+    return getFocusedInfrastructureResourceName(resourceSeries(), props.focusedResourceId);
   });
 
   const singleDisplayedOnlineResource = createMemo(() => {
-    if (displaySeries().length !== 1 || props.resources.length !== 1) return null;
-    const [resource] = props.resources;
-    if (!resource) return null;
-    return resource.status?.toLowerCase() === 'online' ? resource : null;
+    return getSingleDisplayedOnlineInfrastructureResource(props.resources, displaySeries());
   });
 
   const isAwaitingFirstSample = createMemo(() => {
-    const resource = singleDisplayedOnlineResource();
-    if (!resource || !isCurrentRangeLoaded() || fetchFailed()) return false;
-
-    const oldest = oldestDataTimestamp();
-    if (oldest === null) return true;
-    return resource.lastSeen >= oldest;
+    return isInfrastructureAwaitingFirstSample({
+      resource: singleDisplayedOnlineResource(),
+      isCurrentRangeLoaded: isCurrentRangeLoaded(),
+      fetchFailed: fetchFailed(),
+      oldestDataTimestamp: oldestDataTimestamp(),
+    });
   });
 
   const emptyHistoryLabel = createMemo(() =>
-    isAwaitingFirstSample() ? 'Waiting for first sample' : 'No history yet',
+    buildInfrastructureEmptyHistoryLabel(isAwaitingFirstSample()),
   );
 
   const hasData = (metric: InfrastructureSummarySparkMetric) =>
-    displaySeries().some((series) => series[metric].length >= 1);
+    hasInfrastructureSeriesData(displaySeries(), metric);
 
   const networkSeries = createMemo(() =>
-    displaySeries().map((series) => ({
-      id: series.id,
-      data: series.network,
-      color: series.color,
-      name: series.name,
-    })),
+    buildInfrastructureMetricSeries(displaySeries(), 'network'),
   );
 
-  const hasNetData = createMemo(() => displaySeries().some((series) => series.network.length >= 1));
+  const hasNetData = createMemo(() => hasInfrastructureSeriesData(displaySeries(), 'network'));
 
   const diskioSeries = createMemo(() =>
-    displaySeries().map((series) => ({
-      id: series.id,
-      data: series.diskio,
-      color: series.color,
-      name: series.name,
-    })),
+    buildInfrastructureMetricSeries(displaySeries(), 'diskio'),
   );
 
-  const hasDiskIOData = createMemo(() =>
-    displaySeries().some((series) => series.diskio.length >= 1),
-  );
+  const hasDiskIOData = createMemo(() => hasInfrastructureSeriesData(displaySeries(), 'diskio'));
 
   const avgDiskCapacity = createMemo(() => getAverageDiskCapacity(props.resources));
   const shouldShowNetworkCard = createMemo(
-    () => hasNetData() || hasInfrastructureNetworkCapability(props.resources),
+    () => shouldShowInfrastructureNetworkCard(hasNetData(), props.resources),
   );
   const workloadStats = createMemo(() => buildInfrastructureWorkloadStats(workloads()));
   const resourceCounts = createMemo(() => buildInfrastructureResourceCounts(props.resources));
   const emptyMessage = createMemo(() =>
-    fetchFailed() ? 'Trend data unavailable' : emptyHistoryLabel(),
+    buildInfrastructureEmptyMessage(fetchFailed(), emptyHistoryLabel()),
   );
   const seriesFor = (metric: InfrastructureSummarySparkMetric) =>
-    displaySeries().map((series) => ({
-      id: series.id,
-      data: series[metric],
-      color: series.color,
-      name: series.name,
-    }));
+    buildInfrastructureMetricSeries(displaySeries(), metric);
 
   return {
     selectedRange,

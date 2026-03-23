@@ -122,7 +122,7 @@ regression protection.
 
 1. `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts` shared with `unified-resources`: the infrastructure selector pipeline is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
 2. `frontend-modern/src/components/Infrastructure/InfrastructureSummary.tsx` shared with `unified-resources`: the infrastructure summary surface is both a canonical unified-resource consumer and a fleet-scale summary chart hot-path boundary.
-3. `frontend-modern/src/components/Infrastructure/infrastructureSummaryModel.ts` shared with `unified-resources`: infrastructure summary chart matching and series derivation are both a canonical unified-resource consumer surface and a fleet-scale summary chart hot-path boundary.
+3. `frontend-modern/src/components/Infrastructure/infrastructureSummaryModel.ts` shared with `unified-resources`: infrastructure summary chart matching, focused-summary view derivation, and metric-series shaping are both a canonical unified-resource consumer surface and a fleet-scale summary chart hot-path boundary.
 4. `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts` shared with `unified-resources`: resource detail mappers are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
 5. `frontend-modern/src/components/Infrastructure/UnifiedResourceHostTableCard.tsx` shared with `unified-resources`: the unified resource host table card is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
 6. `frontend-modern/src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx` shared with `unified-resources`: the unified resource PBS section is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
@@ -343,9 +343,10 @@ That hot-path contract now includes policy badge rendering on resource rows.
 The infrastructure summary hot path is now explicit shared ownership too:
 `InfrastructureSummary.tsx` stays a render shell,
 `useInfrastructureSummaryState.ts` owns chart polling and cache lifecycle, and
-`infrastructureSummaryModel.ts` owns chart matching plus summary-series
-derivation. Future summary-chart work must not put polling, cache hydration,
-and series math back into the shell.
+`infrastructureSummaryModel.ts` owns chart matching, focused-summary display
+selection, empty-state wording, and summary-series/metric derivation. Future
+summary-chart work must not put polling, cache hydration, and series math
+back into the shell.
 It now also includes the compact resource-facet summary chips rendered next
 to policy metadata, and those chips must stay within the same bounded
 windowing and mounted-row budget proved by

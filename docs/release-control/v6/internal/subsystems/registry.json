@@ -75,7 +75,7 @@
     },
     {
       "path": "frontend-modern/src/components/Infrastructure/infrastructureSummaryModel.ts",
-      "rationale": "infrastructure summary chart matching and series derivation are both a canonical unified-resource consumer surface and a fleet-scale summary chart hot-path boundary",
+      "rationale": "infrastructure summary chart matching, focused-summary view derivation, and metric-series shaping are both a canonical unified-resource consumer surface and a fleet-scale summary chart hot-path boundary",
       "subsystems": [
         "performance-and-scalability",
         "unified-resources"
@@ -2873,6 +2873,7 @@
               "frontend-modern/src/components/Dashboard/MetricBar.test.tsx",
               "frontend-modern/src/components/Dashboard/StackedMemoryBar.test.tsx",
               "frontend-modern/src/components/Dashboard/ThresholdSlider.test.tsx",
+              "frontend-modern/src/components/Infrastructure/__tests__/infrastructureSummaryModel.test.ts",
               "frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx",
               "frontend-modern/src/components/Infrastructure/__tests__/unifiedResourceTableStateModel.test.ts"
             ]
@@ -3354,6 +3355,7 @@
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/components/Infrastructure/__tests__/infrastructureSelectors.test.ts",
+              "frontend-modern/src/components/Infrastructure/__tests__/infrastructureSummaryModel.test.ts",
               "frontend-modern/src/components/Infrastructure/__tests__/ResourceDetailDrawer.discovery.test.ts",
               "frontend-modern/src/components/Infrastructure/__tests__/ResourceDetailDrawer.history.test.tsx",
               "frontend-modern/src/components/Infrastructure/__tests__/resourceDetailDrawerIdentityModel.test.ts",

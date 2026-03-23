@@ -238,6 +238,62 @@ class SubsystemLookupTest(unittest.TestCase):
             unified_resources_match["verification_requirement"]["exact_files"],
         )
 
+    def test_lookup_paths_assigns_infrastructure_summary_model_to_shared_infrastructure_hot_path(
+        self,
+    ) -> None:
+        result = lookup_paths(
+            ["frontend-modern/src/components/Infrastructure/infrastructureSummaryModel.ts"]
+        )
+        self.assertEqual(result["unowned_runtime_files"], [])
+        self.assertEqual(
+            {item["subsystem"] for item in result["impacted_subsystems"]},
+            {"performance-and-scalability", "unified-resources"},
+        )
+
+        file_entry = result["files"][0]
+        self.assertEqual(file_entry["classification"], "runtime")
+        self.assertEqual(
+            {match["subsystem"] for match in file_entry["matches"]},
+            {"performance-and-scalability", "unified-resources"},
+        )
+        self.assertEqual(
+            file_entry["shared_ownership"]["subsystems"],
+            ["performance-and-scalability", "unified-resources"],
+        )
+
+        matches_by_subsystem = {
+            match["subsystem"]: match for match in file_entry["matches"]
+        }
+        performance_match = matches_by_subsystem["performance-and-scalability"]
+        self.assertEqual(
+            performance_match["contract"],
+            "docs/release-control/v6/internal/subsystems/performance-and-scalability.md",
+        )
+        self.assertEqual(performance_match["lane_context"]["lane_id"], "L10")
+        self.assertEqual(
+            performance_match["verification_requirement"]["id"],
+            "dashboard-workload-hot-path",
+        )
+        self.assertIn(
+            "frontend-modern/src/components/Infrastructure/__tests__/infrastructureSummaryModel.test.ts",
+            performance_match["verification_requirement"]["exact_files"],
+        )
+
+        unified_resources_match = matches_by_subsystem["unified-resources"]
+        self.assertEqual(
+            unified_resources_match["contract"],
+            "docs/release-control/v6/internal/subsystems/unified-resources.md",
+        )
+        self.assertEqual(unified_resources_match["lane_context"]["lane_id"], "L13")
+        self.assertEqual(
+            unified_resources_match["verification_requirement"]["id"],
+            "resource-consumers",
+        )
+        self.assertIn(
+            "frontend-modern/src/components/Infrastructure/__tests__/infrastructureSummaryModel.test.ts",
+            unified_resources_match["verification_requirement"]["exact_files"],
+        )
+
     def test_lookup_paths_assigns_resource_detail_drawer_discovery_model_to_unified_resources(self) -> None:
         result = lookup_paths(
             ["frontend-modern/src/components/Infrastructure/resourceDetailDiscoveryModel.ts"]
@@ -4111,6 +4167,7 @@ class SubsystemLookupTest(unittest.TestCase):
                 "frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx",
                 "frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.workloads-link.test.tsx",
                 "frontend-modern/src/components/Infrastructure/__tests__/infrastructureSelectors.test.ts",
+                "frontend-modern/src/components/Infrastructure/__tests__/infrastructureSummaryModel.test.ts",
                 "frontend-modern/src/components/Infrastructure/__tests__/resourceDetailDrawerIdentityModel.test.ts",
                 "frontend-modern/src/components/Infrastructure/__tests__/resourceDetailDrawerOperationalModel.test.ts",
                 "frontend-modern/src/components/Infrastructure/__tests__/resourceDetailMappers.test.ts",

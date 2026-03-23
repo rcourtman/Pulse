@@ -55,6 +55,13 @@ export interface InfrastructureResourceCounts {
   offline: number;
 }
 
+export interface InfrastructureSummaryMetricSeriesEntry {
+  id: string;
+  data: MetricPoint[];
+  color: string;
+  name: string;
+}
+
 const getNormalizedResourceIdentifiers = (resource: Resource): Set<string> =>
   new Set<string>([
     ...getNormalizedIdentityLookupVariants(resource.id),
@@ -214,6 +221,85 @@ export function buildInfrastructureSummarySeries(
   });
 }
 
+export function buildInfrastructureDisplaySeries(
+  allSeries: InfrastructureSummarySeries[],
+  focusedResourceId?: string | null,
+): InfrastructureSummarySeries[] {
+  if (!focusedResourceId) return allSeries;
+  const match = allSeries.find((series) => series.id === focusedResourceId);
+  return match ? [match] : allSeries;
+}
+
+export function getFocusedInfrastructureResourceName(
+  allSeries: InfrastructureSummarySeries[],
+  focusedResourceId?: string | null,
+): string | null {
+  if (!focusedResourceId) return null;
+  const match = allSeries.find((series) => series.id === focusedResourceId);
+  return match?.name ?? null;
+}
+
+export function getSingleDisplayedOnlineInfrastructureResource(
+  resources: Resource[],
+  displaySeries: InfrastructureSummarySeries[],
+): Resource | null {
+  if (displaySeries.length !== 1 || resources.length !== 1) return null;
+  const [resource] = resources;
+  if (!resource) return null;
+  return resource.status?.toLowerCase() === 'online' ? resource : null;
+}
+
+export function isInfrastructureAwaitingFirstSample(options: {
+  resource: Resource | null;
+  isCurrentRangeLoaded: boolean;
+  fetchFailed: boolean;
+  oldestDataTimestamp: number | null;
+}): boolean {
+  if (
+    !options.resource ||
+    !options.isCurrentRangeLoaded ||
+    options.fetchFailed
+  ) {
+    return false;
+  }
+
+  if (options.oldestDataTimestamp === null) {
+    return true;
+  }
+
+  return options.resource.lastSeen >= options.oldestDataTimestamp;
+}
+
+export function buildInfrastructureEmptyHistoryLabel(isAwaitingFirstSample: boolean): string {
+  return isAwaitingFirstSample ? 'Waiting for first sample' : 'No history yet';
+}
+
+export function buildInfrastructureEmptyMessage(
+  fetchFailed: boolean,
+  emptyHistoryLabel: string,
+): string {
+  return fetchFailed ? 'Trend data unavailable' : emptyHistoryLabel;
+}
+
+export function buildInfrastructureMetricSeries(
+  displaySeries: InfrastructureSummarySeries[],
+  metric: InfrastructureSummarySparkMetric | 'network' | 'diskio',
+): InfrastructureSummaryMetricSeriesEntry[] {
+  return displaySeries.map((series) => ({
+    id: series.id,
+    data: series[metric],
+    color: series.color,
+    name: series.name,
+  }));
+}
+
+export function hasInfrastructureSeriesData(
+  displaySeries: InfrastructureSummarySeries[],
+  metric: InfrastructureSummarySparkMetric | 'network' | 'diskio',
+): boolean {
+  return displaySeries.some((series) => series[metric].length >= 1);
+}
+
 export function buildInfrastructureWorkloadStats(
   workloads: Resource[],
 ): InfrastructureWorkloadStats {
@@ -264,4 +350,11 @@ export function hasInfrastructureNetworkCapability(resources: Resource[]): boole
     const tx = resource.network?.txBytes ?? 0;
     return rx > 0 || tx > 0;
   });
+}
+
+export function shouldShowInfrastructureNetworkCard(
+  hasNetworkData: boolean,
+  resources: Resource[],
+): boolean {
+  return hasNetworkData || hasInfrastructureNetworkCapability(resources);
 }

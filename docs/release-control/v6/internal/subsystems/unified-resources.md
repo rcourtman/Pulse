@@ -78,7 +78,7 @@ cross-source deduplication.
 
 1. `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts` shared with `performance-and-scalability`: the infrastructure selector pipeline is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
 2. `frontend-modern/src/components/Infrastructure/InfrastructureSummary.tsx` shared with `performance-and-scalability`: the infrastructure summary surface is both a canonical unified-resource consumer and a fleet-scale summary chart hot-path boundary.
-3. `frontend-modern/src/components/Infrastructure/infrastructureSummaryModel.ts` shared with `performance-and-scalability`: infrastructure summary chart matching and series derivation are both a canonical unified-resource consumer surface and a fleet-scale summary chart hot-path boundary.
+3. `frontend-modern/src/components/Infrastructure/infrastructureSummaryModel.ts` shared with `performance-and-scalability`: infrastructure summary chart matching, focused-summary view derivation, and metric-series shaping are both a canonical unified-resource consumer surface and a fleet-scale summary chart hot-path boundary.
 4. `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts` shared with `performance-and-scalability`: resource detail mappers are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
 5. `frontend-modern/src/components/Infrastructure/UnifiedResourceHostTableCard.tsx` shared with `performance-and-scalability`: the unified resource host table card is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
 6. `frontend-modern/src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx` shared with `performance-and-scalability`: the unified resource PBS section is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
@@ -198,8 +198,8 @@ The infrastructure summary surface now follows the same shell/runtime/model
 shape: `InfrastructureSummary.tsx` is the render shell,
 `useInfrastructureSummaryState.ts` owns chart polling, cache hydration,
 org-scope lifecycle, and focused-summary state, and
-`infrastructureSummaryModel.ts` owns chart matching plus summary-series
-derivation.
+`infrastructureSummaryModel.ts` owns chart matching, focused-summary display
+selection, empty-state wording, and summary-series/metric derivation.
 The backend AI and Patrol context renderers now derive their canonical change
 kind, source type, source adapter, actor, reason, and related-resource
 fragments from `internal/unifiedresources/change_presentation.go`, so the

@@ -957,6 +957,16 @@ describe('frontend resource type boundaries', () => {
     expect(infrastructureSummarySource).not.toContain('setInterval(');
     expect(infrastructureSummarySource).not.toContain('AbortController');
     expect(infrastructureSummaryStateSource).toContain('normalizeOrgScope(getOrgID())');
+    expect(infrastructureSummaryStateSource).toContain('buildInfrastructureDisplaySeries');
+    expect(infrastructureSummaryStateSource).toContain('buildInfrastructureMetricSeries');
+    expect(infrastructureSummaryStateSource).toContain('buildInfrastructureEmptyMessage');
+    expect(infrastructureSummaryStateSource).not.toContain(
+      'const match = allSeries.find((series) => series.id === focused);',
+    );
+    expect(infrastructureSummaryStateSource).not.toContain("displaySeries().map((series) => ({");
+    expect(infrastructureSummaryStateSource).not.toContain(
+      "isAwaitingFirstSample() ? 'Waiting for first sample' : 'No history yet'",
+    );
     expect(infrastructureSummaryStateSource).not.toContain("getOrgID() || 'default'");
     expect(storageSummarySource).toContain('normalizeOrgScope(getOrgID())');
     expect(storageSummarySource).not.toContain("getOrgID() || 'default'");
@@ -2719,6 +2729,9 @@ describe('frontend resource type boundaries', () => {
     expect(chatIdentifiersSource).toContain('normalizeChatMentionKeyPart');
     expect(chatIdentifiersSource).toContain('normalizeChatToolName');
     expect(infrastructureSummaryModelSource).toContain('getNormalizedIdentityLookupVariants');
+    expect(infrastructureSummaryModelSource).toContain('buildInfrastructureDisplaySeries');
+    expect(infrastructureSummaryModelSource).toContain('buildInfrastructureMetricSeries');
+    expect(infrastructureSummaryModelSource).toContain('buildInfrastructureEmptyMessage');
     expect(sharedInfrastructureSummaryTableModelSource).toContain(
       'getNormalizedIdentityLookupVariants',
     );

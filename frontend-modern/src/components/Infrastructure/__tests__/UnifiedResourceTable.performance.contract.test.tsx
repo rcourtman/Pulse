@@ -232,11 +232,33 @@ describe('UnifiedResourceTable performance contract', () => {
       expect(infrastructureSummaryStateSource).toContain('setInterval(');
       expect(infrastructureSummaryStateSource).toContain('AbortController');
       expect(infrastructureSummaryStateSource).toContain("eventBus.on('org_switched'");
+      expect(infrastructureSummaryStateSource).toContain('buildInfrastructureDisplaySeries');
+      expect(infrastructureSummaryStateSource).toContain('buildInfrastructureMetricSeries');
+      expect(infrastructureSummaryStateSource).toContain('buildInfrastructureEmptyMessage');
+      expect(infrastructureSummaryStateSource).not.toContain(
+        'const match = allSeries.find((series) => series.id === focused);',
+      );
+      expect(infrastructureSummaryStateSource).not.toContain(
+        "displaySeries().map((series) => ({",
+      );
+      expect(infrastructureSummaryStateSource).not.toContain(
+        "isAwaitingFirstSample() ? 'Waiting for first sample' : 'No history yet'",
+      );
+      expect(infrastructureSummaryStateSource).not.toContain("fetchFailed() ? 'Trend data unavailable' : emptyHistoryLabel()");
       expect(infrastructureSummaryModelSource).toContain(
         'export function buildInfrastructureSummarySeries',
       );
       expect(infrastructureSummaryModelSource).toContain(
         'export function combineResourceThroughputSeries',
+      );
+      expect(infrastructureSummaryModelSource).toContain(
+        'export function buildInfrastructureDisplaySeries',
+      );
+      expect(infrastructureSummaryModelSource).toContain(
+        'export function buildInfrastructureMetricSeries',
+      );
+      expect(infrastructureSummaryModelSource).toContain(
+        'export function shouldShowInfrastructureNetworkCard',
       );
     });
 
