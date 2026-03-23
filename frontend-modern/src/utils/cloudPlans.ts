@@ -9,7 +9,6 @@ export interface CloudPlanDefinition {
   monitoredSystems: number;
   support: 'Community' | 'Priority';
   foundingPrice?: string;
-  foundingLabel?: string;
   highlighted?: boolean;
 }
 
@@ -25,7 +24,6 @@ export const CLOUD_PLAN_DEFINITIONS: readonly CloudPlanDefinition[] = [
     monitoredSystems: 10,
     support: 'Community',
     foundingPrice: '$19/month',
-    foundingLabel: '$19/mo - Founding Member rate (first 100 signups)',
     highlighted: true,
   },
   {

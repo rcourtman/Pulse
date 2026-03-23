@@ -32,7 +32,8 @@ describe('CloudPricing', () => {
       'href',
       '/cloud/signup?tier=max',
     );
-    expect(screen.getByText('Starter founding rate')).toBeInTheDocument();
+    expect(screen.queryByText('Starter founding rate')).not.toBeInTheDocument();
+    expect(screen.getAllByText('All Pro features')).toHaveLength(1);
     expect(screen.getByText('Setup')).toBeInTheDocument();
     expect(
       screen.queryByText(/provisioned in under 60 seconds/i),

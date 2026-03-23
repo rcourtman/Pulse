@@ -15,29 +15,6 @@ const INCLUDED_IN_ALL = [
   'Dedicated workspace URL',
 ];
 
-// ---------------------------------------------------------------------------
-// Components
-// ---------------------------------------------------------------------------
-
-function FoundingBanner() {
-  return (
-    <div class="rounded-lg border border-amber-300 bg-amber-50 px-5 py-4 dark:border-amber-700 dark:bg-amber-950/40">
-      <div class="flex items-start gap-3">
-        <span class="text-xl leading-tight">🎉</span>
-        <div>
-          <p class="text-sm font-semibold text-amber-900 dark:text-amber-200">
-            Starter founding rate
-          </p>
-          <p class="mt-0.5 text-sm text-amber-800 dark:text-amber-300">
-            Starter is available at <strong>$19/month</strong> for the first 100 signups. The rate
-            remains in place while the subscription stays active.
-          </p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function CloudTierCard(props: { tier: CloudPlanDefinition }) {
   const t = props.tier;
 
@@ -53,7 +30,7 @@ function CloudTierCard(props: { tier: CloudPlanDefinition }) {
       <Show when={t.highlighted}>
         <div class="absolute right-4 top-4">
           <span class="inline-flex items-center rounded-full bg-amber-500 px-2.5 py-1 text-[11px] font-semibold text-white shadow-sm">
-            Founding Rate
+            Founding rate
           </span>
         </div>
       </Show>
@@ -74,25 +51,16 @@ function CloudTierCard(props: { tier: CloudPlanDefinition }) {
       </Show>
       <div class="mt-1 text-sm text-muted">{t.subline}</div>
 
-      <ul class="mt-4 space-y-2 text-sm text-base-content">
-        <li class="flex gap-2">
-          <span class="shrink-0 text-emerald-600 dark:text-emerald-400 font-bold">
-            {t.monitoredSystems} monitored systems
-          </span>
-        </li>
-        <li class="flex gap-2">
-          <span class="text-blue-700 dark:text-blue-300 shrink-0">•</span>
-          <span>{t.support} support</span>
-        </li>
-        <li class="flex gap-2">
-          <span class="text-blue-700 dark:text-blue-300 shrink-0">•</span>
-          <span>All Pro features</span>
-        </li>
-        <li class="flex gap-2">
-          <span class="text-blue-700 dark:text-blue-300 shrink-0">•</span>
-          <span>Managed hosting + daily backups</span>
-        </li>
-      </ul>
+      <dl class="mt-4 space-y-3 text-sm text-base-content">
+        <div class="flex items-center justify-between gap-3">
+          <dt class="text-muted">Monitored systems</dt>
+          <dd class="font-semibold">{t.monitoredSystems}</dd>
+        </div>
+        <div class="flex items-center justify-between gap-3">
+          <dt class="text-muted">Support</dt>
+          <dd class="font-semibold">{t.support}</dd>
+        </div>
+      </dl>
 
       <div class="mt-6">
         <A
@@ -121,8 +89,6 @@ export default function CloudPricing() {
         title="Pulse Cloud"
         description="Managed Pulse hosting with Pro features included."
       />
-
-      <FoundingBanner />
 
       {/* Tier cards */}
       <div class="grid grid-cols-1 gap-4 md:grid-cols-3">

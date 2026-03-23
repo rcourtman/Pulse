@@ -40,7 +40,7 @@ describe('HostedSignup', () => {
       status: 200,
       data: {
         success: true,
-        message: "If that email is registered, you'll receive a magic link shortly.",
+        message: "If that email is registered, you'll receive a sign-in link shortly.",
       },
     });
     window.history.replaceState({}, '', '/cloud/signup?tier=power');
@@ -58,12 +58,11 @@ describe('HostedSignup', () => {
       </Router>
     ));
 
-    expect(await screen.findByText('Create Power Hosted Workspace')).toBeInTheDocument();
-    expect(screen.getByText(/power cloud includes 30 monitored systems/i)).toBeInTheDocument();
-    expect(screen.getByText("You're creating a Power Cloud workspace.")).toBeInTheDocument();
-    expect(screen.getByText('Plan Summary')).toBeInTheDocument();
-    expect(screen.getByText('After Signup')).toBeInTheDocument();
-    expect(screen.getByText('You receive a sign-in link by email.')).toBeInTheDocument();
+    expect(await screen.findByText('Workspace')).toBeInTheDocument();
+    expect(screen.getByText('Create your managed Pulse Cloud workspace.')).toBeInTheDocument();
+    expect(screen.getByText('Plan')).toBeInTheDocument();
+    expect(screen.getByText('Next')).toBeInTheDocument();
+    expect(screen.getByText('Continue through checkout if prompted.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Email Sign-In Link' })).toBeInTheDocument();
 
     fireEvent.input(screen.getByLabelText('Work Email'), {
@@ -72,7 +71,7 @@ describe('HostedSignup', () => {
     fireEvent.input(screen.getByLabelText('Organization Name'), {
       target: { value: 'Pulse Labs' },
     });
-    fireEvent.submit(screen.getByRole('button', { name: 'Create Hosted Workspace' }).closest('form')!);
+    fireEvent.submit(screen.getByRole('button', { name: 'Create Workspace' }).closest('form')!);
 
     await waitFor(() => {
       expect(signupMock).toHaveBeenCalledWith({

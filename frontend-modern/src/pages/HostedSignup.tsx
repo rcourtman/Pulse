@@ -117,10 +117,10 @@ export default function HostedSignup() {
       if (result.ok) {
         setMagicLinkMessage(
           result.data.message ||
-            "If that email is registered, you'll receive a magic link shortly.",
+            "If that email is registered, you'll receive a sign-in link shortly.",
         );
       } else {
-        setMagicLinkMessage(result.error.message || 'Failed to request magic link.');
+        setMagicLinkMessage(result.error.message || 'Failed to request sign-in link.');
       }
     } finally {
       setRequestingMagicLink(false);
@@ -131,17 +131,12 @@ export default function HostedSignup() {
     <div class="space-y-6">
       <PageHeader
         title={`Pulse Cloud ${selectedPlan().name}`}
-        description={`${selectedPlan().name} Cloud includes ${selectedPlan().monitoredSystems} monitored systems and ${selectedPlan().support.toLowerCase()} support.`}
+        description="Create your managed Pulse Cloud workspace."
       />
 
       <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card padding="lg" class="space-y-4">
-          <h2 class="text-lg font-semibold text-base-content">
-            Create {selectedPlan().name} Hosted Workspace
-          </h2>
-          <p class="text-sm text-muted">
-            You&apos;re creating a {selectedPlan().name} Cloud workspace.
-          </p>
+          <h2 class="text-lg font-semibold text-base-content">Workspace</h2>
 
           <form class="space-y-3" onSubmit={submitSignup}>
             <label class="block text-sm font-medium text-base-content" for="hosted-email">
@@ -177,7 +172,7 @@ export default function HostedSignup() {
               class="w-full inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
               disabled={!canSubmit()}
             >
-              <Show when={status() === 'submitting'} fallback="Create Hosted Workspace">
+              <Show when={status() === 'submitting'} fallback="Create Workspace">
                 Creating...
               </Show>
             </button>
@@ -212,9 +207,7 @@ export default function HostedSignup() {
         </Card>
 
         <Card padding="lg" class="space-y-4">
-          <h2 class="text-lg font-semibold text-base-content">
-            Plan Summary
-          </h2>
+          <h2 class="text-lg font-semibold text-base-content">Plan</h2>
           <div class="rounded-md border border-border bg-surface-alt p-4">
             <div class="flex items-baseline justify-between gap-3">
               <div>
@@ -234,10 +227,10 @@ export default function HostedSignup() {
               </div>
             </dl>
           </div>
-          <h3 class="text-sm font-semibold text-base-content">After Signup</h3>
+          <h3 class="text-sm font-semibold text-base-content">Next</h3>
           <ol class="list-decimal space-y-2 pl-5 text-sm text-base-content">
-            <li>Your workspace is created for the {selectedPlan().name} Cloud plan.</li>
-            <li>You receive a sign-in link by email.</li>
+            <li>Continue through checkout if prompted.</li>
+            <li>Finish sign-in from the email link.</li>
             <li>Open your workspace and start connecting systems.</li>
           </ol>
 

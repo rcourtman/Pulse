@@ -327,6 +327,11 @@ deployment internals.
 Those same hosted surfaces should also prefer neutral plan-selection and
 sign-in language such as `Choose Starter` or `sign-in link` rather than
 marketing-heavy CTA copy or infrastructure-specific transport jargon.
+They should also avoid duplicating shared commercial facts across multiple
+adjacent blocks on the same screen. Common Cloud inclusions belong in one
+shared area rather than being restated inside every plan card, and hosted
+signup should not repeat the selected plan facts across the page header, form
+card, and plan summary at the same time.
 That contract applies to both plan summary labels and upgrade/paywall copy:
 current v6 self-hosted pricing may not drift back to the older `$49/yr Relay`,
 `$99/yr Pro`, or monitored-system-count marketing drift that contradicts the
