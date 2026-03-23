@@ -182,7 +182,9 @@ export const buildRelatedLinks = (
 ): ResourceDetailDrawerOperationalLink[] => {
   const links: ResourceDetailDrawerOperationalLink[] = [];
   const workloads = buildWorkloadsHref(resource);
-  if (workloads) {
+  const workloadSearch = workloads ? new URLSearchParams(workloads.split('?')[1] ?? '') : null;
+  const scopedWorkloadType = workloadSearch?.get('type')?.trim() ?? '';
+  if (workloads && scopedWorkloadType) {
     links.push({
       href: workloads,
       label: 'Open in Workloads',

@@ -117,7 +117,7 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
       },
     });
 
-    const { getByRole, getByTestId, getByText, queryByRole } = render(() => (
+    const { getByTestId, getByText, queryByRole } = render(() => (
       <ResourceDetailDrawer resource={resource} />
     ));
 
@@ -128,13 +128,11 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     expect(getByText('Mode')).toBeInTheDocument();
     expect(getByText('Hybrid')).toBeInTheDocument();
     expect(() => getByText('Platform ID')).toThrow();
-    expect(getByText('Quick links')).toBeInTheDocument();
+    expect(() => getByText('Quick links')).toThrow();
     expect(getByTestId('resource-current-state-section').querySelector('.border-dashed')).toBeNull();
     expect(queryByRole('button', { name: 'Show details' })).toBeNull();
     expect(() => getByText('Runtime')).toThrow();
-    expect(getByRole('link', { name: 'Open related workloads for host-1' })).toHaveTextContent(
-      'Workloads',
-    );
+    expect(queryByRole('link', { name: 'Open related workloads for host-1' })).toBeNull();
     const headerBadges = getByTestId('resource-header-badges');
     expect(within(headerBadges).getAllByText('Agent')).toHaveLength(1);
     expect(within(headerBadges).getByText('PVE')).toBeInTheDocument();

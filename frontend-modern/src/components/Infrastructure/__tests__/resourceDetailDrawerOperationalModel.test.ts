@@ -138,4 +138,17 @@ describe('resourceDetailDrawerOperationalModel', () => {
       },
     ]);
   });
+
+  it('omits generic host-wide workloads links from drawer quick links', () => {
+    expect(
+      buildRelatedLinks(
+        baseResource({
+          type: 'agent',
+          platformType: 'agent',
+          platformData: { sources: ['agent'], agent: { hostname: 'host-1' } },
+        }),
+        'Host 1',
+      ),
+    ).toEqual([]);
+  });
 });

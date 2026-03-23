@@ -412,6 +412,10 @@ the resource name, status, or primary identity line.
 That header badge row now also deduplicates identical visible labels, so
 agent-backed nodes do not repeat `Agent` when both the canonical resource type
 and a merged source resolve to the same badge text.
+The summary shell's `Quick links` row now only promotes runtime-scoped
+workloads drill-down routes, so ordinary host drawers do not surface a generic
+host-wide `Workloads` jump that reads like default navigation chrome instead of
+resource-specific operational context.
 Inside that summary, the operational and supporting context rows stay inline
 instead of sitting in a collapsed `Details` disclosure or nested bordered
 cards, so the first read stays like one linear sheet rather than a stack of
