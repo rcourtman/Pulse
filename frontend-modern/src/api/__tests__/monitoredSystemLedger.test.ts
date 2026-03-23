@@ -40,6 +40,7 @@ describe('MonitoredSystemLedgerAPI', () => {
             summary: 'All included top-level collection paths currently report online status.',
             reasons: [],
           },
+          latest_included_signal_at: '2026-01-01T00:00:00Z',
           last_seen: '2026-01-01T00:00:00Z',
           source: 'agent',
           explanation: {
@@ -76,6 +77,7 @@ describe('MonitoredSystemLedgerAPI', () => {
           name: 'server-1',
           type: 'host',
           status: 'online',
+          latest_included_signal_at: '2026-01-01T00:00:00Z',
           last_seen: '2026-01-01T00:00:00Z',
           source: 'agent',
         },
@@ -100,6 +102,7 @@ describe('MonitoredSystemLedgerAPI', () => {
           name: 'server-1',
           type: 'host',
           status: 'warning',
+          latest_included_signal_at: '2026-01-01T00:00:00Z',
           last_seen: '2026-01-01T00:00:00Z',
           source: 'agent',
         },
@@ -113,7 +116,28 @@ describe('MonitoredSystemLedgerAPI', () => {
     expect(result.systems[0]?.status).toBe('warning');
   });
 
-  it('preserves the freshest included observation timestamp from the API contract', async () => {
+  it('preserves the canonical latest included signal timestamp from the API contract', async () => {
+    vi.mocked(apiFetchJSON).mockResolvedValueOnce({
+      systems: [
+        {
+          name: 'Tower',
+          type: 'host',
+          status: 'warning',
+          latest_included_signal_at: '2026-03-23T11:59:50Z',
+          last_seen: '2026-03-23T11:59:50Z',
+          source: 'multiple',
+        },
+      ],
+      total: 1,
+      limit: 5,
+    });
+
+    const result = await MonitoredSystemLedgerAPI.getLedger();
+
+    expect(result.systems[0]?.latest_included_signal_at).toBe('2026-03-23T11:59:50Z');
+  });
+
+  it('falls back to the deprecated last_seen alias for older payloads', async () => {
     vi.mocked(apiFetchJSON).mockResolvedValueOnce({
       systems: [
         {
@@ -130,7 +154,7 @@ describe('MonitoredSystemLedgerAPI', () => {
 
     const result = await MonitoredSystemLedgerAPI.getLedger();
 
-    expect(result.systems[0]?.last_seen).toBe('2026-03-23T11:59:50Z');
+    expect(result.systems[0]?.latest_included_signal_at).toBe('2026-03-23T11:59:50Z');
   });
 
   it('preserves canonical status explanation reasons from the API contract', async () => {
@@ -154,6 +178,7 @@ describe('MonitoredSystemLedgerAPI', () => {
               },
             ],
           },
+          latest_included_signal_at: '2026-03-23T11:59:50Z',
           last_seen: '2026-03-23T11:59:50Z',
           source: 'multiple',
         },
@@ -184,6 +209,7 @@ describe('MonitoredSystemLedgerAPI', () => {
           name: 'server-1',
           type: 'host',
           status: 'degraded',
+          latest_included_signal_at: '2026-01-01T00:00:00Z',
           last_seen: '2026-01-01T00:00:00Z',
           source: 'agent',
         },

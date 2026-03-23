@@ -224,8 +224,8 @@ export function MonitoredSystemLedgerPanel(props: MonitoredSystemLedgerPanelProp
                       </TableCell>
                       <TableCell>
                         <span class="text-xs text-muted">
-                          {system.last_seen
-                            ? formatRelativeTime(system.last_seen, { compact: true })
+                          {system.latest_included_signal_at
+                            ? formatRelativeTime(system.latest_included_signal_at, { compact: true })
                             : '—'}
                         </span>
                       </TableCell>

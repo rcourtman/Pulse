@@ -19,8 +19,9 @@ func TestMonitoredSystemLedgerEntryTypes(t *testing.T) {
 			Summary: "All included top-level collection paths currently report online status.",
 			Reasons: []MonitoredSystemLedgerStatusReason{},
 		},
-		LastSeen: "2025-01-01T00:00:00Z",
-		Source:   "agent",
+		LatestIncludedSignalAt: "2025-01-01T00:00:00Z",
+		LastSeen:               "2025-01-01T00:00:00Z",
+		Source:                 "agent",
 		Explanation: MonitoredSystemLedgerExplanation{
 			Summary: "Counts as one monitored system because Pulse sees one top-level host view from agent.",
 			Reasons: []MonitoredSystemLedgerExplanationReason{
@@ -47,6 +48,9 @@ func TestMonitoredSystemLedgerEntryTypes(t *testing.T) {
 	}
 	if decoded.StatusExplanation.Reasons == nil {
 		t.Errorf("status explanation reasons mismatch: %+v", decoded.StatusExplanation)
+	}
+	if decoded.LatestIncludedSignalAt != "2025-01-01T00:00:00Z" {
+		t.Errorf("latest included signal mismatch: %+v", decoded)
 	}
 	if decoded.Source != "agent" {
 		t.Errorf("source mismatch: got %q", decoded.Source)
@@ -190,8 +194,9 @@ func TestHandleMonitoredSystemLedgerHTTP(t *testing.T) {
 					Summary: "All included top-level collection paths currently report online status.",
 					Reasons: []MonitoredSystemLedgerStatusReason{},
 				},
-				LastSeen: "2025-01-01T00:00:00Z",
-				Source:   "agent",
+				LatestIncludedSignalAt: "2025-01-01T00:00:00Z",
+				LastSeen:               "2025-01-01T00:00:00Z",
+				Source:                 "agent",
 				Explanation: MonitoredSystemLedgerExplanation{
 					Summary: "Counts as one monitored system because Pulse sees one top-level host view from agent.",
 					Reasons: []MonitoredSystemLedgerExplanationReason{
@@ -231,6 +236,9 @@ func TestHandleMonitoredSystemLedgerHTTP(t *testing.T) {
 	}
 	if decoded.Systems[0].StatusExplanation.Reasons == nil {
 		t.Errorf("expected status explanation reasons, got %+v", decoded.Systems[0].StatusExplanation)
+	}
+	if decoded.Systems[0].LatestIncludedSignalAt != "2025-01-01T00:00:00Z" {
+		t.Errorf("expected latest included signal timestamp, got %+v", decoded.Systems[0])
 	}
 	if decoded.Systems[0].Explanation.Summary == "" {
 		t.Errorf("expected explanation summary, got %+v", decoded.Systems[0].Explanation)

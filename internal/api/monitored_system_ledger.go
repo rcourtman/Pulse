@@ -13,13 +13,14 @@ import (
 // MonitoredSystemLedgerEntry represents a single counted top-level monitored
 // system.
 type MonitoredSystemLedgerEntry struct {
-	Name              string                                 `json:"name"`
-	Type              string                                 `json:"type"`
-	Status            string                                 `json:"status"` // "online", "warning", "offline", "unknown"
-	StatusExplanation MonitoredSystemLedgerStatusExplanation `json:"status_explanation"`
-	LastSeen          string                                 `json:"last_seen"` // freshest included observation, RFC3339 or empty
-	Source            string                                 `json:"source"`
-	Explanation       MonitoredSystemLedgerExplanation       `json:"explanation"`
+	Name                   string                                 `json:"name"`
+	Type                   string                                 `json:"type"`
+	Status                 string                                 `json:"status"` // "online", "warning", "offline", "unknown"
+	StatusExplanation      MonitoredSystemLedgerStatusExplanation `json:"status_explanation"`
+	LatestIncludedSignalAt string                                 `json:"latest_included_signal_at"` // freshest included observation, RFC3339 or empty
+	LastSeen               string                                 `json:"last_seen,omitempty"`       // deprecated compatibility alias for latest_included_signal_at
+	Source                 string                                 `json:"source"`
+	Explanation            MonitoredSystemLedgerExplanation       `json:"explanation"`
 }
 
 type MonitoredSystemLedgerStatusExplanation struct {
@@ -118,13 +119,14 @@ func (r *Router) handleMonitoredSystemLedger(w http.ResponseWriter, req *http.Re
 	for _, system := range systems {
 		status := normalizeStatus(string(system.Status))
 		entries = append(entries, MonitoredSystemLedgerEntry{
-			Name:              system.Name,
-			Type:              system.Type,
-			Status:            status,
-			StatusExplanation: monitoredSystemLedgerStatusExplanation(system.StatusExplanation, status),
-			LastSeen:          formatLastSeen(system.LastSeen),
-			Source:            system.Source,
-			Explanation:       monitoredSystemLedgerExplanation(system.Explanation),
+			Name:                   system.Name,
+			Type:                   system.Type,
+			Status:                 status,
+			StatusExplanation:      monitoredSystemLedgerStatusExplanation(system.StatusExplanation, status),
+			LatestIncludedSignalAt: formatLastSeen(system.LastSeen),
+			LastSeen:               formatLastSeen(system.LastSeen),
+			Source:                 system.Source,
+			Explanation:            monitoredSystemLedgerExplanation(system.Explanation),
 		})
 	}
 

@@ -79,6 +79,7 @@ describe('MonitoredSystemLedgerPanel', () => {
             summary: 'All included top-level collection paths currently report online status.',
             reasons: [],
           },
+          latest_included_signal_at: '2026-01-01T00:00:00Z',
           last_seen: '2026-01-01T00:00:00Z',
           source: 'agent',
           explanation: {
@@ -142,6 +143,7 @@ describe('MonitoredSystemLedgerPanel', () => {
             summary: 'All included top-level collection paths currently report online status.',
             reasons: [],
           },
+          latest_included_signal_at: '2026-01-01T00:00:00Z',
           last_seen: '2026-01-01T00:00:00Z',
           source: 'agent',
           explanation: {
@@ -177,6 +179,7 @@ describe('MonitoredSystemLedgerPanel', () => {
               },
             ],
           },
+          latest_included_signal_at: '2026-01-02T00:00:00Z',
           last_seen: '2026-01-02T00:00:00Z',
           source: 'pbs',
           explanation: {
@@ -261,6 +264,7 @@ describe('MonitoredSystemLedgerPanel', () => {
             summary: 'All included top-level collection paths currently report online status.',
             reasons: [],
           },
+          latest_included_signal_at: '2026-01-01T00:00:00Z',
           last_seen: '2026-01-01T00:00:00Z',
           source: 'agent',
         },

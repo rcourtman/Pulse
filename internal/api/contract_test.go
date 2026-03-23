@@ -594,8 +594,9 @@ func TestContract_MonitoredSystemLedgerJSONSnapshot(t *testing.T) {
 						},
 					},
 				},
-				LastSeen: "2026-03-18T17:30:00Z",
-				Source:   "agent",
+				LatestIncludedSignalAt: "2026-03-18T17:30:00Z",
+				LastSeen:               "2026-03-18T17:30:00Z",
+				Source:                 "agent",
 				Explanation: MonitoredSystemLedgerExplanation{
 					Summary: "Counts as one monitored system because Pulse sees one top-level host view from agent.",
 					Reasons: []MonitoredSystemLedgerExplanationReason{
@@ -644,6 +645,7 @@ func TestContract_MonitoredSystemLedgerJSONSnapshot(t *testing.T) {
 						}
 					]
 				},
+				"latest_included_signal_at":"2026-03-18T17:30:00Z",
 				"last_seen":"2026-03-18T17:30:00Z",
 				"source":"agent",
 				"explanation":{
