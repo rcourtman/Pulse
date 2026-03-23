@@ -50,7 +50,9 @@ func TestNormalizeStatus(t *testing.T) {
 		want  string
 	}{
 		{"online", "online"},
+		{"warning", "warning"},
 		{"offline", "offline"},
+		{"unknown", "unknown"},
 		{"", "unknown"},
 		{"degraded", "unknown"},
 		{"running", "unknown"},

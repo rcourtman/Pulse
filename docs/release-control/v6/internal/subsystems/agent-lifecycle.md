@@ -226,6 +226,10 @@ show the counted monitored systems coming from agent-backed infrastructure, but
 the shared API helper must expose the canonical unified-resource grouping
 explanation instead of rebuilding count reasons from install or registration
 state.
+That shared ledger read must also preserve canonical grouped system status,
+including `warning`, so lifecycle-adjacent operator surfaces do not mislabel
+live agent-backed infrastructure as `Unknown` when the unified-resource layer
+already resolved a governed degraded state.
 Lifecycle-adjacent workspace copy must also keep the same commercial framing:
 infrastructure operations may point operators to Pulse Pro for billing, but it
 must describe that boundary in monitored-system, plan-limit, and license-status

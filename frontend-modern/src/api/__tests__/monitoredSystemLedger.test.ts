@@ -84,4 +84,44 @@ describe('MonitoredSystemLedgerAPI', () => {
     expect(result.systems[0]?.explanation.reasons).toEqual([]);
     expect(result.systems[0]?.explanation.surfaces).toEqual([]);
   });
+
+  it('preserves canonical warning status from the API contract', async () => {
+    vi.mocked(apiFetchJSON).mockResolvedValueOnce({
+      systems: [
+        {
+          name: 'server-1',
+          type: 'host',
+          status: 'warning',
+          last_seen: '2026-01-01T00:00:00Z',
+          source: 'agent',
+        },
+      ],
+      total: 1,
+      limit: 5,
+    });
+
+    const result = await MonitoredSystemLedgerAPI.getLedger();
+
+    expect(result.systems[0]?.status).toBe('warning');
+  });
+
+  it('fails closed to unknown for unsupported status values', async () => {
+    vi.mocked(apiFetchJSON).mockResolvedValueOnce({
+      systems: [
+        {
+          name: 'server-1',
+          type: 'host',
+          status: 'degraded',
+          last_seen: '2026-01-01T00:00:00Z',
+          source: 'agent',
+        },
+      ],
+      total: 1,
+      limit: 5,
+    });
+
+    const result = await MonitoredSystemLedgerAPI.getLedger();
+
+    expect(result.systems[0]?.status).toBe('unknown');
+  });
 });

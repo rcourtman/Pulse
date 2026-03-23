@@ -1,5 +1,7 @@
 import { apiFetchJSON } from '@/utils/apiClient';
 
+export type MonitoredSystemLedgerStatus = 'online' | 'warning' | 'offline' | 'unknown';
+
 export interface MonitoredSystemLedgerExplanationReason {
   kind: string;
   signal: string;
@@ -21,7 +23,7 @@ export interface MonitoredSystemLedgerExplanation {
 export interface MonitoredSystemLedgerEntry {
   name: string;
   type: string;
-  status: string; // "online" | "offline" | "unknown"
+  status: MonitoredSystemLedgerStatus;
   last_seen: string; // RFC3339 or empty
   source: string;
   explanation?: MonitoredSystemLedgerExplanation;
@@ -51,6 +53,7 @@ function normalizeMonitoredSystemLedgerEntry(
   const explanation = entry.explanation;
   return {
     ...entry,
+    status: normalizeMonitoredSystemLedgerStatus(entry.status),
     explanation: {
       summary:
         explanation?.summary ??
@@ -59,4 +62,18 @@ function normalizeMonitoredSystemLedgerEntry(
       surfaces: explanation?.surfaces ?? [],
     },
   };
+}
+
+function normalizeMonitoredSystemLedgerStatus(
+  status: MonitoredSystemLedgerStatus | string | null | undefined,
+): MonitoredSystemLedgerStatus {
+  switch ((status ?? '').trim().toLowerCase()) {
+    case 'online':
+    case 'warning':
+    case 'offline':
+    case 'unknown':
+      return status.trim().toLowerCase() as MonitoredSystemLedgerStatus;
+    default:
+      return 'unknown';
+  }
 }

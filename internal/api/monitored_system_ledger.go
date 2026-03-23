@@ -124,7 +124,7 @@ func (r *Router) handleMonitoredSystemLedger(w http.ResponseWriter, req *http.Re
 
 func normalizeStatus(s string) string {
 	switch s {
-	case "online", "offline":
+	case "online", "warning", "offline", "unknown":
 		return s
 	default:
 		return "unknown"

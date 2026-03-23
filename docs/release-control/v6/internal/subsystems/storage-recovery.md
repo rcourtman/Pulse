@@ -147,6 +147,10 @@ ledger explanation reads: storage- and recovery-adjacent surfaces may coexist
 with counted monitored-system inventory, but any support-facing count
 reasoning must come from the canonical unified-resource grouping explanation
 payload rather than from storage or recovery heuristics.
+That adjacent ledger read must also preserve canonical grouped system status,
+including `warning`, so recovery- and storage-adjacent support views do not
+flatten governed degraded state into a fake `unknown` label when the shared
+unified-resource resolver already computed the top-level status.
 The same API resource serializer also refreshes canonical identity and policy
 metadata through the shared unified-resource helper before it writes resource
 payloads, so storage and recovery links inherit the same canonical metadata

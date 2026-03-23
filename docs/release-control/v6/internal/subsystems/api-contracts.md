@@ -234,6 +234,11 @@ shared monitored-system explanation summary, sanitized grouping reasons, and
 included top-level surfaces exactly as the unified-resource resolver computed
 them, while the frontend client stays in lockstep with that nested payload
 shape.
+That same ledger contract must also preserve the canonical monitored-system
+status enum end to end. Backend normalization may fail closed for unsupported
+values, but it must not flatten governed `warning` state to `unknown`, because
+the billing and inventory surfaces need the real top-level runtime status the
+unified-resource resolver computed.
 That client contract must also fail closed when older or partial payloads omit
 the nested explanation object: the frontend may normalize missing explanation
 fields to empty reasons/surfaces plus a safe default summary, but it must not

@@ -573,6 +573,77 @@ func TestContract_AIIntelligenceCorrelationsJSONSnapshot(t *testing.T) {
 	assertJSONSnapshot(t, got, want)
 }
 
+func TestContract_MonitoredSystemLedgerJSONSnapshot(t *testing.T) {
+	payload := MonitoredSystemLedgerResponse{
+		Systems: []MonitoredSystemLedgerEntry{
+			{
+				Name:     "Tower",
+				Type:     "host",
+				Status:   "warning",
+				LastSeen: "2026-03-18T17:30:00Z",
+				Source:   "agent",
+				Explanation: MonitoredSystemLedgerExplanation{
+					Summary: "Counts as one monitored system because Pulse sees one top-level host view from agent.",
+					Reasons: []MonitoredSystemLedgerExplanationReason{
+						{
+							Kind:    "standalone",
+							Signal:  "single-top-level-view",
+							Summary: "No overlapping top-level source matched this system.",
+						},
+					},
+					Surfaces: []MonitoredSystemLedgerExplanationSurface{
+						{
+							Name:   "Tower",
+							Type:   "host",
+							Source: "agent",
+						},
+					},
+				},
+			},
+		},
+		Total: 1,
+		Limit: 5,
+	}
+
+	got, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal monitored system ledger response: %v", err)
+	}
+
+	const want = `{
+		"systems":[
+			{
+				"name":"Tower",
+				"type":"host",
+				"status":"warning",
+				"last_seen":"2026-03-18T17:30:00Z",
+				"source":"agent",
+				"explanation":{
+					"summary":"Counts as one monitored system because Pulse sees one top-level host view from agent.",
+					"reasons":[
+						{
+							"kind":"standalone",
+							"signal":"single-top-level-view",
+							"summary":"No overlapping top-level source matched this system."
+						}
+					],
+					"surfaces":[
+						{
+							"name":"Tower",
+							"type":"host",
+							"source":"agent"
+						}
+					]
+				}
+			}
+		],
+		"total":1,
+		"limit":5
+	}`
+
+	assertJSONSnapshot(t, got, want)
+}
+
 func TestContract_ResolveAuthEnvPathUsesCanonicalRuntimeDataDir(t *testing.T) {
 	envDir := t.TempDir()
 	t.Setenv("PULSE_DATA_DIR", envDir)
