@@ -1,0 +1,379 @@
+import { createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
+import { scheduleSparkline, setupCanvasDPR } from '@/utils/canvasRenderQueue';
+import {
+  buildInteractiveSparklineAxisTicks,
+  buildInteractiveSparklineChartData,
+  buildInteractiveSparklineGridLineX,
+  buildInteractiveSparklineGridLineY,
+  buildInteractiveSparklineTopLabel,
+  buildInteractiveSparklineXAxisTicks,
+  clampInteractiveSparklineValue,
+  computeInteractiveSparklineHoverState,
+  createInteractiveSparklineValueToY,
+  getInteractiveSparklineActiveEmphasisSeriesIndex,
+  getInteractiveSparklineExternalSeriesIndex,
+  getInteractiveSparklineShouldUseCanvas,
+  type InteractiveSparklineHoverState,
+  type InteractiveSparklineProps,
+} from './interactiveSparklineModel';
+
+interface InteractiveSparklineRefs {
+  getCanvas: () => HTMLCanvasElement | undefined;
+  getCanvasHost: () => HTMLDivElement | undefined;
+  getChartSurface: () => Element | undefined;
+}
+
+export function useInteractiveSparklineState(
+  props: InteractiveSparklineProps,
+  refs: InteractiveSparklineRefs,
+) {
+  const vbH = 100;
+  const vbW = 200;
+  const xAxisBandPx = 16;
+  const tooltipPadding = 8;
+  const tooltipEstimatedWidth = 190;
+  const maxRows = () => props.maxTooltipRows ?? 6;
+  const yMode = () => props.yMode ?? 'percent';
+  const shouldUseCanvas = createMemo(() =>
+    getInteractiveSparklineShouldUseCanvas(props.series, props.renderMode),
+  );
+  const formatValue = (value: number) =>
+    props.formatValue ? props.formatValue(value) : `${value.toFixed(1)}%`;
+
+  const [hoveredState, setHoveredState] = createSignal<InteractiveSparklineHoverState | null>(null);
+  const [lockedSeriesIndex, setLockedSeriesIndex] = createSignal<number | null>(null);
+
+  const chartData = createMemo(() =>
+    buildInteractiveSparklineChartData({
+      series: props.series,
+      timeRange: props.timeRange || '1h',
+      yMode: yMode(),
+      vbW,
+      vbH,
+      shouldUseCanvas: shouldUseCanvas(),
+      bridgeLeadingGap: props.bridgeLeadingGap === true,
+    }),
+  );
+
+  let pendingHoverPosition: { clientX: number; clientY: number } | null = null;
+  let hoverRafId: number | null = null;
+  let unregisterCanvasDraw: (() => void) | null = null;
+
+  const computeHoverState = (clientX: number, clientY: number) => {
+    const chartSurface = refs.getChartSurface();
+    if (!chartSurface) return;
+    const computed = computeInteractiveSparklineHoverState({
+      chartData: chartData(),
+      chartRect: chartSurface.getBoundingClientRect(),
+      clientX,
+      clientY,
+      vbW,
+      vbH,
+      yMode: yMode(),
+      maxRows: maxRows(),
+      sortTooltipByValue: props.sortTooltipByValue,
+      highlightNearestSeriesOnHover: props.highlightNearestSeriesOnHover,
+      lockedSeriesIndex: props.highlightNearestSeriesOnHover ? lockedSeriesIndex() : null,
+      tooltipPadding,
+      tooltipEstimatedWidth,
+    });
+    setHoveredState(computed);
+  };
+
+  const flushHoverState = () => {
+    hoverRafId = null;
+    if (!pendingHoverPosition) return;
+    const position = pendingHoverPosition;
+    pendingHoverPosition = null;
+    computeHoverState(position.clientX, position.clientY);
+  };
+
+  const handleMouseMove = (event: MouseEvent) => {
+    const shouldThrottle = chartData().validSeries.length > 80;
+    if (typeof window === 'undefined' || !shouldThrottle) {
+      computeHoverState(event.clientX, event.clientY);
+      return;
+    }
+    pendingHoverPosition = { clientX: event.clientX, clientY: event.clientY };
+    if (hoverRafId !== null) return;
+    hoverRafId = window.requestAnimationFrame(flushHoverState);
+  };
+
+  const handleMouseLeave = () => {
+    pendingHoverPosition = null;
+    if (typeof window !== 'undefined' && hoverRafId !== null) {
+      window.cancelAnimationFrame(hoverRafId);
+      hoverRafId = null;
+    }
+    setHoveredState(null);
+  };
+
+  const handleClick = () => {
+    if (!props.highlightNearestSeriesOnHover) return;
+    const locked = lockedSeriesIndex();
+    if (locked !== null) {
+      setLockedSeriesIndex(null);
+      return;
+    }
+    const hovered = hoveredState();
+    if (!hovered) return;
+    const candidateSeriesIndex = hovered.highlightedSeriesIndex ?? hovered.nearestSeriesIndex;
+    if (candidateSeriesIndex === null) return;
+    setLockedSeriesIndex(candidateSeriesIndex);
+  };
+
+  createEffect(() => {
+    const locked = lockedSeriesIndex();
+    if (locked === null) return;
+    if (locked < 0 || locked >= chartData().validSeries.length) {
+      setLockedSeriesIndex(null);
+    }
+  });
+
+  const topLabel = createMemo(() =>
+    buildInteractiveSparklineTopLabel({
+      yMode: yMode(),
+      scaleMax: chartData().scaleMax,
+      formatTopLabel: props.formatTopLabel,
+    }),
+  );
+
+  const axisTicks = createMemo(() => buildInteractiveSparklineAxisTicks(yMode(), topLabel()));
+  const gridLineY = createMemo(() => buildInteractiveSparklineGridLineY(yMode(), vbH));
+  const gridLineX = createMemo(() => buildInteractiveSparklineGridLineX(vbW));
+  const xAxisTicks = createMemo(() =>
+    buildInteractiveSparklineXAxisTicks({
+      rangeMs: chartData().rangeMs,
+      rangeLabel: props.rangeLabel,
+      timeRange: props.timeRange || '1h',
+    }),
+  );
+
+  const externalSeriesIndex = createMemo(() =>
+    getInteractiveSparklineExternalSeriesIndex(chartData(), props.highlightSeriesId),
+  );
+  const activeEmphasisSeriesIndex = createMemo(() =>
+    getInteractiveSparklineActiveEmphasisSeriesIndex({
+      highlightNearestSeriesOnHover: props.highlightNearestSeriesOnHover === true,
+      lockedSeriesIndex: lockedSeriesIndex(),
+      hoveredState: hoveredState(),
+      externalSeriesIndex: externalSeriesIndex(),
+    }),
+  );
+
+  const drawCanvas = () => {
+    const canvas = refs.getCanvas();
+    if (!canvas) return;
+    const computed = chartData();
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const width = rect.width;
+    const height = rect.height;
+    if (width <= 0 || height <= 0) return;
+
+    setupCanvasDPR(canvas, ctx, width, height);
+
+    const isDark =
+      typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
+    const gridColor = isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(17, 24, 39, 0.06)';
+    const gridColorStrong = isDark ? 'rgba(255, 255, 255, 0.10)' : 'rgba(17, 24, 39, 0.10)';
+    const hoverLineColor = isDark ? 'rgba(255, 255, 255, 0.45)' : 'rgba(17, 24, 39, 0.45)';
+
+    const yLines = yMode() === 'percent' ? [0.2, 0.4, 0.6, 0.8] : [0.25, 0.5, 0.75];
+    ctx.save();
+    ctx.clearRect(0, 0, width, height);
+    ctx.lineWidth = 0.5;
+    for (let index = 0; index < yLines.length; index++) {
+      const y = yLines[index] * height;
+      ctx.strokeStyle = index === 1 ? gridColorStrong : gridColor;
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(width, y);
+      ctx.stroke();
+    }
+    ctx.strokeStyle = isDark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(17, 24, 39, 0.04)';
+    ctx.beginPath();
+    ctx.moveTo(width * 0.5, 0);
+    ctx.lineTo(width * 0.5, height);
+    ctx.stroke();
+    ctx.restore();
+
+    if (computed.validSeries.length === 0 || computed.rangeMs <= 0) {
+      return;
+    }
+
+    const active = activeEmphasisSeriesIndex();
+    const valueToY = createInteractiveSparklineValueToY(yMode(), computed.scaleMax, height);
+
+    for (let seriesIndex = 0; seriesIndex < computed.validSeries.length; seriesIndex++) {
+      const series = computed.validSeries[seriesIndex];
+      const isLg = props.size === 'lg';
+      const lineWidth =
+        active === null
+          ? isLg
+            ? 2
+            : 1.5
+          : active === seriesIndex
+            ? isLg
+              ? 3.5
+              : 2.8
+            : isLg
+              ? 1
+              : 0.9;
+      const opacity = active === null ? 0.75 : active === seriesIndex ? 1 : 0.1;
+
+      ctx.save();
+      ctx.globalAlpha = opacity;
+      ctx.strokeStyle = series.color;
+      ctx.lineWidth = lineWidth;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+
+      for (const segment of series.segments) {
+        if (segment.length === 0) continue;
+
+        if (computed.validSeries.length === 1) {
+          ctx.beginPath();
+          for (let index = 0; index < segment.length; index++) {
+            const point = segment[index];
+            const x = clampInteractiveSparklineValue(
+              ((point.timestamp - computed.windowStart) / computed.rangeMs) * width,
+              0,
+              width,
+            );
+            const y = valueToY(point.value);
+            if (index === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+          }
+          const lastPoint = segment[segment.length - 1];
+          const firstPoint = segment[0];
+          const lastX = clampInteractiveSparklineValue(
+            ((lastPoint.timestamp - computed.windowStart) / computed.rangeMs) * width,
+            0,
+            width,
+          );
+          const firstX = clampInteractiveSparklineValue(
+            ((firstPoint.timestamp - computed.windowStart) / computed.rangeMs) * width,
+            0,
+            width,
+          );
+
+          ctx.lineTo(lastX, height);
+          ctx.lineTo(firstX, height);
+          ctx.closePath();
+
+          const areaGradient = ctx.createLinearGradient(0, 0, 0, height);
+          if (
+            series.color.startsWith('#') &&
+            (series.color.length === 7 || series.color.length === 4)
+          ) {
+            areaGradient.addColorStop(0, `${series.color}40`);
+            areaGradient.addColorStop(1, `${series.color}00`);
+          } else {
+            areaGradient.addColorStop(0, 'rgba(255, 255, 255, 0.15)');
+            areaGradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+          }
+          ctx.fillStyle = areaGradient;
+          ctx.fill();
+        }
+
+        ctx.beginPath();
+        for (let index = 0; index < segment.length; index++) {
+          const point = segment[index];
+          const x = clampInteractiveSparklineValue(
+            ((point.timestamp - computed.windowStart) / computed.rangeMs) * width,
+            0,
+            width,
+          );
+          const y = valueToY(point.value);
+          if (index === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    const hover = hoveredState();
+    if (!hover) return;
+    ctx.save();
+    const x = (hover.x / vbW) * width;
+    const hoverLineGradient = ctx.createLinearGradient(0, Math.max(0, hover.minY - 4), 0, height);
+    hoverLineGradient.addColorStop(0, 'transparent');
+    hoverLineGradient.addColorStop(0.1, hoverLineColor);
+    hoverLineGradient.addColorStop(1, hoverLineColor);
+    ctx.strokeStyle = hoverLineGradient;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    ctx.moveTo(x, Math.max(0, hover.minY - 4));
+    ctx.lineTo(x, height);
+    ctx.stroke();
+    ctx.restore();
+  };
+
+  const queueCanvasDraw = () => {
+    if (!shouldUseCanvas()) return;
+    if (unregisterCanvasDraw) {
+      unregisterCanvasDraw();
+    }
+    unregisterCanvasDraw = scheduleSparkline(drawCanvas);
+  };
+
+  createEffect(() => {
+    if (!shouldUseCanvas()) {
+      if (unregisterCanvasDraw) {
+        unregisterCanvasDraw();
+        unregisterCanvasDraw = null;
+      }
+      return;
+    }
+
+    void chartData();
+    void activeEmphasisSeriesIndex();
+    void hoveredState();
+    queueCanvasDraw();
+  });
+
+  createEffect(() => {
+    const canvasHost = refs.getCanvasHost();
+    if (!shouldUseCanvas() || !canvasHost) return;
+    const observer = new ResizeObserver(() => queueCanvasDraw());
+    observer.observe(canvasHost);
+    onCleanup(() => observer.disconnect());
+  });
+
+  onCleanup(() => {
+    pendingHoverPosition = null;
+    if (typeof window !== 'undefined' && hoverRafId !== null) {
+      window.cancelAnimationFrame(hoverRafId);
+      hoverRafId = null;
+    }
+    if (unregisterCanvasDraw) {
+      unregisterCanvasDraw();
+      unregisterCanvasDraw = null;
+    }
+  });
+
+  return {
+    activeEmphasisSeriesIndex,
+    axisTicks,
+    chartData,
+    formatValue,
+    gridLineX,
+    gridLineY,
+    handleClick,
+    handleMouseLeave,
+    handleMouseMove,
+    hoveredState,
+    shouldUseCanvas,
+    vbH,
+    vbW,
+    xAxisBandPx,
+    xAxisTicks,
+  };
+}
+
+export type InteractiveSparklineState = ReturnType<typeof useInteractiveSparklineState>;

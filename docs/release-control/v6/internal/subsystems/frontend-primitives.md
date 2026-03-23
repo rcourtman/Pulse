@@ -179,6 +179,14 @@ owns sorting, count, identity-alias, and linked-agent derivation, and
 owns the per-row render/runtime surface. Future work should extend those
 owners instead of pushing websocket, alert, or identity plumbing back into the
 shared table shell.
+The shared interactive sparkline now follows that same split.
+`frontend-modern/src/components/shared/InteractiveSparkline.tsx` stays the
+render shell, `frontend-modern/src/components/shared/useInteractiveSparklineState.ts`
+owns hover state, RAF throttling, canvas draw scheduling, and resize lifecycle,
+and `frontend-modern/src/components/shared/interactiveSparklineModel.ts` owns
+sparkline downsampling, gap segmentation, axis-tick math, and hover-selection
+policy. Future sparkline work should extend those owners instead of pushing
+canvas scheduling or chart-shape math back into the shared component shell.
 
 The audit log settings surface now follows that same owner split.
 `frontend-modern/src/components/Settings/AuditLogPanel.tsx` stays the canonical

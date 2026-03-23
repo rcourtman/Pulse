@@ -1,11 +1,25 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { InteractiveSparkline } from '@/components/shared/InteractiveSparkline';
+import interactiveSparklineSource from '@/components/shared/InteractiveSparkline.tsx?raw';
+import interactiveSparklineModelSource from '@/components/shared/interactiveSparklineModel.ts?raw';
+import interactiveSparklineStateSource from '@/components/shared/useInteractiveSparklineState.ts?raw';
 
 describe('InteractiveSparkline hover behavior', () => {
   afterEach(() => {
     vi.useRealTimers();
     cleanup();
+  });
+
+  it('keeps the sparkline on shell, runtime, and model owners', () => {
+    expect(interactiveSparklineSource).toContain('useInteractiveSparklineState');
+    expect(interactiveSparklineSource).not.toContain('createEffect');
+    expect(interactiveSparklineSource).not.toContain('createSignal');
+    expect(interactiveSparklineSource).not.toContain('scheduleSparkline');
+    expect(interactiveSparklineStateSource).toContain('scheduleSparkline');
+    expect(interactiveSparklineStateSource).toContain('createSignal');
+    expect(interactiveSparklineModelSource).toContain('buildInteractiveSparklineChartData');
+    expect(interactiveSparklineModelSource).toContain('computeInteractiveSparklineHoverState');
   });
 
   it('shows a vertical dashed hover line and a tooltip', async () => {

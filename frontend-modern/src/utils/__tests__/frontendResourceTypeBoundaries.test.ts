@@ -10,7 +10,10 @@ import alertTargetTypesSource from '@/utils/alertTargetTypes.ts?raw';
 import resourceBadgesSource from '@/components/Infrastructure/resourceBadges.ts?raw';
 import infrastructureSummaryTableSource from '@/components/shared/InfrastructureSummaryTable.tsx?raw';
 import infrastructureSummaryTableRowSource from '@/components/shared/InfrastructureSummaryTableRow.tsx?raw';
+import interactiveSparklineSource from '@/components/shared/InteractiveSparkline.tsx?raw';
+import interactiveSparklineModelSource from '@/components/shared/interactiveSparklineModel.ts?raw';
 import sharedInfrastructureSummaryTableModelSource from '@/components/shared/infrastructureSummaryTableModel.ts?raw';
+import interactiveSparklineStateSource from '@/components/shared/useInteractiveSparklineState.ts?raw';
 import infrastructureSummaryTableStateSource from '@/components/shared/useInfrastructureSummaryTableState.ts?raw';
 import resourceBadgePresentationSource from '@/utils/resourceBadgePresentation.ts?raw';
 import workloadTypeBadgesSource from '@/components/shared/workloadTypeBadges.ts?raw';
@@ -2620,6 +2623,16 @@ describe('frontend resource type boundaries', () => {
     expect(infrastructureSummaryTableRowSource).toContain('getAlertStyles');
     expect(sharedInfrastructureSummaryTableModelSource).toContain(
       'resolveInfrastructureSummaryLinkedAgent',
+    );
+    expect(interactiveSparklineSource).toContain('useInteractiveSparklineState');
+    expect(interactiveSparklineSource).not.toContain('scheduleSparkline');
+    expect(interactiveSparklineSource).not.toContain('downsampleLTTB');
+    expect(interactiveSparklineSource).not.toContain('createSignal');
+    expect(interactiveSparklineStateSource).toContain('scheduleSparkline');
+    expect(interactiveSparklineStateSource).toContain('createSignal');
+    expect(interactiveSparklineModelSource).toContain('buildInteractiveSparklineChartData');
+    expect(interactiveSparklineModelSource).toContain(
+      'computeInteractiveSparklineHoverState',
     );
     expect(useUnifiedResourcesSource).not.toContain('normalizeResourcePolicyAISafeSummary(');
     expect(useUnifiedResourcesSource).not.toContain('normalizeResourcePolicy(');

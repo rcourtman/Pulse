@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import calloutCardSource from '@/components/shared/CalloutCard.tsx?raw';
 import filterButtonGroupSource from '@/components/shared/FilterButtonGroup.tsx?raw';
+import interactiveSparklineSource from '@/components/shared/InteractiveSparkline.tsx?raw';
+import interactiveSparklineModelSource from '@/components/shared/interactiveSparklineModel.ts?raw';
 import infrastructureSummaryTableSource from '@/components/shared/InfrastructureSummaryTable.tsx?raw';
 import infrastructureSummaryTableRowSource from '@/components/shared/InfrastructureSummaryTableRow.tsx?raw';
 import infrastructureSummaryTableModelSource from '@/components/shared/infrastructureSummaryTableModel.ts?raw';
@@ -8,6 +10,7 @@ import infrastructureSummaryTableStateSource from '@/components/shared/useInfras
 import monitoredSystemLimitWarningBannerSource from '@/components/shared/MonitoredSystemLimitWarningBanner.tsx?raw';
 import selectionCardGroupSource from '@/components/shared/SelectionCardGroup.tsx?raw';
 import tagBadgesSource from '@/components/shared/TagBadges.tsx?raw';
+import interactiveSparklineStateSource from '@/components/shared/useInteractiveSparklineState.ts?raw';
 import guestRowSource from '@/components/Dashboard/GuestRow.tsx?raw';
 import resourceDetailDrawerOverviewSource from '@/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx?raw';
 import aiSettingsDialogsSource from '@/components/Settings/AISettingsDialogs.tsx?raw';
@@ -138,5 +141,23 @@ describe('shared primitive guardrails', () => {
     expect(infrastructureSummaryTableRowSource).toContain('getAlertStyles');
     expect(infrastructureSummaryTableRowSource).not.toContain('useWebSocket');
     expect(infrastructureSummaryTableRowSource).not.toContain('useAlertsActivation');
+  });
+
+  it('keeps interactive sparkline on shell, runtime, and model owners', () => {
+    expect(interactiveSparklineSource).toContain('useInteractiveSparklineState');
+    expect(interactiveSparklineSource).not.toContain('createEffect');
+    expect(interactiveSparklineSource).not.toContain('createSignal');
+    expect(interactiveSparklineSource).not.toContain('scheduleSparkline');
+    expect(interactiveSparklineSource).not.toContain('downsampleLTTB');
+
+    expect(interactiveSparklineStateSource).toContain('export function useInteractiveSparklineState');
+    expect(interactiveSparklineStateSource).toContain('createSignal');
+    expect(interactiveSparklineStateSource).toContain('scheduleSparkline');
+    expect(interactiveSparklineStateSource).toContain('computeInteractiveSparklineHoverState');
+
+    expect(interactiveSparklineModelSource).toContain('buildInteractiveSparklineChartData');
+    expect(interactiveSparklineModelSource).toContain('computeInteractiveSparklineHoverState');
+    expect(interactiveSparklineModelSource).toContain('downsampleLTTB');
+    expect(interactiveSparklineModelSource).toContain('findNearestMetricPoint');
   });
 });
