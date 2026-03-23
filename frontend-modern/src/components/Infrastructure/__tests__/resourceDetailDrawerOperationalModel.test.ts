@@ -116,7 +116,7 @@ describe('resourceDetailDrawerOperationalModel', () => {
       'temperatures',
     ]);
     expect(buildHostDetailSummary(cards)).toBe(
-      '8 detail cards covering system, hardware, storage, network, disks, and temperatures.',
+      'System, Hardware, Storage, Network, Disks, and Temperatures',
     );
     expect(hasRuntimeOperationalContext([], [])).toBe(false);
   });

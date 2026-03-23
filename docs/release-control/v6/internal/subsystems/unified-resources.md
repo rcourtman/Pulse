@@ -498,6 +498,8 @@ read side by side on wider screens instead of as a single full-width stack.
 Host details uses that same flex-wrap pattern inside the disclosure for the
 system, hardware, storage, and network cards, so the drawer matches the
 shared workload-card density instead of stretching those cards one per row.
+The collapsed `Host details` summary now names the available categories only,
+instead of exposing internal card counts in the disclosure label.
 When `Service details` is expanded, each service card remains summary-first and
 pushes heavier breakdowns or update controls behind one more service-local
 reveal, so the opened state still scans as current state before deeper

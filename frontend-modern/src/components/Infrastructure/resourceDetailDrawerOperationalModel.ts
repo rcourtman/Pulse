@@ -155,15 +155,25 @@ export const buildHostDetailCards = (options: {
 export const buildHostDetailSummary = (hostDetailCards: string[]): string | null => {
   const labels = Array.from(new Set(hostDetailCards));
   if (labels.length === 0) return null;
+  const presentation: Record<string, string> = {
+    system: 'System',
+    hardware: 'Hardware',
+    storage: 'Storage',
+    network: 'Network',
+    disks: 'Disks',
+    raid: 'RAID',
+    temperatures: 'Temperatures',
+  };
+  const displayLabels = labels.map((label) => presentation[label] ?? label);
 
   const categories =
-    labels.length === 1
-      ? labels[0]
-      : labels.length === 2
-        ? `${labels[0]} and ${labels[1]}`
-        : `${labels.slice(0, -1).join(', ')}, and ${labels[labels.length - 1]}`;
+    displayLabels.length === 1
+      ? displayLabels[0]
+      : displayLabels.length === 2
+        ? `${displayLabels[0]} and ${displayLabels[1]}`
+        : `${displayLabels.slice(0, -1).join(', ')}, and ${displayLabels[displayLabels.length - 1]}`;
 
-  return `${hostDetailCards.length} detail card${hostDetailCards.length === 1 ? '' : 's'} covering ${categories}.`;
+  return categories;
 };
 
 export const buildRelatedLinks = (

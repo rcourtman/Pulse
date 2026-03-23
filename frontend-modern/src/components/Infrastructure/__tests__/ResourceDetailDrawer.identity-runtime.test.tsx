@@ -214,9 +214,7 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     ));
 
     expect(getByText('Host details')).toBeInTheDocument();
-    expect(
-      getByText('4 detail cards covering system, hardware, network, and disks.'),
-    ).toBeInTheDocument();
+    expect(getByText('System, Hardware, Network, and Disks')).toBeInTheDocument();
     expect(queryByText('Hardware')).toBeNull();
     expect(queryByText('Network')).toBeNull();
 
