@@ -125,8 +125,8 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     expect(getByText('Current state')).toBeInTheDocument();
     expect(() => getByText('Sources')).toThrow();
     expect(queryByRole('link', { name: 'Open related workloads for host-1' })).toBeNull();
-    expect(getByText('Mode')).toBeInTheDocument();
-    expect(getByText('Hybrid')).toBeInTheDocument();
+    expect(() => getByText('Mode')).toThrow();
+    expect(() => getByText('Hybrid')).toThrow();
     expect(() => getByText('Platform ID')).toThrow();
     expect(getByTestId('resource-current-state-section').querySelector('.border-dashed')).toBeNull();
     expect(queryByRole('button', { name: 'Show details' })).toBeNull();
@@ -245,14 +245,13 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
       },
     });
 
-    const { getByTestId, getByText, queryByText } = render(() => (
+    const { getByTestId, queryByText } = render(() => (
       <ResourceDetailDrawer resource={resource} />
     ));
 
     expect(queryByText('Sources')).toBeNull();
     expect(within(getByTestId('resource-header-badges')).getByText('PMG')).toBeInTheDocument();
-    expect(getByText('Mode')).toBeInTheDocument();
-    expect(getByText('API')).toBeInTheDocument();
+    expect(queryByText('Mode')).toBeNull();
     expect(queryByText('Platform ID')).toBeNull();
     expect(queryByText('Details')).toBeNull();
     expect(queryByText('Show details')).toBeNull();
@@ -275,7 +274,7 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     expect(getByText('1/2 degraded')).toBeInTheDocument();
   });
 
-  it('hides the mode row when a resource has no canonical source mode', () => {
+  it('keeps current state free of source mode rows', () => {
     const resource = baseResource({
       sourceType: null as unknown as Resource['sourceType'],
       platformType: null as unknown as Resource['platformType'],

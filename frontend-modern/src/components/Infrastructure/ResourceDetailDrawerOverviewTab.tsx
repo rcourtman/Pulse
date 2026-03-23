@@ -39,7 +39,7 @@ import { formatIdentifierLabel } from '@/utils/textPresentation';
 import { shouldShowResourcePlatformId } from '@/utils/resourceIdentity';
 import { buildInfrastructureResourceHref } from '@/routing/resourceLinks';
 import { getDiscoveryLoadingState } from '@/utils/discoveryPresentation';
-import { formatInteger, formatSourceType } from './resourceDetailMappers';
+import { formatInteger } from './resourceDetailMappers';
 import {
   ResourceDetailDrawerSupportDisclosure as SupportDisclosure,
 } from './ResourceDetailDrawerSupportDisclosure';
@@ -85,7 +85,6 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
 ) => {
   const { resource, drawer } = props;
   const showPlatformId = shouldShowResourcePlatformId(resource);
-  const modeLabel = formatSourceType(resource.sourceType);
 
   return (
     <div class="space-y-3">
@@ -128,12 +127,6 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                   >
                     {drawer.sourceSummary()!.label}
                   </span>
-                </div>
-              </Show>
-              <Show when={modeLabel}>
-                <div class="flex items-center justify-between gap-2">
-                  <span class="text-muted">Mode</span>
-                  <span class="font-medium text-base-content">{modeLabel}</span>
                 </div>
               </Show>
               <Show when={(resource.alerts?.length || 0) > 0}>

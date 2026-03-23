@@ -175,10 +175,10 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(resourceDetailDrawerOverviewSource).not.toContain('MonitoringAPI.');
     expect(resourceDetailDrawerOverviewSource).toContain('drawer.queueDockerUpdateCheck');
     expect(resourceDetailDrawerOverviewSource).toContain('drawer.queueDockerUpdateAll');
-    expect(resourceDetailDrawerOverviewSource).toContain(
+    expect(resourceDetailDrawerOverviewSource).not.toContain(
       'const modeLabel = formatSourceType(resource.sourceType);',
     );
-    expect(resourceDetailDrawerOverviewSource).toContain('<Show when={modeLabel}>');
+    expect(resourceDetailDrawerOverviewSource).not.toContain('<span class="text-muted">Mode</span>');
     expect(resourceDetailDrawerDockerActionsStateSource).toContain('MonitoringAPI.checkDockerUpdates');
     expect(resourceDetailDrawerDockerActionsStateSource).toContain(
       'MonitoringAPI.updateAllDockerContainers',

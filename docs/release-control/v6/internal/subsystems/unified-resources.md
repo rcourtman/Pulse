@@ -180,6 +180,8 @@ coverage inline,
 and the current-state summary now leaves normal source provenance to the
 canonical header badges while only surfacing a `Sources` row when source
 health is degraded or unhealthy,
+and it no longer repeats that same provenance as a separate `Mode` row because
+the drawer header badges already own canonical source display,
 `resourceDetailDrawerServiceModel.ts` owns the pure Docker/PBS/PMG service
 summary and breakdown derivations that feed the overview service-details
 surface,
