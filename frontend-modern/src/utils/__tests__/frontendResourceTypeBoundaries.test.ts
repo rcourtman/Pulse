@@ -337,6 +337,7 @@ import resourceDetailDrawerDebugSource from '@/components/Infrastructure/Resourc
 import infrastructureSummarySource from '@/components/Infrastructure/InfrastructureSummary.tsx?raw';
 import infrastructureSummaryStateSource from '@/components/Infrastructure/useInfrastructureSummaryState.ts?raw';
 import infrastructureSummaryModelSource from '@/components/Infrastructure/infrastructureSummaryModel.ts?raw';
+import resourceDetailDrawerDiscoveryModelSource from '@/components/Infrastructure/resourceDetailDiscoveryModel.ts?raw';
 import resourceDetailMappersSource from '@/components/Infrastructure/resourceDetailMappers.ts?raw';
 import resourceDetailDrawerHistoryStateSource from '@/components/Infrastructure/useResourceDetailDrawerHistoryState.ts?raw';
 import resourceDetailDrawerDerivedStateSource from '@/components/Infrastructure/useResourceDetailDrawerDerivedState.ts?raw';
@@ -988,10 +989,15 @@ describe('frontend resource type boundaries', () => {
     expect(resourceDetailDrawerStateSource).not.toContain('createResource(');
     expect(resourceDetailDrawerStateSource).not.toContain('MonitoringAPI.');
     expect(resourceDetailDrawerHistoryStateSource).toContain('createResource(');
-    expect(resourceDetailDrawerDerivedStateSource).toContain('buildRelatedLinks');
+    expect(resourceDetailDrawerDerivedStateSource).toContain(
+      "from '@/components/Infrastructure/resourceDetailDiscoveryModel'",
+    );
+    expect(resourceDetailDrawerDerivedStateSource).toContain('buildWorkloadsHref');
+    expect(resourceDetailDrawerDerivedStateSource).toContain('buildServiceDetailLinks');
     expect(resourceDetailDrawerDerivedStateSource).toContain(
       "from './resourceDetailDrawerServiceModel'",
     );
+    expect(resourceDetailDrawerDiscoveryModelSource).toContain('export const toDiscoveryConfig');
     expect(resourceDetailDrawerServiceModelSource).toContain('getServiceDetailsSummary');
     expect(resourceDetailDrawerOverviewSource).not.toContain('MonitoringAPI.');
     expect(resourceDetailDrawerOverviewSource).toContain('drawer.queueDockerUpdateCheck');
@@ -3142,6 +3148,7 @@ describe('frontend resource type boundaries', () => {
     expect(useUnifiedResourcesSource).not.toContain('const resolvePolicyRedactionHints =');
     expect(useUnifiedResourcesSource).not.toContain('const resolvePolicy =');
     expect(resourceDetailMappersSource).toContain('titleCaseDelimitedLabel');
+    expect(resourceDetailMappersSource).not.toContain('export const toDiscoveryConfig');
     expect(resourceDetailMappersSource).not.toContain('export const normalizeHealthLabel');
     expect(resourceDetailMappersSource).not.toContain('export const healthToneClass');
     expect(unifiedResourceTableSource).toContain('useUnifiedResourceTableState');

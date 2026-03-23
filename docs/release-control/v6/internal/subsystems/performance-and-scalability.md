@@ -253,6 +253,14 @@ That drawer state now also consumes the same shared
 `frontend-modern/src/routing/resourceLinks.ts` workload-to-infrastructure
 helper, so row and drawer navigation stay aligned without a second
 dashboard-local link-mapping file.
+The shared infrastructure mapper hot path now stays intentionally narrow:
+`frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts`
+continues to own sensor-label presentation and hot-path host/agent projection,
+while canonical drawer discovery-target derivation now lives in
+`frontend-modern/src/components/Infrastructure/resourceDetailDiscoveryModel.ts`
+under `unified-resources`. Future discovery-config or target-resolution
+changes must extend through that unified-resource owner instead of
+re-accumulating discovery heuristics back into the performance hot-path mapper.
 The dashboard disk list now follows the same pattern: the shell stays in
 `frontend-modern/src/components/Dashboard/DiskList.tsx`, while disk-row
 presentation derivations and fallback tooltip/runtime wiring live in

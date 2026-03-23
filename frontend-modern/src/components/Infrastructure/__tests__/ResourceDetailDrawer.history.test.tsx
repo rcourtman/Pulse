@@ -7,6 +7,7 @@ import resourceDetailDrawerShellSource from '@/components/Infrastructure/Resourc
 import resourceDetailDrawerOverviewSource from '@/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx?raw';
 import resourceDetailDrawerHistoryStateSource from '@/components/Infrastructure/useResourceDetailDrawerHistoryState.ts?raw';
 import resourceDetailDrawerDerivedStateSource from '@/components/Infrastructure/useResourceDetailDrawerDerivedState.ts?raw';
+import resourceDetailDrawerDiscoveryModelSource from '@/components/Infrastructure/resourceDetailDiscoveryModel.ts?raw';
 import resourceDetailDrawerServiceModelSource from '@/components/Infrastructure/resourceDetailDrawerServiceModel.ts?raw';
 import resourceDetailDrawerDockerActionsStateSource from '@/components/Infrastructure/useResourceDetailDrawerDockerActionsState.ts?raw';
 import resourceDetailDrawerStateSource from '@/components/Infrastructure/useResourceDetailDrawerState.ts?raw';
@@ -134,11 +135,14 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(resourceDetailDrawerHistoryStateSource).toContain('createResource(');
     expect(resourceDetailDrawerHistoryStateSource).toContain('ResourceAPI.getFacetBundle');
     expect(resourceDetailDrawerHistoryStateSource).toContain('AIAPI.getResourceIntelligence');
-    expect(resourceDetailDrawerDerivedStateSource).toContain('buildWorkloadsHref');
     expect(resourceDetailDrawerDerivedStateSource).toContain('toDiscoveryConfig');
+    expect(resourceDetailDrawerDerivedStateSource).toContain(
+      "from '@/components/Infrastructure/resourceDetailDiscoveryModel'",
+    );
     expect(resourceDetailDrawerDerivedStateSource).toContain(
       "from './resourceDetailDrawerServiceModel'",
     );
+    expect(resourceDetailDrawerDiscoveryModelSource).toContain('export const toDiscoveryConfig');
     expect(resourceDetailDrawerServiceModelSource).toContain('export const getServiceDetailsSummary');
     expect(resourceDetailDrawerServiceModelSource).toContain(
       'export const buildPbsVisibleJobBreakdown',

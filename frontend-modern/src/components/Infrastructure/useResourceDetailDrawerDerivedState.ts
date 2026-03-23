@@ -31,13 +31,13 @@ import {
   ALIAS_COLLAPSE_THRESHOLD,
   buildTemperatureRows,
   toAgentFromResource,
-  toDiscoveryConfig,
   toNodeFromProxmox,
   type AgentPlatformData,
   type DockerPlatformData,
   type KubernetesPlatformData,
   type PlatformData,
 } from '@/components/Infrastructure/resourceDetailMappers';
+import { toDiscoveryConfig } from '@/components/Infrastructure/resourceDetailDiscoveryModel';
 import { formatIdentifierLabel } from '@/utils/textPresentation';
 import {
   buildPbsVisibleJobBreakdown,

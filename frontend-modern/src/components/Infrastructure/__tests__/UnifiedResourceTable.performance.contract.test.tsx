@@ -12,6 +12,8 @@ import unifiedResourceTableModelSource from '@/components/Infrastructure/unified
 import infrastructureSummarySource from '@/components/Infrastructure/InfrastructureSummary.tsx?raw';
 import infrastructureSummaryStateSource from '@/components/Infrastructure/useInfrastructureSummaryState.ts?raw';
 import infrastructureSummaryModelSource from '@/components/Infrastructure/infrastructureSummaryModel.ts?raw';
+import resourceDetailMappersSource from '@/components/Infrastructure/resourceDetailMappers.ts?raw';
+import resourceDetailDiscoveryModelSource from '@/components/Infrastructure/resourceDetailDiscoveryModel.ts?raw';
 import {
   buildStatusOptions,
   filterResources,
@@ -180,6 +182,9 @@ describe('UnifiedResourceTable performance contract', () => {
     it('formats sensor labels through the shared resource detail mapper helper', () => {
       expect(formatSensorName('fan1_cpu_temp')).toBe('Cpu Temp');
       expect(formatSensorName('psu_temp')).toBe('Temp');
+      expect(resourceDetailMappersSource).toContain('titleCaseDelimitedLabel');
+      expect(resourceDetailMappersSource).not.toContain('export const toDiscoveryConfig');
+      expect(resourceDetailDiscoveryModelSource).toContain('export const toDiscoveryConfig');
     });
 
     it('keeps hot-path table state and windowing in the shared table state owner', () => {

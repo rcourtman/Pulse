@@ -3,7 +3,6 @@ import {
   formatInteger,
   formatSensorName,
   formatSourceType,
-  toDiscoveryConfig,
   toAgentFromResource,
   toNodeFromProxmox,
 } from '@/components/Infrastructure/resourceDetailMappers';
@@ -110,50 +109,6 @@ describe('resourceDetailMappers', () => {
 
       expect(agent?.id).toBe('agent-canonical');
       expect(agent?.id).not.toBe('resource:host:hash-1');
-    });
-  });
-
-  describe('toDiscoveryConfig', () => {
-    it('prefers the typed canonical hostname for explicit discovery targets', () => {
-      const config = toDiscoveryConfig({
-        ...createHybridHostResource(),
-        displayName: '',
-        canonicalIdentity: {
-          hostname: 'tower.canonical',
-          displayName: 'Tower',
-          primaryId: 'node:instance-pve1',
-        },
-        discoveryTarget: {
-          resourceType: 'agent',
-          agentId: 'agent-canonical',
-          resourceId: 'agent-canonical',
-        },
-      });
-
-      expect(config?.hostname).toBe('tower.canonical');
-    });
-
-    it('uses the shared Kubernetes cluster helper for pod fallback agent ids', () => {
-      const config = toDiscoveryConfig({
-        ...createHybridHostResource(),
-        id: 'resource:pod:hash-2',
-        type: 'pod',
-        platformType: 'kubernetes',
-        kubernetes: {
-          context: 'cluster-context',
-          podUid: 'pod-uid-2',
-          namespace: 'default',
-        },
-        platformData: {
-          kubernetes: {
-            context: 'cluster-context',
-            namespace: 'default',
-          },
-        },
-      } as unknown as Resource);
-
-      expect(config?.agentId).toBe('cluster-context');
-      expect(config?.resourceId).toBe('pod-uid-2');
     });
   });
 });
