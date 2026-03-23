@@ -599,6 +599,7 @@ func TestTopLevelSystemResolverPinsCanonicalInfrastructureCounting(t *testing.T)
 			"ResolveTopLevelSystems(resources []Resource) TopLevelSystemResolver",
 			"match.Confidence < HighConfidenceThreshold",
 			"monitoredSystemCandidateAllowsHostAttachment(candidate)",
+			"When adding a new top-level monitored-system source, update:",
 		},
 	}
 	for name, snippets := range requiredSnippets {

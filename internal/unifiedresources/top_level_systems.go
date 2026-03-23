@@ -293,6 +293,13 @@ func buildTopLevelSystemNode(resource *Resource) topLevelSystemNode {
 	}
 }
 
+// When adding a new top-level monitored-system source, update:
+// - topLevelSystemStrongIDs
+// - topLevelSystemExactHosts
+// - topLevelSystemExactIPs
+// - monitoredSystemCandidateStrongIDs when candidate matching is exposed
+// - TestResolveTopLevelSystemsTopLevelSourceMatrix
+// - TestResolveTopLevelSystemsMixedEnvironmentCharacterization
 func topLevelSystemStrongIDs(resource Resource) map[string]struct{} {
 	ids := make(map[string]struct{})
 
@@ -340,9 +347,6 @@ func topLevelSystemStrongIDs(resource Resource) map[string]struct{} {
 		if clusterID := strings.TrimSpace(resource.Kubernetes.ClusterID); clusterID != "" {
 			ids["k8s:"+clusterID] = struct{}{}
 		}
-		if agentID := strings.TrimSpace(resource.Kubernetes.AgentID); agentID != "" {
-			ids["agent:"+agentID] = struct{}{}
-		}
 	}
 
 	return ids
@@ -357,9 +361,9 @@ func topLevelSystemExactHosts(resource Resource) map[string]struct{} {
 		canonicalPMGHostname(resource),
 		canonicalTrueNASHostname(resource),
 		canonicalProxmoxNodeName(resource),
-		firstTrimmed(topLevelSystemProxmoxHostURL(resource)),
-		firstTrimmed(topLevelSystemPBSHostURL(resource)),
-		firstTrimmed(topLevelSystemKubernetesServer(resource)),
+		extractHostname(firstTrimmed(topLevelSystemProxmoxHostURL(resource))),
+		extractHostname(firstTrimmed(topLevelSystemPBSHostURL(resource))),
+		extractHostname(firstTrimmed(topLevelSystemKubernetesServer(resource))),
 		firstTrimmed(topLevelSystemCanonicalHostname(resource)),
 	} {
 		if normalized := topLevelSystemNormalizeHost(candidate); normalized != "" {
@@ -495,8 +499,10 @@ func monitoredSystemCandidateStrongIDs(candidate MonitoredSystemCandidate) map[s
 	if machineID := strings.TrimSpace(candidate.MachineID); machineID != "" {
 		ids["machine:"+machineID] = struct{}{}
 	}
-	if agentID := strings.TrimSpace(candidate.AgentID); agentID != "" {
-		ids["agent:"+agentID] = struct{}{}
+	if candidate.Type != ResourceTypeK8sCluster {
+		if agentID := strings.TrimSpace(candidate.AgentID); agentID != "" {
+			ids["agent:"+agentID] = struct{}{}
+		}
 	}
 	return ids
 }

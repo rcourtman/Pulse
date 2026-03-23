@@ -157,6 +157,13 @@ agent IDs, connector-stable primary IDs, or the existing high-confidence
 identity matcher, and it may use exact-host attachment only as a bounded
 fallback onto a uniquely better existing surface. Friendly display names are
 presentation-only and must not participate in monitored-system counting.
+URL-backed host fields must be normalized down to canonical hostnames before
+they participate in exact-host fallback attachment, and Kubernetes cluster
+ownership metadata such as `AgentID` must not collapse a cluster into the
+underlying host's monitored-system identity. The canonical resolver coverage
+is pinned by an explicit top-level source matrix and mixed-environment
+characterization tests so new top-level sources cannot quietly bypass the
+counting contract.
 
 The unified-resource runtime now also owns the durable change timeline for the
 canonical resource view. `internal/unifiedresources/monitor_adapter.go` feeds
