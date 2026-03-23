@@ -285,6 +285,11 @@ and context, but `CommercialBillingSections.tsx` and
 commercial information architecture. Future billing work must extend that
 shared shell/model first instead of letting self-hosted Pulse Pro and hosted
 organization billing drift back into parallel local layouts or vocabularies.
+That same ownership split is explicit in the governed registry as well:
+`CommercialBillingSections.tsx` is part of the shared commercial shell/model
+surface, while `SelfHostedCommercialActivationSection.tsx` stays on the
+self-hosted Pro activation surface with `ProLicensePanel.tsx` rather than
+floating as an unowned settings fragment.
 Hosted tenant browser bootstrap is part of that same cloud-paid boundary as
 well. After control-plane or magic-link handoff, the browser client must
 preserve the tenant-scoped `pulse_org_id` context that the server issued

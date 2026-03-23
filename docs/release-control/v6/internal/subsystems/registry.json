@@ -1356,6 +1356,7 @@
         "frontend-modern/src/components/Dashboard/useRelayOnboardingCardState.ts",
         "frontend-modern/src/components/Settings/BillingAdminOrganizationsTable.tsx",
         "frontend-modern/src/components/Settings/BillingAdminPanel.tsx",
+        "frontend-modern/src/components/Settings/CommercialBillingSections.tsx",
         "frontend-modern/src/components/Settings/MonitoredSystemLedgerPanel.tsx",
         "frontend-modern/src/components/Settings/OrganizationBillingLoadingState.tsx",
         "frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx",
@@ -1363,6 +1364,7 @@
         "frontend-modern/src/components/Settings/ProLicensePlanSection.tsx",
         "frontend-modern/src/components/Settings/RelayPairingSection.tsx",
         "frontend-modern/src/components/Settings/RelaySettingsPanel.tsx",
+        "frontend-modern/src/components/Settings/SelfHostedCommercialActivationSection.tsx",
         "frontend-modern/src/components/Settings/useBillingAdminPanelState.ts",
         "frontend-modern/src/components/Settings/useOrganizationBillingPanelState.ts",
         "frontend-modern/src/components/Settings/useProLicensePanelState.ts",
@@ -1794,6 +1796,7 @@
               "frontend-modern/src/components/Settings/MonitoredSystemLedgerPanel.tsx",
               "frontend-modern/src/components/Settings/ProLicensePanel.tsx",
               "frontend-modern/src/components/Settings/ProLicensePlanSection.tsx",
+              "frontend-modern/src/components/Settings/SelfHostedCommercialActivationSection.tsx",
               "frontend-modern/src/components/Settings/useProLicensePanelState.ts"
             ],
             "allow_same_subsystem_tests": false,
@@ -1822,6 +1825,7 @@
             "match_prefixes": [],
             "match_files": [
               "frontend-modern/src/components/Commercial/MonitoredSystemDefinitionDisclosure.tsx",
+              "frontend-modern/src/components/Settings/CommercialBillingSections.tsx",
               "frontend-modern/src/utils/cloudPlans.ts",
               "frontend-modern/src/utils/commercialBillingModel.ts",
               "frontend-modern/src/utils/selfHostedPlans.ts"
