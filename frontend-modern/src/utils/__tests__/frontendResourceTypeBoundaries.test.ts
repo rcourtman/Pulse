@@ -44,6 +44,8 @@ import searchInputSource from '@/components/shared/SearchInput.tsx?raw';
 import searchInputModelSource from '@/components/shared/searchInputModel.ts?raw';
 import scrollToTopButtonSource from '@/components/shared/ScrollToTopButton.tsx?raw';
 import scrollToTopButtonModelSource from '@/components/shared/scrollToTopButtonModel.ts?raw';
+import toggleSource from '@/components/shared/Toggle.tsx?raw';
+import toggleModelSource from '@/components/shared/toggleModel.ts?raw';
 import searchTipsPopoverSource from '@/components/shared/SearchTipsPopover.tsx?raw';
 import searchTipsPopoverModelSource from '@/components/shared/searchTipsPopoverModel.ts?raw';
 import tooltipSource from '@/components/shared/Tooltip.tsx?raw';
@@ -74,6 +76,7 @@ import whatsNewModalStateSource from '@/components/shared/useWhatsNewModalState.
 import searchFieldStateSource from '@/components/shared/useSearchFieldState.ts?raw';
 import searchInputStateSource from '@/components/shared/useSearchInputState.ts?raw';
 import scrollToTopButtonStateSource from '@/components/shared/useScrollToTopButtonState.ts?raw';
+import toggleStateSource from '@/components/shared/useToggleState.ts?raw';
 import searchTipsPopoverStateSource from '@/components/shared/useSearchTipsPopoverState.ts?raw';
 import tooltipStateSource from '@/components/shared/useTooltipState.ts?raw';
 import trialBannerStateSource from '@/components/shared/useTrialBannerState.ts?raw';
@@ -2812,6 +2815,21 @@ describe('frontend resource type boundaries', () => {
     expect(scrollToTopButtonModelSource).toContain('findNearestScrollableAncestor');
     expect(scrollToTopButtonModelSource).toContain('isScrollToTopButtonVisible');
     expect(scrollToTopButtonModelSource).toContain('getScrollToTopButtonClass');
+    expect(toggleSource).toContain('useToggleState');
+    expect(toggleSource).toContain('getToggleTrackClass');
+    expect(toggleSource).toContain('getToggleKnobClass');
+    expect(toggleSource).not.toContain('defaultPrevented');
+    expect(toggleSource).not.toContain('toggleSizeConfig');
+    expect(toggleSource).not.toContain('handleClick =');
+    expect(toggleStateSource).toContain('defaultPrevented');
+    expect(toggleStateSource).toContain('currentTarget: { checked: next }');
+    expect(toggleStateSource).toContain('props.onChange?.(event)');
+    expect(toggleStateSource).toContain('props.onToggle?.()');
+    expect(toggleModelSource).toContain('toggleSizeConfig');
+    expect(toggleModelSource).toContain('resolveToggleSize');
+    expect(toggleModelSource).toContain('getToggleTrackClass');
+    expect(toggleModelSource).toContain('getToggleKnobClass');
+    expect(toggleModelSource).toContain('ToggleChangeEvent');
     expect(monitoredSystemLimitWarningBannerSource).toContain(
       'useMonitoredSystemLimitWarningBannerState',
     );

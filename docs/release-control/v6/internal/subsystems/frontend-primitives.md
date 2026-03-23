@@ -255,6 +255,14 @@ scrollable-ancestor discovery, visibility threshold policy, aria label, and
 button class policy. Future scroll-to-top work should extend those owners
 instead of pushing scroll-container discovery or listener lifecycle back into
 the shell.
+The shared toggle now follows that same owner split.
+`frontend-modern/src/components/shared/Toggle.tsx` stays the render shell,
+`frontend-modern/src/components/shared/useToggleState.ts` owns disabled gating
+plus the synthetic toggle change-event runtime, and
+`frontend-modern/src/components/shared/toggleModel.ts` owns size resolution,
+track/knob/container class policy, and the canonical toggle event type.
+Future toggle work should extend those owners instead of pushing synthetic
+event behavior or size/class policy back into the shell.
 The shared dialog now follows that same owner split.
 `frontend-modern/src/components/shared/Dialog.tsx` stays the render shell,
 `frontend-modern/src/components/shared/useDialogState.ts` owns focus trap,

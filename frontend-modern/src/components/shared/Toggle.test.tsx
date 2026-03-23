@@ -1,46 +1,16 @@
-import { cleanup, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { FilterHeader, FilterSegmentedControl } from './FilterToolbar';
+import { Toggle, TogglePrimitive } from './Toggle';
 import toggleSource from './Toggle.tsx?raw';
 import toggleModelSource from './toggleModel.ts?raw';
 import toggleStateSource from './useToggleState.ts?raw';
 
-describe('FilterHeader', () => {
+describe('Toggle', () => {
   afterEach(() => {
     cleanup();
   });
 
-  it('gives the stacked search row full width by default', () => {
-    const { container } = render(() => (
-      <FilterHeader search={<div data-testid="search">Search</div>} showFilters={false}>
-        <div>Filters</div>
-      </FilterHeader>
-    ));
-
-    expect(screen.getByTestId('search')).toBeInTheDocument();
-    expect(container.querySelector('.flex.w-full.items-center.gap-2')).not.toBeNull();
-  });
-
-  it('keeps segmented controls on value callbacks while forwarding div attributes', async () => {
-    const onChange = vi.fn();
-    render(() => (
-      <FilterSegmentedControl
-        value="all"
-        onChange={onChange}
-        options={[
-          { value: 'all', label: 'All' },
-          { value: 'warnings', label: 'Warnings' },
-        ]}
-        data-testid="segmented-control"
-      />
-    ));
-
-    expect(screen.getByTestId('segmented-control')).toBeInTheDocument();
-    screen.getByRole('button', { name: 'Warnings' }).click();
-    expect(onChange).toHaveBeenCalledWith('warnings');
-  });
-
-  it('keeps shared toggle behavior on shell, runtime, and model owners', () => {
+  it('keeps toggle on shell, runtime, and model owners', () => {
     expect(toggleSource).toContain('useToggleState');
     expect(toggleSource).toContain('getToggleTrackClass');
     expect(toggleSource).toContain('getToggleKnobClass');
@@ -59,5 +29,26 @@ describe('FilterHeader', () => {
     expect(toggleModelSource).toContain('getToggleTrackClass');
     expect(toggleModelSource).toContain('getToggleKnobClass');
     expect(toggleModelSource).toContain('ToggleChangeEvent');
+  });
+
+  it('emits the synthetic next checked state and respects preventDefault', () => {
+    const onToggle = vi.fn();
+    const onChange = vi.fn((event) => event.preventDefault());
+
+    render(() => <TogglePrimitive checked={false} onToggle={onToggle} onChange={onChange} />);
+
+    fireEvent.click(screen.getByRole('button'));
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange.mock.calls[0][0].currentTarget.checked).toBe(true);
+    expect(onToggle).not.toHaveBeenCalled();
+  });
+
+  it('renders label and description through the shell contract', () => {
+    render(() => (
+      <Toggle checked={true} label={<span>Enabled</span>} description={<span>Turns it on</span>} />
+    ));
+
+    expect(screen.getByText('Enabled')).toBeInTheDocument();
+    expect(screen.getByText('Turns it on')).toBeInTheDocument();
   });
 });
