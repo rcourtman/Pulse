@@ -3,7 +3,11 @@ import ChevronRight from 'lucide-solid/icons/chevron-right';
 import { Card } from '@/components/shared/Card';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { SearchInput } from '@/components/shared/SearchInput';
-import { getSettingsSearchEmptyState } from '@/utils/settingsShellPresentation';
+import {
+  getSettingsSearchEmptyState,
+  getSettingsUnsavedChangesBanner,
+  SETTINGS_SHELL_COPY,
+} from '@/utils/settingsShellPresentation';
 import type {
   SettingsHeaderMeta,
   SettingsNavGroup,
@@ -31,6 +35,8 @@ interface SettingsPageShellProps {
 }
 
 export const SettingsPageShell: Component<SettingsPageShellProps> = (props) => {
+  const unsavedChangesBanner = () => getSettingsUnsavedChangesBanner();
+
   return (
     <div class="space-y-6">
       <div class="px-1">
@@ -55,9 +61,11 @@ export const SettingsPageShell: Component<SettingsPageShellProps> = (props) => {
                 />
               </svg>
               <div>
-                <p class="font-semibold text-amber-900 dark:text-amber-100">Unsaved changes</p>
+                <p class="font-semibold text-amber-900 dark:text-amber-100">
+                  {unsavedChangesBanner().title}
+                </p>
                 <p class="text-sm text-amber-700 dark:text-amber-200 mt-0.5">
-                  Your changes will be lost if you navigate away
+                  {unsavedChangesBanner().description}
                 </p>
               </div>
             </div>
@@ -67,14 +75,14 @@ export const SettingsPageShell: Component<SettingsPageShellProps> = (props) => {
                 class="flex-1 sm:flex-initial px-5 py-2.5 text-sm font-medium bg-amber-600 text-white rounded-md hover:bg-amber-700 shadow-sm transition-colors"
                 onClick={props.saveSettings}
               >
-                Save Changes
+                {unsavedChangesBanner().saveLabel}
               </button>
               <button
                 type="button"
                 class="px-4 py-2.5 text-sm font-medium text-amber-700 dark:text-amber-200 hover:underline transition-colors"
                 onClick={props.discardChanges}
               >
-                Discard
+                {unsavedChangesBanner().discardLabel}
               </button>
             </div>
           </div>
@@ -84,7 +92,7 @@ export const SettingsPageShell: Component<SettingsPageShellProps> = (props) => {
       <Card padding="none" class="relative flex lg:flex-row overflow-hidden min-h-[600px]">
         <div
           class={`${props.isMobileMenuOpen() ? 'flex flex-col w-full' : 'hidden lg:flex lg:flex-col'} ${props.sidebarCollapsed() ? 'lg:w-16 lg:min-w-[4rem] lg:max-w-[4rem] lg:basis-[4rem]' : 'lg:w-72 lg:min-w-[18rem] lg:max-w-[18rem] lg:basis-[18rem]'} relative border-b border-border lg:border-b-0 lg:border-r lg:align-top flex-shrink-0 transition-all duration-200 bg-surface lg:bg-transparent z-10`}
-          aria-label="Settings navigation"
+          aria-label={SETTINGS_SHELL_COPY.navigationAriaLabel}
           aria-expanded={!props.sidebarCollapsed()}
         >
           <div
@@ -92,12 +100,14 @@ export const SettingsPageShell: Component<SettingsPageShellProps> = (props) => {
           >
             <Show when={!props.sidebarCollapsed()}>
               <div class="flex items-center justify-between pb-2 border-b border-border">
-                <h2 class="text-sm font-semibold text-base-content">Settings</h2>
+                <h2 class="text-sm font-semibold text-base-content">
+                  {SETTINGS_SHELL_COPY.navigationTitle}
+                </h2>
                 <button
                   type="button"
                   onClick={() => props.setSidebarCollapsed(true)}
                   class="p-1 rounded-md hover:bg-surface-hover transition-colors"
-                  aria-label="Collapse sidebar"
+                  aria-label={SETTINGS_SHELL_COPY.collapseSidebarLabel}
                 >
                   <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path
@@ -115,7 +125,7 @@ export const SettingsPageShell: Component<SettingsPageShellProps> = (props) => {
                 type="button"
                 onClick={() => props.setSidebarCollapsed(false)}
                 class="w-full p-2 rounded-md hover:bg-surface-hover transition-colors"
-                aria-label="Expand sidebar"
+                aria-label={SETTINGS_SHELL_COPY.expandSidebarLabel}
               >
                 <svg class="w-5 h-5 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path
@@ -133,11 +143,11 @@ export const SettingsPageShell: Component<SettingsPageShellProps> = (props) => {
                   <SearchInput
                     value={props.searchQuery}
                     onChange={props.setSearchQuery}
-                    placeholder="Search settings..."
+                    placeholder={SETTINGS_SHELL_COPY.searchPlaceholder}
                     class="w-full"
                     captureBackspace
                     clearOnEscape
-                    shortcutHint="Any key"
+                    shortcutHint={SETTINGS_SHELL_COPY.searchShortcutHint}
                   />
                 </div>
               </Show>
@@ -231,7 +241,7 @@ export const SettingsPageShell: Component<SettingsPageShellProps> = (props) => {
                 >
                   <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
                 </svg>
-                Settings
+                {SETTINGS_SHELL_COPY.mobileBackLabel}
               </button>
               <div class="ml-auto font-semibold text-base-content pr-3">
                 <Show when={props.flatTabs().find((tab) => tab.id === props.activeTab())}>

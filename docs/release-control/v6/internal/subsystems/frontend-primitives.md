@@ -58,6 +58,7 @@ work extends shared components instead of creating new local variants.
 36. `frontend-modern/src/utils/ssoProviderPresentation.ts`
 37. `frontend-modern/src/utils/systemSettingsPresentation.ts`
 38. `frontend-modern/src/utils/aiSettingsPresentation.ts`
+39. `frontend-modern/src/utils/settingsShellPresentation.ts`
 37. `frontend-modern/src/components/Settings/UpdateInstallGuide.tsx`
 38. `frontend-modern/src/components/Settings/updatesSettingsModel.ts`
 39. `frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx`
@@ -704,6 +705,10 @@ the brief three-step explanation: install the Unified Agent, get the first
 Pulse resource, then layer on additional context.
 
 The settings shell is now also a governed frontend primitive boundary.
+`frontend-modern/src/utils/settingsShellPresentation.ts` now owns the
+customer-facing settings-shell framing copy for navigation, search, loading,
+and unsaved-change banners so `SettingsPageShell.tsx` stays a render shell
+instead of re-accumulating product wording inline.
 
 The alerts page shell now follows that same page-shell rule for feature tabs:
 `frontend-modern/src/pages/Alerts.tsx` owns navigation and cross-surface

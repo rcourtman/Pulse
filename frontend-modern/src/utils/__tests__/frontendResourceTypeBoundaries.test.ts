@@ -118,6 +118,7 @@ import diagnosticsModelSource from '@/components/Settings/diagnosticsModel.ts?ra
 import diagnosticsResultsPanelSource from '@/components/Settings/DiagnosticsResultsPanel.tsx?raw';
 import diagnosticsStateSource from '@/components/Settings/useDiagnosticsPanelState.ts?raw';
 import settingsShellSource from '@/components/Settings/Settings.tsx?raw';
+import settingsPageShellSource from '@/components/Settings/SettingsPageShell.tsx?raw';
 import settingsDialogsSource from '@/components/Settings/SettingsDialogs.tsx?raw';
 import settingsPanelRegistrySource from '@/components/Settings/useSettingsPanelRegistry.tsx?raw';
 import settingsPanelRegistryContextSource from '@/components/Settings/settingsPanelRegistryContext.tsx?raw';
@@ -1433,6 +1434,12 @@ describe('frontend resource type boundaries', () => {
     );
     expect(settingsPanelRegistrySource).toContain('buildSettingsPanelRegistryContext');
     expect(settingsShellSource).not.toContain('getInfrastructurePanelProps: () => ({');
+    expect(settingsPageShellSource).toContain('SETTINGS_SHELL_COPY');
+    expect(settingsPageShellSource).toContain('getSettingsUnsavedChangesBanner');
+    expect(settingsPageShellSource).not.toContain('Unsaved changes');
+    expect(settingsPageShellSource).not.toContain('Search settings...');
+    expect(settingsPageShellSource).not.toContain('Collapse sidebar');
+    expect(settingsPageShellSource).not.toContain('Expand sidebar');
     expect(settingsPanelRegistryContextSource).toContain('systemPanels: SettingsSystemPanels');
     expect(settingsPanelRegistryLoadersSource).toContain(
       'export const SETTINGS_PANEL_REGISTRY_LOADERS',
