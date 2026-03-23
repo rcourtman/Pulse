@@ -302,8 +302,11 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(screen.getByText('Current state')).toBeInTheDocument();
     expect(screen.queryByText('Runtime')).toBeNull();
     expect(screen.getByText('Change history')).toBeInTheDocument();
-    expect(screen.getByTestId('resource-secondary-sections').classList.contains('flex')).toBe(true);
-    expect(screen.getByTestId('resource-secondary-sections').classList.contains('flex-wrap')).toBe(
+    expect(screen.getByTestId('resource-secondary-sections').classList.contains('space-y-3')).toBe(
+      true,
+    );
+    expect(screen.getByTestId('resource-support-sections').classList.contains('flex')).toBe(true);
+    expect(screen.getByTestId('resource-support-sections').classList.contains('flex-wrap')).toBe(
       true,
     );
     expect(

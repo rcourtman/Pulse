@@ -228,9 +228,12 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     await waitFor(() => {
       expect(getByText('Hardware')).toBeInTheDocument();
     });
-    expect(getByTestId('resource-secondary-sections').classList.contains('flex')).toBe(true);
+    expect(getByTestId('resource-secondary-sections').classList.contains('space-y-3')).toBe(true);
     expect(
-      getByTestId('resource-secondary-sections').classList.contains('flex-wrap'),
+      getByTestId('resource-support-sections').classList.contains('flex'),
+    ).toBe(true);
+    expect(
+      getByTestId('resource-support-sections').classList.contains('flex-wrap'),
     ).toBe(true);
     expect(getByTestId('resource-host-details-section').querySelector('.mt-3.flex.flex-wrap')).toBeTruthy();
     expect(

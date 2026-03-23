@@ -262,11 +262,11 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
 
       <div
         data-testid="resource-secondary-sections"
-        class="flex flex-wrap gap-3 [&>*]:flex-1 [&>*]:basis-[calc(50%-0.375rem)] [&>*]:min-w-[260px] [&>*]:max-w-full [&>*]:overflow-hidden"
+        class="space-y-3"
       >
         <div
           data-testid="resource-change-history-section"
-          class="h-full rounded border border-border bg-surface p-3 shadow-sm"
+          class="w-full rounded border border-border bg-surface p-3 shadow-sm"
         >
           <div class="flex items-center justify-between gap-3">
             <div>
@@ -506,6 +506,19 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
             </div>
           </Show>
         </div>
+
+        <Show
+          when={
+            drawer.hasServiceDetails() ||
+            drawer.hasHostDetails() ||
+            drawer.hasAccessContext() ||
+            drawer.hasInvestigationContext()
+          }
+        >
+          <div
+            data-testid="resource-support-sections"
+            class="flex flex-wrap gap-3 [&>*]:flex-1 [&>*]:basis-[calc(50%-0.375rem)] [&>*]:min-w-[260px] [&>*]:max-w-full [&>*]:overflow-hidden"
+          >
 
         <Show when={drawer.hasServiceDetails()}>
           <SupportDisclosure
@@ -1139,6 +1152,8 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
               </div>
             </Show>
           </SupportDisclosure>
+        </Show>
+          </div>
         </Show>
       </div>
     </div>
