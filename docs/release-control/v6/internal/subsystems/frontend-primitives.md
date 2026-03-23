@@ -278,6 +278,14 @@ Escape clear/blur behavior and input-ref lifecycle, and
 visibility rules plus trailing-control padding policy. Future search-field work
 should extend those owners instead of pushing event behavior or layout policy
 back into the shared shell.
+The shared collapsible search input now follows that same owner split.
+`frontend-modern/src/components/shared/CollapsibleSearchInput.tsx` stays the
+render shell, `frontend-modern/src/components/shared/useCollapsibleSearchInputState.ts`
+owns expand/collapse state, focus choreography, and type-to-search handoff, and
+`frontend-modern/src/components/shared/collapsibleSearchInputModel.ts` owns
+trigger-label, expanded-visibility, and full-width layout policy. Future
+collapsible-search work should extend those owners instead of pushing
+expand/collapse runtime or layout rules back into the shared shell.
 The shared pulse data grid now follows that same owner split.
 `frontend-modern/src/components/shared/PulseDataGrid.tsx` stays the render
 shell, `frontend-modern/src/components/shared/usePulseDataGridState.ts` owns

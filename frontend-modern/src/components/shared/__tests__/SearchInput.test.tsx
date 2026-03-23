@@ -3,6 +3,9 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { createSignal } from 'solid-js';
 import { CollapsibleSearchInput } from '@/components/shared/CollapsibleSearchInput';
 import { SearchInput } from '@/components/shared/SearchInput';
+import collapsibleSearchInputSource from '@/components/shared/CollapsibleSearchInput.tsx?raw';
+import collapsibleSearchInputModelSource from '@/components/shared/collapsibleSearchInputModel.ts?raw';
+import collapsibleSearchInputStateSource from '@/components/shared/useCollapsibleSearchInputState.ts?raw';
 import { focusActiveTypeToSearch } from '@/hooks/useTypeToSearch';
 
 const SearchHarness = (props: {
@@ -33,6 +36,35 @@ const SearchHarness = (props: {
 describe('SearchInput', () => {
   afterEach(() => {
     cleanup();
+  });
+
+  it('keeps collapsible search input on shell, runtime, and model owners', () => {
+    expect(collapsibleSearchInputSource).toContain('useCollapsibleSearchInputState');
+    expect(collapsibleSearchInputSource).not.toContain('createSignal');
+    expect(collapsibleSearchInputSource).not.toContain('useTypeToSearch');
+    expect(collapsibleSearchInputSource).not.toContain("const triggerLabel = () => props.triggerLabel ?? 'Search'");
+    expect(collapsibleSearchInputSource).not.toContain(
+      "const layoutClass = showExpanded() ? 'order-last basis-full w-full' : 'shrink-0 md:ml-auto'",
+    );
+
+    expect(collapsibleSearchInputStateSource).toContain(
+      'export function useCollapsibleSearchInputState',
+    );
+    expect(collapsibleSearchInputStateSource).toContain('createSignal');
+    expect(collapsibleSearchInputStateSource).toContain('useTypeToSearch');
+    expect(collapsibleSearchInputStateSource).toContain('queueMicrotask');
+    expect(collapsibleSearchInputStateSource).toContain('setIsExpanded(true)');
+
+    expect(collapsibleSearchInputModelSource).toContain(
+      'getCollapsibleSearchTriggerLabel',
+    );
+    expect(collapsibleSearchInputModelSource).toContain(
+      'shouldShowCollapsibleSearchExpanded',
+    );
+    expect(collapsibleSearchInputModelSource).toContain(
+      'getCollapsibleSearchRootClass',
+    );
+    expect(collapsibleSearchInputModelSource).toContain('order-last basis-full w-full');
   });
 
   it('captures typed characters by default when focus is outside the input', async () => {

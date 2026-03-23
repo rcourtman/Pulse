@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import calloutCardSource from '@/components/shared/CalloutCard.tsx?raw';
 import commandPaletteModalSource from '@/components/shared/CommandPaletteModal.tsx?raw';
 import commandPaletteModelSource from '@/components/shared/commandPaletteModel.ts?raw';
+import collapsibleSearchInputSource from '@/components/shared/CollapsibleSearchInput.tsx?raw';
+import collapsibleSearchInputModelSource from '@/components/shared/collapsibleSearchInputModel.ts?raw';
 import containerUpdateBadgeSource from '@/components/shared/ContainerUpdateBadge.tsx?raw';
 import containerUpdateBadgeModelSource from '@/components/shared/containerUpdateBadgeModel.ts?raw';
 import densityMapSource from '@/components/shared/DensityMap.tsx?raw';
@@ -34,6 +36,7 @@ import monitoredSystemLimitWarningBannerSource from '@/components/shared/Monitor
 import selectionCardGroupSource from '@/components/shared/SelectionCardGroup.tsx?raw';
 import tagBadgesSource from '@/components/shared/TagBadges.tsx?raw';
 import commandPaletteStateSource from '@/components/shared/useCommandPaletteState.ts?raw';
+import collapsibleSearchInputStateSource from '@/components/shared/useCollapsibleSearchInputState.ts?raw';
 import containerUpdateButtonStateSource from '@/components/shared/useContainerUpdateButtonState.ts?raw';
 import densityMapStateSource from '@/components/shared/useDensityMapState.ts?raw';
 import helpIconStateSource from '@/components/shared/useHelpIconState.ts?raw';
@@ -429,5 +432,30 @@ describe('shared primitive guardrails', () => {
     expect(searchFieldModelSource).toContain('shouldShowSearchFieldClearButton');
     expect(searchFieldModelSource).toContain('getSearchFieldInputPaddingRightClass');
     expect(searchFieldModelSource).toContain("return 'pr-14 sm:pr-20'");
+  });
+
+  it('keeps collapsible search input on shell, runtime, and model owners', () => {
+    expect(collapsibleSearchInputSource).toContain('useCollapsibleSearchInputState');
+    expect(collapsibleSearchInputSource).not.toContain('createSignal');
+    expect(collapsibleSearchInputSource).not.toContain('useTypeToSearch');
+    expect(collapsibleSearchInputSource).not.toContain(
+      "const triggerLabel = () => props.triggerLabel ?? 'Search'",
+    );
+    expect(collapsibleSearchInputSource).not.toContain(
+      "const layoutClass = showExpanded() ? 'order-last basis-full w-full' : 'shrink-0 md:ml-auto'",
+    );
+
+    expect(collapsibleSearchInputStateSource).toContain(
+      'export function useCollapsibleSearchInputState',
+    );
+    expect(collapsibleSearchInputStateSource).toContain('createSignal');
+    expect(collapsibleSearchInputStateSource).toContain('useTypeToSearch');
+    expect(collapsibleSearchInputStateSource).toContain('queueMicrotask');
+    expect(collapsibleSearchInputStateSource).toContain('setIsExpanded(true)');
+
+    expect(collapsibleSearchInputModelSource).toContain('getCollapsibleSearchTriggerLabel');
+    expect(collapsibleSearchInputModelSource).toContain('shouldShowCollapsibleSearchExpanded');
+    expect(collapsibleSearchInputModelSource).toContain('getCollapsibleSearchRootClass');
+    expect(collapsibleSearchInputModelSource).toContain('order-last basis-full w-full');
   });
 });

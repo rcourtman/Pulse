@@ -10,6 +10,8 @@ import alertTargetTypesSource from '@/utils/alertTargetTypes.ts?raw';
 import resourceBadgesSource from '@/components/Infrastructure/resourceBadges.ts?raw';
 import commandPaletteModalSource from '@/components/shared/CommandPaletteModal.tsx?raw';
 import commandPaletteModelSource from '@/components/shared/commandPaletteModel.ts?raw';
+import collapsibleSearchInputSource from '@/components/shared/CollapsibleSearchInput.tsx?raw';
+import collapsibleSearchInputModelSource from '@/components/shared/collapsibleSearchInputModel.ts?raw';
 import containerUpdateBadgeSource from '@/components/shared/ContainerUpdateBadge.tsx?raw';
 import containerUpdateBadgeModelSource from '@/components/shared/containerUpdateBadgeModel.ts?raw';
 import densityMapSource from '@/components/shared/DensityMap.tsx?raw';
@@ -35,6 +37,7 @@ import interactiveSparklineModelSource from '@/components/shared/interactiveSpar
 import infrastructureSelectorModelSource from '@/components/shared/infrastructureSelectorModel.ts?raw';
 import sharedInfrastructureSummaryTableModelSource from '@/components/shared/infrastructureSummaryTableModel.ts?raw';
 import commandPaletteStateSource from '@/components/shared/useCommandPaletteState.ts?raw';
+import collapsibleSearchInputStateSource from '@/components/shared/useCollapsibleSearchInputState.ts?raw';
 import containerUpdateButtonStateSource from '@/components/shared/useContainerUpdateButtonState.ts?raw';
 import helpIconStateSource from '@/components/shared/useHelpIconState.ts?raw';
 import historyChartStateSource from '@/components/shared/useHistoryChartState.ts?raw';
@@ -2668,6 +2671,20 @@ describe('frontend resource type boundaries', () => {
     expect(searchFieldModelSource).toContain('shouldShowSearchFieldShortcutHint');
     expect(searchFieldModelSource).toContain('shouldShowSearchFieldClearButton');
     expect(searchFieldModelSource).toContain('getSearchFieldInputPaddingRightClass');
+    expect(collapsibleSearchInputSource).toContain('useCollapsibleSearchInputState');
+    expect(collapsibleSearchInputSource).not.toContain('createSignal');
+    expect(collapsibleSearchInputSource).not.toContain('useTypeToSearch');
+    expect(collapsibleSearchInputSource).not.toContain(
+      "const triggerLabel = () => props.triggerLabel ?? 'Search'",
+    );
+    expect(collapsibleSearchInputStateSource).toContain('createSignal');
+    expect(collapsibleSearchInputStateSource).toContain('useTypeToSearch');
+    expect(collapsibleSearchInputStateSource).toContain('queueMicrotask');
+    expect(collapsibleSearchInputModelSource).toContain('getCollapsibleSearchTriggerLabel');
+    expect(collapsibleSearchInputModelSource).toContain(
+      'shouldShowCollapsibleSearchExpanded',
+    );
+    expect(collapsibleSearchInputModelSource).toContain('getCollapsibleSearchRootClass');
     expect(infrastructureSummaryModelSource).not.toContain(
       'const asTrimmedString = (value: unknown): string | null => {',
     );
