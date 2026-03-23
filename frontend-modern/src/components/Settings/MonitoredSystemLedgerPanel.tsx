@@ -1,4 +1,4 @@
-import { createResource, For, Show } from 'solid-js';
+import { createResource, createSignal, For, Show } from 'solid-js';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { StatusDot } from '@/components/shared/StatusDot';
 import {
@@ -34,6 +34,7 @@ function usagePercent(total: number, limit: number): number {
 
 export function MonitoredSystemLedgerPanel(props: MonitoredSystemLedgerPanelProps = {}) {
   const [ledger, { refetch }] = createResource(() => MonitoredSystemLedgerAPI.getLedger());
+  const [expandedSystemKey, setExpandedSystemKey] = createSignal<string | null>(null);
 
   const total = () => ledger()?.total ?? 0;
   const limit = () => ledger()?.limit ?? 0;
@@ -41,6 +42,11 @@ export function MonitoredSystemLedgerPanel(props: MonitoredSystemLedgerPanelProp
   const hasLimit = () => limit() > 0;
   const overLimit = () => hasLimit() && total() > limit();
   const pct = () => usagePercent(total(), limit());
+  const systemKey = (system: MonitoredSystemLedgerEntry, index: number) =>
+    `${system.name}:${system.type}:${index}`;
+  const toggleSystemExplanation = (key: string) => {
+    setExpandedSystemKey((current) => (current === key ? null : key));
+  };
 
   const content = (
     <>
@@ -120,12 +126,57 @@ export function MonitoredSystemLedgerPanel(props: MonitoredSystemLedgerPanelProp
             </TableHeader>
             <TableBody>
               <For each={systems()}>
-                {(system: MonitoredSystemLedgerEntry) => {
+                {(system: MonitoredSystemLedgerEntry, index) => {
                   const indicator = getSimpleStatusIndicator(system.status);
+                  const key = systemKey(system, index());
+                  const explanationID = `monitored-system-explanation-${index()}`;
+                  const expanded = () => expandedSystemKey() === key;
                   return (
                     <TableRow>
                       <TableCell>
-                        <span class="text-sm font-medium text-base-content">{system.name}</span>
+                        <div class="space-y-1 whitespace-normal">
+                          <span class="text-sm font-medium text-base-content">{system.name}</span>
+                          <button
+                            type="button"
+                            class="block text-[11px] font-medium text-muted underline-offset-2 transition-colors hover:text-base-content hover:underline"
+                            aria-expanded={expanded()}
+                            aria-controls={explanationID}
+                            onClick={() => toggleSystemExplanation(key)}
+                          >
+                            {expanded() ? 'Hide count details' : 'Why this counts'}
+                          </button>
+                          <Show when={expanded()}>
+                            <div
+                              id={explanationID}
+                              class="space-y-2 rounded-md border border-border bg-surface px-3 py-2 text-xs text-muted"
+                            >
+                              <p class="whitespace-normal text-base-content">
+                                {system.explanation.summary}
+                              </p>
+                              <Show when={system.explanation.reasons.length > 0}>
+                                <ul class="space-y-1 whitespace-normal">
+                                  <For each={system.explanation.reasons}>
+                                    {(reason) => <li>{reason.summary}</li>}
+                                  </For>
+                                </ul>
+                              </Show>
+                              <Show when={system.explanation.surfaces.length > 0}>
+                                <div class="space-y-1">
+                                  <p class="font-medium text-base-content">Included views</p>
+                                  <ul class="space-y-1 whitespace-normal">
+                                    <For each={system.explanation.surfaces}>
+                                      {(surface) => (
+                                        <li>
+                                          {surface.name} ({surface.type}, {surface.source})
+                                        </li>
+                                      )}
+                                    </For>
+                                  </ul>
+                                </div>
+                              </Show>
+                            </div>
+                          </Show>
+                        </div>
                       </TableCell>
                       <TableCell>
                         <span class="inline-flex items-center gap-1.5">

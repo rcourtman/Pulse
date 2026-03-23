@@ -129,6 +129,56 @@ func TestResolveTopLevelSystemsMixedEnvironmentCharacterization(t *testing.T) {
 	)
 }
 
+func TestResolveTopLevelSystemsExplainsStandaloneSystem(t *testing.T) {
+	resolver := ResolveTopLevelSystems([]Resource{
+		topLevelTestAgent("agent-host", "tower.local", "machine-1", "agent-1"),
+	})
+
+	records := resolver.records()
+	if len(records) != 1 {
+		t.Fatalf("expected one monitored-system record, got %d", len(records))
+	}
+
+	explanation := records[0].Explanation
+	if explanation.Summary == "" {
+		t.Fatal("expected standalone monitored system to carry an explanation summary")
+	}
+	if len(explanation.Reasons) != 1 || explanation.Reasons[0].Kind != "standalone" {
+		t.Fatalf("expected standalone explanation reason, got %+v", explanation.Reasons)
+	}
+	if len(explanation.Surfaces) != 1 || explanation.Surfaces[0].Source != "agent" {
+		t.Fatalf("expected one agent surface, got %+v", explanation.Surfaces)
+	}
+}
+
+func TestResolveTopLevelSystemsExplainsStrongIdentityAndHostnameAttachment(t *testing.T) {
+	resolver := ResolveTopLevelSystems([]Resource{
+		topLevelTestAgent("agent-host", "tower.local", "machine-1", "agent-1"),
+		topLevelTestDockerHost("docker-host", "tower.local", "docker-runtime-1", "agent-1"),
+		topLevelTestPBS("pbs-system", "tower.local", "pbs-1"),
+	})
+
+	records := resolver.records()
+	if len(records) != 1 {
+		t.Fatalf("expected one monitored-system record, got %d", len(records))
+	}
+
+	reasons := records[0].Explanation.Reasons
+	if len(reasons) < 2 {
+		t.Fatalf("expected multiple grouping reasons, got %+v", reasons)
+	}
+
+	if !hasGroupingReason(reasons, "shared-identity", "agent-id") {
+		t.Fatalf("expected shared agent identity reason, got %+v", reasons)
+	}
+	if !hasGroupingReason(reasons, "exact-host-attachment", "exact-host") {
+		t.Fatalf("expected exact hostname attachment reason, got %+v", reasons)
+	}
+	if len(records[0].Explanation.Surfaces) != 3 {
+		t.Fatalf("expected three grouped surfaces, got %+v", records[0].Explanation.Surfaces)
+	}
+}
+
 func TestHasMatchingMonitoredSystemDoesNotMergeKubernetesCandidateBySharedAgentID(t *testing.T) {
 	registry := NewRegistry(nil)
 	registry.IngestRecords(SourceAgent, []IngestRecord{
@@ -170,6 +220,19 @@ func assertTopLevelSystemGroupPairs(t *testing.T, resolver TopLevelSystemResolve
 			t.Fatalf("expected %q and %q to remain separate, both resolved to %q", pair[0], pair[1], left)
 		}
 	}
+}
+
+func hasGroupingReason(
+	reasons []MonitoredSystemGroupingReason,
+	kind string,
+	signal string,
+) bool {
+	for _, reason := range reasons {
+		if reason.Kind == kind && reason.Signal == signal {
+			return true
+		}
+	}
+	return false
 }
 
 func topLevelTestAgent(id, hostname, machineID, agentID string) Resource {

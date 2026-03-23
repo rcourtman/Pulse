@@ -224,6 +224,12 @@ export history endpoints live in `internal/api/activity_audit_handlers.go` and
 `internal/api/router_routes_licensing.go`, and the contract tests now pin their
 response shapes so the execution trail remains queryable through the governed
 API surface rather than only through the underlying store.
+The monitored-system ledger contract now also carries a canonical grouping
+explanation payload. `/api/license/monitored-system-ledger` must expose the
+shared monitored-system explanation summary, sanitized grouping reasons, and
+included top-level surfaces exactly as the unified-resource resolver computed
+them, while the frontend client stays in lockstep with that nested payload
+shape.
 Action-plan stale-plan protection on those audit records now uses the canonical
 `resourceVersion`, `policyVersion`, and `planHash` fields only, so the
 response contract stays deterministic without extra version baggage.

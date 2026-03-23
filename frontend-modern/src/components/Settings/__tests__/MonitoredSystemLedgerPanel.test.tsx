@@ -77,6 +77,18 @@ describe('MonitoredSystemLedgerPanel', () => {
           status: 'online',
           last_seen: '2026-01-01T00:00:00Z',
           source: 'agent',
+          explanation: {
+            summary:
+              'Counts as one monitored system because Pulse sees one top-level host view from agent.',
+            reasons: [
+              {
+                kind: 'standalone',
+                signal: 'single-top-level-view',
+                summary: 'No overlapping top-level source matched this system.',
+              },
+            ],
+            surfaces: [{ name: 'host-1', type: 'host', source: 'agent' }],
+          },
         },
       ],
       total: 1,
@@ -122,6 +134,18 @@ describe('MonitoredSystemLedgerPanel', () => {
           status: 'online',
           last_seen: '2026-01-01T00:00:00Z',
           source: 'agent',
+          explanation: {
+            summary:
+              'Counts as one monitored system because Pulse sees one top-level host view from agent.',
+            reasons: [
+              {
+                kind: 'standalone',
+                signal: 'single-top-level-view',
+                summary: 'No overlapping top-level source matched this system.',
+              },
+            ],
+            surfaces: [{ name: 'server-a', type: 'host', source: 'agent' }],
+          },
         },
         {
           name: 'server-b',
@@ -129,6 +153,21 @@ describe('MonitoredSystemLedgerPanel', () => {
           status: 'offline',
           last_seen: '2026-01-02T00:00:00Z',
           source: 'pbs',
+          explanation: {
+            summary:
+              'Counts as one monitored system because Pulse merged 2 top-level views into one canonical system using shared machine identity.',
+            reasons: [
+              {
+                kind: 'shared-identity',
+                signal: 'machine-id',
+                summary: 'Merged host and PBS server views using shared machine identity.',
+              },
+            ],
+            surfaces: [
+              { name: 'server-b', type: 'pbs-server', source: 'pbs' },
+              { name: 'server-b host', type: 'host', source: 'agent' },
+            ],
+          },
         },
       ],
       total: 2,
@@ -159,6 +198,15 @@ describe('MonitoredSystemLedgerPanel', () => {
     ).toBeInTheDocument();
     expect(screen.getByText('server-b')).toBeInTheDocument();
     expect(screen.getByText('2 / 10')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Why this counts' })).toHaveLength(2);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Why this counts' })[1]!);
+    expect(
+      screen.getByText(
+        'Counts as one monitored system because Pulse merged 2 top-level views into one canonical system using shared machine identity.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Included views')).toBeInTheDocument();
+    expect(screen.getByText('server-b host (host, agent)')).toBeInTheDocument();
     expect(screen.queryByText('Failed to load monitored system ledger.')).not.toBeInTheDocument();
   });
 });

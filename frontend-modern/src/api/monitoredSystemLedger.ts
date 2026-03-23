@@ -1,11 +1,30 @@
 import { apiFetchJSON } from '@/utils/apiClient';
 
+export interface MonitoredSystemLedgerExplanationReason {
+  kind: string;
+  signal: string;
+  summary: string;
+}
+
+export interface MonitoredSystemLedgerExplanationSurface {
+  name: string;
+  type: string;
+  source: string;
+}
+
+export interface MonitoredSystemLedgerExplanation {
+  summary: string;
+  reasons: MonitoredSystemLedgerExplanationReason[];
+  surfaces: MonitoredSystemLedgerExplanationSurface[];
+}
+
 export interface MonitoredSystemLedgerEntry {
   name: string;
   type: string;
   status: string; // "online" | "offline" | "unknown"
   last_seen: string; // RFC3339 or empty
   source: string;
+  explanation: MonitoredSystemLedgerExplanation;
 }
 
 export interface MonitoredSystemLedgerResponse {

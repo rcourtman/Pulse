@@ -196,6 +196,11 @@ decode-only compatibility inputs at the storage or grant boundary. Runtime
 enforcement, entitlement payload `current` usage, checkout/activation flows,
 and upgrade messaging must all treat the cap as deduped top-level monitored
 systems across agent, API, and Kubernetes views.
+The monitored-system ledger settings surface now also has to explain those
+count decisions. Commercial usage UI may show grouped monitored systems, but
+it must render the canonical backend explanation for why one or more
+top-level views counted as a single monitored system instead of inventing
+support copy or merge heuristics in the frontend.
 Frontend billing/admin surfaces must not synthesize `plan_version` from
 subscription lifecycle state. When a hosted billing record lacks a plan label,
 the UI must preserve that absence instead of fabricating values like `active`

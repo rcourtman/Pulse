@@ -598,6 +598,7 @@ func TestTopLevelSystemResolverPinsCanonicalInfrastructureCounting(t *testing.T)
 		filepath.Join(".", "top_level_systems.go"): {
 			"ResolveTopLevelSystems(resources []Resource) TopLevelSystemResolver",
 			"match.Confidence < HighConfidenceThreshold",
+			"topLevelSystemGroupingExplanation(",
 			"monitoredSystemCandidateAllowsHostAttachment(candidate)",
 			"When adding a new top-level monitored-system source, update:",
 		},

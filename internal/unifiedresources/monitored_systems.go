@@ -18,14 +18,39 @@ type MonitoredSystemCandidate struct {
 	ResourceID string
 }
 
+// MonitoredSystemGroupingExplanation explains why Pulse counted one or more
+// top-level collection paths as a single monitored system.
+type MonitoredSystemGroupingExplanation struct {
+	Summary  string
+	Reasons  []MonitoredSystemGroupingReason
+	Surfaces []MonitoredSystemGroupingSurface
+}
+
+// MonitoredSystemGroupingReason captures one canonical signal that contributed
+// to a top-level monitored-system grouping decision.
+type MonitoredSystemGroupingReason struct {
+	Kind    string
+	Signal  string
+	Summary string
+}
+
+// MonitoredSystemGroupingSurface describes one counted top-level collection
+// path included in a monitored-system group.
+type MonitoredSystemGroupingSurface struct {
+	Name   string
+	Type   string
+	Source string
+}
+
 // MonitoredSystemRecord describes a counted top-level monitored system after
 // canonical cross-view deduplication.
 type MonitoredSystemRecord struct {
-	Name     string
-	Type     string
-	Status   ResourceStatus
-	LastSeen time.Time
-	Source   string
+	Name        string
+	Type        string
+	Status      ResourceStatus
+	LastSeen    time.Time
+	Source      string
+	Explanation MonitoredSystemGroupingExplanation
 }
 
 // MonitoredSystemCount returns the number of top-level monitored systems after
@@ -61,8 +86,9 @@ func HasMatchingMonitoredSystem(rs ReadState, candidate MonitoredSystemCandidate
 }
 
 type monitoredSystemGroup struct {
-	keys      map[string]struct{}
-	resources []*Resource
+	keys        map[string]struct{}
+	resources   []*Resource
+	explanation MonitoredSystemGroupingExplanation
 }
 
 func monitoredSystemGroups(rs ReadState) []monitoredSystemGroup {
@@ -70,8 +96,9 @@ func monitoredSystemGroups(rs ReadState) []monitoredSystemGroup {
 	groups := make([]monitoredSystemGroup, 0, len(resolver.groups))
 	for _, group := range resolver.groups {
 		groups = append(groups, monitoredSystemGroup{
-			keys:      cloneStringSet(group.strongIDs),
-			resources: group.resources,
+			keys:        cloneStringSet(group.strongIDs),
+			resources:   group.resources,
+			explanation: group.explanation,
 		})
 	}
 	return groups
@@ -126,11 +153,12 @@ func resolveMonitoredSystemTopLevelSystems(rs ReadState) TopLevelSystemResolver 
 func monitoredSystemRecord(group monitoredSystemGroup) MonitoredSystemRecord {
 	resource := preferredMonitoredSystemResource(group.resources)
 	record := MonitoredSystemRecord{
-		Name:     monitoredSystemDisplayName(group.resources, resource),
-		Type:     monitoredSystemType(resource),
-		Status:   monitoredSystemStatus(group.resources),
-		LastSeen: monitoredSystemLastSeen(group.resources),
-		Source:   monitoredSystemSource(group.resources),
+		Name:        monitoredSystemDisplayName(group.resources, resource),
+		Type:        monitoredSystemType(resource),
+		Status:      monitoredSystemStatus(group.resources),
+		LastSeen:    monitoredSystemLastSeen(group.resources),
+		Source:      monitoredSystemSource(group.resources),
+		Explanation: normalizeMonitoredSystemGroupingExplanation(group.explanation),
 	}
 	if record.Name == "" {
 		record.Name = "Unnamed system"
@@ -144,7 +172,127 @@ func monitoredSystemRecord(group monitoredSystemGroup) MonitoredSystemRecord {
 	if record.Source == "" {
 		record.Source = "unknown"
 	}
+	if record.Explanation.Summary == "" {
+		record.Explanation = monitoredSystemStandaloneExplanation(group.resources)
+	}
 	return record
+}
+
+func normalizeMonitoredSystemGroupingExplanation(
+	explanation MonitoredSystemGroupingExplanation,
+) MonitoredSystemGroupingExplanation {
+	if explanation.Reasons == nil {
+		explanation.Reasons = []MonitoredSystemGroupingReason{}
+	}
+	if explanation.Surfaces == nil {
+		explanation.Surfaces = []MonitoredSystemGroupingSurface{}
+	}
+	return explanation
+}
+
+func monitoredSystemStandaloneExplanation(resources []*Resource) MonitoredSystemGroupingExplanation {
+	surfaces := monitoredSystemGroupingSurfaces(resources)
+	resource := preferredMonitoredSystemResource(resources)
+	source := monitoredSystemPrimarySource(resource)
+	if source == "" {
+		source = "unknown"
+	}
+
+	return normalizeMonitoredSystemGroupingExplanation(MonitoredSystemGroupingExplanation{
+		Summary: "Counts as one monitored system because Pulse sees one top-level " +
+			monitoredSystemGroupingTypeLabel(monitoredSystemType(resource)) +
+			" view from " + monitoredSystemGroupingSourceLabel(source) + ".",
+		Reasons: []MonitoredSystemGroupingReason{
+			{
+				Kind:    "standalone",
+				Signal:  "single-top-level-view",
+				Summary: "No overlapping top-level source matched this system.",
+			},
+		},
+		Surfaces: surfaces,
+	})
+}
+
+func monitoredSystemGroupingSurfaces(resources []*Resource) []MonitoredSystemGroupingSurface {
+	surfaces := make([]MonitoredSystemGroupingSurface, 0, len(resources))
+	for _, resource := range resources {
+		if resource == nil {
+			continue
+		}
+
+		name := monitoredSystemResourceDisplayName(resource)
+		if name == "" {
+			name = strings.TrimSpace(resource.ID)
+		}
+		if name == "" {
+			name = "Unnamed source"
+		}
+
+		resourceType := monitoredSystemType(resource)
+		if resourceType == "" {
+			resourceType = "system"
+		}
+
+		source := monitoredSystemPrimarySource(resource)
+		if source == "" {
+			source = "unknown"
+		}
+
+		surfaces = append(surfaces, MonitoredSystemGroupingSurface{
+			Name:   name,
+			Type:   resourceType,
+			Source: source,
+		})
+	}
+
+	sort.Slice(surfaces, func(i, j int) bool {
+		if surfaces[i].Name != surfaces[j].Name {
+			return surfaces[i].Name < surfaces[j].Name
+		}
+		if surfaces[i].Type != surfaces[j].Type {
+			return surfaces[i].Type < surfaces[j].Type
+		}
+		return surfaces[i].Source < surfaces[j].Source
+	})
+
+	if surfaces == nil {
+		return []MonitoredSystemGroupingSurface{}
+	}
+	return surfaces
+}
+
+func monitoredSystemGroupingTypeLabel(value string) string {
+	switch strings.TrimSpace(value) {
+	case "docker-host":
+		return "Docker host"
+	case "host":
+		return "host"
+	case "kubernetes-cluster":
+		return "Kubernetes cluster"
+	case "pbs-server":
+		return "PBS server"
+	case "pmg-server":
+		return "PMG server"
+	case "proxmox-node":
+		return "Proxmox node"
+	case "truenas-system":
+		return "TrueNAS system"
+	}
+	if trimmed := strings.TrimSpace(value); trimmed != "" {
+		return strings.ReplaceAll(trimmed, "-", " ")
+	}
+	return "system"
+}
+
+func monitoredSystemGroupingSourceLabel(value string) string {
+	switch strings.TrimSpace(value) {
+	case "":
+		return "an unknown source"
+	case "multiple":
+		return "multiple sources"
+	default:
+		return strings.TrimSpace(value)
+	}
 }
 
 func preferredMonitoredSystemResource(resources []*Resource) *Resource {

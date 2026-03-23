@@ -15,6 +15,15 @@ func TestMonitoredSystemLedgerEntryTypes(t *testing.T) {
 		Status:   "online",
 		LastSeen: "2025-01-01T00:00:00Z",
 		Source:   "agent",
+		Explanation: MonitoredSystemLedgerExplanation{
+			Summary: "Counts as one monitored system because Pulse sees one top-level host view from agent.",
+			Reasons: []MonitoredSystemLedgerExplanationReason{
+				{Kind: "standalone", Signal: "single-top-level-view", Summary: "No overlapping top-level source matched this system."},
+			},
+			Surfaces: []MonitoredSystemLedgerExplanationSurface{
+				{Name: "server-1", Type: "host", Source: "agent"},
+			},
+		},
 	}
 	data, err := json.Marshal(entry)
 	if err != nil {
@@ -29,6 +38,9 @@ func TestMonitoredSystemLedgerEntryTypes(t *testing.T) {
 	}
 	if decoded.Source != "agent" {
 		t.Errorf("source mismatch: got %q", decoded.Source)
+	}
+	if decoded.Explanation.Summary == "" || len(decoded.Explanation.Reasons) != 1 || len(decoded.Explanation.Surfaces) != 1 {
+		t.Errorf("explanation mismatch: %+v", decoded.Explanation)
 	}
 }
 
@@ -99,13 +111,44 @@ func TestMonitoredSystemLedgerNilSystemsBecomesEmptyArray(t *testing.T) {
 	}
 }
 
+func TestMonitoredSystemLedgerEntryNormalizeCollections(t *testing.T) {
+	entry := MonitoredSystemLedgerEntry{
+		Name: "server-1",
+		Explanation: MonitoredSystemLedgerExplanation{
+			Summary: "Counts as one monitored system because Pulse sees one top-level host view from agent.",
+		},
+	}.NormalizeCollections()
+
+	if entry.Explanation.Reasons == nil {
+		t.Fatal("expected explanation reasons to normalize to an empty slice")
+	}
+	if entry.Explanation.Surfaces == nil {
+		t.Fatal("expected explanation surfaces to normalize to an empty slice")
+	}
+}
+
 func TestHandleMonitoredSystemLedgerHTTP(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/license/monitored-system-ledger", nil)
 	rec := httptest.NewRecorder()
 
 	resp := MonitoredSystemLedgerResponse{
 		Systems: []MonitoredSystemLedgerEntry{
-			{Name: "test-host", Type: "host", Status: "online", LastSeen: "2025-01-01T00:00:00Z", Source: "agent"},
+			{
+				Name:     "test-host",
+				Type:     "host",
+				Status:   "online",
+				LastSeen: "2025-01-01T00:00:00Z",
+				Source:   "agent",
+				Explanation: MonitoredSystemLedgerExplanation{
+					Summary: "Counts as one monitored system because Pulse sees one top-level host view from agent.",
+					Reasons: []MonitoredSystemLedgerExplanationReason{
+						{Kind: "standalone", Signal: "single-top-level-view", Summary: "No overlapping top-level source matched this system."},
+					},
+					Surfaces: []MonitoredSystemLedgerExplanationSurface{
+						{Name: "test-host", Type: "host", Source: "agent"},
+					},
+				},
+			},
 		},
 		Total: 1,
 		Limit: 5,
@@ -129,5 +172,8 @@ func TestHandleMonitoredSystemLedgerHTTP(t *testing.T) {
 	}
 	if decoded.Systems[0].Name != "test-host" || decoded.Systems[0].Type != "host" {
 		t.Errorf("unexpected system: %+v", decoded.Systems[0])
+	}
+	if decoded.Systems[0].Explanation.Summary == "" {
+		t.Errorf("expected explanation summary, got %+v", decoded.Systems[0].Explanation)
 	}
 }

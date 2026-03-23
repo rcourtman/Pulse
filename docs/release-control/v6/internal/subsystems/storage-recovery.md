@@ -142,6 +142,11 @@ as adjacent governed API ownership rather than timeline-store ownership. The
 storage and recovery lanes still own their own persistence and query
 contracts, while the control-plane execution trail remains governed by the
 unified-resource and audit contracts.
+That same shared `internal/api/` dependency now also includes monitored-system
+ledger explanation reads: storage- and recovery-adjacent surfaces may coexist
+with counted monitored-system inventory, but any support-facing count
+reasoning must come from the canonical unified-resource grouping explanation
+payload rather than from storage or recovery heuristics.
 The same API resource serializer also refreshes canonical identity and policy
 metadata through the shared unified-resource helper before it writes resource
 payloads, so storage and recovery links inherit the same canonical metadata

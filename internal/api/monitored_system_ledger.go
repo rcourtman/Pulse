@@ -13,11 +13,30 @@ import (
 // MonitoredSystemLedgerEntry represents a single counted top-level monitored
 // system.
 type MonitoredSystemLedgerEntry struct {
-	Name     string `json:"name"`
-	Type     string `json:"type"`
-	Status   string `json:"status"`    // "online", "offline", "unknown"
-	LastSeen string `json:"last_seen"` // RFC3339 or empty
-	Source   string `json:"source"`
+	Name        string                           `json:"name"`
+	Type        string                           `json:"type"`
+	Status      string                           `json:"status"`    // "online", "offline", "unknown"
+	LastSeen    string                           `json:"last_seen"` // RFC3339 or empty
+	Source      string                           `json:"source"`
+	Explanation MonitoredSystemLedgerExplanation `json:"explanation"`
+}
+
+type MonitoredSystemLedgerExplanation struct {
+	Summary  string                                    `json:"summary"`
+	Reasons  []MonitoredSystemLedgerExplanationReason  `json:"reasons"`
+	Surfaces []MonitoredSystemLedgerExplanationSurface `json:"surfaces"`
+}
+
+type MonitoredSystemLedgerExplanationReason struct {
+	Kind    string `json:"kind"`
+	Signal  string `json:"signal"`
+	Summary string `json:"summary"`
+}
+
+type MonitoredSystemLedgerExplanationSurface struct {
+	Name   string `json:"name"`
+	Type   string `json:"type"`
+	Source string `json:"source"`
 }
 
 // MonitoredSystemLedgerResponse is the response for GET /api/license/monitored-system-ledger.
@@ -35,7 +54,20 @@ func (r MonitoredSystemLedgerResponse) NormalizeCollections() MonitoredSystemLed
 	if r.Systems == nil {
 		r.Systems = []MonitoredSystemLedgerEntry{}
 	}
+	for i := range r.Systems {
+		r.Systems[i] = r.Systems[i].NormalizeCollections()
+	}
 	return r
+}
+
+func (e MonitoredSystemLedgerEntry) NormalizeCollections() MonitoredSystemLedgerEntry {
+	if e.Explanation.Reasons == nil {
+		e.Explanation.Reasons = []MonitoredSystemLedgerExplanationReason{}
+	}
+	if e.Explanation.Surfaces == nil {
+		e.Explanation.Surfaces = []MonitoredSystemLedgerExplanationSurface{}
+	}
+	return e
 }
 
 func (r *Router) handleMonitoredSystemLedger(w http.ResponseWriter, req *http.Request) {
@@ -66,11 +98,12 @@ func (r *Router) handleMonitoredSystemLedger(w http.ResponseWriter, req *http.Re
 	entries := make([]MonitoredSystemLedgerEntry, 0, len(systems))
 	for _, system := range systems {
 		entries = append(entries, MonitoredSystemLedgerEntry{
-			Name:     system.Name,
-			Type:     system.Type,
-			Status:   normalizeStatus(string(system.Status)),
-			LastSeen: formatLastSeen(system.LastSeen),
-			Source:   system.Source,
+			Name:        system.Name,
+			Type:        system.Type,
+			Status:      normalizeStatus(string(system.Status)),
+			LastSeen:    formatLastSeen(system.LastSeen),
+			Source:      system.Source,
+			Explanation: monitoredSystemLedgerExplanation(system.Explanation),
 		})
 	}
 
@@ -103,4 +136,32 @@ func formatLastSeen(t time.Time) string {
 		return ""
 	}
 	return t.UTC().Format(time.RFC3339)
+}
+
+func monitoredSystemLedgerExplanation(
+	explanation unifiedresources.MonitoredSystemGroupingExplanation,
+) MonitoredSystemLedgerExplanation {
+	reasons := make([]MonitoredSystemLedgerExplanationReason, 0, len(explanation.Reasons))
+	for _, reason := range explanation.Reasons {
+		reasons = append(reasons, MonitoredSystemLedgerExplanationReason{
+			Kind:    reason.Kind,
+			Signal:  reason.Signal,
+			Summary: reason.Summary,
+		})
+	}
+
+	surfaces := make([]MonitoredSystemLedgerExplanationSurface, 0, len(explanation.Surfaces))
+	for _, surface := range explanation.Surfaces {
+		surfaces = append(surfaces, MonitoredSystemLedgerExplanationSurface{
+			Name:   surface.Name,
+			Type:   surface.Type,
+			Source: surface.Source,
+		})
+	}
+
+	return MonitoredSystemLedgerExplanation{
+		Summary:  explanation.Summary,
+		Reasons:  reasons,
+		Surfaces: surfaces,
+	}
 }

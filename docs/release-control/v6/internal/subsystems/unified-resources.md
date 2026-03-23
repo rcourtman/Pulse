@@ -164,6 +164,13 @@ underlying host's monitored-system identity. The canonical resolver coverage
 is pinned by an explicit top-level source matrix and mixed-environment
 characterization tests so new top-level sources cannot quietly bypass the
 counting contract.
+That same resolver now also owns monitored-system grouping explanations. When
+one counted system includes multiple top-level collection paths, the resolver
+must record the actual canonical merge evidence it used, expose sanitized
+grouping reasons plus included top-level surfaces, and fall back to an
+explicit standalone explanation when no cross-source merge occurred. Support
+and billing surfaces must consume that shared explanation contract instead of
+reconstructing count reasons from API-local heuristics.
 
 The unified-resource runtime now also owns the durable change timeline for the
 canonical resource view. `internal/unifiedresources/monitor_adapter.go` feeds
