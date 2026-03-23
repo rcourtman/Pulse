@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import calloutCardSource from '@/components/shared/CalloutCard.tsx?raw';
 import containerUpdateBadgeSource from '@/components/shared/ContainerUpdateBadge.tsx?raw';
 import containerUpdateBadgeModelSource from '@/components/shared/containerUpdateBadgeModel.ts?raw';
+import densityMapSource from '@/components/shared/DensityMap.tsx?raw';
+import densityMapModelSource from '@/components/shared/densityMapModel.ts?raw';
 import filterButtonGroupSource from '@/components/shared/FilterButtonGroup.tsx?raw';
 import helpIconSource from '@/components/shared/HelpIcon.tsx?raw';
 import helpIconModelSource from '@/components/shared/helpIconModel.ts?raw';
@@ -17,6 +19,7 @@ import monitoredSystemLimitWarningBannerSource from '@/components/shared/Monitor
 import selectionCardGroupSource from '@/components/shared/SelectionCardGroup.tsx?raw';
 import tagBadgesSource from '@/components/shared/TagBadges.tsx?raw';
 import containerUpdateButtonStateSource from '@/components/shared/useContainerUpdateButtonState.ts?raw';
+import densityMapStateSource from '@/components/shared/useDensityMapState.ts?raw';
 import helpIconStateSource from '@/components/shared/useHelpIconState.ts?raw';
 import historyChartStateSource from '@/components/shared/useHistoryChartState.ts?raw';
 import interactiveSparklineStateSource from '@/components/shared/useInteractiveSparklineState.ts?raw';
@@ -171,6 +174,23 @@ describe('shared primitive guardrails', () => {
     expect(interactiveSparklineModelSource).toContain('computeInteractiveSparklineHoverState');
     expect(interactiveSparklineModelSource).toContain('downsampleLTTB');
     expect(interactiveSparklineModelSource).toContain('findNearestMetricPoint');
+  });
+
+  it('keeps density map on shell, runtime, and model owners', () => {
+    expect(densityMapSource).toContain('useDensityMapState');
+    expect(densityMapSource).not.toContain('timeRangeToMs');
+    expect(densityMapSource).not.toContain('createSignal');
+    expect(densityMapSource).not.toContain('ctx.fillRect');
+
+    expect(densityMapStateSource).toContain('export function useDensityMapState');
+    expect(densityMapStateSource).toContain('createSignal');
+    expect(densityMapStateSource).toContain('canvas.getContext');
+    expect(densityMapStateSource).toContain('window.addEventListener');
+
+    expect(densityMapModelSource).toContain('buildDensityMapChartData');
+    expect(densityMapModelSource).toContain('buildDensityMapHoveredState');
+    expect(densityMapModelSource).toContain('formatDensityMapHoverTime');
+    expect(densityMapModelSource).toContain('getDensityMapCellOpacity');
   });
 
   it('keeps history chart on shell, runtime, and model owners', () => {

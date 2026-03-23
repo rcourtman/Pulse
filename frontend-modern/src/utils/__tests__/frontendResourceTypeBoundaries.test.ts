@@ -10,6 +10,8 @@ import alertTargetTypesSource from '@/utils/alertTargetTypes.ts?raw';
 import resourceBadgesSource from '@/components/Infrastructure/resourceBadges.ts?raw';
 import containerUpdateBadgeSource from '@/components/shared/ContainerUpdateBadge.tsx?raw';
 import containerUpdateBadgeModelSource from '@/components/shared/containerUpdateBadgeModel.ts?raw';
+import densityMapSource from '@/components/shared/DensityMap.tsx?raw';
+import densityMapModelSource from '@/components/shared/densityMapModel.ts?raw';
 import helpIconSource from '@/components/shared/HelpIcon.tsx?raw';
 import helpIconModelSource from '@/components/shared/helpIconModel.ts?raw';
 import historyChartSource from '@/components/shared/HistoryChart.tsx?raw';
@@ -28,6 +30,7 @@ import resourceBadgePresentationSource from '@/utils/resourceBadgePresentation.t
 import workloadTypeBadgesSource from '@/components/shared/workloadTypeBadges.ts?raw';
 import tagBadgesSource from '@/components/shared/TagBadges.tsx?raw';
 import emptyStateSource from '@/components/shared/EmptyState.tsx?raw';
+import densityMapStateSource from '@/components/shared/useDensityMapState.ts?raw';
 import webInterfaceUrlFieldSource from '@/components/shared/WebInterfaceUrlField.tsx?raw';
 import webInterfaceUrlFieldModelSource from '@/components/shared/webInterfaceUrlFieldModel.ts?raw';
 import webInterfaceUrlFieldStateSource from '@/components/shared/useWebInterfaceUrlFieldState.ts?raw';
@@ -2645,6 +2648,17 @@ describe('frontend resource type boundaries', () => {
     expect(interactiveSparklineModelSource).toContain(
       'computeInteractiveSparklineHoverState',
     );
+    expect(densityMapSource).toContain('useDensityMapState');
+    expect(densityMapSource).not.toContain('timeRangeToMs');
+    expect(densityMapSource).not.toContain('createSignal');
+    expect(densityMapSource).not.toContain('ctx.fillRect');
+    expect(densityMapStateSource).toContain('createSignal');
+    expect(densityMapStateSource).toContain('canvas.getContext');
+    expect(densityMapStateSource).toContain('window.addEventListener');
+    expect(densityMapModelSource).toContain('buildDensityMapChartData');
+    expect(densityMapModelSource).toContain('buildDensityMapHoveredState');
+    expect(densityMapModelSource).toContain('formatDensityMapHoverTime');
+    expect(densityMapModelSource).toContain('getDensityMapCellOpacity');
     expect(historyChartSource).toContain('useHistoryChartState');
     expect(historyChartSource).not.toContain('ChartsAPI.getMetricsHistory');
     expect(historyChartSource).not.toContain('calculateOptimalPoints');

@@ -187,6 +187,14 @@ and `frontend-modern/src/components/shared/interactiveSparklineModel.ts` owns
 sparkline downsampling, gap segmentation, axis-tick math, and hover-selection
 policy. Future sparkline work should extend those owners instead of pushing
 canvas scheduling or chart-shape math back into the shared component shell.
+The shared density map now follows that same owner split.
+`frontend-modern/src/components/shared/DensityMap.tsx` stays the render shell,
+`frontend-modern/src/components/shared/useDensityMapState.ts` owns hover
+signals, canvas draw lifecycle, and resize handling, and
+`frontend-modern/src/components/shared/densityMapModel.ts` owns bucket/window
+math, hover target selection, tooltip time formatting, and density-cell
+opacity rules. Future density-map work should extend those owners instead of
+pushing canvas lifecycle or chart math back into the shared shell.
 The shared history chart now follows the same owner shape.
 `frontend-modern/src/components/shared/HistoryChart.tsx` stays the render
 shell, `frontend-modern/src/components/shared/useHistoryChartState.ts` owns
