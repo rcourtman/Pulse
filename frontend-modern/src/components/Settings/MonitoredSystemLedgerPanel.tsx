@@ -195,6 +195,13 @@ export function MonitoredSystemLedgerPanel(props: MonitoredSystemLedgerPanelProp
                                 <p class="whitespace-normal text-base-content">
                                   {statusExplanation.summary}
                                 </p>
+                                <Show when={latestSignal}>
+                                  {(signal) => (
+                                    <p class="whitespace-normal text-base-content">
+                                      Latest included signal: {signal().attribution}, reported {signal().relative}.
+                                    </p>
+                                  )}
+                                </Show>
                                 <Show when={statusExplanation.reasons.length > 0}>
                                   <ul class="space-y-1 whitespace-normal text-base-content">
                                     <For each={statusExplanation.reasons}>

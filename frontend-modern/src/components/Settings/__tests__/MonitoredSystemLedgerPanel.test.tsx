@@ -266,6 +266,11 @@ describe('MonitoredSystemLedgerPanel', () => {
     ).toBeInTheDocument();
     expect(
       screen.getByText(
+        'Latest included signal: server-b (PBS Server via PBS), reported 2026-01-02T00:00:00Z.',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
         'PBS data for server-b is offline or disconnected (last reported 2026-01-01T23:55:00Z).',
       ),
     ).toBeInTheDocument();

@@ -229,7 +229,10 @@ with single-source `Last Seen` wording. When the canonical object is present,
 the surface should use its source/name/type attribution instead of showing an
 unqualified aggregate timestamp, and that attribution should stay
 customer-facing rather than exposing raw monitored-system type/source slugs in
-the settings table or included-surface details.
+the settings table or included-surface details. When the row expands to show
+status reasoning, it should also restate the freshest included surface and
+timestamp there so a degraded reason and a fresher grouped signal remain
+readable together.
 Frontend billing/admin surfaces must not synthesize `plan_version` from
 subscription lifecycle state. When a hosted billing record lacks a plan label,
 the UI must preserve that absence instead of fabricating values like `active`
