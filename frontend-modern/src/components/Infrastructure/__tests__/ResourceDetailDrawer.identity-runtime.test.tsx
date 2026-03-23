@@ -142,9 +142,9 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
       () => <ResourceDetailDrawer resource={baseResource({})} />,
     );
 
-    expect(queryByRole('button', { name: 'Discovery' })).toBeNull();
-    expect(getByText('Discovery')).toBeInTheDocument();
-    expect(queryByText('Host discovery via host-1')).toBeNull();
+    expect(queryByRole('button', { name: 'Analysis' })).toBeNull();
+    expect(getByText('Analysis')).toBeInTheDocument();
+    expect(queryByText('Host analysis via host-1')).toBeNull();
     expect(
       queryByText('Supporting metadata only. The web interface path above stays primary.'),
     ).toBeNull();
@@ -155,9 +155,9 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
       ),
     ).toBeNull();
 
-    expect(getByRole('button', { name: 'Open discovery' })).toBeInTheDocument();
+    expect(getByRole('button', { name: 'Open analysis' })).toBeInTheDocument();
 
-    fireEvent.click(getByRole('button', { name: 'Open discovery' }));
+    fireEvent.click(getByRole('button', { name: 'Open analysis' }));
 
     await waitFor(() => {
       expect(queryByTestId('discovery-tab')).toBeInTheDocument();

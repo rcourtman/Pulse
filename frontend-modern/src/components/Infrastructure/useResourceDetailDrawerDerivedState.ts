@@ -240,8 +240,8 @@ export const useResourceDetailDrawerDerivedState = (
 
     const discoveryMode =
       config.resourceType === 'agent'
-        ? 'Host discovery'
-        : `${formatIdentifierLabel(config.resourceType)} discovery`;
+        ? 'Host analysis'
+        : `${formatIdentifierLabel(config.resourceType)} analysis`;
 
     return config.hostname ? `${discoveryMode} via ${config.hostname}` : discoveryMode;
   });

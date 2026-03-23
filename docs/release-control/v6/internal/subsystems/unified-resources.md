@@ -434,7 +434,7 @@ Inside that summary, the operational and supporting context rows stay inline
 instead of sitting in a collapsed `Details` disclosure or nested bordered
 cards, so the first read stays like one linear sheet rather than a stack of
 cards inside the summary.
-Discovery support now also lives inside an overview-only `Discovery`
+Discovery support now also lives inside an overview-only `Analysis`
 instead of a peer drawer tab, so supplemental discovery detail stays available
 without claiming the same navigation weight as runtime, identity, or
 service-specific operational views.
@@ -443,8 +443,8 @@ an on-demand metadata panel, so the actionable web-interface path stays primary
 while deeper discovery inspection remains available without reading like a
 second peer overview surface.
 For ordinary host discovery, that support row now stays even quieter: the
-surface is titled `Discovery`, and the collapsed state does not repeat a
-baseline `Host discovery via <hostname>` summary when the discovery target is
+surface is titled `Analysis`, and the collapsed state does not repeat a
+baseline `Host analysis via <hostname>` summary when the discovery target is
 just the same host identity already shown elsewhere in the drawer.
 The discovery metadata panel now expands directly under the outer support
 disclosure instead of nesting a second bordered card, so the support surface
