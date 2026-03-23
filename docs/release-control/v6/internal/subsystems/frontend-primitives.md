@@ -294,6 +294,14 @@ and `frontend-modern/src/components/shared/searchInputModel.ts` owns the shared
 search-input contract plus shortcut-hint and trailing-control policy. Future
 search-input work should extend those owners instead of pushing type-to-search
 or enhancement wiring back into the shared shell.
+The shared search tips popover now follows that same owner split.
+`frontend-modern/src/components/shared/SearchTipsPopover.tsx` stays the render
+shell, `frontend-modern/src/components/shared/useSearchTipsPopoverState.ts`
+owns open-state, pointer/focus continuity, and outside-click/Escape listener
+runtime, and `frontend-modern/src/components/shared/searchTipsPopoverModel.ts`
+owns trigger variant, label/id defaults, hover policy, and trigger/popover
+class selection. Future search-tips work should extend those owners instead of
+pushing listener lifecycle or trigger policy back into the shared shell.
 The shared tooltip now follows that same owner split.
 `frontend-modern/src/components/shared/Tooltip.tsx` stays the render shell and
 singleton API boundary, `frontend-modern/src/components/shared/useTooltipState.ts`

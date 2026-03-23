@@ -29,6 +29,8 @@ import searchFieldSource from '@/components/shared/SearchField.tsx?raw';
 import searchFieldModelSource from '@/components/shared/searchFieldModel.ts?raw';
 import searchInputSource from '@/components/shared/SearchInput.tsx?raw';
 import searchInputModelSource from '@/components/shared/searchInputModel.ts?raw';
+import searchTipsPopoverSource from '@/components/shared/SearchTipsPopover.tsx?raw';
+import searchTipsPopoverModelSource from '@/components/shared/searchTipsPopoverModel.ts?raw';
 import tooltipSource from '@/components/shared/Tooltip.tsx?raw';
 import tooltipModelSource from '@/components/shared/tooltipModel.ts?raw';
 import interactiveSparklineSource from '@/components/shared/InteractiveSparkline.tsx?raw';
@@ -54,6 +56,7 @@ import infrastructureSelectorStateSource from '@/components/shared/useInfrastruc
 import pulseDataGridStateSource from '@/components/shared/usePulseDataGridState.ts?raw';
 import searchFieldStateSource from '@/components/shared/useSearchFieldState.ts?raw';
 import searchInputStateSource from '@/components/shared/useSearchInputState.ts?raw';
+import searchTipsPopoverStateSource from '@/components/shared/useSearchTipsPopoverState.ts?raw';
 import tooltipStateSource from '@/components/shared/useTooltipState.ts?raw';
 import interactiveSparklineStateSource from '@/components/shared/useInteractiveSparklineState.ts?raw';
 import webInterfaceUrlFieldSource from '@/components/shared/WebInterfaceUrlField.tsx?raw';
@@ -488,6 +491,26 @@ describe('shared primitive guardrails', () => {
     expect(searchInputModelSource).toContain('getSearchInputShortcutHint');
     expect(searchInputModelSource).toContain('shouldSearchInputShowTrailingControls');
     expect(searchInputModelSource).toContain('export interface SearchInputProps');
+  });
+
+  it('keeps search tips popover on shell, runtime, and model owners', () => {
+    expect(searchTipsPopoverSource).toContain('useSearchTipsPopoverState');
+    expect(searchTipsPopoverSource).toContain('getSearchTipsPopoverTriggerClass');
+    expect(searchTipsPopoverSource).not.toContain('createSignal');
+    expect(searchTipsPopoverSource).not.toContain('createEffect');
+    expect(searchTipsPopoverSource).not.toContain('window.addEventListener');
+    expect(searchTipsPopoverSource).not.toContain('triggerVariant ===');
+
+    expect(searchTipsPopoverStateSource).toContain('export function useSearchTipsPopoverState');
+    expect(searchTipsPopoverStateSource).toContain('createSignal');
+    expect(searchTipsPopoverStateSource).toContain('createEffect');
+    expect(searchTipsPopoverStateSource).toContain('window.addEventListener');
+    expect(searchTipsPopoverStateSource).toContain('pointerInside');
+
+    expect(searchTipsPopoverModelSource).toContain('getSearchTipsPopoverTriggerClass');
+    expect(searchTipsPopoverModelSource).toContain('getSearchTipsPopoverPositionClass');
+    expect(searchTipsPopoverModelSource).toContain('getSearchTipsPopoverTriggerVariant');
+    expect(searchTipsPopoverModelSource).toContain('shouldSearchTipsPopoverOpenOnHover');
   });
 
   it('keeps tooltip on shell, runtime, and model owners', () => {
