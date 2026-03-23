@@ -193,7 +193,7 @@ func monitoredSystemRecord(group monitoredSystemGroup) MonitoredSystemRecord {
 	}
 	record.StatusExplanation = normalizeMonitoredSystemStatusExplanation(record.StatusExplanation)
 	if record.StatusExplanation.Summary == "" {
-		record.StatusExplanation.Summary = monitoredSystemStatusSummary(record.Status, record.StatusExplanation.Reasons)
+		record.StatusExplanation.Summary = monitoredSystemStatusSummary(group.resources, record.Status, record.StatusExplanation.Reasons)
 	}
 	if record.Source == "" {
 		record.Source = "unknown"
@@ -453,7 +453,7 @@ func monitoredSystemStatusExplanation(
 ) MonitoredSystemStatusExplanation {
 	reasons := monitoredSystemStatusReasons(resources)
 	return normalizeMonitoredSystemStatusExplanation(MonitoredSystemStatusExplanation{
-		Summary: monitoredSystemStatusSummary(status, reasons),
+		Summary: monitoredSystemStatusSummary(resources, status, reasons),
 		Reasons: reasons,
 	})
 }
@@ -569,7 +569,15 @@ func normalizeMonitoredSystemSourceStatus(status string) string {
 	}
 }
 
-func monitoredSystemStatusSummary(status ResourceStatus, reasons []MonitoredSystemStatusReason) string {
+func monitoredSystemStatusSummary(
+	resources []*Resource,
+	status ResourceStatus,
+	reasons []MonitoredSystemStatusReason,
+) string {
+	if summary := monitoredSystemMixedStateStatusSummary(resources, status, reasons); summary != "" {
+		return summary
+	}
+
 	switch status {
 	case StatusOnline:
 		return "All included top-level collection paths currently report online status."
@@ -589,6 +597,38 @@ func monitoredSystemStatusSummary(status ResourceStatus, reasons []MonitoredSyst
 	}
 }
 
+type monitoredSystemLatestObservation struct {
+	Name     string
+	Source   string
+	LastSeen time.Time
+}
+
+func monitoredSystemMixedStateStatusSummary(
+	resources []*Resource,
+	status ResourceStatus,
+	reasons []MonitoredSystemStatusReason,
+) string {
+	if len(reasons) == 0 || (status != StatusWarning && status != StatusOffline) {
+		return ""
+	}
+
+	degraded := reasons[0]
+	if degraded.LastSeen.IsZero() {
+		return ""
+	}
+
+	latest := monitoredSystemLatestOnlineObservation(resources)
+	if latest.LastSeen.IsZero() || !latest.LastSeen.After(degraded.LastSeen) {
+		return ""
+	}
+
+	return "Pulse most recently heard from " +
+		monitoredSystemStatusSourceLabel(latest.Source) + " for " + latest.Name +
+		" at " + latest.LastSeen.UTC().Format(time.RFC3339) +
+		", but " + monitoredSystemStatusReasonClause(degraded) +
+		", so this monitored system is " + string(status) + "."
+}
+
 func monitoredSystemHasReasonStatus(reasons []MonitoredSystemStatusReason, status string) bool {
 	for _, reason := range reasons {
 		if reason.Status == status {
@@ -596,6 +636,53 @@ func monitoredSystemHasReasonStatus(reasons []MonitoredSystemStatusReason, statu
 		}
 	}
 	return false
+}
+
+func monitoredSystemLatestOnlineObservation(resources []*Resource) monitoredSystemLatestObservation {
+	var latest monitoredSystemLatestObservation
+	for _, resource := range resources {
+		if resource == nil {
+			continue
+		}
+
+		name := monitoredSystemResourceDisplayName(resource)
+		if name == "" {
+			name = "Unnamed source"
+		}
+
+		if len(resource.SourceStatus) > 0 {
+			sourceKeys := make([]DataSource, 0, len(resource.SourceStatus))
+			for source := range resource.SourceStatus {
+				sourceKeys = append(sourceKeys, source)
+			}
+			sort.Slice(sourceKeys, func(i, j int) bool {
+				return sourceKeys[i] < sourceKeys[j]
+			})
+			for _, source := range sourceKeys {
+				sourceStatus := resource.SourceStatus[source]
+				if normalizeMonitoredSystemSourceStatus(sourceStatus.Status) != "online" {
+					continue
+				}
+				if latest.LastSeen.IsZero() || sourceStatus.LastSeen.After(latest.LastSeen) {
+					latest = monitoredSystemLatestObservation{
+						Name:     name,
+						Source:   string(source),
+						LastSeen: sourceStatus.LastSeen,
+					}
+				}
+			}
+		}
+
+		if normalizeMonitoredSystemSourceStatus(string(resource.Status)) == "online" &&
+			(latest.LastSeen.IsZero() || resource.LastSeen.After(latest.LastSeen)) {
+			latest = monitoredSystemLatestObservation{
+				Name:     name,
+				Source:   monitoredSystemPrimarySource(resource),
+				LastSeen: resource.LastSeen,
+			}
+		}
+	}
+	return latest
 }
 
 func monitoredSystemStatusReasonPriority(reason MonitoredSystemStatusReason) int {
@@ -609,6 +696,40 @@ func monitoredSystemStatusReasonPriority(reason MonitoredSystemStatusReason) int
 	default:
 		return 3
 	}
+}
+
+func monitoredSystemStatusReasonClause(reason MonitoredSystemStatusReason) string {
+	subject := reason.Name
+	if strings.TrimSpace(subject) == "" {
+		subject = "this monitored system"
+	}
+
+	sourceLabel := monitoredSystemStatusSourceLabel(reason.Source)
+	switch reason.Kind {
+	case "source-stale":
+		return sourceLabel + " data for " + subject + " is stale (last reported " + reason.LastSeen.UTC().Format(time.RFC3339) + ")"
+	case "source-offline":
+		return sourceLabel + " data for " + subject + " is offline or disconnected" + monitoredSystemStatusLastSeenSuffix(reason.LastSeen)
+	case "source-unknown":
+		return sourceLabel + " data for " + subject + " does not report a canonical status yet" + monitoredSystemStatusLastSeenSuffix(reason.LastSeen)
+	case "surface-stale":
+		return monitoredSystemGroupingTypeLabel(reason.Type) + " view for " + subject + " currently reports warning status from " + sourceLabel + monitoredSystemStatusLastSeenSuffix(reason.LastSeen)
+	case "surface-offline":
+		return monitoredSystemGroupingTypeLabel(reason.Type) + " view for " + subject + " currently reports offline status from " + sourceLabel + monitoredSystemStatusLastSeenSuffix(reason.LastSeen)
+	case "surface-unknown":
+		return monitoredSystemGroupingTypeLabel(reason.Type) + " view for " + subject + " currently reports unknown status from " + sourceLabel + monitoredSystemStatusLastSeenSuffix(reason.LastSeen)
+	default:
+		clause := strings.TrimSpace(reason.Summary)
+		clause = strings.TrimSuffix(clause, ".")
+		return clause
+	}
+}
+
+func monitoredSystemStatusLastSeenSuffix(lastSeen time.Time) string {
+	if lastSeen.IsZero() {
+		return ""
+	}
+	return " (last reported " + lastSeen.UTC().Format(time.RFC3339) + ")"
 }
 
 func monitoredSystemStatusPriority(status ResourceStatus) int {

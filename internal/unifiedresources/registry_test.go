@@ -303,6 +303,9 @@ func TestMonitoredSystemsExplainsStaleGroupedSourceWhileLastSeenStaysFresh(t *te
 	if system.StatusExplanation.Summary == "" {
 		t.Fatal("expected grouped monitored system status explanation summary")
 	}
+	if system.StatusExplanation.Summary != "Pulse most recently heard from Docker for tower.local at 2026-03-23T11:59:50Z, but Agent data for tower.local is stale (last reported 2026-03-23T11:55:00Z), so this monitored system is warning." {
+		t.Fatalf("unexpected grouped monitored system summary: %q", system.StatusExplanation.Summary)
+	}
 	if len(system.StatusExplanation.Reasons) != 1 {
 		t.Fatalf("expected one stale grouped-source reason, got %+v", system.StatusExplanation.Reasons)
 	}

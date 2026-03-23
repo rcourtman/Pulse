@@ -248,6 +248,10 @@ copy: `/api/license/monitored-system-ledger` must preserve the canonical
 summary plus the ordered reason list from unified resources, including the
 degraded source or surface, its status, and its last-seen timestamp, so mixed
 fresh/stale grouped systems remain explainable through one governed API shape.
+That canonical summary must also carry the mixed-source freshness explanation
+when the freshest grouped observation came from a different source than the
+degraded one, so API consumers can show a fresh `Last Seen` value without
+making warning or offline state look contradictory.
 That client contract must also fail closed when older or partial payloads omit
 the nested explanation object: the frontend may normalize missing explanation
 fields to empty reasons/surfaces plus a safe default summary, but it must not

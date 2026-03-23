@@ -179,6 +179,11 @@ source freshness state, including which source or surface degraded and the
 corresponding last-seen timestamp. Billing and support surfaces must consume
 that shared reason list instead of trying to infer why a fresh overall
 `last_seen` can still coincide with warning status.
+That shared summary must also explain mixed-source freshness directly when one
+grouped source reported more recently than the degraded one, so consumers do
+not present a fresh `Last Seen` timestamp beside warning or offline state
+without the canonical explanation of which grouped source is still reporting
+and which one drifted stale or disconnected.
 
 The unified-resource runtime now also owns the durable change timeline for the
 canonical resource view. `internal/unifiedresources/monitor_adapter.go` feeds
