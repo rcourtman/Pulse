@@ -12,6 +12,8 @@ import commandPaletteModalSource from '@/components/shared/CommandPaletteModal.t
 import commandPaletteModelSource from '@/components/shared/commandPaletteModel.ts?raw';
 import activeUseTrialNudgeSource from '@/components/shared/ActiveUseTrialNudge.tsx?raw';
 import activeUseTrialNudgeModelSource from '@/components/shared/activeUseTrialNudgeModel.ts?raw';
+import columnPickerSource from '@/components/shared/ColumnPicker.tsx?raw';
+import columnPickerModelSource from '@/components/shared/columnPickerModel.ts?raw';
 import collapsibleSearchInputSource from '@/components/shared/CollapsibleSearchInput.tsx?raw';
 import collapsibleSearchInputModelSource from '@/components/shared/collapsibleSearchInputModel.ts?raw';
 import containerUpdateBadgeSource from '@/components/shared/ContainerUpdateBadge.tsx?raw';
@@ -54,6 +56,7 @@ import infrastructureSelectorModelSource from '@/components/shared/infrastructur
 import sharedInfrastructureSummaryTableModelSource from '@/components/shared/infrastructureSummaryTableModel.ts?raw';
 import commandPaletteStateSource from '@/components/shared/useCommandPaletteState.ts?raw';
 import activeUseTrialNudgeStateSource from '@/components/shared/useActiveUseTrialNudgeState.ts?raw';
+import columnPickerStateSource from '@/components/shared/useColumnPickerState.ts?raw';
 import collapsibleSearchInputStateSource from '@/components/shared/useCollapsibleSearchInputState.ts?raw';
 import containerUpdateButtonStateSource from '@/components/shared/useContainerUpdateButtonState.ts?raw';
 import dialogStateSource from '@/components/shared/useDialogState.ts?raw';
@@ -2754,6 +2757,22 @@ describe('frontend resource type boundaries', () => {
     expect(trialBannerModelSource).toContain('getTrialBannerToneClass');
     expect(trialBannerModelSource).toContain('getTrialBannerStatusLabel');
     expect(trialBannerModelSource).toContain('TRIAL_BANNER_UPGRADE_LABEL');
+    expect(columnPickerSource).toContain('useColumnPickerState');
+    expect(columnPickerSource).toContain('COLUMN_PICKER_PANEL_TITLE');
+    expect(columnPickerSource).not.toContain('createSignal');
+    expect(columnPickerSource).not.toContain('createEffect');
+    expect(columnPickerSource).not.toContain('document.addEventListener');
+    expect(columnPickerSource).not.toContain('getHiddenColumnCount');
+    expect(columnPickerStateSource).toContain('createSignal');
+    expect(columnPickerStateSource).toContain('createEffect');
+    expect(columnPickerStateSource).toContain('document.addEventListener');
+    expect(columnPickerStateSource).toContain('handleClickOutside');
+    expect(columnPickerStateSource).toContain('hiddenCount');
+    expect(columnPickerModelSource).toContain('COLUMN_PICKER_BUTTON_LABEL');
+    expect(columnPickerModelSource).toContain('COLUMN_PICKER_PANEL_TITLE');
+    expect(columnPickerModelSource).toContain('getHiddenColumnCount');
+    expect(columnPickerModelSource).toContain('shouldShowColumnPickerReset');
+    expect(columnPickerModelSource).toContain('getColumnPickerOptionTextClass');
     expect(monitoredSystemLimitWarningBannerSource).toContain(
       'useMonitoredSystemLimitWarningBannerState',
     );

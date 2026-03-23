@@ -230,6 +230,14 @@ entitlement load, snooze lifecycle, and upgrade-link runtime, and
 normalization, tone policy, and display labels. Future trial-banner work
 should extend those owners instead of pushing entitlement orchestration,
 snooze state, or tone math back into the shared shell.
+The shared column picker now follows that same owner split.
+`frontend-modern/src/components/shared/ColumnPicker.tsx` stays the render
+shell, `frontend-modern/src/components/shared/useColumnPickerState.ts` owns
+dropdown open state and outside-click listener lifecycle, and
+`frontend-modern/src/components/shared/columnPickerModel.ts` owns hidden-column
+count, reset visibility policy, and column-option text-class/copy policy.
+Future column-picker work should extend those owners instead of pushing
+document-level listener logic or column-count policy back into the shell.
 The shared dialog now follows that same owner split.
 `frontend-modern/src/components/shared/Dialog.tsx` stays the render shell,
 `frontend-modern/src/components/shared/useDialogState.ts` owns focus trap,
