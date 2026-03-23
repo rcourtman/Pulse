@@ -6,7 +6,7 @@ import { CommercialBillingShell, CommercialSection } from './CommercialBillingSe
 import { ProLicensePlanSection } from './ProLicensePlanSection';
 import { SelfHostedCommercialActivationSection } from './SelfHostedCommercialActivationSection';
 import { useProLicensePanelState } from './useProLicensePanelState';
-import { SELF_HOSTED_MONITORED_SYSTEMS_DESCRIPTION } from '@/utils/selfHostedPlans';
+import { SELF_HOSTED_MONITORED_SYSTEMS_BRIEF } from '@/utils/selfHostedPlans';
 
 export const ProLicensePanel: Component = () => {
   const state = useProLicensePanelState();
@@ -52,7 +52,7 @@ export const ProLicensePanel: Component = () => {
 
           <CommercialSection
             title="Usage"
-            description={SELF_HOSTED_MONITORED_SYSTEMS_DESCRIPTION}
+            description={SELF_HOSTED_MONITORED_SYSTEMS_BRIEF}
           >
             <MonitoredSystemLedgerPanel embedded />
           </CommercialSection>

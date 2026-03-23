@@ -148,15 +148,24 @@ describe('ProLicensePanel', () => {
       expect(screen.getByText('Plan Terms')).toBeInTheDocument();
     });
 
-      expect(screen.getByText('5 / 12')).toBeInTheDocument();
-      expect(screen.getByText('7')).toBeInTheDocument();
-      expect(screen.getAllByText('Active').length).toBeGreaterThan(0);
-      expect(screen.getByText('V5 Lifetime Grandfathered')).toBeInTheDocument();
-      expect(screen.getByText('Included Monitored Systems')).toBeInTheDocument();
-      expect(
-        screen.getAllByText(/a monitored system is a top-level machine or cluster/i).length,
-      ).toBeGreaterThan(0);
-    });
+    expect(screen.getByText('5 / 12')).toBeInTheDocument();
+    expect(screen.getByText('7')).toBeInTheDocument();
+    expect(screen.getAllByText('Active').length).toBeGreaterThan(0);
+    expect(screen.getByText('V5 Lifetime Grandfathered')).toBeInTheDocument();
+    expect(screen.getByText('Included Monitored Systems')).toBeInTheDocument();
+    expect(
+      screen.getByText('Billing is based on monitored systems. Child resources are included.'),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/a monitored system is a top-level machine or cluster/i),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'What counts?' }));
+
+    expect(
+      screen.getByText(/a monitored system is a top-level machine or cluster/i),
+    ).toBeInTheDocument();
+  });
 
   it('shows recurring grandfathered pricing continuity for migrated v5 Pro plans', async () => {
     const tests = [

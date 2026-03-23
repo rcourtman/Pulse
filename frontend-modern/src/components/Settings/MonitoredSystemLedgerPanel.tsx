@@ -20,8 +20,8 @@ import {
 import { PulseLogoIcon } from '@/components/icons/PulseLogoIcon';
 import {
   SELF_HOSTED_MONITORED_SYSTEM_LEDGER_DESCRIPTION,
-  SELF_HOSTED_MONITORED_SYSTEMS_DESCRIPTION,
 } from '@/utils/selfHostedPlans';
+import { MonitoredSystemDefinitionDisclosure } from '@/components/Commercial/MonitoredSystemDefinitionDisclosure';
 
 interface MonitoredSystemLedgerPanelProps {
   embedded?: boolean;
@@ -47,7 +47,13 @@ export function MonitoredSystemLedgerPanel(props: MonitoredSystemLedgerPanelProp
       {/* Summary */}
       <div class="space-y-1">
         <div class="flex items-center justify-between">
-          <h3 class="text-sm font-semibold text-base-content">Monitored Systems</h3>
+          <div class="space-y-1">
+            <h3 class="text-sm font-semibold text-base-content">Monitored Systems</h3>
+            <MonitoredSystemDefinitionDisclosure
+              buttonClass="text-xs font-medium text-muted underline-offset-2 transition-colors hover:text-base-content hover:underline"
+              detailClass="max-w-xl text-xs text-muted"
+            />
+          </div>
           <Show when={!ledger.error && ledger()}>
             <span
               class="text-sm font-medium"
@@ -61,9 +67,6 @@ export function MonitoredSystemLedgerPanel(props: MonitoredSystemLedgerPanelProp
             </span>
           </Show>
         </div>
-        <p class="text-xs text-muted">
-          {SELF_HOSTED_MONITORED_SYSTEMS_DESCRIPTION}
-        </p>
       </div>
 
       {/* Loading state */}

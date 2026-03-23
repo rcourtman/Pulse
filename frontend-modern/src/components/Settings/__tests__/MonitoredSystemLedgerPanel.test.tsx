@@ -147,6 +147,13 @@ describe('MonitoredSystemLedgerPanel', () => {
         'Review the monitored systems currently counting toward your Pulse Pro allocation.',
       ),
     ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'What counts?' })).toBeInTheDocument();
+    expect(
+      screen.queryByText(/a monitored system is a top-level machine or cluster pulse actively monitors/i),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'What counts?' }));
+
     expect(
       screen.getByText(/a monitored system is a top-level machine or cluster pulse actively monitors/i),
     ).toBeInTheDocument();

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@solidjs/testing-library';
+import { fireEvent, render, screen } from '@solidjs/testing-library';
 import type { JSX } from 'solid-js';
 
 import PricingV6 from '../PricingV6';
@@ -65,6 +65,18 @@ describe('PricingV6', () => {
     expect(screen.getByText('15 monitored systems')).toBeInTheDocument();
     expect(screen.getByText('50 monitored systems')).toBeInTheDocument();
     expect(screen.getByText('Feature Comparison')).toBeInTheDocument();
+    expect(
+      screen.getByText('Billing is based on monitored systems. Child resources are included.'),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/a monitored system is a top-level machine or cluster/i),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'What counts?' }));
+
+    expect(
+      screen.getByText(/a monitored system is a top-level machine or cluster/i),
+    ).toBeInTheDocument();
   });
 
   it('imports the shared self-hosted pricing model instead of redefining it locally', () => {

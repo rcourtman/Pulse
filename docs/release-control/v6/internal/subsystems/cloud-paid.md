@@ -48,27 +48,28 @@ agreement, and cloud-specific enforcement rules.
 26. `frontend-modern/src/useAppRuntimeState.ts`
 27. `frontend-modern/src/components/Dashboard/RelayOnboardingCard.tsx`
 28. `frontend-modern/src/components/Dashboard/useRelayOnboardingCardState.ts`
-29. `frontend-modern/src/components/Settings/BillingAdminPanel.tsx`
-30. `frontend-modern/src/components/Settings/BillingAdminOrganizationsTable.tsx`
-31. `frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx`
-32. `frontend-modern/src/components/Settings/OrganizationBillingLoadingState.tsx`
-33. `frontend-modern/src/components/Settings/MonitoredSystemLedgerPanel.tsx`
-34. `frontend-modern/src/components/Settings/ProLicensePanel.tsx`
-35. `frontend-modern/src/components/Settings/ProLicensePlanSection.tsx`
-36. `frontend-modern/src/components/Settings/CommercialBillingSections.tsx`
-37. `frontend-modern/src/components/Settings/SelfHostedCommercialActivationSection.tsx`
-38. `frontend-modern/src/components/Settings/RelaySettingsPanel.tsx`
-39. `frontend-modern/src/components/Settings/RelayPairingSection.tsx`
-40. `frontend-modern/src/components/Settings/useBillingAdminPanelState.ts`
-41. `frontend-modern/src/components/Settings/useOrganizationBillingPanelState.ts`
-42. `frontend-modern/src/components/Settings/useProLicensePanelState.ts`
-43. `frontend-modern/src/components/Settings/useRelaySettingsPanelState.ts`
-44. `frontend-modern/src/pages/CloudPricing.tsx`
-45. `frontend-modern/src/pages/PricingV6.tsx`
-46. `frontend-modern/src/utils/apiClient.ts`
-47. `frontend-modern/src/utils/cloudPlans.ts`
-48. `frontend-modern/src/utils/commercialBillingModel.ts`
-49. `frontend-modern/src/utils/selfHostedPlans.ts`
+29. `frontend-modern/src/components/Commercial/MonitoredSystemDefinitionDisclosure.tsx`
+30. `frontend-modern/src/components/Settings/BillingAdminPanel.tsx`
+31. `frontend-modern/src/components/Settings/BillingAdminOrganizationsTable.tsx`
+32. `frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx`
+33. `frontend-modern/src/components/Settings/OrganizationBillingLoadingState.tsx`
+34. `frontend-modern/src/components/Settings/MonitoredSystemLedgerPanel.tsx`
+35. `frontend-modern/src/components/Settings/ProLicensePanel.tsx`
+36. `frontend-modern/src/components/Settings/ProLicensePlanSection.tsx`
+37. `frontend-modern/src/components/Settings/CommercialBillingSections.tsx`
+38. `frontend-modern/src/components/Settings/SelfHostedCommercialActivationSection.tsx`
+39. `frontend-modern/src/components/Settings/RelaySettingsPanel.tsx`
+40. `frontend-modern/src/components/Settings/RelayPairingSection.tsx`
+41. `frontend-modern/src/components/Settings/useBillingAdminPanelState.ts`
+42. `frontend-modern/src/components/Settings/useOrganizationBillingPanelState.ts`
+43. `frontend-modern/src/components/Settings/useProLicensePanelState.ts`
+44. `frontend-modern/src/components/Settings/useRelaySettingsPanelState.ts`
+45. `frontend-modern/src/pages/CloudPricing.tsx`
+46. `frontend-modern/src/pages/PricingV6.tsx`
+47. `frontend-modern/src/utils/apiClient.ts`
+48. `frontend-modern/src/utils/cloudPlans.ts`
+49. `frontend-modern/src/utils/commercialBillingModel.ts`
+50. `frontend-modern/src/utils/selfHostedPlans.ts`
 
 ## Shared Boundaries
 
@@ -311,6 +312,10 @@ while `frontend-modern/src/pages/CloudPricing.tsx`,
 `frontend-modern/src/pages/HostedSignup.tsx`, `frontend-modern/src/pages/PricingV6.tsx`,
 and the self-hosted billing settings surfaces must consume those shared owners
 instead of redefining retail plan facts or counted-unit policy locally.
+That same counted-unit boundary also owns the disclosure rule for retail copy:
+default billing and pricing surfaces should use concise monitored-system copy,
+while the full counted-unit definition appears only behind explicit disclosure
+such as `What counts?` instead of sitting as always-visible explanatory chrome.
 That contract applies to both plan summary labels and upgrade/paywall copy:
 current v6 self-hosted pricing may not drift back to the older `$49/yr Relay`,
 `$99/yr Pro`, or monitored-system-count marketing drift that contradicts the

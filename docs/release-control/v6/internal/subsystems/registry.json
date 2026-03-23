@@ -1279,6 +1279,7 @@
       "owned_files": [
         "frontend-modern/src/App.tsx",
         "frontend-modern/src/AppLayout.tsx",
+        "frontend-modern/src/components/Commercial/MonitoredSystemDefinitionDisclosure.tsx",
         "frontend-modern/src/components/Dashboard/RelayOnboardingCard.tsx",
         "frontend-modern/src/components/Dashboard/useRelayOnboardingCardState.ts",
         "frontend-modern/src/components/Settings/BillingAdminOrganizationsTable.tsx",
@@ -1734,6 +1735,7 @@
             "label": "commercial plan model proof",
             "match_prefixes": [],
             "match_files": [
+              "frontend-modern/src/components/Commercial/MonitoredSystemDefinitionDisclosure.tsx",
               "frontend-modern/src/utils/cloudPlans.ts",
               "frontend-modern/src/utils/commercialBillingModel.ts",
               "frontend-modern/src/utils/selfHostedPlans.ts"
@@ -1741,6 +1743,7 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
+              "frontend-modern/src/components/Commercial/__tests__/MonitoredSystemDefinitionDisclosure.test.tsx",
               "frontend-modern/src/components/Settings/__tests__/OrganizationBillingPanel.test.tsx",
               "frontend-modern/src/components/Settings/__tests__/ProLicensePanel.test.tsx",
               "frontend-modern/src/pages/__tests__/CloudPricing.test.tsx",

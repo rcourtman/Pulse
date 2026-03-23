@@ -21,10 +21,12 @@ import { logger } from '@/utils/logger';
 import {
   SELF_HOSTED_FEATURE_ROWS,
   SELF_HOSTED_PLAN_BY_TIER,
+  SELF_HOSTED_MONITORED_SYSTEMS_BRIEF,
   type SelfHostedFeatureRow,
   type SelfHostedPlanDefinition,
   type SelfHostedTierKey,
 } from '@/utils/selfHostedPlans';
+import { MonitoredSystemDefinitionDisclosure } from '@/components/Commercial/MonitoredSystemDefinitionDisclosure';
 
 // ---------------------------------------------------------------------------
 // Shared sub-components
@@ -338,6 +340,14 @@ export default function PricingV6() {
         />
         <TierCard tier={SELF_HOSTED_PLAN_BY_TIER.proPlus} cta={proPlusCta} />
       </div>
+
+      <Card padding="lg" class="space-y-2">
+        <MonitoredSystemDefinitionDisclosure
+          summary={SELF_HOSTED_MONITORED_SYSTEMS_BRIEF}
+          summaryClass="text-sm text-base-content"
+          detailClass="max-w-3xl text-xs text-muted"
+        />
+      </Card>
 
       {/* Upsell links */}
       <div class="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-muted">
