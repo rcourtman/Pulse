@@ -65,7 +65,7 @@ describe('resourceDetailDrawerServiceModel', () => {
         pbs: undefined,
         pmg,
       }),
-    ).toBe('519 queue total · 16 backlog');
+    ).toBe('519 queued messages · 16 delayed messages');
   });
 
   it('keeps docker service summary on container and update counts', () => {
@@ -80,5 +80,35 @@ describe('resourceDetailDrawerServiceModel', () => {
         pmg: undefined,
       }),
     ).toBe('7 containers · 3 updates');
+  });
+
+  it('pluralizes singular service summary counts cleanly', () => {
+    expect(
+      getServiceDetailsSummary({
+        resourceType: 'docker-host',
+        docker: {
+          containerCount: 1,
+          updatesAvailableCount: 1,
+        },
+        pbs: undefined,
+        pmg: undefined,
+      }),
+    ).toBe('1 container · 1 update');
+
+    expect(
+      getServiceDetailsSummary({
+        resourceType: 'pbs',
+        docker: undefined,
+        pbs: {
+          datastoreCount: 1,
+          backupJobCount: 1,
+          syncJobCount: 0,
+          verifyJobCount: 0,
+          pruneJobCount: 0,
+          garbageJobCount: 0,
+        },
+        pmg: undefined,
+      }),
+    ).toBe('1 datastore · 1 job');
   });
 });

@@ -511,6 +511,9 @@ inside PBS or PMG cards, and the service-local reveal labels stay terse
 also use shorter section labels (`Types`, `Queue detail`, `Mail detail`) and
 count-only summary badges so opened cards read like current state instead of
 descriptive chrome.
+That collapsed `Service details` summary now also uses resource-facing count
+phrasing (`1 datastore`, `7 containers`, `16 delayed messages`) instead of
+implementation wording like `queue total`.
 Within that same PMG opened state, queue and backlog remain the primary metric
 tiles while node count moves into quieter support context beneath them, so the
 first read stays on mail-flow state instead of cluster metadata.

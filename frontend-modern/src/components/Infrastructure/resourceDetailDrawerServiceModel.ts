@@ -34,6 +34,9 @@ const filterVisibleBreakdown = <T extends ResourceDetailValueBreakdownEntry>(
   return nonZero.length > 0 ? nonZero : entries;
 };
 
+const formatCount = (value: number, singular: string, plural = `${singular}s`): string =>
+  `${formatInteger(value)} ${value === 1 ? singular : plural}`;
+
 export const getPbsJobTotal = (pbs: PbsPlatformDataLike | undefined): number => {
   if (!pbs) return 0;
   return (
@@ -96,21 +99,24 @@ export const getServiceDetailsSummary = (args: {
   const { resourceType, docker, pbs, pmg } = args;
 
   if (resourceType === 'docker-host') {
-    return `${formatInteger(docker?.containerCount ?? 0)} containers · ${formatInteger(
+    return `${formatCount(docker?.containerCount ?? 0, 'container')} · ${formatCount(
       docker?.updatesAvailableCount ?? 0,
-    )} updates`;
+      'update',
+    )}`;
   }
 
   if (pbs) {
-    return `${formatInteger(pbs.datastoreCount || 0)} datastores · ${formatInteger(
+    return `${formatCount(pbs.datastoreCount || 0, 'datastore')} · ${formatCount(
       getPbsJobTotal(pbs),
-    )} jobs`;
+      'job',
+    )}`;
   }
 
   if (pmg) {
-    return `${formatInteger(pmg.queueTotal || 0)} queue total · ${formatInteger(
+    return `${formatCount(pmg.queueTotal || 0, 'queued message')} · ${formatCount(
       getPmgQueueBacklog(pmg),
-    )} backlog`;
+      'delayed message',
+    )}`;
   }
 
   return null;

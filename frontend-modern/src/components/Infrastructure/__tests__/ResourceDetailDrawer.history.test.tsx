@@ -173,6 +173,8 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(resourceDetailDrawerServiceModelSource).toContain(
       'export const buildPmgVisibleMailBreakdown',
     );
+    expect(resourceDetailDrawerServiceModelSource).toContain("formatCount(pmg.queueTotal || 0, 'queued message')");
+    expect(resourceDetailDrawerServiceModelSource).toContain("'delayed message'");
     expect(resourceDetailDrawerOverviewSource).not.toContain('MonitoringAPI.');
     expect(resourceDetailDrawerOverviewSource).toContain('drawer.queueDockerUpdateCheck');
     expect(resourceDetailDrawerOverviewSource).toContain('drawer.queueDockerUpdateAll');
