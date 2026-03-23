@@ -340,6 +340,7 @@ import infrastructureSummaryModelSource from '@/components/Infrastructure/infras
 import resourceDetailMappersSource from '@/components/Infrastructure/resourceDetailMappers.ts?raw';
 import resourceDetailDrawerHistoryStateSource from '@/components/Infrastructure/useResourceDetailDrawerHistoryState.ts?raw';
 import resourceDetailDrawerDerivedStateSource from '@/components/Infrastructure/useResourceDetailDrawerDerivedState.ts?raw';
+import resourceDetailDrawerServiceModelSource from '@/components/Infrastructure/resourceDetailDrawerServiceModel.ts?raw';
 import resourceDetailDrawerDockerActionsStateSource from '@/components/Infrastructure/useResourceDetailDrawerDockerActionsState.ts?raw';
 import resourceDetailDrawerStateSource from '@/components/Infrastructure/useResourceDetailDrawerState.ts?raw';
 import unifiedResourceTableSource from '@/components/Infrastructure/UnifiedResourceTable.tsx?raw';
@@ -988,6 +989,10 @@ describe('frontend resource type boundaries', () => {
     expect(resourceDetailDrawerStateSource).not.toContain('MonitoringAPI.');
     expect(resourceDetailDrawerHistoryStateSource).toContain('createResource(');
     expect(resourceDetailDrawerDerivedStateSource).toContain('buildWorkloadsHref');
+    expect(resourceDetailDrawerDerivedStateSource).toContain(
+      "from './resourceDetailDrawerServiceModel'",
+    );
+    expect(resourceDetailDrawerServiceModelSource).toContain('getServiceDetailsSummary');
     expect(resourceDetailDrawerOverviewSource).not.toContain('MonitoringAPI.');
     expect(resourceDetailDrawerOverviewSource).toContain('drawer.queueDockerUpdateCheck');
     expect(resourceDetailDrawerOverviewSource).toContain('drawer.queueDockerUpdateAll');
@@ -2632,6 +2637,9 @@ describe('frontend resource type boundaries', () => {
     expect(throughputPresentationSource).toContain('formatThroughputRate');
     expect(resourceDetailDrawerSource).toContain('formatIdentifierLabel');
     expect(resourceDetailDrawerDerivedStateSource).toContain('formatIdentifierLabel');
+    expect(resourceDetailDrawerServiceModelSource).toContain('buildPbsVisibleJobBreakdown');
+    expect(resourceDetailDrawerServiceModelSource).toContain('buildPmgVisibleQueueBreakdown');
+    expect(resourceDetailDrawerServiceModelSource).toContain('buildPmgVisibleMailBreakdown');
     expect(resourceChangePresentationSource).toContain('humanizeToken');
     expect(textPresentationSource).toContain('humanizeArrowDelimitedLabel');
     expect(resourceCorrelationPresentationSource).not.toContain(

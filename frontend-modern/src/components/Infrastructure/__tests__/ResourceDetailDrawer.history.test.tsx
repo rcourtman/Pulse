@@ -7,6 +7,7 @@ import resourceDetailDrawerShellSource from '@/components/Infrastructure/Resourc
 import resourceDetailDrawerOverviewSource from '@/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx?raw';
 import resourceDetailDrawerHistoryStateSource from '@/components/Infrastructure/useResourceDetailDrawerHistoryState.ts?raw';
 import resourceDetailDrawerDerivedStateSource from '@/components/Infrastructure/useResourceDetailDrawerDerivedState.ts?raw';
+import resourceDetailDrawerServiceModelSource from '@/components/Infrastructure/resourceDetailDrawerServiceModel.ts?raw';
 import resourceDetailDrawerDockerActionsStateSource from '@/components/Infrastructure/useResourceDetailDrawerDockerActionsState.ts?raw';
 import resourceDetailDrawerStateSource from '@/components/Infrastructure/useResourceDetailDrawerState.ts?raw';
 import type { Resource } from '@/types/resource';
@@ -135,6 +136,19 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(resourceDetailDrawerHistoryStateSource).toContain('AIAPI.getResourceIntelligence');
     expect(resourceDetailDrawerDerivedStateSource).toContain('buildWorkloadsHref');
     expect(resourceDetailDrawerDerivedStateSource).toContain('toDiscoveryConfig');
+    expect(resourceDetailDrawerDerivedStateSource).toContain(
+      "from './resourceDetailDrawerServiceModel'",
+    );
+    expect(resourceDetailDrawerServiceModelSource).toContain('export const getServiceDetailsSummary');
+    expect(resourceDetailDrawerServiceModelSource).toContain(
+      'export const buildPbsVisibleJobBreakdown',
+    );
+    expect(resourceDetailDrawerServiceModelSource).toContain(
+      'export const buildPmgVisibleQueueBreakdown',
+    );
+    expect(resourceDetailDrawerServiceModelSource).toContain(
+      'export const buildPmgVisibleMailBreakdown',
+    );
     expect(resourceDetailDrawerOverviewSource).not.toContain('MonitoringAPI.');
     expect(resourceDetailDrawerOverviewSource).toContain('drawer.queueDockerUpdateCheck');
     expect(resourceDetailDrawerOverviewSource).toContain('drawer.queueDockerUpdateAll');

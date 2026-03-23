@@ -30,7 +30,6 @@ import type { ResourceIntelligence } from '@/types/aiIntelligence';
 import {
   ALIAS_COLLAPSE_THRESHOLD,
   buildTemperatureRows,
-  formatInteger,
   toAgentFromResource,
   toDiscoveryConfig,
   toNodeFromProxmox,
@@ -40,6 +39,14 @@ import {
   type PlatformData,
 } from '@/components/Infrastructure/resourceDetailMappers';
 import { formatIdentifierLabel } from '@/utils/textPresentation';
+import {
+  buildPbsVisibleJobBreakdown,
+  buildPmgVisibleMailBreakdown,
+  buildPmgVisibleQueueBreakdown,
+  getPbsJobTotal,
+  getPmgQueueBacklog,
+  getServiceDetailsSummary,
+} from './resourceDetailDrawerServiceModel';
 
 type DrawerTab = 'overview' | 'mail' | 'namespaces' | 'deployments' | 'swarm' | 'debug';
 
@@ -227,22 +234,8 @@ export const useResourceDetailDrawerDerivedState = (
 
   const pbsData = createMemo(() => platformData()?.pbs);
   const pmgData = createMemo(() => platformData()?.pmg);
-  const pbsJobTotal = createMemo(() => {
-    const pbs = pbsData();
-    if (!pbs) return 0;
-    return (
-      (pbs.backupJobCount || 0) +
-      (pbs.syncJobCount || 0) +
-      (pbs.verifyJobCount || 0) +
-      (pbs.pruneJobCount || 0) +
-      (pbs.garbageJobCount || 0)
-    );
-  });
-  const pmgQueueBacklog = createMemo(() => {
-    const pmg = pmgData();
-    if (!pmg) return 0;
-    return (pmg.queueDeferred || 0) + (pmg.queueHold || 0);
-  });
+  const pbsJobTotal = createMemo(() => getPbsJobTotal(pbsData()));
+  const pmgQueueBacklog = createMemo(() => getPmgQueueBacklog(pmgData()));
   const pmgUpdatedRelative = createMemo(() => {
     const raw = pmgData()?.lastUpdated;
     if (!raw) return '';
@@ -250,51 +243,9 @@ export const useResourceDetailDrawerDerivedState = (
     if (!Number.isFinite(parsed)) return '';
     return formatRelativeTime(parsed);
   });
-  const pbsJobBreakdown = createMemo(() => {
-    const pbs = pbsData();
-    if (!pbs) return [] as Array<{ label: string; value: number }>;
-    return [
-      { label: 'Backup', value: pbs.backupJobCount || 0 },
-      { label: 'Sync', value: pbs.syncJobCount || 0 },
-      { label: 'Verify', value: pbs.verifyJobCount || 0 },
-      { label: 'Prune', value: pbs.pruneJobCount || 0 },
-      { label: 'Garbage', value: pbs.garbageJobCount || 0 },
-    ];
-  });
-  const pbsVisibleJobBreakdown = createMemo(() => {
-    const all = pbsJobBreakdown();
-    const nonZero = all.filter((entry) => entry.value > 0);
-    return nonZero.length > 0 ? nonZero : all;
-  });
-  const pmgQueueBreakdown = createMemo(() => {
-    const pmg = pmgData();
-    if (!pmg) return [] as Array<{ label: string; value: number; warn?: boolean }>;
-    return [
-      { label: 'Active', value: pmg.queueActive || 0 },
-      { label: 'Deferred', value: pmg.queueDeferred || 0, warn: (pmg.queueDeferred || 0) > 0 },
-      { label: 'Hold', value: pmg.queueHold || 0, warn: (pmg.queueHold || 0) > 0 },
-      { label: 'Incoming', value: pmg.queueIncoming || 0 },
-    ];
-  });
-  const pmgVisibleQueueBreakdown = createMemo(() => {
-    const all = pmgQueueBreakdown();
-    const nonZero = all.filter((entry) => entry.value > 0);
-    return nonZero.length > 0 ? nonZero : all;
-  });
-  const pmgMailBreakdown = createMemo(() => {
-    const pmg = pmgData();
-    if (!pmg) return [] as Array<{ label: string; value: number }>;
-    return [
-      { label: 'Mail', value: pmg.mailCountTotal || 0 },
-      { label: 'Spam', value: pmg.spamIn || 0 },
-      { label: 'Virus', value: pmg.virusIn || 0 },
-    ];
-  });
-  const pmgVisibleMailBreakdown = createMemo(() => {
-    const all = pmgMailBreakdown();
-    const nonZero = all.filter((entry) => entry.value > 0);
-    return nonZero.length > 0 ? nonZero : all;
-  });
+  const pbsVisibleJobBreakdown = createMemo(() => buildPbsVisibleJobBreakdown(pbsData()));
+  const pmgVisibleQueueBreakdown = createMemo(() => buildPmgVisibleQueueBreakdown(pmgData()));
+  const pmgVisibleMailBreakdown = createMemo(() => buildPmgVisibleMailBreakdown(pmgData()));
 
   const mergedSources = createMemo(() => platformData()?.sources ?? []);
   const sourceStatus = createMemo<NonNullable<PlatformData['sourceStatus']>>(
@@ -420,21 +371,12 @@ export const useResourceDetailDrawerDerivedState = (
     () => resource.type === 'docker-host' || Boolean(pbsData()) || Boolean(pmgData()),
   );
   const serviceDetailsSummary = createMemo(() => {
-    if (resource.type === 'docker-host') {
-      return `${formatInteger(dockerContainerCount())} containers · ${formatInteger(dockerUpdatesAvailable())} updates`;
-    }
-
-    const pbs = pbsData();
-    if (pbs) {
-      return `${formatInteger(pbs.datastoreCount)} datastores · ${formatInteger(pbsJobTotal())} jobs`;
-    }
-
-    const pmg = pmgData();
-    if (pmg) {
-      return `${formatInteger(pmg.queueTotal)} queue total · ${formatInteger(pmgQueueBacklog())} backlog`;
-    }
-
-    return null;
+    return getServiceDetailsSummary({
+      resourceType: resource.type,
+      docker: dockerHostData(),
+      pbs: pbsData(),
+      pmg: pmgData(),
+    });
   });
 
   const workloadsHref = createMemo(() => buildWorkloadsHref(resource));

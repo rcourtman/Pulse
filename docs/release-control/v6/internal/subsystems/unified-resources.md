@@ -54,19 +54,20 @@ cross-source deduplication.
 32. `frontend-modern/src/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx`
 33. `frontend-modern/src/components/Infrastructure/unifiedResourceTableModel.ts`
 34. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts`
-35. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerHistoryState.ts`
-36. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDockerActionsState.ts`
-37. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts`
-38. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`
-39. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts`
-40. `frontend-modern/src/components/Discovery/DiscoveryTab.tsx`
-41. `frontend-modern/src/components/Discovery/useDiscoveryTabState.ts`
-42. `frontend-modern/src/features/infrastructure/InfrastructurePageSurface.tsx`
-43. `frontend-modern/src/features/infrastructure/useInfrastructurePageRouteState.ts`
-44. `frontend-modern/src/features/infrastructure/useInfrastructurePageState.ts`
-45. `frontend-modern/src/components/Infrastructure/InfrastructureSummary.tsx`
-46. `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`
-47. `frontend-modern/src/components/Infrastructure/infrastructureSummaryModel.ts`
+35. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerServiceModel.ts`
+36. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerHistoryState.ts`
+37. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDockerActionsState.ts`
+38. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts`
+39. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`
+40. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts`
+41. `frontend-modern/src/components/Discovery/DiscoveryTab.tsx`
+42. `frontend-modern/src/components/Discovery/useDiscoveryTabState.ts`
+43. `frontend-modern/src/features/infrastructure/InfrastructurePageSurface.tsx`
+44. `frontend-modern/src/features/infrastructure/useInfrastructurePageRouteState.ts`
+45. `frontend-modern/src/features/infrastructure/useInfrastructurePageState.ts`
+46. `frontend-modern/src/components/Infrastructure/InfrastructureSummary.tsx`
+47. `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`
+48. `frontend-modern/src/components/Infrastructure/infrastructureSummaryModel.ts`
 
 ## Shared Boundaries
 
@@ -161,7 +162,10 @@ split used elsewhere in v6: `ResourceDetailDrawer.tsx` owns composition,
 `useResourceDetailDrawerState.ts` owns composition of drawer-local state,
 `useResourceDetailDrawerHistoryState.ts` owns facet/intelligence/timeline
 runtime orchestration, `useResourceDetailDrawerDerivedState.ts` owns the
-canonical drawer derivation layer,
+canonical drawer derivation layer, and
+`resourceDetailDrawerServiceModel.ts` owns the pure Docker/PBS/PMG service
+summary and breakdown derivations that feed the overview service-details
+surface,
 `useResourceDetailDrawerDockerActionsState.ts` owns Docker action runtime, and
 the overview/debug render-heavy surfaces live in dedicated drawer-local owners
 instead of staying inline in the shell.
