@@ -27,6 +27,7 @@ operator-facing alert routing behavior for live runtime alerts.
 5. `internal/alerts/unified_incidents.go`
 6. `frontend-modern/src/components/Alerts/RecentAlertsPanel.tsx`
 7. `frontend-modern/src/utils/alertOverviewPresentation.ts`
+8. `frontend-modern/src/utils/alertDestinationsPresentation.ts`
 
 ## Shared Boundaries
 
@@ -348,6 +349,9 @@ destinations render shell and composes
 `frontend-modern/src/features/alerts/AlertWebhookDestinationsSection.tsx`, and
 the dedicated load/error wrappers. Future config cleanup should extend the
 config transport hook, the config model, the override-projection hook, or the
+shared `frontend-modern/src/utils/alertDestinationsPresentation.ts` helper for
+customer-facing destinations copy instead of reviving inline retry, test, and
+error text across the feature tabs.
 destinations runtime hook based on which subsystem actually owns the behavior
 instead of letting the broader configuration hook absorb all four concerns
 again.

@@ -35,23 +35,21 @@ import {
 describe('alertDestinationsPresentation', () => {
   it('returns canonical destinations load error copy', () => {
     expect(ALERT_DESTINATIONS_CONFIG_LOAD_ERROR).toBe(
-      'Failed to load notification configuration. Your existing settings could not be retrieved.',
+      'Unable to load notification settings. Your existing configuration could not be retrieved.',
     );
-    expect(ALERT_DESTINATIONS_WEBHOOK_LOAD_ERROR).toBe('Failed to load webhook configuration.');
+    expect(ALERT_DESTINATIONS_WEBHOOK_LOAD_ERROR).toBe('Unable to load webhook settings.');
     expect(getAlertDestinationsConfigLoadError()).toBe(
-      'Failed to load notification configuration. Your existing settings could not be retrieved.',
+      'Unable to load notification settings. Your existing configuration could not be retrieved.',
     );
-    expect(getAlertDestinationsWebhookLoadError()).toBe(
-      'Failed to load webhook configuration.',
-    );
+    expect(getAlertDestinationsWebhookLoadError()).toBe('Unable to load webhook settings.');
   });
 
   it('returns canonical destinations retry and warning copy', () => {
     expect(ALERT_DESTINATIONS_LOAD_ERROR_RISK_NOTICE).toBe(
       'Saving now may overwrite your existing settings with defaults.',
     );
-    expect(getAlertDestinationsLoadErrorBanner('Failed to load webhook configuration.')).toBe(
-      'Failed to load webhook configuration. Saving now may overwrite your existing settings with defaults.',
+    expect(getAlertDestinationsLoadErrorBanner('Unable to load webhook settings.')).toBe(
+      'Unable to load webhook settings. Saving now may overwrite your existing settings with defaults.',
     );
     expect(ALERT_DESTINATIONS_RETRY_LABEL).toBe('Retry');
     expect(ALERT_DESTINATIONS_RETRYING_LABEL).toBe('Retrying…');
@@ -65,7 +63,7 @@ describe('alertDestinationsPresentation', () => {
     expect(getAlertDestinationsStatusLabel(true)).toBe('Enabled');
     expect(getAlertDestinationsStatusLabel(false)).toBe('Disabled');
     expect(getAlertDestinationsAppriseTestLabel(false)).toBe('Send test');
-    expect(getAlertDestinationsAppriseTestLabel(true)).toBe('Testing...');
+    expect(getAlertDestinationsAppriseTestLabel(true)).toBe('Testing…');
     expect(ALERT_DESTINATIONS_APPRISE_MODE_HELP).toBe(
       'Choose how Pulse should execute Apprise notifications.',
     );
@@ -89,24 +87,24 @@ describe('alertDestinationsPresentation', () => {
       ALERT_DESTINATIONS_APPRISE_MISSING_SERVER_URL_ERROR,
     );
     expect(ALERT_DESTINATIONS_EMAIL_TEST_SUCCESS).toBe(
-      'Test email sent successfully! Check your inbox.',
+      'Test email sent. Check your inbox.',
     );
-    expect(ALERT_DESTINATIONS_EMAIL_TEST_FAILURE).toBe('Failed to send test email');
+    expect(ALERT_DESTINATIONS_EMAIL_TEST_FAILURE).toBe('Unable to send the test email.');
     expect(getAlertDestinationsEmailTestSuccess()).toBe(
-      'Test email sent successfully! Check your inbox.',
+      'Test email sent. Check your inbox.',
     );
-    expect(getAlertDestinationsEmailTestFailure()).toBe('Failed to send test email');
+    expect(getAlertDestinationsEmailTestFailure()).toBe('Unable to send the test email.');
     expect(ALERT_DESTINATIONS_APPRISE_TEST_SUCCESS).toBe(
-      'Test Apprise notification sent successfully!',
+      'Test Apprise notification sent.',
     );
     expect(ALERT_DESTINATIONS_APPRISE_TEST_FAILURE).toBe(
-      'Failed to send test notification',
+      'Unable to send the test notification.',
     );
     expect(getAlertDestinationsAppriseTestSuccess()).toBe(
-      'Test Apprise notification sent successfully!',
+      'Test Apprise notification sent.',
     );
     expect(getAlertDestinationsAppriseTestFailure()).toBe(
-      'Failed to send test notification',
+      'Unable to send the test notification.',
     );
   });
 });

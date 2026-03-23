@@ -1,6 +1,6 @@
 export const ALERT_DESTINATIONS_CONFIG_LOAD_ERROR =
-  'Failed to load notification configuration. Your existing settings could not be retrieved.';
-export const ALERT_DESTINATIONS_WEBHOOK_LOAD_ERROR = 'Failed to load webhook configuration.';
+  'Unable to load notification settings. Your existing configuration could not be retrieved.';
+export const ALERT_DESTINATIONS_WEBHOOK_LOAD_ERROR = 'Unable to load webhook settings.';
 export const ALERT_DESTINATIONS_LOAD_ERROR_RISK_NOTICE =
   'Saving now may overwrite your existing settings with defaults.';
 export const ALERT_DESTINATIONS_RETRY_LABEL = 'Retry';
@@ -12,9 +12,9 @@ export const ALERT_DESTINATIONS_EMAIL_PANEL_DESCRIPTION =
   'Configure SMTP delivery for alert emails.';
 export const ALERT_DESTINATIONS_APPRISE_PANEL_TITLE = 'Apprise notifications';
 export const ALERT_DESTINATIONS_APPRISE_PANEL_DESCRIPTION =
-  'Relay grouped alerts through Apprise via CLI or remote API.';
+  'Relay grouped alerts through Apprise by using the CLI or a remote API.';
 export const ALERT_DESTINATIONS_APPRISE_TEST_LABEL = 'Send test';
-export const ALERT_DESTINATIONS_APPRISE_TESTING_LABEL = 'Testing...';
+export const ALERT_DESTINATIONS_APPRISE_TESTING_LABEL = 'Testing…';
 export const ALERT_DESTINATIONS_APPRISE_MODE_LABEL = 'Delivery mode';
 export const ALERT_DESTINATIONS_APPRISE_MODE_CLI_LABEL = 'Local Apprise CLI';
 export const ALERT_DESTINATIONS_APPRISE_MODE_HTTP_LABEL = 'Remote Apprise API';
@@ -62,11 +62,12 @@ export const ALERT_DESTINATIONS_APPRISE_MISSING_TARGETS_ERROR =
 export const ALERT_DESTINATIONS_APPRISE_MISSING_SERVER_URL_ERROR =
   'Enter an Apprise API server URL to test API delivery.';
 export const ALERT_DESTINATIONS_EMAIL_TEST_SUCCESS =
-  'Test email sent successfully! Check your inbox.';
-export const ALERT_DESTINATIONS_EMAIL_TEST_FAILURE = 'Failed to send test email';
+  'Test email sent. Check your inbox.';
+export const ALERT_DESTINATIONS_EMAIL_TEST_FAILURE = 'Unable to send the test email.';
 export const ALERT_DESTINATIONS_APPRISE_TEST_SUCCESS =
-  'Test Apprise notification sent successfully!';
-export const ALERT_DESTINATIONS_APPRISE_TEST_FAILURE = 'Failed to send test notification';
+  'Test Apprise notification sent.';
+export const ALERT_DESTINATIONS_APPRISE_TEST_FAILURE =
+  'Unable to send the test notification.';
 
 export function getAlertDestinationsConfigLoadError() {
   return ALERT_DESTINATIONS_CONFIG_LOAD_ERROR;
