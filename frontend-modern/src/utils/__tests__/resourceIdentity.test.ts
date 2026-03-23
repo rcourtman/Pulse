@@ -18,6 +18,7 @@ import {
   getPrimaryResourceIdentity,
   getPrimaryResourceIdentityRows,
   getResourceIdentityAliases,
+  shouldShowResourcePlatformId,
 } from '@/utils/resourceIdentity';
 import type { Agent, Node } from '@/types/api';
 
@@ -211,6 +212,38 @@ describe('resourceIdentity', () => {
     });
 
     expect(getPreferredResourceKubernetesContext(resource)).toBe('cluster-a');
+  });
+
+  it('hides platform ids that duplicate canonical identity labels', () => {
+    expect(
+      shouldShowResourcePlatformId(
+        makeResource({
+          name: 'delly',
+          displayName: 'delly',
+          platformId: 'delly',
+          canonicalIdentity: {
+            displayName: 'delly',
+            hostname: 'delly',
+          },
+        }),
+      ),
+    ).toBe(false);
+  });
+
+  it('keeps platform ids when they add distinct identity context', () => {
+    expect(
+      shouldShowResourcePlatformId(
+        makeResource({
+          name: 'pbs-main',
+          displayName: 'PBS Main',
+          platformId: '192.168.0.8',
+          canonicalIdentity: {
+            displayName: 'pbs-main',
+            hostname: 'pbs-main',
+          },
+        }),
+      ),
+    ).toBe(true);
   });
 
   it('builds agent-like aliases for legacy summary/detail surfaces', () => {

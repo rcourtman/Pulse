@@ -73,7 +73,7 @@ describe('ResourceDetailDrawer service cards', () => {
       type: 'pbs',
       name: 'pbs-main',
       displayName: 'PBS Main',
-      platformId: 'pbs-main',
+      platformId: '192.168.0.8',
       platformType: 'proxmox-pbs',
       platformData: {
         sources: ['pbs'],
@@ -121,7 +121,7 @@ describe('ResourceDetailDrawer service cards', () => {
       type: 'pmg',
       name: 'pmg-main',
       displayName: 'PMG Main',
-      platformId: 'pmg-main',
+      platformId: '192.168.0.25',
       platformType: 'proxmox-pmg',
       platformData: {
         sources: ['pmg'],

@@ -36,6 +36,7 @@ import {
 } from '@/utils/resourceChangePresentation';
 import { formatConfidenceLabel } from '@/utils/confidencePresentation';
 import { formatIdentifierLabel } from '@/utils/textPresentation';
+import { shouldShowResourcePlatformId } from '@/utils/resourceIdentity';
 import { buildInfrastructureResourceHref } from '@/routing/resourceLinks';
 import { getDiscoveryLoadingState } from '@/utils/discoveryPresentation';
 import { formatInteger, formatSourceType } from './resourceDetailMappers';
@@ -83,6 +84,7 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
   props,
 ) => {
   const { resource, drawer } = props;
+  const showPlatformId = shouldShowResourcePlatformId(resource);
 
   return (
     <div class="space-y-3">
@@ -141,7 +143,7 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                   </span>
                 </div>
               </Show>
-              <Show when={resource.platformId && !drawer.hasRuntimeOperationalContext()}>
+              <Show when={showPlatformId && !drawer.hasRuntimeOperationalContext()}>
                 <div class="flex items-center justify-between gap-2">
                   <span class="text-muted">Platform ID</span>
                   <span class="font-medium text-base-content truncate" title={resource.platformId}>
@@ -154,7 +156,7 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                   <div class="space-y-2.5">
                     <Show when={drawer.hasRuntimeOperationalContext()}>
                       <div class="space-y-1.5">
-                        <Show when={resource.platformId}>
+                        <Show when={showPlatformId}>
                           <div class="flex items-center justify-between gap-2">
                             <span class="text-muted">Platform ID</span>
                             <span

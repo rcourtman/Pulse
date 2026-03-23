@@ -321,7 +321,7 @@ describe('ResourceDetailDrawer change history section', () => {
     ).toBeNull();
     expect(screen.queryByText('Details')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Show details' })).toBeNull();
-    expect(screen.getByText('Platform ID')).toBeInTheDocument();
+    expect(screen.queryByText('Platform ID')).toBeNull();
     expect(within(identitySection).getByText('Tags')).toBeInTheDocument();
     expect(within(currentStateSection).queryByText('Tags')).toBeNull();
     expect(

@@ -303,6 +303,32 @@ export const getPreferredResourceHostname = (resource: Resource): string | undef
   );
 };
 
+export const shouldShowResourcePlatformId = (resource: Resource): boolean => {
+  const canonical = getCanonicalIdentityRecord(resource);
+  const platformData = getPlatformDataRecord(resource);
+  const platformAgent = getPlatformAgentRecord(resource);
+  const docker = platformData?.docker as Record<string, unknown> | undefined;
+  const pbs = platformData?.pbs as Record<string, unknown> | undefined;
+  const pmg = platformData?.pmg as Record<string, unknown> | undefined;
+  const platformId = asTrimmedString(resource.platformId);
+
+  if (!platformId) return false;
+
+  const redundantIdentityValues = dedupeTrimmedValues([
+    asTrimmedString(resource.displayName),
+    asTrimmedString(canonical?.displayName),
+    asTrimmedString(resource.name),
+    asTrimmedString(canonical?.hostname),
+    resource.identity?.hostname,
+    asTrimmedString(platformAgent?.hostname),
+    asTrimmedString(docker?.hostname),
+    asTrimmedString(pbs?.hostname),
+    asTrimmedString(pmg?.hostname),
+  ]);
+
+  return !redundantIdentityValues.some((value) => value.toLowerCase() === platformId.toLowerCase());
+};
+
 export { getPreferredResourceKubernetesContext };
 export { getPreferredResourceClusterName };
 

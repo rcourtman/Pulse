@@ -127,7 +127,7 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     expect(getByText('2/2 healthy')).toBeInTheDocument();
     expect(getByText('Mode')).toBeInTheDocument();
     expect(getByText('Hybrid')).toBeInTheDocument();
-    expect(getByText('Platform ID')).toBeInTheDocument();
+    expect(() => getByText('Platform ID')).toThrow();
     expect(getByText('Quick links')).toBeInTheDocument();
     expect(queryByRole('button', { name: 'Show details' })).toBeNull();
     expect(() => getByText('Runtime')).toThrow();
@@ -253,7 +253,7 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     expect(getAllByText('PMG').length).toBeGreaterThan(0);
     expect(getByText('Mode')).toBeInTheDocument();
     expect(getByText('API')).toBeInTheDocument();
-    expect(getByText('Platform ID')).toBeInTheDocument();
+    expect(queryByText('Platform ID')).toBeNull();
     expect(queryByText('Details')).toBeNull();
     expect(queryByText('Show details')).toBeNull();
   });

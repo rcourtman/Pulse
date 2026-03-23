@@ -436,9 +436,10 @@ while deeper machine detail remains available on demand.
 That host-details section now reads as a simple vertical stack of detail cards
 instead of a wrapped card grid, so the opened state stays linear instead of
 feeling like a second dashboard.
-Within that summary shell, current-state facts now stay operational: platform
-IDs, quick links, and platform-signal badges remain with runtime status,
-while aliases, IPs, and tags live only under the dedicated `Identity` card.
+Within that summary shell, current-state facts now stay operational: only
+distinct platform IDs, quick links, and platform-signal badges remain with
+runtime status, while aliases, IPs, and tags live only under the dedicated
+`Identity` card.
 That keeps first read status-first while still preserving canonical identity
 metadata on the same top-level summary surface instead of mixing identity
 support details into current-state chrome.
