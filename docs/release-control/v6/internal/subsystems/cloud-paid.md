@@ -239,9 +239,11 @@ signal entirely, the settings surface should degrade to a safe customer-facing
 fallback instead of an unexplained placeholder glyph.
 That same billing support boundary now also owns the shared monitored-system
 presentation helper. `frontend-modern/src/utils/monitoredSystemPresentation.ts`
-is the canonical owner for ledger labels, safe fallback summaries, and
-source/type attribution wording, so the settings panel must consume that
-helper instead of redefining customer-facing monitored-system copy inline.
+is the canonical owner for monitored-system brief/disclosure copy, ledger
+labels, safe fallback summaries, and source/type attribution wording, so the
+settings panel, Pro usage section, and counting-rules disclosure must consume
+that helper instead of redefining customer-facing monitored-system copy inline
+or keeping a parallel copy in generic self-hosted plan utilities.
 Frontend billing/admin surfaces must not synthesize `plan_version` from
 subscription lifecycle state. When a hosted billing record lacks a plan label,
 the UI must preserve that absence instead of fabricating values like `active`

@@ -9,8 +9,15 @@ const titleCaseWords = (value: string): string =>
     .join(' ');
 
 const MONITORED_SYSTEM_LEDGER_PRESENTATION = {
+  briefSummary: 'Billing is based on monitored systems. Child resources are included.',
   sectionTitle: 'Monitored Systems',
   panelTitle: 'Monitored System Ledger',
+  disclosureButtonLabel: 'View counting rules',
+  disclosureHideLabel: 'Hide counting rules',
+  disclosureDefinition:
+    'A monitored system is a top-level machine or cluster Pulse actively monitors. Each system counts once no matter how Pulse collects it. Child resources like VMs, containers, pods, disks, backups, and services are included.',
+  ledgerDescription:
+    'Review the monitored systems currently counted against your Pulse Pro plan limit.',
   tableNameLabel: 'Name',
   tableStatusLabel: 'Status',
   tableLatestIncludedSignalLabel: 'Latest Included Signal',
@@ -28,6 +35,24 @@ const MONITORED_SYSTEM_LEDGER_PRESENTATION = {
 
 export function getMonitoredSystemLedgerPresentation() {
   return MONITORED_SYSTEM_LEDGER_PRESENTATION;
+}
+
+export function getMonitoredSystemBriefSummary(): string {
+  return MONITORED_SYSTEM_LEDGER_PRESENTATION.briefSummary;
+}
+
+export function getMonitoredSystemDisclosureToggleLabel(open: boolean): string {
+  return open
+    ? MONITORED_SYSTEM_LEDGER_PRESENTATION.disclosureHideLabel
+    : MONITORED_SYSTEM_LEDGER_PRESENTATION.disclosureButtonLabel;
+}
+
+export function getMonitoredSystemDisclosureDefinition(): string {
+  return MONITORED_SYSTEM_LEDGER_PRESENTATION.disclosureDefinition;
+}
+
+export function getMonitoredSystemLedgerDescription(): string {
+  return MONITORED_SYSTEM_LEDGER_PRESENTATION.ledgerDescription;
 }
 
 export function getMonitoredSystemCountingDetailsToggleLabel(expanded: boolean): string {

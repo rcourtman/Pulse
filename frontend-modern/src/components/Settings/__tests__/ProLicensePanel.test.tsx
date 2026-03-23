@@ -159,9 +159,17 @@ describe('ProLicensePanel', () => {
     expect(
       screen.queryByText(/a monitored system is a top-level machine or cluster/i),
     ).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'View counting rules' })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
 
     fireEvent.click(screen.getByRole('button', { name: 'View counting rules' }));
 
+    expect(screen.getByRole('button', { name: 'Hide counting rules' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
     expect(
       screen.getByText(/a monitored system is a top-level machine or cluster/i),
     ).toBeInTheDocument();

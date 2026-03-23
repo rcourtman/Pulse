@@ -2,25 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import {
   SELF_HOSTED_FEATURE_ROWS,
-  SELF_HOSTED_MONITORED_SYSTEMS_BRIEF,
-  SELF_HOSTED_MONITORED_SYSTEMS_DEFINITION,
   SELF_HOSTED_PLAN_BY_TIER,
   SELF_HOSTED_PLAN_DEFINITIONS,
 } from '../selfHostedPlans';
 
 describe('selfHostedPlans', () => {
-  it('keeps the monitored-system wording concise by default and explicit on disclosure', () => {
-    expect(SELF_HOSTED_MONITORED_SYSTEMS_BRIEF).toBe(
-      'Billing is based on monitored systems. Child resources are included.',
-    );
-    expect(SELF_HOSTED_MONITORED_SYSTEMS_DEFINITION).toContain(
-      'top-level machine or cluster',
-    );
-    expect(SELF_HOSTED_MONITORED_SYSTEMS_DEFINITION).toContain('counts once');
-    expect(SELF_HOSTED_MONITORED_SYSTEMS_DEFINITION).toContain('VMs');
-    expect(SELF_HOSTED_MONITORED_SYSTEMS_DEFINITION).toContain('services');
-  });
-
   it('keeps self-hosted plan limits aligned across tier cards and comparison rows', () => {
     expect(SELF_HOSTED_PLAN_DEFINITIONS.map((tier) => tier.name)).toEqual([
       'Community',

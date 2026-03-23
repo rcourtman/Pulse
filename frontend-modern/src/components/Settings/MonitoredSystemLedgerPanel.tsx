@@ -25,14 +25,12 @@ import { PulseLogoIcon } from '@/components/icons/PulseLogoIcon';
 import {
   formatMonitoredSystemLatestIncludedSignalSentence,
   formatMonitoredSystemSurfaceAttribution,
+  getMonitoredSystemLedgerDescription,
   getMonitoredSystemCountingDetailsToggleLabel,
   getMonitoredSystemExplanationFallbackSummary,
   getMonitoredSystemLedgerPresentation,
   getMonitoredSystemStatusFallbackSummary,
 } from '@/utils/monitoredSystemPresentation';
-import {
-  SELF_HOSTED_MONITORED_SYSTEM_LEDGER_DESCRIPTION,
-} from '@/utils/selfHostedPlans';
 import { MonitoredSystemDefinitionDisclosure } from '@/components/Commercial/MonitoredSystemDefinitionDisclosure';
 
 interface MonitoredSystemLedgerPanelProps {
@@ -289,7 +287,7 @@ export function MonitoredSystemLedgerPanel(props: MonitoredSystemLedgerPanelProp
   return (
     <SettingsPanel
       title={presentation.panelTitle}
-      description={SELF_HOSTED_MONITORED_SYSTEM_LEDGER_DESCRIPTION}
+      description={getMonitoredSystemLedgerDescription()}
       icon={<PulseLogoIcon class="w-5 h-5" />}
       bodyClass="space-y-4"
     >

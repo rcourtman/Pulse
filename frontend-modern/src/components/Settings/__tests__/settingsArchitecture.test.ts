@@ -80,6 +80,7 @@ import relaySettingsPanelSource from '../RelaySettingsPanel.tsx?raw';
 import relayPairingSectionSource from '../RelayPairingSection.tsx?raw';
 import monitoredSystemLedgerPanelSource from '../MonitoredSystemLedgerPanel.tsx?raw';
 import proLicensePanelSource from '../ProLicensePanel.tsx?raw';
+import monitoredSystemDefinitionDisclosureSource from '@/components/Commercial/MonitoredSystemDefinitionDisclosure.tsx?raw';
 import proLicensePlanSectionSource from '../ProLicensePlanSection.tsx?raw';
 import commercialBillingSectionsSource from '../CommercialBillingSections.tsx?raw';
 import selfHostedCommercialActivationSectionSource from '../SelfHostedCommercialActivationSection.tsx?raw';
@@ -510,6 +511,15 @@ describe('Settings architecture guardrails', () => {
     expect(monitoredSystemLedgerPanelSource).toContain('getMonitoredSystemCountingDetailsToggleLabel');
     expect(monitoredSystemLedgerPanelSource).not.toContain('No monitored systems counted.');
     expect(monitoredSystemLedgerPanelSource).not.toContain('Current status');
+    expect(monitoredSystemLedgerPanelSource).toContain('getMonitoredSystemLedgerDescription');
+    expect(proLicensePanelSource).toContain('@/utils/monitoredSystemPresentation');
+    expect(proLicensePanelSource).toContain('getMonitoredSystemBriefSummary');
+    expect(monitoredSystemDefinitionDisclosureSource).toContain(
+      '@/utils/monitoredSystemPresentation',
+    );
+    expect(monitoredSystemDefinitionDisclosureSource).toContain(
+      'getMonitoredSystemDisclosureToggleLabel',
+    );
     expect(proLicensePanelStateSource).toContain('buildSelfHostedCommercialPlanModel');
     expect(proLicensePanelStateSource).toContain('loadLicenseStatus(true)');
     expect(proLicensePlanSectionSource).toContain('CommercialStatGrid');
@@ -517,6 +527,12 @@ describe('Settings architecture guardrails', () => {
     expect(monitoredSystemPresentationSource).toContain('export function getMonitoredSystemLedgerPresentation');
     expect(monitoredSystemPresentationSource).toContain(
       'export function getMonitoredSystemCountingDetailsToggleLabel',
+    );
+    expect(monitoredSystemPresentationSource).toContain(
+      'export function getMonitoredSystemBriefSummary',
+    );
+    expect(monitoredSystemPresentationSource).toContain(
+      'export function getMonitoredSystemDisclosureToggleLabel',
     );
     expect(selfHostedCommercialActivationSectionSource).toContain('License / Activation Key');
     expect(selfHostedCommercialActivationSectionSource).toContain('Start 14-day Pro Trial');

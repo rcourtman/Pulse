@@ -1,9 +1,8 @@
 import { Show, createSignal, type Component } from 'solid-js';
 import {
-  SELF_HOSTED_MONITORED_SYSTEMS_DEFINITION,
-  SELF_HOSTED_MONITORED_SYSTEMS_DISCLOSURE_LABEL,
-  SELF_HOSTED_MONITORED_SYSTEMS_HIDE_LABEL,
-} from '@/utils/selfHostedPlans';
+  getMonitoredSystemDisclosureDefinition,
+  getMonitoredSystemDisclosureToggleLabel,
+} from '@/utils/monitoredSystemPresentation';
 
 interface MonitoredSystemDefinitionDisclosureProps {
   summary?: string;
@@ -34,12 +33,12 @@ export const MonitoredSystemDefinitionDisclosure: Component<
           aria-expanded={open()}
           onClick={() => setOpen((current) => !current)}
         >
-          {open() ? SELF_HOSTED_MONITORED_SYSTEMS_HIDE_LABEL : SELF_HOSTED_MONITORED_SYSTEMS_DISCLOSURE_LABEL}
+          {getMonitoredSystemDisclosureToggleLabel(open())}
         </button>
 
         <Show when={open()}>
           <p class={props.detailClass ?? 'max-w-2xl text-xs text-muted'}>
-            {SELF_HOSTED_MONITORED_SYSTEMS_DEFINITION}
+            {getMonitoredSystemDisclosureDefinition()}
           </p>
         </Show>
       </div>

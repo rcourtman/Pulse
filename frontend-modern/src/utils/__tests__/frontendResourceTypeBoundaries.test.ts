@@ -61,6 +61,7 @@ import trialBannerModelSource from '@/components/shared/trialBannerModel.ts?raw'
 import monitoredSystemLimitWarningBannerSource from '@/components/shared/MonitoredSystemLimitWarningBanner.tsx?raw';
 import monitoredSystemLimitWarningBannerModelSource from '@/components/shared/monitoredSystemLimitWarningBannerModel.ts?raw';
 import monitoredSystemLedgerPanelSource from '@/components/Settings/MonitoredSystemLedgerPanel.tsx?raw';
+import monitoredSystemDefinitionDisclosureSource from '@/components/Commercial/MonitoredSystemDefinitionDisclosure.tsx?raw';
 import infrastructureSummaryTableSource from '@/components/shared/InfrastructureSummaryTable.tsx?raw';
 import infrastructureSummaryTableRowSource from '@/components/shared/InfrastructureSummaryTableRow.tsx?raw';
 import interactiveSparklineSource from '@/components/shared/InteractiveSparkline.tsx?raw';
@@ -3001,8 +3002,15 @@ describe('frontend resource type boundaries', () => {
     expect(monitoredSystemLedgerPanelSource).toContain(
       'getMonitoredSystemCountingDetailsToggleLabel',
     );
+    expect(monitoredSystemLedgerPanelSource).toContain('getMonitoredSystemLedgerDescription');
     expect(monitoredSystemLedgerPanelSource).not.toContain('No monitored systems counted.');
     expect(monitoredSystemLedgerPanelSource).not.toContain('Current status');
+    expect(monitoredSystemDefinitionDisclosureSource).toContain(
+      '@/utils/monitoredSystemPresentation',
+    );
+    expect(monitoredSystemDefinitionDisclosureSource).toContain(
+      'getMonitoredSystemDisclosureToggleLabel',
+    );
     expect(monitoredSystemPresentationSource).toContain(
       'export function getMonitoredSystemLedgerPresentation',
     );
@@ -3011,6 +3019,12 @@ describe('frontend resource type boundaries', () => {
     );
     expect(monitoredSystemPresentationSource).toContain(
       'export function formatMonitoredSystemLatestIncludedSignalSentence',
+    );
+    expect(monitoredSystemPresentationSource).toContain(
+      'export function getMonitoredSystemBriefSummary',
+    );
+    expect(monitoredSystemPresentationSource).toContain(
+      'export function getMonitoredSystemDisclosureToggleLabel',
     );
     expect(whatsNewModalSource).toContain('useWhatsNewModalState');
     expect(whatsNewModalSource).toContain('WHATS_NEW_FEATURE_CARDS');
