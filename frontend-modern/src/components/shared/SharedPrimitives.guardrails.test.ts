@@ -17,6 +17,7 @@ import densityMapModelSource from '@/components/shared/densityMapModel.ts?raw';
 import dialogSource from '@/components/shared/Dialog.tsx?raw';
 import dialogModelSource from '@/components/shared/dialogModel.ts?raw';
 import filterButtonGroupSource from '@/components/shared/FilterButtonGroup.tsx?raw';
+import filterButtonGroupModelSource from '@/components/shared/filterButtonGroupModel.ts?raw';
 import helpIconSource from '@/components/shared/HelpIcon.tsx?raw';
 import helpIconModelSource from '@/components/shared/helpIconModel.ts?raw';
 import historyChartHeaderSource from '@/components/shared/HistoryChartHeader.tsx?raw';
@@ -68,6 +69,7 @@ import collapsibleSearchInputStateSource from '@/components/shared/useCollapsibl
 import containerUpdateButtonStateSource from '@/components/shared/useContainerUpdateButtonState.ts?raw';
 import densityMapStateSource from '@/components/shared/useDensityMapState.ts?raw';
 import dialogStateSource from '@/components/shared/useDialogState.ts?raw';
+import filterButtonGroupStateSource from '@/components/shared/useFilterButtonGroupState.ts?raw';
 import helpIconStateSource from '@/components/shared/useHelpIconState.ts?raw';
 import historyChartStateSource from '@/components/shared/useHistoryChartState.ts?raw';
 import infrastructureDetailsDrawerStateSource from '@/components/shared/useInfrastructureDetailsDrawerState.ts?raw';
@@ -122,10 +124,21 @@ describe('shared primitive guardrails', () => {
   });
 
   it('routes canonical settings segmented selectors through FilterButtonGroup', () => {
-    expect(filterButtonGroupSource).toContain("variant?: FilterButtonGroupVariant");
-    expect(filterButtonGroupSource).toContain("prominent: 'grid grid-cols-1 gap-2'");
-    expect(filterButtonGroupSource).toContain('touch-scroll');
+    expect(filterButtonGroupSource).toContain('useFilterButtonGroupState');
+    expect(filterButtonGroupSource).toContain('getFilterButtonGroupClass');
+    expect(filterButtonGroupSource).toContain('getFilterButtonGroupButtonClass');
+    expect(filterButtonGroupSource).toContain('getFilterButtonGroupCompactLabel');
     expect(filterButtonGroupSource).not.toContain('-webkit-overflow-scrolling: touch;');
+    expect(filterButtonGroupSource).not.toContain("label.split(' ').pop()");
+    expect(filterButtonGroupSource).not.toContain('props.onChange(option.value)');
+    expect(filterButtonGroupStateSource).toContain('export function useFilterButtonGroupState');
+    expect(filterButtonGroupStateSource).toContain('createMemo');
+    expect(filterButtonGroupStateSource).toContain('props.disabled || option.disabled');
+    expect(filterButtonGroupStateSource).toContain('props.onChange(option.value)');
+    expect(filterButtonGroupModelSource).toContain("prominent: 'grid grid-cols-1 gap-2'");
+    expect(filterButtonGroupModelSource).toContain('touch-scroll');
+    expect(filterButtonGroupModelSource).toContain('getFilterButtonGroupButtonClass');
+    expect(filterButtonGroupModelSource).toContain('getFilterButtonGroupCompactLabel');
     expect(generalSettingsPanelSource).toContain('FilterButtonGroup');
     expect(generalSettingsPanelSource.match(/<FilterButtonGroup/g) ?? []).toHaveLength(3);
     expect(generalSettingsPanelSource).toContain('variant="prominent"');

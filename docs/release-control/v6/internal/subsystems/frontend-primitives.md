@@ -271,6 +271,14 @@ gating and click runtime, and
 label/title fallback policy, and status-badge class selection. Future status
 badge work should extend those owners instead of pushing label/title policy or
 disabled click handling back into the shell.
+The shared segmented selector now follows that same owner split.
+`frontend-modern/src/components/shared/FilterButtonGroup.tsx` stays the render
+shell, `frontend-modern/src/components/shared/useFilterButtonGroupState.ts`
+owns variant resolution plus disabled selection/change runtime, and
+`frontend-modern/src/components/shared/filterButtonGroupModel.ts` owns the
+variant class catalog, compact-label policy, and segmented button class
+selection. Future filter-button-group work should extend those owners instead
+of pushing label truncation or segmented variant policy back into the shell.
 The shared dialog now follows that same owner split.
 `frontend-modern/src/components/shared/Dialog.tsx` stays the render shell,
 `frontend-modern/src/components/shared/useDialogState.ts` owns focus trap,
