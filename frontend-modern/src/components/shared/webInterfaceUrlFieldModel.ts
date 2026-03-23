@@ -4,6 +4,7 @@ export interface WebInterfaceUrlFieldProps {
   metadataKind: 'guest' | 'agent';
   metadataId?: string;
   targetLabel?: string;
+  title?: string;
   customUrl?: string;
   onCustomUrlChange?: (url: string) => void;
   suggestedUrl?: string;
@@ -11,6 +12,7 @@ export interface WebInterfaceUrlFieldProps {
   suggestedUrlReasonTitle?: string;
   suggestedUrlDiagnostic?: string;
   discoveryLoading?: boolean;
+  embedded?: boolean;
   class?: string;
 }
 

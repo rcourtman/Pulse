@@ -176,6 +176,23 @@ export const buildHostDetailSummary = (hostDetailCards: string[]): string | null
   return categories;
 };
 
+export const buildAccessSummary = (options: {
+  hasWebInterface: boolean;
+  links: ResourceDetailDrawerOperationalLink[];
+}): string | null => {
+  const parts: string[] = [];
+
+  if (options.hasWebInterface) {
+    parts.push('Web interface');
+  }
+
+  if (options.links.length > 0) {
+    parts.push(`${options.links.length} link${options.links.length === 1 ? '' : 's'}`);
+  }
+
+  return parts.join(' · ') || null;
+};
+
 export const buildRelatedLinks = (
   resource: Resource,
   displayName: string,
@@ -204,5 +221,4 @@ export const buildRelatedLinks = (
 
 export const hasRuntimeOperationalContext = (
   badges: ResourceDetailDrawerOperationalBadge[],
-  links: ResourceDetailDrawerOperationalLink[],
-): boolean => badges.length > 0 || links.length > 0;
+): boolean => badges.length > 0;

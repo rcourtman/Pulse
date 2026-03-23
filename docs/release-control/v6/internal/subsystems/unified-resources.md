@@ -424,10 +424,10 @@ with the resource name, status, or primary identity line.
 That header badge row now also deduplicates identical visible labels, so
 agent-backed nodes do not repeat `Agent` when both the canonical resource type
 and a merged source resolve to the same badge text.
-The current-state card's `Quick links` row now only promotes runtime-scoped
-workloads drill-down routes, so ordinary host drawers do not surface a generic
-host-wide `Workloads` jump that reads like default navigation chrome instead of
-resource-specific operational context.
+Runtime-scoped workloads drill-down routes now live in a dedicated `Access`
+disclosure instead of a `Current state` row, so ordinary host drawers do not
+surface a generic host-wide `Workloads` jump as default runtime chrome and
+first-read status stays separate from the next place a user can go or inspect.
 That same `Current state` card now only shows `Mode` when the resource carries
 an actual canonical source mode, so ordinary hosts do not surface an empty or
 meaningless mode row when no source-type contract is present.
@@ -435,26 +435,27 @@ Inside that top card pair, the operational and supporting context rows stay inli
 instead of sitting in a collapsed `Details` disclosure or nested bordered
 cards, so the first read stays like one linear sheet rather than a stack of
 cards inside the overview shell.
-Discovery support now also lives inside an overview-only `Analysis`
-instead of a peer drawer tab, so supplemental discovery detail stays available
-without claiming the same navigation weight as runtime, identity, or
-service-specific operational views.
-That discovery surface is now a compact support row with a one-line summary and
-an on-demand metadata panel, so the actionable web-interface path stays primary
-while deeper discovery inspection remains available without reading like a
-second peer overview surface.
-For ordinary host discovery, that support row now stays even quieter: the
-surface is titled `Analysis`, and the collapsed state does not repeat a
-baseline `Host analysis via <hostname>` summary when the discovery target is
-just the same host identity already shown elsewhere in the drawer.
-The discovery metadata panel now expands directly under the outer support
-disclosure instead of nesting a second bordered card, so the support surface
-reads as one flattened reveal instead of a card inside a card.
-That discovery support surface now also follows the same shell/runtime split
-as the rest of the drawer: `DiscoveryTab.tsx` owns presentation and
-disclosures, while `useDiscoveryTabState.ts` owns API fetches, websocket
-progress, and note/discovery mutations.
-The overview keeps host, service, investigation, and discovery detail as
+Discovery support now lives as an `Analysis` reveal inside that same
+overview-only `Access` surface instead of a peer drawer tab, so supplemental
+inspection stays available without claiming the same navigation weight as
+runtime, identity, or service-specific operational views.
+That access surface is now a compact support row with a one-line summary,
+embedded web-interface controls, scoped runtime links, and an on-demand
+analysis panel, so the actionable access path stays primary while deeper
+discovery inspection remains available without reading like a second peer
+overview surface.
+For ordinary host discovery, that analysis entry stays even quieter: the
+collapsed `Access` state does not repeat a baseline `Host analysis via
+<hostname>` summary when the discovery target is just the same host identity
+already shown elsewhere in the drawer.
+The analysis panel now expands directly inside the outer `Access` disclosure
+instead of as a second peer support block, so the access surface reads as one
+flattened reveal instead of another card group under the overview.
+That access-side analysis surface still follows the same shell/runtime split as
+the rest of the drawer: `DiscoveryTab.tsx` owns presentation and disclosures,
+while `useDiscoveryTabState.ts` owns API fetches, websocket progress, and
+note/discovery mutations.
+The overview keeps access, host, service, and investigation detail as
 collapsed sibling disclosures under the primary card pair, so the drawer keeps
 the top-level shape to current-state/identity plus `Change history` before any
 secondary operational context appears.
@@ -480,8 +481,8 @@ That host-details section now reads as a simple vertical stack of detail cards
 instead of a wrapped card grid, so the opened state stays linear instead of
 feeling like a second dashboard.
 Within that summary shell, current-state facts now stay operational: only
-distinct platform IDs, quick links, and platform-signal badges remain with
-runtime status, while aliases, IPs, and tags live only under the dedicated
+distinct platform IDs and platform-signal badges remain with runtime status,
+while scoped links move to `Access` and aliases, IPs, and tags live only under the dedicated
 `Identity` card.
 That keeps first read status-first while still preserving canonical identity
 metadata on the same top-level summary surface instead of mixing identity
@@ -498,7 +499,7 @@ breakdowns stay available without displacing the common runtime and identity
 hierarchy on first read.
 The drawer’s secondary support sections now share the same responsive
 flex-wrap card-group pattern used by the workloads drawer, so change history,
-service details, host details, investigation context, and discovery context
+access, service, host, and investigation context
 read side by side on wider screens instead of as a single full-width stack.
 Host uses that same flex-wrap pattern inside the disclosure for the
 system, hardware, storage, and network cards, so the drawer matches the

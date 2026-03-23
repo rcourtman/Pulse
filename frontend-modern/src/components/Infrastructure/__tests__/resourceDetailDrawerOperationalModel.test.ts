@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  buildAccessSummary,
   buildHostDetailCards,
   buildHostDetailSummary,
   buildKubernetesCapabilityBadges,
@@ -118,7 +119,7 @@ describe('resourceDetailDrawerOperationalModel', () => {
     expect(buildHostDetailSummary(cards)).toBe(
       'System, Hardware, Storage, Network, Disks, and Temperatures',
     );
-    expect(hasRuntimeOperationalContext([], [])).toBe(false);
+    expect(hasRuntimeOperationalContext([])).toBe(false);
   });
 
   it('builds canonical related links from workloads and service detail surfaces', () => {
@@ -152,5 +153,23 @@ describe('resourceDetailDrawerOperationalModel', () => {
         'Host 1',
       ),
     ).toEqual([]);
+  });
+
+  it('builds access summaries from web access and scoped links', () => {
+    expect(buildAccessSummary({ hasWebInterface: true, links: [] })).toBe('Web interface');
+    expect(
+      buildAccessSummary({
+        hasWebInterface: true,
+        links: [
+          {
+            href: '/workloads?type=app-container&agent=agent-1',
+            label: 'Open in Workloads',
+            compactLabel: 'Workloads',
+            ariaLabel: 'Open related workloads for Host 1',
+          },
+        ],
+      }),
+    ).toBe('Web interface · 1 link');
+    expect(buildAccessSummary({ hasWebInterface: false, links: [] })).toBeNull();
   });
 });

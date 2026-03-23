@@ -8,6 +8,7 @@ import resourceDetailDrawerOverviewSource from '@/components/Infrastructure/Reso
 import resourceDetailDrawerHistoryStateSource from '@/components/Infrastructure/useResourceDetailDrawerHistoryState.ts?raw';
 import resourceDetailDrawerDerivedStateSource from '@/components/Infrastructure/useResourceDetailDrawerDerivedState.ts?raw';
 import resourceDetailDrawerDiscoveryModelSource from '@/components/Infrastructure/resourceDetailDiscoveryModel.ts?raw';
+import resourceDetailDrawerIdentityModelSource from '@/components/Infrastructure/resourceDetailDrawerIdentityModel.ts?raw';
 import resourceDetailDrawerOperationalModelSource from '@/components/Infrastructure/resourceDetailDrawerOperationalModel.ts?raw';
 import resourceDetailDrawerServiceModelSource from '@/components/Infrastructure/resourceDetailDrawerServiceModel.ts?raw';
 import resourceDetailDrawerDockerActionsStateSource from '@/components/Infrastructure/useResourceDetailDrawerDockerActionsState.ts?raw';
@@ -150,13 +151,27 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(resourceDetailDrawerDerivedStateSource).toContain(
       "from './resourceDetailDrawerServiceModel'",
     );
+    expect(resourceDetailDrawerDerivedStateSource).toContain(
+      "from './resourceDetailDrawerIdentityModel'",
+    );
     expect(resourceDetailDrawerDiscoveryModelSource).toContain('export const toDiscoveryConfig');
+    expect(resourceDetailDrawerIdentityModelSource).toContain(
+      'export const buildResourceIdentityView',
+    );
+    expect(resourceDetailDrawerIdentityModelSource).toContain(
+      'export const buildDiscoveryContextSummary',
+    );
+    expect(resourceDetailDrawerIdentityModelSource).toContain(
+      'export const buildResourceDebugBundle',
+    );
     expect(resourceDetailDrawerDerivedStateSource).not.toContain('buildWorkloadsHref');
     expect(resourceDetailDrawerDerivedStateSource).not.toContain('buildServiceDetailLinks');
     expect(resourceDetailDrawerDerivedStateSource).not.toContain('const supportedBadge =');
     expect(resourceDetailDrawerDerivedStateSource).not.toContain(
       'const links: Array<{ href: string;',
     );
+    expect(resourceDetailDrawerDerivedStateSource).not.toContain('ALIAS_COLLAPSE_THRESHOLD');
+    expect(resourceDetailDrawerDerivedStateSource).not.toContain('formatIdentifierLabel');
     expect(resourceDetailDrawerOperationalModelSource).toContain(
       'export const buildKubernetesCapabilityBadges',
     );
@@ -338,14 +353,15 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(screen.queryByText('Container Updates')).toBeNull();
     expect(screen.queryByText('Check Updates')).toBeNull();
     expect(screen.queryByText('Show update controls')).toBeNull();
-    expect(screen.getByText('Analysis')).toBeInTheDocument();
+    expect(screen.getByText('Access')).toBeInTheDocument();
+    expect(screen.queryByText('Analysis')).toBeNull();
     expect(
       screen.queryByText('Supporting metadata only. The web interface path above stays primary.'),
     ).toBeNull();
-    expect(screen.getByRole('button', { name: 'Open analysis' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Show access' })).toBeInTheDocument();
     expect(
       screen
-        .getByTestId('resource-discovery-context')
+        .getByTestId('resource-access-section')
         .querySelector('.mt-3.rounded.border.border-border.bg-surface.p-2\\.5'),
     ).toBeNull();
     expect(screen.queryByText('Details')).toBeNull();
@@ -375,6 +391,10 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(screen.queryByText('Capabilities 1')).toBeNull();
     expect(screen.queryByText('Relationships 1')).toBeNull();
     expect(screen.queryByText('AI')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show access' }));
+    expect(screen.getByText('Analysis')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open analysis' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Show context' }));
     await screen.findByText('AI');

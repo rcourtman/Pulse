@@ -324,8 +324,11 @@ render shell, `frontend-modern/src/components/shared/useWebInterfaceUrlFieldStat
 owns metadata fetch/save/remove lifecycle, success/error state, and suggested
 URL runtime, and `frontend-modern/src/components/shared/webInterfaceUrlFieldModel.ts`
 owns URL validation, target-label normalization, and suggested-URL presentation
-rules. Future web-interface URL work should extend those owners instead of
-pushing metadata transport or validation back into the shared shell.
+rules. The shared primitive now also supports an embedded mode with a caller-
+owned title so feature drawers can place web-interface controls inside a larger
+access surface without forking the save/remove/runtime behavior. Future
+web-interface URL work should extend those owners instead of pushing metadata
+transport or validation back into the shared shell.
 The shared help icon now follows that same owner split.
 `frontend-modern/src/components/shared/HelpIcon.tsx` stays the render shell,
 `frontend-modern/src/components/shared/useHelpIconState.ts` owns open state,

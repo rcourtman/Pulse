@@ -6,12 +6,17 @@ export type { WebInterfaceUrlFieldProps } from './webInterfaceUrlFieldModel';
 
 export const WebInterfaceUrlField: Component<WebInterfaceUrlFieldProps> = (props) => {
   const state = useWebInterfaceUrlFieldState(props);
+  const title = () => props.title?.trim() || 'Web Interface URL';
+  const rootClass = () =>
+    props.embedded
+      ? props.class ?? ''
+      : `rounded border border-border bg-surface p-3 shadow-sm ${props.class ?? ''}`.trim();
 
   return (
     <Show when={state.metadataId()}>
-      <div class={`rounded border border-border bg-surface p-3 shadow-sm ${props.class ?? ''}`}>
+      <div class={rootClass()}>
         <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
-          Web Interface URL
+          {title()}
         </div>
         <div class="flex items-center gap-2">
           <input

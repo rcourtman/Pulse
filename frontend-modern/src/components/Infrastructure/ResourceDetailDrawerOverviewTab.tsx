@@ -167,24 +167,6 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                     </div>
                   </div>
                 </Show>
-                <Show when={drawer.relatedLinks().length > 0}>
-                  <div class="flex flex-col gap-1">
-                    <span class="text-muted">Quick links</span>
-                    <div class="flex flex-wrap gap-2">
-                      <For each={drawer.relatedLinks()}>
-                        {(link) => (
-                          <a
-                            href={link.href}
-                            aria-label={link.ariaLabel}
-                            class="inline-flex items-center rounded border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-200 dark:hover:bg-blue-900"
-                          >
-                            {link.compactLabel}
-                          </a>
-                        )}
-                      </For>
-                    </div>
-                  </div>
-                </Show>
               </div>
             </Show>
           </div>
@@ -914,6 +896,95 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
           </SupportDisclosure>
         </Show>
 
+        <Show when={drawer.hasAccessContext()}>
+          <SupportDisclosure
+            title="Access"
+            summary={drawer.accessSummary()}
+            expanded={drawer.showAccessContext()}
+            onToggle={() => drawer.setShowAccessContext((value) => !value)}
+            showLabel="Show access"
+            hideLabel="Hide access"
+            class="h-full"
+            contentClass="mt-3 space-y-3"
+            dataTestId="resource-access-section"
+          >
+            <Show when={drawer.relatedLinks().length > 0}>
+              <div class="space-y-1">
+                <div class="text-[10px] font-medium uppercase tracking-wide text-base-content">
+                  Links
+                </div>
+                <div class="flex flex-wrap gap-2">
+                  <For each={drawer.relatedLinks()}>
+                    {(link) => (
+                      <a
+                        href={link.href}
+                        aria-label={link.ariaLabel}
+                        class="inline-flex items-center rounded border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-200 dark:hover:bg-blue-900"
+                      >
+                        {link.compactLabel}
+                      </a>
+                    )}
+                  </For>
+                </div>
+              </div>
+            </Show>
+
+            <Show when={drawer.discoveryConfig()}>
+              {(config) => (
+                <div class="space-y-3">
+                  <WebInterfaceUrlField
+                    metadataKind={config().metadataKind}
+                    metadataId={config().metadataId}
+                    targetLabel={config().targetLabel}
+                    title="Web interface"
+                    embedded
+                  />
+
+                  <div class="space-y-2 border-t border-border pt-3" data-testid="resource-access-analysis">
+                    <div class="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <div class="text-[10px] font-medium uppercase tracking-wide text-base-content">
+                          Analysis
+                        </div>
+                        <Show when={drawer.discoveryContextSummary()}>
+                          <div class="mt-1 text-[10px] text-base-content">
+                            {drawer.discoveryContextSummary()}
+                          </div>
+                        </Show>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => drawer.setShowDiscoveryContext((value) => !value)}
+                        class="inline-flex items-center rounded-md border border-border bg-surface px-2.5 py-1 text-[10px] font-medium text-base-content transition-colors hover:bg-base"
+                      >
+                        {drawer.showDiscoveryContext() ? 'Hide analysis' : 'Open analysis'}
+                      </button>
+                    </div>
+
+                    <Show when={drawer.showDiscoveryContext()}>
+                      <Suspense
+                        fallback={
+                          <div class="flex items-center justify-center py-8">
+                            <div class="animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full" />
+                            <span class="ml-2 text-sm text-muted">{getDiscoveryLoadingState().text}</span>
+                          </div>
+                        }
+                      >
+                        <DiscoveryTab
+                          resourceType={config().resourceType}
+                          agentId={config().agentId}
+                          resourceId={config().resourceId}
+                          hostname={config().hostname}
+                        />
+                      </Suspense>
+                    </Show>
+                  </div>
+                </div>
+              )}
+            </Show>
+          </SupportDisclosure>
+        </Show>
+
         <Show when={drawer.hasInvestigationContext()}>
           <SupportDisclosure
             title="Context"
@@ -1043,45 +1114,6 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
           </SupportDisclosure>
         </Show>
       </div>
-
-      <Show when={drawer.discoveryConfig()}>
-        {(config) => (
-          <div class="space-y-2">
-            <WebInterfaceUrlField
-              metadataKind={config().metadataKind}
-              metadataId={config().metadataId}
-              targetLabel={config().targetLabel}
-            />
-
-            <SupportDisclosure
-              title="Analysis"
-              summary={drawer.discoveryContextSummary()}
-              expanded={drawer.showDiscoveryContext()}
-              onToggle={() => drawer.setShowDiscoveryContext((value) => !value)}
-              showLabel="Open analysis"
-              hideLabel="Hide analysis"
-              class="h-full"
-              dataTestId="resource-discovery-context"
-            >
-              <Suspense
-                fallback={
-                  <div class="flex items-center justify-center py-8">
-                    <div class="animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full" />
-                    <span class="ml-2 text-sm text-muted">{getDiscoveryLoadingState().text}</span>
-                  </div>
-                }
-              >
-                <DiscoveryTab
-                  resourceType={config().resourceType}
-                  agentId={config().agentId}
-                  resourceId={config().resourceId}
-                  hostname={config().hostname}
-                />
-              </Suspense>
-            </SupportDisclosure>
-          </div>
-        )}
-      </Show>
     </div>
   );
 };

@@ -53,6 +53,21 @@ describe('WebInterfaceUrlField', () => {
     expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument();
   });
 
+  it('supports embedded rendering with a custom title', async () => {
+    const { container } = render(() => (
+      <WebInterfaceUrlField
+        metadataKind="agent"
+        metadataId="host-1"
+        targetLabel="agent"
+        title="Web interface"
+        embedded
+      />
+    ));
+
+    expect(await screen.findByText('Web interface')).toBeInTheDocument();
+    expect(container.querySelector('.shadow-sm')).toBeNull();
+  });
+
   it('saves a host URL through metadata API', async () => {
     render(() => (
       <WebInterfaceUrlField

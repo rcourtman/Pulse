@@ -21,6 +21,7 @@ export const useResourceDetailDrawerState = (options: UseResourceDetailDrawerSta
   const [debugEnabled] = createLocalStorageBooleanSignal(STORAGE_KEYS.DEBUG_MODE, false);
   const [copied, setCopied] = createSignal(false);
   const [showReportModal, setShowReportModal] = createSignal(false);
+  const [showAccessContext, setShowAccessContext] = createSignal(false);
   const [showInvestigationContext, setShowInvestigationContext] = createSignal(false);
   const [showCorrelationContext, setShowCorrelationContext] = createSignal(false);
   const [showDiscoveryContext, setShowDiscoveryContext] = createSignal(false);
@@ -86,6 +87,8 @@ export const useResourceDetailDrawerState = (options: UseResourceDetailDrawerSta
     copied,
     showReportModal,
     setShowReportModal,
+    showAccessContext,
+    setShowAccessContext,
     showInvestigationContext,
     setShowInvestigationContext,
     showCorrelationContext,

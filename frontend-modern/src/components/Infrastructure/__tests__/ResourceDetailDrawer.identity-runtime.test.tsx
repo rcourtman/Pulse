@@ -143,18 +143,23 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     );
 
     expect(queryByRole('button', { name: 'Analysis' })).toBeNull();
-    expect(getByText('Analysis')).toBeInTheDocument();
+    expect(getByText('Access')).toBeInTheDocument();
+    expect(queryByText('Analysis')).toBeNull();
     expect(queryByText('Host analysis via host-1')).toBeNull();
     expect(
       queryByText('Supporting metadata only. The web interface path above stays primary.'),
     ).toBeNull();
     expect(queryByTestId('discovery-tab')).toBeNull();
     expect(
-      getByTestId('resource-discovery-context').querySelector(
+      getByTestId('resource-access-section').querySelector(
         '.mt-3.rounded.border.border-border.bg-surface.p-2\\.5',
       ),
     ).toBeNull();
 
+    expect(getByRole('button', { name: 'Show access' })).toBeInTheDocument();
+
+    fireEvent.click(getByRole('button', { name: 'Show access' }));
+    expect(getByText('Analysis')).toBeInTheDocument();
     expect(getByRole('button', { name: 'Open analysis' })).toBeInTheDocument();
 
     fireEvent.click(getByRole('button', { name: 'Open analysis' }));

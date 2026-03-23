@@ -11,8 +11,6 @@ import {
   getUnifiedSourceBadges,
 } from '@/utils/resourceBadgePresentation';
 import {
-  getPrimaryResourceIdentityRows,
-  getResourceIdentityAliases,
   getPreferredResourceClusterName,
   getPreferredResourceDisplayName,
 } from '@/utils/resourceIdentity';
@@ -26,7 +24,6 @@ import {
 } from '@/utils/resourcePolicyPresentation';
 import type { ResourceIntelligence } from '@/types/aiIntelligence';
 import {
-  ALIAS_COLLAPSE_THRESHOLD,
   buildTemperatureRows,
   toAgentFromResource,
   toNodeFromProxmox,
@@ -36,7 +33,6 @@ import {
   type PlatformData,
 } from '@/components/Infrastructure/resourceDetailMappers';
 import { toDiscoveryConfig } from '@/components/Infrastructure/resourceDetailDiscoveryModel';
-import { formatIdentifierLabel } from '@/utils/textPresentation';
 import {
   buildPbsVisibleJobBreakdown,
   buildPmgVisibleMailBreakdown,
@@ -46,6 +42,7 @@ import {
   getServiceDetailsSummary,
 } from './resourceDetailDrawerServiceModel';
 import {
+  buildAccessSummary,
   buildHostDetailCards,
   buildHostDetailSummary,
   buildKubernetesCapabilityBadges,
@@ -53,6 +50,13 @@ import {
   buildSourceSummary,
   hasRuntimeOperationalContext as buildHasRuntimeOperationalContext,
 } from './resourceDetailDrawerOperationalModel';
+import {
+  buildDiscoveryContextSummary,
+  buildIdentityMatchInfo,
+  buildResourceDebugBundle,
+  buildResourceIdentityView,
+  buildSourceSections,
+} from './resourceDetailDrawerIdentityModel';
 
 type DrawerTab = 'overview' | 'mail' | 'namespaces' | 'deployments' | 'swarm' | 'debug';
 
@@ -212,39 +216,16 @@ export const useResourceDetailDrawerDerivedState = (
   );
   const sourceSummary = createMemo(() => buildSourceSummary(mergedSources(), sourceStatus()));
 
-  const identityAliasValues = createMemo(() => getResourceIdentityAliases(resource));
-  const identityIpValues = createMemo(() => resource.identity?.ips ?? []);
-  const primaryIdentityRows = createMemo(() => getPrimaryResourceIdentityRows(resource));
-  const identityCardHasRichData = createMemo(
-    () =>
-      primaryIdentityRows().length > 0 ||
-      identityIpValues().length > 0 ||
-      (resource.tags?.length || 0) > 0 ||
-      identityAliasValues().length > 0,
-  );
-  const aliasPreviewValues = createMemo(() =>
-    identityAliasValues().slice(0, ALIAS_COLLAPSE_THRESHOLD),
-  );
-  const hasAliasOverflow = createMemo(
-    () => identityAliasValues().length > ALIAS_COLLAPSE_THRESHOLD,
-  );
+  const identityView = createMemo(() => buildResourceIdentityView(resource));
+  const identityAliasValues = createMemo(() => identityView().identityAliasValues);
+  const identityIpValues = createMemo(() => identityView().identityIpValues);
+  const primaryIdentityRows = createMemo(() => identityView().primaryIdentityRows);
+  const identityCardHasRichData = createMemo(() => identityView().identityCardHasRichData);
+  const aliasPreviewValues = createMemo(() => identityView().aliasPreviewValues);
+  const hasAliasOverflow = createMemo(() => identityView().hasAliasOverflow);
   const hasMergedSources = createMemo(() => mergedSources().length > 1);
   const discoveryConfig = createMemo(() => toDiscoveryConfig(resource));
-  const discoveryContextSummary = createMemo(() => {
-    const config = discoveryConfig();
-    if (!config) return null;
-
-    if (config.resourceType === 'agent') {
-      return null;
-    }
-
-    const discoveryMode =
-      config.resourceType === 'agent'
-        ? 'Host analysis'
-        : `${formatIdentifierLabel(config.resourceType)} analysis`;
-
-    return config.hostname ? `${discoveryMode} via ${config.hostname}` : discoveryMode;
-  });
+  const discoveryContextSummary = createMemo(() => buildDiscoveryContextSummary(discoveryConfig()));
 
   const hostDetailCards = createMemo(() =>
     buildHostDetailCards({
@@ -271,53 +252,29 @@ export const useResourceDetailDrawerDerivedState = (
   });
 
   const relatedLinks = createMemo(() => buildRelatedLinks(resource, displayName()));
+  const accessSummary = createMemo(() =>
+    buildAccessSummary({
+      hasWebInterface: Boolean(discoveryConfig()),
+      links: relatedLinks(),
+    }),
+  );
+  const hasAccessContext = createMemo(
+    () => Boolean(discoveryConfig()) || relatedLinks().length > 0,
+  );
   const hasRuntimeOperationalContext = createMemo(
-    () => buildHasRuntimeOperationalContext(kubernetesCapabilityBadges(), relatedLinks()),
+    () => buildHasRuntimeOperationalContext(kubernetesCapabilityBadges()),
   );
 
-  const sourceSections = createMemo(() => {
-    const data = platformData();
-    if (!data) {
-      return [] as Array<{ id: string; label: string; payload: unknown }>;
-    }
-    const sections = [
-      { id: 'proxmox', label: 'Proxmox', payload: data.proxmox },
-      { id: 'agent', label: 'Agent', payload: data.agent },
-      { id: 'docker', label: 'Containers', payload: data.docker },
-      { id: 'pbs', label: 'PBS', payload: data.pbs },
-      { id: 'pmg', label: 'PMG', payload: data.pmg },
-      { id: 'kubernetes', label: 'Kubernetes', payload: data.kubernetes },
-      { id: 'metrics', label: 'Metrics', payload: data.metrics },
-    ];
-    return sections.filter((section) => section.payload !== undefined);
-  });
-  const identityMatchInfo = createMemo(() => {
-    const data = platformData();
-    return (
-      data?.identityMatch ??
-      data?.matchResults ??
-      data?.matchCandidates ??
-      data?.matches ??
-      undefined
-    );
-  });
-  const debugBundle = createMemo(() => ({
-    resource,
-    identity: {
-      resourceIdentity: resource.identity,
-      matchInfo: identityMatchInfo(),
-    },
-    sources: {
+  const sourceSections = createMemo(() => buildSourceSections(platformData()));
+  const identityMatchInfo = createMemo(() => buildIdentityMatchInfo(platformData()));
+  const debugBundle = createMemo(() =>
+    buildResourceDebugBundle({
+      resource,
+      platformData: platformData(),
       sourceStatus: sourceStatus(),
-      proxmox: platformData()?.proxmox,
-      agent: platformData()?.agent,
-      docker: platformData()?.docker,
-      pbs: platformData()?.pbs,
-      pmg: platformData()?.pmg,
-      kubernetes: platformData()?.kubernetes,
-      metrics: platformData()?.metrics,
-    },
-  }));
+      identityMatchInfo: identityMatchInfo(),
+    }),
+  );
   const debugJson = createMemo(() => JSON.stringify(debugBundle(), null, 2));
 
   const tabs = createMemo(() => {
@@ -402,6 +359,8 @@ export const useResourceDetailDrawerDerivedState = (
     hasMergedSources,
     discoveryConfig,
     discoveryContextSummary,
+    accessSummary,
+    hasAccessContext,
     hasHostDetails,
     hostDetailSummary,
     hasServiceDetails,
