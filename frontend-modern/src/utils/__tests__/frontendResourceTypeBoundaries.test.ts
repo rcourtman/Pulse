@@ -4400,17 +4400,25 @@ describe('frontend resource type boundaries', () => {
     expect(patrolRunPresentationSource).toContain('export function getToolCallsLoadingState');
     expect(patrolRunPresentationSource).toContain('export function getToolCallsUnavailableState');
     expect(systemLogsPanelSource).toContain('getSystemLogLineClass');
+    expect(systemLogsPanelSource).toContain('getSystemLogBufferSummary');
     expect(systemLogsPanelSource).toContain('getSystemLogStreamPresentation');
+    expect(systemLogsPanelSource).toContain('SYSTEM_LOGS_PANEL_COPY');
+    expect(systemLogsPanelSource).toContain('SYSTEM_LOG_LEVEL_OPTIONS');
     expect(systemLogsPanelSource).not.toContain('notificationStore.success');
     expect(systemLogsPanelSource).not.toContain('new EventSource(');
     expect(systemLogsPanelSource).not.toContain("log.includes('ERR')");
+    expect(systemLogsPanelSource).not.toContain("isPaused() ? 'Resume Stream' : 'Pause Stream'");
     expect(systemLogsPanelSource).not.toContain("isPaused() ? 'Stream Paused' : 'Live'");
+    expect(systemLogsPanelSource).not.toContain('Waiting for logs...');
     expect(systemLogsPanelSource).not.toContain(
       "'bg-amber-100 text-amber-600 dark:bg-amber-900 dark:text-amber-400'",
     );
     expect(systemLogsPanelStateSource).toContain("window.location.href = '/api/logs/download'");
     expect(systemLogsPanelStateSource).toContain('notificationStore.success');
     expect(systemLogsPanelStateSource).toContain('new EventSource');
+    expect(systemLogsPresentationSource).toContain('export const SYSTEM_LOGS_PANEL_COPY');
+    expect(systemLogsPresentationSource).toContain('export const SYSTEM_LOG_LEVEL_OPTIONS');
+    expect(systemLogsPresentationSource).toContain('export function getSystemLogBufferSummary');
     expect(systemLogsPresentationSource).toContain('export function getSystemLogLineClass');
     expect(systemLogsPresentationSource).toContain(
       'export function getSystemLogStreamPresentation',

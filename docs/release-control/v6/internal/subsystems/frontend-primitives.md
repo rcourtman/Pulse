@@ -76,11 +76,12 @@ work extends shared components instead of creating new local variants.
 53. `frontend-modern/src/components/shared/MonitoredSystemLimitWarningBanner.tsx`
 54. `frontend-modern/src/components/Settings/SystemLogsPanel.tsx`
 55. `frontend-modern/src/components/Settings/useSystemLogsPanelState.ts`
-56. `frontend-modern/src/components/Settings/__tests__/SystemLogsPanel.test.tsx`
-57. `frontend-modern/src/features/operations/OperationsPageSurface.tsx`
-58. `frontend-modern/src/features/operations/operationsPageModel.ts`
-59. `frontend-modern/src/pages/Operations.tsx`
-60. `frontend-modern/src/pages/__tests__/Operations.helpers.test.ts`
+56. `frontend-modern/src/utils/systemLogsPresentation.ts`
+57. `frontend-modern/src/components/Settings/__tests__/SystemLogsPanel.test.tsx`
+58. `frontend-modern/src/features/operations/OperationsPageSurface.tsx`
+59. `frontend-modern/src/features/operations/operationsPageModel.ts`
+60. `frontend-modern/src/pages/Operations.tsx`
+61. `frontend-modern/src/pages/__tests__/Operations.helpers.test.ts`
 59. `frontend-modern/src/components/Settings/NetworkDiscoverySection.tsx`
 60. `frontend-modern/src/components/Settings/NetworkBoundarySettingsSection.tsx`
 61. `frontend-modern/src/components/Settings/networkSettingsModel.ts`
@@ -147,11 +148,13 @@ tag badge variant or importing a feature-local path into infrastructure
 surfaces.
 The system logs operations surface now follows the same shell/runtime split as
 the other modernized settings panels: `frontend-modern/src/components/Settings/SystemLogsPanel.tsx`
-owns the operations framing and presentation helpers, while
+owns the operations framing and consumes the canonical stream-copy/status
+helpers from `frontend-modern/src/utils/systemLogsPresentation.ts`, while
 `frontend-modern/src/components/Settings/useSystemLogsPanelState.ts` owns the
 stream lifecycle, buffering, level updates, and download action. Future system
 logs work must extend that split instead of pulling `EventSource`, API calls,
-or notification flow back into the panel render shell.
+notification flow, or customer-facing system-log copy back into the panel
+render shell.
 Top-level route files are now also expected to stay thin when a feature owns
 the real product surface. `frontend-modern/src/pages/Infrastructure.tsx` now
 acts only as the route boundary, while

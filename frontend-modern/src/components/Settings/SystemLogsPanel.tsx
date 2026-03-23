@@ -1,8 +1,11 @@
 import { Component, For } from 'solid-js';
 import OperationsPanel from '@/components/Settings/OperationsPanel';
 import {
+  getSystemLogBufferSummary,
   getSystemLogLineClass,
   getSystemLogStreamPresentation,
+  SYSTEM_LOG_LEVEL_OPTIONS,
+  SYSTEM_LOGS_PANEL_COPY,
 } from '@/utils/systemLogsPresentation';
 import Download from 'lucide-solid/icons/download';
 import Pause from 'lucide-solid/icons/pause';
@@ -19,24 +22,25 @@ export const SystemLogsPanel: Component = () => {
   return (
     <div class="space-y-6">
       <OperationsPanel
-        title="System Logs"
-        description="Stream real-time system logs and download support bundles."
+        title={SYSTEM_LOGS_PANEL_COPY.title}
+        description={SYSTEM_LOGS_PANEL_COPY.description}
         icon={<Terminal class="w-5 h-5" strokeWidth={2} />}
       >
         {/* Controls */}
         <div class="p-4 sm:p-6">
           <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div class="flex items-center space-x-3">
-              <label class="text-sm font-medium text-base-content">Log Level:</label>
+              <label class="text-sm font-medium text-base-content">
+                {SYSTEM_LOGS_PANEL_COPY.levelLabel}
+              </label>
               <select
                 value={state.level()}
                 onChange={(e) => void state.handleLevelChange(e.currentTarget.value)}
                 class="form-select min-h-10 sm:min-h-9 text-sm py-2.5 px-3 rounded-md border-border bg-surface text-muted focus:ring-primary-500 focus:border-primary-500"
               >
-                <option value="debug">Debug</option>
-                <option value="info">Info</option>
-                <option value="warn">Warn</option>
-                <option value="error">Error</option>
+                <For each={SYSTEM_LOG_LEVEL_OPTIONS}>
+                  {(option) => <option value={option.value}>{option.label}</option>}
+                </For>
               </select>
             </div>
 
@@ -46,14 +50,14 @@ export const SystemLogsPanel: Component = () => {
                 class={`min-h-10 sm:min-h-9 min-w-10 sm:min-w-9 p-2.5 rounded transition-colors ${
                   streamPresentation().pauseButtonClass
                 }`}
-                title={state.isPaused() ? 'Resume Stream' : 'Pause Stream'}
+                title={streamPresentation().toggleTitle}
               >
                 {state.isPaused() ? <Play size={18} /> : <Pause size={18} />}
               </button>
               <button
                 onClick={state.clearLogs}
                 class="min-h-10 sm:min-h-9 min-w-10 sm:min-w-9 p-2.5 rounded hover:bg-surface-hover text-muted transition-colors"
-                title="Clear Logs"
+                title={SYSTEM_LOGS_PANEL_COPY.clearTitle}
               >
                 <Trash2 size={18} />
               </button>
@@ -63,7 +67,7 @@ export const SystemLogsPanel: Component = () => {
                 class="min-h-10 sm:min-h-9 flex items-center space-x-2 px-3 py-2.5 bg-primary-600 text-white rounded-md hover:bg-primary-700 text-sm font-medium transition-colors"
               >
                 <Download size={16} />
-                <span>Support Bundle</span>
+                <span>{SYSTEM_LOGS_PANEL_COPY.downloadLabel}</span>
               </button>
             </div>
           </div>
@@ -86,15 +90,13 @@ export const SystemLogsPanel: Component = () => {
             {state.logs().length === 0 && !state.isLoading() && (
               <div class="h-full flex flex-col items-center justify-center ">
                 <Terminal size={48} class="mb-4 opacity-50" />
-                <p>Waiting for logs...</p>
+                <p>{SYSTEM_LOGS_PANEL_COPY.emptyState}</p>
               </div>
             )}
           </div>
 
           <div class="text-xs text-muted flex justify-between px-1 pt-4">
-            <span>
-              Buffer: {state.logs().length} / {state.maxLogs} lines
-            </span>
+            <span>{getSystemLogBufferSummary(state.logs().length, state.maxLogs)}</span>
             <span class="flex items-center gap-2">
               <div class={`w-2 h-2 rounded-full ${streamPresentation().indicatorClass}`}></div>
               {streamPresentation().label}

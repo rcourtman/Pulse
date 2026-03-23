@@ -2099,6 +2099,7 @@
         "frontend-modern/src/utils/aiSettingsPresentation.ts",
         "frontend-modern/src/utils/reportingPresentation.ts",
         "frontend-modern/src/utils/ssoProviderPresentation.ts",
+        "frontend-modern/src/utils/systemLogsPresentation.ts",
         "frontend-modern/src/utils/systemSettingsPresentation.ts"
       ],
       "verification": {
@@ -2234,6 +2235,19 @@
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/utils/__tests__/aiSettingsPresentation.test.ts"
+            ]
+          },
+          {
+            "id": "system-logs-presentation-helper",
+            "label": "system logs presentation helper proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/utils/systemLogsPresentation.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/utils/__tests__/systemLogsPresentation.test.ts"
             ]
           },
           {
