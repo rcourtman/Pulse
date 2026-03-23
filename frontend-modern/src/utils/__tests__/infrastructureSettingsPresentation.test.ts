@@ -29,17 +29,21 @@ describe('infrastructureSettingsPresentation', () => {
     expect(getDiscoverySubnetValidEntryRequiredMessage()).toBe(
       'Enter at least one valid subnet in CIDR format',
     );
-    expect(getDiscoveryScanStartErrorMessage()).toBe('Failed to start discovery scan');
-    expect(getDiscoverySettingUpdateErrorMessage()).toBe('Failed to update discovery setting');
-    expect(getDiscoverySubnetUpdateErrorMessage()).toBe('Failed to update discovery subnet');
+    expect(getDiscoveryScanStartErrorMessage()).toBe('Unable to start the discovery scan.');
+    expect(getDiscoverySettingUpdateErrorMessage()).toBe(
+      'Unable to update the discovery setting.',
+    );
+    expect(getDiscoverySubnetUpdateErrorMessage()).toBe(
+      'Unable to update the discovery subnet.',
+    );
   });
 
   it('returns canonical infrastructure node management error copy', () => {
     expect(getNodeTemperatureMonitoringUpdateErrorMessage()).toBe(
-      'Failed to update temperature monitoring setting',
+      'Unable to update temperature monitoring.',
     );
     expect(getNodeTemperatureMonitoringUpdateErrorMessage('forbidden')).toBe('forbidden');
-    expect(getNodeDeleteErrorMessage()).toBe('Failed to delete node');
+    expect(getNodeDeleteErrorMessage()).toBe('Unable to delete the node.');
     expect(getNodeDeleteErrorMessage('locked')).toBe('locked');
   });
 });

@@ -346,6 +346,22 @@
       ]
     },
     {
+      "path": "frontend-modern/src/utils/apiTokenPresentation.ts",
+      "rationale": "the API token presentation helper is both a security/privacy control surface and a canonical API token management boundary",
+      "subsystems": [
+        "api-contracts",
+        "security-privacy"
+      ]
+    },
+    {
+      "path": "frontend-modern/src/utils/infrastructureSettingsPresentation.ts",
+      "rationale": "the infrastructure settings presentation helper is both an agent lifecycle control surface and an API-backed direct-node/discovery settings boundary",
+      "subsystems": [
+        "agent-lifecycle",
+        "api-contracts"
+      ]
+    },
+    {
       "path": "internal/api/agent_install_command_shared.go",
       "rationale": "agent install command assembly is both an agent lifecycle control surface and a canonical API payload contract boundary",
       "subsystems": [
@@ -554,6 +570,7 @@
         "frontend-modern/src/components/SetupWizard/SetupCompletionPanel.tsx",
         "frontend-modern/src/utils/agentInstallCommand.ts",
         "frontend-modern/src/utils/agentProfilesPresentation.ts",
+        "frontend-modern/src/utils/infrastructureSettingsPresentation.ts",
         "internal/api/agent_install_command_shared.go",
         "internal/api/config_setup_handlers.go",
         "internal/api/unified_agent.go",
@@ -809,6 +826,19 @@
               "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
               "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts"
             ]
+          },
+          {
+            "id": "direct-proxmox-presentation-helper",
+            "label": "direct Proxmox presentation helper proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/utils/infrastructureSettingsPresentation.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/utils/__tests__/infrastructureSettingsPresentation.test.ts"
+            ]
           }
         ]
       }
@@ -1014,7 +1044,9 @@
         "frontend-modern/src/components/Settings/useInfrastructureReportingState.tsx",
         "frontend-modern/src/components/Settings/useNodeModalState.ts",
         "frontend-modern/src/types/api.ts",
-        "frontend-modern/src/utils/agentInstallCommand.ts"
+        "frontend-modern/src/utils/agentInstallCommand.ts",
+        "frontend-modern/src/utils/apiTokenPresentation.ts",
+        "frontend-modern/src/utils/infrastructureSettingsPresentation.ts"
       ],
       "verification": {
         "allow_same_subsystem_tests": false,
@@ -1148,6 +1180,19 @@
             ]
           },
           {
+            "id": "api-token-presentation-helper",
+            "label": "API token presentation helper proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/utils/apiTokenPresentation.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/utils/__tests__/apiTokenPresentation.test.ts"
+            ]
+          },
+          {
             "id": "agent-profiles-client-contract",
             "label": "agent profiles client API contract proof",
             "match_prefixes": [],
@@ -1261,6 +1306,19 @@
               "frontend-modern/src/api/__tests__/security.test.ts",
               "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsController.test.tsx",
               "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsModel.test.tsx"
+            ]
+          },
+          {
+            "id": "infrastructure-settings-presentation-helper",
+            "label": "infrastructure settings presentation helper proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/utils/infrastructureSettingsPresentation.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/utils/__tests__/infrastructureSettingsPresentation.test.ts"
             ]
           }
         ]
@@ -2999,6 +3057,7 @@
         "frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx",
         "frontend-modern/src/components/Settings/useAPITokenManagerState.ts",
         "frontend-modern/src/components/Settings/useSystemSettingsState.ts",
+        "frontend-modern/src/utils/apiTokenPresentation.ts",
         "internal/api/security.go",
         "internal/api/security_tokens.go",
         "internal/api/system_settings.go",
@@ -3061,6 +3120,19 @@
               "frontend-modern/src/components/Settings/__tests__/SecurityPostureSummary.test.tsx",
               "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
               "frontend-modern/src/stores/__tests__/systemSettings.test.ts"
+            ]
+          },
+          {
+            "id": "security-api-token-presentation-helper",
+            "label": "security API token presentation helper proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/utils/apiTokenPresentation.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/utils/__tests__/apiTokenPresentation.test.ts"
             ]
           },
           {

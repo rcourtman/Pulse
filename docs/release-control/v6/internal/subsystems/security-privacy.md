@@ -31,10 +31,11 @@ token-management visibility, and privacy controls to operators.
 8. `frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx`
 9. `frontend-modern/src/components/Settings/useAPITokenManagerState.ts`
 10. `frontend-modern/src/components/Settings/useSystemSettingsState.ts`
-11. `internal/api/security.go`
-12. `internal/api/security_tokens.go`
-13. `internal/api/system_settings.go`
-14. `internal/telemetry/telemetry.go`
+11. `frontend-modern/src/utils/apiTokenPresentation.ts`
+12. `internal/api/security.go`
+13. `internal/api/security_tokens.go`
+14. `internal/api/system_settings.go`
+15. `internal/telemetry/telemetry.go`
 
 ## Shared Boundaries
 
@@ -45,6 +46,7 @@ token-management visibility, and privacy controls to operators.
 5. `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx` shared with `frontend-primitives`: the authentication settings surface is both a security/privacy control surface and a canonical settings-shell presentation boundary.
 6. `frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx` shared with `frontend-primitives`: the security overview settings surface is both a security/privacy control surface and a canonical settings-shell presentation boundary.
 7. `frontend-modern/src/components/Settings/useAPITokenManagerState.ts` shared with `api-contracts`: the API token settings state hook is both a security/privacy control surface and a canonical API payload contract boundary.
+8. `frontend-modern/src/utils/apiTokenPresentation.ts` shared with `api-contracts`: the API token presentation helper is both a security/privacy control surface and a canonical API token management boundary.
 8. `internal/api/security.go` shared with `api-contracts`: the security handlers are both a security/privacy control surface and a canonical API payload contract boundary.
 9. `internal/api/security_tokens.go` shared with `api-contracts`: the security token handlers are both a security/privacy control surface and a canonical API payload contract boundary.
 10. `internal/api/system_settings.go` shared with `api-contracts`: the system settings telemetry and auth controls are both a security/privacy control surface and a canonical API payload contract boundary.
@@ -101,6 +103,10 @@ The security transport surfaces remain intentionally shared with
 `api-contracts`: token, auth, and telemetry settings payloads are still API
 contracts, but they now also count as first-class security/privacy runtime
 behavior that `L14` must govern directly.
+That shared token-management boundary now also includes
+`frontend-modern/src/utils/apiTokenPresentation.ts`, so API-token load,
+generate, and revoke errors stay on one governed customer-facing wording path
+instead of drifting back into hook-local notification strings.
 That same shared security transport boundary must stay under explicit proof
 routing on both sides: `frontend-modern/src/api/security.ts`,
 `internal/api/security.go`, `internal/api/security_tokens.go`, and

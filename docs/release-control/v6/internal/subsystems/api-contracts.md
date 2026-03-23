@@ -52,6 +52,8 @@ Own canonical runtime payload shapes between backend and frontend.
 29. `frontend-modern/src/components/Settings/useInfrastructureReportingState.tsx`
 30. `frontend-modern/src/components/Settings/useInfrastructureConfiguredNodesState.ts`
 31. `frontend-modern/src/components/Settings/useInfrastructureDiscoveryRuntimeState.ts`
+32. `frontend-modern/src/utils/apiTokenPresentation.ts`
+33. `frontend-modern/src/utils/infrastructureSettingsPresentation.ts`
 
 ## Shared Boundaries
 
@@ -81,6 +83,8 @@ Own canonical runtime payload shapes between backend and frontend.
 24. `frontend-modern/src/components/Settings/useInfrastructureReportingState.tsx` shared with `agent-lifecycle`: the infrastructure reporting state hook is both an agent fleet lifecycle control surface and an API-backed assignment, reporting, and reconnect contract boundary.
 25. `frontend-modern/src/components/Settings/useNodeModalState.ts` shared with `agent-lifecycle`: the node setup modal state hook is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
 24. `frontend-modern/src/utils/agentInstallCommand.ts` shared with `agent-lifecycle`: the shared frontend install-command helper is both an agent lifecycle control surface and a canonical API/install transport contract boundary.
+25. `frontend-modern/src/utils/apiTokenPresentation.ts` shared with `security-privacy`: the API token presentation helper is both a security/privacy control surface and a canonical API token management boundary.
+26. `frontend-modern/src/utils/infrastructureSettingsPresentation.ts` shared with `agent-lifecycle`: the infrastructure settings presentation helper is both an agent lifecycle control surface and an API-backed direct-node/discovery settings boundary.
 25. `internal/api/agent_install_command_shared.go` shared with `agent-lifecycle`: agent install command assembly is both an agent lifecycle control surface and a canonical API payload contract boundary.
 26. `internal/api/ai_handler.go` shared with `ai-runtime`: Pulse Assistant handlers are both an AI runtime control surface and a canonical API payload contract boundary.
 27. `internal/api/ai_handlers.go` shared with `ai-runtime`: AI settings and remediation handlers are both an AI runtime control surface and a canonical API payload contract boundary.
@@ -1391,6 +1395,10 @@ both sides instead of relying only on broad settings-surface coverage on the
 security side: token settings changes must continue to carry the direct
 `api-token-management-surface` API-contract proof together with the
 security-side surface proof.
+That same boundary now also includes
+`frontend-modern/src/utils/apiTokenPresentation.ts`, so token load/create/
+revoke errors keep one governed customer-facing message source instead of
+reappearing as hook-local strings.
 That same token surface, together with `frontend-modern/src/api/security.ts`,
 `internal/api/security.go`, `internal/api/security_tokens.go`, and
 `internal/api/system_settings.go`, now also follows an explicit shared
@@ -1401,6 +1409,11 @@ The `/api/security/tokens` payload contract now also carries explicit owner
 binding: token create/list responses must preserve the originating
 `ownerUserId` together with org scope so long-lived automation credentials
 cannot appear detached from their intended human identity.
+The shared direct-node/discovery settings boundary now also includes
+`frontend-modern/src/utils/infrastructureSettingsPresentation.ts`, so the
+customer-facing mutation and validation copy used by the governed runtime
+hooks stays explicit under the same API-backed settings proof instead of
+living as an unowned utility.
 That same governed token contract must fail closed on mutation. Limited-scope
 API tokens may only create, rotate, or delete tokens whose effective scopes
 are a subset of the caller's own scopes; token-management routes must not let a

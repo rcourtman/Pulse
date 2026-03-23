@@ -75,6 +75,7 @@ management, and fleet control surfaces.
 51. `frontend-modern/src/components/Settings/infrastructureSettingsModel.ts`
 52. `frontend-modern/src/components/Settings/useInfrastructureConfiguredNodesState.ts`
 53. `frontend-modern/src/components/Settings/useInfrastructureDiscoveryRuntimeState.ts`
+54. `frontend-modern/src/utils/infrastructureSettingsPresentation.ts`
 
 ## Shared Boundaries
 
@@ -96,6 +97,7 @@ management, and fleet control surfaces.
 16. `frontend-modern/src/components/Settings/useInfrastructureReportingState.tsx` shared with `api-contracts`: the infrastructure reporting state hook is both an agent fleet lifecycle control surface and an API-backed assignment, reporting, and reconnect contract boundary.
 17. `frontend-modern/src/components/Settings/useNodeModalState.ts` shared with `api-contracts`: the node setup modal state hook is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
 18. `frontend-modern/src/utils/agentInstallCommand.ts` shared with `api-contracts`: the shared frontend install-command helper is both an agent lifecycle control surface and a canonical API/install transport contract boundary.
+19. `frontend-modern/src/utils/infrastructureSettingsPresentation.ts` shared with `api-contracts`: the infrastructure settings presentation helper is both an agent lifecycle control surface and an API-backed direct-node/discovery settings boundary.
 19. `internal/api/agent_install_command_shared.go` shared with `api-contracts`: agent install command assembly is both an agent lifecycle control surface and a canonical API payload contract boundary.
 20. `internal/api/config_setup_handlers.go` shared with `api-contracts`: auto-register and setup handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.
 21. `internal/api/unified_agent.go` shared with `api-contracts`: unified agent download and installer handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.
@@ -228,6 +230,11 @@ Lifecycle-adjacent workspace copy must also keep the same commercial framing:
 infrastructure operations may point operators to Pulse Pro for billing, but it
 must describe that boundary in monitored-system, plan-limit, and license-status
 terms rather than reviving legacy agent-allocation language.
+That same direct-workspace boundary now also owns the shared customer-facing
+error copy for discovery and configured-node actions through
+`frontend-modern/src/utils/infrastructureSettingsPresentation.ts`, so direct
+Proxmox settings mutations do not drift back to inline toast text inside the
+runtime hooks.
 That same boundary now also assumes canonical resource payloads preserve
 shared facet totals through `facetCounts`, so the resource list and detail
 surfaces can keep row summaries aligned without re-inferring totals from

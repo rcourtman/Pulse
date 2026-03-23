@@ -19,21 +19,21 @@ export function getDiscoverySubnetValidEntryRequiredMessage(): string {
 }
 
 export function getDiscoveryScanStartErrorMessage(): string {
-  return 'Failed to start discovery scan';
+  return 'Unable to start the discovery scan.';
 }
 
 export function getDiscoverySettingUpdateErrorMessage(): string {
-  return 'Failed to update discovery setting';
+  return 'Unable to update the discovery setting.';
 }
 
 export function getDiscoverySubnetUpdateErrorMessage(): string {
-  return 'Failed to update discovery subnet';
+  return 'Unable to update the discovery subnet.';
 }
 
 export function getNodeTemperatureMonitoringUpdateErrorMessage(message?: string): string {
-  return message || 'Failed to update temperature monitoring setting';
+  return message || 'Unable to update temperature monitoring.';
 }
 
 export function getNodeDeleteErrorMessage(message?: string): string {
-  return message || 'Failed to delete node';
+  return message || 'Unable to delete the node.';
 }

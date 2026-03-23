@@ -7,9 +7,9 @@ import {
 
 describe('apiTokenPresentation', () => {
   it('returns canonical API token error copy', () => {
-    expect(getAPITokensLoadErrorMessage()).toBe('Failed to load API tokens');
-    expect(getAPITokenGenerateErrorMessage()).toBe('Failed to generate API token');
-    expect(getAPITokenRevokeErrorMessage()).toBe('Failed to revoke API token');
+    expect(getAPITokensLoadErrorMessage()).toBe('Unable to load API tokens.');
+    expect(getAPITokenGenerateErrorMessage()).toBe('Unable to generate the API token.');
+    expect(getAPITokenRevokeErrorMessage()).toBe('Unable to revoke the API token.');
   });
 
   it('surfaces token scope denial copy for generate failures', () => {

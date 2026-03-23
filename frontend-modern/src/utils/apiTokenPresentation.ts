@@ -1,5 +1,5 @@
 export function getAPITokensLoadErrorMessage(): string {
-  return 'Failed to load API tokens';
+  return 'Unable to load API tokens.';
 }
 
 import { API_SCOPE_LABELS } from '@/constants/apiScopes';
@@ -14,7 +14,7 @@ export function getAPITokenGenerateErrorMessage(error?: unknown): string {
   if (error && typeof error === 'object') {
     const typedError = error as APITokenErrorShape;
     if (typedError.status !== 403 || typeof typedError.message !== 'string') {
-      return 'Failed to generate API token';
+      return 'Unable to generate the API token.';
     }
 
     const message = typedError.message.trim();
@@ -32,9 +32,9 @@ export function getAPITokenGenerateErrorMessage(error?: unknown): string {
     }
   }
 
-  return 'Failed to generate API token';
+  return 'Unable to generate the API token.';
 }
 
 export function getAPITokenRevokeErrorMessage(): string {
-  return 'Failed to revoke API token';
+  return 'Unable to revoke the API token.';
 }
