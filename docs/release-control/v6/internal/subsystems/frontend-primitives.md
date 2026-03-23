@@ -286,6 +286,14 @@ and `frontend-modern/src/components/shared/searchInputModel.ts` owns the shared
 search-input contract plus shortcut-hint and trailing-control policy. Future
 search-input work should extend those owners instead of pushing type-to-search
 or enhancement wiring back into the shared shell.
+The shared tooltip now follows that same owner split.
+`frontend-modern/src/components/shared/Tooltip.tsx` stays the render shell and
+singleton API boundary, `frontend-modern/src/components/shared/useTooltipState.ts`
+owns tooltip positioning lifecycle, RAF scheduling, and singleton visibility
+state, and `frontend-modern/src/components/shared/tooltipModel.ts` owns tooltip
+sanitization plus viewport-clamped positioning math. Future tooltip work should
+extend those owners instead of pushing singleton state, DOM measurement, or
+sanitization logic back into the shared shell.
 The shared collapsible search input now follows that same owner split.
 `frontend-modern/src/components/shared/CollapsibleSearchInput.tsx` stays the
 render shell, `frontend-modern/src/components/shared/useCollapsibleSearchInputState.ts`

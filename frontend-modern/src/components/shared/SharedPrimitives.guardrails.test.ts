@@ -27,6 +27,8 @@ import searchFieldSource from '@/components/shared/SearchField.tsx?raw';
 import searchFieldModelSource from '@/components/shared/searchFieldModel.ts?raw';
 import searchInputSource from '@/components/shared/SearchInput.tsx?raw';
 import searchInputModelSource from '@/components/shared/searchInputModel.ts?raw';
+import tooltipSource from '@/components/shared/Tooltip.tsx?raw';
+import tooltipModelSource from '@/components/shared/tooltipModel.ts?raw';
 import interactiveSparklineSource from '@/components/shared/InteractiveSparkline.tsx?raw';
 import interactiveSparklineModelSource from '@/components/shared/interactiveSparklineModel.ts?raw';
 import infrastructureSummaryTableSource from '@/components/shared/InfrastructureSummaryTable.tsx?raw';
@@ -49,6 +51,7 @@ import infrastructureSelectorStateSource from '@/components/shared/useInfrastruc
 import pulseDataGridStateSource from '@/components/shared/usePulseDataGridState.ts?raw';
 import searchFieldStateSource from '@/components/shared/useSearchFieldState.ts?raw';
 import searchInputStateSource from '@/components/shared/useSearchInputState.ts?raw';
+import tooltipStateSource from '@/components/shared/useTooltipState.ts?raw';
 import interactiveSparklineStateSource from '@/components/shared/useInteractiveSparklineState.ts?raw';
 import webInterfaceUrlFieldSource from '@/components/shared/WebInterfaceUrlField.tsx?raw';
 import webInterfaceUrlFieldModelSource from '@/components/shared/webInterfaceUrlFieldModel.ts?raw';
@@ -456,6 +459,28 @@ describe('shared primitive guardrails', () => {
     expect(searchInputModelSource).toContain('getSearchInputShortcutHint');
     expect(searchInputModelSource).toContain('shouldSearchInputShowTrailingControls');
     expect(searchInputModelSource).toContain('export interface SearchInputProps');
+  });
+
+  it('keeps tooltip on shell, runtime, and model owners', () => {
+    expect(tooltipSource).toContain('useTooltipState');
+    expect(tooltipSource).toContain('createTooltipSystemState');
+    expect(tooltipSource).not.toContain('createSignal');
+    expect(tooltipSource).not.toContain('requestAnimationFrame');
+    expect(tooltipSource).not.toContain('sanitizeTooltipContent');
+    expect(tooltipSource).not.toContain('resolveTooltipPosition');
+
+    expect(tooltipStateSource).toContain('export function useTooltipState');
+    expect(tooltipStateSource).toContain('export function createTooltipSystemState');
+    expect(tooltipStateSource).toContain('createSignal');
+    expect(tooltipStateSource).toContain('requestAnimationFrame');
+    expect(tooltipStateSource).toContain('tooltipInstance');
+    expect(tooltipStateSource).toContain('resolveTooltipPosition');
+    expect(tooltipStateSource).toContain('sanitizeTooltipContent');
+
+    expect(tooltipModelSource).toContain('export function sanitizeTooltipContent');
+    expect(tooltipModelSource).toContain('export function resolveTooltipPosition');
+    expect(tooltipModelSource).toContain("export type TooltipAlignment = 'left' | 'center'");
+    expect(tooltipModelSource).toContain("export type TooltipDirection = 'up' | 'down'");
   });
 
   it('keeps collapsible search input on shell, runtime, and model owners', () => {
