@@ -177,6 +177,9 @@ and `useResourceDetailDrawerDerivedState.ts` now composes those operational
 overview derivations through that canonical model owner instead of rebuilding
 Kubernetes capability badges, source health, related links, and host-detail
 coverage inline,
+and the current-state summary now leaves normal source provenance to the
+canonical header badges while only surfacing a `Sources` row when source
+health is degraded or unhealthy,
 `resourceDetailDrawerServiceModel.ts` owns the pure Docker/PBS/PMG service
 summary and breakdown derivations that feed the overview service-details
 surface,

@@ -71,7 +71,7 @@ describe('resourceDetailDrawerOperationalModel', () => {
     ]);
   });
 
-  it('prefers source health summaries and falls back to merged source counts', () => {
+  it('surfaces only non-healthy source health summaries', () => {
     expect(
       buildSourceSummary(
         ['agent', 'docker'],
@@ -86,11 +86,13 @@ describe('resourceDetailDrawerOperationalModel', () => {
       title: 'agent:healthy • docker:degraded',
     });
 
-    expect(buildSourceSummary(['agent', 'docker'], {})).toEqual({
-      label: '2 sources',
-      className: 'text-base-content',
-      title: 'agent • docker',
-    });
+    expect(
+      buildSourceSummary(['agent', 'docker'], {
+        agent: { status: 'healthy' },
+        docker: { status: 'online' },
+      }),
+    ).toBeNull();
+    expect(buildSourceSummary(['agent', 'docker'], {})).toBeNull();
   });
 
   it('keeps host detail coverage and runtime context on canonical operational inputs', () => {

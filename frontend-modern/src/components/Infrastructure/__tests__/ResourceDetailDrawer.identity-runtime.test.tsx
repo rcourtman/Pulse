@@ -106,7 +106,7 @@ const baseResource = (overrides: Partial<Resource>): Resource => ({
 });
 
 describe('ResourceDetailDrawer runtime and identity cards', () => {
-  it('renders a unified summary shell with current-state source and mode details', () => {
+  it('renders a unified summary shell without repeating healthy source status', () => {
     const resource = baseResource({
       platformData: {
         sources: ['agent', 'proxmox'],
@@ -123,15 +123,14 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
 
     expect(getByText('Summary')).toBeInTheDocument();
     expect(getByText('Current state')).toBeInTheDocument();
-    expect(getByText('Sources')).toBeInTheDocument();
-    expect(getByText('2/2 healthy')).toBeInTheDocument();
+    expect(() => getByText('Sources')).toThrow();
+    expect(queryByRole('link', { name: 'Open related workloads for host-1' })).toBeNull();
     expect(getByText('Mode')).toBeInTheDocument();
     expect(getByText('Hybrid')).toBeInTheDocument();
     expect(() => getByText('Platform ID')).toThrow();
     expect(getByTestId('resource-current-state-section').querySelector('.border-dashed')).toBeNull();
     expect(queryByRole('button', { name: 'Show details' })).toBeNull();
     expect(() => getByText('Runtime')).toThrow();
-    expect(queryByRole('link', { name: 'Open related workloads for host-1' })).toBeNull();
     const headerBadges = getByTestId('resource-header-badges');
     expect(within(headerBadges).getAllByText('Agent')).toHaveLength(1);
     expect(within(headerBadges).getByText('PVE')).toBeInTheDocument();
@@ -238,7 +237,7 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     expect(getByText('eth0')).toBeInTheDocument();
   });
 
-  it('falls back to source list summary when per-source health is unavailable', () => {
+  it('keeps source provenance in the header when no source health issue is present', () => {
     const resource = baseResource({
       sourceType: 'api',
       platformData: {
@@ -246,17 +245,34 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
       },
     });
 
-    const { getByText, getAllByText, queryByText } = render(() => (
+    const { getByTestId, getByText, queryByText } = render(() => (
       <ResourceDetailDrawer resource={resource} />
     ));
 
-    expect(getByText('Sources')).toBeInTheDocument();
-    expect(getAllByText('PMG').length).toBeGreaterThan(0);
+    expect(queryByText('Sources')).toBeNull();
+    expect(within(getByTestId('resource-header-badges')).getByText('PMG')).toBeInTheDocument();
     expect(getByText('Mode')).toBeInTheDocument();
     expect(getByText('API')).toBeInTheDocument();
     expect(queryByText('Platform ID')).toBeNull();
     expect(queryByText('Details')).toBeNull();
     expect(queryByText('Show details')).toBeNull();
+  });
+
+  it('shows the sources row when canonical source health is degraded', () => {
+    const resource = baseResource({
+      platformData: {
+        sources: ['agent', 'proxmox'],
+        sourceStatus: {
+          agent: { status: 'online', lastSeen: new Date().toISOString() },
+          proxmox: { status: 'degraded', lastSeen: new Date().toISOString() },
+        },
+      },
+    });
+
+    const { getByText } = render(() => <ResourceDetailDrawer resource={resource} />);
+
+    expect(getByText('Sources')).toBeInTheDocument();
+    expect(getByText('1/2 degraded')).toBeInTheDocument();
   });
 
   it('hides the mode row when a resource has no canonical source mode', () => {

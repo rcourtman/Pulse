@@ -84,7 +84,6 @@ export const buildSourceHealthSummary = (
   const entries = Object.entries(sourceStatus);
   if (entries.length === 0) return null;
 
-  let healthy = 0;
   let warning = 0;
   let unhealthy = 0;
   const parts: string[] = [];
@@ -93,7 +92,7 @@ export const buildSourceHealthSummary = (
     const normalized = (status?.status || '').trim().toLowerCase();
     parts.push(`${source}:${normalized || 'unknown'}`);
     if (['online', 'running', 'healthy', 'connected', 'ok'].includes(normalized)) {
-      healthy += 1;
+      continue;
     } else if (['degraded', 'warning', 'stale'].includes(normalized)) {
       warning += 1;
     } else {
@@ -116,11 +115,7 @@ export const buildSourceHealthSummary = (
       title: parts.join(' • '),
     };
   }
-  return {
-    label: `${healthy}/${total} healthy`,
-    className: 'text-emerald-600 dark:text-emerald-400',
-    title: parts.join(' • '),
-  };
+  return null;
 };
 
 export const buildSourceSummary = (
@@ -129,12 +124,7 @@ export const buildSourceSummary = (
 ): ResourceDetailDrawerSummary | null => {
   const health = buildSourceHealthSummary(sourceStatus);
   if (health) return health;
-  if (mergedSources.length === 0) return null;
-  return {
-    label: mergedSources.length === 1 ? mergedSources[0].toUpperCase() : `${mergedSources.length} sources`,
-    className: 'text-base-content',
-    title: mergedSources.join(' • '),
-  };
+  return null;
 };
 
 export const buildHostDetailCards = (options: {
