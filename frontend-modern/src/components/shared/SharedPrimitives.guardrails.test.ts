@@ -3,6 +3,8 @@ import calloutCardSource from '@/components/shared/CalloutCard.tsx?raw';
 import containerUpdateBadgeSource from '@/components/shared/ContainerUpdateBadge.tsx?raw';
 import containerUpdateBadgeModelSource from '@/components/shared/containerUpdateBadgeModel.ts?raw';
 import filterButtonGroupSource from '@/components/shared/FilterButtonGroup.tsx?raw';
+import helpIconSource from '@/components/shared/HelpIcon.tsx?raw';
+import helpIconModelSource from '@/components/shared/helpIconModel.ts?raw';
 import historyChartSource from '@/components/shared/HistoryChart.tsx?raw';
 import historyChartModelSource from '@/components/shared/historyChartModel.ts?raw';
 import interactiveSparklineSource from '@/components/shared/InteractiveSparkline.tsx?raw';
@@ -15,6 +17,7 @@ import monitoredSystemLimitWarningBannerSource from '@/components/shared/Monitor
 import selectionCardGroupSource from '@/components/shared/SelectionCardGroup.tsx?raw';
 import tagBadgesSource from '@/components/shared/TagBadges.tsx?raw';
 import containerUpdateButtonStateSource from '@/components/shared/useContainerUpdateButtonState.ts?raw';
+import helpIconStateSource from '@/components/shared/useHelpIconState.ts?raw';
 import historyChartStateSource from '@/components/shared/useHistoryChartState.ts?raw';
 import interactiveSparklineStateSource from '@/components/shared/useInteractiveSparklineState.ts?raw';
 import webInterfaceUrlFieldSource from '@/components/shared/WebInterfaceUrlField.tsx?raw';
@@ -223,5 +226,21 @@ describe('shared primitive guardrails', () => {
     expect(webInterfaceUrlFieldModelSource).toContain('validateWebInterfaceCustomUrl');
     expect(webInterfaceUrlFieldModelSource).toContain('getWebInterfaceSuggestedUrlFallback');
     expect(webInterfaceUrlFieldModelSource).toContain('shouldShowWebInterfaceSuggestedUrl');
+  });
+
+  it('keeps help icon on shell, runtime, and model owners', () => {
+    expect(helpIconSource).toContain('useHelpIconState');
+    expect(helpIconSource).not.toContain('getHelpContent(');
+    expect(helpIconSource).not.toContain('requestAnimationFrame');
+    expect(helpIconSource).not.toContain('createSignal');
+
+    expect(helpIconStateSource).toContain('requestAnimationFrame');
+    expect(helpIconStateSource).toContain('document.addEventListener');
+    expect(helpIconStateSource).toContain('export function useHelpIconState');
+    expect(helpIconStateSource).toContain('createSignal');
+
+    expect(helpIconModelSource).toContain('resolveHelpContent');
+    expect(helpIconModelSource).toContain('calculateHelpPopoverPosition');
+    expect(helpIconModelSource).toContain('helpIconSizeClasses');
   });
 });

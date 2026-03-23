@@ -2194,6 +2194,7 @@
               "frontend-modern/src/components/shared/__tests__/CommandPaletteModal.test.tsx",
               "frontend-modern/src/components/shared/__tests__/ContainerUpdateBadge.test.tsx",
               "frontend-modern/src/components/shared/__tests__/Dialog.test.tsx",
+              "frontend-modern/src/components/shared/__tests__/HelpIcon.test.tsx",
               "frontend-modern/src/components/shared/__tests__/HistoryChart.test.tsx",
               "frontend-modern/src/components/shared/__tests__/InfrastructureSummaryTable.test.tsx",
               "frontend-modern/src/components/shared/__tests__/PulseDataGrid.test.tsx",

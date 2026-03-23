@@ -213,6 +213,14 @@ URL runtime, and `frontend-modern/src/components/shared/webInterfaceUrlFieldMode
 owns URL validation, target-label normalization, and suggested-URL presentation
 rules. Future web-interface URL work should extend those owners instead of
 pushing metadata transport or validation back into the shared shell.
+The shared help icon now follows that same owner split.
+`frontend-modern/src/components/shared/HelpIcon.tsx` stays the render shell,
+`frontend-modern/src/components/shared/useHelpIconState.ts` owns open state,
+popover-position lifecycle, and global click/escape listeners, and
+`frontend-modern/src/components/shared/helpIconModel.ts` owns help-content
+resolution, icon sizing, missing-content warnings, and popover-position math.
+Future help-icon work should extend those owners instead of pushing registry
+lookups or DOM listener lifecycle back into the shared shell.
 
 The audit log settings surface now follows that same owner split.
 `frontend-modern/src/components/Settings/AuditLogPanel.tsx` stays the canonical
