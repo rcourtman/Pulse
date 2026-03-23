@@ -2102,7 +2102,8 @@
         "frontend-modern/src/utils/settingsShellPresentation.ts",
         "frontend-modern/src/utils/ssoProviderPresentation.ts",
         "frontend-modern/src/utils/systemLogsPresentation.ts",
-        "frontend-modern/src/utils/systemSettingsPresentation.ts"
+        "frontend-modern/src/utils/systemSettingsPresentation.ts",
+        "frontend-modern/src/utils/updatesPresentation.ts"
       ],
       "verification": {
         "allow_same_subsystem_tests": false,
@@ -2263,6 +2264,19 @@
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/utils/__tests__/settingsShellPresentation.test.ts"
+            ]
+          },
+          {
+            "id": "updates-presentation-helper",
+            "label": "updates presentation helper proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/utils/updatesPresentation.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/utils/__tests__/updatesPresentation.test.ts"
             ]
           },
           {

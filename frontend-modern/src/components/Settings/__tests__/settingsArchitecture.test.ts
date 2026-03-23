@@ -938,9 +938,14 @@ describe('Settings architecture guardrails', () => {
   it('keeps the updates settings shell behind extracted install-guide owners', () => {
     expect(updatesSettingsPanelSource).toContain('@/components/Settings/UpdateInstallGuide');
     expect(updatesSettingsPanelSource).toContain('@/components/Settings/updatesSettingsModel');
+    expect(updatesSettingsPanelSource).toContain('UPDATES_PANEL_COPY');
+    expect(updatesSettingsPanelSource).toContain('getUpdateCheckActionLabel');
     expect(updatesSettingsPanelSource).not.toContain("navigator.clipboard.writeText('update')");
     expect(updatesSettingsPanelSource).not.toContain("value: 'stable'");
     expect(updatesSettingsPanelSource).not.toContain("value: 'rc'");
+    expect(updatesSettingsPanelSource).not.toContain('Check Now');
+    expect(updatesSettingsPanelSource).not.toContain('Checking...');
+    expect(updatesSettingsPanelSource).not.toContain('Update Preferences');
     expect(updateInstallGuideSource).toContain('@/components/Settings/CopyCommandBlock');
     expect(updateInstallGuideSource).toContain('buildUpdateInstallGuide');
     expect(copyCommandBlockSource).toContain('export function CopyCommandBlock');
@@ -1089,10 +1094,12 @@ describe('Settings architecture guardrails', () => {
       expect(SETTINGS_HEADER_META[tab].title, `${tab} should keep its shell title canonical`).toBe(
         title,
       );
+      const allowedTitleExpression =
+        tab === 'system-updates' ? `title={UPDATES_PANEL_COPY.title}` : `title="${title}"`;
       expect(
         source,
         `${tab} should keep its leading SettingsPanel title aligned with the shell title`,
-      ).toContain(`title="${title}"`);
+      ).toContain(allowedTitleExpression);
     }
   });
 

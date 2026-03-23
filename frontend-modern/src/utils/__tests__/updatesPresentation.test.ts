@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  getUpdateCheckActionLabel,
   getUpdateAvailabilityHeading,
   getUpdateBuildBadges,
   getUpdateCheckModeLabel,
   getUpdatePrimaryStatusLabel,
+  UPDATES_PANEL_COPY,
 } from '../updatesPresentation';
 
 describe('updatesPresentation', () => {
@@ -15,6 +17,27 @@ describe('updatesPresentation', () => {
     ).toEqual(['Development', 'Docker', 'Source']);
   });
 
+  it('returns canonical updates panel framing copy', () => {
+    expect(UPDATES_PANEL_COPY).toEqual({
+      title: 'Updates',
+      description: 'Manage version checks and automatic update preferences.',
+      currentVersionLabel: 'Current Version',
+      checkNowLabel: 'Check Now',
+      checkingLabel: 'Checking...',
+      updatePreferencesTitle: 'Update Preferences',
+      autoUpdateTitle: 'Automatic Stable Updates',
+      autoUpdateDescription:
+        'Supported host installs can automatically apply stable releases. RC preview validation always stays manual.',
+      previewChannelTitle: 'RC is a manual preview channel.',
+      previewChannelDescription:
+        'Use this on staging or internal validation environments. Automatic stable updates stay disabled on RC so preview installs do not drift between channels unattended.',
+      previewChannelAutoUpdateNotice:
+        'Automatic stable updates are unavailable while the RC preview channel is selected.',
+      checkIntervalLabel: 'Check Interval',
+      preferredTimeLabel: 'Preferred Time',
+    });
+  });
+
   it('returns canonical update status copy', () => {
     expect(getUpdateAvailabilityHeading(true)).toBe('Available');
     expect(getUpdateAvailabilityHeading(false)).toBe('Status');
@@ -22,5 +45,7 @@ describe('updatesPresentation', () => {
     expect(getUpdatePrimaryStatusLabel(false)).toBe('Up to date');
     expect(getUpdateCheckModeLabel(true)).toBe('Auto-check enabled');
     expect(getUpdateCheckModeLabel(false)).toBe('Manual checks only');
+    expect(getUpdateCheckActionLabel(true)).toBe('Checking...');
+    expect(getUpdateCheckActionLabel(false)).toBe('Check Now');
   });
 });

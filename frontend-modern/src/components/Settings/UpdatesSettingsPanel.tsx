@@ -17,10 +17,12 @@ import {
   type UpdateChannelOptionValue,
 } from '@/components/Settings/updatesSettingsModel';
 import {
+  getUpdateCheckActionLabel,
   getUpdateAvailabilityHeading,
   getUpdateBuildBadges,
   getUpdateCheckModeLabel,
   getUpdatePrimaryStatusLabel,
+  UPDATES_PANEL_COPY,
 } from '@/utils/updatesPresentation';
 
 export interface UpdatesSettingsPanelProps {
@@ -86,8 +88,8 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
 
   return (
     <SettingsPanel
-      title="Updates"
-      description="Manage version checks and automatic update preferences."
+      title={UPDATES_PANEL_COPY.title}
+      description={UPDATES_PANEL_COPY.description}
       icon={<RefreshCw class="w-5 h-5" strokeWidth={2} />}
       noPadding
       bodyClass="divide-y divide-border"
@@ -108,7 +110,7 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                     </div>
                     <div class="flex-1 min-w-0">
                       <p class="text-xs font-medium uppercase tracking-wide text-muted">
-                        Current Version
+                        {UPDATES_PANEL_COPY.currentVersionLabel}
                       </p>
                       <p class="mt-1 text-lg font-bold text-base-content truncate">
                         {props.versionInfo()?.version || 'Loading...'}
@@ -202,12 +204,12 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                   {props.checkingForUpdates() ? (
                     <>
                       <div class="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
-                      Checking...
+                      {getUpdateCheckActionLabel(true)}
                     </>
                   ) : (
                     <>
                       <RefreshCw class="w-4 h-4" />
-                      Check Now
+                      {getUpdateCheckActionLabel(false)}
                     </>
                   )}
                 </button>
@@ -247,7 +249,7 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                   d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
                 />
               </svg>
-              Update Preferences
+              {UPDATES_PANEL_COPY.updatePreferencesTitle}
               <HelpIcon contentId="updates.pulse.channel" size="xs" />
             </h4>
 
@@ -268,11 +270,9 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
 
             <Show when={isPreviewChannel()}>
               <div class="rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
-                <p class="font-medium">RC is a manual preview channel.</p>
+                <p class="font-medium">{UPDATES_PANEL_COPY.previewChannelTitle}</p>
                 <p class="mt-1 text-xs text-amber-800 dark:text-amber-200">
-                  Use this on staging or internal validation environments. Automatic
-                  stable updates stay disabled on RC so preview installs do not drift
-                  between channels unattended.
+                  {UPDATES_PANEL_COPY.previewChannelDescription}
                 </p>
               </div>
             </Show>
@@ -298,11 +298,10 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                   </div>
                   <div>
                     <label class="text-sm font-medium text-base-content">
-                      Automatic Stable Updates
+                      {UPDATES_PANEL_COPY.autoUpdateTitle}
                     </label>
                     <p class="text-xs text-muted">
-                      Supported host installs can automatically apply stable releases.
-                      RC preview validation always stays manual.
+                      {UPDATES_PANEL_COPY.autoUpdateDescription}
                     </p>
                   </div>
                 </div>
@@ -324,8 +323,7 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
 
               <Show when={isPreviewChannel()}>
                 <p class="mt-3 text-xs text-amber-700 dark:text-amber-300">
-                  Automatic stable updates are unavailable while the RC preview
-                  channel is selected.
+                  {UPDATES_PANEL_COPY.previewChannelAutoUpdateNotice}
                 </p>
               </Show>
 
@@ -334,7 +332,9 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                 <div class="mt-4 pt-4 border-t border-border grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {/* Check Interval */}
                   <div class="space-y-2">
-                    <label class="text-xs font-medium text-base-content">Check Interval</label>
+                    <label class="text-xs font-medium text-base-content">
+                      {UPDATES_PANEL_COPY.checkIntervalLabel}
+                    </label>
                     <select
                       value={props.autoUpdateCheckInterval()}
                       onChange={(e) => {
@@ -352,7 +352,9 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
 
                   {/* Check Time */}
                   <div class="space-y-2">
-                    <label class="text-xs font-medium text-base-content">Preferred Time</label>
+                    <label class="text-xs font-medium text-base-content">
+                      {UPDATES_PANEL_COPY.preferredTimeLabel}
+                    </label>
                     <input
                       type="time"
                       value={props.autoUpdateTime()}

@@ -5,6 +5,25 @@ export interface UpdateBuildBadge {
   className: string;
 }
 
+export const UPDATES_PANEL_COPY = {
+  title: 'Updates',
+  description: 'Manage version checks and automatic update preferences.',
+  currentVersionLabel: 'Current Version',
+  checkNowLabel: 'Check Now',
+  checkingLabel: 'Checking...',
+  updatePreferencesTitle: 'Update Preferences',
+  autoUpdateTitle: 'Automatic Stable Updates',
+  autoUpdateDescription:
+    'Supported host installs can automatically apply stable releases. RC preview validation always stays manual.',
+  previewChannelTitle: 'RC is a manual preview channel.',
+  previewChannelDescription:
+    'Use this on staging or internal validation environments. Automatic stable updates stay disabled on RC so preview installs do not drift between channels unattended.',
+  previewChannelAutoUpdateNotice:
+    'Automatic stable updates are unavailable while the RC preview channel is selected.',
+  checkIntervalLabel: 'Check Interval',
+  preferredTimeLabel: 'Preferred Time',
+} as const;
+
 export function getUpdateBuildBadges(
   versionInfo?: Pick<VersionInfo, 'isDevelopment' | 'isDocker' | 'isSourceBuild'> | null,
 ): UpdateBuildBadge[] {
@@ -49,4 +68,8 @@ export function getUpdatePrimaryStatusLabel(available: boolean): string {
 
 export function getUpdateCheckModeLabel(enabled: boolean): string {
   return enabled ? 'Auto-check enabled' : 'Manual checks only';
+}
+
+export function getUpdateCheckActionLabel(checking: boolean): string {
+  return checking ? UPDATES_PANEL_COPY.checkingLabel : UPDATES_PANEL_COPY.checkNowLabel;
 }

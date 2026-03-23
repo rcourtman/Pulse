@@ -66,6 +66,7 @@ work extends shared components instead of creating new local variants.
 41. `frontend-modern/src/components/Settings/reportingPanelModel.ts`
 42. `frontend-modern/src/components/Settings/useReportingPanelState.ts`
 43. `frontend-modern/src/utils/reportingPresentation.ts`
+44. `frontend-modern/src/utils/updatesPresentation.ts`
 44. `frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts`
 45. `tests/integration/tests/15-settings-shell-consistency.spec.ts`
 46. `frontend-modern/src/components/shared/PageControls.guardrails.test.ts`
@@ -520,10 +521,12 @@ The updates settings surface now follows the same presentation-owner rule.
 top-level settings shell, while
 `frontend-modern/src/components/Settings/UpdateInstallGuide.tsx`,
 `frontend-modern/src/components/Settings/CopyCommandBlock.tsx`, and
-`frontend-modern/src/components/Settings/updatesSettingsModel.ts` own the
+`frontend-modern/src/components/Settings/updatesSettingsModel.ts` plus
+`frontend-modern/src/utils/updatesPresentation.ts` own the
 deployment-specific install guide, copy-command block, and update-channel/install
-model data. The panel shell must not rebuild copy-to-clipboard command cards or
-deployment instruction trees inline.
+model data plus customer-facing update status/action copy. The panel shell must
+not rebuild copy-to-clipboard command cards, deployment instruction trees, or
+update-surface wording inline.
 
 The reporting operations surface now follows the same shell-state-model rule.
 `frontend-modern/src/components/Settings/ReportingPanel.tsx` stays the

@@ -4225,12 +4225,17 @@ describe('frontend resource type boundaries', () => {
     expect(diagnosticsPresentationSource).toContain('export const DIAGNOSTICS_EMPTY_PBS_MESSAGE');
     expect(updatesSettingsPanelSource).toContain('getUpdateBuildBadges');
     expect(updatesSettingsPanelSource).toContain('getUpdateAvailabilityHeading');
+    expect(updatesSettingsPanelSource).toContain('getUpdateCheckActionLabel');
     expect(updatesSettingsPanelSource).toContain('getUpdatePrimaryStatusLabel');
     expect(updatesSettingsPanelSource).toContain('getUpdateCheckModeLabel');
+    expect(updatesSettingsPanelSource).toContain('UPDATES_PANEL_COPY');
     expect(updatesSettingsPanelSource).toContain('@/components/Settings/UpdateInstallGuide');
     expect(updatesSettingsPanelSource).toContain('@/components/Settings/updatesSettingsModel');
     expect(updatesSettingsPanelSource).not.toContain('Auto-check enabled');
     expect(updatesSettingsPanelSource).not.toContain('Manual checks only');
+    expect(updatesSettingsPanelSource).not.toContain('Check Now');
+    expect(updatesSettingsPanelSource).not.toContain('Checking...');
+    expect(updatesSettingsPanelSource).not.toContain('Update Preferences');
     expect(updatesSettingsPanelSource).not.toContain('Update Ready');
     expect(updatesSettingsPanelSource).not.toContain('Up to date');
     expect(updatesSettingsPanelSource).not.toContain("navigator.clipboard.writeText('update')");
@@ -4256,8 +4261,10 @@ describe('frontend resource type boundaries', () => {
     );
     expect(updatesPresentationSource).toContain('export function getUpdateBuildBadges');
     expect(updatesPresentationSource).toContain('export function getUpdateAvailabilityHeading');
+    expect(updatesPresentationSource).toContain('export function getUpdateCheckActionLabel');
     expect(updatesPresentationSource).toContain('export function getUpdatePrimaryStatusLabel');
     expect(updatesPresentationSource).toContain('export function getUpdateCheckModeLabel');
+    expect(updatesPresentationSource).toContain('export const UPDATES_PANEL_COPY');
     expect(aiSettingsSource).toContain('getAIProviderTestResultTextClass');
     expect(aiSettingsSource).toContain('getAISettingsLoadingState');
     expect(aiSettingsSource).toContain('getAISettingsLoadErrorMessage');
