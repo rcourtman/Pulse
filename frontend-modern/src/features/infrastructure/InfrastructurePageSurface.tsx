@@ -1,4 +1,5 @@
 import { For, Show } from 'solid-js';
+import { useNavigate } from '@solidjs/router';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { Card } from '@/components/shared/Card';
 import { FilterSegmentedControl, LabeledFilterSelect } from '@/components/shared/FilterToolbar';
@@ -22,6 +23,7 @@ import {
 import { useInfrastructurePageState, type GroupingMode } from './useInfrastructurePageState';
 
 export function InfrastructurePageSurface() {
+  const navigate = useNavigate();
   const sourceOptions = DEFAULT_INFRASTRUCTURE_SOURCE_OPTIONS;
   const {
     loading,
@@ -59,7 +61,6 @@ export function InfrastructurePageSurface() {
     clearFilters,
     filteredResources,
     hasFilteredResources,
-    handleNavigateToSettings,
   } = useInfrastructurePageState();
 
   const infrastructureEmptyState = () => getInfrastructureEmptyState();
@@ -118,7 +119,7 @@ export function InfrastructurePageSurface() {
                   actions={
                     <button
                       type="button"
-                      onClick={handleNavigateToSettings}
+                      onClick={() => navigate('/settings')}
                       class="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-base-content shadow-sm hover:bg-slate-50"
                     >
                       <SettingsIcon class="h-3.5 w-3.5" />

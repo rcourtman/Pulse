@@ -60,7 +60,8 @@ cross-source deduplication.
 38. `frontend-modern/src/components/Discovery/DiscoveryTab.tsx`
 39. `frontend-modern/src/components/Discovery/useDiscoveryTabState.ts`
 40. `frontend-modern/src/features/infrastructure/InfrastructurePageSurface.tsx`
-41. `frontend-modern/src/features/infrastructure/useInfrastructurePageState.ts`
+41. `frontend-modern/src/features/infrastructure/useInfrastructurePageRouteState.ts`
+42. `frontend-modern/src/features/infrastructure/useInfrastructurePageState.ts`
 
 ## Shared Boundaries
 
@@ -772,6 +773,13 @@ The route file `frontend-modern/src/pages/Infrastructure.tsx` is now only the
 navigation boundary for that surface; canonical infrastructure filter, search,
 deep-link, and expansion state now live behind the dedicated infrastructure
 feature owner instead of accumulating in the page shell itself.
+That infrastructure feature now also follows an explicit shell/composition/route
+split: `frontend-modern/src/features/infrastructure/InfrastructurePageSurface.tsx`
+owns the render shell, `frontend-modern/src/features/infrastructure/useInfrastructurePageState.ts`
+owns page controls and filtered-resource composition, and
+`frontend-modern/src/features/infrastructure/useInfrastructurePageRouteState.ts`
+owns URL-sync, deep-link expansion, highlight continuity, and managed
+infrastructure-route navigation.
 Shared unified-resource consumers now also normalize org scope through
 `frontend-modern/src/utils/orgScope.ts` before building cache keys or
 multi-tenant resource fetch state, so the canonical resource hooks do not

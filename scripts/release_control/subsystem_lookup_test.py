@@ -66,6 +66,36 @@ class SubsystemLookupTest(unittest.TestCase):
             "shared-component-guardrails",
         )
 
+    def test_lookup_paths_assigns_infrastructure_page_route_state_to_unified_resources(self) -> None:
+        result = lookup_paths(
+            ["frontend-modern/src/features/infrastructure/useInfrastructurePageRouteState.ts"]
+        )
+        self.assertEqual(result["unowned_runtime_files"], [])
+        self.assertEqual(
+            {item["subsystem"] for item in result["impacted_subsystems"]},
+            {"unified-resources"},
+        )
+        file_entry = result["files"][0]
+        self.assertEqual(file_entry["classification"], "runtime")
+        self.assertEqual(
+            {match["subsystem"] for match in file_entry["matches"]},
+            {"unified-resources"},
+        )
+        match = file_entry["matches"][0]
+        self.assertEqual(
+            match["contract"],
+            "docs/release-control/v6/internal/subsystems/unified-resources.md",
+        )
+        self.assertEqual(match["lane_context"]["lane_id"], "L13")
+        self.assertEqual(
+            match["verification_requirement"]["id"],
+            "resource-consumers",
+        )
+        self.assertIn(
+            "frontend-modern/src/features/infrastructure/__tests__/InfrastructurePageSurface.guardrails.test.ts",
+            match["verification_requirement"]["exact_files"],
+        )
+
     def test_lookup_paths_assigns_recent_alerts_panel_to_alerts(self) -> None:
         result = lookup_paths(["frontend-modern/src/components/Alerts/RecentAlertsPanel.tsx"])
         self.assertEqual(result["unowned_runtime_files"], [])
@@ -3909,6 +3939,7 @@ class SubsystemLookupTest(unittest.TestCase):
                 "frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.workloads-link.test.tsx",
                 "frontend-modern/src/components/Infrastructure/__tests__/infrastructureSelectors.test.ts",
                 "frontend-modern/src/components/Infrastructure/__tests__/resourceDetailMappers.test.ts",
+                "frontend-modern/src/features/infrastructure/__tests__/InfrastructurePageSurface.guardrails.test.ts",
                 "frontend-modern/src/hooks/__tests__/useDashboardTrends.test.ts",
                 "frontend-modern/src/hooks/__tests__/useUnifiedResources.test.ts",
                 "frontend-modern/src/pages/__tests__/Infrastructure.empty-state.test.tsx",

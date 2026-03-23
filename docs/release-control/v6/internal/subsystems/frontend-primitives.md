@@ -153,8 +153,10 @@ Top-level route files are now also expected to stay thin when a feature owns
 the real product surface. `frontend-modern/src/pages/Infrastructure.tsx` now
 acts only as the route boundary, while
 `frontend-modern/src/features/infrastructure/InfrastructurePageSurface.tsx`
-and `frontend-modern/src/features/infrastructure/useInfrastructurePageState.ts`
-own the actual infrastructure page shell and state contract. Future feature
+owns the shell, `frontend-modern/src/features/infrastructure/useInfrastructurePageState.ts`
+owns page-control composition, and
+`frontend-modern/src/features/infrastructure/useInfrastructurePageRouteState.ts`
+owns infrastructure route/deep-link synchronization. Future feature
 surfaces under `frontend-modern/src/features/` should follow that same pattern
 instead of letting page files accumulate route sync, filter, and modal
 orchestration inline.
