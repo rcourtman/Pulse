@@ -392,11 +392,11 @@ state instead of inline documentation.
 The event log cards inside that section now stack key/value fields vertically
 instead of using a two-column micro-grid, so each event reads like a single
 timeline record rather than a tiny dashboard.
-That same overview now keeps AI intelligence and data-governance details
+That same overview now keeps AI and governance detail
 inside a collapsed `Context` disclosure, so runtime status and
 identity stay primary while secondary AI and policy signals remain available
 without competing with the first-screen monitoring story.
-Inside that disclosure, the AI intelligence summary now reads as compact
+Inside that disclosure, the AI summary now reads as compact
 label/value rows instead of metric tiles or nested cards, so the opened
 investigation surface stays scan-first before the change summary and
 correlation reveal appear.

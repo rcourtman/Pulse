@@ -470,10 +470,10 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     ));
 
     expect(getByText('Context')).toBeInTheDocument();
-    expect(queryByText('Data Governance')).toBeNull();
+    expect(queryByText('Governance')).toBeNull();
     expect(queryByText('AI-Safe Summary')).toBeNull();
     fireEvent.click(getByRole('button', { name: 'Show context' }));
-    expect(getByText('Data Governance')).toBeInTheDocument();
+    expect(getByText('Governance')).toBeInTheDocument();
     expect(getByText('Redactions')).toBeInTheDocument();
     expect(getByText('AI-Safe Summary')).toBeInTheDocument();
     expect(getAllByText('Restricted').length).toBeGreaterThan(0);
@@ -522,10 +522,10 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
       expect(getByText('Context')).toBeInTheDocument();
     });
 
-    expect(queryByText('AI Intelligence')).toBeNull();
+    expect(queryByText('AI')).toBeNull();
     fireEvent.click(getByRole('button', { name: 'Show context' }));
     await waitFor(() => {
-      expect(getByText('AI Intelligence')).toBeInTheDocument();
+      expect(getByText('AI')).toBeInTheDocument();
     });
     expect(getByText('Health')).toBeInTheDocument();
     expect(getByText('A · 92/100')).toBeInTheDocument();

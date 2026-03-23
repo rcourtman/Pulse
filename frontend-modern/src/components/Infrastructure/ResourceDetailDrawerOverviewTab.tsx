@@ -930,7 +930,7 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
               {(intel) => (
                 <div class="space-y-1.5 text-[11px]">
                   <div class="flex items-center justify-between gap-2">
-                    <span class="text-muted uppercase tracking-wide">AI Intelligence</span>
+                    <span class="text-muted uppercase tracking-wide">AI</span>
                   </div>
                   <div class="flex items-center justify-between gap-2">
                     <span class="text-muted">Health</span>
@@ -992,7 +992,7 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
             <Show when={drawer.hasGovernanceData()}>
               <div class="space-y-1.5 text-[11px]">
                 <div class="flex items-center justify-between gap-2">
-                  <span class="text-muted uppercase tracking-wide">Data Governance</span>
+                  <span class="text-muted uppercase tracking-wide">Governance</span>
                 </div>
                 <Show when={resource.policy}>
                   <div class="flex items-center justify-between gap-2">
