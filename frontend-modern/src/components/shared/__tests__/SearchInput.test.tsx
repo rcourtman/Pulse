@@ -5,6 +5,9 @@ import { CollapsibleSearchInput } from '@/components/shared/CollapsibleSearchInp
 import { SearchInput } from '@/components/shared/SearchInput';
 import searchInputSource from '@/components/shared/SearchInput.tsx?raw';
 import searchInputModelSource from '@/components/shared/searchInputModel.ts?raw';
+import searchInputEnhancementsSource from '@/components/shared/SearchInputEnhancements.tsx?raw';
+import searchInputEnhancementsModelSource from '@/components/shared/searchInputEnhancementsModel.ts?raw';
+import searchInputEnhancementsStateSource from '@/components/shared/useSearchInputEnhancements.ts?raw';
 import searchInputStateSource from '@/components/shared/useSearchInputState.ts?raw';
 import collapsibleSearchInputSource from '@/components/shared/CollapsibleSearchInput.tsx?raw';
 import collapsibleSearchInputModelSource from '@/components/shared/collapsibleSearchInputModel.ts?raw';
@@ -58,6 +61,27 @@ describe('SearchInput', () => {
     expect(searchInputModelSource).toContain('getSearchInputShortcutHint');
     expect(searchInputModelSource).toContain('shouldSearchInputShowTrailingControls');
     expect(searchInputModelSource).toContain('export interface SearchInputProps');
+
+    expect(searchInputEnhancementsSource).toContain('getSearchHistoryToggleButtonClass');
+    expect(searchInputEnhancementsSource).toContain('getSearchHistoryToggleTitle');
+    expect(searchInputEnhancementsSource).toContain('SEARCH_HISTORY_CLEAR_LABEL');
+    expect(searchInputEnhancementsSource).not.toContain('Show recent searches');
+    expect(searchInputEnhancementsSource).not.toContain('No recent searches yet');
+    expect(searchInputEnhancementsSource).not.toContain('Clear history');
+    expect(searchInputEnhancementsSource).not.toContain('hover:bg-blue-50');
+
+    expect(searchInputStateSource).toContain('useSearchInputEnhancements');
+
+    expect(searchInputEnhancementsStateSource).toContain('createSearchHistoryManager');
+    expect(searchInputEnhancementsStateSource).toContain(
+      "options.history?.emptyMessage ?? 'Searches you run will appear here.'",
+    );
+    expect(searchInputEnhancementsStateSource).not.toContain('Show recent searches');
+
+    expect(searchInputEnhancementsModelSource).toContain('getSearchHistoryToggleButtonClass');
+    expect(searchInputEnhancementsModelSource).toContain('getSearchHistoryToggleTitle');
+    expect(searchInputEnhancementsModelSource).toContain('SEARCH_HISTORY_CLEAR_LABEL');
+    expect(searchInputEnhancementsModelSource).toContain('SEARCH_HISTORY_MENU_CLASS');
   });
 
   it('keeps collapsible search input on shell, runtime, and model owners', () => {

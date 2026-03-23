@@ -43,6 +43,8 @@ import whatsNewModalModelSource from '@/components/shared/whatsNewModalModel.ts?
 import searchFieldSource from '@/components/shared/SearchField.tsx?raw';
 import searchFieldModelSource from '@/components/shared/searchFieldModel.ts?raw';
 import searchInputSource from '@/components/shared/SearchInput.tsx?raw';
+import searchInputEnhancementsSource from '@/components/shared/SearchInputEnhancements.tsx?raw';
+import searchInputEnhancementsModelSource from '@/components/shared/searchInputEnhancementsModel.ts?raw';
 import searchInputModelSource from '@/components/shared/searchInputModel.ts?raw';
 import scrollToTopButtonSource from '@/components/shared/ScrollToTopButton.tsx?raw';
 import scrollToTopButtonModelSource from '@/components/shared/scrollToTopButtonModel.ts?raw';
@@ -82,6 +84,7 @@ import pulseDataGridStateSource from '@/components/shared/usePulseDataGridState.
 import whatsNewModalStateSource from '@/components/shared/useWhatsNewModalState.ts?raw';
 import searchFieldStateSource from '@/components/shared/useSearchFieldState.ts?raw';
 import searchInputStateSource from '@/components/shared/useSearchInputState.ts?raw';
+import searchInputEnhancementsStateSource from '@/components/shared/useSearchInputEnhancements.ts?raw';
 import scrollToTopButtonStateSource from '@/components/shared/useScrollToTopButtonState.ts?raw';
 import statusBadgeStateSource from '@/components/shared/useStatusBadgeState.ts?raw';
 import toggleStateSource from '@/components/shared/useToggleState.ts?raw';
@@ -2726,6 +2729,22 @@ describe('frontend resource type boundaries', () => {
     expect(searchInputStateSource).toContain('getSearchInputShortcutHint');
     expect(searchInputModelSource).toContain('getSearchInputShortcutHint');
     expect(searchInputModelSource).toContain('shouldSearchInputShowTrailingControls');
+    expect(searchInputEnhancementsSource).toContain('getSearchHistoryToggleButtonClass');
+    expect(searchInputEnhancementsSource).toContain('getSearchHistoryToggleTitle');
+    expect(searchInputEnhancementsSource).toContain('SEARCH_HISTORY_CLEAR_LABEL');
+    expect(searchInputEnhancementsSource).not.toContain('Show recent searches');
+    expect(searchInputEnhancementsSource).not.toContain('No recent searches yet');
+    expect(searchInputEnhancementsSource).not.toContain('Clear history');
+    expect(searchInputEnhancementsSource).not.toContain('hover:bg-blue-50');
+    expect(searchInputEnhancementsStateSource).toContain('createSearchHistoryManager');
+    expect(searchInputEnhancementsStateSource).not.toContain('Show recent searches');
+    expect(searchInputEnhancementsStateSource).toContain(
+      "options.history?.emptyMessage ?? 'Searches you run will appear here.'",
+    );
+    expect(searchInputEnhancementsModelSource).toContain('getSearchHistoryToggleButtonClass');
+    expect(searchInputEnhancementsModelSource).toContain('getSearchHistoryToggleTitle');
+    expect(searchInputEnhancementsModelSource).toContain('SEARCH_HISTORY_CLEAR_LABEL');
+    expect(searchInputEnhancementsModelSource).toContain('SEARCH_HISTORY_MENU_CLASS');
     expect(searchTipsPopoverSource).toContain('useSearchTipsPopoverState');
     expect(searchTipsPopoverSource).toContain('getSearchTipsPopoverTriggerClass');
     expect(searchTipsPopoverSource).not.toContain('createSignal');

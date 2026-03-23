@@ -367,6 +367,15 @@ and `frontend-modern/src/components/shared/searchInputModel.ts` owns the shared
 search-input contract plus shortcut-hint and trailing-control policy. Future
 search-input work should extend those owners instead of pushing type-to-search
 or enhancement wiring back into the shared shell.
+The search-input enhancement surfaces now follow that same owner split.
+`frontend-modern/src/components/shared/SearchInputEnhancements.tsx` stays the
+render shell, `frontend-modern/src/components/shared/useSearchInputEnhancements.ts`
+owns search-history persistence, menu-open lifecycle, blur commit policy, and
+tips/history interaction runtime, and
+`frontend-modern/src/components/shared/searchInputEnhancementsModel.ts` owns
+history-toggle copy plus history-menu button and row class policy. Future
+search-input-enhancement work should extend those owners instead of pushing
+history copy or menu presentation policy back into the shell.
 The shared search tips popover now follows that same owner split.
 `frontend-modern/src/components/shared/SearchTipsPopover.tsx` stays the render
 shell, `frontend-modern/src/components/shared/useSearchTipsPopoverState.ts`
