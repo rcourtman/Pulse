@@ -33,9 +33,10 @@ func buildConnectedInfrastructure(
 	snapshot models.StateSnapshot,
 ) []models.ConnectedInfrastructureItemFrontend {
 	groups := make(map[string]*connectedInfrastructureGroup)
+	resolver := unifiedresources.ResolveTopLevelSystems(resources)
 
 	for _, resource := range resources {
-		appendConnectedInfrastructureSurfaces(groups, resource)
+		appendConnectedInfrastructureSurfaces(groups, resource, resolver)
 	}
 
 	applyConnectedInfrastructureIgnoreState(groups, snapshot)
@@ -204,24 +205,25 @@ func applyConnectedInfrastructureIgnoreState(
 func appendConnectedInfrastructureSurfaces(
 	groups map[string]*connectedInfrastructureGroup,
 	resource unifiedresources.Resource,
+	resolver unifiedresources.TopLevelSystemResolver,
 ) {
 	if surface, ok := connectedInfrastructureAgentSurface(resource); ok {
-		addConnectedInfrastructureSurface(groups, resource, surface)
+		addConnectedInfrastructureSurface(groups, resource, surface, resolver)
 	}
 	if surface, ok := connectedInfrastructureDockerSurface(resource); ok {
-		addConnectedInfrastructureSurface(groups, resource, surface)
+		addConnectedInfrastructureSurface(groups, resource, surface, resolver)
 	}
 	if surface, ok := connectedInfrastructureKubernetesSurface(resource); ok {
-		addConnectedInfrastructureSurface(groups, resource, surface)
+		addConnectedInfrastructureSurface(groups, resource, surface, resolver)
 	}
 	if surface, ok := connectedInfrastructureProxmoxSurface(resource); ok {
-		addConnectedInfrastructureSurface(groups, resource, surface)
+		addConnectedInfrastructureSurface(groups, resource, surface, resolver)
 	}
 	if surface, ok := connectedInfrastructurePBSSurface(resource); ok {
-		addConnectedInfrastructureSurface(groups, resource, surface)
+		addConnectedInfrastructureSurface(groups, resource, surface, resolver)
 	}
 	if surface, ok := connectedInfrastructurePMGSurface(resource); ok {
-		addConnectedInfrastructureSurface(groups, resource, surface)
+		addConnectedInfrastructureSurface(groups, resource, surface, resolver)
 	}
 }
 
@@ -229,8 +231,12 @@ func addConnectedInfrastructureSurface(
 	groups map[string]*connectedInfrastructureGroup,
 	resource unifiedresources.Resource,
 	surface models.ConnectedInfrastructureSurfaceFrontend,
+	resolver unifiedresources.TopLevelSystemResolver,
 ) {
-	key := connectedInfrastructureGroupKey(resource, surface.Kind)
+	key := resolver.GroupIDForResource(resource)
+	if strings.TrimSpace(key) == "" {
+		key = connectedInfrastructureGroupKey(resource, surface.Kind)
+	}
 	group, exists := groups[key]
 	if !exists {
 		group = &connectedInfrastructureGroup{

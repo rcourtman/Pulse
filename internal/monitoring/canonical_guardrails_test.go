@@ -60,6 +60,23 @@ func TestNoGetStateResourceArrayRegression(t *testing.T) {
 	}
 }
 
+func TestConnectedInfrastructureUsesSharedTopLevelSystemResolver(t *testing.T) {
+	data, err := os.ReadFile("connected_infrastructure.go")
+	if err != nil {
+		t.Fatalf("failed to read connected_infrastructure.go: %v", err)
+	}
+	source := string(data)
+	requiredSnippets := []string{
+		"resolver := unifiedresources.ResolveTopLevelSystems(resources)",
+		"key := resolver.GroupIDForResource(resource)",
+	}
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(source, snippet) {
+			t.Fatalf("connected_infrastructure.go must contain %q", snippet)
+		}
+	}
+}
+
 func TestLegacyMemorySourceAliasesRemainCanonicalized(t *testing.T) {
 	t.Parallel()
 

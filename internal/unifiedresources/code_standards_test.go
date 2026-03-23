@@ -589,6 +589,32 @@ func TestResourceDisplayNameUsedByInfrastructureConsumers(t *testing.T) {
 	}
 }
 
+func TestTopLevelSystemResolverPinsCanonicalInfrastructureCounting(t *testing.T) {
+	requiredSnippets := map[string][]string{
+		filepath.Join(".", "monitored_systems.go"): {
+			"resolveMonitoredSystemTopLevelSystems(rs).Count()",
+			"ResolveTopLevelSystems(resources)",
+		},
+		filepath.Join(".", "top_level_systems.go"): {
+			"ResolveTopLevelSystems(resources []Resource) TopLevelSystemResolver",
+			"match.Confidence < HighConfidenceThreshold",
+			"monitoredSystemCandidateAllowsHostAttachment(candidate)",
+		},
+	}
+	for name, snippets := range requiredSnippets {
+		data, err := os.ReadFile(name)
+		if err != nil {
+			t.Fatalf("failed to read %s: %v", name, err)
+		}
+		source := string(data)
+		for _, snippet := range snippets {
+			if !strings.Contains(source, snippet) {
+				t.Fatalf("%s must contain %q", name, snippet)
+			}
+		}
+	}
+}
+
 func TestResourceTimelineStoreIndexesSupportFilteredReads(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join("store.go"))
 	if err != nil {

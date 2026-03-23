@@ -110,3 +110,47 @@ func TestBuildConnectedInfrastructure_UsesSharedDisplayNameFallback(t *testing.T
 		t.Fatalf("expected canonical display name to drive displayName, got %q", item.DisplayName)
 	}
 }
+
+func TestBuildConnectedInfrastructure_UsesSharedTopLevelSystemGrouping(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0)
+	items := buildConnectedInfrastructure([]unifiedresources.Resource{
+		{
+			ID:       "tower-agent",
+			Name:     "Tower Agent",
+			LastSeen: now,
+			Status:   unifiedresources.StatusOnline,
+			Agent: &unifiedresources.AgentData{
+				AgentID:      "tower-agent",
+				AgentVersion: "1.2.3",
+				Hostname:     "tower.local",
+			},
+			Identity: unifiedresources.ResourceIdentity{
+				Hostnames: []string{"tower.local"},
+			},
+		},
+		{
+			ID:       "tower-pbs",
+			Name:     "Tower PBS",
+			LastSeen: now,
+			Status:   unifiedresources.StatusOnline,
+			PBS: &unifiedresources.PBSData{
+				InstanceID: "pbs-1",
+				Hostname:   "tower.local",
+				HostURL:    "https://tower.local:8007",
+				Version:    "3.4.1",
+			},
+		},
+	}, models.StateSnapshot{})
+
+	if len(items) != 1 {
+		t.Fatalf("expected one connected infrastructure item after shared grouping, got %d", len(items))
+	}
+
+	item := items[0]
+	if len(item.Surfaces) != 2 {
+		t.Fatalf("expected host telemetry and PBS surfaces on one item, got %#v", item.Surfaces)
+	}
+	if item.ID == "resource:tower-pbs" {
+		t.Fatalf("expected PBS surface to attach to the shared top-level system group, got %q", item.ID)
+	}
+}

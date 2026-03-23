@@ -30,7 +30,8 @@ truth for live infrastructure data.
 6. `internal/unifiedresources/read_state.go`
 7. `internal/unifiedresources/monitor_adapter.go`
 8. `internal/unifiedresources/views.go`
-9. `docker-entrypoint.sh`
+9. `internal/monitoring/connected_infrastructure.go`
+10. `docker-entrypoint.sh`
 
 ## Shared Boundaries
 
@@ -152,6 +153,12 @@ versus `pve-a`.
 Connected infrastructure and monitored-system projections now also use the
 shared unified-resource display-name fallback, so the monitoring layer does
 not rebuild its own canonical name-or-hostname selection for those surfaces.
+Connected infrastructure now also consumes the shared top-level system
+resolver from unified resources instead of maintaining an independent
+machine/hostname grouping heuristic. Monitoring-owned inventory surfaces must
+therefore stay aligned with the monitored-system ledger on one canonical
+top-level system identity contract, and that contract must not count friendly
+display names as identity.
 
 Storage-backup preservation now also derives node-to-storage membership from
 canonical `ReadState.StoragePools()` instead of from snapshot-owned storage

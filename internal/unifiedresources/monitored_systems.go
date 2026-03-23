@@ -1,7 +1,6 @@
 package unifiedresources
 
 import (
-	"net"
 	"sort"
 	"strings"
 	"time"
@@ -33,17 +32,13 @@ type MonitoredSystemRecord struct {
 // canonical cross-view deduplication. Child resources are intentionally
 // excluded.
 func MonitoredSystemCount(rs ReadState) int {
-	return len(monitoredSystemGroups(rs))
+	return resolveMonitoredSystemTopLevelSystems(rs).Count()
 }
 
 // MonitoredSystems returns the canonical counted monitored systems after
 // deduping overlapping top-level roots across collection paths.
 func MonitoredSystems(rs ReadState) []MonitoredSystemRecord {
-	groups := monitoredSystemGroups(rs)
-	records := make([]MonitoredSystemRecord, 0, len(groups))
-	for _, group := range groups {
-		records = append(records, monitoredSystemRecord(group))
-	}
+	records := resolveMonitoredSystemTopLevelSystems(rs).records()
 	sort.Slice(records, func(i, j int) bool {
 		if records[i].Name != records[j].Name {
 			return records[i].Name < records[j].Name
@@ -62,20 +57,7 @@ func MonitoredSystems(rs ReadState) []MonitoredSystemRecord {
 // HasMatchingMonitoredSystem reports whether a prospective monitored system
 // would dedupe onto an already-counted top-level monitored system.
 func HasMatchingMonitoredSystem(rs ReadState, candidate MonitoredSystemCandidate) bool {
-	candidateKeys := monitoredSystemCandidateKeys(candidate)
-	if len(candidateKeys) == 0 {
-		return false
-	}
-
-	for _, group := range monitoredSystemGroups(rs) {
-		for key := range candidateKeys {
-			if _, ok := group.keys[key]; ok {
-				return true
-			}
-		}
-	}
-
-	return false
+	return resolveMonitoredSystemTopLevelSystems(rs).HasMatchingCandidate(candidate)
 }
 
 type monitoredSystemGroup struct {
@@ -84,46 +66,14 @@ type monitoredSystemGroup struct {
 }
 
 func monitoredSystemGroups(rs ReadState) []monitoredSystemGroup {
-	roots := monitoredSystemRoots(rs)
-	groups := make([]monitoredSystemGroup, 0, len(roots))
-
-	for _, resource := range roots {
-		keys := monitoredSystemResourceKeys(resource)
-		matched := -1
-		for i := range groups {
-			if monitoredSystemKeySetsOverlap(groups[i].keys, keys) {
-				matched = i
-				break
-			}
-		}
-
-		if matched == -1 {
-			groups = append(groups, monitoredSystemGroup{
-				keys:      cloneStringSet(keys),
-				resources: []*Resource{resource},
-			})
-			continue
-		}
-
-		for key := range keys {
-			groups[matched].keys[key] = struct{}{}
-		}
-		groups[matched].resources = append(groups[matched].resources, resource)
-
-		// Collapse any later groups that now overlap transitively.
-		for i := matched + 1; i < len(groups); {
-			if !monitoredSystemKeySetsOverlap(groups[matched].keys, groups[i].keys) {
-				i++
-				continue
-			}
-			for key := range groups[i].keys {
-				groups[matched].keys[key] = struct{}{}
-			}
-			groups[matched].resources = append(groups[matched].resources, groups[i].resources...)
-			groups = append(groups[:i], groups[i+1:]...)
-		}
+	resolver := resolveMonitoredSystemTopLevelSystems(rs)
+	groups := make([]monitoredSystemGroup, 0, len(resolver.groups))
+	for _, group := range resolver.groups {
+		groups = append(groups, monitoredSystemGroup{
+			keys:      cloneStringSet(group.strongIDs),
+			resources: group.resources,
+		})
 	}
-
 	return groups
 }
 
@@ -159,6 +109,18 @@ func monitoredSystemRoots(rs ReadState) []*Resource {
 	}
 
 	return roots
+}
+
+func resolveMonitoredSystemTopLevelSystems(rs ReadState) TopLevelSystemResolver {
+	roots := monitoredSystemRoots(rs)
+	resources := make([]Resource, 0, len(roots))
+	for _, resource := range roots {
+		if resource == nil {
+			continue
+		}
+		resources = append(resources, *resource)
+	}
+	return ResolveTopLevelSystems(resources)
 }
 
 func monitoredSystemRecord(group monitoredSystemGroup) MonitoredSystemRecord {
@@ -376,139 +338,6 @@ func monitoredSystemPrimarySource(resource *Resource) string {
 		return string(resource.Sources[0])
 	}
 	return ""
-}
-
-func monitoredSystemResourceKeys(resource *Resource) map[string]struct{} {
-	keys := make(map[string]struct{})
-	if resource == nil {
-		return keys
-	}
-
-	addMonitoredSystemCanonicalKeys(keys, resource.Canonical)
-
-	switch CanonicalResourceType(resource.Type) {
-	case ResourceTypeAgent:
-		addMonitoredSystemTokens(keys, "host", resource.Name)
-		addMonitoredSystemTokens(keys, "host", resource.Identity.Hostnames...)
-		addMonitoredSystemTokens(keys, "ip", resource.Identity.IPAddresses...)
-		addMonitoredSystemTokens(keys, "machine", resource.Identity.MachineID)
-		addMonitoredSystemTokens(keys, "resource", resource.ID)
-		if resource.Agent != nil {
-			addMonitoredSystemTokens(keys, "host", resource.Agent.Hostname)
-			addMonitoredSystemTokens(keys, "machine", resource.Agent.MachineID)
-			addMonitoredSystemTokens(keys, "agent", resource.Agent.AgentID)
-		}
-		if resource.Proxmox != nil {
-			addMonitoredSystemTokens(keys, "host", resource.Proxmox.NodeName)
-			addMonitoredSystemTokens(keys, "proxmox", resource.Proxmox.SourceID)
-			addMonitoredSystemHostURL(keys, resource.Proxmox.HostURL)
-		}
-		if resource.Docker != nil {
-			addMonitoredSystemTokens(keys, "host", resource.Docker.Hostname)
-			addMonitoredSystemTokens(keys, "docker", resource.Docker.HostSourceID)
-		}
-		if resource.TrueNAS != nil {
-			addMonitoredSystemTokens(keys, "host", resource.TrueNAS.Hostname)
-		}
-	case ResourceTypePBS:
-		if resource.PBS != nil {
-			addMonitoredSystemTokens(keys, "pbs", resource.PBS.InstanceID)
-			addMonitoredSystemTokens(keys, "host", resource.PBS.Hostname)
-			addMonitoredSystemHostURL(keys, resource.PBS.HostURL)
-		}
-	case ResourceTypePMG:
-		if resource.PMG != nil {
-			addMonitoredSystemTokens(keys, "pmg", resource.PMG.InstanceID)
-			addMonitoredSystemTokens(keys, "host", resource.PMG.Hostname)
-		}
-	case ResourceTypeK8sCluster:
-		if resource.Kubernetes != nil {
-			addMonitoredSystemTokens(keys, "k8s", resource.Kubernetes.ClusterID)
-			addMonitoredSystemTokens(keys, "agent", resource.Kubernetes.AgentID)
-			addMonitoredSystemHostURL(keys, resource.Kubernetes.Server)
-		}
-	}
-
-	if len(keys) == 0 {
-		addMonitoredSystemTokens(keys, "fallback", string(resource.Type)+":"+resource.ID)
-	}
-
-	return keys
-}
-
-func monitoredSystemCandidateKeys(candidate MonitoredSystemCandidate) map[string]struct{} {
-	keys := make(map[string]struct{})
-	addMonitoredSystemTokens(keys, "resource", candidate.ResourceID)
-	addMonitoredSystemTokens(keys, "host", candidate.Name, candidate.Hostname)
-	addMonitoredSystemTokens(keys, "machine", candidate.MachineID)
-	addMonitoredSystemTokens(keys, "agent", candidate.AgentID)
-	addMonitoredSystemHostURL(keys, candidate.HostURL)
-	if len(keys) == 0 {
-		addMonitoredSystemTokens(keys, "fallback", string(candidate.Type))
-	}
-	return keys
-}
-
-func addMonitoredSystemCanonicalKeys(keys map[string]struct{}, canonical *CanonicalIdentity) {
-	if canonical == nil {
-		return
-	}
-	addMonitoredSystemTokens(keys, "canonical-primary", canonical.PrimaryID)
-	addMonitoredSystemTokens(keys, "host", canonical.Hostname)
-	addMonitoredSystemTokens(keys, "canonical-platform", canonical.PlatformID)
-	for _, alias := range canonical.Aliases {
-		addMonitoredSystemTokens(keys, "canonical-alias", alias)
-	}
-}
-
-func addMonitoredSystemHostURL(keys map[string]struct{}, raw string) {
-	host := extractHostname(raw)
-	if ip := normalizeIPToken(host); ip != "" {
-		keys["ip:"+ip] = struct{}{}
-		return
-	}
-	addMonitoredSystemTokens(keys, "host", host)
-}
-
-func addMonitoredSystemTokens(keys map[string]struct{}, namespace string, values ...string) {
-	for _, value := range values {
-		if normalized := normalizeMonitoredSystemToken(value); normalized != "" {
-			keys[namespace+":"+normalized] = struct{}{}
-		}
-	}
-}
-
-func normalizeMonitoredSystemToken(value string) string {
-	trimmed := strings.ToLower(strings.TrimSpace(value))
-	if trimmed == "" {
-		return ""
-	}
-	if ip := normalizeIPToken(trimmed); ip != "" {
-		return ip
-	}
-	return trimmed
-}
-
-func normalizeIPToken(value string) string {
-	if parsed := net.ParseIP(strings.TrimSpace(value)); parsed != nil {
-		return parsed.String()
-	}
-	return ""
-}
-
-func monitoredSystemKeySetsOverlap(left, right map[string]struct{}) bool {
-	if len(left) == 0 || len(right) == 0 {
-		return false
-	}
-	if len(left) > len(right) {
-		left, right = right, left
-	}
-	for key := range left {
-		if _, ok := right[key]; ok {
-			return true
-		}
-	}
-	return false
 }
 
 func cloneStringSet(in map[string]struct{}) map[string]struct{} {

@@ -38,42 +38,43 @@ cross-source deduplication.
 16. `internal/unifiedresources/kubernetes_capabilities.go`
 17. `internal/unifiedresources/pbs_rollups.go`
 18. `internal/unifiedresources/monitored_systems.go`
-19. `internal/unifiedresources/capabilities.go`
-20. `internal/unifiedresources/changes.go`
-21. `internal/unifiedresources/relationships.go`
-22. `internal/unifiedresources/privacy.go`
-23. `internal/unifiedresources/actions.go`
-24. `frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx`
-25. `frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx`
-26. `frontend-modern/src/components/Infrastructure/ResourceDetailDrawerDebugTab.tsx`
-27. `frontend-modern/src/components/Infrastructure/ResourceDetailDrawerSupportDisclosure.tsx`
-28. `frontend-modern/src/components/Infrastructure/ResourceFacetSummary.tsx`
-29. `frontend-modern/src/components/Infrastructure/UnifiedResourceHostTableCard.tsx`
-30. `frontend-modern/src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx`
-31. `frontend-modern/src/components/Infrastructure/UnifiedResourcePMGTableSection.tsx`
-32. `frontend-modern/src/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx`
-33. `frontend-modern/src/components/Infrastructure/unifiedResourceTableModel.ts`
-34. `frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts`
-35. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts`
-36. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerServiceModel.ts`
-37. `frontend-modern/src/components/Infrastructure/resourceDetailDiscoveryModel.ts`
-38. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerOperationalModel.ts`
-39. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerHistoryState.ts`
-40. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDockerActionsState.ts`
-41. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts`
-42. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`
-43. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts`
-44. `frontend-modern/src/components/Discovery/DiscoveryTab.tsx`
-45. `frontend-modern/src/components/Discovery/useDiscoveryTabState.ts`
-46. `frontend-modern/src/features/infrastructure/InfrastructurePageSurface.tsx`
-47. `frontend-modern/src/features/infrastructure/useInfrastructurePageRouteState.ts`
-48. `frontend-modern/src/features/infrastructure/useInfrastructurePageState.ts`
-49. `frontend-modern/src/features/infrastructure/infrastructurePageModel.ts`
-50. `frontend-modern/src/components/Infrastructure/InfrastructureSummary.tsx`
-51. `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`
-52. `frontend-modern/src/components/Infrastructure/infrastructureSummaryModel.ts`
-53. `frontend-modern/src/utils/resourceIdentity.ts`
-54. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerIdentityModel.ts`
+19. `internal/unifiedresources/top_level_systems.go`
+20. `internal/unifiedresources/capabilities.go`
+21. `internal/unifiedresources/changes.go`
+22. `internal/unifiedresources/relationships.go`
+23. `internal/unifiedresources/privacy.go`
+24. `internal/unifiedresources/actions.go`
+25. `frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx`
+26. `frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx`
+27. `frontend-modern/src/components/Infrastructure/ResourceDetailDrawerDebugTab.tsx`
+28. `frontend-modern/src/components/Infrastructure/ResourceDetailDrawerSupportDisclosure.tsx`
+29. `frontend-modern/src/components/Infrastructure/ResourceFacetSummary.tsx`
+30. `frontend-modern/src/components/Infrastructure/UnifiedResourceHostTableCard.tsx`
+31. `frontend-modern/src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx`
+32. `frontend-modern/src/components/Infrastructure/UnifiedResourcePMGTableSection.tsx`
+33. `frontend-modern/src/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx`
+34. `frontend-modern/src/components/Infrastructure/unifiedResourceTableModel.ts`
+35. `frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts`
+36. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts`
+37. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerServiceModel.ts`
+38. `frontend-modern/src/components/Infrastructure/resourceDetailDiscoveryModel.ts`
+39. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerOperationalModel.ts`
+40. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerHistoryState.ts`
+41. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDockerActionsState.ts`
+42. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts`
+43. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`
+44. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts`
+45. `frontend-modern/src/components/Discovery/DiscoveryTab.tsx`
+46. `frontend-modern/src/components/Discovery/useDiscoveryTabState.ts`
+47. `frontend-modern/src/features/infrastructure/InfrastructurePageSurface.tsx`
+48. `frontend-modern/src/features/infrastructure/useInfrastructurePageRouteState.ts`
+49. `frontend-modern/src/features/infrastructure/useInfrastructurePageState.ts`
+50. `frontend-modern/src/features/infrastructure/infrastructurePageModel.ts`
+51. `frontend-modern/src/components/Infrastructure/InfrastructureSummary.tsx`
+52. `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`
+53. `frontend-modern/src/components/Infrastructure/infrastructureSummaryModel.ts`
+54. `frontend-modern/src/utils/resourceIdentity.ts`
+55. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerIdentityModel.ts`
 
 ## Shared Boundaries
 
@@ -149,6 +150,13 @@ the API cannot supply machine-level identity signals; the code may borrow
 machine-id and MAC evidence from a uniquely matched host agent, but duplicate
 short hostnames across domains or clusters stay an unresolved ambiguity rather
 than being force-merged into a stronger canonical identity.
+The canonical monitored-system and connected-infrastructure grouping contract
+now lives in `internal/unifiedresources/top_level_systems.go`. Top-level
+system identity may merge on strong runtime identity such as machine IDs,
+agent IDs, connector-stable primary IDs, or the existing high-confidence
+identity matcher, and it may use exact-host attachment only as a bounded
+fallback onto a uniquely better existing surface. Friendly display names are
+presentation-only and must not participate in monitored-system counting.
 
 The unified-resource runtime now also owns the durable change timeline for the
 canonical resource view. `internal/unifiedresources/monitor_adapter.go` feeds
