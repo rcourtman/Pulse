@@ -1,5 +1,8 @@
 import { cleanup, render, screen } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import monitoredSystemLimitWarningBannerSource from '@/components/shared/MonitoredSystemLimitWarningBanner.tsx?raw';
+import monitoredSystemLimitWarningBannerModelSource from '@/components/shared/monitoredSystemLimitWarningBannerModel.ts?raw';
+import monitoredSystemLimitWarningBannerStateSource from '@/components/shared/useMonitoredSystemLimitWarningBannerState.ts?raw';
 
 type MockEntitlements = {
   overflow_days_remaining?: number;
@@ -26,6 +29,7 @@ const mockLegacyConnections = vi.hoisted(() =>
 );
 const mockTrackUpgradeMetricEvent = vi.hoisted(() => vi.fn());
 const mockTrackUpgradeClicked = vi.hoisted(() => vi.fn());
+const mockLoadLicenseStatus = vi.hoisted(() => vi.fn());
 
 vi.mock('@/stores/license', () => ({
   entitlements: mockEntitlements,
@@ -33,6 +37,7 @@ vi.mock('@/stores/license', () => ({
   getUpgradeActionUrlOrFallback: vi.fn(() => '/pricing?feature=max_monitored_systems'),
   hasMigrationGap: mockHasMigrationGap,
   legacyConnections: mockLegacyConnections,
+  loadLicenseStatus: (...args: unknown[]) => mockLoadLicenseStatus(...args),
 }));
 
 vi.mock('@/utils/upgradeMetrics', () => ({
@@ -54,6 +59,8 @@ describe('MonitoredSystemLimitWarningBanner', () => {
       docker_hosts: 0,
       kubernetes_clusters: 0,
     });
+    mockLoadLicenseStatus.mockReset();
+    mockLoadLicenseStatus.mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -61,10 +68,48 @@ describe('MonitoredSystemLimitWarningBanner', () => {
     vi.clearAllMocks();
   });
 
+  it('keeps monitored system limit warning banner on shell, runtime, and model owners', () => {
+    expect(monitoredSystemLimitWarningBannerSource).toContain(
+      'useMonitoredSystemLimitWarningBannerState',
+    );
+    expect(monitoredSystemLimitWarningBannerSource).toContain(
+      'MONITORED_SYSTEM_LIMIT_LEARN_MORE_LABEL',
+    );
+    expect(monitoredSystemLimitWarningBannerSource).not.toContain('createEffect');
+    expect(monitoredSystemLimitWarningBannerSource).not.toContain('createMemo');
+    expect(monitoredSystemLimitWarningBannerSource).not.toContain('loadLicenseStatus');
+    expect(monitoredSystemLimitWarningBannerSource).not.toContain('trackUpgradeMetricEvent');
+    expect(monitoredSystemLimitWarningBannerSource).not.toContain('legacyConnections()');
+
+    expect(monitoredSystemLimitWarningBannerStateSource).toContain(
+      'export function useMonitoredSystemLimitWarningBannerState',
+    );
+    expect(monitoredSystemLimitWarningBannerStateSource).toContain('createEffect');
+    expect(monitoredSystemLimitWarningBannerStateSource).toContain('createMemo');
+    expect(monitoredSystemLimitWarningBannerStateSource).toContain('loadLicenseStatus');
+    expect(monitoredSystemLimitWarningBannerStateSource).toContain('trackUpgradeMetricEvent');
+    expect(monitoredSystemLimitWarningBannerStateSource).toContain('legacyConnections');
+    expect(monitoredSystemLimitWarningBannerStateSource).toContain('handleUpgradeClick');
+
+    expect(monitoredSystemLimitWarningBannerModelSource).toContain(
+      'getMonitoredSystemMigrationMessage',
+    );
+    expect(monitoredSystemLimitWarningBannerModelSource).toContain(
+      'getMonitoredSystemBannerToneClass',
+    );
+    expect(monitoredSystemLimitWarningBannerModelSource).toContain(
+      'MONITORED_SYSTEM_LIMIT_UPGRADE_LABEL',
+    );
+    expect(monitoredSystemLimitWarningBannerModelSource).toContain(
+      'MONITORED_SYSTEM_LIMIT_INSTALL_COLLECTORS_LABEL',
+    );
+  });
+
   it('stays hidden for non-urgent pure v6 installs', async () => {
     const mod = await import('../MonitoredSystemLimitWarningBanner');
     render(() => <mod.MonitoredSystemLimitWarningBanner />);
 
+    expect(mockLoadLicenseStatus).toHaveBeenCalled();
     expect(screen.queryByText(/Monitored systems:/i)).not.toBeInTheDocument();
   });
 

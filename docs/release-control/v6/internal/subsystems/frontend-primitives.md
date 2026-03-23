@@ -597,6 +597,15 @@ That banner boundary now also owns the canonical monitored-system naming
 surface directly: the shared warning component path and exported symbol are
 `MonitoredSystemLimitWarningBanner`, and future work may not reintroduce an
 agent-era banner filename or component name as the primary primitive.
+That shared monitored-system warning banner now also follows the shell/runtime/model
+owner split. `frontend-modern/src/components/shared/MonitoredSystemLimitWarningBanner.tsx`
+stays the render shell, `frontend-modern/src/components/shared/useMonitoredSystemLimitWarningBannerState.ts`
+owns entitlement load, warning metric emission, migration/upgrade click tracking,
+and upgrade-link runtime, and
+`frontend-modern/src/components/shared/monitoredSystemLimitWarningBannerModel.ts`
+owns monitored-system summary, migration copy, overflow summary, and tone/text-class
+policy. Future warning-banner work should extend those owners instead of pushing
+entitlement orchestration, tracking, or naming math back into the shared shell.
 First-session educational surfaces must also stay brief, flat, and model-led.
 When Pulse needs to teach a user how a flow works, the primary on-screen
 guidance should collapse to a few short descriptions of the real product

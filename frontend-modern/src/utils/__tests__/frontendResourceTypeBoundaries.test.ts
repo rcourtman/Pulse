@@ -44,6 +44,8 @@ import tooltipSource from '@/components/shared/Tooltip.tsx?raw';
 import tooltipModelSource from '@/components/shared/tooltipModel.ts?raw';
 import trialBannerSource from '@/components/shared/TrialBanner.tsx?raw';
 import trialBannerModelSource from '@/components/shared/trialBannerModel.ts?raw';
+import monitoredSystemLimitWarningBannerSource from '@/components/shared/MonitoredSystemLimitWarningBanner.tsx?raw';
+import monitoredSystemLimitWarningBannerModelSource from '@/components/shared/monitoredSystemLimitWarningBannerModel.ts?raw';
 import infrastructureSummaryTableSource from '@/components/shared/InfrastructureSummaryTable.tsx?raw';
 import infrastructureSummaryTableRowSource from '@/components/shared/InfrastructureSummaryTableRow.tsx?raw';
 import interactiveSparklineSource from '@/components/shared/InteractiveSparkline.tsx?raw';
@@ -67,6 +69,7 @@ import searchTipsPopoverStateSource from '@/components/shared/useSearchTipsPopov
 import tooltipStateSource from '@/components/shared/useTooltipState.ts?raw';
 import trialBannerStateSource from '@/components/shared/useTrialBannerState.ts?raw';
 import interactiveSparklineStateSource from '@/components/shared/useInteractiveSparklineState.ts?raw';
+import monitoredSystemLimitWarningBannerStateSource from '@/components/shared/useMonitoredSystemLimitWarningBannerState.ts?raw';
 import infrastructureSummaryTableStateSource from '@/components/shared/useInfrastructureSummaryTableState.ts?raw';
 import resourceBadgePresentationSource from '@/utils/resourceBadgePresentation.ts?raw';
 import workloadTypeBadgesSource from '@/components/shared/workloadTypeBadges.ts?raw';
@@ -2751,6 +2754,35 @@ describe('frontend resource type boundaries', () => {
     expect(trialBannerModelSource).toContain('getTrialBannerToneClass');
     expect(trialBannerModelSource).toContain('getTrialBannerStatusLabel');
     expect(trialBannerModelSource).toContain('TRIAL_BANNER_UPGRADE_LABEL');
+    expect(monitoredSystemLimitWarningBannerSource).toContain(
+      'useMonitoredSystemLimitWarningBannerState',
+    );
+    expect(monitoredSystemLimitWarningBannerSource).toContain(
+      'MONITORED_SYSTEM_LIMIT_LEARN_MORE_LABEL',
+    );
+    expect(monitoredSystemLimitWarningBannerSource).not.toContain('createEffect');
+    expect(monitoredSystemLimitWarningBannerSource).not.toContain('createMemo');
+    expect(monitoredSystemLimitWarningBannerSource).not.toContain('loadLicenseStatus');
+    expect(monitoredSystemLimitWarningBannerSource).not.toContain('trackUpgradeMetricEvent');
+    expect(monitoredSystemLimitWarningBannerSource).not.toContain('legacyConnections()');
+    expect(monitoredSystemLimitWarningBannerStateSource).toContain('createEffect');
+    expect(monitoredSystemLimitWarningBannerStateSource).toContain('createMemo');
+    expect(monitoredSystemLimitWarningBannerStateSource).toContain('loadLicenseStatus');
+    expect(monitoredSystemLimitWarningBannerStateSource).toContain('trackUpgradeMetricEvent');
+    expect(monitoredSystemLimitWarningBannerStateSource).toContain('legacyConnections');
+    expect(monitoredSystemLimitWarningBannerStateSource).toContain('handleUpgradeClick');
+    expect(monitoredSystemLimitWarningBannerModelSource).toContain(
+      'getMonitoredSystemMigrationMessage',
+    );
+    expect(monitoredSystemLimitWarningBannerModelSource).toContain(
+      'getMonitoredSystemBannerToneClass',
+    );
+    expect(monitoredSystemLimitWarningBannerModelSource).toContain(
+      'MONITORED_SYSTEM_LIMIT_UPGRADE_LABEL',
+    );
+    expect(monitoredSystemLimitWarningBannerModelSource).toContain(
+      'MONITORED_SYSTEM_LIMIT_INSTALL_COLLECTORS_LABEL',
+    );
     expect(whatsNewModalSource).toContain('useWhatsNewModalState');
     expect(whatsNewModalSource).toContain('WHATS_NEW_FEATURE_CARDS');
     expect(whatsNewModalSource).not.toContain('createLocalStorageBooleanSignal');
