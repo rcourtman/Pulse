@@ -2024,7 +2024,9 @@
         "frontend-modern/src/features/operations/operationsPageModel.ts",
         "frontend-modern/src/features/operations/OperationsPageSurface.tsx",
         "frontend-modern/src/pages/Operations.tsx",
-        "frontend-modern/src/utils/reportingPresentation.ts"
+        "frontend-modern/src/utils/reportingPresentation.ts",
+        "frontend-modern/src/utils/ssoProviderPresentation.ts",
+        "frontend-modern/src/utils/systemSettingsPresentation.ts"
       ],
       "verification": {
         "allow_same_subsystem_tests": false,
@@ -2111,7 +2113,9 @@
               "frontend-modern/src/components/Settings/useSettingsPanelRegistry.tsx",
               "frontend-modern/src/components/Settings/useSettingsShellState.ts",
               "frontend-modern/src/components/Settings/useSettingsSystemPanels.tsx",
-              "frontend-modern/src/components/Settings/useSSOProvidersState.ts"
+              "frontend-modern/src/components/Settings/useSSOProvidersState.ts",
+              "frontend-modern/src/utils/ssoProviderPresentation.ts",
+              "frontend-modern/src/utils/systemSettingsPresentation.ts"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],

@@ -65,37 +65,37 @@ export function getBackupIntervalSummary(
 }
 
 export function getSystemSettingsSaveErrorMessage(message?: string): string {
-  return message || 'Failed to save settings';
+  return message || 'Unable to save settings.';
 }
 
 export function getHideLocalLoginUpdateErrorMessage(message?: string): string {
-  return message || 'Failed to update hide local login setting';
+  return message || 'Unable to update local login visibility.';
 }
 
 export function getDockerUpdateActionsUpdateErrorMessage(message?: string): string {
-  return message || 'Failed to update Docker update actions setting';
+  return message || 'Unable to update container update actions.';
 }
 
 export function getReduceUpsellNoiseUpdateErrorMessage(message?: string): string {
-  return message || 'Failed to update reduce upsell noise setting';
+  return message || 'Unable to update upgrade guidance preferences.';
 }
 
 export function getLocalUpgradeMetricsUpdateErrorMessage(message?: string): string {
-  return message || 'Failed to update local upgrade metrics setting';
+  return message || 'Unable to update local upgrade metrics.';
 }
 
 export function getTelemetryUpdateErrorMessage(message?: string): string {
-  return message || 'Failed to update telemetry setting';
+  return message || 'Unable to update anonymous telemetry.';
 }
 
 export function getTemperatureMonitoringUpdateErrorMessage(message?: string): string {
-  return message || 'Failed to update temperature monitoring setting';
+  return message || 'Unable to update temperature monitoring.';
 }
 
 export function getCheckForUpdatesErrorMessage(): string {
-  return 'Failed to check for updates';
+  return 'Unable to check for updates.';
 }
 
 export function getStartUpdateErrorMessage(): string {
-  return 'Failed to start update. Please try again.';
+  return 'Unable to start the update. Please try again.';
 }

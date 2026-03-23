@@ -54,30 +54,32 @@ work extends shared components instead of creating new local variants.
 32. `frontend-modern/src/components/Settings/useSettingsShellState.ts`
 33. `frontend-modern/src/components/Settings/useSSOProvidersState.ts`
 34. `frontend-modern/src/components/Settings/ssoProvidersModel.ts`
-35. `frontend-modern/src/components/Settings/UpdateInstallGuide.tsx`
-36. `frontend-modern/src/components/Settings/updatesSettingsModel.ts`
-37. `frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx`
-38. `frontend-modern/src/components/Settings/ReportingPanel.tsx`
-39. `frontend-modern/src/components/Settings/reportingPanelModel.ts`
-40. `frontend-modern/src/components/Settings/useReportingPanelState.ts`
-41. `frontend-modern/src/utils/reportingPresentation.ts`
-42. `frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts`
-43. `tests/integration/tests/15-settings-shell-consistency.spec.ts`
-44. `frontend-modern/src/components/shared/PageControls.guardrails.test.ts`
-45. `frontend-modern/src/components/shared/TypeColumn.guardrails.test.ts`
-46. `frontend-modern/src/features/`
-47. `frontend-modern/src/components/SetupWizard/SetupWizard.tsx`
-48. `frontend-modern/src/components/SetupWizard/SetupCompletionPreview.tsx`
-49. `frontend-modern/src/components/SetupWizard/__tests__/SetupWizard.test.tsx`
-50. `frontend-modern/src/components/SetupWizard/__tests__/SetupCompletionPreview.test.tsx`
-51. `frontend-modern/src/components/shared/MonitoredSystemLimitWarningBanner.tsx`
-52. `frontend-modern/src/components/Settings/SystemLogsPanel.tsx`
-53. `frontend-modern/src/components/Settings/useSystemLogsPanelState.ts`
-54. `frontend-modern/src/components/Settings/__tests__/SystemLogsPanel.test.tsx`
-55. `frontend-modern/src/features/operations/OperationsPageSurface.tsx`
-56. `frontend-modern/src/features/operations/operationsPageModel.ts`
-57. `frontend-modern/src/pages/Operations.tsx`
-58. `frontend-modern/src/pages/__tests__/Operations.helpers.test.ts`
+35. `frontend-modern/src/utils/ssoProviderPresentation.ts`
+36. `frontend-modern/src/utils/systemSettingsPresentation.ts`
+37. `frontend-modern/src/components/Settings/UpdateInstallGuide.tsx`
+38. `frontend-modern/src/components/Settings/updatesSettingsModel.ts`
+39. `frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx`
+40. `frontend-modern/src/components/Settings/ReportingPanel.tsx`
+41. `frontend-modern/src/components/Settings/reportingPanelModel.ts`
+42. `frontend-modern/src/components/Settings/useReportingPanelState.ts`
+43. `frontend-modern/src/utils/reportingPresentation.ts`
+44. `frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts`
+45. `tests/integration/tests/15-settings-shell-consistency.spec.ts`
+46. `frontend-modern/src/components/shared/PageControls.guardrails.test.ts`
+47. `frontend-modern/src/components/shared/TypeColumn.guardrails.test.ts`
+48. `frontend-modern/src/features/`
+49. `frontend-modern/src/components/SetupWizard/SetupWizard.tsx`
+50. `frontend-modern/src/components/SetupWizard/SetupCompletionPreview.tsx`
+51. `frontend-modern/src/components/SetupWizard/__tests__/SetupWizard.test.tsx`
+52. `frontend-modern/src/components/SetupWizard/__tests__/SetupCompletionPreview.test.tsx`
+53. `frontend-modern/src/components/shared/MonitoredSystemLimitWarningBanner.tsx`
+54. `frontend-modern/src/components/Settings/SystemLogsPanel.tsx`
+55. `frontend-modern/src/components/Settings/useSystemLogsPanelState.ts`
+56. `frontend-modern/src/components/Settings/__tests__/SystemLogsPanel.test.tsx`
+57. `frontend-modern/src/features/operations/OperationsPageSurface.tsx`
+58. `frontend-modern/src/features/operations/operationsPageModel.ts`
+59. `frontend-modern/src/pages/Operations.tsx`
+60. `frontend-modern/src/pages/__tests__/Operations.helpers.test.ts`
 59. `frontend-modern/src/components/Settings/NetworkDiscoverySection.tsx`
 60. `frontend-modern/src/components/Settings/NetworkBoundarySettingsSection.tsx`
 61. `frontend-modern/src/components/Settings/networkSettingsModel.ts`
@@ -903,6 +905,14 @@ owns the public URL, CORS, embedding, and webhook-boundary UI. Shared prop
 contracts for that surface must extend
 `frontend-modern/src/components/Settings/networkSettingsModel.ts` instead of
 re-expanding the shell or reintroducing page-local section types.
+That same settings-shell boundary now also owns the shared settings
+presentation helpers that those panels consume. `frontend-modern/src/utils/systemSettingsPresentation.ts`
+is the canonical owner for shared system-settings presets, summaries, and
+customer-facing action copy, while
+`frontend-modern/src/utils/ssoProviderPresentation.ts` owns the shared SSO
+provider labels, empty states, and action/status messaging. Future settings
+copy changes in those areas should extend these helpers instead of inlining
+panel-local strings inside the shell or reactive state owners.
 First-session runtime framing is now part of that same owned primitive story.
 `frontend-modern/src/components/SetupWizard/SetupWizard.tsx` must stay on the
 real two-step runtime shape (`Welcome`, then `Security`) and hand successful

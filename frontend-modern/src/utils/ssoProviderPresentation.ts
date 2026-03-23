@@ -22,7 +22,7 @@ export function getSSOProviderModalTitle(editing: boolean, type: SSOProviderType
 }
 
 export function getSSOProviderEmptyStateDescription(): string {
-  return 'Click "Add OIDC" or "Add SAML" to get started';
+  return 'Add an OIDC or SAML provider to get started.';
 }
 
 export function getSSOProviderEmptyStateTitle(): string {
@@ -31,48 +31,48 @@ export function getSSOProviderEmptyStateTitle(): string {
 
 export function getSSOProvidersLoadingState() {
   return {
-    text: 'Loading SSO providers...',
+    text: 'Loading SSO providers…',
   } as const;
 }
 
 export function getSSOProvidersLoadErrorMessage(): string {
-  return 'Failed to load SSO providers';
+  return 'Unable to load SSO providers.';
 }
 
 export function getSSOProviderDetailsLoadErrorMessage(): string {
-  return 'Failed to load provider details';
+  return 'Unable to load SSO provider details.';
 }
 
 export function getSSOProviderSaveSuccessMessage(isEdit: boolean): string {
-  return isEdit ? 'Provider updated' : 'Provider created';
+  return isEdit ? 'SSO provider has been updated.' : 'SSO provider has been created.';
 }
 
 export function getSSOProviderSaveErrorMessage(error?: unknown): string {
-  return `Failed to save provider: ${String(error)}`;
+  return `Unable to save the SSO provider: ${String(error)}`;
 }
 
 export function getSSOProviderDeleteSuccessMessage(): string {
-  return 'Provider deleted';
+  return 'SSO provider has been removed.';
 }
 
 export function getSSOProviderDeleteErrorMessage(): string {
-  return 'Failed to delete provider';
+  return 'Unable to remove the SSO provider.';
 }
 
 export function getSSOProviderToggleSuccessMessage(enabled: boolean): string {
-  return enabled ? 'Provider enabled' : 'Provider disabled';
+  return enabled ? 'SSO provider has been enabled.' : 'SSO provider has been disabled.';
 }
 
 export function getSSOProviderToggleErrorMessage(): string {
-  return 'Failed to update provider';
+  return 'Unable to update the SSO provider.';
 }
 
 export function getSSOCopySuccessMessage(label: string): string {
-  return `${label} copied to clipboard`;
+  return `${label} has been copied to the clipboard.`;
 }
 
 export function getSSOConnectionTestSuccessMessage(): string {
-  return 'Connection test successful';
+  return 'Connection test completed successfully.';
 }
 
 export function getSSOConnectionTestFailureMessage(message: string): string {
@@ -80,15 +80,15 @@ export function getSSOConnectionTestFailureMessage(message: string): string {
 }
 
 export function getSSOConnectionTestErrorMessage(): string {
-  return 'Failed to test connection';
+  return 'Unable to run the connection test.';
 }
 
 export function getSSOMetadataUrlRequiredMessage(): string {
-  return 'Please enter an IdP Metadata URL';
+  return 'Enter an IdP metadata URL.';
 }
 
 export function getSSOMetadataFetchErrorMessage(error?: unknown): string {
-  return `Failed to fetch metadata: ${String(error)}`;
+  return `Unable to fetch metadata: ${String(error)}`;
 }
 
 export function getSSOProviderSummary(provider: SSOProviderSummaryLike): string {

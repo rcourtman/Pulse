@@ -75,6 +75,7 @@ import updateInstallGuideSource from '../UpdateInstallGuide.tsx?raw';
 import updatesSettingsModelSource from '../updatesSettingsModel.ts?raw';
 import updatesSettingsPanelSource from '../UpdatesSettingsPanel.tsx?raw';
 import recoverySettingsPanelSource from '../RecoverySettingsPanel.tsx?raw';
+import systemSettingsStateSource from '../useSystemSettingsState.ts?raw';
 import relaySettingsPanelSource from '../RelaySettingsPanel.tsx?raw';
 import relayPairingSectionSource from '../RelayPairingSection.tsx?raw';
 import proLicensePanelSource from '../ProLicensePanel.tsx?raw';
@@ -117,6 +118,8 @@ import securityAuthPanelSource from '../SecurityAuthPanel.tsx?raw';
 import ssoProvidersPanelSource from '../SSOProvidersPanel.tsx?raw';
 import ssoProvidersStateSource from '../useSSOProvidersState.ts?raw';
 import ssoProvidersModelSource from '../ssoProvidersModel.ts?raw';
+import ssoProviderPresentationSource from '@/utils/ssoProviderPresentation.ts?raw';
+import systemSettingsPresentationSource from '@/utils/systemSettingsPresentation.ts?raw';
 import diagnosticsStateSource from '../useDiagnosticsPanelState.ts?raw';
 import reportingPanelModelSource from '../reportingPanelModel.ts?raw';
 import reportingPanelSource from '../ReportingPanel.tsx?raw';
@@ -1002,10 +1005,12 @@ describe('Settings architecture guardrails', () => {
 
   it('keeps the SSO providers shell behind extracted runtime owners', () => {
     expect(ssoProvidersPanelSource).toContain('@/components/Settings/useSSOProvidersState');
+    expect(ssoProvidersPanelSource).toContain('@/utils/ssoProviderPresentation');
     expect(ssoProvidersPanelSource).not.toContain('const loadProviders = async () =>');
     expect(ssoProvidersPanelSource).not.toContain('const handleSave = async (');
     expect(ssoProvidersPanelSource).not.toContain('const testConnection = async () =>');
     expect(ssoProvidersStateSource).toContain('@/components/Settings/ssoProvidersModel');
+    expect(ssoProvidersStateSource).toContain('@/utils/ssoProviderPresentation');
     expect(ssoProvidersStateSource).toContain('export const useSSOProvidersState =');
     expect(ssoProvidersStateSource).toContain('const loadProviders = async () =>');
     expect(ssoProvidersStateSource).toContain('const handleSave = async (event?: Event) =>');
@@ -1014,6 +1019,22 @@ describe('Settings architecture guardrails', () => {
     expect(ssoProvidersModelSource).toContain('export const mapProviderDetailsToForm =');
     expect(ssoProvidersModelSource).toContain('export const buildProviderPayload =');
     expect(ssoProvidersModelSource).toContain('export const buildProviderTestPayload =');
+    expect(ssoProviderPresentationSource).toContain('export function getSSOProviderEmptyStateTitle');
+    expect(ssoProviderPresentationSource).toContain('export function getSSOProvidersLoadErrorMessage');
+  });
+
+  it('keeps shared system settings presentation extracted from panel and state owners', () => {
+    expect(generalSettingsPanelSource).toContain('@/utils/systemSettingsPresentation');
+    expect(recoverySettingsPanelSource).toContain('@/utils/systemSettingsPresentation');
+    expect(networkDiscoverySectionSource).toContain('@/utils/systemSettingsPresentation');
+    expect(systemSettingsStateSource).toContain('@/utils/systemSettingsPresentation');
+    expect(systemSettingsPresentationSource).toContain('export const PVE_POLLING_PRESETS');
+    expect(systemSettingsPresentationSource).toContain(
+      'export function getSystemSettingsSaveErrorMessage',
+    );
+    expect(systemSettingsPresentationSource).toContain(
+      'export function getStartUpdateErrorMessage',
+    );
   });
 
   it('routes every top-level settings surface through the canonical panel shell framing', () => {

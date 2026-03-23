@@ -74,25 +74,25 @@ describe('systemSettingsPresentation', () => {
   });
 
   it('returns canonical system settings operational failure copy', () => {
-    expect(getSystemSettingsSaveErrorMessage()).toBe('Failed to save settings');
+    expect(getSystemSettingsSaveErrorMessage()).toBe('Unable to save settings.');
     expect(getSystemSettingsSaveErrorMessage('forbidden')).toBe('forbidden');
     expect(getHideLocalLoginUpdateErrorMessage()).toBe(
-      'Failed to update hide local login setting',
+      'Unable to update local login visibility.',
     );
     expect(getDockerUpdateActionsUpdateErrorMessage()).toBe(
-      'Failed to update Docker update actions setting',
+      'Unable to update container update actions.',
     );
     expect(getReduceUpsellNoiseUpdateErrorMessage()).toBe(
-      'Failed to update reduce upsell noise setting',
+      'Unable to update upgrade guidance preferences.',
     );
     expect(getLocalUpgradeMetricsUpdateErrorMessage()).toBe(
-      'Failed to update local upgrade metrics setting',
+      'Unable to update local upgrade metrics.',
     );
-    expect(getTelemetryUpdateErrorMessage()).toBe('Failed to update telemetry setting');
+    expect(getTelemetryUpdateErrorMessage()).toBe('Unable to update anonymous telemetry.');
     expect(getTemperatureMonitoringUpdateErrorMessage()).toBe(
-      'Failed to update temperature monitoring setting',
+      'Unable to update temperature monitoring.',
     );
-    expect(getCheckForUpdatesErrorMessage()).toBe('Failed to check for updates');
-    expect(getStartUpdateErrorMessage()).toBe('Failed to start update. Please try again.');
+    expect(getCheckForUpdatesErrorMessage()).toBe('Unable to check for updates.');
+    expect(getStartUpdateErrorMessage()).toBe('Unable to start the update. Please try again.');
   });
 });

@@ -35,8 +35,10 @@ describe('ssoProviderPresentation', () => {
     expect(getSSOProviderAddButtonLabel('saml', true)).toBe('Add SAML (Pro)');
     expect(getSSOProviderModalTitle(false, 'saml')).toBe('Add SAML Provider');
     expect(getSSOProviderEmptyStateTitle()).toBe('No SSO providers configured');
-    expect(getSSOProviderEmptyStateDescription()).toContain('Add OIDC');
-    expect(getSSOProvidersLoadingState()).toEqual({ text: 'Loading SSO providers...' });
+    expect(getSSOProviderEmptyStateDescription()).toBe(
+      'Add an OIDC or SAML provider to get started.',
+    );
+    expect(getSSOProvidersLoadingState()).toEqual({ text: 'Loading SSO providers…' });
     expect(getSSOProviderTypeBadgeClass()).toContain('bg-surface-hover');
     expect(
       getSSOProviderSummary({
@@ -61,24 +63,28 @@ describe('ssoProviderPresentation', () => {
   });
 
   it('formats provider operational messages canonically', () => {
-    expect(getSSOProvidersLoadErrorMessage()).toBe('Failed to load SSO providers');
-    expect(getSSOProviderDetailsLoadErrorMessage()).toBe('Failed to load provider details');
-    expect(getSSOProviderSaveSuccessMessage(true)).toBe('Provider updated');
-    expect(getSSOProviderSaveSuccessMessage(false)).toBe('Provider created');
-    expect(getSSOProviderSaveErrorMessage('boom')).toBe('Failed to save provider: boom');
-    expect(getSSOProviderDeleteSuccessMessage()).toBe('Provider deleted');
-    expect(getSSOProviderDeleteErrorMessage()).toBe('Failed to delete provider');
-    expect(getSSOProviderToggleSuccessMessage(true)).toBe('Provider enabled');
-    expect(getSSOProviderToggleSuccessMessage(false)).toBe('Provider disabled');
-    expect(getSSOProviderToggleErrorMessage()).toBe('Failed to update provider');
-    expect(getSSOCopySuccessMessage('XML')).toBe('XML copied to clipboard');
-    expect(getSSOConnectionTestSuccessMessage()).toBe('Connection test successful');
+    expect(getSSOProvidersLoadErrorMessage()).toBe('Unable to load SSO providers.');
+    expect(getSSOProviderDetailsLoadErrorMessage()).toBe(
+      'Unable to load SSO provider details.',
+    );
+    expect(getSSOProviderSaveSuccessMessage(true)).toBe('SSO provider has been updated.');
+    expect(getSSOProviderSaveSuccessMessage(false)).toBe('SSO provider has been created.');
+    expect(getSSOProviderSaveErrorMessage('boom')).toBe('Unable to save the SSO provider: boom');
+    expect(getSSOProviderDeleteSuccessMessage()).toBe('SSO provider has been removed.');
+    expect(getSSOProviderDeleteErrorMessage()).toBe('Unable to remove the SSO provider.');
+    expect(getSSOProviderToggleSuccessMessage(true)).toBe('SSO provider has been enabled.');
+    expect(getSSOProviderToggleSuccessMessage(false)).toBe('SSO provider has been disabled.');
+    expect(getSSOProviderToggleErrorMessage()).toBe('Unable to update the SSO provider.');
+    expect(getSSOCopySuccessMessage('XML')).toBe('XML has been copied to the clipboard.');
+    expect(getSSOConnectionTestSuccessMessage()).toBe('Connection test completed successfully.');
     expect(getSSOConnectionTestFailureMessage('Bad certificate')).toBe(
       'Connection test failed: Bad certificate',
     );
-    expect(getSSOConnectionTestErrorMessage()).toBe('Failed to test connection');
-    expect(getSSOMetadataUrlRequiredMessage()).toBe('Please enter an IdP Metadata URL');
-    expect(getSSOMetadataFetchErrorMessage('timeout')).toBe('Failed to fetch metadata: timeout');
+    expect(getSSOConnectionTestErrorMessage()).toBe('Unable to run the connection test.');
+    expect(getSSOMetadataUrlRequiredMessage()).toBe('Enter an IdP metadata URL.');
+    expect(getSSOMetadataFetchErrorMessage('timeout')).toBe(
+      'Unable to fetch metadata: timeout',
+    );
   });
 
   it('formats certificate tone and expired label canonically', () => {
