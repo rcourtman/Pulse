@@ -232,7 +232,8 @@ describe('MonitoredSystemLedgerPanel', () => {
 
     expect(screen.getByText('Monitored System Ledger')).toBeInTheDocument();
     expect(screen.getByText('Latest Included Signal')).toBeInTheDocument();
-    expect(screen.getByText('2026-01-02T00:00:00Z via PBS')).toBeInTheDocument();
+    expect(screen.getByText('2026-01-02T00:00:00Z')).toBeInTheDocument();
+    expect(screen.getByText('server-b (PBS Server via PBS)')).toBeInTheDocument();
     expect(
       screen.getByText(
         'Review the monitored systems currently counted against your Pulse Pro plan limit.',
@@ -269,7 +270,7 @@ describe('MonitoredSystemLedgerPanel', () => {
       ),
     ).toBeInTheDocument();
     expect(screen.getByText('Included collection paths')).toBeInTheDocument();
-    expect(screen.getByText('server-b host (host, agent)')).toBeInTheDocument();
+    expect(screen.getByText('server-b host (Host via Agent)')).toBeInTheDocument();
     expect(
       screen.queryByText('Monitored system usage is temporarily unavailable.'),
     ).not.toBeInTheDocument();

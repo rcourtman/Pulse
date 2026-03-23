@@ -3262,12 +3262,12 @@ describe('frontend resource type boundaries', () => {
     expect(guestDrawerSource).not.toContain('Loading discovery...');
     expect(infrastructureDetailsDrawerSource).not.toContain('Loading discovery...');
     expect(resourceDetailDrawerSource).not.toContain('Loading discovery...');
-    expect(discoveryTabSource).not.toContain('No suggested URL found');
+    expect(discoveryTabSource).not.toContain('No suggested URL available');
     expect(discoveryTabSource).not.toContain(
-      'No notes yet. Add notes to document important information.',
+      'No discovery notes yet. Add notes to capture important context.',
     );
     expect(webInterfaceUrlFieldSource).toContain('useWebInterfaceUrlFieldState');
-    expect(webInterfaceUrlFieldSource).not.toContain('No suggested URL found');
+    expect(webInterfaceUrlFieldSource).not.toContain('No suggested URL available');
     expect(webInterfaceUrlFieldSource).not.toContain('GuestMetadataAPI.getMetadata');
     expect(webInterfaceUrlFieldStateSource).toContain('GuestMetadataAPI.getMetadata');
     expect(webInterfaceUrlFieldStateSource).toContain('AgentMetadataAPI.updateMetadata');
@@ -3282,6 +3282,29 @@ describe('frontend resource type boundaries', () => {
       'export function getDiscoverySuggestedURLFallback',
     );
     expect(discoveryPresentationSource).toContain('export function getDiscoveryNotesEmptyState');
+    expect(discoveryPresentationSource).toContain(
+      'export function getNetworkDiscoveryPriorityNotice',
+    );
+    expect(discoveryPresentationSource).toContain(
+      'export function getNetworkDiscoverySectionPresentation',
+    );
+    expect(discoveryPresentationSource).toContain(
+      'export function getNetworkDiscoveryModePresentation',
+    );
+    expect(discoveryPresentationSource).toContain(
+      'export function getNetworkDiscoverySubnetPresentation',
+    );
+    expect(networkDiscoverySectionSource).toContain('getNetworkDiscoveryPriorityNotice');
+    expect(networkDiscoverySectionSource).toContain('getNetworkDiscoverySectionPresentation');
+    expect(networkDiscoverySectionSource).toContain('getNetworkDiscoveryModePresentation');
+    expect(networkDiscoverySectionSource).toContain('getNetworkDiscoverySubnetPresentation');
+    expect(networkDiscoverySectionSource).toContain('getDiscoverySubnetRequiredMessage');
+    expect(networkDiscoverySectionSource).toContain('getDiscoverySubnetInvalidFormatMessage');
+    expect(networkDiscoverySectionSource).not.toContain('Configuration priority');
+    expect(networkDiscoverySectionSource).not.toContain('Automatic scanning');
+    expect(networkDiscoverySectionSource).not.toContain(
+      'Discovery settings are locked by environment variables.',
+    );
     expect(mailGatewaySource).toContain('getPMGThreatPresentation');
     expect(mailGatewaySource).not.toContain('const barColor =');
     expect(mailGatewaySource).not.toContain('const textColor =');

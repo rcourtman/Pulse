@@ -22,6 +22,7 @@ import {
   getMonitoredSystemLedgerLoadingState,
 } from '@/utils/unifiedAgentInventoryPresentation';
 import { PulseLogoIcon } from '@/components/icons/PulseLogoIcon';
+import { formatMonitoredSystemSurfaceAttribution } from '@/utils/monitoredSystemPresentation';
 import {
   SELF_HOSTED_MONITORED_SYSTEM_LEDGER_DESCRIPTION,
 } from '@/utils/selfHostedPlans';
@@ -55,37 +56,17 @@ function systemStatusExplanation(system: MonitoredSystemLedgerEntry): MonitoredS
   };
 }
 
-function monitoredSystemSourceLabel(source: string | undefined): string {
-  switch ((source ?? '').trim().toLowerCase()) {
-    case 'agent':
-      return 'Agent';
-    case 'docker':
-      return 'Docker';
-    case 'kubernetes':
-      return 'Kubernetes';
-    case 'pbs':
-      return 'PBS';
-    case 'pmg':
-      return 'PMG';
-    case 'proxmox':
-      return 'Proxmox';
-    case 'truenas':
-      return 'TrueNAS';
-    default:
-      return '';
-  }
-}
-
-function latestIncludedSignalLabel(system: MonitoredSystemLedgerEntry): string {
+function latestIncludedSignalSummary(system: MonitoredSystemLedgerEntry): {
+  relative: string;
+  attribution: string;
+} | null {
   if (!system.latest_included_signal?.at) {
-    return '—';
+    return null;
   }
-  const relative = formatRelativeTime(system.latest_included_signal.at, { compact: true });
-  const source = monitoredSystemSourceLabel(system.latest_included_signal.source);
-  if (source === '') {
-    return relative;
-  }
-  return `${relative} via ${source}`;
+  return {
+    relative: formatRelativeTime(system.latest_included_signal.at, { compact: true }),
+    attribution: formatMonitoredSystemSurfaceAttribution(system.latest_included_signal),
+  };
 }
 
 export function MonitoredSystemLedgerPanel(props: MonitoredSystemLedgerPanelProps = {}) {
@@ -189,6 +170,7 @@ export function MonitoredSystemLedgerPanel(props: MonitoredSystemLedgerPanelProp
                   const expanded = () => expandedSystemKey() === key;
                   const explanation = systemExplanation(system);
                   const statusExplanation = systemStatusExplanation(system);
+                  const latestSignal = latestIncludedSignalSummary(system);
                   return (
                     <TableRow>
                       <TableCell>
@@ -237,9 +219,7 @@ export function MonitoredSystemLedgerPanel(props: MonitoredSystemLedgerPanelProp
                                   <ul class="space-y-1 whitespace-normal">
                                     <For each={explanation.surfaces}>
                                       {(surface) => (
-                                        <li>
-                                          {surface.name} ({surface.type}, {surface.source})
-                                        </li>
+                                        <li>{formatMonitoredSystemSurfaceAttribution(surface)}</li>
                                       )}
                                     </For>
                                   </ul>
@@ -256,9 +236,19 @@ export function MonitoredSystemLedgerPanel(props: MonitoredSystemLedgerPanelProp
                         </span>
                       </TableCell>
                       <TableCell>
-                        <span class="text-xs text-muted">
-                          {latestIncludedSignalLabel(system)}
-                        </span>
+                        <Show
+                          when={latestSignal}
+                          fallback={<span class="text-xs text-muted">—</span>}
+                        >
+                          {(signal) => (
+                            <div class="space-y-0.5">
+                              <span class="block text-xs text-muted">{signal().relative}</span>
+                              <span class="block text-[11px] text-muted whitespace-normal">
+                                {signal().attribution}
+                              </span>
+                            </div>
+                          )}
+                        </Show>
                       </TableCell>
                     </TableRow>
                   );

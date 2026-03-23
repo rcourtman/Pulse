@@ -43,6 +43,7 @@ work extends shared components instead of creating new local variants.
 21. `frontend-modern/src/components/Settings/DiagnosticsPanel.tsx`
 22. `frontend-modern/src/components/Settings/DiagnosticsResultsPanel.tsx`
 23. `frontend-modern/src/utils/diagnosticsPresentation.ts`
+24. `frontend-modern/src/utils/discoveryPresentation.ts`
 24. `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx`
 25. `frontend-modern/src/components/Settings/NetworkSettingsPanel.tsx`
 26. `frontend-modern/src/components/Settings/RecoverySettingsPanel.tsx`
@@ -924,6 +925,11 @@ owns the public URL, CORS, embedding, and webhook-boundary UI. Shared prop
 contracts for that surface must extend
 `frontend-modern/src/components/Settings/networkSettingsModel.ts` instead of
 re-expanding the shell or reintroducing page-local section types.
+`frontend-modern/src/utils/discoveryPresentation.ts` now owns the
+customer-facing discovery-section framing copy, scan-scope labels, subnet
+guidance, and environment-lock messaging so
+`frontend-modern/src/components/Settings/NetworkDiscoverySection.tsx` stays a
+settings section shell instead of re-accumulating that wording inline.
 That same settings-shell boundary now also owns the shared settings
 presentation helpers that those panels consume. `frontend-modern/src/utils/systemSettingsPresentation.ts`
 is the canonical owner for shared system-settings presets, summaries, and

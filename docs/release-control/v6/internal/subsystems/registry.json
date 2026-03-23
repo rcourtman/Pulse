@@ -2098,6 +2098,7 @@
         "frontend-modern/src/pages/Operations.tsx",
         "frontend-modern/src/utils/aiSettingsPresentation.ts",
         "frontend-modern/src/utils/diagnosticsPresentation.ts",
+        "frontend-modern/src/utils/discoveryPresentation.ts",
         "frontend-modern/src/utils/reportingPresentation.ts",
         "frontend-modern/src/utils/settingsShellPresentation.ts",
         "frontend-modern/src/utils/ssoProviderPresentation.ts",
@@ -2238,6 +2239,19 @@
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/utils/__tests__/aiSettingsPresentation.test.ts"
+            ]
+          },
+          {
+            "id": "discovery-presentation-helper",
+            "label": "discovery presentation helper proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/utils/discoveryPresentation.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/utils/__tests__/discoveryPresentation.test.ts"
             ]
           },
           {

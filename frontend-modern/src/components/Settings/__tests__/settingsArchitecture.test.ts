@@ -568,8 +568,16 @@ describe('Settings architecture guardrails', () => {
     expect(networkSettingsPanelSource).not.toContain('Dashboard URL for Notifications');
     expect(networkSettingsPanelSource).not.toContain('Allowed Private IP Ranges for Webhooks');
     expect(networkDiscoverySectionSource).toContain('COMMON_DISCOVERY_SUBNETS');
-    expect(networkDiscoverySectionSource).toContain('title="Network discovery"');
-    expect(networkDiscoverySectionSource).toContain('Configuration priority');
+    expect(networkDiscoverySectionSource).toContain('@/utils/discoveryPresentation');
+    expect(networkDiscoverySectionSource).toContain('getNetworkDiscoveryPriorityNotice');
+    expect(networkDiscoverySectionSource).toContain('getNetworkDiscoverySectionPresentation');
+    expect(networkDiscoverySectionSource).toContain('getNetworkDiscoveryModePresentation');
+    expect(networkDiscoverySectionSource).toContain('getNetworkDiscoverySubnetPresentation');
+    expect(networkDiscoverySectionSource).not.toContain('Configuration priority');
+    expect(networkDiscoverySectionSource).not.toContain('Automatic scanning');
+    expect(networkDiscoverySectionSource).not.toContain(
+      'Discovery settings are locked by environment variables.',
+    );
     expect(networkBoundarySettingsSectionSource).toContain('Dashboard URL for Notifications');
     expect(networkBoundarySettingsSectionSource).toContain(
       'Allowed Private IP Ranges for Webhooks',
