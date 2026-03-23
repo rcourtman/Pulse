@@ -238,6 +238,14 @@ dropdown open state and outside-click listener lifecycle, and
 count, reset visibility policy, and column-option text-class/copy policy.
 Future column-picker work should extend those owners instead of pushing
 document-level listener logic or column-count policy back into the shell.
+The shared tag input now follows that same owner split.
+`frontend-modern/src/components/shared/TagInput.tsx` stays the render shell,
+`frontend-modern/src/components/shared/useTagInputState.ts` owns input state,
+container-focus runtime, and tag add/remove/backspace orchestration, and
+`frontend-modern/src/components/shared/tagInputModel.ts` owns delimiter keys,
+placeholder policy, remove-title copy, and canonical next-tag derivation.
+Future tag-input work should extend those owners instead of pushing DOM reach-in
+or tag-mutation policy back into the shell.
 The shared dialog now follows that same owner split.
 `frontend-modern/src/components/shared/Dialog.tsx` stays the render shell,
 `frontend-modern/src/components/shared/useDialogState.ts` owns focus trap,

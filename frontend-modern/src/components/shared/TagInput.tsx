@@ -1,65 +1,28 @@
-import { createSignal, For } from 'solid-js';
+import { For } from 'solid-js';
 import X from 'lucide-solid/icons/x';
-
-export interface TagInputProps {
-  tags: string[];
-  onChange: (tags: string[]) => void;
-  placeholder?: string;
-  class?: string;
-}
+import {
+  getTagInputPlaceholder,
+  getTagInputRemoveTitle,
+  TAG_INPUT_FIELD_CLASS,
+  TAG_INPUT_REMOVE_BUTTON_CLASS,
+  TAG_INPUT_TAG_CLASS,
+} from '@/components/shared/tagInputModel';
+import { type TagInputProps, useTagInputState } from '@/components/shared/useTagInputState';
 
 export function TagInput(props: TagInputProps) {
-  const [inputValue, setInputValue] = createSignal('');
-
-  const handleKeyDown = (e: KeyboardEvent) => {
-    // Prevent default on enter/comma to use them as delimiters
-    if (e.key === 'Enter' || e.key === ',') {
-      e.preventDefault();
-      addTag();
-    } else if (e.key === 'Backspace' && !inputValue() && props.tags.length > 0) {
-      // Remove last tag if backspace is pressed while input is empty
-      props.onChange(props.tags.slice(0, -1));
-    }
-  };
-
-  const handleBlur = () => {
-    // Also try adding the tag on blur
-    addTag();
-  };
-
-  const addTag = () => {
-    const newTag = inputValue().trim();
-    if (newTag && !props.tags.includes(newTag)) {
-      props.onChange([...props.tags, newTag]);
-    }
-    setInputValue('');
-  };
-
-  const removeTag = (indexToRemove: number) => {
-    props.onChange(props.tags.filter((_, i) => i !== indexToRemove));
-  };
+  const state = useTagInputState(props);
 
   return (
-    <div
-      class={`min-h-[42px] flex flex-wrap items-center gap-2 rounded-md border border-border bg-surface p-2 text-sm text-base-content focus-within:border-sky-500 focus-within:ring-1 focus-within:ring-sky-500 ${props.class || ''}`}
-      onClick={(e) => {
-        // Focus the input when clicking anywhere in the container
-        const input = e.currentTarget.querySelector('input');
-        if (input) input.focus();
-      }}
-    >
+    <div class={state.containerClass()} onClick={state.handleContainerClick}>
       <For each={props.tags}>
         {(tag, index) => (
-          <span class="inline-flex items-center gap-1 rounded bg-surface-alt px-2 py-1 text-xs font-medium text-base-content">
+          <span class={TAG_INPUT_TAG_CLASS}>
             {tag}
             <button
               type="button"
-              class="rounded-full p-0.5 text-slate-400 hover:bg-slate-300 hover:bg-surface-hover cursor-pointer focus:outline-none focus:ring-2 focus:ring-sky-500"
-              onClick={(e) => {
-                e.stopPropagation();
-                removeTag(index());
-              }}
-              title={`Remove ${tag}`}
+              class={TAG_INPUT_REMOVE_BUTTON_CLASS}
+              onClick={(event) => state.handleRemoveTag(event, index())}
+              title={getTagInputRemoveTitle(tag)}
             >
               <X class="w-3 h-3" />
             </button>
@@ -67,13 +30,14 @@ export function TagInput(props: TagInputProps) {
         )}
       </For>
       <input
+        ref={state.setInputRef}
         type="text"
-        value={inputValue()}
-        onInput={(e) => setInputValue(e.currentTarget.value)}
-        onKeyDown={handleKeyDown}
-        onBlur={handleBlur}
-        placeholder={props.tags.length === 0 ? props.placeholder : ''}
-        class="flex-1 bg-transparent min-w-[120px] focus:outline-none"
+        value={state.inputValue()}
+        onInput={state.handleInput}
+        onKeyDown={state.handleKeyDown}
+        onBlur={state.handleBlur}
+        placeholder={getTagInputPlaceholder(props.tags.length, props.placeholder)}
+        class={TAG_INPUT_FIELD_CLASS}
       />
     </div>
   );

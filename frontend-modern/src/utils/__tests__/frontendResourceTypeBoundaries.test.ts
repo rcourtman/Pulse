@@ -14,6 +14,8 @@ import activeUseTrialNudgeSource from '@/components/shared/ActiveUseTrialNudge.t
 import activeUseTrialNudgeModelSource from '@/components/shared/activeUseTrialNudgeModel.ts?raw';
 import columnPickerSource from '@/components/shared/ColumnPicker.tsx?raw';
 import columnPickerModelSource from '@/components/shared/columnPickerModel.ts?raw';
+import tagInputSource from '@/components/shared/TagInput.tsx?raw';
+import tagInputModelSource from '@/components/shared/tagInputModel.ts?raw';
 import collapsibleSearchInputSource from '@/components/shared/CollapsibleSearchInput.tsx?raw';
 import collapsibleSearchInputModelSource from '@/components/shared/collapsibleSearchInputModel.ts?raw';
 import containerUpdateBadgeSource from '@/components/shared/ContainerUpdateBadge.tsx?raw';
@@ -57,6 +59,7 @@ import sharedInfrastructureSummaryTableModelSource from '@/components/shared/inf
 import commandPaletteStateSource from '@/components/shared/useCommandPaletteState.ts?raw';
 import activeUseTrialNudgeStateSource from '@/components/shared/useActiveUseTrialNudgeState.ts?raw';
 import columnPickerStateSource from '@/components/shared/useColumnPickerState.ts?raw';
+import tagInputStateSource from '@/components/shared/useTagInputState.ts?raw';
 import collapsibleSearchInputStateSource from '@/components/shared/useCollapsibleSearchInputState.ts?raw';
 import containerUpdateButtonStateSource from '@/components/shared/useContainerUpdateButtonState.ts?raw';
 import dialogStateSource from '@/components/shared/useDialogState.ts?raw';
@@ -2773,6 +2776,22 @@ describe('frontend resource type boundaries', () => {
     expect(columnPickerModelSource).toContain('getHiddenColumnCount');
     expect(columnPickerModelSource).toContain('shouldShowColumnPickerReset');
     expect(columnPickerModelSource).toContain('getColumnPickerOptionTextClass');
+    expect(tagInputSource).toContain('useTagInputState');
+    expect(tagInputSource).toContain('getTagInputPlaceholder');
+    expect(tagInputSource).not.toContain('createSignal');
+    expect(tagInputSource).not.toContain('querySelector');
+    expect(tagInputSource).not.toContain('Backspace');
+    expect(tagInputSource).not.toContain('addTag');
+    expect(tagInputStateSource).toContain('createSignal');
+    expect(tagInputStateSource).toContain('createMemo');
+    expect(tagInputStateSource).toContain('inputRef?.focus');
+    expect(tagInputStateSource).toContain("event.key === 'Backspace'");
+    expect(tagInputStateSource).toContain('commitTag');
+    expect(tagInputModelSource).toContain('TAG_INPUT_DELIMITER_KEYS');
+    expect(tagInputModelSource).toContain('isTagInputCommitKey');
+    expect(tagInputModelSource).toContain('getTagInputPlaceholder');
+    expect(tagInputModelSource).toContain('getNextTagsAfterRemove');
+    expect(tagInputModelSource).toContain('getTagInputRemoveTitle');
     expect(monitoredSystemLimitWarningBannerSource).toContain(
       'useMonitoredSystemLimitWarningBannerState',
     );
