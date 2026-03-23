@@ -341,6 +341,7 @@ import resourceDetailDrawerDiscoveryModelSource from '@/components/Infrastructur
 import resourceDetailMappersSource from '@/components/Infrastructure/resourceDetailMappers.ts?raw';
 import resourceDetailDrawerHistoryStateSource from '@/components/Infrastructure/useResourceDetailDrawerHistoryState.ts?raw';
 import resourceDetailDrawerDerivedStateSource from '@/components/Infrastructure/useResourceDetailDrawerDerivedState.ts?raw';
+import resourceDetailDrawerIdentityModelSource from '@/components/Infrastructure/resourceDetailDrawerIdentityModel.ts?raw';
 import resourceDetailDrawerOperationalModelSource from '@/components/Infrastructure/resourceDetailDrawerOperationalModel.ts?raw';
 import resourceDetailDrawerServiceModelSource from '@/components/Infrastructure/resourceDetailDrawerServiceModel.ts?raw';
 import resourceDetailDrawerDockerActionsStateSource from '@/components/Infrastructure/useResourceDetailDrawerDockerActionsState.ts?raw';
@@ -1000,13 +1001,21 @@ describe('frontend resource type boundaries', () => {
     expect(resourceDetailDrawerDerivedStateSource).toContain(
       "from './resourceDetailDrawerServiceModel'",
     );
+    expect(resourceDetailDrawerDerivedStateSource).toContain(
+      "from './resourceDetailDrawerIdentityModel'",
+    );
     expect(resourceDetailDrawerDiscoveryModelSource).toContain('export const toDiscoveryConfig');
+    expect(resourceDetailDrawerIdentityModelSource).toContain('buildResourceIdentityView');
+    expect(resourceDetailDrawerIdentityModelSource).toContain('buildDiscoveryContextSummary');
+    expect(resourceDetailDrawerIdentityModelSource).toContain('buildResourceDebugBundle');
     expect(resourceDetailDrawerDerivedStateSource).not.toContain('buildWorkloadsHref');
     expect(resourceDetailDrawerDerivedStateSource).not.toContain('buildServiceDetailLinks');
     expect(resourceDetailDrawerDerivedStateSource).not.toContain('const supportedBadge =');
     expect(resourceDetailDrawerDerivedStateSource).not.toContain(
       'const links: Array<{ href: string;',
     );
+    expect(resourceDetailDrawerDerivedStateSource).not.toContain('ALIAS_COLLAPSE_THRESHOLD');
+    expect(resourceDetailDrawerDerivedStateSource).not.toContain('formatIdentifierLabel');
     expect(resourceDetailDrawerOperationalModelSource).toContain('buildKubernetesCapabilityBadges');
     expect(resourceDetailDrawerOperationalModelSource).toContain('buildHostDetailCards');
     expect(resourceDetailDrawerOperationalModelSource).toContain('buildHostDetailSummary');
@@ -2655,7 +2664,7 @@ describe('frontend resource type boundaries', () => {
     expect(approvalPresentationSource).toContain('getResourceApprovalLevelLabel');
     expect(throughputPresentationSource).toContain('formatThroughputRate');
     expect(resourceDetailDrawerSource).toContain('formatIdentifierLabel');
-    expect(resourceDetailDrawerDerivedStateSource).toContain('formatIdentifierLabel');
+    expect(resourceDetailDrawerIdentityModelSource).toContain('formatIdentifierLabel');
     expect(resourceDetailDrawerServiceModelSource).toContain('buildPbsVisibleJobBreakdown');
     expect(resourceDetailDrawerServiceModelSource).toContain('buildPmgVisibleQueueBreakdown');
     expect(resourceDetailDrawerServiceModelSource).toContain('buildPmgVisibleMailBreakdown');

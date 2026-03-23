@@ -72,6 +72,7 @@ cross-source deduplication.
 50. `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`
 51. `frontend-modern/src/components/Infrastructure/infrastructureSummaryModel.ts`
 52. `frontend-modern/src/utils/resourceIdentity.ts`
+53. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerIdentityModel.ts`
 
 ## Shared Boundaries
 
@@ -187,6 +188,9 @@ that canonical identifier now lives in the `Identity` card as `Primary ID`,
 `resourceDetailDrawerServiceModel.ts` owns the pure Docker/PBS/PMG service
 summary and breakdown derivations that feed the overview service-details
 surface,
+`resourceDetailDrawerIdentityModel.ts` owns the pure identity-card,
+discovery-summary, source-debug, and debug-bundle derivations that feed the
+overview and debug drawer surfaces,
 `useResourceDetailDrawerDockerActionsState.ts` owns Docker action runtime, and
 the overview/debug render-heavy surfaces live in dedicated drawer-local owners
 instead of staying inline in the shell.
