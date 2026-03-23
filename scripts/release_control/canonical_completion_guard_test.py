@@ -510,6 +510,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                         "frontend-modern/src/components/Infrastructure/__tests__/resourceDetailMappers.test.ts",
                         "frontend-modern/src/components/Infrastructure/__tests__/unifiedResourceTableStateModel.test.ts",
                         "frontend-modern/src/features/infrastructure/__tests__/InfrastructurePageSurface.guardrails.test.ts",
+                        "frontend-modern/src/features/infrastructure/__tests__/infrastructurePageModel.test.ts",
                         "frontend-modern/src/hooks/__tests__/useDashboardTrends.test.ts",
                         "frontend-modern/src/hooks/__tests__/useUnifiedResources.test.ts",
                         "frontend-modern/src/pages/__tests__/Infrastructure.empty-state.test.tsx",

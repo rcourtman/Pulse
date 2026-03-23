@@ -96,6 +96,36 @@ class SubsystemLookupTest(unittest.TestCase):
             match["verification_requirement"]["exact_files"],
         )
 
+    def test_lookup_paths_assigns_infrastructure_page_model_to_unified_resources(self) -> None:
+        result = lookup_paths(
+            ["frontend-modern/src/features/infrastructure/infrastructurePageModel.ts"]
+        )
+        self.assertEqual(result["unowned_runtime_files"], [])
+        self.assertEqual(
+            {item["subsystem"] for item in result["impacted_subsystems"]},
+            {"unified-resources"},
+        )
+        file_entry = result["files"][0]
+        self.assertEqual(file_entry["classification"], "runtime")
+        self.assertEqual(
+            {match["subsystem"] for match in file_entry["matches"]},
+            {"unified-resources"},
+        )
+        match = file_entry["matches"][0]
+        self.assertEqual(
+            match["contract"],
+            "docs/release-control/v6/internal/subsystems/unified-resources.md",
+        )
+        self.assertEqual(match["lane_context"]["lane_id"], "L13")
+        self.assertEqual(
+            match["verification_requirement"]["id"],
+            "resource-consumers",
+        )
+        self.assertIn(
+            "frontend-modern/src/features/infrastructure/__tests__/infrastructurePageModel.test.ts",
+            match["verification_requirement"]["exact_files"],
+        )
+
     def test_lookup_paths_assigns_resource_detail_drawer_service_model_to_unified_resources(self) -> None:
         result = lookup_paths(
             ["frontend-modern/src/components/Infrastructure/resourceDetailDrawerServiceModel.ts"]
@@ -4173,6 +4203,7 @@ class SubsystemLookupTest(unittest.TestCase):
                 "frontend-modern/src/components/Infrastructure/__tests__/resourceDetailMappers.test.ts",
                 "frontend-modern/src/components/Infrastructure/__tests__/unifiedResourceTableStateModel.test.ts",
                 "frontend-modern/src/features/infrastructure/__tests__/InfrastructurePageSurface.guardrails.test.ts",
+                "frontend-modern/src/features/infrastructure/__tests__/infrastructurePageModel.test.ts",
                 "frontend-modern/src/hooks/__tests__/useDashboardTrends.test.ts",
                 "frontend-modern/src/hooks/__tests__/useUnifiedResources.test.ts",
                 "frontend-modern/src/pages/__tests__/Infrastructure.empty-state.test.tsx",

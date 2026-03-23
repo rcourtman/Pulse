@@ -68,11 +68,12 @@ cross-source deduplication.
 46. `frontend-modern/src/features/infrastructure/InfrastructurePageSurface.tsx`
 47. `frontend-modern/src/features/infrastructure/useInfrastructurePageRouteState.ts`
 48. `frontend-modern/src/features/infrastructure/useInfrastructurePageState.ts`
-49. `frontend-modern/src/components/Infrastructure/InfrastructureSummary.tsx`
-50. `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`
-51. `frontend-modern/src/components/Infrastructure/infrastructureSummaryModel.ts`
-52. `frontend-modern/src/utils/resourceIdentity.ts`
-53. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerIdentityModel.ts`
+49. `frontend-modern/src/features/infrastructure/infrastructurePageModel.ts`
+50. `frontend-modern/src/components/Infrastructure/InfrastructureSummary.tsx`
+51. `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`
+52. `frontend-modern/src/components/Infrastructure/infrastructureSummaryModel.ts`
+53. `frontend-modern/src/utils/resourceIdentity.ts`
+54. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerIdentityModel.ts`
 
 ## Shared Boundaries
 
@@ -895,7 +896,9 @@ feature owner instead of accumulating in the page shell itself.
 That infrastructure feature now also follows an explicit shell/composition/route
 split: `frontend-modern/src/features/infrastructure/InfrastructurePageSurface.tsx`
 owns the render shell, `frontend-modern/src/features/infrastructure/useInfrastructurePageState.ts`
-owns page controls and filtered-resource composition, and
+owns page controls, persistence, and route composition,
+`frontend-modern/src/features/infrastructure/infrastructurePageModel.ts`
+owns filter/search/catalog derivation, and
 `frontend-modern/src/features/infrastructure/useInfrastructurePageRouteState.ts`
 owns URL-sync, deep-link expansion, highlight continuity, and managed
 infrastructure-route navigation.

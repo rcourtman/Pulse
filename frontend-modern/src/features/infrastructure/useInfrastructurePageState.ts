@@ -6,14 +6,8 @@ import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import { useKioskMode } from '@/hooks/useKioskMode';
 import { isSummaryTimeRange } from '@/components/shared/summaryTimeRange';
-import {
-  tokenizeSearch,
-  filterResources,
-  collectAvailableSources,
-  collectAvailableStatuses,
-  buildStatusOptions,
-} from '@/components/Infrastructure/infrastructureSelectors';
 import { useInfrastructurePageRouteState } from './useInfrastructurePageRouteState';
+import { buildInfrastructurePageFilterDerivation } from './infrastructurePageModel';
 
 export type GroupingMode = 'grouped' | 'flat';
 
@@ -50,25 +44,20 @@ export function useInfrastructurePageState() {
 
   const hasResources = createMemo(() => resources().length > 0);
   const showNoResources = createMemo(() => initialLoadComplete() && !hasResources() && !error());
-  const activeFilterCount = createMemo(
-    () => (selectedSource() !== '' ? 1 : 0) + (selectedStatus() !== '' ? 1 : 0),
-  );
-  const availableSources = createMemo(() => collectAvailableSources(resources()));
-  const availableStatuses = createMemo(() => collectAvailableStatuses(resources()));
-  const statusOptions = createMemo(() => buildStatusOptions(availableStatuses()));
-  const hasActiveFilters = createMemo(
-    () => selectedSource() !== '' || selectedStatus() !== '' || searchQuery().trim().length > 0,
-  );
-  const searchTerms = createMemo(() => tokenizeSearch(searchQuery()));
-  const filteredResources = createMemo(() =>
-    filterResources(
+  const filterDerivation = createMemo(() =>
+    buildInfrastructurePageFilterDerivation(
       resources(),
-      selectedSource() !== '' ? new Set([selectedSource()]) : new Set(),
-      selectedStatus() !== '' ? new Set([selectedStatus()]) : new Set(),
-      searchTerms(),
+      selectedSource(),
+      selectedStatus(),
+      searchQuery(),
     ),
   );
-  const hasFilteredResources = createMemo(() => filteredResources().length > 0);
+  const activeFilterCount = createMemo(() => filterDerivation().activeFilterCount);
+  const availableSources = createMemo(() => filterDerivation().availableSources);
+  const statusOptions = createMemo(() => filterDerivation().statusOptions);
+  const hasActiveFilters = createMemo(() => filterDerivation().hasActiveFilters);
+  const filteredResources = createMemo(() => filterDerivation().filteredResources);
+  const hasFilteredResources = createMemo(() => filterDerivation().hasFilteredResources);
   const routeState = useInfrastructurePageRouteState({
     resources,
     filteredResources,

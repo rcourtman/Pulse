@@ -154,7 +154,9 @@ the real product surface. `frontend-modern/src/pages/Infrastructure.tsx` now
 acts only as the route boundary, while
 `frontend-modern/src/features/infrastructure/InfrastructurePageSurface.tsx`
 owns the shell, `frontend-modern/src/features/infrastructure/useInfrastructurePageState.ts`
-owns page-control composition, and
+owns page-control composition, persistence, and route composition,
+`frontend-modern/src/features/infrastructure/infrastructurePageModel.ts`
+owns filter/search/catalog derivation, and
 `frontend-modern/src/features/infrastructure/useInfrastructurePageRouteState.ts`
 owns infrastructure route/deep-link synchronization. Future feature
 surfaces under `frontend-modern/src/features/` should follow that same pattern
