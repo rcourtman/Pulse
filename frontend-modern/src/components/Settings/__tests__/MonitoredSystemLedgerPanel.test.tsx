@@ -324,4 +324,31 @@ describe('MonitoredSystemLedgerPanel', () => {
     ).toBeInTheDocument();
     expect(screen.queryByText('Included collection paths')).not.toBeInTheDocument();
   });
+
+  it('shows a customer-facing fallback when no included signal is available', async () => {
+    getLedgerMock.mockResolvedValue({
+      systems: [
+        {
+          name: 'server-c',
+          type: 'host',
+          status: 'unknown',
+          status_explanation: {
+            summary: 'Pulse cannot determine a canonical runtime status for this monitored system yet.',
+            reasons: [],
+          },
+          source: 'agent',
+        },
+      ],
+      total: 1,
+      limit: 10,
+    } as MonitoredSystemLedgerResponse);
+
+    render(() => <MonitoredSystemLedgerPanel />);
+
+    await waitFor(() => {
+      expect(screen.getByText('server-c')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('No included signal yet.')).toBeInTheDocument();
+  });
 });

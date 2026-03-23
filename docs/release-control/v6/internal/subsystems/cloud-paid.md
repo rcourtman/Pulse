@@ -232,7 +232,9 @@ customer-facing rather than exposing raw monitored-system type/source slugs in
 the settings table or included-surface details. When the row expands to show
 status reasoning, it should also restate the freshest included surface and
 timestamp there so a degraded reason and a fresher grouped signal remain
-readable together.
+readable together. When mixed-version payloads omit that canonical freshest
+signal entirely, the settings surface should degrade to a safe customer-facing
+fallback instead of an unexplained placeholder glyph.
 Frontend billing/admin surfaces must not synthesize `plan_version` from
 subscription lifecycle state. When a hosted billing record lacks a plan label,
 the UI must preserve that absence instead of fabricating values like `active`

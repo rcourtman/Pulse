@@ -22,7 +22,14 @@ import {
   getMonitoredSystemLedgerLoadingState,
 } from '@/utils/unifiedAgentInventoryPresentation';
 import { PulseLogoIcon } from '@/components/icons/PulseLogoIcon';
-import { formatMonitoredSystemSurfaceAttribution } from '@/utils/monitoredSystemPresentation';
+import {
+  formatMonitoredSystemLatestIncludedSignalSentence,
+  formatMonitoredSystemSurfaceAttribution,
+  getMonitoredSystemCountingDetailsToggleLabel,
+  getMonitoredSystemExplanationFallbackSummary,
+  getMonitoredSystemLedgerPresentation,
+  getMonitoredSystemStatusFallbackSummary,
+} from '@/utils/monitoredSystemPresentation';
 import {
   SELF_HOSTED_MONITORED_SYSTEM_LEDGER_DESCRIPTION,
 } from '@/utils/selfHostedPlans';
@@ -39,9 +46,7 @@ function usagePercent(total: number, limit: number): number {
 
 function systemExplanation(system: MonitoredSystemLedgerEntry): MonitoredSystemLedgerExplanation {
   return {
-    summary:
-      system.explanation?.summary ??
-      'Pulse counts this top-level collection path as one monitored system.',
+    summary: system.explanation?.summary ?? getMonitoredSystemExplanationFallbackSummary(),
     reasons: system.explanation?.reasons ?? [],
     surfaces: system.explanation?.surfaces ?? [],
   };
@@ -49,9 +54,7 @@ function systemExplanation(system: MonitoredSystemLedgerEntry): MonitoredSystemL
 
 function systemStatusExplanation(system: MonitoredSystemLedgerEntry): MonitoredSystemLedgerStatusExplanation {
   return {
-    summary:
-      system.status_explanation?.summary ??
-      'Pulse cannot determine a canonical runtime status for this monitored system yet.',
+    summary: system.status_explanation?.summary ?? getMonitoredSystemStatusFallbackSummary(),
     reasons: system.status_explanation?.reasons ?? [],
   };
 }
@@ -72,6 +75,7 @@ function latestIncludedSignalSummary(system: MonitoredSystemLedgerEntry): {
 export function MonitoredSystemLedgerPanel(props: MonitoredSystemLedgerPanelProps = {}) {
   const [ledger, { refetch }] = createResource(() => MonitoredSystemLedgerAPI.getLedger());
   const [expandedSystemKey, setExpandedSystemKey] = createSignal<string | null>(null);
+  const presentation = getMonitoredSystemLedgerPresentation();
 
   const total = () => ledger()?.total ?? 0;
   const limit = () => ledger()?.limit ?? 0;
@@ -91,7 +95,7 @@ export function MonitoredSystemLedgerPanel(props: MonitoredSystemLedgerPanelProp
       <div class="space-y-1">
         <div class="flex items-center justify-between">
           <div class="space-y-1">
-            <h3 class="text-sm font-semibold text-base-content">Monitored Systems</h3>
+            <h3 class="text-sm font-semibold text-base-content">{presentation.sectionTitle}</h3>
             <MonitoredSystemDefinitionDisclosure
               buttonClass="text-xs font-medium text-muted underline-offset-2 transition-colors hover:text-base-content hover:underline"
               detailClass="max-w-xl text-xs text-muted"
@@ -151,14 +155,14 @@ export function MonitoredSystemLedgerPanel(props: MonitoredSystemLedgerPanelProp
 
         <Show
           when={systems().length > 0}
-          fallback={<p class="text-sm text-muted py-4 text-center">No monitored systems counted.</p>}
+          fallback={<p class="text-sm text-muted py-4 text-center">{presentation.emptyState}</p>}
         >
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Latest Included Signal</TableHead>
+                <TableHead>{presentation.tableNameLabel}</TableHead>
+                <TableHead>{presentation.tableStatusLabel}</TableHead>
+                <TableHead>{presentation.tableLatestIncludedSignalLabel}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -183,7 +187,7 @@ export function MonitoredSystemLedgerPanel(props: MonitoredSystemLedgerPanelProp
                             aria-controls={explanationID}
                             onClick={() => toggleSystemExplanation(key)}
                           >
-                            {expanded() ? 'Hide counting details' : 'View counting details'}
+                            {getMonitoredSystemCountingDetailsToggleLabel(expanded())}
                           </button>
                           <Show when={expanded()}>
                             <div
@@ -191,14 +195,18 @@ export function MonitoredSystemLedgerPanel(props: MonitoredSystemLedgerPanelProp
                               class="space-y-2 rounded-md border border-border bg-surface px-3 py-2 text-xs text-muted"
                             >
                               <div class="space-y-1">
-                                <p class="font-medium text-base-content">Current status</p>
+                                <p class="font-medium text-base-content">
+                                  {presentation.currentStatusHeading}
+                                </p>
                                 <p class="whitespace-normal text-base-content">
                                   {statusExplanation.summary}
                                 </p>
                                 <Show when={latestSignal}>
                                   {(signal) => (
                                     <p class="whitespace-normal text-base-content">
-                                      Latest included signal: {signal().attribution}, reported {signal().relative}.
+                                      {formatMonitoredSystemLatestIncludedSignalSentence(
+                                        signal(),
+                                      )}
                                     </p>
                                   )}
                                 </Show>
@@ -222,7 +230,9 @@ export function MonitoredSystemLedgerPanel(props: MonitoredSystemLedgerPanelProp
                               </Show>
                               <Show when={explanation.surfaces.length > 0}>
                                 <div class="space-y-1">
-                                  <p class="font-medium text-base-content">Included collection paths</p>
+                                  <p class="font-medium text-base-content">
+                                    {presentation.includedCollectionPathsHeading}
+                                  </p>
                                   <ul class="space-y-1 whitespace-normal">
                                     <For each={explanation.surfaces}>
                                       {(surface) => (
@@ -245,7 +255,11 @@ export function MonitoredSystemLedgerPanel(props: MonitoredSystemLedgerPanelProp
                       <TableCell>
                         <Show
                           when={latestSignal}
-                          fallback={<span class="text-xs text-muted">—</span>}
+                          fallback={
+                            <span class="text-xs text-muted">
+                              {presentation.noIncludedSignalLabel}
+                            </span>
+                          }
                         >
                           {(signal) => (
                             <div class="space-y-0.5">
@@ -274,7 +288,7 @@ export function MonitoredSystemLedgerPanel(props: MonitoredSystemLedgerPanelProp
 
   return (
     <SettingsPanel
-      title="Monitored System Ledger"
+      title={presentation.panelTitle}
       description={SELF_HOSTED_MONITORED_SYSTEM_LEDGER_DESCRIPTION}
       icon={<PulseLogoIcon class="w-5 h-5" />}
       bodyClass="space-y-4"
