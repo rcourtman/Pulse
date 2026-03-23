@@ -214,6 +214,14 @@ signals, canvas draw lifecycle, and resize handling, and
 math, hover target selection, tooltip time formatting, and density-cell
 opacity rules. Future density-map work should extend those owners instead of
 pushing canvas lifecycle or chart math back into the shared shell.
+The shared dialog now follows that same owner split.
+`frontend-modern/src/components/shared/Dialog.tsx` stays the render shell,
+`frontend-modern/src/components/shared/useDialogState.ts` owns focus trap,
+body-scroll lock, previous-focus restoration, and backdrop-close runtime, and
+`frontend-modern/src/components/shared/dialogModel.ts` owns focusable-element
+lookup plus layout and panel class policy. Future dialog work should extend
+those owners instead of pushing focus-trap lifecycle or layout policy back into
+the shared shell.
 The shared history chart now follows the same owner shape.
 `frontend-modern/src/components/shared/HistoryChart.tsx` stays the render
 shell, `frontend-modern/src/components/shared/useHistoryChartState.ts` owns

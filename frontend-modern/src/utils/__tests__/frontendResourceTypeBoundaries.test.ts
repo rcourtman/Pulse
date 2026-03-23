@@ -16,6 +16,8 @@ import containerUpdateBadgeSource from '@/components/shared/ContainerUpdateBadge
 import containerUpdateBadgeModelSource from '@/components/shared/containerUpdateBadgeModel.ts?raw';
 import densityMapSource from '@/components/shared/DensityMap.tsx?raw';
 import densityMapModelSource from '@/components/shared/densityMapModel.ts?raw';
+import dialogSource from '@/components/shared/Dialog.tsx?raw';
+import dialogModelSource from '@/components/shared/dialogModel.ts?raw';
 import helpIconSource from '@/components/shared/HelpIcon.tsx?raw';
 import helpIconModelSource from '@/components/shared/helpIconModel.ts?raw';
 import historyChartHeaderSource from '@/components/shared/HistoryChartHeader.tsx?raw';
@@ -43,6 +45,7 @@ import sharedInfrastructureSummaryTableModelSource from '@/components/shared/inf
 import commandPaletteStateSource from '@/components/shared/useCommandPaletteState.ts?raw';
 import collapsibleSearchInputStateSource from '@/components/shared/useCollapsibleSearchInputState.ts?raw';
 import containerUpdateButtonStateSource from '@/components/shared/useContainerUpdateButtonState.ts?raw';
+import dialogStateSource from '@/components/shared/useDialogState.ts?raw';
 import helpIconStateSource from '@/components/shared/useHelpIconState.ts?raw';
 import historyChartStateSource from '@/components/shared/useHistoryChartState.ts?raw';
 import mobileNavBarStateSource from '@/components/shared/useMobileNavBarState.ts?raw';
@@ -2699,6 +2702,21 @@ describe('frontend resource type boundaries', () => {
     expect(tooltipStateSource).toContain('resolveTooltipPosition');
     expect(tooltipModelSource).toContain('sanitizeTooltipContent');
     expect(tooltipModelSource).toContain('resolveTooltipPosition');
+    expect(dialogSource).toContain('useDialogState');
+    expect(dialogSource).toContain('getDialogViewportClass');
+    expect(dialogSource).toContain('getDialogAlignmentClass');
+    expect(dialogSource).toContain('getDialogPanelClass');
+    expect(dialogSource).not.toContain('createEffect');
+    expect(dialogSource).not.toContain('document.body.style.overflow');
+    expect(dialogSource).not.toContain('FOCUSABLE_SELECTOR');
+    expect(dialogStateSource).toContain('createEffect');
+    expect(dialogStateSource).toContain('onCleanup');
+    expect(dialogStateSource).toContain('document.body.style.overflow');
+    expect(dialogStateSource).toContain('getDialogFocusableElements');
+    expect(dialogModelSource).toContain('getDialogFocusableElements');
+    expect(dialogModelSource).toContain('getDialogViewportClass');
+    expect(dialogModelSource).toContain('getDialogAlignmentClass');
+    expect(dialogModelSource).toContain('getDialogPanelClass');
     expect(collapsibleSearchInputSource).toContain('useCollapsibleSearchInputState');
     expect(collapsibleSearchInputSource).not.toContain('createSignal');
     expect(collapsibleSearchInputSource).not.toContain('useTypeToSearch');
