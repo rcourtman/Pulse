@@ -17,7 +17,7 @@ type MonitoredSystemLedgerEntry struct {
 	Type              string                                 `json:"type"`
 	Status            string                                 `json:"status"` // "online", "warning", "offline", "unknown"
 	StatusExplanation MonitoredSystemLedgerStatusExplanation `json:"status_explanation"`
-	LastSeen          string                                 `json:"last_seen"` // RFC3339 or empty
+	LastSeen          string                                 `json:"last_seen"` // freshest included observation, RFC3339 or empty
 	Source            string                                 `json:"source"`
 	Explanation       MonitoredSystemLedgerExplanation       `json:"explanation"`
 }

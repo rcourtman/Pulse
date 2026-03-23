@@ -144,7 +144,7 @@ export function MonitoredSystemLedgerPanel(props: MonitoredSystemLedgerPanelProp
               <TableRow>
                 <TableHead>Name</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>Last Seen</TableHead>
+                <TableHead>Latest Included Signal</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>

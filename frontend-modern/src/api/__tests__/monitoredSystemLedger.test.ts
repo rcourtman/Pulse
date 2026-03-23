@@ -113,6 +113,26 @@ describe('MonitoredSystemLedgerAPI', () => {
     expect(result.systems[0]?.status).toBe('warning');
   });
 
+  it('preserves the freshest included observation timestamp from the API contract', async () => {
+    vi.mocked(apiFetchJSON).mockResolvedValueOnce({
+      systems: [
+        {
+          name: 'Tower',
+          type: 'host',
+          status: 'warning',
+          last_seen: '2026-03-23T11:59:50Z',
+          source: 'multiple',
+        },
+      ],
+      total: 1,
+      limit: 5,
+    });
+
+    const result = await MonitoredSystemLedgerAPI.getLedger();
+
+    expect(result.systems[0]?.last_seen).toBe('2026-03-23T11:59:50Z');
+  });
+
   it('preserves canonical status explanation reasons from the API contract', async () => {
     vi.mocked(apiFetchJSON).mockResolvedValueOnce({
       systems: [

@@ -46,7 +46,7 @@ export interface MonitoredSystemLedgerEntry {
   type: string;
   status: MonitoredSystemLedgerStatus;
   status_explanation?: MonitoredSystemLedgerStatusExplanation;
-  last_seen: string; // RFC3339 or empty
+  last_seen: string; // freshest included observation, RFC3339 or empty
   source: string;
   explanation?: MonitoredSystemLedgerExplanation;
 }

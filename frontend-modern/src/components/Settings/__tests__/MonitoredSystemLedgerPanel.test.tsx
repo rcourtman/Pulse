@@ -207,6 +207,7 @@ describe('MonitoredSystemLedgerPanel', () => {
     });
 
     expect(screen.getByText('Monitored System Ledger')).toBeInTheDocument();
+    expect(screen.getByText('Latest Included Signal')).toBeInTheDocument();
     expect(
       screen.getByText(
         'Review the monitored systems currently counted against your Pulse Pro plan limit.',

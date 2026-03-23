@@ -376,6 +376,10 @@ adjacent consumers may read the ledger’s nested status explanation, but they
 must preserve the backend-provided reason list for stale or offline grouped
 sources instead of reducing those mixed fresh/stale system states back to a
 generic label.
+That same ledger dependency also treats `last_seen` as the freshest grouped
+observation rather than a universal health timestamp, so storage- or recovery-
+adjacent consumers must not present that field with bare single-source `Last
+Seen` wording that hides grouped stale/offline conditions.
 That same shared `internal/api/` dependency now also assumes self-hosted
 commercial counting is canonical at the top-level monitored-system boundary:
 shared setup, deploy, entitlement, and API-backed monitoring helpers may not

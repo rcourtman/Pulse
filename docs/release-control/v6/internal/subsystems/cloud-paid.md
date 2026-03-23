@@ -219,6 +219,11 @@ That same cloud-paid surface must now also render the canonical status reason
 list when present, so customers can see exactly which grouped source or
 top-level surface degraded and when it last reported rather than only reading
 generic status copy beside a fresh aggregate `Last Seen` value.
+That same settings surface must also label the aggregate `last_seen` field by
+its real meaning. In the monitored-system ledger it is the freshest included
+grouped observation, not a guarantee that every grouped source is healthy, so
+the UI must not present it with a bare `Last Seen` heading that implies a
+single-source health timestamp.
 Frontend billing/admin surfaces must not synthesize `plan_version` from
 subscription lifecycle state. When a hosted billing record lacks a plan label,
 the UI must preserve that absence instead of fabricating values like `active`
