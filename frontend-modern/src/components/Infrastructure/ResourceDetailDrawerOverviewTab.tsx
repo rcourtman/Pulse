@@ -926,7 +926,7 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
 
         <Show when={drawer.hasInvestigationContext()}>
           <SupportDisclosure
-            title="Investigation context"
+            title="Context"
             summary={drawer.investigationContextSummary()}
             expanded={drawer.showInvestigationContext()}
             onToggle={() => drawer.setShowInvestigationContext((value) => !value)}
@@ -970,7 +970,7 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                     <div data-testid="resource-correlation-context" class="space-y-1.5">
                       <div class="flex flex-wrap items-center justify-between gap-2">
                         <span class="text-[10px] font-medium uppercase tracking-wide text-base-content">
-                          Correlation context
+                          Correlations
                         </span>
                         <button
                           type="button"
@@ -984,7 +984,7 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                       <Show when={drawer.showCorrelationContext()}>
                         <div class="pt-1">
                           <ResourceCorrelationSummary
-                            title="Correlation context"
+                            title="Correlations"
                             dependencies={drawer.resourceDependencies()}
                             dependents={drawer.resourceDependents()}
                             correlations={drawer.resourceCorrelations()}

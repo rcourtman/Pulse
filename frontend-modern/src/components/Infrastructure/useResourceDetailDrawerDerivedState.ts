@@ -177,7 +177,7 @@ export const useResourceDetailDrawerDerivedState = (
     const summary: string[] = [];
 
     if (intel && hasMeaningfulResourceIntelligence()) {
-      summary.push(`AI health ${intel.health.grade} · ${Math.round(intel.health.score)}/100`);
+      summary.push(`AI ${intel.health.grade} · ${Math.round(intel.health.score)}/100`);
     }
     if (resourceCorrelations().length > 0) {
       summary.push(

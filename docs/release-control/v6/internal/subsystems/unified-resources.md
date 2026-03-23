@@ -393,7 +393,7 @@ The event log cards inside that section now stack key/value fields vertically
 instead of using a two-column micro-grid, so each event reads like a single
 timeline record rather than a tiny dashboard.
 That same overview now keeps AI intelligence and data-governance details
-inside a collapsed `Investigation context` disclosure, so runtime status and
+inside a collapsed `Context` disclosure, so runtime status and
 identity stay primary while secondary AI and policy signals remain available
 without competing with the first-screen monitoring story.
 Inside that disclosure, the AI intelligence summary now reads as compact

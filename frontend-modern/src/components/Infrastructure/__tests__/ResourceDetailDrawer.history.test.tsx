@@ -369,8 +369,8 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(screen.getAllByText('Proxmox adapter 1')).toHaveLength(1);
     expect(changeHistorySection.querySelectorAll('.mt-1.grid').length).toBe(0);
     expect(screen.queryByText('Quick links')).toBeNull();
-    expect(screen.getByText('Investigation context')).toBeInTheDocument();
-    expect(screen.queryByText('Correlation context')).toBeNull();
+    expect(screen.getByText('Context')).toBeInTheDocument();
+    expect(screen.queryByText('Correlations')).toBeNull();
     expect(screen.queryByText('Storage 1 alias')).toBeNull();
     expect(screen.queryByText('VM Child')).toBeNull();
     expect(screen.queryByText('Capabilities 1')).toBeNull();
@@ -434,7 +434,7 @@ describe('ResourceDetailDrawer change history section', () => {
     render(() => <ResourceDetailDrawer resource={resource} />);
 
     await screen.findByText('Current state');
-    expect(screen.queryByText('Investigation context')).toBeNull();
+    expect(screen.queryByText('Context')).toBeNull();
     expect(screen.queryByText('Data Governance')).toBeNull();
     expect(screen.queryByText('AI-Safe Summary')).toBeNull();
     expect(screen.queryByText('Routing Cloud Summary')).toBeNull();

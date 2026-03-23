@@ -469,7 +469,7 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
       <ResourceDetailDrawer resource={resource} />
     ));
 
-    expect(getByText('Investigation context')).toBeInTheDocument();
+    expect(getByText('Context')).toBeInTheDocument();
     expect(queryByText('Data Governance')).toBeNull();
     expect(queryByText('AI-Safe Summary')).toBeNull();
     fireEvent.click(getByRole('button', { name: 'Show context' }));
@@ -505,7 +505,7 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
       <ResourceDetailDrawer resource={resource} />
     ));
 
-    expect(getByText('Investigation context')).toBeInTheDocument();
+    expect(getByText('Context')).toBeInTheDocument();
     expect(queryByText('AI-Safe Summary')).toBeNull();
     fireEvent.click(getByRole('button', { name: 'Show context' }));
     expect(getByText('AI-Safe Summary')).toBeInTheDocument();
@@ -519,7 +519,7 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     ));
 
     await waitFor(() => {
-      expect(getByText('Investigation context')).toBeInTheDocument();
+      expect(getByText('Context')).toBeInTheDocument();
     });
 
     expect(queryByText('AI Intelligence')).toBeNull();
