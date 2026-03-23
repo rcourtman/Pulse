@@ -16,14 +16,17 @@ import helpIconSource from '@/components/shared/HelpIcon.tsx?raw';
 import helpIconModelSource from '@/components/shared/helpIconModel.ts?raw';
 import historyChartSource from '@/components/shared/HistoryChart.tsx?raw';
 import historyChartModelSource from '@/components/shared/historyChartModel.ts?raw';
+import infrastructureSelectorSource from '@/components/shared/InfrastructureSelector.tsx?raw';
 import infrastructureSummaryTableSource from '@/components/shared/InfrastructureSummaryTable.tsx?raw';
 import infrastructureSummaryTableRowSource from '@/components/shared/InfrastructureSummaryTableRow.tsx?raw';
 import interactiveSparklineSource from '@/components/shared/InteractiveSparkline.tsx?raw';
 import interactiveSparklineModelSource from '@/components/shared/interactiveSparklineModel.ts?raw';
+import infrastructureSelectorModelSource from '@/components/shared/infrastructureSelectorModel.ts?raw';
 import sharedInfrastructureSummaryTableModelSource from '@/components/shared/infrastructureSummaryTableModel.ts?raw';
 import containerUpdateButtonStateSource from '@/components/shared/useContainerUpdateButtonState.ts?raw';
 import helpIconStateSource from '@/components/shared/useHelpIconState.ts?raw';
 import historyChartStateSource from '@/components/shared/useHistoryChartState.ts?raw';
+import infrastructureSelectorStateSource from '@/components/shared/useInfrastructureSelectorState.ts?raw';
 import interactiveSparklineStateSource from '@/components/shared/useInteractiveSparklineState.ts?raw';
 import infrastructureSummaryTableStateSource from '@/components/shared/useInfrastructureSummaryTableState.ts?raw';
 import resourceBadgePresentationSource from '@/utils/resourceBadgePresentation.ts?raw';
@@ -2638,6 +2641,23 @@ describe('frontend resource type boundaries', () => {
     expect(sharedInfrastructureSummaryTableModelSource).toContain(
       'resolveInfrastructureSummaryLinkedAgent',
     );
+    expect(infrastructureSelectorSource).toContain('useInfrastructureSelectorState');
+    expect(infrastructureSelectorSource).toContain('InfrastructureSummaryTable');
+    expect(infrastructureSelectorSource).not.toContain('useResources');
+    expect(infrastructureSelectorSource).not.toContain('createSignal');
+    expect(infrastructureSelectorSource).not.toContain("resource.type === 'truenas'");
+    expect(infrastructureSelectorStateSource).toContain('useResources');
+    expect(infrastructureSelectorStateSource).toContain('useRecoveryRollups');
+    expect(infrastructureSelectorStateSource).toContain('createSignal');
+    expect(infrastructureSelectorStateSource).toContain('document.addEventListener');
+    expect(infrastructureSelectorModelSource).toContain('buildInfrastructureSelectorAgents');
+    expect(infrastructureSelectorModelSource).toContain(
+      'buildInfrastructureSelectorBackupCounts',
+    );
+    expect(infrastructureSelectorModelSource).toContain(
+      'buildInfrastructureSelectorUnifiedNodes',
+    );
+    expect(infrastructureSelectorModelSource).toContain("resource.type === 'truenas'");
     expect(interactiveSparklineSource).toContain('useInteractiveSparklineState');
     expect(interactiveSparklineSource).not.toContain('scheduleSparkline');
     expect(interactiveSparklineSource).not.toContain('downsampleLTTB');

@@ -9,10 +9,12 @@ import helpIconSource from '@/components/shared/HelpIcon.tsx?raw';
 import helpIconModelSource from '@/components/shared/helpIconModel.ts?raw';
 import historyChartSource from '@/components/shared/HistoryChart.tsx?raw';
 import historyChartModelSource from '@/components/shared/historyChartModel.ts?raw';
+import infrastructureSelectorSource from '@/components/shared/InfrastructureSelector.tsx?raw';
 import interactiveSparklineSource from '@/components/shared/InteractiveSparkline.tsx?raw';
 import interactiveSparklineModelSource from '@/components/shared/interactiveSparklineModel.ts?raw';
 import infrastructureSummaryTableSource from '@/components/shared/InfrastructureSummaryTable.tsx?raw';
 import infrastructureSummaryTableRowSource from '@/components/shared/InfrastructureSummaryTableRow.tsx?raw';
+import infrastructureSelectorModelSource from '@/components/shared/infrastructureSelectorModel.ts?raw';
 import infrastructureSummaryTableModelSource from '@/components/shared/infrastructureSummaryTableModel.ts?raw';
 import infrastructureSummaryTableStateSource from '@/components/shared/useInfrastructureSummaryTableState.ts?raw';
 import monitoredSystemLimitWarningBannerSource from '@/components/shared/MonitoredSystemLimitWarningBanner.tsx?raw';
@@ -22,6 +24,7 @@ import containerUpdateButtonStateSource from '@/components/shared/useContainerUp
 import densityMapStateSource from '@/components/shared/useDensityMapState.ts?raw';
 import helpIconStateSource from '@/components/shared/useHelpIconState.ts?raw';
 import historyChartStateSource from '@/components/shared/useHistoryChartState.ts?raw';
+import infrastructureSelectorStateSource from '@/components/shared/useInfrastructureSelectorState.ts?raw';
 import interactiveSparklineStateSource from '@/components/shared/useInteractiveSparklineState.ts?raw';
 import webInterfaceUrlFieldSource from '@/components/shared/WebInterfaceUrlField.tsx?raw';
 import webInterfaceUrlFieldModelSource from '@/components/shared/webInterfaceUrlFieldModel.ts?raw';
@@ -156,6 +159,27 @@ describe('shared primitive guardrails', () => {
     expect(infrastructureSummaryTableRowSource).toContain('getAlertStyles');
     expect(infrastructureSummaryTableRowSource).not.toContain('useWebSocket');
     expect(infrastructureSummaryTableRowSource).not.toContain('useAlertsActivation');
+  });
+
+  it('keeps infrastructure selector on shell, runtime, and model owners', () => {
+    expect(infrastructureSelectorSource).toContain('useInfrastructureSelectorState');
+    expect(infrastructureSelectorSource).toContain('InfrastructureSummaryTable');
+    expect(infrastructureSelectorSource).not.toContain('useResources');
+    expect(infrastructureSelectorSource).not.toContain('createSignal');
+    expect(infrastructureSelectorSource).not.toContain("resource.type === 'truenas'");
+
+    expect(infrastructureSelectorStateSource).toContain('useResources');
+    expect(infrastructureSelectorStateSource).toContain('useRecoveryRollups');
+    expect(infrastructureSelectorStateSource).toContain('createSignal');
+    expect(infrastructureSelectorStateSource).toContain('document.addEventListener');
+    expect(infrastructureSelectorStateSource).toContain(
+      'export function useInfrastructureSelectorState',
+    );
+
+    expect(infrastructureSelectorModelSource).toContain('buildInfrastructureSelectorAgents');
+    expect(infrastructureSelectorModelSource).toContain('buildInfrastructureSelectorBackupCounts');
+    expect(infrastructureSelectorModelSource).toContain('buildInfrastructureSelectorUnifiedNodes');
+    expect(infrastructureSelectorModelSource).toContain("resource.type === 'truenas'");
   });
 
   it('keeps interactive sparkline on shell, runtime, and model owners', () => {

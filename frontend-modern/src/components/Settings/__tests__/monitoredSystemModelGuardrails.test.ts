@@ -19,6 +19,7 @@ import agentLedgerPanelSource from '../MonitoredSystemLedgerPanel.tsx?raw';
 import alertsPageSource from '@/pages/Alerts.tsx?raw';
 import setupCompletionPanelSource from '@/components/SetupWizard/SetupCompletionPanel.tsx?raw';
 import infrastructureSelectorSource from '@/components/shared/InfrastructureSelector.tsx?raw';
+import infrastructureSelectorModelSource from '@/components/shared/infrastructureSelectorModel.ts?raw';
 import aiChatSource from '@/components/AI/Chat/index.tsx?raw';
 import aiChatPresentationSource from '@/utils/aiChatPresentation.ts?raw';
 import diagnosticsPanelSource from '../DiagnosticsPanel.tsx?raw';
@@ -32,7 +33,9 @@ import settingsPanelRegistrySource from '../useSettingsPanelRegistry.tsx?raw';
 import settingsSystemPanelsSource from '../useSettingsSystemPanels.tsx?raw';
 import infrastructureSummarySource from '@/components/Infrastructure/InfrastructureSummary.tsx?raw';
 import infrastructureSelectorComponentSource from '@/components/shared/InfrastructureSelector.tsx?raw';
+import infrastructureSelectorStateSource from '@/components/shared/useInfrastructureSelectorState.ts?raw';
 import workloadsLinkSource from '@/components/Infrastructure/workloadsLink.ts?raw';
+import unifiedResourceHostTableCardSource from '@/components/Infrastructure/UnifiedResourceHostTableCard.tsx?raw';
 import unifiedResourceTableSource from '@/components/Infrastructure/UnifiedResourceTable.tsx?raw';
 import thresholdsTableSource from '@/components/Alerts/ThresholdsTable.tsx?raw';
 import thresholdsTableAgentDisksSectionSource from '@/components/Alerts/ThresholdsTableAgentDisksSection.tsx?raw';
@@ -871,11 +874,19 @@ describe('monitored-system model guardrails', () => {
     expect(setupCompletionPanelSource).not.toContain(
       '(state.hosts || []).length > 0\n            ? state.hosts\n            : resources',
     );
-    expect(infrastructureSelectorSource).toContain(
+    expect(infrastructureSelectorSource).toContain('useInfrastructureSelectorState');
+    expect(infrastructureSelectorSource).not.toContain(
       'const hasAgentFacet = (resource: Resource): boolean =>',
     );
-    expect(infrastructureSelectorSource).toContain("resource.type === 'truenas'");
-    expect(infrastructureSelectorSource).not.toContain('if (hostLikeResources.length === 0');
+    expect(infrastructureSelectorSource).not.toContain("resource.type === 'truenas'");
+    expect(infrastructureSelectorStateSource).toContain('useResources');
+    expect(infrastructureSelectorModelSource).toContain(
+      'hasInfrastructureSelectorAgentFacet',
+    );
+    expect(infrastructureSelectorModelSource).toContain("resource.type === 'truenas'");
+    expect(infrastructureSelectorModelSource).not.toContain(
+      'if (hostLikeResources.length === 0',
+    );
     expect(guestRowCellsSource).toContain('getDashboardGuestBackupStatusPresentation');
     expect(guestRowCellsSource).toContain('getDashboardGuestBackupTooltip');
     expect(guestRowCellsSource).toContain('getDashboardGuestNetworkEmptyState');
@@ -949,8 +960,10 @@ describe('monitored-system model guardrails', () => {
     expect(infrastructureSummarySource).not.toContain("resource.type === 'host'");
     expect(infrastructureSelectorComponentSource).not.toContain("resource.type === 'host'");
     expect(workloadsLinkSource).not.toContain("resource.type === 'host'");
-    expect(unifiedResourceTableSource).toContain('buildMetricKeyForUnifiedResource');
+    expect(unifiedResourceTableSource).not.toContain('buildMetricKeyForUnifiedResource');
     expect(unifiedResourceTableSource).not.toContain("buildMetricKey('host', resource.id)");
+    expect(unifiedResourceHostTableCardSource).toContain('buildMetricKeyForUnifiedResource');
+    expect(unifiedResourceHostTableCardSource).not.toContain("buildMetricKey('host', resource.id)");
     expect(resourceBadgesSource).not.toContain("host: 'Agent'");
     expect(problemResourcesTableSource).not.toContain("host: 'Agent'");
   });

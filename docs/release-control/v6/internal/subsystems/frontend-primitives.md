@@ -179,6 +179,16 @@ owns sorting, count, identity-alias, and linked-agent derivation, and
 owns the per-row render/runtime surface. Future work should extend those
 owners instead of pushing websocket, alert, or identity plumbing back into the
 shared table shell.
+The shared infrastructure selector now follows that same owner split.
+`frontend-modern/src/components/shared/InfrastructureSelector.tsx` stays the
+render shell, `frontend-modern/src/components/shared/useInfrastructureSelectorState.ts`
+owns selected-node state, tab-reset and escape-key lifecycle, plus hook-backed
+resource and recovery composition, and
+`frontend-modern/src/components/shared/infrastructureSelectorModel.ts` owns
+resource-family counts, agent-backed node-summary projection, unified-node and
+PBS-instance projection, and recovery backup-count derivation. Future
+infrastructure-selector work should extend those owners instead of pushing
+resource aggregation or selection lifecycle back into the shared shell.
 The shared interactive sparkline now follows that same split.
 `frontend-modern/src/components/shared/InteractiveSparkline.tsx` stays the
 render shell, `frontend-modern/src/components/shared/useInteractiveSparklineState.ts`
