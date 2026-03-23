@@ -324,6 +324,9 @@ and `HostedSignup.tsx` should describe plan scope and setup in concise product
 language, not in implementation-detail terms such as internal workspace
 provisioning guarantees, control-plane routing mechanics, or narrated
 deployment internals.
+Those same hosted surfaces should also prefer neutral plan-selection and
+sign-in language such as `Choose Starter` or `sign-in link` rather than
+marketing-heavy CTA copy or infrastructure-specific transport jargon.
 That contract applies to both plan summary labels and upgrade/paywall copy:
 current v6 self-hosted pricing may not drift back to the older `$49/yr Relay`,
 `$99/yr Pro`, or monitored-system-count marketing drift that contradicts the

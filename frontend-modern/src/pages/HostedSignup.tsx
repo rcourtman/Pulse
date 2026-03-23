@@ -237,7 +237,7 @@ export default function HostedSignup() {
           <h3 class="text-sm font-semibold text-base-content">After Signup</h3>
           <ol class="list-decimal space-y-2 pl-5 text-sm text-base-content">
             <li>Your workspace is created for the {selectedPlan().name} Cloud plan.</li>
-            <li>You receive a magic-link email to complete sign-in.</li>
+            <li>You receive a sign-in link by email.</li>
             <li>Open your workspace and start connecting systems.</li>
           </ol>
 
@@ -260,7 +260,7 @@ export default function HostedSignup() {
                 class="w-full inline-flex items-center justify-center rounded-md border border-border bg-surface px-4 py-2 text-sm font-semibold text-base-content transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
                 disabled={requestingMagicLink()}
               >
-                <Show when={requestingMagicLink()} fallback="Email Magic Link">
+                <Show when={requestingMagicLink()} fallback="Email Sign-In Link">
                   Sending...
                 </Show>
               </button>

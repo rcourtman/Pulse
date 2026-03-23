@@ -20,18 +20,19 @@ describe('CloudPricing', () => {
       </Router>
     ));
 
-    expect(await screen.findByRole('link', { name: 'Claim Founding Rate' })).toHaveAttribute(
+    expect(await screen.findByRole('link', { name: 'Choose Starter' })).toHaveAttribute(
       'href',
       '/cloud/signup?tier=starter',
     );
-    expect(screen.getByRole('link', { name: 'Get Power' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Choose Power' })).toHaveAttribute(
       'href',
       '/cloud/signup?tier=power',
     );
-    expect(screen.getByRole('link', { name: 'Get Max' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Choose Max' })).toHaveAttribute(
       'href',
       '/cloud/signup?tier=max',
     );
+    expect(screen.getByText('Starter founding rate')).toBeInTheDocument();
     expect(screen.getByText('Setup')).toBeInTheDocument();
     expect(
       screen.queryByText(/provisioned in under 60 seconds/i),

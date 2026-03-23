@@ -26,11 +26,11 @@ function FoundingBanner() {
         <span class="text-xl leading-tight">🎉</span>
         <div>
           <p class="text-sm font-semibold text-amber-900 dark:text-amber-200">
-            Founding Member Pricing — First 100 Signups
+            Starter founding rate
           </p>
           <p class="mt-0.5 text-sm text-amber-800 dark:text-amber-300">
-            Lock in Starter Cloud at <strong>$19/month</strong> (normally $29/month) forever. This
-            rate is exclusively for the first 100 customers and never increases.
+            Starter is available at <strong>$19/month</strong> for the first 100 signups. The rate
+            remains in place while the subscription stays active.
           </p>
         </div>
       </div>
@@ -99,7 +99,7 @@ function CloudTierCard(props: { tier: CloudPlanDefinition }) {
           href={`/cloud/signup?tier=${t.tier}`}
           class="w-full inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
         >
-          {t.foundingPrice ? 'Claim Founding Rate' : `Get ${t.name}`}
+          {`Choose ${t.name}`}
         </A>
       </div>
     </Card>
