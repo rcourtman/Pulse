@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import calloutCardSource from '@/components/shared/CalloutCard.tsx?raw';
 import filterButtonGroupSource from '@/components/shared/FilterButtonGroup.tsx?raw';
+import historyChartSource from '@/components/shared/HistoryChart.tsx?raw';
+import historyChartModelSource from '@/components/shared/historyChartModel.ts?raw';
 import interactiveSparklineSource from '@/components/shared/InteractiveSparkline.tsx?raw';
 import interactiveSparklineModelSource from '@/components/shared/interactiveSparklineModel.ts?raw';
 import infrastructureSummaryTableSource from '@/components/shared/InfrastructureSummaryTable.tsx?raw';
@@ -10,6 +12,7 @@ import infrastructureSummaryTableStateSource from '@/components/shared/useInfras
 import monitoredSystemLimitWarningBannerSource from '@/components/shared/MonitoredSystemLimitWarningBanner.tsx?raw';
 import selectionCardGroupSource from '@/components/shared/SelectionCardGroup.tsx?raw';
 import tagBadgesSource from '@/components/shared/TagBadges.tsx?raw';
+import historyChartStateSource from '@/components/shared/useHistoryChartState.ts?raw';
 import interactiveSparklineStateSource from '@/components/shared/useInteractiveSparklineState.ts?raw';
 import guestRowSource from '@/components/Dashboard/GuestRow.tsx?raw';
 import resourceDetailDrawerOverviewSource from '@/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx?raw';
@@ -159,5 +162,22 @@ describe('shared primitive guardrails', () => {
     expect(interactiveSparklineModelSource).toContain('computeInteractiveSparklineHoverState');
     expect(interactiveSparklineModelSource).toContain('downsampleLTTB');
     expect(interactiveSparklineModelSource).toContain('findNearestMetricPoint');
+  });
+
+  it('keeps history chart on shell, runtime, and model owners', () => {
+    expect(historyChartSource).toContain('useHistoryChartState');
+    expect(historyChartSource).not.toContain('ChartsAPI.getMetricsHistory');
+    expect(historyChartSource).not.toContain('calculateOptimalPoints');
+    expect(historyChartSource).not.toContain('setupCanvasDPR');
+    expect(historyChartSource).not.toContain('createSignal');
+
+    expect(historyChartStateSource).toContain('ChartsAPI.getMetricsHistory');
+    expect(historyChartStateSource).toContain('calculateOptimalPoints');
+    expect(historyChartStateSource).toContain('setupCanvasDPR');
+    expect(historyChartStateSource).toContain('export function useHistoryChartState');
+
+    expect(historyChartModelSource).toContain('formatHistoryChartTooltipValue');
+    expect(historyChartModelSource).toContain('getHistoryChartScale');
+    expect(historyChartModelSource).toContain('findHistoryChartClosestPoint');
   });
 });

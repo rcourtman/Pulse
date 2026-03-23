@@ -187,6 +187,14 @@ and `frontend-modern/src/components/shared/interactiveSparklineModel.ts` owns
 sparkline downsampling, gap segmentation, axis-tick math, and hover-selection
 policy. Future sparkline work should extend those owners instead of pushing
 canvas scheduling or chart-shape math back into the shared component shell.
+The shared history chart now follows the same owner shape.
+`frontend-modern/src/components/shared/HistoryChart.tsx` stays the render
+shell, `frontend-modern/src/components/shared/useHistoryChartState.ts` owns
+license gating, trial actions, history fetch/refresh, canvas draw lifecycle,
+and hover state, and `frontend-modern/src/components/shared/historyChartModel.ts`
+owns tooltip formatting, scale and axis math, and closest-point selection.
+Future history-chart work should extend those owners instead of pushing fetch,
+license, or canvas math back into the shared component shell.
 
 The audit log settings surface now follows that same owner split.
 `frontend-modern/src/components/Settings/AuditLogPanel.tsx` stays the canonical
