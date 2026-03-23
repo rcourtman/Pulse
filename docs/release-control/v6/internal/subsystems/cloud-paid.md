@@ -69,7 +69,8 @@ agreement, and cloud-specific enforcement rules.
 47. `frontend-modern/src/utils/apiClient.ts`
 48. `frontend-modern/src/utils/cloudPlans.ts`
 49. `frontend-modern/src/utils/commercialBillingModel.ts`
-50. `frontend-modern/src/utils/selfHostedPlans.ts`
+50. `frontend-modern/src/utils/monitoredSystemPresentation.ts`
+51. `frontend-modern/src/utils/selfHostedPlans.ts`
 
 ## Shared Boundaries
 
@@ -94,10 +95,11 @@ agreement, and cloud-specific enforcement rules.
 12. Add or change shared commercial plan/usage presentation through `frontend-modern/src/components/Settings/CommercialBillingSections.tsx` and `frontend-modern/src/utils/commercialBillingModel.ts`
 13. Add or change organization billing and usage presentation through `frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx`, `frontend-modern/src/components/Settings/OrganizationBillingLoadingState.tsx`, and `frontend-modern/src/components/Settings/useOrganizationBillingPanelState.ts`
 14. Add or change self-hosted Pro activation, trial, and entitlement actions through `frontend-modern/src/components/Settings/ProLicensePanel.tsx`, `frontend-modern/src/components/Settings/ProLicensePlanSection.tsx`, `frontend-modern/src/components/Settings/SelfHostedCommercialActivationSection.tsx`, and `frontend-modern/src/components/Settings/useProLicensePanelState.ts`
-15. Add or change paid relay settings and onboarding presentation through `frontend-modern/src/components/Settings/RelaySettingsPanel.tsx`, `frontend-modern/src/components/Settings/RelayPairingSection.tsx`, `frontend-modern/src/components/Settings/useRelaySettingsPanelState.ts`, `frontend-modern/src/components/Dashboard/RelayOnboardingCard.tsx`, and `frontend-modern/src/components/Dashboard/useRelayOnboardingCardState.ts`
-16. Add or change cloud plan presentation through `frontend-modern/src/pages/CloudPricing.tsx`
-17. Add contract tests where runtime and pricing need to stay aligned
-18. Add or change hosted browser org-context bootstrap through `frontend-modern/src/App.tsx`, `frontend-modern/src/AppLayout.tsx`, `frontend-modern/src/useAppRuntimeState.ts`, and `frontend-modern/src/utils/apiClient.ts`
+15. Add or change monitored-system ledger presentation through `frontend-modern/src/components/Settings/MonitoredSystemLedgerPanel.tsx`, `frontend-modern/src/components/Commercial/MonitoredSystemDefinitionDisclosure.tsx`, and `frontend-modern/src/utils/monitoredSystemPresentation.ts`
+16. Add or change paid relay settings and onboarding presentation through `frontend-modern/src/components/Settings/RelaySettingsPanel.tsx`, `frontend-modern/src/components/Settings/RelayPairingSection.tsx`, `frontend-modern/src/components/Settings/useRelaySettingsPanelState.ts`, `frontend-modern/src/components/Dashboard/RelayOnboardingCard.tsx`, and `frontend-modern/src/components/Dashboard/useRelayOnboardingCardState.ts`
+17. Add or change cloud plan presentation through `frontend-modern/src/pages/CloudPricing.tsx`
+18. Add contract tests where runtime and pricing need to stay aligned
+19. Add or change hosted browser org-context bootstrap through `frontend-modern/src/App.tsx`, `frontend-modern/src/AppLayout.tsx`, `frontend-modern/src/useAppRuntimeState.ts`, and `frontend-modern/src/utils/apiClient.ts`
 
 ## Forbidden Paths
 
@@ -235,6 +237,11 @@ timestamp there so a degraded reason and a fresher grouped signal remain
 readable together. When mixed-version payloads omit that canonical freshest
 signal entirely, the settings surface should degrade to a safe customer-facing
 fallback instead of an unexplained placeholder glyph.
+That same billing support boundary now also owns the shared monitored-system
+presentation helper. `frontend-modern/src/utils/monitoredSystemPresentation.ts`
+is the canonical owner for ledger labels, safe fallback summaries, and
+source/type attribution wording, so the settings panel must consume that
+helper instead of redefining customer-facing monitored-system copy inline.
 Frontend billing/admin surfaces must not synthesize `plan_version` from
 subscription lifecycle state. When a hosted billing record lacks a plan label,
 the UI must preserve that absence instead of fabricating values like `active`

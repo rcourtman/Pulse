@@ -1374,6 +1374,7 @@
         "frontend-modern/src/utils/apiClient.ts",
         "frontend-modern/src/utils/cloudPlans.ts",
         "frontend-modern/src/utils/commercialBillingModel.ts",
+        "frontend-modern/src/utils/monitoredSystemPresentation.ts",
         "frontend-modern/src/utils/selfHostedPlans.ts",
         "internal/api/public_signup_handlers.go",
         "internal/cloudcp/account/tenant_handlers.go",
@@ -1800,6 +1801,19 @@
             "exact_files": [
               "frontend-modern/src/components/Settings/__tests__/MonitoredSystemLedgerPanel.test.tsx",
               "frontend-modern/src/components/Settings/__tests__/ProLicensePanel.test.tsx"
+            ]
+          },
+          {
+            "id": "monitored-system-presentation-helper",
+            "label": "monitored system presentation helper proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/utils/monitoredSystemPresentation.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/utils/__tests__/monitoredSystemPresentation.test.ts"
             ]
           },
           {

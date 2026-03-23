@@ -60,6 +60,7 @@ import trialBannerSource from '@/components/shared/TrialBanner.tsx?raw';
 import trialBannerModelSource from '@/components/shared/trialBannerModel.ts?raw';
 import monitoredSystemLimitWarningBannerSource from '@/components/shared/MonitoredSystemLimitWarningBanner.tsx?raw';
 import monitoredSystemLimitWarningBannerModelSource from '@/components/shared/monitoredSystemLimitWarningBannerModel.ts?raw';
+import monitoredSystemLedgerPanelSource from '@/components/Settings/MonitoredSystemLedgerPanel.tsx?raw';
 import infrastructureSummaryTableSource from '@/components/shared/InfrastructureSummaryTable.tsx?raw';
 import infrastructureSummaryTableRowSource from '@/components/shared/InfrastructureSummaryTableRow.tsx?raw';
 import interactiveSparklineSource from '@/components/shared/InteractiveSparkline.tsx?raw';
@@ -108,6 +109,7 @@ import sourcePlatformsSource from '@/utils/sourcePlatforms.ts?raw';
 import storageSourcesSource from '@/utils/storageSources.ts?raw';
 import rbacPermissionsSource from '@/utils/rbacPermissions.ts?raw';
 import systemSettingsPresentationSource from '@/utils/systemSettingsPresentation.ts?raw';
+import monitoredSystemPresentationSource from '@/utils/monitoredSystemPresentation.ts?raw';
 import updatesSettingsPanelSource from '@/components/Settings/UpdatesSettingsPanel.tsx?raw';
 import copyCommandBlockSource from '@/components/Settings/CopyCommandBlock.tsx?raw';
 import updateInstallGuideSource from '@/components/Settings/UpdateInstallGuide.tsx?raw';
@@ -2993,6 +2995,22 @@ describe('frontend resource type boundaries', () => {
     );
     expect(monitoredSystemLimitWarningBannerModelSource).toContain(
       'MONITORED_SYSTEM_LIMIT_INSTALL_COLLECTORS_LABEL',
+    );
+    expect(monitoredSystemLedgerPanelSource).toContain('@/utils/monitoredSystemPresentation');
+    expect(monitoredSystemLedgerPanelSource).toContain('getMonitoredSystemLedgerPresentation');
+    expect(monitoredSystemLedgerPanelSource).toContain(
+      'getMonitoredSystemCountingDetailsToggleLabel',
+    );
+    expect(monitoredSystemLedgerPanelSource).not.toContain('No monitored systems counted.');
+    expect(monitoredSystemLedgerPanelSource).not.toContain('Current status');
+    expect(monitoredSystemPresentationSource).toContain(
+      'export function getMonitoredSystemLedgerPresentation',
+    );
+    expect(monitoredSystemPresentationSource).toContain(
+      'export function getMonitoredSystemCountingDetailsToggleLabel',
+    );
+    expect(monitoredSystemPresentationSource).toContain(
+      'export function formatMonitoredSystemLatestIncludedSignalSentence',
     );
     expect(whatsNewModalSource).toContain('useWhatsNewModalState');
     expect(whatsNewModalSource).toContain('WHATS_NEW_FEATURE_CARDS');

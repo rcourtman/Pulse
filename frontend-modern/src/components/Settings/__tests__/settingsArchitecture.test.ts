@@ -78,11 +78,13 @@ import recoverySettingsPanelSource from '../RecoverySettingsPanel.tsx?raw';
 import systemSettingsStateSource from '../useSystemSettingsState.ts?raw';
 import relaySettingsPanelSource from '../RelaySettingsPanel.tsx?raw';
 import relayPairingSectionSource from '../RelayPairingSection.tsx?raw';
+import monitoredSystemLedgerPanelSource from '../MonitoredSystemLedgerPanel.tsx?raw';
 import proLicensePanelSource from '../ProLicensePanel.tsx?raw';
 import proLicensePlanSectionSource from '../ProLicensePlanSection.tsx?raw';
 import commercialBillingSectionsSource from '../CommercialBillingSections.tsx?raw';
 import selfHostedCommercialActivationSectionSource from '../SelfHostedCommercialActivationSection.tsx?raw';
 import commercialBillingModelSource from '@/utils/commercialBillingModel.ts?raw';
+import monitoredSystemPresentationSource from '@/utils/monitoredSystemPresentation.ts?raw';
 import relaySettingsPanelStateSource from '../useRelaySettingsPanelState.ts?raw';
 import proLicensePanelStateSource from '../useProLicensePanelState.ts?raw';
 import organizationOverviewPanelSource from '../OrganizationOverviewPanel.tsx?raw';
@@ -503,10 +505,19 @@ describe('Settings architecture guardrails', () => {
     expect(proLicensePanelSource).toContain('CommercialSection');
     expect(proLicensePanelSource).not.toContain('createSignal(');
     expect(proLicensePanelSource).not.toContain('useLocation()');
+    expect(monitoredSystemLedgerPanelSource).toContain('@/utils/monitoredSystemPresentation');
+    expect(monitoredSystemLedgerPanelSource).toContain('getMonitoredSystemLedgerPresentation');
+    expect(monitoredSystemLedgerPanelSource).toContain('getMonitoredSystemCountingDetailsToggleLabel');
+    expect(monitoredSystemLedgerPanelSource).not.toContain('No monitored systems counted.');
+    expect(monitoredSystemLedgerPanelSource).not.toContain('Current status');
     expect(proLicensePanelStateSource).toContain('buildSelfHostedCommercialPlanModel');
     expect(proLicensePanelStateSource).toContain('loadLicenseStatus(true)');
     expect(proLicensePlanSectionSource).toContain('CommercialStatGrid');
     expect(proLicensePlanSectionSource).toContain('getLicenseStatusLoadingState');
+    expect(monitoredSystemPresentationSource).toContain('export function getMonitoredSystemLedgerPresentation');
+    expect(monitoredSystemPresentationSource).toContain(
+      'export function getMonitoredSystemCountingDetailsToggleLabel',
+    );
     expect(selfHostedCommercialActivationSectionSource).toContain('License / Activation Key');
     expect(selfHostedCommercialActivationSectionSource).toContain('Start 14-day Pro Trial');
     expect(organizationBillingPanelSource).toContain('./CommercialBillingSections');
