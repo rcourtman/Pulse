@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import calloutCardSource from '@/components/shared/CalloutCard.tsx?raw';
+import commandPaletteModalSource from '@/components/shared/CommandPaletteModal.tsx?raw';
+import commandPaletteModelSource from '@/components/shared/commandPaletteModel.ts?raw';
 import containerUpdateBadgeSource from '@/components/shared/ContainerUpdateBadge.tsx?raw';
 import containerUpdateBadgeModelSource from '@/components/shared/containerUpdateBadgeModel.ts?raw';
 import densityMapSource from '@/components/shared/DensityMap.tsx?raw';
@@ -22,6 +24,7 @@ import infrastructureSummaryTableStateSource from '@/components/shared/useInfras
 import monitoredSystemLimitWarningBannerSource from '@/components/shared/MonitoredSystemLimitWarningBanner.tsx?raw';
 import selectionCardGroupSource from '@/components/shared/SelectionCardGroup.tsx?raw';
 import tagBadgesSource from '@/components/shared/TagBadges.tsx?raw';
+import commandPaletteStateSource from '@/components/shared/useCommandPaletteState.ts?raw';
 import containerUpdateButtonStateSource from '@/components/shared/useContainerUpdateButtonState.ts?raw';
 import densityMapStateSource from '@/components/shared/useDensityMapState.ts?raw';
 import helpIconStateSource from '@/components/shared/useHelpIconState.ts?raw';
@@ -96,6 +99,22 @@ describe('shared primitive guardrails', () => {
     expect(updatesSettingsPanelSource).not.toContain(
       'class={`p-4 rounded-md border-2 transition-all text-left',
     );
+  });
+
+  it('keeps command palette on shell, runtime, and model owners', () => {
+    expect(commandPaletteModalSource).toContain('useCommandPaletteState');
+    expect(commandPaletteModalSource).not.toContain('useNavigate');
+    expect(commandPaletteModalSource).not.toContain('createSignal');
+    expect(commandPaletteModalSource).not.toContain('buildInfrastructurePath');
+
+    expect(commandPaletteStateSource).toContain('useNavigate');
+    expect(commandPaletteStateSource).toContain('createSignal');
+    expect(commandPaletteStateSource).toContain('buildInfrastructurePath');
+    expect(commandPaletteStateSource).toContain('export function useCommandPaletteState');
+
+    expect(commandPaletteModelSource).toContain('buildCommandPaletteCommands');
+    expect(commandPaletteModelSource).toContain('normalizeCommandPaletteQuery');
+    expect(commandPaletteModelSource).toContain('filterCommandPaletteCommands');
   });
 
   it('routes settings info callouts through CalloutCard', () => {

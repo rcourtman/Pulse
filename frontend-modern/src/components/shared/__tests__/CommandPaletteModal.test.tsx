@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import type { JSX } from 'solid-js';
+import commandPaletteModalSource from '@/components/shared/CommandPaletteModal.tsx?raw';
+import commandPaletteModelSource from '@/components/shared/commandPaletteModel.ts?raw';
+import commandPaletteStateSource from '@/components/shared/useCommandPaletteState.ts?raw';
 
 const navigateMock = vi.fn();
 
@@ -19,6 +22,22 @@ describe('CommandPaletteModal', () => {
   afterEach(() => {
     cleanup();
     navigateMock.mockReset();
+  });
+
+  it('keeps the command palette on shell, runtime, and model owners', () => {
+    expect(commandPaletteModalSource).toContain('useCommandPaletteState');
+    expect(commandPaletteModalSource).not.toContain('useNavigate');
+    expect(commandPaletteModalSource).not.toContain('createSignal');
+    expect(commandPaletteModalSource).not.toContain('buildInfrastructurePath');
+
+    expect(commandPaletteStateSource).toContain('useNavigate');
+    expect(commandPaletteStateSource).toContain('createSignal');
+    expect(commandPaletteStateSource).toContain('buildInfrastructurePath');
+    expect(commandPaletteStateSource).toContain('export function useCommandPaletteState');
+
+    expect(commandPaletteModelSource).toContain('buildCommandPaletteCommands');
+    expect(commandPaletteModelSource).toContain('normalizeCommandPaletteQuery');
+    expect(commandPaletteModelSource).toContain('filterCommandPaletteCommands');
   });
 
   it('renders the dedicated pod workloads command with a canonical path', () => {

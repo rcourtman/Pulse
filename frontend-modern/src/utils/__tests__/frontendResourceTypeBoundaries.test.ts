@@ -8,6 +8,8 @@ import chartsApiSource from '@/api/charts.ts?raw';
 import investigateAlertButtonSource from '@/components/Alerts/InvestigateAlertButton.tsx?raw';
 import alertTargetTypesSource from '@/utils/alertTargetTypes.ts?raw';
 import resourceBadgesSource from '@/components/Infrastructure/resourceBadges.ts?raw';
+import commandPaletteModalSource from '@/components/shared/CommandPaletteModal.tsx?raw';
+import commandPaletteModelSource from '@/components/shared/commandPaletteModel.ts?raw';
 import containerUpdateBadgeSource from '@/components/shared/ContainerUpdateBadge.tsx?raw';
 import containerUpdateBadgeModelSource from '@/components/shared/containerUpdateBadgeModel.ts?raw';
 import densityMapSource from '@/components/shared/DensityMap.tsx?raw';
@@ -25,6 +27,7 @@ import interactiveSparklineSource from '@/components/shared/InteractiveSparkline
 import interactiveSparklineModelSource from '@/components/shared/interactiveSparklineModel.ts?raw';
 import infrastructureSelectorModelSource from '@/components/shared/infrastructureSelectorModel.ts?raw';
 import sharedInfrastructureSummaryTableModelSource from '@/components/shared/infrastructureSummaryTableModel.ts?raw';
+import commandPaletteStateSource from '@/components/shared/useCommandPaletteState.ts?raw';
 import containerUpdateButtonStateSource from '@/components/shared/useContainerUpdateButtonState.ts?raw';
 import helpIconStateSource from '@/components/shared/useHelpIconState.ts?raw';
 import historyChartStateSource from '@/components/shared/useHistoryChartState.ts?raw';
@@ -2622,6 +2625,16 @@ describe('frontend resource type boundaries', () => {
     expect(resourceIdentitySource).not.toContain(
       'const asTrimmedString = (value: unknown): string | undefined => {',
     );
+    expect(commandPaletteModalSource).toContain('useCommandPaletteState');
+    expect(commandPaletteModalSource).not.toContain('useNavigate');
+    expect(commandPaletteModalSource).not.toContain('createSignal');
+    expect(commandPaletteModalSource).not.toContain('buildInfrastructurePath');
+    expect(commandPaletteStateSource).toContain('useNavigate');
+    expect(commandPaletteStateSource).toContain('createSignal');
+    expect(commandPaletteStateSource).toContain('buildInfrastructurePath');
+    expect(commandPaletteModelSource).toContain('buildCommandPaletteCommands');
+    expect(commandPaletteModelSource).toContain('normalizeCommandPaletteQuery');
+    expect(commandPaletteModelSource).toContain('filterCommandPaletteCommands');
     expect(infrastructureSummaryModelSource).not.toContain(
       'const asTrimmedString = (value: unknown): string | null => {',
     );

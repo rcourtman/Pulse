@@ -248,6 +248,14 @@ handoff lifecycle, and
 utility tab ordering, alert badge counts, fade-state derivation, and tab
 button class policy. Future mobile-nav work should extend those owners instead
 of pushing tab-order or DOM lifecycle logic back into the shared shell.
+The shared command palette now follows that same owner split.
+`frontend-modern/src/components/shared/CommandPaletteModal.tsx` stays the
+render shell, `frontend-modern/src/components/shared/useCommandPaletteState.ts`
+owns query state, open-reset/focus lifecycle, route-path wiring, and Enter-key
+selection, and `frontend-modern/src/components/shared/commandPaletteModel.ts`
+owns canonical command construction plus query normalization and filtering
+policy. Future command-palette work should extend those owners instead of
+pushing route construction or search policy back into the shared shell.
 
 The audit log settings surface now follows that same owner split.
 `frontend-modern/src/components/Settings/AuditLogPanel.tsx` stays the canonical
