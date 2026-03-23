@@ -17,7 +17,11 @@ import XCircle from 'lucide-solid/icons/x-circle';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { getSimpleStatusIndicator, getStatusIndicatorBadgeToneClasses } from '@/utils/status';
 import { getSemanticTonePresentation } from '@/utils/semanticTonePresentation';
-import { DIAGNOSTICS_EMPTY_PBS_MESSAGE } from '@/utils/diagnosticsPresentation';
+import {
+  DIAGNOSTICS_EMPTY_PBS_MESSAGE,
+  DIAGNOSTICS_EMPTY_STATE_COPY,
+  DIAGNOSTICS_PANEL_COPY,
+} from '@/utils/diagnosticsPresentation';
 import type { DiagnosticsData } from '@/components/Settings/diagnosticsModel';
 
 const DiagnosticCard: Component<{
@@ -89,9 +93,11 @@ export const DiagnosticsResultsPanel: Component<DiagnosticsResultsPanelProps> = 
         <Card padding="lg" class="text-center">
           <div class="py-12">
             <Activity class="mx-auto mb-4 h-12 w-12 text-muted" />
-            <h3 class="mb-2 text-lg font-medium text-base-content">No diagnostics data yet</h3>
+            <h3 class="mb-2 text-lg font-medium text-base-content">
+              {DIAGNOSTICS_EMPTY_STATE_COPY.title}
+            </h3>
             <p class="mb-6 text-sm text-muted">
-              Click "Run Diagnostics" above to test connections and inspect system status
+              {DIAGNOSTICS_EMPTY_STATE_COPY.description}
             </p>
             <button
               type="button"
@@ -100,7 +106,7 @@ export const DiagnosticsResultsPanel: Component<DiagnosticsResultsPanelProps> = 
               class="inline-flex min-h-10 items-center gap-2 rounded-md bg-blue-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-50 sm:min-h-9"
             >
               <RefreshCw class={`h-4 w-4 ${props.loading ? 'animate-spin' : ''}`} />
-              Run Diagnostics
+              {DIAGNOSTICS_EMPTY_STATE_COPY.actionLabel}
             </button>
           </div>
         </Card>
@@ -356,7 +362,8 @@ export const DiagnosticsResultsPanel: Component<DiagnosticsResultsPanelProps> = 
               </div>
               <Show when={props.diagnosticsData?.dockerAgents?.recommendedAgentVersion}>
                 <div class="mt-3 border-t border-border-subtle pt-2 text-xs text-muted">
-                  Recommended version: {props.diagnosticsData?.dockerAgents?.recommendedAgentVersion}
+                  {DIAGNOSTICS_PANEL_COPY.recommendedVersionLabel}:{' '}
+                  {props.diagnosticsData?.dockerAgents?.recommendedAgentVersion}
                 </div>
               </Show>
             </Card>

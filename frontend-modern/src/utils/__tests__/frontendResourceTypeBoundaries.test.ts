@@ -4193,8 +4193,11 @@ describe('frontend resource type boundaries', () => {
     expect(auditLogPresentationSource).toContain('export const AUDIT_VERIFY_ROW_BUTTON_CLASS');
     expect(diagnosticsPanelSource).toContain('@/components/Settings/DiagnosticsResultsPanel');
     expect(diagnosticsPanelSource).toContain('@/components/Settings/useDiagnosticsPanelState');
+    expect(diagnosticsPanelSource).toContain('DIAGNOSTICS_PANEL_COPY');
     expect(diagnosticsPanelSource).toContain('formatUptime');
     expect(diagnosticsPanelSource).not.toContain('No PBS configured');
+    expect(diagnosticsPanelSource).not.toContain('System Diagnostics');
+    expect(diagnosticsPanelSource).not.toContain('Run Diagnostics');
     expect(diagnosticsPanelSource).not.toContain("apiFetchJSON('/api/diagnostics')");
     expect(diagnosticsPanelSource).not.toContain('URL.createObjectURL');
     expect(diagnosticsPanelSource).not.toContain(
@@ -4205,10 +4208,13 @@ describe('frontend resource type boundaries', () => {
     );
     expect(diagnosticsResultsPanelSource).toContain('getStatusIndicatorBadgeToneClasses(');
     expect(diagnosticsResultsPanelSource).toContain('DIAGNOSTICS_EMPTY_PBS_MESSAGE');
+    expect(diagnosticsResultsPanelSource).toContain('DIAGNOSTICS_EMPTY_STATE_COPY');
     expect(diagnosticsStateSource).toContain('export const useDiagnosticsPanelState =');
     expect(diagnosticsStateSource).toContain("apiFetchJSON('/api/diagnostics')");
     expect(diagnosticsStateSource).toContain('URL.createObjectURL');
     expect(diagnosticsModelSource).toContain('export function sanitizeDiagnosticsData');
+    expect(diagnosticsPresentationSource).toContain('export const DIAGNOSTICS_PANEL_COPY');
+    expect(diagnosticsPresentationSource).toContain('export const DIAGNOSTICS_EMPTY_STATE_COPY');
     expect(diagnosticsPresentationSource).toContain('export const DIAGNOSTICS_EMPTY_PBS_MESSAGE');
     expect(updatesSettingsPanelSource).toContain('getUpdateBuildBadges');
     expect(updatesSettingsPanelSource).toContain('getUpdateAvailabilityHeading');

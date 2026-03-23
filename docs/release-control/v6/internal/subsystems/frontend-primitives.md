@@ -42,21 +42,22 @@ work extends shared components instead of creating new local variants.
 20. `frontend-modern/src/components/Settings/diagnosticsModel.ts`
 21. `frontend-modern/src/components/Settings/DiagnosticsPanel.tsx`
 22. `frontend-modern/src/components/Settings/DiagnosticsResultsPanel.tsx`
-23. `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx`
-24. `frontend-modern/src/components/Settings/NetworkSettingsPanel.tsx`
-25. `frontend-modern/src/components/Settings/RecoverySettingsPanel.tsx`
-26. `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx`
-27. `frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx`
-28. `frontend-modern/src/components/Settings/settingsHeaderMeta.ts`
-29. `frontend-modern/src/components/Settings/SSOProvidersPanel.tsx`
-30. `frontend-modern/src/components/Settings/useAISettingsState.ts`
-31. `frontend-modern/src/components/Settings/useDiagnosticsPanelState.ts`
-32. `frontend-modern/src/components/Settings/useSettingsShellState.ts`
-33. `frontend-modern/src/components/Settings/useSSOProvidersState.ts`
-34. `frontend-modern/src/components/Settings/ssoProvidersModel.ts`
-35. `frontend-modern/src/utils/ssoProviderPresentation.ts`
-36. `frontend-modern/src/utils/systemSettingsPresentation.ts`
-37. `frontend-modern/src/utils/aiSettingsPresentation.ts`
+23. `frontend-modern/src/utils/diagnosticsPresentation.ts`
+24. `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx`
+25. `frontend-modern/src/components/Settings/NetworkSettingsPanel.tsx`
+26. `frontend-modern/src/components/Settings/RecoverySettingsPanel.tsx`
+27. `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx`
+28. `frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx`
+29. `frontend-modern/src/components/Settings/settingsHeaderMeta.ts`
+30. `frontend-modern/src/components/Settings/SSOProvidersPanel.tsx`
+31. `frontend-modern/src/components/Settings/useAISettingsState.ts`
+32. `frontend-modern/src/components/Settings/useDiagnosticsPanelState.ts`
+33. `frontend-modern/src/components/Settings/useSettingsShellState.ts`
+34. `frontend-modern/src/components/Settings/useSSOProvidersState.ts`
+35. `frontend-modern/src/components/Settings/ssoProvidersModel.ts`
+36. `frontend-modern/src/utils/ssoProviderPresentation.ts`
+37. `frontend-modern/src/utils/systemSettingsPresentation.ts`
+38. `frontend-modern/src/utils/aiSettingsPresentation.ts`
 37. `frontend-modern/src/components/Settings/UpdateInstallGuide.tsx`
 38. `frontend-modern/src/components/Settings/updatesSettingsModel.ts`
 39. `frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx`
@@ -448,11 +449,13 @@ The diagnostics settings surface now follows that same owner split.
 `frontend-modern/src/components/Settings/DiagnosticsPanel.tsx` stays the
 top-level diagnostics shell, while
 `frontend-modern/src/components/Settings/useDiagnosticsPanelState.ts`,
-`frontend-modern/src/components/Settings/DiagnosticsResultsPanel.tsx`, and
-`frontend-modern/src/components/Settings/diagnosticsModel.ts` own the
-diagnostics run/export lifecycle, results rendering, and sanitization/model
-helpers. The shell must not re-accumulate inline API calls, export-download
-plumbing, or diagnostics-card composition.
+`frontend-modern/src/components/Settings/DiagnosticsResultsPanel.tsx`,
+`frontend-modern/src/components/Settings/diagnosticsModel.ts`, and
+`frontend-modern/src/utils/diagnosticsPresentation.ts` own the diagnostics
+run/export lifecycle, results rendering, sanitization/model helpers, and
+customer-facing diagnostics copy. The shell must not re-accumulate inline API
+calls, export-download plumbing, diagnostics-card composition, or diagnostics
+surface copy.
 
 The settings shell registry now also treats extracted feature prop contracts as
 canonical shell inputs instead of reaching back into feature panels for type

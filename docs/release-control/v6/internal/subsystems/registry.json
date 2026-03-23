@@ -2097,6 +2097,7 @@
         "frontend-modern/src/features/operations/OperationsPageSurface.tsx",
         "frontend-modern/src/pages/Operations.tsx",
         "frontend-modern/src/utils/aiSettingsPresentation.ts",
+        "frontend-modern/src/utils/diagnosticsPresentation.ts",
         "frontend-modern/src/utils/reportingPresentation.ts",
         "frontend-modern/src/utils/ssoProviderPresentation.ts",
         "frontend-modern/src/utils/systemLogsPresentation.ts",
@@ -2235,6 +2236,19 @@
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/utils/__tests__/aiSettingsPresentation.test.ts"
+            ]
+          },
+          {
+            "id": "diagnostics-presentation-helper",
+            "label": "diagnostics presentation helper proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/utils/diagnosticsPresentation.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/utils/__tests__/diagnosticsPresentation.test.ts"
             ]
           },
           {

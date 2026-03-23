@@ -946,11 +946,14 @@ describe('Settings architecture guardrails', () => {
   it('keeps the diagnostics shell behind extracted runtime and results owners', () => {
     expect(diagnosticsPanelSource).toContain('@/components/Settings/DiagnosticsResultsPanel');
     expect(diagnosticsPanelSource).toContain('@/components/Settings/useDiagnosticsPanelState');
+    expect(diagnosticsPanelSource).toContain('DIAGNOSTICS_PANEL_COPY');
     expect(diagnosticsPanelSource).toContain('formatUptime');
     expect(diagnosticsPanelSource).not.toContain("apiFetchJSON('/api/diagnostics')");
     expect(diagnosticsPanelSource).not.toContain('URL.createObjectURL');
     expect(diagnosticsPanelSource).not.toContain('sanitizeDiagnosticsData');
+    expect(diagnosticsPanelSource).not.toContain('System Diagnostics');
     expect(diagnosticsResultsPanelSource).toContain('DIAGNOSTICS_EMPTY_PBS_MESSAGE');
+    expect(diagnosticsResultsPanelSource).toContain('DIAGNOSTICS_EMPTY_STATE_COPY');
     expect(diagnosticsResultsPanelSource).toContain('getStatusIndicatorBadgeToneClasses(');
     expect(diagnosticsStateSource).toContain('export const useDiagnosticsPanelState =');
     expect(diagnosticsStateSource).toContain("apiFetchJSON('/api/diagnostics')");
