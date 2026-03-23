@@ -53,12 +53,14 @@ cross-source deduplication.
 31. `frontend-modern/src/components/Infrastructure/UnifiedResourcePMGTableSection.tsx`
 32. `frontend-modern/src/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx`
 33. `frontend-modern/src/components/Infrastructure/unifiedResourceTableModel.ts`
-34. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts`
-35. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`
-36. `frontend-modern/src/components/Discovery/DiscoveryTab.tsx`
-37. `frontend-modern/src/components/Discovery/useDiscoveryTabState.ts`
-38. `frontend-modern/src/features/infrastructure/InfrastructurePageSurface.tsx`
-39. `frontend-modern/src/features/infrastructure/useInfrastructurePageState.ts`
+34. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts`
+35. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerHistoryState.ts`
+36. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts`
+37. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`
+38. `frontend-modern/src/components/Discovery/DiscoveryTab.tsx`
+39. `frontend-modern/src/components/Discovery/useDiscoveryTabState.ts`
+40. `frontend-modern/src/features/infrastructure/InfrastructurePageSurface.tsx`
+41. `frontend-modern/src/features/infrastructure/useInfrastructurePageState.ts`
 
 ## Shared Boundaries
 
@@ -146,9 +148,12 @@ Those same relationship changes now summarize the actual edge(s) in `from` and
 needing the drawer to reconstruct an edge summary from raw endpoints.
 The infrastructure resource drawer now follows the explicit shell/state/render
 split used elsewhere in v6: `ResourceDetailDrawer.tsx` owns composition,
-`useResourceDetailDrawerState.ts` owns runtime state and fetch orchestration,
-and the overview/debug render-heavy surfaces live in dedicated drawer-local
-owners instead of staying inline in the shell.
+`useResourceDetailDrawerState.ts` owns composition of drawer-local state,
+`useResourceDetailDrawerHistoryState.ts` owns facet/intelligence/timeline
+runtime orchestration, `useResourceDetailDrawerDerivedState.ts` owns the
+canonical drawer derivation layer, and the overview/debug render-heavy
+surfaces live in dedicated drawer-local owners instead of staying inline in
+the shell.
 The backend AI and Patrol context renderers now derive their canonical change
 kind, source type, source adapter, actor, reason, and related-resource
 fragments from `internal/unifiedresources/change_presentation.go`, so the
@@ -286,9 +291,12 @@ that shared routing contract instead of reintroducing dashboard-local path
 builders.
 That drawer shell now routes its canonical timeline filter, facet-bundle, and
 resource-intelligence state through
-`frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts`,
-so unified-resource history and investigation orchestration has one explicit
-frontend owner instead of accumulating inline beside the JSX surface.
+`frontend-modern/src/components/Infrastructure/useResourceDetailDrawerHistoryState.ts`,
+while canonical identity, source, service, and debug derivations route through
+`frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts`
+and `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts`
+stays the composition owner, so unified-resource history and investigation
+orchestration no longer accumulate inline beside the drawer-local model layer.
 The shared `ResourceFacetSummary` consumer now omits capability and
 relationship badges from the default table/detail surface entirely, while the
 backend contract keeps capability and relationship data on the owned resource

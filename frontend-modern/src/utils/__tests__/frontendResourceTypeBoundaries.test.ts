@@ -247,6 +247,8 @@ import resourceDetailDrawerOverviewSource from '@/components/Infrastructure/Reso
 import resourceDetailDrawerDebugSource from '@/components/Infrastructure/ResourceDetailDrawerDebugTab.tsx?raw';
 import infrastructureSummarySource from '@/components/Infrastructure/InfrastructureSummary.tsx?raw';
 import resourceDetailMappersSource from '@/components/Infrastructure/resourceDetailMappers.ts?raw';
+import resourceDetailDrawerHistoryStateSource from '@/components/Infrastructure/useResourceDetailDrawerHistoryState.ts?raw';
+import resourceDetailDrawerDerivedStateSource from '@/components/Infrastructure/useResourceDetailDrawerDerivedState.ts?raw';
 import resourceDetailDrawerStateSource from '@/components/Infrastructure/useResourceDetailDrawerState.ts?raw';
 import unifiedResourceTableSource from '@/components/Infrastructure/UnifiedResourceTable.tsx?raw';
 import unifiedResourceTableStateSource from '@/components/Infrastructure/useUnifiedResourceTableState.ts?raw';
@@ -523,6 +525,8 @@ const resourceDetailDrawerSource = [
   resourceDetailDrawerShellSource,
   resourceDetailDrawerOverviewSource,
   resourceDetailDrawerDebugSource,
+  resourceDetailDrawerHistoryStateSource,
+  resourceDetailDrawerDerivedStateSource,
   resourceDetailDrawerStateSource,
 ].join('\n');
 
@@ -874,6 +878,11 @@ describe('frontend resource type boundaries', () => {
       "from './ResourceDetailDrawerOverviewTab'",
     );
     expect(resourceDetailDrawerShellSource).toContain("from './ResourceDetailDrawerDebugTab'");
+    expect(resourceDetailDrawerStateSource).toContain("from './useResourceDetailDrawerHistoryState'");
+    expect(resourceDetailDrawerStateSource).toContain("from './useResourceDetailDrawerDerivedState'");
+    expect(resourceDetailDrawerStateSource).not.toContain('createResource(');
+    expect(resourceDetailDrawerHistoryStateSource).toContain('createResource(');
+    expect(resourceDetailDrawerDerivedStateSource).toContain('buildWorkloadsHref');
     expect(guestDrawerSource).toContain('useGuestDrawerState');
     expect(guestDrawerSource).toContain('GuestDrawerOverview');
     expect(guestDrawerStateSource).toContain('getCanonicalWorkloadId');
@@ -2480,7 +2489,7 @@ describe('frontend resource type boundaries', () => {
       'export const ENVIRONMENT_LOCK_BUTTON_TITLE',
     );
     expect(resourceDetailDrawerSource).toContain('getServiceHealthPresentation');
-    expect(resourceDetailDrawerSource).toContain('ResourceAPI.getFacetBundle');
+    expect(resourceDetailDrawerHistoryStateSource).toContain('ResourceAPI.getFacetBundle');
     expect(resourceDetailDrawerSource).toContain('History');
     expect(resourceDetailDrawerSource).toContain('RESOURCE_CHANGE_KIND_ORDER');
     expect(resourceDetailDrawerSource).toContain('RESOURCE_CHANGE_SOURCE_TYPE_ORDER');
@@ -2506,6 +2515,7 @@ describe('frontend resource type boundaries', () => {
     expect(approvalPresentationSource).toContain('getResourceApprovalLevelLabel');
     expect(throughputPresentationSource).toContain('formatThroughputRate');
     expect(resourceDetailDrawerSource).toContain('formatIdentifierLabel');
+    expect(resourceDetailDrawerDerivedStateSource).toContain('formatIdentifierLabel');
     expect(resourceChangePresentationSource).toContain('humanizeToken');
     expect(textPresentationSource).toContain('humanizeArrowDelimitedLabel');
     expect(resourceCorrelationPresentationSource).not.toContain(

@@ -5,6 +5,9 @@ import discoveryTabSource from '@/components/Discovery/DiscoveryTab.tsx?raw';
 import discoveryTabStateSource from '@/components/Discovery/useDiscoveryTabState.ts?raw';
 import resourceDetailDrawerShellSource from '@/components/Infrastructure/ResourceDetailDrawer.tsx?raw';
 import resourceDetailDrawerOverviewSource from '@/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx?raw';
+import resourceDetailDrawerHistoryStateSource from '@/components/Infrastructure/useResourceDetailDrawerHistoryState.ts?raw';
+import resourceDetailDrawerDerivedStateSource from '@/components/Infrastructure/useResourceDetailDrawerDerivedState.ts?raw';
+import resourceDetailDrawerStateSource from '@/components/Infrastructure/useResourceDetailDrawerState.ts?raw';
 import type { Resource } from '@/types/resource';
 import { ResourceDetailDrawer } from '@/components/Infrastructure/ResourceDetailDrawer';
 
@@ -119,6 +122,14 @@ describe('ResourceDetailDrawer change history section', () => {
     );
     expect(resourceDetailDrawerShellSource).toContain("from './ResourceDetailDrawerDebugTab'");
     expect(resourceDetailDrawerShellSource).not.toContain('Change history');
+    expect(resourceDetailDrawerStateSource).toContain("from './useResourceDetailDrawerHistoryState'");
+    expect(resourceDetailDrawerStateSource).toContain("from './useResourceDetailDrawerDerivedState'");
+    expect(resourceDetailDrawerStateSource).not.toContain('createResource(');
+    expect(resourceDetailDrawerHistoryStateSource).toContain('createResource(');
+    expect(resourceDetailDrawerHistoryStateSource).toContain('ResourceAPI.getFacetBundle');
+    expect(resourceDetailDrawerHistoryStateSource).toContain('AIAPI.getResourceIntelligence');
+    expect(resourceDetailDrawerDerivedStateSource).toContain('buildWorkloadsHref');
+    expect(resourceDetailDrawerDerivedStateSource).toContain('toDiscoveryConfig');
   });
 
   it('keeps compact timeline summary chips in overview while showing one embedded change history section', async () => {
