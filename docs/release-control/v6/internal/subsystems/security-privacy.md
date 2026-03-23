@@ -238,3 +238,8 @@ on both sides: `frontend-modern/src/components/Settings/APITokenManager.tsx`,
 continue to carry the direct `security-settings-surfaces` proof path together
 with the API-contract token-management proof instead of borrowing coverage only
 from broader settings-shell or API ownership.
+That same governed AI trust boundary also covers unified-resource context
+posture derivation: `internal/ai/resource_context_policy_model.go` is now the
+canonical owner for the policy-posture summary, local-only count, and
+redaction-hint inputs that drive outbound AI context export decisions, so
+`resource_context.go` does not duplicate trust-boundary policy assembly inline.

@@ -112,6 +112,10 @@ That governed context should also surface the canonical routing posture and
 redaction hints that were derived from the shared policy model, so prompts
 reflect the same sensitivity, routing, and scrub decisions that the runtime
 uses for export boundaries instead of rebuilding privacy posture locally.
+That governed posture block and its export-routing inputs now also flow through
+the dedicated `internal/ai/resource_context_policy_model.go` owner, so
+`resource_context.go` stays on AI context composition instead of duplicating
+policy redaction sections or recomputing export metadata inline.
 The same shared policy presenter also owns the routing-scope labels used in
 the AI-facing policy surfaces, so the policy wording stays canonical instead
 of being rendered inline by the consumer.

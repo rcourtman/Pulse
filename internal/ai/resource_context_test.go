@@ -237,6 +237,9 @@ func TestBuildUnifiedResourceContext_FullContext(t *testing.T) {
 	assertContains("Routing: " + expectedRouting)
 	assertContains("Policy Redaction Hints")
 	assertContains("Redactions in use: Hostname, IP Address, Platform ID, Alias")
+	if count := strings.Count(got, "### Policy Redaction Hints"); count != 1 {
+		t.Fatalf("expected one policy redaction hints section, got %d in %q", count, got)
+	}
 	assertContains("Proxmox VE Nodes")
 	assertContains("HAS AGENT")
 	assertContains("NO AGENT")

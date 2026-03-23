@@ -101,39 +101,12 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 		infrastructure := unifiedresources.RefreshCanonicalMetadataSlice(urp.GetInfrastructure())
 		workloads := unifiedresources.RefreshCanonicalMetadataSlice(urp.GetWorkloads())
 		allResources := unifiedresources.RefreshCanonicalMetadataSlice(urp.GetAll())
-		policyPosture := unifiedresources.SummarizePolicyPosture(allResources)
-		sensitivityCounts := map[unifiedresources.ResourceSensitivity]int{}
-		routingCounts := map[unifiedresources.ResourceRoutingScope]int{}
-		var redactionHints []unifiedresources.ResourceRedactionHint
-		localOnlyCount := 0
-		if policyPosture != nil {
-			sensitivityCounts = policyPosture.SensitivityCounts
-			routingCounts = policyPosture.RoutingCounts
-			localOnlyCount = routingCounts[unifiedresources.ResourceRoutingScopeLocalOnly]
-			if len(policyPosture.RedactionCounts) > 0 {
-				redactionHints = make([]unifiedresources.ResourceRedactionHint, 0, len(policyPosture.RedactionCounts))
-				for hint := range policyPosture.RedactionCounts {
-					redactionHints = append(redactionHints, hint)
-				}
-			}
-		}
+		policyContext := buildUnifiedResourcePolicyContext(allResources)
 		byResourceID := make(map[string]unifiedresources.Resource, len(allResources))
 		for _, resource := range allResources {
 			byResourceID[resource.ID] = resource
 		}
-		if policyPosture != nil && policyPosture.TotalResources > 0 {
-			sections = append(sections, "\n### Data Governance")
-			sensitivityParts := unifiedresources.ResourcePolicySensitivitySummaryFromCounts(sensitivityCounts)
-			sections = append(sections, fmt.Sprintf("- Sensitivity: %s", strings.Join(sensitivityParts, ", ")))
-
-			routingParts := unifiedresources.ResourcePolicyRoutingSummaryFromCounts(routingCounts)
-			sections = append(sections, fmt.Sprintf("- Routing: %s", strings.Join(routingParts, ", ")))
-			sections = append(sections, fmt.Sprintf("- Local-only resources: %d", localOnlyCount))
-			if redactionLabels := unifiedresources.ResourcePolicyRedactionLabelsFromCounts(policyPosture.RedactionCounts); len(redactionLabels) > 0 {
-				sections = append(sections, "\n### Policy Redaction Hints")
-				sections = append(sections, fmt.Sprintf("- Redactions in use: %s", strings.Join(redactionLabels, ", ")))
-			}
-		}
+		sections = policyContext.appendSummarySections(sections)
 
 		if len(infrastructure) > 0 {
 			sections = append(sections, "\n### Infrastructure (Nodes & Hosts)")
@@ -511,19 +484,6 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 			}
 		}
 
-		if len(redactionHints) > 0 {
-			sections = append(sections, "\n### Policy Redaction Hints")
-			labels := make([]string, 0, len(redactionHints))
-			for _, hint := range redactionHints {
-				if label := unifiedresources.ResourceRedactionHintLabel(hint); label != "" {
-					labels = append(labels, label)
-				}
-			}
-			if len(labels) > 0 {
-				sections = append(sections, fmt.Sprintf("- Redactions in use: %s", strings.Join(labels, ", ")))
-			}
-		}
-
 		result := "\n\n" + strings.Join(sections, "\n")
 
 		const maxContextSize = 50000
@@ -536,7 +496,14 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 		}
 
 		if strings.TrimSpace(destinationModel) != "" {
-			s.recordUnifiedResourceExport(destinationModel, result, stats, sensitivityCounts, localOnlyCount, redactionHints)
+			s.recordUnifiedResourceExport(
+				destinationModel,
+				result,
+				stats,
+				policyContext.sensitivityCounts,
+				policyContext.localOnlyCount,
+				policyContext.redactionHints,
+			)
 		}
 
 		log.Debug().Int("unified_resource_context_size", len(result)).Msg("built unified resource context")
