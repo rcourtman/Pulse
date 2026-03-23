@@ -370,10 +370,12 @@ describe('ResourceDetailDrawer change history section', () => {
     render(() => <ResourceDetailDrawer resource={resource} />);
 
     await screen.findByText('Investigation context');
+    expect(screen.queryByText('Routing Cloud Summary')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Show context' }));
 
     expect(screen.queryByText('Data Governance')).toBeNull();
     expect(screen.queryByText('AI-Safe Summary')).toBeNull();
+    expect(screen.queryByText('Routing Cloud Summary')).toBeNull();
   });
 
   it('keeps details label-first without a summary sentence', () => {

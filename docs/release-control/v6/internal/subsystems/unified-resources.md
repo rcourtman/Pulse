@@ -209,6 +209,10 @@ The resource drawer now applies the same rule to its investigation-context
 governance block: the default posture remains part of the canonical policy
 contract, but the drawer only surfaces the governance section when the policy
 state is non-default or otherwise consequential to operator understanding.
+The drawer investigation summary line also follows that boundary now: default
+`Cloud Summary` routing is not repeated in the collapsed summary text, while
+non-default routing still appears when it materially changes how the operator
+should read the resource.
 The shared routing policy itself now stays intentionally minimal: it carries
 only the routing scope and the redaction hints derived from canonical
 sensitivity, and the cloud-summary decision is derived from that scope

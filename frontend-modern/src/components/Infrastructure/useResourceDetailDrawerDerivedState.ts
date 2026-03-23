@@ -202,7 +202,7 @@ export const useResourceDetailDrawerDerivedState = (
         `${resourceCorrelations().length} correlation${resourceCorrelations().length === 1 ? '' : 's'}`,
       );
     }
-    if (resource.policy?.routing.scope) {
+    if (resource.policy?.routing.scope && !hasDefaultResourcePolicyPosture(resource.policy)) {
       summary.push(`Routing ${getResourceRoutingScopeLabel(resource.policy.routing.scope)}`);
     }
 
