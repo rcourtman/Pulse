@@ -257,6 +257,10 @@ That same timestamp is now canonically exposed as
 during rollout. It represents the freshest included grouped observation, not a
 claim that every grouped source reported successfully at that time, and API
 consumers must preserve that meaning in their labeling and presentation.
+That canonical signal contract now also includes
+`latest_included_signal_source`, so consumers can attribute the freshest
+included grouped observation to the source that produced it instead of
+guessing from the broader grouped `source` field.
 That client contract must also fail closed when older or partial payloads omit
 the nested explanation object: the frontend may normalize missing explanation
 fields to empty reasons/surfaces plus a safe default summary, but it must not

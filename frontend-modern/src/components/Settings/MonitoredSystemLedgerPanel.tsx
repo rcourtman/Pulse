@@ -55,6 +55,39 @@ function systemStatusExplanation(system: MonitoredSystemLedgerEntry): MonitoredS
   };
 }
 
+function monitoredSystemSourceLabel(source: string | undefined): string {
+  switch ((source ?? '').trim().toLowerCase()) {
+    case 'agent':
+      return 'Agent';
+    case 'docker':
+      return 'Docker';
+    case 'kubernetes':
+      return 'Kubernetes';
+    case 'pbs':
+      return 'PBS';
+    case 'pmg':
+      return 'PMG';
+    case 'proxmox':
+      return 'Proxmox';
+    case 'truenas':
+      return 'TrueNAS';
+    default:
+      return '';
+  }
+}
+
+function latestIncludedSignalLabel(system: MonitoredSystemLedgerEntry): string {
+  if (!system.latest_included_signal_at) {
+    return '—';
+  }
+  const relative = formatRelativeTime(system.latest_included_signal_at, { compact: true });
+  const source = monitoredSystemSourceLabel(system.latest_included_signal_source);
+  if (source === '') {
+    return relative;
+  }
+  return `${relative} via ${source}`;
+}
+
 export function MonitoredSystemLedgerPanel(props: MonitoredSystemLedgerPanelProps = {}) {
   const [ledger, { refetch }] = createResource(() => MonitoredSystemLedgerAPI.getLedger());
   const [expandedSystemKey, setExpandedSystemKey] = createSignal<string | null>(null);
@@ -224,9 +257,7 @@ export function MonitoredSystemLedgerPanel(props: MonitoredSystemLedgerPanelProp
                       </TableCell>
                       <TableCell>
                         <span class="text-xs text-muted">
-                          {system.latest_included_signal_at
-                            ? formatRelativeTime(system.latest_included_signal_at, { compact: true })
-                            : '—'}
+                          {latestIncludedSignalLabel(system)}
                         </span>
                       </TableCell>
                     </TableRow>

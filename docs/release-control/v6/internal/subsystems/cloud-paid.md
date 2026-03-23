@@ -225,6 +225,10 @@ signal timestamp by its real meaning. The canonical API field is now
 rollout; it represents the freshest included grouped observation, not a
 guarantee that every grouped source is healthy, so the UI must not present it
 with single-source `Last Seen` wording.
+That same cloud-paid surface should also show the canonical
+`latest_included_signal_source` attribution when present, so a customer can
+see which grouped source most recently reported instead of reading an
+unqualified aggregate timestamp.
 Frontend billing/admin surfaces must not synthesize `plan_version` from
 subscription lifecycle state. When a hosted billing record lacks a plan label,
 the UI must preserve that absence instead of fabricating values like `active`

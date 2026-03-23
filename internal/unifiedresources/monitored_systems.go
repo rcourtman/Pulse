@@ -64,13 +64,14 @@ type MonitoredSystemStatusReason struct {
 // MonitoredSystemRecord describes a counted top-level monitored system after
 // canonical cross-view deduplication.
 type MonitoredSystemRecord struct {
-	Name              string
-	Type              string
-	Status            ResourceStatus
-	StatusExplanation MonitoredSystemStatusExplanation
-	LastSeen          time.Time
-	Source            string
-	Explanation       MonitoredSystemGroupingExplanation
+	Name                       string
+	Type                       string
+	Status                     ResourceStatus
+	StatusExplanation          MonitoredSystemStatusExplanation
+	LastSeen                   time.Time
+	LatestIncludedSignalSource string
+	Source                     string
+	Explanation                MonitoredSystemGroupingExplanation
 }
 
 // MonitoredSystemCount returns the number of top-level monitored systems after
@@ -173,14 +174,16 @@ func resolveMonitoredSystemTopLevelSystems(rs ReadState) TopLevelSystemResolver 
 func monitoredSystemRecord(group monitoredSystemGroup) MonitoredSystemRecord {
 	resource := preferredMonitoredSystemResource(group.resources)
 	status := monitoredSystemStatus(group.resources)
+	latestSignal := monitoredSystemLatestObservation(group.resources)
 	record := MonitoredSystemRecord{
-		Name:              monitoredSystemDisplayName(group.resources, resource),
-		Type:              monitoredSystemType(resource),
-		Status:            status,
-		StatusExplanation: monitoredSystemStatusExplanation(group.resources, status),
-		LastSeen:          monitoredSystemLastSeen(group.resources),
-		Source:            monitoredSystemSource(group.resources),
-		Explanation:       normalizeMonitoredSystemGroupingExplanation(group.explanation),
+		Name:                       monitoredSystemDisplayName(group.resources, resource),
+		Type:                       monitoredSystemType(resource),
+		Status:                     status,
+		StatusExplanation:          monitoredSystemStatusExplanation(group.resources, status),
+		LastSeen:                   latestSignal.LastSeen,
+		LatestIncludedSignalSource: latestSignal.Source,
+		Source:                     monitoredSystemSource(group.resources),
+		Explanation:                normalizeMonitoredSystemGroupingExplanation(group.explanation),
 	}
 	if record.Name == "" {
 		record.Name = "Unnamed system"
@@ -197,6 +200,9 @@ func monitoredSystemRecord(group monitoredSystemGroup) MonitoredSystemRecord {
 	}
 	if record.Source == "" {
 		record.Source = "unknown"
+	}
+	if record.LatestIncludedSignalSource == "" && record.Source != "multiple" {
+		record.LatestIncludedSignalSource = record.Source
 	}
 	if record.Explanation.Summary == "" {
 		record.Explanation = monitoredSystemStandaloneExplanation(group.resources)
@@ -597,7 +603,7 @@ func monitoredSystemStatusSummary(
 	}
 }
 
-type monitoredSystemLatestObservation struct {
+type monitoredSystemObservation struct {
 	Name     string
 	Source   string
 	LastSeen time.Time
@@ -638,8 +644,23 @@ func monitoredSystemHasReasonStatus(reasons []MonitoredSystemStatusReason, statu
 	return false
 }
 
-func monitoredSystemLatestOnlineObservation(resources []*Resource) monitoredSystemLatestObservation {
-	var latest monitoredSystemLatestObservation
+func monitoredSystemLatestOnlineObservation(resources []*Resource) monitoredSystemObservation {
+	return monitoredSystemLatestObservationMatching(resources, func(status string) bool {
+		return status == "online"
+	})
+}
+
+func monitoredSystemLatestObservation(resources []*Resource) monitoredSystemObservation {
+	return monitoredSystemLatestObservationMatching(resources, func(status string) bool {
+		return status != ""
+	})
+}
+
+func monitoredSystemLatestObservationMatching(
+	resources []*Resource,
+	include func(status string) bool,
+) monitoredSystemObservation {
+	var latest monitoredSystemObservation
 	for _, resource := range resources {
 		if resource == nil {
 			continue
@@ -660,11 +681,12 @@ func monitoredSystemLatestOnlineObservation(resources []*Resource) monitoredSyst
 			})
 			for _, source := range sourceKeys {
 				sourceStatus := resource.SourceStatus[source]
-				if normalizeMonitoredSystemSourceStatus(sourceStatus.Status) != "online" {
+				normalizedStatus := normalizeMonitoredSystemSourceStatus(sourceStatus.Status)
+				if !include(normalizedStatus) {
 					continue
 				}
-				if latest.LastSeen.IsZero() || sourceStatus.LastSeen.After(latest.LastSeen) {
-					latest = monitoredSystemLatestObservation{
+				if monitoredSystemObservationIsLater(latest.LastSeen, latest.Source, sourceStatus.LastSeen, string(source)) {
+					latest = monitoredSystemObservation{
 						Name:     name,
 						Source:   string(source),
 						LastSeen: sourceStatus.LastSeen,
@@ -673,16 +695,39 @@ func monitoredSystemLatestOnlineObservation(resources []*Resource) monitoredSyst
 			}
 		}
 
-		if normalizeMonitoredSystemSourceStatus(string(resource.Status)) == "online" &&
-			(latest.LastSeen.IsZero() || resource.LastSeen.After(latest.LastSeen)) {
-			latest = monitoredSystemLatestObservation{
+		normalizedStatus := normalizeMonitoredSystemSourceStatus(string(resource.Status))
+		primarySource := monitoredSystemPrimarySource(resource)
+		if include(normalizedStatus) &&
+			monitoredSystemObservationIsLater(latest.LastSeen, latest.Source, resource.LastSeen, primarySource) {
+			latest = monitoredSystemObservation{
 				Name:     name,
-				Source:   monitoredSystemPrimarySource(resource),
+				Source:   primarySource,
 				LastSeen: resource.LastSeen,
 			}
 		}
 	}
 	return latest
+}
+
+func monitoredSystemObservationIsLater(
+	currentAt time.Time,
+	currentSource string,
+	candidateAt time.Time,
+	candidateSource string,
+) bool {
+	if candidateAt.IsZero() {
+		return false
+	}
+	if currentAt.IsZero() {
+		return true
+	}
+	if candidateAt.After(currentAt) {
+		return true
+	}
+	if candidateAt.Equal(currentAt) && strings.TrimSpace(candidateSource) < strings.TrimSpace(currentSource) {
+		return true
+	}
+	return false
 }
 
 func monitoredSystemStatusReasonPriority(reason MonitoredSystemStatusReason) int {
@@ -805,16 +850,7 @@ func monitoredSystemSurfaceStatusReasonSummary(
 }
 
 func monitoredSystemLastSeen(resources []*Resource) time.Time {
-	var lastSeen time.Time
-	for _, resource := range resources {
-		if resource == nil || resource.LastSeen.IsZero() {
-			continue
-		}
-		if lastSeen.IsZero() || resource.LastSeen.After(lastSeen) {
-			lastSeen = resource.LastSeen
-		}
-	}
-	return lastSeen
+	return monitoredSystemLatestObservation(resources).LastSeen
 }
 
 func monitoredSystemSource(resources []*Resource) string {

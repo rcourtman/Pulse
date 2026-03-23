@@ -243,6 +243,10 @@ included grouped observation, with `last_seen` left only as a compatibility
 alias during rollout, rather than a promise that every grouped source is
 healthy at that moment. Lifecycle-adjacent consumers must not label it with
 generic single-source health wording.
+That same ledger read now also includes `latest_included_signal_source`, so
+lifecycle-adjacent consumers can attribute the freshest grouped observation to
+its canonical reporting source instead of inferring it from the broader grouped
+system source set.
 Lifecycle-adjacent workspace copy must also keep the same commercial framing:
 infrastructure operations may point operators to Pulse Pro for billing, but it
 must describe that boundary in monitored-system, plan-limit, and license-status

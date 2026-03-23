@@ -47,6 +47,7 @@ export interface MonitoredSystemLedgerEntry {
   status: MonitoredSystemLedgerStatus;
   status_explanation?: MonitoredSystemLedgerStatusExplanation;
   latest_included_signal_at: string; // freshest included observation, RFC3339 or empty
+  latest_included_signal_source?: string;
   last_seen?: string; // deprecated compatibility alias
   source: string;
   explanation?: MonitoredSystemLedgerExplanation;
@@ -80,6 +81,9 @@ function normalizeMonitoredSystemLedgerEntry(
     status,
     latest_included_signal_at:
       entry.latest_included_signal_at?.trim() || entry.last_seen?.trim() || '',
+    latest_included_signal_source: normalizeMonitoredSystemLedgerSource(
+      entry.latest_included_signal_source ?? (entry.source !== 'multiple' ? entry.source : ''),
+    ),
     status_explanation: {
       summary: entry.status_explanation?.summary ?? defaultMonitoredSystemStatusExplanation(status),
       reasons: (entry.status_explanation?.reasons ?? []).map(normalizeMonitoredSystemLedgerStatusReason),
@@ -142,5 +146,22 @@ function normalizeMonitoredSystemLedgerStatusReasonStatus(
       return status.trim().toLowerCase() as MonitoredSystemLedgerStatusReasonStatus;
     default:
       return 'unknown';
+  }
+}
+
+function normalizeMonitoredSystemLedgerSource(
+  source: string | null | undefined,
+): string | undefined {
+  switch ((source ?? '').trim().toLowerCase()) {
+    case 'agent':
+    case 'docker':
+    case 'kubernetes':
+    case 'pbs':
+    case 'pmg':
+    case 'proxmox':
+    case 'truenas':
+      return source?.trim().toLowerCase();
+    default:
+      return undefined;
   }
 }

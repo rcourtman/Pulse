@@ -80,6 +80,7 @@ describe('MonitoredSystemLedgerPanel', () => {
             reasons: [],
           },
           latest_included_signal_at: '2026-01-01T00:00:00Z',
+          latest_included_signal_source: 'agent',
           last_seen: '2026-01-01T00:00:00Z',
           source: 'agent',
           explanation: {
@@ -144,6 +145,7 @@ describe('MonitoredSystemLedgerPanel', () => {
             reasons: [],
           },
           latest_included_signal_at: '2026-01-01T00:00:00Z',
+          latest_included_signal_source: 'agent',
           last_seen: '2026-01-01T00:00:00Z',
           source: 'agent',
           explanation: {
@@ -180,6 +182,7 @@ describe('MonitoredSystemLedgerPanel', () => {
             ],
           },
           latest_included_signal_at: '2026-01-02T00:00:00Z',
+          latest_included_signal_source: 'pbs',
           last_seen: '2026-01-02T00:00:00Z',
           source: 'pbs',
           explanation: {
@@ -211,6 +214,7 @@ describe('MonitoredSystemLedgerPanel', () => {
 
     expect(screen.getByText('Monitored System Ledger')).toBeInTheDocument();
     expect(screen.getByText('Latest Included Signal')).toBeInTheDocument();
+    expect(screen.getByText('2026-01-02T00:00:00Z via PBS')).toBeInTheDocument();
     expect(
       screen.getByText(
         'Review the monitored systems currently counted against your Pulse Pro plan limit.',
@@ -265,6 +269,7 @@ describe('MonitoredSystemLedgerPanel', () => {
             reasons: [],
           },
           latest_included_signal_at: '2026-01-01T00:00:00Z',
+          latest_included_signal_source: 'agent',
           last_seen: '2026-01-01T00:00:00Z',
           source: 'agent',
         },

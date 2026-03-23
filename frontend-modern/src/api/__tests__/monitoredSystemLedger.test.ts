@@ -41,6 +41,7 @@ describe('MonitoredSystemLedgerAPI', () => {
             reasons: [],
           },
           latest_included_signal_at: '2026-01-01T00:00:00Z',
+          latest_included_signal_source: 'agent',
           last_seen: '2026-01-01T00:00:00Z',
           source: 'agent',
           explanation: {
@@ -103,6 +104,7 @@ describe('MonitoredSystemLedgerAPI', () => {
           type: 'host',
           status: 'warning',
           latest_included_signal_at: '2026-01-01T00:00:00Z',
+          latest_included_signal_source: 'agent',
           last_seen: '2026-01-01T00:00:00Z',
           source: 'agent',
         },
@@ -124,6 +126,7 @@ describe('MonitoredSystemLedgerAPI', () => {
           type: 'host',
           status: 'warning',
           latest_included_signal_at: '2026-03-23T11:59:50Z',
+          latest_included_signal_source: 'docker',
           last_seen: '2026-03-23T11:59:50Z',
           source: 'multiple',
         },
@@ -135,6 +138,7 @@ describe('MonitoredSystemLedgerAPI', () => {
     const result = await MonitoredSystemLedgerAPI.getLedger();
 
     expect(result.systems[0]?.latest_included_signal_at).toBe('2026-03-23T11:59:50Z');
+    expect(result.systems[0]?.latest_included_signal_source).toBe('docker');
   });
 
   it('falls back to the deprecated last_seen alias for older payloads', async () => {
@@ -155,6 +159,7 @@ describe('MonitoredSystemLedgerAPI', () => {
     const result = await MonitoredSystemLedgerAPI.getLedger();
 
     expect(result.systems[0]?.latest_included_signal_at).toBe('2026-03-23T11:59:50Z');
+    expect(result.systems[0]?.latest_included_signal_source).toBeUndefined();
   });
 
   it('preserves canonical status explanation reasons from the API contract', async () => {
@@ -179,6 +184,7 @@ describe('MonitoredSystemLedgerAPI', () => {
             ],
           },
           latest_included_signal_at: '2026-03-23T11:59:50Z',
+          latest_included_signal_source: 'docker',
           last_seen: '2026-03-23T11:59:50Z',
           source: 'multiple',
         },
@@ -210,6 +216,7 @@ describe('MonitoredSystemLedgerAPI', () => {
           type: 'host',
           status: 'degraded',
           latest_included_signal_at: '2026-01-01T00:00:00Z',
+          latest_included_signal_source: 'agent',
           last_seen: '2026-01-01T00:00:00Z',
           source: 'agent',
         },
