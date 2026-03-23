@@ -213,6 +213,11 @@ The drawer investigation summary line also follows that boundary now: default
 `Cloud Summary` routing is not repeated in the collapsed summary text, while
 non-default routing still appears when it materially changes how the operator
 should read the resource.
+The drawer now also suppresses the investigation-context section entirely when
+Patrol returns only generic baseline health with no notes, changes,
+correlations, dependencies, or other non-default governance signal. The
+canonical resource surface should not advertise AI context unless there is
+actual investigative value to show.
 The shared routing policy itself now stays intentionally minimal: it carries
 only the routing scope and the redaction hints derived from canonical
 sensitivity, and the cloud-summary decision is derived from that scope

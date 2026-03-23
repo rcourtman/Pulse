@@ -181,6 +181,22 @@ export const useResourceDetailDrawerDerivedState = (
   const resourceDependencies = createMemo(() => resourceIntelligence()?.dependencies ?? []);
   const resourceDependents = createMemo(() => resourceIntelligence()?.dependents ?? []);
   const resourceCorrelations = createMemo(() => resourceIntelligence()?.correlations ?? []);
+  const hasMeaningfulResourceIntelligence = createMemo(() => {
+    const intel = resourceIntelligence();
+    if (!intel) return false;
+
+    return (
+      (intel.health.score ?? 100) < 100 ||
+      intel.health.trend !== 'stable' ||
+      (intel.health.prediction?.trim() ?? '') !== '' ||
+      (intel.health.factors?.length ?? 0) > 0 ||
+      (intel.note_count ?? 0) > 0 ||
+      (intel.recent_changes?.length ?? 0) > 0 ||
+      resourceDependencies().length > 0 ||
+      resourceDependents().length > 0 ||
+      resourceCorrelations().length > 0
+    );
+  });
   const hasCorrelationContext = createMemo(
     () =>
       resourceDependencies().length > 0 ||
@@ -188,13 +204,13 @@ export const useResourceDetailDrawerDerivedState = (
       resourceCorrelations().length > 0,
   );
   const hasInvestigationContext = createMemo(
-    () => Boolean(resourceIntelligence()) || hasGovernanceData(),
+    () => hasMeaningfulResourceIntelligence() || hasGovernanceData(),
   );
   const investigationContextSummary = createMemo(() => {
     const intel = resourceIntelligence();
     const summary: string[] = [];
 
-    if (intel) {
+    if (intel && hasMeaningfulResourceIntelligence()) {
       summary.push(`AI health ${intel.health.grade} · ${Math.round(intel.health.score)}/100`);
     }
     if (resourceCorrelations().length > 0) {
@@ -555,6 +571,7 @@ export const useResourceDetailDrawerDerivedState = (
     resourceDependents,
     resourceCorrelations,
     hasCorrelationContext,
+    hasMeaningfulResourceIntelligence,
     hasInvestigationContext,
     investigationContextSummary,
     pbsData,

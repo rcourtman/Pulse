@@ -354,6 +354,22 @@ describe('ResourceDetailDrawer change history section', () => {
   });
 
   it('keeps default internal cloud-summary posture out of the investigation context drawer block', async () => {
+    aiIntelligenceMock.getResourceIntelligence.mockResolvedValueOnce({
+      resource_id: 'agent-default-policy',
+      health: {
+        score: 100,
+        grade: 'A',
+        trend: 'stable',
+        factors: [],
+        prediction: '',
+      },
+      dependencies: [],
+      dependents: [],
+      correlations: [],
+      recent_changes: [],
+      note_count: 0,
+    });
+
     const resource = baseResource({
       id: 'agent-default-policy',
       name: 'default-policy-host',
@@ -369,10 +385,8 @@ describe('ResourceDetailDrawer change history section', () => {
 
     render(() => <ResourceDetailDrawer resource={resource} />);
 
-    await screen.findByText('Investigation context');
-    expect(screen.queryByText('Routing Cloud Summary')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Show context' }));
-
+    await screen.findByText('Current state');
+    expect(screen.queryByText('Investigation context')).toBeNull();
     expect(screen.queryByText('Data Governance')).toBeNull();
     expect(screen.queryByText('AI-Safe Summary')).toBeNull();
     expect(screen.queryByText('Routing Cloud Summary')).toBeNull();
