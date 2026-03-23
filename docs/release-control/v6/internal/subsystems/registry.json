@@ -74,8 +74,48 @@
       ]
     },
     {
+      "path": "frontend-modern/src/components/Infrastructure/UnifiedResourceHostTableCard.tsx",
+      "rationale": "the unified resource host table card is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary",
+      "subsystems": [
+        "performance-and-scalability",
+        "unified-resources"
+      ]
+    },
+    {
+      "path": "frontend-modern/src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx",
+      "rationale": "the unified resource PBS section is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary",
+      "subsystems": [
+        "performance-and-scalability",
+        "unified-resources"
+      ]
+    },
+    {
+      "path": "frontend-modern/src/components/Infrastructure/UnifiedResourcePMGTableSection.tsx",
+      "rationale": "the unified resource PMG section is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary",
+      "subsystems": [
+        "performance-and-scalability",
+        "unified-resources"
+      ]
+    },
+    {
+      "path": "frontend-modern/src/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx",
+      "rationale": "the unified resource service infrastructure card is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary",
+      "subsystems": [
+        "performance-and-scalability",
+        "unified-resources"
+      ]
+    },
+    {
       "path": "frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx",
       "rationale": "the unified resource table is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary",
+      "subsystems": [
+        "performance-and-scalability",
+        "unified-resources"
+      ]
+    },
+    {
+      "path": "frontend-modern/src/components/Infrastructure/unifiedResourceTableModel.ts",
+      "rationale": "unified resource service row shaping and I/O emphasis are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary",
       "subsystems": [
         "performance-and-scalability",
         "unified-resources"
@@ -2616,7 +2656,12 @@
         "frontend-modern/src/components/Dashboard/workloadTopology.ts",
         "frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts",
         "frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts",
+        "frontend-modern/src/components/Infrastructure/UnifiedResourceHostTableCard.tsx",
+        "frontend-modern/src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx",
+        "frontend-modern/src/components/Infrastructure/UnifiedResourcePMGTableSection.tsx",
+        "frontend-modern/src/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx",
         "frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx",
+        "frontend-modern/src/components/Infrastructure/unifiedResourceTableModel.ts",
         "frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts",
         "internal/api/router_bench_test.go",
         "internal/api/slo.go",
@@ -2731,7 +2776,12 @@
               "frontend-modern/src/components/Dashboard/workloadTopology.ts",
               "frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts",
               "frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts",
+              "frontend-modern/src/components/Infrastructure/UnifiedResourceHostTableCard.tsx",
+              "frontend-modern/src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx",
+              "frontend-modern/src/components/Infrastructure/UnifiedResourcePMGTableSection.tsx",
+              "frontend-modern/src/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx",
               "frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx",
+              "frontend-modern/src/components/Infrastructure/unifiedResourceTableModel.ts",
               "frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts"
             ],
             "allow_same_subsystem_tests": false,
@@ -3110,7 +3160,12 @@
         "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerSupportDisclosure.tsx",
         "frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts",
         "frontend-modern/src/components/Infrastructure/ResourceFacetSummary.tsx",
+        "frontend-modern/src/components/Infrastructure/UnifiedResourceHostTableCard.tsx",
+        "frontend-modern/src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx",
+        "frontend-modern/src/components/Infrastructure/UnifiedResourcePMGTableSection.tsx",
+        "frontend-modern/src/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx",
         "frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx",
+        "frontend-modern/src/components/Infrastructure/unifiedResourceTableModel.ts",
         "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts",
         "frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts",
         "frontend-modern/src/features/infrastructure/InfrastructurePageSurface.tsx",
@@ -3187,7 +3242,12 @@
               "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerSupportDisclosure.tsx",
               "frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts",
               "frontend-modern/src/components/Infrastructure/ResourceFacetSummary.tsx",
+              "frontend-modern/src/components/Infrastructure/UnifiedResourceHostTableCard.tsx",
+              "frontend-modern/src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx",
+              "frontend-modern/src/components/Infrastructure/UnifiedResourcePMGTableSection.tsx",
+              "frontend-modern/src/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx",
               "frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx",
+              "frontend-modern/src/components/Infrastructure/unifiedResourceTableModel.ts",
               "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts",
               "frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts",
               "frontend-modern/src/features/infrastructure/InfrastructurePageSurface.tsx",

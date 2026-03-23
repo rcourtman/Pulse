@@ -309,3 +309,5 @@ export function useUnifiedResourceTableState(props: UnifiedResourceTableProps) {
     getUnifiedSources,
   };
 }
+
+export type UnifiedResourceTableState = ReturnType<typeof useUnifiedResourceTableState>;

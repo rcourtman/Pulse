@@ -84,37 +84,47 @@ regression protection.
 62. `frontend-modern/src/components/Dashboard/__tests__/workloadTopology.test.ts`
 63. `frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx`
 64. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`
-65. `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts`
-66. `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts`
-67. `frontend-modern/src/components/Dashboard/__tests__/Dashboard.performance.contract.test.tsx`
-68. `frontend-modern/src/components/Dashboard/__tests__/DashboardFilter.test.tsx`
-69. `frontend-modern/src/components/Dashboard/__tests__/useDashboardFilterState.test.ts`
-70. `frontend-modern/src/components/Dashboard/__tests__/useDashboardSelectionState.test.ts`
-71. `frontend-modern/src/components/Dashboard/MetricBar.test.tsx`
-72. `frontend-modern/src/components/Dashboard/__tests__/useMetricBarState.test.tsx`
-73. `frontend-modern/src/components/Dashboard/__tests__/EnhancedCPUBar.test.tsx`
-74. `frontend-modern/src/components/Dashboard/__tests__/useEnhancedCPUBarState.test.tsx`
-75. `frontend-modern/src/components/Dashboard/ThresholdSlider.test.tsx`
-76. `frontend-modern/src/components/Dashboard/__tests__/useThresholdSliderState.test.ts`
-77. `frontend-modern/src/components/Dashboard/__tests__/StackedDiskBar.test.tsx`
-78. `frontend-modern/src/components/Dashboard/__tests__/useStackedDiskBarState.test.tsx`
-79. `frontend-modern/src/components/Dashboard/StackedMemoryBar.test.tsx`
-80. `frontend-modern/src/components/Dashboard/__tests__/useStackedMemoryBarState.test.tsx`
-81. `frontend-modern/src/components/Dashboard/__tests__/DiskList.test.tsx`
-82. `frontend-modern/src/components/Dashboard/__tests__/GuestRow.test.tsx`
-83. `frontend-modern/src/components/Dashboard/GuestDrawer.test.tsx`
-84. `frontend-modern/src/components/Dashboard/__tests__/useGroupedTableWindowing.test.ts`
-85. `frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx`
-86. `frontend-modern/src/components/Dashboard/useDashboardWorkloadViewportSync.ts`
-87. `frontend-modern/src/components/Dashboard/__tests__/useDashboardWorkloadViewportSync.test.tsx`
+65. `frontend-modern/src/components/Infrastructure/UnifiedResourceHostTableCard.tsx`
+66. `frontend-modern/src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx`
+67. `frontend-modern/src/components/Infrastructure/UnifiedResourcePMGTableSection.tsx`
+68. `frontend-modern/src/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx`
+69. `frontend-modern/src/components/Infrastructure/unifiedResourceTableModel.ts`
+70. `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts`
+71. `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts`
+72. `frontend-modern/src/components/Dashboard/__tests__/Dashboard.performance.contract.test.tsx`
+73. `frontend-modern/src/components/Dashboard/__tests__/DashboardFilter.test.tsx`
+74. `frontend-modern/src/components/Dashboard/__tests__/useDashboardFilterState.test.ts`
+75. `frontend-modern/src/components/Dashboard/__tests__/useDashboardSelectionState.test.ts`
+76. `frontend-modern/src/components/Dashboard/MetricBar.test.tsx`
+77. `frontend-modern/src/components/Dashboard/__tests__/useMetricBarState.test.tsx`
+78. `frontend-modern/src/components/Dashboard/__tests__/EnhancedCPUBar.test.tsx`
+79. `frontend-modern/src/components/Dashboard/__tests__/useEnhancedCPUBarState.test.tsx`
+80. `frontend-modern/src/components/Dashboard/ThresholdSlider.test.tsx`
+81. `frontend-modern/src/components/Dashboard/__tests__/useThresholdSliderState.test.ts`
+82. `frontend-modern/src/components/Dashboard/__tests__/StackedDiskBar.test.tsx`
+83. `frontend-modern/src/components/Dashboard/__tests__/useStackedDiskBarState.test.tsx`
+84. `frontend-modern/src/components/Dashboard/StackedMemoryBar.test.tsx`
+85. `frontend-modern/src/components/Dashboard/__tests__/useStackedMemoryBarState.test.tsx`
+86. `frontend-modern/src/components/Dashboard/__tests__/DiskList.test.tsx`
+87. `frontend-modern/src/components/Dashboard/__tests__/GuestRow.test.tsx`
+88. `frontend-modern/src/components/Dashboard/GuestDrawer.test.tsx`
+89. `frontend-modern/src/components/Dashboard/__tests__/useGroupedTableWindowing.test.ts`
+90. `frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx`
+91. `frontend-modern/src/components/Dashboard/useDashboardWorkloadViewportSync.ts`
+92. `frontend-modern/src/components/Dashboard/__tests__/useDashboardWorkloadViewportSync.test.tsx`
 
 ## Shared Boundaries
 
 1. `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts` shared with `unified-resources`: the infrastructure selector pipeline is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
 2. `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts` shared with `unified-resources`: resource detail mappers are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-3. `frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx` shared with `unified-resources`: the unified resource table is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-4. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts` shared with `unified-resources`: unified resource table state, grouping, and windowing are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-5. `internal/api/slo.go` shared with `api-contracts`: the SLO endpoint is both an API contract surface and a protected performance hot-path boundary.
+3. `frontend-modern/src/components/Infrastructure/UnifiedResourceHostTableCard.tsx` shared with `unified-resources`: the unified resource host table card is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
+4. `frontend-modern/src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx` shared with `unified-resources`: the unified resource PBS section is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
+5. `frontend-modern/src/components/Infrastructure/UnifiedResourcePMGTableSection.tsx` shared with `unified-resources`: the unified resource PMG section is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
+6. `frontend-modern/src/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx` shared with `unified-resources`: the unified resource service infrastructure card is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
+7. `frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx` shared with `unified-resources`: the unified resource table is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
+8. `frontend-modern/src/components/Infrastructure/unifiedResourceTableModel.ts` shared with `unified-resources`: unified resource service row shaping and I/O emphasis are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
+9. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts` shared with `unified-resources`: unified resource table state, grouping, and windowing are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
+10. `internal/api/slo.go` shared with `api-contracts`: the SLO endpoint is both an API contract surface and a protected performance hot-path boundary.
 
 ## Extension Points
 

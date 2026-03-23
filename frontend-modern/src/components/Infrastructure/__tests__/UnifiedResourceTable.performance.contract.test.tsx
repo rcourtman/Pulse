@@ -7,6 +7,7 @@ import { formatSensorName } from '@/components/Infrastructure/resourceDetailMapp
 import { getPreferredResourceDisplayName } from '@/utils/resourceIdentity';
 import unifiedResourceTableSource from '@/components/Infrastructure/UnifiedResourceTable.tsx?raw';
 import unifiedResourceTableStateSource from '@/components/Infrastructure/useUnifiedResourceTableState.ts?raw';
+import unifiedResourceTableModelSource from '@/components/Infrastructure/unifiedResourceTableModel.ts?raw';
 import {
   buildStatusOptions,
   filterResources,
@@ -179,9 +180,16 @@ describe('UnifiedResourceTable performance contract', () => {
 
     it('keeps hot-path table state and windowing in the shared table state owner', () => {
       expect(unifiedResourceTableSource).toContain('useUnifiedResourceTableState');
+      expect(unifiedResourceTableSource).toContain('UnifiedResourceHostTableCard');
+      expect(unifiedResourceTableSource).toContain('UnifiedResourceServiceInfrastructureCard');
       expect(unifiedResourceTableSource).not.toContain('const sortedPBSResources = createMemo(() =>');
+      expect(unifiedResourceTableSource).not.toContain('const getOutlierEmphasis =');
+      expect(unifiedResourceTableSource).not.toContain('const getPBSTableRow =');
       expect(unifiedResourceTableStateSource).toContain('splitPrimaryAndServiceResources');
       expect(unifiedResourceTableStateSource).toContain('useTableWindowing');
+      expect(unifiedResourceTableModelSource).toContain('export const getPBSTableRow');
+      expect(unifiedResourceTableModelSource).toContain('export const getPMGTableRow');
+      expect(unifiedResourceTableModelSource).toContain('export const getOutlierEmphasis');
     });
 
     it('keeps source filtering on the shared canonical source-platform helper', () => {

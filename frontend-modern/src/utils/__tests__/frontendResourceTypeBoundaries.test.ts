@@ -250,6 +250,7 @@ import resourceDetailMappersSource from '@/components/Infrastructure/resourceDet
 import resourceDetailDrawerStateSource from '@/components/Infrastructure/useResourceDetailDrawerState.ts?raw';
 import unifiedResourceTableSource from '@/components/Infrastructure/UnifiedResourceTable.tsx?raw';
 import unifiedResourceTableStateSource from '@/components/Infrastructure/useUnifiedResourceTableState.ts?raw';
+import unifiedResourceTableModelSource from '@/components/Infrastructure/unifiedResourceTableModel.ts?raw';
 import useUnifiedResourcesSource from '@/hooks/useUnifiedResources.ts?raw';
 import useWorkloadsSource from '@/hooks/useWorkloads.ts?raw';
 import findingsPanelSource from '@/components/AI/FindingsPanel.tsx?raw';
@@ -2578,12 +2579,17 @@ describe('frontend resource type boundaries', () => {
     expect(resourceDetailMappersSource).not.toContain('export const normalizeHealthLabel');
     expect(resourceDetailMappersSource).not.toContain('export const healthToneClass');
     expect(unifiedResourceTableSource).toContain('useUnifiedResourceTableState');
+    expect(unifiedResourceTableSource).toContain('UnifiedResourceHostTableCard');
+    expect(unifiedResourceTableSource).toContain('UnifiedResourceServiceInfrastructureCard');
     expect(unifiedResourceTableSource).not.toContain('const split = createMemo(() =>');
     expect(unifiedResourceTableSource).not.toContain('const sortedPBSResources = createMemo(() =>');
     expect(unifiedResourceTableSource).not.toContain('const resourceColumnStyle = createMemo(() =>');
-    expect(unifiedResourceTableSource).toContain('getServiceHealthSummaryPresentation');
+    expect(unifiedResourceTableSource).not.toContain('getServiceHealthSummaryPresentation');
+    expect(unifiedResourceTableSource).not.toContain('const getOutlierEmphasis =');
     expect(unifiedResourceTableSource).not.toContain('const summarizeServiceHealthTone =');
     expect(unifiedResourceTableStateSource).toContain('export function useUnifiedResourceTableState');
+    expect(unifiedResourceTableModelSource).toContain('getServiceHealthSummaryPresentation');
+    expect(unifiedResourceTableModelSource).toContain('export const getOutlierEmphasis');
     expect(unifiedResourceTableStateSource).toContain('splitPrimaryAndServiceResources');
     expect(unifiedResourceTableStateSource).toContain('useTableWindowing');
     expect(exploreStatusBlockSource).toContain('getAIExploreStatusPresentation');
