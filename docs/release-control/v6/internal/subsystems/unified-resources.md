@@ -473,7 +473,7 @@ explicit reveal control without extra explanatory chrome, so the drawer signals
 secondary depth through one governed structure instead of repeating prose about
 what is "supporting" or "secondary" in each block.
 Host and node system or hardware cards now also live behind a collapsed
-`Host details` support block instead of rendering before the primary overview
+`Host` support block instead of rendering before the primary overview
 cards, so runtime status, identity, and next investigation steps stay first
 while deeper machine detail remains available on demand.
 That host-details section now reads as a simple vertical stack of detail cards
@@ -493,30 +493,30 @@ When the identity side has no owned rows or supporting labels yet, the sparse
 fallback now stays terse (`No identity metadata yet.`) so empty state chrome
 does not read heavier than the data it is standing in for.
 Type-specific Docker, PBS, and PMG operational panels now also live inside a
-collapsed `Service details` support block, so lane-specific controls and
+collapsed `Service` support block, so lane-specific controls and
 breakdowns stay available without displacing the common runtime and identity
 hierarchy on first read.
 The drawer’s secondary support sections now share the same responsive
 flex-wrap card-group pattern used by the workloads drawer, so change history,
 service details, host details, investigation context, and discovery context
 read side by side on wider screens instead of as a single full-width stack.
-Host details uses that same flex-wrap pattern inside the disclosure for the
+Host uses that same flex-wrap pattern inside the disclosure for the
 system, hardware, storage, and network cards, so the drawer matches the
 shared workload-card density instead of stretching those cards one per row.
-The collapsed `Host details` summary now names the available categories only,
+The collapsed `Host` summary now names the available categories only,
 instead of exposing internal card counts in the disclosure label.
-When `Service details` is expanded, each service card remains summary-first and
+When `Service` is expanded, each service card remains summary-first and
 pushes heavier breakdowns or update controls behind one more service-local
 reveal, so the opened state still scans as current state before deeper
 operations.
 That same ownership rule now keeps the service-summary sentence in the
-`Service details` disclosure header instead of repeating a second summary box
+`Service` disclosure header instead of repeating a second summary box
 inside PBS or PMG cards, and the service-local reveal labels stay terse
 (`Show jobs`, `Show mail flow`, `Jobs`, `Queue`), while the opened accordions
 also use shorter section labels (`Types`, `Queue detail`, `Mail detail`) and
 count-only summary badges so opened cards read like current state instead of
 descriptive chrome.
-That collapsed `Service details` summary now also uses resource-facing count
+That collapsed `Service` summary now also uses resource-facing count
 phrasing (`1 datastore`, `7 containers`, `16 delayed messages`) instead of
 implementation wording like `queue total`.
 Within that same PMG opened state, queue and backlog remain the primary metric

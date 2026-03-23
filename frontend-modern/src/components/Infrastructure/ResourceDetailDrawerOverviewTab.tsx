@@ -500,12 +500,12 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
 
         <Show when={drawer.hasServiceDetails()}>
           <SupportDisclosure
-            title="Service details"
+            title="Service"
             summary={drawer.serviceDetailsSummary()}
             expanded={drawer.showServiceDetails()}
             onToggle={() => drawer.setShowServiceDetails((value) => !value)}
-            showLabel="Show service details"
-            hideLabel="Hide service details"
+            showLabel="Show service"
+            hideLabel="Hide service"
             class="h-full"
             contentClass="mt-3 space-y-3"
             dataTestId="resource-service-details-section"
@@ -880,12 +880,12 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
 
         <Show when={drawer.hasHostDetails()}>
           <SupportDisclosure
-            title="Host details"
+            title="Host"
             summary={drawer.hostDetailSummary()}
             expanded={drawer.showHostDetails()}
             onToggle={() => drawer.setShowHostDetails((value) => !value)}
-            showLabel="Show host details"
-            hideLabel="Hide host details"
+            showLabel="Show host"
+            hideLabel="Hide host"
             class="h-full"
             contentClass="mt-3 flex flex-wrap gap-3 [&>*]:flex-1 [&>*]:basis-[calc(50%-0.375rem)] [&>*]:min-w-[220px] [&>*]:max-w-full [&>*]:overflow-hidden"
             dataTestId="resource-host-details-section"

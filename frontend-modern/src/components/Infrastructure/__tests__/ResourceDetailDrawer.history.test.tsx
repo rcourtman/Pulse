@@ -320,8 +320,8 @@ describe('ResourceDetailDrawer change history section', () => {
     ).toBeNull();
     const currentStateSection = screen.getByTestId('resource-current-state-section');
     const identitySection = screen.getByTestId('resource-identity-section');
-    expect(screen.queryByText('Host details')).toBeNull();
-    expect(screen.queryByText('Service details')).toBeNull();
+    expect(screen.queryByText('Host')).toBeNull();
+    expect(screen.queryByText('Service')).toBeNull();
     expect(screen.queryByText('Supporting context')).toBeNull();
     expect(screen.queryByText('Mail details are only available for PMG resources.')).toBeNull();
     expect(
@@ -609,8 +609,8 @@ describe('ResourceDetailDrawer change history section', () => {
 
     render(() => <ResourceDetailDrawer resource={resource} />);
 
-    expect(screen.getByText('Service details')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Show service details' }));
+    expect(screen.getByText('Service')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Show service' }));
     const serviceDetails = within(screen.getByTestId('resource-service-details-section'));
     expect(
       screen.getByTestId('resource-service-details-section').querySelector('.mt-3.space-y-3'),
@@ -662,7 +662,7 @@ describe('ResourceDetailDrawer change history section', () => {
 
     render(() => <ResourceDetailDrawer resource={resource} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Show service details' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Show service' }));
     fireEvent.click(screen.getByRole('button', { name: 'Show mail flow' }));
     expect(screen.getByText('Queue')).toBeInTheDocument();
     expect(screen.getByText('Backlog')).toBeInTheDocument();

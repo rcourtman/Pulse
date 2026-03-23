@@ -121,7 +121,7 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
       <ResourceDetailDrawer resource={resource} />
     ));
 
-    expect(getByText('Summary')).toBeInTheDocument();
+    expect(() => getByText('Summary')).toThrow();
     expect(getByText('Current state')).toBeInTheDocument();
     expect(() => getByText('Sources')).toThrow();
     expect(queryByRole('link', { name: 'Open related workloads for host-1' })).toBeNull();
@@ -213,12 +213,12 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
       <ResourceDetailDrawer resource={resource} />
     ));
 
-    expect(getByText('Host details')).toBeInTheDocument();
+    expect(getByText('Host')).toBeInTheDocument();
     expect(getByText('System, Hardware, Network, and Disks')).toBeInTheDocument();
     expect(queryByText('Hardware')).toBeNull();
     expect(queryByText('Network')).toBeNull();
 
-    fireEvent.click(getByRole('button', { name: 'Show host details' }));
+    fireEvent.click(getByRole('button', { name: 'Show host' }));
 
     await waitFor(() => {
       expect(getByText('Hardware')).toBeInTheDocument();

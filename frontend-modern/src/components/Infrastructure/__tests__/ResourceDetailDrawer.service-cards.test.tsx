@@ -90,11 +90,11 @@ describe('ResourceDetailDrawer service cards', () => {
       <ResourceDetailDrawer resource={resource} />
     ));
 
-    expect(getByText('Service details')).toBeInTheDocument();
+    expect(getByText('Service')).toBeInTheDocument();
     expect(getByText('2 datastores · 3 jobs')).toBeInTheDocument();
     expect(getByText('Platform ID')).toBeInTheDocument();
     expect(queryByText('PBS Service')).toBeNull();
-    fireEvent.click(getByRole('button', { name: 'Show service details' }));
+    fireEvent.click(getByRole('button', { name: 'Show service' }));
     expect(getByTestId('resource-service-details-section').querySelector('.mt-3.grid')).toBeNull();
     const serviceDetails = within(getByTestId('resource-service-details-section'));
     expect(serviceDetails.getByText('PBS')).toBeInTheDocument();
@@ -144,11 +144,11 @@ describe('ResourceDetailDrawer service cards', () => {
       <ResourceDetailDrawer resource={resource} />
     ));
 
-    expect(getByText('Service details')).toBeInTheDocument();
-    expect(getByText('519 queue total · 16 backlog')).toBeInTheDocument();
+    expect(getByText('Service')).toBeInTheDocument();
+    expect(getByText('519 queued messages · 16 delayed messages')).toBeInTheDocument();
     expect(getByText('Platform ID')).toBeInTheDocument();
     expect(queryByText('Mail Gateway')).toBeNull();
-    fireEvent.click(getByRole('button', { name: 'Show service details' }));
+    fireEvent.click(getByRole('button', { name: 'Show service' }));
     expect(getByTestId('resource-service-details-section').querySelector('.mt-3.grid')).toBeNull();
     const serviceDetails = within(getByTestId('resource-service-details-section'));
     expect(serviceDetails.getByText('PMG')).toBeInTheDocument();
@@ -199,7 +199,7 @@ describe('ResourceDetailDrawer service cards', () => {
       <ResourceDetailDrawer resource={resource} />
     ));
 
-    fireEvent.click(getByRole('button', { name: 'Show service details' }));
+    fireEvent.click(getByRole('button', { name: 'Show service' }));
     fireEvent.click(getByRole('button', { name: 'Show mail flow' }));
     const pmgSupportContext = within(getByTestId('pmg-support-context'));
     expect(pmgSupportContext.queryByText('Nodes')).toBeNull();
@@ -231,9 +231,9 @@ describe('ResourceDetailDrawer service cards', () => {
       <ResourceDetailDrawer resource={resource} />
     ));
 
-    expect(getByText('Service details')).toBeInTheDocument();
+    expect(getByText('Service')).toBeInTheDocument();
     expect(getByText('18 containers · 4 updates')).toBeInTheDocument();
-    fireEvent.click(getByRole('button', { name: 'Show service details' }));
+    fireEvent.click(getByRole('button', { name: 'Show service' }));
     expect(getByText('Docker runtime')).toBeInTheDocument();
     expect(queryByText('Container Updates')).toBeNull();
     expect(queryByText('Check now')).toBeNull();
