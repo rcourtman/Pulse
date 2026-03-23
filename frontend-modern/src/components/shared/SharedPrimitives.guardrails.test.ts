@@ -25,6 +25,8 @@ import pulseDataGridSource from '@/components/shared/PulseDataGrid.tsx?raw';
 import pulseDataGridModelSource from '@/components/shared/pulseDataGridModel.ts?raw';
 import searchFieldSource from '@/components/shared/SearchField.tsx?raw';
 import searchFieldModelSource from '@/components/shared/searchFieldModel.ts?raw';
+import searchInputSource from '@/components/shared/SearchInput.tsx?raw';
+import searchInputModelSource from '@/components/shared/searchInputModel.ts?raw';
 import interactiveSparklineSource from '@/components/shared/InteractiveSparkline.tsx?raw';
 import interactiveSparklineModelSource from '@/components/shared/interactiveSparklineModel.ts?raw';
 import infrastructureSummaryTableSource from '@/components/shared/InfrastructureSummaryTable.tsx?raw';
@@ -46,6 +48,7 @@ import mobileNavBarStateSource from '@/components/shared/useMobileNavBarState.ts
 import infrastructureSelectorStateSource from '@/components/shared/useInfrastructureSelectorState.ts?raw';
 import pulseDataGridStateSource from '@/components/shared/usePulseDataGridState.ts?raw';
 import searchFieldStateSource from '@/components/shared/useSearchFieldState.ts?raw';
+import searchInputStateSource from '@/components/shared/useSearchInputState.ts?raw';
 import interactiveSparklineStateSource from '@/components/shared/useInteractiveSparklineState.ts?raw';
 import webInterfaceUrlFieldSource from '@/components/shared/WebInterfaceUrlField.tsx?raw';
 import webInterfaceUrlFieldModelSource from '@/components/shared/webInterfaceUrlFieldModel.ts?raw';
@@ -432,6 +435,27 @@ describe('shared primitive guardrails', () => {
     expect(searchFieldModelSource).toContain('shouldShowSearchFieldClearButton');
     expect(searchFieldModelSource).toContain('getSearchFieldInputPaddingRightClass');
     expect(searchFieldModelSource).toContain("return 'pr-14 sm:pr-20'");
+  });
+
+  it('keeps search input on shell, runtime, and model owners', () => {
+    expect(searchInputSource).toContain('useSearchInputState');
+    expect(searchInputSource).not.toContain('let searchInputEl: HTMLInputElement');
+    expect(searchInputSource).not.toContain('useTypeToSearch');
+    expect(searchInputSource).not.toContain('useSearchInputEnhancements');
+    expect(searchInputSource).not.toContain(
+      'enhancements.isSimple() ? props.shortcutHint : undefined',
+    );
+
+    expect(searchInputStateSource).toContain('export function useSearchInputState');
+    expect(searchInputStateSource).toContain('let searchInputEl: HTMLInputElement');
+    expect(searchInputStateSource).toContain('useTypeToSearch');
+    expect(searchInputStateSource).toContain('useSearchInputEnhancements');
+    expect(searchInputStateSource).toContain('getSearchInputShortcutHint');
+    expect(searchInputStateSource).toContain('shouldSearchInputShowTrailingControls');
+
+    expect(searchInputModelSource).toContain('getSearchInputShortcutHint');
+    expect(searchInputModelSource).toContain('shouldSearchInputShowTrailingControls');
+    expect(searchInputModelSource).toContain('export interface SearchInputProps');
   });
 
   it('keeps collapsible search input on shell, runtime, and model owners', () => {

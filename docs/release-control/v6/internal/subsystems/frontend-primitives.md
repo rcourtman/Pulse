@@ -278,6 +278,14 @@ Escape clear/blur behavior and input-ref lifecycle, and
 visibility rules plus trailing-control padding policy. Future search-field work
 should extend those owners instead of pushing event behavior or layout policy
 back into the shared shell.
+The shared search input now follows that same owner split.
+`frontend-modern/src/components/shared/SearchInput.tsx` stays the render shell,
+`frontend-modern/src/components/shared/useSearchInputState.ts` owns input-ref
+lifecycle, type-to-search registration, and enhancement runtime composition,
+and `frontend-modern/src/components/shared/searchInputModel.ts` owns the shared
+search-input contract plus shortcut-hint and trailing-control policy. Future
+search-input work should extend those owners instead of pushing type-to-search
+or enhancement wiring back into the shared shell.
 The shared collapsible search input now follows that same owner split.
 `frontend-modern/src/components/shared/CollapsibleSearchInput.tsx` stays the
 render shell, `frontend-modern/src/components/shared/useCollapsibleSearchInputState.ts`

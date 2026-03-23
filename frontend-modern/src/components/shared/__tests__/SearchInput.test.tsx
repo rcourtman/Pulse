@@ -3,6 +3,9 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { createSignal } from 'solid-js';
 import { CollapsibleSearchInput } from '@/components/shared/CollapsibleSearchInput';
 import { SearchInput } from '@/components/shared/SearchInput';
+import searchInputSource from '@/components/shared/SearchInput.tsx?raw';
+import searchInputModelSource from '@/components/shared/searchInputModel.ts?raw';
+import searchInputStateSource from '@/components/shared/useSearchInputState.ts?raw';
 import collapsibleSearchInputSource from '@/components/shared/CollapsibleSearchInput.tsx?raw';
 import collapsibleSearchInputModelSource from '@/components/shared/collapsibleSearchInputModel.ts?raw';
 import collapsibleSearchInputStateSource from '@/components/shared/useCollapsibleSearchInputState.ts?raw';
@@ -36,6 +39,25 @@ const SearchHarness = (props: {
 describe('SearchInput', () => {
   afterEach(() => {
     cleanup();
+  });
+
+  it('keeps search input on shell, runtime, and model owners', () => {
+    expect(searchInputSource).toContain('useSearchInputState');
+    expect(searchInputSource).not.toContain('let searchInputEl: HTMLInputElement');
+    expect(searchInputSource).not.toContain('useTypeToSearch');
+    expect(searchInputSource).not.toContain('useSearchInputEnhancements');
+    expect(searchInputSource).not.toContain('enhancements.isSimple() ? props.shortcutHint : undefined');
+
+    expect(searchInputStateSource).toContain('export function useSearchInputState');
+    expect(searchInputStateSource).toContain('let searchInputEl: HTMLInputElement');
+    expect(searchInputStateSource).toContain('useTypeToSearch');
+    expect(searchInputStateSource).toContain('useSearchInputEnhancements');
+    expect(searchInputStateSource).toContain('getSearchInputShortcutHint');
+    expect(searchInputStateSource).toContain('shouldSearchInputShowTrailingControls');
+
+    expect(searchInputModelSource).toContain('getSearchInputShortcutHint');
+    expect(searchInputModelSource).toContain('shouldSearchInputShowTrailingControls');
+    expect(searchInputModelSource).toContain('export interface SearchInputProps');
   });
 
   it('keeps collapsible search input on shell, runtime, and model owners', () => {
