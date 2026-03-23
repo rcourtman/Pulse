@@ -85,6 +85,7 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
 ) => {
   const { resource, drawer } = props;
   const showPlatformId = shouldShowResourcePlatformId(resource);
+  const modeLabel = formatSourceType(resource.sourceType);
 
   return (
     <div class="space-y-3">
@@ -129,12 +130,12 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                   </span>
                 </div>
               </Show>
-              <div class="flex items-center justify-between gap-2">
-                <span class="text-muted">Mode</span>
-                <span class="font-medium text-base-content">
-                  {formatSourceType(resource.sourceType)}
-                </span>
-              </div>
+              <Show when={modeLabel}>
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-muted">Mode</span>
+                  <span class="font-medium text-base-content">{modeLabel}</span>
+                </div>
+              </Show>
               <Show when={(resource.alerts?.length || 0) > 0}>
                 <div class="flex items-center justify-between gap-2">
                   <span class="text-muted">Alerts</span>

@@ -341,6 +341,7 @@ import resourceDetailDrawerDiscoveryModelSource from '@/components/Infrastructur
 import resourceDetailMappersSource from '@/components/Infrastructure/resourceDetailMappers.ts?raw';
 import resourceDetailDrawerHistoryStateSource from '@/components/Infrastructure/useResourceDetailDrawerHistoryState.ts?raw';
 import resourceDetailDrawerDerivedStateSource from '@/components/Infrastructure/useResourceDetailDrawerDerivedState.ts?raw';
+import resourceDetailDrawerOperationalModelSource from '@/components/Infrastructure/resourceDetailDrawerOperationalModel.ts?raw';
 import resourceDetailDrawerServiceModelSource from '@/components/Infrastructure/resourceDetailDrawerServiceModel.ts?raw';
 import resourceDetailDrawerDockerActionsStateSource from '@/components/Infrastructure/useResourceDetailDrawerDockerActionsState.ts?raw';
 import resourceDetailDrawerStateSource from '@/components/Infrastructure/useResourceDetailDrawerState.ts?raw';
@@ -993,12 +994,23 @@ describe('frontend resource type boundaries', () => {
     expect(resourceDetailDrawerDerivedStateSource).toContain(
       "from '@/components/Infrastructure/resourceDetailDiscoveryModel'",
     );
-    expect(resourceDetailDrawerDerivedStateSource).toContain('buildWorkloadsHref');
-    expect(resourceDetailDrawerDerivedStateSource).toContain('buildServiceDetailLinks');
+    expect(resourceDetailDrawerDerivedStateSource).toContain(
+      "from './resourceDetailDrawerOperationalModel'",
+    );
     expect(resourceDetailDrawerDerivedStateSource).toContain(
       "from './resourceDetailDrawerServiceModel'",
     );
     expect(resourceDetailDrawerDiscoveryModelSource).toContain('export const toDiscoveryConfig');
+    expect(resourceDetailDrawerDerivedStateSource).not.toContain('buildWorkloadsHref');
+    expect(resourceDetailDrawerDerivedStateSource).not.toContain('buildServiceDetailLinks');
+    expect(resourceDetailDrawerDerivedStateSource).not.toContain('const supportedBadge =');
+    expect(resourceDetailDrawerDerivedStateSource).not.toContain(
+      'const links: Array<{ href: string;',
+    );
+    expect(resourceDetailDrawerOperationalModelSource).toContain('buildKubernetesCapabilityBadges');
+    expect(resourceDetailDrawerOperationalModelSource).toContain('buildHostDetailCards');
+    expect(resourceDetailDrawerOperationalModelSource).toContain('buildHostDetailSummary');
+    expect(resourceDetailDrawerOperationalModelSource).toContain('buildRelatedLinks');
     expect(resourceDetailDrawerServiceModelSource).toContain('getServiceDetailsSummary');
     expect(resourceDetailDrawerOverviewSource).not.toContain('MonitoringAPI.');
     expect(resourceDetailDrawerOverviewSource).toContain('drawer.queueDockerUpdateCheck');

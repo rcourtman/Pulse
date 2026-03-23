@@ -173,6 +173,10 @@ derivation that feeds the drawer discovery surface,
 `resourceDetailDrawerOperationalModel.ts` owns the pure source-health,
 platform-signal, related-link, and host-detail overview derivations that feed
 the current-state and host-details surfaces,
+and `useResourceDetailDrawerDerivedState.ts` now composes those operational
+overview derivations through that canonical model owner instead of rebuilding
+Kubernetes capability badges, source health, related links, and host-detail
+coverage inline,
 `resourceDetailDrawerServiceModel.ts` owns the pure Docker/PBS/PMG service
 summary and breakdown derivations that feed the overview service-details
 surface,
@@ -416,6 +420,9 @@ The summary shell's `Quick links` row now only promotes runtime-scoped
 workloads drill-down routes, so ordinary host drawers do not surface a generic
 host-wide `Workloads` jump that reads like default navigation chrome instead of
 resource-specific operational context.
+That same `Current state` card now only shows `Mode` when the resource carries
+an actual canonical source mode, so ordinary hosts do not surface an empty or
+meaningless mode row when no source-type contract is present.
 Inside that summary, the operational and supporting context rows stay inline
 instead of sitting in a collapsed `Details` disclosure or nested bordered
 cards, so the first read stays like one linear sheet rather than a stack of

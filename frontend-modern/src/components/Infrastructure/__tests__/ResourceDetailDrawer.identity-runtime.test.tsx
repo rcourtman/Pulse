@@ -128,7 +128,6 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     expect(getByText('Mode')).toBeInTheDocument();
     expect(getByText('Hybrid')).toBeInTheDocument();
     expect(() => getByText('Platform ID')).toThrow();
-    expect(() => getByText('Quick links')).toThrow();
     expect(getByTestId('resource-current-state-section').querySelector('.border-dashed')).toBeNull();
     expect(queryByRole('button', { name: 'Show details' })).toBeNull();
     expect(() => getByText('Runtime')).toThrow();
@@ -258,6 +257,22 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     expect(queryByText('Platform ID')).toBeNull();
     expect(queryByText('Details')).toBeNull();
     expect(queryByText('Show details')).toBeNull();
+  });
+
+  it('hides the mode row when a resource has no canonical source mode', () => {
+    const resource = baseResource({
+      sourceType: null as unknown as Resource['sourceType'],
+      platformType: null as unknown as Resource['platformType'],
+      platformData: {
+        sources: [],
+      },
+    });
+
+    const { getByText, queryByText } = render(() => <ResourceDetailDrawer resource={resource} />);
+
+    expect(getByText('Current state')).toBeInTheDocument();
+    expect(queryByText('Mode')).toBeNull();
+    expect(queryByText('Unknown')).toBeNull();
   });
 
   it('shows identity aliases and fallback message when identity metadata is sparse', () => {

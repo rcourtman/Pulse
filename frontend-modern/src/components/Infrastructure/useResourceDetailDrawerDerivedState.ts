@@ -10,8 +10,6 @@ import {
   getTypeBadge,
   getUnifiedSourceBadges,
 } from '@/utils/resourceBadgePresentation';
-import { buildWorkloadsHref } from '@/components/Infrastructure/workloadsLink';
-import { buildServiceDetailLinks } from '@/components/Infrastructure/serviceDetailLinks';
 import {
   getPrimaryResourceIdentity,
   getPrimaryResourceIdentityRows,
@@ -48,6 +46,14 @@ import {
   getPmgQueueBacklog,
   getServiceDetailsSummary,
 } from './resourceDetailDrawerServiceModel';
+import {
+  buildHostDetailCards,
+  buildHostDetailSummary,
+  buildKubernetesCapabilityBadges,
+  buildRelatedLinks,
+  buildSourceSummary,
+  hasRuntimeOperationalContext as buildHasRuntimeOperationalContext,
+} from './resourceDetailDrawerOperationalModel';
 
 type DrawerTab = 'overview' | 'mail' | 'namespaces' | 'deployments' | 'swarm' | 'debug';
 
@@ -105,62 +111,9 @@ export const useResourceDetailDrawerDerivedState = (
   const kubernetesMeta = createMemo(
     () => resource.kubernetes ?? (platformData()?.kubernetes as KubernetesPlatformData | undefined),
   );
-  const kubernetesCapabilityBadges = createMemo(() => {
-    const capabilities = kubernetesMeta()?.metricCapabilities;
-    if (!capabilities) return [] as Array<{ label: string; classes: string; title: string }>;
-
-    const supportedBadge =
-      'inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-cyan-100 text-cyan-700 dark:bg-cyan-900 dark:text-cyan-400';
-    const unsupportedBadge =
-      'inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-surface-alt text-muted';
-    const badges: { label: string; classes: string; title: string }[] = [];
-
-    if (capabilities.nodeCpuMemory) {
-      badges.push({
-        label: 'K8s Node CPU/Memory',
-        classes: supportedBadge,
-        title: 'Node CPU and memory metrics are available.',
-      });
-    }
-    if (capabilities.nodeTelemetry) {
-      badges.push({
-        label: 'Node Telemetry (Agent)',
-        classes: supportedBadge,
-        title: 'Linked Pulse agent provides node uptime, temperature, disk, network, and disk I/O.',
-      });
-    }
-    if (capabilities.podCpuMemory) {
-      badges.push({
-        label: 'Pod CPU/Memory',
-        classes: supportedBadge,
-        title: 'Pod CPU and memory metrics are available.',
-      });
-    }
-    if (capabilities.podNetwork) {
-      badges.push({
-        label: 'Pod Network',
-        classes: supportedBadge,
-        title: 'Pod network throughput is available.',
-      });
-    }
-    if (capabilities.podEphemeralDisk) {
-      badges.push({
-        label: 'Pod Ephemeral Disk',
-        classes: supportedBadge,
-        title: 'Pod ephemeral storage usage is available.',
-      });
-    }
-    if (!capabilities.podDiskIo) {
-      badges.push({
-        label: 'Pod Disk I/O Unsupported',
-        classes: unsupportedBadge,
-        title:
-          'Pod disk read/write throughput is not collected by the Kubernetes integration path today.',
-      });
-    }
-
-    return badges;
-  });
+  const kubernetesCapabilityBadges = createMemo(() =>
+    buildKubernetesCapabilityBadges(kubernetesMeta()?.metricCapabilities),
+  );
 
   const proxmoxNode = createMemo(() => toNodeFromProxmox(resource));
   const agentInfo = createMemo(() => toAgentFromResource(resource, agentMeta()));
@@ -258,59 +211,7 @@ export const useResourceDetailDrawerDerivedState = (
   const sourceStatus = createMemo<NonNullable<PlatformData['sourceStatus']>>(
     () => platformData()?.sourceStatus ?? {},
   );
-  const sourceHealthSummary = createMemo(() => {
-    const entries = Object.entries(sourceStatus());
-    if (entries.length === 0) return null;
-
-    let healthy = 0;
-    let warning = 0;
-    let unhealthy = 0;
-    const parts: string[] = [];
-
-    for (const [source, status] of entries) {
-      const normalized = (status?.status || '').trim().toLowerCase();
-      parts.push(`${source}:${normalized || 'unknown'}`);
-      if (['online', 'running', 'healthy', 'connected', 'ok'].includes(normalized)) {
-        healthy += 1;
-      } else if (['degraded', 'warning', 'stale'].includes(normalized)) {
-        warning += 1;
-      } else {
-        unhealthy += 1;
-      }
-    }
-
-    const total = entries.length;
-    if (unhealthy > 0) {
-      return {
-        label: `${unhealthy}/${total} unhealthy`,
-        className: 'text-red-600 dark:text-red-400',
-        title: parts.join(' • '),
-      };
-    }
-    if (warning > 0) {
-      return {
-        label: `${warning}/${total} degraded`,
-        className: 'text-amber-600 dark:text-amber-400',
-        title: parts.join(' • '),
-      };
-    }
-    return {
-      label: `${healthy}/${total} healthy`,
-      className: 'text-emerald-600 dark:text-emerald-400',
-      title: parts.join(' • '),
-    };
-  });
-  const sourceSummary = createMemo(() => {
-    const health = sourceHealthSummary();
-    if (health) return health;
-    const sources = mergedSources();
-    if (sources.length === 0) return null;
-    return {
-      label: sources.length === 1 ? sources[0].toUpperCase() : `${sources.length} sources`,
-      className: 'text-base-content',
-      title: sources.join(' • '),
-    };
-  });
+  const sourceSummary = createMemo(() => buildSourceSummary(mergedSources(), sourceStatus()));
 
   const identityAliasValues = createMemo(() => getResourceIdentityAliases(resource));
   const identityIpValues = createMemo(() => resource.identity?.ips ?? []);
@@ -346,38 +247,18 @@ export const useResourceDetailDrawerDerivedState = (
     return config.hostname ? `${discoveryMode} via ${config.hostname}` : discoveryMode;
   });
 
-  const hostDetailCards = createMemo(() => {
-    const cards: string[] = [];
-
-    if (proxmoxNode()) {
-      cards.push('system', 'hardware', 'storage');
-    }
-
-    const agent = agentInfo();
-    if (agent) {
-      cards.push('system', 'hardware');
-      if ((agent.networkInterfaces?.length ?? 0) > 0) cards.push('network');
-      if ((agent.disks?.length ?? 0) > 0) cards.push('disks');
-      if ((agentMeta()?.raid?.length ?? 0) > 0) cards.push('raid');
-      if (temperatureRows().length > 0) cards.push('temperatures');
-    }
-
-    return cards;
-  });
+  const hostDetailCards = createMemo(() =>
+    buildHostDetailCards({
+      hasProxmoxNode: Boolean(proxmoxNode()),
+      hasAgentDetails: Boolean(agentInfo()),
+      networkInterfaceCount: agentInfo()?.networkInterfaces?.length ?? 0,
+      diskCount: agentInfo()?.disks?.length ?? 0,
+      raidCount: agentMeta()?.raid?.length ?? 0,
+      temperatureRowCount: temperatureRows().length,
+    }),
+  );
   const hasHostDetails = createMemo(() => hostDetailCards().length > 0);
-  const hostDetailSummary = createMemo(() => {
-    const labels = Array.from(new Set(hostDetailCards()));
-    if (labels.length === 0) return null;
-
-    const categories =
-      labels.length === 1
-        ? labels[0]
-        : labels.length === 2
-          ? `${labels[0]} and ${labels[1]}`
-          : `${labels.slice(0, -1).join(', ')}, and ${labels[labels.length - 1]}`;
-
-    return `${hostDetailCards().length} detail card${hostDetailCards().length === 1 ? '' : 's'} covering ${categories}.`;
-  });
+  const hostDetailSummary = createMemo(() => buildHostDetailSummary(hostDetailCards()));
   const hasServiceDetails = createMemo(
     () => resource.type === 'docker-host' || Boolean(pbsData()) || Boolean(pmgData()),
   );
@@ -390,30 +271,10 @@ export const useResourceDetailDrawerDerivedState = (
     });
   });
 
-  const workloadsHref = createMemo(() => buildWorkloadsHref(resource));
   const headerIdentity = createMemo(() => getPrimaryResourceIdentity(resource));
-  const relatedLinks = createMemo(() => {
-    const links: Array<{ href: string; label: string; compactLabel: string; ariaLabel: string }> =
-      [];
-    const workloads = workloadsHref();
-    if (workloads) {
-      links.push({
-        href: workloads,
-        label: 'Open in Workloads',
-        compactLabel: 'Workloads',
-        ariaLabel: `Open related workloads for ${displayName()}`,
-      });
-    }
-    links.push(...buildServiceDetailLinks(resource));
-    const seen = new Set<string>();
-    return links.filter((link) => {
-      if (seen.has(link.href)) return false;
-      seen.add(link.href);
-      return true;
-    });
-  });
+  const relatedLinks = createMemo(() => buildRelatedLinks(resource, displayName()));
   const hasRuntimeOperationalContext = createMemo(
-    () => kubernetesCapabilityBadges().length > 0 || relatedLinks().length > 0,
+    () => buildHasRuntimeOperationalContext(kubernetesCapabilityBadges(), relatedLinks()),
   );
 
   const sourceSections = createMemo(() => {

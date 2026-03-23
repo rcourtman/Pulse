@@ -8,6 +8,7 @@ import resourceDetailDrawerOverviewSource from '@/components/Infrastructure/Reso
 import resourceDetailDrawerHistoryStateSource from '@/components/Infrastructure/useResourceDetailDrawerHistoryState.ts?raw';
 import resourceDetailDrawerDerivedStateSource from '@/components/Infrastructure/useResourceDetailDrawerDerivedState.ts?raw';
 import resourceDetailDrawerDiscoveryModelSource from '@/components/Infrastructure/resourceDetailDiscoveryModel.ts?raw';
+import resourceDetailDrawerOperationalModelSource from '@/components/Infrastructure/resourceDetailDrawerOperationalModel.ts?raw';
 import resourceDetailDrawerServiceModelSource from '@/components/Infrastructure/resourceDetailDrawerServiceModel.ts?raw';
 import resourceDetailDrawerDockerActionsStateSource from '@/components/Infrastructure/useResourceDetailDrawerDockerActionsState.ts?raw';
 import resourceDetailDrawerStateSource from '@/components/Infrastructure/useResourceDetailDrawerState.ts?raw';
@@ -143,9 +144,24 @@ describe('ResourceDetailDrawer change history section', () => {
       "from '@/components/Infrastructure/resourceDetailDiscoveryModel'",
     );
     expect(resourceDetailDrawerDerivedStateSource).toContain(
+      "from './resourceDetailDrawerOperationalModel'",
+    );
+    expect(resourceDetailDrawerDerivedStateSource).toContain(
       "from './resourceDetailDrawerServiceModel'",
     );
     expect(resourceDetailDrawerDiscoveryModelSource).toContain('export const toDiscoveryConfig');
+    expect(resourceDetailDrawerDerivedStateSource).not.toContain('buildWorkloadsHref');
+    expect(resourceDetailDrawerDerivedStateSource).not.toContain('buildServiceDetailLinks');
+    expect(resourceDetailDrawerDerivedStateSource).not.toContain('const supportedBadge =');
+    expect(resourceDetailDrawerDerivedStateSource).not.toContain(
+      'const links: Array<{ href: string;',
+    );
+    expect(resourceDetailDrawerOperationalModelSource).toContain(
+      'export const buildKubernetesCapabilityBadges',
+    );
+    expect(resourceDetailDrawerOperationalModelSource).toContain('export const buildSourceSummary');
+    expect(resourceDetailDrawerOperationalModelSource).toContain('export const buildHostDetailCards');
+    expect(resourceDetailDrawerOperationalModelSource).toContain('export const buildRelatedLinks');
     expect(resourceDetailDrawerServiceModelSource).toContain('export const getServiceDetailsSummary');
     expect(resourceDetailDrawerServiceModelSource).toContain(
       'export const buildPbsVisibleJobBreakdown',
@@ -159,6 +175,10 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(resourceDetailDrawerOverviewSource).not.toContain('MonitoringAPI.');
     expect(resourceDetailDrawerOverviewSource).toContain('drawer.queueDockerUpdateCheck');
     expect(resourceDetailDrawerOverviewSource).toContain('drawer.queueDockerUpdateAll');
+    expect(resourceDetailDrawerOverviewSource).toContain(
+      'const modeLabel = formatSourceType(resource.sourceType);',
+    );
+    expect(resourceDetailDrawerOverviewSource).toContain('<Show when={modeLabel}>');
     expect(resourceDetailDrawerDockerActionsStateSource).toContain('MonitoringAPI.checkDockerUpdates');
     expect(resourceDetailDrawerDockerActionsStateSource).toContain(
       'MonitoringAPI.updateAllDockerContainers',
