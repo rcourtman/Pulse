@@ -199,6 +199,12 @@ The same policy presenter now also owns the routing-scope labels used across
 AI-facing policy surfaces, while the resource detail drawer stays on
 per-resource policy lines instead of reconstructing a separate
 `Allowed`/`Blocked` row or `Cloud Summary` decision row locally.
+The infrastructure host-table shell now treats the default
+`Internal` + `Cloud Summary` posture as canonical policy metadata that should
+stay available in the drawer and AI/governance surfaces without being promoted
+to always-on row chrome. Inline row badges are reserved for non-default policy
+states so the canonical resource surface does not imply that every host carries
+an operator-actionable governance exception.
 The shared routing policy itself now stays intentionally minimal: it carries
 only the routing scope and the redaction hints derived from canonical
 sensitivity, and the cloud-summary decision is derived from that scope

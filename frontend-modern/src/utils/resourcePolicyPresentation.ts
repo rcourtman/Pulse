@@ -108,6 +108,21 @@ export const getResourcePolicyBadges = (policy?: ResourcePolicy): PolicyBadgePre
   return [sensitivityPresentation[policy.sensitivity], routingPresentation[policy.routing.scope]];
 };
 
+export const getResourcePolicyTableBadges = (policy?: ResourcePolicy): PolicyBadgePresentation[] => {
+  if (!policy) return [];
+
+  const hasDefaultPolicyPosture =
+    policy.sensitivity === 'internal' &&
+    policy.routing.scope === 'cloud-summary' &&
+    (policy.routing.redact?.length ?? 0) === 0;
+
+  if (hasDefaultPolicyPosture) {
+    return [];
+  }
+
+  return getResourcePolicyBadges(policy);
+};
+
 export const getResourceSensitivityLabel = (sensitivity?: ResourceSensitivity): string =>
   sensitivity ? sensitivityPresentation[sensitivity].label : 'Unclassified';
 

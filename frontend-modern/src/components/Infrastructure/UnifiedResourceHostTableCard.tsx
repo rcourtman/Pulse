@@ -25,7 +25,7 @@ import {
 import { getAgentStatusIndicator } from '@/utils/status';
 import { getPreferredResourceDisplayName } from '@/utils/resourceIdentity';
 import {
-  getResourcePolicyBadges,
+  getResourcePolicyTableBadges,
   shouldShowResourceAlternateName,
 } from '@/utils/resourcePolicyPresentation';
 import { ResourceDetailDrawer } from './ResourceDetailDrawer';
@@ -267,7 +267,7 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                     () => unifiedSourceBadges().length > 0,
                   );
                   const policyBadges = createMemo(() =>
-                    getResourcePolicyBadges(resource.policy),
+                    getResourcePolicyTableBadges(resource.policy),
                   );
                   const workloadsHref = createMemo(() => buildWorkloadsHref(resource));
 

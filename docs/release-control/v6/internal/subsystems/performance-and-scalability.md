@@ -393,6 +393,10 @@ share the canonical cluster-name helpers in the shared agent-resource layer,
 so route labels, pod grouping, and cluster-name fetch keys keep using the
 same source of truth instead of rebuilding the `clusterName`/`context`/
 `clusterId` prefix locally.
+The infrastructure host-table hot path now also suppresses the default
+`Internal` + `Cloud Summary` policy pair in row chrome. That baseline posture
+still belongs to the canonical policy contract, but repeating it on every host
+burns row-density budget without adding operator-grade signal.
 The shared node adapter also uses that same cluster-name helper for the
 infrastructure summary surface, so Proxmox node projections stay aligned with
 the same canonical cluster label instead of carrying a raw adapter-local

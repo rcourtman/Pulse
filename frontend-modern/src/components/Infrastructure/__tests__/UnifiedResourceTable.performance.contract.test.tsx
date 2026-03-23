@@ -249,6 +249,49 @@ describe('UnifiedResourceTable performance contract', () => {
       expect(matchesSearch(governedResource, 'secret-host-9')).toBe(false);
     });
 
+    it('suppresses the default policy posture badges in host-table rows while preserving exceptional policy badges', async () => {
+      const resources = [
+        makeResource(0, {
+          name: 'default-policy-host',
+          displayName: 'Default Policy Host',
+          policy: {
+            sensitivity: 'internal',
+            routing: { scope: 'cloud-summary' },
+          },
+        }),
+        makeResource(1, {
+          name: 'governed-host',
+          displayName: 'Governed Host',
+          policy: {
+            sensitivity: 'sensitive',
+            routing: { scope: 'local-first', redact: ['hostname'] },
+          },
+        }),
+      ];
+
+      const { container } = render(() => (
+        <UnifiedResourceTable
+          resources={resources}
+          expandedResourceId={null}
+          onExpandedResourceChange={vi.fn()}
+          groupingMode="flat"
+        />
+      ));
+
+      await waitFor(() => {
+        expect(container.querySelector('table')).toBeInTheDocument();
+      });
+
+      const body = container.querySelector('tbody');
+      expect(body).not.toBeNull();
+      const bodyQueries = within(body as HTMLElement);
+
+      expect(bodyQueries.queryByText('Internal')).not.toBeInTheDocument();
+      expect(bodyQueries.queryByText('Cloud Summary')).not.toBeInTheDocument();
+      expect(bodyQueries.getByText('Sensitive')).toBeInTheDocument();
+      expect(bodyQueries.getByText('Local First')).toBeInTheDocument();
+    });
+
     it('renders facet summary badges without changing the Profile S row budget', async () => {
       const resources = makeResources(PROFILES.S, (i) =>
         i === 0
