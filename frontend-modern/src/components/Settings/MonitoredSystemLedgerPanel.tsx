@@ -157,7 +157,7 @@ export function MonitoredSystemLedgerPanel(props: MonitoredSystemLedgerPanelProp
                             aria-controls={explanationID}
                             onClick={() => toggleSystemExplanation(key)}
                           >
-                            {expanded() ? 'Hide count details' : 'Why this counts'}
+                            {expanded() ? 'Hide counting details' : 'View counting details'}
                           </button>
                           <Show when={expanded()}>
                             <div
@@ -176,7 +176,7 @@ export function MonitoredSystemLedgerPanel(props: MonitoredSystemLedgerPanelProp
                               </Show>
                               <Show when={explanation.surfaces.length > 0}>
                                 <div class="space-y-1">
-                                  <p class="font-medium text-base-content">Included views</p>
+                                  <p class="font-medium text-base-content">Included collection paths</p>
                                   <ul class="space-y-1 whitespace-normal">
                                     <For each={explanation.surfaces}>
                                       {(surface) => (

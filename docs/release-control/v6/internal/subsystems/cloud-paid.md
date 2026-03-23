@@ -205,6 +205,10 @@ That billing support surface must also remain readable while mixed-version
 clients and servers roll forward: missing explanation payloads may degrade to a
 safe generic explanation, but the monitored-system ledger must never fail the
 page or hide counted systems because the nested support details are absent.
+That same disclosure copy must stay professional and customer-facing. The
+settings ledger may expose counting details and included collection paths, but
+it must avoid informal debug-style labels or ad hoc wording that makes the
+commercial usage surface feel provisional.
 Frontend billing/admin surfaces must not synthesize `plan_version` from
 subscription lifecycle state. When a hosted billing record lacks a plan label,
 the UI must preserve that absence instead of fabricating values like `active`

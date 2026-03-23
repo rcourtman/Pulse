@@ -198,14 +198,14 @@ describe('MonitoredSystemLedgerPanel', () => {
     ).toBeInTheDocument();
     expect(screen.getByText('server-b')).toBeInTheDocument();
     expect(screen.getByText('2 / 10')).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: 'Why this counts' })).toHaveLength(2);
-    fireEvent.click(screen.getAllByRole('button', { name: 'Why this counts' })[1]!);
+    expect(screen.getAllByRole('button', { name: 'View counting details' })).toHaveLength(2);
+    fireEvent.click(screen.getAllByRole('button', { name: 'View counting details' })[1]!);
     expect(
       screen.getByText(
         'Counts as one monitored system because Pulse merged 2 top-level views into one canonical system using shared machine identity.',
       ),
     ).toBeInTheDocument();
-    expect(screen.getByText('Included views')).toBeInTheDocument();
+    expect(screen.getByText('Included collection paths')).toBeInTheDocument();
     expect(screen.getByText('server-b host (host, agent)')).toBeInTheDocument();
     expect(screen.queryByText('Failed to load monitored system ledger.')).not.toBeInTheDocument();
   });
@@ -231,11 +231,11 @@ describe('MonitoredSystemLedgerPanel', () => {
       expect(screen.getByText('server-a')).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Why this counts' }));
+    fireEvent.click(screen.getByRole('button', { name: 'View counting details' }));
 
     expect(
       screen.getByText('Pulse counts this top-level collection path as one monitored system.'),
     ).toBeInTheDocument();
-    expect(screen.queryByText('Included views')).not.toBeInTheDocument();
+    expect(screen.queryByText('Included collection paths')).not.toBeInTheDocument();
   });
 });
