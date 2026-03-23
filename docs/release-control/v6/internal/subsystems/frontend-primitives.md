@@ -302,6 +302,14 @@ runtime, and `frontend-modern/src/components/shared/searchTipsPopoverModel.ts`
 owns trigger variant, label/id defaults, hover policy, and trigger/popover
 class selection. Future search-tips work should extend those owners instead of
 pushing listener lifecycle or trigger policy back into the shared shell.
+The shared what's-new modal now follows that same owner split.
+`frontend-modern/src/components/shared/WhatsNewModal.tsx` stays the render
+shell, `frontend-modern/src/components/shared/useWhatsNewModalState.ts` owns
+local-storage dismissal, session dismissal, and close behavior, and
+`frontend-modern/src/components/shared/whatsNewModalModel.ts` owns the feature
+card catalog, telemetry copy, labels, and canonical docs/privacy links. Future
+what's-new work should extend those owners instead of pushing dismissal state,
+product copy, or external links back into the shared shell.
 The shared tooltip now follows that same owner split.
 `frontend-modern/src/components/shared/Tooltip.tsx` stays the render shell and
 singleton API boundary, `frontend-modern/src/components/shared/useTooltipState.ts`
