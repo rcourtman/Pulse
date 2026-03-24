@@ -199,6 +199,11 @@ Makefile targets, `scripts/toggle-mock.sh`, and `scripts/clean-mock-alerts.sh` m
 route through the managed runtime control plane when they are operating on the
 local dev stack, instead of resurrecting lane-local `hot-dev.sh` or raw Vite
 process management through separate shell folklore.
+When `scripts/clean-mock-alerts.sh` needs to quiesce a local dev runtime, it
+must stop the managed session through `hot-dev-bg` before touching legacy
+compatibility services, and its operator recovery guidance must point back to
+the canonical repo-root `npm run dev` and `npm run dev:foreground` controls
+instead of treating `pulse-hot-dev` service management as the primary dev path.
 That same rule now extends to the macOS auto-start surface. The launchd helper
 may not boot a separate legacy foreground runtime beside the managed dev stack:
 `scripts/dev-launchd-wrapper.sh`, `scripts/dev-launchd-setup.sh`, and the

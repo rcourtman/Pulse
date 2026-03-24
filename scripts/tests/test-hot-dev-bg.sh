@@ -6,6 +6,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 HOT_DEV_BG="${ROOT_DIR}/scripts/hot-dev-bg.sh"
+CLEAN_MOCK_ALERTS="${ROOT_DIR}/scripts/clean-mock-alerts.sh"
 PACKAGE_JSON="${ROOT_DIR}/package.json"
 FRONTEND_PACKAGE_JSON="${ROOT_DIR}/frontend-modern/package.json"
 DEV_LAUNCHD_WRAPPER="${ROOT_DIR}/scripts/dev-launchd-wrapper.sh"
@@ -251,6 +252,119 @@ PY
   assert_contains "frontend package keeps explicit frontend-only escape hatch" "${output}" "dev:frontend-only=vite"
 }
 
+test_clean_mock_alerts_prefers_managed_runtime() {
+  local test_dir fake_bin alert_history fake_hot_dev_bg action_log output
+  test_dir="$(mktemp -d)"
+  temp_dirs+=("${test_dir}")
+  fake_bin="${test_dir}/bin"
+  mkdir -p "${fake_bin}"
+  action_log="${test_dir}/actions.log"
+  alert_history="${test_dir}/alert-history.json"
+  fake_hot_dev_bg="${test_dir}/hot-dev-bg.sh"
+
+  cat > "${alert_history}" <<'EOF'
+[
+  {
+    "alert": {
+      "resourceId": "mock-resource-1"
+    }
+  },
+  {
+    "alert": {
+      "resourceId": "real-resource-1"
+    }
+  }
+]
+EOF
+
+  cat > "${fake_hot_dev_bg}" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'hot-dev-bg %s\n' "$*" >> "${ACTION_LOG}"
+case "${1:-}" in
+  status)
+    echo "[hot-dev-bg] Running (pid: 12345)"
+    ;;
+  stop)
+    echo "[hot-dev-bg] Stopped"
+    ;;
+  *)
+    echo "unexpected hot-dev-bg command: $*" >&2
+    exit 1
+    ;;
+esac
+EOF
+  chmod +x "${fake_hot_dev_bg}"
+
+  cat > "${fake_bin}/sudo" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'sudo %s\n' "$*" >> "${ACTION_LOG}"
+exec "$@"
+EOF
+  chmod +x "${fake_bin}/sudo"
+
+  cat > "${fake_bin}/systemctl" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'systemctl %s\n' "$*" >> "${ACTION_LOG}"
+exit 0
+EOF
+  chmod +x "${fake_bin}/systemctl"
+
+  cat > "${fake_bin}/chown" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'chown %s\n' "$*" >> "${ACTION_LOG}"
+exit 0
+EOF
+  chmod +x "${fake_bin}/chown"
+
+  cat > "${fake_bin}/pkill" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'pkill %s\n' "$*" >> "${ACTION_LOG}"
+exit 0
+EOF
+  chmod +x "${fake_bin}/pkill"
+
+  output="$(
+    PATH="${fake_bin}:$PATH" \
+    ACTION_LOG="${action_log}" \
+    ALERT_HISTORY="${alert_history}" \
+    HOT_DEV_BG_PATH="${fake_hot_dev_bg}" \
+    "${CLEAN_MOCK_ALERTS}"
+  )"
+
+  local actions
+  actions="$(cat "${action_log}")"
+  assert_contains "clean-mock-alerts checks managed runtime state" "${actions}" "hot-dev-bg status"
+  assert_contains "clean-mock-alerts stops managed runtime first" "${actions}" "hot-dev-bg stop"
+  assert_contains "clean-mock-alerts still stops compatibility services" "${actions}" "systemctl stop pulse-hot-dev"
+  assert_contains "clean-mock-alerts advertises managed restart" "${output}" "npm run dev"
+  assert_contains "clean-mock-alerts advertises foreground escape hatch" "${output}" "npm run dev:foreground"
+
+  local order_output
+  order_output="$(
+    ACTION_LOG_PATH="${action_log}" python3 - <<'PY'
+import os
+from pathlib import Path
+
+lines = Path(os.environ["ACTION_LOG_PATH"]).read_text(encoding="utf-8").splitlines()
+stop_index = next(i for i, line in enumerate(lines) if line == "hot-dev-bg stop")
+systemctl_index = next(i for i, line in enumerate(lines) if line == "systemctl stop pulse-hot-dev")
+print(f"managed_before_systemctl={stop_index < systemctl_index}")
+PY
+  )"
+  assert_contains "managed runtime stop precedes legacy service stop" "${order_output}" "managed_before_systemctl=True"
+
+  local cleaned_count mock_count
+  cleaned_count="$(jq 'length' "${alert_history}")"
+  mock_count="$(jq '[.[] | select((.alert.resourceId // "" | contains("mock")))] | length' "${alert_history}")"
+  assert_contains "clean-mock-alerts removes only mock alerts" "${cleaned_count}" "1"
+  assert_contains "clean-mock-alerts leaves no mock alerts" "${mock_count}" "0"
+}
+
 test_backend_restart_requires_managed_runtime() {
   local frontend_port backend_port output
   local state_dir
@@ -330,6 +444,7 @@ main() {
   test_launchd_wrapper_uses_managed_supervisor
   test_root_package_exposes_managed_runtime_entrypoints
   test_frontend_package_exposes_managed_runtime_entrypoints
+  test_clean_mock_alerts_prefers_managed_runtime
   test_backend_restart_requires_managed_runtime
   test_status_without_runtime
   test_detects_unmanaged_listeners
