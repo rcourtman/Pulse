@@ -29,13 +29,20 @@ token-management visibility, and privacy controls to operators.
 6. `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx`
 7. `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx`
 8. `frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx`
-9. `frontend-modern/src/components/Settings/useAPITokenManagerState.ts`
-10. `frontend-modern/src/components/Settings/useSystemSettingsState.ts`
-11. `frontend-modern/src/utils/apiTokenPresentation.ts`
-12. `internal/api/security.go`
-13. `internal/api/security_tokens.go`
-14. `internal/api/system_settings.go`
-15. `internal/telemetry/telemetry.go`
+9. `frontend-modern/src/components/Settings/QuickSecuritySetup.tsx`
+10. `frontend-modern/src/components/Settings/SecurityPostureSummary.tsx`
+11. `frontend-modern/src/components/Settings/SSOProviderTypeIcon.tsx`
+12. `frontend-modern/src/components/Settings/useAPITokenManagerState.ts`
+13. `frontend-modern/src/components/Settings/useSystemSettingsState.ts`
+14. `frontend-modern/src/utils/apiTokenPresentation.ts`
+15. `frontend-modern/src/utils/auditLogPresentation.ts`
+16. `frontend-modern/src/utils/auditWebhookPresentation.ts`
+17. `frontend-modern/src/utils/securityAuthPresentation.ts`
+18. `frontend-modern/src/utils/securityScorePresentation.ts`
+19. `internal/api/security.go`
+20. `internal/api/security_tokens.go`
+21. `internal/api/system_settings.go`
+22. `internal/telemetry/telemetry.go`
 
 ## Shared Boundaries
 
@@ -57,7 +64,7 @@ token-management visibility, and privacy controls to operators.
 2. Change security policy, hardening guidance, or supported auth boundaries through `SECURITY.md`.
 3. Change telemetry/privacy settings state handling through `frontend-modern/src/components/Settings/useSystemSettingsState.ts`.
 4. Change security/auth/token transport behavior through the shared `frontend-modern/src/api/security.ts`, `frontend-modern/src/components/Settings/APITokenManager.tsx`, `frontend-modern/src/components/Settings/apiTokenManagerModel.ts`, `frontend-modern/src/components/Settings/useAPITokenManagerState.ts`, `internal/api/security.go`, `internal/api/security_tokens.go`, and `internal/api/system_settings.go` boundary.
-5. Change security/privacy settings presentation through the shared `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx`, `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx`, and `frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx` boundary.
+5. Change security/privacy settings presentation through the shared `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx`, `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx`, `frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx`, `frontend-modern/src/components/Settings/QuickSecuritySetup.tsx`, `frontend-modern/src/components/Settings/SecurityPostureSummary.tsx`, `frontend-modern/src/components/Settings/SSOProviderTypeIcon.tsx`, `frontend-modern/src/utils/securityAuthPresentation.ts`, `frontend-modern/src/utils/securityScorePresentation.ts`, `frontend-modern/src/utils/auditLogPresentation.ts`, and `frontend-modern/src/utils/auditWebhookPresentation.ts` boundary.
 
 ## Forbidden Paths
 
@@ -107,6 +114,17 @@ That shared token-management boundary now also includes
 `frontend-modern/src/utils/apiTokenPresentation.ts`, so API-token load,
 generate, and revoke errors stay on one governed customer-facing wording path
 instead of drifting back into hook-local notification strings.
+That same governed settings trust boundary now also includes
+`frontend-modern/src/components/Settings/QuickSecuritySetup.tsx`,
+`frontend-modern/src/components/Settings/SecurityPostureSummary.tsx`,
+`frontend-modern/src/components/Settings/SSOProviderTypeIcon.tsx`,
+`frontend-modern/src/utils/securityAuthPresentation.ts`,
+`frontend-modern/src/utils/securityScorePresentation.ts`,
+`frontend-modern/src/utils/auditLogPresentation.ts`, and
+`frontend-modern/src/utils/auditWebhookPresentation.ts`, so auth bootstrap
+copy, security posture scoring, audit-log wording, audit-webhook wording, and
+SSO provider-type presentation remain part of the governed security trust
+surface instead of floating as unowned settings helpers.
 That same shared security transport boundary must stay under explicit proof
 routing on both sides: `frontend-modern/src/api/security.ts`,
 `internal/api/security.go`, `internal/api/security_tokens.go`, and

@@ -3287,11 +3287,18 @@
         "frontend-modern/src/components/Settings/APITokenManager.tsx",
         "frontend-modern/src/components/Settings/apiTokenManagerModel.ts",
         "frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx",
+        "frontend-modern/src/components/Settings/QuickSecuritySetup.tsx",
         "frontend-modern/src/components/Settings/SecurityAuthPanel.tsx",
         "frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx",
+        "frontend-modern/src/components/Settings/SecurityPostureSummary.tsx",
+        "frontend-modern/src/components/Settings/SSOProviderTypeIcon.tsx",
         "frontend-modern/src/components/Settings/useAPITokenManagerState.ts",
         "frontend-modern/src/components/Settings/useSystemSettingsState.ts",
         "frontend-modern/src/utils/apiTokenPresentation.ts",
+        "frontend-modern/src/utils/auditLogPresentation.ts",
+        "frontend-modern/src/utils/auditWebhookPresentation.ts",
+        "frontend-modern/src/utils/securityAuthPresentation.ts",
+        "frontend-modern/src/utils/securityScorePresentation.ts",
         "internal/api/security.go",
         "internal/api/security_tokens.go",
         "internal/api/system_settings.go",
@@ -3354,6 +3361,31 @@
               "frontend-modern/src/components/Settings/__tests__/SecurityPostureSummary.test.tsx",
               "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
               "frontend-modern/src/stores/__tests__/systemSettings.test.ts"
+            ]
+          },
+          {
+            "id": "security-settings-presentation-helpers",
+            "label": "security settings presentation helper proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/components/Settings/QuickSecuritySetup.tsx",
+              "frontend-modern/src/components/Settings/SecurityPostureSummary.tsx",
+              "frontend-modern/src/components/Settings/SSOProviderTypeIcon.tsx",
+              "frontend-modern/src/utils/auditLogPresentation.ts",
+              "frontend-modern/src/utils/auditWebhookPresentation.ts",
+              "frontend-modern/src/utils/securityAuthPresentation.ts",
+              "frontend-modern/src/utils/securityScorePresentation.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/components/Settings/__tests__/SecurityPostureSummary.test.tsx",
+              "frontend-modern/src/components/Settings/__tests__/settingsReadOnlyPanels.test.tsx",
+              "frontend-modern/src/utils/__tests__/auditLogPresentation.test.ts",
+              "frontend-modern/src/utils/__tests__/auditWebhookPresentation.test.ts",
+              "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
+              "frontend-modern/src/utils/__tests__/securityAuthPresentation.test.ts",
+              "frontend-modern/src/utils/__tests__/securityScorePresentation.test.ts"
             ]
           },
           {
