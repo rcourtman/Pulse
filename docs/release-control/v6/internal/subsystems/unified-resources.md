@@ -89,6 +89,7 @@ cross-source deduplication.
 67. `frontend-modern/src/utils/resourceTypePresentation.ts`
 68. `frontend-modern/src/utils/resourceIdentity.ts`
 69. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerIdentityModel.ts`
+70. `frontend-modern/src/hooks/useDashboardTrends.ts`
 
 ## Shared Boundaries
 
@@ -190,9 +191,9 @@ explanations. When a grouped monitored system resolves to warning, offline, or
 unknown, unified resources must expose the shared summary plus structured
 degraded-status reasons derived from the grouped top-level resources and their
 source freshness state, including which source or surface degraded and the
-corresponding last-seen timestamp. Billing and support surfaces must consume
-that shared reason list instead of trying to infer why a fresh overall
-`last_seen` can still coincide with warning status.
+canonical degraded-signal `reported_at` timestamp. Billing and support
+surfaces must consume that shared reason list instead of trying to infer why a
+fresh overall `last_seen` can still coincide with warning status.
 That same status contract must choose the canonical monitored-system runtime
 status from the actual grouped top-level resources rather than from an
 implicit `unknown` baseline. Severity ordering is canonical: `offline`
@@ -261,6 +262,14 @@ shape: `InfrastructureSummary.tsx` is the render shell,
 org-scope lifecycle, and focused-summary state, and
 `infrastructureSummaryModel.ts` owns chart matching, focused-summary display
 selection, empty-state wording, and summary-series/metric derivation.
+The dashboard overview trend hook now follows that same canonical consumer
+contract for infrastructure sparklines: `frontend-modern/src/hooks/useDashboardTrends.ts`
+must consume the infrastructure summary chart cache and shared unified-resource
+series matching logic instead of issuing bespoke per-resource
+`/api/metrics-store/history` fetches for top-CPU and top-memory cards. That
+keeps dashboard summary sparklines aligned with canonical resource identity
+matching, agent-facet fallback behavior, and first-sample empty-state semantics
+already owned by the infrastructure summary surface.
 The backend AI and Patrol context renderers now derive their canonical change
 kind, source type, source adapter, actor, reason, and related-resource
 fragments from `internal/unifiedresources/change_presentation.go`, so the

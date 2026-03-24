@@ -584,13 +584,13 @@ func TestContract_MonitoredSystemLedgerJSONSnapshot(t *testing.T) {
 					Summary: "At least one included source is stale, so Pulse marks this monitored system as warning.",
 					Reasons: []MonitoredSystemLedgerStatusReason{
 						{
-							Kind:     "source-stale",
-							Name:     "Tower",
-							Type:     "host",
-							Source:   "agent",
-							Status:   "stale",
-							LastSeen: "2026-03-18T17:25:00Z",
-							Summary:  "Agent data for Tower is stale (last reported 2026-03-18T17:25:00Z).",
+							Kind:       "source-stale",
+							Name:       "Tower",
+							Type:       "host",
+							Source:     "agent",
+							Status:     "stale",
+							ReportedAt: "2026-03-18T17:25:00Z",
+							Summary:    "Agent data for Tower is stale (last reported 2026-03-18T17:25:00Z).",
 						},
 					},
 				},
@@ -644,7 +644,7 @@ func TestContract_MonitoredSystemLedgerJSONSnapshot(t *testing.T) {
 							"type":"host",
 							"source":"agent",
 							"status":"stale",
-							"last_seen":"2026-03-18T17:25:00Z",
+							"reported_at":"2026-03-18T17:25:00Z",
 							"summary":"Agent data for Tower is stale (last reported 2026-03-18T17:25:00Z)."
 						}
 					]

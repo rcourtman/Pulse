@@ -85,16 +85,16 @@ func TestNormalizeStatus(t *testing.T) {
 	}
 }
 
-func TestFormatLastSeen(t *testing.T) {
+func TestFormatMonitoredSystemTime(t *testing.T) {
 	zero := time.Time{}
-	if got := formatLastSeen(zero); got != "" {
-		t.Errorf("formatLastSeen(zero) = %q, want empty", got)
+	if got := formatMonitoredSystemTime(zero); got != "" {
+		t.Errorf("formatMonitoredSystemTime(zero) = %q, want empty", got)
 	}
 
 	ts := time.Date(2025, 6, 15, 10, 30, 0, 0, time.UTC)
-	got := formatLastSeen(ts)
+	got := formatMonitoredSystemTime(ts)
 	if got != "2025-06-15T10:30:00Z" {
-		t.Errorf("formatLastSeen = %q, want 2025-06-15T10:30:00Z", got)
+		t.Errorf("formatMonitoredSystemTime = %q, want 2025-06-15T10:30:00Z", got)
 	}
 }
 
@@ -103,13 +103,13 @@ func TestMonitoredSystemLedgerStatusExplanation(t *testing.T) {
 		Summary: "At least one included source is stale, so Pulse marks this monitored system as warning.",
 		Reasons: []unifiedresources.MonitoredSystemStatusReason{
 			{
-				Kind:     "source-stale",
-				Name:     "Tower",
-				Type:     "host",
-				Source:   "agent",
-				Status:   "stale",
-				LastSeen: time.Date(2026, 3, 23, 11, 55, 0, 0, time.UTC),
-				Summary:  "Agent data for Tower is stale (last reported 2026-03-23T11:55:00Z).",
+				Kind:       "source-stale",
+				Name:       "Tower",
+				Type:       "host",
+				Source:     "agent",
+				Status:     "stale",
+				ReportedAt: time.Date(2026, 3, 23, 11, 55, 0, 0, time.UTC),
+				Summary:    "Agent data for Tower is stale (last reported 2026-03-23T11:55:00Z).",
 			},
 		},
 	}, "warning")
@@ -122,8 +122,8 @@ func TestMonitoredSystemLedgerStatusExplanation(t *testing.T) {
 	if got.Reasons[0].Status != "stale" {
 		t.Fatalf("expected stale status reason, got %+v", got.Reasons[0])
 	}
-	if got.Reasons[0].LastSeen != "2026-03-23T11:55:00Z" {
-		t.Fatalf("expected formatted reason last_seen, got %+v", got.Reasons[0])
+	if got.Reasons[0].ReportedAt != "2026-03-23T11:55:00Z" {
+		t.Fatalf("expected formatted reason reported_at, got %+v", got.Reasons[0])
 	}
 }
 
@@ -134,7 +134,17 @@ func TestMonitoredSystemLedgerEntryDoesNotEmitCompatibilityAliases(t *testing.T)
 		Status: unifiedresources.StatusWarning,
 		StatusExplanation: unifiedresources.MonitoredSystemStatusExplanation{
 			Summary: "At least one included source is stale, so Pulse marks this monitored system as warning.",
-			Reasons: []unifiedresources.MonitoredSystemStatusReason{},
+			Reasons: []unifiedresources.MonitoredSystemStatusReason{
+				{
+					Kind:       "source-stale",
+					Name:       "Tower",
+					Type:       "host",
+					Source:     "agent",
+					Status:     "stale",
+					ReportedAt: time.Date(2026, 3, 23, 11, 55, 0, 0, time.UTC),
+					Summary:    "Agent data for Tower is stale (last reported 2026-03-23T11:55:00Z).",
+				},
+			},
 		},
 		LastSeen: time.Date(2026, 3, 23, 12, 5, 0, 0, time.UTC),
 		LatestIncludedSignal: unifiedresources.MonitoredSystemLatestSignal{
@@ -170,6 +180,24 @@ func TestMonitoredSystemLedgerEntryDoesNotEmitCompatibilityAliases(t *testing.T)
 	}
 	if _, ok := decoded["last_seen"]; ok {
 		t.Fatalf("expected last_seen to be absent, got %+v", decoded)
+	}
+	statusExplanation, ok := decoded["status_explanation"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected status_explanation object, got %+v", decoded)
+	}
+	reasons, ok := statusExplanation["reasons"].([]any)
+	if !ok || len(reasons) != 1 {
+		t.Fatalf("expected one status reason, got %+v", statusExplanation)
+	}
+	reason, ok := reasons[0].(map[string]any)
+	if !ok {
+		t.Fatalf("expected status reason object, got %+v", reasons[0])
+	}
+	if _, ok := reason["last_seen"]; ok {
+		t.Fatalf("expected nested reason last_seen to be absent, got %+v", reason)
+	}
+	if reason["reported_at"] != "2026-03-23T11:55:00Z" {
+		t.Fatalf("expected nested reason reported_at, got %+v", reason)
 	}
 }
 

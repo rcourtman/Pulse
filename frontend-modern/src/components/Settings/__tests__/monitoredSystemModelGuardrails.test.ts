@@ -252,9 +252,11 @@ describe('monitored-system model guardrails', () => {
     expect(monitoredSystemLedgerApiSource).toContain('getMonitoredSystemExplanationFallbackSummary');
     expect(monitoredSystemLedgerApiSource).toContain('type MonitoredSystemLedgerRawEntry =');
     expect(monitoredSystemLedgerApiSource).toContain('systems?: MonitoredSystemLedgerRawEntry[];');
+    expect(monitoredSystemLedgerApiSource).toContain('reported_at: string;');
+    expect(monitoredSystemLedgerApiSource).not.toContain('last_seen: string;');
     expect(monitoredSystemLedgerApiSource).not.toContain('latest_included_signal_at?: string;');
     expect(monitoredSystemLedgerApiSource).not.toContain('latest_included_signal_source?: string;');
-    expect(monitoredSystemLedgerApiSource).not.toContain('last_seen?: string;');
+    expect(monitoredSystemLedgerApiSource).toContain('last_seen?: string;');
     expect(monitoredSystemLedgerApiSource).not.toContain(
       'All included top-level collection paths currently report online status.',
     );

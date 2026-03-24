@@ -382,8 +382,8 @@ That same shared `internal/api/` dependency now also assumes monitored-system
 ledger status details stay canonical and source-aware: storage- or recovery-
 adjacent consumers may read the ledger’s nested status explanation, but they
 must preserve the backend-provided reason list for stale or offline grouped
-sources instead of reducing those mixed fresh/stale system states back to a
-generic label.
+sources, including the canonical `reported_at` timestamp, instead of reducing
+those mixed fresh/stale system states back to a generic label.
 That same ledger dependency also treats the canonical `latest_included_signal`
 object as the freshest grouped observation. Storage- or recovery-adjacent
 consumers must not present that data with bare single-source `Last Seen`

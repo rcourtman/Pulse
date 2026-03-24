@@ -332,8 +332,8 @@ func TestMonitoredSystemsExplainsStaleGroupedSourceWhileLastSeenStaysFresh(t *te
 	if reason.Status != "stale" {
 		t.Fatalf("expected stale reason status, got %+v", reason)
 	}
-	if !reason.LastSeen.Equal(agentResource.LastSeen) {
-		t.Fatalf("expected stale reason last_seen %s, got %s", agentResource.LastSeen, reason.LastSeen)
+	if !reason.ReportedAt.Equal(agentResource.LastSeen) {
+		t.Fatalf("expected stale reason reported_at %s, got %s", agentResource.LastSeen, reason.ReportedAt)
 	}
 	if reason.Summary == "" {
 		t.Fatalf("expected stale reason summary, got %+v", reason)

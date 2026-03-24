@@ -41,7 +41,7 @@ export interface MonitoredSystemLedgerStatusReason {
   type: string;
   source: string;
   status: MonitoredSystemLedgerStatusReasonStatus;
-  last_seen: string;
+  reported_at: string;
   summary: string;
 }
 
@@ -72,7 +72,7 @@ type MonitoredSystemLedgerRawEntry = Omit<
   MonitoredSystemLedgerEntry,
   'status_explanation' | 'latest_included_signal' | 'explanation'
 > & {
-  status_explanation?: MonitoredSystemLedgerStatusExplanation;
+  status_explanation?: MonitoredSystemLedgerRawStatusExplanation;
   latest_included_signal?: MonitoredSystemLedgerLatestSignal;
   explanation?: MonitoredSystemLedgerExplanation;
 };
@@ -80,6 +80,17 @@ type MonitoredSystemLedgerRawEntry = Omit<
 type MonitoredSystemLedgerRawResponse = Omit<MonitoredSystemLedgerResponse, 'systems'> & {
   systems?: MonitoredSystemLedgerRawEntry[];
 };
+
+interface MonitoredSystemLedgerRawStatusExplanation
+  extends Omit<MonitoredSystemLedgerStatusExplanation, 'reasons'> {
+  reasons?: MonitoredSystemLedgerRawStatusReason[];
+}
+
+interface MonitoredSystemLedgerRawStatusReason
+  extends Omit<MonitoredSystemLedgerStatusReason, 'reported_at'> {
+  reported_at?: string;
+  last_seen?: string;
+}
 
 export class MonitoredSystemLedgerAPI {
   private static readonly baseUrl = '/api/license/monitored-system-ledger';
@@ -135,12 +146,16 @@ function normalizeMonitoredSystemLedgerStatus(
 }
 
 function normalizeMonitoredSystemLedgerStatusReason(
-  reason: MonitoredSystemLedgerStatusReason,
+  reason: MonitoredSystemLedgerRawStatusReason,
 ): MonitoredSystemLedgerStatusReason {
   return {
-    ...reason,
+    kind: reason.kind,
+    name: reason.name,
+    type: reason.type,
+    source: reason.source,
     status: normalizeMonitoredSystemLedgerStatusReasonStatus(reason.status),
-    last_seen: reason.last_seen ?? '',
+    reported_at: reason.reported_at ?? reason.last_seen ?? '',
+    summary: reason.summary,
   };
 }
 

@@ -52,13 +52,13 @@ type MonitoredSystemStatusExplanation struct {
 // MonitoredSystemStatusReason captures one canonical degraded-status signal
 // that contributed to the monitored-system runtime status.
 type MonitoredSystemStatusReason struct {
-	Kind     string
-	Name     string
-	Type     string
-	Source   string
-	Status   string
-	LastSeen time.Time
-	Summary  string
+	Kind       string
+	Name       string
+	Type       string
+	Source     string
+	Status     string
+	ReportedAt time.Time
+	Summary    string
 }
 
 // MonitoredSystemLatestSignal captures the freshest included grouped signal
@@ -512,8 +512,8 @@ func monitoredSystemStatusReasons(resources []*Resource) []MonitoredSystemStatus
 		if reasons[i].Source != reasons[j].Source {
 			return reasons[i].Source < reasons[j].Source
 		}
-		if !reasons[i].LastSeen.Equal(reasons[j].LastSeen) {
-			return reasons[i].LastSeen.Before(reasons[j].LastSeen)
+		if !reasons[i].ReportedAt.Equal(reasons[j].ReportedAt) {
+			return reasons[i].ReportedAt.Before(reasons[j].ReportedAt)
 		}
 		return reasons[i].Summary < reasons[j].Summary
 	})
@@ -555,13 +555,13 @@ func monitoredSystemResourceStatusReasons(resource *Resource) []MonitoredSystemS
 				continue
 			}
 			reasons = append(reasons, MonitoredSystemStatusReason{
-				Kind:     "source-" + normalizedStatus,
-				Name:     name,
-				Type:     resourceType,
-				Source:   string(source),
-				Status:   normalizedStatus,
-				LastSeen: sourceStatus.LastSeen,
-				Summary:  monitoredSystemSourceStatusReasonSummary(name, source, normalizedStatus, sourceStatus.LastSeen),
+				Kind:       "source-" + normalizedStatus,
+				Name:       name,
+				Type:       resourceType,
+				Source:     string(source),
+				Status:     normalizedStatus,
+				ReportedAt: sourceStatus.LastSeen,
+				Summary:    monitoredSystemSourceStatusReasonSummary(name, source, normalizedStatus, sourceStatus.LastSeen),
 			})
 		}
 	}
@@ -581,13 +581,13 @@ func monitoredSystemResourceStatusReasons(resource *Resource) []MonitoredSystemS
 	}
 	return []MonitoredSystemStatusReason{
 		{
-			Kind:     "surface-" + normalizedStatus,
-			Name:     name,
-			Type:     resourceType,
-			Source:   source,
-			Status:   normalizedStatus,
-			LastSeen: resource.LastSeen,
-			Summary:  monitoredSystemSurfaceStatusReasonSummary(name, resourceType, source, normalizedStatus, resource.LastSeen),
+			Kind:       "surface-" + normalizedStatus,
+			Name:       name,
+			Type:       resourceType,
+			Source:     source,
+			Status:     normalizedStatus,
+			ReportedAt: resource.LastSeen,
+			Summary:    monitoredSystemSurfaceStatusReasonSummary(name, resourceType, source, normalizedStatus, resource.LastSeen),
 		},
 	}
 }
@@ -650,12 +650,12 @@ func monitoredSystemMixedStateStatusSummary(
 	}
 
 	degraded := reasons[0]
-	if degraded.LastSeen.IsZero() {
+	if degraded.ReportedAt.IsZero() {
 		return ""
 	}
 
 	latest := monitoredSystemLatestOnlineObservation(resources)
-	if latest.LastSeen.IsZero() || !latest.LastSeen.After(degraded.LastSeen) {
+	if latest.LastSeen.IsZero() || !latest.LastSeen.After(degraded.ReportedAt) {
 		return ""
 	}
 
@@ -798,17 +798,17 @@ func monitoredSystemStatusReasonClause(reason MonitoredSystemStatusReason) strin
 	sourceLabel := monitoredSystemStatusSourceLabel(reason.Source)
 	switch reason.Kind {
 	case "source-stale":
-		return sourceLabel + " data for " + subject + " is stale (last reported " + reason.LastSeen.UTC().Format(time.RFC3339) + ")"
+		return sourceLabel + " data for " + subject + " is stale (last reported " + reason.ReportedAt.UTC().Format(time.RFC3339) + ")"
 	case "source-offline":
-		return sourceLabel + " data for " + subject + " is offline or disconnected" + monitoredSystemStatusLastSeenSuffix(reason.LastSeen)
+		return sourceLabel + " data for " + subject + " is offline or disconnected" + monitoredSystemStatusReportedAtSuffix(reason.ReportedAt)
 	case "source-unknown":
-		return sourceLabel + " data for " + subject + " does not report a canonical status yet" + monitoredSystemStatusLastSeenSuffix(reason.LastSeen)
+		return sourceLabel + " data for " + subject + " does not report a canonical status yet" + monitoredSystemStatusReportedAtSuffix(reason.ReportedAt)
 	case "surface-stale":
-		return monitoredSystemGroupingTypeLabel(reason.Type) + " view for " + subject + " currently reports warning status from " + sourceLabel + monitoredSystemStatusLastSeenSuffix(reason.LastSeen)
+		return monitoredSystemGroupingTypeLabel(reason.Type) + " view for " + subject + " currently reports warning status from " + sourceLabel + monitoredSystemStatusReportedAtSuffix(reason.ReportedAt)
 	case "surface-offline":
-		return monitoredSystemGroupingTypeLabel(reason.Type) + " view for " + subject + " currently reports offline status from " + sourceLabel + monitoredSystemStatusLastSeenSuffix(reason.LastSeen)
+		return monitoredSystemGroupingTypeLabel(reason.Type) + " view for " + subject + " currently reports offline status from " + sourceLabel + monitoredSystemStatusReportedAtSuffix(reason.ReportedAt)
 	case "surface-unknown":
-		return monitoredSystemGroupingTypeLabel(reason.Type) + " view for " + subject + " currently reports unknown status from " + sourceLabel + monitoredSystemStatusLastSeenSuffix(reason.LastSeen)
+		return monitoredSystemGroupingTypeLabel(reason.Type) + " view for " + subject + " currently reports unknown status from " + sourceLabel + monitoredSystemStatusReportedAtSuffix(reason.ReportedAt)
 	default:
 		clause := strings.TrimSpace(reason.Summary)
 		clause = strings.TrimSuffix(clause, ".")
@@ -816,11 +816,11 @@ func monitoredSystemStatusReasonClause(reason MonitoredSystemStatusReason) strin
 	}
 }
 
-func monitoredSystemStatusLastSeenSuffix(lastSeen time.Time) string {
-	if lastSeen.IsZero() {
+func monitoredSystemStatusReportedAtSuffix(reportedAt time.Time) string {
+	if reportedAt.IsZero() {
 		return ""
 	}
-	return " (last reported " + lastSeen.UTC().Format(time.RFC3339) + ")"
+	return " (last reported " + reportedAt.UTC().Format(time.RFC3339) + ")"
 }
 
 func monitoredSystemStatusPriority(status ResourceStatus) int {

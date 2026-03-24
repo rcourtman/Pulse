@@ -35,13 +35,13 @@ type MonitoredSystemLedgerStatusExplanation struct {
 }
 
 type MonitoredSystemLedgerStatusReason struct {
-	Kind     string `json:"kind"`
-	Name     string `json:"name"`
-	Type     string `json:"type"`
-	Source   string `json:"source"`
-	Status   string `json:"status"`
-	LastSeen string `json:"last_seen"`
-	Summary  string `json:"summary"`
+	Kind       string `json:"kind"`
+	Name       string `json:"name"`
+	Type       string `json:"type"`
+	Source     string `json:"source"`
+	Status     string `json:"status"`
+	ReportedAt string `json:"reported_at"`
+	Summary    string `json:"summary"`
 }
 
 type MonitoredSystemLedgerExplanation struct {
@@ -177,13 +177,13 @@ func monitoredSystemLedgerStatusExplanation(
 	reasons := make([]MonitoredSystemLedgerStatusReason, 0, len(explanation.Reasons))
 	for _, reason := range explanation.Reasons {
 		reasons = append(reasons, MonitoredSystemLedgerStatusReason{
-			Kind:     reason.Kind,
-			Name:     reason.Name,
-			Type:     reason.Type,
-			Source:   reason.Source,
-			Status:   normalizeMonitoredSystemLedgerReasonStatus(reason.Status),
-			LastSeen: formatLastSeen(reason.LastSeen),
-			Summary:  reason.Summary,
+			Kind:       reason.Kind,
+			Name:       reason.Name,
+			Type:       reason.Type,
+			Source:     reason.Source,
+			Status:     normalizeMonitoredSystemLedgerReasonStatus(reason.Status),
+			ReportedAt: formatMonitoredSystemTime(reason.ReportedAt),
+			Summary:    reason.Summary,
 		})
 	}
 
@@ -236,11 +236,11 @@ func monitoredSystemLedgerLatestSignal(
 		Name:   signal.Name,
 		Type:   signal.Type,
 		Source: normalizeMonitoredSystemLedgerSource(signal.Source),
-		At:     formatLastSeen(signal.At),
+		At:     formatMonitoredSystemTime(signal.At),
 	}
 }
 
-func formatLastSeen(t time.Time) string {
+func formatMonitoredSystemTime(t time.Time) string {
 	if t.IsZero() {
 		return ""
 	}

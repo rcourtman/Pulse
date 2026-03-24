@@ -236,7 +236,8 @@ operators can interpret warning, offline, and unknown states without inventing
 local status semantics.
 Those status details are now structured as well: lifecycle-adjacent consumers
 must preserve the canonical reason list from the ledger read so operators can
-see which grouped source or surface degraded and when it last reported,
+see which grouped source or surface degraded and its canonical `reported_at`
+timestamp,
 instead of only seeing a generic warning/offline paragraph.
 That same ledger read also treats the canonical `latest_included_signal`
 object as the freshest included grouped observation. Lifecycle-adjacent

@@ -181,7 +181,7 @@ describe('MonitoredSystemLedgerPanel', () => {
                 type: 'pbs-server',
                 source: 'pbs',
                 status: 'offline',
-                last_seen: '2026-01-01T23:55:00Z',
+                reported_at: '2026-01-01T23:55:00Z',
                 summary:
                   'PBS data for server-b is offline or disconnected (last reported 2026-01-01T23:55:00Z).',
               },
