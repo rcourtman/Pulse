@@ -169,12 +169,22 @@ browser runtime, cover both stream-only reconnect degradation and full backend
 loss, bounce the real backend through the launcher contract when needed, and
 prove that the shell degrades and recovers through the proxy instead of
 relying on backend-only API checks that miss browser/runtime drift.
+That same managed browser proof pack must also keep the desktop Recovery page
+layout guard on the canonical entrypoint, so `dev:verify` catches right-edge
+history-table overflow regressions introduced by more human-readable subject
+labels instead of leaving that check as a hidden one-off Playwright command.
 That same launcher boundary now also owns the one-command verification entry
 point for that proof. `./scripts/hot-dev-bg.sh verify` must prepare a coherent
 managed runtime, run the canonical browser recovery proof with the managed dev
 credentials and browser entrypoint defaults, and fail with ownership or health
 diagnostics instead of leaving operators to remember the exact Playwright
 command and env combination by hand.
+That same takeover path must remain safe on the default macOS Bash runtime and
+must not tear down the operator's current shell lineage while reclaiming a
+foreground `hot-dev.sh` session. When the canonical ports are already owned by
+that foreground session, the managed wrapper should reclaim the occupied
+listener processes without relying on Bash-4-only shell features or killing
+the terminal that invoked the takeover.
 That same launcher boundary now also owns the canonical repo-root developer
 entry surface. `package.json` must expose the managed runtime as the default
 local dev path, including explicit status, log, stop, backend-restart, and

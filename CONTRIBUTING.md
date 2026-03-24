@@ -83,7 +83,7 @@ examples where possible.
 - Runtime logs: `npm run dev:logs`
 - Managed restart: `npm run dev:restart`
 - Managed backend restart: `npm run dev:backend-restart`
-- Browser recovery proof: `npm run dev:verify`
+- Browser proof pack: `npm run dev:verify`
 - Foreground managed launcher: `npm run dev:foreground`
 - Frontend-only escape hatch: `cd frontend-modern && npm run dev:frontend-only`
 - Tests: `npm run test`

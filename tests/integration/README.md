@@ -40,6 +40,13 @@ End-to-end Playwright tests that validate critical user flows against a running 
   - Replays verified Stripe webhook events into control plane
   - Asserts tenant activation after checkout event processing
   - Asserts tenant cancellation after subscription deletion event processing
+- `tests/16-dev-runtime-recovery.spec.ts` — managed browser runtime proof:
+  - Attaches Playwright to the canonical `5173` browser entrypoint
+  - Restarts the managed backend and proves the browser shell recovers through the proxy
+- `tests/17-recovery-layout.spec.ts` — desktop Recovery layout regression guard:
+  - Mocks a realistic Recovery dataset with human-readable subject labels
+  - Proves the focused history table fits the desktop wrapper without horizontal overflow
+  - Proves the `Outcome` column stays visible at the right edge
 
 ## Running Tests
 
@@ -133,14 +140,14 @@ Equivalent direct proof command from the integration harness:
 cd tests/integration
 PULSE_E2E_USE_HOT_DEV=1 \
 PULSE_E2E_SKIP_PLAYWRIGHT_INSTALL=1 \
-npm test -- tests/16-dev-runtime-recovery.spec.ts --project=chromium
+npm test -- tests/16-dev-runtime-recovery.spec.ts tests/17-recovery-layout.spec.ts --project=chromium
 ```
 
 This mode attaches Playwright to the canonical dev browser entrypoint on `http://127.0.0.1:5173`, uses `scripts/hot-dev-bg.sh` as the runtime control surface, and writes browser runtime connection state for Playwright instead of targeting the backend port directly.
 
 If the managed runtime is not already running, the harness starts it. If you need the harness to reclaim existing unmanaged `5173`/`7655` listeners first, add `PULSE_E2E_HOT_DEV_TAKEOVER=1`.
 
-The managed recovery proof bounces the real backend through `npm run dev:backend-restart` and verifies that the browser shell reports the outage and then recovers through the proxy. When the harness attaches to an already-running managed dev session, `posttest` leaves that runtime running.
+The managed proof pack bounces the real backend through `npm run dev:backend-restart`, verifies that the browser shell reports the outage and then recovers through the proxy, and keeps a desktop Recovery layout guard on the same canonical browser entrypoint. When the harness attaches to an already-running managed dev session, `posttest` leaves that runtime running.
 
 For deterministic paid-feature runs against an existing instance, provide one of:
 - `PULSE_E2E_BILLING_STATE_PATH=/absolute/path/to/billing.json` to let the harness write the billing state file directly.

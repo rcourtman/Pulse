@@ -76,6 +76,67 @@ process_parent_id() {
   ps -o ppid= -p "${pid}" 2>/dev/null | tr -d '[:space:]'
 }
 
+array_contains() {
+  local needle="${1:-}"
+  shift || true
+
+  local item
+  for item in "$@"; do
+    [[ "${item}" == "${needle}" ]] && return 0
+  done
+
+  return 1
+}
+
+safe_kill_target() {
+  local signal="${1:-TERM}"
+  local target_pgid="${2:-}"
+  local target_pid="${3:-}"
+  local current_pgid=""
+
+  if [[ -n "${target_pgid}" ]]; then
+    current_pgid="$(process_group_id "$$")"
+    if [[ -n "${current_pgid}" && "${target_pgid}" != "${current_pgid}" ]]; then
+      kill "-${signal}" "-${target_pgid}" 2>/dev/null && return 0
+    fi
+  fi
+
+  [[ -n "${target_pid}" ]] || return 1
+  kill "-${signal}" "${target_pid}" 2>/dev/null
+}
+
+current_shell_has_ancestor() {
+  local target_pid="${1:-}"
+  local current_pid="$$"
+  local parent_pid
+
+  [[ -n "${target_pid}" ]] || return 1
+
+  while [[ -n "${current_pid}" && "${current_pid}" != "1" ]]; do
+    parent_pid="$(process_parent_id "${current_pid}")"
+    [[ -n "${parent_pid}" && "${parent_pid}" != "${current_pid}" ]] || break
+    if [[ "${parent_pid}" == "${target_pid}" ]]; then
+      return 0
+    fi
+    current_pid="${parent_pid}"
+  done
+
+  return 1
+}
+
+takeover_should_signal_listeners_only() {
+  local target_pgid="${1:-}"
+  local target_pid="${2:-}"
+  local current_pgid=""
+
+  current_pgid="$(process_group_id "$$")"
+  if [[ -n "${target_pgid}" && -n "${current_pgid}" && "${target_pgid}" == "${current_pgid}" ]]; then
+    return 0
+  fi
+
+  current_shell_has_ancestor "${target_pid}"
+}
+
 pid_is_managed() {
   local pid="$1"
   local session_pid="$2"
@@ -251,24 +312,31 @@ hot_dev_root_pids() {
 stop_hot_dev_sessions() {
   local signal="${1:-TERM}"
   local root_pid root_pgid root_command target_key
-  declare -A seen=()
+  local seen=()
 
   while IFS= read -r root_pid; do
     [[ -n "${root_pid}" ]] || continue
     root_pgid="$(process_group_id "${root_pid}")"
     if [[ -n "${root_pgid}" ]]; then
+      if takeover_should_signal_listeners_only "${root_pgid}" "${root_pid}"; then
+        continue
+      fi
       target_key="pgid:${root_pgid}"
-      [[ -z "${seen[${target_key}]:-}" ]] || continue
-      seen["${target_key}"]=1
+      if array_contains "${target_key}" "${seen[@]-}"; then
+        continue
+      fi
+      seen+=("${target_key}")
       root_command="$(process_command "${root_pid}")"
       log "Takeover sending ${signal} to hot-dev session group ${root_pgid} rooted at pid=${root_pid} cmd=${root_command:-unknown}"
-      kill "-${signal}" "-${root_pgid}" 2>/dev/null || kill "-${signal}" "${root_pid}" 2>/dev/null || true
+      safe_kill_target "${signal}" "${root_pgid}" "${root_pid}" || true
       continue
     fi
 
     target_key="pid:${root_pid}"
-    [[ -z "${seen[${target_key}]:-}" ]] || continue
-    seen["${target_key}"]=1
+    if array_contains "${target_key}" "${seen[@]-}"; then
+      continue
+    fi
+    seen+=("${target_key}")
     root_command="$(process_command "${root_pid}")"
     log "Takeover sending ${signal} to hot-dev root pid=${root_pid} cmd=${root_command:-unknown}"
     kill "-${signal}" "${root_pid}" 2>/dev/null || true
@@ -295,7 +363,7 @@ stop_launchd_hot_dev_job() {
 stop_takeover_targets() {
   local signal="${1:-TERM}"
   local port listener_pid ancestor_pid target_key target_pid target_pgid target_command
-  declare -A seen=()
+  local seen=()
 
   for port in "${FRONTEND_DEV_PORT}" "${PULSE_DEV_API_PORT}"; do
     while IFS= read -r listener_pid; do
@@ -305,18 +373,24 @@ stop_takeover_targets() {
       if [[ -n "${ancestor_pid}" ]]; then
         target_pgid="$(process_group_id "${ancestor_pid}")"
         [[ -n "${target_pgid}" ]] || continue
-        target_key="pgid:${target_pgid}"
-        [[ -z "${seen[${target_key}]:-}" ]] || continue
-        seen["${target_key}"]=1
-        target_command="$(process_command "${ancestor_pid}")"
-        log "Takeover sending ${signal} to hot-dev process group ${target_pgid} rooted at pid=${ancestor_pid} cmd=${target_command:-unknown}"
-        kill "-${signal}" "-${target_pgid}" 2>/dev/null || kill "-${signal}" "${ancestor_pid}" 2>/dev/null || true
-        continue
+        if ! takeover_should_signal_listeners_only "${target_pgid}" "${ancestor_pid}"; then
+          target_key="pgid:${target_pgid}"
+          if array_contains "${target_key}" "${seen[@]-}"; then
+            continue
+          fi
+          seen+=("${target_key}")
+          target_command="$(process_command "${ancestor_pid}")"
+          log "Takeover sending ${signal} to hot-dev process group ${target_pgid} rooted at pid=${ancestor_pid} cmd=${target_command:-unknown}"
+          safe_kill_target "${signal}" "${target_pgid}" "${ancestor_pid}" || true
+          continue
+        fi
       fi
 
       target_key="pid:${listener_pid}"
-      [[ -z "${seen[${target_key}]:-}" ]] || continue
-      seen["${target_key}"]=1
+      if array_contains "${target_key}" "${seen[@]-}"; then
+        continue
+      fi
+      seen+=("${target_key}")
       target_command="$(process_command "${listener_pid}")"
       log "Takeover sending ${signal} to listener pid=${listener_pid} cmd=${target_command:-unknown}"
       kill "-${signal}" "${listener_pid}" 2>/dev/null || true

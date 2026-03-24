@@ -197,6 +197,48 @@ EOF
   assert_contains "default verify proof keeps chromium project pin" "${output}" "--project=chromium"
 }
 
+test_takeover_avoids_killing_current_shell_lineage() {
+  local output
+  output="$(
+    HOT_DEV_BG_PATH="${HOT_DEV_BG}" \
+    bash -lc '
+      source "${HOT_DEV_BG_PATH}"
+      process_group_id() {
+        case "${1:-}" in
+          "$$"|900)
+            printf "4242\n"
+            ;;
+          *)
+            printf "9999\n"
+            ;;
+        esac
+      }
+      process_parent_id() {
+        case "${1:-}" in
+          "$$")
+            printf "900\n"
+            ;;
+          *)
+            printf "1\n"
+            ;;
+        esac
+      }
+      hot_dev_root_pids() { printf "900\n"; }
+      listener_pids() { printf "901\n"; }
+      find_hot_dev_ancestor() { printf "900\n"; }
+      process_command() { printf "cmd-%s\n" "${1:-unknown}"; }
+      kill() { printf "kill %s\n" "$*"; }
+
+      stop_hot_dev_sessions TERM
+      stop_takeover_targets TERM
+    '
+  )"
+
+  assert_not_contains "takeover does not signal the current process group" "${output}" "kill -TERM -4242"
+  assert_not_contains "takeover does not signal the current shell ancestor" "${output}" "kill -TERM 900"
+  assert_contains "takeover falls back to killing the occupied listener pid" "${output}" "kill -TERM 901"
+}
+
 test_launchd_session_supervises_managed_runtime() {
   local output
   output="$(
@@ -404,7 +446,7 @@ test_hot_dev_script_advertises_foreground_escape_hatch() {
 
 test_hot_dev_bg_script_advertises_managed_entrypoint() {
   local output
-  output="$(sed -n '1,720p' "${ROOT_DIR}/scripts/hot-dev-bg.sh")"
+  output="$(sed -n '1,780p' "${ROOT_DIR}/scripts/hot-dev-bg.sh")"
 
   assert_contains "hot-dev-bg usage points to managed runtime first" "${output}" "npm run dev                             # Canonical managed dev runtime"
   assert_contains "hot-dev-bg still documents direct launcher start" "${output}" "./scripts/hot-dev-bg.sh start [--takeover]"
@@ -658,6 +700,7 @@ main() {
   test_cli_parses_takeover_flag
   test_verify_command_injects_managed_runtime_env
   test_default_verify_command_runs_runtime_and_layout_proofs
+  test_takeover_avoids_killing_current_shell_lineage
   test_launchd_session_supervises_managed_runtime
   test_start_bg_reports_browser_entrypoint
   test_launchd_wrapper_uses_managed_supervisor
