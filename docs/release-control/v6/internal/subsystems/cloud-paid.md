@@ -207,6 +207,10 @@ That billing support surface must also remain readable while mixed-version
 clients and servers roll forward: missing explanation payloads may degrade to a
 safe generic explanation, but the monitored-system ledger must never fail the
 page or hide counted systems because the nested support details are absent.
+That same monitored-system presentation boundary now also owns the customer-
+facing ledger loading and retry copy through
+`frontend-modern/src/utils/monitoredSystemPresentation.ts`, so commercial
+usage states do not leak back into lifecycle inventory helpers.
 That same disclosure copy must stay professional and customer-facing. The
 settings ledger may expose counting details and included collection paths, but
 it must avoid informal debug-style labels or ad hoc wording that makes the

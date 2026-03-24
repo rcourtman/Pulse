@@ -47,6 +47,14 @@ describe('MonitoredSystemLedgerPanel', () => {
     getLedgerMock.mockReset();
   });
 
+  it('shows monitored-system loading copy while the ledger request is pending', () => {
+    getLedgerMock.mockReturnValue(new Promise<MonitoredSystemLedgerResponse>(() => {}));
+
+    render(() => <MonitoredSystemLedgerPanel />);
+
+    expect(screen.getByText('Loading monitored system usage…')).toBeInTheDocument();
+  });
+
   it('shows error message with Retry button when API fails', async () => {
     getLedgerMock.mockRejectedValue(new Error('network error'));
 

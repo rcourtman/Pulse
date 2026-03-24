@@ -45,20 +45,6 @@ export function getMonitoringStoppedEmptyState(hasFilters: boolean): string {
     : 'No infrastructure currently has monitoring stopped.';
 }
 
-export function getMonitoredSystemLedgerLoadingState() {
-  return {
-    text: 'Loading monitored system usage…',
-  } as const;
-}
-
-export function getMonitoredSystemLedgerErrorState() {
-  return {
-    title: 'Monitored system usage is temporarily unavailable.',
-    retryingLabel: 'Trying again…',
-    retryLabel: 'Try again',
-  } as const;
-}
-
 export function getUnifiedAgentStopMonitoringUnavailableMessage(): string {
   return 'No host identifiers are available to stop monitoring.';
 }

@@ -370,10 +370,16 @@ describe('monitored-system model guardrails', () => {
     expect(unifiedAgentInventoryPresentationSource).toContain(
       'export function getMonitoringStoppedEmptyState',
     );
-    expect(unifiedAgentInventoryPresentationSource).toContain(
+    expect(unifiedAgentInventoryPresentationSource).not.toContain(
       'export function getMonitoredSystemLedgerLoadingState',
     );
-    expect(unifiedAgentInventoryPresentationSource).toContain(
+    expect(unifiedAgentInventoryPresentationSource).not.toContain(
+      'export function getMonitoredSystemLedgerErrorState',
+    );
+    expect(monitoredSystemPresentationSource).toContain(
+      'export function getMonitoredSystemLedgerLoadingState',
+    );
+    expect(monitoredSystemPresentationSource).toContain(
       'export function getMonitoredSystemLedgerErrorState',
     );
     expect(unifiedAgentInventoryPresentationSource).toContain(

@@ -13,15 +13,13 @@ import { formatRelativeTime } from '@/utils/format';
 import { MonitoredSystemLedgerAPI } from '@/api/monitoredSystemLedger';
 import type { MonitoredSystemLedgerEntry } from '@/api/monitoredSystemLedger';
 import { getSimpleStatusIndicator } from '@/utils/status';
-import {
-  getMonitoredSystemLedgerErrorState,
-  getMonitoredSystemLedgerLoadingState,
-} from '@/utils/unifiedAgentInventoryPresentation';
 import { PulseLogoIcon } from '@/components/icons/PulseLogoIcon';
 import {
   formatMonitoredSystemLatestIncludedSignalSentence,
   formatMonitoredSystemSurfaceAttribution,
+  getMonitoredSystemLedgerErrorState,
   getMonitoredSystemLedgerDescription,
+  getMonitoredSystemLedgerLoadingState,
   getMonitoredSystemCountingDetailsToggleLabel,
   getMonitoredSystemLedgerPresentation,
 } from '@/utils/monitoredSystemPresentation';

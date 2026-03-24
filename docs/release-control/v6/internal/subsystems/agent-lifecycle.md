@@ -76,6 +76,12 @@ management, and fleet control surfaces.
 52. `frontend-modern/src/components/Settings/useInfrastructureConfiguredNodesState.ts`
 53. `frontend-modern/src/components/Settings/useInfrastructureDiscoveryRuntimeState.ts`
 54. `frontend-modern/src/utils/infrastructureSettingsPresentation.ts`
+55. `frontend-modern/src/utils/agentCapabilityPresentation.ts`
+56. `frontend-modern/src/utils/agentProfileSuggestionPresentation.ts`
+57. `frontend-modern/src/utils/configuredNodeCapabilityPresentation.ts`
+58. `frontend-modern/src/utils/configuredNodeStatusPresentation.ts`
+59. `frontend-modern/src/utils/unifiedAgentInventoryPresentation.ts`
+60. `frontend-modern/src/utils/unifiedAgentStatusPresentation.ts`
 
 ## Shared Boundaries
 
@@ -254,6 +260,19 @@ error copy for discovery and configured-node actions through
 `frontend-modern/src/utils/infrastructureSettingsPresentation.ts`, so direct
 Proxmox settings mutations do not drift back to inline toast text inside the
 runtime hooks.
+That same fleet lifecycle boundary now also owns the shared capability,
+status, and inventory presentation helpers that those settings surfaces reuse.
+`frontend-modern/src/utils/agentCapabilityPresentation.ts`,
+`frontend-modern/src/utils/agentProfileSuggestionPresentation.ts`,
+`frontend-modern/src/utils/configuredNodeCapabilityPresentation.ts`,
+`frontend-modern/src/utils/configuredNodeStatusPresentation.ts`,
+`frontend-modern/src/utils/unifiedAgentInventoryPresentation.ts`, and
+`frontend-modern/src/utils/unifiedAgentStatusPresentation.ts` are the
+canonical owners for agent capability badges, profile suggestion formatting,
+configured-node capability/status badges, monitoring-stopped inventory copy,
+and unified-agent status labels. Lifecycle-adjacent settings and inventory
+surfaces should extend those helpers instead of reintroducing inline fleet
+semantics in panels, workspace models, or reporting hooks.
 That same boundary now also assumes canonical resource payloads preserve
 shared facet totals through `facetCounts`, so the resource list and detail
 surfaces can keep row summaries aligned without re-inferring totals from

@@ -21,6 +21,14 @@ const MONITORED_SYSTEM_LEDGER_PRESENTATION = {
   tableNameLabel: 'Name',
   tableStatusLabel: 'Status',
   tableLatestIncludedSignalLabel: 'Latest Included Signal',
+  loadingState: {
+    text: 'Loading monitored system usage…',
+  },
+  errorState: {
+    title: 'Monitored system usage is temporarily unavailable.',
+    retryingLabel: 'Trying again…',
+    retryLabel: 'Try again',
+  },
   countingDetailsCollapsedLabel: 'View counting details',
   countingDetailsExpandedLabel: 'Hide counting details',
   currentStatusHeading: 'Current status',
@@ -73,6 +81,14 @@ export function getMonitoredSystemDisclosureDefinition(): string {
 
 export function getMonitoredSystemLedgerDescription(): string {
   return MONITORED_SYSTEM_LEDGER_PRESENTATION.ledgerDescription;
+}
+
+export function getMonitoredSystemLedgerLoadingState() {
+  return MONITORED_SYSTEM_LEDGER_PRESENTATION.loadingState;
+}
+
+export function getMonitoredSystemLedgerErrorState() {
+  return MONITORED_SYSTEM_LEDGER_PRESENTATION.errorState;
 }
 
 export function getMonitoredSystemCountingDetailsToggleLabel(expanded: boolean): string {

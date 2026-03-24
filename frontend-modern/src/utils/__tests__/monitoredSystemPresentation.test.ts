@@ -13,6 +13,8 @@ import {
   getMonitoredSystemDisclosureToggleLabel,
   getMonitoredSystemExplanationFallbackSummary,
   getMonitoredSystemLedgerDescription,
+  getMonitoredSystemLedgerErrorState,
+  getMonitoredSystemLedgerLoadingState,
   getMonitoredSystemLedgerPresentation,
   getMonitoredSystemLimitInstallCollectorsLabel,
   getMonitoredSystemLimitLearnMoreLabel,
@@ -37,6 +39,14 @@ describe('monitoredSystemPresentation', () => {
       tableNameLabel: 'Name',
       tableStatusLabel: 'Status',
       tableLatestIncludedSignalLabel: 'Latest Included Signal',
+      loadingState: {
+        text: 'Loading monitored system usage…',
+      },
+      errorState: {
+        title: 'Monitored system usage is temporarily unavailable.',
+        retryingLabel: 'Trying again…',
+        retryLabel: 'Try again',
+      },
       countingDetailsCollapsedLabel: 'View counting details',
       countingDetailsExpandedLabel: 'Hide counting details',
       currentStatusHeading: 'Current status',
@@ -71,6 +81,14 @@ describe('monitoredSystemPresentation', () => {
     expect(getMonitoredSystemLedgerDescription()).toBe(
       'Review the monitored systems currently counted against your Pulse Pro plan limit.',
     );
+    expect(getMonitoredSystemLedgerLoadingState()).toEqual({
+      text: 'Loading monitored system usage…',
+    });
+    expect(getMonitoredSystemLedgerErrorState()).toEqual({
+      title: 'Monitored system usage is temporarily unavailable.',
+      retryingLabel: 'Trying again…',
+      retryLabel: 'Try again',
+    });
     expect(getMonitoredSystemCountingDetailsToggleLabel(false)).toBe('View counting details');
     expect(getMonitoredSystemCountingDetailsToggleLabel(true)).toBe('Hide counting details');
     expect(getMonitoredSystemExplanationFallbackSummary()).toBe(

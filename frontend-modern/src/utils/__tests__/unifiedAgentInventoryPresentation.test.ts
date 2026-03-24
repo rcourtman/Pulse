@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  getMonitoredSystemLedgerErrorState,
-  getMonitoredSystemLedgerLoadingState,
   getUnifiedAgentAllowReconnectErrorMessage,
   getUnifiedAgentAllowReconnectSuccessMessage,
   getUnifiedAgentClipboardCopyErrorMessage,
@@ -40,17 +38,6 @@ describe('unifiedAgentInventoryPresentation', () => {
       getUnifiedAgentLastSeenLabel({ status: 'removed' }, 'Monitoring stopped'),
     ).toBe('Monitoring stopped');
     expect(getUnifiedAgentLastSeenLabel({ status: 'active' }, 'Monitoring stopped')).toBe('—');
-  });
-
-  it('returns canonical monitored-system ledger loading and error copy', () => {
-    expect(getMonitoredSystemLedgerLoadingState()).toEqual({
-      text: 'Loading monitored system usage…',
-    });
-    expect(getMonitoredSystemLedgerErrorState()).toEqual({
-      title: 'Monitored system usage is temporarily unavailable.',
-      retryingLabel: 'Trying again…',
-      retryLabel: 'Try again',
-    });
   });
 
   it('returns canonical unified-agent operational action copy', () => {
