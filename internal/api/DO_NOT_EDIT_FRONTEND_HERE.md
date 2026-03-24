@@ -16,8 +16,9 @@ This `frontend-modern` directory is **AUTO-GENERATED** during builds.
 
 ## How to edit frontend code
 1. Edit files in `${PULSE_REPOS_DIR}/pulse/frontend-modern/src/`
-2. The dev server (port 7655) will hot-reload
-3. When building for production, the Makefile copies it here
+2. The frontend dev shell on `http://127.0.0.1:5173` will hot-reload
+3. That dev shell proxies `/api` and `/ws` to the backend on `http://127.0.0.1:7655`
+4. When building for production, the Makefile copies it here
 
 ---
 This file exists to prevent confusion. The directory structure is intentional and required by Go's limitations.

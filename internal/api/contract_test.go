@@ -4720,6 +4720,25 @@ func TestContract_UnifiedAuditLimitCapsOversizedRequests(t *testing.T) {
 	}
 }
 
+func TestContract_EmbeddedFrontendWarningUsesCanonicalDevEntrypoints(t *testing.T) {
+	path := filepath.Join("DO_NOT_EDIT_FRONTEND_HERE.md")
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read embedded frontend warning: %v", err)
+	}
+
+	text := string(body)
+	if !strings.Contains(text, "http://127.0.0.1:5173") {
+		t.Fatalf("embedded frontend warning must point to the frontend dev shell on 5173")
+	}
+	if !strings.Contains(text, "http://127.0.0.1:7655") {
+		t.Fatalf("embedded frontend warning must identify the backend on 7655")
+	}
+	if strings.Contains(text, "The dev server (port 7655) will hot-reload") {
+		t.Fatalf("embedded frontend warning must not describe 7655 as the hot-reload dev server")
+	}
+}
+
 func mustStreamEvent(t *testing.T, eventType string, data interface{}) chat.StreamEvent {
 	t.Helper()
 

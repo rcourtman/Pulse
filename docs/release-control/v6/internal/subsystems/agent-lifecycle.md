@@ -539,6 +539,12 @@ That same shared `internal/api/` boundary also assumes manual auth env writes
 and first-session status reads resolve the `.env` path through the shared
 auth-path helper, so lifecycle-adjacent setup and password flows do not each
 reconstruct their own `/etc/pulse/.env` fallback logic.
+That same shared `internal/api/` boundary also assumes generated developer
+warnings do not mis-teach the local runtime split: the embedded frontend notice
+under `internal/api/DO_NOT_EDIT_FRONTEND_HERE.md` may point operators to the
+shared backend on `:7655` when explaining the proxy relationship, but it must
+keep the hot-reload browser entrypoint on `http://127.0.0.1:5173` so lifecycle-
+adjacent setup and install guidance does not regress to the backend port.
 Those same lifecycle-adjacent setup and password flows must now also route
 `.env` writes through the shared writable auth-env helper instead of
 re-implementing config-path writes plus data-path fallback ordering inline.

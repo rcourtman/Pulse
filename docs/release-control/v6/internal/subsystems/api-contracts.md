@@ -372,6 +372,13 @@ surface as well: `internal/api/agent_install_command_shared.go`,
 `internal/api/config_setup_handlers.go`, and `internal/api/unified_agent.go`
 must carry a direct API-contract proof path instead of relying only on the
 generic `internal/api/` backend payload prefix.
+That same backend-owned `internal/api/` boundary also includes the generated
+embedded-frontend warning surface used during local development.
+`internal/api/DO_NOT_EDIT_FRONTEND_HERE.md` must direct developers to edit
+`frontend-modern/src`, identify `http://127.0.0.1:5173` as the hot-reload
+frontend dev shell, and describe `http://127.0.0.1:7655` as the proxied
+backend dependency instead of teaching `7655` as the browser-facing dev
+entrypoint.
 That shared frontend install-command helper must also stay under explicit proof
 routing instead of remaining an orphan utility: changes in
 `frontend-modern/src/utils/agentInstallCommand.ts` must carry the direct

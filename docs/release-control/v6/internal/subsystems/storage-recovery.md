@@ -437,6 +437,12 @@ That same shared boundary also assumes manual auth env writes and auth-status
 reads resolve `.env` through the shared auth-path helper, so storage-adjacent
 recovery and setup flows do not keep neighboring `/etc/pulse/.env` fallback
 logic alive after the runtime data-dir authority has been centralized.
+That same shared `internal/api/` dependency also assumes generated developer
+warnings keep the local browser/runtime split accurate: the embedded frontend
+notice under `internal/api/DO_NOT_EDIT_FRONTEND_HERE.md` may describe `:7655`
+as the proxied backend dependency, but it must preserve
+`http://127.0.0.1:5173` as the hot-reload browser entrypoint so storage- and
+recovery-adjacent setup guidance does not drift back to the backend port.
 That same shared boundary now also owns writable auth-env fallback order, so
 storage-adjacent setup and recovery flows may not keep per-handler config-path
 write branches with private data-path fallback logic once the shared helper
