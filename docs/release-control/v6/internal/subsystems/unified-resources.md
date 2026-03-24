@@ -193,6 +193,12 @@ source freshness state, including which source or surface degraded and the
 corresponding last-seen timestamp. Billing and support surfaces must consume
 that shared reason list instead of trying to infer why a fresh overall
 `last_seen` can still coincide with warning status.
+That same status contract must choose the canonical monitored-system runtime
+status from the actual grouped top-level resources rather than from an
+implicit `unknown` baseline. Severity ordering is canonical: `offline`
+outranks `warning`, `warning` outranks `unknown`, and `unknown` outranks
+`online`, so all-online groups resolve online while any grouped offline view
+still wins over merely stale or warning surfaces.
 That shared summary must also explain mixed-source freshness directly when one
 grouped source reported more recently than the degraded one, so consumers do
 not present a fresh `Last Seen` timestamp beside warning or offline state

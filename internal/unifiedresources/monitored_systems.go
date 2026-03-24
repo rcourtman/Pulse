@@ -458,17 +458,27 @@ func monitoredSystemType(resource *Resource) string {
 }
 
 func monitoredSystemStatus(resources []*Resource) ResourceStatus {
-	best := StatusUnknown
-	bestPriority := monitoredSystemStatusPriority(best)
+	var (
+		best     ResourceStatus
+		foundAny bool
+	)
 	for _, resource := range resources {
 		if resource == nil {
 			continue
 		}
+		if !foundAny {
+			best = resource.Status
+			foundAny = true
+			continue
+		}
 		priority := monitoredSystemStatusPriority(resource.Status)
+		bestPriority := monitoredSystemStatusPriority(best)
 		if priority < bestPriority {
 			best = resource.Status
-			bestPriority = priority
 		}
+	}
+	if !foundAny {
+		return StatusUnknown
 	}
 	return best
 }
@@ -815,9 +825,9 @@ func monitoredSystemStatusLastSeenSuffix(lastSeen time.Time) string {
 
 func monitoredSystemStatusPriority(status ResourceStatus) int {
 	switch status {
-	case StatusWarning:
-		return 0
 	case StatusOffline:
+		return 0
+	case StatusWarning:
 		return 1
 	case StatusUnknown:
 		return 2

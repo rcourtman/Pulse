@@ -340,6 +340,97 @@ func TestMonitoredSystemsExplainsStaleGroupedSourceWhileLastSeenStaysFresh(t *te
 	}
 }
 
+func TestMonitoredSystemsReportOnlineStatusWithoutUnknownBaselineBias(t *testing.T) {
+	rr := NewRegistry(nil)
+
+	proxmoxNode := topLevelTestProxmoxNode("proxmox-node", "tower", "proxmox-1", "https://tower.local:8006")
+	proxmoxNode.LastSeen = time.Date(2026, 3, 24, 10, 0, 0, 0, time.UTC)
+
+	rr.IngestRecords(SourceProxmox, []IngestRecord{
+		{
+			SourceID: "proxmox-node",
+			Resource: proxmoxNode,
+		},
+	})
+
+	systems := MonitoredSystems(rr)
+	if len(systems) != 1 {
+		t.Fatalf("MonitoredSystems() returned %d systems, want 1", len(systems))
+	}
+	if systems[0].Status != StatusOnline {
+		t.Fatalf("MonitoredSystems()[0].Status = %q, want %q", systems[0].Status, StatusOnline)
+	}
+	if systems[0].StatusExplanation.Summary != "All included top-level collection paths currently report online status." {
+		t.Fatalf("unexpected online status summary: %q", systems[0].StatusExplanation.Summary)
+	}
+}
+
+func TestMonitoredSystemsGroupedOnlineSourcesStayOnline(t *testing.T) {
+	rr := NewRegistry(nil)
+	now := time.Date(2026, 3, 24, 10, 0, 0, 0, time.UTC)
+
+	agentResource := topLevelTestAgent("agent-host", "tower.local", "machine-1", "agent-1")
+	agentResource.LastSeen = now.Add(-1 * time.Minute)
+
+	dockerResource := topLevelTestDockerHost("docker-host", "tower.local", "docker-runtime-1", "agent-1")
+	dockerResource.LastSeen = now
+
+	rr.IngestRecords(SourceAgent, []IngestRecord{
+		{
+			SourceID: "agent-host",
+			Resource: agentResource,
+		},
+	})
+	rr.IngestRecords(SourceDocker, []IngestRecord{
+		{
+			SourceID: "docker-host",
+			Resource: dockerResource,
+		},
+	})
+
+	systems := MonitoredSystems(rr)
+	if len(systems) != 1 {
+		t.Fatalf("MonitoredSystems() returned %d systems, want 1", len(systems))
+	}
+	if systems[0].Status != StatusOnline {
+		t.Fatalf("MonitoredSystems()[0].Status = %q, want %q", systems[0].Status, StatusOnline)
+	}
+}
+
+func TestMonitoredSystemsPreferOfflineOverWarning(t *testing.T) {
+	rr := NewRegistry(nil)
+	now := time.Date(2026, 3, 24, 10, 0, 0, 0, time.UTC)
+
+	agentResource := topLevelTestAgent("agent-host", "tower.local", "machine-1", "agent-1")
+	agentResource.Status = StatusWarning
+	agentResource.LastSeen = now.Add(-1 * time.Minute)
+
+	dockerResource := topLevelTestDockerHost("docker-host", "tower.local", "docker-runtime-1", "agent-1")
+	dockerResource.Status = StatusOffline
+	dockerResource.LastSeen = now
+
+	rr.IngestRecords(SourceAgent, []IngestRecord{
+		{
+			SourceID: "agent-host",
+			Resource: agentResource,
+		},
+	})
+	rr.IngestRecords(SourceDocker, []IngestRecord{
+		{
+			SourceID: "docker-host",
+			Resource: dockerResource,
+		},
+	})
+
+	systems := MonitoredSystems(rr)
+	if len(systems) != 1 {
+		t.Fatalf("MonitoredSystems() returned %d systems, want 1", len(systems))
+	}
+	if systems[0].Status != StatusOffline {
+		t.Fatalf("MonitoredSystems()[0].Status = %q, want %q", systems[0].Status, StatusOffline)
+	}
+}
+
 func TestResourceRegistry_IngestRecords_UnknownSource(t *testing.T) {
 	rr := NewRegistry(nil)
 	now := time.Date(2026, 2, 20, 12, 0, 0, 0, time.UTC)
