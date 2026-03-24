@@ -2884,6 +2884,8 @@
         "frontend-modern/src/stores/aiIntelligenceSummaryModel.ts",
         "frontend-modern/src/types/aiIntelligence.ts",
         "frontend-modern/src/utils/aiFindingPresentation.ts",
+        "frontend-modern/src/utils/aiPatrolSchedulePresentation.ts",
+        "frontend-modern/src/utils/aiQuickstartPresentation.ts",
         "frontend-modern/src/utils/approvalRiskPresentation.ts",
         "frontend-modern/src/utils/findingAlertIdentity.ts",
         "frontend-modern/src/utils/patrolEmptyStatePresentation.ts",
@@ -2929,6 +2931,22 @@
               "frontend-modern/src/pages/__tests__/AIIntelligence.test.tsx",
               "frontend-modern/src/stores/__tests__/aiIntelligence.test.ts",
               "frontend-modern/src/stores/__tests__/aiIntelligenceSummaryModel.test.ts",
+              "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts"
+            ]
+          },
+          {
+            "id": "patrol-header-presentation-helpers",
+            "label": "patrol header presentation helper proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/utils/aiPatrolSchedulePresentation.ts",
+              "frontend-modern/src/utils/aiQuickstartPresentation.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/utils/__tests__/aiPatrolSchedulePresentation.test.ts",
+              "frontend-modern/src/utils/__tests__/aiQuickstartPresentation.test.ts",
               "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts"
             ]
           },
