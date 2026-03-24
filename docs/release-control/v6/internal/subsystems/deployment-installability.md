@@ -35,6 +35,8 @@ server-side update execution surfaces.
 13. `package.json`
 14. `frontend-modern/package.json`
 15. `scripts/dev-check.sh`
+16. `scripts/toggle-mock.sh`
+17. `scripts/clean-mock-alerts.sh`
 
 ## Shared Boundaries
 
@@ -49,7 +51,7 @@ server-side update execution surfaces.
 2. Add or change release-build metadata injection, release artifact assembly, or governed promotion metadata resolution through `scripts/build-release.sh`, `scripts/release_ldflags.sh`, and `scripts/release_control/resolve_release_promotion.py`, plus the container Dockerfile and governed release workflows that consume those same contracts
 3. Add or change shell installer, Windows installer, container-agent installer, or auto-update script behavior through `scripts/install.sh`, `scripts/install.ps1`, `scripts/install-container-agent.sh`, and `scripts/pulse-auto-update.sh`
 4. Add or change server update transport through `internal/api/updates.go` and `frontend-modern/src/api/updates.ts`
-5. Add or change local dev-runtime orchestration, managed ownership, browser-runtime proof wiring, frontend/backend coherence diagnostics, or the canonical developer entry wrappers through `scripts/hot-dev.sh`, `scripts/hot-dev-bg.sh`, `tests/integration/scripts/managed-dev-runtime.mjs`, `package.json`, `frontend-modern/package.json`, and `scripts/dev-check.sh`
+5. Add or change local dev-runtime orchestration, managed ownership, browser-runtime proof wiring, frontend/backend coherence diagnostics, canonical developer entry wrappers, or dev-runtime helper control surfaces through `scripts/hot-dev.sh`, `scripts/hot-dev-bg.sh`, `tests/integration/scripts/managed-dev-runtime.mjs`, `package.json`, `frontend-modern/package.json`, `scripts/dev-check.sh`, `scripts/toggle-mock.sh`, and `scripts/clean-mock-alerts.sh`
 
 ## Forbidden Paths
 
@@ -188,6 +190,12 @@ operational parity with the repo-root entry surface for the canonical controls:
 start, status, logs, stop, restart, managed backend restart, verification, and
 the explicit foreground escape hatch. The only intentionally narrower frontend
 workspace exception is the named `dev:frontend-only` raw Vite escape hatch.
+That same dev-runtime helper boundary also includes the auxiliary operator
+controls that start, stop, restart, or recover local development. The repo-root
+Makefile targets, `scripts/toggle-mock.sh`, and `scripts/clean-mock-alerts.sh` must
+route through the managed runtime control plane when they are operating on the
+local dev stack, instead of resurrecting lane-local `hot-dev.sh` or raw Vite
+process management through separate shell folklore.
 That shared `scripts/install.sh` boundary must also keep one canonical service
 argument builder for the runtime flags it persists. Token-bearing install
 paths, token-file systemd paths, wrapper-script launches, and later service

@@ -1,6 +1,6 @@
 # Pulse Makefile for development
 
-.PHONY: build run dev frontend backend all clean distclean dev-hot lint lint-backend lint-frontend format format-backend format-frontend build-agents control-plane handoff
+.PHONY: build run dev dev-status dev-logs dev-stop dev-restart dev-backend-restart dev-verify frontend backend all clean distclean dev-hot lint lint-backend lint-frontend format format-backend format-frontend build-agents control-plane handoff
 
 FRONTEND_DIR := frontend-modern
 FRONTEND_DIST := $(FRONTEND_DIR)/dist
@@ -25,9 +25,27 @@ build: frontend backend
 run: build
 	./pulse
 
-# Development - rebuild everything and restart service
-dev: frontend backend
-	sudo systemctl restart pulse-hot-dev
+# Development - managed local runtime
+dev:
+	./scripts/hot-dev-bg.sh start --takeover
+
+dev-status:
+	./scripts/hot-dev-bg.sh status
+
+dev-logs:
+	./scripts/hot-dev-bg.sh logs
+
+dev-stop:
+	./scripts/hot-dev-bg.sh stop
+
+dev-restart:
+	./scripts/hot-dev-bg.sh restart --takeover
+
+dev-backend-restart:
+	./scripts/hot-dev-bg.sh backend-restart
+
+dev-verify:
+	./scripts/hot-dev-bg.sh verify --takeover
 
 dev-hot:
 	./scripts/hot-dev.sh
@@ -40,9 +58,8 @@ clean:
 distclean: clean
 	./scripts/cleanup.sh
 
-# Quick rebuild and restart for development
-restart: frontend backend
-	sudo systemctl restart pulse-hot-dev
+# Quick managed restart for development
+restart: dev-restart
 
 # Run linters for both backend and frontend
 lint: lint-backend lint-frontend

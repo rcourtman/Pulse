@@ -18,6 +18,7 @@ NC='\033[0m'
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
+HOT_DEV_BG_PATH="${HOT_DEV_BG_PATH:-${ROOT_DIR}/scripts/hot-dev-bg.sh}"
 
 MOCK_ENV_FILE="${ROOT_DIR}/mock.env"
 DEV_DATA_DIR="${ROOT_DIR}/tmp/dev-config"
@@ -126,6 +127,20 @@ wait_for_port() {
     done
 
     return 1
+}
+
+run_hot_dev_bg() {
+    "${HOT_DEV_BG_PATH}" "$@"
+}
+
+hot_dev_bg_status_output() {
+    run_hot_dev_bg status 2>/dev/null || true
+}
+
+hot_dev_bg_is_running() {
+    local output
+    output="$(hot_dev_bg_status_output)"
+    [[ "${output}" == *"[hot-dev-bg] Running"* ]]
 }
 
 prefer_hot_dev_runtime() {
@@ -265,6 +280,11 @@ detect_runtime_mode() {
         fi
     fi
 
+    if hot_dev_bg_is_running; then
+        echo "managed-hot-dev"
+        return
+    fi
+
     if pgrep -f "hot-dev.sh" >/dev/null 2>&1; then
         echo "hot-dev"
         return
@@ -310,11 +330,18 @@ wait_for_exit() {
 }
 
 stop_hot_dev_runtime() {
+    local runtime_mode="${1:-hot-dev}"
     local hot_dev_pattern="${ROOT_DIR}/scripts/hot-dev.sh|scripts/hot-dev.sh|hot-dev.sh"
     local pulse_pattern="${ROOT_DIR}/pulse|(^|[[:space:]])\\./pulse([[:space:]]|$)"
     local vite_pattern="${ROOT_DIR}/frontend-modern.*vite|vite.*${ROOT_DIR}/frontend-modern|vite --config vite.config.ts"
 
-    log_info "Stopping hot-dev runtime..."
+    if [[ "${runtime_mode}" == "managed-hot-dev" ]] && hot_dev_bg_is_running; then
+        log_info "Stopping managed hot-dev runtime..."
+        run_hot_dev_bg stop >/dev/null
+        return
+    fi
+
+    log_info "Stopping legacy hot-dev runtime..."
 
     kill_with_grace "$hot_dev_pattern" TERM
     wait_for_exit "$hot_dev_pattern"
@@ -445,45 +472,12 @@ sync_production_config() {
 }
 
 start_hot_dev_runtime() {
-    local pid
-    local expected_backend_port="${PULSE_TOGGLE_BACKEND_PORT:-7655}"
-    local expected_frontend_port="${PULSE_TOGGLE_FRONTEND_PORT:-5173}"
-    local startup_timeout="${PULSE_TOGGLE_HOT_DEV_START_TIMEOUT:-45}"
-    local frontend_dev_host="${FRONTEND_DEV_HOST:-127.0.0.1}"
-    local pulse_dev_api_host="${PULSE_DEV_API_HOST:-127.0.0.1}"
-    local pulse_dev_api_url="${PULSE_DEV_API_URL:-http://${pulse_dev_api_host}:${expected_backend_port}}"
-    local pulse_dev_ws_url="${PULSE_DEV_WS_URL:-ws://${pulse_dev_api_host}:${expected_backend_port}}"
-    log_info "Starting hot-dev runtime in background"
-    pid="$(
-        cd "${ROOT_DIR}" && launch_detached "${HOT_DEV_LOG}" \
-            /usr/bin/env \
-            FRONTEND_DEV_HOST="${frontend_dev_host}" \
-            FRONTEND_DEV_PORT="${expected_frontend_port}" \
-            PULSE_DEV_API_HOST="${pulse_dev_api_host}" \
-            PULSE_DEV_API_PORT="${expected_backend_port}" \
-            PULSE_DEV_API_URL="${pulse_dev_api_url}" \
-            PULSE_DEV_WS_URL="${pulse_dev_ws_url}" \
-            "${ROOT_DIR}/scripts/hot-dev.sh"
-    )"
-    sleep 2
-
-    if ! pgrep -f "hot-dev.sh" >/dev/null 2>&1; then
-        log_error "hot-dev failed to start. Check ${HOT_DEV_LOG}"
+    log_info "Starting managed hot-dev runtime..."
+    if ! run_hot_dev_bg start --takeover; then
+        log_error "Managed hot-dev failed to start"
         return 1
     fi
-
-    if ! wait_for_port "${expected_backend_port}" "${startup_timeout}"; then
-        log_warn "hot-dev did not open backend port ${expected_backend_port} within ${startup_timeout}s"
-        return 2
-    fi
-
-    # Frontend startup can lag behind backend startup when the dependency map is large.
-    if ! wait_for_port "${expected_frontend_port}" "${startup_timeout}"; then
-        log_warn "hot-dev backend is up but frontend port ${expected_frontend_port} is not listening yet"
-        log_warn "Proceeding with backend-only availability; check ${HOT_DEV_LOG} for frontend startup"
-    fi
-
-    log_success "hot-dev started (pid: ${pid}, backend:${expected_backend_port}, frontend:${expected_frontend_port}, log: ${HOT_DEV_LOG})"
+    log_success "Managed hot-dev runtime is running"
 }
 
 start_standalone_runtime() {
@@ -580,8 +574,8 @@ apply_mode() {
         systemd-hot-dev|systemd-pulse)
             stop_systemd_runtime "$runtime_mode"
             ;;
-        hot-dev)
-            stop_hot_dev_runtime
+        managed-hot-dev|hot-dev)
+            stop_hot_dev_runtime "$runtime_mode"
             ;;
         standalone)
             stop_standalone_runtime "false"
@@ -598,12 +592,12 @@ apply_mode() {
     # are always reflected immediately after toggling.
     if [[ "${runtime_mode}" == "none" ]] || [[ "${runtime_mode}" == "standalone" ]] || [[ "${runtime_mode}" == "pulse-name" ]]; then
         if prefer_hot_dev_runtime; then
-            start_mode="hot-dev"
+            start_mode="managed-hot-dev"
         fi
     fi
 
     # hot-dev already handles build/reload on startup; avoid duplicate builds here for fast toggles.
-    if [[ "$start_mode" == "hot-dev" ]] || [[ "$start_mode" == "systemd-hot-dev" ]]; then
+    if [[ "$start_mode" == "managed-hot-dev" ]] || [[ "$start_mode" == "hot-dev" ]] || [[ "$start_mode" == "systemd-hot-dev" ]]; then
         log_info "Skipping pre-rebuild for hot-dev runtime (managed by hot-dev startup)"
     else
         rebuild_frontend_backend
@@ -613,11 +607,11 @@ apply_mode() {
         systemd-hot-dev|systemd-pulse)
             start_systemd_runtime "$start_mode"
             ;;
-        hot-dev)
+        managed-hot-dev|hot-dev)
             if ! start_hot_dev_runtime; then
                 if [[ "${allow_fallback}" == "true" ]]; then
                     log_warn "hot-dev restart failed or is unhealthy; falling back to standalone backend on port ${DEFAULT_PORT}"
-                    stop_hot_dev_runtime || true
+                    stop_hot_dev_runtime "$start_mode" || true
                     start_standalone_runtime "$target_mode"
                     start_mode="standalone"
                 else
@@ -631,7 +625,7 @@ apply_mode() {
             ;;
     esac
 
-    if [[ "$start_mode" == "hot-dev" ]]; then
+    if [[ "$start_mode" == "managed-hot-dev" ]] || [[ "$start_mode" == "hot-dev" ]]; then
         if ! verify_mock_state_via_frontend_proxy "$target_mode"; then
             log_error "Frontend proxy at 127.0.0.1:5173 did not report expected mock state (${target_mode})"
             return 1
@@ -767,4 +761,6 @@ main() {
     esac
 }
 
-main "$@"
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+    main "$@"
+fi
