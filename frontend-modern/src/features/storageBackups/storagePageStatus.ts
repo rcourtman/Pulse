@@ -12,8 +12,8 @@ export type StoragePageBannerStateInput = {
 export const getStoragePageBannerKind = (
   input: StoragePageBannerStateInput,
 ): StoragePageBannerKind | null => {
-  if (input.reconnecting) return 'reconnecting';
   if (input.hasFetchError) return 'fetch-error';
+  if (input.reconnecting && !input.connected) return 'reconnecting';
   if (!input.connected && input.initialDataReceived) return 'disconnected';
   if (
     input.loading &&

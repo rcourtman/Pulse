@@ -1,3 +1,4 @@
+import { createMemo } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
 import { useKioskMode } from '@/hooks/useKioskMode';
 import { useStorageExpansionState } from './useStorageExpansionState';
@@ -16,14 +17,12 @@ export const useStoragePageModel = () => {
   const {
     state,
     activeAlerts,
-    connected,
-    initialDataReceived,
     reconnecting,
     reconnect,
+    storageRecoveryResources,
     nodes,
     physicalDisks,
     cephResources,
-    storageRecoveryResources,
     alertsEnabled,
   } = useStoragePageResources();
 
@@ -76,6 +75,23 @@ export const useStoragePageModel = () => {
     groupBy,
   });
 
+  const surfaceInitialDataReceived = createMemo(
+    () =>
+      records().length > 0 ||
+      !storageRecoveryResources.loading() ||
+      Boolean(storageRecoveryResources.error()),
+  );
+  const surfaceConnected = createMemo(
+    () =>
+      storageRecoveryResources.loading() ||
+      records().length > 0 ||
+      !storageRecoveryResources.error(),
+  );
+  const reconnectSurface = () => {
+    void storageRecoveryResources.refetch();
+    reconnect();
+  };
+
   const { expandedGroups, expandedPoolId, setExpandedPoolId, toggleGroup } =
     useStorageExpansionState({
       groupedKeys: () => groupedRecords().map((group) => group.key),
@@ -104,8 +120,8 @@ export const useStoragePageModel = () => {
     loading: storageRecoveryResources.loading,
     error: storageRecoveryResources.error,
     filteredRecordCount: () => filteredRecords().length,
-    connected,
-    initialDataReceived,
+    connected: surfaceConnected,
+    initialDataReceived: surfaceInitialDataReceived,
     reconnecting,
     view,
   });
@@ -121,7 +137,7 @@ export const useStoragePageModel = () => {
 
   return {
     kioskMode,
-    reconnect,
+    reconnect: reconnectSurface,
     selectedNodeId,
     setSelectedNodeId,
     view,
@@ -143,7 +159,9 @@ export const useStoragePageModel = () => {
     nodeFilterOptions,
     activeBannerKind,
     cephSummaryStats,
+    connected: surfaceConnected,
     filteredRecords,
+    initialDataReceived: surfaceInitialDataReceived,
     nodeOptions,
     physicalDisks,
     nodes,

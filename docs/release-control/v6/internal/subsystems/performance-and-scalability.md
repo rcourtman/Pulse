@@ -192,6 +192,12 @@ The dashboard workload selector path and the dashboard runtime that consumes it
 are now part of the protected performance surface rather than proof-only
 context. Future hot-path filter/group/sort/windowing changes must route through
 the explicit dashboard performance proof policy in the subsystem registry.
+That workload route now also treats readiness as a route-owned contract instead
+of a raw websocket proxy signal: `frontend-modern/src/components/Dashboard/Dashboard.tsx`
+and `frontend-modern/src/components/Dashboard/useDashboardState.ts` must keep
+filters, stats, and table visibility driven by the workload route's own
+REST-backed health so websocket churn does not hide already-fetched workloads
+or swap the protected hot path into a false disconnected shell.
 That runtime is now intentionally split by concern:
 `frontend-modern/src/components/Dashboard/useDashboardState.ts` owns
 top-level dashboard orchestration, workload loading, and composition across

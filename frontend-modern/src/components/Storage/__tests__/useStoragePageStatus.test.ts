@@ -4,11 +4,11 @@ import { describe, expect, it } from 'vitest';
 import { useStoragePageStatus } from '@/components/Storage/useStoragePageStatus';
 
 describe('useStoragePageStatus', () => {
-  it('derives reconnecting banner and pool loading state canonically', () => {
+  it('derives reconnecting banner and pool loading state when the storage surface is offline', () => {
     const [loading] = createSignal(true);
     const [error] = createSignal<unknown>(null);
     const [filteredRecordCount] = createSignal(0);
-    const [connected] = createSignal(true);
+    const [connected] = createSignal(false);
     const [initialDataReceived] = createSignal(true);
     const [reconnecting] = createSignal(true);
     const [view] = createSignal<'pools' | 'disks'>('pools');
@@ -37,6 +37,31 @@ describe('useStoragePageStatus', () => {
     const [initialDataReceived] = createSignal(true);
     const [reconnecting] = createSignal(false);
     const [view] = createSignal<'pools' | 'disks'>('disks');
+
+    const { result } = renderHook(() =>
+      useStoragePageStatus({
+        loading,
+        error,
+        filteredRecordCount,
+        connected,
+        initialDataReceived,
+        reconnecting,
+        view,
+      }),
+    );
+
+    expect(result.activeBannerKind()).toBeNull();
+    expect(result.isLoadingPools()).toBe(false);
+  });
+
+  it('suppresses reconnecting banners when the storage surface remains connected', () => {
+    const [loading] = createSignal(false);
+    const [error] = createSignal<unknown>(null);
+    const [filteredRecordCount] = createSignal(1);
+    const [connected] = createSignal(true);
+    const [initialDataReceived] = createSignal(true);
+    const [reconnecting] = createSignal(true);
+    const [view] = createSignal<'pools' | 'disks'>('pools');
 
     const { result } = renderHook(() =>
       useStoragePageStatus({

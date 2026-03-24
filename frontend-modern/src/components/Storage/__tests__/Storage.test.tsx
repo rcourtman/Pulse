@@ -822,40 +822,43 @@ describe('Storage', () => {
     );
   });
 
-  it('shows disconnected waiting state while loading with no initial data', () => {
+  it('keeps the storage content card in loading mode while the route is still fetching its first dataset', () => {
     hookLoading = true;
     wsConnected = false;
     wsInitialDataReceived = false;
 
     render(() => <Storage />);
 
+    expect(screen.getByText('Loading storage resources...')).toBeInTheDocument();
     expect(
-      screen.getByText('Waiting for storage data from connected platforms.'),
-    ).toBeInTheDocument();
+      screen.queryByText('Waiting for storage data from connected platforms.'),
+    ).not.toBeInTheDocument();
   });
 
-  it('shows reconnect banner and retries on demand', () => {
+  it('keeps storage content visible when the websocket stream is reconnecting but REST data is healthy', () => {
+    hookResources = [buildStorageResource('storage-1', 'Node-Store', 'pve1')];
+    wsConnected = false;
+    wsInitialDataReceived = false;
     wsReconnecting = true;
 
     render(() => <Storage />);
 
-    expect(screen.getByText('Reconnecting to backend data stream…')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Retry now' }));
-    expect(reconnectSpy).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('Node-Store')).toBeInTheDocument();
+    expect(screen.queryByText('Reconnecting to backend data stream…')).not.toBeInTheDocument();
   });
 
-  it('shows disconnected stale-data state after initial load', () => {
+  it('suppresses stale-data disconnect banners when storage resources are still available', () => {
+    hookResources = [buildStorageResource('storage-1', 'Node-Store', 'pve1')];
     wsConnected = false;
     wsInitialDataReceived = true;
     wsReconnecting = false;
 
     render(() => <Storage />);
 
+    expect(screen.getByText('Node-Store')).toBeInTheDocument();
     expect(
-      screen.getByText('Storage data stream disconnected. Data may be stale.'),
-    ).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Reconnect' }));
-    expect(reconnectSpy).toHaveBeenCalledTimes(1);
+      screen.queryByText('Storage data stream disconnected. Data may be stale.'),
+    ).not.toBeInTheDocument();
   });
 
   it('shows warning when v2 fetch reports an error', () => {

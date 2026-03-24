@@ -39,25 +39,25 @@ export function Dashboard(props: DashboardProps) {
 
       <DashboardStateCards
         allGuests={state.allGuests}
-        connected={state.connected}
+        connected={state.surfaceConnected}
         dashboardDisconnectedState={state.dashboardDisconnectedState}
         dashboardGuestsEmptyState={state.dashboardGuestsEmptyState}
         dashboardInfrastructureEmptyState={state.dashboardInfrastructureEmptyState}
         dashboardLoadingState={state.dashboardLoadingState}
         filteredGuests={state.filteredGuests}
-        initialDataReceived={state.initialDataReceived}
+        initialDataReceived={state.surfaceInitialDataReceived}
         kioskMode={state.kioskMode}
         navigate={state.navigate}
         nodeCount={props.nodes.length}
-        reconnect={state.reconnect}
+        reconnect={state.reconnectSurface}
         workloads={state.workloads}
       />
 
       <Show
         when={
           !state.kioskMode() &&
-          state.connected() &&
-          state.initialDataReceived() &&
+          state.surfaceConnected() &&
+          state.surfaceInitialDataReceived() &&
           state.allGuests().length > 0
         }
       >
@@ -88,8 +88,8 @@ export function Dashboard(props: DashboardProps) {
 
       <Show
         when={
-          state.connected() &&
-          state.initialDataReceived() &&
+          state.surfaceConnected() &&
+          state.surfaceInitialDataReceived() &&
           state.filteredGuests().length > 0
         }
       >
@@ -128,8 +128,8 @@ export function Dashboard(props: DashboardProps) {
       </Show>
 
       <DashboardStatsStrip
-        connected={state.connected}
-        initialDataReceived={state.initialDataReceived}
+        connected={state.surfaceConnected}
+        initialDataReceived={state.surfaceInitialDataReceived}
         totalStats={state.totalStats}
       />
 

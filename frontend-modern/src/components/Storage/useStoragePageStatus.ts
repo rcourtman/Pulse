@@ -39,4 +39,3 @@ export const useStoragePageStatus = (options: UseStoragePageStatusOptions) => {
     isLoadingPools,
   };
 };
-

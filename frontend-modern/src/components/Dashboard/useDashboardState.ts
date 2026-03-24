@@ -146,6 +146,24 @@ export function useDashboardState(props: DashboardProps) {
   const dashboardGuestsEmptyState = createMemo(() => getDashboardGuestsEmptyState(search()));
   const dashboardLoadingState = createMemo(() => getDashboardLoadingState(reconnecting()));
   const dashboardDisconnectedState = createMemo(() => getDashboardDisconnectedState(reconnecting()));
+  const hasWorkloadsData = createMemo(() => allGuests().length > 0);
+  const surfaceConnected = createMemo(() =>
+    workloadsEnabled()
+      ? workloads.loading() || hasWorkloadsData() || !workloads.error()
+      : connected(),
+  );
+  const surfaceInitialDataReceived = createMemo(() =>
+    workloadsEnabled()
+      ? hasWorkloadsData() || !workloads.loading() || Boolean(workloads.error())
+      : initialDataReceived(),
+  );
+
+  const reconnectSurface = () => {
+    if (workloadsEnabled()) {
+      void workloads.refetch();
+    }
+    reconnect();
+  };
 
   let lastConnected = connected();
   createEffect(() => {
@@ -254,6 +272,7 @@ export function useDashboardState(props: DashboardProps) {
     nodeByInstance,
     namespaceFilterConfig,
     reconnect,
+    reconnectSurface,
     search,
     selectedGuestId,
     selectedKubernetesContext,
@@ -277,6 +296,8 @@ export function useDashboardState(props: DashboardProps) {
     sortDirection,
     sortKey,
     statusMode,
+    surfaceConnected,
+    surfaceInitialDataReceived,
     topSpacerHeight,
     totalColumns,
     totalStats,

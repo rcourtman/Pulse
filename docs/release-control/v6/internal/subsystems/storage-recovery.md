@@ -218,6 +218,13 @@ points. `frontend-modern/src/pages/Storage.tsx` is the storage route shell,
 storage surface owner, and `frontend-modern/src/components/Storage/` plus
 `frontend-modern/src/features/storageBackups/` define the storage health model
 and presentation, while
+the storage page's readiness now stays route-owned as well:
+`frontend-modern/src/components/Storage/useStoragePageModel.ts` and
+`frontend-modern/src/features/storageBackups/storagePageStatus.ts` must derive
+loading, reconnect, and disconnect presentation from the storage unified-resource
+fetch contract before consulting websocket churn so the storage surface does
+not present healthy REST-backed data as down or stale.
+Meanwhile,
 `frontend-modern/src/components/Recovery/` and the recovery hooks define the
 timeline, protected-item, and recovery-summary UX.
 The recovery table presentation helper now owns the canonical subject-type

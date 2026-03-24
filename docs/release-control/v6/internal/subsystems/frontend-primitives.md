@@ -146,6 +146,11 @@ The subsystem registry now also requires explicit proof-policy coverage for all
 shared runtime files, and shared-component guardrails fail if raw table
 composition is reintroduced in new shared components outside the canonical
 allowlist.
+Shared feature presentation helpers under `frontend-modern/src/features/` now
+also need to preserve route-owned page-health semantics when the owning surface
+is REST-backed: operators should only see reconnect or disconnected shells when
+the route's own data contract is unhealthy, not because a global websocket
+singleton is transiently reconnecting.
 `frontend-modern/src/components/shared/TagBadges.tsx` is now also the
 canonical tag-badge primitive. Dashboard workload rows and the unified-resource
 detail drawer must import that shared owner instead of keeping a dashboard-local

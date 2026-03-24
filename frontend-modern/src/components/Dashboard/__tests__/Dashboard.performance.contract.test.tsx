@@ -78,6 +78,9 @@ let mockWorkloads: Array<Record<string, unknown>> = [];
 let setMockWorkloadsSignal: ((next: Array<Record<string, unknown>>) => void) | null = null;
 let guestRowMountCount = 0;
 let guestRowUnmountCount = 0;
+let wsConnected = true;
+let wsInitialDataReceived = true;
+let wsReconnecting = false;
 
 const pushMockWorkloads = (next: Array<Record<string, unknown>>) => {
   mockWorkloads = next;
@@ -95,10 +98,10 @@ vi.mock('@solidjs/router', async () => {
 
 vi.mock('@/App', () => ({
   useWebSocket: () => ({
-    connected: () => true,
+    connected: () => wsConnected,
     activeAlerts: () => ({}),
-    initialDataReceived: () => true,
-    reconnecting: () => false,
+    initialDataReceived: () => wsInitialDataReceived,
+    reconnecting: () => wsReconnecting,
     reconnect: vi.fn(),
     state: {
       connectedInfrastructure: [],
@@ -303,6 +306,9 @@ describe('Dashboard performance contract', () => {
     setMockWorkloadsSignal = null;
     guestRowMountCount = 0;
     guestRowUnmountCount = 0;
+    wsConnected = true;
+    wsInitialDataReceived = true;
+    wsReconnecting = false;
   });
 
   describe('Fixture profile validation', () => {
@@ -336,6 +342,28 @@ describe('Dashboard performance contract', () => {
       await waitFor(() => {
         expect(getGuestRowCount(container)).toBe(PROFILES.S);
       });
+    });
+
+    it('keeps the workloads route visible when websocket connectivity degrades but REST workload data is healthy', async () => {
+      mockLocationSearch = '?type=all';
+      wsConnected = false;
+      wsInitialDataReceived = false;
+      wsReconnecting = true;
+      mockWorkloads = [makeGuest(1, { name: 'route-owned-workload' })];
+
+      render(() => <Dashboard vms={[]} containers={[]} nodes={[]} useWorkloads />);
+
+      await waitFor(() => {
+        expect(document.querySelector('[data-testid="dashboard-filter"]')).toBeInTheDocument();
+      });
+      await waitFor(() => {
+        expect(
+          document.querySelector('[data-testid="guest-row-route-owned-workload"]'),
+        ).toBeInTheDocument();
+      });
+
+      expect(document.body).not.toHaveTextContent('Connection lost');
+      expect(document.body).not.toHaveTextContent('Attempting to reconnect…');
     });
 
     it('keeps governed resource search aligned with the preferred display label', () => {
