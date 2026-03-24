@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  formatMonitoredSystemLegacyConnectionBreakdown,
   getMonitoredSystemBriefSummary,
+  formatMonitoredSystemLimitSummary,
   formatMonitoredSystemLatestIncludedSignalSentence,
+  formatMonitoredSystemMigrationMessage,
+  formatMonitoredSystemOverflowSummary,
   formatMonitoredSystemSurfaceAttribution,
   getMonitoredSystemCountingDetailsToggleLabel,
   getMonitoredSystemDisclosureDefinition,
@@ -10,6 +14,9 @@ import {
   getMonitoredSystemExplanationFallbackSummary,
   getMonitoredSystemLedgerDescription,
   getMonitoredSystemLedgerPresentation,
+  getMonitoredSystemLimitInstallCollectorsLabel,
+  getMonitoredSystemLimitLearnMoreLabel,
+  getMonitoredSystemLimitUpgradeLabel,
   getMonitoredSystemSourceLabel,
   getMonitoredSystemStatusFallbackSummary,
   getMonitoredSystemSurfaceTypeLabel,
@@ -46,6 +53,14 @@ describe('monitoredSystemPresentation', () => {
           'At least one included source is offline or disconnected, so Pulse marks this monitored system as offline.',
         unknown: 'Pulse cannot determine a canonical runtime status for this monitored system yet.',
       },
+      limitBanner: {
+        learnMoreLabel: 'Learn more',
+        installCollectorsLabel: 'Install v6 collectors',
+        upgradeLabel: 'Upgrade to add more',
+        overflowSummaryPrefix: 'Includes 1 temporary onboarding slot',
+        legacyConnectionSuffix:
+          'that count once toward your monitored-system cap when the same top-level system is discovered canonically.',
+      },
     });
     expect(getMonitoredSystemBriefSummary()).toBe(
       'Billing is based on monitored systems. Child resources are included.',
@@ -73,6 +88,35 @@ describe('monitoredSystemPresentation', () => {
     expect(getMonitoredSystemStatusFallbackSummary()).toBe(
       'Pulse cannot determine a canonical runtime status for this monitored system yet.',
     );
+  });
+
+  it('returns canonical monitored-system limit warning copy', () => {
+    expect(getMonitoredSystemLimitLearnMoreLabel()).toBe('Learn more');
+    expect(getMonitoredSystemLimitInstallCollectorsLabel()).toBe('Install v6 collectors');
+    expect(getMonitoredSystemLimitUpgradeLabel()).toBe('Upgrade to add more');
+    expect(formatMonitoredSystemLimitSummary({ current: 5, limit: 6 })).toBe(
+      'Monitored systems: 5/6',
+    );
+    expect(
+      formatMonitoredSystemLegacyConnectionBreakdown({
+        proxmox_nodes: 2,
+        docker_hosts: 1,
+        kubernetes_clusters: 0,
+      }),
+    ).toBe('2 Proxmox nodes, 1 Docker host');
+    expect(
+      formatMonitoredSystemMigrationMessage({
+        proxmox_nodes: 2,
+        docker_hosts: 1,
+        kubernetes_clusters: 0,
+      }),
+    ).toBe(
+      'You also have 3 resources connected via API or legacy collectors (2 Proxmox nodes, 1 Docker host) that count once toward your monitored-system cap when the same top-level system is discovered canonically.',
+    );
+    expect(formatMonitoredSystemOverflowSummary(14)).toBe(
+      'Includes 1 temporary onboarding slot (14d remaining)',
+    );
+    expect(formatMonitoredSystemOverflowSummary(undefined)).toBe('');
   });
 
   it('returns customer-facing source and type labels', () => {

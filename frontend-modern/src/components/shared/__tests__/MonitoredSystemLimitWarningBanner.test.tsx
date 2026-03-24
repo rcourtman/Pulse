@@ -92,17 +92,22 @@ describe('MonitoredSystemLimitWarningBanner', () => {
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('handleUpgradeClick');
 
     expect(monitoredSystemLimitWarningBannerModelSource).toContain(
+      "@/utils/monitoredSystemPresentation",
+    );
+    expect(monitoredSystemLimitWarningBannerModelSource).toContain(
       'getMonitoredSystemMigrationMessage',
     );
     expect(monitoredSystemLimitWarningBannerModelSource).toContain(
       'getMonitoredSystemBannerToneClass',
     );
     expect(monitoredSystemLimitWarningBannerModelSource).toContain(
-      'MONITORED_SYSTEM_LIMIT_UPGRADE_LABEL',
+      'getMonitoredSystemLimitUpgradeLabel',
     );
     expect(monitoredSystemLimitWarningBannerModelSource).toContain(
-      'MONITORED_SYSTEM_LIMIT_INSTALL_COLLECTORS_LABEL',
+      'getMonitoredSystemLimitInstallCollectorsLabel',
     );
+    expect(monitoredSystemLimitWarningBannerModelSource).not.toContain('Upgrade to add more');
+    expect(monitoredSystemLimitWarningBannerModelSource).not.toContain('Install v6 collectors');
   });
 
   it('stays hidden for non-urgent pure v6 installs', async () => {

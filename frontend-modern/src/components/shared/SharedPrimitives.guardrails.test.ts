@@ -373,9 +373,21 @@ describe('shared primitive guardrails', () => {
   });
 
   it('keeps shared fleet limit banner copy on the monitored-system commercial term', () => {
-    expect(monitoredSystemLimitWarningBannerModelSource).toContain('Monitored systems:');
-    expect(monitoredSystemLimitWarningBannerModelSource).toContain('monitored-system cap');
-    expect(monitoredSystemLimitWarningBannerModelSource).toContain('Install v6 collectors');
+    expect(monitoredSystemLimitWarningBannerModelSource).toContain(
+      "@/utils/monitoredSystemPresentation",
+    );
+    expect(monitoredSystemLimitWarningBannerModelSource).toContain(
+      'formatMonitoredSystemLimitSummary',
+    );
+    expect(monitoredSystemLimitWarningBannerModelSource).toContain(
+      'formatMonitoredSystemMigrationMessage',
+    );
+    expect(monitoredSystemLimitWarningBannerModelSource).toContain(
+      'getMonitoredSystemLimitInstallCollectorsLabel',
+    );
+    expect(monitoredSystemLimitWarningBannerModelSource).not.toContain('Monitored systems:');
+    expect(monitoredSystemLimitWarningBannerModelSource).not.toContain('monitored-system cap');
+    expect(monitoredSystemLimitWarningBannerModelSource).not.toContain('Install v6 collectors');
     expect(monitoredSystemLimitWarningBannerModelSource).not.toContain('v6 Unified Agents:');
     expect(monitoredSystemLimitWarningBannerModelSource).not.toContain(
       'do not count toward Unified Agents.',
@@ -415,10 +427,10 @@ describe('shared primitive guardrails', () => {
       'getMonitoredSystemBannerToneClass',
     );
     expect(monitoredSystemLimitWarningBannerModelSource).toContain(
-      'MONITORED_SYSTEM_LIMIT_UPGRADE_LABEL',
+      'getMonitoredSystemLimitUpgradeLabel',
     );
     expect(monitoredSystemLimitWarningBannerModelSource).toContain(
-      'MONITORED_SYSTEM_LIMIT_INSTALL_COLLECTORS_LABEL',
+      'getMonitoredSystemLimitInstallCollectorsLabel',
     );
   });
 

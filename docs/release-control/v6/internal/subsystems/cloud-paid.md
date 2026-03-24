@@ -240,10 +240,12 @@ fallback instead of an unexplained placeholder glyph.
 That same billing support boundary now also owns the shared monitored-system
 presentation helper. `frontend-modern/src/utils/monitoredSystemPresentation.ts`
 is the canonical owner for monitored-system brief/disclosure copy, ledger
-labels, safe fallback summaries, and source/type attribution wording, so the
-settings panel, Pro usage section, and counting-rules disclosure must consume
-that helper instead of redefining customer-facing monitored-system copy inline
-or keeping a parallel copy in generic self-hosted plan utilities.
+labels, safe fallback summaries, source/type attribution wording, and the
+customer-facing monitored-system usage/migration strings reused by the shared
+limit-warning banner, so the settings panel, Pro usage section, counting-rules
+disclosure, and shared warning-banner model must consume that helper instead
+of redefining customer-facing monitored-system copy inline or keeping a
+parallel copy in generic self-hosted plan utilities.
 That same helper now also owns the row-status fallback summaries used when
 mixed-version payloads omit `status_explanation.summary`. The API client and
 settings panel must derive online/warning/offline/unknown fallback text from

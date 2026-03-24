@@ -697,9 +697,12 @@ stays the render shell, `frontend-modern/src/components/shared/useMonitoredSyste
 owns entitlement load, warning metric emission, migration/upgrade click tracking,
 and upgrade-link runtime, and
 `frontend-modern/src/components/shared/monitoredSystemLimitWarningBannerModel.ts`
-owns monitored-system summary, migration copy, overflow summary, and tone/text-class
-policy. Future warning-banner work should extend those owners instead of pushing
-entitlement orchestration, tracking, or naming math back into the shared shell.
+owns monitored-system warning policy, count aggregation, and tone/text-class
+policy while sourcing customer-facing monitored-system copy from the canonical
+`frontend-modern/src/utils/monitoredSystemPresentation.ts` helper. Future
+warning-banner work should extend those owners instead of pushing entitlement
+orchestration, tracking, or naming math back into the shared shell or
+reintroducing banner-local monitored-system copy strings.
 Shared frontend label-formatting helpers now also have an explicit owner here.
 `frontend-modern/src/utils/textPresentation.ts` is the canonical shared owner
 for token humanization, identifier label formatting, title-casing, and

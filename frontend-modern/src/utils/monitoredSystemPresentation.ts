@@ -37,7 +37,21 @@ const MONITORED_SYSTEM_LEDGER_PRESENTATION = {
       'At least one included source is offline or disconnected, so Pulse marks this monitored system as offline.',
     unknown: 'Pulse cannot determine a canonical runtime status for this monitored system yet.',
   },
+  limitBanner: {
+    learnMoreLabel: 'Learn more',
+    installCollectorsLabel: 'Install v6 collectors',
+    upgradeLabel: 'Upgrade to add more',
+    overflowSummaryPrefix: 'Includes 1 temporary onboarding slot',
+    legacyConnectionSuffix:
+      'that count once toward your monitored-system cap when the same top-level system is discovered canonically.',
+  },
 } as const;
+
+export type MonitoredSystemLegacyConnectionCounts = {
+  proxmox_nodes: number;
+  docker_hosts: number;
+  kubernetes_clusters: number;
+};
 
 export function getMonitoredSystemLedgerPresentation() {
   return MONITORED_SYSTEM_LEDGER_PRESENTATION;
@@ -75,6 +89,69 @@ export function getMonitoredSystemStatusFallbackSummary(
   status: 'online' | 'warning' | 'offline' | 'unknown' = 'unknown',
 ): string {
   return MONITORED_SYSTEM_LEDGER_PRESENTATION.statusSummaryByStatus[status];
+}
+
+export function getMonitoredSystemLimitLearnMoreLabel(): string {
+  return MONITORED_SYSTEM_LEDGER_PRESENTATION.limitBanner.learnMoreLabel;
+}
+
+export function getMonitoredSystemLimitInstallCollectorsLabel(): string {
+  return MONITORED_SYSTEM_LEDGER_PRESENTATION.limitBanner.installCollectorsLabel;
+}
+
+export function getMonitoredSystemLimitUpgradeLabel(): string {
+  return MONITORED_SYSTEM_LEDGER_PRESENTATION.limitBanner.upgradeLabel;
+}
+
+export function formatMonitoredSystemLimitSummary(limit: {
+  current: number;
+  limit: number;
+}): string {
+  return `Monitored systems: ${limit.current}/${limit.limit}`;
+}
+
+export function formatMonitoredSystemLegacyConnectionBreakdown(
+  counts: MonitoredSystemLegacyConnectionCounts,
+): string {
+  const parts: string[] = [];
+
+  if (counts.proxmox_nodes > 0) {
+    parts.push(
+      `${counts.proxmox_nodes} Proxmox ${counts.proxmox_nodes === 1 ? 'node' : 'nodes'}`,
+    );
+  }
+  if (counts.docker_hosts > 0) {
+    parts.push(`${counts.docker_hosts} Docker ${counts.docker_hosts === 1 ? 'host' : 'hosts'}`);
+  }
+  if (counts.kubernetes_clusters > 0) {
+    parts.push(
+      `${counts.kubernetes_clusters} Kubernetes ${
+        counts.kubernetes_clusters === 1 ? 'cluster' : 'clusters'
+      }`,
+    );
+  }
+
+  return parts.join(', ');
+}
+
+export function formatMonitoredSystemMigrationMessage(
+  counts: MonitoredSystemLegacyConnectionCounts,
+): string {
+  const total = counts.proxmox_nodes + counts.docker_hosts + counts.kubernetes_clusters;
+  if (total <= 0) return '';
+
+  const noun = total === 1 ? 'resource' : 'resources';
+  const breakdown = formatMonitoredSystemLegacyConnectionBreakdown(counts);
+  return `You also have ${total} ${noun} connected via API or legacy collectors${
+    breakdown ? ` (${breakdown})` : ''
+  } ${MONITORED_SYSTEM_LEDGER_PRESENTATION.limitBanner.legacyConnectionSuffix}`;
+}
+
+export function formatMonitoredSystemOverflowSummary(
+  daysRemaining: number | undefined,
+): string {
+  if (!daysRemaining) return '';
+  return `${MONITORED_SYSTEM_LEDGER_PRESENTATION.limitBanner.overflowSummaryPrefix} (${daysRemaining}d remaining)`;
 }
 
 export function formatMonitoredSystemLatestIncludedSignalSentence(signal: {
