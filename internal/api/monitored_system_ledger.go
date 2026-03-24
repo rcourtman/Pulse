@@ -132,19 +132,7 @@ func (r *Router) handleMonitoredSystemLedger(w http.ResponseWriter, req *http.Re
 
 	entries := make([]MonitoredSystemLedgerEntry, 0, len(systems))
 	for _, system := range systems {
-		status := normalizeStatus(string(system.Status))
-		entries = append(entries, MonitoredSystemLedgerEntry{
-			Name:                       system.Name,
-			Type:                       system.Type,
-			Status:                     status,
-			StatusExplanation:          monitoredSystemLedgerStatusExplanation(system.StatusExplanation, status),
-			LatestIncludedSignal:       monitoredSystemLedgerLatestSignal(system.LatestIncludedSignal),
-			LatestIncludedSignalAt:     formatLastSeen(system.LastSeen),
-			LatestIncludedSignalSource: normalizeMonitoredSystemLedgerSource(system.LatestIncludedSignal.Source),
-			LastSeen:                   formatLastSeen(system.LastSeen),
-			Source:                     system.Source,
-			Explanation:                monitoredSystemLedgerExplanation(system.Explanation),
-		})
+		entries = append(entries, monitoredSystemLedgerEntry(system))
 	}
 
 	limit := maxMonitoredSystemsLimitForContext(req.Context())
@@ -156,6 +144,23 @@ func (r *Router) handleMonitoredSystemLedger(w http.ResponseWriter, req *http.Re
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp.NormalizeCollections())
+}
+
+func monitoredSystemLedgerEntry(system unifiedresources.MonitoredSystemRecord) MonitoredSystemLedgerEntry {
+	status := normalizeStatus(string(system.Status))
+	latestIncludedSignal := monitoredSystemLedgerLatestSignal(system.LatestIncludedSignal)
+	return MonitoredSystemLedgerEntry{
+		Name:                       system.Name,
+		Type:                       system.Type,
+		Status:                     status,
+		StatusExplanation:          monitoredSystemLedgerStatusExplanation(system.StatusExplanation, status),
+		LatestIncludedSignal:       latestIncludedSignal,
+		LatestIncludedSignalAt:     latestIncludedSignal.At,
+		LatestIncludedSignalSource: latestIncludedSignal.Source,
+		LastSeen:                   latestIncludedSignal.At,
+		Source:                     system.Source,
+		Explanation:                monitoredSystemLedgerExplanation(system.Explanation),
+	}
 }
 
 // ---------------------------------------------------------------------------

@@ -688,6 +688,75 @@ func TestContract_MonitoredSystemLedgerJSONSnapshot(t *testing.T) {
 	assertJSONSnapshot(t, got, want)
 }
 
+func TestContract_MonitoredSystemLedgerCompatibilityAliasesFollowLatestSignal(t *testing.T) {
+	entry := monitoredSystemLedgerEntry(unifiedresources.MonitoredSystemRecord{
+		Name:   "Tower",
+		Type:   "host",
+		Status: unifiedresources.StatusWarning,
+		StatusExplanation: unifiedresources.MonitoredSystemStatusExplanation{
+			Summary: "At least one included source is stale, so Pulse marks this monitored system as warning.",
+			Reasons: []unifiedresources.MonitoredSystemStatusReason{},
+		},
+		LastSeen: time.Date(2026, 3, 18, 17, 35, 0, 0, time.UTC),
+		LatestIncludedSignal: unifiedresources.MonitoredSystemLatestSignal{
+			Name:   "tower.local",
+			Type:   "docker-host",
+			Source: "docker",
+			At:     time.Date(2026, 3, 18, 17, 30, 0, 0, time.UTC),
+		},
+		Source: "multiple",
+		Explanation: unifiedresources.MonitoredSystemGroupingExplanation{
+			Summary:  "Counts as one monitored system because Pulse merged 2 top-level views into one canonical system using shared machine identity.",
+			Reasons:  []unifiedresources.MonitoredSystemGroupingReason{},
+			Surfaces: []unifiedresources.MonitoredSystemGroupingSurface{},
+		},
+	})
+
+	payload := MonitoredSystemLedgerResponse{
+		Systems: []MonitoredSystemLedgerEntry{entry},
+		Total:   1,
+		Limit:   5,
+	}
+
+	got, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal monitored system ledger response: %v", err)
+	}
+
+	const want = `{
+		"systems":[
+			{
+				"name":"Tower",
+				"type":"host",
+				"status":"warning",
+				"status_explanation":{
+					"summary":"At least one included source is stale, so Pulse marks this monitored system as warning.",
+					"reasons":[]
+				},
+				"latest_included_signal":{
+					"name":"tower.local",
+					"type":"docker-host",
+					"source":"docker",
+					"at":"2026-03-18T17:30:00Z"
+				},
+				"latest_included_signal_at":"2026-03-18T17:30:00Z",
+				"latest_included_signal_source":"docker",
+				"last_seen":"2026-03-18T17:30:00Z",
+				"source":"multiple",
+				"explanation":{
+					"summary":"Counts as one monitored system because Pulse merged 2 top-level views into one canonical system using shared machine identity.",
+					"reasons":[],
+					"surfaces":[]
+				}
+			}
+		],
+		"total":1,
+		"limit":5
+	}`
+
+	assertJSONSnapshot(t, got, want)
+}
+
 func TestContract_ResolveAuthEnvPathUsesCanonicalRuntimeDataDir(t *testing.T) {
 	envDir := t.TempDir()
 	t.Setenv("PULSE_DATA_DIR", envDir)

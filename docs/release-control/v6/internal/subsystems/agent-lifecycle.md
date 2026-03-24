@@ -245,7 +245,9 @@ left only as rollout compatibility fields rather than promises that every
 grouped source is healthy at that moment. Lifecycle-adjacent consumers must
 not label it with generic single-source health wording, and should use the
 canonical object when they need attribution for which grouped surface reported
-most recently.
+most recently. When those flat fields still appear during rollout, they should
+be treated only as aliases for `latest_included_signal.at` and
+`latest_included_signal.source`, not as an independent lifecycle signal.
 Lifecycle-adjacent workspace copy must also keep the same commercial framing:
 infrastructure operations may point operators to Pulse Pro for billing, but it
 must describe that boundary in monitored-system, plan-limit, and license-status

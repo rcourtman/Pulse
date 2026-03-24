@@ -136,6 +136,44 @@ func TestMonitoredSystemLedgerStatusExplanation(t *testing.T) {
 	}
 }
 
+func TestMonitoredSystemLedgerEntryUsesLatestIncludedSignalForCompatibilityAliases(t *testing.T) {
+	got := monitoredSystemLedgerEntry(unifiedresources.MonitoredSystemRecord{
+		Name:   "Tower",
+		Type:   "host",
+		Status: unifiedresources.StatusWarning,
+		StatusExplanation: unifiedresources.MonitoredSystemStatusExplanation{
+			Summary: "At least one included source is stale, so Pulse marks this monitored system as warning.",
+			Reasons: []unifiedresources.MonitoredSystemStatusReason{},
+		},
+		LastSeen: time.Date(2026, 3, 23, 12, 5, 0, 0, time.UTC),
+		LatestIncludedSignal: unifiedresources.MonitoredSystemLatestSignal{
+			Name:   "tower.local",
+			Type:   "docker-host",
+			Source: "docker",
+			At:     time.Date(2026, 3, 23, 12, 0, 0, 0, time.UTC),
+		},
+		Source: "multiple",
+		Explanation: unifiedresources.MonitoredSystemGroupingExplanation{
+			Summary:  "Counts as one monitored system because Pulse merged 2 top-level views into one canonical system using shared machine identity.",
+			Reasons:  []unifiedresources.MonitoredSystemGroupingReason{},
+			Surfaces: []unifiedresources.MonitoredSystemGroupingSurface{},
+		},
+	})
+
+	if got.LatestIncludedSignal.At != "2026-03-23T12:00:00Z" {
+		t.Fatalf("expected canonical latest signal timestamp, got %+v", got.LatestIncludedSignal)
+	}
+	if got.LatestIncludedSignalAt != got.LatestIncludedSignal.At {
+		t.Fatalf("expected latest_included_signal_at to mirror latest_included_signal.at, got %+v", got)
+	}
+	if got.LastSeen != got.LatestIncludedSignal.At {
+		t.Fatalf("expected last_seen compatibility alias to mirror latest_included_signal.at, got %+v", got)
+	}
+	if got.LatestIncludedSignalSource != got.LatestIncludedSignal.Source {
+		t.Fatalf("expected latest_included_signal_source to mirror latest_included_signal.source, got %+v", got)
+	}
+}
+
 func TestMonitoredSystemLedgerResponseEmptyState(t *testing.T) {
 	resp := EmptyMonitoredSystemLedgerResponse()
 	data, err := json.Marshal(resp)

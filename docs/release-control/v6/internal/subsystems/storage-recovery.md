@@ -384,7 +384,9 @@ left only as rollout compatibility fields rather than universal health
 timestamps. Storage- or recovery-adjacent consumers must not present that data
 with bare single-source `Last Seen` wording that hides grouped stale/offline
 conditions, and should use the canonical object when they need attribution for
-which grouped surface most recently reported.
+which grouped surface most recently reported. When those flat fields still
+appear during rollout, they should be interpreted only as aliases for the
+canonical object rather than as separate storage-facing freshness signals.
 That same shared `internal/api/` dependency now also assumes self-hosted
 commercial counting is canonical at the top-level monitored-system boundary:
 shared setup, deploy, entitlement, and API-backed monitoring helpers may not
