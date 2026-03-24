@@ -22,6 +22,23 @@ export const RECOVERY_PROTECTED_SEARCH_PLACEHOLDER = 'Search protected items...'
 export const RECOVERY_HISTORY_SEARCH_PLACEHOLDER = 'Search recovery history...';
 export const RECOVERY_SEARCH_HISTORY_EMPTY_MESSAGE = 'Recent searches appear here.';
 
+const RECOVERY_ARTIFACT_COLUMN_SPECS: Record<string, { headerClass: string; minWidthPx: number }> = {
+  time: { headerClass: 'w-[76px] text-right', minWidthPx: 76 },
+  type: { headerClass: 'w-[72px] text-center', minWidthPx: 72 },
+  subject: { headerClass: 'w-[248px]', minWidthPx: 248 },
+  entityId: { headerClass: 'w-[84px]', minWidthPx: 84 },
+  cluster: { headerClass: 'w-[120px]', minWidthPx: 120 },
+  nodeAgent: { headerClass: 'w-[120px]', minWidthPx: 120 },
+  namespace: { headerClass: 'w-[120px]', minWidthPx: 120 },
+  source: { headerClass: 'w-[78px] text-center', minWidthPx: 78 },
+  verified: { headerClass: 'w-[56px] text-center', minWidthPx: 56 },
+  size: { headerClass: 'w-[92px] text-right', minWidthPx: 92 },
+  method: { headerClass: 'w-[84px] text-center', minWidthPx: 84 },
+  repository: { headerClass: 'w-[160px]', minWidthPx: 160 },
+  details: { headerClass: 'w-[220px]', minWidthPx: 220 },
+  outcome: { headerClass: 'w-[88px] text-center', minWidthPx: 88 },
+};
+
 export function getRecoveryEventTimeTextClass(
   timestamp: number,
   nowMs: number = Date.now(),
@@ -117,38 +134,15 @@ export function getRecoverySubjectTypeLabel(point: RecoveryPoint): string {
 }
 
 export function getRecoveryArtifactColumnHeaderClass(id: string): string {
-  switch (id) {
-    case 'time':
-      return 'w-[76px] text-right';
-    case 'type':
-      return 'w-[72px] text-center';
-    case 'subject':
-      return 'w-[248px]';
-    case 'entityId':
-      return 'w-[84px]';
-    case 'cluster':
-      return 'w-[120px]';
-    case 'nodeAgent':
-      return 'w-[120px]';
-    case 'namespace':
-      return 'w-[120px]';
-    case 'source':
-      return 'w-[78px] text-center';
-    case 'verified':
-      return 'w-[56px] text-center';
-    case 'size':
-      return 'w-[92px] text-right';
-    case 'method':
-      return 'w-[84px] text-center';
-    case 'repository':
-      return 'w-[160px]';
-    case 'details':
-      return 'w-[220px]';
-    case 'outcome':
-      return 'w-[88px] text-center';
-    default:
-      return '';
-  }
+  return RECOVERY_ARTIFACT_COLUMN_SPECS[id]?.headerClass || '';
+}
+
+export function getRecoveryArtifactTableMinWidth(columnIds: readonly string[]): string {
+  const totalWidth = columnIds.reduce(
+    (sum, id) => sum + (RECOVERY_ARTIFACT_COLUMN_SPECS[id]?.minWidthPx || 140),
+    0,
+  );
+  return `${Math.max(980, totalWidth)}px`;
 }
 
 export function getRecoveryArtifactRowClass(selected: boolean): string {

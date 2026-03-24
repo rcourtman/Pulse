@@ -3,6 +3,7 @@ import type { ProtectionRollup, RecoveryPoint } from '@/types/recovery';
 import {
   getRecoveryArtifactColumnHeaderClass,
   getRecoveryArtifactRowClass,
+  getRecoveryArtifactTableMinWidth,
   getRecoveryEventTimeTextClass,
   getRecoveryGroupNoTimestampLabel,
   getRecoveryHistorySearchPlaceholder,
@@ -91,6 +92,21 @@ describe('recoveryTablePresentation', () => {
     expect(getRecoveryArtifactColumnHeaderClass('time')).toContain('text-right');
     expect(getRecoveryArtifactColumnHeaderClass('type')).toContain('w-[72px]');
     expect(getRecoveryArtifactColumnHeaderClass('subject')).toContain('w-[248px]');
+    expect(getRecoveryArtifactTableMinWidth(['time', 'subject', 'outcome'])).toBe('980px');
+    expect(
+      getRecoveryArtifactTableMinWidth([
+        'time',
+        'type',
+        'subject',
+        'source',
+        'verified',
+        'size',
+        'method',
+        'repository',
+        'details',
+        'outcome',
+      ]),
+    ).toBe('1174px');
     expect(getRecoveryArtifactRowClass(true)).toContain('outline-blue-200/80');
     expect(getRecoveryArtifactRowClass(false)).toBe('hover:bg-surface-hover');
   });

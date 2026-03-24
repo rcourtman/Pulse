@@ -94,6 +94,7 @@ querying, and the operator-facing storage health presentation layer.
 2. Keep recovery store/runtime changes aligned with the storage and recovery frontend proofs in `registry.json`
 3. Tighten guardrails when legacy storage or recovery presentation paths are removed
 4. Preserve the dependency split: API payload ownership stays in `api-contracts`, settings shell ownership stays in `frontend-primitives`, and canonical resource truth stays in `unified-resources`
+5. Keep recovery history table width budgeting derived from the canonical column specs in `frontend-modern/src/utils/recoveryTablePresentation.ts`, not from raw visible-column counts, so normalized subject labels and optional column sets cannot drift the right-edge badges and controls off-screen
 
 ## Current State
 
@@ -121,6 +122,11 @@ protected inventory, activity, and history presentation layers. The history
 surface is further split so `RecoveryHistorySection.tsx` owns the toolbar and
 controller boundary, `useRecoveryHistorySectionState.ts` owns local section UI
 state, and `RecoveryHistoryTable.tsx` owns the row/detail renderer.
+That history table layout now also derives its minimum width from the same
+canonical column-width spec that owns the header sizing in
+`frontend-modern/src/utils/recoveryTablePresentation.ts`, so longer governed
+subject labels do not force the trailing outcome/status columns off-screen by
+budget drift.
 That same shared `internal/api/` dependency now also assumes tenant-scoped
 resource handlers seed registries from canonical unified resources only:
 recovery- and storage-adjacent API helpers may not fall back to raw tenant

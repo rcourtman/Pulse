@@ -28,6 +28,7 @@ import {
 } from '@/utils/recoveryRecordPresentation';
 import {
   getRecoveryGroupNoTimestampLabel,
+  getRecoveryArtifactTableMinWidth,
   STALE_ISSUE_THRESHOLD_MS,
 } from '@/utils/recoveryTablePresentation';
 import { getRecoveryTimelineLabelEvery } from '@/utils/recoveryTimelineChartPresentation';
@@ -321,7 +322,9 @@ const Recovery: Component = () => {
   );
   const tableColumnCount = createMemo(() => mobileVisibleArtifactColumns().length);
   const tableMinWidth = createMemo(() =>
-    isMobile() ? 'auto' : `${Math.max(980, tableColumnCount() * 140)}px`,
+    isMobile()
+      ? 'auto'
+      : getRecoveryArtifactTableMinWidth(mobileVisibleArtifactColumns().map((column) => column.id)),
   );
 
   createEffect(() => {

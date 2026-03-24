@@ -188,6 +188,19 @@ describe('Recovery', () => {
     }
   });
 
+  it('keeps recovery history width aligned with canonical column specs', async () => {
+    render(() => <Recovery />);
+
+    const subject = await screen.findByText('VM 123');
+    fireEvent.click(subject);
+
+    await screen.findByText(/Showing 1 - 1 of 1 recovery points/i);
+    const tables = await screen.findAllByRole('table');
+    const historyTable = tables.find((table) => within(table).queryByText('Local'));
+    expect(historyTable).toBeDefined();
+    expect(historyTable).toHaveStyle({ 'min-width': '1046px', 'table-layout': 'fixed' });
+  });
+
   it('focuses history when a rollup is clicked', async () => {
     render(() => <Recovery />);
 
