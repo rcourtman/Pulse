@@ -5,11 +5,11 @@ import { MonitoredSystemDefinitionDisclosure } from '../MonitoredSystemDefinitio
 
 describe('MonitoredSystemDefinitionDisclosure', () => {
   it('shows concise copy first and reveals the full definition on demand', async () => {
-    render(() => (
-      <MonitoredSystemDefinitionDisclosure summary="Billing is based on monitored systems." />
-    ));
+    render(() => <MonitoredSystemDefinitionDisclosure showSummary />);
 
-    expect(screen.getByText('Billing is based on monitored systems.')).toBeInTheDocument();
+    expect(
+      screen.getByText('Billing is based on monitored systems. Child resources are included.'),
+    ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'View counting rules' })).toHaveAttribute(
       'aria-expanded',
       'false',
@@ -27,5 +27,13 @@ describe('MonitoredSystemDefinitionDisclosure', () => {
     expect(
       screen.getByText(/a monitored system is a top-level machine or cluster/i),
     ).toBeInTheDocument();
+  });
+
+  it('does not expose brief summary copy unless requested', () => {
+    render(() => <MonitoredSystemDefinitionDisclosure />);
+
+    expect(
+      screen.queryByText('Billing is based on monitored systems. Child resources are included.'),
+    ).not.toBeInTheDocument();
   });
 });

@@ -246,6 +246,11 @@ limit-warning banner, so the settings panel, Pro usage section, counting-rules
 disclosure, and shared warning-banner model must consume that helper instead
 of redefining customer-facing monitored-system copy inline or keeping a
 parallel copy in generic self-hosted plan utilities.
+That same disclosure surface must not accept arbitrary caller-supplied
+monitored-system summary strings as its primary API. When the disclosure needs
+to show brief summary copy, it should render the canonical helper-owned brief
+summary rather than giving callers a free-form summary prop that can drift from
+the governed monitored-system language.
 That same helper now also owns the row-status fallback summaries used when
 mixed-version payloads omit `status_explanation.summary`. The API client and
 settings panel must derive online/warning/offline/unknown fallback text from

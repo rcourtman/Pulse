@@ -518,8 +518,13 @@ describe('Settings architecture guardrails', () => {
       '@/utils/monitoredSystemPresentation',
     );
     expect(monitoredSystemDefinitionDisclosureSource).toContain(
+      'getMonitoredSystemBriefSummary',
+    );
+    expect(monitoredSystemDefinitionDisclosureSource).toContain(
       'getMonitoredSystemDisclosureToggleLabel',
     );
+    expect(monitoredSystemDefinitionDisclosureSource).not.toContain('summary?: string');
+    expect(monitoredSystemDefinitionDisclosureSource).not.toContain('{props.summary}');
     expect(proLicensePanelStateSource).toContain('buildSelfHostedCommercialPlanModel');
     expect(proLicensePanelStateSource).toContain('loadLicenseStatus(true)');
     expect(proLicensePlanSectionSource).toContain('CommercialStatGrid');

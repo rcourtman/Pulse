@@ -1,11 +1,12 @@
 import { Show, createSignal, type Component } from 'solid-js';
 import {
+  getMonitoredSystemBriefSummary,
   getMonitoredSystemDisclosureDefinition,
   getMonitoredSystemDisclosureToggleLabel,
 } from '@/utils/monitoredSystemPresentation';
 
 interface MonitoredSystemDefinitionDisclosureProps {
-  summary?: string;
+  showSummary?: boolean;
   class?: string;
   summaryClass?: string;
   buttonClass?: string;
@@ -19,8 +20,10 @@ export const MonitoredSystemDefinitionDisclosure: Component<
 
   return (
     <div class={props.class ?? 'space-y-2'}>
-      <Show when={props.summary}>
-        <p class={props.summaryClass ?? 'text-xs text-muted'}>{props.summary}</p>
+      <Show when={props.showSummary}>
+        <p class={props.summaryClass ?? 'text-xs text-muted'}>
+          {getMonitoredSystemBriefSummary()}
+        </p>
       </Show>
 
       <div class="space-y-2">
