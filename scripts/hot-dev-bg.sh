@@ -3,6 +3,7 @@
 # Run Pulse hot-dev in a managed background session (macOS/Linux).
 #
 # Usage:
+#   npm run dev                             # Canonical managed dev runtime
 #   ./scripts/hot-dev-bg.sh start [--takeover]
 #   ./scripts/hot-dev-bg.sh stop
 #   ./scripts/hot-dev-bg.sh restart

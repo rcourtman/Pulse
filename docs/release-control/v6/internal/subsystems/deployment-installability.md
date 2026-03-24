@@ -203,6 +203,11 @@ That foreground escape hatch contract also applies to `scripts/hot-dev.sh`
 itself: its self-description and usage guidance must point operators back to
 the canonical managed `npm run dev` path for normal work and reserve
 `hot-dev.sh` for explicit foreground/manual troubleshooting.
+That same self-description rule applies to `scripts/hot-dev-bg.sh`: even
+though it is the managed control surface underneath the wrappers, its usage
+guidance must still point operators to the canonical repo-root `npm run dev`
+entrypoint for routine startup instead of teaching direct script invocation as
+the primary habit.
 That same dev-runtime helper boundary also includes the auxiliary operator
 controls that start, stop, restart, or recover local development. The repo-root
 Makefile targets, `scripts/toggle-mock.sh`, and `scripts/clean-mock-alerts.sh` must

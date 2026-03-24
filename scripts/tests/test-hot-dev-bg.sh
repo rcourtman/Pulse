@@ -321,6 +321,14 @@ test_hot_dev_script_advertises_foreground_escape_hatch() {
   assert_not_contains "hot-dev usage no longer claims standard dev mode" "${output}" "Standard dev mode"
 }
 
+test_hot_dev_bg_script_advertises_managed_entrypoint() {
+  local output
+  output="$(sed -n '1,20p' "${ROOT_DIR}/scripts/hot-dev-bg.sh")"
+
+  assert_contains "hot-dev-bg usage points to managed runtime first" "${output}" "npm run dev                             # Canonical managed dev runtime"
+  assert_contains "hot-dev-bg still documents direct launcher start" "${output}" "./scripts/hot-dev-bg.sh start [--takeover]"
+}
+
 test_clean_mock_alerts_prefers_managed_runtime() {
   local test_dir fake_bin alert_history fake_hot_dev_bg action_log output
   test_dir="$(mktemp -d)"
@@ -550,6 +558,7 @@ main() {
   test_root_package_exposes_managed_runtime_entrypoints
   test_frontend_package_exposes_managed_runtime_entrypoints
   test_hot_dev_script_advertises_foreground_escape_hatch
+  test_hot_dev_bg_script_advertises_managed_entrypoint
   test_clean_mock_alerts_prefers_managed_runtime
   test_dev_check_uses_managed_runtime_status
   test_backend_restart_requires_managed_runtime
