@@ -346,6 +346,21 @@ PY
   assert_contains "frontend package keeps explicit frontend-only escape hatch" "${output}" "dev:frontend-only=vite"
 }
 
+test_makefile_routes_managed_runtime_through_npm() {
+  local output
+  output="$(cat "${ROOT_DIR}/Makefile")"
+
+  assert_contains "make dev routes through npm wrapper" "${output}" $'dev:\n\tnpm run dev'
+  assert_contains "make dev-status routes through npm wrapper" "${output}" $'dev-status:\n\tnpm run dev:status'
+  assert_contains "make dev-logs routes through npm wrapper" "${output}" $'dev-logs:\n\tnpm run dev:logs'
+  assert_contains "make dev-stop routes through npm wrapper" "${output}" $'dev-stop:\n\tnpm run dev:stop'
+  assert_contains "make dev-restart routes through npm wrapper" "${output}" $'dev-restart:\n\tnpm run dev:restart'
+  assert_contains "make dev-backend-restart routes through npm wrapper" "${output}" $'dev-backend-restart:\n\tnpm run dev:backend-restart'
+  assert_contains "make dev-verify routes through npm wrapper" "${output}" $'dev-verify:\n\tnpm run dev:verify'
+  assert_contains "make dev-foreground routes through npm wrapper" "${output}" $'dev-foreground:\n\tnpm run dev:foreground'
+  assert_contains "make dev-hot routes through foreground wrapper" "${output}" $'dev-hot:\n\tnpm run dev:foreground'
+}
+
 test_hot_dev_script_advertises_foreground_escape_hatch() {
   local output
   output="$(sed -n '1,30p' "${ROOT_DIR}/scripts/hot-dev.sh")"
@@ -605,6 +620,7 @@ main() {
   test_launchd_setup_advertises_managed_runtime_controls
   test_root_package_exposes_managed_runtime_entrypoints
   test_frontend_package_exposes_managed_runtime_entrypoints
+  test_makefile_routes_managed_runtime_through_npm
   test_hot_dev_script_advertises_foreground_escape_hatch
   test_hot_dev_bg_script_advertises_managed_entrypoint
   test_integration_readme_uses_managed_backend_restart_wrapper

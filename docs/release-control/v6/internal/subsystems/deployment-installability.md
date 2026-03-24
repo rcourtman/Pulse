@@ -228,7 +228,11 @@ controls that start, stop, restart, or recover local development. The repo-root
 Makefile targets, `scripts/toggle-mock.sh`, and `scripts/clean-mock-alerts.sh` must
 route through the managed runtime control plane when they are operating on the
 local dev stack, instead of resurrecting lane-local `hot-dev.sh` or raw Vite
-process management through separate shell folklore.
+process management through separate shell folklore. For Makefile targets, that
+means dispatching through the canonical repo-root npm wrappers (`npm run dev`,
+`npm run dev:status`, `npm run dev:restart`, `npm run dev:backend-restart`,
+`npm run dev:verify`, `npm run dev:stop`, and `npm run dev:foreground`) rather
+than shelling directly into `scripts/hot-dev-bg.sh`.
 When `scripts/clean-mock-alerts.sh` needs to quiesce a local dev runtime, it
 must stop the managed session through `hot-dev-bg` before touching legacy
 compatibility services, and its operator recovery guidance must point back to

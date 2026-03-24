@@ -1,6 +1,6 @@
 # Pulse Makefile for development
 
-.PHONY: build run dev dev-status dev-logs dev-stop dev-restart dev-backend-restart dev-verify frontend backend all clean distclean dev-hot lint lint-backend lint-frontend format format-backend format-frontend build-agents control-plane handoff
+.PHONY: build run dev dev-status dev-logs dev-stop dev-restart dev-backend-restart dev-verify dev-foreground frontend backend all clean distclean dev-hot lint lint-backend lint-frontend format format-backend format-frontend build-agents control-plane handoff
 
 FRONTEND_DIR := frontend-modern
 FRONTEND_DIST := $(FRONTEND_DIR)/dist
@@ -27,28 +27,31 @@ run: build
 
 # Development - managed local runtime
 dev:
-	./scripts/hot-dev-bg.sh start --takeover
+	npm run dev
 
 dev-status:
-	./scripts/hot-dev-bg.sh status
+	npm run dev:status
 
 dev-logs:
-	./scripts/hot-dev-bg.sh logs
+	npm run dev:logs
 
 dev-stop:
-	./scripts/hot-dev-bg.sh stop
+	npm run dev:stop
 
 dev-restart:
-	./scripts/hot-dev-bg.sh restart --takeover
+	npm run dev:restart
 
 dev-backend-restart:
-	./scripts/hot-dev-bg.sh backend-restart
+	npm run dev:backend-restart
 
 dev-verify:
-	./scripts/hot-dev-bg.sh verify --takeover
+	npm run dev:verify
+
+dev-foreground:
+	npm run dev:foreground
 
 dev-hot:
-	./scripts/hot-dev.sh
+	npm run dev:foreground
 
 # Clean build artifacts
 clean:
