@@ -216,6 +216,12 @@ may not boot a separate legacy foreground runtime beside the managed dev stack:
 generated `com.pulse.hot-dev` LaunchAgent template must supervise the same
 managed `hot-dev-bg` control plane, so login-time auto-start, crash restart,
 and takeover diagnostics all operate on one runtime model.
+That same launchd helper must also advertise the canonical managed runtime
+controls as its primary operator surface. After installation it should point
+developers back to the browser entrypoint on `http://127.0.0.1:5173` and the
+repo-root `npm run dev`, `npm run dev:restart`, `npm run dev:status`, and
+`npm run dev:logs` commands for daily use, while keeping raw `launchctl`
+commands clearly secondary as LaunchAgent maintenance operations.
 That shared `scripts/install.sh` boundary must also keep one canonical service
 argument builder for the runtime flags it persists. Token-bearing install
 paths, token-file systemd paths, wrapper-script launches, and later service

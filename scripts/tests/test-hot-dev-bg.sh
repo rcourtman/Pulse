@@ -11,6 +11,7 @@ DEV_CHECK="${ROOT_DIR}/scripts/dev-check.sh"
 PACKAGE_JSON="${ROOT_DIR}/package.json"
 FRONTEND_PACKAGE_JSON="${ROOT_DIR}/frontend-modern/package.json"
 DEV_LAUNCHD_WRAPPER="${ROOT_DIR}/scripts/dev-launchd-wrapper.sh"
+DEV_LAUNCHD_SETUP="${ROOT_DIR}/scripts/dev-launchd-setup.sh"
 
 if [[ ! -x "${HOT_DEV_BG}" ]]; then
   echo "hot-dev-bg.sh not found or not executable at ${HOT_DEV_BG}" >&2
@@ -179,6 +180,49 @@ test_launchd_wrapper_uses_managed_supervisor() {
   output="$(sed -n '1,80p' "${DEV_LAUNCHD_WRAPPER}")"
 
   assert_contains "launchd wrapper uses managed launchd-session" "${output}" "scripts/hot-dev-bg.sh launchd-session --takeover"
+}
+
+test_launchd_setup_advertises_managed_runtime_controls() {
+  local test_dir fake_bin output
+  test_dir="$(mktemp -d)"
+  temp_dirs+=("${test_dir}")
+  fake_bin="${test_dir}/bin"
+  mkdir -p "${fake_bin}"
+
+  cat > "${fake_bin}/launchctl" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+case "${1:-}" in
+  bootout)
+    exit 0
+    ;;
+  bootstrap)
+    exit 0
+    ;;
+  print)
+    echo "pid = 4242"
+    exit 0
+    ;;
+  *)
+    echo "unexpected launchctl command: $*" >&2
+    exit 1
+    ;;
+esac
+EOF
+  chmod +x "${fake_bin}/launchctl"
+
+  output="$(
+    PATH="${fake_bin}:$PATH" \
+    HOME="${test_dir}/home" \
+    "${DEV_LAUNCHD_SETUP}" install
+  )"
+
+  assert_contains "launchd setup shows browser entrypoint" "${output}" "http://127.0.0.1:5173"
+  assert_contains "launchd setup shows managed start command" "${output}" "npm run dev"
+  assert_contains "launchd setup shows managed restart command" "${output}" "npm run dev:restart"
+  assert_contains "launchd setup shows managed status command" "${output}" "npm run dev:status"
+  assert_contains "launchd setup shows managed logs command" "${output}" "npm run dev:logs"
+  assert_contains "launchd setup keeps launchctl maintenance commands" "${output}" "launchctl kickstart -k"
 }
 
 test_root_package_exposes_managed_runtime_entrypoints() {
@@ -478,6 +522,7 @@ main() {
   test_verify_command_injects_managed_runtime_env
   test_launchd_session_supervises_managed_runtime
   test_launchd_wrapper_uses_managed_supervisor
+  test_launchd_setup_advertises_managed_runtime_controls
   test_root_package_exposes_managed_runtime_entrypoints
   test_frontend_package_exposes_managed_runtime_entrypoints
   test_clean_mock_alerts_prefers_managed_runtime
