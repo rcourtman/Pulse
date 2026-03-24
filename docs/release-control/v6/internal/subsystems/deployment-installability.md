@@ -183,6 +183,11 @@ must route operators back to the managed runtime entrypoint before falling back
 to process-killing folklore, otherwise the repo keeps reintroducing the same
 split-ownership `5173` versus `7655` confusion through secondary entry
 surfaces.
+When the frontend workspace exposes managed runtime wrappers, they must stay in
+operational parity with the repo-root entry surface for the canonical controls:
+start, status, logs, stop, restart, managed backend restart, verification, and
+the explicit foreground escape hatch. The only intentionally narrower frontend
+workspace exception is the named `dev:frontend-only` raw Vite escape hatch.
 That shared `scripts/install.sh` boundary must also keep one canonical service
 argument builder for the runtime flags it persists. Token-bearing install
 paths, token-file systemd paths, wrapper-script launches, and later service

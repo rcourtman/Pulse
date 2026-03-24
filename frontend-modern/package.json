@@ -15,9 +15,13 @@
   "homepage": "https://github.com/rcourtman/Pulse",
   "scripts": {
     "dev": "../scripts/hot-dev-bg.sh start --takeover",
+    "dev:logs": "../scripts/hot-dev-bg.sh logs",
+    "dev:restart": "../scripts/hot-dev-bg.sh restart --takeover",
+    "dev:backend-restart": "../scripts/hot-dev-bg.sh backend-restart",
     "dev:status": "../scripts/hot-dev-bg.sh status",
     "dev:stop": "../scripts/hot-dev-bg.sh stop",
     "dev:verify": "../scripts/hot-dev-bg.sh verify --takeover",
+    "dev:foreground": "../scripts/hot-dev.sh",
     "dev:frontend-only": "vite",
     "build": "node scripts/build-embed-assets.mjs",
     "preview": "vite preview",

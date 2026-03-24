@@ -80,11 +80,19 @@ examples where possible.
 
 - Managed dev runtime: `npm run dev`
 - Runtime status: `npm run dev:status`
+- Runtime logs: `npm run dev:logs`
+- Managed restart: `npm run dev:restart`
+- Managed backend restart: `npm run dev:backend-restart`
 - Browser recovery proof: `npm run dev:verify`
+- Foreground managed launcher: `npm run dev:foreground`
 - Frontend-only escape hatch: `cd frontend-modern && npm run dev:frontend-only`
 - Tests: `npm run test`
 - Lint: `npm run lint`
 - Format: `npm run format`
+
+The same managed runtime wrappers are available from `frontend-modern/` if you
+start there by habit, so `npm run dev`, `npm run dev:status`, and
+`npm run dev:verify` behave the same way from either workspace.
 - Production build: `npm run build` (syncs the Go embed copy in
   `internal/api/frontend-modern/dist` automatically).
 

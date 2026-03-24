@@ -193,9 +193,13 @@ with open(os.environ["PACKAGE_JSON_PATH"], "r", encoding="utf-8") as fh:
 
 for key in [
     "dev",
+    "dev:logs",
+    "dev:restart",
+    "dev:backend-restart",
     "dev:status",
     "dev:stop",
     "dev:verify",
+    "dev:foreground",
     "dev:frontend-only",
 ]:
     print(f"{key}={scripts.get(key, '')}")
@@ -203,9 +207,13 @@ PY
   )"
 
   assert_contains "frontend package exposes managed dev start" "${output}" "dev=../scripts/hot-dev-bg.sh start --takeover"
+  assert_contains "frontend package exposes managed dev logs" "${output}" "dev:logs=../scripts/hot-dev-bg.sh logs"
+  assert_contains "frontend package exposes managed dev restart" "${output}" "dev:restart=../scripts/hot-dev-bg.sh restart --takeover"
+  assert_contains "frontend package exposes managed backend restart" "${output}" "dev:backend-restart=../scripts/hot-dev-bg.sh backend-restart"
   assert_contains "frontend package exposes managed dev status" "${output}" "dev:status=../scripts/hot-dev-bg.sh status"
   assert_contains "frontend package exposes managed dev stop" "${output}" "dev:stop=../scripts/hot-dev-bg.sh stop"
   assert_contains "frontend package exposes managed dev verify" "${output}" "dev:verify=../scripts/hot-dev-bg.sh verify --takeover"
+  assert_contains "frontend package keeps foreground managed launcher" "${output}" "dev:foreground=../scripts/hot-dev.sh"
   assert_contains "frontend package keeps explicit frontend-only escape hatch" "${output}" "dev:frontend-only=vite"
 }
 
