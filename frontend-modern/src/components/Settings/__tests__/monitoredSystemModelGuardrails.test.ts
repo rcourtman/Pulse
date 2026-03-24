@@ -47,6 +47,8 @@ import thresholdsTableStateSource from '@/features/alerts/thresholds/hooks/useTh
 import collapsibleSectionSource from '@/components/Alerts/Thresholds/sections/CollapsibleSection.tsx?raw';
 import alertThresholdsPresentationSource from '@/utils/alertThresholdsPresentation.ts?raw';
 import alertThresholdsSectionPresentationSource from '@/utils/alertThresholdsSectionPresentation.ts?raw';
+import monitoredSystemLedgerApiSource from '@/api/monitoredSystemLedger.ts?raw';
+import monitoredSystemPresentationSource from '@/utils/monitoredSystemPresentation.ts?raw';
 import loginSource from '@/components/Login.tsx?raw';
 import settingsSource from '../Settings.tsx?raw';
 import aiSettingsShellSource from '../AISettings.tsx?raw';
@@ -117,6 +119,7 @@ import monitoringApiSource from '@/api/monitoring.ts?raw';
 import chartsApiSource from '@/api/charts.ts?raw';
 import resourceStateAdaptersSource from '@/utils/resourceStateAdapters.ts?raw';
 import resourceDetailMappersSource from '@/components/Infrastructure/resourceDetailMappers.ts?raw';
+import resourceDetailDiscoveryModelSource from '@/components/Infrastructure/resourceDetailDiscoveryModel.ts?raw';
 import resourceBadgesSource from '@/components/Infrastructure/resourceBadges.ts?raw';
 import resourceBadgePresentationSource from '@/utils/resourceBadgePresentation.ts?raw';
 import recoveryComponentSource from '@/components/Recovery/Recovery.tsx?raw';
@@ -244,6 +247,19 @@ describe('monitored-system model guardrails', () => {
     expect(agentLedgerPanelSource).not.toContain('Loading monitored system ledger...');
     expect(agentLedgerPanelSource).not.toContain('Failed to load monitored system ledger.');
     expect(agentLedgerPanelSource).not.toContain('function statusVariant(');
+    expect(monitoredSystemLedgerApiSource).toContain('@/utils/monitoredSystemPresentation');
+    expect(monitoredSystemLedgerApiSource).toContain('getMonitoredSystemStatusFallbackSummary');
+    expect(monitoredSystemLedgerApiSource).toContain('getMonitoredSystemExplanationFallbackSummary');
+    expect(monitoredSystemLedgerApiSource).not.toContain(
+      'All included top-level collection paths currently report online status.',
+    );
+    expect(monitoredSystemLedgerApiSource).not.toContain(
+      'At least one included top-level collection path is degraded, so Pulse marks this monitored system as warning.',
+    );
+    expect(monitoredSystemLedgerApiSource).not.toContain(
+      'Pulse cannot determine a canonical runtime status for this monitored system yet.',
+    );
+    expect(monitoredSystemPresentationSource).toContain('statusSummaryByStatus');
   });
 
   it('keeps APITokenManager runtime usage mapped from unified resources', () => {
@@ -917,8 +933,10 @@ describe('monitored-system model guardrails', () => {
   });
 
   it('keeps discovery mapping on canonical agentId only', () => {
-    expect(resourceDetailMappersSource).toContain('agentId: explicitDiscoveryAgentId');
-    expect(resourceDetailMappersSource).not.toContain('hostId: explicitDiscoveryAgentId');
+    expect(resourceDetailDiscoveryModelSource).toContain('const explicitDiscoveryAgentId =');
+    expect(resourceDetailDiscoveryModelSource).toContain('agentId: explicitDiscoveryAgentId');
+    expect(resourceDetailDiscoveryModelSource).not.toContain('hostId: explicitDiscoveryAgentId');
+    expect(resourceDetailMappersSource).toContain('getActionableAgentIdFromResource(resource)');
     expect(unifiedResourcesHookSource).toContain(
       'const discoveryAgentId = v2.discoveryTarget?.agentId;',
     );
