@@ -1,0 +1,129 @@
+#!/usr/bin/env bash
+#
+# Smoke test for scripts/hot-dev-bg.sh managed ownership diagnostics.
+
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+HOT_DEV_BG="${ROOT_DIR}/scripts/hot-dev-bg.sh"
+
+if [[ ! -x "${HOT_DEV_BG}" ]]; then
+  echo "hot-dev-bg.sh not found or not executable at ${HOT_DEV_BG}" >&2
+  exit 1
+fi
+
+failures=0
+server_pids=()
+
+cleanup() {
+  local pid
+  for pid in "${server_pids[@]:-}"; do
+    kill "${pid}" 2>/dev/null || true
+  done
+}
+trap cleanup EXIT
+
+assert_contains() {
+  local desc="$1"
+  local haystack="$2"
+  local needle="$3"
+
+  if [[ "${haystack}" == *"${needle}"* ]]; then
+    echo "[PASS] ${desc}"
+  else
+    echo "[FAIL] ${desc}" >&2
+    echo "Expected to find: ${needle}" >&2
+    ((failures++))
+  fi
+}
+
+pick_free_port() {
+  python3 - <<'PY'
+import socket
+
+sock = socket.socket()
+sock.bind(("127.0.0.1", 0))
+print(sock.getsockname()[1])
+sock.close()
+PY
+}
+
+start_http_server() {
+  local port="$1"
+  python3 -m http.server "${port}" --bind 127.0.0.1 >/dev/null 2>&1 &
+  local pid=$!
+  server_pids+=("${pid}")
+  sleep 1
+}
+
+test_status_without_runtime() {
+  local frontend_port backend_port output
+  frontend_port="$(pick_free_port)"
+  backend_port="$(pick_free_port)"
+  if [[ "${backend_port}" == "${frontend_port}" ]]; then
+    backend_port="$(pick_free_port)"
+  fi
+
+  output="$(
+    FRONTEND_DEV_HOST=127.0.0.1 \
+    FRONTEND_DEV_PORT="${frontend_port}" \
+    PULSE_DEV_API_HOST=127.0.0.1 \
+    PULSE_DEV_API_PORT="${backend_port}" \
+    "${HOT_DEV_BG}" status
+  )"
+
+  assert_contains "status reports no managed runtime" "${output}" "[hot-dev-bg] Not running"
+  assert_contains "status reports idle frontend port" "${output}" "[hot-dev-bg] Frontend port ${frontend_port} is not listening"
+  assert_contains "status reports idle backend port" "${output}" "[hot-dev-bg] Backend port ${backend_port} is not listening"
+}
+
+test_detects_unmanaged_listeners() {
+  local frontend_port backend_port status_output start_output
+  frontend_port="$(pick_free_port)"
+  backend_port="$(pick_free_port)"
+  if [[ "${backend_port}" == "${frontend_port}" ]]; then
+    backend_port="$(pick_free_port)"
+  fi
+
+  start_http_server "${frontend_port}"
+  start_http_server "${backend_port}"
+
+  status_output="$(
+    FRONTEND_DEV_HOST=127.0.0.1 \
+    FRONTEND_DEV_PORT="${frontend_port}" \
+    PULSE_DEV_API_HOST=127.0.0.1 \
+    PULSE_DEV_API_PORT="${backend_port}" \
+    "${HOT_DEV_BG}" status
+  )"
+
+  assert_contains "status reports unmanaged frontend listener" "${status_output}" "[hot-dev-bg] Port ${frontend_port}: unmanaged listener"
+  assert_contains "status reports unmanaged backend listener" "${status_output}" "[hot-dev-bg] Port ${backend_port}: unmanaged listener"
+  assert_contains "status explains unmanaged runtime ownership" "${status_output}" "[hot-dev-bg] Detected unmanaged dev listeners. hot-dev-bg is not managing the current runtime."
+
+  start_output="$(
+    set +e
+    FRONTEND_DEV_HOST=127.0.0.1 \
+    FRONTEND_DEV_PORT="${frontend_port}" \
+    PULSE_DEV_API_HOST=127.0.0.1 \
+    PULSE_DEV_API_PORT="${backend_port}" \
+    "${HOT_DEV_BG}" start 2>&1
+    printf '\nexit_code=%s' "$?"
+  )"
+
+  assert_contains "start refuses unmanaged takeover by default" "${start_output}" "Refusing to take over unmanaged listeners."
+  assert_contains "start returns failure for unmanaged takeover" "${start_output}" "exit_code=1"
+}
+
+main() {
+  test_status_without_runtime
+  test_detects_unmanaged_listeners
+
+  if (( failures > 0 )); then
+    echo "Total failures: ${failures}" >&2
+    exit 1
+  fi
+
+  echo "hot-dev-bg ownership diagnostics smoke tests passed."
+}
+
+main "$@"

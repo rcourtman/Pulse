@@ -3,7 +3,7 @@
 # Run Pulse hot-dev in a managed background session (macOS/Linux).
 #
 # Usage:
-#   ./scripts/hot-dev-bg.sh start
+#   ./scripts/hot-dev-bg.sh start [--takeover]
 #   ./scripts/hot-dev-bg.sh stop
 #   ./scripts/hot-dev-bg.sh restart
 #   ./scripts/hot-dev-bg.sh status
@@ -38,13 +38,46 @@ is_port_listening() {
   lsof -nP -iTCP:"${port}" -sTCP:LISTEN >/dev/null 2>&1
 }
 
-wait_for_port() {
+listener_pids() {
   local port="$1"
-  local timeout_seconds="${2:-60}"
+  lsof -nP -t -iTCP:"${port}" -sTCP:LISTEN 2>/dev/null | sort -u
+}
+
+process_group_id() {
+  local pid="$1"
+  ps -o pgid= -p "${pid}" 2>/dev/null | tr -d '[:space:]'
+}
+
+process_command() {
+  local pid="$1"
+  ps -o command= -p "${pid}" 2>/dev/null | sed 's/^[[:space:]]*//'
+}
+
+listener_is_managed() {
+  local port="$1"
+  local session_pid="$2"
+  local listener_pid
+
+  [[ -n "${session_pid}" ]] || return 1
+
+  while IFS= read -r listener_pid; do
+    [[ -n "${listener_pid}" ]] || continue
+    if [[ "$(process_group_id "${listener_pid}")" == "${session_pid}" ]]; then
+      return 0
+    fi
+  done < <(listener_pids "${port}")
+
+  return 1
+}
+
+wait_for_managed_listener() {
+  local port="$1"
+  local session_pid="$2"
+  local timeout_seconds="${3:-60}"
   local checks=$((timeout_seconds * 2))
 
   while (( checks > 0 )); do
-    if is_port_listening "${port}"; then
+    if listener_is_managed "${port}" "${session_pid}"; then
       return 0
     fi
     sleep 0.5
@@ -64,11 +97,61 @@ is_running() {
   kill -0 "${pid}" 2>/dev/null
 }
 
+describe_listener() {
+  local port="$1"
+  local session_pid="${2:-}"
+  local found=0
+  local listener_pid pgid owner command
+
+  while IFS= read -r listener_pid; do
+    [[ -n "${listener_pid}" ]] || continue
+    found=1
+    pgid="$(process_group_id "${listener_pid}")"
+    owner="unmanaged"
+    if [[ -n "${session_pid}" && "${pgid}" == "${session_pid}" ]]; then
+      owner="managed"
+    fi
+    command="$(process_command "${listener_pid}")"
+    log "Port ${port}: ${owner} listener pid=${listener_pid} pgid=${pgid:-unknown} cmd=${command:-unknown}"
+  done < <(listener_pids "${port}")
+
+  if [[ "${found}" -eq 1 ]]; then
+    return 0
+  fi
+  return 1
+}
+
+has_any_listener() {
+  local port="$1"
+  local listener_pid
+
+  while IFS= read -r listener_pid; do
+    [[ -n "${listener_pid}" ]] || continue
+    return 0
+  done < <(listener_pids "${port}")
+
+  return 1
+}
+
+has_unmanaged_listeners() {
+  local session_pid="${1:-}"
+  local port
+
+  for port in "${FRONTEND_DEV_PORT}" "${PULSE_DEV_API_PORT}"; do
+    if has_any_listener "${port}" && ! listener_is_managed "${port}" "${session_pid}"; then
+      return 0
+    fi
+  done
+
+  return 1
+}
+
 require_python() {
   command -v python3 >/dev/null 2>&1 || fail "python3 is required"
 }
 
 start_bg() {
+  local takeover="${1:-false}"
   require_python
   mkdir -p "$(dirname "${PID_FILE}")"
   touch "${LOG_FILE}"
@@ -80,6 +163,18 @@ start_bg() {
 
   # Clear stale PID file before fresh start.
   rm -f "${PID_FILE}"
+
+  if has_unmanaged_listeners ""; then
+    if [[ "${takeover}" != "true" ]]; then
+      log "Unmanaged listeners are already using the dev ports."
+      describe_listener "${FRONTEND_DEV_PORT}" "" || true
+      describe_listener "${PULSE_DEV_API_PORT}" "" || true
+      fail "Refusing to take over unmanaged listeners. Stop them first or rerun with: ./scripts/hot-dev-bg.sh start --takeover"
+    fi
+    log "Taking over existing unmanaged listeners on the dev ports."
+    describe_listener "${FRONTEND_DEV_PORT}" "" || true
+    describe_listener "${PULSE_DEV_API_PORT}" "" || true
+  fi
 
   local pid
   pid="$(
@@ -120,15 +215,15 @@ PY
   printf "%s\n" "${pid}" > "${PID_FILE}"
 
   log "Started hot-dev (pid: ${pid})"
-  log "Waiting for backend port ${PULSE_DEV_API_PORT}..."
-  if ! wait_for_port "${PULSE_DEV_API_PORT}" 90; then
+  log "Waiting for managed backend listener on port ${PULSE_DEV_API_PORT}..."
+  if ! wait_for_managed_listener "${PULSE_DEV_API_PORT}" "${pid}" 90; then
     log "Backend did not start. Showing recent logs:"
     tail -n 80 "${LOG_FILE}" || true
     fail "hot-dev startup failed"
   fi
 
-  if ! wait_for_port "${FRONTEND_DEV_PORT}" 90; then
-    log "Backend is up, but frontend port ${FRONTEND_DEV_PORT} is not listening yet."
+  if ! wait_for_managed_listener "${FRONTEND_DEV_PORT}" "${pid}" 90; then
+    log "Backend is up, but a managed frontend listener on port ${FRONTEND_DEV_PORT} is not ready yet."
     log "Check logs with: ./scripts/hot-dev-bg.sh logs"
   fi
 
@@ -168,10 +263,10 @@ stop_bg() {
 }
 
 status_bg() {
+  local managed_pid=""
   if is_running; then
-    local pid
-    pid="$(cat "${PID_FILE}")"
-    log "Running (pid: ${pid})"
+    managed_pid="$(cat "${PID_FILE}")"
+    log "Running (pid: ${managed_pid})"
   else
     log "Not running"
   fi
@@ -195,6 +290,15 @@ status_bg() {
   [[ -n "${backend_code}" ]] || backend_code="000"
   log "Frontend HTTP: ${frontend_code}"
   log "Backend HTTP:  ${backend_code}"
+
+  describe_listener "${FRONTEND_DEV_PORT}" "${managed_pid}" || true
+  describe_listener "${PULSE_DEV_API_PORT}" "${managed_pid}" || true
+
+  if [[ -z "${managed_pid}" ]] && has_unmanaged_listeners ""; then
+    log "Detected unmanaged dev listeners. hot-dev-bg is not managing the current runtime."
+  elif [[ -n "${managed_pid}" ]] && has_unmanaged_listeners "${managed_pid}"; then
+    log "Detected split ownership: managed session is running, but one or more dev ports are owned by another process."
+  fi
 }
 
 logs_bg() {
@@ -207,7 +311,7 @@ usage() {
 Usage: $(basename "$0") <command>
 
 Commands:
-  start
+  start [--takeover]
   stop
   restart
   status
@@ -216,10 +320,31 @@ EOF
 }
 
 main() {
-  case "${1:-}" in
-    start) start_bg ;;
+  local command="${1:-}"
+  local flag="${2:-}"
+  local takeover="false"
+
+  if [[ "${flag}" == "--takeover" ]]; then
+    takeover="true"
+  fi
+
+  case "${command}" in
+    start)
+      if [[ -n "${flag}" && "${flag}" != "--takeover" ]]; then
+        usage
+        exit 1
+      fi
+      start_bg "${takeover}"
+      ;;
     stop) stop_bg ;;
-    restart) stop_bg; start_bg ;;
+    restart)
+      if [[ -n "${flag}" && "${flag}" != "--takeover" ]]; then
+        usage
+        exit 1
+      fi
+      stop_bg
+      start_bg "${takeover}"
+      ;;
     status) status_bg ;;
     logs) logs_bg ;;
     *) usage; exit 1 ;;

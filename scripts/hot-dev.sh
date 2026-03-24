@@ -10,6 +10,7 @@
 # Environment Variables:
 #   HOT_DEV_USE_PROD_DATA=true   Use /etc/pulse for data (sessions, config, etc.)
 #   HOT_DEV_USE_PRO=true         Build Pro binary (default: true if module available)
+#   HOT_DEV_ALLOW_OSS_FALLBACK=true  Allow fallback to OSS backend when Pro build fails
 #   PULSE_MOCK_MODE=true         Render mock UI data while keeping real metrics history intact
 #   PULSE_DATA_DIR=/path         Override data directory
 #   PULSE_DEV_API_PORT=7655      Backend API port (default: 7655)
@@ -68,6 +69,41 @@ check_dependencies() {
     if [[ $missing -eq 1 ]]; then
         exit 1
     fi
+}
+
+build_backend_binary() {
+    local build_output
+    PULSE_REPOS_DIR="${PULSE_REPOS_DIR:-${DEFAULT_PULSE_REPOS_DIR}}"
+    PRO_MODULE_DIR="${PULSE_REPOS_DIR}/pulse-enterprise"
+
+    if [[ -d "${PRO_MODULE_DIR}" ]] && [[ ${HOT_DEV_USE_PRO:-true} == "true" ]]; then
+        log_info "Building Pro binary (includes persistent audit logging)..."
+        if build_output=$(cd "${PRO_MODULE_DIR}" && go build -buildvcs=false -o "${ROOT_DIR}/pulse" ./cmd/pulse-enterprise 2>&1); then
+            printf "%s\n" "${build_output}" | grep -v "^#" || true
+            PRO_BUILD_SUCCESS=true
+            return 0
+        fi
+
+        printf "%s\n" "${build_output}" | grep -v "^#" || true
+        if [[ ${HOT_DEV_ALLOW_OSS_FALLBACK:-false} != "true" ]]; then
+            log_error "Pro build failed; refusing to fall back to the OSS backend."
+            log_error "Fix pulse-enterprise or set HOT_DEV_ALLOW_OSS_FALLBACK=true to override this explicitly."
+            PRO_BUILD_SUCCESS=false
+            return 1
+        fi
+
+        log_warn "Pro build failed; HOT_DEV_ALLOW_OSS_FALLBACK=true so hot-dev is falling back to the OSS backend."
+    fi
+
+    if build_output=$(cd "${ROOT_DIR}" && go build -o pulse ./cmd/pulse 2>&1); then
+        printf "%s\n" "${build_output}" | grep -v "^#" || true
+        PRO_BUILD_SUCCESS=false
+        return 0
+    fi
+
+    printf "%s\n" "${build_output}" | grep -v "^#" || true
+    PRO_BUILD_SUCCESS=false
+    return 1
 }
 
 # --- Configuration & Environment ---
@@ -273,24 +309,10 @@ cd "${ROOT_DIR}"
 mkdir -p internal/api/frontend-modern/dist
 touch internal/api/frontend-modern/dist/index.html
 
-# Check if Pro module is available and use it for full audit logging support
+# Check if Pro module is available and use it for full audit logging support.
 # Use PULSE_REPOS_DIR env var or default to the parent directory that contains sibling repos.
-PULSE_REPOS_DIR="${PULSE_REPOS_DIR:-${DEFAULT_PULSE_REPOS_DIR}}"
-PRO_MODULE_DIR="${PULSE_REPOS_DIR}/pulse-enterprise"
-if [[ -d "${PRO_MODULE_DIR}" ]] && [[ ${HOT_DEV_USE_PRO:-true} == "true" ]]; then
-    log_info "Building Pro binary (includes persistent audit logging)..."
-    cd "${PRO_MODULE_DIR}"
-    go build -buildvcs=false -o "${ROOT_DIR}/pulse" ./cmd/pulse-enterprise 2>/dev/null || {
-        log_warn "Pro build failed, falling back to standard binary"
-        cd "${ROOT_DIR}"
-        go build -o pulse ./cmd/pulse
-    }
-    cd "${ROOT_DIR}"
-    # Note: PULSE_AUDIT_DIR is set after PULSE_DATA_DIR is determined below
-    PRO_BUILD_SUCCESS=true
-else
-    PRO_BUILD_SUCCESS=false
-    go build -o pulse ./cmd/pulse
+if ! build_backend_binary; then
+    exit 1
 fi
 
 FRONTEND_PORT=${PULSE_DEV_API_PORT}
@@ -565,34 +587,11 @@ log_info "Starting backend file watcher..."
         log_info "🔄 Change detected: $(basename "$changed_file")"
         log_info "Rebuilding backend..."
 
-        # Use the same build logic as the initial build
-        local build_success=0
-        local build_output
-        PULSE_REPOS_DIR="${PULSE_REPOS_DIR:-${DEFAULT_PULSE_REPOS_DIR}}"
-        PRO_MODULE_DIR="${PULSE_REPOS_DIR}/pulse-enterprise"
-        if [[ -d "${PRO_MODULE_DIR}" ]] && [[ ${HOT_DEV_USE_PRO:-true} == "true" ]]; then
-            log_info "Building Pro binary..."
-            if build_output=$(cd "${PRO_MODULE_DIR}" && go build -buildvcs=false -o "${ROOT_DIR}/pulse" ./cmd/pulse-enterprise 2>&1); then
-                printf "%s\n" "${build_output}" | grep -v "^#" || true
-                build_success=1
-            else
-                printf "%s\n" "${build_output}" | grep -v "^#" || true
-            fi
-        fi
-        
-        if [[ $build_success -eq 0 ]]; then
-            if build_output=$(go build -o pulse ./cmd/pulse 2>&1); then
-                printf "%s\n" "${build_output}" | grep -v "^#" || true
-                build_success=1
-            else
-                printf "%s\n" "${build_output}" | grep -v "^#" || true
-            fi
-        fi
-
-        if [[ $build_success -eq 1 ]]; then
+        # Use the same build logic as the initial build.
+        if build_backend_binary; then
             restart_backend
         else
-            log_error "✗ Build failed!"
+            log_error "✗ Build failed; keeping the current backend process running."
         fi
         log_info "Watching for changes..."
     }
