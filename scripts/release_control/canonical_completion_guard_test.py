@@ -990,6 +990,56 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                         "frontend-modern/src/features/storageBackups/__tests__/storagePagePresentation.test.ts",
                         "frontend-modern/src/features/storageBackups/__tests__/storagePoolsTablePresentation.test.ts",
                         "frontend-modern/src/pages/__tests__/Storage.helpers.test.ts",
+                        "frontend-modern/src/utils/__tests__/dashboardStoragePresentation.test.ts",
+                        "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
+                    ],
+                }
+            ],
+        )
+
+    def test_dashboard_storage_presentation_change_requires_storage_recovery_contract(self):
+        required = infer_impacted_subsystems(
+            ["frontend-modern/src/utils/dashboardStoragePresentation.ts"]
+        )
+        self.assertEqual(set(required), {"storage-recovery"})
+
+        recovery = required["storage-recovery"]
+        self.assertEqual(
+            recovery["contract"],
+            "docs/release-control/v6/internal/subsystems/storage-recovery.md",
+        )
+        self.assertEqual(
+            recovery["touched_runtime_files"],
+            ["frontend-modern/src/utils/dashboardStoragePresentation.ts"],
+        )
+        self.assertEqual(
+            recovery["verification_requirements"],
+            [
+                {
+                    "id": "storage-product-surface",
+                    "label": "storage product surface proof",
+                    "touched_runtime_files": [
+                        "frontend-modern/src/utils/dashboardStoragePresentation.ts"
+                    ],
+                    "allow_same_subsystem_tests": False,
+                    "test_prefixes": [],
+                    "exact_files": [
+                        "frontend-modern/src/components/Storage/__tests__/DashboardStoragePanel.test.tsx",
+                        "frontend-modern/src/components/Storage/__tests__/DiskList.test.tsx",
+                        "frontend-modern/src/components/Storage/__tests__/Storage.test.tsx",
+                        "frontend-modern/src/components/Storage/__tests__/StorageControls.test.tsx",
+                        "frontend-modern/src/components/Storage/__tests__/StorageGroupRow.test.tsx",
+                        "frontend-modern/src/components/Storage/__tests__/StoragePoolDetail.test.tsx",
+                        "frontend-modern/src/components/Storage/code_standards.test.ts",
+                        "frontend-modern/src/features/storageBackups/__tests__/resourceStorageMapping.test.ts",
+                        "frontend-modern/src/features/storageBackups/__tests__/storageAdapters.test.ts",
+                        "frontend-modern/src/features/storageBackups/__tests__/storageAlertState.test.ts",
+                        "frontend-modern/src/features/storageBackups/__tests__/storageDomain.test.ts",
+                        "frontend-modern/src/features/storageBackups/__tests__/storageModelCore.test.ts",
+                        "frontend-modern/src/features/storageBackups/__tests__/storagePagePresentation.test.ts",
+                        "frontend-modern/src/features/storageBackups/__tests__/storagePoolsTablePresentation.test.ts",
+                        "frontend-modern/src/pages/__tests__/Storage.helpers.test.ts",
+                        "frontend-modern/src/utils/__tests__/dashboardStoragePresentation.test.ts",
                         "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
                     ],
                 }

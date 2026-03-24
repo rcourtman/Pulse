@@ -48,6 +48,20 @@ assert_contains() {
   fi
 }
 
+assert_not_contains() {
+  local desc="$1"
+  local haystack="$2"
+  local needle="$3"
+
+  if [[ "${haystack}" == *"${needle}"* ]]; then
+    echo "[FAIL] ${desc}" >&2
+    echo "Did not expect to find: ${needle}" >&2
+    ((failures++))
+  else
+    echo "[PASS] ${desc}"
+  fi
+}
+
 pick_free_port() {
   python3 - <<'PY'
 import socket
@@ -297,6 +311,16 @@ PY
   assert_contains "frontend package keeps explicit frontend-only escape hatch" "${output}" "dev:frontend-only=vite"
 }
 
+test_hot_dev_script_advertises_foreground_escape_hatch() {
+  local output
+  output="$(sed -n '1,30p' "${ROOT_DIR}/scripts/hot-dev.sh")"
+
+  assert_contains "hot-dev header identifies foreground escape hatch" "${output}" "hot-dev.sh - Foreground Pulse dev runtime escape hatch"
+  assert_contains "hot-dev usage points to managed runtime first" "${output}" "npm run dev                             # Canonical managed dev runtime"
+  assert_contains "hot-dev usage reserves direct script for manual troubleshooting" "${output}" "./scripts/hot-dev.sh                    # Foreground/manual runtime troubleshooting"
+  assert_not_contains "hot-dev usage no longer claims standard dev mode" "${output}" "Standard dev mode"
+}
+
 test_clean_mock_alerts_prefers_managed_runtime() {
   local test_dir fake_bin alert_history fake_hot_dev_bg action_log output
   test_dir="$(mktemp -d)"
@@ -525,6 +549,7 @@ main() {
   test_launchd_setup_advertises_managed_runtime_controls
   test_root_package_exposes_managed_runtime_entrypoints
   test_frontend_package_exposes_managed_runtime_entrypoints
+  test_hot_dev_script_advertises_foreground_escape_hatch
   test_clean_mock_alerts_prefers_managed_runtime
   test_dev_check_uses_managed_runtime_status
   test_backend_restart_requires_managed_runtime

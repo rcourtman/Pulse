@@ -1,5 +1,5 @@
 #!/bin/bash
-# hot-dev.sh - Development server with hot-reload for Pulse
+# hot-dev.sh - Foreground Pulse dev runtime escape hatch
 #
 # This script runs a local development environment with:
 # - Go backend with auto-rebuild on file changes (via inotifywait)
@@ -24,8 +24,9 @@
 #   - HMAC event signing for tamper detection
 #
 # Usage:
-#   ./scripts/hot-dev.sh                    # Standard dev mode
-#   HOT_DEV_USE_PROD_DATA=true ./scripts/hot-dev.sh  # Use production data
+#   npm run dev                             # Canonical managed dev runtime
+#   ./scripts/hot-dev.sh                    # Foreground/manual runtime troubleshooting
+#   HOT_DEV_USE_PROD_DATA=true ./scripts/hot-dev.sh  # Foreground/manual runtime with production data
 #
 set -euo pipefail
 

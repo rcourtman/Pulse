@@ -894,6 +894,50 @@ class SubsystemLookupTest(unittest.TestCase):
                 "frontend-modern/src/features/storageBackups/__tests__/storagePagePresentation.test.ts",
                 "frontend-modern/src/features/storageBackups/__tests__/storagePoolsTablePresentation.test.ts",
                 "frontend-modern/src/pages/__tests__/Storage.helpers.test.ts",
+                "frontend-modern/src/utils/__tests__/dashboardStoragePresentation.test.ts",
+                "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
+            ],
+        )
+
+    def test_lookup_paths_assigns_dashboard_storage_presentation_to_storage_recovery(self) -> None:
+        result = lookup_paths(["frontend-modern/src/utils/dashboardStoragePresentation.ts"])
+        self.assertEqual(result["unowned_runtime_files"], [])
+        self.assertEqual(
+            {item["subsystem"] for item in result["impacted_subsystems"]},
+            {"storage-recovery"},
+        )
+        file_entry = result["files"][0]
+        self.assertEqual(file_entry["classification"], "runtime")
+        self.assertEqual(
+            {match["subsystem"] for match in file_entry["matches"]},
+            {"storage-recovery"},
+        )
+        match = file_entry["matches"][0]
+        self.assertEqual(
+            match["contract"],
+            "docs/release-control/v6/internal/subsystems/storage-recovery.md",
+        )
+        self.assertEqual(match["lane_context"]["lane_id"], "L15")
+        self.assertEqual(match["verification_requirement"]["id"], "storage-product-surface")
+        self.assertEqual(
+            match["verification_requirement"]["exact_files"],
+            [
+                "frontend-modern/src/components/Storage/__tests__/DashboardStoragePanel.test.tsx",
+                "frontend-modern/src/components/Storage/__tests__/DiskList.test.tsx",
+                "frontend-modern/src/components/Storage/__tests__/Storage.test.tsx",
+                "frontend-modern/src/components/Storage/__tests__/StorageControls.test.tsx",
+                "frontend-modern/src/components/Storage/__tests__/StorageGroupRow.test.tsx",
+                "frontend-modern/src/components/Storage/__tests__/StoragePoolDetail.test.tsx",
+                "frontend-modern/src/components/Storage/code_standards.test.ts",
+                "frontend-modern/src/features/storageBackups/__tests__/resourceStorageMapping.test.ts",
+                "frontend-modern/src/features/storageBackups/__tests__/storageAdapters.test.ts",
+                "frontend-modern/src/features/storageBackups/__tests__/storageAlertState.test.ts",
+                "frontend-modern/src/features/storageBackups/__tests__/storageDomain.test.ts",
+                "frontend-modern/src/features/storageBackups/__tests__/storageModelCore.test.ts",
+                "frontend-modern/src/features/storageBackups/__tests__/storagePagePresentation.test.ts",
+                "frontend-modern/src/features/storageBackups/__tests__/storagePoolsTablePresentation.test.ts",
+                "frontend-modern/src/pages/__tests__/Storage.helpers.test.ts",
+                "frontend-modern/src/utils/__tests__/dashboardStoragePresentation.test.ts",
                 "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
             ],
         )

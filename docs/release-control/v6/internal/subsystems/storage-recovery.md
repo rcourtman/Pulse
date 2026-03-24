@@ -250,9 +250,11 @@ coverage only through the full recovery route or broader dashboard shells.
 The storage dashboard entry point must be treated the same way on the storage
 side: `frontend-modern/src/pages/Dashboard.tsx`,
 `frontend-modern/src/features/dashboardOverview/dashboardWidgets.ts`, and
-`frontend-modern/src/components/Storage/DashboardStoragePanel.tsx` must stay on
+`frontend-modern/src/components/Storage/DashboardStoragePanel.tsx` and
+`frontend-modern/src/utils/dashboardStoragePresentation.ts` must stay on
 explicit direct dashboard/storage proof routing instead of borrowing release-
-control coverage only from the broader storage page and model surfaces.
+control coverage only from the broader storage page, component, and model
+surfaces.
 That route shell now also composes the recent-alerts widget directly from the
 alert-owned `frontend-modern/src/components/Alerts/RecentAlertsPanel.tsx`
 surface instead of via a dashboard-panels-local alert implementation, so the

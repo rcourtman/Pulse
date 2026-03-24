@@ -199,6 +199,10 @@ operational parity with the repo-root entry surface for the canonical controls:
 start, status, logs, stop, restart, managed backend restart, verification, and
 the explicit foreground escape hatch. The only intentionally narrower frontend
 workspace exception is the named `dev:frontend-only` raw Vite escape hatch.
+That foreground escape hatch contract also applies to `scripts/hot-dev.sh`
+itself: its self-description and usage guidance must point operators back to
+the canonical managed `npm run dev` path for normal work and reserve
+`hot-dev.sh` for explicit foreground/manual troubleshooting.
 That same dev-runtime helper boundary also includes the auxiliary operator
 controls that start, stop, restart, or recover local development. The repo-root
 Makefile targets, `scripts/toggle-mock.sh`, and `scripts/clean-mock-alerts.sh` must
