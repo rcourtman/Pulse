@@ -124,6 +124,11 @@ export function TrendCharts(props: TrendChartsProps) {
           {getDashboardTrendErrorState().text}
         </div>
       </Show>
+      <Show when={!props.trends.error && props.trends.infrastructure.emptyMessage}>
+        <div class="mb-2 rounded border border-border bg-surface px-2 py-1.5 text-[11px] text-muted">
+          {props.trends.infrastructure.emptyMessage}
+        </div>
+      </Show>
 
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
         <Card padding="none" tone="default" class="px-4 py-3 border-border-subtle">

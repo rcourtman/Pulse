@@ -20,7 +20,7 @@ function makeOverview(overrides: Partial<DashboardOverview> = {}): DashboardOver
 
 function makeTrends(overrides: Partial<DashboardTrends> = {}): DashboardTrends {
   return {
-    infrastructure: { cpu: new Map(), memory: new Map() },
+    infrastructure: { cpu: new Map(), memory: new Map(), emptyMessage: null },
     storage: { capacity: null },
     loading: false,
     error: null,
@@ -55,5 +55,25 @@ describe('TrendCharts', () => {
     ));
 
     expect(screen.getByText('Unable to load trends')).toBeTruthy();
+  });
+
+  it('renders the infrastructure empty-state message when the charts have no renderable history', () => {
+    const [range, setRange] = createSignal<HistoryTimeRange>('1h');
+    render(() => (
+      <TrendCharts
+        trends={makeTrends({
+          infrastructure: {
+            cpu: new Map(),
+            memory: new Map(),
+            emptyMessage: 'Waiting for first sample',
+          },
+        })}
+        overview={makeOverview()}
+        trendRange={range}
+        setTrendRange={setRange}
+      />
+    ));
+
+    expect(screen.getByText('Waiting for first sample')).toBeTruthy();
   });
 });

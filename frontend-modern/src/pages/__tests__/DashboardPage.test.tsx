@@ -83,6 +83,7 @@ vi.mock('@/hooks/useDashboardTrends', () => ({
     infrastructure: {
       cpu: new Map(),
       memory: new Map(),
+      emptyMessage: null,
     },
     storage: {
       capacity: null,

@@ -4,9 +4,16 @@ import {
   type AggregatedMetricPoint,
   type HistoryTimeRange,
   type ResourceType as HistoryResourceType,
+  type TimeRange,
 } from '@/api/charts';
+import {
+  buildInfrastructureEmptyHistoryLabel,
+  buildInfrastructureSummarySeries,
+} from '@/components/Infrastructure/infrastructureSummaryModel';
 import type { DashboardOverview } from '@/hooks/useDashboardOverview';
-import { isStorage, type Resource, type ResourceMetricsTarget } from '@/types/resource';
+import { hasAgentFacet } from '@/utils/agentResources';
+import { fetchInfrastructureSummaryAndCache } from '@/utils/infrastructureSummaryCache';
+import { isInfrastructure, isStorage, type Resource } from '@/types/resource';
 
 export type TrendPoint = {
   timestamp: number;
@@ -23,6 +30,7 @@ export interface DashboardTrends {
   infrastructure: {
     cpu: Map<string, TrendData>;
     memory: Map<string, TrendData>;
+    emptyMessage: string | null;
   };
   storage: {
     capacity: TrendData | null;
@@ -31,16 +39,8 @@ export interface DashboardTrends {
   error: string | null;
 }
 
-interface HistoryTarget {
-  id: string;
-  resourceType: HistoryResourceType;
-  /** The unified resource ID used as the map key (may differ from the API resource ID). */
-  originalId: string;
-}
-
 interface DashboardTrendRequest {
-  cpu: HistoryTarget[];
-  memory: HistoryTarget[];
+  infrastructure: string[];
   storage: string[];
   infrastructureRange: HistoryTimeRange;
 }
@@ -68,6 +68,7 @@ function createEmptyTrendSnapshot(): DashboardTrendSnapshot {
     infrastructure: {
       cpu: new Map<string, TrendData>(),
       memory: new Map<string, TrendData>(),
+      emptyMessage: null,
     },
     storage: {
       capacity: null,
@@ -100,20 +101,78 @@ function dedupeValues(values: string[]): string[] {
   return Array.from(new Set(values));
 }
 
-function buildHistoryTargets(
-  ids: string[],
-  metricsTargetById: Map<string, ResourceMetricsTarget>,
-): HistoryTarget[] {
-  const uniqueIds = dedupeValues(ids);
-  const targets: HistoryTarget[] = [];
+function toInfrastructureSummaryRange(range: HistoryTimeRange): TimeRange {
+  switch (range) {
+    case '1h':
+      return '1h';
+    case '6h':
+    case '12h':
+      return '12h';
+    case '24h':
+      return '24h';
+    case '7d':
+      return '7d';
+    case '30d':
+    case '90d':
+      return '30d';
+    default:
+      return '1h';
+  }
+}
 
-  for (const id of uniqueIds) {
-    const mt = metricsTargetById.get(id);
-    if (!mt) continue;
-    targets.push({ id: mt.resourceId, resourceType: mt.resourceType, originalId: id });
+async function fetchInfrastructureTrendSnapshot(
+  resources: Resource[],
+  range: HistoryTimeRange,
+): Promise<DashboardTrends['infrastructure']> {
+  const infrastructureResources = resources.filter((resource) => isInfrastructure(resource));
+  if (infrastructureResources.length === 0) {
+    return {
+      cpu: new Map<string, TrendData>(),
+      memory: new Map<string, TrendData>(),
+      emptyMessage: null,
+    };
   }
 
-  return targets;
+  const agentFacetResources = resources.filter(
+    (resource) =>
+      (resource.type === 'agent' ||
+        resource.type === 'pbs' ||
+        resource.type === 'pmg' ||
+        resource.type === 'truenas') &&
+      hasAgentFacet(resource),
+  );
+
+  const { map, oldestDataTimestamp } = await fetchInfrastructureSummaryAndCache(
+    toInfrastructureSummaryRange(range),
+    { caller: 'useDashboardTrends' },
+  );
+  const summarySeries = buildInfrastructureSummarySeries(
+    infrastructureResources,
+    map,
+    agentFacetResources,
+  );
+
+  const cpu = new Map<string, TrendData>();
+  const memory = new Map<string, TrendData>();
+  let hasRenderableHistory = false;
+
+  for (const series of summarySeries) {
+    const cpuTrend = extractTrendData(series.cpu);
+    const memoryTrend = extractTrendData(series.memory);
+    if (cpuTrend.points.length >= 2 || memoryTrend.points.length >= 2) {
+      hasRenderableHistory = true;
+    }
+    cpu.set(series.id, cpuTrend);
+    memory.set(series.id, memoryTrend);
+  }
+
+  return {
+    cpu,
+    memory,
+    emptyMessage: hasRenderableHistory
+      ? null
+      : buildInfrastructureEmptyHistoryLabel(oldestDataTimestamp === null),
+  };
 }
 
 export function aggregateStoragePoints(allSeries: TrendPoint[][]): TrendPoint[] {
@@ -191,6 +250,7 @@ export function extractTrendData(points: Array<{ timestamp: number; value: numbe
 
 async function fetchDashboardTrendSnapshot(
   request: DashboardTrendRequest,
+  resources: Resource[],
 ): Promise<DashboardTrendSnapshot> {
   let firstError: string | null = null;
   const captureError = (error: unknown) => {
@@ -199,41 +259,15 @@ async function fetchDashboardTrendSnapshot(
     }
   };
 
-  const [cpuEntries, memoryEntries, storageSeries] = await Promise.all([
-    Promise.all(
-      request.cpu.map(async (target) => {
-        try {
-          const points = await fetchMetricPoints(
-            target.resourceType,
-            target.id,
-            'cpu',
-            request.infrastructureRange,
-            SPARKLINE_POINTS,
-          );
-          return [target.originalId, extractTrendData(points)] as const;
-        } catch (error) {
-          captureError(error);
-          return [target.originalId, createEmptyTrendData()] as const;
-        }
-      }),
-    ),
-    Promise.all(
-      request.memory.map(async (target) => {
-        try {
-          const points = await fetchMetricPoints(
-            target.resourceType,
-            target.id,
-            'memory',
-            request.infrastructureRange,
-            SPARKLINE_POINTS,
-          );
-          return [target.originalId, extractTrendData(points)] as const;
-        } catch (error) {
-          captureError(error);
-          return [target.originalId, createEmptyTrendData()] as const;
-        }
-      }),
-    ),
+  const [infrastructure, storageSeries] = await Promise.all([
+    (async () => {
+      try {
+        return await fetchInfrastructureTrendSnapshot(resources, request.infrastructureRange);
+      } catch (error) {
+        captureError(error);
+        return createEmptyTrendSnapshot().infrastructure;
+      }
+    })(),
     Promise.all(
       request.storage.map(async (resourceId) => {
         try {
@@ -256,10 +290,7 @@ async function fetchDashboardTrendSnapshot(
     request.storage.length > 0 ? extractTrendData(aggregateStoragePoints(storageSeries)) : null;
 
   return {
-    infrastructure: {
-      cpu: new Map<string, TrendData>(cpuEntries),
-      memory: new Map<string, TrendData>(memoryEntries),
-    },
+    infrastructure,
     storage: {
       capacity: storageCapacity,
     },
@@ -277,21 +308,10 @@ export function useDashboardTrends(
   const trendRequest = createMemo<DashboardTrendRequest>(() => {
     const currentOverview = overview();
     const currentResources = resources();
-    const metricsTargetById = new Map<string, ResourceMetricsTarget>();
-    for (const resource of currentResources) {
-      if (resource.metricsTarget) {
-        metricsTargetById.set(resource.id, resource.metricsTarget);
-      }
-    }
-
-    const cpuTargets = buildHistoryTargets(
-      currentOverview.infrastructure.topCPU.map((item) => item.id),
-      metricsTargetById,
-    );
-    const memoryTargets = buildHistoryTargets(
-      currentOverview.infrastructure.topMemory.map((item) => item.id),
-      metricsTargetById,
-    );
+    const infrastructureTargets = dedupeValues([
+      ...currentOverview.infrastructure.topCPU.map((item) => item.id),
+      ...currentOverview.infrastructure.topMemory.map((item) => item.id),
+    ]).sort();
     const storageTargets = dedupeValues(
       currentResources
         .filter((resource) => isStorage(resource))
@@ -302,8 +322,7 @@ export function useDashboardTrends(
     ).sort();
 
     return {
-      cpu: cpuTargets,
-      memory: memoryTargets,
+      infrastructure: infrastructureTargets,
       storage: storageTargets,
       infrastructureRange: infrastructureRange ? infrastructureRange() : INFRASTRUCTURE_RANGE,
     };
@@ -314,8 +333,7 @@ export function useDashboardTrends(
   const requestKey = createMemo(() => {
     const req = trendRequest();
     const stableReq = {
-      cpu: [...req.cpu].sort((a, b) => a.id.localeCompare(b.id)),
-      memory: [...req.memory].sort((a, b) => a.id.localeCompare(b.id)),
+      infrastructure: [...req.infrastructure].sort(),
       storage: [...req.storage].sort(),
       infrastructureRange: req.infrastructureRange,
     };
@@ -335,15 +353,15 @@ export function useDashboardTrends(
   createEffect(() => {
     requestKey(); // track dependency — re-run effect when key changes
     const request = trendRequest();
+    const currentResources = resources();
 
     // Skip empty requests (no targets yet).
-    if (request.cpu.length === 0 && request.memory.length === 0 && request.storage.length === 0)
-      return;
+    if (request.infrastructure.length === 0 && request.storage.length === 0) return;
 
     const requestId = ++latestRequestId;
     setTrendLoading(true);
 
-    fetchDashboardTrendSnapshot(request)
+    fetchDashboardTrendSnapshot(request, currentResources)
       .then((result) => {
         if (requestId !== latestRequestId) return; // stale
         setSnapshot(result);

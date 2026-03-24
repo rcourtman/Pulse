@@ -244,6 +244,11 @@ must treat missing infrastructure history as a governed empty state rather than
 as a silent blank sparkline box. Error copy and empty-history copy belong to
 the feature shell, while the data path and chart-shaping logic must stay in the
 owned hook/model layers that feed it.
+That shell must also stay passive with respect to data ownership: dashboard
+trend cards may render the summary-range controls and operator-facing empty or
+error copy, but they must not reintroduce route-local metrics-history fetch
+loops for CPU and memory sparklines when the canonical infrastructure summary
+surface already owns the chart contract.
 The shared density map now follows that same owner split.
 `frontend-modern/src/components/shared/DensityMap.tsx` stays the render shell,
 `frontend-modern/src/components/shared/useDensityMapState.ts` owns hover

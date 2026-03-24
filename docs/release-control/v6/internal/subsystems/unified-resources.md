@@ -270,6 +270,12 @@ series matching logic instead of issuing bespoke per-resource
 keeps dashboard summary sparklines aligned with canonical resource identity
 matching, agent-facet fallback behavior, and first-sample empty-state semantics
 already owned by the infrastructure summary surface.
+The same contract now also treats dashboard top-card sparkline hydration as a
+summary projection concern, not a per-resource history concern: top-CPU and
+top-memory selections may still come from dashboard overview ranking, but the
+series attached to those selections must be resolved through the same
+resource-to-chart matching path used by infrastructure summary cards so agent
+fallback and canonical identity aliases do not drift between the two surfaces.
 The backend AI and Patrol context renderers now derive their canonical change
 kind, source type, source adapter, actor, reason, and related-resource
 fragments from `internal/unifiedresources/change_presentation.go`, so the

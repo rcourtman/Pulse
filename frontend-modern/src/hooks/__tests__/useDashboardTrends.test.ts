@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import useDashboardTrendsSource from '@/hooks/useDashboardTrends.ts?raw';
 import { computeTrendDelta, extractTrendData, type TrendPoint } from '@/hooks/useDashboardTrends';
 
 function createPoints(values: number[]): TrendPoint[] {
@@ -76,5 +77,14 @@ describe('extractTrendData', () => {
     expect(trend.currentValue).toBe(72);
     expect(trend.delta).not.toBeNull();
     expect(trend.delta ?? 0).toBeGreaterThan(0);
+  });
+});
+
+describe('useDashboardTrends infrastructure routing', () => {
+  it('routes dashboard infrastructure sparklines through the infrastructure summary chart cache', () => {
+    expect(useDashboardTrendsSource).toContain('fetchInfrastructureSummaryAndCache');
+    expect(useDashboardTrendsSource).toContain("caller: 'useDashboardTrends'");
+    expect(useDashboardTrendsSource).not.toContain('request.cpu.map(async');
+    expect(useDashboardTrendsSource).not.toContain('request.memory.map(async');
   });
 });
