@@ -370,7 +370,7 @@ start_bg() {
       log "Unmanaged listeners are already using the dev ports."
       describe_listener "${FRONTEND_DEV_PORT}" "" || true
       describe_listener "${PULSE_DEV_API_PORT}" "" || true
-      fail "Refusing to take over unmanaged listeners. Stop them first or rerun with: ./scripts/hot-dev-bg.sh start --takeover"
+      fail "Refusing to take over unmanaged listeners. Stop them first or rerun with: npm run dev"
     fi
     log "Taking over existing unmanaged listeners on the dev ports."
     describe_listener "${FRONTEND_DEV_PORT}" "" || true
@@ -439,7 +439,7 @@ PY
 
   if ! wait_for_managed_listener "${FRONTEND_DEV_PORT}" "${pid}" 90; then
     log "Backend is up, but a managed frontend listener on port ${FRONTEND_DEV_PORT} is not ready yet."
-    log "Check logs with: ./scripts/hot-dev-bg.sh logs"
+    log "Check logs with: npm run dev:logs"
   fi
 
   log "Frontend: http://127.0.0.1:${FRONTEND_DEV_PORT}"
@@ -650,7 +650,7 @@ verify_bg() {
     managed_pid="$(managed_session_pid)"
     if [[ -n "${managed_pid}" ]] && has_unmanaged_listeners "${managed_pid}"; then
       if [[ "${takeover}" != "true" ]]; then
-        fail "Managed runtime has split ownership. Rerun with: ./scripts/hot-dev-bg.sh verify --takeover"
+        fail "Managed runtime has split ownership. Rerun with: npm run dev:verify"
       fi
       log "Managed runtime has split ownership. Reclaiming ports before verification..."
       stop_bg

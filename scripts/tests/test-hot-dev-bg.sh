@@ -323,10 +323,12 @@ test_hot_dev_script_advertises_foreground_escape_hatch() {
 
 test_hot_dev_bg_script_advertises_managed_entrypoint() {
   local output
-  output="$(sed -n '1,20p' "${ROOT_DIR}/scripts/hot-dev-bg.sh")"
+  output="$(sed -n '1,720p' "${ROOT_DIR}/scripts/hot-dev-bg.sh")"
 
   assert_contains "hot-dev-bg usage points to managed runtime first" "${output}" "npm run dev                             # Canonical managed dev runtime"
   assert_contains "hot-dev-bg still documents direct launcher start" "${output}" "./scripts/hot-dev-bg.sh start [--takeover]"
+  assert_contains "hot-dev-bg routes log guidance to managed wrapper" "${output}" "Check logs with: npm run dev:logs"
+  assert_contains "hot-dev-bg routes verify guidance to managed wrapper" "${output}" "Rerun with: npm run dev:verify"
 }
 
 test_clean_mock_alerts_prefers_managed_runtime() {
@@ -546,6 +548,7 @@ test_detects_unmanaged_listeners() {
   )"
 
   assert_contains "start refuses unmanaged takeover by default" "${start_output}" "Refusing to take over unmanaged listeners."
+  assert_contains "start recommends canonical managed entrypoint" "${start_output}" "npm run dev"
   assert_contains "start returns failure for unmanaged takeover" "${start_output}" "exit_code=1"
 }
 
