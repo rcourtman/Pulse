@@ -351,4 +351,42 @@ describe('MonitoredSystemLedgerPanel', () => {
 
     expect(screen.getByText('No included signal yet.')).toBeInTheDocument();
   });
+
+  it('falls back to the canonical status summary for the row status when status explanation is missing', async () => {
+    getLedgerMock.mockResolvedValue({
+      systems: [
+        {
+          name: 'server-d',
+          type: 'host',
+          status: 'offline',
+          latest_included_signal: {
+            name: 'server-d',
+            type: 'host',
+            source: 'agent',
+            at: '2026-01-01T00:00:00Z',
+          },
+          latest_included_signal_at: '2026-01-01T00:00:00Z',
+          latest_included_signal_source: 'agent',
+          last_seen: '2026-01-01T00:00:00Z',
+          source: 'agent',
+        },
+      ],
+      total: 1,
+      limit: 10,
+    } as MonitoredSystemLedgerResponse);
+
+    render(() => <MonitoredSystemLedgerPanel />);
+
+    await waitFor(() => {
+      expect(screen.getByText('server-d')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'View counting details' }));
+
+    expect(
+      screen.getByText(
+        'At least one included source is offline or disconnected, so Pulse marks this monitored system as offline.',
+      ),
+    ).toBeInTheDocument();
+  });
 });

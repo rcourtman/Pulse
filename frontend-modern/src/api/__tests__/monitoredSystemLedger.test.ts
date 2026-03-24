@@ -107,6 +107,36 @@ describe('MonitoredSystemLedgerAPI', () => {
     expect(result.systems[0]?.explanation.surfaces).toEqual([]);
   });
 
+  it('normalizes missing status explanation copy from the canonical presentation helper', async () => {
+    vi.mocked(apiFetchJSON).mockResolvedValueOnce({
+      systems: [
+        {
+          name: 'server-1',
+          type: 'host',
+          status: 'offline',
+          latest_included_signal: {
+            name: 'server-1',
+            type: 'host',
+            source: 'agent',
+            at: '2026-01-01T00:00:00Z',
+          },
+          latest_included_signal_at: '2026-01-01T00:00:00Z',
+          latest_included_signal_source: 'agent',
+          last_seen: '2026-01-01T00:00:00Z',
+          source: 'agent',
+        },
+      ],
+      total: 1,
+      limit: 5,
+    });
+
+    const result = await MonitoredSystemLedgerAPI.getLedger();
+
+    expect(result.systems[0]?.status_explanation?.summary).toBe(
+      'At least one included source is offline or disconnected, so Pulse marks this monitored system as offline.',
+    );
+  });
+
   it('preserves canonical warning status from the API contract', async () => {
     vi.mocked(apiFetchJSON).mockResolvedValueOnce({
       systems: [

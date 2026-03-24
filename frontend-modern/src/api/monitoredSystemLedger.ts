@@ -1,4 +1,8 @@
 import { apiFetchJSON } from '@/utils/apiClient';
+import {
+  getMonitoredSystemExplanationFallbackSummary,
+  getMonitoredSystemStatusFallbackSummary,
+} from '@/utils/monitoredSystemPresentation';
 
 export type MonitoredSystemLedgerStatus = 'online' | 'warning' | 'offline' | 'unknown';
 
@@ -97,13 +101,11 @@ function normalizeMonitoredSystemLedgerEntry(
       latestIncludedSignal.source,
     ),
     status_explanation: {
-      summary: entry.status_explanation?.summary ?? defaultMonitoredSystemStatusExplanation(status),
+      summary: entry.status_explanation?.summary ?? getMonitoredSystemStatusFallbackSummary(status),
       reasons: (entry.status_explanation?.reasons ?? []).map(normalizeMonitoredSystemLedgerStatusReason),
     },
     explanation: {
-      summary:
-        explanation?.summary ??
-        'Pulse counts this top-level collection path as one monitored system.',
+      summary: explanation?.summary ?? getMonitoredSystemExplanationFallbackSummary(),
       reasons: explanation?.reasons ?? [],
       surfaces: explanation?.surfaces ?? [],
     },
@@ -121,19 +123,6 @@ function normalizeMonitoredSystemLedgerStatus(
       return status.trim().toLowerCase() as MonitoredSystemLedgerStatus;
     default:
       return 'unknown';
-  }
-}
-
-function defaultMonitoredSystemStatusExplanation(status: MonitoredSystemLedgerStatus): string {
-  switch (status) {
-    case 'online':
-      return 'All included top-level collection paths currently report online status.';
-    case 'warning':
-      return 'At least one included top-level collection path is degraded, so Pulse marks this monitored system as warning.';
-    case 'offline':
-      return 'At least one included source is offline or disconnected, so Pulse marks this monitored system as offline.';
-    default:
-      return 'Pulse cannot determine a canonical runtime status for this monitored system yet.';
   }
 }
 

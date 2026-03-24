@@ -38,8 +38,14 @@ describe('monitoredSystemPresentation', () => {
       emptyState: 'No monitored systems counted.',
       noIncludedSignalLabel: 'No included signal yet.',
       fallbackExplanationSummary: 'Pulse counts this top-level collection path as one monitored system.',
-      fallbackStatusSummary:
-        'Pulse cannot determine a canonical runtime status for this monitored system yet.',
+      statusSummaryByStatus: {
+        online: 'All included top-level collection paths currently report online status.',
+        warning:
+          'At least one included top-level collection path is degraded, so Pulse marks this monitored system as warning.',
+        offline:
+          'At least one included source is offline or disconnected, so Pulse marks this monitored system as offline.',
+        unknown: 'Pulse cannot determine a canonical runtime status for this monitored system yet.',
+      },
     });
     expect(getMonitoredSystemBriefSummary()).toBe(
       'Billing is based on monitored systems. Child resources are included.',
@@ -54,6 +60,15 @@ describe('monitoredSystemPresentation', () => {
     expect(getMonitoredSystemCountingDetailsToggleLabel(true)).toBe('Hide counting details');
     expect(getMonitoredSystemExplanationFallbackSummary()).toBe(
       'Pulse counts this top-level collection path as one monitored system.',
+    );
+    expect(getMonitoredSystemStatusFallbackSummary('online')).toBe(
+      'All included top-level collection paths currently report online status.',
+    );
+    expect(getMonitoredSystemStatusFallbackSummary('warning')).toBe(
+      'At least one included top-level collection path is degraded, so Pulse marks this monitored system as warning.',
+    );
+    expect(getMonitoredSystemStatusFallbackSummary('offline')).toBe(
+      'At least one included source is offline or disconnected, so Pulse marks this monitored system as offline.',
     );
     expect(getMonitoredSystemStatusFallbackSummary()).toBe(
       'Pulse cannot determine a canonical runtime status for this monitored system yet.',

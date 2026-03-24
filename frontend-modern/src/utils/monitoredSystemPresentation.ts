@@ -29,8 +29,14 @@ const MONITORED_SYSTEM_LEDGER_PRESENTATION = {
   emptyState: 'No monitored systems counted.',
   noIncludedSignalLabel: 'No included signal yet.',
   fallbackExplanationSummary: 'Pulse counts this top-level collection path as one monitored system.',
-  fallbackStatusSummary:
-    'Pulse cannot determine a canonical runtime status for this monitored system yet.',
+  statusSummaryByStatus: {
+    online: 'All included top-level collection paths currently report online status.',
+    warning:
+      'At least one included top-level collection path is degraded, so Pulse marks this monitored system as warning.',
+    offline:
+      'At least one included source is offline or disconnected, so Pulse marks this monitored system as offline.',
+    unknown: 'Pulse cannot determine a canonical runtime status for this monitored system yet.',
+  },
 } as const;
 
 export function getMonitoredSystemLedgerPresentation() {
@@ -65,8 +71,10 @@ export function getMonitoredSystemExplanationFallbackSummary(): string {
   return MONITORED_SYSTEM_LEDGER_PRESENTATION.fallbackExplanationSummary;
 }
 
-export function getMonitoredSystemStatusFallbackSummary(): string {
-  return MONITORED_SYSTEM_LEDGER_PRESENTATION.fallbackStatusSummary;
+export function getMonitoredSystemStatusFallbackSummary(
+  status: 'online' | 'warning' | 'offline' | 'unknown' = 'unknown',
+): string {
+  return MONITORED_SYSTEM_LEDGER_PRESENTATION.statusSummaryByStatus[status];
 }
 
 export function formatMonitoredSystemLatestIncludedSignalSentence(signal: {

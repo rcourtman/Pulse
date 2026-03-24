@@ -262,6 +262,12 @@ That client contract must also fail closed when older or partial payloads omit
 the nested explanation object: the frontend may normalize missing explanation
 fields to empty reasons/surfaces plus a safe default summary, but it must not
 crash or invent non-canonical grouping details.
+That same frontend monitored-system client must not keep its own parallel
+fallback copy for those summaries. When the payload omits frontend-authored
+status or explanation text during mixed-version rollouts, the client should
+source its safe default wording from the governed monitored-system
+presentation helper instead of duplicating local strings inside the API
+normalizer.
 Action-plan stale-plan protection on those audit records now uses the canonical
 `resourceVersion`, `policyVersion`, and `planHash` fields only, so the
 response contract stays deterministic without extra version baggage.

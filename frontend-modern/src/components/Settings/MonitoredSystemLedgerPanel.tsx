@@ -52,7 +52,9 @@ function systemExplanation(system: MonitoredSystemLedgerEntry): MonitoredSystemL
 
 function systemStatusExplanation(system: MonitoredSystemLedgerEntry): MonitoredSystemLedgerStatusExplanation {
   return {
-    summary: system.status_explanation?.summary ?? getMonitoredSystemStatusFallbackSummary(),
+    summary:
+      system.status_explanation?.summary ??
+      getMonitoredSystemStatusFallbackSummary(system.status),
     reasons: system.status_explanation?.reasons ?? [],
   };
 }

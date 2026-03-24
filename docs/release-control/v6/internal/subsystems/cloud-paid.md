@@ -244,6 +244,10 @@ labels, safe fallback summaries, and source/type attribution wording, so the
 settings panel, Pro usage section, and counting-rules disclosure must consume
 that helper instead of redefining customer-facing monitored-system copy inline
 or keeping a parallel copy in generic self-hosted plan utilities.
+That same helper now also owns the row-status fallback summaries used when
+mixed-version payloads omit `status_explanation.summary`. The API client and
+settings panel must derive online/warning/offline/unknown fallback text from
+that shared owner instead of keeping separate local defaults that can drift.
 Frontend billing/admin surfaces must not synthesize `plan_version` from
 subscription lifecycle state. When a hosted billing record lacks a plan label,
 the UI must preserve that absence instead of fabricating values like `active`
