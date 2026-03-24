@@ -623,7 +623,10 @@ run_verify_proof_command() {
       PULSE_E2E_USE_HOT_DEV=1 \
       PULSE_E2E_USERNAME="${PULSE_E2E_USERNAME:-admin}" \
       PULSE_E2E_PASSWORD="${PULSE_E2E_PASSWORD:-admin}" \
-      npm test -- tests/16-dev-runtime-recovery.spec.ts --project=chromium
+      npm test -- \
+        tests/16-dev-runtime-recovery.spec.ts \
+        tests/17-recovery-layout.spec.ts \
+        --project=chromium
     )
     return
   fi
@@ -667,7 +670,7 @@ verify_bg() {
     fail "Managed runtime is not healthy enough to run browser verification"
   fi
 
-  log "Running managed dev-runtime browser verification proof..."
+  log "Running managed dev-runtime browser verification proofs..."
   run_verify_proof_command
 }
 
@@ -724,6 +727,16 @@ launchd_session_bg() {
 usage() {
   cat <<EOF
 Usage: $(basename "$0") <command>
+
+Managed entrypoints:
+  npm run dev
+  npm run dev:status
+  npm run dev:logs
+  npm run dev:stop
+  npm run dev:restart
+  npm run dev:backend-restart
+  npm run dev:verify
+  npm run dev:foreground
 
 Commands:
   start [--takeover]

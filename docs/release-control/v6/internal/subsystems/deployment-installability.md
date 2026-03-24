@@ -223,6 +223,9 @@ That runtime-guidance rule also applies to successful launcher startup output:
 `hot-dev-bg` must identify `http://127.0.0.1:5173` as the browser entrypoint
 and present `7655` as the managed backend dependency, rather than advertising
 frontend and backend URLs as if they were equal browser targets.
+The same wrapper-first rule applies to launcher help text: `hot-dev-bg` usage
+output must present the repo-root npm entrypoints first and reserve raw
+subcommands as secondary script-local controls for direct troubleshooting.
 That same dev-runtime helper boundary also includes the auxiliary operator
 controls that start, stop, restart, or recover local development. The repo-root
 Makefile targets, `scripts/toggle-mock.sh`, and `scripts/clean-mock-alerts.sh` must

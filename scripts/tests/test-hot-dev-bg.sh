@@ -166,6 +166,37 @@ PY"
   assert_contains "verify proof defaults password" "${output}" "password=admin"
 }
 
+test_default_verify_command_runs_runtime_and_layout_proofs() {
+  local test_dir fake_bin output
+  test_dir="$(mktemp -d)"
+  temp_dirs+=("${test_dir}")
+  fake_bin="${test_dir}/bin"
+  mkdir -p "${fake_bin}"
+
+  cat > "${fake_bin}/npm" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'cwd=%s\n' "$PWD"
+printf 'args=%s\n' "$*"
+EOF
+  chmod +x "${fake_bin}/npm"
+
+  output="$(
+    FAKE_BIN_PATH="${fake_bin}" \
+    HOT_DEV_BG_PATH="${HOT_DEV_BG}" \
+    bash -lc '
+      export PATH="${FAKE_BIN_PATH}:$PATH"
+      source "${HOT_DEV_BG_PATH}"
+      run_verify_proof_command
+    '
+  )"
+
+  assert_contains "default verify proof runs from integration harness" "${output}" "cwd=${ROOT_DIR}/tests/integration"
+  assert_contains "default verify proof includes dev runtime recovery spec" "${output}" "tests/16-dev-runtime-recovery.spec.ts"
+  assert_contains "default verify proof includes recovery layout spec" "${output}" "tests/17-recovery-layout.spec.ts"
+  assert_contains "default verify proof keeps chromium project pin" "${output}" "--project=chromium"
+}
+
 test_launchd_session_supervises_managed_runtime() {
   local output
   output="$(
@@ -382,11 +413,23 @@ test_hot_dev_bg_script_advertises_managed_entrypoint() {
   assert_contains "hot-dev-bg routes launchd supervision guidance to managed wrapper" "${output}" "Rerun with: npm run dev"
 }
 
+test_hot_dev_bg_usage_prefers_managed_wrappers() {
+  local output
+  output="$("${HOT_DEV_BG}" 2>&1 || true)"
+
+  assert_contains "hot-dev-bg usage shows managed entrypoints heading" "${output}" "Managed entrypoints:"
+  assert_contains "hot-dev-bg usage advertises npm dev wrapper" "${output}" "npm run dev"
+  assert_contains "hot-dev-bg usage advertises npm verify wrapper" "${output}" "npm run dev:verify"
+  assert_contains "hot-dev-bg usage retains raw command list" "${output}" "Commands:"
+  assert_contains "hot-dev-bg usage retains direct start subcommand" "${output}" "start [--takeover]"
+}
+
 test_integration_readme_uses_managed_backend_restart_wrapper() {
   local output
   output="$(sed -n '132,150p' "${INTEGRATION_README}")"
 
   assert_contains "integration readme documents managed backend restart wrapper" "${output}" "npm run dev:backend-restart"
+  assert_contains "integration readme documents recovery layout proof" "${output}" "tests/17-recovery-layout.spec.ts"
   assert_not_contains "integration readme no longer documents raw backend restart script" "${output}" "./scripts/hot-dev-bg.sh backend-restart"
 }
 
@@ -614,6 +657,7 @@ test_detects_unmanaged_listeners() {
 main() {
   test_cli_parses_takeover_flag
   test_verify_command_injects_managed_runtime_env
+  test_default_verify_command_runs_runtime_and_layout_proofs
   test_launchd_session_supervises_managed_runtime
   test_start_bg_reports_browser_entrypoint
   test_launchd_wrapper_uses_managed_supervisor
@@ -623,6 +667,7 @@ main() {
   test_makefile_routes_managed_runtime_through_npm
   test_hot_dev_script_advertises_foreground_escape_hatch
   test_hot_dev_bg_script_advertises_managed_entrypoint
+  test_hot_dev_bg_usage_prefers_managed_wrappers
   test_integration_readme_uses_managed_backend_restart_wrapper
   test_clean_mock_alerts_prefers_managed_runtime
   test_dev_check_uses_managed_runtime_status
