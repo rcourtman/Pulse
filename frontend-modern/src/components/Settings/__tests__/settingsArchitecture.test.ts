@@ -66,6 +66,7 @@ import aiSettingsStateSource from '../useAISettingsState.ts?raw';
 import diagnosticsModelSource from '../diagnosticsModel.ts?raw';
 import diagnosticsPanelSource from '../DiagnosticsPanel.tsx?raw';
 import diagnosticsResultsPanelSource from '../DiagnosticsResultsPanel.tsx?raw';
+import operationsPanelSource from '../OperationsPanel.tsx?raw';
 import networkBoundarySettingsSectionSource from '../NetworkBoundarySettingsSection.tsx?raw';
 import networkDiscoverySectionSource from '../NetworkDiscoverySection.tsx?raw';
 import networkSettingsPanelSource from '../NetworkSettingsPanel.tsx?raw';
@@ -196,6 +197,7 @@ const extractedModules = [
   '../diagnosticsModel.ts',
   '../DiagnosticsPanel.tsx',
   '../DiagnosticsResultsPanel.tsx',
+  '../OperationsPanel.tsx',
   '../NetworkBoundarySettingsSection.tsx',
   '../NetworkDiscoverySection.tsx',
   '../networkSettingsModel.ts',
@@ -583,6 +585,7 @@ describe('Settings architecture guardrails', () => {
   });
 
   it('keeps system logs split into shell and runtime owners', () => {
+    expect(systemLogsPanelSource).toContain('@/components/Settings/OperationsPanel');
     expect(systemLogsPanelSource).toContain('./useSystemLogsPanelState');
     expect(systemLogsPanelSource).not.toContain('createSignal(');
     expect(systemLogsPanelSource).not.toContain('new EventSource(');
@@ -995,6 +998,7 @@ describe('Settings architecture guardrails', () => {
   });
 
   it('keeps the diagnostics shell behind extracted runtime and results owners', () => {
+    expect(diagnosticsPanelSource).toContain('@/components/Settings/OperationsPanel');
     expect(diagnosticsPanelSource).toContain('@/components/Settings/DiagnosticsResultsPanel');
     expect(diagnosticsPanelSource).toContain('@/components/Settings/useDiagnosticsPanelState');
     expect(diagnosticsPanelSource).toContain('DIAGNOSTICS_PANEL_COPY');
@@ -1015,6 +1019,7 @@ describe('Settings architecture guardrails', () => {
   });
 
   it('keeps the reporting shell behind extracted runtime and model owners', () => {
+    expect(reportingPanelSource).toContain('@/components/Settings/OperationsPanel');
     expect(reportingPanelSource).toContain('@/components/Settings/useReportingPanelState');
     expect(reportingPanelSource).toContain('@/components/Settings/reportingPanelModel');
     expect(reportingPanelSource).not.toContain('loadLicenseStatus()');
@@ -1029,6 +1034,14 @@ describe('Settings architecture guardrails', () => {
     expect(reportingPanelModelSource).toContain('export function getReportingRangeStart');
     expect(reportingPanelModelSource).toContain('export function buildReportingRequest');
     expect(reportingPanelModelSource).toContain('export function buildReportingFilename');
+  });
+
+  it('keeps the shared operations wrapper rooted at SettingsPanel', () => {
+    expect(operationsPanelSource).toContain('@/components/shared/SettingsPanel');
+    expect(operationsPanelSource).toContain('noPadding');
+    expect(operationsPanelSource).toContain('bodyClass="divide-y divide-border"');
+    expect(operationsPanelSource).not.toContain('createSignal(');
+    expect(operationsPanelSource).not.toContain('apiFetch');
   });
 
   it('keeps the audit log shell behind an extracted runtime owner', () => {

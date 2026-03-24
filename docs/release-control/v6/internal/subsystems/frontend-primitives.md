@@ -42,7 +42,8 @@ work extends shared components instead of creating new local variants.
 20. `frontend-modern/src/components/Settings/diagnosticsModel.ts`
 21. `frontend-modern/src/components/Settings/DiagnosticsPanel.tsx`
 22. `frontend-modern/src/components/Settings/DiagnosticsResultsPanel.tsx`
-23. `frontend-modern/src/utils/diagnosticsPresentation.ts`
+23. `frontend-modern/src/components/Settings/OperationsPanel.tsx`
+24. `frontend-modern/src/utils/diagnosticsPresentation.ts`
 24. `frontend-modern/src/utils/discoveryPresentation.ts`
 24. `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx`
 25. `frontend-modern/src/components/Settings/NetworkSettingsPanel.tsx`
@@ -170,6 +171,11 @@ canonical tag-badge primitive. Dashboard workload rows and the unified-resource
 detail drawer must import that shared owner instead of keeping a dashboard-local
 tag badge variant or importing a feature-local path into infrastructure
 surfaces.
+`frontend-modern/src/components/Settings/OperationsPanel.tsx` is now also the
+canonical shared settings wrapper for operations-style panels such as
+diagnostics, reporting, and system logs. Those surfaces must extend that owner
+instead of rebuilding a local `SettingsPanel` wrapper, panel-header action
+slot, or divided content-body framing inline.
 The system logs operations surface now follows the same shell/runtime split as
 the other modernized settings panels: `frontend-modern/src/components/Settings/SystemLogsPanel.tsx`
 owns the operations framing and consumes the canonical stream-copy/status
