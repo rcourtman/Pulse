@@ -188,6 +188,12 @@ must route operators back to the managed runtime entrypoint before falling back
 to process-killing folklore, otherwise the repo keeps reintroducing the same
 split-ownership `5173` versus `7655` confusion through secondary entry
 surfaces.
+That same `scripts/dev-check.sh` helper must treat `hot-dev-bg status` as the
+canonical dev diagnosis surface instead of re-deriving its own competing
+frontend-versus-backend health story from ad hoc curls and process scans. Any
+secondary checks it adds should be clearly subordinate to the managed runtime
+ownership and health report, and unhealthy runtime guidance must point back to
+the repo-root managed controls such as `npm run dev` or `npm run dev:restart`.
 When the frontend workspace exposes managed runtime wrappers, they must stay in
 operational parity with the repo-root entry surface for the canonical controls:
 start, status, logs, stop, restart, managed backend restart, verification, and

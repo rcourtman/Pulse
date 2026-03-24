@@ -7,6 +7,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 HOT_DEV_BG="${ROOT_DIR}/scripts/hot-dev-bg.sh"
 CLEAN_MOCK_ALERTS="${ROOT_DIR}/scripts/clean-mock-alerts.sh"
+DEV_CHECK="${ROOT_DIR}/scripts/dev-check.sh"
 PACKAGE_JSON="${ROOT_DIR}/package.json"
 FRONTEND_PACKAGE_JSON="${ROOT_DIR}/frontend-modern/package.json"
 DEV_LAUNCHD_WRAPPER="${ROOT_DIR}/scripts/dev-launchd-wrapper.sh"
@@ -365,6 +366,41 @@ PY
   assert_contains "clean-mock-alerts leaves no mock alerts" "${mock_count}" "0"
 }
 
+test_dev_check_uses_managed_runtime_status() {
+  local test_dir fake_hot_dev_bg output
+  test_dir="$(mktemp -d)"
+  temp_dirs+=("${test_dir}")
+  fake_hot_dev_bg="${test_dir}/hot-dev-bg.sh"
+
+  cat > "${fake_hot_dev_bg}" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+case "${1:-}" in
+  status)
+    echo "[hot-dev-bg] Running (pid: 4242)"
+    echo "[hot-dev-bg] Browser entrypoint: http://127.0.0.1:5173"
+    echo "[hot-dev-bg] Runtime summary: frontend shell is up, but the backend health endpoint is unavailable."
+    ;;
+  *)
+    echo "unexpected command: $*" >&2
+    exit 1
+    ;;
+esac
+EOF
+  chmod +x "${fake_hot_dev_bg}"
+
+  output="$(
+    PULSE_DEV_CHECK_SKIP_AUXILIARY_CHECKS=true \
+    HOT_DEV_BG_PATH="${fake_hot_dev_bg}" \
+    "${DEV_CHECK}"
+  )"
+
+  assert_contains "dev-check prints managed runtime heading" "${output}" "=== Managed Runtime Status ==="
+  assert_contains "dev-check relays hot-dev-bg status" "${output}" "[hot-dev-bg] Running (pid: 4242)"
+  assert_contains "dev-check relays runtime summary" "${output}" "frontend shell is up, but the backend health endpoint is unavailable"
+  assert_contains "dev-check recommends managed restart for unhealthy runtime" "${output}" "npm run dev:restart"
+}
+
 test_backend_restart_requires_managed_runtime() {
   local frontend_port backend_port output
   local state_dir
@@ -445,6 +481,7 @@ main() {
   test_root_package_exposes_managed_runtime_entrypoints
   test_frontend_package_exposes_managed_runtime_entrypoints
   test_clean_mock_alerts_prefers_managed_runtime
+  test_dev_check_uses_managed_runtime_status
   test_backend_restart_requires_managed_runtime
   test_status_without_runtime
   test_detects_unmanaged_listeners
