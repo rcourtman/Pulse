@@ -88,6 +88,8 @@ regression protection.
 66. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts`
 67. `frontend-modern/src/components/Infrastructure/UnifiedResourceHostTableCard.tsx`
 68. `frontend-modern/src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx`
+69. `frontend-modern/src/components/Workloads/WorkloadsSummary.tsx`
+70. `frontend-modern/src/utils/throughputPresentation.ts`
 69. `frontend-modern/src/components/Infrastructure/UnifiedResourcePMGTableSection.tsx`
 70. `frontend-modern/src/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx`
 71. `frontend-modern/src/components/Infrastructure/unifiedResourceTableModel.ts`
@@ -437,6 +439,14 @@ The infrastructure and workload summary cards now share a canonical
 throughput-rate formatter in `frontend-modern/src/utils/throughputPresentation.ts`,
 so bytes-per-second labels stay consistent between the two summary surfaces
 instead of each component carrying its own rate string builder.
+That shared throughput boundary is now also explicitly governed here.
+`frontend-modern/src/components/Workloads/WorkloadsSummary.tsx` is the
+canonical workload-summary hot-path surface, and
+`frontend-modern/src/utils/throughputPresentation.ts` is the canonical
+bytes-per-second formatter shared by workload and infrastructure summary
+cards. Future throughput wording or workload-summary hot-path changes must
+extend these performance-owned surfaces instead of leaving the formatter or
+summary shell unowned in registry coverage.
 
 Infrastructure selector status ordering must now tolerate arbitrary filter-set
 strings without widening the canonical hot-path order tuple. Unknown statuses
