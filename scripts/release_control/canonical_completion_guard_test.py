@@ -3008,6 +3008,69 @@ index 1111111..2222222 100644
             ],
         )
 
+    def test_threshold_slider_presentation_change_requires_performance_contract(self):
+        required = infer_impacted_subsystems(
+            ["frontend-modern/src/utils/thresholdSliderPresentation.ts"]
+        )
+        self.assertEqual(set(required), {"performance-and-scalability"})
+
+        performance = required["performance-and-scalability"]
+        self.assertEqual(
+            performance["contract"],
+            "docs/release-control/v6/internal/subsystems/performance-and-scalability.md",
+        )
+        self.assertEqual(
+            performance["touched_runtime_files"],
+            ["frontend-modern/src/utils/thresholdSliderPresentation.ts"],
+        )
+        self.assertEqual(
+            performance["verification_requirements"],
+            [
+                {
+                    "id": "dashboard-workload-hot-path",
+                    "label": "dashboard workload selector proof",
+                    "touched_runtime_files": [
+                        "frontend-modern/src/utils/thresholdSliderPresentation.ts"
+                    ],
+                    "allow_same_subsystem_tests": False,
+                    "test_prefixes": [],
+                    "exact_files": [
+                        "frontend-modern/src/components/Dashboard/__tests__/Dashboard.performance.contract.test.tsx",
+                        "frontend-modern/src/components/Dashboard/__tests__/DashboardFilter.test.tsx",
+                        "frontend-modern/src/components/Dashboard/__tests__/dashboardSelectionModel.test.ts",
+                        "frontend-modern/src/components/Dashboard/__tests__/dashboardWorkloadFilterConfigModel.test.ts",
+                        "frontend-modern/src/components/Dashboard/__tests__/dashboardWorkloadRouteModel.test.ts",
+                        "frontend-modern/src/components/Dashboard/__tests__/dashboardWorkloadRouteStateModel.test.ts",
+                        "frontend-modern/src/components/Dashboard/__tests__/dashboardWorkloadUrlSyncModel.test.ts",
+                        "frontend-modern/src/components/Dashboard/__tests__/DiskList.test.tsx",
+                        "frontend-modern/src/components/Dashboard/__tests__/EnhancedCPUBar.test.tsx",
+                        "frontend-modern/src/components/Dashboard/__tests__/GuestRow.test.tsx",
+                        "frontend-modern/src/components/Dashboard/__tests__/StackedDiskBar.test.tsx",
+                        "frontend-modern/src/components/Dashboard/__tests__/useDashboardFilterState.test.ts",
+                        "frontend-modern/src/components/Dashboard/__tests__/useDashboardSelectionState.test.ts",
+                        "frontend-modern/src/components/Dashboard/__tests__/useDashboardWorkloadViewportSync.test.tsx",
+                        "frontend-modern/src/components/Dashboard/__tests__/useEnhancedCPUBarState.test.tsx",
+                        "frontend-modern/src/components/Dashboard/__tests__/useGroupedTableWindowing.test.ts",
+                        "frontend-modern/src/components/Dashboard/__tests__/useMetricBarState.test.tsx",
+                        "frontend-modern/src/components/Dashboard/__tests__/useStackedDiskBarState.test.tsx",
+                        "frontend-modern/src/components/Dashboard/__tests__/useStackedMemoryBarState.test.tsx",
+                        "frontend-modern/src/components/Dashboard/__tests__/useThresholdSliderState.test.ts",
+                        "frontend-modern/src/components/Dashboard/__tests__/workloadSelectors.test.ts",
+                        "frontend-modern/src/components/Dashboard/__tests__/workloadTopology.test.ts",
+                        "frontend-modern/src/components/Dashboard/GuestDrawer.test.tsx",
+                        "frontend-modern/src/components/Dashboard/MetricBar.test.tsx",
+                        "frontend-modern/src/components/Dashboard/StackedMemoryBar.test.tsx",
+                        "frontend-modern/src/components/Dashboard/ThresholdSlider.test.tsx",
+                        "frontend-modern/src/components/Infrastructure/__tests__/infrastructureSummaryModel.test.ts",
+                        "frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx",
+                        "frontend-modern/src/components/Infrastructure/__tests__/unifiedResourceTableStateModel.test.ts",
+                        "frontend-modern/src/components/Workloads/WorkloadsSummary.test.tsx",
+                        "frontend-modern/src/utils/__tests__/thresholdSliderPresentation.test.ts",
+                    ],
+                }
+            ],
+        )
+
     def test_monitoring_metrics_hot_path_uses_specific_proof_policy(self):
         monitoring_rule = next(rule for rule in load_subsystem_rules() if rule["id"] == "monitoring")
         requirements = build_verification_requirements(

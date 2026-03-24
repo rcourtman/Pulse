@@ -290,12 +290,15 @@ reintroducing dashboard-local state, reset drift, or inline config assembly
 into the shell.
 The dashboard threshold slider now follows that same pattern: the shell stays
 in `frontend-modern/src/components/Dashboard/ThresholdSlider.tsx`, while
+metric-type text and fill presentation live in
+`frontend-modern/src/utils/thresholdSliderPresentation.ts`, while
 slider bounds math, thumb-position transforms, and title/label derivations
 live in `frontend-modern/src/components/Dashboard/thresholdSliderModel.ts`
 and drag scroll-lock lifecycle lives in
 `frontend-modern/src/components/Dashboard/useThresholdSliderState.ts`.
 Future slider runtime changes must extend through those owners instead of
-reintroducing mixed drag state and formatting logic into the shell.
+reintroducing mixed drag state, type-color formatting, and presentation logic
+into the shell.
 The dashboard stacked disk bar now follows that same pattern: the shell stays
 in `frontend-modern/src/components/Dashboard/StackedDiskBar.tsx`, while
 disk-capacity math, segment and tooltip derivation, max-disk labeling, and

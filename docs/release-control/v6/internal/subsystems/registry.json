@@ -3303,6 +3303,7 @@
         "frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts",
         "frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts",
         "frontend-modern/src/components/Workloads/WorkloadsSummary.tsx",
+        "frontend-modern/src/utils/thresholdSliderPresentation.ts",
         "frontend-modern/src/utils/throughputPresentation.ts",
         "internal/api/router_bench_test.go",
         "internal/api/slo.go",
@@ -3429,7 +3430,8 @@
               "frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts",
               "frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts",
               "frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts",
-              "frontend-modern/src/components/Workloads/WorkloadsSummary.tsx"
+              "frontend-modern/src/components/Workloads/WorkloadsSummary.tsx",
+              "frontend-modern/src/utils/thresholdSliderPresentation.ts"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
@@ -3463,7 +3465,8 @@
               "frontend-modern/src/components/Infrastructure/__tests__/infrastructureSummaryModel.test.ts",
               "frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx",
               "frontend-modern/src/components/Infrastructure/__tests__/unifiedResourceTableStateModel.test.ts",
-              "frontend-modern/src/components/Workloads/WorkloadsSummary.test.tsx"
+              "frontend-modern/src/components/Workloads/WorkloadsSummary.test.tsx",
+              "frontend-modern/src/utils/__tests__/thresholdSliderPresentation.test.ts"
             ]
           },
           {
