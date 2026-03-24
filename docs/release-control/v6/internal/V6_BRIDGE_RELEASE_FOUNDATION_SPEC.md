@@ -152,6 +152,6 @@ broader surfaced case is proven.
   surfaces and adjacent approvals work.
 - Fleet governance and rollout control: promoted from the current L16 floor.
 
-These promotions are tracked in `docs/release-control/v6/status.json` as
+These promotions are tracked in `docs/release-control/v6/internal/status.json` as
 coverage gaps and candidate lanes under the planned target
 `v6-product-lane-expansion`.

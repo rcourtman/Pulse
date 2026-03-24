@@ -12,10 +12,10 @@ target are machine-selected by `docs/release-control/control_plane.json`.
 
 Current lane scores, evidence references, coverage-gap discovery records,
 candidate-lane planning records, and typed operational decision records live
-only in `docs/release-control/v6/status.json`.
+only in `docs/release-control/v6/internal/status.json`.
 Lane completion state, residual-gap summaries, normalized follow-up tracking,
 and derived coverage scores also live only in
-`docs/release-control/v6/status.json`.
+`docs/release-control/v6/internal/status.json`.
 Non-blocking same-lane residuals that are concrete enough to name directly
 live in `status.json.lane_followups`.
 Product-scope lane-discovery records that reveal where the current taxonomy is
@@ -28,7 +28,7 @@ Current repo/release readiness is derived by
 `python3 scripts/release_control/status_audit.py --pretty` from
 `status.json`, not hand-maintained in this file. The human runbook for
 trust-critical manual release gates lives in
-`docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md`.
+`docs/release-control/v6/internal/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md`.
 Use `python3 scripts/release_control/status_lookup.py` for candidate-lane,
 coverage-gap, lane, readiness-assertion, release-gate, followup, and
 work-claim lookups when only one governed surface is relevant.
@@ -63,13 +63,13 @@ This file must not contain:
    active target.
 4. `docs/release-control/control_plane.schema.json`
    Machine-readable contract for `control_plane.json`.
-5. `docs/release-control/v6/status.json`
+5. `docs/release-control/v6/internal/status.json`
    Live lane state, lane completion records, coverage-gap discovery records,
    candidate-lane planning records, active work claims, structured evidence
    references, and typed operational decision records.
 6. `docs/release-control/v6/status.schema.json`
    Machine-readable contract for the `status.json` shape.
-7. `docs/release-control/v6/CANONICAL_DEVELOPMENT_PROTOCOL.md`
+7. `docs/release-control/v6/internal/CANONICAL_DEVELOPMENT_PROTOCOL.md`
    Repo-wide change rules for canonical work.
 8. `docs/release-control/v6/internal/subsystems/registry.json`
    Machine-readable subsystem ownership and proof requirements.
@@ -78,13 +78,13 @@ This file must not contain:
 10. `docs/release-control/v6/internal/subsystems/*.md`
    Per-subsystem contracts: truth, extension points, forbidden paths, and
    completion obligations.
-11. `docs/release-control/v6/RELEASE_PROMOTION_POLICY.md`
+11. `docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md`
    Canonical stable-versus-RC promotion rules, rollout criteria, and rollback
    expectations for v6 and later release lines.
-12. `docs/release-control/v6/V5_MAINTENANCE_SUPPORT_POLICY.md`
+12. `docs/release-control/v6/internal/V5_MAINTENANCE_SUPPORT_POLICY.md`
    Canonical v5 maintenance-only support policy, release-line rules, and GA
    notice requirements for the v6 cutover.
-13. `docs/release-control/v6/RC_TO_GA_REHEARSAL_TEMPLATE.md`
+13. `docs/release-control/v6/internal/RC_TO_GA_REHEARSAL_TEMPLATE.md`
    Canonical human record shape for the non-publish RC-to-GA rehearsal run.
 
 These machine files remain canonical, but agents should not ingest them in full
@@ -425,14 +425,14 @@ For canonical subsystem work:
 1. Read `docs/release-control/CONTROL_PLANE.md`,
    `docs/release-control/AGENT_VALUES.md`,
    `docs/release-control/control_plane.json`, this file, and
-   `docs/release-control/v6/status.json` first.
+   `docs/release-control/v6/internal/status.json` first.
    Use `python3 scripts/release_control/control_plane.py --agent-entrypoint --pretty`
    when you need the canonical ordered entry bundle instead of reconstructing
    it manually.
    If the agent starts outside the `pulse` repo, resolve those files from
    `pulse/docs/release-control/v6/` under the shared workspace root rather than
    inventing a parallel control layer in the current repo.
-2. Then read `docs/release-control/v6/CANONICAL_DEVELOPMENT_PROTOCOL.md`.
+2. Then read `docs/release-control/v6/internal/CANONICAL_DEVELOPMENT_PROTOCOL.md`.
 3. Then read `docs/release-control/v6/internal/subsystems/registry.json`.
 4. Then read the relevant subsystem contract under
    `docs/release-control/v6/internal/subsystems/`.
@@ -507,10 +507,10 @@ For readiness assertion work:
 
 If conflicts appear, resolve by domain:
 
-1. `docs/release-control/v6/CANONICAL_DEVELOPMENT_PROTOCOL.md`,
+1. `docs/release-control/v6/internal/CANONICAL_DEVELOPMENT_PROTOCOL.md`,
    `docs/release-control/v6/internal/subsystems/registry.json`, and the relevant
    subsystem contract own implementation rules.
-2. `docs/release-control/v6/status.json` owns live lane state, the active
+2. `docs/release-control/v6/internal/status.json` owns live lane state, the active
    readiness assertion catalog, readiness derivation rules, executable proof
    commands, coverage-gap discovery records, candidate-lane planning records,
    structured evidence references, and typed operational decision records.

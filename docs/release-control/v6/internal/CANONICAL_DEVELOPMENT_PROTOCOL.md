@@ -46,8 +46,8 @@ point:
 1. `docs/release-control/AGENT_VALUES.md`
 2. `docs/release-control/CONTROL_PLANE.md`
 3. `docs/release-control/control_plane.json`
-4. `docs/release-control/v6/SOURCE_OF_TRUTH.md`
-5. `docs/release-control/v6/CANONICAL_DEVELOPMENT_PROTOCOL.md`
+4. `docs/release-control/v6/internal/SOURCE_OF_TRUTH.md`
+5. `docs/release-control/v6/internal/CANONICAL_DEVELOPMENT_PROTOCOL.md`
 
 Use derived startup commands before escalating into the heavier machine control
 files:
@@ -66,11 +66,11 @@ files:
 Escalate into these raw machine files only when the current task genuinely
 needs their full detail:
 
-1. `docs/release-control/v6/status.json`
+1. `docs/release-control/v6/internal/status.json`
 2. `docs/release-control/v6/status.schema.json`
-3. `docs/release-control/v6/subsystems/registry.json`
-4. `docs/release-control/v6/subsystems/registry.schema.json`
-5. the relevant subsystem contract in `docs/release-control/v6/subsystems/`
+3. `docs/release-control/v6/internal/subsystems/registry.json`
+4. `docs/release-control/v6/internal/subsystems/registry.schema.json`
+5. the relevant subsystem contract in `docs/release-control/v6/internal/subsystems/`
 
 The startup files answer values, active target, profile selection, release
 priority, and stable operating rules.
@@ -114,7 +114,7 @@ same files are still authoritative; resolve them from `pulse/docs/release-contro
 rather than recreating release control in the current repo.
 Use `python3 scripts/release_control/status_audit.py --pretty` for the current
 machine-derived repo/governance, `rc_ready`, and `release_ready` summary. Use
-`docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md` as the
+`docs/release-control/v6/internal/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md` as the
 human runbook for clearing the manual high-risk gates represented in
 `status.json.release_gates`.
 Use `python3 scripts/release_control/status_lookup.py` for id-scoped lane,
@@ -169,22 +169,22 @@ Each major subsystem contract must define:
 
 Current required subsystem contracts:
 
-1. `docs/release-control/v6/subsystems/alerts.md`
-2. `docs/release-control/v6/subsystems/api-contracts.md`
-3. `docs/release-control/v6/subsystems/cloud-paid.md`
-4. `docs/release-control/v6/subsystems/frontend-primitives.md`
-5. `docs/release-control/v6/subsystems/monitoring.md`
-6. `docs/release-control/v6/subsystems/organization-settings.md`
-7. `docs/release-control/v6/subsystems/patrol-intelligence.md`
-8. `docs/release-control/v6/subsystems/performance-and-scalability.md`
-9. `docs/release-control/v6/subsystems/security-privacy.md`
-10. `docs/release-control/v6/subsystems/unified-resources.md`
+1. `docs/release-control/v6/internal/subsystems/alerts.md`
+2. `docs/release-control/v6/internal/subsystems/api-contracts.md`
+3. `docs/release-control/v6/internal/subsystems/cloud-paid.md`
+4. `docs/release-control/v6/internal/subsystems/frontend-primitives.md`
+5. `docs/release-control/v6/internal/subsystems/monitoring.md`
+6. `docs/release-control/v6/internal/subsystems/organization-settings.md`
+7. `docs/release-control/v6/internal/subsystems/patrol-intelligence.md`
+8. `docs/release-control/v6/internal/subsystems/performance-and-scalability.md`
+9. `docs/release-control/v6/internal/subsystems/security-privacy.md`
+10. `docs/release-control/v6/internal/subsystems/unified-resources.md`
 
 If a major subsystem is refactored and does not have one of these files, the
 work is incomplete.
 
 The machine-readable ownership map for those subsystem contracts lives in
-`docs/release-control/v6/subsystems/registry.json`.
+`docs/release-control/v6/internal/subsystems/registry.json`.
 Each contract must also carry structured metadata that binds the markdown file
 to its registry subsystem id, owning lane in `status.json`, and exact declared
 cross-subsystem dependencies implied by its canonical-file and extension-point
@@ -418,7 +418,7 @@ contract section such as `Purpose`, `Canonical Files`, `Shared Boundaries`, `Ext
 edits are not sufficient completion proof for runtime changes.
 
 Verification artifacts are subsystem-specific. The allowed proof classes are
-defined in `docs/release-control/v6/subsystems/registry.json` and may include
+defined in `docs/release-control/v6/internal/subsystems/registry.json` and may include
 explicit guardrail files, contract tests, benchmark/SLO/query-plan artifacts,
 approved test-prefix matches, non-test contract/type files, or same-subsystem
 tests only when the registry explicitly allows them.

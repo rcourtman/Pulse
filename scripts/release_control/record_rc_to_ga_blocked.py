@@ -318,7 +318,7 @@ def build_blocked_record(*, record_date: str) -> str:
     if dates_are_locked:
         release_date_fact_lines = [
             "`docs/releases/RELEASE_NOTES_v6.md` and",
-            "`docs/release-control/v6/V5_MAINTENANCE_SUPPORT_POLICY.md` now carry the",
+            "`docs/release-control/v6/internal/V5_MAINTENANCE_SUPPORT_POLICY.md` now carry the",
             "currently proposed exact dates for the eventual GA notice:",
             f"- `v6` GA date: `{ga_date}`",
             f"- `v5` end-of-support date: `{v5_eos_date}`",
@@ -337,7 +337,7 @@ def build_blocked_record(*, record_date: str) -> str:
     else:
         release_date_fact_lines = [
             "`docs/releases/RELEASE_NOTES_v6.md` and",
-            "`docs/release-control/v6/V5_MAINTENANCE_SUPPORT_POLICY.md` still leave the",
+            "`docs/release-control/v6/internal/V5_MAINTENANCE_SUPPORT_POLICY.md` still leave the",
             "GA announcement dates as placeholders because no real RC lineage or GA-ready",
             "rehearsal has locked them yet:",
             f"- `v6` GA date placeholder: `{ga_date}`",

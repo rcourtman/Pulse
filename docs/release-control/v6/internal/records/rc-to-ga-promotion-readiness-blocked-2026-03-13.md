@@ -24,7 +24,7 @@
 7. There is still no governed `RC-to-GA Rehearsal Record` proving a successful
    non-publish `Release Dry Run` for the eventual stable `6.0.0` candidate.
 8. `docs/releases/RELEASE_NOTES_v6.md` and
-   `docs/release-control/v6/V5_MAINTENANCE_SUPPORT_POLICY.md` now carry the
+   `docs/release-control/v6/internal/V5_MAINTENANCE_SUPPORT_POLICY.md` now carry the
    currently proposed exact dates for the eventual GA notice:
    - `v6` GA date: `2026-03-24`
    - `v5` end-of-support date: `2026-06-22`

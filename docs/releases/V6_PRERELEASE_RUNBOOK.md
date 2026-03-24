@@ -4,7 +4,7 @@ This runbook captures the branch-specific operational path that was used while
 `main` continued to serve v5 releases during the v6 prerelease period.
 
 Canonical customer-channel and promotion rules now live in
-`docs/release-control/v6/RELEASE_PROMOTION_POLICY.md`.
+`docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md`.
 Current release-branch authority lives in
 `docs/release-control/control_plane.json`.
 If this historical runbook and the release-control policy disagree, the
@@ -148,7 +148,7 @@ git pull --ff-only
 
 4. Publish the exact v6 GA date and v5 end-of-support date in the GA release
    notice using
-   `docs/release-control/v6/V5_MAINTENANCE_SUPPORT_POLICY.md` as the canonical
+   `docs/release-control/v6/internal/V5_MAINTENANCE_SUPPORT_POLICY.md` as the canonical
    policy.
 
 5. Continue critical v5 fixes from `pulse/v5-maintenance` only.

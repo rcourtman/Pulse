@@ -43,11 +43,11 @@
       "prefixItems": [
         {
           "type": "string",
-          "const": "docs/release-control/v6/SOURCE_OF_TRUTH.md"
+          "const": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md"
         },
         {
           "type": "string",
-          "const": "docs/release-control/v6/status.json"
+          "const": "docs/release-control/v6/internal/status.json"
         },
         {
           "type": "string",
@@ -55,15 +55,15 @@
         },
         {
           "type": "string",
-          "const": "docs/release-control/v6/CANONICAL_DEVELOPMENT_PROTOCOL.md"
+          "const": "docs/release-control/v6/internal/CANONICAL_DEVELOPMENT_PROTOCOL.md"
         },
         {
           "type": "string",
-          "const": "docs/release-control/v6/subsystems/registry.json"
+          "const": "docs/release-control/v6/internal/subsystems/registry.json"
         },
         {
           "type": "string",
-          "const": "docs/release-control/v6/subsystems/registry.schema.json"
+          "const": "docs/release-control/v6/internal/subsystems/registry.schema.json"
         }
       ],
       "items": false
@@ -134,7 +134,7 @@
     },
     "source_of_truth_file": {
       "type": "string",
-      "const": "docs/release-control/v6/SOURCE_OF_TRUTH.md"
+      "const": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md"
     },
     "resolved_decisions": {
       "type": "array",
@@ -869,7 +869,7 @@
         },
         "verification_doc": {
           "type": "string",
-          "const": "docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md"
+          "const": "docs/release-control/v6/internal/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md"
         },
         "lane_ids": {
           "type": "array",

@@ -23,7 +23,7 @@ Use this as the final gate before cutting a Pulse v6 pre-release.
   candidate stable tag, promotion channel, promoted RC tag, rollback target,
   exact rollback command, exact GA date, and exact v5 end-of-support inputs.
 - Mobile is in scope for the release and now has targeted readiness coverage in `pulse-mobile`.
-- High-risk release confidence now lives in `docs/release-control/v6/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md` and should be cleared alongside this checklist.
+- High-risk release confidence now lives in `docs/release-control/v6/internal/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md` and should be cleared alongside this checklist.
 
 ## Promotion Policy
 - [ ] Record the previous stable tag and exact rollback pin command before publishing a new RC or stable release.

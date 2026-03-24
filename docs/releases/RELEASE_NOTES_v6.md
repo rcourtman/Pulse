@@ -27,7 +27,7 @@ the RC-to-GA gate is actually cleared:
   unless I publish an explicit exception.
 
 This notice must stay aligned with
-`docs/release-control/v6/V5_MAINTENANCE_SUPPORT_POLICY.md`.
+`docs/release-control/v6/internal/V5_MAINTENANCE_SUPPORT_POLICY.md`.
 
 ---
 

@@ -46,7 +46,7 @@ def active_guidance_paths() -> tuple[str, ...]:
         "docs/release-control/v6/README.md",
         "docs/release-control/v6/internal/PRE_RELEASE_CHECKLIST.md",
         "docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md",
-        "docs/release-control/v6/V5_MAINTENANCE_SUPPORT_POLICY.md",
+        "docs/release-control/v6/internal/V5_MAINTENANCE_SUPPORT_POLICY.md",
         "docs/release-control/v6/internal/CANONICAL_DEVELOPMENT_PROTOCOL.md",
         "docs/release-control/v6/internal/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
         "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
