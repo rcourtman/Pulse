@@ -265,11 +265,13 @@ owned hook/model layers that feed it.
 That same dashboard boundary now also owns the shared dashboard presentation
 helpers through `frontend-modern/src/utils/dashboardEmptyStatePresentation.ts`,
 `frontend-modern/src/utils/dashboardGuestPresentation.ts`,
-`frontend-modern/src/utils/dashboardKpiPresentation.ts`, and
+`frontend-modern/src/utils/dashboardKpiPresentation.ts`,
+`frontend-modern/src/utils/dashboardMetricPresentation.ts`, and
 `frontend-modern/src/utils/dashboardTrendPresentation.ts`. Dashboard loading,
 disconnect, and empty states; guest backup/disk fallback copy; KPI card
-framing; and trend palette/error copy must extend those helpers instead of
-being redefined inline in route shells, guest rows, or overview cards.
+framing; status-badge, delta, percent, and action-priority formatting; and
+trend palette/error copy must extend those helpers instead of being redefined
+inline in route shells, guest rows, or overview cards.
 That shell must also stay passive with respect to data ownership: dashboard
 trend cards may render the summary-range controls and operator-facing empty or
 error copy, but they must not reintroduce route-local metrics-history fetch

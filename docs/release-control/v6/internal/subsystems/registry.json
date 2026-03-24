@@ -2371,6 +2371,7 @@
         "frontend-modern/src/utils/dashboardEmptyStatePresentation.ts",
         "frontend-modern/src/utils/dashboardGuestPresentation.ts",
         "frontend-modern/src/utils/dashboardKpiPresentation.ts",
+        "frontend-modern/src/utils/dashboardMetricPresentation.ts",
         "frontend-modern/src/utils/dashboardTrendPresentation.ts",
         "frontend-modern/src/utils/diagnosticsPresentation.ts",
         "frontend-modern/src/utils/discoveryPresentation.ts",
@@ -2545,6 +2546,7 @@
               "frontend-modern/src/utils/dashboardEmptyStatePresentation.ts",
               "frontend-modern/src/utils/dashboardGuestPresentation.ts",
               "frontend-modern/src/utils/dashboardKpiPresentation.ts",
+              "frontend-modern/src/utils/dashboardMetricPresentation.ts",
               "frontend-modern/src/utils/dashboardTrendPresentation.ts"
             ],
             "allow_same_subsystem_tests": false,
@@ -2554,6 +2556,7 @@
               "frontend-modern/src/utils/__tests__/dashboardEmptyStatePresentation.test.ts",
               "frontend-modern/src/utils/__tests__/dashboardGuestPresentation.test.ts",
               "frontend-modern/src/utils/__tests__/dashboardKpiPresentation.test.ts",
+              "frontend-modern/src/utils/__tests__/dashboardMetricPresentation.test.ts",
               "frontend-modern/src/utils/__tests__/dashboardTrendPresentation.test.ts"
             ]
           },
