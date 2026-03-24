@@ -4323,6 +4323,7 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(
             match["verification_requirement"]["exact_files"],
             [
+                "frontend-modern/src/components/Infrastructure/__tests__/ResourceChangeSummary.test.tsx",
                 "frontend-modern/src/components/Infrastructure/__tests__/ResourceDetailDrawer.discovery.test.ts",
                 "frontend-modern/src/components/Infrastructure/__tests__/ResourceDetailDrawer.history.test.tsx",
                 "frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx",

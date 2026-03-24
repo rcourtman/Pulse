@@ -3507,6 +3507,7 @@
         "frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts",
         "frontend-modern/src/components/Infrastructure/InfrastructureSummary.tsx",
         "frontend-modern/src/components/Infrastructure/infrastructureSummaryModel.ts",
+        "frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx",
         "frontend-modern/src/components/Infrastructure/resourceDetailDiscoveryModel.ts",
         "frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx",
         "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerDebugTab.tsx",
@@ -3540,6 +3541,7 @@
         "frontend-modern/src/pages/Infrastructure.tsx",
         "frontend-modern/src/routing/resourceLinks.ts",
         "frontend-modern/src/types/resource.ts",
+        "frontend-modern/src/utils/resourceChangePresentation.ts",
         "frontend-modern/src/utils/resourceIdentity.ts",
         "internal/api/resources.go"
       ],
@@ -3606,6 +3608,7 @@
               "frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts",
               "frontend-modern/src/components/Infrastructure/InfrastructureSummary.tsx",
               "frontend-modern/src/components/Infrastructure/infrastructureSummaryModel.ts",
+              "frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx",
               "frontend-modern/src/components/Infrastructure/resourceDetailDiscoveryModel.ts",
               "frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx",
               "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerDebugTab.tsx",
@@ -3647,6 +3650,7 @@
             "exact_files": [
               "frontend-modern/src/components/Infrastructure/__tests__/infrastructureSelectors.test.ts",
               "frontend-modern/src/components/Infrastructure/__tests__/infrastructureSummaryModel.test.ts",
+              "frontend-modern/src/components/Infrastructure/__tests__/ResourceChangeSummary.test.tsx",
               "frontend-modern/src/components/Infrastructure/__tests__/ResourceDetailDrawer.discovery.test.ts",
               "frontend-modern/src/components/Infrastructure/__tests__/ResourceDetailDrawer.history.test.tsx",
               "frontend-modern/src/components/Infrastructure/__tests__/resourceDetailDrawerIdentityModel.test.ts",
@@ -3665,6 +3669,19 @@
               "frontend-modern/src/stores/__tests__/websocket-unified.test.ts",
               "frontend-modern/src/types/__tests__/resource.test.ts",
               "internal/unifiedresources/code_standards_test.go"
+            ]
+          },
+          {
+            "id": "resource-change-presentation-helper",
+            "label": "resource change presentation helper proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/utils/resourceChangePresentation.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/utils/__tests__/resourceChangePresentation.test.ts"
             ]
           },
           {
