@@ -328,6 +328,16 @@ theme synchronization, and authenticated runtime startup, and
 as org switching and kiosk-safe navigation. Future hosted browser bootstrap
 work must extend that split rather than pulling org bootstrap and app chrome
 back into one monolithic route component.
+That same authenticated shell contract now also has to distinguish backend
+availability from websocket-stream liveness. When hosted runtime health stays
+available during a stream reconnect or renegotiation window,
+`frontend-modern/src/useAppRuntimeState.ts` must preserve a canonical
+backend-healthy signal and `frontend-modern/src/AppLayout.tsx` must not
+advertise the whole paid shell as disconnected or "Reconnecting..." solely
+because the live stream is transiently recovering. Future hosted shell work
+must keep the top-right connection badge aligned to overall authenticated
+runtime availability first, with websocket churn treated as a narrower live
+stream status instead of the shell-level truth.
 That same route/provider shell must stay page-oriented as well: `App.tsx`
 should lazy-load route shells like `frontend-modern/src/pages/Storage.tsx`
 and `frontend-modern/src/pages/Operations.tsx`

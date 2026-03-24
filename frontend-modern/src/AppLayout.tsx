@@ -68,6 +68,7 @@ type UtilityTab = {
 };
 
 export interface AppLayoutProps {
+  backendHealthy: () => boolean;
   connected: () => boolean;
   reconnecting: () => boolean;
   dataUpdated: () => boolean;
@@ -87,21 +88,25 @@ export interface AppLayoutProps {
 }
 
 function ConnectionStatusBadge(props: {
+  backendHealthy: () => boolean;
   connected: () => boolean;
   reconnecting: () => boolean;
   class?: string;
 }) {
+  const shellAvailable = () => props.connected() || props.backendHealthy();
+  const showSyncing = () => !props.connected() && props.backendHealthy() && props.reconnecting();
+
   return (
     <div
       class={`group status text-xs rounded-full flex items-center justify-center transition-all duration-500 ease-in-out px-1.5 ${
-        props.connected()
+        shellAvailable()
           ? 'connected bg-green-200 dark:bg-green-700 text-green-700 dark:text-green-300 min-w-6 h-6 group-hover:px-3'
           : props.reconnecting()
             ? 'reconnecting bg-yellow-200 dark:bg-yellow-700 text-yellow-700 dark:text-yellow-300 py-1'
             : 'disconnected bg-surface-hover text-base-content min-w-6 h-6 group-hover:px-3'
       } ${props.class ?? ''}`}
     >
-      <Show when={props.reconnecting()}>
+      <Show when={!shellAvailable() && props.reconnecting()}>
         <svg class="animate-spin h-3 w-3 flex-shrink-0" fill="none" viewBox="0 0 24 24">
           <circle
             class="opacity-25"
@@ -118,21 +123,23 @@ function ConnectionStatusBadge(props: {
           />
         </svg>
       </Show>
-      <Show when={props.connected()}>
+      <Show when={shellAvailable()}>
         <span class="h-2.5 w-2.5 rounded-full bg-green-600 dark:bg-green-400 flex-shrink-0" />
       </Show>
-      <Show when={!props.connected() && !props.reconnecting()}>
+      <Show when={!shellAvailable() && !props.reconnecting()}>
         <span class="h-2.5 w-2.5 rounded-full bg-slate-600 flex-shrink-0" />
       </Show>
       <span
         class={`whitespace-nowrap overflow-hidden transition-all duration-500 ${
-          props.connected() || (!props.connected() && !props.reconnecting())
+          shellAvailable() || (!shellAvailable() && !props.reconnecting())
             ? 'max-w-0 group-hover:max-w-[100px] group-hover:ml-2 group-hover:mr-1 opacity-0 group-hover:opacity-100'
             : 'max-w-[100px] ml-1 opacity-100'
         }`}
       >
-        {props.connected()
-          ? 'Connected'
+        {shellAvailable()
+          ? showSyncing()
+            ? 'Connected'
+            : 'Connected'
           : props.reconnecting()
             ? 'Reconnecting...'
             : 'Disconnected'}
@@ -593,6 +600,7 @@ export function AppLayout(props: AppLayoutProps) {
             </div>
           </Show>
           <ConnectionStatusBadge
+            backendHealthy={props.backendHealthy}
             connected={props.connected}
             reconnecting={props.reconnecting}
             class="flex-shrink-0"

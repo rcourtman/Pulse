@@ -146,6 +146,12 @@ The subsystem registry now also requires explicit proof-policy coverage for all
 shared runtime files, and shared-component guardrails fail if raw table
 composition is reintroduced in new shared components outside the canonical
 allowlist.
+The root app shell now also treats backend availability as distinct from
+websocket liveness: `frontend-modern/src/AppLayout.tsx` and
+`frontend-modern/src/useAppRuntimeState.ts` must keep the top-right connection
+badge aligned to overall backend availability so a healthy dev/runtime backend
+does not present the whole shell as reconnecting just because the live stream
+is transiently renegotiating.
 Shared feature presentation helpers under `frontend-modern/src/features/` now
 also need to preserve route-owned page-health semantics when the owning surface
 is REST-backed: operators should only see reconnect or disconnected shells when

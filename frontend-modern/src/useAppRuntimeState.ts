@@ -181,6 +181,7 @@ export const useAppRuntimeState = () => {
     logoutURL?: string;
   } | null>(null);
   const [wsStore, setWsStore] = createSignal<EnhancedStore | null>(null);
+  const [backendHealthy, setBackendHealthy] = createSignal(false);
   const state = (): State => wsStore()?.state || fallbackState;
   const connected = () => wsStore()?.connected() || false;
   const reconnecting = () => wsStore()?.reconnecting() || false;
@@ -226,7 +227,19 @@ export const useAppRuntimeState = () => {
     setNeedsAuth(false);
     await loadOrganizations();
     setWsStore(acquireWsStore());
+    setBackendHealthy(true);
     await loadSystemSettingsAndLayout();
+  };
+
+  const checkBackendHealth = async () => {
+    try {
+      const response = await apiFetch('/api/health', { cache: 'no-store' });
+      setBackendHealthy(response.ok);
+      return response.ok;
+    } catch {
+      setBackendHealthy(false);
+      return false;
+    }
   };
 
   const loadOrganizations = async () => {
@@ -417,6 +430,26 @@ export const useAppRuntimeState = () => {
     if (!ready) {
       alertsInitialized = false;
     }
+  });
+
+  createEffect(() => {
+    if (connected()) {
+      setBackendHealthy(true);
+      return;
+    }
+
+    if (!reconnecting()) {
+      return;
+    }
+
+    void checkBackendHealth();
+    const interval = window.setInterval(() => {
+      void checkBackendHealth();
+    }, 5000);
+
+    onCleanup(() => {
+      window.clearInterval(interval);
+    });
   });
 
   const handleThemeChange = async (newPreference: ThemePreference) => {
@@ -634,6 +667,7 @@ export const useAppRuntimeState = () => {
     proxyAuthInfo,
     state,
     connected,
+    backendHealthy,
     reconnecting,
     dataUpdated,
     lastUpdateText,

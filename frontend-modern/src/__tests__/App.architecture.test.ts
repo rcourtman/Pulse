@@ -23,9 +23,12 @@ describe('App architecture', () => {
   it('keeps authenticated chrome in AppLayout and hosted bootstrap in useAppRuntimeState', () => {
     expect(appLayoutSource).toContain('export function AppLayout(props: AppLayoutProps)');
     expect(appLayoutSource).toContain('<OrgSwitcher');
+    expect(appLayoutSource).toContain('const shellAvailable = () => props.connected() || props.backendHealthy();');
     expect(appLayoutSource).toContain('const utilityTabs = createMemo(() =>');
     expect(appRuntimeStateSource).toContain('export const useAppRuntimeState = () =>');
     expect(appRuntimeStateSource).toContain('const beginAuthenticatedRuntime = async () =>');
+    expect(appRuntimeStateSource).toContain("const [backendHealthy, setBackendHealthy] = createSignal(false);");
+    expect(appRuntimeStateSource).toContain("const checkBackendHealth = async () => {");
     expect(appRuntimeStateSource).toContain('const loadOrganizations = async () =>');
     expect(appRuntimeStateSource).toContain('const handleOrgSwitch = (nextOrgID: string) =>');
     expect(appRuntimeStateSource).toContain(
