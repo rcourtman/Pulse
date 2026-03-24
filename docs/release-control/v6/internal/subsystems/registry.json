@@ -572,9 +572,12 @@
         "frontend-modern/src/utils/agentInstallCommand.ts",
         "frontend-modern/src/utils/agentProfilesPresentation.ts",
         "frontend-modern/src/utils/agentProfileSuggestionPresentation.ts",
+        "frontend-modern/src/utils/clusterEndpointPresentation.ts",
         "frontend-modern/src/utils/configuredNodeCapabilityPresentation.ts",
         "frontend-modern/src/utils/configuredNodeStatusPresentation.ts",
         "frontend-modern/src/utils/infrastructureSettingsPresentation.ts",
+        "frontend-modern/src/utils/nodeModalPresentation.ts",
+        "frontend-modern/src/utils/proxmoxSettingsPresentation.ts",
         "frontend-modern/src/utils/unifiedAgentInventoryPresentation.ts",
         "frontend-modern/src/utils/unifiedAgentStatusPresentation.ts",
         "internal/api/agent_install_command_shared.go",
@@ -738,12 +741,14 @@
               "frontend-modern/src/components/Settings/NodeModalMonitoringSection.tsx",
               "frontend-modern/src/components/Settings/NodeModalSetupGuideSection.tsx",
               "frontend-modern/src/components/Settings/NodeModalStatusFooter.tsx",
-              "frontend-modern/src/components/Settings/useNodeModalState.ts"
+              "frontend-modern/src/components/Settings/useNodeModalState.ts",
+              "frontend-modern/src/utils/nodeModalPresentation.ts"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
-              "frontend-modern/src/components/Settings/__tests__/NodeModal.guardrails.test.ts"
+              "frontend-modern/src/components/Settings/__tests__/NodeModal.guardrails.test.ts",
+              "frontend-modern/src/utils/__tests__/nodeModalPresentation.test.ts"
             ]
           },
           {
@@ -821,7 +826,9 @@
               "frontend-modern/src/components/Settings/useInfrastructureConfiguredNodesState.ts",
               "frontend-modern/src/components/Settings/useInfrastructureDiscoveryRuntimeState.ts",
               "frontend-modern/src/components/Settings/useInfrastructureSettingsState.ts",
-              "frontend-modern/src/components/Settings/useProxmoxDirectWorkspaceState.ts"
+              "frontend-modern/src/components/Settings/useProxmoxDirectWorkspaceState.ts",
+              "frontend-modern/src/utils/clusterEndpointPresentation.ts",
+              "frontend-modern/src/utils/proxmoxSettingsPresentation.ts"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
@@ -830,7 +837,9 @@
               "frontend-modern/src/components/Settings/__tests__/InfrastructureWorkspace.test.tsx",
               "frontend-modern/src/components/Settings/__tests__/monitoredSystemModelGuardrails.test.ts",
               "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
-              "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts"
+              "frontend-modern/src/utils/__tests__/clusterEndpointPresentation.test.ts",
+              "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
+              "frontend-modern/src/utils/__tests__/proxmoxSettingsPresentation.test.ts"
             ]
           },
           {

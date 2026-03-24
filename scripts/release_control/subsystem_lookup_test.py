@@ -1639,7 +1639,8 @@ class SubsystemLookupTest(unittest.TestCase):
             self.assertEqual(
                 lifecycle_match["verification_requirement"]["exact_files"],
                 [
-                    "frontend-modern/src/components/Settings/__tests__/NodeModal.guardrails.test.ts"
+                    "frontend-modern/src/components/Settings/__tests__/NodeModal.guardrails.test.ts",
+                    "frontend-modern/src/utils/__tests__/nodeModalPresentation.test.ts",
                 ],
             )
 
@@ -1820,7 +1821,9 @@ class SubsystemLookupTest(unittest.TestCase):
                 "frontend-modern/src/components/Settings/__tests__/InfrastructureWorkspace.test.tsx",
                 "frontend-modern/src/components/Settings/__tests__/monitoredSystemModelGuardrails.test.ts",
                 "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
+                "frontend-modern/src/utils/__tests__/clusterEndpointPresentation.test.ts",
                 "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
+                "frontend-modern/src/utils/__tests__/proxmoxSettingsPresentation.test.ts",
             ],
         )
 
@@ -1856,7 +1859,9 @@ class SubsystemLookupTest(unittest.TestCase):
                 "frontend-modern/src/components/Settings/__tests__/InfrastructureWorkspace.test.tsx",
                 "frontend-modern/src/components/Settings/__tests__/monitoredSystemModelGuardrails.test.ts",
                 "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
+                "frontend-modern/src/utils/__tests__/clusterEndpointPresentation.test.ts",
                 "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
+                "frontend-modern/src/utils/__tests__/proxmoxSettingsPresentation.test.ts",
             ],
         )
 
@@ -1896,7 +1901,9 @@ class SubsystemLookupTest(unittest.TestCase):
                 "frontend-modern/src/components/Settings/__tests__/InfrastructureWorkspace.test.tsx",
                 "frontend-modern/src/components/Settings/__tests__/monitoredSystemModelGuardrails.test.ts",
                 "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
+                "frontend-modern/src/utils/__tests__/clusterEndpointPresentation.test.ts",
                 "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
+                "frontend-modern/src/utils/__tests__/proxmoxSettingsPresentation.test.ts",
             ],
         )
 
@@ -1932,7 +1939,9 @@ class SubsystemLookupTest(unittest.TestCase):
                 "frontend-modern/src/components/Settings/__tests__/InfrastructureWorkspace.test.tsx",
                 "frontend-modern/src/components/Settings/__tests__/monitoredSystemModelGuardrails.test.ts",
                 "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
+                "frontend-modern/src/utils/__tests__/clusterEndpointPresentation.test.ts",
                 "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
+                "frontend-modern/src/utils/__tests__/proxmoxSettingsPresentation.test.ts",
             ],
         )
 
@@ -1963,7 +1972,9 @@ class SubsystemLookupTest(unittest.TestCase):
                 "frontend-modern/src/components/Settings/__tests__/InfrastructureWorkspace.test.tsx",
                 "frontend-modern/src/components/Settings/__tests__/monitoredSystemModelGuardrails.test.ts",
                 "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
+                "frontend-modern/src/utils/__tests__/clusterEndpointPresentation.test.ts",
                 "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
+                "frontend-modern/src/utils/__tests__/proxmoxSettingsPresentation.test.ts",
             ],
         )
 

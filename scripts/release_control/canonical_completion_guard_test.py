@@ -1609,7 +1609,8 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     "allow_same_subsystem_tests": False,
                     "test_prefixes": [],
                     "exact_files": [
-                        "frontend-modern/src/components/Settings/__tests__/NodeModal.guardrails.test.ts"
+                        "frontend-modern/src/components/Settings/__tests__/NodeModal.guardrails.test.ts",
+                        "frontend-modern/src/utils/__tests__/nodeModalPresentation.test.ts",
                     ],
                 }
             ],
@@ -1993,7 +1994,9 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                         "frontend-modern/src/components/Settings/__tests__/InfrastructureWorkspace.test.tsx",
                         "frontend-modern/src/components/Settings/__tests__/monitoredSystemModelGuardrails.test.ts",
                         "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
+                        "frontend-modern/src/utils/__tests__/clusterEndpointPresentation.test.ts",
                         "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
+                        "frontend-modern/src/utils/__tests__/proxmoxSettingsPresentation.test.ts",
                     ],
                 }
             ],
@@ -2043,7 +2046,9 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                         "frontend-modern/src/components/Settings/__tests__/InfrastructureWorkspace.test.tsx",
                         "frontend-modern/src/components/Settings/__tests__/monitoredSystemModelGuardrails.test.ts",
                         "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
+                        "frontend-modern/src/utils/__tests__/clusterEndpointPresentation.test.ts",
                         "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
+                        "frontend-modern/src/utils/__tests__/proxmoxSettingsPresentation.test.ts",
                     ],
                 }
             ],
@@ -2105,7 +2110,9 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                         "frontend-modern/src/components/Settings/__tests__/InfrastructureWorkspace.test.tsx",
                         "frontend-modern/src/components/Settings/__tests__/monitoredSystemModelGuardrails.test.ts",
                         "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
+                        "frontend-modern/src/utils/__tests__/clusterEndpointPresentation.test.ts",
                         "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
+                        "frontend-modern/src/utils/__tests__/proxmoxSettingsPresentation.test.ts",
                     ],
                 }
             ],

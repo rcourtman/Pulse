@@ -82,6 +82,9 @@ management, and fleet control surfaces.
 58. `frontend-modern/src/utils/configuredNodeStatusPresentation.ts`
 59. `frontend-modern/src/utils/unifiedAgentInventoryPresentation.ts`
 60. `frontend-modern/src/utils/unifiedAgentStatusPresentation.ts`
+61. `frontend-modern/src/utils/clusterEndpointPresentation.ts`
+62. `frontend-modern/src/utils/nodeModalPresentation.ts`
+63. `frontend-modern/src/utils/proxmoxSettingsPresentation.ts`
 
 ## Shared Boundaries
 
@@ -208,6 +211,12 @@ as the composition boundary, and the new direct-node/discovery runtime hooks as
 the canonical state owners, instead of leaving those
 panels ungoverned beside the canonical
 unified-agent install path.
+That same direct Proxmox workspace owner now also includes the shared
+presentation helpers `frontend-modern/src/utils/clusterEndpointPresentation.ts`
+and `frontend-modern/src/utils/proxmoxSettingsPresentation.ts`, so endpoint
+reachability state, discovery-prefill defaults, and variant copy stay on the
+same governed lifecycle surface instead of drifting into card-local strings or
+prefill assembly.
 That canonical /api/auto-register behavior now also includes hostname/IP continuity:
 reruns that arrive through a different canonical host form must reuse the same
 Pulse-managed node record and token instead of forking duplicate fleet entries.
@@ -380,6 +389,10 @@ The corresponding node setup modal owner is now an explicit shell-plus-sections
 surface: `NodeModal.tsx` composes `NodeModalBasicInfoSection.tsx`,
 `NodeModalAuthenticationSection.tsx`, `NodeModalMonitoringSection.tsx`,
 `NodeModalStatusFooter.tsx`, `nodeModalModel.ts`, and `useNodeModalState.ts`.
+That same node setup owner also includes
+`frontend-modern/src/utils/nodeModalPresentation.ts`, which now owns the
+canonical node-type defaults, endpoint/auth placeholders, monitoring coverage
+copy, and test-result styling for PVE, PBS, and PMG setup.
 That presentation layer remains presentation-only for those API-managed
 Proxmox, PBS, and PMG connections. Lifecycle guidance in that settings surface
 may explain monitored-system caps, but commercial enforcement still belongs to
