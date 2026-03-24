@@ -140,7 +140,7 @@ This mode attaches Playwright to the canonical dev browser entrypoint on `http:/
 
 If the managed runtime is not already running, the harness starts it. If you need the harness to reclaim existing unmanaged `5173`/`7655` listeners first, add `PULSE_E2E_HOT_DEV_TAKEOVER=1`.
 
-The managed recovery proof bounces the real backend through `./scripts/hot-dev-bg.sh backend-restart` and verifies that the browser shell reports the outage and then recovers through the proxy. When the harness attaches to an already-running managed dev session, `posttest` leaves that runtime running.
+The managed recovery proof bounces the real backend through `npm run dev:backend-restart` and verifies that the browser shell reports the outage and then recovers through the proxy. When the harness attaches to an already-running managed dev session, `posttest` leaves that runtime running.
 
 For deterministic paid-feature runs against an existing instance, provide one of:
 - `PULSE_E2E_BILLING_STATE_PATH=/absolute/path/to/billing.json` to let the harness write the billing state file directly.

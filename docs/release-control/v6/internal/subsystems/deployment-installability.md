@@ -214,6 +214,11 @@ verify, supervise, or inspect the routine local dev runtime, it must route them
 to the repo-root `npm run dev`, `npm run dev:verify`, and `npm run dev:logs`
 wrappers instead of teaching direct raw script invocations for those day-to-day
 flows.
+That same wrapper rule also applies to the managed recovery-proof docs in
+`tests/integration/README.md`: when those instructions tell operators how to
+bounce or verify the local managed runtime, they must use the repo-root wrapper
+surface such as `npm run dev:backend-restart` instead of documenting raw
+launcher commands directly.
 That same dev-runtime helper boundary also includes the auxiliary operator
 controls that start, stop, restart, or recover local development. The repo-root
 Makefile targets, `scripts/toggle-mock.sh`, and `scripts/clean-mock-alerts.sh` must

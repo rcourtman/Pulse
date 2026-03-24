@@ -12,6 +12,7 @@ PACKAGE_JSON="${ROOT_DIR}/package.json"
 FRONTEND_PACKAGE_JSON="${ROOT_DIR}/frontend-modern/package.json"
 DEV_LAUNCHD_WRAPPER="${ROOT_DIR}/scripts/dev-launchd-wrapper.sh"
 DEV_LAUNCHD_SETUP="${ROOT_DIR}/scripts/dev-launchd-setup.sh"
+INTEGRATION_README="${ROOT_DIR}/tests/integration/README.md"
 
 if [[ ! -x "${HOT_DEV_BG}" ]]; then
   echo "hot-dev-bg.sh not found or not executable at ${HOT_DEV_BG}" >&2
@@ -332,6 +333,14 @@ test_hot_dev_bg_script_advertises_managed_entrypoint() {
   assert_contains "hot-dev-bg routes launchd supervision guidance to managed wrapper" "${output}" "Rerun with: npm run dev"
 }
 
+test_integration_readme_uses_managed_backend_restart_wrapper() {
+  local output
+  output="$(sed -n '132,150p' "${INTEGRATION_README}")"
+
+  assert_contains "integration readme documents managed backend restart wrapper" "${output}" "npm run dev:backend-restart"
+  assert_not_contains "integration readme no longer documents raw backend restart script" "${output}" "./scripts/hot-dev-bg.sh backend-restart"
+}
+
 test_clean_mock_alerts_prefers_managed_runtime() {
   local test_dir fake_bin alert_history fake_hot_dev_bg action_log output
   test_dir="$(mktemp -d)"
@@ -563,6 +572,7 @@ main() {
   test_frontend_package_exposes_managed_runtime_entrypoints
   test_hot_dev_script_advertises_foreground_escape_hatch
   test_hot_dev_bg_script_advertises_managed_entrypoint
+  test_integration_readme_uses_managed_backend_restart_wrapper
   test_clean_mock_alerts_prefers_managed_runtime
   test_dev_check_uses_managed_runtime_status
   test_backend_restart_requires_managed_runtime
