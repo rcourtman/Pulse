@@ -912,7 +912,10 @@
       "owned_files": [
         "frontend-modern/src/pages/Alerts.tsx",
         "frontend-modern/src/utils/alertDestinationsPresentation.ts",
-        "frontend-modern/src/utils/alertOverviewPresentation.ts"
+        "frontend-modern/src/utils/alertIncidentPresentation.ts",
+        "frontend-modern/src/utils/alertOverviewPresentation.ts",
+        "frontend-modern/src/utils/alertSchedulePresentation.ts",
+        "frontend-modern/src/utils/alertWebhookPresentation.ts"
       ],
       "verification": {
         "allow_same_subsystem_tests": true,
@@ -1004,6 +1007,45 @@
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/utils/__tests__/alertDestinationsPresentation.test.ts"
+            ]
+          },
+          {
+            "id": "alert-incident-presentation-helper",
+            "label": "alert incident presentation helper proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/utils/alertIncidentPresentation.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/utils/__tests__/alertIncidentPresentation.test.ts"
+            ]
+          },
+          {
+            "id": "alert-schedule-presentation-helper",
+            "label": "alert schedule presentation helper proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/utils/alertSchedulePresentation.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/utils/__tests__/alertSchedulePresentation.test.ts"
+            ]
+          },
+          {
+            "id": "alert-webhook-presentation-helper",
+            "label": "alert webhook presentation helper proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/utils/alertWebhookPresentation.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/utils/__tests__/alertWebhookPresentation.test.ts"
             ]
           },
           {

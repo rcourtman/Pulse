@@ -28,6 +28,9 @@ operator-facing alert routing behavior for live runtime alerts.
 6. `frontend-modern/src/components/Alerts/RecentAlertsPanel.tsx`
 7. `frontend-modern/src/utils/alertOverviewPresentation.ts`
 8. `frontend-modern/src/utils/alertDestinationsPresentation.ts`
+9. `frontend-modern/src/utils/alertIncidentPresentation.ts`
+10. `frontend-modern/src/utils/alertSchedulePresentation.ts`
+11. `frontend-modern/src/utils/alertWebhookPresentation.ts`
 
 ## Shared Boundaries
 
@@ -71,6 +74,17 @@ The alert webhook editor now mirrors that canonical Pushover field rule through
 `frontend-modern/src/utils/alertWebhookPresentation.ts`, so the UI shares the
 same alias, preset, and custom-field input mapping instead of carrying its own
 local webhook-field normalization fork.
+That shared alert presentation boundary now also has explicit alerts ownership.
+`frontend-modern/src/utils/alertWebhookPresentation.ts` is the canonical owner
+for webhook setup copy, service labels, mention-help phrasing, custom-field
+presets, and add/test/update/delete action wording; 
+`frontend-modern/src/utils/alertSchedulePresentation.ts` owns quiet-hours day
+and suppress-category card styling; and
+`frontend-modern/src/utils/alertIncidentPresentation.ts` owns incident badge,
+timeline, filter-chip, note-editor, and resource-incident panel presentation.
+Future alert presentation work must extend those helpers through the alerts
+contract instead of leaving alert-facing wording or styling inlined in page or
+feature shells while the registry treats the helpers as unowned.
 
 The alert webhook service chooser also now derives its service set from the
 backend webhook template registry, rather than keeping a second frontend-only
