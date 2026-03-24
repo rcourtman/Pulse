@@ -87,9 +87,13 @@ cross-source deduplication.
 65. `frontend-modern/src/utils/resourceStateAdapters.ts`
 66. `frontend-modern/src/utils/resourceTypeCompat.ts`
 67. `frontend-modern/src/utils/resourceTypePresentation.ts`
-68. `frontend-modern/src/utils/resourceIdentity.ts`
-69. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerIdentityModel.ts`
-70. `frontend-modern/src/hooks/useDashboardTrends.ts`
+68. `frontend-modern/src/utils/serviceHealthPresentation.ts`
+69. `frontend-modern/src/utils/sourceTypePresentation.ts`
+70. `frontend-modern/src/utils/workloadTypePresentation.ts`
+71. `frontend-modern/src/components/PMG/ServiceHealthBadge.tsx`
+72. `frontend-modern/src/utils/resourceIdentity.ts`
+73. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerIdentityModel.ts`
+74. `frontend-modern/src/hooks/useDashboardTrends.ts`
 
 ## Shared Boundaries
 
@@ -860,6 +864,18 @@ resource tables, drawers, and infrastructure summary cards. Future resource
 type or badge wording changes should extend these unified-resource owners
 instead of rebuilding type-label or badge mapping logic inside infrastructure,
 settings, alerts, recovery, or dashboard-local helpers.
+That same unified-resource presentation boundary also owns workload, source,
+and service-health labeling now. `frontend-modern/src/utils/workloadTypePresentation.ts`
+owns canonical workload-type alias handling plus badge labels/titles,
+`frontend-modern/src/utils/sourceTypePresentation.ts` owns canonical source
+labels and source badge styling, and
+`frontend-modern/src/utils/serviceHealthPresentation.ts` owns canonical
+service-health tone, dot, and compact-summary presentation. The PMG-facing
+consumer `frontend-modern/src/components/PMG/ServiceHealthBadge.tsx` is part
+of that same boundary and must stay a thin render shell over the canonical
+service-health helper. Future workload/source/service-health wording changes
+should extend these unified-resource owners instead of rebuilding status or
+badge logic inside PMG, recovery, dashboard, or infrastructure-local views.
 The shared resource-runtime adapter boundary is also owned here now.
 `frontend-modern/src/utils/agentResources.ts` owns canonical actionable
 resource identities, agent-facet detection, cluster-name fallbacks, and
