@@ -612,3 +612,10 @@ checkout provisioning: long-running `checkout.session.completed` tenant
 provisioning must complete under an explicit background timeout instead of
 depending on the inbound Stripe request context surviving long enough for first
 boot and health polling.
+That same paid relay onboarding boundary now also owns QR-token lifecycle on
+the staged mobile rollout surface. `RelaySettingsPanel.tsx`,
+`RelayPairingSection.tsx`, and `useRelaySettingsPanelState.ts` may revoke a
+displayed pairing token only when canonical token metadata still shows no
+`lastUsedAt`; once a token has been used by a paired device, refreshing or
+hiding the QR must preserve that credential instead of treating it as
+disposable UI state.

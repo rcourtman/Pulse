@@ -12,6 +12,7 @@ const updateRelayConfigMock = vi.fn();
 const getQRPayloadMock = vi.fn();
 const createTokenMock = vi.fn();
 const deleteTokenMock = vi.fn();
+const getTokenMock = vi.fn();
 const showSuccessMock = vi.fn();
 const showErrorMock = vi.fn();
 const loggerErrorMock = vi.fn();
@@ -45,6 +46,7 @@ vi.mock('@/api/security', () => ({
   SecurityAPI: {
     createToken: (...args: unknown[]) => createTokenMock(...args),
     deleteToken: (...args: unknown[]) => deleteTokenMock(...args),
+    getToken: (...args: unknown[]) => getTokenMock(...args),
   },
 }));
 
@@ -80,6 +82,7 @@ describe('RelaySettingsPanel runtime', () => {
     getQRPayloadMock.mockReset();
     createTokenMock.mockReset();
     deleteTokenMock.mockReset();
+    getTokenMock.mockReset();
     showSuccessMock.mockReset();
     showErrorMock.mockReset();
     loggerErrorMock.mockReset();
@@ -110,6 +113,13 @@ describe('RelaySettingsPanel runtime', () => {
       },
     });
     deleteTokenMock.mockResolvedValue(undefined);
+    getTokenMock.mockResolvedValue({
+      id: 'relay-token-1',
+      name: 'Relay mobile device 2026-03-12T00:00:00Z',
+      prefix: 'pmp_',
+      suffix: '1234',
+      createdAt: '',
+    });
     getQRPayloadMock.mockResolvedValue({
       schema: 'pulse-onboarding/v1',
       instance_url: 'https://pulse.example.test',
@@ -268,8 +278,107 @@ describe('RelaySettingsPanel runtime', () => {
 
     await waitFor(() => {
       expect(screen.getByText('pulse://connect?instance_id=instance-local&auth_token=token-456')).toBeInTheDocument();
+      expect(getTokenMock).toHaveBeenCalledWith('relay-token-1');
       expect(deleteTokenMock).toHaveBeenCalledWith('relay-token-1');
     });
+  });
+
+  it('keeps a previously used pairing token when refreshing the QR code', async () => {
+    createTokenMock
+      .mockResolvedValueOnce({
+        token: 'token-123',
+        record: {
+          id: 'relay-token-1',
+          name: 'Relay mobile device first',
+          prefix: 'pmp_',
+          suffix: '1234',
+          createdAt: '',
+        },
+      })
+      .mockResolvedValueOnce({
+        token: 'token-456',
+        record: {
+          id: 'relay-token-2',
+          name: 'Relay mobile device second',
+          prefix: 'pmp_',
+          suffix: '5678',
+          createdAt: '',
+        },
+      });
+    getQRPayloadMock
+      .mockResolvedValueOnce({
+        schema: 'pulse-onboarding/v1',
+        instance_url: 'https://pulse.example.test',
+        relay: {
+          enabled: true,
+          url: 'wss://relay.example.test/ws/instance',
+        },
+        auth_token: 'token-123',
+        deep_link: 'pulse://connect?instance_id=instance-local&auth_token=token-123',
+      })
+      .mockResolvedValueOnce({
+        schema: 'pulse-onboarding/v1',
+        instance_url: 'https://pulse.example.test',
+        relay: {
+          enabled: true,
+          url: 'wss://relay.example.test/ws/instance',
+        },
+        auth_token: 'token-456',
+        deep_link: 'pulse://connect?instance_id=instance-local&auth_token=token-456',
+      });
+    getTokenMock
+      .mockResolvedValueOnce({
+        id: 'relay-token-1',
+        name: 'Relay mobile device first',
+        prefix: 'pmp_',
+        suffix: '1234',
+        createdAt: '',
+        lastUsedAt: '2026-03-24T12:00:00Z',
+      });
+
+    render(() => <RelaySettingsPanel canManage />);
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('wss://relay.example.test/ws/instance')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Pair New Device' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('pulse://connect?instance_id=instance-local&auth_token=token-123')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh QR Code' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('pulse://connect?instance_id=instance-local&auth_token=token-456')).toBeInTheDocument();
+      expect(getTokenMock).toHaveBeenCalledWith('relay-token-1');
+    });
+
+    expect(deleteTokenMock).not.toHaveBeenCalledWith('relay-token-1');
+  });
+
+  it('hides the QR and deletes the displayed token only when it is still unused', async () => {
+    render(() => <RelaySettingsPanel canManage />);
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('wss://relay.example.test/ws/instance')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Pair New Device' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Hide QR' })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Hide QR' }));
+
+    await waitFor(() => {
+      expect(getTokenMock).toHaveBeenCalledWith('relay-token-1');
+      expect(deleteTokenMock).toHaveBeenCalledWith('relay-token-1');
+    });
+
+    expect(screen.queryByRole('button', { name: 'Hide QR' })).not.toBeInTheDocument();
   });
 
   it('keeps the previous QR code when refresh fails', async () => {

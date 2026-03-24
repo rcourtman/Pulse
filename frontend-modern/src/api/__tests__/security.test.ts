@@ -70,6 +70,27 @@ describe('SecurityAPI', () => {
     });
   });
 
+  describe('getToken', () => {
+    it('fetches a single token record', async () => {
+      const mockRecord: APITokenRecord = {
+        id: 't1',
+        name: 'Token 1',
+        prefix: 'pmp_',
+        suffix: 'abc',
+        createdAt: '',
+        lastUsedAt: '2026-03-24T12:00:00Z',
+        expiresAt: '2026-03-25T12:00:00Z',
+        ownerUserId: 'owner@example.com',
+      };
+      vi.mocked(apiFetchJSON).mockResolvedValueOnce({ record: mockRecord });
+
+      const result = await SecurityAPI.getToken('token/1');
+
+      expect(apiFetchJSON).toHaveBeenCalledWith('/api/security/tokens/token%2F1');
+      expect(result).toEqual(mockRecord);
+    });
+  });
+
   describe('createToken', () => {
     it('creates token with name and scopes', async () => {
       const mockResponse: CreateAPITokenResponse = {

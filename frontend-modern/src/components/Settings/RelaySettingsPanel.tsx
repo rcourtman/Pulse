@@ -199,6 +199,7 @@ export const RelaySettingsPanel: Component<RelaySettingsPanelProps> = (props) =>
             saving={state.saving()}
             showPairing={state.showPairing()}
             onCopyPairingPayload={() => void state.handleCopyPairingPayload()}
+            onHidePairing={() => void state.handleHidePairing()}
             onPairNewDevice={() => void state.handlePairNewDevice()}
           />
         </Show>

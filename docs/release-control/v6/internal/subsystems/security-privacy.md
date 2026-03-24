@@ -9,7 +9,9 @@
   "contract_file": "docs/release-control/v6/internal/subsystems/security-privacy.md",
   "status_file": "docs/release-control/v6/internal/status.json",
   "registry_file": "docs/release-control/v6/internal/subsystems/registry.json",
-  "dependency_subsystem_ids": []
+  "dependency_subsystem_ids": [
+    "api-contracts"
+  ]
 }
 ```
 
@@ -43,6 +45,7 @@ token-management visibility, and privacy controls to operators.
 20. `internal/api/security_tokens.go`
 21. `internal/api/system_settings.go`
 22. `internal/telemetry/telemetry.go`
+23. `internal/api/router_routes_auth_security.go`
 
 ## Shared Boundaries
 
@@ -272,3 +275,10 @@ posture derivation: `internal/ai/resource_context_policy_model.go` is now the
 canonical owner for the policy-posture summary, local-only count, and
 redaction-hint inputs that drive outbound AI context export decisions, so
 `resource_context.go` does not duplicate trust-boundary policy assembly inline.
+That same shared token-settings boundary now also governs relay pairing token
+lifecycle. `internal/api/security_tokens.go`,
+`internal/api/router_routes_auth_security.go`, and
+`frontend-modern/src/api/security.ts` expose canonical single-token metadata
+reads, and the relay pairing UI may revoke a displayed token only when that
+metadata still shows no `lastUsedAt`. Refreshing or hiding a QR payload must
+not delete a token that an already paired device is actively depending on.

@@ -9,6 +9,7 @@ export interface APITokenRecord {
   suffix: string;
   createdAt: string;
   lastUsedAt?: string;
+  expiresAt?: string;
   scopes?: string[];
   ownerUserId?: string;
 }

@@ -11,7 +11,7 @@ import { trackPaywallViewed } from '@/utils/upgradeMetrics';
 import { showError, showSuccess } from '@/utils/toast';
 import { RelayAPI, type RelayConfig, type RelayStatus } from '@/api/relay';
 import { OnboardingAPI, type OnboardingQRResponse } from '@/api/onboarding';
-import { SecurityAPI } from '@/api/security';
+import { SecurityAPI, type APITokenRecord } from '@/api/security';
 import { logger } from '@/utils/logger';
 import { getRelayConnectionPresentation } from '@/utils/relayPresentation';
 import QRCode from 'qrcode';
@@ -73,12 +73,38 @@ export function useRelaySettingsPanelState(props: RelaySettingsPanelProps) {
     }
   };
 
+  const getPairingTokenRecord = async (tokenID: string): Promise<APITokenRecord | null> => {
+    try {
+      return await SecurityAPI.getToken(tokenID);
+    } catch (error) {
+      const status = (error as { status?: number } | null)?.status;
+      if (status === 404) {
+        return null;
+      }
+      throw error;
+    }
+  };
+
+  const deletePairingTokenIfUnused = async (tokenID: string | null) => {
+    if (!tokenID) return;
+    try {
+      const record = await getPairingTokenRecord(tokenID);
+      if (!record || record.lastUsedAt) {
+        return;
+      }
+      await deletePairingToken(tokenID);
+    } catch (error) {
+      logger.warn('[RelaySettings] Failed to inspect relay pairing token lifecycle', error);
+    }
+  };
+
   const loadConfig = async () => {
     try {
       const nextConfig = await RelayAPI.getConfig();
       setConfig(nextConfig);
       setServerUrl(nextConfig.server_url);
       if (!nextConfig.enabled) {
+        await deletePairingTokenIfUnused(pairingTokenId());
         resetPairingState();
       }
     } catch (error) {
@@ -124,6 +150,7 @@ export function useRelaySettingsPanelState(props: RelaySettingsPanelProps) {
 
   onCleanup(() => {
     stopStatusPolling();
+    void deletePairingTokenIfUnused(pairingTokenId());
   });
 
   const handleStartTrial = async () => {
@@ -160,6 +187,7 @@ export function useRelaySettingsPanelState(props: RelaySettingsPanelProps) {
       } else {
         stopStatusPolling();
         setStatus(null);
+        await deletePairingTokenIfUnused(pairingTokenId());
         resetPairingState();
         showSuccess('Remote access disabled');
       }
@@ -217,7 +245,7 @@ export function useRelaySettingsPanelState(props: RelaySettingsPanelProps) {
       setPairingQRCode(qrCodeDataUrl);
       setPairingTokenId(createdTokenId);
       if (previousTokenId && previousTokenId !== createdTokenId) {
-        await deletePairingToken(previousTokenId);
+        await deletePairingTokenIfUnused(previousTokenId);
       }
     } catch (error) {
       await deletePairingToken(createdTokenId);
@@ -229,6 +257,11 @@ export function useRelaySettingsPanelState(props: RelaySettingsPanelProps) {
     } finally {
       setPairingLoading(false);
     }
+  };
+
+  const handleHidePairing = async () => {
+    await deletePairingTokenIfUnused(pairingTokenId());
+    resetPairingState();
   };
 
   const handleCopyPairingPayload = async () => {
@@ -251,6 +284,7 @@ export function useRelaySettingsPanelState(props: RelaySettingsPanelProps) {
     config,
     connectionPresentation,
     handleCopyPairingPayload,
+    handleHidePairing,
     handlePairNewDevice,
     handleSaveServerUrl,
     handleStartTrial,

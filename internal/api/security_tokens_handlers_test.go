@@ -91,6 +91,23 @@ func TestSecurityTokens_ListCreateDelete(t *testing.T) {
 		t.Fatalf("expected 1 token, got %d", len(listResp.Tokens))
 	}
 
+	req = httptest.NewRequest(http.MethodGet, "/api/security/tokens/"+createResp.Record.ID, nil)
+	rr = httptest.NewRecorder()
+	router.handleGetAPIToken(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rr.Code)
+	}
+
+	var getResp struct {
+		Record apiTokenDTO `json:"record"`
+	}
+	if err := json.NewDecoder(rr.Body).Decode(&getResp); err != nil {
+		t.Fatalf("decode get response: %v", err)
+	}
+	if getResp.Record.ID != createResp.Record.ID {
+		t.Fatalf("expected record id %q, got %q", createResp.Record.ID, getResp.Record.ID)
+	}
+
 	req = httptest.NewRequest(http.MethodDelete, "/api/security/tokens/", nil)
 	rr = httptest.NewRecorder()
 	router.handleDeleteAPIToken(rr, req)
@@ -101,6 +118,13 @@ func TestSecurityTokens_ListCreateDelete(t *testing.T) {
 	req = httptest.NewRequest(http.MethodDelete, "/api/security/tokens/missing", nil)
 	rr = httptest.NewRecorder()
 	router.handleDeleteAPIToken(rr, req)
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("expected status %d, got %d", http.StatusNotFound, rr.Code)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/api/security/tokens/missing", nil)
+	rr = httptest.NewRecorder()
+	router.handleGetAPIToken(rr, req)
 	if rr.Code != http.StatusNotFound {
 		t.Fatalf("expected status %d, got %d", http.StatusNotFound, rr.Code)
 	}

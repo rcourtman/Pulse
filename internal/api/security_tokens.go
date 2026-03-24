@@ -150,6 +150,36 @@ func (r *Router) handleListAPITokens(w http.ResponseWriter, req *http.Request) {
 	})
 }
 
+// handleGetAPIToken returns a single configured API token by ID (metadata only).
+func (r *Router) handleGetAPIToken(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	tokenID := strings.TrimSpace(strings.TrimPrefix(req.URL.Path, "/api/security/tokens/"))
+	if tokenID == "" || strings.Contains(tokenID, "/") {
+		http.Error(w, "Token ID required", http.StatusBadRequest)
+		return
+	}
+
+	config.Mu.RLock()
+	defer config.Mu.RUnlock()
+
+	for _, record := range r.config.APITokens {
+		if record.ID != tokenID {
+			continue
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"record": toAPITokenDTO(record),
+		})
+		return
+	}
+
+	http.Error(w, "Token not found", http.StatusNotFound)
+}
+
 type createTokenRequest struct {
 	Name      string    `json:"name"`
 	Scopes    *[]string `json:"scopes"`

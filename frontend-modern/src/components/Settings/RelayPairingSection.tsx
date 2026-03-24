@@ -20,6 +20,7 @@ interface RelayPairingSectionProps {
   saving: boolean;
   showPairing: boolean;
   onCopyPairingPayload: () => void;
+  onHidePairing: () => void;
   onPairNewDevice: () => void;
 }
 
@@ -41,13 +42,22 @@ export const RelayPairingSection: Component<RelayPairingSectionProps> = (props) 
                 : 'Pair New Device'}
           </button>
           <Show when={props.showPairing && props.pairingPayload}>
-            <button
-              class={RELAY_SECONDARY_BUTTON_CLASS}
-              onClick={props.onCopyPairingPayload}
-              disabled={!props.canManage || props.pairingLoading}
-            >
-              Copy Payload
-            </button>
+            <>
+              <button
+                class={RELAY_SECONDARY_BUTTON_CLASS}
+                onClick={props.onCopyPairingPayload}
+                disabled={!props.canManage || props.pairingLoading}
+              >
+                Copy Payload
+              </button>
+              <button
+                class={RELAY_SECONDARY_BUTTON_CLASS}
+                onClick={props.onHidePairing}
+                disabled={!props.canManage || props.pairingLoading}
+              >
+                Hide QR
+              </button>
+            </>
           </Show>
         </div>
 

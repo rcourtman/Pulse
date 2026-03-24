@@ -839,3 +839,10 @@ share the canonical trimmed-string utility instead of each surface rebuilding
     route for timeline history and related change counts, so storage and recovery
     surfaces must continue to consume the shared bundle rather than issuing
     separate local resource-detail fetches.
+That same shared `internal/api/` dependency now also assumes canonical
+security-token lifecycle reads. Storage- and recovery-adjacent consumers of
+shared auth/security helpers may inspect token metadata, but they must not
+treat a displayed relay pairing token as disposable once canonical metadata
+shows `lastUsedAt`. Shared transport mutations must preserve used-token
+continuity instead of deleting a credential that an already paired device
+still depends on.

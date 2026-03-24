@@ -15,6 +15,13 @@ export class SecurityAPI {
     return apiFetchJSON<SecurityStatus>('/api/security/status');
   }
 
+  static async getToken(id: string): Promise<APITokenRecord> {
+    const response = await apiFetchJSON<{ record: APITokenRecord }>(
+      `/api/security/tokens/${encodeURIComponent(id)}`,
+    );
+    return response.record;
+  }
+
   static async listTokens(): Promise<APITokenRecord[]> {
     const response = await apiFetchJSON<{ tokens: APITokenRecord[] }>('/api/security/tokens');
     return objectArrayFieldOrEmpty<APITokenRecord>(response, 'tokens');

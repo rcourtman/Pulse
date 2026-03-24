@@ -54,6 +54,7 @@ Own canonical runtime payload shapes between backend and frontend.
 31. `frontend-modern/src/components/Settings/useInfrastructureDiscoveryRuntimeState.ts`
 32. `frontend-modern/src/utils/apiTokenPresentation.ts`
 33. `frontend-modern/src/utils/infrastructureSettingsPresentation.ts`
+34. `internal/api/router_routes_auth_security.go`
 
 ## Shared Boundaries
 
@@ -1522,3 +1523,11 @@ when hosted auth handoff preserves a non-default tenant org like `t-...`,
 instance-level hosted billing lease from `default` if that tenant org has no
 org-local billing state of its own, rather than failing closed into
 `subscription_required` on first entry.
+The shared security token contract now also includes single-record metadata
+reads. `internal/api/security_tokens.go`,
+`internal/api/router_routes_auth_security.go`,
+`frontend-modern/src/api/security.ts`, and
+`frontend-modern/src/types/api.ts` own the canonical `record.lastUsedAt` and
+`record.expiresAt` lookup shape for one token, and relay pairing surfaces must
+consume that same contract when deciding whether a displayed QR token can be
+revoked or must be preserved as an already-used device credential.

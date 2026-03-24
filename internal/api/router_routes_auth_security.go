@@ -140,6 +140,13 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 		}
 	}))
 	r.mux.HandleFunc("/api/security/tokens/", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, func(w http.ResponseWriter, req *http.Request) {
+		if req.Method == http.MethodGet {
+			if !ensureSettingsReadScope(r.config, w, req) {
+				return
+			}
+			r.handleGetAPIToken(w, req)
+			return
+		}
 		if !ensureSettingsWriteScope(r.config, w, req) {
 			return
 		}
