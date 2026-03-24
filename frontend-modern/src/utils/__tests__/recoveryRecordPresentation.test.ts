@@ -43,6 +43,42 @@ describe('recoveryRecordPresentation', () => {
     expect(getRecoveryPointDetailsSummary(point)).toBe('Immutable and encrypted');
   });
 
+  it('prefers governed display labels over opaque linked-resource ids', () => {
+    const resources = new Map<string, Resource>([
+      [
+        'res-2',
+        {
+          id: 'res-2',
+          name: 'res-2',
+          displayName: 'Payments API',
+          type: 'vm',
+        } as Resource,
+      ],
+      [
+        'res-3',
+        {
+          id: 'res-3',
+          name: 'res-3',
+          type: 'vm',
+        } as Resource,
+      ],
+    ]);
+
+    const rollup = {
+      rollupId: 'res:res-3',
+      subjectResourceId: 'res-3',
+      display: { subjectLabel: 'Archive VM' },
+    } as ProtectionRollup;
+    const linkedPoint = {
+      id: 'point-3',
+      subjectResourceId: 'res-2',
+      display: { subjectLabel: 'billing-api' },
+    } as RecoveryPoint;
+
+    expect(getRecoveryRollupSubjectLabel(rollup, resources)).toBe('Archive VM');
+    expect(getRecoveryPointSubjectLabel(linkedPoint, resources)).toBe('Payments API');
+  });
+
   it('derives timestamps and normalizes mode query values', () => {
     const point = {
       completedAt: '2026-03-09T12:00:00.000Z',

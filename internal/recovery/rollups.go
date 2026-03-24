@@ -6,6 +6,14 @@ import (
 	"time"
 )
 
+func displayForRollupPoint(p RecoveryPoint) *RecoveryPointDisplay {
+	if p.Display != nil {
+		display := *p.Display
+		return &display
+	}
+	return DeriveIndex(p).ToDisplay()
+}
+
 // BuildRollupsFromPoints computes per-subject rollups from a set of recovery points.
 // This mirrors the sqlite rollup semantics (timestamp selection + success window)
 // so mock mode and in-memory consumers behave consistently with persisted stores.
@@ -28,6 +36,7 @@ func BuildRollupsFromPoints(points []RecoveryPoint) []ProtectionRollup {
 		// Latest identity seen (ties resolved by latestTS/updated/id).
 		subjectRID string
 		subjectRef *ExternalRef
+		display    *RecoveryPointDisplay
 
 		providers map[Provider]struct{}
 	}
@@ -90,6 +99,7 @@ func BuildRollupsFromPoints(points []RecoveryPoint) []ProtectionRollup {
 				lastSuccessMs: 0,
 				subjectRID:    strings.TrimSpace(p.SubjectResourceID),
 				subjectRef:    p.SubjectRef,
+				display:       displayForRollupPoint(p),
 				providers:     make(map[Provider]struct{}, 2),
 			}
 			byKey[subjectKey] = a
@@ -119,6 +129,7 @@ func BuildRollupsFromPoints(points []RecoveryPoint) []ProtectionRollup {
 			}
 			a.subjectRID = strings.TrimSpace(p.SubjectResourceID)
 			a.subjectRef = p.SubjectRef
+			a.display = displayForRollupPoint(p)
 		}
 	}
 
@@ -148,6 +159,7 @@ func BuildRollupsFromPoints(points []RecoveryPoint) []ProtectionRollup {
 			RollupID:          strings.TrimSpace(a.subjectKey),
 			SubjectResourceID: a.subjectRID,
 			SubjectRef:        a.subjectRef,
+			Display:           a.display,
 			LastAttemptAt:     lastAttemptAt,
 			LastSuccessAt:     lastSuccessAt,
 			LastOutcome:       a.latestOutcome,

@@ -93,6 +93,9 @@ func TestStore_ListRollups(t *testing.T) {
 	if got[0].SubjectRef == nil || got[0].SubjectRef.Type != "truenas-dataset" || got[0].SubjectRef.Name != "tank/apps" {
 		t.Fatalf("rollup[0].SubjectRef = %#v, want truenas dataset ref", got[0].SubjectRef)
 	}
+	if got[0].Display == nil || got[0].Display.SubjectLabel != "tank/apps" {
+		t.Fatalf("rollup[0].Display = %#v, want subject label tank/apps", got[0].Display)
+	}
 
 	// Second: vm-1 with latest failure at t2 and last success at t1.
 	if got[1].RollupID != "res:vm-1" {
@@ -103,6 +106,9 @@ func TestStore_ListRollups(t *testing.T) {
 	}
 	if got[1].SubjectRef != nil {
 		t.Fatalf("rollup[1].SubjectRef = %#v, want nil", got[1].SubjectRef)
+	}
+	if got[1].Display == nil || got[1].Display.SubjectLabel != "vm-1" {
+		t.Fatalf("rollup[1].Display = %#v, want subject label vm-1", got[1].Display)
 	}
 	if got[1].LastAttemptAt == nil || !got[1].LastAttemptAt.Equal(t2) {
 		t.Fatalf("rollup[1].LastAttemptAt = %v, want %v", got[1].LastAttemptAt, t2)
@@ -195,5 +201,8 @@ func TestStore_ListRollups(t *testing.T) {
 	}
 	if got3[0].RollupID != "res:pod-1" {
 		t.Fatalf("rollup with normalized filters = %q, want %q", got3[0].RollupID, "res:pod-1")
+	}
+	if got3[0].Display == nil || got3[0].Display.SubjectLabel != "default/pod-1" {
+		t.Fatalf("rollup with normalized filters display = %#v, want subject label default/pod-1", got3[0].Display)
 	}
 }

@@ -75,6 +75,7 @@ export interface ProtectionRollup {
   rollupId: string;
   subjectResourceId?: string;
   subjectRef?: RecoveryExternalRef | null;
+  display?: RecoveryPointDisplay | null;
 
   lastAttemptAt?: string | null;
   lastSuccessAt?: string | null;

@@ -1077,6 +1077,15 @@ func (s *Store) ListRollups(ctx context.Context, opts recovery.ListPointsOptions
 				subject_key,
 				subject_resource_id,
 				subject_ref_json,
+				subject_label,
+				subject_type,
+				is_workload,
+				cluster_label,
+				node_host_label,
+				namespace_label,
+				entity_id_label,
+				repository_label,
+				details_summary,
 				provider,
 				outcome,
 				` + tsExpr + ` AS ts_ms,
@@ -1101,12 +1110,33 @@ func (s *Store) ListRollups(ctx context.Context, opts recovery.ListPointsOptions
 			FROM filtered
 		),
 		latest AS (
-			SELECT subject_key, subject_resource_id, subject_ref_json
+			SELECT
+				subject_key,
+				subject_resource_id,
+				subject_ref_json,
+				subject_label,
+				subject_type,
+				is_workload,
+				cluster_label,
+				node_host_label,
+				namespace_label,
+				entity_id_label,
+				repository_label,
+				details_summary
 			FROM (
 				SELECT
 					subject_key,
 					subject_resource_id,
 					subject_ref_json,
+					subject_label,
+					subject_type,
+					is_workload,
+					cluster_label,
+					node_host_label,
+					namespace_label,
+					entity_id_label,
+					repository_label,
+					details_summary,
 					ROW_NUMBER() OVER (PARTITION BY subject_key ORDER BY ts_ms DESC, updated_at_ms DESC, id DESC) AS rn
 				FROM filtered
 			) x
@@ -1121,6 +1151,15 @@ func (s *Store) ListRollups(ctx context.Context, opts recovery.ListPointsOptions
 			agg.subject_key,
 			latest.subject_resource_id,
 			latest.subject_ref_json,
+			latest.subject_label,
+			latest.subject_type,
+			latest.is_workload,
+			latest.cluster_label,
+			latest.node_host_label,
+			latest.namespace_label,
+			latest.entity_id_label,
+			latest.repository_label,
+			latest.details_summary,
 			agg.last_attempt_ms,
 			agg.last_success_ms,
 			(SELECT outcome FROM ranked r WHERE r.subject_key = agg.subject_key AND r.rn = 1) AS last_outcome,
@@ -1144,12 +1183,38 @@ func (s *Store) ListRollups(ctx context.Context, opts recovery.ListPointsOptions
 		var subjectKey string
 		var subjectRID sql.NullString
 		var subjectRefRaw sql.NullString
+		var subjectLabel sql.NullString
+		var subjectType sql.NullString
+		var isWorkload sql.NullInt64
+		var clusterLabel sql.NullString
+		var nodeHostLabel sql.NullString
+		var namespaceLabel sql.NullString
+		var entityIDLabel sql.NullString
+		var repositoryLabel sql.NullString
+		var detailsSummary sql.NullString
 		var lastAttemptMs sql.NullInt64
 		var lastSuccessMs sql.NullInt64
 		var lastOutcome string
 		var providersRaw sql.NullString
 
-		if err := rows.Scan(&subjectKey, &subjectRID, &subjectRefRaw, &lastAttemptMs, &lastSuccessMs, &lastOutcome, &providersRaw); err != nil {
+		if err := rows.Scan(
+			&subjectKey,
+			&subjectRID,
+			&subjectRefRaw,
+			&subjectLabel,
+			&subjectType,
+			&isWorkload,
+			&clusterLabel,
+			&nodeHostLabel,
+			&namespaceLabel,
+			&entityIDLabel,
+			&repositoryLabel,
+			&detailsSummary,
+			&lastAttemptMs,
+			&lastSuccessMs,
+			&lastOutcome,
+			&providersRaw,
+		); err != nil {
 			return nil, 0, err
 		}
 
@@ -1189,10 +1254,23 @@ func (s *Store) ListRollups(ctx context.Context, opts recovery.ListPointsOptions
 			outcome = recovery.OutcomeUnknown
 		}
 
+		display := recovery.PointIndex{
+			SubjectLabel:    strings.TrimSpace(subjectLabel.String),
+			SubjectType:     strings.TrimSpace(subjectType.String),
+			IsWorkload:      isWorkload.Valid && isWorkload.Int64 != 0,
+			ClusterLabel:    strings.TrimSpace(clusterLabel.String),
+			NodeHostLabel:   strings.TrimSpace(nodeHostLabel.String),
+			NamespaceLabel:  strings.TrimSpace(namespaceLabel.String),
+			EntityIDLabel:   strings.TrimSpace(entityIDLabel.String),
+			RepositoryLabel: strings.TrimSpace(repositoryLabel.String),
+			DetailsSummary:  strings.TrimSpace(detailsSummary.String),
+		}.ToDisplay()
+
 		out = append(out, recovery.ProtectionRollup{
 			RollupID:          strings.TrimSpace(subjectKey),
 			SubjectResourceID: strings.TrimSpace(subjectRID.String),
 			SubjectRef:        subjectRefPtr,
+			Display:           display,
 			LastAttemptAt:     lastAttemptAt,
 			LastSuccessAt:     lastSuccessAt,
 			LastOutcome:       outcome,

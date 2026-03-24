@@ -144,6 +144,50 @@ describe('Recovery', () => {
     expect(screen.getByText('tank/apps')).toBeInTheDocument();
   });
 
+  it('renders canonical rollup and history subject labels when linked resources are unavailable', async () => {
+    rollupsPayload.push({
+      rollupId: 'res:vm-404',
+      subjectResourceId: 'vm-404',
+      display: { subjectLabel: 'Archive VM' },
+      lastAttemptAt: '2026-02-12T08:00:00.000Z',
+      lastSuccessAt: '2026-02-12T08:00:00.000Z',
+      lastOutcome: 'success',
+      providers: ['proxmox-pve'],
+    });
+    pointsByRollupId['res:vm-404'] = [
+      {
+        id: 'p404',
+        provider: 'proxmox-pve',
+        kind: 'backup',
+        mode: 'local',
+        outcome: 'success',
+        completedAt: '2026-02-12T08:00:00.000Z',
+        display: { subjectLabel: 'Archive VM' },
+      },
+    ];
+
+    try {
+      render(() => <Recovery />);
+
+      const subject = await screen.findByText('Archive VM');
+      fireEvent.click(subject);
+
+      await waitFor(() => {
+        expect(navigateSpy).toHaveBeenCalledWith('/recovery?rollupId=res%3Avm-404', {
+          replace: true,
+        });
+      });
+
+      const tables = await screen.findAllByRole('table');
+      const historyTable = tables[tables.length - 1];
+      expect(within(historyTable).getByText('Archive VM')).toBeInTheDocument();
+      expect(within(historyTable).queryByText('vm-404')).not.toBeInTheDocument();
+    } finally {
+      rollupsPayload.pop();
+      delete pointsByRollupId['res:vm-404'];
+    }
+  });
+
   it('focuses history when a rollup is clicked', async () => {
     render(() => <Recovery />);
 

@@ -838,3 +838,53 @@ func TestBuildRollupsFromPoints_SortOrder(t *testing.T) {
 		t.Error("expected rollups sorted by last attempt descending")
 	}
 }
+
+func TestBuildRollupsFromPoints_PreservesLatestDisplayLabels(t *testing.T) {
+	now := time.Now()
+	laterTime := now.Add(1 * time.Minute)
+
+	points := []RecoveryPoint{
+		{
+			ID:                "p1",
+			Provider:          ProviderProxmoxPVE,
+			SubjectResourceID: "res-1",
+			StartedAt:         &now,
+			CompletedAt:       &now,
+			Outcome:           OutcomeSuccess,
+			Display: &RecoveryPointDisplay{
+				SubjectLabel: "Old Label",
+				SubjectType:  "proxmox-vm",
+			},
+		},
+		{
+			ID:                "p2",
+			Provider:          ProviderProxmoxPVE,
+			SubjectResourceID: "res-1",
+			StartedAt:         &laterTime,
+			CompletedAt:       &laterTime,
+			Outcome:           OutcomeFailed,
+			Display: &RecoveryPointDisplay{
+				SubjectLabel: "Current Label",
+				SubjectType:  "proxmox-vm",
+				IsWorkload:   true,
+			},
+		},
+	}
+
+	rollups := BuildRollupsFromPoints(points)
+	if len(rollups) != 1 {
+		t.Fatalf("expected 1 rollup, got %d", len(rollups))
+	}
+	if rollups[0].Display == nil {
+		t.Fatal("expected rollup display to be populated")
+	}
+	if got := rollups[0].Display.SubjectLabel; got != "Current Label" {
+		t.Fatalf("Display.SubjectLabel = %q, want %q", got, "Current Label")
+	}
+	if got := rollups[0].Display.SubjectType; got != "proxmox-vm" {
+		t.Fatalf("Display.SubjectType = %q, want %q", got, "proxmox-vm")
+	}
+	if !rollups[0].Display.IsWorkload {
+		t.Fatal("expected rollup display workload marker to be preserved")
+	}
+}

@@ -1,18 +1,31 @@
 import type { ProtectionRollup, RecoveryPoint } from '@/types/recovery';
 import type { Resource } from '@/types/resource';
+import { getPreferredResourceDisplayName } from '@/utils/resourceIdentity';
 
 export type RecoveryArtifactMode = 'snapshot' | 'local' | 'remote';
+
+const getRecoveryLinkedResourceLabel = (
+  subjectResourceId: string,
+  resourcesById: Map<string, Resource>,
+): string => {
+  if (!subjectResourceId) return '';
+  const resource = resourcesById.get(subjectResourceId);
+  if (!resource) return '';
+  const label = getPreferredResourceDisplayName(resource).trim();
+  if (!label) return '';
+  if (label.toLowerCase() === subjectResourceId.toLowerCase()) return '';
+  return label;
+};
 
 export function getRecoveryRollupSubjectLabel(
   rollup: ProtectionRollup,
   resourcesById: Map<string, Resource>,
 ): string {
   const subjectResourceId = (rollup.subjectResourceId || '').trim();
-  if (subjectResourceId) {
-    const resource = resourcesById.get(subjectResourceId);
-    const name = (resource?.name || '').trim();
-    if (name) return name;
-  }
+  const displayLabel = String(rollup.display?.subjectLabel || '').trim();
+  const linkedResourceLabel = getRecoveryLinkedResourceLabel(subjectResourceId, resourcesById);
+  if (linkedResourceLabel) return linkedResourceLabel;
+  if (displayLabel) return displayLabel;
 
   const ref = rollup.subjectRef || null;
   if (ref?.namespace && ref?.name) return `${ref.namespace}/${ref.name}`;
@@ -32,14 +45,9 @@ export function getRecoveryPointSubjectLabel(
   resourcesById: Map<string, Resource>,
 ): string {
   const subjectResourceId = (point.subjectResourceId || '').trim();
-  if (subjectResourceId) {
-    const resource = resourcesById.get(subjectResourceId);
-    const name = (resource?.name || '').trim();
-    if (name) return name;
-    return subjectResourceId;
-  }
-
   const displayLabel = String(point.display?.subjectLabel || '').trim();
+  const linkedResourceLabel = getRecoveryLinkedResourceLabel(subjectResourceId, resourcesById);
+  if (linkedResourceLabel) return linkedResourceLabel;
   if (displayLabel) return displayLabel;
 
   const ref = point.subjectRef || null;
@@ -49,6 +57,7 @@ export function getRecoveryPointSubjectLabel(
   if (name) return name;
   const id = String(ref?.id || '').trim();
   if (id) return id;
+  if (subjectResourceId) return subjectResourceId;
   return point.id;
 }
 

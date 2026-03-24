@@ -284,6 +284,11 @@ That same direct proof rule also applies to the shared recovery record helper:
 `frontend-modern/src/utils/recoveryRecordPresentation.ts` must stay on the
 explicit `recovery-product-surface` proof path instead of inheriting coverage
 only through pages or higher-level recovery components.
+That shared recovery record contract now also includes rollup-side display
+payload continuity: the recovery backend must preserve the latest normalized
+subject label on rollups, and recovery UI helpers must prefer that canonical
+display label before raw subject ids whenever the live unified-resource map is
+missing or only resolves to opaque machine identifiers.
 That same direct proof rule also applies to the shared recovery outcome helper:
 `frontend-modern/src/utils/recoveryOutcomePresentation.ts` must stay on the
 explicit `recovery-product-surface` proof path instead of inheriting coverage

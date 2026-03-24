@@ -113,6 +113,10 @@ type ProtectionRollup struct {
 	// Latest known subject identity for display in UIs.
 	SubjectResourceID string       `json:"subjectResourceId,omitempty"`
 	SubjectRef        *ExternalRef `json:"subjectRef,omitempty"`
+	// Display mirrors the latest normalized subject-facing labels derived from
+	// the newest point in the rollup so protected-inventory UIs can prefer the
+	// canonical label contract before falling back to opaque ids.
+	Display *RecoveryPointDisplay `json:"display,omitempty"`
 
 	LastAttemptAt *time.Time `json:"lastAttemptAt,omitempty"`
 	LastSuccessAt *time.Time `json:"lastSuccessAt,omitempty"`
