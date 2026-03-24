@@ -378,15 +378,13 @@ must preserve the backend-provided reason list for stale or offline grouped
 sources instead of reducing those mixed fresh/stale system states back to a
 generic label.
 That same ledger dependency also treats the canonical `latest_included_signal`
-object as the freshest grouped observation, with
-`latest_included_signal_at`, `latest_included_signal_source`, and `last_seen`
-left only as rollout compatibility fields rather than universal health
-timestamps. Storage- or recovery-adjacent consumers must not present that data
-with bare single-source `Last Seen` wording that hides grouped stale/offline
-conditions, and should use the canonical object when they need attribution for
-which grouped surface most recently reported. When those flat fields still
-appear during rollout, they should be interpreted only as aliases for the
-canonical object rather than as separate storage-facing freshness signals.
+object as the freshest grouped observation. Storage- or recovery-adjacent
+consumers must not present that data with bare single-source `Last Seen`
+wording that hides grouped stale/offline conditions, and should use the
+canonical object when they need attribution for which grouped surface most
+recently reported. Older rollout payloads may still carry flat alias fields,
+but storage-facing consumers must interpret them only as legacy input for the
+canonical object rather than as separate freshness signals.
 That same shared `internal/api/` dependency now also assumes self-hosted
 commercial counting is canonical at the top-level monitored-system boundary:
 shared setup, deploy, entitlement, and API-backed monitoring helpers may not

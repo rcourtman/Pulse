@@ -13,16 +13,13 @@ import (
 // MonitoredSystemLedgerEntry represents a single counted top-level monitored
 // system.
 type MonitoredSystemLedgerEntry struct {
-	Name                       string                                 `json:"name"`
-	Type                       string                                 `json:"type"`
-	Status                     string                                 `json:"status"` // "online", "warning", "offline", "unknown"
-	StatusExplanation          MonitoredSystemLedgerStatusExplanation `json:"status_explanation"`
-	LatestIncludedSignal       MonitoredSystemLedgerLatestSignal      `json:"latest_included_signal"`
-	LatestIncludedSignalAt     string                                 `json:"latest_included_signal_at"` // freshest included observation, RFC3339 or empty
-	LatestIncludedSignalSource string                                 `json:"latest_included_signal_source,omitempty"`
-	LastSeen                   string                                 `json:"last_seen,omitempty"` // deprecated compatibility alias for latest_included_signal_at
-	Source                     string                                 `json:"source"`
-	Explanation                MonitoredSystemLedgerExplanation       `json:"explanation"`
+	Name                 string                                 `json:"name"`
+	Type                 string                                 `json:"type"`
+	Status               string                                 `json:"status"` // "online", "warning", "offline", "unknown"
+	StatusExplanation    MonitoredSystemLedgerStatusExplanation `json:"status_explanation"`
+	LatestIncludedSignal MonitoredSystemLedgerLatestSignal      `json:"latest_included_signal"`
+	Source               string                                 `json:"source"`
+	Explanation          MonitoredSystemLedgerExplanation       `json:"explanation"`
 }
 
 type MonitoredSystemLedgerLatestSignal struct {
@@ -150,16 +147,13 @@ func monitoredSystemLedgerEntry(system unifiedresources.MonitoredSystemRecord) M
 	status := normalizeStatus(string(system.Status))
 	latestIncludedSignal := monitoredSystemLedgerLatestSignal(system.LatestIncludedSignal)
 	return MonitoredSystemLedgerEntry{
-		Name:                       system.Name,
-		Type:                       system.Type,
-		Status:                     status,
-		StatusExplanation:          monitoredSystemLedgerStatusExplanation(system.StatusExplanation, status),
-		LatestIncludedSignal:       latestIncludedSignal,
-		LatestIncludedSignalAt:     latestIncludedSignal.At,
-		LatestIncludedSignalSource: latestIncludedSignal.Source,
-		LastSeen:                   latestIncludedSignal.At,
-		Source:                     system.Source,
-		Explanation:                monitoredSystemLedgerExplanation(system.Explanation),
+		Name:                 system.Name,
+		Type:                 system.Type,
+		Status:               status,
+		StatusExplanation:    monitoredSystemLedgerStatusExplanation(system.StatusExplanation, status),
+		LatestIncludedSignal: latestIncludedSignal,
+		Source:               system.Source,
+		Explanation:          monitoredSystemLedgerExplanation(system.Explanation),
 	}
 }
 

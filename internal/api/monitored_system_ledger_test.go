@@ -25,10 +25,7 @@ func TestMonitoredSystemLedgerEntryTypes(t *testing.T) {
 			Source: "agent",
 			At:     "2025-01-01T00:00:00Z",
 		},
-		LatestIncludedSignalAt:     "2025-01-01T00:00:00Z",
-		LatestIncludedSignalSource: "agent",
-		LastSeen:                   "2025-01-01T00:00:00Z",
-		Source:                     "agent",
+		Source: "agent",
 		Explanation: MonitoredSystemLedgerExplanation{
 			Summary: "Counts as one monitored system because Pulse sees one top-level host view from agent.",
 			Reasons: []MonitoredSystemLedgerExplanationReason{
@@ -56,14 +53,8 @@ func TestMonitoredSystemLedgerEntryTypes(t *testing.T) {
 	if decoded.StatusExplanation.Reasons == nil {
 		t.Errorf("status explanation reasons mismatch: %+v", decoded.StatusExplanation)
 	}
-	if decoded.LatestIncludedSignalAt != "2025-01-01T00:00:00Z" {
-		t.Errorf("latest included signal mismatch: %+v", decoded)
-	}
 	if decoded.LatestIncludedSignal.Name != "server-1" || decoded.LatestIncludedSignal.Type != "host" || decoded.LatestIncludedSignal.At != "2025-01-01T00:00:00Z" {
 		t.Errorf("latest included signal payload mismatch: %+v", decoded.LatestIncludedSignal)
-	}
-	if decoded.LatestIncludedSignalSource != "agent" {
-		t.Errorf("latest included signal source mismatch: %+v", decoded)
 	}
 	if decoded.Source != "agent" {
 		t.Errorf("source mismatch: got %q", decoded.Source)
@@ -136,7 +127,7 @@ func TestMonitoredSystemLedgerStatusExplanation(t *testing.T) {
 	}
 }
 
-func TestMonitoredSystemLedgerEntryUsesLatestIncludedSignalForCompatibilityAliases(t *testing.T) {
+func TestMonitoredSystemLedgerEntryDoesNotEmitCompatibilityAliases(t *testing.T) {
 	got := monitoredSystemLedgerEntry(unifiedresources.MonitoredSystemRecord{
 		Name:   "Tower",
 		Type:   "host",
@@ -163,14 +154,22 @@ func TestMonitoredSystemLedgerEntryUsesLatestIncludedSignalForCompatibilityAlias
 	if got.LatestIncludedSignal.At != "2026-03-23T12:00:00Z" {
 		t.Fatalf("expected canonical latest signal timestamp, got %+v", got.LatestIncludedSignal)
 	}
-	if got.LatestIncludedSignalAt != got.LatestIncludedSignal.At {
-		t.Fatalf("expected latest_included_signal_at to mirror latest_included_signal.at, got %+v", got)
+	data, err := json.Marshal(got)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
 	}
-	if got.LastSeen != got.LatestIncludedSignal.At {
-		t.Fatalf("expected last_seen compatibility alias to mirror latest_included_signal.at, got %+v", got)
+	var decoded map[string]any
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("unmarshal: %v", err)
 	}
-	if got.LatestIncludedSignalSource != got.LatestIncludedSignal.Source {
-		t.Fatalf("expected latest_included_signal_source to mirror latest_included_signal.source, got %+v", got)
+	if _, ok := decoded["latest_included_signal_at"]; ok {
+		t.Fatalf("expected latest_included_signal_at to be absent, got %+v", decoded)
+	}
+	if _, ok := decoded["latest_included_signal_source"]; ok {
+		t.Fatalf("expected latest_included_signal_source to be absent, got %+v", decoded)
+	}
+	if _, ok := decoded["last_seen"]; ok {
+		t.Fatalf("expected last_seen to be absent, got %+v", decoded)
 	}
 }
 
@@ -251,10 +250,7 @@ func TestHandleMonitoredSystemLedgerHTTP(t *testing.T) {
 					Source: "agent",
 					At:     "2025-01-01T00:00:00Z",
 				},
-				LatestIncludedSignalAt:     "2025-01-01T00:00:00Z",
-				LatestIncludedSignalSource: "agent",
-				LastSeen:                   "2025-01-01T00:00:00Z",
-				Source:                     "agent",
+				Source: "agent",
 				Explanation: MonitoredSystemLedgerExplanation{
 					Summary: "Counts as one monitored system because Pulse sees one top-level host view from agent.",
 					Reasons: []MonitoredSystemLedgerExplanationReason{
@@ -295,14 +291,8 @@ func TestHandleMonitoredSystemLedgerHTTP(t *testing.T) {
 	if decoded.Systems[0].StatusExplanation.Reasons == nil {
 		t.Errorf("expected status explanation reasons, got %+v", decoded.Systems[0].StatusExplanation)
 	}
-	if decoded.Systems[0].LatestIncludedSignalAt != "2025-01-01T00:00:00Z" {
-		t.Errorf("expected latest included signal timestamp, got %+v", decoded.Systems[0])
-	}
 	if decoded.Systems[0].LatestIncludedSignal.Source != "agent" {
 		t.Errorf("expected latest included signal payload, got %+v", decoded.Systems[0].LatestIncludedSignal)
-	}
-	if decoded.Systems[0].LatestIncludedSignalSource != "agent" {
-		t.Errorf("expected latest included signal source, got %+v", decoded.Systems[0])
 	}
 	if decoded.Systems[0].Explanation.Summary == "" {
 		t.Errorf("expected explanation summary, got %+v", decoded.Systems[0].Explanation)

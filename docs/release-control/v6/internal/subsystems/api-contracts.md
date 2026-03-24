@@ -255,15 +255,11 @@ making warning or offline state look contradictory.
 That freshest grouped observation is now canonically exposed as the structured
 `latest_included_signal` object. Its `at`, `source`, `name`, and `type` fields
 identify exactly which included top-level surface reported most recently.
-`latest_included_signal_at`, `latest_included_signal_source`, and `last_seen`
-remain rollout compatibility fields only on the raw wire shape; normalized
-frontend clients should treat the object as the primary contract and must not
-re-export those flat aliases in their public response model.
-When those flat fields are still emitted for rollout compatibility, the backend
-must derive them directly from the canonical object rather than from a parallel
-timestamp/source path, so `latest_included_signal_at` and `last_seen` mirror
-`latest_included_signal.at` and `latest_included_signal_source` mirrors
-`latest_included_signal.source`.
+The backend payload contract now emits only that structured object. Frontend
+clients may keep temporary raw-payload fallback support for older server
+rollouts, but the canonical wire contract no longer serializes
+`latest_included_signal_at`, `latest_included_signal_source`, or `last_seen`,
+and normalized client models must not re-export those retired aliases.
 That client contract must also fail closed when older or partial payloads omit
 the nested explanation object: the frontend may normalize missing explanation
 fields to empty reasons/surfaces plus a safe default summary, but it must not

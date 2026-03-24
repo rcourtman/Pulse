@@ -239,15 +239,12 @@ must preserve the canonical reason list from the ledger read so operators can
 see which grouped source or surface degraded and when it last reported,
 instead of only seeing a generic warning/offline paragraph.
 That same ledger read also treats the canonical `latest_included_signal`
-object as the freshest included grouped observation, with
-`latest_included_signal_at`, `latest_included_signal_source`, and `last_seen`
-left only as rollout compatibility fields rather than promises that every
-grouped source is healthy at that moment. Lifecycle-adjacent consumers must
-not label it with generic single-source health wording, and should use the
-canonical object when they need attribution for which grouped surface reported
-most recently. When those flat fields still appear during rollout, they should
-be treated only as aliases for `latest_included_signal.at` and
-`latest_included_signal.source`, not as an independent lifecycle signal.
+object as the freshest included grouped observation. Lifecycle-adjacent
+consumers must not label it with generic single-source health wording, and
+should use the canonical object when they need attribution for which grouped
+surface reported most recently. Older rollout payloads may still carry flat
+alias fields, but lifecycle consumers must treat those as legacy input only,
+not as an independent lifecycle signal contract.
 Lifecycle-adjacent workspace copy must also keep the same commercial framing:
 infrastructure operations may point operators to Pulse Pro for billing, but it
 must describe that boundary in monitored-system, plan-limit, and license-status

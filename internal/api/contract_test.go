@@ -600,10 +600,7 @@ func TestContract_MonitoredSystemLedgerJSONSnapshot(t *testing.T) {
 					Source: "agent",
 					At:     "2026-03-18T17:30:00Z",
 				},
-				LatestIncludedSignalAt:     "2026-03-18T17:30:00Z",
-				LatestIncludedSignalSource: "agent",
-				LastSeen:                   "2026-03-18T17:30:00Z",
-				Source:                     "agent",
+				Source: "agent",
 				Explanation: MonitoredSystemLedgerExplanation{
 					Summary: "Counts as one monitored system because Pulse sees one top-level host view from agent.",
 					Reasons: []MonitoredSystemLedgerExplanationReason{
@@ -658,9 +655,6 @@ func TestContract_MonitoredSystemLedgerJSONSnapshot(t *testing.T) {
 					"source":"agent",
 					"at":"2026-03-18T17:30:00Z"
 				},
-				"latest_included_signal_at":"2026-03-18T17:30:00Z",
-				"latest_included_signal_source":"agent",
-				"last_seen":"2026-03-18T17:30:00Z",
 				"source":"agent",
 				"explanation":{
 					"summary":"Counts as one monitored system because Pulse sees one top-level host view from agent.",
@@ -688,7 +682,7 @@ func TestContract_MonitoredSystemLedgerJSONSnapshot(t *testing.T) {
 	assertJSONSnapshot(t, got, want)
 }
 
-func TestContract_MonitoredSystemLedgerCompatibilityAliasesFollowLatestSignal(t *testing.T) {
+func TestContract_MonitoredSystemLedgerDoesNotEmitCompatibilityAliases(t *testing.T) {
 	entry := monitoredSystemLedgerEntry(unifiedresources.MonitoredSystemRecord{
 		Name:   "Tower",
 		Type:   "host",
@@ -739,9 +733,6 @@ func TestContract_MonitoredSystemLedgerCompatibilityAliasesFollowLatestSignal(t 
 					"source":"docker",
 					"at":"2026-03-18T17:30:00Z"
 				},
-				"latest_included_signal_at":"2026-03-18T17:30:00Z",
-				"latest_included_signal_source":"docker",
-				"last_seen":"2026-03-18T17:30:00Z",
 				"source":"multiple",
 				"explanation":{
 					"summary":"Counts as one monitored system because Pulse merged 2 top-level views into one canonical system using shared machine identity.",
