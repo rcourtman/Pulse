@@ -29,6 +29,8 @@ server-side update execution surfaces.
 7. `scripts/install.sh`
 8. `scripts/install-container-agent.sh`
 9. `scripts/pulse-auto-update.sh`
+10. `scripts/hot-dev.sh`
+11. `scripts/hot-dev-bg.sh`
 
 ## Shared Boundaries
 
@@ -43,6 +45,7 @@ server-side update execution surfaces.
 2. Add or change release-build metadata injection, release artifact assembly, or governed promotion metadata resolution through `scripts/build-release.sh`, `scripts/release_ldflags.sh`, and `scripts/release_control/resolve_release_promotion.py`, plus the container Dockerfile and governed release workflows that consume those same contracts
 3. Add or change shell installer, Windows installer, container-agent installer, or auto-update script behavior through `scripts/install.sh`, `scripts/install.ps1`, `scripts/install-container-agent.sh`, and `scripts/pulse-auto-update.sh`
 4. Add or change server update transport through `internal/api/updates.go` and `frontend-modern/src/api/updates.ts`
+5. Add or change local dev-runtime orchestration, managed ownership, or frontend/backend coherence diagnostics through `scripts/hot-dev.sh` and `scripts/hot-dev-bg.sh`
 
 ## Forbidden Paths
 
@@ -118,6 +121,19 @@ release artifacts. `scripts/install.sh`, `scripts/install.ps1`,
 `scripts/install-container-agent.sh`, and `scripts/pulse-auto-update.sh`
 define supported deployment entry points and update behavior, even when the
 shell and Windows installers also sit on the shared agent-lifecycle boundary.
+The local dev-runtime launcher now sits on that same installability boundary.
+`scripts/hot-dev.sh` and `scripts/hot-dev-bg.sh` are the canonical owned entry
+points for a coherent local Pulse runtime, so frontend shell health, proxy
+health, backend health, and listener ownership diagnostics may not drift into
+ad hoc shell snippets or undocumented operator lore outside those scripts.
+When the managed launcher reports runtime status, it must tell operators which
+browser URL to use and whether the frontend shell, proxied API path, and
+direct backend health endpoint all agree, instead of leaving `5173` versus
+`7655` interpretation to manual inference from whichever process still happens
+to be listening.
+Changes to `scripts/hot-dev.sh` and `scripts/hot-dev-bg.sh` must therefore
+stay on their own direct dev-runtime orchestration proof path instead of
+piggybacking on installer proof coverage for unrelated deployment scripts.
 That shared `scripts/install.sh` boundary must also keep one canonical service
 argument builder for the runtime flags it persists. Token-bearing install
 paths, token-file systemd paths, wrapper-script launches, and later service

@@ -151,7 +151,10 @@ websocket liveness: `frontend-modern/src/AppLayout.tsx` and
 `frontend-modern/src/useAppRuntimeState.ts` must keep the top-right connection
 badge aligned to overall backend availability so a healthy dev/runtime backend
 does not present the whole shell as reconnecting just because the live stream
-is transiently renegotiating.
+is transiently renegotiating. That shell badge must now stay on an explicit
+state model as well: healthy runtime, backend-healthy-but-stream-degraded,
+full reconnect, and full disconnect are distinct operator states, and the
+shared shell may not collapse them back into one generic reconnect label.
 Shared feature presentation helpers under `frontend-modern/src/features/` now
 also need to preserve route-owned page-health semantics when the owning surface
 is REST-backed: operators should only see reconnect or disconnected shells when
@@ -230,6 +233,12 @@ and `frontend-modern/src/components/shared/interactiveSparklineModel.ts` owns
 sparkline downsampling, gap segmentation, axis-tick math, and hover-selection
 policy. Future sparkline work should extend those owners instead of pushing
 canvas scheduling or chart-shape math back into the shared component shell.
+The dashboard overview trend cards now also have an explicit shared-shell
+obligation: `frontend-modern/src/features/dashboardOverview/TrendCharts.tsx`
+must treat missing infrastructure history as a governed empty state rather than
+as a silent blank sparkline box. Error copy and empty-history copy belong to
+the feature shell, while the data path and chart-shaping logic must stay in the
+owned hook/model layers that feed it.
 The shared density map now follows that same owner split.
 `frontend-modern/src/components/shared/DensityMap.tsx` stays the render shell,
 `frontend-modern/src/components/shared/useDensityMapState.ts` owns hover

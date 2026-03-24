@@ -1987,6 +1987,8 @@
         "frontend-modern/src/api/updates.ts",
         "internal/api/updates.go",
         "scripts/build-release.sh",
+        "scripts/hot-dev-bg.sh",
+        "scripts/hot-dev.sh",
         "scripts/install-container-agent.sh",
         "scripts/install.ps1",
         "scripts/install.sh",
@@ -2076,6 +2078,20 @@
               "scripts/installtests/install_docker_sh_test.go",
               "scripts/installtests/install_ps1_test.go",
               "scripts/installtests/root_install_sh_test.go"
+            ]
+          },
+          {
+            "id": "dev-runtime-orchestration",
+            "label": "dev runtime orchestration proof",
+            "match_prefixes": [],
+            "match_files": [
+              "scripts/hot-dev-bg.sh",
+              "scripts/hot-dev.sh"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "scripts/tests/test-hot-dev-bg.sh"
             ]
           },
           {

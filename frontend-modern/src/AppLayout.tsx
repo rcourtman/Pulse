@@ -39,6 +39,7 @@ import { getKioskModePreference, setKioskMode } from '@/utils/url';
 import { updateStore } from '@/stores/updates';
 import { aiChatStore } from '@/stores/aiChat';
 import { isMultiTenantEnabled, isPro } from '@/stores/license';
+import type { AppConnectionStatus } from '@/useAppRuntimeState';
 
 const ROOT_INFRASTRUCTURE_PATH = buildInfrastructurePath();
 const ROOT_WORKLOADS_PATH = buildWorkloadsPath();
@@ -68,9 +69,7 @@ type UtilityTab = {
 };
 
 export interface AppLayoutProps {
-  backendHealthy: () => boolean;
-  connected: () => boolean;
-  reconnecting: () => boolean;
+  connectionStatus: () => AppConnectionStatus;
   dataUpdated: () => boolean;
   lastUpdateText: () => string;
   versionInfo: () => VersionInfo | null;
@@ -87,26 +86,44 @@ export interface AppLayoutProps {
   children?: JSX.Element;
 }
 
-function ConnectionStatusBadge(props: {
-  backendHealthy: () => boolean;
-  connected: () => boolean;
-  reconnecting: () => boolean;
+export function ConnectionStatusBadge(props: {
+  connectionStatus: () => AppConnectionStatus;
   class?: string;
 }) {
-  const shellAvailable = () => props.connected() || props.backendHealthy();
-  const showSyncing = () => !props.connected() && props.backendHealthy() && props.reconnecting();
+  const status = () => props.connectionStatus();
+  const showSpinner = () =>
+    status().kind === 'sync-reconnecting' || status().kind === 'reconnecting';
+  const showLabelByDefault = () => status().tone !== 'healthy';
+  const containerClass = () => {
+    if (status().tone === 'healthy') {
+      return 'connected bg-green-200 dark:bg-green-700 text-green-700 dark:text-green-300 min-w-6 h-6 group-hover:px-3';
+    }
+    if (status().tone === 'warning') {
+      return 'degraded bg-amber-200 dark:bg-amber-700 text-amber-800 dark:text-amber-200 py-1 px-2';
+    }
+    if (status().kind === 'reconnecting') {
+      return 'reconnecting bg-yellow-200 dark:bg-yellow-700 text-yellow-700 dark:text-yellow-300 py-1 px-2';
+    }
+    return 'disconnected bg-surface-hover text-base-content min-w-6 h-6 group-hover:px-3';
+  };
+  const indicatorClass = () => {
+    if (status().tone === 'healthy') {
+      return 'bg-green-600 dark:bg-green-400';
+    }
+    if (status().tone === 'warning') {
+      return 'bg-amber-600 dark:bg-amber-300';
+    }
+    return 'bg-slate-600';
+  };
 
   return (
     <div
-      class={`group status text-xs rounded-full flex items-center justify-center transition-all duration-500 ease-in-out px-1.5 ${
-        shellAvailable()
-          ? 'connected bg-green-200 dark:bg-green-700 text-green-700 dark:text-green-300 min-w-6 h-6 group-hover:px-3'
-          : props.reconnecting()
-            ? 'reconnecting bg-yellow-200 dark:bg-yellow-700 text-yellow-700 dark:text-yellow-300 py-1'
-            : 'disconnected bg-surface-hover text-base-content min-w-6 h-6 group-hover:px-3'
-      } ${props.class ?? ''}`}
+      class={`group status text-xs rounded-full flex items-center justify-center transition-all duration-500 ease-in-out ${containerClass()} ${props.class ?? ''}`}
+      title={status().detail}
+      role="status"
+      aria-label={status().detail}
     >
-      <Show when={!shellAvailable() && props.reconnecting()}>
+      <Show when={showSpinner()}>
         <svg class="animate-spin h-3 w-3 flex-shrink-0" fill="none" viewBox="0 0 24 24">
           <circle
             class="opacity-25"
@@ -123,26 +140,17 @@ function ConnectionStatusBadge(props: {
           />
         </svg>
       </Show>
-      <Show when={shellAvailable()}>
-        <span class="h-2.5 w-2.5 rounded-full bg-green-600 dark:bg-green-400 flex-shrink-0" />
-      </Show>
-      <Show when={!shellAvailable() && !props.reconnecting()}>
-        <span class="h-2.5 w-2.5 rounded-full bg-slate-600 flex-shrink-0" />
+      <Show when={!showSpinner()}>
+        <span class={`h-2.5 w-2.5 rounded-full flex-shrink-0 ${indicatorClass()}`} />
       </Show>
       <span
         class={`whitespace-nowrap overflow-hidden transition-all duration-500 ${
-          shellAvailable() || (!shellAvailable() && !props.reconnecting())
-            ? 'max-w-0 group-hover:max-w-[100px] group-hover:ml-2 group-hover:mr-1 opacity-0 group-hover:opacity-100'
-            : 'max-w-[100px] ml-1 opacity-100'
+          showLabelByDefault()
+            ? 'max-w-[170px] ml-2 opacity-100'
+            : 'max-w-0 group-hover:max-w-[120px] group-hover:ml-2 group-hover:mr-1 opacity-0 group-hover:opacity-100'
         }`}
       >
-        {shellAvailable()
-          ? showSyncing()
-            ? 'Connected'
-            : 'Connected'
-          : props.reconnecting()
-            ? 'Reconnecting...'
-            : 'Disconnected'}
+        {status().label}
       </span>
     </div>
   );
@@ -600,9 +608,7 @@ export function AppLayout(props: AppLayoutProps) {
             </div>
           </Show>
           <ConnectionStatusBadge
-            backendHealthy={props.backendHealthy}
-            connected={props.connected}
-            reconnecting={props.reconnecting}
+            connectionStatus={props.connectionStatus}
             class="flex-shrink-0"
           />
         </div>

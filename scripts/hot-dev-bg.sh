@@ -33,6 +33,19 @@ fail() {
   exit 1
 }
 
+http_status_code() {
+  local url="$1"
+  local code
+  code="$(curl -sS -m 2 -o /dev/null -w '%{http_code}' "${url}" 2>/dev/null || true)"
+  [[ -n "${code}" ]] || code="000"
+  printf "%s\n" "${code}"
+}
+
+http_status_ok() {
+  local code="$1"
+  [[ "${code}" =~ ^2[0-9][0-9]$ || "${code}" =~ ^3[0-9][0-9]$ ]]
+}
+
 is_port_listening() {
   local port="$1"
   lsof -nP -iTCP:"${port}" -sTCP:LISTEN >/dev/null 2>&1
@@ -283,13 +296,20 @@ status_bg() {
     log "Backend port ${PULSE_DEV_API_PORT} is not listening"
   fi
 
-  local frontend_code backend_code
-  frontend_code="$(curl -sS -m 2 -o /dev/null -w '%{http_code}' "http://127.0.0.1:${FRONTEND_DEV_PORT}/" 2>/dev/null || true)"
-  backend_code="$(curl -sS -m 2 -o /dev/null -w '%{http_code}' "http://127.0.0.1:${PULSE_DEV_API_PORT}/api/health" 2>/dev/null || true)"
-  [[ -n "${frontend_code}" ]] || frontend_code="000"
-  [[ -n "${backend_code}" ]] || backend_code="000"
-  log "Frontend HTTP: ${frontend_code}"
-  log "Backend HTTP:  ${backend_code}"
+  local browser_url frontend_url proxy_health_url backend_health_url
+  browser_url="http://127.0.0.1:${FRONTEND_DEV_PORT}"
+  frontend_url="${browser_url}/"
+  proxy_health_url="${browser_url}/api/health"
+  backend_health_url="http://127.0.0.1:${PULSE_DEV_API_PORT}/api/health"
+
+  local frontend_code proxy_code backend_code
+  frontend_code="$(http_status_code "${frontend_url}")"
+  proxy_code="$(http_status_code "${proxy_health_url}")"
+  backend_code="$(http_status_code "${backend_health_url}")"
+  log "Browser entrypoint: ${browser_url}"
+  log "Frontend shell HTTP: ${frontend_code}"
+  log "Frontend proxy /api/health: ${proxy_code}"
+  log "Backend /api/health: ${backend_code}"
 
   describe_listener "${FRONTEND_DEV_PORT}" "${managed_pid}" || true
   describe_listener "${PULSE_DEV_API_PORT}" "${managed_pid}" || true
@@ -298,6 +318,18 @@ status_bg() {
     log "Detected unmanaged dev listeners. hot-dev-bg is not managing the current runtime."
   elif [[ -n "${managed_pid}" ]] && has_unmanaged_listeners "${managed_pid}"; then
     log "Detected split ownership: managed session is running, but one or more dev ports are owned by another process."
+  fi
+
+  if http_status_ok "${frontend_code}" && http_status_ok "${proxy_code}" && http_status_ok "${backend_code}"; then
+    log "Runtime summary: frontend shell, proxy, and backend are healthy. Use ${browser_url} in the browser."
+  elif http_status_ok "${frontend_code}" && ! http_status_ok "${proxy_code}" && http_status_ok "${backend_code}"; then
+    log "Runtime summary: frontend shell is up and the backend is healthy, but the frontend proxy path is unhealthy."
+  elif http_status_ok "${frontend_code}" && ! http_status_ok "${backend_code}"; then
+    log "Runtime summary: frontend shell is up, but the backend health endpoint is unavailable."
+  elif ! http_status_ok "${frontend_code}" && http_status_ok "${backend_code}"; then
+    log "Runtime summary: backend is healthy, but the frontend dev shell is unavailable. Use the backend URL only for direct API debugging."
+  else
+    log "Runtime summary: frontend shell and backend are not both healthy. Fix the runtime before trusting browser results."
   fi
 }
 

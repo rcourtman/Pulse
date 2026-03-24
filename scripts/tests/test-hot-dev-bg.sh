@@ -73,8 +73,10 @@ test_status_without_runtime() {
   )"
 
   assert_contains "status reports no managed runtime" "${output}" "[hot-dev-bg] Not running"
+  assert_contains "status reports the browser entrypoint" "${output}" "[hot-dev-bg] Browser entrypoint: http://127.0.0.1:${frontend_port}"
   assert_contains "status reports idle frontend port" "${output}" "[hot-dev-bg] Frontend port ${frontend_port} is not listening"
   assert_contains "status reports idle backend port" "${output}" "[hot-dev-bg] Backend port ${backend_port} is not listening"
+  assert_contains "status reports proxy health probe" "${output}" "[hot-dev-bg] Frontend proxy /api/health: 000"
 }
 
 test_detects_unmanaged_listeners() {
@@ -99,6 +101,9 @@ test_detects_unmanaged_listeners() {
   assert_contains "status reports unmanaged frontend listener" "${status_output}" "[hot-dev-bg] Port ${frontend_port}: unmanaged listener"
   assert_contains "status reports unmanaged backend listener" "${status_output}" "[hot-dev-bg] Port ${backend_port}: unmanaged listener"
   assert_contains "status explains unmanaged runtime ownership" "${status_output}" "[hot-dev-bg] Detected unmanaged dev listeners. hot-dev-bg is not managing the current runtime."
+  assert_contains "status reports shell HTTP" "${status_output}" "[hot-dev-bg] Frontend shell HTTP: 200"
+  assert_contains "status reports proxied health mismatch" "${status_output}" "[hot-dev-bg] Frontend proxy /api/health: 404"
+  assert_contains "status reports backend health probe" "${status_output}" "[hot-dev-bg] Backend /api/health: 404"
 
   start_output="$(
     set +e

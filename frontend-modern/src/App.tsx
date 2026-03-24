@@ -324,13 +324,11 @@ function App() {
                         <div
                           class={`app-scroll-shell flex-1 min-w-0 overflow-y-scroll bg-base text-base-content font-sans py-4 sm:py-6 transition-all duration-300`}
                         >
-                          <AppLayout
-                            backendHealthy={runtime.backendHealthy}
-                            connected={runtime.connected}
-                            reconnecting={runtime.reconnecting}
-                            dataUpdated={runtime.dataUpdated}
-                            lastUpdateText={runtime.lastUpdateText}
-                            versionInfo={runtime.versionInfo}
+      <AppLayout
+        connectionStatus={runtime.connectionStatus}
+        dataUpdated={runtime.dataUpdated}
+        lastUpdateText={runtime.lastUpdateText}
+        versionInfo={runtime.versionInfo}
                             hasAuth={runtime.hasAuth}
                             needsAuth={runtime.needsAuth}
                             proxyAuthInfo={runtime.proxyAuthInfo}

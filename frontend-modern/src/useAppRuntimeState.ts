@@ -1,5 +1,6 @@
 import {
   createEffect,
+  createMemo,
   createSignal,
   getOwner,
   onCleanup,
@@ -59,6 +60,18 @@ import {
 } from '@/stores/systemSettings';
 
 type EnhancedStore = ReturnType<typeof getGlobalWebSocketStore>;
+
+export type AppConnectionStatus = {
+  kind:
+    | 'connected'
+    | 'sync-reconnecting'
+    | 'backend-healthy'
+    | 'reconnecting'
+    | 'disconnected';
+  label: string;
+  detail: string;
+  tone: 'healthy' | 'warning' | 'offline';
+};
 
 const ROOT_INFRASTRUCTURE_PATH = buildInfrastructurePath();
 
@@ -188,6 +201,50 @@ export const useAppRuntimeState = () => {
   const [dataUpdated, setDataUpdated] = createSignal(false);
   const [lastUpdateText, setLastUpdateText] = createSignal('');
   const [versionInfo, setVersionInfo] = createSignal<VersionInfo | null>(null);
+  const connectionStatus = createMemo<AppConnectionStatus>(() => {
+    if (connected()) {
+      return {
+        kind: 'connected',
+        label: 'Connected',
+        detail: 'Backend and live data stream are connected.',
+        tone: 'healthy',
+      };
+    }
+
+    if (backendHealthy() && reconnecting()) {
+      return {
+        kind: 'sync-reconnecting',
+        label: 'Sync reconnecting',
+        detail: 'Backend is healthy. Live updates are reconnecting.',
+        tone: 'warning',
+      };
+    }
+
+    if (backendHealthy()) {
+      return {
+        kind: 'backend-healthy',
+        label: 'Backend healthy',
+        detail: 'Backend is healthy, but the live data stream is not connected.',
+        tone: 'warning',
+      };
+    }
+
+    if (reconnecting()) {
+      return {
+        kind: 'reconnecting',
+        label: 'Reconnecting...',
+        detail: 'Attempting to reconnect to the backend and live data stream.',
+        tone: 'offline',
+      };
+    }
+
+    return {
+      kind: 'disconnected',
+      label: 'Disconnected',
+      detail: 'Backend and live data stream are unavailable.',
+      tone: 'offline',
+    };
+  });
 
   const initialThemePreference = getStoredThemePreference();
   const [themePreference, setThemePreference] =
@@ -433,19 +490,20 @@ export const useAppRuntimeState = () => {
   });
 
   createEffect(() => {
-    if (connected()) {
-      setBackendHealthy(true);
+    if (!hasAuth()) {
+      setBackendHealthy(false);
       return;
     }
 
-    if (!reconnecting()) {
+    if (connected()) {
+      setBackendHealthy(true);
       return;
     }
 
     void checkBackendHealth();
     const interval = window.setInterval(() => {
       void checkBackendHealth();
-    }, 5000);
+    }, reconnecting() ? 5000 : 15000);
 
     onCleanup(() => {
       window.clearInterval(interval);
@@ -668,6 +726,7 @@ export const useAppRuntimeState = () => {
     state,
     connected,
     backendHealthy,
+    connectionStatus,
     reconnecting,
     dataUpdated,
     lastUpdateText,

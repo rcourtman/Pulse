@@ -219,8 +219,9 @@ instead of inventing page-local wording for what warning, offline, or unknown
 means on a counted monitored system.
 That same cloud-paid surface must now also render the canonical status reason
 list when present, so customers can see exactly which grouped source or
-top-level surface degraded and when it last reported rather than only reading
-generic status copy beside a fresh aggregate `Last Seen` value.
+top-level surface degraded and its canonical `reported_at` timestamp rather
+than only reading generic status copy beside a fresh aggregate `Last Seen`
+value.
 That same settings surface must also label the monitored-system signal by its
 real meaning. The canonical API shape is now the structured
 `latest_included_signal` object, and the normalized frontend client contract
@@ -338,6 +339,12 @@ because the live stream is transiently recovering. Future hosted shell work
 must keep the top-right connection badge aligned to overall authenticated
 runtime availability first, with websocket churn treated as a narrower live
 stream status instead of the shell-level truth.
+That same hosted shell badge must also stay explicit about degraded-but-usable
+paid runtime states. When the backend remains healthy but the live stream is
+recovering, the authenticated shell should surface a degraded sync state
+instead of collapsing back to the same disconnected wording used for total
+runtime loss, so hosted operators can tell the difference between browser/API
+usability and live-stream freshness at a glance.
 That same route/provider shell must stay page-oriented as well: `App.tsx`
 should lazy-load route shells like `frontend-modern/src/pages/Storage.tsx`
 and `frontend-modern/src/pages/Operations.tsx`
