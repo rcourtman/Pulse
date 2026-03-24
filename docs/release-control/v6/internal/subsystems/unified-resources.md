@@ -52,35 +52,40 @@ cross-source deduplication.
 30. `frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx`
 31. `frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx`
 32. `frontend-modern/src/components/Infrastructure/ResourcePolicySummary.tsx`
-33. `frontend-modern/src/components/Infrastructure/UnifiedResourceHostTableCard.tsx`
-34. `frontend-modern/src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx`
-35. `frontend-modern/src/components/Infrastructure/UnifiedResourcePMGTableSection.tsx`
-36. `frontend-modern/src/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx`
-37. `frontend-modern/src/components/Infrastructure/unifiedResourceTableModel.ts`
-38. `frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts`
-39. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts`
-40. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerServiceModel.ts`
-41. `frontend-modern/src/components/Infrastructure/resourceDetailDiscoveryModel.ts`
-42. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerOperationalModel.ts`
-43. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerHistoryState.ts`
-44. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDockerActionsState.ts`
-45. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts`
-46. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`
-47. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts`
-48. `frontend-modern/src/components/Discovery/DiscoveryTab.tsx`
-49. `frontend-modern/src/components/Discovery/useDiscoveryTabState.ts`
-50. `frontend-modern/src/features/infrastructure/InfrastructurePageSurface.tsx`
-51. `frontend-modern/src/features/infrastructure/useInfrastructurePageRouteState.ts`
-52. `frontend-modern/src/features/infrastructure/useInfrastructurePageState.ts`
-53. `frontend-modern/src/features/infrastructure/infrastructurePageModel.ts`
-54. `frontend-modern/src/components/Infrastructure/InfrastructureSummary.tsx`
-55. `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`
-56. `frontend-modern/src/components/Infrastructure/infrastructureSummaryModel.ts`
-57. `frontend-modern/src/utils/resourceChangePresentation.ts`
-58. `frontend-modern/src/utils/resourceCorrelationPresentation.ts`
-59. `frontend-modern/src/utils/resourcePolicyPresentation.ts`
-60. `frontend-modern/src/utils/resourceIdentity.ts`
-61. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerIdentityModel.ts`
+33. `frontend-modern/src/components/Infrastructure/resourceBadges.ts`
+34. `frontend-modern/src/components/Infrastructure/UnifiedResourceHostTableCard.tsx`
+35. `frontend-modern/src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx`
+36. `frontend-modern/src/components/Infrastructure/UnifiedResourcePMGTableSection.tsx`
+37. `frontend-modern/src/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx`
+38. `frontend-modern/src/components/Infrastructure/unifiedResourceTableModel.ts`
+39. `frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts`
+40. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts`
+41. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerServiceModel.ts`
+42. `frontend-modern/src/components/Infrastructure/resourceDetailDiscoveryModel.ts`
+43. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerOperationalModel.ts`
+44. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerHistoryState.ts`
+45. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDockerActionsState.ts`
+46. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts`
+47. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`
+48. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts`
+49. `frontend-modern/src/components/Discovery/DiscoveryTab.tsx`
+50. `frontend-modern/src/components/Discovery/useDiscoveryTabState.ts`
+51. `frontend-modern/src/features/infrastructure/InfrastructurePageSurface.tsx`
+52. `frontend-modern/src/features/infrastructure/useInfrastructurePageRouteState.ts`
+53. `frontend-modern/src/features/infrastructure/useInfrastructurePageState.ts`
+54. `frontend-modern/src/features/infrastructure/infrastructurePageModel.ts`
+55. `frontend-modern/src/components/Infrastructure/InfrastructureSummary.tsx`
+56. `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`
+57. `frontend-modern/src/components/Infrastructure/infrastructureSummaryModel.ts`
+58. `frontend-modern/src/utils/canonicalResourceTypes.ts`
+59. `frontend-modern/src/utils/resourceBadgePresentation.ts`
+60. `frontend-modern/src/utils/resourceChangePresentation.ts`
+61. `frontend-modern/src/utils/resourceCorrelationPresentation.ts`
+62. `frontend-modern/src/utils/resourcePolicyPresentation.ts`
+63. `frontend-modern/src/utils/resourceTypeCompat.ts`
+64. `frontend-modern/src/utils/resourceTypePresentation.ts`
+65. `frontend-modern/src/utils/resourceIdentity.ts`
+66. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerIdentityModel.ts`
 
 ## Shared Boundaries
 
@@ -818,6 +823,19 @@ sensitivity, routing, and redaction labels and aggregate count summaries.
 Future correlation or policy-posture wording changes should extend those
 unified-resource owners instead of drifting into page-local loops in AI,
 Patrol, or infrastructure surfaces.
+The canonical frontend resource-type and badge presentation boundaries are
+also owned here now. `frontend-modern/src/utils/canonicalResourceTypes.ts`
+owns the canonical allowed resource-type set for shared resource-picking and
+validation flows, `frontend-modern/src/utils/resourceTypeCompat.ts` owns
+frontend canonicalization from legacy or alias type tokens, and
+`frontend-modern/src/utils/resourceTypePresentation.ts` owns canonical
+resource-type labels and badge styling. `frontend-modern/src/utils/resourceBadgePresentation.ts`
+and `frontend-modern/src/components/Infrastructure/resourceBadges.ts` then
+own the shared resource/source/platform badge composition used by unified
+resource tables, drawers, and infrastructure summary cards. Future resource
+type or badge wording changes should extend these unified-resource owners
+instead of rebuilding type-label or badge mapping logic inside infrastructure,
+settings, alerts, recovery, or dashboard-local helpers.
 `ResourceFacetSummary` now consumes the shared
 `frontend-modern/src/utils/resourceChangePresentation.ts` label helper for
 canonical change kinds, source types, and adapter provenance, so the chip
