@@ -85,9 +85,6 @@ describe('MonitoredSystemLedgerPanel', () => {
             source: 'agent',
             at: '2026-01-01T00:00:00Z',
           },
-          latest_included_signal_at: '2026-01-01T00:00:00Z',
-          latest_included_signal_source: 'agent',
-          last_seen: '2026-01-01T00:00:00Z',
           source: 'agent',
           explanation: {
             summary:
@@ -156,9 +153,6 @@ describe('MonitoredSystemLedgerPanel', () => {
             source: 'agent',
             at: '2026-01-01T00:00:00Z',
           },
-          latest_included_signal_at: '2026-01-01T00:00:00Z',
-          latest_included_signal_source: 'agent',
-          last_seen: '2026-01-01T00:00:00Z',
           source: 'agent',
           explanation: {
             summary:
@@ -199,9 +193,6 @@ describe('MonitoredSystemLedgerPanel', () => {
             source: 'pbs',
             at: '2026-01-02T00:00:00Z',
           },
-          latest_included_signal_at: '2026-01-02T00:00:00Z',
-          latest_included_signal_source: 'pbs',
-          last_seen: '2026-01-02T00:00:00Z',
           source: 'pbs',
           explanation: {
             summary:
@@ -303,9 +294,6 @@ describe('MonitoredSystemLedgerPanel', () => {
             source: 'agent',
             at: '2026-01-01T00:00:00Z',
           },
-          latest_included_signal_at: '2026-01-01T00:00:00Z',
-          latest_included_signal_source: 'agent',
-          last_seen: '2026-01-01T00:00:00Z',
           source: 'agent',
         },
       ],
@@ -352,8 +340,6 @@ describe('MonitoredSystemLedgerPanel', () => {
             source: 'agent',
             at: '',
           },
-          latest_included_signal_at: '',
-          latest_included_signal_source: 'agent',
           source: 'agent',
         },
       ],
@@ -393,9 +379,6 @@ describe('MonitoredSystemLedgerPanel', () => {
             source: 'agent',
             at: '2026-01-01T00:00:00Z',
           },
-          latest_included_signal_at: '2026-01-01T00:00:00Z',
-          latest_included_signal_source: 'agent',
-          last_seen: '2026-01-01T00:00:00Z',
           source: 'agent',
         },
       ],

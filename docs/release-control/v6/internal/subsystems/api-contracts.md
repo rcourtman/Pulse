@@ -256,8 +256,9 @@ That freshest grouped observation is now canonically exposed as the structured
 `latest_included_signal` object. Its `at`, `source`, `name`, and `type` fields
 identify exactly which included top-level surface reported most recently.
 `latest_included_signal_at`, `latest_included_signal_source`, and `last_seen`
-remain rollout compatibility fields only; consumers should treat the object as
-the primary contract and preserve its meaning in presentation.
+remain rollout compatibility fields only on the raw wire shape; normalized
+frontend clients should treat the object as the primary contract and must not
+re-export those flat aliases in their public response model.
 That client contract must also fail closed when older or partial payloads omit
 the nested explanation object: the frontend may normalize missing explanation
 fields to empty reasons/surfaces plus a safe default summary, but it must not

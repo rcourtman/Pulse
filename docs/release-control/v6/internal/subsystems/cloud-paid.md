@@ -225,17 +225,19 @@ That same settings surface must also label the monitored-system signal by its
 real meaning. The canonical API shape is now the structured
 `latest_included_signal` object, while `latest_included_signal_at`,
 `latest_included_signal_source`, and `last_seen` are rollout compatibility
-fields only. It represents the freshest included grouped observation, not a
-guarantee that every grouped source is healthy, so the UI must not present it
-with single-source `Last Seen` wording. When the canonical object is present,
-the surface should use its source/name/type attribution instead of showing an
-unqualified aggregate timestamp, and that attribution should stay
-customer-facing rather than exposing raw monitored-system type/source slugs in
-the settings table or included-surface details. When the row expands to show
-status reasoning, it should also restate the freshest included surface and
-timestamp there so a degraded reason and a fresher grouped signal remain
-readable together. When mixed-version payloads omit that canonical freshest
-signal entirely, the settings surface should degrade to a safe customer-facing
+fields only on the raw response payload. The normalized frontend client
+contract should expose only the canonical object. It represents the freshest
+included grouped observation, not a guarantee that every grouped source is
+healthy, so the UI must not present it with single-source `Last Seen` wording.
+When the canonical object is present, the surface should use its
+source/name/type attribution instead of showing an unqualified aggregate
+timestamp, and that attribution should stay customer-facing rather than
+exposing raw monitored-system type/source slugs in the settings table or
+included-surface details. When the row expands to show status reasoning, it
+should also restate the freshest included surface and timestamp there so a
+degraded reason and a fresher grouped signal remain readable together. When
+mixed-version payloads omit that canonical freshest signal entirely, the
+settings surface should degrade to a safe customer-facing
 fallback instead of an unexplained placeholder glyph.
 That same billing support boundary now also owns the shared monitored-system
 presentation helper. `frontend-modern/src/utils/monitoredSystemPresentation.ts`

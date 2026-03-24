@@ -196,14 +196,15 @@ describe('MonitoredSystemLedgerAPI', () => {
 
     const result = await MonitoredSystemLedgerAPI.getLedger();
 
-    expect(result.systems[0]?.latest_included_signal_at).toBe('2026-03-23T11:59:50Z');
-    expect(result.systems[0]?.latest_included_signal_source).toBe('docker');
     expect(result.systems[0]?.latest_included_signal).toEqual({
       name: 'tower.local',
       type: 'docker-host',
       source: 'docker',
       at: '2026-03-23T11:59:50Z',
     });
+    expect(result.systems[0]).not.toHaveProperty('latest_included_signal_at');
+    expect(result.systems[0]).not.toHaveProperty('latest_included_signal_source');
+    expect(result.systems[0]).not.toHaveProperty('last_seen');
   });
 
   it('falls back to legacy latest signal fields for older payloads', async () => {
@@ -223,14 +224,15 @@ describe('MonitoredSystemLedgerAPI', () => {
 
     const result = await MonitoredSystemLedgerAPI.getLedger();
 
-    expect(result.systems[0]?.latest_included_signal_at).toBe('2026-03-23T11:59:50Z');
-    expect(result.systems[0]?.latest_included_signal_source).toBeUndefined();
     expect(result.systems[0]?.latest_included_signal).toEqual({
       name: 'Tower',
       type: 'host',
       source: undefined,
       at: '2026-03-23T11:59:50Z',
     });
+    expect(result.systems[0]).not.toHaveProperty('latest_included_signal_at');
+    expect(result.systems[0]).not.toHaveProperty('latest_included_signal_source');
+    expect(result.systems[0]).not.toHaveProperty('last_seen');
   });
 
   it('preserves canonical status explanation reasons from the API contract', async () => {

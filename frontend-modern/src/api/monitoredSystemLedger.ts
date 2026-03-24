@@ -51,9 +51,6 @@ export interface MonitoredSystemLedgerEntry {
   status: MonitoredSystemLedgerStatus;
   status_explanation: MonitoredSystemLedgerStatusExplanation;
   latest_included_signal: MonitoredSystemLedgerLatestSignal;
-  latest_included_signal_at: string; // freshest included observation, RFC3339 or empty
-  latest_included_signal_source?: string;
-  last_seen?: string; // deprecated compatibility alias
   source: string;
   explanation: MonitoredSystemLedgerExplanation;
 }
@@ -75,6 +72,9 @@ type MonitoredSystemLedgerRawEntry = Omit<
   MonitoredSystemLedgerEntry,
   'status_explanation' | 'latest_included_signal' | 'explanation'
 > & {
+  latest_included_signal_at?: string; // freshest included observation, RFC3339 or empty
+  latest_included_signal_source?: string;
+  last_seen?: string; // deprecated compatibility alias
   status_explanation?: MonitoredSystemLedgerStatusExplanation;
   latest_included_signal?: MonitoredSystemLedgerLatestSignal;
   explanation?: MonitoredSystemLedgerExplanation;
@@ -106,13 +106,11 @@ function normalizeMonitoredSystemLedgerEntry(
     entry,
   );
   return {
-    ...entry,
+    name: entry.name,
+    type: entry.type,
     status,
+    source: entry.source,
     latest_included_signal: latestIncludedSignal,
-    latest_included_signal_at: latestIncludedSignal.at,
-    latest_included_signal_source: normalizeMonitoredSystemLedgerSource(
-      latestIncludedSignal.source,
-    ),
     status_explanation: {
       summary: entry.status_explanation?.summary ?? getMonitoredSystemStatusFallbackSummary(status),
       reasons: (entry.status_explanation?.reasons ?? []).map(normalizeMonitoredSystemLedgerStatusReason),
