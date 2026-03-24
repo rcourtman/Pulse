@@ -2309,6 +2309,7 @@
         "frontend-modern/src/components/Settings/diagnosticsModel.ts",
         "frontend-modern/src/components/Settings/DiagnosticsPanel.tsx",
         "frontend-modern/src/components/Settings/DiagnosticsResultsPanel.tsx",
+        "frontend-modern/src/components/Settings/DockerRuntimeSettingsCard.tsx",
         "frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx",
         "frontend-modern/src/components/Settings/NetworkBoundarySettingsSection.tsx",
         "frontend-modern/src/components/Settings/NetworkDiscoverySection.tsx",
@@ -2374,6 +2375,7 @@
         "frontend-modern/src/utils/diagnosticsPresentation.ts",
         "frontend-modern/src/utils/discoveryPresentation.ts",
         "frontend-modern/src/utils/emptyStatePresentation.ts",
+        "frontend-modern/src/utils/environmentLockPresentation.ts",
         "frontend-modern/src/utils/problemResourcePresentation.ts",
         "frontend-modern/src/utils/reportableResourceTypes.ts",
         "frontend-modern/src/utils/reportingPresentation.ts",
@@ -2437,6 +2439,7 @@
               "frontend-modern/src/components/Settings/diagnosticsModel.ts",
               "frontend-modern/src/components/Settings/DiagnosticsPanel.tsx",
               "frontend-modern/src/components/Settings/DiagnosticsResultsPanel.tsx",
+              "frontend-modern/src/components/Settings/DockerRuntimeSettingsCard.tsx",
               "frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx",
               "frontend-modern/src/components/Settings/NetworkBoundarySettingsSection.tsx",
               "frontend-modern/src/components/Settings/NetworkDiscoverySection.tsx",
@@ -2482,6 +2485,21 @@
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts"
+            ]
+          },
+          {
+            "id": "environment-lock-primitives",
+            "label": "environment lock primitive proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/components/shared/EnvironmentLockBadge.tsx",
+              "frontend-modern/src/utils/environmentLockPresentation.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/utils/__tests__/environmentLockPresentation.test.ts",
+              "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts"
             ]
           },
           {

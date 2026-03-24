@@ -3110,6 +3110,63 @@ index 1111111..2222222 100644
             ],
         )
 
+    def _assert_environment_lock_boundary_requires_frontend_primitives(
+        self, touched_path: str, requirement_id: str, exact_files: list[str]
+    ) -> None:
+        required = infer_impacted_subsystems([touched_path])
+        self.assertEqual(set(required), {"frontend-primitives"})
+
+        frontend = required["frontend-primitives"]
+        self.assertEqual(
+            frontend["contract"],
+            "docs/release-control/v6/internal/subsystems/frontend-primitives.md",
+        )
+        self.assertEqual(frontend["touched_runtime_files"], [touched_path])
+        self.assertEqual(
+            frontend["verification_requirements"],
+            [
+                {
+                    "id": requirement_id,
+                    "label": (
+                        "settings shell framing proof"
+                        if requirement_id == "settings-shell-and-framing"
+                        else "environment lock primitive proof"
+                    ),
+                    "touched_runtime_files": [touched_path],
+                    "allow_same_subsystem_tests": False,
+                    "test_prefixes": [],
+                    "exact_files": exact_files,
+                }
+            ],
+        )
+
+    def test_docker_runtime_settings_card_change_requires_frontend_primitives(self):
+        self._assert_environment_lock_boundary_requires_frontend_primitives(
+            "frontend-modern/src/components/Settings/DockerRuntimeSettingsCard.tsx",
+            "settings-shell-and-framing",
+            ["frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts"],
+        )
+
+    def test_environment_lock_badge_change_requires_frontend_primitives(self):
+        self._assert_environment_lock_boundary_requires_frontend_primitives(
+            "frontend-modern/src/components/shared/EnvironmentLockBadge.tsx",
+            "environment-lock-primitives",
+            [
+                "frontend-modern/src/utils/__tests__/environmentLockPresentation.test.ts",
+                "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
+            ],
+        )
+
+    def test_environment_lock_presentation_change_requires_frontend_primitives(self):
+        self._assert_environment_lock_boundary_requires_frontend_primitives(
+            "frontend-modern/src/utils/environmentLockPresentation.ts",
+            "environment-lock-primitives",
+            [
+                "frontend-modern/src/utils/__tests__/environmentLockPresentation.test.ts",
+                "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
+            ],
+        )
+
     def test_cloud_paid_entitlement_lease_uses_specific_guardrails(self):
         rule = next(rule for rule in load_subsystem_rules() if rule["id"] == "cloud-paid")
         requirements = build_verification_requirements(

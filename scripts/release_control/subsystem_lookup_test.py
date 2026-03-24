@@ -3097,6 +3097,61 @@ class SubsystemLookupTest(unittest.TestCase):
             "security-settings-surfaces",
         )
 
+    def _assert_environment_lock_lookup(
+        self, path: str, requirement_id: str, exact_files: list[str]
+    ) -> None:
+        result = lookup_paths([path])
+        self.assertEqual(result["unowned_runtime_files"], [])
+        self.assertEqual(
+            {item["subsystem"] for item in result["impacted_subsystems"]},
+            {"frontend-primitives"},
+        )
+        file_entry = result["files"][0]
+        self.assertEqual(file_entry["classification"], "runtime")
+        self.assertEqual(
+            {match["subsystem"] for match in file_entry["matches"]},
+            {"frontend-primitives"},
+        )
+        match = file_entry["matches"][0]
+        self.assertEqual(
+            match["contract"],
+            "docs/release-control/v6/internal/subsystems/frontend-primitives.md",
+        )
+        self.assertEqual(match["lane_context"]["lane_id"], "L8")
+        self.assertEqual(match["verification_requirement"]["id"], requirement_id)
+        self.assertEqual(match["verification_requirement"]["exact_files"], exact_files)
+
+    def test_lookup_paths_assigns_docker_runtime_settings_card_to_frontend_primitives(
+        self,
+    ) -> None:
+        self._assert_environment_lock_lookup(
+            "frontend-modern/src/components/Settings/DockerRuntimeSettingsCard.tsx",
+            "settings-shell-and-framing",
+            ["frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts"],
+        )
+
+    def test_lookup_paths_assigns_environment_lock_badge_to_frontend_primitives(self) -> None:
+        self._assert_environment_lock_lookup(
+            "frontend-modern/src/components/shared/EnvironmentLockBadge.tsx",
+            "environment-lock-primitives",
+            [
+                "frontend-modern/src/utils/__tests__/environmentLockPresentation.test.ts",
+                "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
+            ],
+        )
+
+    def test_lookup_paths_assigns_environment_lock_presentation_to_frontend_primitives(
+        self,
+    ) -> None:
+        self._assert_environment_lock_lookup(
+            "frontend-modern/src/utils/environmentLockPresentation.ts",
+            "environment-lock-primitives",
+            [
+                "frontend-modern/src/utils/__tests__/environmentLockPresentation.test.ts",
+                "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
+            ],
+        )
+
     def test_lookup_paths_assigns_remaining_settings_shell_panels_to_frontend_primitives(self) -> None:
         runtime_files = [
             "frontend-modern/src/components/Settings/APIAccessPanel.tsx",

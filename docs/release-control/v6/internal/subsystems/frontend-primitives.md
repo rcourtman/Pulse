@@ -118,6 +118,9 @@ work extends shared components instead of creating new local variants.
 72. `frontend-modern/src/components/Settings/useSettingsNavigation.ts`
 73. `frontend-modern/src/components/Settings/useSettingsPanelRegistry.tsx`
 74. `frontend-modern/src/components/Settings/useSettingsSystemPanels.tsx`
+75. `frontend-modern/src/components/Settings/DockerRuntimeSettingsCard.tsx`
+76. `frontend-modern/src/components/shared/EnvironmentLockBadge.tsx`
+77. `frontend-modern/src/utils/environmentLockPresentation.ts`
 
 ## Shared Boundaries
 
@@ -1026,6 +1029,15 @@ customer-facing action copy, while
 provider labels, empty states, and action/status messaging. Future settings
 copy changes in those areas should extend these helpers instead of inlining
 panel-local strings inside the shell or reactive state owners.
+That same shared primitive boundary now also owns environment-lock
+presentation. `frontend-modern/src/components/shared/EnvironmentLockBadge.tsx`
+stays the reusable badge shell,
+`frontend-modern/src/utils/environmentLockPresentation.ts` owns the canonical
+badge label, title, and lock-button copy, and
+`frontend-modern/src/components/Settings/DockerRuntimeSettingsCard.tsx` stays
+the settings-shell consumer for environment-variable-locked container-update
+controls. Future environment-lock UX should extend those owners instead of
+reintroducing panel-local lock labels, badge styling, or title copy.
 First-session runtime framing is now part of that same owned primitive story.
 `frontend-modern/src/components/SetupWizard/SetupWizard.tsx` must stay on the
 real two-step runtime shape (`Welcome`, then `Security`) and hand successful
