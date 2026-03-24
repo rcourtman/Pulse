@@ -329,6 +329,7 @@ test_hot_dev_bg_script_advertises_managed_entrypoint() {
   assert_contains "hot-dev-bg still documents direct launcher start" "${output}" "./scripts/hot-dev-bg.sh start [--takeover]"
   assert_contains "hot-dev-bg routes log guidance to managed wrapper" "${output}" "Check logs with: npm run dev:logs"
   assert_contains "hot-dev-bg routes verify guidance to managed wrapper" "${output}" "Rerun with: npm run dev:verify"
+  assert_contains "hot-dev-bg routes launchd supervision guidance to managed wrapper" "${output}" "Rerun with: npm run dev"
 }
 
 test_clean_mock_alerts_prefers_managed_runtime() {

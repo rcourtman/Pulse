@@ -210,9 +210,10 @@ entrypoint for routine startup instead of teaching direct script invocation as
 the primary habit.
 That operator-guidance rule also applies to the managed launcher's recovery and
 diagnostic messages: when `hot-dev-bg` tells users how to start, restart,
-verify, or inspect the routine local dev runtime, it must route them to the
-repo-root `npm run dev`, `npm run dev:verify`, and `npm run dev:logs` wrappers
-instead of teaching direct raw script invocations for those day-to-day flows.
+verify, supervise, or inspect the routine local dev runtime, it must route them
+to the repo-root `npm run dev`, `npm run dev:verify`, and `npm run dev:logs`
+wrappers instead of teaching direct raw script invocations for those day-to-day
+flows.
 That same dev-runtime helper boundary also includes the auxiliary operator
 controls that start, stop, restart, or recover local development. The repo-root
 Makefile targets, `scripts/toggle-mock.sh`, and `scripts/clean-mock-alerts.sh` must

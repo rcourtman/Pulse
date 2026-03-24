@@ -692,7 +692,7 @@ launchd_session_bg() {
     managed_pid="$(managed_session_pid)"
     if [[ -n "${managed_pid}" ]] && has_unmanaged_listeners "${managed_pid}"; then
       if [[ "${takeover}" != "true" ]]; then
-        fail "Managed runtime has split ownership. Rerun with: ./scripts/hot-dev-bg.sh launchd-session --takeover"
+        fail "Managed runtime has split ownership. Rerun with: npm run dev"
       fi
       log "Managed runtime has split ownership. Reclaiming ports before launchd supervision..."
       stop_bg
