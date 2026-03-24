@@ -34,7 +34,7 @@ class SubsystemLookupTest(unittest.TestCase):
             self.assertEqual(match["lane_context"]["lane"]["id"], expected_lanes[match["subsystem"]])
 
     def test_lookup_paths_classifies_tests_without_runtime_matches(self) -> None:
-        result = lookup_paths(["internal/api/contract_test.go"])
+        result = lookup_paths(["tests/example.spec.ts"])
         self.assertEqual(result["files"][0]["classification"], "test-or-fixture")
         self.assertEqual(result["files"][0]["matches"], [])
 

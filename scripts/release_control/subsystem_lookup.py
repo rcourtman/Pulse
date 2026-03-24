@@ -16,6 +16,7 @@ from canonical_completion_guard import (
     is_ignored_runtime_file,
     is_test_or_fixture,
     load_subsystem_rules,
+    normalize_verification_requirement,
     required_contract_updates,
     subsystem_matches_path,
 )
@@ -35,6 +36,36 @@ def normalize_input_path(raw: str) -> str:
 
 def verification_requirement_for_path(rule: dict[str, Any], path: str) -> dict[str, Any]:
     return build_verification_requirements(rule, [path])[0]
+
+
+def path_matches_prefixes(path: str, prefixes: list[str]) -> bool:
+    return any(path == prefix.rstrip("/") or path.startswith(prefix) for prefix in prefixes)
+
+
+def verification_requirements_for_test_path(rule: dict[str, Any], path: str) -> list[dict[str, Any]]:
+    verification = dict(rule.get("verification", {}))
+    requirements: list[dict[str, Any]] = []
+
+    for policy in verification.get("path_policies", []):
+        exact_files = [str(item) for item in policy.get("exact_files", [])]
+        test_prefixes = [str(item) for item in policy.get("test_prefixes", [])]
+        allow_same_subsystem_tests = bool(policy.get("allow_same_subsystem_tests", False))
+        matches_exact_file = path in exact_files
+        matches_test_prefix = path_matches_prefixes(path, test_prefixes)
+        matches_same_subsystem_test = allow_same_subsystem_tests and subsystem_matches_path(rule, path)
+        if not (matches_exact_file or matches_test_prefix or matches_same_subsystem_test):
+            continue
+        policy_id = str(policy.get("id", "default"))
+        requirements.append(
+            normalize_verification_requirement(
+                policy,
+                requirement_id=policy_id,
+                label=str(policy.get("label", policy_id)),
+                touched_runtime_files=[],
+            )
+        )
+
+    return requirements
 
 
 def lane_context_for_rule(rule: dict[str, Any], status_report: dict[str, Any]) -> dict[str, Any] | None:
@@ -109,6 +140,19 @@ def lookup_paths(paths: list[str]) -> dict[str, Any]:
                         "verification_requirement": requirement,
                     }
                 )
+        elif classification == "test-or-fixture":
+            for rule in rules:
+                for requirement in verification_requirements_for_test_path(rule, path):
+                    matches.append(
+                        {
+                            "subsystem": rule["id"],
+                            "contract": rule["contract"],
+                            "lane_context": lane_context_for_rule(rule, status_report),
+                            "contract_update_required": False,
+                            "proof_update_required": False,
+                            "verification_requirement": requirement,
+                        }
+                    )
         if not matches and classification == "runtime":
             unowned.append(path)
 

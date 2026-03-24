@@ -112,6 +112,8 @@ def stdin_files(stdin: Sequence[str]) -> List[str]:
 
 
 def is_test_or_fixture(path: str) -> bool:
+    if path.startswith("scripts/tests/"):
+        return True
     if path.endswith("_test.go"):
         return True
     if "/__tests__/" in path:
