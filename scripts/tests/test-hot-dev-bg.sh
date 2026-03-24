@@ -103,6 +103,7 @@ test_cli_parses_takeover_flag() {
       source "${HOT_DEV_BG_PATH}"
       printf "start=%s\n" "$(parse_takeover_flag start --takeover)"
       printf "restart=%s\n" "$(parse_takeover_flag restart --takeover)"
+      printf "verify=%s\n" "$(parse_takeover_flag verify --takeover)"
       printf "backend_restart=%s\n" "$(parse_takeover_flag backend-restart)"
       printf "plain=%s\n" "$(parse_takeover_flag start)"
       if parse_takeover_flag status --takeover >/tmp/hot-dev-bg.invalid 2>&1; then
@@ -115,9 +116,31 @@ test_cli_parses_takeover_flag() {
 
   assert_contains "takeover parsing enables start" "${output}" "start=true"
   assert_contains "takeover parsing enables restart" "${output}" "restart=true"
+  assert_contains "takeover parsing enables verify" "${output}" "verify=true"
   assert_contains "backend restart remains flagless" "${output}" "backend_restart=false"
   assert_contains "start without flag stays false" "${output}" "plain=false"
   assert_contains "unexpected status flag is rejected" "${output}" "invalid=rejected"
+}
+
+test_verify_command_injects_managed_runtime_env() {
+  local output
+  output="$(
+    HOT_DEV_BG_PATH="${HOT_DEV_BG}" \
+    bash -lc '
+      source "${HOT_DEV_BG_PATH}"
+      HOT_DEV_BG_VERIFY_COMMAND="python3 - <<'\''PY'\''
+import os
+print(f\"mode={os.environ.get('\''PULSE_E2E_USE_HOT_DEV'\'')}\")
+print(f\"username={os.environ.get('\''PULSE_E2E_USERNAME'\'')}\")
+print(f\"password={os.environ.get('\''PULSE_E2E_PASSWORD'\'')}\")
+PY"
+      run_verify_proof_command
+    '
+  )"
+
+  assert_contains "verify proof forces managed hot-dev mode" "${output}" "mode=1"
+  assert_contains "verify proof defaults username" "${output}" "username=admin"
+  assert_contains "verify proof defaults password" "${output}" "password=admin"
 }
 
 test_backend_restart_requires_managed_runtime() {
@@ -194,6 +217,7 @@ test_detects_unmanaged_listeners() {
 
 main() {
   test_cli_parses_takeover_flag
+  test_verify_command_injects_managed_runtime_env
   test_backend_restart_requires_managed_runtime
   test_status_without_runtime
   test_detects_unmanaged_listeners

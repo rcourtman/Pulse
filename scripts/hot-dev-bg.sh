@@ -7,6 +7,7 @@
 #   ./scripts/hot-dev-bg.sh stop
 #   ./scripts/hot-dev-bg.sh restart
 #   ./scripts/hot-dev-bg.sh backend-restart
+#   ./scripts/hot-dev-bg.sh verify [--takeover]
 #   ./scripts/hot-dev-bg.sh status
 #   ./scripts/hot-dev-bg.sh logs
 
@@ -167,6 +168,10 @@ is_running() {
   pid="$(cat "${PID_FILE}" 2>/dev/null || true)"
   [[ -n "${pid}" ]] || return 1
   kill -0 "${pid}" 2>/dev/null
+}
+
+managed_session_pid() {
+  cat "${PID_FILE}" 2>/dev/null || true
 }
 
 describe_listener() {
@@ -543,7 +548,7 @@ restart_backend_bg() {
   fi
 
   local session_pid backend_pid next_backend_pid restart_sentinel
-  session_pid="$(cat "${PID_FILE}")"
+  session_pid="$(managed_session_pid)"
   backend_pid="$(first_managed_listener_pid "${PULSE_DEV_API_PORT}" "${session_pid}" || true)"
   restart_sentinel="${ROOT_DIR}/tmp/hot-dev.restart"
 
@@ -590,6 +595,80 @@ restart_backend_bg() {
   log "Managed backend recovered and is healthy on port ${PULSE_DEV_API_PORT}"
 }
 
+runtime_healthy() {
+  local frontend_code proxy_code backend_code managed_pid
+  managed_pid="$(managed_session_pid)"
+
+  [[ -n "${managed_pid}" ]] || return 1
+  port_has_managed_listener "${FRONTEND_DEV_PORT}" "${managed_pid}" || return 1
+  port_has_managed_listener "${PULSE_DEV_API_PORT}" "${managed_pid}" || return 1
+
+  frontend_code="$(http_status_code "http://127.0.0.1:${FRONTEND_DEV_PORT}/")"
+  proxy_code="$(http_status_code "http://127.0.0.1:${FRONTEND_DEV_PORT}/api/health")"
+  backend_code="$(http_status_code "http://127.0.0.1:${PULSE_DEV_API_PORT}/api/health")"
+
+  http_status_ok "${frontend_code}" && http_status_ok "${proxy_code}" && http_status_ok "${backend_code}"
+}
+
+run_verify_proof_command() {
+  local verify_command integration_dir
+  integration_dir="${ROOT_DIR}/tests/integration"
+  verify_command="${HOT_DEV_BG_VERIFY_COMMAND:-}"
+
+  if [[ -z "${verify_command}" ]]; then
+    (
+      cd "${integration_dir}"
+      PULSE_E2E_USE_HOT_DEV=1 \
+      PULSE_E2E_USERNAME="${PULSE_E2E_USERNAME:-admin}" \
+      PULSE_E2E_PASSWORD="${PULSE_E2E_PASSWORD:-admin}" \
+      npm test -- tests/16-dev-runtime-recovery.spec.ts --project=chromium
+    )
+    return
+  fi
+
+  (
+    cd "${ROOT_DIR}"
+    PULSE_E2E_USE_HOT_DEV=1 \
+    PULSE_E2E_USERNAME="${PULSE_E2E_USERNAME:-admin}" \
+    PULSE_E2E_PASSWORD="${PULSE_E2E_PASSWORD:-admin}" \
+    bash -lc "${verify_command}"
+  )
+}
+
+verify_bg() {
+  local takeover="${1:-false}"
+  local managed_pid
+
+  require_python
+
+  if ! is_running; then
+    log "Managed runtime is not running. Starting it before verification..."
+    start_bg "${takeover}"
+  else
+    managed_pid="$(managed_session_pid)"
+    if [[ -n "${managed_pid}" ]] && has_unmanaged_listeners "${managed_pid}"; then
+      if [[ "${takeover}" != "true" ]]; then
+        fail "Managed runtime has split ownership. Rerun with: ./scripts/hot-dev-bg.sh verify --takeover"
+      fi
+      log "Managed runtime has split ownership. Reclaiming ports before verification..."
+      stop_bg
+      start_bg "${takeover}"
+    elif ! runtime_healthy; then
+      log "Managed runtime is unhealthy. Restarting it before verification..."
+      stop_bg
+      start_bg "${takeover}"
+    fi
+  fi
+
+  if ! runtime_healthy; then
+    status_bg
+    fail "Managed runtime is not healthy enough to run browser verification"
+  fi
+
+  log "Running managed dev-runtime browser verification proof..."
+  run_verify_proof_command
+}
+
 usage() {
   cat <<EOF
 Usage: $(basename "$0") <command>
@@ -599,6 +678,7 @@ Commands:
   stop
   restart
   backend-restart
+  verify [--takeover]
   status
   logs
 EOF
@@ -609,7 +689,7 @@ parse_takeover_flag() {
   local flag="${2:-}"
 
   case "${command}" in
-    start|restart)
+    start|restart|verify)
       if [[ -z "${flag}" ]]; then
         printf "false\n"
         return 0
@@ -651,6 +731,7 @@ main() {
       start_bg "${takeover}"
       ;;
     backend-restart) restart_backend_bg ;;
+    verify) verify_bg "${takeover}" ;;
     status) status_bg ;;
     logs) logs_bg ;;
     *) usage; exit 1 ;;

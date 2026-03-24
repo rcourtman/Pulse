@@ -161,6 +161,12 @@ browser runtime, cover both stream-only reconnect degradation and full backend
 loss, bounce the real backend through the launcher contract when needed, and
 prove that the shell degrades and recovers through the proxy instead of
 relying on backend-only API checks that miss browser/runtime drift.
+That same launcher boundary now also owns the one-command verification entry
+point for that proof. `./scripts/hot-dev-bg.sh verify` must prepare a coherent
+managed runtime, run the canonical browser recovery proof with the managed dev
+credentials and browser entrypoint defaults, and fail with ownership or health
+diagnostics instead of leaving operators to remember the exact Playwright
+command and env combination by hand.
 That shared `scripts/install.sh` boundary must also keep one canonical service
 argument builder for the runtime flags it persists. Token-bearing install
 paths, token-file systemd paths, wrapper-script launches, and later service
