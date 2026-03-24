@@ -345,6 +345,14 @@ recovering, the authenticated shell should surface a degraded sync state
 instead of collapsing back to the same disconnected wording used for total
 runtime loss, so hosted operators can tell the difference between browser/API
 usability and live-stream freshness at a glance.
+That same authenticated shell contract also applies to every chrome consumer of
+runtime health, not only the badge label. `frontend-modern/src/AppLayout.tsx`
+must consume the canonical `connectionStatus` contract end-to-end for shell
+behavior such as the Pulse logo activity animation rather than retaining
+parallel `connected`/`reconnecting` prop assumptions after the runtime model
+moves. Future hosted shell changes must update all chrome affordances together
+so a status-model refactor cannot leave stale prop calls behind that crash the
+authenticated cloud shell at render time.
 That same route/provider shell must stay page-oriented as well: `App.tsx`
 should lazy-load route shells like `frontend-modern/src/pages/Storage.tsx`
 and `frontend-modern/src/pages/Operations.tsx`

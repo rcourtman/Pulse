@@ -523,7 +523,7 @@ export function AppLayout(props: AppLayoutProps) {
                 height="20"
                 viewBox="0 0 256 256"
                 xmlns="http://www.w3.org/2000/svg"
-                class={`pulse-logo ${props.connected() && props.dataUpdated() ? 'animate-pulse-logo' : ''}`}
+                class={`pulse-logo ${props.connectionStatus().kind === 'connected' && props.dataUpdated() ? 'animate-pulse-logo' : ''}`}
               >
                 <title>Pulse Logo</title>
                 <circle class="pulse-bg fill-blue-600 dark:fill-blue-500" cx="128" cy="128" r="122" />

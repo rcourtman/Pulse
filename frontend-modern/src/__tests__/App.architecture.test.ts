@@ -25,6 +25,10 @@ describe('App architecture', () => {
     expect(appLayoutSource).toContain('<OrgSwitcher');
     expect(appLayoutSource).toContain('const status = () => props.connectionStatus();');
     expect(appLayoutSource).toContain("status().kind === 'sync-reconnecting' || status().kind === 'reconnecting'");
+    expect(appLayoutSource).toContain(
+      "props.connectionStatus().kind === 'connected' && props.dataUpdated()",
+    );
+    expect(appLayoutSource).not.toContain('props.connected()');
     expect(appLayoutSource).toContain('const utilityTabs = createMemo(() =>');
     expect(appRuntimeStateSource).toContain('export const useAppRuntimeState = () =>');
     expect(appRuntimeStateSource).toContain('const connectionStatus = createMemo<AppConnectionStatus>(() => {');
