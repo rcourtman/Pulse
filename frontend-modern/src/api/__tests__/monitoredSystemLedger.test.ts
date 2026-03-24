@@ -46,9 +46,6 @@ describe('MonitoredSystemLedgerAPI', () => {
             source: 'agent',
             at: '2026-01-01T00:00:00Z',
           },
-          latest_included_signal_at: '2026-01-01T00:00:00Z',
-          latest_included_signal_source: 'agent',
-          last_seen: '2026-01-01T00:00:00Z',
           source: 'agent',
           explanation: {
             summary:
@@ -89,8 +86,6 @@ describe('MonitoredSystemLedgerAPI', () => {
             type: 'host',
             at: '2026-01-01T00:00:00Z',
           },
-          latest_included_signal_at: '2026-01-01T00:00:00Z',
-          last_seen: '2026-01-01T00:00:00Z',
           source: 'agent',
         },
       ],
@@ -126,9 +121,6 @@ describe('MonitoredSystemLedgerAPI', () => {
             source: 'agent',
             at: '2026-01-01T00:00:00Z',
           },
-          latest_included_signal_at: '2026-01-01T00:00:00Z',
-          latest_included_signal_source: 'agent',
-          last_seen: '2026-01-01T00:00:00Z',
           source: 'agent',
         },
       ],
@@ -156,9 +148,6 @@ describe('MonitoredSystemLedgerAPI', () => {
             source: 'agent',
             at: '2026-01-01T00:00:00Z',
           },
-          latest_included_signal_at: '2026-01-01T00:00:00Z',
-          latest_included_signal_source: 'agent',
-          last_seen: '2026-01-01T00:00:00Z',
           source: 'agent',
         },
       ],
@@ -184,9 +173,6 @@ describe('MonitoredSystemLedgerAPI', () => {
             source: 'docker',
             at: '2026-03-23T11:59:50Z',
           },
-          latest_included_signal_at: '2026-03-23T11:59:50Z',
-          latest_included_signal_source: 'docker',
-          last_seen: '2026-03-23T11:59:50Z',
           source: 'multiple',
         },
       ],
@@ -200,34 +186,6 @@ describe('MonitoredSystemLedgerAPI', () => {
       name: 'tower.local',
       type: 'docker-host',
       source: 'docker',
-      at: '2026-03-23T11:59:50Z',
-    });
-    expect(result.systems[0]).not.toHaveProperty('latest_included_signal_at');
-    expect(result.systems[0]).not.toHaveProperty('latest_included_signal_source');
-    expect(result.systems[0]).not.toHaveProperty('last_seen');
-  });
-
-  it('falls back to legacy latest signal fields for older payloads', async () => {
-    vi.mocked(apiFetchJSON).mockResolvedValueOnce({
-      systems: [
-        {
-          name: 'Tower',
-          type: 'host',
-          status: 'warning',
-          last_seen: '2026-03-23T11:59:50Z',
-          source: 'multiple',
-        },
-      ],
-      total: 1,
-      limit: 5,
-    });
-
-    const result = await MonitoredSystemLedgerAPI.getLedger();
-
-    expect(result.systems[0]?.latest_included_signal).toEqual({
-      name: 'Tower',
-      type: 'host',
-      source: undefined,
       at: '2026-03-23T11:59:50Z',
     });
     expect(result.systems[0]).not.toHaveProperty('latest_included_signal_at');
@@ -262,9 +220,6 @@ describe('MonitoredSystemLedgerAPI', () => {
             source: 'docker',
             at: '2026-03-23T11:59:50Z',
           },
-          latest_included_signal_at: '2026-03-23T11:59:50Z',
-          latest_included_signal_source: 'docker',
-          last_seen: '2026-03-23T11:59:50Z',
           source: 'multiple',
         },
       ],
@@ -300,9 +255,6 @@ describe('MonitoredSystemLedgerAPI', () => {
             source: 'agent',
             at: '2026-01-01T00:00:00Z',
           },
-          latest_included_signal_at: '2026-01-01T00:00:00Z',
-          latest_included_signal_source: 'agent',
-          last_seen: '2026-01-01T00:00:00Z',
           source: 'agent',
         },
       ],

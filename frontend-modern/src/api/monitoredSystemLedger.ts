@@ -72,9 +72,6 @@ type MonitoredSystemLedgerRawEntry = Omit<
   MonitoredSystemLedgerEntry,
   'status_explanation' | 'latest_included_signal' | 'explanation'
 > & {
-  latest_included_signal_at?: string; // freshest included observation, RFC3339 or empty
-  latest_included_signal_source?: string;
-  last_seen?: string; // deprecated compatibility alias
   status_explanation?: MonitoredSystemLedgerStatusExplanation;
   latest_included_signal?: MonitoredSystemLedgerLatestSignal;
   explanation?: MonitoredSystemLedgerExplanation;
@@ -186,8 +183,8 @@ function normalizeMonitoredSystemLedgerLatestSignal(
     name: signal?.name?.trim() || entry.name || 'Unnamed source',
     type: signal?.type?.trim() || entry.type || 'system',
     source: normalizeMonitoredSystemLedgerSource(
-      signal?.source ?? entry.latest_included_signal_source ?? (entry.source !== 'multiple' ? entry.source : ''),
+      signal?.source ?? (entry.source !== 'multiple' ? entry.source : ''),
     ),
-    at: signal?.at?.trim() || entry.latest_included_signal_at?.trim() || entry.last_seen?.trim() || '',
+    at: signal?.at?.trim() || '',
   };
 }

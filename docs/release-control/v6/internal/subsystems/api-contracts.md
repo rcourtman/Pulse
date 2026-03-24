@@ -255,11 +255,10 @@ making warning or offline state look contradictory.
 That freshest grouped observation is now canonically exposed as the structured
 `latest_included_signal` object. Its `at`, `source`, `name`, and `type` fields
 identify exactly which included top-level surface reported most recently.
-The backend payload contract now emits only that structured object. Frontend
-clients may keep temporary raw-payload fallback support for older server
-rollouts, but the canonical wire contract no longer serializes
-`latest_included_signal_at`, `latest_included_signal_source`, or `last_seen`,
-and normalized client models must not re-export those retired aliases.
+The backend payload contract now emits only that structured object, and the
+frontend monitored-system client should parse that canonical wire contract
+directly rather than keeping flat alias fallback for
+`latest_included_signal_at`, `latest_included_signal_source`, or `last_seen`.
 That client contract must also fail closed when older or partial payloads omit
 the nested explanation object: the frontend may normalize missing explanation
 fields to empty reasons/surfaces plus a safe default summary, but it must not
