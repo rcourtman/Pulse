@@ -854,7 +854,13 @@
         "frontend-modern/src/api/ai.ts",
         "frontend-modern/src/api/patrol.ts",
         "frontend-modern/src/components/AI/AICostDashboard.tsx",
+        "frontend-modern/src/utils/aiChatPresentation.ts",
+        "frontend-modern/src/utils/aiControlLevelPresentation.ts",
         "frontend-modern/src/utils/aiCostPresentation.ts",
+        "frontend-modern/src/utils/aiExplorePresentation.ts",
+        "frontend-modern/src/utils/aiProviderHealthPresentation.ts",
+        "frontend-modern/src/utils/aiProviderPresentation.ts",
+        "frontend-modern/src/utils/aiSessionDiffPresentation.ts",
         "internal/api/ai_handler.go",
         "internal/api/ai_handlers.go",
         "internal/api/ai_intelligence_handlers.go"
@@ -899,6 +905,31 @@
             "exact_files": [
               "frontend-modern/src/components/AI/__tests__/AICostDashboard.test.tsx",
               "frontend-modern/src/utils/__tests__/aiCostPresentation.test.ts",
+              "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts"
+            ]
+          },
+          {
+            "id": "ai-presentation-helpers",
+            "label": "AI presentation helper proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/utils/aiChatPresentation.ts",
+              "frontend-modern/src/utils/aiControlLevelPresentation.ts",
+              "frontend-modern/src/utils/aiExplorePresentation.ts",
+              "frontend-modern/src/utils/aiProviderHealthPresentation.ts",
+              "frontend-modern/src/utils/aiProviderPresentation.ts",
+              "frontend-modern/src/utils/aiSessionDiffPresentation.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/components/Settings/__tests__/monitoredSystemModelGuardrails.test.ts",
+              "frontend-modern/src/utils/__tests__/aiChatPresentation.test.ts",
+              "frontend-modern/src/utils/__tests__/aiControlLevelPresentation.test.ts",
+              "frontend-modern/src/utils/__tests__/aiExplorePresentation.test.ts",
+              "frontend-modern/src/utils/__tests__/aiProviderHealthPresentation.test.ts",
+              "frontend-modern/src/utils/__tests__/aiProviderPresentation.test.ts",
+              "frontend-modern/src/utils/__tests__/aiSessionDiffPresentation.test.ts",
               "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts"
             ]
           },

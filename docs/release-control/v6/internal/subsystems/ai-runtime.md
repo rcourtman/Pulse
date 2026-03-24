@@ -28,8 +28,14 @@ runtime cost control, and shared AI transport surfaces.
 6. `frontend-modern/src/api/patrol.ts`
 7. `frontend-modern/src/components/AI/AICostDashboard.tsx`
 8. `frontend-modern/src/components/AI/Chat/`
-9. `frontend-modern/src/utils/aiCostPresentation.ts`
-10. `frontend-modern/src/utils/textPresentation.ts`
+9. `frontend-modern/src/utils/aiChatPresentation.ts`
+10. `frontend-modern/src/utils/aiControlLevelPresentation.ts`
+11. `frontend-modern/src/utils/aiCostPresentation.ts`
+12. `frontend-modern/src/utils/aiExplorePresentation.ts`
+13. `frontend-modern/src/utils/aiProviderHealthPresentation.ts`
+14. `frontend-modern/src/utils/aiProviderPresentation.ts`
+15. `frontend-modern/src/utils/aiSessionDiffPresentation.ts`
+16. `frontend-modern/src/utils/textPresentation.ts`
 
 ## Shared Boundaries
 
@@ -45,7 +51,8 @@ runtime cost control, and shared AI transport surfaces.
 2. Add or change Pulse Assistant request flow through `internal/api/ai_handler.go` and `frontend-modern/src/api/ai.ts`
 3. Add or change Patrol, alert-analysis, or remediation transport through `internal/api/ai_handlers.go`, `internal/api/ai_intelligence_handlers.go`, and `frontend-modern/src/api/patrol.ts`
 4. Add or change AI usage/cost dashboard presentation through `frontend-modern/src/components/AI/AICostDashboard.tsx` and `frontend-modern/src/utils/aiCostPresentation.ts`
-5. Keep AI chat presentation helpers aligned through `frontend-modern/src/components/AI/Chat/` and the shared `frontend-modern/src/utils/textPresentation.ts`
+5. Add or change AI provider, control-level, chat/session, or explore-state presentation through `frontend-modern/src/components/AI/Chat/`, `frontend-modern/src/utils/aiProviderPresentation.ts`, `frontend-modern/src/utils/aiProviderHealthPresentation.ts`, `frontend-modern/src/utils/aiControlLevelPresentation.ts`, `frontend-modern/src/utils/aiChatPresentation.ts`, `frontend-modern/src/utils/aiSessionDiffPresentation.ts`, and `frontend-modern/src/utils/aiExplorePresentation.ts`
+6. Keep AI chat presentation helpers aligned through `frontend-modern/src/components/AI/Chat/` and the shared `frontend-modern/src/utils/textPresentation.ts`
 
 ## Forbidden Paths
 
@@ -80,6 +87,18 @@ canonical AI usage dashboard shell, while
 empty-state, and range-button presentation contract. Future cost-surface work
 must extend those owners instead of reintroducing inline AI usage copy or
 dashboard-local segmented-button styling.
+The same runtime boundary also owns the shared AI semantic presentation
+helpers used across chat, settings, and usage surfaces.
+`frontend-modern/src/utils/aiProviderPresentation.ts`,
+`frontend-modern/src/utils/aiProviderHealthPresentation.ts`,
+`frontend-modern/src/utils/aiControlLevelPresentation.ts`,
+`frontend-modern/src/utils/aiChatPresentation.ts`,
+`frontend-modern/src/utils/aiSessionDiffPresentation.ts`, and
+`frontend-modern/src/utils/aiExplorePresentation.ts` are the canonical owners
+for provider naming, provider health labels, control-level semantics,
+chat/session empty states, session-diff badges, and explore-status labels.
+Settings and chat surfaces must consume those helpers instead of keeping local
+AI wording or model/provider inference branches.
 
 The AI transport files are shared with `api-contracts`, not delegated away to
 it. `frontend-modern/src/api/ai.ts`,
