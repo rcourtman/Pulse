@@ -3297,6 +3297,7 @@
       "owned_prefixes": [
         "frontend-modern/src/components/Recovery/",
         "frontend-modern/src/components/Storage/",
+        "frontend-modern/src/features/recovery/",
         "frontend-modern/src/features/storageBackups/",
         "internal/recovery/"
       ],
@@ -3304,6 +3305,7 @@
         "frontend-modern/src/components/Recovery/DashboardRecoveryStatusPanel.tsx",
         "frontend-modern/src/components/Storage/DashboardStoragePanel.tsx",
         "frontend-modern/src/features/dashboardOverview/dashboardWidgets.ts",
+        "frontend-modern/src/features/recovery/useRecoverySurfaceState.ts",
         "frontend-modern/src/hooks/useDashboardRecovery.ts",
         "frontend-modern/src/hooks/useRecoveryPoints.ts",
         "frontend-modern/src/hooks/useRecoveryPointsFacets.ts",
@@ -3382,6 +3384,7 @@
             ],
             "match_files": [
               "frontend-modern/src/components/Recovery/DashboardRecoveryStatusPanel.tsx",
+              "frontend-modern/src/features/recovery/useRecoverySurfaceState.ts",
               "frontend-modern/src/hooks/useDashboardRecovery.ts",
               "frontend-modern/src/hooks/useRecoveryPoints.ts",
               "frontend-modern/src/hooks/useRecoveryPointsFacets.ts",
