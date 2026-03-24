@@ -3071,6 +3071,45 @@ index 1111111..2222222 100644
             ],
         )
 
+    def test_remediation_presentation_change_requires_patrol_contract(self):
+        required = infer_impacted_subsystems(
+            ["frontend-modern/src/utils/remediationPresentation.ts"]
+        )
+        self.assertEqual(set(required), {"patrol-intelligence"})
+
+        patrol = required["patrol-intelligence"]
+        self.assertEqual(
+            patrol["contract"],
+            "docs/release-control/v6/internal/subsystems/patrol-intelligence.md",
+        )
+        self.assertEqual(
+            patrol["touched_runtime_files"],
+            ["frontend-modern/src/utils/remediationPresentation.ts"],
+        )
+        self.assertEqual(
+            patrol["verification_requirements"],
+            [
+                {
+                    "id": "patrol-findings-and-approvals",
+                    "label": "patrol findings and approvals proof",
+                    "touched_runtime_files": [
+                        "frontend-modern/src/utils/remediationPresentation.ts"
+                    ],
+                    "allow_same_subsystem_tests": False,
+                    "test_prefixes": [],
+                    "exact_files": [
+                        "frontend-modern/src/components/AI/__tests__/FindingsPanel.test.ts",
+                        "frontend-modern/src/components/patrol/__tests__/ApprovalSection.test.tsx",
+                        "frontend-modern/src/components/patrol/__tests__/InvestigationSection.test.tsx",
+                        "frontend-modern/src/utils/__tests__/approvalRiskPresentation.test.ts",
+                        "frontend-modern/src/utils/__tests__/findingAlertIdentity.test.ts",
+                        "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
+                        "frontend-modern/src/utils/__tests__/remediationPresentation.test.ts",
+                    ],
+                }
+            ],
+        )
+
     def test_monitoring_metrics_hot_path_uses_specific_proof_policy(self):
         monitoring_rule = next(rule for rule in load_subsystem_rules() if rule["id"] == "monitoring")
         requirements = build_verification_requirements(

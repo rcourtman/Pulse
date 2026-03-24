@@ -3815,6 +3815,37 @@ class SubsystemLookupTest(unittest.TestCase):
                 "frontend-modern/src/utils/__tests__/approvalRiskPresentation.test.ts",
                 "frontend-modern/src/utils/__tests__/findingAlertIdentity.test.ts",
                 "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
+                "frontend-modern/src/utils/__tests__/remediationPresentation.test.ts",
+            ],
+        )
+
+    def test_lookup_paths_assigns_remediation_presentation_to_patrol_intelligence(self) -> None:
+        result = lookup_paths(["frontend-modern/src/utils/remediationPresentation.ts"])
+        self.assertEqual(result["unowned_runtime_files"], [])
+        self.assertEqual(
+            {item["subsystem"] for item in result["impacted_subsystems"]},
+            {"patrol-intelligence"},
+        )
+        match = result["files"][0]["matches"][0]
+        self.assertEqual(
+            match["contract"],
+            "docs/release-control/v6/internal/subsystems/patrol-intelligence.md",
+        )
+        self.assertEqual(match["lane_context"]["lane_id"], "L6")
+        self.assertEqual(
+            match["verification_requirement"]["id"],
+            "patrol-findings-and-approvals",
+        )
+        self.assertEqual(
+            match["verification_requirement"]["exact_files"],
+            [
+                "frontend-modern/src/components/AI/__tests__/FindingsPanel.test.ts",
+                "frontend-modern/src/components/patrol/__tests__/ApprovalSection.test.tsx",
+                "frontend-modern/src/components/patrol/__tests__/InvestigationSection.test.tsx",
+                "frontend-modern/src/utils/__tests__/approvalRiskPresentation.test.ts",
+                "frontend-modern/src/utils/__tests__/findingAlertIdentity.test.ts",
+                "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
+                "frontend-modern/src/utils/__tests__/remediationPresentation.test.ts",
             ],
         )
 

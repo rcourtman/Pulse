@@ -3111,7 +3111,8 @@
         "frontend-modern/src/utils/patrolEmptyStatePresentation.ts",
         "frontend-modern/src/utils/patrolFormat.ts",
         "frontend-modern/src/utils/patrolRunPresentation.ts",
-        "frontend-modern/src/utils/patrolSummaryPresentation.ts"
+        "frontend-modern/src/utils/patrolSummaryPresentation.ts",
+        "frontend-modern/src/utils/remediationPresentation.ts"
       ],
       "verification": {
         "allow_same_subsystem_tests": false,
@@ -3183,7 +3184,8 @@
               "frontend-modern/src/components/patrol/RemediationStatus.tsx",
               "frontend-modern/src/utils/aiFindingPresentation.ts",
               "frontend-modern/src/utils/approvalRiskPresentation.ts",
-              "frontend-modern/src/utils/findingAlertIdentity.ts"
+              "frontend-modern/src/utils/findingAlertIdentity.ts",
+              "frontend-modern/src/utils/remediationPresentation.ts"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
@@ -3193,7 +3195,8 @@
               "frontend-modern/src/components/patrol/__tests__/InvestigationSection.test.tsx",
               "frontend-modern/src/utils/__tests__/approvalRiskPresentation.test.ts",
               "frontend-modern/src/utils/__tests__/findingAlertIdentity.test.ts",
-              "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts"
+              "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
+              "frontend-modern/src/utils/__tests__/remediationPresentation.test.ts"
             ]
           },
           {
