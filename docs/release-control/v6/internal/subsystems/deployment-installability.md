@@ -157,7 +157,8 @@ managed-backend restart command instead of forcing operators or tests to kill
 listener PIDs ad hoc, and the integration harness must be able to attach
 Playwright to the browser entrypoint on `5173` rather than only the backend
 port on `7655`. Recovery proof for this surface must run through the managed
-browser runtime, bounce the real backend through the launcher contract, and
+browser runtime, cover both stream-only reconnect degradation and full backend
+loss, bounce the real backend through the launcher contract when needed, and
 prove that the shell degrades and recovers through the proxy instead of
 relying on backend-only API checks that miss browser/runtime drift.
 That shared `scripts/install.sh` boundary must also keep one canonical service
