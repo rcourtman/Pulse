@@ -107,6 +107,13 @@ it. `frontend-modern/src/api/ai.ts`,
 `internal/api/ai_handlers.go`, and
 `internal/api/ai_intelligence_handlers.go` are runtime control surfaces for
 the AI product while also remaining canonical payload contract boundaries.
+That same AI transport boundary now also defines the narrow Pulse Mobile
+runtime compatibility rule: mobile relay credentials are minted with the
+dedicated backend-owned `relay:mobile:access` scope, and only the governed
+mobile runtime routes may accept that scope as a compatibility alias alongside
+legacy `ai:chat` or `ai:execute` mobile tokens. Broader AI runtime surfaces
+must stay on their canonical AI scopes instead of treating the mobile relay
+capability as a general-purpose AI permission.
 The same ownership includes the Pulse query tool schema under
 `internal/ai/tools/`: topology-query input names must stay canonical inside
 the AI runtime itself, so new tool arguments such as `max_proxmox_nodes`

@@ -133,8 +133,7 @@ func canonicalizeRequestedScope(scope string) string {
 
 func relayMobileAccessTokenScopes() []string {
 	return []string{
-		config.ScopeAIChat,
-		config.ScopeAIExecute,
+		config.ScopeRelayMobileAccess,
 	}
 }
 

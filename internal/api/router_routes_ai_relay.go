@@ -25,6 +25,11 @@ const (
 	featureAIAutoFixKey    = "ai_autofix"
 )
 
+var (
+	relayMobileChatCompatibleScopes    = []string{config.ScopeRelayMobileAccess, config.ScopeAIChat}
+	relayMobileExecuteCompatibleScopes = []string{config.ScopeRelayMobileAccess, config.ScopeAIExecute}
+)
+
 func (r *Router) registerAIRelayRoutesGroup() {
 	// Resolve AI extension endpoints. In the open-source build (no enterprise binder),
 	// the free adapters return 402 for all premium operations. Enterprise binders
@@ -106,29 +111,19 @@ func (r *Router) registerAIRelayRoutesGroup() {
 	// SECURITY: Patrol status and stream require ai:execute scope to access findings
 	r.mux.HandleFunc("/api/ai/patrol/status", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleGetPatrolStatus)))
 	r.mux.HandleFunc("/api/ai/patrol/stream", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandlePatrolStream)))
-	r.mux.HandleFunc("/api/ai/patrol/findings", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, func(w http.ResponseWriter, req *http.Request) {
-		switch req.Method {
-		case http.MethodGet:
-			r.aiSettingsHandler.HandleGetPatrolFindings(w, req)
-		case http.MethodDelete:
-			// Clear all findings - doesn't require Pro license so users can clean up accumulated findings
-			r.aiSettingsHandler.HandleClearAllFindings(w, req)
-		default:
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		}
-	})))
+	r.mux.HandleFunc("/api/ai/patrol/findings", RequireAuth(r.config, r.routeAIPatrolFindings))
 	// SECURITY: AI Patrol read endpoints - require ai:execute scope
 	r.mux.HandleFunc("/api/ai/patrol/history", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleGetFindingsHistory)))
 	r.mux.HandleFunc("/api/ai/patrol/run", RequireAdmin(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleForcePatrol)))
 	// SECURITY: AI Patrol mutation endpoints - require ai:execute scope to prevent low-privilege tokens from
 	// dismissing, suppressing, or otherwise hiding findings. This prevents attackers from blinding AI Patrol.
-	r.mux.HandleFunc("/api/ai/patrol/acknowledge", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleAcknowledgeFinding)))
+	r.mux.HandleFunc("/api/ai/patrol/acknowledge", RequireAuth(r.config, RequireAnyScope(relayMobileExecuteCompatibleScopes, r.aiSettingsHandler.HandleAcknowledgeFinding)))
 	// Dismiss and resolve don't require Pro license - users should be able to clear findings they can see
 	// This is especially important for users who accumulated findings before fixing the patrol-without-AI bug
-	r.mux.HandleFunc("/api/ai/patrol/dismiss", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleDismissFinding)))
+	r.mux.HandleFunc("/api/ai/patrol/dismiss", RequireAuth(r.config, RequireAnyScope(relayMobileExecuteCompatibleScopes, r.aiSettingsHandler.HandleDismissFinding)))
 	r.mux.HandleFunc("/api/ai/patrol/findings/note", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleSetFindingNote)))
 	r.mux.HandleFunc("/api/ai/patrol/suppress", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleSuppressFinding)))
-	r.mux.HandleFunc("/api/ai/patrol/snooze", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleSnoozeFinding)))
+	r.mux.HandleFunc("/api/ai/patrol/snooze", RequireAuth(r.config, RequireAnyScope(relayMobileExecuteCompatibleScopes, r.aiSettingsHandler.HandleSnoozeFinding)))
 	r.mux.HandleFunc("/api/ai/patrol/resolve", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleResolveFinding)))
 	r.mux.HandleFunc("/api/ai/patrol/runs", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleGetPatrolRunHistory)))
 	r.mux.HandleFunc("/api/ai/patrol/runs/", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleGetPatrolRun)))
@@ -160,21 +155,7 @@ func (r *Router) registerAIRelayRoutesGroup() {
 
 	// Investigation endpoints - viewing is free; reinvestigation and fix execution gated via extension
 	// SECURITY: Require ai:execute scope to prevent low-privilege tokens from reading investigation details
-	r.mux.HandleFunc("/api/ai/findings/", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, func(w http.ResponseWriter, req *http.Request) {
-		path := req.URL.Path
-		switch {
-		case strings.HasSuffix(path, "/investigation/messages"):
-			r.aiSettingsHandler.HandleGetInvestigationMessages(w, req)
-		case strings.HasSuffix(path, "/investigation"):
-			r.aiSettingsHandler.HandleGetInvestigation(w, req)
-		case strings.HasSuffix(path, "/reinvestigate"):
-			r.aiAutoFixEndpoints.HandleReinvestigateFinding(w, req)
-		case strings.HasSuffix(path, "/reapprove"):
-			r.aiAutoFixEndpoints.HandleReapproveInvestigationFix(w, req)
-		default:
-			http.Error(w, "Not found", http.StatusNotFound)
-		}
-	})))
+	r.mux.HandleFunc("/api/ai/findings/", RequireAuth(r.config, r.routeAIFindings))
 
 	// AI Intelligence endpoints - expose learned patterns, correlations, and predictions
 	// SECURITY: Require ai:execute scope to prevent low-privilege tokens from reading sensitive intelligence
@@ -221,23 +202,14 @@ func (r *Router) registerAIRelayRoutesGroup() {
 	// AI chat endpoints
 	// SECURITY: Status endpoint is part of chat UX and should require ai:chat scope for token clients.
 	r.mux.HandleFunc("/api/ai/status", RequireAuth(r.config, RequireScope(config.ScopeAIChat, r.aiHandler.HandleStatus)))
-	r.mux.HandleFunc("/api/ai/chat", RequireAuth(r.config, RequireScope(config.ScopeAIChat, r.aiHandler.HandleChat)))
-	r.mux.HandleFunc("/api/ai/sessions", RequireAuth(r.config, RequireScope(config.ScopeAIChat, func(w http.ResponseWriter, req *http.Request) {
-		switch req.Method {
-		case http.MethodGet:
-			r.aiHandler.HandleSessions(w, req)
-		case http.MethodPost:
-			r.aiHandler.HandleCreateSession(w, req)
-		default:
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		}
-	})))
-	r.mux.HandleFunc("/api/ai/sessions/", RequireAuth(r.config, RequireScope(config.ScopeAIChat, r.routeAISessions)))
+	r.mux.HandleFunc("/api/ai/chat", RequireAuth(r.config, RequireAnyScope(relayMobileChatCompatibleScopes, r.aiHandler.HandleChat)))
+	r.mux.HandleFunc("/api/ai/sessions", RequireAuth(r.config, r.routeAISessionsCollection))
+	r.mux.HandleFunc("/api/ai/sessions/", RequireAuth(r.config, r.routeAISessions))
 
 	// AI approval endpoints - for command approval workflow
 	// Require ai:execute scope to prevent low-privilege tokens from enumerating or denying approvals
-	r.mux.HandleFunc("/api/ai/approvals", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiAutoFixEndpoints.HandleListApprovals)))
-	r.mux.HandleFunc("/api/ai/approvals/", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.routeApprovals)))
+	r.mux.HandleFunc("/api/ai/approvals", RequireAuth(r.config, RequireAnyScope(relayMobileExecuteCompatibleScopes, r.aiAutoFixEndpoints.HandleListApprovals)))
+	r.mux.HandleFunc("/api/ai/approvals/", RequireAuth(r.config, RequireAnyScope(relayMobileExecuteCompatibleScopes, r.routeApprovals)))
 
 	// AI question endpoints - require ai:chat scope for interactive AI features
 	r.mux.HandleFunc("/api/ai/question/", RequireAuth(r.config, RequireScope(config.ScopeAIChat, r.routeQuestions)))
@@ -411,6 +383,12 @@ func newAIAutoFixHandlerDeps(r *Router) extensions.AIAutoFixHandlerDeps {
 			return getAuthUsername(h.getConfig(req.Context()), req)
 		},
 		EnsureScope: func(w http.ResponseWriter, req *http.Request, scope string) bool {
+			if scope == config.ScopeAIExecute && strings.HasPrefix(req.URL.Path, "/api/ai/approvals/") {
+				// Approval execution accepts the dedicated mobile relay capability
+				// for new pairings while remaining backward-compatible with legacy
+				// ai:execute-scoped mobile tokens.
+				return ensureAnyScope(w, req, relayMobileExecuteCompatibleScopes...)
+			}
 			return ensureScope(w, req, scope)
 		},
 		AuditLog:    LogAuditEvent,

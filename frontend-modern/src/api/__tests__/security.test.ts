@@ -164,7 +164,7 @@ describe('SecurityAPI', () => {
           prefix: 'pmp_',
           suffix: 'bile',
           createdAt: '',
-          scopes: ['ai:chat', 'ai:execute'],
+          scopes: ['relay:mobile:access'],
           ownerUserId: 'owner@example.com',
         },
       };

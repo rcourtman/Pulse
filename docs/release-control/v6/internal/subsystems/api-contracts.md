@@ -131,7 +131,7 @@ Own canonical runtime payload shapes between backend and frontend.
 10. Add or change infrastructure operations token generation, lookup, assignment, the pure unified-agent inventory/install model, the split infrastructure install/reporting state owners, the split direct-node/discovery infrastructure settings owners, the shared infrastructure-operations state provider/context shell, and reporting/install presentation through `frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx`, `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`, `frontend-modern/src/components/Settings/useInfrastructureConfiguredNodesState.ts`, `frontend-modern/src/components/Settings/useInfrastructureDiscoveryRuntimeState.ts`, `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx`, `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx`, and `frontend-modern/src/components/Settings/useInfrastructureReportingState.tsx`
 11. Keep `internal/api/session_store.go` on a fail-closed auth-persistence boundary: persisted OIDC refresh tokens may only round-trip through encrypted-at-rest session payloads, and any missing-crypto or invalid-ciphertext path must drop the token instead of preserving plaintext-at-rest session state.
 12. Keep tenant AI handler wiring on canonical provider ownership: `internal/api/ai_handlers.go` may wire tenant `ReadState` and tenant-scoped unified-resource providers into AI services, but it must not revive tenant snapshot-provider bridges once Patrol can initialize and verify from those canonical providers directly.
-13. Keep Pulse Mobile relay credential minting on backend ownership: `internal/api/router_routes_auth_security.go`, `internal/api/security_tokens.go`, and `frontend-modern/src/api/security.ts` may expose the canonical mobile runtime token creator, but browser callers must only consume that route and must not define the mobile runtime scope bundle or token-purpose metadata locally.
+13. Keep Pulse Mobile relay credential minting and permission ownership on backend ownership: `internal/api/router_routes_auth_security.go`, `internal/api/security_tokens.go`, `internal/api/auth.go`, `internal/api/router_routes_ai_relay.go`, and `frontend-modern/src/api/security.ts` may expose the canonical mobile runtime token creator and governed route gates, but browser callers must only consume that route and must not define the mobile runtime scope, compatibility gate list, or token-purpose metadata locally.
 
 ## Forbidden Paths
 
@@ -1533,6 +1533,8 @@ reads. `internal/api/security_tokens.go`,
 consume that same contract when deciding whether a displayed QR token can be
 revoked or must be preserved as an already-used device credential. That same
 contract now also owns backend-minted Pulse Mobile relay access tokens: the
-server route, not the browser, defines the canonical mobile runtime scope
-bundle and token-purpose metadata, and the pairing UI only consumes that
-server-owned credential when requesting the onboarding payload.
+server route, not the browser, defines the canonical dedicated
+`relay:mobile:access` runtime scope, its backward-compatible server-side route
+gates alongside legacy `ai:chat` and `ai:execute` mobile tokens, and the
+token-purpose metadata. The pairing UI only consumes that server-owned
+credential when requesting the onboarding payload.

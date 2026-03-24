@@ -657,20 +657,44 @@ func (r *Router) routeAISessions(w http.ResponseWriter, req *http.Request) {
 	if len(parts) > 1 {
 		switch parts[1] {
 		case "messages":
+			if !ensureAnyScope(w, req, relayMobileChatCompatibleScopes...) {
+				return
+			}
 			r.aiHandler.HandleMessages(w, req, sessionID)
 		case "abort":
+			if !ensureAnyScope(w, req, relayMobileChatCompatibleScopes...) {
+				return
+			}
 			r.aiHandler.HandleAbort(w, req, sessionID)
 		case "summarize":
+			if !ensureScope(w, req, config.ScopeAIChat) {
+				return
+			}
 			r.aiHandler.HandleSummarize(w, req, sessionID)
 		case "diff":
+			if !ensureScope(w, req, config.ScopeAIChat) {
+				return
+			}
 			r.aiHandler.HandleDiff(w, req, sessionID)
 		case "fork":
+			if !ensureScope(w, req, config.ScopeAIChat) {
+				return
+			}
 			r.aiHandler.HandleFork(w, req, sessionID)
 		case "revert":
+			if !ensureScope(w, req, config.ScopeAIChat) {
+				return
+			}
 			r.aiHandler.HandleRevert(w, req, sessionID)
 		case "unrevert":
+			if !ensureScope(w, req, config.ScopeAIChat) {
+				return
+			}
 			r.aiHandler.HandleUnrevert(w, req, sessionID)
 		default:
+			if !ensureScope(w, req, config.ScopeAIChat) {
+				return
+			}
 			http.Error(w, "Not found", http.StatusNotFound)
 		}
 		return
@@ -679,9 +703,82 @@ func (r *Router) routeAISessions(w http.ResponseWriter, req *http.Request) {
 	// Handle session-level operations
 	switch req.Method {
 	case http.MethodDelete:
+		if !ensureAnyScope(w, req, relayMobileChatCompatibleScopes...) {
+			return
+		}
 		r.aiHandler.HandleDeleteSession(w, req, sessionID)
 	default:
+		if !ensureScope(w, req, config.ScopeAIChat) {
+			return
+		}
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (r *Router) routeAISessionsCollection(w http.ResponseWriter, req *http.Request) {
+	if !ensureAnyScope(w, req, relayMobileChatCompatibleScopes...) {
+		return
+	}
+
+	switch req.Method {
+	case http.MethodGet:
+		r.aiHandler.HandleSessions(w, req)
+	case http.MethodPost:
+		r.aiHandler.HandleCreateSession(w, req)
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (r *Router) routeAIPatrolFindings(w http.ResponseWriter, req *http.Request) {
+	switch req.Method {
+	case http.MethodGet:
+		if !ensureAnyScope(w, req, relayMobileExecuteCompatibleScopes...) {
+			return
+		}
+		r.aiSettingsHandler.HandleGetPatrolFindings(w, req)
+	case http.MethodDelete:
+		if !ensureScope(w, req, config.ScopeAIExecute) {
+			return
+		}
+		// Clear all findings - doesn't require Pro license so users can clean up accumulated findings
+		r.aiSettingsHandler.HandleClearAllFindings(w, req)
+	default:
+		if !ensureScope(w, req, config.ScopeAIExecute) {
+			return
+		}
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (r *Router) routeAIFindings(w http.ResponseWriter, req *http.Request) {
+	path := req.URL.Path
+	switch {
+	case strings.HasSuffix(path, "/investigation/messages"):
+		if !ensureAnyScope(w, req, relayMobileExecuteCompatibleScopes...) {
+			return
+		}
+		r.aiSettingsHandler.HandleGetInvestigationMessages(w, req)
+	case strings.HasSuffix(path, "/investigation"):
+		if !ensureAnyScope(w, req, relayMobileExecuteCompatibleScopes...) {
+			return
+		}
+		r.aiSettingsHandler.HandleGetInvestigation(w, req)
+	case strings.HasSuffix(path, "/reinvestigate"):
+		if !ensureScope(w, req, config.ScopeAIExecute) {
+			return
+		}
+		r.aiAutoFixEndpoints.HandleReinvestigateFinding(w, req)
+	case strings.HasSuffix(path, "/reapprove"):
+		if !ensureScope(w, req, config.ScopeAIExecute) {
+			return
+		}
+		r.aiAutoFixEndpoints.HandleReapproveInvestigationFix(w, req)
+	default:
+		if !ensureScope(w, req, config.ScopeAIExecute) {
+			return
+		}
+		http.Error(w, "Not found", http.StatusNotFound)
 	}
 }
 

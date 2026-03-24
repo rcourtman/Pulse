@@ -269,7 +269,7 @@ func TestSecurityTokens_CreateRelayMobileAccessToken(t *testing.T) {
 	if !strings.HasPrefix(createResp.Record.Name, "Pulse Mobile relay access ") {
 		t.Fatalf("unexpected relay mobile token name %q", createResp.Record.Name)
 	}
-	wantScopes := []string{config.ScopeAIChat, config.ScopeAIExecute}
+	wantScopes := []string{config.ScopeRelayMobileAccess}
 	if len(createResp.Record.Scopes) != len(wantScopes) {
 		t.Fatalf("relay mobile scopes length = %d, want %d", len(createResp.Record.Scopes), len(wantScopes))
 	}

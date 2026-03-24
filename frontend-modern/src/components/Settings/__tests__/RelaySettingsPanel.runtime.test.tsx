@@ -110,7 +110,7 @@ describe('RelaySettingsPanel runtime', () => {
         prefix: 'pmp_',
         suffix: '1234',
         createdAt: '',
-        scopes: ['ai:chat', 'ai:execute'],
+        scopes: ['relay:mobile:access'],
       },
     });
     deleteTokenMock.mockResolvedValue(undefined);
@@ -120,7 +120,7 @@ describe('RelaySettingsPanel runtime', () => {
       prefix: 'pmp_',
       suffix: '1234',
       createdAt: '',
-      scopes: ['ai:chat', 'ai:execute'],
+      scopes: ['relay:mobile:access'],
     });
     getQRPayloadMock.mockResolvedValue({
       schema: 'pulse-onboarding/v1',

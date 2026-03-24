@@ -1017,8 +1017,15 @@ func RequirePermission(cfg *config.Config, authorizer auth.Authorizer, action, r
 // RequireScope ensures that token-authenticated requests include the specified scope.
 // Session-based (browser) requests bypass the scope check.
 func RequireScope(scope string, handler http.HandlerFunc) http.HandlerFunc {
+	return RequireAnyScope([]string{scope}, handler)
+}
+
+// RequireAnyScope ensures that token-authenticated requests include at least
+// one of the specified scopes. Session-based (browser) requests bypass the
+// scope check.
+func RequireAnyScope(scopes []string, handler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if !ensureScope(w, r, scope) {
+		if !ensureAnyScope(w, r, scopes...) {
 			return
 		}
 		handler(w, r)
@@ -1041,14 +1048,46 @@ func respondMissingScope(w http.ResponseWriter, scope string) {
 // ensureScope enforces that the request either originates from a session or a token
 // possessing the specified scope. Returns true when access should continue.
 func ensureScope(w http.ResponseWriter, r *http.Request, scope string) bool {
-	if scope == "" {
+	return ensureAnyScope(w, r, scope)
+}
+
+// ensureAnyScope enforces that the request either originates from a session or
+// a token possessing at least one of the specified scopes.
+func ensureAnyScope(w http.ResponseWriter, r *http.Request, scopes ...string) bool {
+	normalized := make([]string, 0, len(scopes))
+	for _, scope := range scopes {
+		scope = strings.TrimSpace(scope)
+		if scope == "" {
+			return true
+		}
+		normalized = append(normalized, scope)
+	}
+	if len(normalized) == 0 {
 		return true
 	}
+
 	record := getAPITokenRecordFromRequest(r)
-	if record == nil || record.HasScope(scope) {
+	if record == nil {
 		return true
 	}
-	respondMissingScope(w, scope)
+	for _, scope := range normalized {
+		if record.HasScope(scope) {
+			return true
+		}
+	}
+
+	if len(normalized) == 1 {
+		respondMissingScope(w, normalized[0])
+		return false
+	}
+	if w != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"error":          "missing_scope",
+			"requiredScopes": normalized,
+		})
+	}
 	return false
 }
 

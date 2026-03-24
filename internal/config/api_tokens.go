@@ -12,22 +12,23 @@ import (
 
 // Canonical API token scope strings.
 const (
-	ScopeWildcard         = "*"
-	ScopeMonitoringRead   = "monitoring:read"
-	ScopeMonitoringWrite  = "monitoring:write"
-	ScopeDockerReport     = "docker:report"
-	ScopeDockerManage     = "docker:manage"
-	ScopeKubernetesReport = "kubernetes:report"
-	ScopeKubernetesManage = "kubernetes:manage"
-	ScopeAgentReport      = "agent:report"
-	ScopeAgentConfigRead  = "agent:config:read"
-	ScopeAgentManage      = "agent:manage"
-	ScopeSettingsRead     = "settings:read"
-	ScopeSettingsWrite    = "settings:write"
-	ScopeAIExecute        = "ai:execute"   // Allows executing AI commands and remediation plans
-	ScopeAIChat           = "ai:chat"      // Allows AI chat participation
-	ScopeAgentExec        = "agent:exec"   // Allows agent execution WebSocket connections
-	ScopeAgentEnroll      = "agent:enroll" // Bootstrap enrollment only
+	ScopeWildcard          = "*"
+	ScopeMonitoringRead    = "monitoring:read"
+	ScopeMonitoringWrite   = "monitoring:write"
+	ScopeDockerReport      = "docker:report"
+	ScopeDockerManage      = "docker:manage"
+	ScopeKubernetesReport  = "kubernetes:report"
+	ScopeKubernetesManage  = "kubernetes:manage"
+	ScopeAgentReport       = "agent:report"
+	ScopeAgentConfigRead   = "agent:config:read"
+	ScopeAgentManage       = "agent:manage"
+	ScopeSettingsRead      = "settings:read"
+	ScopeSettingsWrite     = "settings:write"
+	ScopeAIExecute         = "ai:execute"          // Allows executing AI commands and remediation plans
+	ScopeAIChat            = "ai:chat"             // Allows AI chat participation
+	ScopeRelayMobileAccess = "relay:mobile:access" // Allows the governed Pulse Mobile relay runtime surface
+	ScopeAgentExec         = "agent:exec"          // Allows agent execution WebSocket connections
+	ScopeAgentEnroll       = "agent:enroll"        // Bootstrap enrollment only
 )
 
 // AllKnownScopes enumerates scopes recognized by the backend (excluding the wildcard sentinel).
@@ -45,6 +46,7 @@ var AllKnownScopes = []string{
 	ScopeSettingsWrite,
 	ScopeAIExecute,
 	ScopeAIChat,
+	ScopeRelayMobileAccess,
 	ScopeAgentExec,
 	ScopeAgentEnroll,
 }

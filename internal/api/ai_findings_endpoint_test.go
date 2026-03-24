@@ -422,8 +422,10 @@ func TestFindingsRouterDispatch_UnknownSubpath(t *testing.T) {
 	}
 }
 
-func TestFindingsRouterDispatch_RequiresAIExecuteScope(t *testing.T) {
-	// Token with only ai:chat scope — should be denied ai:execute endpoints
+func TestFindingsRouterDispatch_RequiresRelayMobileOrAIExecuteScopeForReadEndpoints(t *testing.T) {
+	// Token with only ai:chat scope — should be denied investigation reads
+	// because they now accept either the dedicated mobile relay capability or
+	// the legacy ai:execute scope.
 	rawToken := "ai-findings-scope-test.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeAIChat}, nil)
 	cfg := newTestConfigWithTokens(t, record)
@@ -435,8 +437,6 @@ func TestFindingsRouterDispatch_RequiresAIExecuteScope(t *testing.T) {
 	}{
 		{http.MethodGet, "/api/ai/findings/f-1/investigation"},
 		{http.MethodGet, "/api/ai/findings/f-1/investigation/messages"},
-		{http.MethodPost, "/api/ai/findings/f-1/reinvestigate"},
-		{http.MethodPost, "/api/ai/findings/f-1/reapprove"},
 	}
 
 	for _, tc := range paths {
@@ -455,6 +455,37 @@ func TestFindingsRouterDispatch_RequiresAIExecuteScope(t *testing.T) {
 		router.Handler().ServeHTTP(rec, req)
 		if rec.Code != http.StatusForbidden {
 			t.Errorf("%s %s: expected 403 for wrong scope, got %d", tc.method, tc.path, rec.Code)
+		}
+		if !strings.Contains(rec.Body.String(), config.ScopeRelayMobileAccess) {
+			t.Errorf("%s %s: expected missing scope response to mention %q, got %q", tc.method, tc.path, config.ScopeRelayMobileAccess, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), config.ScopeAIExecute) {
+			t.Errorf("%s %s: expected missing scope response to mention %q, got %q", tc.method, tc.path, config.ScopeAIExecute, rec.Body.String())
+		}
+	}
+}
+
+func TestFindingsRouterDispatch_MutationsStillRequireAIExecuteScope(t *testing.T) {
+	rawToken := "ai-findings-mutation-scope-test.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeRelayMobileAccess}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	paths := []string{
+		"/api/ai/findings/f-1/reinvestigate",
+		"/api/ai/findings/f-1/reapprove",
+	}
+
+	for _, path := range paths {
+		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{}`))
+		req.Header.Set("X-API-Token", rawToken)
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusForbidden {
+			t.Errorf("POST %s: expected 403 for missing ai:execute scope, got %d", path, rec.Code)
+		}
+		if !strings.Contains(rec.Body.String(), config.ScopeAIExecute) {
+			t.Errorf("POST %s: expected missing scope response to mention %q, got %q", path, config.ScopeAIExecute, rec.Body.String())
 		}
 	}
 }

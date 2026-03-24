@@ -6304,8 +6304,10 @@ func (h *AISettingsHandler) HandleApproveCommand(w http.ResponseWriter, r *http.
 		return
 	}
 
-	// SECURITY: Validating command execution scope
-	if !ensureScope(w, r, config.ScopeAIExecute) {
+	// SECURITY: Approval execution accepts the dedicated mobile relay capability
+	// for new pairings while remaining backward-compatible with older mobile
+	// tokens that still carry ai:execute.
+	if !ensureAnyScope(w, r, relayMobileExecuteCompatibleScopes...) {
 		return
 	}
 

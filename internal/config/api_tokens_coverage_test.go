@@ -114,6 +114,9 @@ func TestAPITokenScopesHelpers(t *testing.T) {
 	if !IsKnownScope(ScopeMonitoringWrite) {
 		t.Fatalf("known scope should be recognized")
 	}
+	if !IsKnownScope(ScopeRelayMobileAccess) {
+		t.Fatalf("relay mobile scope should be recognized")
+	}
 	if IsKnownScope("host-agent:config:read") {
 		t.Fatalf("legacy host-agent:config:read alias should not be recognized as a canonical runtime scope")
 	}

@@ -1291,6 +1291,81 @@ func TestAIExecuteReadEndpointsRequireAIExecuteScope(t *testing.T) {
 	}
 }
 
+func TestRelayMobileAccessScopeAllowsGovernedMobileRuntimeEndpoints(t *testing.T) {
+	rawToken := "relay-mobile-runtime-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeRelayMobileAccess}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	paths := []struct {
+		method string
+		path   string
+		body   string
+	}{
+		{method: http.MethodGet, path: "/api/ai/patrol/findings", body: ""},
+		{method: http.MethodGet, path: "/api/ai/findings/finding-1/investigation", body: ""},
+		{method: http.MethodGet, path: "/api/ai/findings/finding-1/investigation/messages", body: ""},
+		{method: http.MethodPost, path: "/api/ai/patrol/acknowledge", body: `{}`},
+		{method: http.MethodPost, path: "/api/ai/patrol/dismiss", body: `{}`},
+		{method: http.MethodPost, path: "/api/ai/patrol/snooze", body: `{}`},
+		{method: http.MethodGet, path: "/api/ai/approvals", body: ""},
+		{method: http.MethodPost, path: "/api/ai/approvals/approval-1/approve", body: `{}`},
+		{method: http.MethodPost, path: "/api/ai/approvals/approval-1/deny", body: `{}`},
+		{method: http.MethodPost, path: "/api/ai/chat", body: `{}`},
+		{method: http.MethodGet, path: "/api/ai/sessions", body: ""},
+		{method: http.MethodGet, path: "/api/ai/sessions/session-1/messages", body: ""},
+		{method: http.MethodPost, path: "/api/ai/sessions/session-1/abort", body: `{}`},
+		{method: http.MethodDelete, path: "/api/ai/sessions/session-1", body: ""},
+	}
+
+	for _, tc := range paths {
+		req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
+		req.Header.Set("X-API-Token", rawToken)
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		if rec.Code == http.StatusForbidden && strings.Contains(rec.Body.String(), "missing_scope") {
+			t.Fatalf("expected relay mobile scope to pass scope gating on %s %s, got %d with body %q", tc.method, tc.path, rec.Code, rec.Body.String())
+		}
+	}
+}
+
+func TestRelayMobileAccessScopeDeniesAdjacentAIRoutes(t *testing.T) {
+	rawToken := "relay-mobile-adjacent-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeRelayMobileAccess}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	paths := []struct {
+		method string
+		path   string
+		body   string
+		want   string
+	}{
+		{method: http.MethodGet, path: "/api/ai/models", body: "", want: config.ScopeAIChat},
+		{method: http.MethodGet, path: "/api/ai/status", body: "", want: config.ScopeAIChat},
+		{method: http.MethodGet, path: "/api/ai/agents", body: "", want: config.ScopeAIExecute},
+		{method: http.MethodDelete, path: "/api/ai/patrol/findings", body: "", want: config.ScopeAIExecute},
+		{method: http.MethodPost, path: "/api/ai/findings/finding-1/reinvestigate", body: `{}`, want: config.ScopeAIExecute},
+		{method: http.MethodPost, path: "/api/ai/findings/finding-1/reapprove", body: `{}`, want: config.ScopeAIExecute},
+		{method: http.MethodPost, path: "/api/ai/sessions/session-1/summarize", body: `{}`, want: config.ScopeAIChat},
+		{method: http.MethodGet, path: "/api/ai/sessions/session-1/diff", body: "", want: config.ScopeAIChat},
+		{method: http.MethodPost, path: "/api/ai/sessions/session-1/fork", body: `{}`, want: config.ScopeAIChat},
+	}
+
+	for _, tc := range paths {
+		req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
+		req.Header.Set("X-API-Token", rawToken)
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("expected 403 for relay mobile token on %s %s, got %d", tc.method, tc.path, rec.Code)
+		}
+		if !strings.Contains(rec.Body.String(), tc.want) {
+			t.Fatalf("expected missing scope response to mention %q for %s %s, got %q", tc.want, tc.method, tc.path, rec.Body.String())
+		}
+	}
+}
+
 func TestAIExecuteMutationEndpointsRequireAIExecuteScope(t *testing.T) {
 	rawToken := "ai-exec-mutate-token-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeAIChat}, nil)

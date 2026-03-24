@@ -500,6 +500,10 @@ settings surface must label those Pulse Mobile relay access credentials
 distinctly from long-lived automation tokens so operators can identify and
 revoke stale mobile devices or abandoned pairing attempts without guessing
 which credential was created for mobile runtime access.
+That same runtime contract now uses a dedicated backend-owned
+`relay:mobile:access` scope, with the server preserving backward-compatible
+gates for older mobile tokens that still carry the legacy AI scopes during the
+post-RC migration window.
 Relay pairing refresh behavior is part of that lifecycle contract too: a
 successful QR refresh must revoke the superseded token once the new token-backed
 payload is ready only if the superseded token still shows no device use, while

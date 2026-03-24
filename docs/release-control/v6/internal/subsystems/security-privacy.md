@@ -150,6 +150,13 @@ That same trust boundary also governs API token scope identity: legacy
 migration boundaries, where they must be rewritten immediately into canonical
 `agent:*` scopes. Live token records and runtime scope checks may not keep the
 legacy scope names as an active second contract.
+That same token-scope boundary now also governs Pulse Mobile relay runtime
+credentials: `internal/api/security_tokens.go` must mint only the dedicated
+backend-owned `relay:mobile:access` scope for new mobile relay tokens, and the
+shared auth/router helpers may expose backward-compatible gates for older
+mobile tokens only on the governed mobile runtime routes. Browser callers and
+route-local handlers must not recreate wildcard or broad AI-scoped mobile
+credentials.
 That same trust rule also applies to AI-owned persisted state under
 `internal/config/persistence.go`: findings, usage history, patrol run history,
 and chat sessions may use plaintext files only as migration input. Once those

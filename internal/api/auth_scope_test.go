@@ -228,3 +228,46 @@ func TestEnsureScope_RejectsWithProperJSONResponse(t *testing.T) {
 		t.Fatalf("expected required scope in body, got: %s", body)
 	}
 }
+
+func TestRequireAnyScopeAllowsMatchingAlternativeScope(t *testing.T) {
+	handler := RequireAnyScope([]string{config.ScopeRelayMobileAccess, config.ScopeAIExecute}, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusAccepted)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	record := config.APITokenRecord{ID: "token-mobile", Scopes: []string{config.ScopeRelayMobileAccess}}
+	attachAPITokenRecord(req, &record)
+
+	rr := httptest.NewRecorder()
+	handler(rr, req)
+
+	if rr.Code != http.StatusAccepted {
+		t.Fatalf("expected status 202 when alternative scope present, got %d", rr.Code)
+	}
+}
+
+func TestEnsureAnyScopeRejectsWithScopeList(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	record := config.APITokenRecord{ID: "token-4", Scopes: []string{config.ScopeMonitoringRead}}
+	attachAPITokenRecord(req, &record)
+	rr := httptest.NewRecorder()
+
+	result := ensureAnyScope(rr, req, config.ScopeRelayMobileAccess, config.ScopeAIExecute)
+	if result {
+		t.Fatal("expected ensureAnyScope to return false")
+	}
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("expected status 403, got %d", rr.Code)
+	}
+
+	body := rr.Body.String()
+	if !strings.Contains(body, "requiredScopes") {
+		t.Fatalf("expected requiredScopes in body, got: %s", body)
+	}
+	if !strings.Contains(body, config.ScopeRelayMobileAccess) {
+		t.Fatalf("expected relay mobile scope in body, got: %s", body)
+	}
+	if !strings.Contains(body, config.ScopeAIExecute) {
+		t.Fatalf("expected ai:execute scope in body, got: %s", body)
+	}
+}
