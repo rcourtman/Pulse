@@ -2347,6 +2347,7 @@
         "frontend-modern/src/components/Settings/useSystemLogsPanelState.ts",
         "frontend-modern/src/components/SetupWizard/SetupCompletionPreview.tsx",
         "frontend-modern/src/components/SetupWizard/SetupWizard.tsx",
+        "frontend-modern/src/components/Toast/Toast.tsx",
         "frontend-modern/src/features/dashboardOverview/ActionRequiredPanel.tsx",
         "frontend-modern/src/features/dashboardOverview/DashboardCustomizer.tsx",
         "frontend-modern/src/features/dashboardOverview/index.ts",
@@ -2363,15 +2364,19 @@
         "frontend-modern/src/utils/dashboardTrendPresentation.ts",
         "frontend-modern/src/utils/diagnosticsPresentation.ts",
         "frontend-modern/src/utils/discoveryPresentation.ts",
+        "frontend-modern/src/utils/emptyStatePresentation.ts",
         "frontend-modern/src/utils/problemResourcePresentation.ts",
         "frontend-modern/src/utils/reportableResourceTypes.ts",
         "frontend-modern/src/utils/reportingPresentation.ts",
         "frontend-modern/src/utils/reportingResourceTypes.ts",
+        "frontend-modern/src/utils/semanticTonePresentation.ts",
         "frontend-modern/src/utils/settingsShellPresentation.ts",
         "frontend-modern/src/utils/ssoProviderPresentation.ts",
         "frontend-modern/src/utils/systemLogsPresentation.ts",
         "frontend-modern/src/utils/systemSettingsPresentation.ts",
         "frontend-modern/src/utils/textPresentation.ts",
+        "frontend-modern/src/utils/toast.ts",
+        "frontend-modern/src/utils/typeColumnPresentation.ts",
         "frontend-modern/src/utils/updatesPresentation.ts"
       ],
       "verification": {
@@ -2523,6 +2528,27 @@
               "frontend-modern/src/utils/__tests__/dashboardGuestPresentation.test.ts",
               "frontend-modern/src/utils/__tests__/dashboardKpiPresentation.test.ts",
               "frontend-modern/src/utils/__tests__/dashboardTrendPresentation.test.ts"
+            ]
+          },
+          {
+            "id": "shared-feedback-and-column-presentation",
+            "label": "shared feedback and column presentation proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/components/Toast/Toast.tsx",
+              "frontend-modern/src/utils/emptyStatePresentation.ts",
+              "frontend-modern/src/utils/semanticTonePresentation.ts",
+              "frontend-modern/src/utils/toast.ts",
+              "frontend-modern/src/utils/typeColumnPresentation.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/components/shared/TypeColumn.guardrails.test.ts",
+              "frontend-modern/src/components/Toast/__tests__/Toast.test.tsx",
+              "frontend-modern/src/utils/__tests__/emptyStatePresentation.test.ts",
+              "frontend-modern/src/utils/__tests__/semanticTonePresentation.test.ts",
+              "frontend-modern/src/utils/__tests__/typeColumnPresentation.test.ts"
             ]
           },
           {

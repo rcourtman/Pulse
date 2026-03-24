@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import guestRowSource from '@/components/Dashboard/GuestRow.tsx?raw';
+import guestRowModelSource from '@/components/Dashboard/guestRowModel.tsx?raw';
 import recoverySource from '@/components/Recovery/Recovery.tsx?raw';
 import responsiveSource from '@/types/responsive.ts?raw';
 import typeColumnDefinitionSource from '@/utils/typeColumnDefinition.ts?raw';
@@ -60,10 +60,10 @@ describe('type column guardrails', () => {
   });
 
   it('routes runtime Type columns through the shared helper', () => {
-    expect(guestRowSource).toContain('createVisibleCanonicalTypeColumn()');
-    expect(guestRowSource).not.toContain('createCanonicalTypeColumn');
-    expect(guestRowSource).not.toMatch(INLINE_TYPE_COLUMN_PATTERN);
-    expect(guestRowSource).not.toContain("defaultVisibility:");
+    expect(guestRowModelSource).toContain('createVisibleCanonicalTypeColumn()');
+    expect(guestRowModelSource).not.toContain('createCanonicalTypeColumn');
+    expect(guestRowModelSource).not.toMatch(INLINE_TYPE_COLUMN_PATTERN);
+    expect(guestRowModelSource).not.toContain("defaultVisibility:");
 
     expect(recoverySource).toContain('createHiddenCanonicalTypeColumn()');
     expect(recoverySource).not.toContain('createCanonicalTypeColumn');
@@ -92,7 +92,7 @@ describe('type column guardrails', () => {
       .sort();
 
     expect(typeColumnUsers).toEqual([
-      '../Dashboard/GuestRow.tsx',
+      '../Dashboard/guestRowModel.tsx',
       '../Recovery/Recovery.tsx',
     ]);
 
@@ -127,7 +127,7 @@ describe('type column guardrails', () => {
       .sort();
 
     expect(directHelperImportUsers).toEqual([
-      '../Dashboard/GuestRow.tsx',
+      '../Dashboard/guestRowModel.tsx',
       '../Recovery/Recovery.tsx',
     ]);
   });

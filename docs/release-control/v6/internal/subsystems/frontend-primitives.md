@@ -96,6 +96,11 @@ work extends shared components instead of creating new local variants.
 67. `frontend-modern/src/utils/dashboardGuestPresentation.ts`
 68. `frontend-modern/src/utils/dashboardKpiPresentation.ts`
 69. `frontend-modern/src/utils/dashboardTrendPresentation.ts`
+70. `frontend-modern/src/components/Toast/Toast.tsx`
+71. `frontend-modern/src/utils/toast.ts`
+72. `frontend-modern/src/utils/semanticTonePresentation.ts`
+73. `frontend-modern/src/utils/emptyStatePresentation.ts`
+74. `frontend-modern/src/utils/typeColumnPresentation.ts`
 61. `frontend-modern/src/pages/__tests__/Operations.helpers.test.ts`
 59. `frontend-modern/src/components/Settings/NetworkDiscoverySection.tsx`
 60. `frontend-modern/src/components/Settings/NetworkBoundarySettingsSection.tsx`
@@ -770,6 +775,18 @@ arrow-delimited label presentation used across AI, Patrol, Storage/Recovery,
 and other feature surfaces. Feature contracts may depend on that helper, but
 they should not re-home or fork those generic text-formatting rules into
 feature-local utilities.
+That same shared presentation boundary now also owns operator feedback and
+shared table-label semantics. `frontend-modern/src/components/Toast/Toast.tsx`
+stays the render shell for the global toast stack,
+`frontend-modern/src/utils/toast.ts` owns the app-level trigger helper,
+`frontend-modern/src/utils/semanticTonePresentation.ts` owns canonical toast
+and diagnostics tone classes, `frontend-modern/src/utils/emptyStatePresentation.ts`
+owns the shared empty-state tone styling consumed by `EmptyState`, and
+`frontend-modern/src/utils/typeColumnPresentation.ts` owns the single
+canonical type-column label used across dashboard and alert tables. Future
+feedback, empty-state, or shared type-column work should extend those helpers
+instead of reintroducing panel-local tone classes, app-local toast wiring, or
+copy drift between tables.
 First-session educational surfaces must also stay brief, flat, and model-led.
 When Pulse needs to teach a user how a flow works, the primary on-screen
 guidance should collapse to a few short descriptions of the real product
