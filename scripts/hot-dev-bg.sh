@@ -7,6 +7,7 @@
 #   ./scripts/hot-dev-bg.sh stop
 #   ./scripts/hot-dev-bg.sh restart
 #   ./scripts/hot-dev-bg.sh backend-restart
+#   ./scripts/hot-dev-bg.sh launchd-session [--takeover]
 #   ./scripts/hot-dev-bg.sh verify [--takeover]
 #   ./scripts/hot-dev-bg.sh status
 #   ./scripts/hot-dev-bg.sh logs
@@ -669,6 +670,56 @@ verify_bg() {
   run_verify_proof_command
 }
 
+launchd_session_bg() {
+  local takeover="${1:-false}"
+  local managed_pid poll_interval
+
+  require_python
+
+  stop_and_exit() {
+    log "Launchd supervisor received termination signal; stopping managed runtime..."
+    stop_bg
+    exit 0
+  }
+
+  trap stop_and_exit TERM INT HUP
+
+  if ! is_running; then
+    log "Managed runtime is not running. Starting supervised session..."
+    start_bg "${takeover}"
+  else
+    managed_pid="$(managed_session_pid)"
+    if [[ -n "${managed_pid}" ]] && has_unmanaged_listeners "${managed_pid}"; then
+      if [[ "${takeover}" != "true" ]]; then
+        fail "Managed runtime has split ownership. Rerun with: ./scripts/hot-dev-bg.sh launchd-session --takeover"
+      fi
+      log "Managed runtime has split ownership. Reclaiming ports before launchd supervision..."
+      stop_bg
+      start_bg "${takeover}"
+    elif ! runtime_healthy; then
+      log "Managed runtime is unhealthy. Restarting it before launchd supervision..."
+      stop_bg
+      start_bg "${takeover}"
+    fi
+  fi
+
+  managed_pid="$(managed_session_pid)"
+  [[ -n "${managed_pid}" ]] || fail "Managed runtime did not produce a session pid"
+
+  poll_interval="${HOT_DEV_BG_SUPERVISOR_POLL_INTERVAL:-1}"
+  log "Supervising managed runtime for launchd (pid: ${managed_pid})"
+
+  while is_running; do
+    sleep "${poll_interval}"
+  done
+
+  rm -f "${PID_FILE}"
+  log "Managed runtime exited unexpectedly under launchd supervision"
+  touch "${LOG_FILE}"
+  tail -n 80 "${LOG_FILE}" || true
+  return 1
+}
+
 usage() {
   cat <<EOF
 Usage: $(basename "$0") <command>
@@ -678,6 +729,7 @@ Commands:
   stop
   restart
   backend-restart
+  launchd-session [--takeover]
   verify [--takeover]
   status
   logs
@@ -689,7 +741,7 @@ parse_takeover_flag() {
   local flag="${2:-}"
 
   case "${command}" in
-    start|restart|verify)
+    start|restart|verify|launchd-session)
       if [[ -z "${flag}" ]]; then
         printf "false\n"
         return 0
@@ -731,6 +783,7 @@ main() {
       start_bg "${takeover}"
       ;;
     backend-restart) restart_backend_bg ;;
+    launchd-session) launchd_session_bg "${takeover}" ;;
     verify) verify_bg "${takeover}" ;;
     status) status_bg ;;
     logs) logs_bg ;;

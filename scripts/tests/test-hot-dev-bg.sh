@@ -8,6 +8,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 HOT_DEV_BG="${ROOT_DIR}/scripts/hot-dev-bg.sh"
 PACKAGE_JSON="${ROOT_DIR}/package.json"
 FRONTEND_PACKAGE_JSON="${ROOT_DIR}/frontend-modern/package.json"
+DEV_LAUNCHD_WRAPPER="${ROOT_DIR}/scripts/dev-launchd-wrapper.sh"
 
 if [[ ! -x "${HOT_DEV_BG}" ]]; then
   echo "hot-dev-bg.sh not found or not executable at ${HOT_DEV_BG}" >&2
@@ -106,6 +107,7 @@ test_cli_parses_takeover_flag() {
       printf "start=%s\n" "$(parse_takeover_flag start --takeover)"
       printf "restart=%s\n" "$(parse_takeover_flag restart --takeover)"
       printf "verify=%s\n" "$(parse_takeover_flag verify --takeover)"
+      printf "launchd=%s\n" "$(parse_takeover_flag launchd-session --takeover)"
       printf "backend_restart=%s\n" "$(parse_takeover_flag backend-restart)"
       printf "plain=%s\n" "$(parse_takeover_flag start)"
       if parse_takeover_flag status --takeover >/tmp/hot-dev-bg.invalid 2>&1; then
@@ -119,6 +121,7 @@ test_cli_parses_takeover_flag() {
   assert_contains "takeover parsing enables start" "${output}" "start=true"
   assert_contains "takeover parsing enables restart" "${output}" "restart=true"
   assert_contains "takeover parsing enables verify" "${output}" "verify=true"
+  assert_contains "takeover parsing enables launchd-session" "${output}" "launchd=true"
   assert_contains "backend restart remains flagless" "${output}" "backend_restart=false"
   assert_contains "start without flag stays false" "${output}" "plain=false"
   assert_contains "unexpected status flag is rejected" "${output}" "invalid=rejected"
@@ -143,6 +146,37 @@ PY"
   assert_contains "verify proof forces managed hot-dev mode" "${output}" "mode=1"
   assert_contains "verify proof defaults username" "${output}" "username=admin"
   assert_contains "verify proof defaults password" "${output}" "password=admin"
+}
+
+test_launchd_session_supervises_managed_runtime() {
+  local output
+  output="$(
+    HOT_DEV_BG_PATH="${HOT_DEV_BG}" \
+    bash -lc '
+      source "${HOT_DEV_BG_PATH}"
+      set +e
+      test_dir="$(mktemp -d)"
+      trap "rm -rf \"$test_dir\"" EXIT
+      PID_FILE="${test_dir}/hot-dev-bg.pid"
+      LOG_FILE="${test_dir}/hot-dev-bg.log"
+      require_python(){ :; }
+      start_bg(){ printf "%s\n" "999999" > "${PID_FILE}"; }
+      launchd_session_bg true
+      status=$?
+      printf "status=%s\n" "${status}"
+    '
+  )"
+
+  assert_contains "launchd session starts supervised runtime" "${output}" "Managed runtime is not running. Starting supervised session..."
+  assert_contains "launchd session announces supervision" "${output}" "Supervising managed runtime for launchd"
+  assert_contains "launchd session exits nonzero on child crash" "${output}" "status=1"
+}
+
+test_launchd_wrapper_uses_managed_supervisor() {
+  local output
+  output="$(sed -n '1,80p' "${DEV_LAUNCHD_WRAPPER}")"
+
+  assert_contains "launchd wrapper uses managed launchd-session" "${output}" "scripts/hot-dev-bg.sh launchd-session --takeover"
 }
 
 test_root_package_exposes_managed_runtime_entrypoints() {
@@ -292,6 +326,8 @@ test_detects_unmanaged_listeners() {
 main() {
   test_cli_parses_takeover_flag
   test_verify_command_injects_managed_runtime_env
+  test_launchd_session_supervises_managed_runtime
+  test_launchd_wrapper_uses_managed_supervisor
   test_root_package_exposes_managed_runtime_entrypoints
   test_frontend_package_exposes_managed_runtime_entrypoints
   test_backend_restart_requires_managed_runtime

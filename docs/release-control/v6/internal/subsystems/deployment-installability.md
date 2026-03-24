@@ -37,6 +37,9 @@ server-side update execution surfaces.
 15. `scripts/dev-check.sh`
 16. `scripts/toggle-mock.sh`
 17. `scripts/clean-mock-alerts.sh`
+18. `scripts/dev-launchd-setup.sh`
+19. `scripts/dev-launchd-wrapper.sh`
+20. `scripts/com.pulse.hot-dev.plist.template`
 
 ## Shared Boundaries
 
@@ -51,7 +54,7 @@ server-side update execution surfaces.
 2. Add or change release-build metadata injection, release artifact assembly, or governed promotion metadata resolution through `scripts/build-release.sh`, `scripts/release_ldflags.sh`, and `scripts/release_control/resolve_release_promotion.py`, plus the container Dockerfile and governed release workflows that consume those same contracts
 3. Add or change shell installer, Windows installer, container-agent installer, or auto-update script behavior through `scripts/install.sh`, `scripts/install.ps1`, `scripts/install-container-agent.sh`, and `scripts/pulse-auto-update.sh`
 4. Add or change server update transport through `internal/api/updates.go` and `frontend-modern/src/api/updates.ts`
-5. Add or change local dev-runtime orchestration, managed ownership, browser-runtime proof wiring, frontend/backend coherence diagnostics, canonical developer entry wrappers, or dev-runtime helper control surfaces through `scripts/hot-dev.sh`, `scripts/hot-dev-bg.sh`, `tests/integration/scripts/managed-dev-runtime.mjs`, `package.json`, `frontend-modern/package.json`, `scripts/dev-check.sh`, `scripts/toggle-mock.sh`, and `scripts/clean-mock-alerts.sh`
+5. Add or change local dev-runtime orchestration, managed ownership, browser-runtime proof wiring, frontend/backend coherence diagnostics, canonical developer entry wrappers, or dev-runtime helper control surfaces through `scripts/hot-dev.sh`, `scripts/hot-dev-bg.sh`, `tests/integration/scripts/managed-dev-runtime.mjs`, `package.json`, `frontend-modern/package.json`, `scripts/dev-check.sh`, `scripts/toggle-mock.sh`, `scripts/clean-mock-alerts.sh`, `scripts/dev-launchd-setup.sh`, `scripts/dev-launchd-wrapper.sh`, and `scripts/com.pulse.hot-dev.plist.template`
 
 ## Forbidden Paths
 
@@ -196,6 +199,12 @@ Makefile targets, `scripts/toggle-mock.sh`, and `scripts/clean-mock-alerts.sh` m
 route through the managed runtime control plane when they are operating on the
 local dev stack, instead of resurrecting lane-local `hot-dev.sh` or raw Vite
 process management through separate shell folklore.
+That same rule now extends to the macOS auto-start surface. The launchd helper
+may not boot a separate legacy foreground runtime beside the managed dev stack:
+`scripts/dev-launchd-wrapper.sh`, `scripts/dev-launchd-setup.sh`, and the
+generated `com.pulse.hot-dev` LaunchAgent template must supervise the same
+managed `hot-dev-bg` control plane, so login-time auto-start, crash restart,
+and takeover diagnostics all operate on one runtime model.
 That shared `scripts/install.sh` boundary must also keep one canonical service
 argument builder for the runtime flags it persists. Token-bearing install
 paths, token-file systemd paths, wrapper-script launches, and later service

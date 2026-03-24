@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# dev-launchd-setup.sh - Install or uninstall the Pulse dev Launch Agent
+# dev-launchd-setup.sh - Install or uninstall the Pulse managed dev LaunchAgent
 #
 # Usage:
 #   ./scripts/dev-launchd-setup.sh           # Install and start
@@ -89,15 +89,16 @@ install() {
     fi
 
     echo ""
-    log_info "=== Pulse Dev Launch Agent Installed ==="
+    log_info "=== Pulse Dev LaunchAgent Installed ==="
     log_info ""
-    log_info "The dev environment will now auto-start on login and auto-restart on crash."
+    log_info "The managed dev runtime will now auto-start on login and auto-restart on crash."
     log_info ""
     log_info "Useful commands:"
     log_info "  Restart:  launchctl kickstart -k ${GUI_DOMAIN}/${LABEL}"
     log_info "  Stop:     launchctl kill SIGTERM ${GUI_DOMAIN}/${LABEL}"
     log_info "  Status:   launchctl print ${GUI_DOMAIN}/${LABEL}"
     log_info "  Logs:     tail -f ${LOG_DIR}/hot-dev.stderr.log"
+    log_info "  Runtime:  cd ${ROOT_DIR} && ./scripts/hot-dev-bg.sh status"
     log_info "  Disable:  launchctl bootout ${GUI_DOMAIN}/${LABEL}"
     log_info "  Remove:   $0 uninstall"
 }
