@@ -44,7 +44,7 @@ vi.mock('@/api/onboarding', () => ({
 
 vi.mock('@/api/security', () => ({
   SecurityAPI: {
-    createToken: (...args: unknown[]) => createTokenMock(...args),
+    createRelayMobileAccessToken: (...args: unknown[]) => createTokenMock(...args),
     deleteToken: (...args: unknown[]) => deleteTokenMock(...args),
     getToken: (...args: unknown[]) => getTokenMock(...args),
   },
@@ -106,19 +106,21 @@ describe('RelaySettingsPanel runtime', () => {
       token: 'token-123',
       record: {
         id: 'relay-token-1',
-        name: 'Relay mobile device 2026-03-12T00:00:00Z',
+        name: 'Pulse Mobile relay access 2026-03-12T00:00:00Z',
         prefix: 'pmp_',
         suffix: '1234',
         createdAt: '',
+        scopes: ['ai:chat', 'ai:execute'],
       },
     });
     deleteTokenMock.mockResolvedValue(undefined);
     getTokenMock.mockResolvedValue({
       id: 'relay-token-1',
-      name: 'Relay mobile device 2026-03-12T00:00:00Z',
+      name: 'Pulse Mobile relay access 2026-03-12T00:00:00Z',
       prefix: 'pmp_',
       suffix: '1234',
       createdAt: '',
+      scopes: ['ai:chat', 'ai:execute'],
     });
     getQRPayloadMock.mockResolvedValue({
       schema: 'pulse-onboarding/v1',
@@ -159,6 +161,7 @@ describe('RelaySettingsPanel runtime', () => {
 
     await waitFor(() => {
       expect(createTokenMock).toHaveBeenCalledTimes(1);
+      expect(createTokenMock).toHaveBeenCalledWith();
       expect(getQRPayloadMock).toHaveBeenCalledTimes(1);
       expect(getQRPayloadMock).toHaveBeenCalledWith('token-123');
       expect(qrToDataUrlMock).toHaveBeenCalledWith('pulse://connect?instance_id=instance-local', {
@@ -224,7 +227,7 @@ describe('RelaySettingsPanel runtime', () => {
         token: 'token-123',
         record: {
           id: 'relay-token-1',
-          name: 'Relay mobile device first',
+          name: 'Pulse Mobile relay access first',
           prefix: 'pmp_',
           suffix: '1234',
           createdAt: '',
@@ -234,7 +237,7 @@ describe('RelaySettingsPanel runtime', () => {
         token: 'token-456',
         record: {
           id: 'relay-token-2',
-          name: 'Relay mobile device second',
+          name: 'Pulse Mobile relay access second',
           prefix: 'pmp_',
           suffix: '5678',
           createdAt: '',
@@ -289,7 +292,7 @@ describe('RelaySettingsPanel runtime', () => {
         token: 'token-123',
         record: {
           id: 'relay-token-1',
-          name: 'Relay mobile device first',
+          name: 'Pulse Mobile relay access first',
           prefix: 'pmp_',
           suffix: '1234',
           createdAt: '',
@@ -299,7 +302,7 @@ describe('RelaySettingsPanel runtime', () => {
         token: 'token-456',
         record: {
           id: 'relay-token-2',
-          name: 'Relay mobile device second',
+          name: 'Pulse Mobile relay access second',
           prefix: 'pmp_',
           suffix: '5678',
           createdAt: '',
@@ -329,7 +332,7 @@ describe('RelaySettingsPanel runtime', () => {
     getTokenMock
       .mockResolvedValueOnce({
         id: 'relay-token-1',
-        name: 'Relay mobile device first',
+        name: 'Pulse Mobile relay access first',
         prefix: 'pmp_',
         suffix: '1234',
         createdAt: '',
@@ -387,7 +390,7 @@ describe('RelaySettingsPanel runtime', () => {
         token: 'token-123',
         record: {
           id: 'relay-token-1',
-          name: 'Relay mobile device first',
+          name: 'Pulse Mobile relay access first',
           prefix: 'pmp_',
           suffix: '1234',
           createdAt: '',
@@ -397,7 +400,7 @@ describe('RelaySettingsPanel runtime', () => {
         token: 'token-456',
         record: {
           id: 'relay-token-2',
-          name: 'Relay mobile device second',
+          name: 'Pulse Mobile relay access second',
           prefix: 'pmp_',
           suffix: '5678',
           createdAt: '',

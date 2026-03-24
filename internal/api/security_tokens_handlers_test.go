@@ -239,6 +239,53 @@ func TestSecurityTokens_Create_WithInvalidExpiresIn(t *testing.T) {
 	}
 }
 
+func TestSecurityTokens_CreateRelayMobileAccessToken(t *testing.T) {
+	cfg := &config.Config{}
+	persistence := config.NewConfigPersistence(t.TempDir())
+	router := &Router{
+		config:      cfg,
+		persistence: persistence,
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/security/tokens/relay-mobile", nil)
+	req = req.WithContext(authpkg.WithUser(req.Context(), "alice"))
+	rr := httptest.NewRecorder()
+	router.handleCreateRelayMobileAccessToken(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rr.Code)
+	}
+
+	var createResp struct {
+		Token  string      `json:"token"`
+		Record apiTokenDTO `json:"record"`
+	}
+	if err := json.NewDecoder(rr.Body).Decode(&createResp); err != nil {
+		t.Fatalf("decode create response: %v", err)
+	}
+	if createResp.Token == "" {
+		t.Fatal("expected raw token in response")
+	}
+	if !strings.HasPrefix(createResp.Record.Name, "Pulse Mobile relay access ") {
+		t.Fatalf("unexpected relay mobile token name %q", createResp.Record.Name)
+	}
+	wantScopes := []string{config.ScopeAIChat, config.ScopeAIExecute}
+	if len(createResp.Record.Scopes) != len(wantScopes) {
+		t.Fatalf("relay mobile scopes length = %d, want %d", len(createResp.Record.Scopes), len(wantScopes))
+	}
+	for i, scope := range wantScopes {
+		if createResp.Record.Scopes[i] != scope {
+			t.Fatalf("relay mobile scope[%d] = %q, want %q", i, createResp.Record.Scopes[i], scope)
+		}
+	}
+	if got := cfg.APITokens[0].Metadata[apiTokenMetadataPurpose]; got != apiTokenPurposeRelayMobileAccess {
+		t.Fatalf("relay mobile token purpose metadata = %q, want %q", got, apiTokenPurposeRelayMobileAccess)
+	}
+	if got := cfg.APITokens[0].Metadata[apiTokenMetadataOwnerUserID]; got != "alice" {
+		t.Fatalf("relay mobile owner user metadata = %q, want alice", got)
+	}
+}
+
 func TestSecurityTokens_Create_BindsTokenToRequestOrg(t *testing.T) {
 	cfg := &config.Config{}
 	persistence := config.NewConfigPersistence(t.TempDir())

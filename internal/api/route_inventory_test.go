@@ -458,6 +458,7 @@ var allRouteAllowlist = []string{
 	"/api/security/sso/providers/metadata/preview",
 	"/api/security/sso/providers",
 	"/api/security/sso/providers/",
+	"/api/security/tokens/relay-mobile",
 	"/api/security/tokens",
 	"/api/security/tokens/",
 	"/api/security/status",

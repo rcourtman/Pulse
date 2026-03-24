@@ -27,6 +27,8 @@ type apiTokenDTO struct {
 }
 
 const apiTokenMetadataOwnerUserID = "owner_user_id"
+const apiTokenMetadataPurpose = "purpose"
+const apiTokenPurposeRelayMobileAccess = "relay_mobile_access"
 
 func apiTokenOwnerUserID(record config.APITokenRecord) string {
 	if record.Metadata == nil {
@@ -129,6 +131,88 @@ func canonicalizeRequestedScope(scope string) string {
 	}
 }
 
+func relayMobileAccessTokenScopes() []string {
+	return []string{
+		config.ScopeAIChat,
+		config.ScopeAIExecute,
+	}
+}
+
+func defaultRelayMobileAccessTokenName(now time.Time) string {
+	return fmt.Sprintf("Pulse Mobile relay access %s", now.UTC().Format(time.RFC3339))
+}
+
+func (r *Router) createAPITokenRecord(
+	req *http.Request,
+	name string,
+	scopes []string,
+	expiresIn *string,
+	metadata map[string]string,
+) (string, *config.APITokenRecord, error) {
+	if callerToken := getAPITokenRecordFromRequest(req); callerToken != nil {
+		for _, requested := range scopes {
+			if !callerToken.HasScope(requested) {
+				return "", nil, fmt.Errorf("Cannot grant scope %q: your token does not have this scope", requested)
+			}
+		}
+	}
+
+	rawToken, err := internalauth.GenerateAPIToken()
+	if err != nil {
+		return "", nil, fmt.Errorf("generate raw token: %w", err)
+	}
+
+	record, err := config.NewAPITokenRecord(rawToken, name, scopes)
+	if err != nil {
+		return "", nil, fmt.Errorf("construct token record: %w", err)
+	}
+	record.OrgID = strings.TrimSpace(GetOrgID(req.Context()))
+	if record.OrgID == "" {
+		record.OrgID = "default"
+	}
+	if ownerUserID := apiTokenOwnerUserIDForRequest(r.config, req); ownerUserID != "" {
+		if record.Metadata == nil {
+			record.Metadata = make(map[string]string)
+		}
+		record.Metadata[apiTokenMetadataOwnerUserID] = ownerUserID
+	}
+	if len(metadata) > 0 {
+		if record.Metadata == nil {
+			record.Metadata = make(map[string]string)
+		}
+		for key, value := range metadata {
+			record.Metadata[key] = value
+		}
+	}
+
+	if expiresIn != nil && *expiresIn != "" {
+		dur, err := time.ParseDuration(*expiresIn)
+		if err != nil {
+			return "", nil, fmt.Errorf("invalid expiresIn duration: %w", err)
+		}
+		if dur < time.Minute {
+			return "", nil, fmt.Errorf("Token expiration must be at least 1 minute")
+		}
+		exp := time.Now().UTC().Add(dur)
+		record.ExpiresAt = &exp
+	}
+
+	config.Mu.Lock()
+	defer config.Mu.Unlock()
+
+	r.config.APITokens = append(r.config.APITokens, *record)
+	r.config.SortAPITokens()
+
+	if r.persistence != nil {
+		if err := r.persistence.SaveAPITokens(r.config.APITokens); err != nil {
+			r.config.APITokens = r.config.APITokens[:len(r.config.APITokens)-1]
+			return "", nil, fmt.Errorf("persist token: %w", err)
+		}
+	}
+
+	return rawToken, record, nil
+}
+
 // handleListAPITokens returns all configured API tokens (metadata only).
 func (r *Router) handleListAPITokens(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodGet {
@@ -222,77 +306,28 @@ func (r *Router) handleCreateAPIToken(w http.ResponseWriter, req *http.Request) 
 		return
 	}
 
-	// Scope escalation prevention: if the caller is an API token, the new token's
-	// scopes must be a subset of the caller's scopes. Session-based (browser) requests
-	// bypass this check since sessions have implicit full access.
-	if callerToken := getAPITokenRecordFromRequest(req); callerToken != nil {
-		for _, requested := range scopes {
-			if !callerToken.HasScope(requested) {
-				r.auditTokenEvent(req, "token_created", false,
-					fmt.Sprintf("Scope escalation denied: caller missing scope %q", requested))
-				http.Error(w, fmt.Sprintf("Cannot grant scope %q: your token does not have this scope", requested), http.StatusForbidden)
-				return
-			}
-		}
-	}
-
-	rawToken, err := internalauth.GenerateAPIToken()
+	rawToken, record, err := r.createAPITokenRecord(req, name, scopes, payload.ExpiresIn, nil)
 	if err != nil {
-		r.auditTokenEvent(req, "token_created", false, "Failed to generate API token")
-		log.Error().Err(err).Msg("Failed to generate API token")
-		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
-		return
-	}
-
-	record, err := config.NewAPITokenRecord(rawToken, name, scopes)
-	if err != nil {
-		r.auditTokenEvent(req, "token_created", false, "Failed to construct API token record")
-		log.Error().Err(err).Str("token_name", name).Msg("Failed to construct API token record")
-		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
-		return
-	}
-	record.OrgID = strings.TrimSpace(GetOrgID(req.Context()))
-	if record.OrgID == "" {
-		record.OrgID = "default"
-	}
-	if ownerUserID := apiTokenOwnerUserIDForRequest(r.config, req); ownerUserID != "" {
-		if record.Metadata == nil {
-			record.Metadata = make(map[string]string)
-		}
-		record.Metadata[apiTokenMetadataOwnerUserID] = ownerUserID
-	}
-
-	if payload.ExpiresIn != nil && *payload.ExpiresIn != "" {
-		dur, err := time.ParseDuration(*payload.ExpiresIn)
-		if err != nil {
+		switch {
+		case strings.HasPrefix(err.Error(), "Cannot grant scope "):
+			r.auditTokenEvent(req, "token_created", false, "Scope escalation denied for token creation")
+			http.Error(w, err.Error(), http.StatusForbidden)
+		case strings.HasPrefix(err.Error(), "invalid expiresIn duration: "):
 			r.auditTokenEvent(req, "token_created", false, "Invalid token expiration duration")
-			http.Error(w, "Invalid expiresIn duration: "+err.Error(), http.StatusBadRequest)
-			return
-		}
-		if dur < time.Minute {
+			http.Error(w, "Invalid expiresIn duration: "+strings.TrimPrefix(err.Error(), "invalid expiresIn duration: "), http.StatusBadRequest)
+		case err.Error() == "Token expiration must be at least 1 minute":
 			r.auditTokenEvent(req, "token_created", false, "Token expiration duration below minimum")
-			http.Error(w, "Token expiration must be at least 1 minute", http.StatusBadRequest)
-			return
-		}
-		exp := time.Now().UTC().Add(dur)
-		record.ExpiresAt = &exp
-	}
-
-	config.Mu.Lock()
-	defer config.Mu.Unlock()
-
-	r.config.APITokens = append(r.config.APITokens, *record)
-	r.config.SortAPITokens()
-
-	if r.persistence != nil {
-		if err := r.persistence.SaveAPITokens(r.config.APITokens); err != nil {
-			// Rollback the in-memory addition
-			r.config.APITokens = r.config.APITokens[:len(r.config.APITokens)-1]
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		case strings.HasPrefix(err.Error(), "persist token: "):
 			r.auditTokenEvent(req, "token_created", false, "Failed to persist API token")
 			log.Error().Err(err).Msg("Failed to persist API tokens after creation")
 			http.Error(w, "Failed to save token", http.StatusInternalServerError)
-			return
+		default:
+			r.auditTokenEvent(req, "token_created", false, "Failed to generate API token")
+			log.Error().Err(err).Str("token_name", name).Msg("Failed to construct API token record")
+			http.Error(w, "Failed to generate token", http.StatusInternalServerError)
 		}
+		return
 	}
 
 	r.auditTokenEvent(req, "token_created", true, fmt.Sprintf("Created API token id=%s scopes=%s", record.ID, strings.Join(record.Scopes, ",")))
@@ -306,6 +341,53 @@ func (r *Router) handleCreateAPIToken(w http.ResponseWriter, req *http.Request) 
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
+		"token":  rawToken,
+		"record": toAPITokenDTO(*record),
+	})
+}
+
+// handleCreateRelayMobileAccessToken generates the canonical Pulse Mobile relay runtime token.
+func (r *Router) handleCreateRelayMobileAccessToken(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	rawToken, record, err := r.createAPITokenRecord(
+		req,
+		defaultRelayMobileAccessTokenName(time.Now().UTC()),
+		relayMobileAccessTokenScopes(),
+		nil,
+		map[string]string{apiTokenMetadataPurpose: apiTokenPurposeRelayMobileAccess},
+	)
+	if err != nil {
+		switch {
+		case strings.HasPrefix(err.Error(), "Cannot grant scope "):
+			r.auditTokenEvent(req, "token_created", false, "Relay mobile scope escalation denied")
+			http.Error(w, err.Error(), http.StatusForbidden)
+		case strings.HasPrefix(err.Error(), "persist token: "):
+			r.auditTokenEvent(req, "token_created", false, "Failed to persist relay mobile access token")
+			log.Error().Err(err).Msg("Failed to persist relay mobile access token")
+			http.Error(w, "Failed to save token", http.StatusInternalServerError)
+		default:
+			r.auditTokenEvent(req, "token_created", false, "Failed to generate relay mobile access token")
+			log.Error().Err(err).Msg("Failed to generate relay mobile access token")
+			http.Error(w, "Failed to generate token", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	r.auditTokenEvent(req, "token_created", true, fmt.Sprintf("Created relay mobile access token id=%s scopes=%s", record.ID, strings.Join(record.Scopes, ",")))
+
+	log.Info().
+		Str("audit_event", "token_created").
+		Str("token_id", record.ID).
+		Str("token_name", record.Name).
+		Str("client_ip", req.RemoteAddr).
+		Msg("Relay mobile access token created")
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{
 		"token":  rawToken,
 		"record": toAPITokenDTO(*record),
 	})

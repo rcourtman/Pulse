@@ -279,6 +279,7 @@ That same shared token-settings boundary now also governs relay pairing token
 lifecycle. `internal/api/security_tokens.go`,
 `internal/api/router_routes_auth_security.go`, and
 `frontend-modern/src/api/security.ts` expose canonical single-token metadata
-reads, and the relay pairing UI may revoke a displayed token only when that
-metadata still shows no `lastUsedAt`. Refreshing or hiding a QR payload must
-not delete a token that an already paired device is actively depending on.
+reads, expose the backend-owned Pulse Mobile relay access token creator, and
+the relay pairing UI may revoke a displayed token only when that metadata still
+shows no `lastUsedAt`. Refreshing or hiding a QR payload must not delete a
+token that an already paired device is actively depending on.

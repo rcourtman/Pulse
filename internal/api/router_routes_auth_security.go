@@ -123,6 +123,12 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 		}
 	}))
 
+	r.mux.HandleFunc("/api/security/tokens/relay-mobile", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, func(w http.ResponseWriter, req *http.Request) {
+		if !ensureSettingsWriteScope(r.config, w, req) {
+			return
+		}
+		r.handleCreateRelayMobileAccessToken(w, req)
+	}))
 	r.mux.HandleFunc("/api/security/tokens", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, func(w http.ResponseWriter, req *http.Request) {
 		switch req.Method {
 		case http.MethodGet:

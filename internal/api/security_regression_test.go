@@ -2181,6 +2181,7 @@ func TestProxyAuthNonAdminDeniedAdminEndpoints(t *testing.T) {
 		{method: http.MethodPost, path: "/api/system/settings/update", body: `{}`},
 		{method: http.MethodPost, path: "/api/security/reset-lockout", body: `{}`},
 		{method: http.MethodPost, path: "/api/security/apply-restart", body: `{}`},
+		{method: http.MethodPost, path: "/api/security/tokens/relay-mobile", body: `{}`},
 		{method: http.MethodGet, path: "/api/security/tokens", body: ``},
 		{method: http.MethodDelete, path: "/api/security/tokens/token-1", body: ``},
 		{method: http.MethodPost, path: "/api/security/regenerate-token", body: `{}`},
@@ -2927,6 +2928,7 @@ func TestSecurityTokensWriteRequiresSettingsWriteScope(t *testing.T) {
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
 
 	paths := []string{
+		"/api/security/tokens/relay-mobile",
 		"/api/security/tokens",
 		"/api/security/tokens/token-1",
 	}
@@ -3079,6 +3081,7 @@ func TestPermissionProtectedEndpointsDenyWhenAuthorizerBlocks(t *testing.T) {
 		{method: http.MethodGet, path: "/api/admin/reports/generate", body: ""},
 		{method: http.MethodPost, path: "/api/admin/reports/generate-multi", body: `{}`},
 		{method: http.MethodGet, path: "/api/admin/webhooks/audit", body: ""},
+		{method: http.MethodPost, path: "/api/security/tokens/relay-mobile", body: `{}`},
 		{method: http.MethodGet, path: "/api/security/tokens", body: ""},
 		{method: http.MethodDelete, path: "/api/security/tokens/token-1", body: ""},
 		{method: http.MethodGet, path: "/api/settings/ai", body: ""},
@@ -3216,6 +3219,7 @@ func TestPrivilegedSecurityEndpointsRejectNonAdminSession(t *testing.T) {
 		{method: http.MethodPut, path: "/api/settings/relay", body: `{}`},
 		{method: http.MethodGet, path: "/api/settings/ai", body: ``},
 		{method: http.MethodGet, path: "/api/ai/cost/summary", body: ``},
+		{method: http.MethodPost, path: "/api/security/tokens/relay-mobile", body: `{}`},
 		{method: http.MethodGet, path: "/api/security/tokens", body: ``},
 		{method: http.MethodDelete, path: "/api/security/tokens/token-1", body: ``},
 		{method: http.MethodGet, path: "/api/security/sso/providers", body: ``},

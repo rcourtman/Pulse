@@ -62,7 +62,7 @@ export const RelayPairingSection: Component<RelayPairingSectionProps> = (props) 
         </div>
 
         <p class={formHelpText}>
-          Generate a QR code for pairing during staged mobile beta rollout.
+          Generate a QR code that provisions a dedicated Pulse Mobile relay access credential.
         </p>
 
         <Show when={props.showPairing}>

@@ -20,10 +20,6 @@ export interface RelaySettingsPanelProps {
   canManage?: boolean;
 }
 
-function buildRelayPairingTokenName(now: Date): string {
-  return `Relay mobile device ${now.toISOString()}`;
-}
-
 export function useRelaySettingsPanelState(props: RelaySettingsPanelProps) {
   const [config, setConfig] = createSignal<RelayConfig | null>(null);
   const [status, setStatus] = createSignal<RelayStatus | null>(null);
@@ -226,7 +222,7 @@ export function useRelaySettingsPanelState(props: RelaySettingsPanelProps) {
 
     let createdTokenId: string | null = null;
     try {
-      const createdToken = await SecurityAPI.createToken(buildRelayPairingTokenName(new Date()));
+      const createdToken = await SecurityAPI.createRelayMobileAccessToken();
       if (!createdToken.token) {
         throw new Error('Failed to generate relay device token');
       }

@@ -154,6 +154,35 @@ describe('SecurityAPI', () => {
     });
   });
 
+  describe('createRelayMobileAccessToken', () => {
+    it('creates a server-owned relay mobile runtime token', async () => {
+      const mockResponse: CreateAPITokenResponse = {
+        token: 'pmp_mobile',
+        record: {
+          id: 'relay-mobile-1',
+          name: 'Pulse Mobile relay access 2026-03-24T23:30:00Z',
+          prefix: 'pmp_',
+          suffix: 'bile',
+          createdAt: '',
+          scopes: ['ai:chat', 'ai:execute'],
+          ownerUserId: 'owner@example.com',
+        },
+      };
+      vi.mocked(apiFetchJSON).mockResolvedValueOnce(mockResponse);
+
+      const result = await SecurityAPI.createRelayMobileAccessToken();
+
+      expect(apiFetchJSON).toHaveBeenCalledWith(
+        '/api/security/tokens/relay-mobile',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({}),
+        }),
+      );
+      expect(result).toEqual(mockResponse);
+    });
+  });
+
   describe('deleteToken', () => {
     it('deletes a token', async () => {
       vi.mocked(apiFetchJSON).mockResolvedValueOnce(undefined);

@@ -482,11 +482,11 @@ dashboard shell, while
 owns license readiness, relay status polling, snooze state, and trial start
 runtime. Future onboarding changes must extend that split instead of pulling
 license and relay runtime back into the card shell.
-That relay pairing boundary now also includes ephemeral device-token lifecycle:
-when the settings surface generates a mobile pairing QR, it must mint a fresh
-scoped API token for that pairing attempt, fetch the onboarding payload through
-that token context, and tear down superseded or failed pairing tokens instead
-of accumulating long-lived hidden credentials.
+That relay pairing boundary now also includes backend-owned mobile credential
+lifecycle: when the settings surface generates a mobile pairing QR, it must ask
+the server for a fresh scoped Pulse Mobile relay access token, fetch the
+onboarding payload through that token context, and tear down superseded or
+failed unused tokens instead of accumulating hidden credentials.
 That same pairing fetch path must stay token-bound instead of ambient-session
 bound: the onboarding QR request must carry the freshly minted relay pairing
 token explicitly so the returned payload reflects the exact credential that the
@@ -496,15 +496,16 @@ The same flow must fail closed if the pairing payload omits the authenticated
 relay token state needed by the mobile deep link; pairing UI cannot silently
 render a QR that bypasses governed auth ownership.
 Relay pairing token presentation is part of that same contract as well: the
-settings surface must label those transient credentials distinctly from
-long-lived automation tokens so operators can identify and revoke stale mobile
-pairing attempts without guessing which credential was created for device
-bootstrap.
+settings surface must label those Pulse Mobile relay access credentials
+distinctly from long-lived automation tokens so operators can identify and
+revoke stale mobile devices or abandoned pairing attempts without guessing
+which credential was created for mobile runtime access.
 Relay pairing refresh behavior is part of that lifecycle contract too: a
-successful QR refresh must revoke the superseded pairing token once the new
-token-backed payload is ready, while a failed refresh must revoke only the new
-failed token and keep the previously valid QR visible instead of collapsing the
-operator back to an empty pairing state.
+successful QR refresh must revoke the superseded token once the new token-backed
+payload is ready only if the superseded token still shows no device use, while
+a failed refresh must revoke only the new failed token and keep the previously
+valid QR visible instead of collapsing the operator back to an empty pairing
+state.
 Hosted signup provisioning now follows the same rule. Changes to
 `internal/api/public_signup_handlers.go` and `internal/hosted/provisioner.go`
 must carry this contract and the dedicated hosted-signup provisioning proof

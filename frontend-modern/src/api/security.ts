@@ -42,6 +42,13 @@ export class SecurityAPI {
     });
   }
 
+  static async createRelayMobileAccessToken(): Promise<CreateAPITokenResponse> {
+    return apiFetchJSON<CreateAPITokenResponse>('/api/security/tokens/relay-mobile', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+  }
+
   static async deleteToken(id: string): Promise<void> {
     await apiFetchJSON(`/api/security/tokens/${encodeURIComponent(id)}`, {
       method: 'DELETE',
