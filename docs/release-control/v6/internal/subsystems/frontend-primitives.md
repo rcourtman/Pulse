@@ -86,6 +86,11 @@ work extends shared components instead of creating new local variants.
 58. `frontend-modern/src/features/operations/OperationsPageSurface.tsx`
 59. `frontend-modern/src/features/operations/operationsPageModel.ts`
 60. `frontend-modern/src/pages/Operations.tsx`
+61. `frontend-modern/src/components/Settings/ResourcePicker.tsx`
+62. `frontend-modern/src/components/Settings/reportingResourceTypes.ts`
+63. `frontend-modern/src/utils/reportableResourceTypes.ts`
+64. `frontend-modern/src/utils/reportingResourceTypes.ts`
+65. `frontend-modern/src/utils/problemResourcePresentation.ts`
 61. `frontend-modern/src/pages/__tests__/Operations.helpers.test.ts`
 59. `frontend-modern/src/components/Settings/NetworkDiscoverySection.tsx`
 60. `frontend-modern/src/components/Settings/NetworkBoundarySettingsSection.tsx`
@@ -505,6 +510,10 @@ owns the dashboard-specific action, KPI, problem-resource, trend, and
 customization surfaces. Lane-owned widgets like recent alerts, storage,
 and recovery must continue to route through their own subsystem owners instead
 of drifting back into a page-local dashboard panel cluster.
+`frontend-modern/src/utils/problemResourcePresentation.ts` now also belongs to
+that same dashboard overview boundary so the problem-resource severity contract
+stays shared with `ProblemResourcesTable.tsx` instead of floating as an
+unowned helper.
 
 Feature-owned alert shells under `frontend-modern/src/features/alerts/` now
 also treat shared action runtime as a first-class feature owner instead of
@@ -555,10 +564,18 @@ The reporting operations surface now follows the same shell-state-model rule.
 operations-panel shell, while
 `frontend-modern/src/components/Settings/useReportingPanelState.ts` owns the
 license/trial lifecycle and report generation flow,
-`frontend-modern/src/components/Settings/reportingPanelModel.ts` owns the
-request/range/filename model, and `frontend-modern/src/utils/reportingPresentation.ts`
-owns the user-facing range/status copy. The shell must not re-accumulate
-license bootstrapping, inline report API requests, or blob-download plumbing.
+`frontend-modern/src/components/Settings/reportingPanelModel.ts` plus
+`frontend-modern/src/utils/reportingResourceTypes.ts` own the
+request/range/filename model and reporting-type API mapping,
+`frontend-modern/src/components/Settings/ResourcePicker.tsx` plus
+`frontend-modern/src/utils/reportableResourceTypes.ts` own the reportable
+resource selection, filter, sort, and empty-state contract, and
+`frontend-modern/src/utils/reportingPresentation.ts` owns the user-facing
+range/status copy. The compatibility re-export in
+`frontend-modern/src/components/Settings/reportingResourceTypes.ts` stays part
+of that same reporting boundary. The shell must not re-accumulate license
+bootstrapping, inline report API requests, blob-download plumbing, or local
+resource-type filter and reporting-token maps.
 
 General settings segmented selectors for theme preference and temperature unit
 must now also route through the shared `FilterButtonGroup` primitive instead of

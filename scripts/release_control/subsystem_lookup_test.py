@@ -728,6 +728,7 @@ class SubsystemLookupTest(unittest.TestCase):
                 "frontend-modern/src/features/dashboardOverview/__tests__/TrendCharts.test.tsx",
                 "frontend-modern/src/pages/__tests__/DashboardPage.test.tsx",
                 "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
+                "frontend-modern/src/utils/__tests__/problemResourcePresentation.test.ts",
                 "frontend-modern/src/utils/__tests__/typeColumnPresentation.test.ts",
             ],
         )
