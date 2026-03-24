@@ -914,6 +914,7 @@
         "frontend-modern/src/utils/alertDestinationsPresentation.ts",
         "frontend-modern/src/utils/alertIncidentPresentation.ts",
         "frontend-modern/src/utils/alertOverviewPresentation.ts",
+        "frontend-modern/src/utils/alertResourceTablePresentation.ts",
         "frontend-modern/src/utils/alertSchedulePresentation.ts",
         "frontend-modern/src/utils/alertWebhookPresentation.ts"
       ],
@@ -994,6 +995,19 @@
               "frontend-modern/src/features/alerts/thresholds/hooks/__tests__/useThresholdsTableState.test.tsx",
               "frontend-modern/src/pages/__tests__/Alerts.helpers.test.ts",
               "frontend-modern/src/utils/__tests__/alertOverviewPresentation.test.ts"
+            ]
+          },
+          {
+            "id": "alert-resource-table-presentation-helper",
+            "label": "alert resource table presentation helper proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/utils/alertResourceTablePresentation.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/utils/__tests__/alertResourceTablePresentation.test.ts"
             ]
           },
           {

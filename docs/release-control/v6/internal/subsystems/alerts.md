@@ -27,10 +27,11 @@ operator-facing alert routing behavior for live runtime alerts.
 5. `internal/alerts/unified_incidents.go`
 6. `frontend-modern/src/components/Alerts/RecentAlertsPanel.tsx`
 7. `frontend-modern/src/utils/alertOverviewPresentation.ts`
-8. `frontend-modern/src/utils/alertDestinationsPresentation.ts`
-9. `frontend-modern/src/utils/alertIncidentPresentation.ts`
-10. `frontend-modern/src/utils/alertSchedulePresentation.ts`
-11. `frontend-modern/src/utils/alertWebhookPresentation.ts`
+8. `frontend-modern/src/utils/alertResourceTablePresentation.ts`
+9. `frontend-modern/src/utils/alertDestinationsPresentation.ts`
+10. `frontend-modern/src/utils/alertIncidentPresentation.ts`
+11. `frontend-modern/src/utils/alertSchedulePresentation.ts`
+12. `frontend-modern/src/utils/alertWebhookPresentation.ts`
 
 ## Shared Boundaries
 
@@ -223,7 +224,11 @@ card ownership lives in
 desktop row ownership lives in
 `frontend-modern/src/components/Alerts/AlertResourceTableRow.tsx`, and selection
 state, delay-row toggling, and inline metric-input focus live in
-`frontend-modern/src/components/Alerts/useAlertResourceTableState.ts`.
+`frontend-modern/src/components/Alerts/useAlertResourceTableState.ts`. Shared
+resource-table empty states, badge labels, offline-state wording, note
+placeholders, and metric input titles now route through
+`frontend-modern/src/utils/alertResourceTablePresentation.ts` instead of
+remaining duplicated across the desktop and mobile thresholds surfaces.
 `frontend-modern/src/components/Alerts/ResourceTable.tsx` is now limited to the
 shell boundary for breakpoint selection and bulk-edit composition. Future
 resource-table threshold semantics should land in those owners instead of
