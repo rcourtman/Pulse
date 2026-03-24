@@ -3561,12 +3561,15 @@
         "frontend-modern/src/pages/Infrastructure.tsx",
         "frontend-modern/src/routing/resourceLinks.ts",
         "frontend-modern/src/types/resource.ts",
+        "frontend-modern/src/utils/agentResources.ts",
         "frontend-modern/src/utils/canonicalResourceTypes.ts",
         "frontend-modern/src/utils/resourceBadgePresentation.ts",
         "frontend-modern/src/utils/resourceChangePresentation.ts",
         "frontend-modern/src/utils/resourceCorrelationPresentation.ts",
         "frontend-modern/src/utils/resourceIdentity.ts",
+        "frontend-modern/src/utils/resourcePlatformData.ts",
         "frontend-modern/src/utils/resourcePolicyPresentation.ts",
+        "frontend-modern/src/utils/resourceStateAdapters.ts",
         "frontend-modern/src/utils/resourceTypeCompat.ts",
         "frontend-modern/src/utils/resourceTypePresentation.ts",
         "internal/api/resources.go"
@@ -3712,6 +3715,23 @@
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/utils/__tests__/resourceChangePresentation.test.ts"
+            ]
+          },
+          {
+            "id": "resource-runtime-adapter-helpers",
+            "label": "resource runtime adapter helper proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/utils/agentResources.ts",
+              "frontend-modern/src/utils/resourcePlatformData.ts",
+              "frontend-modern/src/utils/resourceStateAdapters.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/utils/__tests__/agentResources.test.ts",
+              "frontend-modern/src/utils/__tests__/resourcePlatformData.test.ts",
+              "frontend-modern/src/utils/__tests__/resourceStateAdapters.test.ts"
             ]
           },
           {

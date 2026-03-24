@@ -77,15 +77,18 @@ cross-source deduplication.
 55. `frontend-modern/src/components/Infrastructure/InfrastructureSummary.tsx`
 56. `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`
 57. `frontend-modern/src/components/Infrastructure/infrastructureSummaryModel.ts`
-58. `frontend-modern/src/utils/canonicalResourceTypes.ts`
-59. `frontend-modern/src/utils/resourceBadgePresentation.ts`
-60. `frontend-modern/src/utils/resourceChangePresentation.ts`
-61. `frontend-modern/src/utils/resourceCorrelationPresentation.ts`
-62. `frontend-modern/src/utils/resourcePolicyPresentation.ts`
-63. `frontend-modern/src/utils/resourceTypeCompat.ts`
-64. `frontend-modern/src/utils/resourceTypePresentation.ts`
-65. `frontend-modern/src/utils/resourceIdentity.ts`
-66. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerIdentityModel.ts`
+58. `frontend-modern/src/utils/agentResources.ts`
+59. `frontend-modern/src/utils/canonicalResourceTypes.ts`
+60. `frontend-modern/src/utils/resourceBadgePresentation.ts`
+61. `frontend-modern/src/utils/resourceChangePresentation.ts`
+62. `frontend-modern/src/utils/resourceCorrelationPresentation.ts`
+63. `frontend-modern/src/utils/resourcePlatformData.ts`
+64. `frontend-modern/src/utils/resourcePolicyPresentation.ts`
+65. `frontend-modern/src/utils/resourceStateAdapters.ts`
+66. `frontend-modern/src/utils/resourceTypeCompat.ts`
+67. `frontend-modern/src/utils/resourceTypePresentation.ts`
+68. `frontend-modern/src/utils/resourceIdentity.ts`
+69. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerIdentityModel.ts`
 
 ## Shared Boundaries
 
@@ -836,6 +839,17 @@ resource tables, drawers, and infrastructure summary cards. Future resource
 type or badge wording changes should extend these unified-resource owners
 instead of rebuilding type-label or badge mapping logic inside infrastructure,
 settings, alerts, recovery, or dashboard-local helpers.
+The shared resource-runtime adapter boundary is also owned here now.
+`frontend-modern/src/utils/agentResources.ts` owns canonical actionable
+resource identities, agent-facet detection, cluster-name fallbacks, and
+resource-derived chart-key candidates. `frontend-modern/src/utils/resourcePlatformData.ts`
+owns the typed extraction of platform-data fragments from unified resources,
+and `frontend-modern/src/utils/resourceStateAdapters.ts` owns canonical
+projection from unified resources into node/PBS/PMG runtime view models.
+Future resource-to-runtime mapping changes should extend these unified-resource
+owners instead of rebuilding ad hoc platform-data parsing or action-target
+fallback logic inside alerts, settings, recovery, AI, or infrastructure-local
+state owners.
 `ResourceFacetSummary` now consumes the shared
 `frontend-modern/src/utils/resourceChangePresentation.ts` label helper for
 canonical change kinds, source types, and adapter provenance, so the chip
