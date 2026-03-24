@@ -2351,6 +2351,10 @@
         "frontend-modern/src/features/operations/OperationsPageSurface.tsx",
         "frontend-modern/src/pages/Operations.tsx",
         "frontend-modern/src/utils/aiSettingsPresentation.ts",
+        "frontend-modern/src/utils/dashboardEmptyStatePresentation.ts",
+        "frontend-modern/src/utils/dashboardGuestPresentation.ts",
+        "frontend-modern/src/utils/dashboardKpiPresentation.ts",
+        "frontend-modern/src/utils/dashboardTrendPresentation.ts",
         "frontend-modern/src/utils/diagnosticsPresentation.ts",
         "frontend-modern/src/utils/discoveryPresentation.ts",
         "frontend-modern/src/utils/problemResourcePresentation.ts",
@@ -2493,6 +2497,26 @@
               "frontend-modern/src/utils/__tests__/reportableResourceTypes.test.ts",
               "frontend-modern/src/utils/__tests__/reportingPresentation.test.ts",
               "frontend-modern/src/utils/__tests__/reportingResourceTypes.test.ts"
+            ]
+          },
+          {
+            "id": "dashboard-presentation-helpers",
+            "label": "dashboard presentation helper proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/utils/dashboardEmptyStatePresentation.ts",
+              "frontend-modern/src/utils/dashboardGuestPresentation.ts",
+              "frontend-modern/src/utils/dashboardKpiPresentation.ts",
+              "frontend-modern/src/utils/dashboardTrendPresentation.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/components/Settings/__tests__/monitoredSystemModelGuardrails.test.ts",
+              "frontend-modern/src/utils/__tests__/dashboardEmptyStatePresentation.test.ts",
+              "frontend-modern/src/utils/__tests__/dashboardGuestPresentation.test.ts",
+              "frontend-modern/src/utils/__tests__/dashboardKpiPresentation.test.ts",
+              "frontend-modern/src/utils/__tests__/dashboardTrendPresentation.test.ts"
             ]
           },
           {

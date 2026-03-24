@@ -92,6 +92,10 @@ work extends shared components instead of creating new local variants.
 63. `frontend-modern/src/utils/reportableResourceTypes.ts`
 64. `frontend-modern/src/utils/reportingResourceTypes.ts`
 65. `frontend-modern/src/utils/problemResourcePresentation.ts`
+66. `frontend-modern/src/utils/dashboardEmptyStatePresentation.ts`
+67. `frontend-modern/src/utils/dashboardGuestPresentation.ts`
+68. `frontend-modern/src/utils/dashboardKpiPresentation.ts`
+69. `frontend-modern/src/utils/dashboardTrendPresentation.ts`
 61. `frontend-modern/src/pages/__tests__/Operations.helpers.test.ts`
 59. `frontend-modern/src/components/Settings/NetworkDiscoverySection.tsx`
 60. `frontend-modern/src/components/Settings/NetworkBoundarySettingsSection.tsx`
@@ -250,6 +254,14 @@ must treat missing infrastructure history as a governed empty state rather than
 as a silent blank sparkline box. Error copy and empty-history copy belong to
 the feature shell, while the data path and chart-shaping logic must stay in the
 owned hook/model layers that feed it.
+That same dashboard boundary now also owns the shared dashboard presentation
+helpers through `frontend-modern/src/utils/dashboardEmptyStatePresentation.ts`,
+`frontend-modern/src/utils/dashboardGuestPresentation.ts`,
+`frontend-modern/src/utils/dashboardKpiPresentation.ts`, and
+`frontend-modern/src/utils/dashboardTrendPresentation.ts`. Dashboard loading,
+disconnect, and empty states; guest backup/disk fallback copy; KPI card
+framing; and trend palette/error copy must extend those helpers instead of
+being redefined inline in route shells, guest rows, or overview cards.
 That shell must also stay passive with respect to data ownership: dashboard
 trend cards may render the summary-range controls and operator-facing empty or
 error copy, but they must not reintroduce route-local metrics-history fetch
