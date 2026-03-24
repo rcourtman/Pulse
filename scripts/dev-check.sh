@@ -14,6 +14,9 @@ NC='\033[0m'
 # Handle --kill flag
 if [[ "${1:-}" == "--kill" ]]; then
     echo "Stopping all dev processes..."
+    if [[ -x "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/hot-dev-bg.sh" ]]; then
+        "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/hot-dev-bg.sh" stop >/dev/null 2>&1 || true
+    fi
     pkill -9 -f "bin/pulse$" 2>/dev/null || true
     pkill -9 -f "^\./pulse$" 2>/dev/null || true
     pkill -f "node.*vite" 2>/dev/null || true
@@ -54,13 +57,13 @@ else
     echo -e "${RED}✗ NOT RESPONDING${NC}"
 fi
 
-# Check Vite frontend
-echo -n "Vite frontend (port 5173): "
+# Check frontend shell
+echo -n "Frontend shell (port 5173): "
 if curl -s -o /dev/null http://127.0.0.1:5173/ 2>/dev/null; then
     echo -e "${GREEN}✓ Running${NC}"
 else
     echo -e "${RED}✗ NOT RUNNING${NC}"
-    echo "   Fix: cd \${PULSE_REPOS_DIR:-\$HOME/pulse/repos}/pulse/frontend-modern && npm run dev"
+    echo "   Fix: cd \${PULSE_REPOS_DIR:-\$HOME/pulse/repos}/pulse && npm run dev"
 fi
 
 # Check AI status

@@ -853,6 +853,8 @@
       "owned_files": [
         "frontend-modern/src/api/ai.ts",
         "frontend-modern/src/api/patrol.ts",
+        "frontend-modern/src/components/AI/AICostDashboard.tsx",
+        "frontend-modern/src/utils/aiCostPresentation.ts",
         "internal/api/ai_handler.go",
         "internal/api/ai_handlers.go",
         "internal/api/ai_intelligence_handlers.go"
@@ -882,6 +884,22 @@
               "internal/api/ai_handler_test.go",
               "internal/api/ai_handlers_test.go",
               "internal/api/ai_intelligence_handlers_test.go"
+            ]
+          },
+          {
+            "id": "ai-cost-dashboard-surface",
+            "label": "AI cost dashboard proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/components/AI/AICostDashboard.tsx",
+              "frontend-modern/src/utils/aiCostPresentation.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/components/AI/__tests__/AICostDashboard.test.tsx",
+              "frontend-modern/src/utils/__tests__/aiCostPresentation.test.ts",
+              "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts"
             ]
           },
           {
@@ -1984,9 +2002,12 @@
         ".github/workflows/deploy-demo-server.yml",
         ".github/workflows/release-dry-run.yml",
         "Dockerfile",
+        "frontend-modern/package.json",
         "frontend-modern/src/api/updates.ts",
         "internal/api/updates.go",
+        "package.json",
         "scripts/build-release.sh",
+        "scripts/dev-check.sh",
         "scripts/hot-dev-bg.sh",
         "scripts/hot-dev.sh",
         "scripts/install-container-agent.sh",
@@ -2086,6 +2107,9 @@
             "label": "dev runtime orchestration proof",
             "match_prefixes": [],
             "match_files": [
+              "frontend-modern/package.json",
+              "package.json",
+              "scripts/dev-check.sh",
               "scripts/hot-dev-bg.sh",
               "scripts/hot-dev.sh",
               "tests/integration/scripts/managed-dev-runtime.mjs"

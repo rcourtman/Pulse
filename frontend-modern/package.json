@@ -14,7 +14,11 @@
   },
   "homepage": "https://github.com/rcourtman/Pulse",
   "scripts": {
-    "dev": "vite",
+    "dev": "../scripts/hot-dev-bg.sh start --takeover",
+    "dev:status": "../scripts/hot-dev-bg.sh status",
+    "dev:stop": "../scripts/hot-dev-bg.sh stop",
+    "dev:verify": "../scripts/hot-dev-bg.sh verify --takeover",
+    "dev:frontend-only": "vite",
     "build": "node scripts/build-embed-assets.mjs",
     "preview": "vite preview",
     "generate-types": "cd ../scripts && go run generate-types.go",

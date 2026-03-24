@@ -39,9 +39,13 @@ cd ..
 ### Hot Reload Dev Loop
 
 ```bash
-./scripts/hot-dev.sh        # Backend on :7656, frontend on :7655
+npm run dev                 # Frontend shell on :5173, backend on :7655
 npm run mock:on             # Optional: enable mock data
 ```
+
+Use `http://127.0.0.1:5173` in the browser for local frontend development. The
+frontend dev shell proxies `/api` and `/ws` to the backend on `:7655`; do not
+switch your browser to `:7655` unless you are debugging the backend directly.
 
 Backend-only hot reload (requires `air`):
 
@@ -74,7 +78,10 @@ examples where possible.
 
 ## Frontend Workflow
 
-- Dev server: `cd frontend-modern && npm run dev`
+- Managed dev runtime: `npm run dev`
+- Runtime status: `npm run dev:status`
+- Browser recovery proof: `npm run dev:verify`
+- Frontend-only escape hatch: `cd frontend-modern && npm run dev:frontend-only`
 - Tests: `npm run test`
 - Lint: `npm run lint`
 - Format: `npm run format`

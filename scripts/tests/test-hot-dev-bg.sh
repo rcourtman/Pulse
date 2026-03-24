@@ -7,6 +7,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 HOT_DEV_BG="${ROOT_DIR}/scripts/hot-dev-bg.sh"
 PACKAGE_JSON="${ROOT_DIR}/package.json"
+FRONTEND_PACKAGE_JSON="${ROOT_DIR}/frontend-modern/package.json"
 
 if [[ ! -x "${HOT_DEV_BG}" ]]; then
   echo "hot-dev-bg.sh not found or not executable at ${HOT_DEV_BG}" >&2
@@ -179,6 +180,35 @@ PY
   assert_contains "root package keeps foreground escape hatch" "${output}" "dev:foreground=./scripts/hot-dev.sh"
 }
 
+test_frontend_package_exposes_managed_runtime_entrypoints() {
+  local output
+  output="$(
+    PACKAGE_JSON_PATH="${FRONTEND_PACKAGE_JSON}" \
+    python3 - <<'PY'
+import json
+import os
+
+with open(os.environ["PACKAGE_JSON_PATH"], "r", encoding="utf-8") as fh:
+    scripts = json.load(fh)["scripts"]
+
+for key in [
+    "dev",
+    "dev:status",
+    "dev:stop",
+    "dev:verify",
+    "dev:frontend-only",
+]:
+    print(f"{key}={scripts.get(key, '')}")
+PY
+  )"
+
+  assert_contains "frontend package exposes managed dev start" "${output}" "dev=../scripts/hot-dev-bg.sh start --takeover"
+  assert_contains "frontend package exposes managed dev status" "${output}" "dev:status=../scripts/hot-dev-bg.sh status"
+  assert_contains "frontend package exposes managed dev stop" "${output}" "dev:stop=../scripts/hot-dev-bg.sh stop"
+  assert_contains "frontend package exposes managed dev verify" "${output}" "dev:verify=../scripts/hot-dev-bg.sh verify --takeover"
+  assert_contains "frontend package keeps explicit frontend-only escape hatch" "${output}" "dev:frontend-only=vite"
+}
+
 test_backend_restart_requires_managed_runtime() {
   local frontend_port backend_port output
   local state_dir
@@ -255,6 +285,7 @@ main() {
   test_cli_parses_takeover_flag
   test_verify_command_injects_managed_runtime_env
   test_root_package_exposes_managed_runtime_entrypoints
+  test_frontend_package_exposes_managed_runtime_entrypoints
   test_backend_restart_requires_managed_runtime
   test_status_without_runtime
   test_detects_unmanaged_listeners
