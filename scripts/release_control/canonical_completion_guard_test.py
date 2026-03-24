@@ -500,8 +500,10 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     "test_prefixes": [],
                     "exact_files": [
                         "frontend-modern/src/components/Infrastructure/__tests__/ResourceChangeSummary.test.tsx",
+                        "frontend-modern/src/components/Infrastructure/__tests__/ResourceCorrelationSummary.test.tsx",
                         "frontend-modern/src/components/Infrastructure/__tests__/ResourceDetailDrawer.discovery.test.ts",
                         "frontend-modern/src/components/Infrastructure/__tests__/ResourceDetailDrawer.history.test.tsx",
+                        "frontend-modern/src/components/Infrastructure/__tests__/ResourcePolicySummary.test.tsx",
                         "frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx",
                         "frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.workloads-link.test.tsx",
                         "frontend-modern/src/components/Infrastructure/__tests__/infrastructureSelectors.test.ts",
