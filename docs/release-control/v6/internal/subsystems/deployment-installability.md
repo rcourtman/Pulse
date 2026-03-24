@@ -134,6 +134,22 @@ to be listening.
 Changes to `scripts/hot-dev.sh` and `scripts/hot-dev-bg.sh` must therefore
 stay on their own direct dev-runtime orchestration proof path instead of
 piggybacking on installer proof coverage for unrelated deployment scripts.
+That same launcher boundary also owns its CLI contract: managed commands such
+as `start --takeover` and `restart --takeover` must preserve the takeover flag
+through the actual script entrypoint instead of silently dropping second-arg
+control flow and falling back to refusal behavior that contradicts the command
+the operator just ran.
+That takeover contract also has to reclaim the old dev runtime, not merely
+launch another wrapper beside it. When takeover is requested, the launcher
+must stop the prior port-owning hot-dev session or direct listeners before the
+new managed session starts, otherwise stale watchers can immediately respawn
+on `5173` or `7655` and leave split ownership behind.
+On macOS that same takeover boundary also includes the optional
+`com.pulse.hot-dev` LaunchAgent installed by the local dev launchd helper:
+managed takeover must surface that competing job in diagnostics and boot it
+out before starting a new managed session, otherwise launchd can immediately
+recreate the legacy `0.0.0.0` dev runtime beside the managed `127.0.0.1`
+session.
 That shared `scripts/install.sh` boundary must also keep one canonical service
 argument builder for the runtime flags it persists. Token-bearing install
 paths, token-file systemd paths, wrapper-script launches, and later service

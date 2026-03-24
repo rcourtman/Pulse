@@ -14,8 +14,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
-PID_FILE="${ROOT_DIR}/tmp/hot-dev.bg.pid"
-LOG_FILE="${ROOT_DIR}/tmp/hot-dev.bg.log"
+PID_FILE="${HOT_DEV_BG_PID_FILE:-${ROOT_DIR}/tmp/hot-dev.bg.pid}"
+LOG_FILE="${HOT_DEV_BG_LOG_FILE:-${ROOT_DIR}/tmp/hot-dev.bg.log}"
 
 FRONTEND_DEV_HOST="${FRONTEND_DEV_HOST:-127.0.0.1}"
 FRONTEND_DEV_PORT="${FRONTEND_DEV_PORT:-5173}"
@@ -23,6 +23,7 @@ PULSE_DEV_API_HOST="${PULSE_DEV_API_HOST:-127.0.0.1}"
 PULSE_DEV_API_PORT="${PULSE_DEV_API_PORT:-7655}"
 PULSE_DEV_API_URL="${PULSE_DEV_API_URL:-http://${PULSE_DEV_API_HOST}:${PULSE_DEV_API_PORT}}"
 PULSE_DEV_WS_URL="${PULSE_DEV_WS_URL:-ws://${PULSE_DEV_API_HOST}:${PULSE_DEV_API_PORT}}"
+MACOS_HOT_DEV_LABEL="com.pulse.hot-dev"
 
 log() {
   printf "[hot-dev-bg] %s\n" "$*"
@@ -66,16 +67,57 @@ process_command() {
   ps -o command= -p "${pid}" 2>/dev/null | sed 's/^[[:space:]]*//'
 }
 
-listener_is_managed() {
+process_parent_id() {
+  local pid="$1"
+  ps -o ppid= -p "${pid}" 2>/dev/null | tr -d '[:space:]'
+}
+
+pid_is_managed() {
+  local pid="$1"
+  local session_pid="$2"
+  local current_pid="${pid}"
+  local parent_pid
+
+  [[ -n "${session_pid}" ]] || return 1
+
+  while [[ -n "${current_pid}" && "${current_pid}" != "1" ]]; do
+    if [[ "${current_pid}" == "${session_pid}" ]]; then
+      return 0
+    fi
+    if [[ "$(process_group_id "${current_pid}")" == "${session_pid}" ]]; then
+      return 0
+    fi
+    parent_pid="$(process_parent_id "${current_pid}")"
+    [[ -n "${parent_pid}" && "${parent_pid}" != "${current_pid}" ]] || break
+    current_pid="${parent_pid}"
+  done
+
+  return 1
+}
+
+port_has_managed_listener() {
   local port="$1"
   local session_pid="$2"
   local listener_pid
 
-  [[ -n "${session_pid}" ]] || return 1
+  while IFS= read -r listener_pid; do
+    [[ -n "${listener_pid}" ]] || continue
+    if pid_is_managed "${listener_pid}" "${session_pid}"; then
+      return 0
+    fi
+  done < <(listener_pids "${port}")
+
+  return 1
+}
+
+port_has_unmanaged_listener() {
+  local port="$1"
+  local session_pid="$2"
+  local listener_pid
 
   while IFS= read -r listener_pid; do
     [[ -n "${listener_pid}" ]] || continue
-    if [[ "$(process_group_id "${listener_pid}")" == "${session_pid}" ]]; then
+    if ! pid_is_managed "${listener_pid}" "${session_pid}"; then
       return 0
     fi
   done < <(listener_pids "${port}")
@@ -90,7 +132,7 @@ wait_for_managed_listener() {
   local checks=$((timeout_seconds * 2))
 
   while (( checks > 0 )); do
-    if listener_is_managed "${port}" "${session_pid}"; then
+    if port_has_managed_listener "${port}" "${session_pid}"; then
       return 0
     fi
     sleep 0.5
@@ -121,7 +163,7 @@ describe_listener() {
     found=1
     pgid="$(process_group_id "${listener_pid}")"
     owner="unmanaged"
-    if [[ -n "${session_pid}" && "${pgid}" == "${session_pid}" ]]; then
+    if pid_is_managed "${listener_pid}" "${session_pid}"; then
       owner="managed"
     fi
     command="$(process_command "${listener_pid}")"
@@ -151,9 +193,131 @@ has_unmanaged_listeners() {
   local port
 
   for port in "${FRONTEND_DEV_PORT}" "${PULSE_DEV_API_PORT}"; do
-    if has_any_listener "${port}" && ! listener_is_managed "${port}" "${session_pid}"; then
+    if has_any_listener "${port}" && port_has_unmanaged_listener "${port}" "${session_pid}"; then
       return 0
     fi
+  done
+
+  return 1
+}
+
+find_hot_dev_ancestor() {
+  local pid="$1"
+  local current_pid="${pid}"
+  local command parent_pid
+
+  while [[ -n "${current_pid}" && "${current_pid}" != "1" ]]; do
+    command="$(process_command "${current_pid}")"
+    if [[ "${command}" == *"/scripts/hot-dev.sh"* || "${command}" == "bash scripts/hot-dev.sh" ]]; then
+      printf "%s\n" "${current_pid}"
+      return 0
+    fi
+    parent_pid="$(process_parent_id "${current_pid}")"
+    [[ -n "${parent_pid}" && "${parent_pid}" != "${current_pid}" ]] || break
+    current_pid="${parent_pid}"
+  done
+
+  return 1
+}
+
+hot_dev_root_pids() {
+  pgrep -f '(^|/)(hot-dev\.sh|bash scripts/hot-dev\.sh)$|/scripts/hot-dev\.sh' 2>/dev/null | sort -u
+}
+
+stop_hot_dev_sessions() {
+  local signal="${1:-TERM}"
+  local root_pid root_pgid root_command target_key
+  declare -A seen=()
+
+  while IFS= read -r root_pid; do
+    [[ -n "${root_pid}" ]] || continue
+    root_pgid="$(process_group_id "${root_pid}")"
+    if [[ -n "${root_pgid}" ]]; then
+      target_key="pgid:${root_pgid}"
+      [[ -z "${seen[${target_key}]:-}" ]] || continue
+      seen["${target_key}"]=1
+      root_command="$(process_command "${root_pid}")"
+      log "Takeover sending ${signal} to hot-dev session group ${root_pgid} rooted at pid=${root_pid} cmd=${root_command:-unknown}"
+      kill "-${signal}" "-${root_pgid}" 2>/dev/null || kill "-${signal}" "${root_pid}" 2>/dev/null || true
+      continue
+    fi
+
+    target_key="pid:${root_pid}"
+    [[ -z "${seen[${target_key}]:-}" ]] || continue
+    seen["${target_key}"]=1
+    root_command="$(process_command "${root_pid}")"
+    log "Takeover sending ${signal} to hot-dev root pid=${root_pid} cmd=${root_command:-unknown}"
+    kill "-${signal}" "${root_pid}" 2>/dev/null || true
+  done < <(hot_dev_root_pids)
+}
+
+launchd_hot_dev_target() {
+  printf "gui/%s/%s\n" "$(id -u)" "${MACOS_HOT_DEV_LABEL}"
+}
+
+launchd_hot_dev_active() {
+  [[ "$(uname -s)" == "Darwin" ]] || return 1
+  launchctl print "$(launchd_hot_dev_target)" >/dev/null 2>&1
+}
+
+stop_launchd_hot_dev_job() {
+  launchd_hot_dev_active || return 0
+  local target
+  target="$(launchd_hot_dev_target)"
+  log "Takeover booting out launchd job ${MACOS_HOT_DEV_LABEL}"
+  launchctl bootout "${target}" >/dev/null 2>&1 || launchctl remove "${MACOS_HOT_DEV_LABEL}" >/dev/null 2>&1 || true
+}
+
+stop_takeover_targets() {
+  local signal="${1:-TERM}"
+  local port listener_pid ancestor_pid target_key target_pid target_pgid target_command
+  declare -A seen=()
+
+  for port in "${FRONTEND_DEV_PORT}" "${PULSE_DEV_API_PORT}"; do
+    while IFS= read -r listener_pid; do
+      [[ -n "${listener_pid}" ]] || continue
+
+      ancestor_pid="$(find_hot_dev_ancestor "${listener_pid}" || true)"
+      if [[ -n "${ancestor_pid}" ]]; then
+        target_pgid="$(process_group_id "${ancestor_pid}")"
+        [[ -n "${target_pgid}" ]] || continue
+        target_key="pgid:${target_pgid}"
+        [[ -z "${seen[${target_key}]:-}" ]] || continue
+        seen["${target_key}"]=1
+        target_command="$(process_command "${ancestor_pid}")"
+        log "Takeover sending ${signal} to hot-dev process group ${target_pgid} rooted at pid=${ancestor_pid} cmd=${target_command:-unknown}"
+        kill "-${signal}" "-${target_pgid}" 2>/dev/null || kill "-${signal}" "${ancestor_pid}" 2>/dev/null || true
+        continue
+      fi
+
+      target_key="pid:${listener_pid}"
+      [[ -z "${seen[${target_key}]:-}" ]] || continue
+      seen["${target_key}"]=1
+      target_command="$(process_command "${listener_pid}")"
+      log "Takeover sending ${signal} to listener pid=${listener_pid} cmd=${target_command:-unknown}"
+      kill "-${signal}" "${listener_pid}" 2>/dev/null || true
+    done < <(listener_pids "${port}")
+  done
+}
+
+wait_for_ports_to_clear() {
+  local timeout_seconds="${1:-10}"
+  local checks=$((timeout_seconds * 2))
+  local port
+
+  while (( checks > 0 )); do
+    local any_listeners="false"
+    for port in "${FRONTEND_DEV_PORT}" "${PULSE_DEV_API_PORT}"; do
+      if has_any_listener "${port}"; then
+        any_listeners="true"
+        break
+      fi
+    done
+    if [[ "${any_listeners}" == "false" ]]; then
+      return 0
+    fi
+    sleep 0.5
+    checks=$((checks - 1))
   done
 
   return 1
@@ -187,6 +351,20 @@ start_bg() {
     log "Taking over existing unmanaged listeners on the dev ports."
     describe_listener "${FRONTEND_DEV_PORT}" "" || true
     describe_listener "${PULSE_DEV_API_PORT}" "" || true
+    stop_launchd_hot_dev_job
+    stop_hot_dev_sessions TERM
+    stop_takeover_targets TERM
+    if ! wait_for_ports_to_clear 10; then
+      log "Takeover escalation: dev ports are still occupied after TERM."
+      stop_hot_dev_sessions KILL
+      stop_takeover_targets KILL
+      if ! wait_for_ports_to_clear 5; then
+        log "Remaining listeners after takeover escalation:"
+        describe_listener "${FRONTEND_DEV_PORT}" "" || true
+        describe_listener "${PULSE_DEV_API_PORT}" "" || true
+        fail "Unable to reclaim the dev ports for managed takeover"
+      fi
+    fi
   fi
 
   local pid
@@ -314,6 +492,10 @@ status_bg() {
   describe_listener "${FRONTEND_DEV_PORT}" "${managed_pid}" || true
   describe_listener "${PULSE_DEV_API_PORT}" "${managed_pid}" || true
 
+  if launchd_hot_dev_active; then
+    log "LaunchAgent ${MACOS_HOT_DEV_LABEL} is active"
+  fi
+
   if [[ -z "${managed_pid}" ]] && has_unmanaged_listeners ""; then
     log "Detected unmanaged dev listeners. hot-dev-bg is not managing the current runtime."
   elif [[ -n "${managed_pid}" ]] && has_unmanaged_listeners "${managed_pid}"; then
@@ -351,29 +533,49 @@ Commands:
 EOF
 }
 
-main() {
+parse_takeover_flag() {
   local command="${1:-}"
   local flag="${2:-}"
-  local takeover="false"
 
-  if [[ "${flag}" == "--takeover" ]]; then
-    takeover="true"
-  fi
+  case "${command}" in
+    start|restart)
+      if [[ -z "${flag}" ]]; then
+        printf "false\n"
+        return 0
+      fi
+      if [[ "${flag}" == "--takeover" ]]; then
+        printf "true\n"
+        return 0
+      fi
+      usage
+      return 1
+      ;;
+    stop|status|logs)
+      if [[ -n "${flag}" ]]; then
+        usage
+        return 1
+      fi
+      printf "false\n"
+      return 0
+      ;;
+    *)
+      printf "false\n"
+      return 0
+      ;;
+  esac
+}
+
+main() {
+  local command="${1:-}"
+  local takeover
+  takeover="$(parse_takeover_flag "$@")" || exit 1
 
   case "${command}" in
     start)
-      if [[ -n "${flag}" && "${flag}" != "--takeover" ]]; then
-        usage
-        exit 1
-      fi
       start_bg "${takeover}"
       ;;
     stop) stop_bg ;;
     restart)
-      if [[ -n "${flag}" && "${flag}" != "--takeover" ]]; then
-        usage
-        exit 1
-      fi
       stop_bg
       start_bg "${takeover}"
       ;;
@@ -383,4 +585,6 @@ main() {
   esac
 }
 
-main "${1:-}"
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
+fi

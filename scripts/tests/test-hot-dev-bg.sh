@@ -14,11 +14,16 @@ fi
 
 failures=0
 server_pids=()
+temp_dirs=()
 
 cleanup() {
   local pid
   for pid in "${server_pids[@]:-}"; do
     kill "${pid}" 2>/dev/null || true
+  done
+  local dir
+  for dir in "${temp_dirs[@]:-}"; do
+    rm -rf "${dir}" 2>/dev/null || true
   done
 }
 trap cleanup EXIT
@@ -56,15 +61,26 @@ start_http_server() {
   sleep 1
 }
 
+make_isolated_hot_dev_bg_state() {
+  local dir
+  dir="$(mktemp -d)"
+  temp_dirs+=("${dir}")
+  printf "%s\n" "${dir}"
+}
+
 test_status_without_runtime() {
   local frontend_port backend_port output
+  local state_dir
   frontend_port="$(pick_free_port)"
   backend_port="$(pick_free_port)"
   if [[ "${backend_port}" == "${frontend_port}" ]]; then
     backend_port="$(pick_free_port)"
   fi
+  state_dir="$(make_isolated_hot_dev_bg_state)"
 
   output="$(
+    HOT_DEV_BG_PID_FILE="${state_dir}/hot-dev-bg.pid" \
+    HOT_DEV_BG_LOG_FILE="${state_dir}/hot-dev-bg.log" \
     FRONTEND_DEV_HOST=127.0.0.1 \
     FRONTEND_DEV_PORT="${frontend_port}" \
     PULSE_DEV_API_HOST=127.0.0.1 \
@@ -79,18 +95,45 @@ test_status_without_runtime() {
   assert_contains "status reports proxy health probe" "${output}" "[hot-dev-bg] Frontend proxy /api/health: 000"
 }
 
+test_cli_parses_takeover_flag() {
+  local output
+  output="$(
+    HOT_DEV_BG_PATH="${HOT_DEV_BG}" \
+    bash -lc '
+      source "${HOT_DEV_BG_PATH}"
+      printf "start=%s\n" "$(parse_takeover_flag start --takeover)"
+      printf "restart=%s\n" "$(parse_takeover_flag restart --takeover)"
+      printf "plain=%s\n" "$(parse_takeover_flag start)"
+      if parse_takeover_flag status --takeover >/tmp/hot-dev-bg.invalid 2>&1; then
+        printf "invalid=accepted\n"
+      else
+        printf "invalid=rejected\n"
+      fi
+    '
+  )"
+
+  assert_contains "takeover parsing enables start" "${output}" "start=true"
+  assert_contains "takeover parsing enables restart" "${output}" "restart=true"
+  assert_contains "start without flag stays false" "${output}" "plain=false"
+  assert_contains "unexpected status flag is rejected" "${output}" "invalid=rejected"
+}
+
 test_detects_unmanaged_listeners() {
   local frontend_port backend_port status_output start_output
+  local state_dir
   frontend_port="$(pick_free_port)"
   backend_port="$(pick_free_port)"
   if [[ "${backend_port}" == "${frontend_port}" ]]; then
     backend_port="$(pick_free_port)"
   fi
+  state_dir="$(make_isolated_hot_dev_bg_state)"
 
   start_http_server "${frontend_port}"
   start_http_server "${backend_port}"
 
   status_output="$(
+    HOT_DEV_BG_PID_FILE="${state_dir}/hot-dev-bg.pid" \
+    HOT_DEV_BG_LOG_FILE="${state_dir}/hot-dev-bg.log" \
     FRONTEND_DEV_HOST=127.0.0.1 \
     FRONTEND_DEV_PORT="${frontend_port}" \
     PULSE_DEV_API_HOST=127.0.0.1 \
@@ -107,6 +150,8 @@ test_detects_unmanaged_listeners() {
 
   start_output="$(
     set +e
+    HOT_DEV_BG_PID_FILE="${state_dir}/hot-dev-bg.pid" \
+    HOT_DEV_BG_LOG_FILE="${state_dir}/hot-dev-bg.log" \
     FRONTEND_DEV_HOST=127.0.0.1 \
     FRONTEND_DEV_PORT="${frontend_port}" \
     PULSE_DEV_API_HOST=127.0.0.1 \
@@ -120,6 +165,7 @@ test_detects_unmanaged_listeners() {
 }
 
 main() {
+  test_cli_parses_takeover_flag
   test_status_without_runtime
   test_detects_unmanaged_listeners
 
