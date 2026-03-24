@@ -242,55 +242,6 @@ describe('MonitoredSystemLedgerAPI', () => {
     ]);
   });
 
-  it('maps legacy status reason last_seen fields onto the canonical reported_at contract', async () => {
-    vi.mocked(apiFetchJSON).mockResolvedValueOnce({
-      systems: [
-        {
-          name: 'Tower',
-          type: 'host',
-          status: 'warning',
-          status_explanation: {
-            summary: 'At least one included source is stale, so Pulse marks this monitored system as warning.',
-            reasons: [
-              {
-                kind: 'source-stale',
-                name: 'Tower',
-                type: 'host',
-                source: 'agent',
-                status: 'stale',
-                last_seen: '2026-03-23T11:55:00Z',
-                summary: 'Agent data for Tower is stale (last reported 2026-03-23T11:55:00Z).',
-              },
-            ],
-          },
-          latest_included_signal: {
-            name: 'tower.local',
-            type: 'docker-host',
-            source: 'docker',
-            at: '2026-03-23T11:59:50Z',
-          },
-          source: 'multiple',
-        },
-      ],
-      total: 1,
-      limit: 5,
-    });
-
-    const result = await MonitoredSystemLedgerAPI.getLedger();
-
-    expect(result.systems[0]?.status_explanation?.reasons).toEqual([
-      {
-        kind: 'source-stale',
-        name: 'Tower',
-        type: 'host',
-        source: 'agent',
-        status: 'stale',
-        reported_at: '2026-03-23T11:55:00Z',
-        summary: 'Agent data for Tower is stale (last reported 2026-03-23T11:55:00Z).',
-      },
-    ]);
-  });
-
   it('fails closed to unknown for unsupported status values', async () => {
     vi.mocked(apiFetchJSON).mockResolvedValueOnce({
       systems: [

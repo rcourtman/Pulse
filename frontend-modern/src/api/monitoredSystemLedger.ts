@@ -89,7 +89,6 @@ interface MonitoredSystemLedgerRawStatusExplanation
 interface MonitoredSystemLedgerRawStatusReason
   extends Omit<MonitoredSystemLedgerStatusReason, 'reported_at'> {
   reported_at?: string;
-  last_seen?: string;
 }
 
 export class MonitoredSystemLedgerAPI {
@@ -154,7 +153,7 @@ function normalizeMonitoredSystemLedgerStatusReason(
     type: reason.type,
     source: reason.source,
     status: normalizeMonitoredSystemLedgerStatusReasonStatus(reason.status),
-    reported_at: reason.reported_at ?? reason.last_seen ?? '',
+    reported_at: reason.reported_at ?? '',
     summary: reason.summary,
   };
 }

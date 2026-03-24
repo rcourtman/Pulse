@@ -260,9 +260,8 @@ The backend payload contract now emits only that structured object, and the
 frontend monitored-system client should parse that canonical wire contract
 directly rather than keeping flat alias fallback for
 `latest_included_signal_at`, `latest_included_signal_source`, or `last_seen`.
-The canonical nested status-reason timestamp is `reported_at`; older raw
-payloads may map a legacy nested `last_seen` input forward during rollout, but
-the normalized client contract must expose only `reported_at`.
+The canonical nested status-reason timestamp is `reported_at`, and the
+normalized client contract must expose only that field.
 That client contract must also fail closed when older or partial payloads omit
 the nested explanation object: the frontend may normalize missing explanation
 fields to empty reasons/surfaces plus a safe default summary, but it must not

@@ -256,7 +256,7 @@ describe('monitored-system model guardrails', () => {
     expect(monitoredSystemLedgerApiSource).not.toContain('last_seen: string;');
     expect(monitoredSystemLedgerApiSource).not.toContain('latest_included_signal_at?: string;');
     expect(monitoredSystemLedgerApiSource).not.toContain('latest_included_signal_source?: string;');
-    expect(monitoredSystemLedgerApiSource).toContain('last_seen?: string;');
+    expect(monitoredSystemLedgerApiSource).not.toContain('last_seen?: string;');
     expect(monitoredSystemLedgerApiSource).not.toContain(
       'All included top-level collection paths currently report online status.',
     );
