@@ -5,6 +5,16 @@ from canonical_completion_guard import REPO_ROOT
 from subsystem_lookup import lookup_paths
 
 
+RECOVERY_PRODUCT_SURFACE_EXACT_FILES = [
+    "frontend-modern/src/components/Recovery/RecoverySummary.test.tsx",
+    "frontend-modern/src/components/Recovery/__tests__/Recovery.test.tsx",
+    "frontend-modern/src/pages/__tests__/RecoveryRoute.test.tsx",
+    "frontend-modern/src/utils/__tests__/dashboardRecoveryPresentation.test.ts",
+    "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
+    "tests/integration/tests/17-recovery-layout.spec.ts",
+]
+
+
 class SubsystemLookupTest(unittest.TestCase):
     def test_lookup_paths_reports_multiple_subsystems_for_shared_runtime_file(self) -> None:
         result = lookup_paths(["internal/api/resources.go"])
@@ -645,13 +655,7 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(match["verification_requirement"]["id"], "recovery-product-surface")
         self.assertEqual(
             match["verification_requirement"]["exact_files"],
-            [
-                "frontend-modern/src/components/Recovery/RecoverySummary.test.tsx",
-                "frontend-modern/src/components/Recovery/__tests__/Recovery.test.tsx",
-                "frontend-modern/src/pages/__tests__/RecoveryRoute.test.tsx",
-                "frontend-modern/src/utils/__tests__/dashboardRecoveryPresentation.test.ts",
-                "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
-            ],
+            RECOVERY_PRODUCT_SURFACE_EXACT_FILES,
         )
 
     def test_lookup_paths_assigns_dashboard_page_to_storage_recovery(self) -> None:
@@ -982,13 +986,7 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(match["verification_requirement"]["id"], "recovery-product-surface")
         self.assertEqual(
             match["verification_requirement"]["exact_files"],
-            [
-                "frontend-modern/src/components/Recovery/RecoverySummary.test.tsx",
-                "frontend-modern/src/components/Recovery/__tests__/Recovery.test.tsx",
-                "frontend-modern/src/pages/__tests__/RecoveryRoute.test.tsx",
-                "frontend-modern/src/utils/__tests__/dashboardRecoveryPresentation.test.ts",
-                "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
-            ],
+            RECOVERY_PRODUCT_SURFACE_EXACT_FILES,
         )
 
     def test_lookup_paths_assigns_recovery_date_presentation_to_storage_recovery(self) -> None:
@@ -1010,13 +1008,7 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(match["verification_requirement"]["id"], "recovery-product-surface")
         self.assertEqual(
             match["verification_requirement"]["exact_files"],
-            [
-                "frontend-modern/src/components/Recovery/RecoverySummary.test.tsx",
-                "frontend-modern/src/components/Recovery/__tests__/Recovery.test.tsx",
-                "frontend-modern/src/pages/__tests__/RecoveryRoute.test.tsx",
-                "frontend-modern/src/utils/__tests__/dashboardRecoveryPresentation.test.ts",
-                "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
-            ],
+            RECOVERY_PRODUCT_SURFACE_EXACT_FILES,
         )
 
     def test_lookup_paths_assigns_recovery_status_presentation_to_storage_recovery(self) -> None:
@@ -1038,13 +1030,7 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(match["verification_requirement"]["id"], "recovery-product-surface")
         self.assertEqual(
             match["verification_requirement"]["exact_files"],
-            [
-                "frontend-modern/src/components/Recovery/RecoverySummary.test.tsx",
-                "frontend-modern/src/components/Recovery/__tests__/Recovery.test.tsx",
-                "frontend-modern/src/pages/__tests__/RecoveryRoute.test.tsx",
-                "frontend-modern/src/utils/__tests__/dashboardRecoveryPresentation.test.ts",
-                "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
-            ],
+            RECOVERY_PRODUCT_SURFACE_EXACT_FILES,
         )
 
     def test_lookup_paths_assigns_recovery_summary_presentation_to_storage_recovery(self) -> None:
@@ -1066,13 +1052,7 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(match["verification_requirement"]["id"], "recovery-product-surface")
         self.assertEqual(
             match["verification_requirement"]["exact_files"],
-            [
-                "frontend-modern/src/components/Recovery/RecoverySummary.test.tsx",
-                "frontend-modern/src/components/Recovery/__tests__/Recovery.test.tsx",
-                "frontend-modern/src/pages/__tests__/RecoveryRoute.test.tsx",
-                "frontend-modern/src/utils/__tests__/dashboardRecoveryPresentation.test.ts",
-                "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
-            ],
+            RECOVERY_PRODUCT_SURFACE_EXACT_FILES,
         )
 
     def test_lookup_paths_assigns_recovery_record_presentation_to_storage_recovery(self) -> None:
@@ -1094,13 +1074,7 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(match["verification_requirement"]["id"], "recovery-product-surface")
         self.assertEqual(
             match["verification_requirement"]["exact_files"],
-            [
-                "frontend-modern/src/components/Recovery/RecoverySummary.test.tsx",
-                "frontend-modern/src/components/Recovery/__tests__/Recovery.test.tsx",
-                "frontend-modern/src/pages/__tests__/RecoveryRoute.test.tsx",
-                "frontend-modern/src/utils/__tests__/dashboardRecoveryPresentation.test.ts",
-                "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
-            ],
+            RECOVERY_PRODUCT_SURFACE_EXACT_FILES,
         )
 
     def test_lookup_paths_assigns_recovery_outcome_presentation_to_storage_recovery(self) -> None:
@@ -1122,13 +1096,7 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(match["verification_requirement"]["id"], "recovery-product-surface")
         self.assertEqual(
             match["verification_requirement"]["exact_files"],
-            [
-                "frontend-modern/src/components/Recovery/RecoverySummary.test.tsx",
-                "frontend-modern/src/components/Recovery/__tests__/Recovery.test.tsx",
-                "frontend-modern/src/pages/__tests__/RecoveryRoute.test.tsx",
-                "frontend-modern/src/utils/__tests__/dashboardRecoveryPresentation.test.ts",
-                "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
-            ],
+            RECOVERY_PRODUCT_SURFACE_EXACT_FILES,
         )
 
     def test_lookup_paths_assigns_recovery_action_presentation_to_storage_recovery(self) -> None:
@@ -1150,13 +1118,7 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(match["verification_requirement"]["id"], "recovery-product-surface")
         self.assertEqual(
             match["verification_requirement"]["exact_files"],
-            [
-                "frontend-modern/src/components/Recovery/RecoverySummary.test.tsx",
-                "frontend-modern/src/components/Recovery/__tests__/Recovery.test.tsx",
-                "frontend-modern/src/pages/__tests__/RecoveryRoute.test.tsx",
-                "frontend-modern/src/utils/__tests__/dashboardRecoveryPresentation.test.ts",
-                "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
-            ],
+            RECOVERY_PRODUCT_SURFACE_EXACT_FILES,
         )
 
     def test_lookup_paths_assigns_recovery_artifact_mode_presentation_to_storage_recovery(self) -> None:
@@ -1178,13 +1140,7 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(match["verification_requirement"]["id"], "recovery-product-surface")
         self.assertEqual(
             match["verification_requirement"]["exact_files"],
-            [
-                "frontend-modern/src/components/Recovery/RecoverySummary.test.tsx",
-                "frontend-modern/src/components/Recovery/__tests__/Recovery.test.tsx",
-                "frontend-modern/src/pages/__tests__/RecoveryRoute.test.tsx",
-                "frontend-modern/src/utils/__tests__/dashboardRecoveryPresentation.test.ts",
-                "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
-            ],
+            RECOVERY_PRODUCT_SURFACE_EXACT_FILES,
         )
 
     def test_lookup_paths_assigns_recovery_empty_state_presentation_to_storage_recovery(self) -> None:
@@ -1206,13 +1162,7 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(match["verification_requirement"]["id"], "recovery-product-surface")
         self.assertEqual(
             match["verification_requirement"]["exact_files"],
-            [
-                "frontend-modern/src/components/Recovery/RecoverySummary.test.tsx",
-                "frontend-modern/src/components/Recovery/__tests__/Recovery.test.tsx",
-                "frontend-modern/src/pages/__tests__/RecoveryRoute.test.tsx",
-                "frontend-modern/src/utils/__tests__/dashboardRecoveryPresentation.test.ts",
-                "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
-            ],
+            RECOVERY_PRODUCT_SURFACE_EXACT_FILES,
         )
 
     def test_lookup_paths_assigns_recovery_filter_chip_presentation_to_storage_recovery(self) -> None:
@@ -1234,13 +1184,7 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(match["verification_requirement"]["id"], "recovery-product-surface")
         self.assertEqual(
             match["verification_requirement"]["exact_files"],
-            [
-                "frontend-modern/src/components/Recovery/RecoverySummary.test.tsx",
-                "frontend-modern/src/components/Recovery/__tests__/Recovery.test.tsx",
-                "frontend-modern/src/pages/__tests__/RecoveryRoute.test.tsx",
-                "frontend-modern/src/utils/__tests__/dashboardRecoveryPresentation.test.ts",
-                "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
-            ],
+            RECOVERY_PRODUCT_SURFACE_EXACT_FILES,
         )
 
     def test_lookup_paths_assigns_recovery_issue_presentation_to_storage_recovery(self) -> None:
@@ -1262,13 +1206,7 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(match["verification_requirement"]["id"], "recovery-product-surface")
         self.assertEqual(
             match["verification_requirement"]["exact_files"],
-            [
-                "frontend-modern/src/components/Recovery/RecoverySummary.test.tsx",
-                "frontend-modern/src/components/Recovery/__tests__/Recovery.test.tsx",
-                "frontend-modern/src/pages/__tests__/RecoveryRoute.test.tsx",
-                "frontend-modern/src/utils/__tests__/dashboardRecoveryPresentation.test.ts",
-                "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
-            ],
+            RECOVERY_PRODUCT_SURFACE_EXACT_FILES,
         )
 
     def test_lookup_paths_assigns_recovery_table_presentation_to_storage_recovery(self) -> None:
@@ -1290,13 +1228,7 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(match["verification_requirement"]["id"], "recovery-product-surface")
         self.assertEqual(
             match["verification_requirement"]["exact_files"],
-            [
-                "frontend-modern/src/components/Recovery/RecoverySummary.test.tsx",
-                "frontend-modern/src/components/Recovery/__tests__/Recovery.test.tsx",
-                "frontend-modern/src/pages/__tests__/RecoveryRoute.test.tsx",
-                "frontend-modern/src/utils/__tests__/dashboardRecoveryPresentation.test.ts",
-                "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
-            ],
+            RECOVERY_PRODUCT_SURFACE_EXACT_FILES,
         )
 
     def test_lookup_paths_assigns_recovery_timeline_chart_presentation_to_storage_recovery(self) -> None:
@@ -1318,13 +1250,7 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(match["verification_requirement"]["id"], "recovery-product-surface")
         self.assertEqual(
             match["verification_requirement"]["exact_files"],
-            [
-                "frontend-modern/src/components/Recovery/RecoverySummary.test.tsx",
-                "frontend-modern/src/components/Recovery/__tests__/Recovery.test.tsx",
-                "frontend-modern/src/pages/__tests__/RecoveryRoute.test.tsx",
-                "frontend-modern/src/utils/__tests__/dashboardRecoveryPresentation.test.ts",
-                "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
-            ],
+            RECOVERY_PRODUCT_SURFACE_EXACT_FILES,
         )
 
     def test_lookup_paths_assigns_recovery_timeline_presentation_to_storage_recovery(self) -> None:
@@ -1346,13 +1272,7 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(match["verification_requirement"]["id"], "recovery-product-surface")
         self.assertEqual(
             match["verification_requirement"]["exact_files"],
-            [
-                "frontend-modern/src/components/Recovery/RecoverySummary.test.tsx",
-                "frontend-modern/src/components/Recovery/__tests__/Recovery.test.tsx",
-                "frontend-modern/src/pages/__tests__/RecoveryRoute.test.tsx",
-                "frontend-modern/src/utils/__tests__/dashboardRecoveryPresentation.test.ts",
-                "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
-            ],
+            RECOVERY_PRODUCT_SURFACE_EXACT_FILES,
         )
 
     def test_lookup_paths_assigns_api_token_manager_to_api_contracts(self) -> None:

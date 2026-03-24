@@ -73,6 +73,16 @@ def first_matching_policy_id(rule: dict, rel: str) -> str:
     return "DEFAULT"
 
 
+RECOVERY_PRODUCT_SURFACE_EXACT_FILES = [
+    "frontend-modern/src/components/Recovery/RecoverySummary.test.tsx",
+    "frontend-modern/src/components/Recovery/__tests__/Recovery.test.tsx",
+    "frontend-modern/src/pages/__tests__/RecoveryRoute.test.tsx",
+    "frontend-modern/src/utils/__tests__/dashboardRecoveryPresentation.test.ts",
+    "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
+    "tests/integration/tests/17-recovery-layout.spec.ts",
+]
+
+
 class CanonicalCompletionGuardTest(unittest.TestCase):
     def test_registry_exists_and_contains_required_subsystems(self):
         self.assertTrue(SUBSYSTEM_REGISTRY.exists())
@@ -776,13 +786,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     "touched_runtime_files": ["frontend-modern/src/pages/RecoveryRoute.tsx"],
                     "allow_same_subsystem_tests": False,
                     "test_prefixes": [],
-                    "exact_files": [
-                        "frontend-modern/src/components/Recovery/RecoverySummary.test.tsx",
-                        "frontend-modern/src/components/Recovery/__tests__/Recovery.test.tsx",
-                        "frontend-modern/src/pages/__tests__/RecoveryRoute.test.tsx",
-                        "frontend-modern/src/utils/__tests__/dashboardRecoveryPresentation.test.ts",
-                        "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
-                    ],
+                    "exact_files": RECOVERY_PRODUCT_SURFACE_EXACT_FILES,
                 }
             ],
         )
@@ -1086,13 +1090,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     "touched_runtime_files": ["frontend-modern/src/types/recovery.ts"],
                     "allow_same_subsystem_tests": False,
                     "test_prefixes": [],
-                    "exact_files": [
-                        "frontend-modern/src/components/Recovery/RecoverySummary.test.tsx",
-                        "frontend-modern/src/components/Recovery/__tests__/Recovery.test.tsx",
-                        "frontend-modern/src/pages/__tests__/RecoveryRoute.test.tsx",
-                        "frontend-modern/src/utils/__tests__/dashboardRecoveryPresentation.test.ts",
-                        "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
-                    ],
+                    "exact_files": RECOVERY_PRODUCT_SURFACE_EXACT_FILES,
                 }
             ],
         )
@@ -1123,13 +1121,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     ],
                     "allow_same_subsystem_tests": False,
                     "test_prefixes": [],
-                    "exact_files": [
-                        "frontend-modern/src/components/Recovery/RecoverySummary.test.tsx",
-                        "frontend-modern/src/components/Recovery/__tests__/Recovery.test.tsx",
-                        "frontend-modern/src/pages/__tests__/RecoveryRoute.test.tsx",
-                        "frontend-modern/src/utils/__tests__/dashboardRecoveryPresentation.test.ts",
-                        "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
-                    ],
+                    "exact_files": RECOVERY_PRODUCT_SURFACE_EXACT_FILES,
                 }
             ],
         )
@@ -1160,13 +1152,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     ],
                     "allow_same_subsystem_tests": False,
                     "test_prefixes": [],
-                    "exact_files": [
-                        "frontend-modern/src/components/Recovery/RecoverySummary.test.tsx",
-                        "frontend-modern/src/components/Recovery/__tests__/Recovery.test.tsx",
-                        "frontend-modern/src/pages/__tests__/RecoveryRoute.test.tsx",
-                        "frontend-modern/src/utils/__tests__/dashboardRecoveryPresentation.test.ts",
-                        "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
-                    ],
+                    "exact_files": RECOVERY_PRODUCT_SURFACE_EXACT_FILES,
                 }
             ],
         )
@@ -1197,13 +1183,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     ],
                     "allow_same_subsystem_tests": False,
                     "test_prefixes": [],
-                    "exact_files": [
-                        "frontend-modern/src/components/Recovery/RecoverySummary.test.tsx",
-                        "frontend-modern/src/components/Recovery/__tests__/Recovery.test.tsx",
-                        "frontend-modern/src/pages/__tests__/RecoveryRoute.test.tsx",
-                        "frontend-modern/src/utils/__tests__/dashboardRecoveryPresentation.test.ts",
-                        "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
-                    ],
+                    "exact_files": RECOVERY_PRODUCT_SURFACE_EXACT_FILES,
                 }
             ],
         )
@@ -1234,13 +1214,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     ],
                     "allow_same_subsystem_tests": False,
                     "test_prefixes": [],
-                    "exact_files": [
-                        "frontend-modern/src/components/Recovery/RecoverySummary.test.tsx",
-                        "frontend-modern/src/components/Recovery/__tests__/Recovery.test.tsx",
-                        "frontend-modern/src/pages/__tests__/RecoveryRoute.test.tsx",
-                        "frontend-modern/src/utils/__tests__/dashboardRecoveryPresentation.test.ts",
-                        "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
-                    ],
+                    "exact_files": RECOVERY_PRODUCT_SURFACE_EXACT_FILES,
                 }
             ],
         )
@@ -1271,13 +1245,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     ],
                     "allow_same_subsystem_tests": False,
                     "test_prefixes": [],
-                    "exact_files": [
-                        "frontend-modern/src/components/Recovery/RecoverySummary.test.tsx",
-                        "frontend-modern/src/components/Recovery/__tests__/Recovery.test.tsx",
-                        "frontend-modern/src/pages/__tests__/RecoveryRoute.test.tsx",
-                        "frontend-modern/src/utils/__tests__/dashboardRecoveryPresentation.test.ts",
-                        "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
-                    ],
+                    "exact_files": RECOVERY_PRODUCT_SURFACE_EXACT_FILES,
                 }
             ],
         )
@@ -1308,13 +1276,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     ],
                     "allow_same_subsystem_tests": False,
                     "test_prefixes": [],
-                    "exact_files": [
-                        "frontend-modern/src/components/Recovery/RecoverySummary.test.tsx",
-                        "frontend-modern/src/components/Recovery/__tests__/Recovery.test.tsx",
-                        "frontend-modern/src/pages/__tests__/RecoveryRoute.test.tsx",
-                        "frontend-modern/src/utils/__tests__/dashboardRecoveryPresentation.test.ts",
-                        "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
-                    ],
+                    "exact_files": RECOVERY_PRODUCT_SURFACE_EXACT_FILES,
                 }
             ],
         )
@@ -1345,13 +1307,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     ],
                     "allow_same_subsystem_tests": False,
                     "test_prefixes": [],
-                    "exact_files": [
-                        "frontend-modern/src/components/Recovery/RecoverySummary.test.tsx",
-                        "frontend-modern/src/components/Recovery/__tests__/Recovery.test.tsx",
-                        "frontend-modern/src/pages/__tests__/RecoveryRoute.test.tsx",
-                        "frontend-modern/src/utils/__tests__/dashboardRecoveryPresentation.test.ts",
-                        "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
-                    ],
+                    "exact_files": RECOVERY_PRODUCT_SURFACE_EXACT_FILES,
                 }
             ],
         )
@@ -1382,13 +1338,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     ],
                     "allow_same_subsystem_tests": False,
                     "test_prefixes": [],
-                    "exact_files": [
-                        "frontend-modern/src/components/Recovery/RecoverySummary.test.tsx",
-                        "frontend-modern/src/components/Recovery/__tests__/Recovery.test.tsx",
-                        "frontend-modern/src/pages/__tests__/RecoveryRoute.test.tsx",
-                        "frontend-modern/src/utils/__tests__/dashboardRecoveryPresentation.test.ts",
-                        "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
-                    ],
+                    "exact_files": RECOVERY_PRODUCT_SURFACE_EXACT_FILES,
                 }
             ],
         )
@@ -1419,13 +1369,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     ],
                     "allow_same_subsystem_tests": False,
                     "test_prefixes": [],
-                    "exact_files": [
-                        "frontend-modern/src/components/Recovery/RecoverySummary.test.tsx",
-                        "frontend-modern/src/components/Recovery/__tests__/Recovery.test.tsx",
-                        "frontend-modern/src/pages/__tests__/RecoveryRoute.test.tsx",
-                        "frontend-modern/src/utils/__tests__/dashboardRecoveryPresentation.test.ts",
-                        "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
-                    ],
+                    "exact_files": RECOVERY_PRODUCT_SURFACE_EXACT_FILES,
                 }
             ],
         )
@@ -1456,13 +1400,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     ],
                     "allow_same_subsystem_tests": False,
                     "test_prefixes": [],
-                    "exact_files": [
-                        "frontend-modern/src/components/Recovery/RecoverySummary.test.tsx",
-                        "frontend-modern/src/components/Recovery/__tests__/Recovery.test.tsx",
-                        "frontend-modern/src/pages/__tests__/RecoveryRoute.test.tsx",
-                        "frontend-modern/src/utils/__tests__/dashboardRecoveryPresentation.test.ts",
-                        "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
-                    ],
+                    "exact_files": RECOVERY_PRODUCT_SURFACE_EXACT_FILES,
                 }
             ],
         )
@@ -1493,13 +1431,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     ],
                     "allow_same_subsystem_tests": False,
                     "test_prefixes": [],
-                    "exact_files": [
-                        "frontend-modern/src/components/Recovery/RecoverySummary.test.tsx",
-                        "frontend-modern/src/components/Recovery/__tests__/Recovery.test.tsx",
-                        "frontend-modern/src/pages/__tests__/RecoveryRoute.test.tsx",
-                        "frontend-modern/src/utils/__tests__/dashboardRecoveryPresentation.test.ts",
-                        "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
-                    ],
+                    "exact_files": RECOVERY_PRODUCT_SURFACE_EXACT_FILES,
                 }
             ],
         )
@@ -1530,13 +1462,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     ],
                     "allow_same_subsystem_tests": False,
                     "test_prefixes": [],
-                    "exact_files": [
-                        "frontend-modern/src/components/Recovery/RecoverySummary.test.tsx",
-                        "frontend-modern/src/components/Recovery/__tests__/Recovery.test.tsx",
-                        "frontend-modern/src/pages/__tests__/RecoveryRoute.test.tsx",
-                        "frontend-modern/src/utils/__tests__/dashboardRecoveryPresentation.test.ts",
-                        "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
-                    ],
+                    "exact_files": RECOVERY_PRODUCT_SURFACE_EXACT_FILES,
                 }
             ],
         )
@@ -1567,13 +1493,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     ],
                     "allow_same_subsystem_tests": False,
                     "test_prefixes": [],
-                    "exact_files": [
-                        "frontend-modern/src/components/Recovery/RecoverySummary.test.tsx",
-                        "frontend-modern/src/components/Recovery/__tests__/Recovery.test.tsx",
-                        "frontend-modern/src/pages/__tests__/RecoveryRoute.test.tsx",
-                        "frontend-modern/src/utils/__tests__/dashboardRecoveryPresentation.test.ts",
-                        "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
-                    ],
+                    "exact_files": RECOVERY_PRODUCT_SURFACE_EXACT_FILES,
                 }
             ],
         )

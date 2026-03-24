@@ -3824,7 +3824,8 @@
               "frontend-modern/src/components/Recovery/RecoverySummary.test.tsx",
               "frontend-modern/src/pages/__tests__/RecoveryRoute.test.tsx",
               "frontend-modern/src/utils/__tests__/dashboardRecoveryPresentation.test.ts",
-              "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts"
+              "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
+              "tests/integration/tests/17-recovery-layout.spec.ts"
             ]
           },
           {

@@ -95,6 +95,7 @@ querying, and the operator-facing storage health presentation layer.
 3. Tighten guardrails when legacy storage or recovery presentation paths are removed
 4. Preserve the dependency split: API payload ownership stays in `api-contracts`, settings shell ownership stays in `frontend-primitives`, and canonical resource truth stays in `unified-resources`
 5. Keep recovery history table width budgeting derived from the canonical column specs in `frontend-modern/src/utils/recoveryTablePresentation.ts`, not from raw visible-column counts, so normalized subject labels and optional column sets cannot drift the right-edge badges and controls off-screen
+6. Keep at least one browser-level desktop recovery proof in the governed `recovery-product-surface` policy so right-edge column visibility and wrapper-fit regressions are caught at rendered layout time instead of only through unit-level width math
 
 ## Current State
 
@@ -127,6 +128,11 @@ canonical column-width spec that owns the header sizing in
 `frontend-modern/src/utils/recoveryTablePresentation.ts`, so longer governed
 subject labels do not force the trailing outcome/status columns off-screen by
 budget drift.
+That same recovery product proof surface now also includes a browser-level
+desktop layout guard in `tests/integration/tests/17-recovery-layout.spec.ts`,
+which opens the recovery page against deterministic recovery payloads and
+fails when the history table needs horizontal scrolling or lets the outcome
+column drift outside the visible wrapper at desktop width.
 That same shared `internal/api/` dependency now also assumes tenant-scoped
 resource handlers seed registries from canonical unified resources only:
 recovery- and storage-adjacent API helpers may not fall back to raw tenant
