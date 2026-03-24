@@ -45,8 +45,8 @@ export function getSecurityAuthRestartInstruction(
       };
     case 'development':
       return {
-        label: 'Restart the development server:',
-        command: 'sudo systemctl restart pulse-hot-dev',
+        label: 'Restart the managed development runtime from the repo root:',
+        command: 'npm run dev:restart',
       };
     default:
       return {

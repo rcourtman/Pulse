@@ -36,8 +36,8 @@ describe('securityAuthPresentation', () => {
       command: 'systemctl restart pulse',
     });
     expect(getSecurityAuthRestartInstruction('development')).toEqual({
-      label: 'Restart the development server:',
-      command: 'sudo systemctl restart pulse-hot-dev',
+      label: 'Restart the managed development runtime from the repo root:',
+      command: 'npm run dev:restart',
     });
     expect(getSecurityAuthRestartInstruction()).toEqual({
       label: 'Restart Pulse using your deployment method',

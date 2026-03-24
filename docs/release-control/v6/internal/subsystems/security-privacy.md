@@ -258,6 +258,11 @@ of allowing plaintext licensing state to remain on the runtime primary path.
 That same shared token-settings boundary must stay under explicit proof routing
 on both sides: `frontend-modern/src/components/Settings/APITokenManager.tsx`,
 `frontend-modern/src/components/Settings/apiTokenManagerModel.ts`, and
+That same security settings presentation boundary also owns deployment-specific
+restart guidance after auth changes. When `securityAuthPresentation.ts`
+describes the development deployment, it must point at the canonical managed
+runtime control surface (`npm run dev:restart` from the repo root), not a
+stale `pulse-hot-dev` service name or any lane-local restart folklore.
 `frontend-modern/src/components/Settings/useAPITokenManagerState.ts` must
 continue to carry the direct `security-settings-surfaces` proof path together
 with the API-contract token-management proof instead of borrowing coverage only
