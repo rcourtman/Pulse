@@ -32,6 +32,18 @@ operator-facing alert routing behavior for live runtime alerts.
 10. `frontend-modern/src/utils/alertIncidentPresentation.ts`
 11. `frontend-modern/src/utils/alertSchedulePresentation.ts`
 12. `frontend-modern/src/utils/alertWebhookPresentation.ts`
+13. `frontend-modern/src/utils/alertActivationPresentation.ts`
+14. `frontend-modern/src/utils/alertAdministrationPresentation.ts`
+15. `frontend-modern/src/utils/alertBulkEditPresentation.ts`
+16. `frontend-modern/src/utils/alertConfigPresentation.ts`
+17. `frontend-modern/src/utils/alertEmailPresentation.ts`
+18. `frontend-modern/src/utils/alertFrequencyPresentation.ts`
+19. `frontend-modern/src/utils/alertGroupingPresentation.ts`
+20. `frontend-modern/src/utils/alertHistoryPresentation.ts`
+21. `frontend-modern/src/utils/alertSeverityPresentation.ts`
+22. `frontend-modern/src/utils/alertTabsPresentation.ts`
+23. `frontend-modern/src/utils/alertThresholdsPresentation.ts`
+24. `frontend-modern/src/utils/alertThresholdsSectionPresentation.ts`
 
 ## Shared Boundaries
 
@@ -86,6 +98,27 @@ timeline, filter-chip, note-editor, and resource-incident panel presentation.
 Future alert presentation work must extend those helpers through the alerts
 contract instead of leaving alert-facing wording or styling inlined in page or
 feature shells while the registry treats the helpers as unowned.
+
+The remaining alert configuration and history presentation helpers now also
+have explicit alerts ownership. `frontend-modern/src/utils/alertActivationPresentation.ts`,
+`frontend-modern/src/utils/alertAdministrationPresentation.ts`,
+`frontend-modern/src/utils/alertBulkEditPresentation.ts`,
+`frontend-modern/src/utils/alertConfigPresentation.ts`,
+`frontend-modern/src/utils/alertEmailPresentation.ts`,
+`frontend-modern/src/utils/alertFrequencyPresentation.ts`,
+`frontend-modern/src/utils/alertGroupingPresentation.ts`,
+`frontend-modern/src/utils/alertHistoryPresentation.ts`,
+`frontend-modern/src/utils/alertSeverityPresentation.ts`,
+`frontend-modern/src/utils/alertTabsPresentation.ts`,
+`frontend-modern/src/utils/alertThresholdsPresentation.ts`, and
+`frontend-modern/src/utils/alertThresholdsSectionPresentation.ts` are the
+canonical owners for alert enablement copy, history administration wording,
+bulk-edit labels, schedule/configuration text, email-destination field labels,
+frequency chips, grouping card styling, history source and resource badges,
+severity badges, tab labels, thresholds empty states, and thresholds section
+status labels. Future alert configuration or history presentation work should
+extend those helpers instead of rebuilding alert-specific semantics in pages,
+dashboard surfaces, feature hooks, or thresholds shells.
 
 The alert webhook service chooser also now derives its service set from the
 backend webhook template registry, rather than keeping a second frontend-only

@@ -960,11 +960,23 @@
       ],
       "owned_files": [
         "frontend-modern/src/pages/Alerts.tsx",
+        "frontend-modern/src/utils/alertActivationPresentation.ts",
+        "frontend-modern/src/utils/alertAdministrationPresentation.ts",
+        "frontend-modern/src/utils/alertBulkEditPresentation.ts",
+        "frontend-modern/src/utils/alertConfigPresentation.ts",
         "frontend-modern/src/utils/alertDestinationsPresentation.ts",
+        "frontend-modern/src/utils/alertEmailPresentation.ts",
+        "frontend-modern/src/utils/alertFrequencyPresentation.ts",
+        "frontend-modern/src/utils/alertGroupingPresentation.ts",
+        "frontend-modern/src/utils/alertHistoryPresentation.ts",
         "frontend-modern/src/utils/alertIncidentPresentation.ts",
         "frontend-modern/src/utils/alertOverviewPresentation.ts",
         "frontend-modern/src/utils/alertResourceTablePresentation.ts",
         "frontend-modern/src/utils/alertSchedulePresentation.ts",
+        "frontend-modern/src/utils/alertSeverityPresentation.ts",
+        "frontend-modern/src/utils/alertTabsPresentation.ts",
+        "frontend-modern/src/utils/alertThresholdsPresentation.ts",
+        "frontend-modern/src/utils/alertThresholdsSectionPresentation.ts",
         "frontend-modern/src/utils/alertWebhookPresentation.ts"
       ],
       "verification": {
@@ -1044,6 +1056,42 @@
               "frontend-modern/src/features/alerts/thresholds/hooks/__tests__/useThresholdsTableState.test.tsx",
               "frontend-modern/src/pages/__tests__/Alerts.helpers.test.ts",
               "frontend-modern/src/utils/__tests__/alertOverviewPresentation.test.ts"
+            ]
+          },
+          {
+            "id": "alert-configuration-presentation-helpers",
+            "label": "alert configuration presentation helper proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/utils/alertActivationPresentation.ts",
+              "frontend-modern/src/utils/alertAdministrationPresentation.ts",
+              "frontend-modern/src/utils/alertBulkEditPresentation.ts",
+              "frontend-modern/src/utils/alertConfigPresentation.ts",
+              "frontend-modern/src/utils/alertEmailPresentation.ts",
+              "frontend-modern/src/utils/alertFrequencyPresentation.ts",
+              "frontend-modern/src/utils/alertGroupingPresentation.ts",
+              "frontend-modern/src/utils/alertHistoryPresentation.ts",
+              "frontend-modern/src/utils/alertSeverityPresentation.ts",
+              "frontend-modern/src/utils/alertTabsPresentation.ts",
+              "frontend-modern/src/utils/alertThresholdsPresentation.ts",
+              "frontend-modern/src/utils/alertThresholdsSectionPresentation.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/components/Settings/__tests__/monitoredSystemModelGuardrails.test.ts",
+              "frontend-modern/src/utils/__tests__/alertActivationPresentation.test.ts",
+              "frontend-modern/src/utils/__tests__/alertAdministrationPresentation.test.ts",
+              "frontend-modern/src/utils/__tests__/alertBulkEditPresentation.test.ts",
+              "frontend-modern/src/utils/__tests__/alertConfigPresentation.test.ts",
+              "frontend-modern/src/utils/__tests__/alertEmailPresentation.test.ts",
+              "frontend-modern/src/utils/__tests__/alertFrequencyPresentation.test.ts",
+              "frontend-modern/src/utils/__tests__/alertGroupingPresentation.test.ts",
+              "frontend-modern/src/utils/__tests__/alertHistoryPresentation.test.ts",
+              "frontend-modern/src/utils/__tests__/alertSeverityPresentation.test.ts",
+              "frontend-modern/src/utils/__tests__/alertTabsPresentation.test.ts",
+              "frontend-modern/src/utils/__tests__/alertThresholdsPresentation.test.ts",
+              "frontend-modern/src/utils/__tests__/alertThresholdsSectionPresentation.test.ts"
             ]
           },
           {
