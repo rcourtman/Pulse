@@ -26,8 +26,10 @@ runtime cost control, and shared AI transport surfaces.
 4. `internal/api/ai_intelligence_handlers.go`
 5. `frontend-modern/src/api/ai.ts`
 6. `frontend-modern/src/api/patrol.ts`
-7. `frontend-modern/src/components/AI/Chat/`
-8. `frontend-modern/src/utils/textPresentation.ts`
+7. `frontend-modern/src/components/AI/AICostDashboard.tsx`
+8. `frontend-modern/src/components/AI/Chat/`
+9. `frontend-modern/src/utils/aiCostPresentation.ts`
+10. `frontend-modern/src/utils/textPresentation.ts`
 
 ## Shared Boundaries
 
@@ -42,7 +44,8 @@ runtime cost control, and shared AI transport surfaces.
 1. Add or change chat runtime, Patrol orchestration, findings generation, or remediation behavior through `internal/ai/`
 2. Add or change Pulse Assistant request flow through `internal/api/ai_handler.go` and `frontend-modern/src/api/ai.ts`
 3. Add or change Patrol, alert-analysis, or remediation transport through `internal/api/ai_handlers.go`, `internal/api/ai_intelligence_handlers.go`, and `frontend-modern/src/api/patrol.ts`
-4. Keep AI chat presentation helpers aligned through `frontend-modern/src/components/AI/Chat/` and the shared `frontend-modern/src/utils/textPresentation.ts`
+4. Add or change AI usage/cost dashboard presentation through `frontend-modern/src/components/AI/AICostDashboard.tsx` and `frontend-modern/src/utils/aiCostPresentation.ts`
+5. Keep AI chat presentation helpers aligned through `frontend-modern/src/components/AI/Chat/` and the shared `frontend-modern/src/utils/textPresentation.ts`
 
 ## Forbidden Paths
 
@@ -69,6 +72,14 @@ governed floor is ready.
 `internal/ai/` is the live backend AI engine. It owns chat execution, Patrol
 orchestration, findings generation, investigation support, quickstart and
 provider selection, remediation flow, and cost persistence.
+
+The same runtime ownership now includes the customer-facing AI usage and cost
+surface. `frontend-modern/src/components/AI/AICostDashboard.tsx` is the
+canonical AI usage dashboard shell, while
+`frontend-modern/src/utils/aiCostPresentation.ts` owns its shared loading,
+empty-state, and range-button presentation contract. Future cost-surface work
+must extend those owners instead of reintroducing inline AI usage copy or
+dashboard-local segmented-button styling.
 
 The AI transport files are shared with `api-contracts`, not delegated away to
 it. `frontend-modern/src/api/ai.ts`,
