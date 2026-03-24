@@ -71,6 +71,8 @@ agreement, and cloud-specific enforcement rules.
 49. `frontend-modern/src/utils/commercialBillingModel.ts`
 50. `frontend-modern/src/utils/monitoredSystemPresentation.ts`
 51. `frontend-modern/src/utils/selfHostedPlans.ts`
+52. `frontend-modern/src/utils/licensePresentation.ts`
+53. `frontend-modern/src/utils/upgradePresentation.ts`
 
 ## Shared Boundaries
 
@@ -211,6 +213,13 @@ That same monitored-system presentation boundary now also owns the customer-
 facing ledger loading and retry copy through
 `frontend-modern/src/utils/monitoredSystemPresentation.ts`, so commercial
 usage states do not leak back into lifecycle inventory helpers.
+That same cloud-paid boundary also owns the shared entitlement and upgrade
+presentation helpers through `frontend-modern/src/utils/licensePresentation.ts`
+and `frontend-modern/src/utils/upgradePresentation.ts`. Commercial tier labels,
+feature minimum-tier messaging, migration/trial notices, billing-admin status
+labels, and upgrade CTA styling must extend those helpers instead of being
+redefined inline in settings feature gates, Pro license panels, or trial
+upgrade nudges.
 That same disclosure copy must stay professional and customer-facing. The
 settings ledger may expose counting details and included collection paths, but
 it must avoid informal debug-style labels or ad hoc wording that makes the

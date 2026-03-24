@@ -1559,8 +1559,10 @@
         "frontend-modern/src/utils/apiClient.ts",
         "frontend-modern/src/utils/cloudPlans.ts",
         "frontend-modern/src/utils/commercialBillingModel.ts",
+        "frontend-modern/src/utils/licensePresentation.ts",
         "frontend-modern/src/utils/monitoredSystemPresentation.ts",
         "frontend-modern/src/utils/selfHostedPlans.ts",
+        "frontend-modern/src/utils/upgradePresentation.ts",
         "internal/api/public_signup_handlers.go",
         "internal/cloudcp/account/tenant_handlers.go",
         "internal/cloudcp/entitlements/service.go",
@@ -2000,6 +2002,22 @@
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/utils/__tests__/monitoredSystemPresentation.test.ts"
+            ]
+          },
+          {
+            "id": "commercial-presentation-helpers",
+            "label": "commercial presentation helper proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/utils/licensePresentation.ts",
+              "frontend-modern/src/utils/upgradePresentation.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/components/Settings/__tests__/monitoredSystemModelGuardrails.test.ts",
+              "frontend-modern/src/utils/__tests__/licensePresentation.test.ts",
+              "frontend-modern/src/utils/__tests__/upgradePresentation.test.ts"
             ]
           },
           {
