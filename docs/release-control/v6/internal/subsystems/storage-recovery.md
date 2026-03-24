@@ -11,6 +11,7 @@
   "registry_file": "docs/release-control/v6/internal/subsystems/registry.json",
   "dependency_subsystem_ids": [
     "api-contracts",
+    "frontend-primitives",
     "unified-resources"
   ]
 }

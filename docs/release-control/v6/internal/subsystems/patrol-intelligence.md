@@ -9,7 +9,7 @@
   "contract_file": "docs/release-control/v6/internal/subsystems/patrol-intelligence.md",
   "status_file": "docs/release-control/v6/internal/status.json",
   "registry_file": "docs/release-control/v6/internal/subsystems/registry.json",
-  "dependency_subsystem_ids": []
+  "dependency_subsystem_ids": ["frontend-primitives"]
 }
 ```
 

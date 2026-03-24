@@ -60,6 +60,7 @@ work extends shared components instead of creating new local variants.
 37. `frontend-modern/src/utils/systemSettingsPresentation.ts`
 38. `frontend-modern/src/utils/aiSettingsPresentation.ts`
 39. `frontend-modern/src/utils/settingsShellPresentation.ts`
+40. `frontend-modern/src/utils/textPresentation.ts`
 37. `frontend-modern/src/components/Settings/UpdateInstallGuide.tsx`
 38. `frontend-modern/src/components/Settings/updatesSettingsModel.ts`
 39. `frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx`
@@ -699,6 +700,13 @@ and upgrade-link runtime, and
 owns monitored-system summary, migration copy, overflow summary, and tone/text-class
 policy. Future warning-banner work should extend those owners instead of pushing
 entitlement orchestration, tracking, or naming math back into the shared shell.
+Shared frontend label-formatting helpers now also have an explicit owner here.
+`frontend-modern/src/utils/textPresentation.ts` is the canonical shared owner
+for token humanization, identifier label formatting, title-casing, and
+arrow-delimited label presentation used across AI, Patrol, Storage/Recovery,
+and other feature surfaces. Feature contracts may depend on that helper, but
+they should not re-home or fork those generic text-formatting rules into
+feature-local utilities.
 First-session educational surfaces must also stay brief, flat, and model-led.
 When Pulse needs to teach a user how a flow works, the primary on-screen
 guidance should collapse to a few short descriptions of the real product
