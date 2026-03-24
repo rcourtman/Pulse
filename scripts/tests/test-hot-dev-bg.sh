@@ -190,6 +190,40 @@ test_launchd_session_supervises_managed_runtime() {
   assert_contains "launchd session exits nonzero on child crash" "${output}" "status=1"
 }
 
+test_start_bg_reports_browser_entrypoint() {
+  local test_dir fake_bin output
+  test_dir="$(mktemp -d)"
+  temp_dirs+=("${test_dir}")
+  fake_bin="${test_dir}/bin"
+  mkdir -p "${fake_bin}"
+
+  cat > "${fake_bin}/python3" <<'EOF'
+#!/usr/bin/env bash
+printf '4242\n'
+EOF
+  chmod +x "${fake_bin}/python3"
+
+  output="$(
+    HOT_DEV_BG_PATH="${HOT_DEV_BG}" \
+    PATH="${fake_bin}:$PATH" \
+    bash -lc '
+      source "${HOT_DEV_BG_PATH}"
+      PID_FILE="'"${test_dir}"'/hot-dev-bg.pid"
+      LOG_FILE="'"${test_dir}"'/hot-dev-bg.log"
+      FRONTEND_DEV_PORT=5173
+      PULSE_DEV_API_PORT=7655
+      has_unmanaged_listeners(){ return 1; }
+      is_running(){ return 1; }
+      wait_for_managed_listener(){ return 0; }
+      start_bg false
+    '
+  )"
+
+  assert_contains "start reports browser entrypoint" "${output}" "Browser entrypoint: http://127.0.0.1:5173"
+  assert_contains "start reports managed backend" "${output}" "Managed backend:  http://127.0.0.1:7655"
+  assert_not_contains "start no longer reports generic frontend url" "${output}" "Frontend: http://127.0.0.1:5173"
+}
+
 test_launchd_wrapper_uses_managed_supervisor() {
   local output
   output="$(sed -n '1,80p' "${DEV_LAUNCHD_WRAPPER}")"
@@ -566,6 +600,7 @@ main() {
   test_cli_parses_takeover_flag
   test_verify_command_injects_managed_runtime_env
   test_launchd_session_supervises_managed_runtime
+  test_start_bg_reports_browser_entrypoint
   test_launchd_wrapper_uses_managed_supervisor
   test_launchd_setup_advertises_managed_runtime_controls
   test_root_package_exposes_managed_runtime_entrypoints

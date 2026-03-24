@@ -442,8 +442,8 @@ PY
     log "Check logs with: npm run dev:logs"
   fi
 
-  log "Frontend: http://127.0.0.1:${FRONTEND_DEV_PORT}"
-  log "Backend:  http://127.0.0.1:${PULSE_DEV_API_PORT}"
+  log "Browser entrypoint: http://127.0.0.1:${FRONTEND_DEV_PORT}"
+  log "Managed backend:  http://127.0.0.1:${PULSE_DEV_API_PORT}"
   log "Logs: ${LOG_FILE}"
 }
 
