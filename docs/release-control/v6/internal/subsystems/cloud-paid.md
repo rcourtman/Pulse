@@ -223,10 +223,9 @@ top-level surface degraded and when it last reported rather than only reading
 generic status copy beside a fresh aggregate `Last Seen` value.
 That same settings surface must also label the monitored-system signal by its
 real meaning. The canonical API shape is now the structured
-`latest_included_signal` object, while `latest_included_signal_at`,
-`latest_included_signal_source`, and `last_seen` are rollout compatibility
-fields only on the raw response payload. The normalized frontend client
-contract should expose only the canonical object. It represents the freshest
+`latest_included_signal` object, and the normalized frontend client contract
+should expose only that canonical object. Retired flat alias fields must not
+re-enter the live backend payload or client contract. It represents the freshest
 included grouped observation, not a guarantee that every grouped source is
 healthy, so the UI must not present it with single-source `Last Seen` wording.
 When the canonical object is present, the surface should use its

@@ -242,9 +242,8 @@ That same ledger read also treats the canonical `latest_included_signal`
 object as the freshest included grouped observation. Lifecycle-adjacent
 consumers must not label it with generic single-source health wording, and
 should use the canonical object when they need attribution for which grouped
-surface reported most recently. Older rollout payloads may still carry flat
-alias fields, but lifecycle consumers must treat those as legacy input only,
-not as an independent lifecycle signal contract.
+surface reported most recently. Retired flat alias fields must not reappear as
+parallel lifecycle signal inputs or contract language.
 Lifecycle-adjacent workspace copy must also keep the same commercial framing:
 infrastructure operations may point operators to Pulse Pro for billing, but it
 must describe that boundary in monitored-system, plan-limit, and license-status
