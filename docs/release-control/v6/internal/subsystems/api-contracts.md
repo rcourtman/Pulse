@@ -441,6 +441,13 @@ place that derives `.env` from configured runtime paths, and neighboring
 handlers like `router.go`, `router_routes_auth_security.go`, and
 `security_setup_fix.go` may not reconstruct their own `/etc/pulse/.env`
 fallbacks once runtime path authority has been centralized.
+That same monitored-system ledger boundary now also governs frontend client
+normalization. `frontend-modern/src/api/monitoredSystemLedger.ts` must decode
+mixed-version payloads into one normalized response shape before render
+surfaces consume it: `status_explanation`, `explanation`, and
+`latest_included_signal` are the client contract exposed to the UI, while
+missing mixed-version fields may be repaired only inside that API client layer
+rather than in panel-local fallback helpers.
 That same shared API boundary rule now also applies to notification test
 handlers: `internal/api/notifications.go` may decode webhook-test requests and
 return the governed response envelope, but notifications-owned service-template

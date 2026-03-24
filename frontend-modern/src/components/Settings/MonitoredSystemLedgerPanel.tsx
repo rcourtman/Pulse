@@ -11,11 +11,7 @@ import {
 } from '@/components/shared/Table';
 import { formatRelativeTime } from '@/utils/format';
 import { MonitoredSystemLedgerAPI } from '@/api/monitoredSystemLedger';
-import type {
-  MonitoredSystemLedgerEntry,
-  MonitoredSystemLedgerExplanation,
-  MonitoredSystemLedgerStatusExplanation,
-} from '@/api/monitoredSystemLedger';
+import type { MonitoredSystemLedgerEntry } from '@/api/monitoredSystemLedger';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import {
   getMonitoredSystemLedgerErrorState,
@@ -27,9 +23,7 @@ import {
   formatMonitoredSystemSurfaceAttribution,
   getMonitoredSystemLedgerDescription,
   getMonitoredSystemCountingDetailsToggleLabel,
-  getMonitoredSystemExplanationFallbackSummary,
   getMonitoredSystemLedgerPresentation,
-  getMonitoredSystemStatusFallbackSummary,
 } from '@/utils/monitoredSystemPresentation';
 import { MonitoredSystemDefinitionDisclosure } from '@/components/Commercial/MonitoredSystemDefinitionDisclosure';
 
@@ -42,28 +36,11 @@ function usagePercent(total: number, limit: number): number {
   return Math.min(100, Math.round((total / limit) * 100));
 }
 
-function systemExplanation(system: MonitoredSystemLedgerEntry): MonitoredSystemLedgerExplanation {
-  return {
-    summary: system.explanation?.summary ?? getMonitoredSystemExplanationFallbackSummary(),
-    reasons: system.explanation?.reasons ?? [],
-    surfaces: system.explanation?.surfaces ?? [],
-  };
-}
-
-function systemStatusExplanation(system: MonitoredSystemLedgerEntry): MonitoredSystemLedgerStatusExplanation {
-  return {
-    summary:
-      system.status_explanation?.summary ??
-      getMonitoredSystemStatusFallbackSummary(system.status),
-    reasons: system.status_explanation?.reasons ?? [],
-  };
-}
-
 function latestIncludedSignalSummary(system: MonitoredSystemLedgerEntry): {
   relative: string;
   attribution: string;
 } | null {
-  if (!system.latest_included_signal?.at) {
+  if (!system.latest_included_signal.at) {
     return null;
   }
   return {
@@ -172,8 +149,6 @@ export function MonitoredSystemLedgerPanel(props: MonitoredSystemLedgerPanelProp
                   const key = systemKey(system, index());
                   const explanationID = `monitored-system-explanation-${index()}`;
                   const expanded = () => expandedSystemKey() === key;
-                  const explanation = systemExplanation(system);
-                  const statusExplanation = systemStatusExplanation(system);
                   const latestSignal = latestIncludedSignalSummary(system);
                   return (
                     <TableRow>
@@ -199,7 +174,7 @@ export function MonitoredSystemLedgerPanel(props: MonitoredSystemLedgerPanelProp
                                   {presentation.currentStatusHeading}
                                 </p>
                                 <p class="whitespace-normal text-base-content">
-                                  {statusExplanation.summary}
+                                  {system.status_explanation.summary}
                                 </p>
                                 <Show when={latestSignal}>
                                   {(signal) => (
@@ -210,31 +185,31 @@ export function MonitoredSystemLedgerPanel(props: MonitoredSystemLedgerPanelProp
                                     </p>
                                   )}
                                 </Show>
-                                <Show when={statusExplanation.reasons.length > 0}>
+                                <Show when={system.status_explanation.reasons.length > 0}>
                                   <ul class="space-y-1 whitespace-normal text-base-content">
-                                    <For each={statusExplanation.reasons}>
+                                    <For each={system.status_explanation.reasons}>
                                       {(reason) => <li>{reason.summary}</li>}
                                     </For>
                                   </ul>
                                 </Show>
                               </div>
                               <p class="whitespace-normal text-base-content">
-                                {explanation.summary}
+                                {system.explanation.summary}
                               </p>
-                              <Show when={explanation.reasons.length > 0}>
+                              <Show when={system.explanation.reasons.length > 0}>
                                 <ul class="space-y-1 whitespace-normal">
-                                  <For each={explanation.reasons}>
+                                  <For each={system.explanation.reasons}>
                                     {(reason) => <li>{reason.summary}</li>}
                                   </For>
                                 </ul>
                               </Show>
-                              <Show when={explanation.surfaces.length > 0}>
+                              <Show when={system.explanation.surfaces.length > 0}>
                                 <div class="space-y-1">
                                   <p class="font-medium text-base-content">
                                     {presentation.includedCollectionPathsHeading}
                                   </p>
                                   <ul class="space-y-1 whitespace-normal">
-                                    <For each={explanation.surfaces}>
+                                    <For each={system.explanation.surfaces}>
                                       {(surface) => (
                                         <li>{formatMonitoredSystemSurfaceAttribution(surface)}</li>
                                       )}

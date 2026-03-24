@@ -105,6 +105,12 @@ describe('MonitoredSystemLedgerAPI', () => {
     expect(result.systems[0]?.status_explanation?.reasons).toEqual([]);
     expect(result.systems[0]?.explanation.reasons).toEqual([]);
     expect(result.systems[0]?.explanation.surfaces).toEqual([]);
+    expect(result.systems[0]?.latest_included_signal).toEqual({
+      name: 'server-1',
+      type: 'host',
+      source: 'agent',
+      at: '2026-01-01T00:00:00Z',
+    });
   });
 
   it('normalizes missing status explanation copy from the canonical presentation helper', async () => {

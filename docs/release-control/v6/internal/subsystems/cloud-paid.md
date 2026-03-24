@@ -255,6 +255,14 @@ That same helper now also owns the row-status fallback summaries used when
 mixed-version payloads omit `status_explanation.summary`. The API client and
 settings panel must derive online/warning/offline/unknown fallback text from
 that shared owner instead of keeping separate local defaults that can drift.
+That same settings owner split now also requires
+`frontend-modern/src/components/Settings/MonitoredSystemLedgerPanel.tsx` to
+consume the normalized ledger client contract directly. Panel-local fallback
+reconstruction for `status_explanation`, `explanation`, or
+`latest_included_signal` belongs in
+`frontend-modern/src/api/monitoredSystemLedger.ts` instead, so the billing
+surface stays a pure render shell over one canonical monitored-system ledger
+shape.
 Frontend billing/admin surfaces must not synthesize `plan_version` from
 subscription lifecycle state. When a hosted billing record lacks a plan label,
 the UI must preserve that absence instead of fabricating values like `active`

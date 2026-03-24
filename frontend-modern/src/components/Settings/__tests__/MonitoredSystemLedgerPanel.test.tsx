@@ -292,6 +292,11 @@ describe('MonitoredSystemLedgerPanel', () => {
             summary: 'All included top-level collection paths currently report online status.',
             reasons: [],
           },
+          explanation: {
+            summary: 'Pulse counts this top-level collection path as one monitored system.',
+            reasons: [],
+            surfaces: [],
+          },
           latest_included_signal: {
             name: 'server-a',
             type: 'host',
@@ -336,6 +341,19 @@ describe('MonitoredSystemLedgerPanel', () => {
             summary: 'Pulse cannot determine a canonical runtime status for this monitored system yet.',
             reasons: [],
           },
+          explanation: {
+            summary: 'Pulse counts this top-level collection path as one monitored system.',
+            reasons: [],
+            surfaces: [],
+          },
+          latest_included_signal: {
+            name: 'server-c',
+            type: 'host',
+            source: 'agent',
+            at: '',
+          },
+          latest_included_signal_at: '',
+          latest_included_signal_source: 'agent',
           source: 'agent',
         },
       ],
@@ -359,6 +377,16 @@ describe('MonitoredSystemLedgerPanel', () => {
           name: 'server-d',
           type: 'host',
           status: 'offline',
+          status_explanation: {
+            summary:
+              'At least one included source is offline or disconnected, so Pulse marks this monitored system as offline.',
+            reasons: [],
+          },
+          explanation: {
+            summary: 'Pulse counts this top-level collection path as one monitored system.',
+            reasons: [],
+            surfaces: [],
+          },
           latest_included_signal: {
             name: 'server-d',
             type: 'host',

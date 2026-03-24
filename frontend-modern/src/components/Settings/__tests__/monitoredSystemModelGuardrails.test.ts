@@ -250,6 +250,8 @@ describe('monitored-system model guardrails', () => {
     expect(monitoredSystemLedgerApiSource).toContain('@/utils/monitoredSystemPresentation');
     expect(monitoredSystemLedgerApiSource).toContain('getMonitoredSystemStatusFallbackSummary');
     expect(monitoredSystemLedgerApiSource).toContain('getMonitoredSystemExplanationFallbackSummary');
+    expect(monitoredSystemLedgerApiSource).toContain('type MonitoredSystemLedgerRawEntry =');
+    expect(monitoredSystemLedgerApiSource).toContain('systems?: MonitoredSystemLedgerRawEntry[];');
     expect(monitoredSystemLedgerApiSource).not.toContain(
       'All included top-level collection paths currently report online status.',
     );
@@ -260,6 +262,10 @@ describe('monitored-system model guardrails', () => {
       'Pulse cannot determine a canonical runtime status for this monitored system yet.',
     );
     expect(monitoredSystemPresentationSource).toContain('statusSummaryByStatus');
+    expect(agentLedgerPanelSource).not.toContain('getMonitoredSystemExplanationFallbackSummary');
+    expect(agentLedgerPanelSource).not.toContain('getMonitoredSystemStatusFallbackSummary');
+    expect(agentLedgerPanelSource).not.toContain('function systemExplanation(');
+    expect(agentLedgerPanelSource).not.toContain('function systemStatusExplanation(');
   });
 
   it('keeps APITokenManager runtime usage mapped from unified resources', () => {

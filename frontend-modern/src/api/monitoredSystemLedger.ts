@@ -49,13 +49,13 @@ export interface MonitoredSystemLedgerEntry {
   name: string;
   type: string;
   status: MonitoredSystemLedgerStatus;
-  status_explanation?: MonitoredSystemLedgerStatusExplanation;
-  latest_included_signal?: MonitoredSystemLedgerLatestSignal;
+  status_explanation: MonitoredSystemLedgerStatusExplanation;
+  latest_included_signal: MonitoredSystemLedgerLatestSignal;
   latest_included_signal_at: string; // freshest included observation, RFC3339 or empty
   latest_included_signal_source?: string;
   last_seen?: string; // deprecated compatibility alias
   source: string;
-  explanation?: MonitoredSystemLedgerExplanation;
+  explanation: MonitoredSystemLedgerExplanation;
 }
 
 export interface MonitoredSystemLedgerLatestSignal {
@@ -71,11 +71,24 @@ export interface MonitoredSystemLedgerResponse {
   limit: number; // 0 = unlimited
 }
 
+type MonitoredSystemLedgerRawEntry = Omit<
+  MonitoredSystemLedgerEntry,
+  'status_explanation' | 'latest_included_signal' | 'explanation'
+> & {
+  status_explanation?: MonitoredSystemLedgerStatusExplanation;
+  latest_included_signal?: MonitoredSystemLedgerLatestSignal;
+  explanation?: MonitoredSystemLedgerExplanation;
+};
+
+type MonitoredSystemLedgerRawResponse = Omit<MonitoredSystemLedgerResponse, 'systems'> & {
+  systems?: MonitoredSystemLedgerRawEntry[];
+};
+
 export class MonitoredSystemLedgerAPI {
   private static readonly baseUrl = '/api/license/monitored-system-ledger';
 
   static async getLedger(): Promise<MonitoredSystemLedgerResponse> {
-    const response = await apiFetchJSON<MonitoredSystemLedgerResponse>(this.baseUrl);
+    const response = await apiFetchJSON<MonitoredSystemLedgerRawResponse>(this.baseUrl);
     return {
       ...response,
       systems: (response.systems ?? []).map(normalizeMonitoredSystemLedgerEntry),
@@ -84,7 +97,7 @@ export class MonitoredSystemLedgerAPI {
 }
 
 function normalizeMonitoredSystemLedgerEntry(
-  entry: MonitoredSystemLedgerEntry,
+  entry: MonitoredSystemLedgerRawEntry,
 ): MonitoredSystemLedgerEntry {
   const explanation = entry.explanation;
   const status = normalizeMonitoredSystemLedgerStatus(entry.status);
@@ -169,7 +182,7 @@ function normalizeMonitoredSystemLedgerSource(
 
 function normalizeMonitoredSystemLedgerLatestSignal(
   signal: MonitoredSystemLedgerLatestSignal | undefined,
-  entry: MonitoredSystemLedgerEntry,
+  entry: MonitoredSystemLedgerRawEntry,
 ): MonitoredSystemLedgerLatestSignal {
   return {
     name: signal?.name?.trim() || entry.name || 'Unnamed source',
