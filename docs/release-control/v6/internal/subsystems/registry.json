@@ -1994,7 +1994,8 @@
         "scripts/install.sh",
         "scripts/pulse-auto-update.sh",
         "scripts/release_control/resolve_release_promotion.py",
-        "scripts/release_ldflags.sh"
+        "scripts/release_ldflags.sh",
+        "tests/integration/scripts/managed-dev-runtime.mjs"
       ],
       "verification": {
         "allow_same_subsystem_tests": false,
@@ -2086,12 +2087,14 @@
             "match_prefixes": [],
             "match_files": [
               "scripts/hot-dev-bg.sh",
-              "scripts/hot-dev.sh"
+              "scripts/hot-dev.sh",
+              "tests/integration/scripts/managed-dev-runtime.mjs"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
-              "scripts/tests/test-hot-dev-bg.sh"
+              "scripts/tests/test-hot-dev-bg.sh",
+              "tests/integration/tests/16-dev-runtime-recovery.spec.ts"
             ]
           },
           {

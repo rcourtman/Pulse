@@ -103,6 +103,7 @@ test_cli_parses_takeover_flag() {
       source "${HOT_DEV_BG_PATH}"
       printf "start=%s\n" "$(parse_takeover_flag start --takeover)"
       printf "restart=%s\n" "$(parse_takeover_flag restart --takeover)"
+      printf "backend_restart=%s\n" "$(parse_takeover_flag backend-restart)"
       printf "plain=%s\n" "$(parse_takeover_flag start)"
       if parse_takeover_flag status --takeover >/tmp/hot-dev-bg.invalid 2>&1; then
         printf "invalid=accepted\n"
@@ -114,8 +115,35 @@ test_cli_parses_takeover_flag() {
 
   assert_contains "takeover parsing enables start" "${output}" "start=true"
   assert_contains "takeover parsing enables restart" "${output}" "restart=true"
+  assert_contains "backend restart remains flagless" "${output}" "backend_restart=false"
   assert_contains "start without flag stays false" "${output}" "plain=false"
   assert_contains "unexpected status flag is rejected" "${output}" "invalid=rejected"
+}
+
+test_backend_restart_requires_managed_runtime() {
+  local frontend_port backend_port output
+  local state_dir
+  frontend_port="$(pick_free_port)"
+  backend_port="$(pick_free_port)"
+  if [[ "${backend_port}" == "${frontend_port}" ]]; then
+    backend_port="$(pick_free_port)"
+  fi
+  state_dir="$(make_isolated_hot_dev_bg_state)"
+
+  output="$(
+    set +e
+    HOT_DEV_BG_PID_FILE="${state_dir}/hot-dev-bg.pid" \
+    HOT_DEV_BG_LOG_FILE="${state_dir}/hot-dev-bg.log" \
+    FRONTEND_DEV_HOST=127.0.0.1 \
+    FRONTEND_DEV_PORT="${frontend_port}" \
+    PULSE_DEV_API_HOST=127.0.0.1 \
+    PULSE_DEV_API_PORT="${backend_port}" \
+    "${HOT_DEV_BG}" backend-restart 2>&1
+    printf '\nexit_code=%s' "$?"
+  )"
+
+  assert_contains "backend restart refuses missing managed runtime" "${output}" "Managed hot-dev session is not running"
+  assert_contains "backend restart returns failure without managed runtime" "${output}" "exit_code=1"
 }
 
 test_detects_unmanaged_listeners() {
@@ -166,6 +194,7 @@ test_detects_unmanaged_listeners() {
 
 main() {
   test_cli_parses_takeover_flag
+  test_backend_restart_requires_managed_runtime
   test_status_without_runtime
   test_detects_unmanaged_listeners
 

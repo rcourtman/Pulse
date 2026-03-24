@@ -190,6 +190,7 @@ export PULSE_DEV_API_HOST PULSE_DEV_API_PORT PULSE_DEV_API_URL PULSE_DEV_WS_URL
 export ALLOWED_ORIGINS
 
 EXTRA_CLEANUP_PORT=$((PULSE_DEV_API_PORT + 1))
+HOT_DEV_RESTART_SENTINEL="${ROOT_DIR}/tmp/hot-dev.restart"
 
 # --- Startup Checks ---
 
@@ -268,6 +269,9 @@ done
 set -o pipefail
 
 log_info "Ports are clean!"
+
+mkdir -p "$(dirname "${HOT_DEV_RESTART_SENTINEL}")"
+touch "${HOT_DEV_RESTART_SENTINEL}"
 
 # Self-restart check
 check_script_change() {
@@ -602,10 +606,13 @@ log_info "Starting backend file watcher..."
         inotifywait -r -m -e modify,create,delete,move,attrib \
             --exclude '(vendor/|node_modules/|\.git/|\.swp$|\.tmp$|~$)' \
             --format '%e %w%f' \
-            "${ROOT_DIR}/cmd" "${ROOT_DIR}/internal" "${ROOT_DIR}/pkg" "${ROOT_DIR}/pulse" 2>/dev/null | \
+            "${ROOT_DIR}/cmd" "${ROOT_DIR}/internal" "${ROOT_DIR}/pkg" "${ROOT_DIR}/pulse" "${HOT_DEV_RESTART_SENTINEL}" 2>/dev/null | \
         while read -r event changed_file; do
             check_script_change "$@"
-            if [[ "$changed_file" == "${ROOT_DIR}/pulse" ]]; then
+            if [[ "$changed_file" == "${HOT_DEV_RESTART_SENTINEL}" ]]; then
+                log_info "🚀 Managed restart requested, restarting backend..."
+                restart_backend
+            elif [[ "$changed_file" == "${ROOT_DIR}/pulse" ]]; then
                 log_info "🚀 Manual build detected (pulse binary changed), restarting..."
                 restart_backend
             elif [[ "$changed_file" == *.go ]] || [[ "$event" =~ CREATE|DELETE|MOVED|ATTRIB ]]; then
@@ -622,9 +629,13 @@ log_info "Starting backend file watcher..."
         # Watch the pulse binary too — if someone does `go build -o pulse`
         # manually, we should restart without rebuilding.
         fswatch --event Created --event Updated --event Renamed --event AttributeModified \
-            "${ROOT_DIR}/pulse" 2>/dev/null | \
-        while read -r _; do
-            log_info "🚀 Manual build detected (pulse binary changed), restarting..."
+            "${ROOT_DIR}/pulse" "${HOT_DEV_RESTART_SENTINEL}" 2>/dev/null | \
+        while read -r changed_file; do
+            if [[ "$changed_file" == "${HOT_DEV_RESTART_SENTINEL}" ]]; then
+                log_info "🚀 Managed restart requested, restarting backend..."
+            else
+                log_info "🚀 Manual build detected (pulse binary changed), restarting..."
+            fi
             restart_backend
         done &
         BINARY_WATCH_PID=$!

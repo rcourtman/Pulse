@@ -31,6 +31,7 @@ server-side update execution surfaces.
 9. `scripts/pulse-auto-update.sh`
 10. `scripts/hot-dev.sh`
 11. `scripts/hot-dev-bg.sh`
+12. `tests/integration/scripts/managed-dev-runtime.mjs`
 
 ## Shared Boundaries
 
@@ -45,7 +46,7 @@ server-side update execution surfaces.
 2. Add or change release-build metadata injection, release artifact assembly, or governed promotion metadata resolution through `scripts/build-release.sh`, `scripts/release_ldflags.sh`, and `scripts/release_control/resolve_release_promotion.py`, plus the container Dockerfile and governed release workflows that consume those same contracts
 3. Add or change shell installer, Windows installer, container-agent installer, or auto-update script behavior through `scripts/install.sh`, `scripts/install.ps1`, `scripts/install-container-agent.sh`, and `scripts/pulse-auto-update.sh`
 4. Add or change server update transport through `internal/api/updates.go` and `frontend-modern/src/api/updates.ts`
-5. Add or change local dev-runtime orchestration, managed ownership, or frontend/backend coherence diagnostics through `scripts/hot-dev.sh` and `scripts/hot-dev-bg.sh`
+5. Add or change local dev-runtime orchestration, managed ownership, browser-runtime proof wiring, or frontend/backend coherence diagnostics through `scripts/hot-dev.sh`, `scripts/hot-dev-bg.sh`, and `tests/integration/scripts/managed-dev-runtime.mjs`
 
 ## Forbidden Paths
 
@@ -150,6 +151,15 @@ managed takeover must surface that competing job in diagnostics and boot it
 out before starting a new managed session, otherwise launchd can immediately
 recreate the legacy `0.0.0.0` dev runtime beside the managed `127.0.0.1`
 session.
+That same managed dev-runtime boundary now also owns operator-safe recovery
+control and browser proof. `scripts/hot-dev-bg.sh` must provide a canonical
+managed-backend restart command instead of forcing operators or tests to kill
+listener PIDs ad hoc, and the integration harness must be able to attach
+Playwright to the browser entrypoint on `5173` rather than only the backend
+port on `7655`. Recovery proof for this surface must run through the managed
+browser runtime, bounce the real backend through the launcher contract, and
+prove that the shell degrades and recovers through the proxy instead of
+relying on backend-only API checks that miss browser/runtime drift.
 That shared `scripts/install.sh` boundary must also keep one canonical service
 argument builder for the runtime flags it persists. Token-bearing install
 paths, token-file systemd paths, wrapper-script launches, and later service

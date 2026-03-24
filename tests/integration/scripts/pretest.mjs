@@ -3,6 +3,7 @@ import http from 'node:http';
 import { resolveComposeInvocation } from './compose-command.mjs';
 import { applyRequestedEntitlementProfile } from './entitlement-bootstrap.mjs';
 import { startManagedLocalBackend } from './managed-local-backend.mjs';
+import { startManagedDevRuntime } from './managed-dev-runtime.mjs';
 import { clearRuntimeState } from './runtime-state.mjs';
 
 // Add signal handlers to debug unexpected termination
@@ -32,6 +33,7 @@ const truthy = (value) => {
 const shouldSkipDocker = truthy(process.env.PULSE_E2E_SKIP_DOCKER);
 const shouldSkipPlaywrightInstall = truthy(process.env.PULSE_E2E_SKIP_PLAYWRIGHT_INSTALL);
 const shouldUseManagedLocalBackend = truthy(process.env.PULSE_E2E_USE_LOCAL_BACKEND);
+const shouldUseManagedDevRuntime = truthy(process.env.PULSE_E2E_USE_HOT_DEV);
 
 const DEFAULT_E2E_BOOTSTRAP_TOKEN = '0123456789abcdef0123456789abcdef0123456789abcdef';
 if (!process.env.PULSE_E2E_BOOTSTRAP_TOKEN) {
@@ -106,6 +108,11 @@ if (!shouldSkipPlaywrightInstall) {
 }
 
 await clearRuntimeState();
+
+if (shouldUseManagedDevRuntime) {
+  await startManagedDevRuntime();
+  process.exit(0);
+}
 
 if (shouldUseManagedLocalBackend) {
   await startManagedLocalBackend();

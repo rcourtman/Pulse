@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { stopManagedDevRuntime } from './managed-dev-runtime.mjs';
 import { stopManagedLocalBackend } from './managed-local-backend.mjs';
 
 const truthy = (value) => {
@@ -8,6 +9,11 @@ const truthy = (value) => {
 
 if (truthy(process.env.PULSE_E2E_USE_LOCAL_BACKEND)) {
   await stopManagedLocalBackend();
+  process.exit(0);
+}
+
+if (truthy(process.env.PULSE_E2E_USE_HOT_DEV)) {
+  await stopManagedDevRuntime();
   process.exit(0);
 }
 

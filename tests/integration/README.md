@@ -122,6 +122,20 @@ This mode starts an isolated Pulse backend from the local repo binary in a tempo
 
 Each `npm test` invocation gets its own runtime-state file and managed-backend root automatically, so separate managed-local-backend runs can execute in parallel without sharing PID or cleanup state. Shared embedded-frontend and backend-binary refreshes are serialized by the harness.
 
+### Run Against The Managed Hot-Dev Browser Runtime
+```bash
+cd tests/integration
+PULSE_E2E_USE_HOT_DEV=1 \
+PULSE_E2E_SKIP_PLAYWRIGHT_INSTALL=1 \
+npm test -- tests/16-dev-runtime-recovery.spec.ts --project=chromium
+```
+
+This mode attaches Playwright to the canonical dev browser entrypoint on `http://127.0.0.1:5173`, uses `scripts/hot-dev-bg.sh` as the runtime control surface, and writes browser runtime connection state for Playwright instead of targeting the backend port directly.
+
+If the managed runtime is not already running, the harness starts it. If you need the harness to reclaim existing unmanaged `5173`/`7655` listeners first, add `PULSE_E2E_HOT_DEV_TAKEOVER=1`.
+
+The managed recovery proof bounces the real backend through `./scripts/hot-dev-bg.sh backend-restart` and verifies that the browser shell reports the outage and then recovers through the proxy. When the harness attaches to an already-running managed dev session, `posttest` leaves that runtime running.
+
 For deterministic paid-feature runs against an existing instance, provide one of:
 - `PULSE_E2E_BILLING_STATE_PATH=/absolute/path/to/billing.json` to let the harness write the billing state file directly.
 - `PULSE_E2E_ENTITLEMENT_WRITE_COMMAND='ssh host "cat > /etc/pulse/billing.json"'` to pipe the billing JSON to a remote/local writer command.

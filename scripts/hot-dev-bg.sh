@@ -6,6 +6,7 @@
 #   ./scripts/hot-dev-bg.sh start [--takeover]
 #   ./scripts/hot-dev-bg.sh stop
 #   ./scripts/hot-dev-bg.sh restart
+#   ./scripts/hot-dev-bg.sh backend-restart
 #   ./scripts/hot-dev-bg.sh status
 #   ./scripts/hot-dev-bg.sh logs
 
@@ -118,6 +119,22 @@ port_has_unmanaged_listener() {
   while IFS= read -r listener_pid; do
     [[ -n "${listener_pid}" ]] || continue
     if ! pid_is_managed "${listener_pid}" "${session_pid}"; then
+      return 0
+    fi
+  done < <(listener_pids "${port}")
+
+  return 1
+}
+
+first_managed_listener_pid() {
+  local port="$1"
+  local session_pid="$2"
+  local listener_pid
+
+  while IFS= read -r listener_pid; do
+    [[ -n "${listener_pid}" ]] || continue
+    if pid_is_managed "${listener_pid}" "${session_pid}"; then
+      printf "%s\n" "${listener_pid}"
       return 0
     fi
   done < <(listener_pids "${port}")
@@ -520,6 +537,59 @@ logs_bg() {
   tail -n 120 -f "${LOG_FILE}"
 }
 
+restart_backend_bg() {
+  if ! is_running; then
+    fail "Managed hot-dev session is not running"
+  fi
+
+  local session_pid backend_pid next_backend_pid restart_sentinel
+  session_pid="$(cat "${PID_FILE}")"
+  backend_pid="$(first_managed_listener_pid "${PULSE_DEV_API_PORT}" "${session_pid}" || true)"
+  restart_sentinel="${ROOT_DIR}/tmp/hot-dev.restart"
+
+  if [[ ! -f "${restart_sentinel}" ]]; then
+    fail "Managed restart sentinel not found at ${restart_sentinel}"
+  fi
+
+  log "Requesting managed backend restart via hot-dev file watcher"
+  touch "${restart_sentinel}"
+
+  local checks=180
+  while (( checks > 0 )); do
+    next_backend_pid="$(first_managed_listener_pid "${PULSE_DEV_API_PORT}" "${session_pid}" || true)"
+    if [[ -z "${backend_pid}" && -n "${next_backend_pid}" ]]; then
+      break
+    fi
+    if [[ -n "${backend_pid}" && -n "${next_backend_pid}" && "${backend_pid}" != "${next_backend_pid}" ]]; then
+      break
+    fi
+    sleep 0.5
+    checks=$((checks - 1))
+  done
+
+  if [[ -n "${backend_pid}" && "${backend_pid}" == "${next_backend_pid:-}" ]]; then
+    log "Managed backend restart did not replace the listener process. Showing recent logs:"
+    tail -n 80 "${LOG_FILE}" || true
+    fail "Managed backend restart did not replace the listener process on port ${PULSE_DEV_API_PORT}"
+  fi
+
+  log "Waiting for managed backend listener to become healthy on port ${PULSE_DEV_API_PORT}..."
+  if ! wait_for_managed_listener "${PULSE_DEV_API_PORT}" "${session_pid}" 90; then
+    log "Managed backend did not recover. Showing recent logs:"
+    tail -n 80 "${LOG_FILE}" || true
+    fail "Managed backend failed to recover after restart"
+  fi
+
+  local backend_health_url backend_code
+  backend_health_url="http://127.0.0.1:${PULSE_DEV_API_PORT}/api/health"
+  backend_code="$(http_status_code "${backend_health_url}")"
+  if ! http_status_ok "${backend_code}"; then
+    fail "Managed backend listener recovered but health probe returned ${backend_code}"
+  fi
+
+  log "Managed backend recovered and is healthy on port ${PULSE_DEV_API_PORT}"
+}
+
 usage() {
   cat <<EOF
 Usage: $(basename "$0") <command>
@@ -528,6 +598,7 @@ Commands:
   start [--takeover]
   stop
   restart
+  backend-restart
   status
   logs
 EOF
@@ -550,7 +621,7 @@ parse_takeover_flag() {
       usage
       return 1
       ;;
-    stop|status|logs)
+    stop|backend-restart|status|logs)
       if [[ -n "${flag}" ]]; then
         usage
         return 1
@@ -579,6 +650,7 @@ main() {
       stop_bg
       start_bg "${takeover}"
       ;;
+    backend-restart) restart_backend_bg ;;
     status) status_bg ;;
     logs) logs_bg ;;
     *) usage; exit 1 ;;
