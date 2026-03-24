@@ -8,6 +8,14 @@
     "test": "tests"
   },
   "scripts": {
+    "dev": "./scripts/hot-dev-bg.sh start --takeover",
+    "dev:status": "./scripts/hot-dev-bg.sh status",
+    "dev:logs": "./scripts/hot-dev-bg.sh logs",
+    "dev:stop": "./scripts/hot-dev-bg.sh stop",
+    "dev:restart": "./scripts/hot-dev-bg.sh restart --takeover",
+    "dev:backend-restart": "./scripts/hot-dev-bg.sh backend-restart",
+    "dev:verify": "./scripts/hot-dev-bg.sh verify --takeover",
+    "dev:foreground": "./scripts/hot-dev.sh",
     "test": "echo \"Error: no test specified\" && exit 1",
     "prepare": "husky",
     "mock:on": "sed -i 's/PULSE_MOCK_MODE=.*/PULSE_MOCK_MODE=true/' .env || echo 'PULSE_MOCK_MODE=true' >> .env",

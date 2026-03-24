@@ -32,6 +32,7 @@ server-side update execution surfaces.
 10. `scripts/hot-dev.sh`
 11. `scripts/hot-dev-bg.sh`
 12. `tests/integration/scripts/managed-dev-runtime.mjs`
+13. `package.json`
 
 ## Shared Boundaries
 
@@ -46,7 +47,7 @@ server-side update execution surfaces.
 2. Add or change release-build metadata injection, release artifact assembly, or governed promotion metadata resolution through `scripts/build-release.sh`, `scripts/release_ldflags.sh`, and `scripts/release_control/resolve_release_promotion.py`, plus the container Dockerfile and governed release workflows that consume those same contracts
 3. Add or change shell installer, Windows installer, container-agent installer, or auto-update script behavior through `scripts/install.sh`, `scripts/install.ps1`, `scripts/install-container-agent.sh`, and `scripts/pulse-auto-update.sh`
 4. Add or change server update transport through `internal/api/updates.go` and `frontend-modern/src/api/updates.ts`
-5. Add or change local dev-runtime orchestration, managed ownership, browser-runtime proof wiring, or frontend/backend coherence diagnostics through `scripts/hot-dev.sh`, `scripts/hot-dev-bg.sh`, and `tests/integration/scripts/managed-dev-runtime.mjs`
+5. Add or change local dev-runtime orchestration, managed ownership, browser-runtime proof wiring, frontend/backend coherence diagnostics, or the canonical root dev-entry wrappers through `scripts/hot-dev.sh`, `scripts/hot-dev-bg.sh`, `tests/integration/scripts/managed-dev-runtime.mjs`, and `package.json`
 
 ## Forbidden Paths
 
@@ -167,6 +168,12 @@ managed runtime, run the canonical browser recovery proof with the managed dev
 credentials and browser entrypoint defaults, and fail with ownership or health
 diagnostics instead of leaving operators to remember the exact Playwright
 command and env combination by hand.
+That same launcher boundary now also owns the canonical repo-root developer
+entry surface. `package.json` must expose the managed runtime as the default
+local dev path, including explicit status, log, stop, backend-restart, and
+verification wrappers, instead of requiring developers to remember
+lane-specific shell paths or continue discovering the runtime through a stale
+unmanaged `5173` process by accident.
 That shared `scripts/install.sh` boundary must also keep one canonical service
 argument builder for the runtime flags it persists. Token-bearing install
 paths, token-file systemd paths, wrapper-script launches, and later service

@@ -123,6 +123,12 @@ This mode starts an isolated Pulse backend from the local repo binary in a tempo
 Each `npm test` invocation gets its own runtime-state file and managed-backend root automatically, so separate managed-local-backend runs can execute in parallel without sharing PID or cleanup state. Shared embedded-frontend and backend-binary refreshes are serialized by the harness.
 
 ### Run Against The Managed Hot-Dev Browser Runtime
+Canonical one-command verification from the repo root:
+```bash
+npm run dev:verify
+```
+
+Equivalent direct proof command from the integration harness:
 ```bash
 cd tests/integration
 PULSE_E2E_USE_HOT_DEV=1 \

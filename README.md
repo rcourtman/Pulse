@@ -87,6 +87,32 @@ docker run -d \
 
 Access the dashboard at `http://<your-ip>:7655`.
 
+## Local Development
+
+Use the managed dev runtime from the repo root:
+
+```bash
+npm run dev
+```
+
+Open `http://127.0.0.1:5173` in the browser. `5173` is the frontend dev shell,
+and it proxies `/api` and `/ws` to the backend on `7655`. `7655` is the backend
+dependency for API and websocket traffic, not the primary browser URL for local
+frontend development.
+
+Canonical local dev commands:
+
+- `npm run dev` — start the managed runtime and reclaim the canonical dev ports if an older unmanaged session is still using them
+- `npm run dev:status` — show frontend shell health, proxied API health, direct backend health, and listener ownership
+- `npm run dev:verify` — run the managed browser recovery proof against the live dev runtime
+- `npm run dev:logs` — tail the managed runtime log
+- `npm run dev:backend-restart` — bounce only the managed backend through the launcher contract
+- `npm run dev:stop` — stop the managed runtime
+- `npm run dev:foreground` — run the foreground hot-reload launcher intentionally if you need an attached shell
+
+If `npm run dev:verify` passes, the managed dev shell, proxy path, backend
+health endpoint, and browser recovery path are all aligned.
+
 ## 📚 Documentation
 
 - **[Installation Guide](docs/INSTALL.md)**: Detailed instructions for Docker, Kubernetes, and bare metal.
