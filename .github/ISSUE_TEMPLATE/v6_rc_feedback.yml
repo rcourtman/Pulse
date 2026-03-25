@@ -1,0 +1,142 @@
+name: Pulse v6 RC feedback
+description: Report v6 release candidate bugs, regressions, upgrade issues, or actionable UX feedback
+title: "[v6 RC]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form for actionable Pulse v6 release candidate feedback.
+
+        For general impressions or smaller notes, use the pinned v6 RC feedback hub.
+        For reproducible failures, include exact version details and sanitized diagnostics when possible.
+
+        Do not post secrets, tokens, private keys, or unsanitized config files.
+
+  - type: dropdown
+    id: feedback_type
+    attributes:
+      label: Feedback type
+      options:
+        - Bug / regression
+        - Upgrade / migration issue
+        - UX / workflow friction
+        - Performance issue
+        - Documentation issue
+        - Other actionable feedback
+    validations:
+      required: true
+
+  - type: input
+    id: pulse_version
+    attributes:
+      label: Pulse version
+      description: Exact version shown in the UI, logs, or release asset.
+      placeholder: v6.0.0-rc.1
+    validations:
+      required: true
+
+  - type: input
+    id: image_ref
+    attributes:
+      label: Image tag or binary reference
+      description: Exact image tag, digest, or release asset name if you know it.
+      placeholder: rcourtman/pulse:v6.0.0-rc.1 or pulse-linux-amd64
+
+  - type: dropdown
+    id: install_path
+    attributes:
+      label: Install path
+      options:
+        - Clean v6 install
+        - Upgrade from v5
+        - Upgrade from an earlier v6 prerelease
+        - Not sure
+    validations:
+      required: true
+
+  - type: dropdown
+    id: installation_type
+    attributes:
+      label: Installation type
+      options:
+        - Docker
+        - Docker Compose
+        - ProxmoxVE LXC
+        - Kubernetes / Helm
+        - Bare metal / systemd
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: OS / environment
+      description: Host OS, distro, or environment details that matter to the report.
+      placeholder: Ubuntu 24.04, Debian 12, Unraid 7, Proxmox 8, macOS 15
+    validations:
+      required: true
+
+  - type: dropdown
+    id: license_tier
+    attributes:
+      label: License tier
+      options:
+        - Community / Free
+        - Relay
+        - Pro
+        - Pro+
+        - Cloud
+        - MSP
+        - Enterprise
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      description: Describe the problem, friction, or feedback clearly and directly.
+      placeholder: Pulse upgraded cleanly, but the new storage filters are hard to understand and I could not find the previous view quickly.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce_or_context
+    attributes:
+      label: Steps to reproduce or usage context
+      description: If this is a bug, list exact steps. If this is workflow feedback, describe what you were trying to do.
+      placeholder: |
+        1. Upgrade to v6.0.0-rc.1
+        2. Open ...
+        3. Click ...
+        4. Observe ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected_behavior
+    attributes:
+      label: What did you expect instead?
+      placeholder: I expected ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Logs, screenshots, or diagnostics
+      description: Paste relevant logs, link screenshots, or mention sanitized diagnostics export details if available.
+      render: shell
+
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Confirmations
+      options:
+        - label: I verified the exact version before filing this report.
+          required: true
+        - label: I searched existing issues and the pinned v6 RC feedback hub first.
+          required: true
+
