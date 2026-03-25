@@ -59,6 +59,7 @@ Patrol-specific presentation helpers.
 3. Keep remediation execution badge copy and severity styling aligned through `frontend-modern/src/components/patrol/RemediationStatus.tsx` and `frontend-modern/src/utils/remediationPresentation.ts`
 4. Add or change Patrol header, summary, or status runtime-state presentation through `frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx`, `frontend-modern/src/features/patrol/PatrolIntelligenceSummary.tsx`, `frontend-modern/src/components/patrol/PatrolStatusBar.tsx`, and `frontend-modern/src/utils/patrolRuntimePresentation.ts`
 5. Add or change Patrol header quickstart-credit or schedule presentation through `frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx`, `frontend-modern/src/utils/aiQuickstartPresentation.ts`, and `frontend-modern/src/utils/aiPatrolSchedulePresentation.ts`
+   Patrol must not show the exhausted quickstart-credit warning while runtime state is active on a non-quickstart provider path; that warning belongs only to active quickstart usage or a blocked quickstart-exhausted runtime.
 6. Keep Patrol and chat identifier-label presentation aligned through the shared `frontend-modern/src/utils/textPresentation.ts`
 7. Keep Patrol and chat stream-matching / mention dedupe aligned through the shared `frontend-modern/src/utils/chatIdentifiers.ts`
 8. Keep Patrol transport and payload changes aligned through the governed AI runtime and API contract transport surfaces
@@ -118,7 +119,12 @@ and `frontend-modern/src/utils/aiPatrolSchedulePresentation.ts` are the
 canonical owners for quickstart-credit messaging and Patrol interval option
 labeling used by `frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx`;
 future Patrol header work should extend those helpers instead of rebuilding
-credit badges or schedule labels inline in the header shell.
+credit badges or schedule labels inline in the header shell. That same header
+surface must now gate exhausted-credit messaging on actual runtime usage:
+Patrol may only show the quickstart exhausted warning when `using_quickstart`
+is true or when the Patrol runtime is explicitly blocked by quickstart
+exhaustion, not merely because the stored credit counter reached zero while a
+configured provider path keeps Patrol active.
 `frontend-modern/src/utils/remediationPresentation.ts` is now also the
 canonical owner for remediation result badge copy and success/failure styling
 used by `frontend-modern/src/components/patrol/RemediationStatus.tsx`, so

@@ -27,6 +27,16 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
   const runtimePresentation = createMemo(() =>
     getPatrolRuntimePresentation(state.runtimeState(), state.blockedReason()),
   );
+  const showQuickstartStatus = createMemo(() => {
+    const patrolStatus = state.patrolStatus();
+    if (!patrolStatus) return false;
+    if (patrolStatus.using_quickstart) return true;
+    return (
+      state.runtimeState() === 'blocked' &&
+      (patrolStatus.quickstart_credits_total ?? 0) > 0 &&
+      (patrolStatus.quickstart_credits_remaining ?? 0) <= 0
+    );
+  });
   const patrolModelStale = createMemo(() => {
     const model = state.patrolModel();
     const models = state.availableModels();
@@ -116,14 +126,7 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
           <span class="text-sm font-medium text-base-content">{runtimePresentation().label}</span>
         </div>
 
-        <Show
-          when={
-            state.patrolStatus()?.using_quickstart ||
-            (state.patrolStatus()?.quickstart_credits_total &&
-              state.patrolStatus()!.quickstart_credits_total! > 0 &&
-              state.patrolStatus()!.quickstart_credits_remaining !== undefined)
-          }
-        >
+        <Show when={showQuickstartStatus()}>
           <div
             class={`flex items-center gap-1.5 px-3 py-1.5 rounded-md border text-xs font-medium ${quickstartPresentation().className}`}
             title={quickstartPresentation().title}

@@ -677,6 +677,57 @@ describe('AIIntelligence entitlement gating', () => {
     expect(screen.queryByText(/Health A · 100\/100/)).not.toBeInTheDocument();
   });
 
+  it('does not show the exhausted quickstart chip when patrol is active on a configured provider path', async () => {
+    hasFeatureMock.mockReturnValue(true);
+    licenseStatusMock.mockReturnValue({ subscription_state: 'active' });
+    getPatrolStatusMock.mockResolvedValue(
+      defaultPatrolStatus({
+        runtime_state: 'active',
+        using_quickstart: false,
+        quickstart_credits_total: 25,
+        quickstart_credits_remaining: 0,
+        last_patrol_at: '2026-03-12T09:57:00Z',
+      }),
+    );
+    intelligenceState.summary = {
+      timestamp: '2026-03-12T10:00:00Z',
+      overall_health: {
+        score: 100,
+        grade: 'A',
+        trend: 'stable',
+        factors: [],
+        prediction: 'Infrastructure is healthy with no significant issues detected.',
+      },
+      findings_count: {
+        critical: 0,
+        warning: 0,
+        watch: 0,
+        info: 0,
+        total: 0,
+      },
+      predictions_count: 0,
+      recent_changes_count: 0,
+      learning: {
+        resources_with_knowledge: 0,
+        total_notes: 0,
+        resources_with_baselines: 0,
+        patterns_detected: 0,
+        correlations_learned: 0,
+        incidents_tracked: 0,
+      },
+    };
+
+    render(() => <AIIntelligence />);
+
+    await waitFor(() => {
+      expect(getPatrolStatusMock).toHaveBeenCalled();
+      expect(screen.getByText('Patrol Active')).toBeInTheDocument();
+    });
+
+    expect(screen.queryByText('Credits exhausted — connect API key')).not.toBeInTheDocument();
+    expect(screen.getByText(/Health A · 100\/100/)).toBeInTheDocument();
+  });
+
   it('treats a selected zero-finding run as an empty snapshot and uses effective scope ids', async () => {
     hasFeatureMock.mockReturnValue(true);
     licenseStatusMock.mockReturnValue({ subscription_state: 'active' });

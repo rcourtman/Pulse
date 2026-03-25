@@ -178,6 +178,10 @@ also need to preserve route-owned page-health semantics when the owning surface
 is REST-backed: operators should only see reconnect or disconnected shells when
 the route's own data contract is unhealthy, not because a global websocket
 singleton is transiently reconnecting.
+Those same feature-owned header badges must also stay aligned to the owning
+runtime state instead of surfacing stale auxiliary counters as primary status;
+an exhausted quickstart-credit badge cannot override an otherwise active Patrol
+runtime unless quickstart exhaustion is the active blocker.
 `frontend-modern/src/components/shared/TagBadges.tsx` is now also the
 canonical tag-badge primitive. Dashboard workload rows and the unified-resource
 detail drawer must import that shared owner instead of keeping a dashboard-local
