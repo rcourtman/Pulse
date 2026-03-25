@@ -3894,7 +3894,7 @@ while [[ $# -gt 0 ]]; do
             echo "Usage: $0 [OPTIONS]"
             echo ""
             echo "Installation options:"
-            echo "  --rc, --pre        Install latest RC/pre-release version"
+            echo "  --rc, --pre        Install latest prerelease preview version"
             echo "  --stable           Install latest stable version (default)"
             echo "  --version VERSION  Install specific version (e.g., v4.4.0-rc.1)"
             echo "  --source [BRANCH]  Build and install from source (default: main)"

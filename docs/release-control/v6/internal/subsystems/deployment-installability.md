@@ -114,8 +114,8 @@ as `rc`, `rc-to-ga-*`, and `v6.0.0-rc.1` remain the canonical internal keys.
 That same prerelease framing requirement also applies to installer and update
 runtime copy: `install.sh`, `scripts/pulse-auto-update.sh`, and
 `internal/updates/manager.go` must present `rc`-tagged builds as prerelease or
-preview paths in menus, operator diagnostics, and runtime logs rather than as
-release-candidate promises.
+preview paths in menus, CLI help text, operator diagnostics, and runtime logs
+rather than as release-candidate promises.
 Those same workflows must also fetch and dispatch the governed release branch
 derived from release-control metadata instead of hardcoding `pulse/v6`,
 `pulse/v6-release`, or any later branch literal inline.
@@ -199,6 +199,11 @@ That same proof pack must also keep the Patrol blocked-runtime page contract on
 the canonical entrypoint, so `dev:verify` catches stale healthy-summary
 regressions where the real `/ai` route would otherwise look healthy even after
 the backend reports `runtime_state=blocked`.
+The managed-runtime proof helper that drives those browser checks must also
+wait for stable recovered ownership after backend or owner-process restarts,
+not just the first transient `200` health probe, otherwise later specs can hit
+`ERR_CONNECTION_REFUSED` while the supervisor is still finishing a second
+recovery cycle.
 That same launcher boundary now also owns the one-command verification entry
 point for that proof. `./scripts/hot-dev-bg.sh verify` must prepare a coherent
 managed runtime, run the canonical browser recovery proof with the managed dev

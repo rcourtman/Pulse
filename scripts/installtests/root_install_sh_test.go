@@ -123,6 +123,7 @@ func TestPrereleaseUpdateCopyUsesPreviewFraming(t *testing.T) {
 	installScript := string(rootInstall)
 	requiredInstall := []string{
 		`Update to $RC_VERSION (prerelease preview)`,
+		`--rc, --pre        Install latest prerelease preview version`,
 		`Prerelease channel detected in configuration`,
 		`Prerelease channel: get latest release (including prereleases, but skip drafts)`,
 	}
@@ -133,6 +134,7 @@ func TestPrereleaseUpdateCopyUsesPreviewFraming(t *testing.T) {
 	}
 	forbiddenInstall := []string{
 		`Update to $RC_VERSION (release candidate)`,
+		`--rc, --pre        Install latest RC/pre-release version`,
 		`RC channel detected in configuration`,
 		`RC channel: Get latest release (including pre-releases, but skip drafts)`,
 	}
