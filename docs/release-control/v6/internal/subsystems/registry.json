@@ -2158,7 +2158,12 @@
         "scripts/release_control/resolve_release_promotion.py",
         "scripts/release_ldflags.sh",
         "scripts/toggle-mock.sh",
-        "tests/integration/scripts/managed-dev-runtime.mjs"
+        "tests/integration/playwright.config.ts",
+        "tests/integration/QUICK_START.md",
+        "tests/integration/README.md",
+        "tests/integration/scripts/managed-dev-runtime.mjs",
+        "tests/integration/tests/helpers.ts",
+        "tests/integration/tests/runtime-defaults.ts"
       ],
       "verification": {
         "allow_same_subsystem_tests": false,
@@ -2260,7 +2265,12 @@
               "scripts/hot-dev-bg.sh",
               "scripts/hot-dev.sh",
               "scripts/toggle-mock.sh",
-              "tests/integration/scripts/managed-dev-runtime.mjs"
+              "tests/integration/playwright.config.ts",
+              "tests/integration/QUICK_START.md",
+              "tests/integration/README.md",
+              "tests/integration/scripts/managed-dev-runtime.mjs",
+              "tests/integration/tests/helpers.ts",
+              "tests/integration/tests/runtime-defaults.ts"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
