@@ -91,6 +91,16 @@ describe('patrolRunPresentation', () => {
   it('uses checked-resource language for non-scoped coverage summaries', () => {
     expect(getPatrolRunCoverageSummary(fullCoverageRun)).toBe('Checked 58 resources');
     expect(getPatrolRunResourcesHeading(fullCoverageRun)).toBe('Resources checked (58)');
+
+  it('fails closed on zero-coverage scoped runs', () => {
+    expect(
+      getPatrolRunCoverageSummary({
+        resources_checked: 0,
+        scope_resource_ids: ['seed-resource'],
+        effective_scope_resource_ids: ['expanded-a', 'expanded-b'],
+      }),
+    ).toBe('Checked 0 of 2 scoped resources');
+  });
   });
 
   it('returns canonical patrol run loading and unavailable copy', () => {

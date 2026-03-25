@@ -424,6 +424,8 @@ owner, so the Patrol hook composes one canonical payload-to-summary derivation
 instead of rebuilding recent-change, correlation, and governed-resource count
 copy inline.
 That same normalization applies to supporting effort strips inside the expanded
+Zero-coverage scoped runs must also fail closed as `Checked 0 of N scoped
+resources` rather than drifting back to a scope-only headline.
 run card. Once the run presenter is already carrying canonical coverage copy,
 secondary chips must not reintroduce a raw `Scoped to N resources` variant that
 re-opens the same ambiguity.

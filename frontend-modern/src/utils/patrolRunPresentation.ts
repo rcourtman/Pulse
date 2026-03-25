@@ -95,13 +95,12 @@ export function getPatrolRunCoverageSummary(run: Pick<PatrolRunRecord, 'resource
   const scopedResourceCount = getCanonicalScopeResourceIds(run)?.length ?? 0;
 
   if (scopedResourceCount > 0) {
-    if (resourcesChecked > 0 && resourcesChecked < scopedResourceCount) {
+    if (resourcesChecked < scopedResourceCount) {
       return `Checked ${resourcesChecked} of ${scopedResourceCount} scoped resources`;
     }
     if (resourcesChecked > 0) {
       return `Checked ${formatResourceCount(resourcesChecked, 'scoped')}`;
     }
-    return `Scoped to ${formatResourceCount(scopedResourceCount)}`;
   }
 
   if (resourcesChecked > 0) {
