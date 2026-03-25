@@ -192,6 +192,10 @@ states: shared section shells under `frontend-modern/src/features/patrol/`
 must not render a green healthy empty state from `0 active findings` alone
 when the owning Patrol runtime or overall-health summary is degraded, blocked,
 or not fully verified.
+The same hierarchy also applies inside the Patrol summary shell: once the
+primary summary card states Patrol's assessment and verification basis,
+supporting metric strips under that card must stay metric-oriented and must
+not repeat assessment or verification labels as a second compact verdict row.
 `frontend-modern/src/components/shared/TagBadges.tsx` is now also the
 canonical tag-badge primitive. Dashboard workload rows and the unified-resource
 detail drawer must import that shared owner instead of keeping a dashboard-local

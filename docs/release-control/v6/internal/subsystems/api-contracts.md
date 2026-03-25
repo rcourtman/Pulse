@@ -136,7 +136,8 @@ Own canonical runtime payload shapes between backend and frontend.
 12. Keep tenant AI handler wiring on canonical provider ownership: `internal/api/ai_handlers.go` may wire tenant `ReadState` and tenant-scoped unified-resource providers into AI services, but it must not revive tenant snapshot-provider bridges once Patrol can initialize and verify from those canonical providers directly.
 13. Keep Patrol status transport semantics explicit in that same AI handler layer: the Patrol status endpoint must carry machine-readable runtime availability such as blocked, running, disabled, active, or unavailable rather than asking frontend consumers to infer operator state from stale summaries or run history.
 14. Keep Patrol quickstart transport semantics explicit as well: zero remaining quickstart credits are inventory data, not a standalone runtime-state override, so frontend consumers may only present the exhausted quickstart warning when the payload still reports `using_quickstart` or a runtime state that is blocked by quickstart exhaustion.
-15. Keep Pulse Mobile relay credential minting and permission ownership on backend ownership: `internal/api/router_routes_auth_security.go`, `internal/api/security_tokens.go`, `internal/api/auth.go`, `internal/api/router_routes_ai_relay.go`, and `frontend-modern/src/api/security.ts` may expose the canonical mobile runtime token creator and governed route gates, but browser callers must only consume that route and must not define the mobile runtime scope, compatibility gate list, or token-purpose metadata locally.
+15. Keep Patrol intelligence summary transport semantics single-voiced: the canonical overall-health payload and Patrol run-history payload together must support one primary assessment plus one explicit verification explanation, and frontend consumers must not need to derive a second compact assessment or verification verdict row from the same payloads beneath the primary summary card.
+16. Keep Pulse Mobile relay credential minting and permission ownership on backend ownership: `internal/api/router_routes_auth_security.go`, `internal/api/security_tokens.go`, `internal/api/auth.go`, `internal/api/router_routes_ai_relay.go`, and `frontend-modern/src/api/security.ts` may expose the canonical mobile runtime token creator and governed route gates, but browser callers must only consume that route and must not define the mobile runtime scope, compatibility gate list, or token-purpose metadata locally.
 
 ## Forbidden Paths
 
@@ -168,6 +169,7 @@ Own canonical runtime payload shapes between backend and frontend.
 4. Update this contract when canonical payload ownership changes
 5. Keep `/api/resources` policy metadata aligned across backend payload tests and canonical frontend resource consumers whenever sensitivity or routing fields change
 6. Keep Patrol status payloads explicit enough that the frontend can present blocked runtime state without treating a previously healthy summary snapshot as current runtime truth
+7. Keep Patrol summary payload consumers aligned on one assessment hierarchy: transport-driven Patrol summary surfaces may show supporting counts and outcomes, but the canonical assessment and verification states must remain singular and not be repeated as a second compact verdict strip
 
 ## Current State
 
