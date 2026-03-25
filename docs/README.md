@@ -116,8 +116,8 @@ Pulse is available in four self-hosted tiers plus hosted Cloud:
 ## 📁 Previous Versions
 
 - **[Upgrade to v5](UPGRADE_v5.md)** – Upgrade guidance for v4 → v5 migrations.
-- **[v6 Release Promotion Policy](release-control/v6/internal/RELEASE_PROMOTION_POLICY.md)** – Canonical stable-vs-RC release rules and rollback expectations.
-- **[v6 Prerelease Runbook](releases/V6_PRERELEASE_RUNBOOK.md)** – Internal release operations used during the v6 RC period.
+- **[v6 Release Promotion Policy](release-control/v6/internal/RELEASE_PROMOTION_POLICY.md)** – Canonical stable-vs-prerelease promotion rules and rollback expectations.
+- **[v6 Prerelease Runbook](releases/V6_PRERELEASE_RUNBOOK.md)** – Internal release operations used during the v6 prerelease period.
 
 ---
 
