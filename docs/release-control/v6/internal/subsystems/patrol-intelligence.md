@@ -120,6 +120,14 @@ overall-health summary is degraded or not fully verified. The green healthy
 empty state belongs only to an actually healthy Patrol summary, while degraded
 coverage or paused-runtime states must surface the governing warning/error copy
 through `frontend-modern/src/utils/patrolEmptyStatePresentation.ts`.
+The Patrol summary surface must follow that same hierarchy. The primary summary
+headline in `frontend-modern/src/features/patrol/PatrolIntelligenceSummary.tsx`
+should state Patrol's current assessment first, such as verified healthy,
+issues detected, or coverage incomplete, with the health grade only as
+supporting evidence. Secondary metric strips must not render `No issues found`
+when the same governed overall-health summary says coverage is incomplete or
+health still requires attention; that compact summary state now belongs to the
+shared `frontend-modern/src/utils/patrolSummaryPresentation.ts` helper.
 hook-local fallback logic.
 The Patrol header now also has explicit helper ownership for its quickstart and
 schedule presentation. `frontend-modern/src/utils/aiQuickstartPresentation.ts`

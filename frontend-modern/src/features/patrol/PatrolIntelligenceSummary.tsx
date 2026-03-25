@@ -3,9 +3,10 @@ import ActivityIcon from 'lucide-solid/icons/activity';
 import ShieldAlertIcon from 'lucide-solid/icons/shield-alert';
 import CheckCircleIcon from 'lucide-solid/icons/check-circle';
 import AlertCircleIcon from 'lucide-solid/icons/alert-circle';
+import AlertTriangleIcon from 'lucide-solid/icons/alert-triangle';
 import {
+  getPatrolAssessmentPresentation,
   getPatrolSummaryPresentation,
-  PATROL_NO_ISSUES_LABEL,
 } from '@/utils/patrolSummaryPresentation';
 import { getPatrolRuntimePresentation } from '@/utils/patrolRuntimePresentation';
 import { getSemanticTonePresentation } from '@/utils/semanticTonePresentation';
@@ -17,14 +18,15 @@ import type { PatrolIntelligenceState } from './usePatrolIntelligenceState';
 
 export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceState }) {
   const state = props.state;
+  const summaryStats = createMemo(() => state.summaryStats());
   const criticalSummaryPresentation = createMemo(() =>
-    getPatrolSummaryPresentation('critical', state.summaryStats().criticalFindings > 0),
+    getPatrolSummaryPresentation('critical', summaryStats().criticalFindings > 0),
   );
   const warningSummaryPresentation = createMemo(() =>
-    getPatrolSummaryPresentation('warning', state.summaryStats().warningFindings > 0),
+    getPatrolSummaryPresentation('warning', summaryStats().warningFindings > 0),
   );
   const fixedSummaryPresentation = createMemo(() =>
-    getPatrolSummaryPresentation('success', state.summaryStats().fixedCount > 0),
+    getPatrolSummaryPresentation('success', summaryStats().fixedCount > 0),
   );
   const runtimePresentation = createMemo(() =>
     getPatrolRuntimePresentation(state.runtimeState(), state.blockedReason()),
@@ -38,6 +40,28 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
       runtimeState === 'blocked' || runtimeState === 'disabled' || runtimeState === 'unavailable'
     );
   });
+  const assessment = createMemo(() =>
+    getPatrolAssessmentPresentation({
+      overallHealth: state.intelligenceSummary()?.overall_health,
+      runtimeState: state.runtimeState(),
+      blockedReason: state.blockedReason(),
+      criticalFindings: summaryStats().criticalFindings,
+      warningFindings: summaryStats().warningFindings,
+    }),
+  );
+  const assessmentTonePresentation = createMemo(() =>
+    getSemanticTonePresentation(assessment().tone),
+  );
+  const assessmentSummaryPresentation = createMemo(() =>
+    getPatrolSummaryPresentation(
+      assessment().tone === 'error'
+        ? 'critical'
+        : assessment().tone === 'warning'
+          ? 'warning'
+          : 'success',
+      true,
+    ),
+  );
 
   return (
     <>
@@ -73,17 +97,67 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
       <Show when={!showRuntimeSummary()}>
         <Show when={state.intelligenceSummary()}>
           {(summary) => (
-            <section class="rounded-md border border-border bg-surface p-4">
+            <section class={`rounded-md border p-4 ${assessmentTonePresentation().panelClass}`}>
               <div class="flex flex-wrap items-start justify-between gap-4">
-                <div>
-                  <p class="text-xs font-semibold uppercase tracking-[0.16em] text-muted">
-                    Patrol summary
-                  </p>
-                  <h2 class="mt-1 text-lg font-semibold text-base-content">
-                    Health {summary().overall_health.grade} ·{' '}
-                    {Math.round(summary().overall_health.score)}/100
-                  </h2>
-                  <p class="mt-1 text-sm text-muted">{summary().overall_health.prediction}</p>
+                <div class="flex items-start gap-3">
+                  <div class="flex-shrink-0 rounded-md bg-base/70 p-2">
+                    <Show
+                      when={assessment().tone === 'success'}
+                      fallback={
+                        <Show
+                          when={assessment().tone === 'error'}
+                          fallback={
+                            <Show
+                              when={assessment().tone === 'warning'}
+                              fallback={
+                                <AlertCircleIcon
+                                  class={`w-5 h-5 ${assessmentTonePresentation().iconClass}`}
+                                />
+                              }
+                            >
+                              <AlertTriangleIcon
+                                class={`w-5 h-5 ${assessmentTonePresentation().iconClass}`}
+                              />
+                            </Show>
+                          }
+                        >
+                          <ShieldAlertIcon
+                            class={`w-5 h-5 ${assessmentTonePresentation().iconClass}`}
+                          />
+                        </Show>
+                      }
+                    >
+                      <CheckCircleIcon class={`w-5 h-5 ${assessmentTonePresentation().iconClass}`} />
+                    </Show>
+                  </div>
+
+                  <div>
+                    <p class="text-xs font-semibold uppercase tracking-[0.16em] text-muted">
+                      {assessment().eyebrow}
+                    </p>
+                    <h2 class="mt-1 text-lg font-semibold text-base-content">
+                      {assessment().title}
+                    </h2>
+                    <p class="mt-1 text-sm text-base-content">{summary().overall_health.prediction}</p>
+                    <div class="mt-3 flex flex-wrap items-center gap-2">
+                      <span class="rounded-full border border-border-subtle bg-base px-2.5 py-1 text-xs font-medium text-base-content">
+                        Health {summary().overall_health.grade} ·{' '}
+                        {Math.round(summary().overall_health.score)}/100
+                      </span>
+                      <span class="rounded-full border border-border-subtle bg-base px-2.5 py-1 text-xs font-medium text-base-content">
+                        Active findings {summaryStats().totalActive}
+                      </span>
+                      <Show when={state.patrolStatus()?.last_patrol_at}>
+                        <span class="rounded-full border border-border-subtle bg-base px-2.5 py-1 text-xs font-medium text-base-content">
+                          Last patrol{' '}
+                          {formatRelativeTime(state.patrolStatus()!.last_patrol_at, {
+                            compact: true,
+                            emptyText: 'never',
+                          })}
+                        </span>
+                      </Show>
+                    </div>
+                  </div>
                 </div>
 
                 <div class="flex flex-wrap items-center gap-2">
@@ -97,7 +171,7 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
               </div>
 
               <Show when={state.hasInvestigationContext()}>
-                <div class="mt-4 rounded-md border border-border-subtle bg-base p-3">
+                <div class="mt-4 rounded-md border border-border-subtle bg-base/90 p-3">
                   <div class="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <p class="text-xs font-semibold uppercase tracking-[0.16em] text-muted">
@@ -158,23 +232,38 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
         </Show>
       </Show>
 
-      <Show
-        when={
-          !showRuntimeSummary() &&
-          (state.summaryStats().criticalFindings > 0 ||
-            state.summaryStats().warningFindings > 0 ||
-            state.summaryStats().fixedCount > 0)
-        }
-        fallback={
-          <Show when={!showRuntimeSummary() && state.patrolStatus()?.last_patrol_at}>
-            <div class="flex items-center gap-2 px-4 py-3 bg-surface rounded-md border border-border">
-              <CheckCircleIcon class="w-4 h-4 text-green-500 dark:text-green-400" />
-              <span class="text-sm text-muted">{PATROL_NO_ISSUES_LABEL}</span>
+      <Show when={!showRuntimeSummary() && state.intelligenceSummary()}>
+        <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+          <div class="bg-surface rounded-md border border-border p-3">
+            <div class="flex items-center gap-2">
+              <div
+                class={`p-1.5 rounded-md border ${assessmentSummaryPresentation().iconContainerClass}`}
+              >
+                <Show
+                  when={assessment().tone === 'success'}
+                  fallback={
+                    <Show
+                      when={assessment().tone === 'error'}
+                      fallback={
+                        <AlertTriangleIcon class={`w-4 h-4 ${assessmentSummaryPresentation().iconClass}`} />
+                      }
+                    >
+                      <ShieldAlertIcon class={`w-4 h-4 ${assessmentSummaryPresentation().iconClass}`} />
+                    </Show>
+                  }
+                >
+                  <CheckCircleIcon class={`w-4 h-4 ${assessmentSummaryPresentation().iconClass}`} />
+                </Show>
+              </div>
+              <div>
+                <p class="text-xs text-muted">Assessment</p>
+                <p class={`text-sm font-semibold ${assessmentSummaryPresentation().valueClass}`}>
+                  {assessment().compactLabel}
+                </p>
+              </div>
             </div>
-          </Show>
-        }
-      >
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          </div>
+
           <div class="bg-surface rounded-md border border-border p-3">
             <div class="flex items-center gap-2">
               <div

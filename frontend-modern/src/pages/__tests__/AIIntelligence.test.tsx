@@ -582,7 +582,8 @@ describe('AIIntelligence entitlement gating', () => {
 
     await waitFor(() => {
       expect(getPatrolStatusMock).toHaveBeenCalled();
-      expect(screen.getByText('Patrol summary')).toBeInTheDocument();
+      expect(screen.getByText('Patrol assessment')).toBeInTheDocument();
+      expect(screen.getByText('No active issues detected')).toBeInTheDocument();
     });
 
     expect(screen.getByText(/Health A · 91\/100/)).toBeInTheDocument();
@@ -726,6 +727,61 @@ describe('AIIntelligence entitlement gating', () => {
 
     expect(screen.queryByText('Credits exhausted — connect API key')).not.toBeInTheDocument();
     expect(screen.getByText(/Health A · 100\/100/)).toBeInTheDocument();
+  });
+
+  it('surfaces coverage incomplete as the primary patrol assessment instead of no-issues copy', async () => {
+    hasFeatureMock.mockReturnValue(true);
+    licenseStatusMock.mockReturnValue({ subscription_state: 'active' });
+    getPatrolStatusMock.mockResolvedValue(
+      defaultPatrolStatus({
+        runtime_state: 'active',
+        last_patrol_at: '2026-03-12T09:57:00Z',
+      }),
+    );
+    intelligenceState.summary = {
+      timestamp: '2026-03-12T10:00:00Z',
+      overall_health: {
+        score: 70,
+        grade: 'C',
+        trend: 'stable',
+        factors: [
+          {
+            name: 'Patrol coverage incomplete',
+            impact: -0.35,
+            description:
+              'Patrol coverage is incomplete: recent activity was limited to scoped runs and ended with errors, so overall health is not fully verified.',
+            category: 'coverage',
+          },
+        ],
+        prediction:
+          'Patrol coverage is incomplete: recent activity was limited to scoped runs and ended with errors, so overall health is not fully verified.',
+      },
+      findings_count: {
+        critical: 0,
+        warning: 0,
+        watch: 0,
+        info: 0,
+        total: 0,
+      },
+      predictions_count: 0,
+      recent_changes_count: 0,
+      learning: {
+        resources_with_knowledge: 0,
+        total_notes: 0,
+        resources_with_baselines: 0,
+        patterns_detected: 0,
+        correlations_learned: 0,
+        incidents_tracked: 0,
+      },
+    };
+
+    render(() => <AIIntelligence />);
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Coverage incomplete').length).toBeGreaterThan(0);
+    });
+
+    expect(screen.queryByText('No issues found')).not.toBeInTheDocument();
   });
 
   it('treats a selected zero-finding run as an empty snapshot and uses effective scope ids', async () => {

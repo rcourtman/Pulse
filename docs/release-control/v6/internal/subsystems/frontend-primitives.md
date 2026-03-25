@@ -737,6 +737,10 @@ That same route-owned page-health rule now also applies to Patrol: a feature
 surface may not present a green or all-clear primary summary when the owning
 runtime contract says the page is blocked or unavailable, even if the last
 successful snapshot was healthy.
+That same rule also applies to compact Patrol summary fragments inside the
+feature surface: count-only strips or metric cards must not emit `No issues
+found` or other reassuring copy when the owning overall-health summary is
+degraded or not fully verified.
 
 Shared primitive consumers that split status-dot tone and status-text tone
 must now keep both values routed through the same exported presentation helper.
