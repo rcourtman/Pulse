@@ -181,6 +181,11 @@ than hardcoding panel copy, routes, or range presets in the frontend. The
 frontend models may validate and present the catalog, but the canonical panel
 title, descriptions, endpoints, filename prefixes, range windows, and column
 list belong to the API reporting contract.
+The same reporting catalog ownership now also governs the operator resource-
+selection cap for performance reports. `ReportingPanel.tsx` and
+`ResourcePicker.tsx` may present or enforce that limit, but they must receive
+it from the backend-owned `multiResourceMax` definition rather than hardcoding
+the reporting cap in frontend-local constants.
 The shared updates settings owner also defines the user-facing framing for
 rc-tagged builds. `frontend-modern/src/components/Settings/updatesSettingsModel.ts`
 and `frontend-modern/src/utils/updatesPresentation.ts` must present that

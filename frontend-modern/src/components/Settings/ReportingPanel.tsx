@@ -163,6 +163,7 @@ export function ReportingPanel() {
                   helpText="Select the resources to include in the report"
                 >
                   <ResourcePicker
+                    maxSelection={performanceReport()?.multiResourceMax}
                     selected={selectedResources}
                     onSelectionChange={setSelectedResources}
                   />

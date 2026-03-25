@@ -21,7 +21,7 @@ import { showWarning } from '@/utils/toast';
 import { getResourceTypePresentation } from '@/utils/resourceTypePresentation';
 import { getSimpleStatusIndicator } from '@/utils/status';
 
-const MAX_SELECTION = 50;
+const DEFAULT_MAX_SELECTION = 50;
 
 export interface SelectedResource {
   id: string;
@@ -30,6 +30,7 @@ export interface SelectedResource {
 }
 
 interface ResourcePickerProps {
+  maxSelection?: number;
   selected: Accessor<SelectedResource[]>;
   onSelectionChange: (items: SelectedResource[]) => void;
 }
@@ -39,6 +40,7 @@ export function ResourcePicker(props: ResourcePickerProps) {
   const [search, setSearch] = createSignal('');
   const [typeFilter, setTypeFilter] = createSignal<TypeFilter>('all');
   const [tagFilter, setTagFilter] = createSignal('');
+  const maxSelection = () => props.maxSelection ?? DEFAULT_MAX_SELECTION;
 
   // Filter to reportable resource types across infrastructure, workloads, storage, and recovery.
   const reportableResources = createMemo(() => {
@@ -90,8 +92,8 @@ export function ResourcePicker(props: ResourcePickerProps) {
     if (isSelected(resource.id)) {
       props.onSelectionChange(current.filter((s) => s.id !== resource.id));
     } else {
-      if (current.length >= MAX_SELECTION) {
-        showWarning(`Maximum ${MAX_SELECTION} resources can be selected`);
+      if (current.length >= maxSelection()) {
+        showWarning(`Maximum ${maxSelection()} resources can be selected`);
         return;
       }
       props.onSelectionChange([
@@ -117,11 +119,14 @@ export function ResourcePicker(props: ResourcePickerProps) {
       }));
 
     const newSelection = [...current, ...toAdd];
-    if (newSelection.length > MAX_SELECTION) {
+    if (newSelection.length > maxSelection()) {
       showWarning(
-        `Maximum ${MAX_SELECTION} resources can be selected. Only ${MAX_SELECTION - current.length} more can be added.`,
+        `Maximum ${maxSelection()} resources can be selected. Only ${maxSelection() - current.length} more can be added.`,
       );
-      props.onSelectionChange([...current, ...toAdd.slice(0, MAX_SELECTION - current.length)]);
+      props.onSelectionChange([
+        ...current,
+        ...toAdd.slice(0, maxSelection() - current.length),
+      ]);
       return;
     }
     props.onSelectionChange(newSelection);
@@ -329,7 +334,7 @@ export function ResourcePicker(props: ResourcePickerProps) {
         </div>
         <span class="text-xs sm:text-sm text-slate-500">
           {props.selected().length} selected
-          <Show when={props.selected().length >= MAX_SELECTION}>
+          <Show when={props.selected().length >= maxSelection()}>
             <span class="text-amber-400 ml-1">(max)</span>
           </Show>
         </span>

@@ -39,6 +39,13 @@ const createSelectedResources = (count: number): SelectedResource[] =>
   }));
 
 const renderPicker = (initialSelection: SelectedResource[] = []) => {
+  return renderPickerWithOptions(initialSelection, {});
+};
+
+const renderPickerWithOptions = (
+  initialSelection: SelectedResource[] = [],
+  options: { maxSelection?: number } = {},
+) => {
   const onSelectionChange = vi.fn();
   render(() => {
     const [selected, setSelected] = createSignal<SelectedResource[]>(initialSelection);
@@ -46,7 +53,13 @@ const renderPicker = (initialSelection: SelectedResource[] = []) => {
       setSelected(items);
       onSelectionChange(items);
     };
-    return <ResourcePicker selected={selected} onSelectionChange={handleSelectionChange} />;
+    return (
+      <ResourcePicker
+        maxSelection={options.maxSelection}
+        selected={selected}
+        onSelectionChange={handleSelectionChange}
+      />
+    );
   });
   return { onSelectionChange };
 };
@@ -301,6 +314,24 @@ describe('ResourcePicker', () => {
 
     expect(showWarningMock).toHaveBeenCalledWith('Maximum 50 resources can be selected');
     expect(screen.getByText('50 selected')).toBeInTheDocument();
+    expect(onSelectionChange).not.toHaveBeenCalled();
+  });
+
+  it('obeys a caller-provided max selection limit', async () => {
+    mockResources = [
+      makeResource({ id: 'vm-new', type: 'vm', name: 'Overflow VM', displayName: 'Overflow VM' }),
+    ];
+
+    const { onSelectionChange } = renderPickerWithOptions(createSelectedResources(2), {
+      maxSelection: 2,
+    });
+
+    const resourceButton = (await screen.findByText('Overflow VM')).closest('button');
+    expect(resourceButton).toBeTruthy();
+    fireEvent.click(resourceButton!);
+
+    expect(showWarningMock).toHaveBeenCalledWith('Maximum 2 resources can be selected');
+    expect(screen.getByText('2 selected')).toBeInTheDocument();
     expect(onSelectionChange).not.toHaveBeenCalled();
   });
 
