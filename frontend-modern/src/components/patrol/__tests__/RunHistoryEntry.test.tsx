@@ -132,6 +132,7 @@ describe('RunHistoryEntry', () => {
     ));
 
     expect(screen.getByText('• Findings snapshot unavailable')).toBeInTheDocument();
+    expect(screen.getByText('completed')).toBeInTheDocument();
     expect(screen.getByTestId('findings-panel')).toBeInTheDocument();
     expect(findingsPanelState.latestProps).toMatchObject({
       filterFindingIds: undefined,
@@ -154,6 +155,7 @@ describe('RunHistoryEntry', () => {
     expect(screen.getByText('Snapshot unavailable')).toBeInTheDocument();
     expect(screen.queryByText('All clear — no new issues.')).not.toBeInTheDocument();
     expect(screen.queryByText(/^All clear$/)).not.toBeInTheDocument();
+    expect(screen.queryByText('healthy')).not.toBeInTheDocument();
   });
 
   it('uses a shared coverage summary when a scoped run checked fewer resources than its scope', () => {

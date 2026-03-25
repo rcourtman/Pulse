@@ -52,6 +52,7 @@ export const PatrolStatusBar: Component<PatrolStatusBarProps> = (props) => {
     const lastRunStatus = getPatrolRunStatusPresentation(
       lastRun?.status ?? 'unknown',
       lastRun?.error_count ?? 0,
+      lastRun?.finding_ids !== undefined,
     );
     return {
       lastRun,

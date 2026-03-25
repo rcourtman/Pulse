@@ -47,6 +47,13 @@ describe('patrolRunPresentation', () => {
     expect(getPatrolRunStatusPresentation('healthy').badgeClass).toContain('green-100');
   });
 
+  it('downgrades legacy healthy runs without findings snapshots to a neutral completed state', () => {
+    expect(getPatrolRunStatusPresentation('healthy', 0, false)).toEqual({
+      badgeClass: 'bg-surface-alt text-base-content',
+      label: 'completed',
+    });
+  });
+
   it('treats erroring runs as error presentation even when the raw status says healthy', () => {
     const presentation = getPatrolRunStatusPresentation('healthy', 2);
     expect(presentation.label).toBe('error');
@@ -91,6 +98,7 @@ describe('patrolRunPresentation', () => {
   it('uses checked-resource language for non-scoped coverage summaries', () => {
     expect(getPatrolRunCoverageSummary(fullCoverageRun)).toBe('Checked 58 resources');
     expect(getPatrolRunResourcesHeading(fullCoverageRun)).toBe('Resources checked (58)');
+  });
 
   it('fails closed on zero-coverage scoped runs', () => {
     expect(
@@ -100,7 +108,6 @@ describe('patrolRunPresentation', () => {
         effective_scope_resource_ids: ['expanded-a', 'expanded-b'],
       }),
     ).toBe('Checked 0 of 2 scoped resources');
-  });
   });
 
   it('returns canonical patrol run loading and unavailable copy', () => {

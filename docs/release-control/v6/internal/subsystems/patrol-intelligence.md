@@ -292,6 +292,10 @@ flattening the run into a plain healthy-looking summary.
 That same caveat belongs in collapsed run-history rows. Legacy runs without
 findings snapshot ids must carry an explicit snapshot-unavailable marker in the
 top row instead of looking like a clean zero-findings run until expanded.
+That same rule applies to run-status badges. A legacy run without findings
+snapshot ids must not keep a green `healthy` badge when the surrounding UI is
+saying findings verification is unavailable; the canonical run-status
+presentation should downgrade that state to a neutral `completed` badge.
 That same findings surface should keep its section chrome functional rather
 than promotional. Inside the Patrol findings tab, the selected tab already
 names the surface, so the findings card should not add another in-card product

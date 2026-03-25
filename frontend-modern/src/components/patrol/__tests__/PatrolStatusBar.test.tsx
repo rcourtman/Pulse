@@ -105,7 +105,7 @@ describe('PatrolStatusBar', () => {
     const latestRunSection = screen.getByText('Latest: Full patrol').closest('span');
     expect(latestRunSection).not.toBeNull();
     expect(latestRunSection).toHaveTextContent(
-      'Latest: Full patrol · healthy · Findings snapshot unavailable',
+      'Latest: Full patrol · completed · Findings snapshot unavailable',
     );
   });
 

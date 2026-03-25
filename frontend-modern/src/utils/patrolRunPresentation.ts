@@ -48,6 +48,7 @@ export function isPatrolRunHealthy(
 export function getPatrolRunStatusPresentation(
   status: PatrolRunStatus | string,
   errorCount: number = 0,
+  findingsSnapshotAvailable: boolean = true,
 ): PatrolRunStatusPresentation {
   const normalized = getEffectivePatrolRunStatus(status, errorCount);
 
@@ -64,6 +65,12 @@ export function getPatrolRunStatusPresentation(
         label: 'issues found',
       };
     case 'healthy':
+      if (!findingsSnapshotAvailable) {
+        return {
+          badgeClass: 'bg-surface-alt text-base-content',
+          label: 'completed',
+        };
+      }
       return {
         badgeClass: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
         label: 'healthy',
