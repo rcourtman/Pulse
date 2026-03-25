@@ -34,17 +34,24 @@ type portalPageAccount struct {
 
 // portalPageData is passed to the portal HTML template.
 type portalPageData struct {
-	Nonce    string
-	Email    string
-	Accounts []portalPageAccount
+	Nonce         string
+	Email         string
+	PublicSiteURL string
+	SupportEmail  string
+	Accounts      []portalPageAccount
 }
+
+const (
+	defaultPublicSiteURL = "https://pulserelay.pro"
+	defaultSupportEmail  = "support@pulserelay.pro"
+)
 
 var portalPageTmpl = template.Must(template.New("portal").Parse(`<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Pulse Cloud — Portal</title>
+  <title>Pulse Account</title>
   <style nonce="{{.Nonce}}">
     :root { color-scheme: light; }
     * { box-sizing: border-box; }
@@ -103,6 +110,18 @@ var portalPageTmpl = template.Must(template.New("portal").Parse(`<!DOCTYPE html>
     .team-invite label { font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px; }
     .team-invite input { border: 1px solid #cbd5e1; border-radius: 8px; padding: 8px 12px; font-size: 14px; min-width: 200px; }
     .team-invite select { border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px 10px; font-size: 14px; background: #fff; }
+    .intro-card { background: linear-gradient(145deg, #fff, #f8fafc); border: 1px solid #dbe4f0; border-radius: 16px; padding: 22px 24px; margin-bottom: 24px; box-shadow: 0 10px 24px rgba(15,23,42,.05); }
+    .intro-card h1 { margin: 0 0 8px; font-size: 26px; line-height: 1.1; }
+    .intro-card p { margin: 0; color: #475569; font-size: 15px; line-height: 1.6; max-width: 760px; }
+    .service-section { margin-top: 40px; }
+    .service-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+    .service-header h2 { margin: 0; font-size: 20px; font-weight: 700; }
+    .service-note { font-size: 13px; color: #64748b; max-width: 680px; }
+    .service-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+    .service-card { display: block; text-decoration: none; color: inherit; background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; box-shadow: 0 1px 3px rgba(15,23,42,.04); }
+    .service-card:hover { border-color: #93c5fd; box-shadow: 0 6px 18px rgba(29,78,216,.08); }
+    .service-card h3 { margin: 0 0 6px; font-size: 16px; font-weight: 700; }
+    .service-card p { margin: 0; font-size: 14px; color: #64748b; line-height: 1.5; }
     .empty-state { background: #fff; border: 1px dashed #cbd5e1; border-radius: 10px; padding: 32px; text-align: center; color: #64748b; }
     .empty-state p { margin: 0; font-size: 15px; }
     .spinner { display: none; width: 18px; height: 18px; border: 2px solid #93c5fd; border-top-color: #1d4ed8; border-radius: 50%; animation: spin 0.6s linear infinite; }
@@ -120,7 +139,7 @@ var portalPageTmpl = template.Must(template.New("portal").Parse(`<!DOCTYPE html>
 </head>
 <body>
 <header>
-  <span class="brand">Pulse Cloud</span>
+  <span class="brand">Pulse Account</span>
   <div class="user-info">
     <span>{{.Email}}</span>
     <button class="logout-btn" id="logout-btn">Sign out</button>
@@ -128,10 +147,14 @@ var portalPageTmpl = template.Must(template.New("portal").Parse(`<!DOCTYPE html>
 </header>
 
 <main class="main">
+  <section class="intro-card">
+    <h1>Pulse Account</h1>
+    <p>Manage hosted Cloud and MSP workspaces here today. Self-hosted license and recovery tools still live on the public commercial surface during the current rollout, and are linked below so the account experience does not stay fragmented forever.</p>
+  </section>
   {{if eq (len .Accounts) 0}}
   <div class="empty-state" style="margin-top:48px">
     <p>No workspaces found. If you just signed up, check your email for setup instructions.</p>
-    <p style="margin-top:12px;font-size:13px">Need help? Contact <a href="mailto:support@pulserelay.pro" style="color:#1d4ed8">support@pulserelay.pro</a></p>
+    <p style="margin-top:12px;font-size:13px">Need help? Contact <a href="mailto:{{.SupportEmail}}" style="color:#1d4ed8">{{.SupportEmail}}</a></p>
   </div>
   {{else}}
   {{range $ai, $account := .Accounts}}
@@ -220,6 +243,31 @@ var portalPageTmpl = template.Must(template.New("portal").Parse(`<!DOCTYPE html>
   </section>
   {{end}}
   {{end}}
+
+  <section class="service-section">
+    <div class="service-header">
+      <h2>Other account services</h2>
+      <div class="service-note">These self-hosted commercial tools still live on the public Pulse surface today, but they are part of the same future Pulse Account story.</div>
+    </div>
+    <div class="service-grid">
+      <a class="service-card" href="{{.PublicSiteURL}}/manage.html">
+        <h3>Manage subscriptions</h3>
+        <p>Open the current self-hosted commercial management flow for billing, renewals, and account actions.</p>
+      </a>
+      <a class="service-card" href="{{.PublicSiteURL}}/retrieve-license.html">
+        <h3>Retrieve licenses</h3>
+        <p>Recover existing self-hosted licenses and activation details without digging through old emails.</p>
+      </a>
+      <a class="service-card" href="{{.PublicSiteURL}}/refund.html">
+        <h3>Refund requests</h3>
+        <p>Start the current refund path when a commercial purchase needs review or reversal.</p>
+      </a>
+      <a class="service-card" href="{{.PublicSiteURL}}/data.html">
+        <h3>Data and privacy</h3>
+        <p>Use the existing data-request surface for commercial privacy, export, and deletion requests.</p>
+      </a>
+    </div>
+  </section>
 </main>
 
 <div class="toast" id="toast"></div>
@@ -458,7 +506,7 @@ var loginPageTmpl = template.Must(template.New("portal-login").Parse(`<!DOCTYPE 
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Pulse Cloud — Sign In</title>
+  <title>Pulse Account — Sign In</title>
   <style nonce="{{.Nonce}}">
     :root { color-scheme: light; }
     body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: linear-gradient(140deg, #f8fafc, #e2e8f0); color: #0f172a; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
@@ -479,8 +527,8 @@ var loginPageTmpl = template.Must(template.New("portal-login").Parse(`<!DOCTYPE 
 </head>
 <body>
 <div class="card">
-  <div class="brand">Pulse Cloud</div>
-  <div class="subtitle">Sign in to manage your workspaces</div>
+  <div class="brand">Pulse Account</div>
+  <div class="subtitle">Sign in to manage Cloud workspaces, MSP access, and commercial account services.</div>
   <label for="email">Email address</label>
   <input id="email" type="email" autocomplete="email" placeholder="you@example.com" />
   <button class="cta" id="send-btn">Send magic link</button>
@@ -669,9 +717,11 @@ func HandlePortalPage(sessionSvc *cpauth.Service, reg *registry.TenantRegistry) 
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
 		if err := portalPageTmpl.Execute(w, portalPageData{
-			Nonce:    nonce,
-			Email:    claims.Email,
-			Accounts: accounts,
+			Nonce:         nonce,
+			Email:         claims.Email,
+			PublicSiteURL: defaultPublicSiteURL,
+			SupportEmail:  defaultSupportEmail,
+			Accounts:      accounts,
 		}); err != nil {
 			log.Error().Err(err).Msg("cloudcp.portal.page: render portal page")
 		}

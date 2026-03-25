@@ -697,6 +697,64 @@ func TestPortalPageTemplate_ActorRolePassedToSection(t *testing.T) {
 	}
 }
 
+func TestPortalPageTemplate_AccountServicesRendered(t *testing.T) {
+	data := portalPageData{
+		Nonce:         "test-nonce",
+		Email:         "owner@example.com",
+		PublicSiteURL: "https://pulserelay.pro",
+		SupportEmail:  "support@pulserelay.pro",
+		Accounts: []portalPageAccount{
+			{
+				ID:        "a_test",
+				Kind:      "cloud",
+				KindLabel: "Cloud",
+				Name:      "Test Account",
+			},
+		},
+	}
+
+	var buf strings.Builder
+	if err := portalPageTmpl.Execute(&buf, data); err != nil {
+		t.Fatalf("template execute: %v", err)
+	}
+	html := buf.String()
+
+	mustContain := []string{
+		"<title>Pulse Account</title>",
+		"Pulse Account",
+		"Other account services",
+		`href="https://pulserelay.pro/manage.html"`,
+		`href="https://pulserelay.pro/retrieve-license.html"`,
+		`href="https://pulserelay.pro/refund.html"`,
+		`href="https://pulserelay.pro/data.html"`,
+		"self-hosted commercial tools still live on the public Pulse surface today",
+	}
+	for _, needle := range mustContain {
+		if !strings.Contains(html, needle) {
+			t.Errorf("expected %q in rendered HTML", needle)
+		}
+	}
+}
+
+func TestPortalLoginTemplate_UsesPulseAccountBranding(t *testing.T) {
+	var buf strings.Builder
+	if err := loginPageTmpl.Execute(&buf, struct{ Nonce string }{Nonce: "test-nonce"}); err != nil {
+		t.Fatalf("template execute: %v", err)
+	}
+	html := buf.String()
+
+	mustContain := []string{
+		"<title>Pulse Account — Sign In</title>",
+		"Pulse Account",
+		"Sign in to manage Cloud workspaces, MSP access, and commercial account services.",
+	}
+	for _, needle := range mustContain {
+		if !strings.Contains(html, needle) {
+			t.Errorf("expected %q in rendered HTML", needle)
+		}
+	}
+}
+
 func TestBillingPortalRedirect_NoReturnURL(t *testing.T) {
 	reg := newTestRegistry(t)
 	accountID, err := registry.GenerateAccountID()
