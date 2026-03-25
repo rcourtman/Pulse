@@ -120,8 +120,28 @@ var portalPageTmpl = template.Must(template.New("portal").Parse(`<!DOCTYPE html>
     .service-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
     .service-card { display: block; text-decoration: none; color: inherit; background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; box-shadow: 0 1px 3px rgba(15,23,42,.04); }
     .service-card:hover { border-color: #93c5fd; box-shadow: 0 6px 18px rgba(29,78,216,.08); }
+    .service-card-button { width: 100%; text-align: left; border: 1px solid #e2e8f0; cursor: pointer; font: inherit; }
     .service-card h3 { margin: 0 0 6px; font-size: 16px; font-weight: 700; }
     .service-card p { margin: 0; font-size: 14px; color: #64748b; line-height: 1.5; }
+    .service-panel { display: none; margin-top: 14px; background: #fff; border: 1px solid #dbe4f0; border-radius: 12px; padding: 18px; }
+    .service-panel.visible { display: block; }
+    .service-panel h3 { margin: 0 0 8px; font-size: 17px; }
+    .service-panel p { margin: 0 0 14px; font-size: 14px; color: #64748b; }
+    .service-panel label { display: block; margin-bottom: 6px; font-size: 13px; font-weight: 600; color: #475569; }
+    .service-panel input, .service-panel textarea { width: 100%; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px 12px; font: inherit; box-sizing: border-box; background: #fff; color: #0f172a; }
+    .service-panel input:focus, .service-panel textarea:focus { outline: 2px solid #93c5fd; border-color: #1d4ed8; }
+    .service-panel textarea { min-height: 120px; resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .service-panel .form-group { margin-bottom: 14px; }
+    .service-panel .form-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .service-panel .helper-text { margin-top: 10px; font-size: 13px; color: #64748b; }
+    .service-panel .helper-text a { color: #1d4ed8; }
+    .service-panel .result-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-top: 14px; }
+    .service-panel .result-meta-label { font-size: 12px; color: #64748b; margin-bottom: 4px; }
+    .service-panel .result-meta-value { font-size: 14px; color: #0f172a; word-break: break-word; }
+    .service-status { margin-top: 12px; padding: 10px 12px; border-radius: 8px; font-size: 13px; display: none; }
+    .service-status.visible { display: block; }
+    .service-status.error { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+    .service-status.success { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
     .empty-state { background: #fff; border: 1px dashed #cbd5e1; border-radius: 10px; padding: 32px; text-align: center; color: #64748b; }
     .empty-state p { margin: 0; font-size: 15px; }
     .spinner { display: none; width: 18px; height: 18px; border: 2px solid #93c5fd; border-top-color: #1d4ed8; border-radius: 50%; animation: spin 0.6s linear infinite; }
@@ -247,25 +267,99 @@ var portalPageTmpl = template.Must(template.New("portal").Parse(`<!DOCTYPE html>
   <section class="service-section">
     <div class="service-header">
       <h2>Other account services</h2>
-      <div class="service-note">These self-hosted commercial tools still live on the public Pulse surface today, but they are part of the same future Pulse Account story.</div>
+      <div class="service-note">Manage and retrieve self-hosted commercial licenses here first. Refund and privacy requests still use the existing public support flows during the current rollout.</div>
     </div>
     <div class="service-grid">
-      <a class="service-card" href="{{.PublicSiteURL}}/manage.html">
+      <button class="service-card service-card-button" type="button" id="open-manage-service">
         <h3>Manage subscriptions</h3>
-        <p>Open the current self-hosted commercial management flow for billing, renewals, and account actions.</p>
-      </a>
-      <a class="service-card" href="{{.PublicSiteURL}}/retrieve-license.html">
+        <p>Open Stripe billing access for existing self-hosted subscriptions without leaving the Pulse Account shell.</p>
+      </button>
+      <button class="service-card service-card-button" type="button" id="open-retrieve-service">
         <h3>Retrieve licenses</h3>
-        <p>Recover existing self-hosted licenses and activation details without digging through old emails.</p>
-      </a>
-      <a class="service-card" href="{{.PublicSiteURL}}/refund.html">
+        <p>Recover the latest active self-hosted license and invoice link for a commercial email address.</p>
+      </button>
+      <a class="service-card" href="{{.PublicSiteURL}}/refund.html?email={{.Email}}">
         <h3>Refund requests</h3>
-        <p>Start the current refund path when a commercial purchase needs review or reversal.</p>
+        <p>Use the current refund path for commercial purchases that need review or reversal.</p>
       </a>
-      <a class="service-card" href="{{.PublicSiteURL}}/data.html">
+      <a class="service-card" href="{{.PublicSiteURL}}/data.html?email={{.Email}}">
         <h3>Data and privacy</h3>
-        <p>Use the existing data-request surface for commercial privacy, export, and deletion requests.</p>
+        <p>Use the current data-request surface for privacy, export, and deletion requests.</p>
       </a>
+    </div>
+
+    <div class="service-panel" id="manage-service-panel">
+      <h3>Manage subscriptions</h3>
+      <p>Request a verification code for the commercial email, then open the Stripe customer portal for billing changes, invoices, and subscription actions.</p>
+      <div id="manage-inline-step1">
+        <div class="form-group">
+          <label for="manage-inline-email">Email address</label>
+          <input type="email" id="manage-inline-email" value="{{.Email}}" autocomplete="email">
+        </div>
+        <div class="form-actions">
+          <button class="btn-primary" type="button" id="manage-inline-request">Send Verification Code</button>
+        </div>
+      </div>
+      <div id="manage-inline-step2" style="display:none">
+        <div class="form-group">
+          <label for="manage-inline-code">Verification code</label>
+          <input type="text" id="manage-inline-code" inputmode="numeric" pattern="[0-9]{6}" placeholder="123456">
+        </div>
+        <div class="form-actions">
+          <button class="btn-primary" type="button" id="manage-inline-confirm">Open Customer Portal</button>
+        </div>
+        <div class="helper-text">Need a new code? <a href="#" id="manage-inline-resend">Send again</a></div>
+      </div>
+      <div class="service-status" id="manage-inline-status"></div>
+    </div>
+
+    <div class="service-panel" id="retrieve-service-panel">
+      <h3>Retrieve licenses</h3>
+      <p>Request a verification code for the commercial email, then reveal the current active self-hosted license without leaving Pulse Account.</p>
+      <div id="retrieve-inline-step1">
+        <div class="form-group">
+          <label for="retrieve-inline-email">Email address</label>
+          <input type="email" id="retrieve-inline-email" value="{{.Email}}" autocomplete="email">
+        </div>
+        <div class="form-actions">
+          <button class="btn-primary" type="button" id="retrieve-inline-request">Send Verification Code</button>
+        </div>
+      </div>
+      <div id="retrieve-inline-step2" style="display:none">
+        <div class="form-group">
+          <label for="retrieve-inline-code">Verification code</label>
+          <input type="text" id="retrieve-inline-code" inputmode="numeric" pattern="[0-9]{6}" placeholder="123456">
+        </div>
+        <div class="form-actions">
+          <button class="btn-primary" type="button" id="retrieve-inline-confirm">Show License</button>
+          <button class="btn-secondary" type="button" id="retrieve-inline-copy" style="display:none">Copy License Key</button>
+          <a class="btn-secondary" id="retrieve-inline-invoice" href="#" target="_blank" rel="noopener" style="display:none">View Invoice</a>
+        </div>
+        <div class="helper-text">Use the latest active self-hosted license for this commercial email.</div>
+      </div>
+      <div class="service-status" id="retrieve-inline-status"></div>
+      <div id="retrieve-inline-result" style="display:none; margin-top:14px">
+        <label for="retrieve-inline-token">License key</label>
+        <textarea id="retrieve-inline-token" readonly></textarea>
+        <div class="result-grid">
+          <div>
+            <div class="result-meta-label">Plan</div>
+            <div class="result-meta-value" id="retrieve-inline-tier"></div>
+          </div>
+          <div>
+            <div class="result-meta-label">Issued</div>
+            <div class="result-meta-value" id="retrieve-inline-issued"></div>
+          </div>
+          <div>
+            <div class="result-meta-label">Expires</div>
+            <div class="result-meta-value" id="retrieve-inline-expires"></div>
+          </div>
+          <div>
+            <div class="result-meta-label">Purchase Email</div>
+            <div class="result-meta-value" id="retrieve-inline-email-value"></div>
+          </div>
+        </div>
+      </div>
     </div>
   </section>
 </main>
@@ -273,6 +367,8 @@ var portalPageTmpl = template.Must(template.New("portal").Parse(`<!DOCTYPE html>
 <div class="toast" id="toast"></div>
 
 <script nonce="{{.Nonce}}">
+const LICENSE_API_BASE = 'https://license.pulserelay.pro';
+
 function showToast(msg, isError) {
   var t = document.getElementById('toast');
   t.textContent = msg;
@@ -288,6 +384,166 @@ document.getElementById('logout-btn').onclick = async function() {
     await fetch('/auth/logout', { method: 'POST' });
   } catch(_) {}
   window.location.href = '/portal';
+};
+
+function toggleServicePanel(panelID) {
+  var panels = ['manage-service-panel', 'retrieve-service-panel'];
+  for (var i = 0; i < panels.length; i++) {
+    var panel = document.getElementById(panels[i]);
+    panel.classList.toggle('visible', panels[i] === panelID ? !panel.classList.contains('visible') : false);
+  }
+}
+
+function setServiceStatus(id, message, isError) {
+  var el = document.getElementById(id);
+  el.textContent = message;
+  el.className = 'service-status visible' + (isError ? ' error' : ' success');
+}
+
+document.getElementById('open-manage-service').onclick = function() {
+  toggleServicePanel('manage-service-panel');
+  document.getElementById('manage-inline-email').focus();
+};
+
+document.getElementById('open-retrieve-service').onclick = function() {
+  toggleServicePanel('retrieve-service-panel');
+  document.getElementById('retrieve-inline-email').focus();
+};
+
+var pendingManageEmail = '';
+var pendingRetrieveEmail = '';
+
+document.getElementById('manage-inline-request').onclick = async function() {
+  var email = document.getElementById('manage-inline-email').value.trim();
+  if (!email) { document.getElementById('manage-inline-email').focus(); return; }
+  this.disabled = true;
+  this.textContent = 'Sending...';
+  try {
+    var res = await fetch(LICENSE_API_BASE + '/v1/manage/request', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email })
+    });
+    var data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to send verification code');
+    pendingManageEmail = email;
+    document.getElementById('manage-inline-step2').style.display = 'block';
+    setServiceStatus('manage-inline-status', 'Verification code sent. Check your email.', false);
+  } catch (err) {
+    setServiceStatus('manage-inline-status', err.message, true);
+  } finally {
+    this.disabled = false;
+    this.textContent = 'Send Verification Code';
+  }
+};
+
+document.getElementById('manage-inline-resend').onclick = async function(e) {
+  e.preventDefault();
+  if (!pendingManageEmail) return;
+  try {
+    var res = await fetch(LICENSE_API_BASE + '/v1/manage/request', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: pendingManageEmail })
+    });
+    var data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to send verification code');
+    setServiceStatus('manage-inline-status', 'New verification code sent.', false);
+  } catch (err) {
+    setServiceStatus('manage-inline-status', err.message, true);
+  }
+};
+
+document.getElementById('manage-inline-confirm').onclick = async function() {
+  var code = document.getElementById('manage-inline-code').value.trim();
+  if (!pendingManageEmail || !code) return;
+  this.disabled = true;
+  this.textContent = 'Redirecting...';
+  try {
+    var res = await fetch(LICENSE_API_BASE + '/v1/manage', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: pendingManageEmail, code: code })
+    });
+    var data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to open customer portal');
+    window.location.href = data.url;
+  } catch (err) {
+    setServiceStatus('manage-inline-status', err.message, true);
+    this.disabled = false;
+    this.textContent = 'Open Customer Portal';
+  }
+};
+
+document.getElementById('retrieve-inline-request').onclick = async function() {
+  var email = document.getElementById('retrieve-inline-email').value.trim();
+  if (!email) { document.getElementById('retrieve-inline-email').focus(); return; }
+  this.disabled = true;
+  this.textContent = 'Sending...';
+  document.getElementById('retrieve-inline-result').style.display = 'none';
+  try {
+    var res = await fetch(LICENSE_API_BASE + '/v1/retrieve-license/request', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email })
+    });
+    var data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to send verification code');
+    pendingRetrieveEmail = email;
+    document.getElementById('retrieve-inline-step2').style.display = 'block';
+    setServiceStatus('retrieve-inline-status', 'Verification code sent. Check your email.', false);
+  } catch (err) {
+    setServiceStatus('retrieve-inline-status', err.message, true);
+  } finally {
+    this.disabled = false;
+    this.textContent = 'Send Verification Code';
+  }
+};
+
+document.getElementById('retrieve-inline-confirm').onclick = async function() {
+  var code = document.getElementById('retrieve-inline-code').value.trim();
+  if (!pendingRetrieveEmail || !code) return;
+  this.disabled = true;
+  this.textContent = 'Loading...';
+  try {
+    var res = await fetch(LICENSE_API_BASE + '/v1/retrieve-license', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: pendingRetrieveEmail, code: code })
+    });
+    var data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to retrieve license');
+    var license = data.license;
+    document.getElementById('retrieve-inline-token').value = license.token;
+    document.getElementById('retrieve-inline-tier').textContent = license.tier;
+    document.getElementById('retrieve-inline-issued').textContent = new Date(license.issued_at).toLocaleString();
+    document.getElementById('retrieve-inline-expires').textContent = license.expires_at ? new Date(license.expires_at).toLocaleString() : 'Does not expire';
+    document.getElementById('retrieve-inline-email-value').textContent = license.email;
+    document.getElementById('retrieve-inline-result').style.display = 'block';
+    document.getElementById('retrieve-inline-copy').style.display = 'inline-block';
+    if (license.invoice_url) {
+      var invoice = document.getElementById('retrieve-inline-invoice');
+      invoice.href = license.invoice_url;
+      invoice.style.display = 'inline-block';
+    }
+    setServiceStatus('retrieve-inline-status', 'License retrieved successfully.', false);
+  } catch (err) {
+    setServiceStatus('retrieve-inline-status', err.message, true);
+  } finally {
+    this.disabled = false;
+    this.textContent = 'Show License';
+  }
+};
+
+document.getElementById('retrieve-inline-copy').onclick = async function() {
+  var token = document.getElementById('retrieve-inline-token').value;
+  if (!token) return;
+  try {
+    await navigator.clipboard.writeText(token);
+    setServiceStatus('retrieve-inline-status', 'License key copied to clipboard.', false);
+  } catch (_) {
+    setServiceStatus('retrieve-inline-status', 'Failed to copy automatically. Please copy the key manually.', true);
+  }
 };
 
 function toggleAddWorkspace(accountID) {

@@ -723,11 +723,15 @@ func TestPortalPageTemplate_AccountServicesRendered(t *testing.T) {
 		"<title>Pulse Account</title>",
 		"Pulse Account",
 		"Other account services",
-		`href="https://pulserelay.pro/manage.html"`,
-		`href="https://pulserelay.pro/retrieve-license.html"`,
-		`href="https://pulserelay.pro/refund.html"`,
-		`href="https://pulserelay.pro/data.html"`,
-		"self-hosted commercial tools still live on the public Pulse surface today",
+		`id="open-manage-service"`,
+		`id="open-retrieve-service"`,
+		`id="manage-service-panel"`,
+		`id="retrieve-service-panel"`,
+		`fetch(LICENSE_API_BASE + '/v1/manage/request'`,
+		`fetch(LICENSE_API_BASE + '/v1/retrieve-license/request'`,
+		`href="https://pulserelay.pro/refund.html?email=owner%40example.com"`,
+		`href="https://pulserelay.pro/data.html?email=owner%40example.com"`,
+		"Manage and retrieve self-hosted commercial licenses here first",
 	}
 	for _, needle := range mustContain {
 		if !strings.Contains(html, needle) {
