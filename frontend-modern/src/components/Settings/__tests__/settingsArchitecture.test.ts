@@ -1105,7 +1105,12 @@ describe('Settings architecture guardrails', () => {
     expect(reportingCatalogModelSource).toContain('export function buildReportingCatalogRequest');
     expect(reportingCatalogModelSource).toContain('export function parseReportingCatalog');
     expect(reportingCatalogModelSource).toContain('interface ReportingLockedStateDefinition');
+    expect(reportingCatalogModelSource).toContain('interface ReportingGuidanceDefinition');
     expect(reportingPanelSource).not.toContain('Advanced Reporting (Pro)');
+    expect(reportingPanelSource).not.toContain('Advanced Insights');
+    expect(reportingPanelSource).not.toContain(
+      'Performance reports come from the historical metrics store',
+    );
     expect(reportingPanelModelSource).toContain('export function getReportingRangeStart');
     expect(reportingPanelModelSource).toContain('export function buildReportingRequest');
     expect(reportingPanelModelSource).toContain('export function buildReportingFilename');

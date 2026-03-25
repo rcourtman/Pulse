@@ -353,6 +353,10 @@ func TestContract_ReportingCatalogJSONSnapshot(t *testing.T) {
 			"title":"Advanced Reporting (Pro)",
 			"description":"Generate PDF and CSV performance reports plus current-state VM inventory exports across infrastructure and workload resources."
 		},
+		"guidance":{
+			"title":"Advanced Insights",
+			"description":"Performance reports come from the historical metrics store, while VM inventory export captures the current runtime state for spreadsheet-friendly fleet reviews. Use reports for trends and the inventory export for current allocation and usage snapshots."
+		},
 		"performanceReport":{
 			"id":"performance_reports",
 			"title":"Performance Reports",

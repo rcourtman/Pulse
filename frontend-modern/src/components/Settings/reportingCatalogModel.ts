@@ -39,11 +39,17 @@ export interface ReportingLockedStateDefinition {
   description: string;
 }
 
+export interface ReportingGuidanceDefinition {
+  title: string;
+  description: string;
+}
+
 export interface ReportingCatalog {
   id: string;
   title: string;
   description: string;
   lockedState: ReportingLockedStateDefinition;
+  guidance: ReportingGuidanceDefinition;
   performanceReport: ReportingPerformanceReportDefinition;
   vmInventoryExport: ReportingInventoryExportDefinition;
 }
@@ -167,6 +173,21 @@ function parseReportingLockedStateDefinition(input: unknown): ReportingLockedSta
   };
 }
 
+function parseReportingGuidanceDefinition(input: unknown): ReportingGuidanceDefinition {
+  if (!input || typeof input !== 'object') {
+    throw new Error('Invalid reporting catalog payload');
+  }
+  const candidate = input as Partial<ReportingGuidanceDefinition>;
+  if (typeof candidate.title !== 'string' || typeof candidate.description !== 'string') {
+    throw new Error('Invalid reporting catalog payload');
+  }
+
+  return {
+    title: candidate.title,
+    description: candidate.description,
+  };
+}
+
 export function parseReportingCatalog(input: unknown): ReportingCatalog {
   if (!input || typeof input !== 'object') {
     throw new Error('Invalid reporting catalog payload');
@@ -185,6 +206,7 @@ export function parseReportingCatalog(input: unknown): ReportingCatalog {
     title: candidate.title,
     description: candidate.description,
     lockedState: parseReportingLockedStateDefinition(candidate.lockedState),
+    guidance: parseReportingGuidanceDefinition(candidate.guidance),
     performanceReport: parseReportingPerformanceReportDefinition(candidate.performanceReport),
     vmInventoryExport: parseVMInventoryExportDefinition(candidate.vmInventoryExport),
   };

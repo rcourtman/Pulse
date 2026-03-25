@@ -17,6 +17,9 @@ func TestDescribeReportingCatalog_DefinesCanonicalSurfaces(t *testing.T) {
 	if catalog.LockedState.Title != "Advanced Reporting (Pro)" {
 		t.Fatalf("locked state title = %q, want Advanced Reporting (Pro)", catalog.LockedState.Title)
 	}
+	if catalog.Guidance.Title != "Advanced Insights" {
+		t.Fatalf("guidance title = %q, want Advanced Insights", catalog.Guidance.Title)
+	}
 	if catalog.PerformanceReport.MultiResourceMax != 50 {
 		t.Fatalf("multi-resource max = %d, want 50", catalog.PerformanceReport.MultiResourceMax)
 	}

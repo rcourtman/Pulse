@@ -44,11 +44,17 @@ type ReportingLockedStateDefinition struct {
 	Description string `json:"description"`
 }
 
+type ReportingGuidanceDefinition struct {
+	Title       string `json:"title"`
+	Description string `json:"description"`
+}
+
 type ReportingCatalog struct {
 	ID                string                         `json:"id"`
 	Title             string                         `json:"title"`
 	Description       string                         `json:"description"`
 	LockedState       ReportingLockedStateDefinition `json:"lockedState"`
+	Guidance          ReportingGuidanceDefinition    `json:"guidance"`
 	PerformanceReport PerformanceReportDefinition    `json:"performanceReport"`
 	VMInventoryExport VMInventoryExportDefinition    `json:"vmInventoryExport"`
 }
@@ -113,6 +119,10 @@ func DescribeReportingCatalog() ReportingCatalog {
 		LockedState: ReportingLockedStateDefinition{
 			Title:       "Advanced Reporting (Pro)",
 			Description: "Generate PDF and CSV performance reports plus current-state VM inventory exports across infrastructure and workload resources.",
+		},
+		Guidance: ReportingGuidanceDefinition{
+			Title:       "Advanced Insights",
+			Description: "Performance reports come from the historical metrics store, while VM inventory export captures the current runtime state for spreadsheet-friendly fleet reviews. Use reports for trends and the inventory export for current allocation and usage snapshots.",
 		},
 		PerformanceReport: DescribePerformanceReport(),
 		VMInventoryExport: DescribeVMInventoryExport(),

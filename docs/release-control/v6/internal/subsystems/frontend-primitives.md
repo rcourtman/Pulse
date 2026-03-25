@@ -206,6 +206,11 @@ That same catalog-owned contract also includes the locked teaser copy itself:
 `ReportingPanel.tsx` may style or place the paywall content, but the locked
 title and description must come from the parsed reporting catalog instead of
 hardcoded component strings.
+That same reporting catalog also owns the enabled-shell guidance callout that
+explains when to use performance reports versus VM inventory export.
+`ReportingPanel.tsx` may choose the presentation primitive, but the callout
+title and description must come from the parsed catalog instead of a
+frontend-local explainer paragraph.
 The shared updates settings owner also defines the user-facing framing for
 rc-tagged builds. `frontend-modern/src/components/Settings/updatesSettingsModel.ts`
 and `frontend-modern/src/utils/updatesPresentation.ts` must present that

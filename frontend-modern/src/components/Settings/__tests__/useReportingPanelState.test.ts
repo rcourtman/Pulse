@@ -18,6 +18,10 @@ const catalogPayload = {
     title: 'Advanced Reporting (Pro)',
     description: 'Canonical locked reporting teaser',
   },
+  guidance: {
+    title: 'Advanced Insights',
+    description: 'Catalog-owned reporting guidance',
+  },
   performanceReport: {
     id: 'performance_reports',
     title: 'Performance Reports',

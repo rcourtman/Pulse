@@ -70,6 +70,7 @@ export function ReportingPanel() {
   const performanceReport = () => reportingCatalog()?.performanceReport ?? null;
   const inventoryDefinition = () => reportingCatalog()?.vmInventoryExport ?? null;
   const lockedState = () => reportingCatalog()?.lockedState ?? null;
+  const guidance = () => reportingCatalog()?.guidance ?? null;
   const supportsMetricFilter = () => performanceReport()?.supportsMetricFilter ?? false;
   const supportsCustomTitle = () => performanceReport()?.supportsCustomTitle ?? false;
   const selectedRange = (): ReportingRangeValue => range() ?? performanceReport()!.defaultRange;
@@ -304,12 +305,16 @@ export function ReportingPanel() {
           </div>
         </OperationsPanel>
 
-        <CalloutCard
-          icon={<BarChart size={24} />}
-          title="Advanced Insights"
-          description="Performance reports come from the historical metrics store, while VM inventory export captures the current runtime state for spreadsheet-friendly fleet reviews. Use reports for trends and the inventory export for current allocation and usage snapshots."
-          padding="lg"
-        />
+        <Show when={guidance()}>
+          {(card) => (
+            <CalloutCard
+              icon={<BarChart size={24} />}
+              title={card().title}
+              description={card().description}
+              padding="lg"
+            />
+          )}
+        </Show>
       </Show>
     </div>
   );

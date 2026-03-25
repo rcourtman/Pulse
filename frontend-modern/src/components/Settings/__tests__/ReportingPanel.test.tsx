@@ -27,6 +27,10 @@ const baseCatalog = {
     title: 'Advanced Reporting (Pro)',
     description: 'Canonical locked reporting teaser',
   },
+  guidance: {
+    title: 'Advanced Insights',
+    description: 'Catalog-owned reporting guidance',
+  },
   performanceReport: {
     id: 'performance_reports',
     title: 'Performance Reports',
@@ -150,5 +154,26 @@ describe('ReportingPanel', () => {
 
     expect(screen.getByText('Reporting for Paid Workflows')).toBeInTheDocument();
     expect(screen.getByText('Catalog-owned locked teaser copy')).toBeInTheDocument();
+  });
+
+  it('uses catalog-owned guidance copy for the enabled explainer callout', () => {
+    useReportingPanelStateMock.mockReturnValue(
+      buildState({
+        reportingCatalog: () => ({
+          ...baseCatalog,
+          guidance: {
+            title: 'Inventory Versus Trends',
+            description: 'Catalog-owned explainer for when to use each reporting surface.',
+          },
+        }),
+      }),
+    );
+
+    render(() => <ReportingPanel />);
+
+    expect(screen.getByText('Inventory Versus Trends')).toBeInTheDocument();
+    expect(
+      screen.getByText('Catalog-owned explainer for when to use each reporting surface.'),
+    ).toBeInTheDocument();
   });
 });

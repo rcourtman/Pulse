@@ -228,8 +228,9 @@ first-class surface separate from historical metrics reports.
 own `/api/admin/reports/catalog` as the canonical operator-facing reporting
 catalog plus `/api/admin/reports/inventory/vms/export` as the stable VM
 inventory sub-contract. The catalog endpoint owns the reporting panel title,
-description, locked-shell teaser copy, historical performance report options,
-and nested VM inventory definition, while the export endpoint remains the
+description, locked-shell teaser copy, enabled-shell guidance copy,
+historical performance report options, and nested VM inventory definition,
+while the export endpoint remains the
 spreadsheet-shaped CSV transport. That
 export is intentionally not comment-prefixed like the legacy metrics CSV, and
 it now carries Proxmox pool membership from the canonical unified VM runtime

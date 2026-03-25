@@ -12,6 +12,10 @@ const baseCatalogPayload = {
     title: 'Advanced Reporting (Pro)',
     description: 'Canonical locked reporting teaser',
   },
+  guidance: {
+    title: 'Advanced Insights',
+    description: 'Catalog-owned reporting guidance',
+  },
   performanceReport: {
     id: 'performance_reports',
     title: 'Performance Reports',
@@ -66,6 +70,7 @@ describe('reporting catalog model', () => {
     const catalog = parseReportingCatalog(baseCatalogPayload);
 
     expect(catalog.lockedState.title).toBe('Advanced Reporting (Pro)');
+    expect(catalog.guidance.title).toBe('Advanced Insights');
     expect(catalog.performanceReport.defaultFormat).toBe('pdf');
     expect(catalog.performanceReport.ranges[0].windowHours).toBe(24);
     expect(catalog.vmInventoryExport.exportEndpoint).toBe(
@@ -112,6 +117,17 @@ describe('reporting catalog model', () => {
         ...baseCatalogPayload,
         lockedState: {
           title: 'Advanced Reporting (Pro)',
+        },
+      }),
+    ).toThrow('Invalid reporting catalog payload');
+  });
+
+  it('rejects a catalog whose guidance copy is incomplete', () => {
+    expect(() =>
+      parseReportingCatalog({
+        ...baseCatalogPayload,
+        guidance: {
+          title: 'Advanced Insights',
         },
       }),
     ).toThrow('Invalid reporting catalog payload');
