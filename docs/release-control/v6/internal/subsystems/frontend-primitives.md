@@ -196,6 +196,10 @@ The same hierarchy also applies inside the Patrol summary shell: once the
 primary summary card states Patrol's assessment and verification basis,
 supporting metric strips under that card must stay metric-oriented and must
 not repeat assessment or verification labels as a second compact verdict row.
+Those supporting cards must also keep their content factual and count-based:
+active findings, critical findings, warnings, and fixes are valid secondary
+readouts, while labels such as `Issues detected` or `Partial verification`
+belong only to the primary Patrol assessment and verification surfaces.
 `frontend-modern/src/components/shared/TagBadges.tsx` is now also the
 canonical tag-badge primitive. Dashboard workload rows and the unified-resource
 detail drawer must import that shared owner instead of keeping a dashboard-local

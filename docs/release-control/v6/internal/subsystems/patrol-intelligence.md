@@ -128,6 +128,12 @@ supporting evidence. Secondary metric strips must not render `No issues found`
 when the same governed overall-health summary says coverage is incomplete or
 health still requires attention; that compact summary state now belongs to the
 shared `frontend-modern/src/utils/patrolSummaryPresentation.ts` helper.
+That summary surface must also avoid reintroducing a second compact assessment
+or verification layer beneath the primary card. Supporting metric strips
+belong to counts and outcomes such as active findings, critical findings,
+warnings, and fixes; they must not repeat Patrol assessment labels or
+verification labels in a second row that competes with the primary governed
+assessment and verification copy above.
 That same summary surface must also explain what Patrol actually verified.
 Recent run history should drive a visible verification summary that tells the
 operator whether Patrol recently completed a successful full patrol, only ran

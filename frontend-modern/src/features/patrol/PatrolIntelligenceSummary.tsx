@@ -50,14 +50,14 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
   const assessmentTonePresentation = createMemo(() =>
     getSemanticTonePresentation(assessment().tone),
   );
-  const assessmentSummaryPresentation = createMemo(() =>
+  const activeFindingsSummaryPresentation = createMemo(() =>
     getPatrolSummaryPresentation(
-      assessment().tone === 'error'
+      summaryStats().criticalFindings > 0
         ? 'critical'
-        : assessment().tone === 'warning'
+        : summaryStats().totalActive > 0
           ? 'warning'
-          : 'success',
-      true,
+          : 'warning',
+      summaryStats().totalActive > 0,
     ),
   );
   const verification = createMemo(() =>
@@ -67,15 +67,8 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
       blockedReason: state.blockedReason(),
     }),
   );
-  const verificationSummaryPresentation = createMemo(() =>
-    getPatrolSummaryPresentation(
-      verification().tone === 'error'
-        ? 'critical'
-        : verification().tone === 'warning'
-          ? 'warning'
-          : 'success',
-      true,
-    ),
+  const fixedSummaryPresentation = createMemo(() =>
+    getPatrolSummaryPresentation('success', summaryStats().fixedCount > 0),
   );
 
   return (
@@ -272,62 +265,34 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
           <div class="bg-surface rounded-md border border-border p-3">
             <div class="flex items-center gap-2">
               <div
-                class={`p-1.5 rounded-md border ${assessmentSummaryPresentation().iconContainerClass}`}
+                class={`p-1.5 rounded-md border ${activeFindingsSummaryPresentation().iconContainerClass}`}
               >
                 <Show
-                  when={assessment().tone === 'success'}
+                  when={summaryStats().criticalFindings > 0}
                   fallback={
                     <Show
-                      when={assessment().tone === 'error'}
+                      when={summaryStats().totalActive > 0}
                       fallback={
-                        <AlertTriangleIcon class={`w-4 h-4 ${assessmentSummaryPresentation().iconClass}`} />
-                      }
-                    >
-                      <ShieldAlertIcon class={`w-4 h-4 ${assessmentSummaryPresentation().iconClass}`} />
-                    </Show>
-                  }
-                >
-                  <CheckCircleIcon class={`w-4 h-4 ${assessmentSummaryPresentation().iconClass}`} />
-                </Show>
-              </div>
-              <div>
-                <p class="text-xs text-muted">Assessment</p>
-                <p class={`text-sm font-semibold ${assessmentSummaryPresentation().valueClass}`}>
-                  {assessment().compactLabel}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div class="bg-surface rounded-md border border-border p-3">
-            <div class="flex items-center gap-2">
-              <div
-                class={`p-1.5 rounded-md border ${verificationSummaryPresentation().iconContainerClass}`}
-              >
-                <Show
-                  when={verification().tone === 'success'}
-                  fallback={
-                    <Show
-                      when={verification().tone === 'error'}
-                      fallback={
-                        <AlertTriangleIcon
-                          class={`w-4 h-4 ${verificationSummaryPresentation().iconClass}`}
+                        <ActivityIcon
+                          class={`w-4 h-4 ${activeFindingsSummaryPresentation().iconClass}`}
                         />
                       }
                     >
-                      <ShieldAlertIcon
-                        class={`w-4 h-4 ${verificationSummaryPresentation().iconClass}`}
+                      <AlertTriangleIcon
+                        class={`w-4 h-4 ${activeFindingsSummaryPresentation().iconClass}`}
                       />
                     </Show>
                   }
                 >
-                  <CheckCircleIcon class={`w-4 h-4 ${verificationSummaryPresentation().iconClass}`} />
+                  <ShieldAlertIcon
+                    class={`w-4 h-4 ${activeFindingsSummaryPresentation().iconClass}`}
+                  />
                 </Show>
               </div>
               <div>
-                <p class="text-xs text-muted">Verification</p>
-                <p class={`text-sm font-semibold ${verificationSummaryPresentation().valueClass}`}>
-                  {verification().compactLabel}
+                <p class="text-xs text-muted">Active findings</p>
+                <p class={`text-lg font-bold ${activeFindingsSummaryPresentation().valueClass}`}>
+                  {summaryStats().totalActive}
                 </p>
               </div>
             </div>
@@ -352,19 +317,34 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
           <div class="bg-surface rounded-md border border-border p-3">
             <div class="flex items-center gap-2">
               <div
-                class={`p-1.5 rounded-md border ${warningSummaryPresentation().iconContainerClass}`}
+                class={`p-1.5 rounded-md border ${criticalSummaryPresentation().iconContainerClass}`}
               >
-                <ActivityIcon class={`w-4 h-4 ${warningSummaryPresentation().iconClass}`} />
+                <ShieldAlertIcon class={`w-4 h-4 ${criticalSummaryPresentation().iconClass}`} />
               </div>
               <div>
-                <p class="text-xs text-muted">Warnings</p>
-                <p class={`text-lg font-bold ${warningSummaryPresentation().valueClass}`}>
-                  {state.summaryStats().warningFindings}
+                <p class="text-xs text-muted">Critical</p>
+                <p class={`text-lg font-bold ${criticalSummaryPresentation().valueClass}`}>
+                  {state.summaryStats().criticalFindings}
                 </p>
               </div>
             </div>
           </div>
 
+          <div class="bg-surface rounded-md border border-border p-3">
+            <div class="flex items-center gap-2">
+              <div
+                class={`p-1.5 rounded-md border ${fixedSummaryPresentation().iconContainerClass}`}
+              >
+                <CheckCircleIcon class={`w-4 h-4 ${fixedSummaryPresentation().iconClass}`} />
+              </div>
+              <div>
+                <p class="text-xs text-muted">Fixed</p>
+                <p class={`text-lg font-bold ${fixedSummaryPresentation().valueClass}`}>
+                  {state.summaryStats().fixedCount}
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
       </Show>
     </>

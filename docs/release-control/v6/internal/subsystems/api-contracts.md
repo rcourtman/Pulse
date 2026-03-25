@@ -170,6 +170,7 @@ Own canonical runtime payload shapes between backend and frontend.
 5. Keep `/api/resources` policy metadata aligned across backend payload tests and canonical frontend resource consumers whenever sensitivity or routing fields change
 6. Keep Patrol status payloads explicit enough that the frontend can present blocked runtime state without treating a previously healthy summary snapshot as current runtime truth
 7. Keep Patrol summary payload consumers aligned on one assessment hierarchy: transport-driven Patrol summary surfaces may show supporting counts and outcomes, but the canonical assessment and verification states must remain singular and not be repeated as a second compact verdict strip
+8. Treat Patrol summary supporting metrics as readouts, not reinterpretations: when frontend consumers derive cards such as active findings, criticals, warnings, or fixes from the canonical payloads, those cards must stay numeric and must not synthesize new assessment labels like `Issues detected` or verification labels like `Partial verification` beneath the primary summary contract
 
 ## Current State
 
