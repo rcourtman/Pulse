@@ -222,6 +222,10 @@ export interface FindingManualControlsPresentation {
   dismiss: boolean;
 }
 
+export interface PatrolFindingsBadgePresentation {
+  toneClasses: string;
+}
+
 export const getFindingSourceLabel = (source: UnifiedFinding['source'] | string): string =>
   FINDING_SOURCE_LABELS[source] || source;
 
@@ -249,6 +253,30 @@ export const getFindingSeveritySortOrder = (
 export const getFindingActiveRuntimeSortOrder = (
   finding: Pick<UnifiedFinding, 'status' | 'resourceId' | 'resourceName' | 'title'>,
 ): number => (finding.status === 'active' && isPatrolRuntimeFinding(finding) ? 0 : 1);
+
+export const getPatrolFindingsBadgePresentation = (
+  findings: Pick<UnifiedFinding, 'status' | 'severity' | 'resourceId' | 'resourceName' | 'title'>[],
+): PatrolFindingsBadgePresentation => {
+  const activeFindings = findings.filter((finding) => finding.status === 'active');
+  if (activeFindings.some((finding) => finding.severity === 'critical' && !isPatrolRuntimeFinding(finding))) {
+    return { toneClasses: getFindingSeverityToneClasses('critical') };
+  }
+  if (activeFindings.some((finding) => finding.severity === 'critical' && isPatrolRuntimeFinding(finding))) {
+    return {
+      toneClasses: 'bg-sky-100 text-sky-700 dark:bg-sky-900 dark:text-sky-300',
+    };
+  }
+  if (activeFindings.some((finding) => finding.severity === 'warning' && !isPatrolRuntimeFinding(finding))) {
+    return { toneClasses: getFindingSeverityToneClasses('warning') };
+  }
+  if (activeFindings.some((finding) => finding.severity === 'warning' && isPatrolRuntimeFinding(finding))) {
+    return {
+      toneClasses: 'bg-sky-100 text-sky-700 dark:bg-sky-900 dark:text-sky-300',
+    };
+  }
+
+  return { toneClasses: 'bg-surface-alt text-muted' };
+};
 
 export const getFindingSeverityCompactLabel = (
   severity: UnifiedFinding['severity'] | string,

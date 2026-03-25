@@ -20,6 +20,7 @@ import {
   getFindingStatusBadgeClasses,
   getFindingStatusLabel,
   getFindingSeverityToneClasses,
+  getPatrolFindingsBadgePresentation,
   getFindingSourceBadgeClasses,
   getFindingSourceLabel,
   hasFindingInvestigationDetails,
@@ -135,6 +136,38 @@ describe('aiFindingPresentation', () => {
 
     it('contains compact tone classes for critical severity', () => {
       expect(getFindingSeverityToneClasses('critical')).toContain('bg-red-100');
+    });
+
+    it('uses patrol runtime badge tones when only runtime findings are active', () => {
+      expect(
+        getPatrolFindingsBadgePresentation([
+          {
+            status: 'active',
+            severity: 'warning',
+            resourceId: 'ai-service',
+            resourceName: 'Pulse Patrol Service',
+            title: 'Pulse Patrol: Insufficient API credits',
+          },
+        ]),
+      ).toEqual({
+        toneClasses: 'bg-sky-100 text-sky-700 dark:bg-sky-900 dark:text-sky-300',
+      });
+    });
+
+    it('keeps warning tones for infrastructure warning findings', () => {
+      expect(
+        getPatrolFindingsBadgePresentation([
+          {
+            status: 'active',
+            severity: 'warning',
+            resourceId: 'vm-101',
+            resourceName: 'db-01',
+            title: 'Disk nearly full',
+          },
+        ]),
+      ).toEqual({
+        toneClasses: getFindingSeverityToneClasses('warning'),
+      });
     });
   });
 
@@ -387,6 +420,11 @@ describe('aiFindingPresentation', () => {
       expect(patrolWorkspaceSource).toContain("{' '}");
       expect(patrolWorkspaceSource).toContain('{state.summaryStats().totalActive}');
       expect(patrolWorkspaceSource).toContain('{state.displayRunHistory().length}');
+    });
+
+    it('routes the findings tab badge tone through the shared patrol findings badge helper', () => {
+      expect(patrolWorkspaceSource).toContain('getPatrolFindingsBadgePresentation');
+      expect(patrolWorkspaceSource).toContain('findingsBadgePresentation().toneClasses');
     });
 
     it('does not stack a detected loop-state badge on top of acknowledged active findings', () => {

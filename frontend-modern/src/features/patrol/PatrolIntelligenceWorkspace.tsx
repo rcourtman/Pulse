@@ -1,7 +1,7 @@
 import { Show } from 'solid-js';
 import { FindingsPanel } from '@/components/AI/FindingsPanel';
 import { ApprovalBanner, PatrolStatusBar, RunHistoryPanel } from '@/components/patrol';
-import { getFindingSeverityToneClasses } from '@/utils/aiFindingPresentation';
+import { getPatrolFindingsBadgePresentation } from '@/utils/aiFindingPresentation';
 import { formatRelativeTime } from '@/utils/format';
 import { formatTriggerReason } from '@/utils/patrolFormat';
 import { ResourcePolicySummary } from '@/components/Infrastructure/ResourcePolicySummary';
@@ -11,6 +11,7 @@ import type { PatrolIntelligenceState } from './usePatrolIntelligenceState';
 
 export function PatrolIntelligenceWorkspace(props: { state: PatrolIntelligenceState }) {
   const state = props.state;
+  const findingsBadgePresentation = () => getPatrolFindingsBadgePresentation(state.activePatrolFindings());
 
   return (
     <>
@@ -51,7 +52,7 @@ export function PatrolIntelligenceWorkspace(props: { state: PatrolIntelligenceSt
           <Show when={state.summaryStats().totalActive > 0}>
             <span
               aria-hidden="true"
-              class={`ml-1.5 px-1.5 py-0.5 text-xs rounded-full ${getFindingSeverityToneClasses(state.summaryStats().criticalFindings > 0 ? 'critical' : 'warning')}`}
+              class={`ml-1.5 px-1.5 py-0.5 text-xs rounded-full ${findingsBadgePresentation().toneClasses}`}
             >
               {' '}
               {state.summaryStats().totalActive}
