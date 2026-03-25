@@ -265,6 +265,11 @@ copy must present the flow as starting a trial for the originating Pulse
 instance, not as a generic purchase funnel. Recovery-contact fields such as
 work email and optional company name must remain clearly secondary to the
 instance-bound entitlement handoff.
+That same hosted owner also applies after Stripe returns to
+`/trial-signup/complete`: customer-facing completion failures must stay inside
+owned trial UX rather than dropping raw control-plane error strings, and they
+may only offer a direct "Start Trial Again" restart path when the original
+Pulse return target and initiation binding are still known.
 That same rule applies to the self-hosted Pro settings panel. Trial start
 errors in `frontend-modern/src/components/Settings/useProLicensePanelState.ts`
 must route through the shared cloud-paid presentation helper so backend denial

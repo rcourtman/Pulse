@@ -382,6 +382,126 @@ var trialSignupSuccessTemplate = template.Must(template.New("trial-signup-succes
 </html>
 `))
 
+var trialSignupFailureTemplate = template.Must(template.New("trial-signup-failure").Parse(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pulse Pro Trial Setup Issue</title>
+  <style nonce="{{.Nonce}}">
+    :root {
+      color-scheme: light;
+      --bg-top: #f7f3ea;
+      --bg-bottom: #e9efe8;
+      --card: #fffdf8;
+      --line: #d8dccf;
+      --text: #14261f;
+      --muted: #4d5f57;
+      --accent: #0f766e;
+      --accent-deep: #115e59;
+      --warn-bg: #fff7ed;
+      --warn-line: #fdba74;
+      --warn-text: #9a3412;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background:
+        radial-gradient(circle at top left, rgba(15,118,110,.10), transparent 34%),
+        linear-gradient(155deg, var(--bg-top), var(--bg-bottom));
+      color: var(--text);
+    }
+    .wrap { max-width: 760px; margin: 40px auto; padding: 0 18px; }
+    .card {
+      background: var(--card);
+      border-radius: 18px;
+      border: 1px solid rgba(20,38,31,.10);
+      box-shadow: 0 18px 60px rgba(20,38,31,.10);
+      padding: 28px;
+    }
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(15,118,110,.10);
+      color: var(--accent-deep);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+      margin-bottom: 14px;
+    }
+    h1 { margin: 0 0 10px; font-size: 34px; line-height: 1.05; }
+    p { margin: 0 0 16px; line-height: 1.6; color: var(--muted); }
+    .status {
+      background: var(--warn-bg);
+      border: 1px solid var(--warn-line);
+      border-radius: 12px;
+      color: var(--warn-text);
+      padding: 14px 16px;
+      margin: 20px 0;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    .meta {
+      background: rgba(255,255,255,.78);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 14px 16px;
+      margin: 20px 0;
+    }
+    .meta strong {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--text);
+      font-size: 12px;
+      letter-spacing: .03em;
+      text-transform: uppercase;
+    }
+    .cta {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: 0;
+      border-radius: 12px;
+      background: var(--accent);
+      color: #fff;
+      font-size: 16px;
+      font-weight: 700;
+      padding: 13px 18px;
+      text-decoration: none;
+    }
+    .cta:hover { background: var(--accent-deep); }
+    .fine { font-size: 12px; color: #64748b; margin-top: 14px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <div class="eyebrow">Pulse Pro Trial</div>
+      <h1>{{.Title}}</h1>
+      <p>{{.Message}}</p>
+
+      <div class="status">
+        Return to Pulse and start the secure trial handoff again if you still want to activate Pro on this instance.
+      </div>
+
+      <div class="meta">
+        <strong>Pulse instance</strong>
+        <div>{{.ReturnTarget}}</div>
+      </div>
+
+      {{if .ActionURL}}<a class="cta" href="{{.ActionURL}}">{{.ActionLabel}}</a>{{end}}
+      <p class="fine">{{.FinePrint}}</p>
+    </div>
+  </div>
+</body>
+</html>
+`))
+
 type TrialSignupHandlers struct {
 	cfg                   *CPConfig
 	emailSender           cpemail.Sender
@@ -412,6 +532,16 @@ type trialSignupSuccessData struct {
 	ReturnTarget string
 	Email        string
 	ActivateURL  string
+	Nonce        string
+}
+
+type trialSignupFailureData struct {
+	Title        string
+	Message      string
+	ReturnTarget string
+	ActionURL    string
+	ActionLabel  string
+	FinePrint    string
 	Nonce        string
 }
 
@@ -799,13 +929,17 @@ func (h *TrialSignupHandlers) HandleTrialSignupComplete(w http.ResponseWriter, r
 		return
 	}
 
+	fail := func(status int, data trialSignupPageData, message string) {
+		h.renderTrialSignupFailurePage(w, r, status, trialSignupFailureDataForPage(h.cfg, data, message))
+	}
+
 	sessionID := strings.TrimSpace(r.URL.Query().Get("session_id"))
 	if sessionID == "" {
-		http.Error(w, "session_id is required", http.StatusBadRequest)
+		fail(http.StatusBadRequest, trialSignupPageData{}, "This secure trial session is missing its completion token.")
 		return
 	}
 	if strings.TrimSpace(h.cfg.StripeAPIKey) == "" {
-		http.Error(w, "stripe api key not configured", http.StatusServiceUnavailable)
+		fail(http.StatusServiceUnavailable, trialSignupPageData{}, "Secure trial setup is unavailable right now.")
 		return
 	}
 
@@ -813,30 +947,35 @@ func (h *TrialSignupHandlers) HandleTrialSignupComplete(w http.ResponseWriter, r
 	session, err := h.getCheckoutSession(sessionID, nil)
 	if err != nil || session == nil {
 		log.Warn().Err(err).Str("session_id", sessionID).Msg("trial signup checkout session lookup failed")
-		http.Error(w, "invalid checkout session", http.StatusBadRequest)
+		fail(http.StatusBadRequest, trialSignupPageData{}, "This secure trial session could not be confirmed.")
 		return
 	}
+	data := trialSignupPageData{
+		OrgID:        normalizeTrialOrgID(session.Metadata["org_id"]),
+		ReturnURL:    strings.TrimSpace(session.Metadata["return_url"]),
+		ReturnTarget: summarizeTrialReturnTarget(session.Metadata["return_url"]),
+	}
 	if session.Status != stripe.CheckoutSessionStatusComplete {
-		http.Error(w, "checkout session not complete", http.StatusBadRequest)
+		fail(http.StatusBadRequest, data, "This secure trial session has not completed yet.")
 		return
 	}
 	if session.Mode != stripe.CheckoutSessionModeSubscription {
-		http.Error(w, "invalid checkout session mode", http.StatusBadRequest)
+		fail(http.StatusBadRequest, data, "This secure trial session is not valid for a Pulse Pro trial.")
 		return
 	}
 	if strings.TrimSpace(session.Metadata["signup_source"]) != "pulse_pro_trial" {
-		http.Error(w, "invalid trial signup source", http.StatusBadRequest)
+		fail(http.StatusBadRequest, data, "This secure trial session is not valid for a Pulse Pro trial.")
 		return
 	}
 
 	returnURL := strings.TrimSpace(session.Metadata["return_url"])
 	if !isValidTrialReturnURL(returnURL) {
-		http.Error(w, "invalid return url", http.StatusBadRequest)
+		fail(http.StatusBadRequest, data, "This trial return target is no longer valid.")
 		return
 	}
 	instanceHost, err := trialSignupReturnURLHost(returnURL)
 	if err != nil {
-		http.Error(w, "invalid return url host", http.StatusBadRequest)
+		fail(http.StatusBadRequest, data, "This trial return target is no longer valid.")
 		return
 	}
 
@@ -852,68 +991,72 @@ func (h *TrialSignupHandlers) HandleTrialSignupComplete(w http.ResponseWriter, r
 	now := h.now().UTC()
 	requestID := strings.TrimSpace(session.Metadata["trial_request_id"])
 	if requestID == "" {
-		http.Error(w, "missing trial request id", http.StatusBadRequest)
+		fail(http.StatusBadRequest, data, "This secure trial session is missing its request binding.")
 		return
 	}
 	if h.verificationStore == nil {
-		http.Error(w, "trial signup store not configured", http.StatusServiceUnavailable)
+		fail(http.StatusServiceUnavailable, data, "Secure trial setup is unavailable right now.")
 		return
 	}
 	record, err := h.verificationStore.GetRecord(requestID)
 	if err != nil {
-		http.Error(w, "invalid trial request", http.StatusBadRequest)
+		fail(http.StatusBadRequest, data, "This secure trial request could not be confirmed.")
 		return
 	}
+	data.InstanceToken = record.InstanceToken
+	data.Name = record.Name
+	data.Email = record.Email
+	data.Company = record.Company
 	if record.VerifiedAt.IsZero() {
-		http.Error(w, "invalid trial request", http.StatusBadRequest)
+		fail(http.StatusBadRequest, data, "This secure trial request could not be confirmed.")
 		return
 	}
 	if strings.TrimSpace(record.OrgID) != orgID {
-		http.Error(w, "trial request org mismatch", http.StatusBadRequest)
+		fail(http.StatusBadRequest, data, "This secure trial request does not match the originating workspace.")
 		return
 	}
 	if strings.TrimSpace(record.ReturnURL) != returnURL {
-		http.Error(w, "trial request return url mismatch", http.StatusBadRequest)
+		fail(http.StatusBadRequest, data, "This secure trial request does not match the originating Pulse instance.")
 		return
 	}
 	if strings.TrimSpace(record.InstanceToken) == "" {
-		http.Error(w, "trial request initiation token missing", http.StatusBadRequest)
+		fail(http.StatusBadRequest, data, "This secure trial request is missing its Pulse initiation binding.")
 		return
 	}
 	if verifiedEmail := normalizeTrialSignupEmail(record.Email); verifiedEmail == "" || normalizeTrialSignupEmail(email) != verifiedEmail {
-		http.Error(w, "trial request email mismatch", http.StatusBadRequest)
+		fail(http.StatusBadRequest, data, "This secure trial request does not match the verified recovery contact.")
 		return
 	}
 	if existingSessionID := strings.TrimSpace(record.CheckoutSessionID); existingSessionID != "" && existingSessionID != sessionID {
-		http.Error(w, "trial request checkout session mismatch", http.StatusBadRequest)
+		fail(http.StatusBadRequest, data, "This secure trial request does not match the checkout session that was already started.")
 		return
 	}
 	if err := h.verificationStore.MarkCheckoutCompleted(requestID, sessionID, now); err != nil {
 		switch {
 		case errors.Is(err, ErrTrialSignupRecordNotFound):
-			http.Error(w, "invalid trial request", http.StatusBadRequest)
+			fail(http.StatusBadRequest, data, "This secure trial request could not be confirmed.")
 		default:
 			log.Error().Err(err).Str("request_id", requestID).Str("session_id", sessionID).Msg("failed to record checkout completion")
-			http.Error(w, "failed to record checkout completion", http.StatusInternalServerError)
+			fail(http.StatusInternalServerError, data, "Pulse could not finish recording this secure trial checkout.")
 		}
 		return
 	}
 	if err := h.verificationStore.MarkTrialIssued(requestID, now); err != nil {
 		switch {
 		case errors.Is(err, ErrTrialSignupEmailAlreadyUsed):
-			http.Error(w, "trial already used for this email", http.StatusConflict)
+			fail(http.StatusConflict, data, "This recovery email has already used a Pulse Pro trial.")
 		case errors.Is(err, ErrTrialSignupOrganizationUsed):
-			http.Error(w, "trial already used for this organization", http.StatusConflict)
+			fail(http.StatusConflict, data, "This organization has already used a Pulse Pro trial.")
 		case errors.Is(err, ErrTrialSignupRecordNotFound), errors.Is(err, ErrTrialSignupVerificationInvalid):
-			http.Error(w, "invalid trial request", http.StatusBadRequest)
+			fail(http.StatusBadRequest, data, "This secure trial request could not be confirmed.")
 		default:
 			log.Error().Err(err).Str("request_id", requestID).Msg("failed to record trial issuance")
-			http.Error(w, "failed to record trial issuance", http.StatusInternalServerError)
+			fail(http.StatusInternalServerError, data, "Pulse could not finalize this trial issuance.")
 		}
 		return
 	}
 	if h.entitlements == nil {
-		http.Error(w, "hosted entitlement service unavailable", http.StatusServiceUnavailable)
+		fail(http.StatusServiceUnavailable, data, "Secure trial activation is unavailable right now.")
 		return
 	}
 	token, err := h.entitlements.IssueTrialActivation(entitlements.TrialActivationInput{
@@ -930,7 +1073,7 @@ func (h *TrialSignupHandlers) HandleTrialSignupComplete(w http.ResponseWriter, r
 	})
 	if err != nil {
 		log.Error().Err(err).Str("request_id", requestID).Str("session_id", sessionID).Msg("failed to persist trial activation token")
-		http.Error(w, "failed to persist activation token", http.StatusInternalServerError)
+		fail(http.StatusInternalServerError, data, "Pulse could not prepare the activation handoff for this trial.")
 		return
 	}
 
@@ -939,7 +1082,7 @@ func (h *TrialSignupHandlers) HandleTrialSignupComplete(w http.ResponseWriter, r
 	})
 	if err != nil {
 		log.Error().Err(err).Str("return_url", returnURL).Msg("failed to build trial activation redirect URL")
-		http.Error(w, "failed to build redirect URL", http.StatusInternalServerError)
+		fail(http.StatusInternalServerError, data, "Pulse could not prepare the return link back to your instance.")
 		return
 	}
 	h.renderTrialSignupSuccessPage(w, r, http.StatusOK, trialSignupSuccessData{
@@ -1148,6 +1291,15 @@ func (h *TrialSignupHandlers) trialSignupPageDataFromRequest(r *http.Request) tr
 	return data
 }
 
+func (h *TrialSignupHandlers) renderTrialSignupFailurePage(w http.ResponseWriter, r *http.Request, status int, data trialSignupFailureData) {
+	data.Nonce = cpsec.NonceFromContext(r.Context())
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(status)
+	if err := trialSignupFailureTemplate.Execute(w, data); err != nil {
+		log.Error().Err(err).Msg("trial signup failure page render failed")
+	}
+}
+
 func trialSignupRateLimitMessage(retryAfter int) string {
 	return "Too many trial setup attempts from this browser. " + humanizeTrialSignupRetryAfter(retryAfter) + "."
 }
@@ -1223,6 +1375,43 @@ func normalizeTrialOrgID(raw string) string {
 		return trialSignupDefaultOrgID
 	}
 	return orgID
+}
+
+func trialSignupFailureDataForPage(cfg *CPConfig, data trialSignupPageData, message string) trialSignupFailureData {
+	title := "Trial setup could not be completed"
+	finePrint := "Return to Pulse and restart the secure trial handoff if you still want to activate Pro on this instance."
+
+	switch {
+	case strings.Contains(strings.ToLower(message), "already used"):
+		title = "Trial already used"
+		finePrint = "This hosted trial flow cannot issue another Pro trial for the same recovery contact or organization."
+	case strings.Contains(strings.ToLower(message), "unavailable"):
+		title = "Trial setup is unavailable"
+		finePrint = "Pulse could not finish the secure trial handoff right now. Return to Pulse and try again later."
+	}
+
+	page := trialSignupFailureData{
+		Title:        title,
+		Message:      strings.TrimSpace(message),
+		ReturnTarget: strings.TrimSpace(data.ReturnTarget),
+		FinePrint:    finePrint,
+	}
+	if page.Message == "" {
+		page.Message = "Pulse could not complete this secure trial handoff."
+	}
+	if page.ReturnTarget == "" {
+		page.ReturnTarget = "your Pulse instance"
+	}
+	if strings.TrimSpace(data.ReturnURL) == "" || strings.TrimSpace(data.InstanceToken) == "" {
+		return page
+	}
+	baseURL := ""
+	if cfg != nil {
+		baseURL = cfg.BaseURL
+	}
+	page.ActionURL = buildTrialSignupStartURL(baseURL, data, false)
+	page.ActionLabel = "Start Trial Again"
+	return page
 }
 
 func buildCPURL(baseURL, path string, query url.Values) string {

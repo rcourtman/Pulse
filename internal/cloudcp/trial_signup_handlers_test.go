@@ -1076,9 +1076,12 @@ func TestTrialSignupHandleCompleteRejectsDuplicateIssuedEmail(t *testing.T) {
 	if rec.Code != http.StatusConflict {
 		t.Fatalf("status=%d, want %d body=%q", rec.Code, http.StatusConflict, rec.Body.String())
 	}
-	if !strings.Contains(rec.Body.String(), "trial already used for this email") {
-		t.Fatalf("expected duplicate issuance error, got %q", rec.Body.String())
-	}
+	assertTrialSignupFailurePageContains(t, rec.Body.String(),
+		"Trial already used",
+		"This recovery email has already used a Pulse Pro trial.",
+		"pulse.example.com",
+		"Start Trial Again",
+	)
 }
 
 func TestTrialSignupHandleCompleteRejectsDuplicateCorporateDomainIssuedEmail(t *testing.T) {
@@ -1147,9 +1150,12 @@ func TestTrialSignupHandleCompleteRejectsDuplicateCorporateDomainIssuedEmail(t *
 	if rec.Code != http.StatusConflict {
 		t.Fatalf("status=%d, want %d body=%q", rec.Code, http.StatusConflict, rec.Body.String())
 	}
-	if !strings.Contains(rec.Body.String(), "trial already used for this organization") {
-		t.Fatalf("expected organization duplicate issuance error, got %q", rec.Body.String())
-	}
+	assertTrialSignupFailurePageContains(t, rec.Body.String(),
+		"Trial already used",
+		"This organization has already used a Pulse Pro trial.",
+		"pulse.example.com",
+		"Start Trial Again",
+	)
 }
 
 func TestTrialSignupHandleCompleteRejectsCheckoutSessionMismatch(t *testing.T) {
@@ -1186,9 +1192,12 @@ func TestTrialSignupHandleCompleteRejectsCheckoutSessionMismatch(t *testing.T) {
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status=%d, want %d body=%q", rec.Code, http.StatusBadRequest, rec.Body.String())
 	}
-	if !strings.Contains(rec.Body.String(), "checkout session mismatch") {
-		t.Fatalf("expected checkout session mismatch, got %q", rec.Body.String())
-	}
+	assertTrialSignupFailurePageContains(t, rec.Body.String(),
+		"Trial setup could not be completed",
+		"This secure trial request does not match the checkout session that was already started.",
+		"pulse.example.com",
+		"Start Trial Again",
+	)
 }
 
 func TestTrialSignupHandleCompleteRejectsNonTrialCheckoutSession(t *testing.T) {
@@ -1249,9 +1258,11 @@ func TestTrialSignupHandleCompleteRejectsNonTrialCheckoutSession(t *testing.T) {
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status=%d, want %d body=%q", rec.Code, http.StatusBadRequest, rec.Body.String())
 	}
-	if !strings.Contains(rec.Body.String(), "invalid checkout session mode") {
-		t.Fatalf("expected invalid mode error, got %q", rec.Body.String())
-	}
+	assertTrialSignupFailurePageContains(t, rec.Body.String(),
+		"Trial setup could not be completed",
+		"This secure trial session is not valid for a Pulse Pro trial.",
+		"pulse.example.com",
+	)
 
 	_ = pub
 }
@@ -1314,9 +1325,11 @@ func TestTrialSignupHandleCompleteRejectsMissingVerifiedTrialMetadata(t *testing
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status=%d, want %d body=%q", rec.Code, http.StatusBadRequest, rec.Body.String())
 	}
-	if !strings.Contains(rec.Body.String(), "invalid trial signup source") {
-		t.Fatalf("expected invalid signup source error, got %q", rec.Body.String())
-	}
+	assertTrialSignupFailurePageContains(t, rec.Body.String(),
+		"Trial setup could not be completed",
+		"This secure trial session is not valid for a Pulse Pro trial.",
+		"pulse.example.com",
+	)
 }
 
 func newTrialSignupTestHandler(t *testing.T) (*TrialSignupHandlers, *TrialSignupStore, *captureEmailSender) {
@@ -1399,6 +1412,18 @@ func parseVerifiedTokenRequestID(t *testing.T, h *TrialSignupHandlers, verifiedT
 		t.Fatalf("lookupVerifiedTrialSignupRecord: %v", err)
 	}
 	return record.ID
+}
+
+func assertTrialSignupFailurePageContains(t *testing.T, body string, parts ...string) {
+	t.Helper()
+	if !strings.Contains(body, "Pulse Pro Trial") {
+		t.Fatalf("expected trial failure page chrome, got %q", body)
+	}
+	for _, part := range parts {
+		if !strings.Contains(body, part) {
+			t.Fatalf("expected response body to contain %q, got %q", part, body)
+		}
+	}
 }
 
 func extractQueryValueFromTextURL(t *testing.T, text, key string) string {
