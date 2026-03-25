@@ -69,6 +69,12 @@ export function ReportingPanel() {
 
   const performanceReport = () => reportingCatalog()?.performanceReport ?? null;
   const inventoryDefinition = () => reportingCatalog()?.vmInventoryExport ?? null;
+  const supportsMetricFilter = () => performanceReport()?.supportsMetricFilter ?? false;
+  const supportsCustomTitle = () => performanceReport()?.supportsCustomTitle ?? false;
+  const optionalFieldCount = () =>
+    Number(supportsMetricFilter()) + Number(supportsCustomTitle());
+  const optionalFieldGridClass = () =>
+    optionalFieldCount() > 1 ? 'grid grid-cols-1 gap-6 md:grid-cols-2' : 'grid grid-cols-1 gap-6';
 
   const rangeFilterOptions = (): FilterOption<ReportingRangeValue>[] =>
     (performanceReport()?.ranges ?? []).map((option) => ({
@@ -169,32 +175,38 @@ export function ReportingPanel() {
                   />
                 </FormField>
 
-                <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
-                  <FormField
-                    label="Metric Type (Optional)"
-                    helpText="Filter by specific metric type"
-                  >
-                    <input
-                      id="metric-type"
-                      type="text"
-                      class={formControl}
-                      placeholder="e.g. cpu, memory, disk, temperature (leave empty for all)"
-                      value={metricType()}
-                      onInput={(e) => setMetricType(e.currentTarget.value)}
-                    />
-                  </FormField>
+                <Show when={optionalFieldCount() > 0}>
+                  <div class={optionalFieldGridClass()}>
+                    <Show when={supportsMetricFilter()}>
+                      <FormField
+                        label="Metric Type (Optional)"
+                        helpText="Filter by specific metric type"
+                      >
+                        <input
+                          id="metric-type"
+                          type="text"
+                          class={formControl}
+                          placeholder="e.g. cpu, memory, disk, temperature (leave empty for all)"
+                          value={metricType()}
+                          onInput={(e) => setMetricType(e.currentTarget.value)}
+                        />
+                      </FormField>
+                    </Show>
 
-                  <FormField label="Report Title" helpText="Custom title for the PDF report">
-                    <input
-                      id="report-title"
-                      type="text"
-                      class={formControl}
-                      placeholder="Auto-generated if empty"
-                      value={title()}
-                      onInput={(e) => setTitle(e.currentTarget.value)}
-                    />
-                  </FormField>
-                </div>
+                    <Show when={supportsCustomTitle()}>
+                      <FormField label="Report Title" helpText="Custom title for the PDF report">
+                        <input
+                          id="report-title"
+                          type="text"
+                          class={formControl}
+                          placeholder="Auto-generated if empty"
+                          value={title()}
+                          onInput={(e) => setTitle(e.currentTarget.value)}
+                        />
+                      </FormField>
+                    </Show>
+                  </div>
+                </Show>
 
                 <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
                   <FormField label="Time Range">

@@ -227,6 +227,10 @@ export is intentionally not comment-prefixed like the legacy metrics CSV, and
 it now carries Proxmox pool membership from the canonical unified VM runtime
 model instead of inferring or reconstructing that field locally inside the
 frontend or handler.
+That same catalog payload also owns the optional performance-report capability
+surface: `supportsMetricFilter` and `supportsCustomTitle` are contract flags,
+not UI hints, so frontend consumers and request builders must not render or
+emit unsupported metric-filter or custom-title fields from local assumptions.
 The `/api/resources` serializer now also refreshes canonical identity and
 policy metadata through the shared unified-resource helper before it writes
 the payload, so backend and frontend contract tests stay aligned on one

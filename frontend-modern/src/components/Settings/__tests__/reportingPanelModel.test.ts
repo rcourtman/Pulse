@@ -121,6 +121,38 @@ describe('reporting panel model', () => {
     );
   });
 
+  it('omits unsupported metric filters and custom titles from the request contract', () => {
+    const now = new Date('2026-03-20T12:34:56.000Z');
+    const resources: SelectedResource[] = [
+      {
+        id: 'vm-1',
+        type: 'vm',
+        name: 'vm-a',
+      },
+    ];
+
+    const request = buildReportingRequest(
+      {
+        end: now.toISOString(),
+        format: 'pdf',
+        metricType: 'cpu',
+        now,
+        resources,
+        start: '2026-03-19T12:34:56.000Z',
+        title: 'Custom fleet title',
+      },
+      {
+        ...performanceDefinition,
+        supportsMetricFilter: false,
+        supportsCustomTitle: false,
+      },
+    );
+
+    expect(request.request.url).toContain('title=Pulse+Report+-+vm-a');
+    expect(request.request.url).not.toContain('metricType=');
+    expect(request.request.url).not.toContain('Custom+fleet+title');
+  });
+
   it('derives canonical range starts from the selected preset', () => {
     const now = new Date('2026-03-20T12:00:00.000Z');
 

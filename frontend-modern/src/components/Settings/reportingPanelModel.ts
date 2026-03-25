@@ -71,9 +71,18 @@ export function buildReportingRequest(
   context: ReportingRequestContext,
   definition?: Pick<
     ReportingPerformanceReportDefinition,
-    'multiFilenamePrefix' | 'multiResourceEndpoint' | 'singleFilenamePrefix' | 'singleResourceEndpoint'
+    | 'multiFilenamePrefix'
+    | 'multiResourceEndpoint'
+    | 'singleFilenamePrefix'
+    | 'singleResourceEndpoint'
+    | 'supportsCustomTitle'
+    | 'supportsMetricFilter'
   > | null,
 ): ReportingRequestDefinition {
+  const metricType =
+    definition?.supportsMetricFilter === false ? '' : context.metricType.trim();
+  const customTitle = definition?.supportsCustomTitle === false ? '' : context.title.trim();
+
   if (context.resources.length === 1) {
     const resource = context.resources[0];
     const params = new URLSearchParams({
@@ -82,11 +91,11 @@ export function buildReportingRequest(
       format: context.format,
       start: context.start,
       end: context.end,
-      title: buildSingleReportTitle(context.title, resource.name),
+      title: buildSingleReportTitle(customTitle, resource.name),
     });
 
-    if (context.metricType) {
-      params.append('metricType', context.metricType);
+    if (metricType) {
+      params.append('metricType', metricType);
     }
 
     return {
@@ -112,8 +121,8 @@ export function buildReportingRequest(
           format: context.format,
           start: context.start,
           end: context.end,
-          title: buildFleetReportTitle(context.title),
-          metricType: context.metricType || undefined,
+          title: buildFleetReportTitle(customTitle),
+          metricType: metricType || undefined,
         }),
       },
     },

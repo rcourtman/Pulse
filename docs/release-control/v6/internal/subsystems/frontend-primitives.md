@@ -186,6 +186,12 @@ selection cap for performance reports. `ReportingPanel.tsx` and
 `ResourcePicker.tsx` may present or enforce that limit, but they must receive
 it from the backend-owned `multiResourceMax` definition rather than hardcoding
 the reporting cap in frontend-local constants.
+That same catalog-owned capability contract also governs which optional
+performance-report controls appear at all. The settings shell and reporting
+request builder may not assume metric filtering or custom titles are always
+available; they must honor `supportsMetricFilter` and `supportsCustomTitle`
+from the backend catalog and avoid emitting unsupported controls or request
+parameters from frontend-local defaults.
 The shared updates settings owner also defines the user-facing framing for
 rc-tagged builds. `frontend-modern/src/components/Settings/updatesSettingsModel.ts`
 and `frontend-modern/src/utils/updatesPresentation.ts` must present that
