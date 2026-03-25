@@ -57,7 +57,7 @@
         </div>
         <div class="ws-actions">
           {{if eq $ws.State "active"}}
-          <form method="POST" action="/api/accounts/{{$account.ID}}/tenants/{{$ws.ID}}/handoff">
+          <form method="POST" action="{{$.AccountAPIBasePath}}/{{$account.ID}}/tenants/{{$ws.ID}}/handoff">
             <button type="submit" class="btn-primary">Open →</button>
           </form>
           {{else}}

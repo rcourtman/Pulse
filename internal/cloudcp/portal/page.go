@@ -40,6 +40,10 @@ type portalPageData struct {
 	PublicSiteURL        string
 	SupportEmail         string
 	CommercialAPIBaseURL string
+	PortalPath           string
+	LogoutPath           string
+	AccountAPIBasePath   string
+	PortalAPIBasePath    string
 	Accounts             []portalPageAccount
 	Styles               template.CSS
 	Script               template.JS
@@ -75,6 +79,10 @@ type portalBootstrapData struct {
 	PublicSiteURL        string                   `json:"public_site_url"`
 	SupportEmail         string                   `json:"support_email"`
 	CommercialAPIBaseURL string                   `json:"commercial_api_base_url"`
+	PortalPath           string                   `json:"portal_path"`
+	LogoutPath           string                   `json:"logout_path"`
+	AccountAPIBasePath   string                   `json:"account_api_base_path"`
+	PortalAPIBasePath    string                   `json:"portal_api_base_path"`
 	Accounts             []portalBootstrapAccount `json:"accounts"`
 }
 
@@ -82,6 +90,10 @@ const (
 	defaultPublicSiteURL        = "https://pulserelay.pro"
 	defaultSupportEmail         = "support@pulserelay.pro"
 	defaultCommercialAPIBaseURL = "https://license.pulserelay.pro"
+	defaultPortalPath           = "/portal"
+	defaultLogoutPath           = "/auth/logout"
+	defaultAccountAPIBasePath   = "/api/accounts"
+	defaultPortalAPIBasePath    = "/api/portal"
 )
 
 // HandlePortalPage serves the MSP/Cloud portal dashboard (browser-facing HTML).
@@ -212,6 +224,10 @@ func renderPortalPage(w http.ResponseWriter, nonce, email string, accounts []por
 		PublicSiteURL:        defaultPublicSiteURL,
 		SupportEmail:         defaultSupportEmail,
 		CommercialAPIBaseURL: defaultCommercialAPIBaseURL,
+		PortalPath:           defaultPortalPath,
+		LogoutPath:           defaultLogoutPath,
+		AccountAPIBasePath:   defaultAccountAPIBasePath,
+		PortalAPIBasePath:    defaultPortalAPIBasePath,
 		Accounts:             accounts,
 		Styles:               portalStyles,
 		Script:               portalScript,
@@ -262,6 +278,10 @@ func buildPortalBootstrapJSON(email string, accounts []portalPageAccount) (templ
 		PublicSiteURL:        defaultPublicSiteURL,
 		SupportEmail:         defaultSupportEmail,
 		CommercialAPIBaseURL: defaultCommercialAPIBaseURL,
+		PortalPath:           defaultPortalPath,
+		LogoutPath:           defaultLogoutPath,
+		AccountAPIBasePath:   defaultAccountAPIBasePath,
+		PortalAPIBasePath:    defaultPortalAPIBasePath,
 		Accounts:             bootstrapAccounts,
 	})
 	if err != nil {

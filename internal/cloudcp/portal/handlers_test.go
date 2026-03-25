@@ -729,6 +729,10 @@ func TestPortalPageTemplate_AccountServicesRendered(t *testing.T) {
 		"Pulse Account",
 		`id="pulse-account-bootstrap"`,
 		`"commercial_api_base_url":"https://license.pulserelay.pro"`,
+		`"portal_path":"/portal"`,
+		`"logout_path":"/auth/logout"`,
+		`"account_api_base_path":"/api/accounts"`,
+		`"portal_api_base_path":"/api/portal"`,
 		`"email":"owner@example.com"`,
 		`"accounts":[{"id":"a_test"`,
 		"Other account services",
@@ -757,6 +761,9 @@ func TestPortalPageTemplate_AccountServicesRendered(t *testing.T) {
 	}
 	if strings.Contains(html, `const LICENSE_API_BASE = 'https://license.pulserelay.pro';`) {
 		t.Errorf("expected commercial API base URL to be renderer-owned, not hardcoded in the asset")
+	}
+	if strings.Contains(html, `await fetch('/auth/logout'`) {
+		t.Errorf("expected portal paths to be renderer-owned, not hardcoded in the asset")
 	}
 }
 
@@ -794,6 +801,18 @@ func TestBuildPortalBootstrapJSON_Contract(t *testing.T) {
 	}
 	if got := payload["commercial_api_base_url"]; got != "https://license.pulserelay.pro" {
 		t.Fatalf("commercial_api_base_url = %#v", got)
+	}
+	if got := payload["portal_path"]; got != "/portal" {
+		t.Fatalf("portal_path = %#v", got)
+	}
+	if got := payload["logout_path"]; got != "/auth/logout" {
+		t.Fatalf("logout_path = %#v", got)
+	}
+	if got := payload["account_api_base_path"]; got != "/api/accounts" {
+		t.Fatalf("account_api_base_path = %#v", got)
+	}
+	if got := payload["portal_api_base_path"]; got != "/api/portal" {
+		t.Fatalf("portal_api_base_path = %#v", got)
 	}
 
 	accounts, ok := payload["accounts"].([]any)

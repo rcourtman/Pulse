@@ -8,6 +8,10 @@ if (bootstrapEl) {
   }
 }
 var LICENSE_API_BASE = portalBootstrap.commercial_api_base_url || '';
+var PORTAL_PATH = portalBootstrap.portal_path || '/portal';
+var LOGOUT_PATH = portalBootstrap.logout_path || '/auth/logout';
+var ACCOUNT_API_BASE_PATH = portalBootstrap.account_api_base_path || '/api/accounts';
+var PORTAL_API_BASE_PATH = portalBootstrap.portal_api_base_path || '/api/portal';
 
 function showToast(msg, isError) {
   var t = document.getElementById('toast');
@@ -21,9 +25,9 @@ document.getElementById('logout-btn').onclick = async function() {
   this.disabled = true;
   this.textContent = 'Signing out…';
   try {
-    await fetch('/auth/logout', { method: 'POST' });
+    await fetch(LOGOUT_PATH, { method: 'POST' });
   } catch(_) {}
-  window.location.href = '/portal';
+  window.location.href = PORTAL_PATH;
 };
 
 function toggleServicePanel(panelID) {
@@ -379,7 +383,7 @@ async function createWorkspace(accountID) {
   var spinner = document.getElementById('ws-spinner-' + accountID);
   spinner.style.display = 'block';
   try {
-    var resp = await fetch('/api/accounts/' + accountID + '/tenants', {
+    var resp = await fetch(ACCOUNT_API_BASE_PATH + '/' + accountID + '/tenants', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ display_name: name })
@@ -404,7 +408,7 @@ function suspendOrDelete(evt, accountID, tenantID, state, name) {
   if (!confirm(action + ' workspace "' + name + '"?')) return;
   var method = state === 'active' ? 'PATCH' : 'DELETE';
   var body = state === 'active' ? JSON.stringify({ state: 'suspended' }) : undefined;
-  fetch('/api/accounts/' + accountID + '/tenants/' + tenantID, {
+  fetch(ACCOUNT_API_BASE_PATH + '/' + accountID + '/tenants/' + tenantID, {
     method: method,
     headers: body ? { 'Content-Type': 'application/json' } : {},
     body: body
@@ -422,7 +426,7 @@ function suspendOrDelete(evt, accountID, tenantID, state, name) {
 
 async function openBilling(accountID) {
   try {
-    var r = await fetch('/api/portal/billing?account_id=' + encodeURIComponent(accountID), { method: 'POST' });
+    var r = await fetch(PORTAL_API_BASE_PATH + '/billing?account_id=' + encodeURIComponent(accountID), { method: 'POST' });
     if (!r.ok) {
       var err = await r.json().catch(function() { return {}; });
       showToast((err && err.error) || 'Failed to open billing portal.', true);
@@ -464,7 +468,7 @@ async function loadTeam(accountID) {
   var isOwner = actorRole === 'owner';
   setTbodyMessage(tbody, 'Loading\u2026', false);
   try {
-    var r = await fetch('/api/accounts/' + encodeURIComponent(accountID) + '/members');
+    var r = await fetch(ACCOUNT_API_BASE_PATH + '/' + encodeURIComponent(accountID) + '/members');
     if (!r.ok) { setTbodyMessage(tbody, 'Failed to load team.', true); return; }
     var members = await r.json();
     if (!members || members.length === 0) {
@@ -520,7 +524,7 @@ async function inviteMember(accountID) {
   var email = emailEl.value.trim();
   if (!email) { emailEl.focus(); return; }
   try {
-    var r = await fetch('/api/accounts/' + encodeURIComponent(accountID) + '/members', {
+    var r = await fetch(ACCOUNT_API_BASE_PATH + '/' + encodeURIComponent(accountID) + '/members', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: email, role: roleEl.value })
@@ -541,7 +545,7 @@ async function inviteMember(accountID) {
 
 async function changeRole(accountID, userID, newRole) {
   try {
-    var r = await fetch('/api/accounts/' + encodeURIComponent(accountID) + '/members/' + encodeURIComponent(userID), {
+    var r = await fetch(ACCOUNT_API_BASE_PATH + '/' + encodeURIComponent(accountID) + '/members/' + encodeURIComponent(userID), {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ role: newRole })
@@ -558,7 +562,7 @@ async function changeRole(accountID, userID, newRole) {
 async function removeMember(accountID, userID, email) {
   if (!confirm('Remove ' + email + ' from this account?')) return;
   try {
-    var r = await fetch('/api/accounts/' + encodeURIComponent(accountID) + '/members/' + encodeURIComponent(userID), {
+    var r = await fetch(ACCOUNT_API_BASE_PATH + '/' + encodeURIComponent(accountID) + '/members/' + encodeURIComponent(userID), {
       method: 'DELETE'
     });
     if (r.status === 409) { showToast('Cannot remove last owner.', true); return; }
