@@ -1514,6 +1514,40 @@ func TestGetStatus_ClearsStaleQuickstartBlockedStateWhenCreditsReturn(t *testing
 	}
 }
 
+func TestShouldSkipInitialFullPatrol_IgnoresRecentScopedErrorRun(t *testing.T) {
+	now := time.Now()
+	skip := shouldSkipInitialFullPatrol([]PatrolRunRecord{
+		{
+			ID:            "scoped-error",
+			Type:          "scoped",
+			TriggerReason: "alert_fired",
+			CompletedAt:   now.Add(-5 * time.Minute),
+			ErrorCount:    1,
+			Status:        "error",
+		},
+	}, now)
+	if skip {
+		t.Fatal("expected recent scoped error run not to suppress initial full patrol")
+	}
+}
+
+func TestShouldSkipInitialFullPatrol_SkipsAfterRecentSuccessfulFullRun(t *testing.T) {
+	now := time.Now()
+	skip := shouldSkipInitialFullPatrol([]PatrolRunRecord{
+		{
+			ID:            "full-success",
+			Type:          "patrol",
+			TriggerReason: "scheduled",
+			CompletedAt:   now.Add(-10 * time.Minute),
+			ErrorCount:    0,
+			Status:        "healthy",
+		},
+	}, now)
+	if !skip {
+		t.Fatal("expected recent successful full patrol to suppress initial full patrol")
+	}
+}
+
 // --- appendStreamContent ---
 
 func TestAppendStreamContent(t *testing.T) {

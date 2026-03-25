@@ -153,6 +153,52 @@ func TestIntelligence_getTopFindings_Empty(t *testing.T) {
 	}
 }
 
+func TestIntelligence_GetSummary_DegradesWhenRecentPatrolCoverageIsScopedAndErroring(t *testing.T) {
+	intel := NewIntelligence(IntelligenceConfig{})
+	runHistory := NewPatrolRunHistoryStore(10)
+	now := time.Now()
+	runHistory.Add(PatrolRunRecord{
+		ID:               "scoped-error-1",
+		Type:             "scoped",
+		TriggerReason:    "alert_fired",
+		CompletedAt:      now.Add(-5 * time.Minute),
+		ErrorCount:       1,
+		Status:           "error",
+		ResourcesChecked: 1,
+	})
+	runHistory.Add(PatrolRunRecord{
+		ID:               "scoped-error-2",
+		Type:             "scoped",
+		TriggerReason:    "alert_fired",
+		CompletedAt:      now.Add(-15 * time.Minute),
+		ErrorCount:       1,
+		Status:           "error",
+		ResourcesChecked: 1,
+	})
+	intel.SetRunHistoryStore(runHistory)
+
+	summary := intel.GetSummary()
+	if summary.OverallHealth.Score >= 100 {
+		t.Fatalf("expected reduced health score, got %f", summary.OverallHealth.Score)
+	}
+	if summary.OverallHealth.Grade == HealthGradeA {
+		t.Fatalf("expected non-A grade, got %s", summary.OverallHealth.Grade)
+	}
+	if !strings.Contains(summary.OverallHealth.Prediction, "not fully verified") {
+		t.Fatalf("expected coverage warning prediction, got %q", summary.OverallHealth.Prediction)
+	}
+	foundCoverageFactor := false
+	for _, factor := range summary.OverallHealth.Factors {
+		if factor.Category == "coverage" {
+			foundCoverageFactor = true
+			break
+		}
+	}
+	if !foundCoverageFactor {
+		t.Fatal("expected coverage factor in overall health")
+	}
+}
+
 func TestIntelligence_getLearningStats(t *testing.T) {
 	intel := NewIntelligence(IntelligenceConfig{})
 	knowledgeStore, err := knowledge.NewStore(t.TempDir())
@@ -388,14 +434,14 @@ func TestIntelligence_calculateOverallHealth_Clamps(t *testing.T) {
 	negative := intel.calculateOverallHealth(&IntelligenceSummary{
 		FindingsCount: FindingsCounts{Critical: 10, Warning: 10},
 		UpcomingRisks: predictions,
-	})
+	}, nil)
 	if negative.Score != 0 {
 		t.Errorf("expected score clamped to 0, got %f", negative.Score)
 	}
 
 	positive := intel.calculateOverallHealth(&IntelligenceSummary{
 		Learning: LearningStats{ResourcesWithKnowledge: 10},
-	})
+	}, nil)
 	if positive.Score != 100 {
 		t.Errorf("expected score clamped to 100, got %f", positive.Score)
 	}

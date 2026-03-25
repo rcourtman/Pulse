@@ -117,19 +117,8 @@ func (p *PatrolService) patrolLoop(ctx context.Context) {
 	select {
 	case <-initialTimer.C:
 		// Check if a patrol ran recently (within last hour) to avoid wasting tokens on restarts
-		runHistory := p.GetRunHistory(1)
-
-		skipInitial := false
-		if len(runHistory) > 0 {
-			lastRun := runHistory[0]
-			timeSinceLastRun := time.Since(lastRun.CompletedAt)
-			if timeSinceLastRun < 1*time.Hour {
-				log.Info().
-					Dur("time_since_last", timeSinceLastRun).
-					Msg("AI Patrol: Skipping initial patrol - recent run exists")
-				skipInitial = true
-			}
-		}
+		runHistory := p.GetRunHistory(10)
+		skipInitial := shouldSkipInitialFullPatrol(runHistory, time.Now())
 
 		if !skipInitial {
 			p.runPatrolWithTrigger(ctx, TriggerReasonStartup, nil)
@@ -204,6 +193,27 @@ func (p *PatrolService) patrolLoop(ctx context.Context) {
 			return
 		}
 	}
+}
+
+func shouldSkipInitialFullPatrol(runHistory []PatrolRunRecord, now time.Time) bool {
+	for _, run := range runHistory {
+		if run.CompletedAt.IsZero() {
+			continue
+		}
+		timeSinceLastRun := now.Sub(run.CompletedAt)
+		if timeSinceLastRun >= 1*time.Hour {
+			continue
+		}
+		if isSuccessfulFullPatrolRun(run) {
+			log.Info().
+				Dur("time_since_last", timeSinceLastRun).
+				Str("run_type", run.Type).
+				Str("trigger_reason", run.TriggerReason).
+				Msg("AI Patrol: Skipping initial patrol - recent successful full run exists")
+			return true
+		}
+	}
+	return false
 }
 
 // runPatrol executes a scheduled patrol run

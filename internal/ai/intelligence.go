@@ -153,6 +153,7 @@ type Intelligence struct {
 	knowledge                  *knowledge.Store
 	changes                    *memory.ChangeDetector
 	remediations               *memory.RemediationLog
+	runHistoryStore            *PatrolRunHistoryStore
 	resourceTimelineStore      unifiedresources.ResourceStore
 	resourceTimelineStoreOrgID string
 	unifiedResourceProvider    UnifiedResourceProvider
@@ -166,6 +167,11 @@ type Intelligence struct {
 	// Configuration
 	dataDir string
 }
+
+const (
+	intelligencePatrolCoverageWindow = 24 * time.Hour
+	intelligenceRecentRunLimit       = 10
+)
 
 // IntelligenceConfig configures the unified intelligence layer
 type IntelligenceConfig struct {
@@ -212,6 +218,14 @@ func (i *Intelligence) SetResourceTimelineStore(store unifiedresources.ResourceS
 	i.resourceTimelineStoreOrgID = strings.TrimSpace(orgID)
 }
 
+// SetRunHistoryStore wires Patrol run history so intelligence summaries can
+// distinguish broad successful coverage from recent scoped or incomplete runs.
+func (i *Intelligence) SetRunHistoryStore(store *PatrolRunHistoryStore) {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	i.runHistoryStore = store
+}
+
 // SetUnifiedResourceProvider wires the canonical unified resource provider used
 // for infrastructure-wide posture summaries.
 func (i *Intelligence) SetUnifiedResourceProvider(urp UnifiedResourceProvider) {
@@ -237,6 +251,7 @@ func (i *Intelligence) GetSummary() *IntelligenceSummary {
 	findings := i.findings
 	patternsDetector := i.patterns
 	remediations := i.remediations
+	runHistoryStore := i.runHistoryStore
 	unifiedResourceProvider := i.unifiedResourceProvider
 	i.mu.RUnlock()
 
@@ -275,7 +290,7 @@ func (i *Intelligence) GetSummary() *IntelligenceSummary {
 	summary.Learning = i.getLearningStats()
 
 	// Calculate overall health
-	summary.OverallHealth = i.calculateOverallHealth(summary)
+	summary.OverallHealth = i.calculateOverallHealth(summary, runHistoryStore)
 
 	// Resources at risk
 	summary.ResourcesAtRisk = i.getResourcesAtRisk(5)
@@ -798,7 +813,7 @@ func (i *Intelligence) FormatCorrelationsContext(resourceID string) string {
 	return detector.FormatForContext(resourceID)
 }
 
-func (i *Intelligence) calculateOverallHealth(summary *IntelligenceSummary) HealthScore {
+func (i *Intelligence) calculateOverallHealth(summary *IntelligenceSummary, runHistoryStore *PatrolRunHistoryStore) HealthScore {
 	health := HealthScore{
 		Score:   100,
 		Grade:   HealthGradeA,
@@ -847,6 +862,16 @@ func (i *Intelligence) calculateOverallHealth(summary *IntelligenceSummary) Heal
 				Category:    "prediction",
 			})
 		}
+	}
+
+	if factor, ok := summarizeRecentPatrolCoverage(runHistoryStore, time.Now()); ok {
+		health.Score -= factor.impact
+		health.Factors = append(health.Factors, HealthFactor{
+			Name:        factor.name,
+			Impact:      -factor.impact / 100,
+			Description: factor.description,
+			Category:    "coverage",
+		})
 	}
 
 	// Bonus for learning progress
@@ -988,6 +1013,12 @@ func scoreToGrade(score float64) HealthGrade {
 }
 
 func (i *Intelligence) generateHealthPrediction(health HealthScore, summary *IntelligenceSummary) string {
+	for _, factor := range health.Factors {
+		if factor.Category == "coverage" {
+			return factor.Description
+		}
+	}
+
 	if health.Grade == HealthGradeA {
 		return "Infrastructure is healthy with no significant issues detected."
 	}
@@ -1007,6 +1038,86 @@ func (i *Intelligence) generateHealthPrediction(health HealthScore, summary *Int
 	}
 
 	return "Infrastructure is stable with minor issues to monitor."
+}
+
+type patrolCoverageFactor struct {
+	name        string
+	description string
+	impact      float64
+}
+
+func summarizeRecentPatrolCoverage(
+	runHistoryStore *PatrolRunHistoryStore,
+	now time.Time,
+) (patrolCoverageFactor, bool) {
+	if runHistoryStore == nil {
+		return patrolCoverageFactor{}, false
+	}
+
+	recentRuns := runHistoryStore.GetRecent(intelligenceRecentRunLimit)
+	if len(recentRuns) == 0 {
+		return patrolCoverageFactor{}, false
+	}
+
+	cutoff := now.Add(-intelligencePatrolCoverageWindow)
+	relevant := make([]PatrolRunRecord, 0, len(recentRuns))
+	for _, run := range recentRuns {
+		if run.CompletedAt.IsZero() || run.CompletedAt.Before(cutoff) {
+			continue
+		}
+		relevant = append(relevant, run)
+	}
+	if len(relevant) == 0 {
+		return patrolCoverageFactor{}, false
+	}
+
+	var recentErrors int
+	var hasSuccessfulFullRun bool
+	var scopedRuns int
+	for _, run := range relevant {
+		if run.ErrorCount > 0 || strings.EqualFold(strings.TrimSpace(run.Status), "error") {
+			recentErrors++
+		}
+		if isSuccessfulFullPatrolRun(run) {
+			hasSuccessfulFullRun = true
+		}
+		if isScopedPatrolRun(run) {
+			scopedRuns++
+		}
+	}
+
+	switch {
+	case !hasSuccessfulFullRun && recentErrors > 0:
+		return patrolCoverageFactor{
+			name:        "Patrol coverage incomplete",
+			description: "Patrol coverage is incomplete: recent activity was limited to scoped runs and ended with errors, so overall health is not fully verified.",
+			impact:      35,
+		}, true
+	case !hasSuccessfulFullRun && scopedRuns == len(relevant):
+		return patrolCoverageFactor{
+			name:        "Patrol coverage incomplete",
+			description: "Patrol coverage is incomplete: recent activity was limited to scoped runs, so overall infrastructure health is not fully verified.",
+			impact:      20,
+		}, true
+	case recentErrors > 0:
+		return patrolCoverageFactor{
+			name:        "Recent Patrol errors",
+			description: "Recent Patrol runs encountered errors, so the current health summary may be incomplete.",
+			impact:      10,
+		}, true
+	default:
+		return patrolCoverageFactor{}, false
+	}
+}
+
+func isScopedPatrolRun(run PatrolRunRecord) bool {
+	return strings.EqualFold(strings.TrimSpace(run.Type), "scoped")
+}
+
+func isSuccessfulFullPatrolRun(run PatrolRunRecord) bool {
+	return !isScopedPatrolRun(run) &&
+		run.ErrorCount == 0 &&
+		!strings.EqualFold(strings.TrimSpace(run.Status), "error")
 }
 
 func (i *Intelligence) getResourcesAtRisk(limit int) []ResourceRiskSummary {

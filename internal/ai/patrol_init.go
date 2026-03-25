@@ -782,6 +782,7 @@ func (p *PatrolService) GetIntelligence() *Intelligence {
 		p.changeDetector,
 		p.remediationLog,
 	)
+	p.intelligence.SetRunHistoryStore(p.runHistoryStore)
 	if p.aiService != nil {
 		p.aiService.mu.RLock()
 		store := p.aiService.resourceExportStore

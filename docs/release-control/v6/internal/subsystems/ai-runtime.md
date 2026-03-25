@@ -463,6 +463,16 @@ That runtime-state contract must be derived from live Patrol runtime inputs,
 not only from the last failed run attempt: exhausted quickstart credits are a
 blocked Patrol runtime immediately, and the backend must also clear any stale
 quickstart block once credits or BYOK configuration return.
+The same runtime contract now also governs when the system-wide Patrol health
+summary is allowed to read as healthy. `internal/ai/intelligence.go` must not
+derive `Health A` or `100/100` from "no active findings" alone when recent
+Patrol evidence is limited to alert-scoped runs or includes recent Patrol run
+errors; the summary must degrade and explain that overall infrastructure health
+is not fully verified until a recent successful full Patrol run exists.
+The Patrol startup scheduler must preserve that coverage guarantee as well:
+`internal/ai/patrol_run.go` may skip the startup full patrol only when recent
+run history already includes a successful full Patrol run, not merely because
+some recent scoped alert-triggered run exists.
 AI chat tool-name labels, pending-tool headers, and assistant status copy now
 also route through the shared frontend identifier-label helper, so the chat
 surfaces do not keep their own underscore-stripping behavior separate from
