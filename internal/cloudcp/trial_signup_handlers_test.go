@@ -186,7 +186,7 @@ func TestTrialSignupHandleRequestVerificationRejectsEmailThatAlreadyUsedTrial(t 
 	if rec.Code != http.StatusConflict {
 		t.Fatalf("status=%d, want %d body=%q", rec.Code, http.StatusConflict, rec.Body.String())
 	}
-	if !strings.Contains(rec.Body.String(), "organization has already used a Pulse Pro trial") {
+	if !strings.Contains(rec.Body.String(), "recovery email has already used a Pulse Pro trial") {
 		t.Fatalf("expected duplicate trial message, got %q", rec.Body.String())
 	}
 }
@@ -406,6 +406,37 @@ func TestTrialSignupHandleCheckoutCreatesFreshSessionWhenRecordAlreadyHasSession
 	}
 	if updatedRecord.CheckoutSessionID != "cs_fresh_new" {
 		t.Fatalf("checkout_session_id=%q, want %q", updatedRecord.CheckoutSessionID, "cs_fresh_new")
+	}
+}
+
+func TestTrialSignupHandleCheckoutRejectsEmailThatAlreadyUsedTrial(t *testing.T) {
+	h, store, sender := newTrialSignupTestHandler(t)
+	rawToken := requestTrialVerification(t, h, sender)
+	verifiedToken := verifyTrialRequest(t, h, rawToken)
+	requestID := parseVerifiedTokenRequestID(t, h, verifiedToken)
+	if err := store.MarkTrialIssued(requestID, h.now().UTC()); err != nil {
+		t.Fatalf("MarkTrialIssued: %v", err)
+	}
+
+	form := url.Values{
+		"org_id":         {"default"},
+		"return_url":     {"https://pulse.example.com/auth/trial-activate"},
+		"instance_token": {"tsi_test"},
+		"name":           {"Test User"},
+		"email":          {"owner@example.com"},
+		"company":        {"Pulse Labs"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/trial-signup/checkout", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	h.HandleCheckout(rec, req)
+
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("status=%d, want %d body=%q", rec.Code, http.StatusConflict, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "recovery email has already used a Pulse Pro trial") {
+		t.Fatalf("expected duplicate email trial message, got %q", rec.Body.String())
 	}
 }
 

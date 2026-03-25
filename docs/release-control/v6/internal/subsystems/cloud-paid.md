@@ -264,7 +264,9 @@ still use a secure hosted Stripe-backed session internally, but the customer
 copy must present the flow as starting a trial for the originating Pulse
 instance, not as a generic purchase funnel. Recovery-contact fields such as
 work email and optional company name must remain clearly secondary to the
-instance-bound entitlement handoff.
+instance-bound entitlement handoff. Hosted form-stage issuance conflicts must
+also preserve the canonical reason shape: duplicate recovery-email usage must
+not be flattened into an organization-level message.
 That same hosted owner also applies after Stripe returns to
 `/trial-signup/complete`: customer-facing completion failures must stay inside
 owned trial UX rather than dropping raw control-plane error strings, and they

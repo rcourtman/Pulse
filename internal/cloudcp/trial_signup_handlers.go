@@ -664,7 +664,7 @@ func (h *TrialSignupHandlers) HandleRequestVerification(w http.ResponseWriter, r
 			return
 		}
 		if conflict != nil {
-			data.ErrorMessage = "This organization has already used a Pulse Pro trial. Upgrade the existing account or contact support if you need help."
+			data.ErrorMessage = trialSignupIssuanceConflictMessage(conflict)
 			h.renderTrialSignupPage(w, r, http.StatusConflict, data)
 			return
 		}
@@ -842,7 +842,7 @@ func (h *TrialSignupHandlers) HandleCheckout(w http.ResponseWriter, r *http.Requ
 			return
 		}
 		if conflict != nil {
-			data.ErrorMessage = "This organization has already used a Pulse Pro trial. Upgrade the existing account or contact support if you need help."
+			data.ErrorMessage = trialSignupIssuanceConflictMessage(conflict)
 			h.renderTrialSignupPage(w, r, http.StatusConflict, data)
 			return
 		}
@@ -1426,6 +1426,17 @@ func trialSignupFailureDataForPage(cfg *CPConfig, data trialSignupPageData, kind
 	page.ActionURL = buildTrialSignupStartURL(baseURL, data, false)
 	page.ActionLabel = "Start Trial Again"
 	return page
+}
+
+func trialSignupIssuanceConflictMessage(conflict *TrialSignupIssuanceConflict) string {
+	switch {
+	case conflict == nil:
+		return "This Pulse Pro trial request conflicts with a previous trial issuance. Upgrade the existing account or contact support if you need help."
+	case conflict.Kind == trialSignupConflictEmail:
+		return "This recovery email has already used a Pulse Pro trial. Upgrade the existing account or contact support if you need help."
+	default:
+		return "This organization has already used a Pulse Pro trial. Upgrade the existing account or contact support if you need help."
+	}
 }
 
 func buildCPURL(baseURL, path string, query url.Values) string {
