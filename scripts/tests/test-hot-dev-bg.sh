@@ -616,19 +616,27 @@ test_playwright_defaults_prefer_managed_hot_dev_runtime() {
   local output
   output="$(cat "${ROOT_DIR}/tests/integration/playwright.config.ts")"
 
-  assert_contains "playwright config checks managed hot-dev pid" "${output}" "managedHotDevPidPath"
-  assert_contains "playwright config computes managed browser base url" "${output}" "managedDevBrowserBaseURL"
-  assert_contains "playwright config prefers runtime-state first" "${output}" "loadRuntimeBaseURL() ||"
-  assert_contains "playwright config prefers managed dev browser before embedded fallback" "${output}" "managedDevBrowserBaseURL() ||"
+  assert_contains "playwright config imports shared browser default helper" "${output}" "import { preferredBrowserBaseURL } from './tests/runtime-defaults';"
+  assert_contains "playwright config delegates base url to shared helper" "${output}" "baseURL: preferredBrowserBaseURL(),"
 }
 
 test_integration_helpers_prefer_managed_hot_dev_runtime() {
   local output
   output="$(cat "${ROOT_DIR}/tests/integration/tests/helpers.ts")"
 
-  assert_contains "integration helpers check managed hot-dev pid" "${output}" "managedHotDevPidPath"
-  assert_contains "integration helpers compute managed browser base url" "${output}" "managedDevBrowserBaseURL"
-  assert_contains "integration helpers prefer managed browser before embedded fallback" "${output}" "managedDevBrowserBaseURL() ||"
+  assert_contains "integration helpers import shared browser defaults" "${output}" "import { preferredBrowserBaseURL, readRuntimeState } from './runtime-defaults';"
+  assert_contains "integration helpers delegate browser context base url to shared helper" "${output}" "baseURL: preferredBrowserBaseURL(),"
+  assert_contains "integration helpers delegate api request base url to shared helper" "${output}" "const baseURL = preferredBrowserBaseURL().replace(/\\/+\$/, '');"
+}
+
+test_integration_runtime_defaults_centralize_managed_browser_detection() {
+  local output
+  output="$(cat "${ROOT_DIR}/tests/integration/tests/runtime-defaults.ts")"
+
+  assert_contains "runtime defaults declare managed hot-dev pid path" "${output}" "managedHotDevPidPath"
+  assert_contains "runtime defaults expose runtime-state reader" "${output}" "export const readRuntimeState ="
+  assert_contains "runtime defaults expose managed browser detection" "${output}" "export const managedDevBrowserBaseURL ="
+  assert_contains "runtime defaults expose preferred browser base url" "${output}" "export const preferredBrowserBaseURL ="
 }
 
 test_clean_mock_alerts_prefers_managed_runtime() {

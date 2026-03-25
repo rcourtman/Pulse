@@ -1,59 +1,5 @@
-/**
- * Test helpers for Pulse update integration tests
- */
-
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-
 import { Browser, Page, expect } from '@playwright/test';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const repoRoot = path.resolve(__dirname, '..', '..', '..');
-const managedHotDevPidPath = path.join(repoRoot, 'tmp', 'hot-dev.bg.pid');
-const runtimeStatePath = (() => {
-  const configuredPath = String(process.env.PULSE_E2E_RUNTIME_STATE_PATH || '').trim();
-  if (configuredPath === '') {
-    return path.resolve(repoRoot, 'tmp', 'e2e-runtime-state.json');
-  }
-  return path.isAbsolute(configuredPath) ? configuredPath : path.resolve(repoRoot, configuredPath);
-})();
-
-type RuntimeState = {
-  baseURL?: string;
-  primaryAPIToken?: string;
-};
-
-const readRuntimeState = (): RuntimeState | null => {
-  try {
-    const raw = fs.readFileSync(runtimeStatePath, 'utf8');
-    return JSON.parse(raw) as RuntimeState;
-  } catch {
-    return null;
-  }
-};
-
-const runtimeBaseURL = (): string | null => {
-  const parsed = readRuntimeState();
-  return typeof parsed?.baseURL === 'string' && parsed.baseURL.trim() !== ''
-    ? parsed.baseURL.trim()
-    : null;
-};
-
-const managedDevBrowserBaseURL = (): string | null => {
-  try {
-    const pid = Number.parseInt(fs.readFileSync(managedHotDevPidPath, 'utf8').trim(), 10);
-    if (!Number.isInteger(pid) || pid <= 0) {
-      return null;
-    }
-    process.kill(pid, 0);
-    const host = String(process.env.FRONTEND_DEV_HOST || '').trim() || '127.0.0.1';
-    const port = String(process.env.FRONTEND_DEV_PORT || '').trim() || '5173';
-    return `http://${host}:${port}`;
-  } catch {
-    return null;
-  }
-};
+import { preferredBrowserBaseURL, readRuntimeState } from './runtime-defaults';
 
 const runtimePrimaryAPIToken = (): string => {
   const parsed = readRuntimeState();
@@ -394,12 +340,7 @@ export async function createAuthenticatedStorageState(
   storageStatePath: string,
 ): Promise<void> {
   const context = await browser.newContext({
-    baseURL:
-      process.env.PULSE_BASE_URL ||
-      process.env.PLAYWRIGHT_BASE_URL ||
-      runtimeBaseURL() ||
-      managedDevBrowserBaseURL() ||
-      'http://localhost:7655',
+    baseURL: preferredBrowserBaseURL(),
   });
   const page = await context.newPage();
   try {
@@ -632,13 +573,7 @@ export async function resetTestEnvironment() {
  * Make API request to Pulse backend
  */
 export async function apiRequest(page: Page, endpoint: string, options: any = {}) {
-  const baseURL = (
-    process.env.PULSE_BASE_URL ||
-    process.env.PLAYWRIGHT_BASE_URL ||
-    runtimeBaseURL() ||
-    managedDevBrowserBaseURL() ||
-    'http://localhost:7655'
-  ).replace(/\/+$/, '');
+  const baseURL = preferredBrowserBaseURL().replace(/\/+$/, '');
 
   const method = String(options.method || 'GET').toUpperCase();
   const headers = { ...(options.headers || {}) } as Record<string, string>;

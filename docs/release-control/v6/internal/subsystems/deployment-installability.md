@@ -292,6 +292,10 @@ explicit base URL, runtime-state file, and any active managed `hot-dev`
 session. If `hot-dev-bg` is already running, ad hoc Playwright/browser helpers
 must prefer the managed shell on `http://127.0.0.1:5173` instead of silently
 teaching the backend port as the default local browser target.
+That defaulting rule must live in one shared integration helper rather than
+being duplicated between config and helper files, so future browser-target
+changes cannot leave Playwright navigation and browser/API helper calls
+disagreeing about whether the managed shell or embedded frontend is canonical.
 That runtime-guidance rule also applies to successful launcher startup output:
 `hot-dev-bg` must identify `http://127.0.0.1:5173` as the browser entrypoint
 and present `7655` as the managed backend dependency, rather than advertising
