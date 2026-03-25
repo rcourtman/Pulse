@@ -66,6 +66,7 @@ func TestView_VMViewAccessors(t *testing.T) {
 		Proxmox: &ProxmoxData{
 			SourceID:         " vm-source-1 ",
 			NodeName:         " pve-a ",
+			Pool:             " production ",
 			Instance:         " lab ",
 			VMID:             101,
 			CPUs:             4,
@@ -116,6 +117,9 @@ func TestView_VMViewAccessors(t *testing.T) {
 	}
 	if v.Node() != "pve-a" || v.Instance() != "lab" {
 		t.Fatalf("expected Node/Instance %q/%q, got %q/%q", "pve-a", "lab", v.Node(), v.Instance())
+	}
+	if v.Pool() != "production" {
+		t.Fatalf("expected Pool %q, got %q", "production", v.Pool())
 	}
 	if v.Node() != "pve-a" {
 		t.Fatalf("expected Node %q, got %q", "pve-a", v.Node())
@@ -199,6 +203,7 @@ func TestView_VMViewAccessors(t *testing.T) {
 			zero.Status() != "" ||
 			zero.VMID() != 0 ||
 			zero.Node() != "" ||
+			zero.Pool() != "" ||
 			zero.Instance() != "" ||
 			zero.Template() != false ||
 			zero.CPUs() != 0 ||
@@ -233,7 +238,7 @@ func TestView_VMViewAccessors(t *testing.T) {
 		r.Identity = ResourceIdentity{}
 		v := NewVMView(r)
 
-		if v.VMID() != 0 || v.Node() != "" || v.Instance() != "" || v.Template() != false || v.CPUs() != 0 || v.Uptime() != 0 || !v.LastBackup().IsZero() || v.Lock() != "" {
+		if v.VMID() != 0 || v.Node() != "" || v.Pool() != "" || v.Instance() != "" || v.Template() != false || v.CPUs() != 0 || v.Uptime() != 0 || !v.LastBackup().IsZero() || v.Lock() != "" {
 			t.Fatalf("expected proxmox accessors to return zero values when Proxmox is nil")
 		}
 		if v.Disks() != nil {

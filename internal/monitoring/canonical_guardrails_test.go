@@ -124,6 +124,28 @@ func TestProxmoxNodeDiskUsesCanonicalResolver(t *testing.T) {
 	}
 }
 
+func TestProxmoxGuestPollersCarryPoolIntoCanonicalModels(t *testing.T) {
+	requiredSnippets := map[string][]string{
+		"monitor_pve_guest_builders.go": {"Pool:     strings.TrimSpace(res.Pool)"},
+		"monitor_pve_guest_lxc.go":      {"Pool:     strings.TrimSpace(res.Pool)"},
+		"monitor_polling_vm.go":         {"Pool:     strings.TrimSpace(vm.Pool)"},
+		"monitor_polling_containers.go": {"Pool:     strings.TrimSpace(container.Pool)"},
+	}
+
+	for file, snippets := range requiredSnippets {
+		data, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatalf("failed to read %s: %v", file, err)
+		}
+		source := string(data)
+		for _, snippet := range snippets {
+			if !strings.Contains(source, snippet) {
+				t.Fatalf("%s must contain %q", file, snippet)
+			}
+		}
+	}
+}
+
 func TestAlertLifecycleCanonicalChangesRemainWritable(t *testing.T) {
 	store := unifiedresources.NewMemoryStore()
 	incidentStore := memory.NewIncidentStore(memory.IncidentStoreConfig{})

@@ -20,6 +20,7 @@ type VMInventoryRow struct {
 	ResourceID           string
 	Instance             string
 	Node                 string
+	Pool                 string
 	VMID                 int
 	Name                 string
 	Status               string
@@ -34,6 +35,7 @@ var vmInventoryCSVHeaders = []string{
 	"Resource ID",
 	"Instance",
 	"Node",
+	"Pool",
 	"VMID",
 	"VM Name",
 	"Status",
@@ -77,6 +79,7 @@ func GenerateVMInventoryCSV(data VMInventoryData) ([]byte, error) {
 			row.ResourceID,
 			row.Instance,
 			row.Node,
+			row.Pool,
 			strconv.Itoa(row.VMID),
 			row.Name,
 			row.Status,

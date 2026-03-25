@@ -489,6 +489,7 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 					VMID:     vm.VMID,
 					Name:     vm.Name,
 					Node:     n.Node,
+					Pool:     strings.TrimSpace(vm.Pool),
 					Instance: instanceName,
 					Status:   vm.Status,
 					Type:     "qemu",

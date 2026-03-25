@@ -117,6 +117,13 @@ func (v VMView) Node() string {
 	return strings.TrimSpace(v.r.Proxmox.NodeName)
 }
 
+func (v VMView) Pool() string {
+	if v.r == nil || v.r.Proxmox == nil {
+		return ""
+	}
+	return strings.TrimSpace(v.r.Proxmox.Pool)
+}
+
 func (v VMView) Instance() string {
 	if v.r == nil || v.r.Proxmox == nil {
 		return ""
@@ -361,6 +368,13 @@ func (v ContainerView) Node() string {
 		return ""
 	}
 	return strings.TrimSpace(v.r.Proxmox.NodeName)
+}
+
+func (v ContainerView) Pool() string {
+	if v.r == nil || v.r.Proxmox == nil {
+		return ""
+	}
+	return strings.TrimSpace(v.r.Proxmox.Pool)
 }
 
 func (v ContainerView) Instance() string {

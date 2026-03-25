@@ -152,6 +152,7 @@ func (m *Monitor) pollContainersWithNodes(ctx context.Context, instanceName stri
 					VMID:     int(container.VMID),
 					Name:     container.Name,
 					Node:     n.Node,
+					Pool:     strings.TrimSpace(container.Pool),
 					Instance: instanceName,
 					Status:   container.Status,
 					Type:     "lxc",

@@ -323,7 +323,7 @@ func TestContract_VMInventoryExportCSVHeaders(t *testing.T) {
 		t.Fatalf("expected VM inventory attachment filename, got %q", got)
 	}
 
-	const want = "Resource ID,Instance,Node,VMID,VM Name,Status,CPU Cores,Memory Allocated Bytes,Disk Allocated Bytes,Disk Used Bytes,Disk Status Reason\n"
+	const want = "Resource ID,Instance,Node,Pool,VMID,VM Name,Status,CPU Cores,Memory Allocated Bytes,Disk Allocated Bytes,Disk Used Bytes,Disk Status Reason\n"
 	if got := rec.Body.String(); got != want {
 		t.Fatalf("unexpected VM inventory CSV header row:\nwant %q\ngot  %q", want, got)
 	}

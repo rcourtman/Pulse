@@ -213,3 +213,30 @@ func TestRefreshCanonicalIdentityFeedsPolicyMetadata(t *testing.T) {
 		}
 	}
 }
+
+func TestRefreshCanonicalIdentityIgnoresProxmoxPoolAsPlatformIdentity(t *testing.T) {
+	resource := Resource{
+		ID:   "vm-101",
+		Type: ResourceTypeVM,
+		Name: "app-vm",
+		Proxmox: &ProxmoxData{
+			NodeName: "pve-a",
+			Pool:     "prod-vms",
+			VMID:     101,
+		},
+	}
+
+	RefreshCanonicalIdentity(&resource)
+
+	if resource.Canonical == nil {
+		t.Fatalf("expected canonical identity")
+	}
+	if got := resource.Canonical.PlatformID; got != "pve-a" {
+		t.Fatalf("platformId = %q, want pve-a", got)
+	}
+	for _, alias := range resource.Canonical.Aliases {
+		if alias == "prod-vms" {
+			t.Fatalf("expected pool name not to become canonical identity alias: %+v", resource.Canonical.Aliases)
+		}
+	}
+}

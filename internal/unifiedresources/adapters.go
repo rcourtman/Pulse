@@ -1019,6 +1019,7 @@ func resourceFromVM(vm models.VM) (Resource, ResourceIdentity) {
 	proxmox := &ProxmoxData{
 		SourceID:          vm.ID,
 		NodeName:          vm.Node,
+		Pool:              vm.Pool,
 		Instance:          vm.Instance,
 		VMID:              vm.VMID,
 		CPUs:              vm.CPUs,
@@ -1059,6 +1060,7 @@ func resourceFromContainer(ct models.Container) (Resource, ResourceIdentity) {
 	proxmox := &ProxmoxData{
 		SourceID:          ct.ID,
 		NodeName:          ct.Node,
+		Pool:              ct.Pool,
 		Instance:          ct.Instance,
 		VMID:              ct.VMID,
 		ContainerType:     ct.Type,

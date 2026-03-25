@@ -184,6 +184,7 @@ export interface VM {
   vmid: number;
   name: string;
   node: string;
+  pool?: string;
   instance: string;
   status: string;
   type: string;
@@ -215,6 +216,7 @@ export interface Container {
   vmid: number;
   name: string;
   node: string;
+  pool?: string;
   instance: string;
   status: string;
   type: string;

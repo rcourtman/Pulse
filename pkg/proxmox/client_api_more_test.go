@@ -228,7 +228,7 @@ func TestClientStatusAndResources(t *testing.T) {
 			})
 		case "/api2/json/cluster/resources":
 			writeJSON(t, w, map[string]interface{}{
-				"data": []ClusterResource{{ID: "qemu/100", Type: "vm", VMID: 100}},
+				"data": []ClusterResource{{ID: "qemu/100", Type: "vm", VMID: 100, Pool: "prod-vms"}},
 			})
 		case "/api2/json/nodes/node1/lxc/101/interfaces":
 			writeJSON(t, w, map[string]interface{}{
@@ -262,6 +262,9 @@ func TestClientStatusAndResources(t *testing.T) {
 	}
 	if len(resources) != 1 || resources[0].VMID != 100 {
 		t.Fatalf("unexpected resources: %+v", resources)
+	}
+	if resources[0].Pool != "prod-vms" {
+		t.Fatalf("expected cluster resource pool to decode, got %+v", resources[0])
 	}
 
 	ifaces, err := client.GetContainerInterfaces(ctx, "node1", 101)

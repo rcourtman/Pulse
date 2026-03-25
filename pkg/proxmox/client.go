@@ -834,6 +834,7 @@ type VM struct {
 	VMID      int     `json:"vmid"`
 	Name      string  `json:"name"`
 	Node      string  `json:"node"`
+	Pool      string  `json:"pool,omitempty"`
 	Status    string  `json:"status"`
 	CPU       float64 `json:"cpu"`
 	CPUs      int     `json:"cpus"`
@@ -857,6 +858,7 @@ type Container struct {
 	VMID      FlexInt                           `json:"vmid"` // Changed to FlexInt to handle string VMIDs from some Proxmox versions
 	Name      string                            `json:"name"`
 	Node      string                            `json:"node"`
+	Pool      string                            `json:"pool,omitempty"`
 	Status    string                            `json:"status"`
 	CPU       float64                           `json:"cpu"`
 	CPUs      FlexInt                           `json:"cpus"`
@@ -1738,6 +1740,7 @@ type ClusterResource struct {
 	ID        string  `json:"id"`
 	Type      string  `json:"type"`
 	Node      string  `json:"node"`
+	Pool      string  `json:"pool,omitempty"`
 	Status    string  `json:"status"`
 	Name      string  `json:"name,omitempty"`
 	VMID      int     `json:"vmid,omitempty"`

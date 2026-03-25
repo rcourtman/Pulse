@@ -150,6 +150,11 @@ The same applies to proxmox topology coordinates exposed through typed views:
 node, cluster, and instance accessors must return canonical trimmed values so
 monitoring consumers do not fork topology grouping or labeling on `" pve-a "`
 versus `pve-a`.
+That same canonical guest runtime truth now also includes Proxmox pool
+membership. The cluster-resource builders and traditional VM/LXC pollers must
+carry `pool` through `models.VM` and `models.Container` so reporting and
+inventory surfaces consume one canonical guest topology contract instead of
+re-deriving pool membership from API-local queries.
 Connected infrastructure and monitored-system projections now also use the
 shared unified-resource display-name fallback, so the monitoring layer does
 not rebuild its own canonical name-or-hostname selection for those surfaces.

@@ -211,6 +211,7 @@ type MetricValue struct {
 type ProxmoxData struct {
 	SourceID                     string              `json:"sourceId,omitempty"` // raw model ID from source snapshot
 	NodeName                     string              `json:"nodeName,omitempty"`
+	Pool                         string              `json:"pool,omitempty"`
 	ClusterName                  string              `json:"clusterName,omitempty"`
 	IsClusterMember              bool                `json:"isClusterMember,omitempty"`
 	Instance                     string              `json:"instance,omitempty"`

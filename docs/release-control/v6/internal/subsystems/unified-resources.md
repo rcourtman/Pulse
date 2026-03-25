@@ -1011,6 +1011,10 @@ Proxmox topology coordinates exposed through typed views must also be trimmed
 before they reach consumers. Node, cluster, and instance accessors must not
 present `" pve-a "` or `" lab "` as distinct topology values from `pve-a`
 and `lab`.
+That same topology contract now also includes Proxmox guest pool membership.
+`ProxmoxData`, `VMView`, and `ContainerView` must preserve trimmed `pool`
+coordinates from the canonical monitoring runtime so inventory, reporting, and
+future fleet grouping surfaces do not re-query or infer pool ownership locally.
 
 Frontend unified-resource consumers must now also normalize legacy discovery
 resource type aliases before storing `discoveryTarget`. Backend `k8s`

@@ -219,9 +219,9 @@ first-class surface separate from historical metrics reports.
 `internal/api/router_routes_licensing.go`, and the settings reporting shell now
 own `/api/admin/reports/inventory/vms/export` as the canonical VM inventory CSV
 contract. That export is intentionally spreadsheet-shaped rather than comment-
-prefixed like the legacy metrics CSV, and it currently omits Proxmox pool
-membership until that field exists on the canonical unified VM runtime model
-instead of being inferred locally by the frontend or handler.
+prefixed like the legacy metrics CSV, and it now carries Proxmox pool
+membership from the canonical unified VM runtime model instead of inferring or
+reconstructing that field locally inside the frontend or handler.
 The `/api/resources` serializer now also refreshes canonical identity and
 policy metadata through the shared unified-resource helper before it writes
 the payload, so backend and frontend contract tests stay aligned on one

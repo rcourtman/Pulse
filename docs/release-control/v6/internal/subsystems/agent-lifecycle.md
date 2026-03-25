@@ -176,6 +176,11 @@ inventory export route for reporting. Fleet and install surfaces may coexist
 with that export, but `internal/api/reporting_inventory_handlers.go` and
 `internal/api/router_routes_licensing.go` remain API-owned reporting transport,
 not lifecycle-owned inventory or install behavior.
+That adjacent export contract now also carries canonical Proxmox pool
+membership for each VM row. Lifecycle-adjacent install and fleet surfaces may
+reuse those current-state facts, but they must still treat the pool column as
+API-owned reporting data rather than introducing lifecycle-local guest
+inventory assembly.
 The same API serializer now also refreshes canonical identity and policy
 metadata through the shared unified-resource helper before it returns
 resource payloads, so lifecycle-adjacent links keep the same canonical

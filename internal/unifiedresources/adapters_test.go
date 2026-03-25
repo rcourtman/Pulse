@@ -142,6 +142,47 @@ func TestResourceFromDockerContainerIncludesContainerID(t *testing.T) {
 	}
 }
 
+func TestResourceFromVMPreservesProxmoxPool(t *testing.T) {
+	vm := models.VM{
+		ID:       "cluster-a:pve-a:101",
+		Name:     "app-vm",
+		Node:     "pve-a",
+		Pool:     "prod-vms",
+		Instance: "cluster-a",
+		VMID:     101,
+		Status:   "running",
+	}
+
+	resource, _ := resourceFromVM(vm)
+	if resource.Proxmox == nil {
+		t.Fatal("expected proxmox payload")
+	}
+	if got, want := resource.Proxmox.Pool, "prod-vms"; got != want {
+		t.Fatalf("pool = %q, want %q", got, want)
+	}
+}
+
+func TestResourceFromContainerPreservesProxmoxPool(t *testing.T) {
+	container := models.Container{
+		ID:       "cluster-a:pve-a:202",
+		Name:     "cache-ct",
+		Node:     "pve-a",
+		Pool:     "ops-lxc",
+		Instance: "cluster-a",
+		VMID:     202,
+		Status:   "running",
+		Type:     "lxc",
+	}
+
+	resource, _ := resourceFromContainer(container)
+	if resource.Proxmox == nil {
+		t.Fatal("expected proxmox payload")
+	}
+	if got, want := resource.Proxmox.Pool, "ops-lxc"; got != want {
+		t.Fatalf("pool = %q, want %q", got, want)
+	}
+}
+
 func TestResourceFromStorageIncludesStorageMetadata(t *testing.T) {
 	storage := models.Storage{
 		ID:       "storage-1",

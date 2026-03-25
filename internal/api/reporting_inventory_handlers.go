@@ -60,6 +60,7 @@ func buildVMInventoryRows(resources []unifiedresources.Resource) []reporting.VMI
 			ResourceID:           view.ID(),
 			Instance:             view.Instance(),
 			Node:                 view.Node(),
+			Pool:                 view.Pool(),
 			VMID:                 view.VMID(),
 			Name:                 view.Name(),
 			Status:               string(view.Status()),

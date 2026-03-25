@@ -262,7 +262,7 @@ func TestReportingHandlers_ExportVMInventory_EmptySnapshotStillReturnsCSVHeader(
 	if contentType := rr.Header().Get("Content-Type"); !strings.Contains(contentType, "text/csv") {
 		t.Fatalf("expected CSV content type, got %q", contentType)
 	}
-	if !strings.Contains(rr.Body.String(), "Resource ID,Instance,Node,VMID,VM Name") {
+	if !strings.Contains(rr.Body.String(), "Resource ID,Instance,Node,Pool,VMID,VM Name") {
 		t.Fatalf("expected CSV header row, got %q", rr.Body.String())
 	}
 }
@@ -281,6 +281,7 @@ func TestBuildVMInventoryRows_UsesCanonicalFieldsAndDiskFallback(t *testing.T) {
 			Proxmox: &unifiedresources.ProxmoxData{
 				Instance:         "lab",
 				NodeName:         "pve-a",
+				Pool:             "prod",
 				VMID:             101,
 				CPUs:             4,
 				DiskStatusReason: "guest agent offline",
@@ -304,6 +305,9 @@ func TestBuildVMInventoryRows_UsesCanonicalFieldsAndDiskFallback(t *testing.T) {
 	row := rows[0]
 	if row.ResourceID != "vm-101" || row.Name != "app-vm" || row.Instance != "lab" || row.Node != "pve-a" {
 		t.Fatalf("unexpected inventory row identity: %+v", row)
+	}
+	if row.Pool != "prod" {
+		t.Fatalf("expected pool to come from canonical model, got %+v", row)
 	}
 	if row.CPUCores != 4 || row.MemoryAllocatedBytes != total {
 		t.Fatalf("expected CPU and memory totals from canonical model, got %+v", row)

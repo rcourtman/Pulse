@@ -126,6 +126,7 @@ type VM struct {
 	VMID              int                     `json:"vmid"`
 	Name              string                  `json:"name"`
 	Node              string                  `json:"node"`
+	Pool              string                  `json:"pool,omitempty"`
 	Instance          string                  `json:"instance"`
 	Status            string                  `json:"status"`
 	Type              string                  `json:"type"`
@@ -177,6 +178,7 @@ type Container struct {
 	VMID              int                     `json:"vmid"`
 	Name              string                  `json:"name"`
 	Node              string                  `json:"node"`
+	Pool              string                  `json:"pool,omitempty"`
 	Instance          string                  `json:"instance"`
 	Status            string                  `json:"status"`
 	Type              string                  `json:"type"`

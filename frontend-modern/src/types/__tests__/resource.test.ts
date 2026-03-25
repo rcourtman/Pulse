@@ -10,6 +10,7 @@ import {
   getMemoryPercent,
   getDiskPercent,
   type ResourceChangeKind,
+  type ResourceProxmoxMeta,
   type Resource,
   type ResourceType,
 } from '@/types/resource';
@@ -92,6 +93,18 @@ describe('Resource Type Guards', () => {
 });
 
 describe('Resource Helper Functions', () => {
+  describe('ResourceProxmoxMeta', () => {
+    it('accepts Proxmox pool membership in the canonical resource contract', () => {
+      const proxmox: ResourceProxmoxMeta = {
+        nodeName: 'pve-a',
+        instance: 'cluster-a',
+        pool: 'prod-vms',
+      };
+
+      expect(proxmox.pool).toBe('prod-vms');
+    });
+  });
+
   describe('getPreferredResourceDisplayName', () => {
     it('returns displayName when set', () => {
       const resource = createResource({ name: 'machine-1', displayName: 'Production Server' });

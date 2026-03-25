@@ -302,6 +302,40 @@ func TestHandleClusterVMResourceMemoryTrustCharacterization(t *testing.T) {
 	}
 }
 
+func TestPollVMsWithNodesPreservesProxmoxPool(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+
+	mon := newTestPVEMonitor("test")
+	defer mon.alertManager.Stop()
+	defer mon.notificationMgr.Stop()
+
+	client := &vmMemoryTrustStubClient{
+		stubPVEClient: &stubPVEClient{},
+		vms: []proxmox.VM{{
+			VMID:   101,
+			Name:   "vm-101",
+			Node:   "node1",
+			Pool:   "prod-vms",
+			Status: "stopped",
+			MaxMem: 8 * 1024,
+			Mem:    2 * 1024,
+			CPUs:   2,
+		}},
+	}
+
+	nodes := []proxmox.Node{{Node: "node1", Status: "online"}}
+	nodeEffectiveStatus := map[string]string{"node1": "online"}
+	mon.pollVMsWithNodes(context.Background(), "test", "", false, client, nodes, nodeEffectiveStatus)
+
+	vms := mon.state.GetSnapshot().VMs
+	if len(vms) != 1 {
+		t.Fatalf("expected 1 VM, got %d", len(vms))
+	}
+	if got := vms[0].Pool; got != "prod-vms" {
+		t.Fatalf("vm pool = %q, want %q", got, "prod-vms")
+	}
+}
+
 func TestPollVMsWithNodesMemoryTrustCharacterization(t *testing.T) {
 	t.Setenv("PULSE_DATA_DIR", t.TempDir())
 
@@ -511,6 +545,40 @@ func TestHandleClusterContainerResourceMemoryTrustCharacterization(t *testing.T)
 				t.Fatalf("snapshot.Raw.MemInfoAvailable = %d, want %d", snap.Raw.MemInfoAvailable, tt.wantAvail)
 			}
 		})
+	}
+}
+
+func TestPollContainersWithNodesPreservesProxmoxPool(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+
+	mon := newTestPVEMonitor("test")
+	defer mon.alertManager.Stop()
+	defer mon.notificationMgr.Stop()
+
+	client := &vmMemoryTrustStubClient{
+		stubPVEClient: &stubPVEClient{},
+		containers: []proxmox.Container{{
+			VMID:   201,
+			Name:   "ct-201",
+			Node:   "node1",
+			Pool:   "ops-lxc",
+			Status: "stopped",
+			MaxMem: 8 * 1024,
+			Mem:    2 * 1024,
+			CPUs:   2,
+		}},
+	}
+
+	nodes := []proxmox.Node{{Node: "node1", Status: "online"}}
+	nodeEffectiveStatus := map[string]string{"node1": "online"}
+	mon.pollContainersWithNodes(context.Background(), "test", "", false, client, nodes, nodeEffectiveStatus)
+
+	containers := mon.state.GetSnapshot().Containers
+	if len(containers) != 1 {
+		t.Fatalf("expected 1 container, got %d", len(containers))
+	}
+	if got := containers[0].Pool; got != "ops-lxc" {
+		t.Fatalf("container pool = %q, want %q", got, "ops-lxc")
 	}
 }
 

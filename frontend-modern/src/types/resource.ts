@@ -366,6 +366,7 @@ export interface ResourceProxmoxMeta {
   vmid?: number;
   node?: string;
   nodeName?: string;
+  pool?: string;
   instance?: string;
   clusterName?: string;
   cpus?: number;

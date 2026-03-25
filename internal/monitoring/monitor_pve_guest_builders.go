@@ -223,6 +223,7 @@ func (m *Monitor) buildVMFromClusterResource(
 		VMID:     res.VMID,
 		Name:     res.Name,
 		Node:     res.Node,
+		Pool:     strings.TrimSpace(res.Pool),
 		Instance: instanceName,
 		Status:   res.Status,
 		Type:     "qemu",

@@ -138,6 +138,7 @@ func (m *Monitor) buildContainerFromClusterResource(
 		VMID:     res.VMID,
 		Name:     res.Name,
 		Node:     res.Node,
+		Pool:     strings.TrimSpace(res.Pool),
 		Instance: instanceName,
 		Status:   res.Status,
 		Type:     "lxc",

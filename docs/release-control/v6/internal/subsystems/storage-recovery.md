@@ -222,6 +222,10 @@ reporting surface. Storage and recovery workflows may consume similar current-
 state VM facts, but `internal/api/reporting_inventory_handlers.go` and
 `internal/api/router_routes_licensing.go` remain API/reporting transport
 ownership rather than storage/recovery contract ownership.
+That adjacent export contract now also includes canonical Proxmox pool
+membership for each VM row. Storage and recovery flows may use those current-
+state facts when they need fleet context, but they must consume the API-owned
+pool column rather than rebuilding pool membership from storage-side queries.
 Those resource timeline reads now also accept governed kind and source-type
 filters plus source-adapter filters, with filtered history counts owned by the
 unified-resource store so storage and recovery views can consume the same
