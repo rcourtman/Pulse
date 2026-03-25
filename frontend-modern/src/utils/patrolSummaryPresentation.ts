@@ -1,6 +1,7 @@
 import type { PatrolRunRecord, PatrolRuntimeState } from '@/api/patrol';
 import type { UnifiedFinding } from '@/stores/aiIntelligence';
 import type { IntelligenceHealthScore } from '@/types/aiIntelligence';
+import { isPatrolRuntimeFinding } from '@/utils/aiFindingPresentation';
 import type { SemanticTone } from '@/utils/semanticTonePresentation';
 import { getPatrolRuntimePresentation } from '@/utils/patrolRuntimePresentation';
 
@@ -94,18 +95,6 @@ function getCoverageDescription(overallHealth: IntelligenceHealthScore | undefin
 
 function formatFindingCount(count: number, severity: 'critical' | 'warning'): string {
   return `${count} active ${severity} finding${count === 1 ? '' : 's'}`;
-}
-
-function isPatrolRuntimeFinding(finding: PatrolAssessmentFinding): boolean {
-  const resourceId = String(finding.resourceId || '').trim().toLowerCase();
-  const resourceName = String(finding.resourceName || '').trim().toLowerCase();
-  const title = String(finding.title || '').trim().toLowerCase();
-
-  return (
-    resourceId === 'ai-service' ||
-    resourceName === 'pulse patrol service' ||
-    title.startsWith('pulse patrol:')
-  );
 }
 
 function classifyActiveFindings(activeFindings: PatrolAssessmentFinding[] | undefined) {

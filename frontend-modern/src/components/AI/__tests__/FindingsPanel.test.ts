@@ -6,6 +6,7 @@ import {
   formatFindingLifecycleType,
   formatFindingLoopState,
   getFindingEmptyStateCopy,
+  getPatrolFindingClassification,
   getFindingSeverityCompactLabel,
   getFindingSeveritySortOrder,
   getFindingResolutionReason,
@@ -158,6 +159,37 @@ describe('aiFindingPresentation', () => {
     });
   });
 
+  describe('patrolFindingClassification', () => {
+    it('classifies ai-service findings as patrol runtime issues', () => {
+      expect(
+        getPatrolFindingClassification({
+          resourceId: 'ai-service',
+          resourceName: 'Pulse Patrol Service',
+          title: 'Pulse Patrol: Insufficient API credits',
+        }),
+      ).toEqual({
+        kind: 'runtime',
+        label: 'Patrol runtime',
+        badgeClasses:
+          'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-900 dark:text-sky-300',
+      });
+    });
+
+    it('keeps ordinary findings classified as infrastructure', () => {
+      expect(
+        getPatrolFindingClassification({
+          resourceId: 'vm-101',
+          resourceName: 'db-01',
+          title: 'Disk nearly full',
+        }),
+      ).toEqual({
+        kind: 'infrastructure',
+        label: 'Infrastructure',
+        badgeClasses: 'border-border bg-surface-alt text-muted',
+      });
+    });
+  });
+
   describe('filterPresentation', () => {
     it('builds canonical filter options', () => {
       expect(
@@ -243,6 +275,14 @@ describe('aiFindingPresentation', () => {
       expect(findingsPanelSource).toContain('const recency = getFindingRecencyPresentation(finding);');
       expect(findingsPanelSource).toContain("{recency.label}{' '}");
       expect(findingsPanelSource).toContain('{formatTime(recency.timestamp)}');
+    });
+
+    it('surfaces patrol runtime findings with the shared patrol runtime badge', () => {
+      expect(findingsPanelSource).toContain(
+        'const patrolFindingClassification = getPatrolFindingClassification(finding);',
+      );
+      expect(findingsPanelSource).toContain("patrolFindingClassification.kind === 'runtime'");
+      expect(findingsPanelSource).toContain('{patrolFindingClassification.label}');
     });
   });
 

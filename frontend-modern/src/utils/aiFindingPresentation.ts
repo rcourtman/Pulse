@@ -201,6 +201,12 @@ export interface FindingRecencyPresentation {
   timestamp: string;
 }
 
+export interface PatrolFindingClassification {
+  kind: 'runtime' | 'infrastructure';
+  label: string;
+  badgeClasses: string;
+}
+
 export const getFindingSourceLabel = (source: UnifiedFinding['source'] | string): string =>
   FINDING_SOURCE_LABELS[source] || source;
 
@@ -228,6 +234,36 @@ export const getFindingSeveritySortOrder = (
 export const getFindingSeverityCompactLabel = (
   severity: UnifiedFinding['severity'] | string,
 ): string => FINDING_SEVERITY_COMPACT_LABELS[severity] || String(severity).toUpperCase();
+
+export const isPatrolRuntimeFinding = (
+  finding: Pick<UnifiedFinding, 'resourceId' | 'resourceName' | 'title'>,
+): boolean => {
+  const resourceId = String(finding.resourceId || '').trim().toLowerCase();
+  const resourceName = String(finding.resourceName || '').trim().toLowerCase();
+  const title = String(finding.title || '').trim().toLowerCase();
+
+  return (
+    resourceId === 'ai-service' ||
+    resourceName === 'pulse patrol service' ||
+    title.startsWith('pulse patrol:')
+  );
+};
+
+export const getPatrolFindingClassification = (
+  finding: Pick<UnifiedFinding, 'resourceId' | 'resourceName' | 'title'>,
+): PatrolFindingClassification =>
+  isPatrolRuntimeFinding(finding)
+    ? {
+        kind: 'runtime',
+        label: 'Patrol runtime',
+        badgeClasses:
+          'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-900 dark:text-sky-300',
+      }
+    : {
+        kind: 'infrastructure',
+        label: 'Infrastructure',
+        badgeClasses: DEFAULT_BADGE_CLASSES,
+      };
 
 export const getFindingRecencyPresentation = (
   finding: Pick<UnifiedFinding, 'status' | 'detectedAt' | 'lastSeenAt'>,
