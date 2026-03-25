@@ -190,18 +190,52 @@ export const getResourcePolicyRedactionSummaries = (
     false,
   );
 
+const getConciseGovernedDisplaySummary = (summary: string): string => {
+  const trimmed = summary.trim();
+  if (!trimmed) return '';
+  if (!trimmed.includes(';')) {
+    return trimmed;
+  }
+
+  const parts = trimmed
+    .split(';')
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0);
+  if (parts.length === 0) {
+    return '';
+  }
+
+  const baseLabel = parts[0].replace(/\s+resource$/i, '').trim() || parts[0];
+  const statusPart = parts.find((part, index) => index > 0 && /^status\s+/i.test(part));
+  const status = statusPart?.replace(/^status\s+/i, '').trim();
+
+  return status ? `${baseLabel} (${status})` : baseLabel;
+};
+
+export const getResourcePolicyGovernedSummary = (
+  resource?: ResourcePolicyDisplayResource | null,
+): string => {
+  if (!resource) return '';
+
+  const policy = resource.policy;
+  if (!policy || !requiresGovernedResourceDisplay(policy)) {
+    return resource.displayName?.trim() || resource.name?.trim() || '';
+  }
+
+  return resource.aiSafeSummary?.trim() || 'redacted by policy';
+};
+
 export const getResourcePolicyDisplayLabel = (
   resource?: ResourcePolicyDisplayResource | null,
 ): string => {
   if (!resource) return '';
 
-  const summary = resource.aiSafeSummary?.trim() ?? '';
   const policy = resource.policy;
   if (!policy) {
     return resource.displayName?.trim() || resource.name?.trim() || '';
   }
   if (requiresGovernedResourceDisplay(policy)) {
-    return summary || 'redacted by policy';
+    return getConciseGovernedDisplaySummary(getResourcePolicyGovernedSummary(resource));
   }
 
   return resource.displayName?.trim() || resource.name?.trim() || '';

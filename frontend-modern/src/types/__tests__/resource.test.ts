@@ -124,6 +124,22 @@ describe('Resource Helper Functions', () => {
       expect(getPreferredResourceDisplayName(resource)).toBe('Production VM');
     });
 
+    it('condenses generated governed summaries into concise UI labels', () => {
+      const resource = createResource({
+        name: 'pbs-secret',
+        displayName: 'PBS Secret',
+        type: 'pbs',
+        policy: {
+          sensitivity: 'sensitive',
+          routing: { scope: 'local-first', redact: ['hostname', 'platform-id'] },
+        },
+        aiSafeSummary:
+          'backup server resource; status online; sources pbs; 1 child resources; redacted for cloud summary',
+      } as Partial<Resource>);
+
+      expect(getPreferredResourceDisplayName(resource)).toBe('backup server (online)');
+    });
+
     it('falls back to the redacted policy label when the safe summary is missing', () => {
       const resource = createResource({
         name: 'secret-vm-1',

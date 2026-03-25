@@ -465,6 +465,25 @@ describe('resourceIdentity', () => {
     expect(
       getPreferredResourceDisplayName(
         makeResource({
+          name: 'pbs-secret',
+          displayName: 'PBS Secret',
+          type: 'pbs',
+          policy: {
+            sensitivity: 'sensitive',
+            routing: {
+              scope: 'local-first',
+              redact: ['hostname', 'platform-id'],
+            },
+          },
+          aiSafeSummary:
+            'backup server resource; status online; sources pbs; 1 child resources; redacted for cloud summary',
+        }),
+      ),
+    ).toBe('backup server (online)');
+
+    expect(
+      getPreferredResourceDisplayName(
+        makeResource({
           displayName: 'Display Label',
           platformData: {
             agent: {

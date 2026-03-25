@@ -17,7 +17,7 @@ import {
 import { areSystemSettingsLoaded, shouldHideDockerUpdateActions } from '@/stores/systemSettings';
 import {
   getResourcePolicyBadges,
-  getResourcePolicyDisplayLabel,
+  getResourcePolicyGovernedSummary,
   getResourcePolicyRedactionLabels,
   getResourceRoutingScopeLabel,
   hasDefaultResourcePolicyPosture,
@@ -99,7 +99,7 @@ export const useResourceDetailDrawerDerivedState = (
   const policyRedactions = createMemo(() => getResourcePolicyRedactionLabels(resource.policy));
   const governanceSummary = createMemo(() =>
     requiresGovernedResourceDisplay(resource.policy)
-      ? getResourcePolicyDisplayLabel(resource)
+      ? getResourcePolicyGovernedSummary(resource)
       : (resource.aiSafeSummary?.trim() ?? ''),
   );
   const hasGovernanceData = createMemo(

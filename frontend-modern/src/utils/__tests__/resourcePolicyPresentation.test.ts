@@ -6,6 +6,7 @@ import {
   RESOURCE_POLICY_SENSITIVITY_ORDER,
   hasDefaultResourcePolicyPosture,
   getResourcePolicyTableBadges,
+  getResourcePolicyGovernedSummary,
   getResourcePolicyDisplayLabel,
   getResourcePolicyRedactionSummaries,
   getResourcePolicyRoutingSummaries,
@@ -76,7 +77,7 @@ describe('resourcePolicyPresentation utils', () => {
     ).toBe(false);
   });
 
-  it('uses the governed aiSafeSummary for redacted resources', () => {
+  it('uses concise governed labels for redacted resources', () => {
     expect(
       getResourcePolicyDisplayLabel({
         name: 'sensitive-host',
@@ -94,6 +95,22 @@ describe('resourcePolicyPresentation utils', () => {
 
     expect(
       getResourcePolicyDisplayLabel({
+        name: 'pbs-secret',
+        displayName: 'PBS Secret',
+        policy: {
+          sensitivity: 'sensitive',
+          routing: {
+            scope: 'local-first',
+            redact: ['hostname', 'platform-id'],
+          },
+        },
+        aiSafeSummary:
+          'backup server resource; status online; sources pbs; 1 child resources; redacted for cloud summary',
+      }),
+    ).toBe('backup server (online)');
+
+    expect(
+      getResourcePolicyDisplayLabel({
         name: 'storage-1',
         displayName: 'Storage 1',
         policy: {
@@ -105,6 +122,26 @@ describe('resourcePolicyPresentation utils', () => {
         },
       }),
     ).toBe('redacted by policy');
+  });
+
+  it('preserves the full governed summary for detail surfaces', () => {
+    expect(
+      getResourcePolicyGovernedSummary({
+        name: 'pbs-secret',
+        displayName: 'PBS Secret',
+        policy: {
+          sensitivity: 'sensitive',
+          routing: {
+            scope: 'local-first',
+            redact: ['hostname', 'platform-id'],
+          },
+        },
+        aiSafeSummary:
+          'backup server resource; status online; sources pbs; 1 child resources; redacted for cloud summary',
+      }),
+    ).toBe(
+      'backup server resource; status online; sources pbs; 1 child resources; redacted for cloud summary',
+    );
   });
 
   it('hides raw alternate names when policy requires governed handling', () => {
