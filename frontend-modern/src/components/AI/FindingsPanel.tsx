@@ -68,6 +68,10 @@ interface FindingsPanelProps {
   showControls?: boolean;
   scopeResourceIds?: string[];
   scopeResourceTypes?: string[];
+  showScopeWarnings?: boolean;
+  runtimeState?: PatrolRuntimeState;
+  blockedReason?: string;
+  overallHealth?: IntelligenceHealthScore;
   runSnapshot?: Pick<
     PatrolRunRecord,
     | 'resources_checked'
@@ -77,10 +81,6 @@ interface FindingsPanelProps {
     | 'status'
     | 'error_count'
   >;
-  showScopeWarnings?: boolean;
-  runtimeState?: PatrolRuntimeState;
-  blockedReason?: string;
-  overallHealth?: IntelligenceHealthScore;
 }
 
 export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
@@ -233,6 +233,26 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       (f) => f.source !== 'threshold' && !f.isThreshold && !hasTriggeringAlert(f),
     ),
   );
+  const runSnapshotScopedPatrolFindings = createMemo(() => {
+    if (props.filterFindingIds === undefined) {
+      return allPatrolFindings();
+    }
+    const snapshotFindingIds = new Set(props.filterFindingIds);
+    return allPatrolFindings().filter((finding) => snapshotFindingIds.has(finding.id));
+  });
+  const useRunSnapshotScopedControls = createMemo(
+    () => props.runSnapshot !== undefined && props.filterFindingIds !== undefined,
+  );
+  const scopedNeedsAttentionCount = createMemo(() => {
+    const attentionIds = new Set(aiIntelligenceStore.findingsNeedingAttention.map((f) => f.id));
+    return runSnapshotScopedPatrolFindings().filter((finding) => attentionIds.has(finding.id)).length;
+  });
+  const scopedPendingApprovalCount = createMemo(() => {
+    const approvalIds = new Set(
+      aiIntelligenceStore.findingsWithPendingApprovals.map((finding) => finding.id),
+    );
+    return runSnapshotScopedPatrolFindings().filter((finding) => approvalIds.has(finding.id)).length;
+  });
   const patrolFindings = createMemo(() =>
     filteredFindings().filter(
       (f) => f.source !== 'threshold' && !f.isThreshold && !hasTriggeringAlert(f),
@@ -240,9 +260,12 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
   );
   const filterOptions = createMemo(() =>
     buildFindingFilterOptions({
-      needsAttentionCount: aiIntelligenceStore.needsAttentionCount,
-      pendingApprovalCount: aiIntelligenceStore.pendingApprovalCount,
-      runSnapshot: props.runSnapshot,
+      needsAttentionCount: useRunSnapshotScopedControls()
+        ? scopedNeedsAttentionCount()
+        : aiIntelligenceStore.needsAttentionCount,
+      pendingApprovalCount: useRunSnapshotScopedControls()
+        ? scopedPendingApprovalCount()
+        : aiIntelligenceStore.pendingApprovalCount,
     }),
   );
   const emptyStateCopy = createMemo(() =>
@@ -251,15 +274,20 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       overallHealth: props.overallHealth,
       runtimeState: props.runtimeState,
       blockedReason: props.blockedReason,
+      runSnapshot: props.runSnapshot,
     }),
   );
   const emptyStateTone = createMemo(() => getSemanticTonePresentation(emptyStateCopy().tone));
   const showFilterControls = createMemo(
     () =>
       props.showControls !== false &&
-      (allPatrolFindings().length > 0 ||
-        aiIntelligenceStore.needsAttentionCount > 0 ||
-        aiIntelligenceStore.pendingApprovalCount > 0),
+      (useRunSnapshotScopedControls()
+        ? runSnapshotScopedPatrolFindings().length > 0 ||
+          scopedNeedsAttentionCount() > 0 ||
+          scopedPendingApprovalCount() > 0
+        : allPatrolFindings().length > 0 ||
+          aiIntelligenceStore.needsAttentionCount > 0 ||
+          aiIntelligenceStore.pendingApprovalCount > 0),
   );
 
   const isOutOfScope = (finding: UnifiedFinding): boolean => {

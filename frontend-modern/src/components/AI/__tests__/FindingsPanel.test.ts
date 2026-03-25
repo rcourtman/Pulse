@@ -462,6 +462,10 @@ describe('aiFindingPresentation', () => {
 
     it('hides the filter bar when there are no Patrol findings or special buckets to navigate', () => {
       expect(findingsPanelSource).toContain('const showFilterControls = createMemo(');
+      expect(findingsPanelSource).toContain('const useRunSnapshotScopedControls = createMemo(');
+      expect(findingsPanelSource).toContain('const runSnapshotScopedPatrolFindings = createMemo(');
+      expect(findingsPanelSource).toContain('scopedNeedsAttentionCount()');
+      expect(findingsPanelSource).toContain('scopedPendingApprovalCount()');
       expect(findingsPanelSource).toContain('allPatrolFindings().length > 0');
       expect(findingsPanelSource).toContain('aiIntelligenceStore.needsAttentionCount > 0');
       expect(findingsPanelSource).toContain('aiIntelligenceStore.pendingApprovalCount > 0');

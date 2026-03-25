@@ -202,12 +202,6 @@ the latest completed activity was only a scoped run, the summary should label
 that timestamp as `Last activity` instead of `Last patrol`; `Last full patrol`
 belongs only to the most recent completed full Patrol run.
 That same recency contract also applies to the header metadata row. The top
-That same empty-state contract must become run-snapshot-aware when the user is
-filtering findings to an explicit Patrol run. A selected run with an explicit
-empty `finding_ids` snapshot should explain that no findings were recorded for
-that run and, when applicable, carry the canonical run coverage summary and
-issue caveat instead of falling back to the generic `No Patrol findings to
-display` copy.
 header must not revert to a generic `Last:` timestamp when the rest of Patrol
 is explicitly distinguishing activity from full verification recency.
 That summary surface must also avoid reintroducing a second compact assessment
@@ -251,6 +245,16 @@ Patrol page, `frontend-modern/src/components/AI/FindingsPanel.tsx` should
 explain the absence of active findings without repeating `Last activity`,
 `Next run`, or interval schedule details that already belong to the header and
 verification hierarchy above.
+That same empty-state contract must become run-snapshot-aware when the user is
+filtering findings to an explicit Patrol run. A selected run with an explicit
+empty `finding_ids` snapshot should explain that no findings were recorded for
+that run and, when applicable, carry the canonical run coverage summary and
+issue caveat instead of falling back to the generic `No Patrol findings to
+display` copy.
+That same snapshot scoping must apply to the findings control bar too. When the
+user is looking at an explicit run snapshot, filter pills and their attention
+or approval counts must derive from that snapshot-scoped finding set rather
+than borrowing global Patrol finding counts from outside the selected run.
 That same findings surface should keep its section chrome functional rather
 than promotional. Inside the Patrol findings tab, the selected tab already
 names the surface, so the findings card should not add another in-card product
@@ -372,11 +376,6 @@ and the resource drawer both reflect the same learned edge evidence instead
 of each page fetching its own copy. Both surfaces now render that evidence
 through the shared `frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx`
 card, so the correlation layout stays governed by one component instead of
-Within that same run-history surface, coverage copy must stay canonical across
-the header chips, narrative summary, and selected-run snapshot. Scoped runs
-must not present scope size and checked-resource count as contradictory
-independent facts; the shared run presenter should collapse them into one
-coverage statement such as `Checked 1 of 2 scoped resources`.
 two page-local card implementations. That shared card also owns the
 correlation ordering and truncation rule, so the page and drawer hand it raw
 correlation lists instead of slicing or re-sorting them locally.
@@ -423,20 +422,25 @@ dedicated `frontend-modern/src/features/patrol/patrolInvestigationContextModel.t
 owner, so the Patrol hook composes one canonical payload-to-summary derivation
 instead of rebuilding recent-change, correlation, and governed-resource count
 copy inline.
-That same normalization applies to supporting effort strips inside the expanded
-Zero-coverage scoped runs must also fail closed as `Checked 0 of N scoped
-resources` rather than drifting back to a scope-only headline.
-run card. Once the run presenter is already carrying canonical coverage copy,
-secondary chips must not reintroduce a raw `Scoped to N resources` variant that
-That same zero-coverage rule also applies to the expanded narrative sentence.
-When Patrol checked none of a known scoped set, the run summary must still say
-`Checked 0 of N scoped resources` rather than reverting to a generic `Patrol
-completed` sentence that hides the failed coverage.
-re-opens the same ambiguity.
 The Patrol page's run-history tab label is now also tightened to `Runs`, while
 the underlying run-history panel remains canonical for snapshot filtering and
 tool-call inspection. That copy change is intentional: run history is support
 context for Patrol findings, not a peer primary workflow beside findings.
+Within that same run-history surface, coverage copy must stay canonical across
+the header chips, narrative summary, and selected-run snapshot. Scoped runs
+must not present scope size and checked-resource count as contradictory
+independent facts; the shared run presenter should collapse them into one
+coverage statement such as `Checked 1 of 2 scoped resources`, and zero-coverage
+scoped runs should fail closed as `Checked 0 of N scoped resources` rather
+than drifting back to a scope-only headline.
+That same normalization applies to supporting effort strips inside the expanded
+run card. Once the run presenter is already carrying canonical coverage copy,
+secondary chips must not reintroduce a raw `Scoped to N resources` variant that
+re-opens the same ambiguity.
+That same zero-coverage rule also applies to the expanded narrative sentence.
+When Patrol checked none of a known scoped set, the run summary must still say
+`Checked 0 of N scoped resources` rather than reverting to a generic `Patrol
+completed` sentence that hides the failed coverage.
 The Patrol page and resource drawer now also share the canonical
 `frontend-modern/src/utils/resourceChangePresentation.ts` formatter so
 recent-change kind and headline wording stays aligned wherever the canonical
