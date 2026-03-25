@@ -227,6 +227,11 @@ plus a VM inventory definition route that own panel copy, stable column
 schema, and filename prefix. Storage and recovery flows may read those facts
 when they need fleet context, but they must not fork their own reporting or
 inventory column contract.
+That same API-owned performance-report definition also governs transport-side
+validation and attachment naming. Storage and recovery flows may consume those
+downloads, but they must treat allowed formats, multi-resource caps, optional
+metric/title support, and filename prefixes as API/reporting contract rather
+than rebuilding local reporting constants.
 That adjacent export contract now also includes canonical Proxmox pool
 membership for each VM row. Storage and recovery flows may use those current-
 state facts when they need fleet context, but they must consume the API-owned

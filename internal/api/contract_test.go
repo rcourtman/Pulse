@@ -31,6 +31,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 	authpkg "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/reporting"
 )
 
 func TestContract_FindingJSONSnapshot(t *testing.T) {
@@ -464,6 +465,37 @@ func TestContract_ReportingCatalogJSONSnapshot(t *testing.T) {
 	}`
 
 	assertJSONSnapshot(t, rec.Body.Bytes(), want)
+}
+
+func TestContract_PerformanceReportTransportUsesCatalogDefinition(t *testing.T) {
+	engine := &stubReportingEngine{data: []byte("report"), contentType: "application/pdf"}
+	original := reporting.GetEngine()
+	reporting.SetEngine(engine)
+	t.Cleanup(func() { reporting.SetEngine(original) })
+
+	handler := NewReportingHandlers(nil, nil)
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/api/reporting?resourceType=node&resourceId=node-1&metricType=+cpu+&title=+Node+report+",
+		nil,
+	)
+	rec := httptest.NewRecorder()
+
+	handler.HandleGenerateReport(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	definition := reporting.DescribePerformanceReport()
+	if got := rec.Header().Get("Content-Disposition"); !strings.HasPrefix(got, fmt.Sprintf("attachment; filename=\"%s-node-1-", definition.SingleFilenamePrefix)) {
+		t.Fatalf("expected canonical performance-report attachment filename, got %q", got)
+	}
+	if engine.lastReq.Format != definition.DefaultFormat {
+		t.Fatalf("expected default format %q, got %q", definition.DefaultFormat, engine.lastReq.Format)
+	}
+	if engine.lastReq.MetricType != "cpu" || engine.lastReq.Title != "Node report" {
+		t.Fatalf("expected trimmed canonical optional fields, got %+v", engine.lastReq)
+	}
 }
 
 func TestContract_VMInventoryExportDefinitionJSONSnapshot(t *testing.T) {

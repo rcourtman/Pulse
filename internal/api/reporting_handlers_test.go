@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -126,8 +127,9 @@ func TestReportingHandlers_GenerateReport(t *testing.T) {
 	if ct := rr.Header().Get("Content-Type"); ct != "application/pdf" {
 		t.Fatalf("expected content-type application/pdf, got %q", ct)
 	}
-	if disp := rr.Header().Get("Content-Disposition"); !strings.Contains(disp, "report-node-1") {
-		t.Fatalf("expected content-disposition to contain sanitized filename, got %q", disp)
+	definition := reporting.DescribePerformanceReport()
+	if disp := rr.Header().Get("Content-Disposition"); !strings.Contains(disp, definition.SingleFilenamePrefix+"-node-1") {
+		t.Fatalf("expected content-disposition to contain canonical filename prefix, got %q", disp)
 	}
 	if body := rr.Body.String(); body != "report" {
 		t.Fatalf("expected report body, got %q", body)
@@ -135,6 +137,33 @@ func TestReportingHandlers_GenerateReport(t *testing.T) {
 
 	if engine.lastReq.ResourceType != "node" || engine.lastReq.ResourceID != "node-1" {
 		t.Fatalf("unexpected request: %+v", engine.lastReq)
+	}
+}
+
+func TestReportingHandlers_GenerateReport_TrimsOptionalFields(t *testing.T) {
+	engine := &stubReportingEngine{data: []byte("report"), contentType: "application/pdf"}
+	original := reporting.GetEngine()
+	reporting.SetEngine(engine)
+	t.Cleanup(func() { reporting.SetEngine(original) })
+
+	handler := NewReportingHandlers(nil, nil)
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/api/reporting?format=pdf&resourceType=node&resourceId=node-1&metricType=+cpu+&title=+Node+report+",
+		nil,
+	)
+	rr := httptest.NewRecorder()
+
+	handler.HandleGenerateReport(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, rr.Code, rr.Body.String())
+	}
+	if engine.lastReq.MetricType != "cpu" {
+		t.Fatalf("expected trimmed metric type, got %q", engine.lastReq.MetricType)
+	}
+	if engine.lastReq.Title != "Node report" {
+		t.Fatalf("expected trimmed title, got %q", engine.lastReq.Title)
 	}
 }
 
@@ -325,6 +354,66 @@ func TestReportingHandlers_ExportVMInventory_InvalidFormat(t *testing.T) {
 
 	if rr.Code != http.StatusBadRequest {
 		t.Fatalf("expected status %d, got %d body=%s", http.StatusBadRequest, rr.Code, rr.Body.String())
+	}
+}
+
+func TestReportingHandlers_GenerateMultiReport_UsesCatalogLimit(t *testing.T) {
+	engine := &stubReportingEngine{data: []byte("report"), contentType: "text/csv"}
+	original := reporting.GetEngine()
+	reporting.SetEngine(engine)
+	t.Cleanup(func() { reporting.SetEngine(original) })
+
+	handler := NewReportingHandlers(nil, nil)
+	definition := reporting.DescribePerformanceReport()
+	resources := make([]string, 0, definition.MultiResourceMax+1)
+	for i := 0; i < definition.MultiResourceMax+1; i++ {
+		resources = append(resources, fmt.Sprintf(`{"resourceType":"vm","resourceId":"vm-%d"}`, i))
+	}
+	body := `{"resources":[` + strings.Join(resources, ",") + `],"format":"csv"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/reporting/generate-multi", strings.NewReader(body))
+	rr := httptest.NewRecorder()
+
+	handler.HandleGenerateMultiReport(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusBadRequest, rr.Code, rr.Body.String())
+	}
+	if !strings.Contains(rr.Body.String(), fmt.Sprintf("Maximum %d resources allowed", definition.MultiResourceMax)) {
+		t.Fatalf("expected canonical multi-resource max in error, got %s", rr.Body.String())
+	}
+}
+
+func TestReportingHandlers_GenerateMultiReport_TrimsOptionalFieldsAndUsesCanonicalFilename(t *testing.T) {
+	engine := &stubReportingEngine{data: []byte("report"), contentType: "text/csv"}
+	original := reporting.GetEngine()
+	reporting.SetEngine(engine)
+	t.Cleanup(func() { reporting.SetEngine(original) })
+
+	handler := NewReportingHandlers(nil, nil)
+	body := `{"resources":[{"resourceType":"vm","resourceId":"vm-1"}],"format":"csv","metricType":" cpu ","title":" Fleet report "}`
+	req := httptest.NewRequest(http.MethodPost, "/api/reporting/generate-multi", strings.NewReader(body))
+	rr := httptest.NewRecorder()
+
+	handler.HandleGenerateMultiReport(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, rr.Code, rr.Body.String())
+	}
+	definition := reporting.DescribePerformanceReport()
+	if disp := rr.Header().Get("Content-Disposition"); !strings.Contains(disp, definition.MultiFilenamePrefix+"-") {
+		t.Fatalf("expected canonical multi-report filename prefix, got %q", disp)
+	}
+	if engine.lastMulti.MetricType != "cpu" {
+		t.Fatalf("expected trimmed metric type, got %q", engine.lastMulti.MetricType)
+	}
+	if engine.lastMulti.Title != "Fleet report" {
+		t.Fatalf("expected trimmed title, got %q", engine.lastMulti.Title)
+	}
+	if len(engine.lastMulti.Resources) != 1 {
+		t.Fatalf("expected one resource request, got %+v", engine.lastMulti.Resources)
+	}
+	if engine.lastMulti.Resources[0].MetricType != "cpu" || engine.lastMulti.Resources[0].Title != "Fleet report" {
+		t.Fatalf("expected canonical optional fields to propagate to per-resource requests, got %+v", engine.lastMulti.Resources[0])
 	}
 }
 

@@ -21,3 +21,17 @@ func TestDescribeReportingCatalog_DefinesCanonicalSurfaces(t *testing.T) {
 		t.Fatalf("vm inventory export endpoint = %q", catalog.VMInventoryExport.ExportEndpoint)
 	}
 }
+
+func TestPerformanceReportDefinition_SupportsFormat(t *testing.T) {
+	definition := DescribePerformanceReport()
+
+	if !definition.SupportsFormat(FormatPDF) {
+		t.Fatalf("expected PDF to be supported")
+	}
+	if !definition.SupportsFormat(FormatCSV) {
+		t.Fatalf("expected CSV to be supported")
+	}
+	if definition.SupportsFormat(ReportFormat("xlsx")) {
+		t.Fatalf("did not expect xlsx to be supported")
+	}
+}

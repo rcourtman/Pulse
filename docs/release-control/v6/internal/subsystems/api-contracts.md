@@ -231,6 +231,11 @@ That same catalog payload also owns the optional performance-report capability
 surface: `supportsMetricFilter` and `supportsCustomTitle` are contract flags,
 not UI hints, so frontend consumers and request builders must not render or
 emit unsupported metric-filter or custom-title fields from local assumptions.
+The same performance-report catalog definition also owns backend transport
+validation and download semantics. `internal/api/metrics_reporting_handlers.go`
+must derive allowed formats, default format selection, multi-resource limits,
+optional metric/title field emission, and attachment filename prefixes from the
+canonical reporting definition instead of hardcoding a second local contract.
 The `/api/resources` serializer now also refreshes canonical identity and
 policy metadata through the shared unified-resource helper before it writes
 the payload, so backend and frontend contract tests stay aligned on one

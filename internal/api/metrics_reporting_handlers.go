@@ -42,6 +42,39 @@ type ReportingHandlers struct {
 	recoveryManager *recoverymanager.Manager
 }
 
+func performanceReportDefinition() reporting.PerformanceReportDefinition {
+	return reporting.DescribePerformanceReport()
+}
+
+func normalizePerformanceReportFormat(raw string, definition reporting.PerformanceReportDefinition) (reporting.ReportFormat, error) {
+	format := reporting.ReportFormat(strings.TrimSpace(raw))
+	if format == "" {
+		format = definition.DefaultFormat
+	}
+	if !definition.SupportsFormat(format) {
+		return "", fmt.Errorf("Format must be 'pdf' or 'csv'")
+	}
+	return format, nil
+}
+
+func normalizePerformanceReportOptionalFields(
+	definition reporting.PerformanceReportDefinition,
+	metricType string,
+	title string,
+) (string, string) {
+	normalizedMetricType := strings.TrimSpace(metricType)
+	normalizedTitle := strings.TrimSpace(title)
+
+	if !definition.SupportsMetricFilter {
+		normalizedMetricType = ""
+	}
+	if !definition.SupportsCustomTitle {
+		normalizedTitle = ""
+	}
+
+	return normalizedMetricType, normalizedTitle
+}
+
 type reportingEnrichmentSnapshot struct {
 	Nodes            []models.Node
 	VMs              []models.VM
@@ -257,15 +290,11 @@ func (h *ReportingHandlers) HandleGenerateReport(w http.ResponseWriter, r *http.
 		return
 	}
 
+	definition := performanceReportDefinition()
 	q := r.URL.Query()
-	format := reporting.ReportFormat(q.Get("format"))
-	if format == "" {
-		format = reporting.FormatPDF
-	}
-
-	// Validate format is one of known values
-	if format != reporting.FormatPDF && format != reporting.FormatCSV {
-		writeErrorResponse(w, http.StatusBadRequest, "invalid_format", "Format must be 'pdf' or 'csv'", nil)
+	format, err := normalizePerformanceReportFormat(q.Get("format"), definition)
+	if err != nil {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_format", err.Error(), nil)
 		return
 	}
 
@@ -291,7 +320,11 @@ func (h *ReportingHandlers) HandleGenerateReport(w http.ResponseWriter, r *http.
 		return
 	}
 
-	metricType := q.Get("metricType")
+	metricType, title := normalizePerformanceReportOptionalFields(
+		definition,
+		q.Get("metricType"),
+		q.Get("title"),
+	)
 
 	// Parse range
 	end := time.Now()
@@ -315,7 +348,7 @@ func (h *ReportingHandlers) HandleGenerateReport(w http.ResponseWriter, r *http.
 		Start:        start,
 		End:          end,
 		Format:       format,
-		Title:        q.Get("title"),
+		Title:        title,
 	}
 
 	// Enrich with resource data if monitor is available
@@ -333,7 +366,7 @@ func (h *ReportingHandlers) HandleGenerateReport(w http.ResponseWriter, r *http.
 	w.Header().Set("Content-Type", contentType)
 	// Build safe filename - sanitize resourceID to prevent header injection
 	safeResourceID := sanitizeFilename(resourceID)
-	filename := fmt.Sprintf("report-%s-%s.%s", safeResourceID, time.Now().Format("20060102"), format)
+	filename := fmt.Sprintf("%s-%s-%s.%s", definition.SingleFilenamePrefix, safeResourceID, time.Now().Format("20060102"), format)
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
 	w.Write(data)
 }
@@ -614,6 +647,7 @@ func (h *ReportingHandlers) HandleGenerateMultiReport(w http.ResponseWriter, r *
 		return
 	}
 
+	definition := performanceReportDefinition()
 	var body multiReportRequestBody
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_body", "Invalid request body", nil)
@@ -625,20 +659,17 @@ func (h *ReportingHandlers) HandleGenerateMultiReport(w http.ResponseWriter, r *
 		writeErrorResponse(w, http.StatusBadRequest, "no_resources", "At least one resource is required", nil)
 		return
 	}
-	if len(body.Resources) > 50 {
-		writeErrorResponse(w, http.StatusBadRequest, "too_many_resources", "Maximum 50 resources allowed", nil)
+	if len(body.Resources) > definition.MultiResourceMax {
+		writeErrorResponse(w, http.StatusBadRequest, "too_many_resources", fmt.Sprintf("Maximum %d resources allowed", definition.MultiResourceMax), nil)
 		return
 	}
 
-	// Validate format
-	format := reporting.ReportFormat(body.Format)
-	if format == "" {
-		format = reporting.FormatPDF
-	}
-	if format != reporting.FormatPDF && format != reporting.FormatCSV {
-		writeErrorResponse(w, http.StatusBadRequest, "invalid_format", "Format must be 'pdf' or 'csv'", nil)
+	format, err := normalizePerformanceReportFormat(body.Format, definition)
+	if err != nil {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_format", err.Error(), nil)
 		return
 	}
+	metricType, title := normalizePerformanceReportOptionalFields(definition, body.MetricType, body.Title)
 
 	// Parse time range
 	end := time.Now()
@@ -659,8 +690,8 @@ func (h *ReportingHandlers) HandleGenerateMultiReport(w http.ResponseWriter, r *
 		Format:     format,
 		Start:      start,
 		End:        end,
-		Title:      body.Title,
-		MetricType: body.MetricType,
+		Title:      title,
+		MetricType: metricType,
 	}
 
 	// Get monitor state for enrichment
@@ -686,11 +717,11 @@ func (h *ReportingHandlers) HandleGenerateMultiReport(w http.ResponseWriter, r *
 		req := reporting.MetricReportRequest{
 			ResourceType: resourceType,
 			ResourceID:   res.ResourceID,
-			MetricType:   body.MetricType,
+			MetricType:   metricType,
 			Start:        start,
 			End:          end,
 			Format:       format,
-			Title:        body.Title,
+			Title:        title,
 		}
 
 		// Enrich with resource data
@@ -708,7 +739,7 @@ func (h *ReportingHandlers) HandleGenerateMultiReport(w http.ResponseWriter, r *
 	}
 
 	w.Header().Set("Content-Type", contentType)
-	filename := fmt.Sprintf("fleet-report-%s.%s", time.Now().Format("20060102"), format)
+	filename := fmt.Sprintf("%s-%s.%s", definition.MultiFilenamePrefix, time.Now().Format("20060102"), format)
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
 	w.Write(data)
 }

@@ -45,6 +45,17 @@ type ReportingCatalog struct {
 	VMInventoryExport VMInventoryExportDefinition `json:"vmInventoryExport"`
 }
 
+// SupportsFormat reports whether the performance reporting surface allows the
+// given output format.
+func (d PerformanceReportDefinition) SupportsFormat(format ReportFormat) bool {
+	for _, candidate := range d.Formats {
+		if candidate.Value == format {
+			return true
+		}
+	}
+	return false
+}
+
 // DescribePerformanceReport returns the canonical definition for Pulse's
 // historical performance reporting surface.
 func DescribePerformanceReport() PerformanceReportDefinition {
