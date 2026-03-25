@@ -2893,20 +2893,39 @@ func TestAuditVerifyRequiresLicenseFeature(t *testing.T) {
 	}
 }
 
-func TestReportingEndpointsRequireLicenseFeature(t *testing.T) {
+func TestReportingCatalogDoesNotRequireLicenseFeature(t *testing.T) {
+	rawToken := "reporting-license-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/reports/catalog", nil)
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for reporting catalog without reporting license, got %d", rec.Code)
+	}
+}
+
+func TestReportingExecutionEndpointsRequireLicenseFeature(t *testing.T) {
 	rawToken := "reporting-license-token-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
 	cfg := newTestConfigWithTokens(t, record)
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
 
 	paths := []string{
-		"/api/admin/reports/catalog",
 		"/api/admin/reports/generate",
 		"/api/admin/reports/generate-multi",
+		"/api/admin/reports/inventory/vms/definition",
+		"/api/admin/reports/inventory/vms/export",
 	}
 
 	for _, path := range paths {
 		req := httptest.NewRequest(http.MethodGet, path, nil)
+		if path == "/api/admin/reports/generate-multi" {
+			req = httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{}`))
+		}
 		req.Header.Set("X-API-Token", rawToken)
 		rec := httptest.NewRecorder()
 		router.Handler().ServeHTTP(rec, req)

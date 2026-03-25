@@ -242,6 +242,10 @@ consumers may validate or reject malformed payloads, but they must not invent
 replacement report endpoints, filename prefixes, export routes, or default
 range windows from frontend-local fallback constants once the catalog has been
 accepted.
+The catalog route itself is intentionally metadata-readable without the
+`advanced_reporting` feature gate so locked admin surfaces can present the same
+canonical reporting definition before upsell, while report generation and
+inventory export remain feature-gated execution routes.
 The `/api/resources` serializer now also refreshes canonical identity and
 policy metadata through the shared unified-resource helper before it writes
 the payload, so backend and frontend contract tests stay aligned on one

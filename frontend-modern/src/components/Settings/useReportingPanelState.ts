@@ -67,7 +67,7 @@ export const useReportingPanelState = () => {
 
   createEffect(() => {
     if (
-      !isReportingEnabled() ||
+      !licenseLoaded() ||
       reportingCatalog() ||
       reportingCatalogLoading() ||
       reportingCatalogRequested()

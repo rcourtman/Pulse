@@ -227,6 +227,11 @@ plus a VM inventory definition route that own panel copy, stable column
 schema, and filename prefix. Storage and recovery flows may read those facts
 when they need fleet context, but they must not fork their own reporting or
 inventory column contract.
+That catalog route is intentionally metadata-readable without the
+`advanced_reporting` feature gate so locked admin reporting shells can stay on
+the same API-owned definition before upsell; storage- and recovery-adjacent
+surfaces must not treat that metadata visibility as permission to execute paid
+report/export routes.
 That same API-owned performance-report definition also governs transport-side
 validation and attachment naming. Storage and recovery flows may consume those
 downloads, but they must treat allowed formats, multi-resource caps, optional

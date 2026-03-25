@@ -499,6 +499,25 @@ func TestContract_PerformanceReportTransportUsesCatalogDefinition(t *testing.T) 
 	}
 }
 
+func TestContract_ReportingCatalogRouteAccessibleWithoutReportingFeature(t *testing.T) {
+	rawToken := "reporting-catalog-contract-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/reports/catalog", nil)
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for ungated reporting catalog route, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	if got := rec.Header().Get("Content-Type"); !strings.Contains(got, "application/json") {
+		t.Fatalf("expected json content type, got %q", got)
+	}
+}
+
 func TestContract_PerformanceReportTransportUsesCatalogDefaultRange(t *testing.T) {
 	engine := &stubReportingEngine{data: []byte("report"), contentType: "application/pdf"}
 	original := reporting.GetEngine()

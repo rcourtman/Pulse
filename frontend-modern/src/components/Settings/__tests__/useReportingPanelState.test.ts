@@ -66,6 +66,7 @@ const catalogPayload = {
 describe('useReportingPanelState', () => {
   let useReportingPanelState: UseReportingPanelStateModule['useReportingPanelState'];
   let apiFetchMock: ReturnType<typeof vi.fn>;
+  let hasReportingFeature: boolean;
   let loadLicenseStatusMock: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
@@ -74,6 +75,7 @@ describe('useReportingPanelState', () => {
     apiFetchMock = vi
       .fn()
       .mockResolvedValue(new Response(JSON.stringify(catalogPayload), { status: 200 }));
+    hasReportingFeature = true;
     loadLicenseStatusMock = vi.fn();
 
     vi.doMock('@/utils/apiClient', () => ({
@@ -96,7 +98,7 @@ describe('useReportingPanelState', () => {
     vi.doMock('@/stores/license', () => ({
       entitlements: vi.fn(() => ({ trial_eligible: true })),
       getUpgradeActionUrlOrFallback: vi.fn(() => '/pricing'),
-      hasFeature: vi.fn((feature: string) => feature === 'advanced_reporting'),
+      hasFeature: vi.fn((feature: string) => feature === 'advanced_reporting' && hasReportingFeature),
       licenseLoaded: vi.fn(() => true),
       loadLicenseStatus: loadLicenseStatusMock,
     }));
@@ -132,6 +134,19 @@ describe('useReportingPanelState', () => {
     expect(hookState.reportingCatalog()?.performanceReport.defaultFormat).toBe('csv');
     expect(hookState.format()).toBe('csv');
     expect(hookState.range()).toBe('7d');
+
+    dispose();
+  });
+
+  it('loads the reporting catalog even when the feature is locked', async () => {
+    hasReportingFeature = false;
+    const { hookState, dispose } = mountHook();
+
+    await flushAsync();
+    await flushAsync();
+
+    expect(apiFetchMock).toHaveBeenCalledWith('/api/admin/reports/catalog');
+    expect(hookState.reportingCatalog()?.title).toBe('Detailed Reporting');
 
     dispose();
   });

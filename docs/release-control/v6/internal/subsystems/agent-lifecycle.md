@@ -181,6 +181,11 @@ plus a VM inventory definition route that own panel copy, performance report
 options, export title, column schema, and filename prefixes. Lifecycle-
 adjacent install and fleet surfaces may read those facts, but they must not
 redefine reporting or inventory schema locally.
+That catalog route is intentionally metadata-readable without the
+`advanced_reporting` feature gate so locked admin reporting shells can stay on
+the same API-owned definition before upsell; lifecycle-adjacent surfaces must
+not treat that metadata visibility as permission to execute paid report/export
+routes.
 That same API-owned performance-report definition also governs transport-side
 validation and attachment naming. Lifecycle-adjacent fleet surfaces may depend
 on those downloads, but they must treat allowed formats, multi-resource caps,

@@ -181,7 +181,7 @@ func (r *Router) registerOrgLicenseRoutesGroup(orgHandlers *OrgHandlers, rbacHan
 		if !ensureAdminSession(r.config, w, req) {
 			return
 		}
-		RequireLicenseFeature(r.licenseHandlers, featureAdvancedReportingValue, RequireScope(config.ScopeSettingsRead, reportingAdminEndpoints.HandleGetReportingCatalog))(w, req)
+		RequireScope(config.ScopeSettingsRead, reportingAdminEndpoints.HandleGetReportingCatalog)(w, req)
 	}))
 	r.mux.HandleFunc("/api/admin/reports/generate", RequirePermission(r.config, r.authorizer, auth.ActionRead, auth.ResourceNodes, func(w http.ResponseWriter, req *http.Request) {
 		if !ensureAdminSession(r.config, w, req) {

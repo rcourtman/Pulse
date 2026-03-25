@@ -199,6 +199,9 @@ format/range selections from legacy frontend constants or invent fallback
 report endpoints, filename prefixes, or range windows when the catalog is
 present; the first valid selection and all request semantics must come from the
 parsed backend definition.
+That same settings shell must also read the reporting catalog for locked users,
+not just entitled users, so the paywalled reporting panel does not drift onto a
+separate frontend-owned title or description contract.
 The shared updates settings owner also defines the user-facing framing for
 rc-tagged builds. `frontend-modern/src/components/Settings/updatesSettingsModel.ts`
 and `frontend-modern/src/utils/updatesPresentation.ts` must present that
