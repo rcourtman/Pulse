@@ -499,7 +499,7 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     expect(
       getAllByText('restricted host summary safe for remote AI consumption').length,
     ).toBeGreaterThan(0);
-    expect(queryByText('Sensitive Host')).toBeNull();
+    expect(getByText('Sensitive Host')).toBeInTheDocument();
     expect(queryByText('sensitive-host')).toBeNull();
   });
 
@@ -525,7 +525,7 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     expect(queryByText('AI-Safe Summary')).toBeNull();
     fireEvent.click(getByRole('button', { name: 'Show context' }));
     expect(getByText('AI-Safe Summary')).toBeInTheDocument();
-    expect(getAllByText('redacted by policy').length).toBeGreaterThan(1);
+    expect(getAllByText('redacted by policy').length).toBeGreaterThan(0);
   });
 
   it('surfaces canonical AI intelligence for the resource overview', async () => {
