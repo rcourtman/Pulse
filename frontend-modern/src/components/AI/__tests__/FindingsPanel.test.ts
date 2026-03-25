@@ -165,6 +165,12 @@ describe('aiFindingPresentation', () => {
       expect(findingsPanelSource).not.toContain('Runs every');
       expect(findingsPanelSource).not.toContain('Next: ');
     });
+
+    it('keeps the findings card header functional instead of repeating product marketing copy', () => {
+      expect(findingsPanelSource).toContain('Patrol findings');
+      expect(findingsPanelSource).not.toContain('Pulse Patrol Findings');
+      expect(findingsPanelSource).not.toContain('AI-discovered insights');
+    });
   });
 
   describe('sourceColors', () => {
