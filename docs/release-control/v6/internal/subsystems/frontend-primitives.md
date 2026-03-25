@@ -196,7 +196,8 @@ That same backend-owned catalog also owns the initial reporting selections and
 transport details. `useReportingPanelState.ts`,
 `reportingPanelModel.ts`, and `reportingInventoryExportModel.ts` may not seed
 format/range selections from legacy frontend constants or invent fallback
-report endpoints, filename prefixes, or range windows when the catalog is
+report endpoints, filename prefixes, default report titles, or range windows
+when the catalog is
 present; the first valid selection and all request semantics must come from the
 parsed backend definition.
 That same settings shell must also read the reporting catalog for locked users,

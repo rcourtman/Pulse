@@ -407,8 +407,10 @@ Triggers a test alert to all configured channels.
   - Metadata route: readable without the `advanced_reporting` feature so locked admin surfaces can render the same reporting definition before upsell.
 - `GET /api/admin/reports/generate` (admin, `settings:read`)
   - Query params: `format` (pdf/csv, default `pdf`), `resourceType`, `resourceId`, `metricType` (optional), `start`/`end` (RFC3339, optional; defaults to last 24h), `title` (optional)
+  - If `title` is omitted, the backend applies the canonical default title for that resource report.
 - `POST /api/admin/reports/generate-multi` (admin, `settings:read`)
   - Body fields: `resources` (1-50 entries of `{resourceType,resourceId}`), `format`, `metricType` (optional), `start`/`end` (RFC3339, optional; defaults to last 24h), `title` (optional)
+  - If `title` is omitted, the backend applies the canonical default fleet report title.
 - `GET /api/admin/reports/inventory/vms/export` (admin, `settings:read`)
   - Query params: `format` (`csv` only; optional and defaults to `csv`)
   - Exports the current fleet-wide VM inventory as spreadsheet-friendly CSV using the canonical runtime model.

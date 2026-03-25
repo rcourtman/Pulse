@@ -243,7 +243,8 @@ emit unsupported metric-filter or custom-title fields from local assumptions.
 The same performance-report catalog definition also owns backend transport
 validation and download semantics. `internal/api/metrics_reporting_handlers.go`
 must derive allowed formats, default format selection, multi-resource limits,
-optional metric/title field emission, default fallback range window, and
+optional metric/title field emission, canonical default-title fallback,
+default fallback range window, and
 attachment filename prefixes from the canonical reporting definition instead of
 hardcoding a second local contract.
 That same catalog contract is also authoritative for frontend request builders:

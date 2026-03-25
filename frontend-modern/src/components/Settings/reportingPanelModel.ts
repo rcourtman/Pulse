@@ -45,14 +45,6 @@ export function getReportingRangeStart(
   return start;
 }
 
-export function buildSingleReportTitle(title: string, resourceName: string): string {
-  return title || `Pulse Report - ${resourceName}`;
-}
-
-export function buildFleetReportTitle(title: string): string {
-  return title || 'Pulse Fleet Report';
-}
-
 export function buildReportingFilename(
   format: ReportingFormat,
   resourceName: string | null,
@@ -92,11 +84,13 @@ export function buildReportingRequest(
       format: context.format,
       start: context.start,
       end: context.end,
-      title: buildSingleReportTitle(customTitle, resource.name),
     });
 
     if (metricType) {
       params.append('metricType', metricType);
+    }
+    if (customTitle) {
+      params.append('title', customTitle);
     }
 
     return {
@@ -122,7 +116,7 @@ export function buildReportingRequest(
           format: context.format,
           start: context.start,
           end: context.end,
-          title: buildFleetReportTitle(customTitle),
+          title: customTitle || undefined,
           metricType: metricType || undefined,
         }),
       },

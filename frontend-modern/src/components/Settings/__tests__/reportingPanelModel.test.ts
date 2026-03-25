@@ -72,7 +72,7 @@ describe('reporting panel model', () => {
     expect(request.request.url).toContain('resourceType=agent');
     expect(request.request.url).toContain('resourceId=agent-1');
     expect(request.request.url).toContain('metricType=cpu');
-    expect(request.request.url).toContain('title=Pulse+Report+-+node-a');
+    expect(request.request.url).not.toContain('title=');
   });
 
   it('builds a fleet reporting request body and filename', () => {
@@ -115,7 +115,6 @@ describe('reporting panel model', () => {
         format: 'csv',
         start: '2026-03-19T12:34:56.000Z',
         end: now.toISOString(),
-        title: 'Pulse Fleet Report',
         metricType: undefined,
       }),
     );
@@ -148,9 +147,32 @@ describe('reporting panel model', () => {
       },
     );
 
-    expect(request.request.url).toContain('title=Pulse+Report+-+vm-a');
+    expect(request.request.url).not.toContain('title=');
     expect(request.request.url).not.toContain('metricType=');
     expect(request.request.url).not.toContain('Custom+fleet+title');
+  });
+
+  it('passes through explicit custom titles without inventing defaults', () => {
+    const now = new Date('2026-03-20T12:34:56.000Z');
+    const resources: SelectedResource[] = [
+      {
+        id: 'vm-1',
+        type: 'vm',
+        name: 'vm-a',
+      },
+    ];
+
+    const request = buildReportingRequest({
+      end: now.toISOString(),
+      format: 'pdf',
+      metricType: '',
+      now,
+      resources,
+      start: '2026-03-19T12:34:56.000Z',
+      title: 'Custom report title',
+    }, performanceDefinition);
+
+    expect(request.request.url).toContain('title=Custom+report+title');
   });
 
   it('derives canonical range starts from the selected preset', () => {
