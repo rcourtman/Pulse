@@ -1,5 +1,5 @@
 name: Pulse Release Pipeline
-# Optimized: parallel jobs, fast RC path
+# Optimized: parallel jobs, fast prerelease path
 
 on:
   workflow_dispatch:
@@ -13,7 +13,7 @@ on:
         required: true
         type: string
       promoted_from_tag:
-        description: 'Stable only: RC tag being promoted (for example 6.0.0-rc.2)'
+        description: 'Stable only: prerelease tag being promoted (for example 6.0.0-rc.2)'
         required: false
         type: string
       rollback_version:
@@ -29,7 +29,7 @@ on:
         required: false
         type: string
       hotfix_exception:
-        description: 'Stable only: bypass the 72-hour RC soak for urgent customer harm'
+        description: 'Stable only: bypass the 72-hour prerelease soak for urgent customer harm'
         required: false
         type: boolean
         default: false
@@ -503,9 +503,9 @@ jobs:
             echo "- Promotion channel: ${{ needs.prepare.outputs.is_prerelease == 'true' && 'rc' || 'stable' }}"
             echo "- Candidate stable tag: ${{ needs.prepare.outputs.tag }}"
             if [ -n "${{ needs.prepare.outputs.promoted_from_tag }}" ]; then
-              echo "- Promoted RC tag: ${{ needs.prepare.outputs.promoted_from_tag }}"
+              echo "- Promoted prerelease tag: ${{ needs.prepare.outputs.promoted_from_tag }}"
             else
-              echo "- Promoted RC tag: n/a"
+              echo "- Promoted prerelease tag: n/a"
             fi
             echo "- Rollback target: ${{ needs.prepare.outputs.rollback_tag }}"
             echo "- Rollback command: \`${{ needs.prepare.outputs.rollback_command }}\`"

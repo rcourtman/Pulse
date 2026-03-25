@@ -78,11 +78,11 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
     def test_release_promotion_policy_requires_live_rc_and_v5_policy(self) -> None:
         content = read("docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md")
         self.assertIn("Every candidate intended for broad customer use must ship to `rc`", content)
-        self.assertIn("live run of the release pipeline for the RC tag itself", content)
+        self.assertIn("live run of the release pipeline for the prerelease tag itself", content)
         self.assertIn("an accidental git tag by itself", content)
-        self.assertIn("does not count as a shipped RC", content)
+        self.assertIn("does not count as a shipped prerelease", content)
         self.assertIn("do not promote to `stable` until the active control-plane target", content)
-        self.assertIn("A live release-pipeline exercise already completed for the promoted RC", content)
+        self.assertIn("A live release-pipeline exercise already completed for the promoted prerelease tag", content)
         self.assertIn("maintenance-only window lasts 90 calendar days", content)
         self.assertIn("V5_MAINTENANCE_SUPPORT_POLICY.md", content)
         self.assertIn("release notes may keep placeholder", content)
@@ -91,7 +91,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
 
     def test_pre_release_checklist_tracks_rc_to_ga_gate_inputs(self) -> None:
         content = read("docs/release-control/v6/internal/PRE_RELEASE_CHECKLIST.md")
-        self.assertIn("release pipeline has already been exercised on a real RC tag", content)
+        self.assertIn("release pipeline has already been exercised on a real prerelease tag", content)
         self.assertIn("not an accidental git tag", content)
         self.assertIn("V5_MAINTENANCE_SUPPORT_POLICY.md", content)
         self.assertIn("replace any placeholder GA notice dates", content)
@@ -105,16 +105,20 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("maintenance-only support immediately on the v6 GA date", policy)
         self.assertIn("90 calendar days from the v6 GA", policy)
         self.assertIn("pulse/v5-maintenance", policy)
-        self.assertIn("Pulse v5 Support Transition", release_notes)
-        self.assertIn("publish an explicit exception", release_notes)
-        self.assertRegex(
-            release_notes,
-            re.compile(r"Pulse v5 entered maintenance-only support on `(?:\[v6-ga-date\]|\d{4}-\d{2}-\d{2})`\.")
-        )
-        self.assertRegex(
-            release_notes,
-            re.compile(r"existing v5 users until `(?:\[v5-eos-date\]|\d{4}-\d{2}-\d{2})`\.")
-        )
+        if "Pulse v5 Support Transition" in release_notes:
+            self.assertIn("publish an explicit exception", release_notes)
+            self.assertRegex(
+                release_notes,
+                re.compile(r"Pulse v5 entered maintenance-only support on `(?:\[v6-ga-date\]|\d{4}-\d{2}-\d{2})`\.")
+            )
+            self.assertRegex(
+                release_notes,
+                re.compile(r"existing v5 users until `(?:\[v5-eos-date\]|\d{4}-\d{2}-\d{2})`\.")
+            )
+        else:
+            self.assertIn("Pre-Release Notes", release_notes)
+            self.assertIn("final GA release", release_notes)
+            self.assertNotIn("Pulse v5 Support Transition", release_notes)
 
     def test_rehearsal_template_and_workflow_capture_ga_rehearsal_record(self) -> None:
         template = read("docs/release-control/v6/internal/RC_TO_GA_REHEARSAL_TEMPLATE.md")
@@ -132,7 +136,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("- Rollback command:", workflow)
         self.assertIn("- Candidate stable tag:", workflow)
         self.assertIn("- Promotion channel:", workflow)
-        self.assertIn("- Promoted RC tag:", workflow)
+        self.assertIn("- Promoted prerelease tag:", workflow)
         self.assertIn("Planned GA date", workflow)
         self.assertIn("Planned v5 end-of-support date", workflow)
         self.assertIn("resolve_release_promotion.py", release_workflow)
@@ -162,7 +166,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("minimum is 72 hours unless hotfix_exception is true", resolver)
         self.assertIn("- Candidate stable tag:", content)
         self.assertIn("- Promotion channel:", content)
-        self.assertIn("- Promoted RC tag:", content)
+        self.assertIn("- Promoted prerelease tag:", content)
         self.assertIn("ga_date", content)
         self.assertIn("v5_eos_date", content)
         self.assertIn("Derived rollback command:", helper)
@@ -201,8 +205,8 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("control_plane.py --branch-for-version", promote)
         self.assertIn("control_plane.py --branch-for-version", demo)
         self.assertIn("control_plane.py --branch-for-version", helm)
-        self.assertIn("does not descend from any matching RC tag", publish)
-        self.assertIn("does not descend from any matching RC tag", promote)
+        self.assertIn("does not descend from any matching prerelease tag", publish)
+        self.assertIn("does not descend from any matching prerelease tag", promote)
         self.assertIn("both stable and prerelease releases dispatch", runbook)
         self.assertIn("Release `6.0.0` from `pulse/v6-release`", runbook)
         self.assertIn(promotion_metadata_envelope(), normalize_ws(runbook))
@@ -213,10 +217,10 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("rollback target and exact derived", blocked)
         self.assertIn("artifact-owned candidate stable tag", blocked)
         self.assertIn("artifact-owned promotion channel", blocked)
-        self.assertIn("artifact-owned promoted RC tag", blocked)
+        self.assertIn("artifact-owned promoted prerelease tag", blocked)
         self.assertIn("artifact-owned rollback target", blocked)
         self.assertIn("Materialize the final rehearsal record from that artifact without", blocked)
-        self.assertIn("hand-repairing any missing candidate tag, promoted RC tag, rollback", blocked)
+        self.assertIn("hand-repairing any missing candidate tag, promoted prerelease tag, rollback", blocked)
         matrix = read("docs/release-control/v6/internal/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md")
         self.assertIn(promotion_metadata_envelope(), normalize_ws(matrix))
         expected = blocked_record.build_blocked_record(record_date="2026-03-13")

@@ -135,7 +135,7 @@ git pull --ff-only
    instead of returning an opaque 422 from `gh workflow run`.
    The governed `Release Dry Run` must still carry:
    - `version`: `6.0.0`
-   - `promoted_from_tag`: exact RC tag being promoted
+   - `promoted_from_tag`: exact prerelease tag being promoted
    - `rollback_version`: prior stable
    - `ga_date`: exact published v6 GA date
    - `v5_eos_date`: exact published v5 end-of-support date
@@ -143,7 +143,7 @@ git pull --ff-only
    Attach the `rc-to-ga-rehearsal-summary` artifact and run URL to the release
    ticket, and confirm the artifact carries the canonical promotion metadata
    envelope for that candidate: candidate stable tag, promotion channel,
-   promoted RC tag, rollback target, exact rollback command, planned GA date,
+   promoted prerelease tag, rollback target, exact rollback command, planned GA date,
    and planned v5 end-of-support date.
 
 4. Publish the exact v6 GA date and v5 end-of-support date in the GA release

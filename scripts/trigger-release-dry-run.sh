@@ -102,23 +102,23 @@ if [ "$IS_PRERELEASE" != "true" ]; then
   DEFAULT_PROMOTED_FROM_TAG=$(git tag -l "v${VERSION}-rc.*" --sort=-version:refname | head -1 || true)
   echo ""
   if [ -n "$DEFAULT_PROMOTED_FROM_TAG" ]; then
-    read -r -p "Promoted RC tag [${DEFAULT_PROMOTED_FROM_TAG}]: " PROMOTED_FROM_TAG
+    read -r -p "Promoted prerelease tag [${DEFAULT_PROMOTED_FROM_TAG}]: " PROMOTED_FROM_TAG
     PROMOTED_FROM_TAG="${PROMOTED_FROM_TAG:-$DEFAULT_PROMOTED_FROM_TAG}"
   else
-    read -r -p "Promoted RC tag (for example v${VERSION}-rc.2): " PROMOTED_FROM_TAG
+    read -r -p "Promoted prerelease tag (for example v${VERSION}-rc.2): " PROMOTED_FROM_TAG
   fi
   if [ -z "$PROMOTED_FROM_TAG" ]; then
-    echo "❌ Error: promoted RC tag is required for stable rehearsals"
+    echo "❌ Error: promoted prerelease tag is required for stable rehearsals"
     exit 1
   fi
 
   echo ""
-  read -r -p "Hotfix exception to bypass 72-hour RC soak? [y/N] " HOTFIX_REPLY
+  read -r -p "Hotfix exception to bypass 72-hour prerelease soak? [y/N] " HOTFIX_REPLY
   if [[ "$HOTFIX_REPLY" =~ ^[Yy]$ ]]; then
     HOTFIX_EXCEPTION="true"
     read -r -p "Hotfix reason: " HOTFIX_REASON
     if [ -z "$HOTFIX_REASON" ]; then
-      echo "❌ Error: hotfix reason is required when bypassing RC soak"
+      echo "❌ Error: hotfix reason is required when bypassing prerelease soak"
       exit 1
     fi
   fi

@@ -79,7 +79,7 @@ This file must not contain:
    Per-subsystem contracts: truth, extension points, forbidden paths, and
    completion obligations.
 11. `docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md`
-   Canonical stable-versus-RC promotion rules, rollout criteria, and rollback
+   Canonical stable-versus-prerelease promotion rules, rollout criteria, and rollback
    expectations for v6 and later release lines.
 12. `docs/release-control/v6/internal/V5_MAINTENANCE_SUPPORT_POLICY.md`
    Canonical v5 maintenance-only support policy, release-line rules, and GA
@@ -309,7 +309,7 @@ Assertion design rules:
     header chrome, or section treatment without explicit justification.
 13. Do not keep polishing strong lanes while weak lanes remain behind.
 14. Do not treat `status.json` lane scores reaching target as sufficient release approval by themselves; open operational decisions, machine-derived unresolved readiness assertions, and unresolved release gates still apply.
-15. Do not promote v6 to stable or GA without an exercised RC, a real
+15. Do not promote v6 to stable or GA without an exercised prerelease, a real
     release-pipeline proof run, a recorded rollback target plus exact
     reinstall command, and a written v5 maintenance-only support policy.
 16. Do not declare a lane or blocker complete just because the first passing

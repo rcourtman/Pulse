@@ -128,7 +128,7 @@ on:
             ),
             patch(
                 "release_promotion_policy_support.read_repo_text",
-                return_value="# Pulse v6 RC-to-GA Rehearsal Record\n",
+                return_value="# Pulse v6 Prerelease-to-GA Rehearsal Record\n",
             ) as read_repo_text,
         ):
             self.assertEqual(
@@ -154,7 +154,7 @@ on:
             "release_promotion_policy_support.read_repo_text",
             side_effect=[
                 "# Pulse v6 Pre-Release Checklist\n- rc-to-ga-rehearsal-summary\n",
-                "# Pulse v6 RC-to-GA Rehearsal Record\n",
+                "# Pulse v6 Prerelease-to-GA Rehearsal Record\n",
             ],
         ):
             self.assertEqual(

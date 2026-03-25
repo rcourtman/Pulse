@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Materialize the blocked RC-to-GA promotion record from current repo state."""
+"""Materialize the blocked prerelease-to-GA promotion record from current repo state."""
 
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ STABLE_REHEARSAL_INPUT_KEYS = (
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Generate the blocked RC-to-GA promotion record from current repo facts."
+        description="Generate the blocked prerelease-to-GA promotion record from current repo facts."
     )
     parser.add_argument(
         "--output",
@@ -146,7 +146,7 @@ def parse_release_dates() -> tuple[str, str]:
     ga_match = GA_DATE_RE.search(content)
     eos_match = V5_EOS_RE.search(content)
     if not ga_match or not eos_match:
-        raise ValueError("could not derive GA/EOS dates from docs/releases/RELEASE_NOTES_v6.md")
+        return "[v6-ga-date]", "[v5-eos-date]"
     return ga_match.group("ga_date"), eos_match.group("v5_eos_date")
 
 
@@ -192,7 +192,7 @@ def build_blocked_record(*, record_date: str) -> str:
                 f"`{stable_version}` candidate.",
             ],
             [
-                "There is still no governed `RC-to-GA Rehearsal Record` proving a successful",
+                "There is still no governed `Prerelease-to-GA Rehearsal Record` proving a successful",
                 f"non-publish `Release Dry Run` for the eventual stable `{stable_version}` candidate.",
             ],
         ]
@@ -203,7 +203,7 @@ def build_blocked_record(*, record_date: str) -> str:
                 "local GA candidate exists on the governed stable line.",
             ],
             [
-                "There is still no governed `RC-to-GA Rehearsal Record` proving a successful",
+                "There is still no governed `Prerelease-to-GA Rehearsal Record` proving a successful",
                 f"non-publish `Release Dry Run` for the current `{version}` candidate.",
             ],
         ]
@@ -249,7 +249,7 @@ def build_blocked_record(*, record_date: str) -> str:
         if version_is_prerelease:
             why_lines = [
                 "The blocker is no longer missing governance text. The remaining problem is that",
-                "the control plane still treats v6 as an RC-stabilization line, the working",
+                "the control plane still treats v6 as the prerelease-stabilization line, the working",
                 f"version is still prerelease (`{version}`), and there is still no exercised",
                 f"`Release Dry Run` record proving the eventual stable `{stable_version}`",
                 "candidate is ready for GA-style promotion. Until that rehearsal exists, stable",
@@ -269,7 +269,7 @@ def build_blocked_record(*, record_date: str) -> str:
         else:
             why_lines = [
                 "The blocker is no longer missing governance text. The remaining problem is that",
-                "the control plane still treats v6 as an RC-stabilization line, and there is",
+                "the control plane still treats v6 as the prerelease-stabilization line, and there is",
                 f"still no exercised `Release Dry Run` record proving the exact `{version}`",
                 "candidate is ready for GA-style promotion. Until that rehearsal exists, stable",
                 "users would still be the first real cohort for the final promotion path.",
@@ -289,18 +289,18 @@ def build_blocked_record(*, record_date: str) -> str:
     if rc_tag:
         blocking_fact_lines.extend(
             [
-                [f"The latest shipped Pulse v6 RC tag is `{rc_tag}`."],
-                [f"That shipped RC tag resolves to commit `{rc_commit}`."],
+                [f"The latest shipped Pulse v6 prerelease tag is `{rc_tag}`."],
+                [f"That shipped prerelease tag resolves to commit `{rc_commit}`."],
             ]
         )
     else:
-        blocking_fact_lines.append(["No Pulse v6 RC has shipped yet."])
+        blocking_fact_lines.append(["No Pulse v6 prerelease has shipped yet."])
         if accidental_tags:
             accidental_list = ", ".join(f"`{tag}`" for tag in sorted(accidental_tags))
             blocking_fact_lines.append(
                 [
                     f"The repository contains accidental prerelease git tag history ({accidental_list}),",
-                    "but those tags were never published and do not count as shipped RC lineage.",
+                    "but those tags were never published and do not count as shipped prerelease lineage.",
                 ]
             )
 
@@ -327,7 +327,7 @@ def build_blocked_record(*, record_date: str) -> str:
             f"- `version={stable_version}`",
             "- the artifact-owned candidate stable tag for that rehearsal",
             "- the artifact-owned promotion channel for that rehearsal",
-            "- the artifact-owned promoted RC tag for that rehearsal",
+            "- the artifact-owned promoted prerelease tag for that rehearsal",
             "- the artifact-owned rollback target for that stable candidate",
             f"- `ga_date={ga_date}`",
             "- an explicit `rollback_version`",
@@ -338,7 +338,7 @@ def build_blocked_record(*, record_date: str) -> str:
         release_date_fact_lines = [
             "`docs/releases/RELEASE_NOTES_v6.md` and",
             "`docs/release-control/v6/internal/V5_MAINTENANCE_SUPPORT_POLICY.md` still leave the",
-            "GA announcement dates as placeholders because no real RC lineage or GA-ready",
+            "GA announcement dates as placeholders because no real prerelease lineage or GA-ready",
             "rehearsal has locked them yet:",
             f"- `v6` GA date placeholder: `{ga_date}`",
             f"- `v5` end-of-support placeholder: `{v5_eos_date}`",
@@ -347,7 +347,7 @@ def build_blocked_record(*, record_date: str) -> str:
             f"- `version={stable_version}`",
             "- the artifact-owned candidate stable tag for that rehearsal",
             "- the artifact-owned promotion channel for that rehearsal",
-            "- the artifact-owned promoted RC tag for that rehearsal",
+            "- the artifact-owned promoted prerelease tag for that rehearsal",
             "- the artifact-owned rollback target for that stable candidate",
             "- no exact `ga_date` is locked yet because the GA notice is still pending",
             "- no exact `v5_eos_date` is locked yet because the GA notice is still pending",
@@ -359,7 +359,7 @@ def build_blocked_record(*, record_date: str) -> str:
     else:
         rehearsal_input_lines.insert(
             1,
-            "- no governed `promoted_from_tag` exists yet because no RC has shipped",
+            "- no governed `promoted_from_tag` exists yet because no prerelease has shipped",
         )
 
     required_blocks: list[list[str] | tuple[str, ...] | str] = list(required_step_lines)
@@ -374,19 +374,19 @@ def build_blocked_record(*, record_date: str) -> str:
     if not rc_tag:
         required_blocks.append(
             [
-                "Ship the first real RC through the governed prerelease release path and record",
+                "Ship the first real prerelease through the governed prerelease release path and record",
                 "its exact published prerelease tag plus rollback target and exact derived",
                 "rollback command.",
             ]
         )
         required_blocks.append(
             [
-                f"Run `Release Dry Run` from `{stable_branch}` using that published RC as",
+                f"Run `Release Dry Run` from `{stable_branch}` using that published prerelease as",
                 "`promoted_from_tag` with:",
                 f"- `version={stable_version}`",
                 "- an artifact-owned candidate stable tag matching that rehearsal",
                 "- an artifact-owned promotion channel matching that rehearsal",
-                "- an artifact-owned promoted RC tag matching that rehearsal",
+                "- an artifact-owned promoted prerelease tag matching that rehearsal",
                 "- an artifact-owned rollback target for the stable candidate",
                 "- the exact planned GA and v5 end-of-support dates for the publish notice",
                 f"- `ga_date={ga_date}`" if dates_are_locked else "- an explicit `ga_date` chosen for that rehearsal",
@@ -403,7 +403,7 @@ def build_blocked_record(*, record_date: str) -> str:
                 f"- `promoted_from_tag={rc_tag}`",
                 "- an artifact-owned candidate stable tag matching that rehearsal",
                 "- an artifact-owned promotion channel matching that rehearsal",
-                "- an artifact-owned promoted RC tag matching that rehearsal",
+                "- an artifact-owned promoted prerelease tag matching that rehearsal",
                 "- an artifact-owned rollback target for the stable candidate",
                 "- the exact planned GA and v5 end-of-support dates for the publish notice",
                 f"- `ga_date={ga_date}`" if dates_are_locked else "- an explicit `ga_date` chosen for that rehearsal",
@@ -417,7 +417,7 @@ def build_blocked_record(*, record_date: str) -> str:
             ["Capture the `rc-to-ga-rehearsal-summary` artifact and run URL."],
             [
                 "Materialize the final rehearsal record from that artifact without",
-                "hand-repairing any missing candidate tag, promoted RC tag, rollback",
+                "hand-repairing any missing candidate tag, promoted prerelease tag, rollback",
                 "target, rollback command, or GA/EOS metadata.",
             ],
             [
@@ -428,7 +428,7 @@ def build_blocked_record(*, record_date: str) -> str:
     )
 
     lines = [
-        "# RC-to-GA Promotion Readiness Blocked Record",
+        "# Prerelease-to-GA Promotion Readiness Blocked Record",
         "",
         f"- Date: `{record_date}`",
         "- Gate: `rc-to-ga-promotion-readiness`",

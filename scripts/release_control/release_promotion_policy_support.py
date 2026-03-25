@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Shared helpers for RC-to-GA promotion proof governance."""
+"""Shared helpers for prerelease-to-GA promotion proof governance."""
 
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ REQUIRED_STAGED_GOVERNANCE_INPUTS: tuple[str, ...] = (
 PROMOTION_METADATA_FIELDS: tuple[tuple[str, str], ...] = (
     ("tag", "candidate stable tag"),
     ("channel_under_rehearsal", "promotion channel"),
-    ("promoted_from_rc", "promoted RC tag"),
+    ("promoted_from_rc", "promoted prerelease tag"),
     ("rollback_target", "rollback target"),
     ("rollback_command", "exact rollback command"),
     ("planned_ga_date", "planned GA date"),
@@ -194,7 +194,7 @@ def staged_governance_input_errors(*, use_staged_governance: bool) -> list[str]:
         if (
             "Exact rollback or reinstall command" not in template
             or "rc-to-ga-rehearsal-summary" not in template
-            or "promotion channel, promoted RC tag, rollback target, exact rollback command" not in template
+            or "promotion channel, promoted prerelease tag, rollback target, exact rollback command" not in template
         ):
             errors.append(
                 "stage the updated docs/release-control/v6/internal/RC_TO_GA_REHEARSAL_TEMPLATE.md "

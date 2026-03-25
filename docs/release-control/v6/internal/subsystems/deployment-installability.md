@@ -40,6 +40,10 @@ server-side update execution surfaces.
 18. `scripts/dev-launchd-setup.sh`
 19. `scripts/dev-launchd-wrapper.sh`
 20. `scripts/com.pulse.hot-dev.plist.template`
+21. `.github/workflows/create-release.yml`
+22. `.github/workflows/release-dry-run.yml`
+23. `.github/workflows/publish-docker.yml`
+24. `.github/workflows/promote-floating-tags.yml`
 
 ## Shared Boundaries
 
@@ -55,6 +59,7 @@ server-side update execution surfaces.
 3. Add or change shell installer, Windows installer, container-agent installer, or auto-update script behavior through `scripts/install.sh`, `scripts/install.ps1`, `scripts/install-container-agent.sh`, and `scripts/pulse-auto-update.sh`
 4. Add or change server update transport through `internal/api/updates.go` and `frontend-modern/src/api/updates.ts`
 5. Add or change local dev-runtime orchestration, managed ownership, browser-runtime proof wiring, frontend/backend coherence diagnostics, canonical developer entry wrappers, or dev-runtime helper control surfaces through `scripts/hot-dev.sh`, `scripts/hot-dev-bg.sh`, `tests/integration/scripts/managed-dev-runtime.mjs`, `package.json`, `frontend-modern/package.json`, `scripts/dev-check.sh`, `scripts/toggle-mock.sh`, `scripts/clean-mock-alerts.sh`, `scripts/dev-launchd-setup.sh`, `scripts/dev-launchd-wrapper.sh`, and `scripts/com.pulse.hot-dev.plist.template`
+6. Add or change governed release-promotion workflow inputs, operator-facing promotion metadata, prerelease lineage enforcement, or stable-promotion rehearsal summaries through `.github/workflows/create-release.yml`, `.github/workflows/release-dry-run.yml`, `.github/workflows/publish-docker.yml`, and `.github/workflows/promote-floating-tags.yml`
 
 ## Forbidden Paths
 
@@ -97,10 +102,15 @@ contract rather than depending on whichever local ldflags string happened to be
 updated last.
 The same governed promotion path must now stay explicit too:
 `scripts/release_control/resolve_release_promotion.py` is the canonical owner
-for stable-versus-RC metadata validation shared by `.github/workflows/release-dry-run.yml`
+for stable-versus-prerelease metadata validation shared by `.github/workflows/release-dry-run.yml`
 and `.github/workflows/create-release.yml`. Promotion rollback targets, promoted
 RC lineage, soak checks, and GA/v5 notice metadata may not drift between those
 two workflows through duplicated inline shell validation.
+Those same governed release workflows also own the operator-facing wording for
+that promotion metadata. Human-visible workflow inputs, summaries, and error
+messages must describe the path as a prerelease or preview flow rather than
+implying a near-ready release candidate, while machine-owned identifiers such
+as `rc`, `rc-to-ga-*`, and `v6.0.0-rc.1` remain the canonical internal keys.
 Those same workflows must also fetch and dispatch the governed release branch
 derived from release-control metadata instead of hardcoding `pulse/v6`,
 `pulse/v6-release`, or any later branch literal inline.

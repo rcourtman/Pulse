@@ -8,7 +8,7 @@ on:
         required: false
         type: string
       promoted_from_tag:
-        description: 'Stable rehearsal only: RC tag being promoted (for example v6.0.0-rc.2)'
+        description: 'Stable rehearsal only: prerelease tag being promoted (for example v6.0.0-rc.2)'
         required: false
         type: string
       rollback_version:
@@ -24,7 +24,7 @@ on:
         required: false
         type: string
       hotfix_exception:
-        description: 'Stable rehearsal only: bypass 72-hour RC soak for urgent customer harm'
+        description: 'Stable rehearsal only: bypass 72-hour prerelease soak for urgent customer harm'
         required: false
         type: boolean
         default: false
@@ -256,7 +256,7 @@ jobs:
           SUMMARY_FILE="release-dry-run/rc-to-ga-rehearsal-summary.md"
           RUN_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           {
-            echo "# RC-to-GA Rehearsal Summary"
+            echo "# Prerelease-to-GA Rehearsal Summary"
             echo ""
             echo "- Workflow run: ${RUN_URL}"
             echo "- Branch: ${GITHUB_REF_NAME}"
@@ -264,7 +264,7 @@ jobs:
             echo "- Candidate stable tag: ${{ steps.rehearsal.outputs.tag }}"
             echo "- Promotion channel: ${{ steps.rehearsal.outputs.is_prerelease == 'true' && 'rc' || 'stable' }}"
             if [ -n "${{ steps.rehearsal.outputs.promoted_from_tag }}" ]; then
-              echo "- Promoted RC tag: ${{ steps.rehearsal.outputs.promoted_from_tag }}"
+              echo "- Promoted prerelease tag: ${{ steps.rehearsal.outputs.promoted_from_tag }}"
             fi
             if [ -n "${{ steps.rehearsal.outputs.rollback_tag }}" ]; then
               echo "- Rollback target: ${{ steps.rehearsal.outputs.rollback_tag }}"

@@ -72,7 +72,7 @@ def tag_created_unix(tag: str) -> int:
     )
     value = result.stdout.strip().splitlines()
     if not value or not value[0].strip():
-        raise ValueError(f"Could not determine creation time for promoted RC tag {tag}.")
+        raise ValueError(f"Could not determine creation time for promoted prerelease tag {tag}.")
     return int(value[0].strip())
 
 
@@ -125,11 +125,11 @@ def resolve_metadata(
         promoted_from_tag = normalize_tag(promoted_from_tag_input)
         if not promoted_from_tag:
             raise ValueError(
-                "Stable promotion requires promoted_from_tag naming the RC being promoted."
+                "Stable promotion requires promoted_from_tag naming the prerelease being promoted."
             )
         if not re.match(rf"^v{re.escape(version)}-rc\.\d+$", promoted_from_tag):
             raise ValueError(
-                f"promoted_from_tag must reference an RC tag for the same stable version ({version}), got {promoted_from_tag}."
+                f"promoted_from_tag must reference a prerelease tag for the same stable version ({version}), got {promoted_from_tag}."
             )
         if not tag_exists_fn(promoted_from_tag):
             raise ValueError(
@@ -139,7 +139,7 @@ def resolve_metadata(
         promoted_commit = tag_commit_fn(promoted_from_tag)
         if not head_descends_from_fn(promoted_commit):
             raise ValueError(
-                f"Stable promotion {tag} must descend from promoted RC tag {promoted_from_tag}."
+                f"Stable promotion {tag} must descend from promoted prerelease tag {promoted_from_tag}."
             )
 
         promoted_tag_ts = tag_created_unix_fn(promoted_from_tag)

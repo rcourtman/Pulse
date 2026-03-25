@@ -14,7 +14,7 @@ The evergreen control-plane files live one level up:
 1. `../CONTROL_PLANE.md` (evergreen governance, active-profile selection, and active-target rules)
 2. `../control_plane.json` (machine-readable active profile and active target)
 3. `internal/SOURCE_OF_TRUTH.md` (stable human governance, readiness-assertion design rules, and locked decisions)
-4. `internal/RELEASE_PROMOTION_POLICY.md` (canonical stable-versus-RC promotion rules, rollout criteria, and rollback expectations)
+4. `internal/RELEASE_PROMOTION_POLICY.md` (canonical stable-versus-prerelease promotion rules, rollout criteria, and rollback expectations)
 5. `internal/status.json` (live lane state, coverage-gap discovery records, readiness derivation rules, the active readiness assertion catalog, lane-to-subsystem ownership, structured evidence references, typed lane/subsystem decision records, and canonical ordered lists)
 6. `status.schema.json` (machine-readable contract for the `status.json` shape)
 7. `internal/subsystems/registry.json` (machine-readable subsystem ownership, explicit shared-ownership exceptions, and proof routing)
@@ -22,7 +22,7 @@ The evergreen control-plane files live one level up:
 
 `status.json` reporting every lane as `target-met` means the tracked v6
 repo-hardening work is at target. It does not, by itself, mean Pulse v6 is
-ready to cut an RC or approve stable/GA while phase-blocking
+ready to cut a prerelease or approve stable/GA while phase-blocking
 `readiness_assertions`, `open_decisions`, or `release_gates` remain unresolved.
 Use `python3 scripts/release_control/status_audit.py --pretty` for the current
 derived `repo_ready`, `rc_ready`, and `release_ready` summary.
@@ -62,7 +62,7 @@ Supporting governance file:
 - `CONSOLIDATION_MAP.md` (legacy-doc demotion and archival map)
 - `RETIREMENT_AUDIT_2026-02-27.md` (file-by-file audited retirement decisions)
 - `internal/CANONICAL_DEVELOPMENT_PROTOCOL.md` (canonical subsystem development protocol)
-- `internal/RELEASE_PROMOTION_POLICY.md` (customer-facing release-train contract for `stable` versus `rc`)
+- `internal/RELEASE_PROMOTION_POLICY.md` (customer-facing release-train contract for `stable` versus the prerelease `rc` channel)
 - `internal/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md` (manual verification runbook for trust-critical release gates)
 - `internal/RC_TO_GA_REHEARSAL_TEMPLATE.md` (human record template for the non-publish GA rehearsal run)
 - `internal/subsystems/*.md` (per-subsystem contracts: truth, shared boundaries, extension points, forbidden paths, completion obligations)

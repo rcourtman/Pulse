@@ -80,7 +80,7 @@ jobs:
             BASE_VERSION="${BASE_VERSION%%-*}"
             mapfile -t RC_TAGS < <(git tag -l "v${BASE_VERSION}-rc.*" --sort=-version:refname)
             if [ "${#RC_TAGS[@]}" -eq 0 ]; then
-              echo "::error::Stable tag ${TAG} has no matching RC tags for base version ${BASE_VERSION}."
+              echo "::error::Stable tag ${TAG} has no matching prerelease tags for base version ${BASE_VERSION}."
               exit 1
             fi
 
@@ -94,7 +94,7 @@ jobs:
             done
 
             if [ -z "$MATCHED_RC" ]; then
-              echo "::error::Stable tag ${TAG} does not descend from any matching RC tag for base version ${BASE_VERSION}."
+              echo "::error::Stable tag ${TAG} does not descend from any matching prerelease tag for base version ${BASE_VERSION}."
               exit 1
             fi
 
