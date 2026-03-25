@@ -191,3 +191,10 @@ legacy aliases such as `rrd-available`, `rrd-data`, `node-status-available`,
 `calculated`, and `listing` must normalize onto the governed canonical labels
 before snapshots are returned to diagnostics consumers, not only when new
 snapshots are first recorded.
+Node disk-source selection now also routes through one canonical resolver
+under `internal/monitoring/`. When a Proxmox node has a linked Pulse host
+agent, the node summary must prefer the linked host's canonical disk view over
+Proxmox `rootfs` bytes because dataset-level `rootfs` can materially
+under-report ZFS-backed node capacity and usage. Proxmox `rootfs` and `/nodes`
+disk values remain fallback sources only when no linked host disk truth is
+available.

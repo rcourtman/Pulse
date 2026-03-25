@@ -42,12 +42,6 @@ func (m *Monitor) pollPVENode(
 			Free:  int64(node.MaxMem - node.Mem),
 			Usage: safePercentage(float64(node.Mem), float64(node.MaxMem)),
 		},
-		Disk: models.Disk{
-			Total: int64(node.MaxDisk),
-			Used:  int64(node.Disk),
-			Free:  int64(node.MaxDisk - node.Disk),
-			Usage: safePercentage(float64(node.Disk), float64(node.MaxDisk)),
-		},
 		Uptime:                       int64(node.Uptime),
 		LoadAverage:                  []float64{},
 		LastSeen:                     time.Now(),
@@ -56,6 +50,7 @@ func (m *Monitor) pollPVENode(
 		ClusterName:                  instanceCfg.ClusterName,
 		TemperatureMonitoringEnabled: instanceCfg.TemperatureMonitoringEnabled,
 	}
+	modelNode.Disk, _ = m.resolveNodeDisk(instanceName, nodeID, node.Node, node, nil)
 
 	nodeSnapshotRaw := NodeMemoryRaw{
 		Total:               node.MaxMem,
@@ -138,31 +133,9 @@ func (m *Monitor) pollPVENode(
 			modelNode.KernelVersion = nodeInfo.KernelVersion
 			modelNode.PVEVersion = nodeInfo.PVEVersion
 
-			// Prefer rootfs data for more accurate disk metrics, but ensure we have valid fallback
-			if nodeInfo.RootFS != nil && nodeInfo.RootFS.Total > 0 {
-				modelNode.Disk = models.Disk{
-					Total: int64(nodeInfo.RootFS.Total),
-					Used:  int64(nodeInfo.RootFS.Used),
-					Free:  int64(nodeInfo.RootFS.Free),
-					Usage: safePercentage(float64(nodeInfo.RootFS.Used), float64(nodeInfo.RootFS.Total)),
-				}
-				log.Debug().
-					Str("node", node.Node).
-					Uint64("rootfsUsed", nodeInfo.RootFS.Used).
-					Uint64("rootfsTotal", nodeInfo.RootFS.Total).
-					Float64("rootfsUsage", modelNode.Disk.Usage).
-					Msg("Using rootfs for disk metrics")
-			} else if node.Disk > 0 && node.MaxDisk > 0 {
-				// RootFS unavailable but we have valid disk data from /nodes endpoint
-				// Keep the values we already set from the nodes list
-				log.Debug().
-					Str("node", node.Node).
-					Bool("rootfsNil", nodeInfo.RootFS == nil).
-					Uint64("fallbackDisk", node.Disk).
-					Uint64("fallbackMaxDisk", node.MaxDisk).
-					Msg("RootFS data unavailable - using /nodes endpoint disk metrics")
+			if resolvedDisk, diskSource := m.resolveNodeDisk(instanceName, nodeID, node.Node, node, nodeInfo); diskSource != "" {
+				modelNode.Disk = resolvedDisk
 			} else {
-				// Neither rootfs nor valid node disk data available
 				log.Warn().
 					Str("node", node.Node).
 					Bool("rootfsNil", nodeInfo.RootFS == nil).

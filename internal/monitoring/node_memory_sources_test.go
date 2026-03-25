@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 )
 
@@ -97,5 +98,91 @@ func TestResolveNodeMemoryCharacterization(t *testing.T) {
 				t.Fatalf("raw.ProxmoxMemorySource = %q, want %q", raw.ProxmoxMemorySource, tt.wantRawSource)
 			}
 		})
+	}
+}
+
+func TestPollPVENodePrefersLinkedHostDiskOverRootFS(t *testing.T) {
+	mon := newTestPVEMonitor("test")
+	defer mon.alertManager.Stop()
+	defer mon.notificationMgr.Stop()
+
+	mon.state.UpsertHost(models.Host{
+		ID:       "host-1",
+		Hostname: "ebringa",
+		Status:   "online",
+		Disks: []models.Disk{
+			{Mountpoint: "/", Type: "zfs", Total: 975, Used: 410, Free: 565, Usage: 42.0512820513},
+		},
+	})
+	mon.state.UpdateNodesForInstance("test", []models.Node{
+		{
+			ID:            "test-ebringa",
+			Name:          "ebringa",
+			Instance:      "test",
+			LinkedAgentID: "host-1",
+		},
+	})
+
+	client := &stubPVEClient{
+		nodeStatus: &proxmox.NodeStatus{
+			RootFS: &proxmox.RootFS{
+				Total: 975,
+				Used:  3,
+				Free:  972,
+			},
+		},
+	}
+
+	modelNode, _, err := mon.pollPVENode(
+		context.Background(),
+		"test",
+		&mon.config.PVEInstances[0],
+		client,
+		proxmox.Node{
+			Node:    "ebringa",
+			Status:  "online",
+			MaxDisk: 975,
+			Disk:    3,
+		},
+		"healthy",
+		nil,
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("pollPVENode() error = %v", err)
+	}
+
+	if modelNode.Disk.Total != 975 || modelNode.Disk.Used != 410 || modelNode.Disk.Free != 565 {
+		t.Fatalf("node disk = %+v, want linked host summary", modelNode.Disk)
+	}
+	if modelNode.Disk.Usage < 42 || modelNode.Disk.Usage > 42.1 {
+		t.Fatalf("node disk usage = %.2f, want linked host usage around 42.05", modelNode.Disk.Usage)
+	}
+}
+
+func TestResolveNodeDiskFallsBackToRootFSWithoutLinkedHost(t *testing.T) {
+	mon := newTestPVEMonitor("test")
+	defer mon.alertManager.Stop()
+	defer mon.notificationMgr.Stop()
+
+	disk, source := mon.resolveNodeDisk(
+		"test",
+		"test-node1",
+		"node1",
+		proxmox.Node{Node: "node1", Disk: 10, MaxDisk: 100},
+		&proxmox.NodeStatus{
+			RootFS: &proxmox.RootFS{
+				Total: 200,
+				Used:  50,
+				Free:  150,
+			},
+		},
+	)
+
+	if source != "node-status-rootfs" {
+		t.Fatalf("source = %q, want node-status-rootfs", source)
+	}
+	if disk.Total != 200 || disk.Used != 50 || disk.Free != 150 {
+		t.Fatalf("disk = %+v, want rootfs values", disk)
 	}
 }

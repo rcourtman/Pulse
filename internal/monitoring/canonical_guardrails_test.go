@@ -107,6 +107,23 @@ func TestLegacyMemorySourceAliasesRemainCanonicalized(t *testing.T) {
 	}
 }
 
+func TestProxmoxNodeDiskUsesCanonicalResolver(t *testing.T) {
+	data, err := os.ReadFile("monitor_polling_node.go")
+	if err != nil {
+		t.Fatalf("failed to read monitor_polling_node.go: %v", err)
+	}
+	source := string(data)
+	requiredSnippets := []string{
+		"modelNode.Disk, _ = m.resolveNodeDisk(",
+		"if resolvedDisk, diskSource := m.resolveNodeDisk(",
+	}
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(source, snippet) {
+			t.Fatalf("monitor_polling_node.go must contain %q", snippet)
+		}
+	}
+}
+
 func TestAlertLifecycleCanonicalChangesRemainWritable(t *testing.T) {
 	store := unifiedresources.NewMemoryStore()
 	incidentStore := memory.NewIncidentStore(memory.IncidentStoreConfig{})
