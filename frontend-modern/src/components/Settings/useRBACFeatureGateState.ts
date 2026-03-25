@@ -11,7 +11,6 @@ import { getRBACFeatureGateCopy, type RBACFeatureGateCopy } from '@/utils/rbacPr
 import { trackPaywallViewed } from '@/utils/upgradeMetrics';
 import {
   getProTrialStartedMessage,
-  getTrialAlreadyUsedMessage,
   getTrialStartErrorMessage,
 } from '@/utils/upgradePresentation';
 
@@ -62,14 +61,7 @@ export function useRBACFeatureGateState(options: UseRBACFeatureGateStateOptions)
       }
       notificationStore.success(getProTrialStartedMessage());
     } catch (err) {
-      const statusCode = (err as { status?: number } | null)?.status;
-      if (statusCode === 409) {
-        notificationStore.error(getTrialAlreadyUsedMessage());
-      } else {
-        notificationStore.error(
-          getTrialStartErrorMessage(err instanceof Error ? err.message : undefined),
-        );
-      }
+      notificationStore.error(getTrialStartErrorMessage(err));
     } finally {
       setStartingTrial(false);
     }

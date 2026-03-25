@@ -155,3 +155,8 @@ license and free-trial runtime, `useRolesPanelState.ts` plus
 `useUserAssignmentsPanelState.ts` plus `UserAssignmentsDialog.tsx` own the
 user-assignment runtime split. `RolesPanel.tsx` and `UserAssignmentsPanel.tsx`
 remain the canonical render shells for those governed RBAC surfaces.
+That shared RBAC free-trial runtime must also preserve backend denial reasons
+through the canonical upgrade presentation helper instead of collapsing every
+trial-start conflict into a generic already-used message. Organization settings
+paywalls should only map the explicit canonical trial helper outputs, not
+re-interpret status codes locally.

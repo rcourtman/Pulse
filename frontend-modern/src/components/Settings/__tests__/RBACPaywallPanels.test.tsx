@@ -191,4 +191,32 @@ describe('RBAC paywall settings panels', () => {
     expect(notificationSuccessMock).not.toHaveBeenCalled();
     expect(screen.getByRole('dialog', { name: 'Manage access: alice' })).toBeInTheDocument();
   });
+
+  it('surfaces backend trial-start messages instead of collapsing every conflict into already-used', async () => {
+    hasFeatureMock.mockImplementation((feature: string) => feature !== 'rbac');
+    entitlementsMock.mockReturnValue({ trial_eligible: true });
+    startProTrialMock.mockRejectedValueOnce(
+      Object.assign(
+        new Error('Trial cannot be started while a paid v5 license migration is pending'),
+        {
+          status: 409,
+          code: 'trial_not_available',
+        },
+      ),
+    );
+
+    render(() => <RolesPanel />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Start free trial' })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start free trial' }));
+
+    await waitFor(() => {
+      expect(notificationErrorMock).toHaveBeenCalledWith(
+        'Trial cannot be started while a paid v5 license migration is pending',
+      );
+    });
+  });
 });
