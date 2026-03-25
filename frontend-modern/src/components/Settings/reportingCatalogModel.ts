@@ -116,6 +116,18 @@ function parseReportingPerformanceReportDefinition(
     throw new Error('Invalid reporting catalog payload');
   }
 
+  const formats = candidate.formats.map(parseReportingFormatDefinition);
+  const ranges = candidate.ranges.map(parseReportingRangeDefinition);
+  if (formats.length === 0 || ranges.length === 0) {
+    throw new Error('Invalid reporting catalog payload');
+  }
+  if (!formats.some((format) => format.value === candidate.defaultFormat)) {
+    throw new Error('Invalid reporting catalog payload');
+  }
+  if (!ranges.some((range) => range.key === candidate.defaultRange)) {
+    throw new Error('Invalid reporting catalog payload');
+  }
+
   return {
     id: candidate.id,
     title: candidate.title,
@@ -124,9 +136,9 @@ function parseReportingPerformanceReportDefinition(
     multiResourceEndpoint: candidate.multiResourceEndpoint,
     singleFilenamePrefix: candidate.singleFilenamePrefix,
     multiFilenamePrefix: candidate.multiFilenamePrefix,
-    formats: candidate.formats.map(parseReportingFormatDefinition),
+    formats,
     defaultFormat: candidate.defaultFormat,
-    ranges: candidate.ranges.map(parseReportingRangeDefinition),
+    ranges,
     defaultRange: candidate.defaultRange,
     multiResourceMax: candidate.multiResourceMax,
     supportsMetricFilter: candidate.supportsMetricFilter,
