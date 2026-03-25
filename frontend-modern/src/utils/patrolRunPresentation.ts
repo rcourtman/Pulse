@@ -6,6 +6,13 @@ export interface PatrolRunStatusPresentation {
   label: string;
 }
 
+function normalizePatrolRunType(type: string | undefined): string {
+  return String(type || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '_');
+}
+
 function normalizePatrolRunStatus(status: PatrolRunStatus | string | undefined): string {
   return String(status || '')
     .trim()
@@ -13,17 +20,29 @@ function normalizePatrolRunStatus(status: PatrolRunStatus | string | undefined):
     .replace(/\s+/g, '_');
 }
 
+function getEffectivePatrolRunStatus(
+  status: PatrolRunStatus | string | undefined,
+  errorCount: number = 0,
+): string {
+  const normalized = normalizePatrolRunStatus(status);
+  if (errorCount > 0) {
+    return 'error';
+  }
+  return normalized;
+}
+
 export function isPatrolRunHealthy(
   status: PatrolRunStatus | string | undefined,
   errorCount: number = 0,
 ): boolean {
-  return errorCount === 0 && normalizePatrolRunStatus(status) === 'healthy';
+  return getEffectivePatrolRunStatus(status, errorCount) === 'healthy';
 }
 
 export function getPatrolRunStatusPresentation(
   status: PatrolRunStatus | string,
+  errorCount: number = 0,
 ): PatrolRunStatusPresentation {
-  const normalized = normalizePatrolRunStatus(status);
+  const normalized = getEffectivePatrolRunStatus(status, errorCount);
 
   switch (normalized) {
     case 'critical':
@@ -58,6 +77,10 @@ export function getToolCallResultBadgeClass(success: boolean): string {
 
 export function getToolCallResultTextClass(success: boolean): string {
   return success ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400';
+}
+
+export function getPatrolRunKindLabel(type: string | undefined): string {
+  return normalizePatrolRunType(type) === 'scoped' ? 'Scoped run' : 'Full patrol';
 }
 
 export function getRunHistoryLoadingState(): string {

@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from '@solidjs/testing-library';
+import { cleanup, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PatrolRunRecord } from '@/api/patrol';
 import { PatrolStatusBar } from '../PatrolStatusBar';
@@ -24,7 +24,7 @@ describe('PatrolStatusBar', () => {
     cleanup();
   });
 
-  it('shows healthy status only for healthy patrol runs', async () => {
+  it('shows recent activity instead of a healthy verdict for healthy patrol runs', async () => {
     getPatrolRunHistoryMock.mockResolvedValue([
       {
         id: 'run-healthy',
@@ -58,8 +58,11 @@ describe('PatrolStatusBar', () => {
     render(() => <PatrolStatusBar refreshTrigger={1} />);
 
     await waitFor(() => {
-      expect(screen.getByText('Running normally')).toBeInTheDocument();
+      expect(screen.getByText('Recent activity')).toBeInTheDocument();
     });
+
+    expect(screen.getByText('Latest: Full patrol')).toBeInTheDocument();
+    expect(screen.getByText('healthy')).toBeInTheDocument();
   });
 
   it('shows patrol paused when the runtime is blocked even if the last run was healthy', async () => {
@@ -105,10 +108,10 @@ describe('PatrolStatusBar', () => {
       expect(screen.getByText('Patrol Paused')).toBeInTheDocument();
     });
 
-    expect(screen.queryByText('Running normally')).not.toBeInTheDocument();
+    expect(screen.queryByText('Recent activity')).not.toBeInTheDocument();
   });
 
-  it('shows issues detected when the last patrol run found issues without transport errors', async () => {
+  it('shows the latest full-patrol result when the last patrol run found issues', async () => {
     getPatrolRunHistoryMock.mockResolvedValue([
       {
         id: 'run-critical',
@@ -142,20 +145,22 @@ describe('PatrolStatusBar', () => {
     render(() => <PatrolStatusBar refreshTrigger={1} />);
 
     await waitFor(() => {
-      expect(screen.getByText('Issues detected')).toBeInTheDocument();
+      expect(screen.getByText('Recent activity')).toBeInTheDocument();
     });
 
-    expect(screen.queryByText('Running normally')).not.toBeInTheDocument();
+    expect(screen.getByText('Latest: Full patrol')).toBeInTheDocument();
+    expect(screen.getByText('critical')).toBeInTheDocument();
   });
 
-  it('does not show healthy status when the run finished with errors', async () => {
+  it('shows scoped/erroring activity factually instead of a healthy summary', async () => {
     getPatrolRunHistoryMock.mockResolvedValue([
       {
         id: 'run-error-count',
         started_at: '2026-03-12T10:00:00Z',
         completed_at: '2026-03-12T10:01:00Z',
         duration_ms: 60000,
-        type: 'patrol',
+        type: 'scoped',
+        trigger_reason: 'alert_fired',
         resources_checked: 1,
         nodes_checked: 0,
         guests_checked: 0,
@@ -182,9 +187,12 @@ describe('PatrolStatusBar', () => {
     render(() => <PatrolStatusBar refreshTrigger={1} />);
 
     await waitFor(() => {
-      expect(screen.getByText('Issues detected')).toBeInTheDocument();
+      expect(screen.getByText('Recent activity')).toBeInTheDocument();
     });
 
-    expect(screen.queryByText('Running normally')).not.toBeInTheDocument();
+    const latestRunSection = screen.getByText('Latest: Scoped run').closest('span');
+    expect(latestRunSection).not.toBeNull();
+    expect(within(latestRunSection as HTMLElement).queryByText('healthy')).not.toBeInTheDocument();
+    expect(within(latestRunSection as HTMLElement).getByText('error')).toBeInTheDocument();
   });
 });

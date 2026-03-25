@@ -10,8 +10,12 @@ import { getPatrolRunHistory, type PatrolRunRecord, type PatrolRuntimeState } fr
 import { aiIntelligenceStore } from '@/stores/aiIntelligence';
 import { formatRelativeTime } from '@/utils/format';
 import { formatTriggerReason } from '@/utils/patrolFormat';
-import { isPatrolRunHealthy } from '@/utils/patrolRunPresentation';
+import {
+  getPatrolRunKindLabel,
+  getPatrolRunStatusPresentation,
+} from '@/utils/patrolRunPresentation';
 import { getPatrolRuntimePresentation } from '@/utils/patrolRuntimePresentation';
+import ActivityIcon from 'lucide-solid/icons/activity';
 import CheckCircleIcon from 'lucide-solid/icons/check-circle';
 import AlertCircleIcon from 'lucide-solid/icons/alert-circle';
 import AlertTriangleIcon from 'lucide-solid/icons/alert-triangle';
@@ -45,12 +49,18 @@ export const PatrolStatusBar: Component<PatrolStatusBarProps> = (props) => {
 
     const lastRun = allRuns[0];
     const lastRunTime = lastRun ? new Date(lastRun.started_at) : null;
+    const lastRunStatus = getPatrolRunStatusPresentation(
+      lastRun?.status ?? 'unknown',
+      lastRun?.error_count ?? 0,
+    );
     return {
+      lastRun,
       runsToday: todayRuns.length,
       newFindingsToday: todayRuns.reduce((sum, r) => sum + (r.new_findings || 0), 0),
       lastRunTime: lastRunTime ? formatRelativeTime(lastRunTime, { compact: true }) : null,
       lastRunTrigger: formatTriggerReason(lastRun?.trigger_reason),
-      isHealthy: isPatrolRunHealthy(lastRun?.status, lastRun?.error_count ?? 0),
+      lastRunTypeLabel: getPatrolRunKindLabel(lastRun?.type),
+      lastRunStatus,
     };
   });
 
@@ -96,22 +106,12 @@ export const PatrolStatusBar: Component<PatrolStatusBarProps> = (props) => {
               <Show
                 when={showRuntimeState()}
                 fallback={
-                  <Show
-                    when={s().isHealthy}
-                    fallback={
-                      <>
-                        <AlertCircleIcon class="w-3.5 h-3.5 text-amber-500" />
-                        <span class="text-amber-600 dark:text-amber-400 font-medium text-xs">
-                          Issues detected
-                        </span>
-                      </>
-                    }
-                  >
-                    <CheckCircleIcon class="w-3.5 h-3.5 text-green-500" />
-                    <span class="text-green-600 dark:text-green-400 font-medium text-xs">
-                      Running normally
+                  <>
+                    <ActivityIcon class="w-3.5 h-3.5 text-blue-500" />
+                    <span class="text-blue-600 dark:text-blue-400 font-medium text-xs">
+                      Recent activity
                     </span>
-                  </Show>
+                  </>
                 }
               >
                 <Show
@@ -150,6 +150,17 @@ export const PatrolStatusBar: Component<PatrolStatusBarProps> = (props) => {
                 <Show when={s().lastRunTrigger}>
                   <span class=" "> ({s().lastRunTrigger})</span>
                 </Show>
+              </span>
+            </Show>
+
+            <span class="hidden sm:inline text-slate-300 ">|</span>
+
+            <Show when={s().lastRun}>
+              <span class="text-xs text-muted">
+                Latest: {s().lastRunTypeLabel}
+                <span class={`ml-1.5 px-1.5 py-0.5 rounded ${s().lastRunStatus.badgeClass}`}>
+                  {s().lastRunStatus.label}
+                </span>
               </span>
             </Show>
 

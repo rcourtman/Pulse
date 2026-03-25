@@ -143,7 +143,7 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
   const run = props.run;
   const scopeSummary = formatScope(run);
   const duration = formatDurationMs(run.duration_ms);
-  const runStatus = getPatrolRunStatusPresentation(run.status);
+  const runStatus = getPatrolRunStatusPresentation(run.status, run.error_count);
   const canonicalScopeResourceIds = getCanonicalScopeResourceIds(run);
   const runIsHealthy = isPatrolRunHealthy(run.status, run.error_count);
 

@@ -134,6 +134,17 @@ operator whether Patrol recently completed a successful full patrol, only ran
 scoped alert-triggered checks, or ended its most recent full patrol with
 errors, so the page does not leave trust and coverage as implicit background
 knowledge.
+The Patrol status bar should stay factual and operational within that same
+hierarchy. `frontend-modern/src/components/patrol/PatrolStatusBar.tsx` is a
+recent-activity strip, not a second health verdict: when Patrol is active it
+should report recent run activity, run kind, latest run result, and run-count
+context instead of emitting another green/amber all-clear headline that can
+drift from the governed assessment summary above it.
+That latest run result must come from the effective run outcome, not the raw
+status field alone: shared Patrol run presentation helpers must treat any run
+with execution errors as an error result even when the stored status text is
+still `healthy`, so run history and header activity surfaces do not present a
+false green outcome for an incomplete Patrol execution.
 hook-local fallback logic.
 The Patrol header now also has explicit helper ownership for its quickstart and
 schedule presentation. `frontend-modern/src/utils/aiQuickstartPresentation.ts`

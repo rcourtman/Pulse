@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  getPatrolRunKindLabel,
   getPatrolRunStatusPresentation,
   isPatrolRunHealthy,
   getRunHistoryLoadingState,
@@ -25,6 +26,12 @@ describe('patrolRunPresentation', () => {
     expect(getPatrolRunStatusPresentation('healthy').badgeClass).toContain('green-100');
   });
 
+  it('treats erroring runs as error presentation even when the raw status says healthy', () => {
+    const presentation = getPatrolRunStatusPresentation('healthy', 2);
+    expect(presentation.label).toBe('error');
+    expect(presentation.badgeClass).toContain('red-100');
+  });
+
   it('treats only healthy runs without errors as healthy', () => {
     expect(isPatrolRunHealthy('healthy', 0)).toBe(true);
     expect(isPatrolRunHealthy('critical', 0)).toBe(false);
@@ -43,6 +50,12 @@ describe('patrolRunPresentation', () => {
     expect(getToolCallResultBadgeClass(false)).toContain('red-100');
     expect(getToolCallResultTextClass(true)).toContain('text-emerald-600');
     expect(getToolCallResultTextClass(false)).toContain('text-red-600');
+  });
+
+  it('returns canonical patrol run kind labels', () => {
+    expect(getPatrolRunKindLabel('scoped')).toBe('Scoped run');
+    expect(getPatrolRunKindLabel('patrol')).toBe('Full patrol');
+    expect(getPatrolRunKindLabel('')).toBe('Full patrol');
   });
 
   it('returns canonical patrol run loading and unavailable copy', () => {
