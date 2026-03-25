@@ -35,6 +35,7 @@ import {
   buildFindingFilterOptions,
   formatFindingLifecycleType,
   formatFindingLoopState,
+  getFindingActiveRuntimeSortOrder,
   getFindingSeveritySortOrder,
   getFindingResolutionReason,
   getFindingLoopStateBadgeClasses,
@@ -192,6 +193,10 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
         const aPriority = getFindingSeveritySortOrder(a.severity);
         const bPriority = getFindingSeveritySortOrder(b.severity);
         if (aPriority !== bPriority) return aPriority - bPriority;
+
+        const aRuntimePriority = getFindingActiveRuntimeSortOrder(a);
+        const bRuntimePriority = getFindingActiveRuntimeSortOrder(b);
+        if (aRuntimePriority !== bRuntimePriority) return aRuntimePriority - bRuntimePriority;
 
         // Within same severity, sort acknowledged findings below unacknowledged
         const aAcked = a.acknowledgedAt ? 1 : 0;

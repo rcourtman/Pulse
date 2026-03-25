@@ -5,6 +5,7 @@ import {
   buildFindingFilterOptions,
   formatFindingLifecycleType,
   formatFindingLoopState,
+  getFindingActiveRuntimeSortOrder,
   getFindingEmptyStateCopy,
   getFindingManualControlsPresentation,
   getFindingPrimaryActionPresentation,
@@ -57,6 +58,25 @@ describe('aiFindingPresentation', () => {
 
     it('has correct sort order for info', () => {
       expect(getFindingSeveritySortOrder('info')).toBe(3);
+    });
+
+    it('prioritizes active patrol runtime findings within the same severity tier', () => {
+      expect(
+        getFindingActiveRuntimeSortOrder({
+          status: 'active',
+          resourceId: 'ai-service',
+          resourceName: 'Pulse Patrol Service',
+          title: 'Pulse Patrol: Insufficient API credits',
+        }),
+      ).toBe(0);
+      expect(
+        getFindingActiveRuntimeSortOrder({
+          status: 'active',
+          resourceId: 'vm-101',
+          resourceName: 'db-01',
+          title: 'Disk nearly full',
+        }),
+      ).toBe(1);
     });
 
     it('returns compact severity labels', () => {
@@ -336,6 +356,11 @@ describe('aiFindingPresentation', () => {
       expect(findingsPanelSource).toContain('manualControls.acknowledge');
       expect(findingsPanelSource).toContain('manualControls.snooze');
       expect(findingsPanelSource).toContain('manualControls.dismiss');
+    });
+
+    it('routes same-severity ordering through the shared patrol runtime sort helper', () => {
+      expect(findingsPanelSource).toContain('getFindingActiveRuntimeSortOrder(a)');
+      expect(findingsPanelSource).toContain('getFindingActiveRuntimeSortOrder(b)');
     });
 
     it('only shows the sort control when there are multiple Patrol findings to sort', () => {

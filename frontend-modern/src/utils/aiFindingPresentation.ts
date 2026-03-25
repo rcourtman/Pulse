@@ -246,6 +246,10 @@ export const getFindingSeveritySortOrder = (
   severity: UnifiedFinding['severity'] | string,
 ): number => FINDING_SEVERITY_SORT_ORDER[severity] ?? 4;
 
+export const getFindingActiveRuntimeSortOrder = (
+  finding: Pick<UnifiedFinding, 'status' | 'resourceId' | 'resourceName' | 'title'>,
+): number => (finding.status === 'active' && isPatrolRuntimeFinding(finding) ? 0 : 1);
+
 export const getFindingSeverityCompactLabel = (
   severity: UnifiedFinding['severity'] | string,
 ): string => FINDING_SEVERITY_COMPACT_LABELS[severity] || String(severity).toUpperCase();

@@ -186,6 +186,10 @@ metrics strip as well. When Patrol-owned runtime issues are active, the
 supporting metrics must stop counting them under generic infrastructure
 `Warnings` or `Active findings`; the strip should break out `Runtime issues`
 separately and reserve infrastructure finding counts for actual estate issues.
+The findings list must respect that same trust priority. When Patrol-owned
+runtime issues share a severity tier with ordinary infrastructure findings, the
+runtime issue should sort first within that tier so Patrol blindness is not
+buried under same-severity estate warnings.
 The summary recency chip must follow the same governed scope distinction. When
 the latest completed activity was only a scoped run, the summary should label
 that timestamp as `Last activity` instead of `Last patrol`; `Last full patrol`
