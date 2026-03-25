@@ -6,6 +6,7 @@ import AlertCircleIcon from 'lucide-solid/icons/alert-circle';
 import AlertTriangleIcon from 'lucide-solid/icons/alert-triangle';
 import {
   getPatrolAssessmentPresentation,
+  getPatrolVerificationPresentation,
   getPatrolSummaryPresentation,
 } from '@/utils/patrolSummaryPresentation';
 import { getPatrolRuntimePresentation } from '@/utils/patrolRuntimePresentation';
@@ -24,9 +25,6 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
   );
   const warningSummaryPresentation = createMemo(() =>
     getPatrolSummaryPresentation('warning', summaryStats().warningFindings > 0),
-  );
-  const fixedSummaryPresentation = createMemo(() =>
-    getPatrolSummaryPresentation('success', summaryStats().fixedCount > 0),
   );
   const runtimePresentation = createMemo(() =>
     getPatrolRuntimePresentation(state.runtimeState(), state.blockedReason()),
@@ -57,6 +55,23 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
       assessment().tone === 'error'
         ? 'critical'
         : assessment().tone === 'warning'
+          ? 'warning'
+          : 'success',
+      true,
+    ),
+  );
+  const verification = createMemo(() =>
+    getPatrolVerificationPresentation({
+      runs: state.patrolRunHistory() ?? [],
+      runtimeState: state.runtimeState(),
+      blockedReason: state.blockedReason(),
+    }),
+  );
+  const verificationSummaryPresentation = createMemo(() =>
+    getPatrolSummaryPresentation(
+      verification().tone === 'error'
+        ? 'critical'
+        : verification().tone === 'warning'
           ? 'warning'
           : 'success',
       true,
@@ -156,6 +171,26 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
                           })}
                         </span>
                       </Show>
+                    </div>
+
+                    <div class="mt-4 rounded-md border border-border-subtle bg-base/90 p-3">
+                      <p class="text-xs font-semibold uppercase tracking-[0.16em] text-muted">
+                        Verification
+                      </p>
+                      <p class="mt-1 text-sm font-medium text-base-content">
+                        {verification().title}
+                        <Show when={verification().lastFullRunAt}>
+                          <span class="text-muted">
+                            {' '}
+                            ·{' '}
+                            {formatRelativeTime(verification().lastFullRunAt!, {
+                              compact: true,
+                              emptyText: 'never',
+                            })}
+                          </span>
+                        </Show>
+                      </p>
+                      <p class="mt-1 text-sm text-muted">{verification().description}</p>
                     </div>
                   </div>
                 </div>
@@ -267,6 +302,40 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
           <div class="bg-surface rounded-md border border-border p-3">
             <div class="flex items-center gap-2">
               <div
+                class={`p-1.5 rounded-md border ${verificationSummaryPresentation().iconContainerClass}`}
+              >
+                <Show
+                  when={verification().tone === 'success'}
+                  fallback={
+                    <Show
+                      when={verification().tone === 'error'}
+                      fallback={
+                        <AlertTriangleIcon
+                          class={`w-4 h-4 ${verificationSummaryPresentation().iconClass}`}
+                        />
+                      }
+                    >
+                      <ShieldAlertIcon
+                        class={`w-4 h-4 ${verificationSummaryPresentation().iconClass}`}
+                      />
+                    </Show>
+                  }
+                >
+                  <CheckCircleIcon class={`w-4 h-4 ${verificationSummaryPresentation().iconClass}`} />
+                </Show>
+              </div>
+              <div>
+                <p class="text-xs text-muted">Verification</p>
+                <p class={`text-sm font-semibold ${verificationSummaryPresentation().valueClass}`}>
+                  {verification().compactLabel}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div class="bg-surface rounded-md border border-border p-3">
+            <div class="flex items-center gap-2">
+              <div
                 class={`p-1.5 rounded-md border ${criticalSummaryPresentation().iconContainerClass}`}
               >
                 <ShieldAlertIcon class={`w-4 h-4 ${criticalSummaryPresentation().iconClass}`} />
@@ -296,21 +365,6 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
             </div>
           </div>
 
-          <div class="bg-surface rounded-md border border-border p-3">
-            <div class="flex items-center gap-2">
-              <div
-                class={`p-1.5 rounded-md border ${fixedSummaryPresentation().iconContainerClass}`}
-              >
-                <CheckCircleIcon class={`w-4 h-4 ${fixedSummaryPresentation().iconClass}`} />
-              </div>
-              <div>
-                <p class="text-xs text-muted">Fixed</p>
-                <p class={`text-lg font-bold ${fixedSummaryPresentation().valueClass}`}>
-                  {state.summaryStats().fixedCount}
-                </p>
-              </div>
-            </div>
-          </div>
         </div>
       </Show>
     </>

@@ -1,4 +1,4 @@
-import type { PatrolRuntimeState } from '@/api/patrol';
+import type { PatrolRunRecord, PatrolRuntimeState } from '@/api/patrol';
 import type { IntelligenceHealthScore } from '@/types/aiIntelligence';
 import type { SemanticTone } from '@/utils/semanticTonePresentation';
 import { getPatrolRuntimePresentation } from '@/utils/patrolRuntimePresentation';
@@ -21,6 +21,14 @@ export interface PatrolAssessmentPresentation {
   eyebrow: string;
   compactLabel: string;
   tone: SemanticTone;
+}
+
+export interface PatrolVerificationPresentation {
+  title: string;
+  description: string;
+  compactLabel: string;
+  tone: SemanticTone;
+  lastFullRunAt?: string;
 }
 
 export const PATROL_NO_ISSUES_LABEL = 'No issues found';
@@ -63,6 +71,25 @@ export function getPatrolSummaryPresentation(
 
 function getHealthSummaryTone(overallHealth: IntelligenceHealthScore): SemanticTone {
   return overallHealth.grade === 'D' || overallHealth.grade === 'F' ? 'error' : 'warning';
+}
+
+function normalizeRunType(type: string | undefined): string {
+  return String(type || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '_');
+}
+
+function isFullPatrolRun(run: PatrolRunRecord): boolean {
+  return normalizeRunType(run.type) !== 'scoped';
+}
+
+function isCompletedPatrolRun(run: PatrolRunRecord): boolean {
+  return Boolean(run.completed_at?.trim());
+}
+
+function hasRunErrors(run: PatrolRunRecord): boolean {
+  return run.error_count > 0 || String(run.status || '').trim().toLowerCase() === 'error';
 }
 
 export function getPatrolAssessmentPresentation(args: {
@@ -127,6 +154,77 @@ export function getPatrolAssessmentPresentation(args: {
     eyebrow: 'Patrol assessment',
     compactLabel: PATROL_NO_ISSUES_LABEL,
     tone: 'success',
+  };
+}
+
+export function getPatrolVerificationPresentation(args: {
+  runs?: PatrolRunRecord[];
+  runtimeState?: PatrolRuntimeState;
+  blockedReason?: string;
+}): PatrolVerificationPresentation {
+  if (
+    args.runtimeState === 'blocked' ||
+    args.runtimeState === 'disabled' ||
+    args.runtimeState === 'unavailable'
+  ) {
+    const runtime = getPatrolRuntimePresentation(args.runtimeState, args.blockedReason);
+    return {
+      title: runtime.label,
+      description: runtime.description,
+      compactLabel: runtime.label,
+      tone: runtime.tone,
+    };
+  }
+
+  const completedRuns = (args.runs ?? []).filter((run) => isCompletedPatrolRun(run));
+  const recentFullRun = completedRuns.find((run) => isFullPatrolRun(run));
+
+  if (recentFullRun) {
+    const resourcesChecked = recentFullRun.resources_checked || 0;
+    if (hasRunErrors(recentFullRun)) {
+      return {
+        title: 'Full patrol needs review',
+        description:
+          resourcesChecked > 0
+            ? `The most recent full patrol checked ${resourcesChecked} resource${resourcesChecked === 1 ? '' : 's'} but ended with ${recentFullRun.error_count} error${recentFullRun.error_count === 1 ? '' : 's'}.`
+            : 'The most recent full patrol ended with errors, so Patrol has not fully re-verified your infrastructure.',
+        compactLabel: 'Verification limited',
+        tone: 'warning',
+        lastFullRunAt: recentFullRun.completed_at,
+      };
+    }
+
+    return {
+      title: 'Recently verified',
+      description:
+        resourcesChecked > 0
+          ? `The most recent full patrol completed successfully and checked ${resourcesChecked} resource${resourcesChecked === 1 ? '' : 's'}.`
+          : 'The most recent full patrol completed successfully.',
+      compactLabel: 'Recently verified',
+      tone: 'success',
+      lastFullRunAt: recentFullRun.completed_at,
+    };
+  }
+
+  const recentScopedRun = completedRuns.find((run) => !isFullPatrolRun(run));
+  if (recentScopedRun) {
+    const resourcesChecked = recentScopedRun.resources_checked || 0;
+    return {
+      title: 'No recent full patrol',
+      description:
+        resourcesChecked > 0
+          ? `Recent activity was limited to scoped ${recentScopedRun.trigger_reason ? String(recentScopedRun.trigger_reason).replace(/_/g, ' ') : 'patrol'} runs over ${resourcesChecked} resource${resourcesChecked === 1 ? '' : 's'}, so Patrol has not recently re-verified your full infrastructure.`
+          : 'Recent activity was limited to scoped patrol runs, so Patrol has not recently re-verified your full infrastructure.',
+      compactLabel: 'Partial verification',
+      tone: 'warning',
+    };
+  }
+
+  return {
+    title: 'Verification pending',
+    description: 'Patrol has not completed a recent full verification run yet.',
+    compactLabel: 'Verification pending',
+    tone: 'info',
   };
 }
 

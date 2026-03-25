@@ -746,6 +746,10 @@ That same rule also applies to compact Patrol summary fragments inside the
 feature surface: count-only strips or metric cards must not emit `No issues
 found` or other reassuring copy when the owning overall-health summary is
 degraded or not fully verified.
+That same summary shell should also surface verification scope from the
+owning run-history contract. Operators should be able to see, inside the same
+summary surface, whether Patrol recently completed a full verification pass or
+whether recent activity was limited to scoped/erroring patrol runs.
 
 Shared primitive consumers that split status-dot tone and status-text tone
 must now keep both values routed through the same exported presentation helper.

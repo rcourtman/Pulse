@@ -128,6 +128,12 @@ supporting evidence. Secondary metric strips must not render `No issues found`
 when the same governed overall-health summary says coverage is incomplete or
 health still requires attention; that compact summary state now belongs to the
 shared `frontend-modern/src/utils/patrolSummaryPresentation.ts` helper.
+That same summary surface must also explain what Patrol actually verified.
+Recent run history should drive a visible verification summary that tells the
+operator whether Patrol recently completed a successful full patrol, only ran
+scoped alert-triggered checks, or ended its most recent full patrol with
+errors, so the page does not leave trust and coverage as implicit background
+knowledge.
 hook-local fallback logic.
 The Patrol header now also has explicit helper ownership for its quickstart and
 schedule presentation. `frontend-modern/src/utils/aiQuickstartPresentation.ts`
