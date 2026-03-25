@@ -164,6 +164,11 @@ The subsystem registry now also requires explicit proof-policy coverage for all
 shared runtime files, and shared-component guardrails fail if raw table
 composition is reintroduced in new shared components outside the canonical
 allowlist.
+The shared updates settings owner also defines the user-facing framing for
+rc-tagged builds. `frontend-modern/src/components/Settings/updatesSettingsModel.ts`
+and `frontend-modern/src/utils/updatesPresentation.ts` must present that
+channel as a prerelease or preview path with manual validation expectations,
+not as a near-ready release candidate promise.
 The root app shell now also treats backend availability as distinct from
 websocket liveness: `frontend-modern/src/AppLayout.tsx` and
 `frontend-modern/src/useAppRuntimeState.ts` must keep the top-right connection

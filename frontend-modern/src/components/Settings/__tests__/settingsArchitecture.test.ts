@@ -124,6 +124,7 @@ import ssoProvidersStateSource from '../useSSOProvidersState.ts?raw';
 import ssoProvidersModelSource from '../ssoProvidersModel.ts?raw';
 import ssoProviderPresentationSource from '@/utils/ssoProviderPresentation.ts?raw';
 import systemSettingsPresentationSource from '@/utils/systemSettingsPresentation.ts?raw';
+import updatesPresentationSource from '@/utils/updatesPresentation.ts?raw';
 import diagnosticsStateSource from '../useDiagnosticsPanelState.ts?raw';
 import reportingPanelModelSource from '../reportingPanelModel.ts?raw';
 import reportingPanelSource from '../ReportingPanel.tsx?raw';
@@ -1009,6 +1010,10 @@ describe('Settings architecture guardrails', () => {
     expect(copyCommandBlockSource).toContain("aria-label=\"Copy to clipboard\"");
     expect(updatesSettingsModelSource).toContain('export function getUpdateChannelCardOptions');
     expect(updatesSettingsModelSource).toContain('export function buildUpdateInstallGuide');
+    expect(updatesSettingsModelSource).toContain("title: 'Pre-release'");
+    expect(updatesSettingsModelSource).not.toContain('Release Candidate');
+    expect(updatesPresentationSource).toContain('Pre-release builds stay on a manual preview channel.');
+    expect(updatesPresentationSource).not.toContain('RC is a manual preview channel.');
   });
 
   it('keeps the diagnostics shell behind extracted runtime and results owners', () => {

@@ -231,6 +231,11 @@ The top-level authenticated shell is part of that same customer-facing
 boundary: cloud-paid trial prompts may appear in owned commercial surfaces, but
 the app shell must not force a global, persistent Pro trial nudge that
 overrides the primary runtime chrome for every signed-in user.
+That same shell framing also owns user-facing prerelease labeling for
+rc-channel builds. `frontend-modern/src/AppLayout.tsx` may still key off the
+canonical `rc` channel metadata internally, but the visible badge must frame
+those builds as a preview/prerelease experience rather than implying a
+near-ready release candidate.
 The shared trial-start runtime is part of that same cloud-paid boundary.
 Commercial relay, onboarding, setup, Pro settings, and shared paywall
 surfaces may customize success copy, but they must route hosted handoff,

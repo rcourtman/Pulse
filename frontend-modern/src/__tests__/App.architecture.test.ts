@@ -29,6 +29,8 @@ describe('App architecture', () => {
     expect(appLayoutSource).toContain(
       "props.connectionStatus().kind === 'connected' && props.dataUpdated()",
     );
+    expect(appLayoutSource).toContain("props.versionInfo()?.channel === 'rc'");
+    expect(appLayoutSource).toContain('Preview');
     expect(appLayoutSource).not.toContain('props.connected()');
     expect(appLayoutSource).toContain('const utilityTabs = createMemo(() =>');
     expect(appRuntimeStateSource).toContain('export const useAppRuntimeState = () =>');

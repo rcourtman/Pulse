@@ -28,11 +28,11 @@ export const updatesHelpContent: HelpContent[] = [
     description:
       'Choose which Pulse releases to be notified about:\n\n' +
       '- Stable: Production-ready releases only\n' +
-      '- Release Candidate (RC): Preview upcoming features before stable release\n\n' +
-      'RC builds are tested but may have rough edges. Use stable for production environments.\n\n' +
+      '- Pre-release: Early preview builds before stable release\n\n' +
+      'Pre-release builds can contain bugs, regressions, and migration issues. Use stable for production environments.\n\n' +
       'For major version pre-releases (e.g. v6.0.0-rc.1), we strongly recommend installing ' +
       'as a separate instance rather than upgrading your production installation.',
-    examples: ['stable - v6.1.1, v6.1.2, etc.', 'rc - v6.2.0-rc.1, v6.2.0-rc.2, etc.'],
+    examples: ['stable - v6.1.1, v6.1.2, etc.', 'pre-release - v6.2.0-rc.1, v6.2.0-rc.2, etc.'],
     addedInVersion: 'v4.0.0',
   },
   {

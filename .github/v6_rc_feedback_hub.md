@@ -1,6 +1,6 @@
-# Pulse v6 RC Feedback Hub
+# Pulse v6 Pre-release Feedback Hub
 
-I have published Pulse v6 as a release candidate, and this thread is the main place I want general v6 RC feedback.
+I have published Pulse v6 as a pre-release, and this thread is the main place I want general v6 pre-release feedback.
 
 Use this thread for:
 
@@ -10,7 +10,7 @@ Use this thread for:
 - small quality-of-life suggestions
 - feedback that is useful but does not need its own dedicated issue yet
 
-Open a separate GitHub issue with the `Pulse v6 RC feedback` template for:
+Open a separate GitHub issue with the `Pulse v6 pre-release feedback` template for:
 
 - reproducible bugs
 - regressions from v5 or earlier v6 builds
@@ -32,6 +32,6 @@ Please keep one comment per topic so I can track follow-ups cleanly.
 
 Notes:
 
-- Pulse Pro features remain normally license-gated during the RC.
+- Pulse Pro features remain normally license-gated during the pre-release.
 - If something blocks normal use, open a dedicated issue instead of burying it in this thread.
 - Please do not post secrets, tokens, private keys, or unsanitized config files.

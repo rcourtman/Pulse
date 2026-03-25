@@ -538,7 +538,7 @@ export function AppLayout(props: AppLayoutProps) {
               <span class="text-lg font-medium text-base-content">Pulse</span>
               <Show when={props.versionInfo()?.channel === 'rc'}>
                 <span class="text-xs px-1.5 py-0.5 bg-orange-500 text-white rounded font-bold">
-                  RC
+                  Preview
                 </span>
               </Show>
             </div>

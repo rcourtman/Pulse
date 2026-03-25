@@ -14,12 +14,12 @@ export const UPDATES_PANEL_COPY = {
   updatePreferencesTitle: 'Update Preferences',
   autoUpdateTitle: 'Automatic Stable Updates',
   autoUpdateDescription:
-    'Supported host installs can automatically apply stable releases. RC preview validation always stays manual.',
-  previewChannelTitle: 'RC is a manual preview channel.',
+    'Supported host installs can automatically apply stable releases. Pre-release testing always stays manual.',
+  previewChannelTitle: 'Pre-release builds stay on a manual preview channel.',
   previewChannelDescription:
-    'Use this on staging or internal validation environments. Automatic stable updates stay disabled on RC so preview installs do not drift between channels unattended.',
+    'Use this on staging or internal validation environments. Automatic stable updates stay disabled on pre-release builds so preview installs do not drift between channels unattended.',
   previewChannelAutoUpdateNotice:
-    'Automatic stable updates are unavailable while the RC preview channel is selected.',
+    'Automatic stable updates are unavailable while the pre-release preview channel is selected.',
   checkIntervalLabel: 'Check Interval',
   preferredTimeLabel: 'Preferred Time',
 } as const;

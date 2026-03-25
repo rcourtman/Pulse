@@ -64,7 +64,7 @@ describe('SelectionCardGroup', () => {
       <SelectionCardGroup
         options={[
           { value: 'stable', title: 'Stable' },
-          { value: 'rc', title: 'Release Candidate', disabled: true },
+          { value: 'rc', title: 'Pre-release', disabled: true },
         ]}
         value="stable"
         onChange={onChange}
@@ -72,7 +72,7 @@ describe('SelectionCardGroup', () => {
       />
     ));
 
-    const rcButton = screen.getByRole('button', { name: /release candidate/i });
+    const rcButton = screen.getByRole('button', { name: /pre-release/i });
     expect(rcButton).toBeDisabled();
 
     fireEvent.click(rcButton);
@@ -91,8 +91,8 @@ describe('SelectionCardGroup', () => {
           },
           {
             value: 'rc',
-            title: 'Release Candidate',
-            description: 'Preview upcoming features',
+            title: 'Pre-release',
+            description: 'Early preview builds',
             tone: 'accent',
           },
         ]}
@@ -105,7 +105,7 @@ describe('SelectionCardGroup', () => {
     const stableButton = screen.getByRole('button', {
       name: /stable production-ready releases/i,
     });
-    const rcButton = screen.getByRole('button', { name: /release candidate preview upcoming features/i });
+    const rcButton = screen.getByRole('button', { name: /pre-release early preview builds/i });
 
     expect(stableButton.className).toContain('border-green-500');
     expect(stableButton.className).toContain('bg-green-50');

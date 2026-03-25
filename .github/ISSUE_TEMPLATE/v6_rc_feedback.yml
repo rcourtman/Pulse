@@ -1,13 +1,13 @@
-name: Pulse v6 RC feedback
-description: Report v6 release candidate bugs, regressions, upgrade issues, or actionable UX feedback
-title: "[v6 RC]: "
+name: Pulse v6 pre-release feedback
+description: Report v6 pre-release bugs, regressions, upgrade issues, or actionable UX feedback
+title: "[v6 pre-release]: "
 body:
   - type: markdown
     attributes:
       value: |
-        Use this form for actionable Pulse v6 release candidate feedback.
+        Use this form for actionable Pulse v6 pre-release feedback.
 
-        For general impressions or smaller notes, use the pinned v6 RC feedback hub.
+        For general impressions or smaller notes, use the pinned v6 pre-release feedback hub.
         For reproducible failures, include exact version details and sanitized diagnostics when possible.
 
         Do not post secrets, tokens, private keys, or unsanitized config files.
@@ -137,6 +137,5 @@ body:
       options:
         - label: I verified the exact version before filing this report.
           required: true
-        - label: I searched existing issues and the pinned v6 RC feedback hub first.
+        - label: I searched existing issues and the pinned v6 pre-release feedback hub first.
           required: true
-

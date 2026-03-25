@@ -38,8 +38,8 @@ export function getUpdateChannelCardOptions(
     },
     {
       value: 'rc',
-      title: 'Release Candidate',
-      description: 'Preview builds for staging, internal validation, and opt-in testers',
+      title: 'Pre-release',
+      description: 'Early preview builds for staging, internal validation, and opt-in testers',
       tone: 'accent',
       disabled: versionInfo?.isSourceBuild,
     },
