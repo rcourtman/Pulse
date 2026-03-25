@@ -25,6 +25,7 @@ import {
   sortFindingsForAttentionQueue,
 } from '@/utils/aiFindingPresentation';
 import { getApprovalExpiryTime, isLivePendingApproval } from '@/utils/approvalState';
+import { sortPendingApprovalsByUrgency } from '@/utils/approvalRiskPresentation';
 import { logger } from '@/utils/logger';
 import type {
   CorrelationsResponse,
@@ -434,7 +435,7 @@ export const aiIntelligenceStore = {
 
   // Pending Approvals
   get pendingApprovals() {
-    return getLivePendingApprovals();
+    return sortPendingApprovalsByUrgency(getLivePendingApprovals());
   },
   get approvalsError() {
     return approvalsError();
@@ -447,9 +448,16 @@ export const aiIntelligenceStore = {
 
   get findingsWithPendingApprovals() {
     const approvals = getLivePendingApprovals();
-    return unifiedFindings().filter((finding) =>
-      hasPendingInvestigationFixApproval(finding.id, approvals),
+    const approvalOrder = new Map(
+      sortPendingApprovalsByUrgency(approvals).map((approval, index) => [approval.targetId, index]),
     );
+    return unifiedFindings()
+      .filter((finding) => hasPendingInvestigationFixApproval(finding.id, approvals))
+      .sort(
+        (a, b) =>
+          (approvalOrder.get(a.id) ?? Number.MAX_SAFE_INTEGER) -
+          (approvalOrder.get(b.id) ?? Number.MAX_SAFE_INTEGER),
+      );
   },
 
   get findingsNeedingAttention() {

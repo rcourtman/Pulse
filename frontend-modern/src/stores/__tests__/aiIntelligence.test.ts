@@ -474,4 +474,81 @@ describe('aiIntelligenceStore', () => {
       'infra-warning',
     ]);
   });
+
+  it('sorts pending approvals and approval-linked findings by urgency', async () => {
+    vi.mocked(AIAPI.getUnifiedFindings).mockResolvedValueOnce({
+      findings: [
+        {
+          id: 'finding-later',
+          source: 'ai-patrol',
+          severity: 'warning',
+          category: 'performance',
+          resource_id: 'instance:node:200',
+          resource_name: 'node-200',
+          resource_type: 'host',
+          title: 'Queued remediation later',
+          description: 'Later approval.',
+          detected_at: '2026-03-01T00:00:00Z',
+          status: 'active',
+          investigation_outcome: 'fix_queued',
+        },
+        {
+          id: 'finding-sooner',
+          source: 'ai-patrol',
+          severity: 'warning',
+          category: 'performance',
+          resource_id: 'instance:node:201',
+          resource_name: 'node-201',
+          resource_type: 'host',
+          title: 'Queued remediation sooner',
+          description: 'Sooner approval.',
+          detected_at: '2026-03-01T00:00:00Z',
+          status: 'active',
+          investigation_outcome: 'fix_queued',
+        },
+      ],
+      count: 2,
+    });
+
+    vi.mocked(AIAPI.getPendingApprovals).mockResolvedValueOnce([
+      {
+        id: 'approval-later',
+        toolId: 'investigation_fix',
+        command: 'restart later',
+        targetType: 'host',
+        targetId: 'finding-later',
+        targetName: 'node-200',
+        context: 'Later approval',
+        riskLevel: 'low',
+        status: 'pending',
+        requestedAt: '2026-03-01T00:01:00Z',
+        expiresAt: '2026-04-01T00:10:00Z',
+      },
+      {
+        id: 'approval-sooner',
+        toolId: 'investigation_fix',
+        command: 'restart sooner',
+        targetType: 'host',
+        targetId: 'finding-sooner',
+        targetName: 'node-201',
+        context: 'Sooner approval',
+        riskLevel: 'high',
+        status: 'pending',
+        requestedAt: '2026-03-01T00:02:00Z',
+        expiresAt: '2026-04-01T00:06:00Z',
+      },
+    ]);
+
+    await aiIntelligenceStore.loadFindings();
+    await aiIntelligenceStore.loadPendingApprovals();
+
+    expect(aiIntelligenceStore.pendingApprovals.map((approval) => approval.id)).toEqual([
+      'approval-sooner',
+      'approval-later',
+    ]);
+    expect(aiIntelligenceStore.findingsWithPendingApprovals.map((finding) => finding.id)).toEqual([
+      'finding-sooner',
+      'finding-later',
+    ]);
+  });
 });

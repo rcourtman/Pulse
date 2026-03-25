@@ -3,6 +3,14 @@ export interface ApprovalRiskPresentation {
   label: string;
 }
 
+const APPROVAL_RISK_SORT_ORDER: Record<string, number> = {
+  critical: 0,
+  high: 0,
+  medium: 1,
+  low: 2,
+  unknown: 3,
+};
+
 function normalizeApprovalRiskLevel(level?: string): string {
   const normalized = level?.trim().toLowerCase();
   if (!normalized) return 'unknown';
@@ -35,4 +43,23 @@ export function getApprovalRiskPresentation(level?: string): ApprovalRiskPresent
         label: normalized,
       };
   }
+}
+
+export function getApprovalRiskSortOrder(level?: string): number {
+  const normalized = normalizeApprovalRiskLevel(level);
+  return APPROVAL_RISK_SORT_ORDER[normalized] ?? APPROVAL_RISK_SORT_ORDER.unknown;
+}
+
+export function sortPendingApprovalsByUrgency<
+  T extends { expiresAt: string; requestedAt: string; riskLevel?: string },
+>(approvals: T[]): T[] {
+  return [...approvals].sort((a, b) => {
+    const expiryDiff = new Date(a.expiresAt).getTime() - new Date(b.expiresAt).getTime();
+    if (expiryDiff !== 0) return expiryDiff;
+
+    const riskDiff = getApprovalRiskSortOrder(a.riskLevel) - getApprovalRiskSortOrder(b.riskLevel);
+    if (riskDiff !== 0) return riskDiff;
+
+    return new Date(a.requestedAt).getTime() - new Date(b.requestedAt).getTime();
+  });
 }

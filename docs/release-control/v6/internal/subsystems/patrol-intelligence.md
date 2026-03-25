@@ -379,6 +379,13 @@ denial handling. `ApprovalSection.tsx` and
 `usePatrolIntelligenceState.ts` may still choose Patrol-specific success copy,
 but they must not reintroduce local `startProTrial()` status-code branches
 that diverge from the commercial backend contract.
+Pending Patrol fix approvals now also require a canonical urgency order across
+the store and Patrol approval surfaces. `frontend-modern/src/stores/aiIntelligence.ts`,
+`frontend-modern/src/components/patrol/ApprovalBanner.tsx`, and dashboard
+approval consumers must treat the approval queue as `soonest expiry first`,
+then higher risk, then older request time, rather than inheriting raw API
+order. Approval-linked findings must follow that same ordering so multi-approval
+`Review` actions jump to the most urgent finding instead of an arbitrary one.
 That same store now owns the Patrol dashboard load bundle as well, so the
 page refresh path stays aligned on a single orchestrated AI bundle instead of
 repeating the individual summary, findings, approval, and correlation fetches
