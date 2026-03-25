@@ -16,7 +16,7 @@ import { Card } from '@/components/shared/Card';
 import { aiIntelligenceStore, type UnifiedFinding } from '@/stores/aiIntelligence';
 import { notificationStore } from '@/stores/notifications';
 import { aiChatStore } from '@/stores/aiChat';
-import { InvestigationSection, ApprovalSection } from '@/components/patrol';
+import { InvestigationSection, ApprovalSection, CountdownTimer } from '@/components/patrol';
 import { AIAPI, type RemediationPlan } from '@/api/ai';
 import type { PatrolRuntimeState } from '@/api/patrol';
 import { getApprovalRiskPresentation } from '@/utils/approvalRiskPresentation';
@@ -1179,7 +1179,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                                   d="M13 10V3L4 14h7v7l9-11h-7z"
                                 />
                               </svg>
-                              <span>Next: {formatTime(props.nextPatrolAt!)}</span>
+                              <CountdownTimer targetDate={props.nextPatrolAt!} prefix="Next: " />
                             </div>
                           </Show>
                           <Show

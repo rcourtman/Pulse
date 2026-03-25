@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   buildFindingFilterOptions,
@@ -24,6 +26,11 @@ import {
   getInvestigationStatusBadgeClasses,
   doesFindingNeedAttention,
 } from '@/utils/aiFindingPresentation';
+
+const findingsPanelSource = readFileSync(
+  resolve(__dirname, '..', 'FindingsPanel.tsx'),
+  'utf-8',
+);
 
 describe('aiFindingPresentation', () => {
   describe('severity presentation', () => {
@@ -148,6 +155,13 @@ describe('aiFindingPresentation', () => {
       expect(getFindingEmptyStateCopy('resolved')).toEqual({
         title: 'No Patrol findings to display',
       });
+    });
+  });
+
+  describe('patrol schedule presentation', () => {
+    it('keeps the next patrol footer on the canonical countdown timer', () => {
+      expect(findingsPanelSource).toContain('<CountdownTimer targetDate={props.nextPatrolAt!} prefix="Next: " />');
+      expect(findingsPanelSource).not.toContain('Next: {formatTime(props.nextPatrolAt!)}');
     });
   });
 
