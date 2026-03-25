@@ -243,6 +243,69 @@ func TestContract_BillingStateQuickstartJSONSnapshot(t *testing.T) {
 	assertJSONSnapshot(t, got, want)
 }
 
+func TestContract_HostedAISettingsAutoBootstrapJSONSnapshot(t *testing.T) {
+	t.Setenv("PULSE_HOSTED_MODE", "true")
+
+	baseDir := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(baseDir)
+	persistence, err := mtp.GetPersistence("default")
+	if err != nil {
+		t.Fatalf("GetPersistence(default): %v", err)
+	}
+
+	seedHostedAIBillingState(t, mtp, "default")
+
+	handler := NewAISettingsHandler(mtp, nil, nil)
+	handler.defaultConfig = &config.Config{DataPath: baseDir}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/settings/ai", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleGetAISettings(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	if !persistence.HasAIConfig() {
+		t.Fatal("expected hosted AI settings contract to persist canonical ai.enc bootstrap")
+	}
+
+	const want = `{
+		"enabled":true,
+		"model":"quickstart:minimax-2.5m",
+		"chat_model":"quickstart:minimax-2.5m",
+		"patrol_model":"quickstart:minimax-2.5m",
+		"configured":true,
+		"custom_context":"",
+		"auth_method":"api_key",
+		"oauth_connected":false,
+		"patrol_interval_minutes":360,
+		"patrol_enabled":true,
+		"patrol_auto_fix":false,
+		"alert_triggered_analysis":true,
+		"patrol_event_triggers_enabled":true,
+		"use_proactive_thresholds":false,
+		"available_models":[],
+		"anthropic_configured":false,
+		"openai_configured":false,
+		"openrouter_configured":false,
+		"deepseek_configured":false,
+		"gemini_configured":false,
+		"ollama_configured":false,
+		"ollama_base_url":"http://localhost:11434",
+		"configured_providers":[],
+		"control_level":"read_only",
+		"protected_guests":[],
+		"discovery_enabled":false,
+		"quickstart_credits_total":25,
+		"quickstart_credits_used":0,
+		"quickstart_credits_remaining":25,
+		"quickstart_credits_available":true,
+		"using_quickstart":true
+	}`
+
+	assertJSONSnapshot(t, rec.Body.Bytes(), want)
+}
+
 func TestContract_StripeWebhookHandlersUseCanonicalRuntimeDataDir(t *testing.T) {
 	envDir := t.TempDir()
 	t.Setenv("PULSE_DATA_DIR", envDir)

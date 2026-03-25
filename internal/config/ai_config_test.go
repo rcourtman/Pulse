@@ -223,6 +223,14 @@ func TestAIConfig_GetConfiguredProviders(t *testing.T) {
 	}
 }
 
+func TestDefaultModelForProvider_Quickstart(t *testing.T) {
+	got := DefaultModelForProvider(AIProviderQuickstart)
+	want := FormatModelString(AIProviderQuickstart, DefaultAIModelQuickstart)
+	if got != want {
+		t.Fatalf("DefaultModelForProvider(%q) = %q, want %q", AIProviderQuickstart, got, want)
+	}
+}
+
 func TestAIConfig_GetAPIKeyForProvider(t *testing.T) {
 	config := AIConfig{
 		AnthropicAPIKey:  "anthropic-key",

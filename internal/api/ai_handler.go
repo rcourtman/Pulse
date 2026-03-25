@@ -77,6 +77,7 @@ type AIHandler struct {
 	mtMonitor          *monitoring.MultiTenantMonitor
 	defaultConfig      *config.Config
 	defaultPersistence AIPersistence
+	hostedMode         bool
 	defaultService     AIService
 	agentServer        *agentexec.Server
 	services           map[string]AIService
@@ -118,6 +119,7 @@ func NewAIHandler(mtp *config.MultiTenantPersistence, mtm *monitoring.MultiTenan
 		mtMonitor:          mtm,
 		defaultConfig:      defaultConfig,
 		defaultPersistence: defaultPersistence,
+		hostedMode:         hostedModeEnabledFromEnv(),
 		agentServer:        agentServer,
 		services:           make(map[string]AIService),
 		unifiedStores:      make(map[string]*unified.UnifiedStore),
@@ -460,6 +462,21 @@ func (h *AIHandler) loadAIConfig(ctx context.Context) *config.AIConfig {
 	p := h.getPersistence(ctx)
 	if p == nil {
 		return nil
+	}
+	if persistence, ok := p.(*config.ConfigPersistence); ok {
+		billingBaseDir := persistence.DataDir()
+		orgID := strings.TrimSpace(GetOrgID(ctx))
+		if orgID == "" {
+			orgID = "default"
+		}
+		if h.mtPersistence != nil {
+			billingBaseDir = h.mtPersistence.BaseDataDir()
+		}
+		cfg, err := loadHostedAwareAIConfig(h.hostedMode, billingBaseDir, orgID, persistence)
+		if err == nil {
+			return cfg
+		}
+		log.Warn().Err(err).Str("org_id", orgID).Msg("Failed to load hosted-aware Pulse Assistant config")
 	}
 	cfg, err := p.LoadAIConfig()
 	if err != nil {

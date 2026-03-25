@@ -1854,6 +1854,17 @@ func (c *ConfigPersistence) LoadAIConfig() (*AIConfig, error) {
 	return settings, nil
 }
 
+// HasAIConfig reports whether ai.enc exists on disk, which distinguishes
+// explicit operator configuration from synthesized defaults returned by
+// LoadAIConfig when the file is absent.
+func (c *ConfigPersistence) HasAIConfig() bool {
+	if c == nil || c.fs == nil {
+		return false
+	}
+	_, err := c.fs.Stat(c.aiFile)
+	return err == nil
+}
+
 func applyLegacyAIConfigFields(settings *AIConfig, raw map[string]json.RawMessage) bool {
 	if settings == nil || len(raw) == 0 {
 		return false

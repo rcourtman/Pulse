@@ -223,6 +223,13 @@ before any API-only token fallback or optional-auth anonymous fallback so
 operators can mint relay-mobile credentials and continue onboarding from the
 hosted runtime itself even after that tenant has already minted managed API
 tokens.
+That same lifecycle-adjacent hosted setup path also depends on AI bootstrap
+staying canonical before the first settings write. Hosted operators may land
+in Chat, Patrol-backed setup hints, or AI-dependent remediation surfaces
+before anyone has visited AI Settings, so the shared `internal/api/`
+hosted-AI bootstrap helper must persist the machine-owned quickstart-backed
+`ai.enc` for entitled tenants instead of leaving lifecycle-adjacent hosted
+flows in a fake `AI disabled` state that disappears only after a manual save.
 That same lifecycle-adjacent hosted entitlement path must also preserve the
 trial quickstart grant fields already seeded into billing state. Hosted setup
 and pairing may depend on the shared `internal/api/` entitlement refresh, but

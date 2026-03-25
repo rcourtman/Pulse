@@ -131,6 +131,7 @@ const (
 	DefaultAIModelOllama     = "llama3"
 	DefaultAIModelDeepSeek   = "deepseek-chat"    // V3.2 with tool-use support
 	DefaultAIModelGemini     = "gemini-2.5-flash" // Latest stable Gemini model
+	DefaultAIModelQuickstart = "minimax-2.5m"
 	DefaultOllamaBaseURL     = "http://localhost:11434"
 	DefaultOpenRouterBaseURL = "https://openrouter.ai/api/v1/chat/completions"
 	DefaultDeepSeekBaseURL   = "https://api.deepseek.com/chat/completions"
@@ -331,6 +332,8 @@ func DefaultModelForProvider(provider string) string {
 		return FormatModelString(AIProviderGemini, DefaultAIModelGemini)
 	case AIProviderOllama:
 		return FormatModelString(AIProviderOllama, DefaultAIModelOllama)
+	case AIProviderQuickstart:
+		return FormatModelString(AIProviderQuickstart, DefaultAIModelQuickstart)
 	default:
 		return ""
 	}

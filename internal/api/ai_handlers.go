@@ -48,6 +48,7 @@ type AISettingsHandler struct {
 	mtMonitor               *monitoring.MultiTenantMonitor
 	defaultConfig           *config.Config
 	defaultPersistence      *config.ConfigPersistence
+	hostedMode              bool
 	defaultAIService        *ai.Service
 	aiServices              map[string]*ai.Service
 	aiServicesMu            sync.RWMutex
@@ -186,6 +187,7 @@ func NewAISettingsHandler(mtp *config.MultiTenantPersistence, mtm *monitoring.Mu
 	var defaultConfig *config.Config
 	var defaultPersistence *config.ConfigPersistence
 	var defaultAIService *ai.Service
+	hostedMode := hostedModeEnabledFromEnv()
 
 	if mtm != nil {
 		if m, err := mtm.GetMonitor("default"); err == nil && m != nil {
@@ -198,36 +200,12 @@ func NewAISettingsHandler(mtp *config.MultiTenantPersistence, mtm *monitoring.Mu
 		}
 	}
 
-	defaultAIService = ai.NewService(defaultPersistence, agentServer)
-	defaultAIService.SetOrgID("default")
-	defaultAIService.SetAlertAnalyzerFactory(getCreateAlertAnalyzer())
-	// Wire quickstart credit manager before LoadConfig so the quickstart
-	// provider path is available during initial configuration.
-	if defaultPersistence != nil {
-		billingStore := config.NewFileBillingStore(defaultPersistence.DataDir())
-		qsMgr := ai.NewFileQuickstartCreditManager(
-			billingStore,
-			"default",
-			func() *config.AIConfig {
-				cfg, _ := defaultPersistence.LoadAIConfig()
-				return cfg
-			},
-			"default",
-		)
-		defaultAIService.SetQuickstartCredits(qsMgr)
-	}
-	if defaultPersistence != nil {
-		if err := defaultAIService.LoadConfig(); err != nil {
-			log.Warn().Err(err).Msg("Failed to load AI config on startup")
-		}
-	}
-
-	return &AISettingsHandler{
+	handler := &AISettingsHandler{
 		mtPersistence:        mtp,
 		mtMonitor:            mtm,
 		defaultConfig:        defaultConfig,
 		defaultPersistence:   defaultPersistence,
-		defaultAIService:     defaultAIService,
+		hostedMode:           hostedMode,
 		aiServices:           make(map[string]*ai.Service),
 		agentServer:          agentServer,
 		proxmoxCorrelators:   make(map[string]*proxmox.EventCorrelator),
@@ -243,6 +221,57 @@ func NewAISettingsHandler(mtp *config.MultiTenantPersistence, mtm *monitoring.Mu
 		incidentCoordinators: make(map[string]*ai.IncidentCoordinator),
 		incidentRecorders:    make(map[string]*metrics.IncidentRecorder),
 	}
+
+	defaultAIService = ai.NewService(defaultPersistence, agentServer)
+	defaultAIService.SetOrgID("default")
+	defaultAIService.SetAlertAnalyzerFactory(getCreateAlertAnalyzer())
+	// Wire quickstart credit manager before LoadConfig so the quickstart
+	// provider path is available during initial configuration.
+	if defaultPersistence != nil {
+		billingStore := config.NewFileBillingStore(defaultPersistence.DataDir())
+		qsMgr := ai.NewFileQuickstartCreditManager(
+			billingStore,
+			"default",
+			func() *config.AIConfig {
+				cfg, _ := handler.loadAIConfigForPersistence(context.Background(), "default", defaultPersistence)
+				return cfg
+			},
+			"default",
+		)
+		defaultAIService.SetQuickstartCredits(qsMgr)
+		if _, err := handler.loadAIConfigForPersistence(context.Background(), "default", defaultPersistence); err != nil {
+			log.Warn().Err(err).Msg("Failed to bootstrap Pulse Assistant config on startup")
+		}
+		if err := defaultAIService.LoadConfig(); err != nil {
+			log.Warn().Err(err).Msg("Failed to load AI config on startup")
+		}
+	}
+	handler.defaultAIService = defaultAIService
+
+	return handler
+}
+
+func (h *AISettingsHandler) loadAIConfigForPersistence(_ context.Context, orgID string, persistence *config.ConfigPersistence) (*config.AIConfig, error) {
+	if persistence == nil {
+		return nil, fmt.Errorf("Pulse Assistant config persistence unavailable")
+	}
+	billingBaseDir := persistence.DataDir()
+	if h != nil && h.mtPersistence != nil {
+		billingBaseDir = h.mtPersistence.BaseDataDir()
+	}
+	return loadHostedAwareAIConfig(h != nil && h.hostedMode, billingBaseDir, orgID, persistence)
+}
+
+func (h *AISettingsHandler) loadAIConfig(ctx context.Context) (*config.AIConfig, error) {
+	persistence := h.getPersistence(ctx)
+	if persistence == nil {
+		return nil, fmt.Errorf("Pulse Assistant config persistence unavailable")
+	}
+	orgID := strings.TrimSpace(GetOrgID(ctx))
+	if orgID == "" {
+		orgID = "default"
+	}
+	return h.loadAIConfigForPersistence(ctx, orgID, persistence)
 }
 
 // GetAIService returns the underlying AI service
@@ -303,12 +332,15 @@ func (h *AISettingsHandler) GetAIService(ctx context.Context) *ai.Service {
 		billingStore,
 		orgID,
 		func() *config.AIConfig {
-			cfg, _ := persistence.LoadAIConfig()
+			cfg, _ := h.loadAIConfigForPersistence(context.Background(), orgID, persistence)
 			return cfg
 		},
 		orgID,
 	)
 	svc.SetQuickstartCredits(qsMgr)
+	if _, err := h.loadAIConfigForPersistence(context.Background(), orgID, persistence); err != nil {
+		log.Warn().Str("orgID", orgID).Err(err).Msg("Failed to bootstrap Pulse Assistant config for tenant")
+	}
 	if err := svc.LoadConfig(); err != nil {
 		log.Warn().Str("orgID", orgID).Err(err).Msg("Failed to load AI config for tenant")
 	}
@@ -2242,8 +2274,7 @@ func (h *AISettingsHandler) HandleGetAISettings(w http.ResponseWriter, r *http.R
 	}
 
 	ctx := r.Context()
-	persistence := h.getPersistence(ctx)
-	settings, err := persistence.LoadAIConfig()
+	settings, err := h.loadAIConfig(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to load Pulse Assistant settings")
 		http.Error(w, "Failed to load Pulse Assistant settings", http.StatusInternalServerError)
@@ -2344,7 +2375,7 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 	}
 
 	// Load existing settings
-	settings, err := h.getPersistence(r.Context()).LoadAIConfig()
+	settings, err := h.loadAIConfig(r.Context())
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to load existing AI settings")
 		settings = config.NewDefaultAIConfig()
@@ -4457,7 +4488,7 @@ func (h *AISettingsHandler) HandleOAuthExchange(w http.ResponseWriter, r *http.R
 		http.Error(w, "Tenant persistence unavailable", http.StatusInternalServerError)
 		return
 	}
-	settings, err := persistence.LoadAIConfig()
+	settings, err := h.loadAIConfig(oauthCtx)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to load Pulse Assistant settings for OAuth")
 		settings = config.NewDefaultAIConfig()
@@ -4566,7 +4597,7 @@ func (h *AISettingsHandler) HandleOAuthCallback(w http.ResponseWriter, r *http.R
 		http.Redirect(w, r, "/settings?ai_oauth_error=save_failed", http.StatusTemporaryRedirect)
 		return
 	}
-	settings, err := persistence.LoadAIConfig()
+	settings, err := h.loadAIConfig(oauthCtx)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to load Pulse Assistant settings for OAuth")
 		settings = config.NewDefaultAIConfig()
@@ -4623,7 +4654,7 @@ func (h *AISettingsHandler) HandleOAuthDisconnect(w http.ResponseWriter, r *http
 		http.Error(w, "Failed to load settings", http.StatusInternalServerError)
 		return
 	}
-	settings, err := persistence.LoadAIConfig()
+	settings, err := h.loadAIConfig(r.Context())
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to load Pulse Assistant settings for OAuth disconnect")
 		http.Error(w, "Failed to load settings", http.StatusInternalServerError)

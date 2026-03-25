@@ -56,6 +56,7 @@ Own canonical runtime payload shapes between backend and frontend.
 33. `frontend-modern/src/utils/infrastructureSettingsPresentation.ts`
 34. `internal/api/router_routes_auth_security.go`
 35. `internal/api/relay_hosted_runtime.go`
+36. `internal/api/ai_hosted_runtime.go`
 
 ## Shared Boundaries
 
@@ -143,6 +144,7 @@ Own canonical runtime payload shapes between backend and frontend.
 18. Keep tenant settings-scope authorization aligned with org management: `internal/api/security_setup_fix.go`, `internal/api/contract_test.go`, and settings-bound hosted callers must allow the current non-default org owner/admin membership to exercise privileged tenant routes, rather than requiring a separate configured local admin identity after hosted handoff.
 19. Keep mobile onboarding payload reads aligned with the server-owned relay-mobile credential: `internal/api/router_routes_ai_relay.go`, `internal/api/onboarding_handlers.go`, and `internal/api/contract_test.go` must allow the dedicated `relay:mobile:access` scope to reach the governed QR, deep-link, and connection-validation payloads without reintroducing a broader `settings:read` requirement for token-authenticated pairing clients.
 20. Keep hosted billing-state quickstart payload fields on the shared API contract: `internal/api/hosted_entitlement_refresh.go`, `internal/api/subscription_state_handlers.go`, and `internal/api/contract_test.go` must preserve `quickstart_credits_granted`, `quickstart_credits_used`, and `quickstart_credits_granted_at` through hosted signup, hosted lease refresh, and billing-state reads instead of letting lease rewrites silently erase seeded quickstart inventory.
+21. Keep hosted AI settings bootstrap on the shared API contract: `internal/api/ai_hosted_runtime.go`, `internal/api/ai_handlers.go`, `internal/api/ai_handler.go`, and `internal/api/contract_test.go` must treat a missing `ai.enc` in hosted mode as a canonical bootstrap condition, persist one machine-owned quickstart-backed AI config when hosted entitlements grant AI capability, and preserve that configured settings payload as the same public contract that Chat, Patrol, and AI Settings consume.
 
 ## Forbidden Paths
 
@@ -1630,3 +1632,14 @@ generated relay identity metadata instead of requiring a prior manual
 `PUT /api/settings/relay`. The API response contract must continue to expose
 only public relay fields while omitting the hosted instance secret and
 private key.
+That same shared backend API contract now also owns hosted AI bootstrap
+reads. `internal/api/ai_hosted_runtime.go`, `internal/api/ai_handler.go`,
+`internal/api/ai_handlers.go`, and `internal/api/contract_test.go` must derive
+`/api/settings/ai` and the initial hosted AI runtime from the same runtime
+helper. In hosted mode, when no explicit `ai.enc` exists but the default
+hosted billing lease grants AI capability and carries hosted entitlement
+proof, those read surfaces must persist a canonical quickstart-backed AI
+config with the governed hosted default model instead of returning a synthetic
+`enabled=false` payload that leaves Chat and Patrol unavailable until the
+operator manually saves settings. Once a real AI config exists, that explicit
+operator-owned state must remain authoritative over hosted bootstrap.

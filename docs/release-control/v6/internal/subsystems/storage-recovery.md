@@ -877,6 +877,14 @@ surfaces may run without local auth configured, but a valid tenant
 the anonymous optional-auth fallback so hosted recovery, onboarding, and
 support flows do not silently degrade into unauthenticated state or bearer-
 token-only mode after cloud handoff.
+That same shared `internal/api/` boundary also owns hosted AI bootstrap
+continuity. Storage- and recovery-adjacent hosted flows may surface Patrol-
+backed investigation or AI-assisted recovery guidance before an operator has
+ever opened AI Settings, so the shared hosted runtime helper must persist the
+canonical quickstart-backed `ai.enc` from entitled billing state when no
+explicit AI config exists. Adjacent recovery surfaces must not invent their
+own "AI disabled until configured" fallback when the hosted runtime already
+has enough entitlement proof to bootstrap the machine-owned default.
 That same shared settings helper layer must then preserve canonical
 org-management privilege for non-default tenant requests. Storage- and
 recovery-adjacent hosted flows that reuse settings-bound helpers must allow

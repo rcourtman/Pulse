@@ -9,7 +9,7 @@
   "contract_file": "docs/release-control/v6/internal/subsystems/ai-runtime.md",
   "status_file": "docs/release-control/v6/internal/status.json",
   "registry_file": "docs/release-control/v6/internal/subsystems/registry.json",
-  "dependency_subsystem_ids": ["frontend-primitives"]
+  "dependency_subsystem_ids": ["api-contracts", "frontend-primitives"]
 }
 ```
 
@@ -23,19 +23,20 @@ runtime cost control, and shared AI transport surfaces.
 1. `internal/ai/`
 2. `internal/api/ai_handler.go`
 3. `internal/api/ai_handlers.go`
-4. `internal/api/ai_intelligence_handlers.go`
-5. `frontend-modern/src/api/ai.ts`
-6. `frontend-modern/src/api/patrol.ts`
-7. `frontend-modern/src/components/AI/AICostDashboard.tsx`
-8. `frontend-modern/src/components/AI/Chat/`
-9. `frontend-modern/src/utils/aiChatPresentation.ts`
-10. `frontend-modern/src/utils/aiControlLevelPresentation.ts`
-11. `frontend-modern/src/utils/aiCostPresentation.ts`
-12. `frontend-modern/src/utils/aiExplorePresentation.ts`
-13. `frontend-modern/src/utils/aiProviderHealthPresentation.ts`
-14. `frontend-modern/src/utils/aiProviderPresentation.ts`
-15. `frontend-modern/src/utils/aiSessionDiffPresentation.ts`
-16. `frontend-modern/src/utils/textPresentation.ts`
+4. `internal/api/ai_hosted_runtime.go`
+5. `internal/api/ai_intelligence_handlers.go`
+6. `frontend-modern/src/api/ai.ts`
+7. `frontend-modern/src/api/patrol.ts`
+8. `frontend-modern/src/components/AI/AICostDashboard.tsx`
+9. `frontend-modern/src/components/AI/Chat/`
+10. `frontend-modern/src/utils/aiChatPresentation.ts`
+11. `frontend-modern/src/utils/aiControlLevelPresentation.ts`
+12. `frontend-modern/src/utils/aiCostPresentation.ts`
+13. `frontend-modern/src/utils/aiExplorePresentation.ts`
+14. `frontend-modern/src/utils/aiProviderHealthPresentation.ts`
+15. `frontend-modern/src/utils/aiProviderPresentation.ts`
+16. `frontend-modern/src/utils/aiSessionDiffPresentation.ts`
+17. `frontend-modern/src/utils/textPresentation.ts`
 
 ## Shared Boundaries
 
@@ -105,6 +106,7 @@ it. `frontend-modern/src/api/ai.ts`,
 `frontend-modern/src/api/patrol.ts`,
 `internal/api/ai_handler.go`,
 `internal/api/ai_handlers.go`, and
+`internal/api/ai_hosted_runtime.go`, and
 `internal/api/ai_intelligence_handlers.go` are runtime control surfaces for
 the AI product while also remaining canonical payload contract boundaries.
 That same AI transport boundary now also defines the narrow Pulse Mobile
@@ -114,6 +116,16 @@ mobile runtime routes may accept that scope as a compatibility alias alongside
 legacy `ai:chat` or `ai:execute` mobile tokens. Broader AI runtime surfaces
 must stay on their canonical AI scopes instead of treating the mobile relay
 capability as a general-purpose AI permission.
+That same shared AI transport boundary now also owns hosted AI bootstrap.
+When Pulse Cloud runs in hosted mode and no explicit `ai.enc` exists yet,
+`internal/api/ai_hosted_runtime.go`, `internal/api/ai_handler.go`, and
+`internal/api/ai_handlers.go` must derive the initial runtime config from the
+canonical hosted billing state instead of falling back to a synthetic
+`enabled=false` default. Entitled hosted tenants that carry AI capabilities
+must persist one machine-owned quickstart-backed AI config with the canonical
+`quickstart:minimax-2.5m` runtime models so Chat and Patrol can start before
+the operator visits AI Settings, while any explicitly written AI config
+remains authoritative and must not be overwritten by hosted bootstrap.
 The same ownership includes the Pulse query tool schema under
 `internal/ai/tools/`: topology-query input names must stay canonical inside
 the AI runtime itself, so new tool arguments such as `max_proxmox_nodes`

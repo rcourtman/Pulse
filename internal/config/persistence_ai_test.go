@@ -145,6 +145,25 @@ func TestPersistence_AIConfig(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestPersistence_HasAIConfig(t *testing.T) {
+	tempDir := t.TempDir()
+	p := NewConfigPersistence(tempDir)
+
+	if p.HasAIConfig() {
+		t.Fatal("expected HasAIConfig() to be false before ai config is saved")
+	}
+
+	cfg := NewDefaultAIConfig()
+	cfg.Enabled = true
+	if err := p.SaveAIConfig(*cfg); err != nil {
+		t.Fatalf("SaveAIConfig(): %v", err)
+	}
+
+	if !p.HasAIConfig() {
+		t.Fatal("expected HasAIConfig() to be true after ai config is saved")
+	}
+}
+
 func TestPersistence_AIConfig_MigratesSuggestControlLevel(t *testing.T) {
 	tempDir := t.TempDir()
 	p := NewConfigPersistence(tempDir)

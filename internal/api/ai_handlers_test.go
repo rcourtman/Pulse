@@ -191,6 +191,36 @@ func TestAISettingsResponse_UsesCanonicalEmptyCollections(t *testing.T) {
 	}
 }
 
+func TestAISettingsHandler_GetHostedSettings_AutoBootstrapsQuickstart(t *testing.T) {
+	t.Setenv("PULSE_HOSTED_MODE", "true")
+
+	tmp := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(tmp)
+	persistence, err := mtp.GetPersistence("default")
+	require.NoError(t, err)
+
+	seedHostedAIBillingState(t, mtp, "default")
+
+	handler := NewAISettingsHandler(mtp, nil, nil)
+	handler.defaultConfig = &config.Config{DataPath: tmp}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/settings/ai", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleGetAISettings(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, "body=%s", rec.Body.String())
+
+	var resp AISettingsResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.True(t, resp.Enabled)
+	assert.True(t, resp.Configured)
+	assert.Equal(t, config.DefaultModelForProvider(config.AIProviderQuickstart), resp.Model)
+	assert.Equal(t, 25, resp.QuickstartCreditsTotal)
+	assert.Equal(t, 25, resp.QuickstartCreditsRemaining)
+	assert.True(t, resp.QuickstartCreditsAvailable)
+	assert.True(t, persistence.HasAIConfig())
+}
+
 func TestAISettingsHandler_UpdateSettings_OpenRouterKeySetAndClear(t *testing.T) {
 	t.Parallel()
 
