@@ -48,6 +48,7 @@ describe('getPatrolSummaryPresentation', () => {
       }),
     ).toEqual({
       title: 'Coverage incomplete',
+      description: 'Patrol coverage is incomplete.',
       eyebrow: 'Patrol assessment',
       compactLabel: 'Coverage incomplete',
       tone: 'warning',
@@ -68,6 +69,37 @@ describe('getPatrolSummaryPresentation', () => {
       }),
     ).toEqual({
       title: 'Issues detected',
+      description: 'Warnings require review.',
+      eyebrow: 'Patrol assessment',
+      compactLabel: 'Issues detected',
+      tone: 'warning',
+    });
+  });
+
+  it('combines active findings with the coverage caveat when both are present', () => {
+    expect(
+      getPatrolAssessmentPresentation({
+        overallHealth: {
+          score: 60,
+          grade: 'C',
+          trend: 'stable',
+          factors: [
+            {
+              name: 'Patrol coverage incomplete',
+              impact: -0.35,
+              description: 'Patrol coverage is incomplete.',
+              category: 'coverage',
+            },
+          ],
+          prediction:
+            'Patrol coverage is incomplete: recent activity was limited to scoped runs and ended with errors, so overall health is not fully verified.',
+        },
+        warningFindings: 1,
+      }),
+    ).toEqual({
+      title: 'Issues detected',
+      description:
+        'Patrol surfaced 1 active warning finding. Recent coverage is also incomplete, so the rest of your infrastructure is not fully verified.',
       eyebrow: 'Patrol assessment',
       compactLabel: 'Issues detected',
       tone: 'warning',

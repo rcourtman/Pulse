@@ -18,6 +18,7 @@ const { findingsPanelState, runHistoryState, intelligenceState } = vi.hoisted(()
     selection: null as Record<string, unknown> | null,
   },
   intelligenceState: {
+    findings: [] as Array<Record<string, unknown>>,
     summary: null as {
       timestamp: string;
       overall_health: {
@@ -141,7 +142,6 @@ vi.mock('@/stores/notifications', () => ({
 
 vi.mock('@/stores/aiIntelligence', () => {
   const store = {
-    findings: [],
     loadFindings: vi.fn().mockResolvedValue(undefined),
     loadIntelligenceSummary: vi.fn().mockResolvedValue(undefined),
     loadCircuitBreakerStatus: vi.fn().mockResolvedValue(undefined),
@@ -161,6 +161,9 @@ vi.mock('@/stores/aiIntelligence', () => {
         store.loadCorrelations(),
       ]);
     }),
+    get findings() {
+      return intelligenceState.findings;
+    },
     get intelligenceSummary() {
       return intelligenceState.summary;
     },
@@ -300,6 +303,7 @@ describe('AIIntelligence entitlement gating', () => {
     notificationErrorMock.mockReset();
     findingsPanelState.latestProps = null;
     runHistoryState.selection = null;
+    intelligenceState.findings = [];
     intelligenceState.summary = null;
     intelligenceState.correlations = null;
     setCorrelationsState(null);
@@ -823,6 +827,110 @@ describe('AIIntelligence entitlement gating', () => {
         'Patrol coverage is incomplete: recent activity was limited to scoped runs and ended with errors, so overall health is not fully verified.',
       ),
     ).toHaveLength(1);
+  });
+
+  it('describes both findings and incomplete coverage when active issues exist', async () => {
+    hasFeatureMock.mockReturnValue(true);
+    licenseStatusMock.mockReturnValue({ subscription_state: 'active' });
+    getPatrolStatusMock.mockResolvedValue(defaultPatrolStatus({ license_required: false }));
+    getPatrolRunHistoryMock.mockResolvedValue([
+      {
+        id: 'run-full-error',
+        started_at: '2026-03-12T09:56:00Z',
+        completed_at: '2026-03-12T09:57:00Z',
+        duration_ms: 60000,
+        type: 'patrol',
+        trigger_reason: 'startup',
+        scope_resource_ids: [],
+        effective_scope_resource_ids: [],
+        scope_resource_types: [],
+        resources_checked: 58,
+        nodes_checked: 0,
+        guests_checked: 0,
+        docker_checked: 0,
+        storage_checked: 0,
+        hosts_checked: 0,
+        pbs_checked: 0,
+        pmg_checked: 0,
+        kubernetes_checked: 0,
+        new_findings: 1,
+        existing_findings: 0,
+        rejected_findings: 0,
+        resolved_findings: 0,
+        auto_fix_count: 0,
+        findings_summary: '1 warning',
+        finding_ids: ['finding-1'],
+        error_count: 1,
+        status: 'error',
+        triage_flags: 0,
+        tool_call_count: 0,
+      },
+    ]);
+    intelligenceState.findings = [
+      {
+        id: 'finding-1',
+        source: 'patrol',
+        isThreshold: false,
+        status: 'active',
+        severity: 'warning',
+        resourceId: 'svc-patrol',
+        resourceType: 'service',
+        detectedAt: '2026-03-12T09:57:00Z',
+      },
+    ];
+    intelligenceState.summary = {
+      timestamp: '2026-03-12T10:00:00Z',
+      overall_health: {
+        score: 60,
+        grade: 'C',
+        trend: 'stable',
+        factors: [
+          {
+            name: 'Patrol coverage incomplete',
+            impact: -0.35,
+            description:
+              'Patrol coverage is incomplete: recent activity was limited to scoped runs and ended with errors, so overall health is not fully verified.',
+            category: 'coverage',
+          },
+        ],
+        prediction:
+          'Patrol coverage is incomplete: recent activity was limited to scoped runs and ended with errors, so overall health is not fully verified.',
+      },
+      findings_count: {
+        critical: 0,
+        warning: 1,
+        watch: 0,
+        info: 0,
+        total: 1,
+      },
+      predictions_count: 0,
+      recent_changes_count: 0,
+      learning: {
+        resources_with_knowledge: 0,
+        total_notes: 0,
+        resources_with_baselines: 0,
+        patterns_detected: 0,
+        correlations_learned: 0,
+        incidents_tracked: 0,
+      },
+    };
+
+    render(() => <AIIntelligence />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Issues detected')).toBeInTheDocument();
+      expect(
+        screen.getByText(
+          'Patrol surfaced 1 active warning finding. Recent coverage is also incomplete, so the rest of your infrastructure is not fully verified.',
+        ),
+      ).toBeInTheDocument();
+    });
+
+    expect(
+      screen.queryByText(
+        'Patrol coverage is incomplete: recent activity was limited to scoped runs and ended with errors, so overall health is not fully verified.',
+      ),
+    ).not.toBeInTheDocument();
   });
 
   it('treats a selected zero-finding run as an empty snapshot and uses effective scope ids', async () => {

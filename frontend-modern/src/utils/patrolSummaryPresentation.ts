@@ -18,6 +18,7 @@ export interface PatrolNoIssuesPresentation {
 
 export interface PatrolAssessmentPresentation {
   title: string;
+  description: string;
   eyebrow: string;
   compactLabel: string;
   tone: SemanticTone;
@@ -73,6 +74,43 @@ function getHealthSummaryTone(overallHealth: IntelligenceHealthScore): SemanticT
   return overallHealth.grade === 'D' || overallHealth.grade === 'F' ? 'error' : 'warning';
 }
 
+function getCoverageDescription(overallHealth: IntelligenceHealthScore | undefined): string {
+  return (
+    overallHealth?.prediction?.trim() ||
+    'Patrol coverage is incomplete, so overall infrastructure health is not fully verified.'
+  );
+}
+
+function formatFindingCount(count: number, severity: 'critical' | 'warning'): string {
+  return `${count} active ${severity} finding${count === 1 ? '' : 's'}`;
+}
+
+function getFindingAssessmentDescription(args: {
+  criticalFindings?: number;
+  warningFindings?: number;
+  overallHealth?: IntelligenceHealthScore;
+}): string {
+  const criticalFindings = args.criticalFindings ?? 0;
+  const warningFindings = args.warningFindings ?? 0;
+  const hasCoverageGap = Boolean(
+    args.overallHealth?.factors.some((factor) => factor.category === 'coverage'),
+  );
+
+  const findingSummary =
+    criticalFindings > 0
+      ? `Patrol surfaced ${formatFindingCount(criticalFindings, 'critical')}.`
+      : `Patrol surfaced ${formatFindingCount(warningFindings, 'warning')}.`;
+
+  if (hasCoverageGap) {
+    return `${findingSummary} Recent coverage is also incomplete, so the rest of your infrastructure is not fully verified.`;
+  }
+
+  return (
+    args.overallHealth?.prediction?.trim() ||
+    `${findingSummary} Review the active findings for more detail.`
+  );
+}
+
 function normalizeRunType(type: string | undefined): string {
   return String(type || '')
     .trim()
@@ -107,6 +145,7 @@ export function getPatrolAssessmentPresentation(args: {
     const runtime = getPatrolRuntimePresentation(args.runtimeState, args.blockedReason);
     return {
       title: runtime.label,
+      description: runtime.description,
       eyebrow: runtime.title,
       compactLabel: runtime.label,
       tone: runtime.tone,
@@ -116,6 +155,7 @@ export function getPatrolAssessmentPresentation(args: {
   if ((args.criticalFindings ?? 0) > 0) {
     return {
       title: 'Critical issues detected',
+      description: getFindingAssessmentDescription(args),
       eyebrow: 'Patrol assessment',
       compactLabel: 'Issues detected',
       tone: 'error',
@@ -125,6 +165,7 @@ export function getPatrolAssessmentPresentation(args: {
   if ((args.warningFindings ?? 0) > 0) {
     return {
       title: 'Issues detected',
+      description: getFindingAssessmentDescription(args),
       eyebrow: 'Patrol assessment',
       compactLabel: 'Issues detected',
       tone: 'warning',
@@ -134,6 +175,7 @@ export function getPatrolAssessmentPresentation(args: {
   if (args.overallHealth?.factors.some((factor) => factor.category === 'coverage')) {
     return {
       title: 'Coverage incomplete',
+      description: getCoverageDescription(args.overallHealth),
       eyebrow: 'Patrol assessment',
       compactLabel: 'Coverage incomplete',
       tone: getHealthSummaryTone(args.overallHealth),
@@ -143,6 +185,9 @@ export function getPatrolAssessmentPresentation(args: {
   if (args.overallHealth && args.overallHealth.grade !== 'A') {
     return {
       title: 'Health requires attention',
+      description:
+        args.overallHealth.prediction?.trim() ||
+        'Patrol assessment still needs attention.',
       eyebrow: 'Patrol assessment',
       compactLabel: 'Health requires attention',
       tone: getHealthSummaryTone(args.overallHealth),
@@ -151,6 +196,9 @@ export function getPatrolAssessmentPresentation(args: {
 
   return {
     title: 'No active issues detected',
+    description:
+      args.overallHealth?.prediction?.trim() ||
+      'Infrastructure is healthy with no significant issues detected.',
     eyebrow: 'Patrol assessment',
     compactLabel: PATROL_NO_ISSUES_LABEL,
     tone: 'success',

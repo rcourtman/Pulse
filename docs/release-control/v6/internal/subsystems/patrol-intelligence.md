@@ -134,6 +134,11 @@ supporting evidence. Secondary metric strips must not render `No issues found`
 when the same governed overall-health summary says coverage is incomplete or
 health still requires attention; that compact summary state now belongs to the
 shared `frontend-modern/src/utils/patrolSummaryPresentation.ts` helper.
+That same helper also owns the primary assessment explanation. The summary card
+must not pair an `Issues detected` headline with a raw coverage-only
+`overall_health.prediction` sentence from a separate source; when active
+findings and incomplete verification are both true, the Patrol summary should
+describe both in one canonical assessment message.
 That summary surface must also avoid reintroducing a second compact assessment
 or verification layer beneath the primary card. Supporting metric strips
 belong to counts and outcomes such as active findings, critical findings,

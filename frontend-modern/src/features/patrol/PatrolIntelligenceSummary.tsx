@@ -146,7 +146,7 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
                     <h2 class="mt-1 text-lg font-semibold text-base-content">
                       {assessment().title}
                     </h2>
-                    <p class="mt-1 text-sm text-base-content">{summary().overall_health.prediction}</p>
+                    <p class="mt-1 text-sm text-base-content">{assessment().description}</p>
                     <div class="mt-3 flex flex-wrap items-center gap-2">
                       <span class="rounded-full border border-border-subtle bg-base px-2.5 py-1 text-xs font-medium text-base-content">
                         Health {summary().overall_health.grade} ·{' '}
