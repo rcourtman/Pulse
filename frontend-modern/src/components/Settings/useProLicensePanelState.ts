@@ -11,9 +11,7 @@ import {
 import { LicenseAPI } from '@/api/license';
 import {
   getProTrialStartedMessage,
-  getTrialAlreadyUsedMessage,
   getTrialStartErrorMessage,
-  getTrialTryAgainLaterMessage,
 } from '@/utils/upgradePresentation';
 import {
   formatLicensePlanVersion,
@@ -87,19 +85,7 @@ export function useProLicensePanelState() {
       }
       notificationStore.success(getProTrialStartedMessage());
     } catch (error) {
-      const trialError = error as { status?: number; code?: string; message?: string } | null;
-      const statusCode = trialError?.status;
-      if (statusCode === 409 && trialError?.code === 'trial_already_used') {
-        notificationStore.error(getTrialAlreadyUsedMessage());
-      } else if (statusCode === 429) {
-        notificationStore.error(getTrialTryAgainLaterMessage());
-      } else {
-        notificationStore.error(
-          getTrialStartErrorMessage(error instanceof Error ? error.message : undefined, {
-            branded: true,
-          }),
-        );
-      }
+      notificationStore.error(getTrialStartErrorMessage(error, { branded: true }));
     } finally {
       setStartingTrial(false);
     }

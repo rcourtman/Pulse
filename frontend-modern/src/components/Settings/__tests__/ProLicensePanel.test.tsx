@@ -412,6 +412,39 @@ describe('ProLicensePanel', () => {
     });
   });
 
+  it('maps explicit trial-already-used errors to the canonical message', async () => {
+    startProTrialMock.mockRejectedValue(
+      Object.assign(new Error('conflict'), {
+        status: 409,
+        code: 'trial_already_used',
+      }),
+    );
+
+    render(() => <ProLicensePanel />);
+
+    fireEvent.click(screen.getByRole('button', { name: /start 14-day pro trial/i }));
+
+    await waitFor(() => {
+      expect(notificationErrorMock).toHaveBeenCalledWith('Trial already used');
+    });
+  });
+
+  it('maps rate-limited trial starts to the canonical retry message', async () => {
+    startProTrialMock.mockRejectedValue(
+      Object.assign(new Error('rate limited'), {
+        status: 429,
+      }),
+    );
+
+    render(() => <ProLicensePanel />);
+
+    fireEvent.click(screen.getByRole('button', { name: /start 14-day pro trial/i }));
+
+    await waitFor(() => {
+      expect(notificationErrorMock).toHaveBeenCalledWith('Try again later');
+    });
+  });
+
   it('keeps Pro license split into shell, runtime, and plan owners', () => {
     expect(proLicensePanelSource).toContain('./useProLicensePanelState');
     expect(proLicensePanelSource).toContain('./ProLicensePlanSection');

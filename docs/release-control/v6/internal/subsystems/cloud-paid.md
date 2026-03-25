@@ -237,6 +237,11 @@ copy must present the flow as starting a trial for the originating Pulse
 instance, not as a generic purchase funnel. Recovery-contact fields such as
 work email and optional company name must remain clearly secondary to the
 instance-bound entitlement handoff.
+That same rule applies to the self-hosted Pro settings panel. Trial start
+errors in `frontend-modern/src/components/Settings/useProLicensePanelState.ts`
+must route through the shared cloud-paid presentation helper so backend denial
+reasons, explicit already-used conflicts, and retry-later states stay aligned
+with the rest of the commercial surfaces.
 redefined inline in settings feature gates, Pro license panels, or trial
 upgrade nudges.
 That same disclosure copy must stay professional and customer-facing. The
