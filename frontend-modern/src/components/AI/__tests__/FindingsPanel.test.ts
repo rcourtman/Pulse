@@ -171,6 +171,11 @@ describe('aiFindingPresentation', () => {
       expect(findingsPanelSource).not.toContain('Pulse Patrol Findings');
       expect(findingsPanelSource).not.toContain('AI-discovered insights');
     });
+
+    it('only shows the sort control when there are multiple Patrol findings to sort', () => {
+      expect(findingsPanelSource).toContain('<Show when={patrolFindings().length > 1}>');
+      expect(findingsPanelSource).toContain('<option value="severity">By Severity</option>');
+    });
   });
 
   describe('sourceColors', () => {

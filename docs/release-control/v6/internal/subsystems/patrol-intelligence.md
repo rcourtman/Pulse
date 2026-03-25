@@ -191,6 +191,10 @@ than promotional. Inside the Patrol findings tab, the card header should use a
 direct label such as `Patrol findings` and should not add extra product
 restatement or marketing subtitles that compete with the page-level Patrol
 header above.
+That same control bar should also stay proportional to the current findings
+set. Sort controls belong only when there are multiple Patrol findings to
+order; the empty state or single-finding state should not spend header space
+on a no-op sort selector.
 When Patrol is currently running, that strip should still stay factual rather
 than switching to another verdict label: the runtime may add an explicit
 in-progress indicator, but the primary activity label remains recent activity

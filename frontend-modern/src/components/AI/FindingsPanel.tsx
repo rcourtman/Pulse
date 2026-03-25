@@ -1035,14 +1035,16 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
               }}
             </For>
           </div>
-          <select
-            value={sortBy()}
-            onChange={(e) => setSortBy(e.currentTarget.value as 'severity' | 'time')}
-            class="text-xs px-2 py-1 rounded border border-border bg-surface"
-          >
-            <option value="severity">By Severity</option>
-            <option value="time">By Time</option>
-          </select>
+          <Show when={patrolFindings().length > 1}>
+            <select
+              value={sortBy()}
+              onChange={(e) => setSortBy(e.currentTarget.value as 'severity' | 'time')}
+              class="text-xs px-2 py-1 rounded border border-border bg-surface"
+            >
+              <option value="severity">By Severity</option>
+              <option value="time">By Time</option>
+            </select>
+          </Show>
         </div>
       </Show>
 
