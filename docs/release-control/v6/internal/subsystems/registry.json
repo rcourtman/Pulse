@@ -3152,7 +3152,8 @@
               "frontend-modern/src/pages/__tests__/AIIntelligence.test.tsx",
               "frontend-modern/src/stores/__tests__/aiIntelligence.test.ts",
               "frontend-modern/src/stores/__tests__/aiIntelligenceSummaryModel.test.ts",
-              "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts"
+              "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
+              "tests/integration/tests/18-patrol-runtime-state.spec.ts"
             ]
           },
           {

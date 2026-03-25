@@ -14,6 +14,16 @@ RECOVERY_PRODUCT_SURFACE_EXACT_FILES = [
     "tests/integration/tests/17-recovery-layout.spec.ts",
 ]
 
+PATROL_PAGE_AND_STATE_EXACT_FILES = [
+    "frontend-modern/src/components/Brand/__tests__/PulsePatrolLogo.test.tsx",
+    "frontend-modern/src/components/Settings/__tests__/monitoredSystemModelGuardrails.test.ts",
+    "frontend-modern/src/pages/__tests__/AIIntelligence.test.tsx",
+    "frontend-modern/src/stores/__tests__/aiIntelligence.test.ts",
+    "frontend-modern/src/stores/__tests__/aiIntelligenceSummaryModel.test.ts",
+    "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
+    "tests/integration/tests/18-patrol-runtime-state.spec.ts",
+]
+
 
 class SubsystemLookupTest(unittest.TestCase):
     def test_lookup_paths_reports_multiple_subsystems_for_shared_runtime_file(self) -> None:
@@ -3578,14 +3588,7 @@ class SubsystemLookupTest(unittest.TestCase):
         )
         self.assertEqual(
             match["verification_requirement"]["exact_files"],
-            [
-                "frontend-modern/src/components/Brand/__tests__/PulsePatrolLogo.test.tsx",
-                "frontend-modern/src/components/Settings/__tests__/monitoredSystemModelGuardrails.test.ts",
-                "frontend-modern/src/pages/__tests__/AIIntelligence.test.tsx",
-                "frontend-modern/src/stores/__tests__/aiIntelligence.test.ts",
-                "frontend-modern/src/stores/__tests__/aiIntelligenceSummaryModel.test.ts",
-                "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
-            ],
+            PATROL_PAGE_AND_STATE_EXACT_FILES,
         )
 
     def test_lookup_paths_assigns_patrol_surface_to_patrol_intelligence(self) -> None:
@@ -3613,14 +3616,7 @@ class SubsystemLookupTest(unittest.TestCase):
         )
         self.assertEqual(
             match["verification_requirement"]["exact_files"],
-            [
-                "frontend-modern/src/components/Brand/__tests__/PulsePatrolLogo.test.tsx",
-                "frontend-modern/src/components/Settings/__tests__/monitoredSystemModelGuardrails.test.ts",
-                "frontend-modern/src/pages/__tests__/AIIntelligence.test.tsx",
-                "frontend-modern/src/stores/__tests__/aiIntelligence.test.ts",
-                "frontend-modern/src/stores/__tests__/aiIntelligenceSummaryModel.test.ts",
-                "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
-            ],
+            PATROL_PAGE_AND_STATE_EXACT_FILES,
         )
 
     def test_lookup_paths_assigns_patrol_state_hook_to_patrol_intelligence(self) -> None:
@@ -3648,14 +3644,7 @@ class SubsystemLookupTest(unittest.TestCase):
         )
         self.assertEqual(
             match["verification_requirement"]["exact_files"],
-            [
-                "frontend-modern/src/components/Brand/__tests__/PulsePatrolLogo.test.tsx",
-                "frontend-modern/src/components/Settings/__tests__/monitoredSystemModelGuardrails.test.ts",
-                "frontend-modern/src/pages/__tests__/AIIntelligence.test.tsx",
-                "frontend-modern/src/stores/__tests__/aiIntelligence.test.ts",
-                "frontend-modern/src/stores/__tests__/aiIntelligenceSummaryModel.test.ts",
-                "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
-            ],
+            PATROL_PAGE_AND_STATE_EXACT_FILES,
         )
 
     def test_lookup_paths_assigns_patrol_investigation_context_model_to_patrol_intelligence(

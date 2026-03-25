@@ -105,6 +105,12 @@ render contract: the header chip, primary summary card, and status bar must
 all route through the shared `frontend-modern/src/utils/patrolRuntimePresentation.ts`
 helper plus the backend `runtime_state` payload instead of inferring operator
 state from the last healthy summary snapshot or run history alone.
+That render rule now also has browser-level proof in
+`tests/integration/tests/18-patrol-runtime-state.spec.ts`: when the backend
+reports `runtime_state=blocked`, the real `/ai` route must show Patrol as
+paused, keep the blocked reason visible, disable manual Patrol runs, and
+suppress stale healthy summary headlines such as `Health A · 100/100` even if
+the last summary payload still looks healthy.
 hook-local fallback logic.
 The Patrol header now also has explicit helper ownership for its quickstart and
 schedule presentation. `frontend-modern/src/utils/aiQuickstartPresentation.ts`
