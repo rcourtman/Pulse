@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"time"
@@ -8,6 +9,18 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/reporting"
 )
+
+// HandleGetVMInventoryDefinition returns the canonical operator-facing
+// definition for the VM inventory export surface.
+func (h *ReportingHandlers) HandleGetVMInventoryDefinition(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(reporting.DescribeVMInventoryExport())
+}
 
 // HandleExportVMInventory exports the current VM inventory as spreadsheet-friendly CSV.
 func (h *ReportingHandlers) HandleExportVMInventory(w http.ResponseWriter, r *http.Request) {

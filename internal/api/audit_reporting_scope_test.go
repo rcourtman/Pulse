@@ -49,6 +49,7 @@ func TestReportingEndpointsRequireSettingsReadScope(t *testing.T) {
 	paths := []string{
 		"/api/admin/reports/generate",
 		"/api/admin/reports/generate-multi",
+		"/api/admin/reports/inventory/vms/definition",
 		"/api/admin/reports/inventory/vms/export",
 	}
 

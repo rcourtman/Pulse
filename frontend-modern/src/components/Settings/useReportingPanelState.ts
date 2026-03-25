@@ -24,7 +24,12 @@ import {
   type ReportingFormat,
   type ReportingRangeValue,
 } from '@/components/Settings/reportingPanelModel';
-import { buildVMInventoryExportRequest } from '@/components/Settings/reportingInventoryExportModel';
+import {
+  buildVMInventoryExportDefinitionRequest,
+  buildVMInventoryExportRequest,
+  parseVMInventoryExportDefinition,
+  type ReportingInventoryExportDefinition,
+} from '@/components/Settings/reportingInventoryExportModel';
 
 export const useReportingPanelState = () => {
   const [selectedResources, setSelectedResources] = createSignal<SelectedResource[]>([]);
@@ -33,6 +38,11 @@ export const useReportingPanelState = () => {
   const [range, setRange] = createSignal<ReportingRangeValue>('24h');
   const [generating, setGenerating] = createSignal(false);
   const [exportingInventory, setExportingInventory] = createSignal(false);
+  const [inventoryDefinition, setInventoryDefinition] =
+    createSignal<ReportingInventoryExportDefinition | null>(null);
+  const [inventoryDefinitionLoading, setInventoryDefinitionLoading] = createSignal(false);
+  const [inventoryDefinitionError, setInventoryDefinitionError] = createSignal('');
+  const [inventoryDefinitionRequested, setInventoryDefinitionRequested] = createSignal(false);
   const [title, setTitle] = createSignal('');
   const [startingTrial, setStartingTrial] = createSignal(false);
 
@@ -52,6 +62,40 @@ export const useReportingPanelState = () => {
     }
     return visible;
   }, false);
+
+  createEffect(() => {
+    if (
+      !isReportingEnabled() ||
+      inventoryDefinition() ||
+      inventoryDefinitionLoading() ||
+      inventoryDefinitionRequested()
+    ) {
+      return;
+    }
+
+    void (async () => {
+      setInventoryDefinitionRequested(true);
+      setInventoryDefinitionLoading(true);
+      setInventoryDefinitionError('');
+      try {
+        const request = buildVMInventoryExportDefinitionRequest();
+        const response = await apiFetch(request.url);
+        if (!response.ok) {
+          const text = await response.text();
+          throw new Error(text || getReportingInventoryExportErrorMessage());
+        }
+
+        setInventoryDefinition(parseVMInventoryExportDefinition(await response.json()));
+      } catch (error) {
+        console.error('VM inventory export definition error:', error);
+        setInventoryDefinitionError(
+          error instanceof Error ? error.message : getReportingInventoryExportErrorMessage(),
+        );
+      } finally {
+        setInventoryDefinitionLoading(false);
+      }
+    })();
+  });
 
   const handleStartTrial = async () => {
     if (startingTrial()) return;
@@ -121,7 +165,7 @@ export const useReportingPanelState = () => {
 
     setExportingInventory(true);
     try {
-      const request = buildVMInventoryExportRequest(new Date());
+      const request = buildVMInventoryExportRequest(new Date(), inventoryDefinition());
       const response = await apiFetch(request.request.url);
       if (!response.ok) {
         const text = await response.text();
@@ -148,6 +192,9 @@ export const useReportingPanelState = () => {
     generating,
     handleGenerate,
     handleStartTrial,
+    inventoryDefinition,
+    inventoryDefinitionError,
+    inventoryDefinitionLoading,
     isLocked,
     isReportingEnabled,
     metricType,

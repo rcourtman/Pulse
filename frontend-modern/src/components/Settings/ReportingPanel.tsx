@@ -1,4 +1,4 @@
-import { Show, JSX } from 'solid-js';
+import { For, Show, JSX } from 'solid-js';
 import FileText from 'lucide-solid/icons/file-text';
 import Download from 'lucide-solid/icons/download';
 import BarChart from 'lucide-solid/icons/bar-chart';
@@ -55,6 +55,9 @@ export function ReportingPanel() {
     generating,
     handleGenerate,
     handleStartTrial,
+    inventoryDefinition,
+    inventoryDefinitionError,
+    inventoryDefinitionLoading,
     isLocked,
     isReportingEnabled,
     metricType,
@@ -210,11 +213,33 @@ export function ReportingPanel() {
               <div class="space-y-2">
                 <h4 class="text-base font-semibold text-base-content">VM Inventory Export</h4>
                 <p class="text-sm text-muted">
-                  Export the current fleet-wide VM inventory as CSV using the canonical runtime
-                  model. Includes VM identity, placement, CPU, memory allocation, disk allocation,
-                  and disk usage columns.
+                  {inventoryDefinition()?.description ??
+                    'Export the current fleet-wide VM inventory as CSV using the canonical runtime model.'}
                 </p>
               </div>
+
+              <Show when={inventoryDefinitionLoading()}>
+                <p class="text-xs text-muted">Loading export column definition...</p>
+              </Show>
+
+              <Show when={inventoryDefinitionError()}>
+                <p class="text-xs text-warning">{inventoryDefinitionError()}</p>
+              </Show>
+
+              <Show when={inventoryDefinition()?.columns.length}>
+                <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                  <For each={inventoryDefinition()?.columns ?? []}>
+                    {(column) => (
+                      <div class="rounded-lg border border-base-300/70 bg-base-100/70 p-3 space-y-1">
+                        <div class="text-xs font-semibold uppercase tracking-wide text-base-content/80">
+                          {column.label}
+                        </div>
+                        <p class="text-xs text-muted leading-relaxed">{column.description}</p>
+                      </div>
+                    )}
+                  </For>
+                </div>
+              </Show>
 
               <div class="flex justify-end">
                 <button

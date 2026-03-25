@@ -174,6 +174,11 @@ historical performance reports and current-state VM inventory export.
 keep those as separate operator jobs with separate request builders and success
 copy, rather than collapsing inventory export back into the metrics-report
 controls.
+That same settings shell must now also render VM inventory export schema from
+the backend-owned definition contract rather than hardcoding column copy in the
+panel. The frontend model may validate and present the definition, but the
+canonical title, description, filename prefix, and column list belong to the
+API reporting contract.
 The shared updates settings owner also defines the user-facing framing for
 rc-tagged builds. `frontend-modern/src/components/Settings/updatesSettingsModel.ts`
 and `frontend-modern/src/utils/updatesPresentation.ts` must present that

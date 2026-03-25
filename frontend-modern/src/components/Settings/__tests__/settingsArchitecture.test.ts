@@ -1093,6 +1093,7 @@ describe('Settings architecture guardrails', () => {
     expect(reportingPanelStateSource).toContain('runStartProTrialAction({');
     expect(reportingPanelStateSource).not.toContain('startProTrial()');
     expect(reportingPanelStateSource).toContain('buildReportingRequest');
+    expect(reportingPanelStateSource).toContain('buildVMInventoryExportDefinitionRequest');
     expect(reportingPanelStateSource).toContain('buildVMInventoryExportRequest');
     expect(reportingPanelStateSource).toContain('getReportingGenerateSuccessMessage');
     expect(reportingPanelStateSource).not.toContain('getTrialAlreadyUsedMessage()');
@@ -1101,6 +1102,12 @@ describe('Settings architecture guardrails', () => {
     expect(reportingPanelModelSource).toContain('export function buildReportingFilename');
     expect(reportingInventoryExportModelSource).toContain(
       'export function buildVMInventoryExportFilename',
+    );
+    expect(reportingInventoryExportModelSource).toContain(
+      'export function buildVMInventoryExportDefinitionRequest',
+    );
+    expect(reportingInventoryExportModelSource).toContain(
+      'export function parseVMInventoryExportDefinition',
     );
   });
 

@@ -9,6 +9,25 @@ import (
 	"time"
 )
 
+// InventoryExportColumnDefinition describes one stable column in a current-state
+// inventory export contract.
+type InventoryExportColumnDefinition struct {
+	Key         string `json:"key"`
+	Label       string `json:"label"`
+	Description string `json:"description"`
+}
+
+// VMInventoryExportDefinition describes the operator-facing contract for the VM
+// inventory export surface.
+type VMInventoryExportDefinition struct {
+	ID             string                            `json:"id"`
+	Title          string                            `json:"title"`
+	Description    string                            `json:"description"`
+	Format         ReportFormat                      `json:"format"`
+	FilenamePrefix string                            `json:"filenamePrefix"`
+	Columns        []InventoryExportColumnDefinition `json:"columns"`
+}
+
 // VMInventoryData captures the current-state VM inventory export payload.
 type VMInventoryData struct {
 	GeneratedAt time.Time
@@ -31,19 +50,39 @@ type VMInventoryRow struct {
 	DiskStatusReason     string
 }
 
-var vmInventoryCSVHeaders = []string{
-	"Resource ID",
-	"Instance",
-	"Node",
-	"Pool",
-	"VMID",
-	"VM Name",
-	"Status",
-	"CPU Cores",
-	"Memory Allocated Bytes",
-	"Disk Allocated Bytes",
-	"Disk Used Bytes",
-	"Disk Status Reason",
+// DescribeVMInventoryExport returns the canonical operator-facing definition for
+// the current-state VM inventory CSV surface.
+func DescribeVMInventoryExport() VMInventoryExportDefinition {
+	return VMInventoryExportDefinition{
+		ID:             "vm_inventory",
+		Title:          "VM Inventory Export",
+		Description:    "Export the current fleet-wide VM inventory as CSV using the canonical runtime model. Includes VM identity, placement, CPU, memory allocation, disk allocation, and disk usage columns.",
+		Format:         FormatCSV,
+		FilenamePrefix: "vm-inventory",
+		Columns: []InventoryExportColumnDefinition{
+			{Key: "resource_id", Label: "Resource ID", Description: "Canonical Pulse resource ID for the VM."},
+			{Key: "instance", Label: "Instance", Description: "Configured Proxmox instance or cluster name."},
+			{Key: "node", Label: "Node", Description: "Proxmox node currently hosting the VM."},
+			{Key: "pool", Label: "Pool", Description: "Canonical Proxmox pool membership when the platform reports one."},
+			{Key: "vmid", Label: "VMID", Description: "Numeric Proxmox VM identifier."},
+			{Key: "vm_name", Label: "VM Name", Description: "Current VM display name from the runtime model."},
+			{Key: "status", Label: "Status", Description: "Canonical runtime status for the VM."},
+			{Key: "cpu_cores", Label: "CPU Cores", Description: "Allocated virtual CPU core count."},
+			{Key: "memory_allocated_bytes", Label: "Memory Allocated Bytes", Description: "Configured memory allocation in bytes."},
+			{Key: "disk_allocated_bytes", Label: "Disk Allocated Bytes", Description: "Total allocated disk capacity in bytes across the VM."},
+			{Key: "disk_used_bytes", Label: "Disk Used Bytes", Description: "Current used disk bytes from the canonical runtime disk view."},
+			{Key: "disk_status_reason", Label: "Disk Status Reason", Description: "Reason disk usage is partial or unavailable when the runtime cannot provide a full guest view."},
+		},
+	}
+}
+
+func vmInventoryCSVHeaders() []string {
+	definition := DescribeVMInventoryExport()
+	headers := make([]string, 0, len(definition.Columns))
+	for _, column := range definition.Columns {
+		headers = append(headers, column.Label)
+	}
+	return headers
 }
 
 // GenerateVMInventoryCSV renders a spreadsheet-friendly CSV export for the
@@ -52,7 +91,7 @@ func GenerateVMInventoryCSV(data VMInventoryData) ([]byte, error) {
 	var buf bytes.Buffer
 	w := csv.NewWriter(&buf)
 
-	if err := w.Write(vmInventoryCSVHeaders); err != nil {
+	if err := w.Write(vmInventoryCSVHeaders()); err != nil {
 		return nil, fmt.Errorf("write VM inventory CSV header: %w", err)
 	}
 

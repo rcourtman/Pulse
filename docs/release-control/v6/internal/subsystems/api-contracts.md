@@ -217,8 +217,11 @@ The reporting API contract now also treats current-state fleet inventory as a
 first-class surface separate from historical metrics reports.
 `internal/api/reporting_inventory_handlers.go`,
 `internal/api/router_routes_licensing.go`, and the settings reporting shell now
-own `/api/admin/reports/inventory/vms/export` as the canonical VM inventory CSV
-contract. That export is intentionally spreadsheet-shaped rather than comment-
+own `/api/admin/reports/inventory/vms/definition` plus
+`/api/admin/reports/inventory/vms/export` as the canonical VM inventory
+contract. The definition endpoint owns the operator-facing title, description,
+filename prefix, and stable column schema, while the export endpoint remains
+the spreadsheet-shaped CSV transport. That export is intentionally not comment-
 prefixed like the legacy metrics CSV, and it now carries Proxmox pool
 membership from the canonical unified VM runtime model instead of inferring or
 reconstructing that field locally inside the frontend or handler.

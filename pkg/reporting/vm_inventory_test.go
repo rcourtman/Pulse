@@ -5,6 +5,23 @@ import (
 	"testing"
 )
 
+func TestDescribeVMInventoryExport_DefinesCanonicalColumns(t *testing.T) {
+	definition := DescribeVMInventoryExport()
+
+	if definition.ID != "vm_inventory" {
+		t.Fatalf("definition ID = %q, want vm_inventory", definition.ID)
+	}
+	if definition.Format != FormatCSV {
+		t.Fatalf("definition format = %q, want %q", definition.Format, FormatCSV)
+	}
+	if got := len(definition.Columns); got != 12 {
+		t.Fatalf("definition columns = %d, want 12", got)
+	}
+	if definition.Columns[3].Key != "pool" || definition.Columns[3].Label != "Pool" {
+		t.Fatalf("expected canonical Pool column at index 3, got %+v", definition.Columns[3])
+	}
+}
+
 func TestGenerateVMInventoryCSV_SortsRowsAndWritesHeader(t *testing.T) {
 	data := VMInventoryData{
 		Rows: []VMInventoryRow{
