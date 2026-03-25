@@ -6,6 +6,7 @@ import {
   formatFindingLifecycleType,
   formatFindingLoopState,
   getFindingEmptyStateCopy,
+  getFindingSubjectPresentation,
   getPatrolFindingClassification,
   getFindingSeverityCompactLabel,
   getFindingSeveritySortOrder,
@@ -190,6 +191,34 @@ describe('aiFindingPresentation', () => {
     });
   });
 
+  describe('findingSubjectPresentation', () => {
+    it('renders patrol-owned service findings as patrol runtime', () => {
+      expect(
+        getFindingSubjectPresentation({
+          resourceId: 'ai-service',
+          resourceName: 'Pulse Patrol Service',
+          resourceType: 'service',
+          title: 'Pulse Patrol: Insufficient API credits',
+        }),
+      ).toEqual({
+        label: 'Patrol runtime',
+      });
+    });
+
+    it('normalizes ordinary resource type labels', () => {
+      expect(
+        getFindingSubjectPresentation({
+          resourceId: 'ct-101',
+          resourceName: 'app-ct',
+          resourceType: 'system-container',
+          title: 'Disk nearly full',
+        }),
+      ).toEqual({
+        label: 'app-ct (system-container)',
+      });
+    });
+  });
+
   describe('filterPresentation', () => {
     it('builds canonical filter options', () => {
       expect(
@@ -273,7 +302,7 @@ describe('aiFindingPresentation', () => {
 
     it('uses canonical finding recency presentation instead of raw detected timestamps for active rows', () => {
       expect(findingsPanelSource).toContain('const recency = getFindingRecencyPresentation(finding);');
-      expect(findingsPanelSource).toContain("{recency.label}{' '}");
+      expect(findingsPanelSource).toContain('{subject.label} - {recency.label} ');
       expect(findingsPanelSource).toContain('{formatTime(recency.timestamp)}');
     });
 
@@ -283,6 +312,12 @@ describe('aiFindingPresentation', () => {
       );
       expect(findingsPanelSource).toContain("patrolFindingClassification.kind === 'runtime'");
       expect(findingsPanelSource).toContain('{patrolFindingClassification.label}');
+    });
+
+    it('uses the shared finding subject presentation instead of raw patrol service resource tokens', () => {
+      expect(findingsPanelSource).toContain('const subject = getFindingSubjectPresentation(finding);');
+      expect(findingsPanelSource).toContain('{subject.label} - {recency.label}');
+      expect(findingsPanelSource).not.toContain('{finding.resourceName} ({finding.resourceType})');
     });
   });
 

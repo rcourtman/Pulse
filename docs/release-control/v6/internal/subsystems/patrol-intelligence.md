@@ -153,6 +153,11 @@ shared finding-presentation helper instead of being re-inferred separately by
 the summary card and the findings list. The active finding row should surface
 the same Patrol runtime classification with an explicit badge such as
 `Patrol runtime`.
+That same shared finding-presentation helper should also own Patrol finding
+subject labels, so Patrol-owned synthetic service findings render as
+`Patrol runtime` rather than leaking backend resource internals like
+`Pulse Patrol Service (service)` into the primary findings row or assistant
+handoff prompts.
 The summary recency chip must follow the same governed scope distinction. When
 the latest completed activity was only a scoped run, the summary should label
 that timestamp as `Last activity` instead of `Last patrol`; `Last full patrol`

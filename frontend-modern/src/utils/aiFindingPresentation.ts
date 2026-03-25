@@ -207,6 +207,10 @@ export interface PatrolFindingClassification {
   badgeClasses: string;
 }
 
+export interface FindingSubjectPresentation {
+  label: string;
+}
+
 export const getFindingSourceLabel = (source: UnifiedFinding['source'] | string): string =>
   FINDING_SOURCE_LABELS[source] || source;
 
@@ -264,6 +268,25 @@ export const getPatrolFindingClassification = (
         label: 'Infrastructure',
         badgeClasses: DEFAULT_BADGE_CLASSES,
       };
+
+export const getFindingSubjectPresentation = (
+  finding: Pick<UnifiedFinding, 'resourceId' | 'resourceName' | 'resourceType' | 'title'>,
+): FindingSubjectPresentation => {
+  if (isPatrolRuntimeFinding(finding)) {
+    return { label: 'Patrol runtime' };
+  }
+
+  const resourceName = String(finding.resourceName || '').trim() || String(finding.resourceId || '').trim();
+  const resourceType = String(finding.resourceType || '').trim();
+
+  if (!resourceType) {
+    return { label: resourceName };
+  }
+
+  return {
+    label: `${resourceName} (${formatIdentifierLabel(resourceType)})`,
+  };
+};
 
 export const getFindingRecencyPresentation = (
   finding: Pick<UnifiedFinding, 'status' | 'detectedAt' | 'lastSeenAt'>,

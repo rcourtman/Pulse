@@ -43,6 +43,7 @@ import {
   getFindingStatusLabel,
   getFindingSourceBadgeClasses,
   getFindingSourceLabel,
+  getFindingSubjectPresentation,
   getPatrolFindingClassification,
   getFindingRecencyPresentation,
   hasFindingInvestigationDetails,
@@ -362,17 +363,19 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
 
   const handleDiscussWithAssistant = (finding: UnifiedFinding, e: Event) => {
     e.stopPropagation();
+    const subject = getFindingSubjectPresentation(finding).label;
     aiChatStore.openWithPrompt(
-      `I'd like to discuss this Patrol finding: "${finding.title}" on ${finding.resourceName}.\n\n${finding.description}`,
+      `I'd like to discuss this Patrol finding: "${finding.title}" on ${subject}.\n\n${finding.description}`,
       { targetType: finding.resourceType, targetId: finding.resourceId, findingId: finding.id },
     );
   };
 
   const handleOpenPlanInAssistant = (finding: UnifiedFinding, plan: RemediationPlan, e: Event) => {
     e.stopPropagation();
+    const subject = getFindingSubjectPresentation(finding).label;
 
     let prompt = `Pulse Patrol generated a remediation plan for a finding. Please help me apply it safely.\n\n`;
-    prompt += `**Finding:** ${finding.title} on ${finding.resourceName}\n`;
+    prompt += `**Finding:** ${finding.title} on ${subject}\n`;
     if (plan.title) prompt += `**Plan:** ${plan.title}\n`;
     if (plan.risk_level) prompt += `**Risk level:** ${plan.risk_level}\n`;
     if (plan.description) prompt += `\n**Plan context:** ${plan.description}\n`;
@@ -403,6 +406,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
   const renderFindingItem = (finding: UnifiedFinding, showSourceBadge: boolean = false) => {
     const recency = getFindingRecencyPresentation(finding);
     const patrolFindingClassification = getPatrolFindingClassification(finding);
+    const subject = getFindingSubjectPresentation(finding);
 
     return (
       <div
@@ -551,8 +555,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
           </div>
           {/* Resource info */}
           <div class="text-xs text-muted mt-1">
-            {finding.resourceName} ({finding.resourceType}) - {recency.label}{' '}
-            {formatTime(recency.timestamp)}
+            {subject.label} - {recency.label} {formatTime(recency.timestamp)}
             <Show when={finding.status === 'resolved' && finding.resolvedAt}>
               <span class="ml-2 text-green-600 dark:text-green-400">
                 {' · '}
