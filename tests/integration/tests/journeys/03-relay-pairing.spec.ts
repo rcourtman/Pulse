@@ -46,24 +46,66 @@ type EntitlementPayload = {
   valid?: boolean;
 };
 
+type CreateRelayMobileTokenResponse = {
+  token?: string;
+  record?: {
+    id?: string;
+  };
+};
+
 /** Saved relay config from before the journey, for afterAll restore. */
 let savedRelayConfig: Record<string, unknown> | null = null;
+const mintedRelayTokenIDs = new Set<string>();
+
+async function createRelayMobileToken(page: import('@playwright/test').Page): Promise<{ id: string; token: string }> {
+  const res = await apiRequest(page, '/api/security/tokens/relay-mobile', {
+    method: 'POST',
+    data: {},
+    headers: { 'Content-Type': 'application/json' },
+  });
+  expect(
+    res.ok(),
+    `Relay mobile token creation failed: ${res.status()} ${await res.text()}`,
+  ).toBeTruthy();
+
+  const payload = (await res.json()) as CreateRelayMobileTokenResponse;
+  const token = typeof payload.token === 'string' ? payload.token : '';
+  const tokenID = typeof payload.record?.id === 'string' ? payload.record.id : '';
+
+  expect(token, 'relay mobile token response must include a raw token').not.toBe('');
+  expect(tokenID, 'relay mobile token response must include a token id').not.toBe('');
+
+  mintedRelayTokenIDs.add(tokenID);
+  return { id: tokenID, token };
+}
 
 test.describe.serial('Journey: Relay Pairing → Mobile Connection', () => {
   test.afterAll(async ({ browser }) => {
-    if (!RELAY_HOST || !savedRelayConfig) return;
+    if (!RELAY_HOST && !savedRelayConfig && mintedRelayTokenIDs.size === 0) return;
 
     const ctx = await browser.newContext();
     const page = await ctx.newPage();
     try {
       await ensureAuthenticated(page);
-      await apiRequest(page, '/api/settings/relay', {
-        method: 'PUT',
-        data: savedRelayConfig,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      if (savedRelayConfig) {
+        await apiRequest(page, '/api/settings/relay', {
+          method: 'PUT',
+          data: savedRelayConfig,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      for (const tokenID of mintedRelayTokenIDs) {
+        const res = await apiRequest(page, `/api/security/tokens/${encodeURIComponent(tokenID)}`, {
+          method: 'DELETE',
+        });
+        if (res.ok() || res.status() === 404) {
+          mintedRelayTokenIDs.delete(tokenID);
+        } else {
+          console.warn(`[journey cleanup] failed to delete relay mobile token ${tokenID}:`, res.status(), await res.text());
+        }
+      }
     } catch (err) {
-      console.warn('[journey cleanup] failed to restore relay config:', err);
+      console.warn('[journey cleanup] failed to restore relay journey state:', err);
     } finally {
       await ctx.close();
     }
@@ -165,29 +207,42 @@ test.describe.serial('Journey: Relay Pairing → Mobile Connection', () => {
 
     await ensureAuthenticated(page);
 
+    const relayToken = await createRelayMobileToken(page);
+
     const res = await apiRequest(page, '/api/onboarding/qr');
+    const tokenBackedRes = await apiRequest(page, '/api/onboarding/qr', {
+      headers: { 'X-API-Token': relayToken.token },
+    });
     if (res.status() === 402) {
       test.skip(true, 'Relay feature not licensed');
       return;
     }
     expect(res.ok(), `QR endpoint failed: ${res.status()}`).toBeTruthy();
+    expect(tokenBackedRes.ok(), `Token-backed QR endpoint failed: ${tokenBackedRes.status()} ${await tokenBackedRes.text()}`).toBeTruthy();
 
-    const qr = (await res.json()) as Record<string, unknown>;
+    const sessionQR = (await res.json()) as Record<string, unknown>;
+    const qr = (await tokenBackedRes.json()) as Record<string, unknown>;
 
     // onboardingQRResponse: schema, instance_url, relay, auth_token, deep_link
     expect(qr).toHaveProperty('schema');
     expect(qr).toHaveProperty('instance_url');
     expect(qr).toHaveProperty('relay');
-    // auth_token is present but may be empty for session-based requests
-    // (only populated when X-API-Token or Bearer token is provided).
     expect(qr).toHaveProperty('auth_token');
     expect(qr).toHaveProperty('deep_link');
+    expect(sessionQR).toHaveProperty('auth_token');
+
+    expect(
+      typeof sessionQR.auth_token === 'string' && sessionQR.auth_token.length === 0,
+      'session-backed QR payload should not expose a bootstrap auth_token',
+    ).toBeTruthy();
+    expect(qr.auth_token).toBe(relayToken.token);
 
     // deep_link should be a pulse:// URL.
     expect(
       typeof qr.deep_link === 'string' && (qr.deep_link as string).length > 0,
       'deep_link must be a non-empty string',
     ).toBeTruthy();
+    expect((qr.deep_link as string).includes(encodeURIComponent(relayToken.token))).toBeTruthy();
 
     // relay sub-object should indicate relay is enabled.
     const relay = qr.relay as Record<string, unknown> | undefined;
@@ -201,7 +256,11 @@ test.describe.serial('Journey: Relay Pairing → Mobile Connection', () => {
 
     await ensureAuthenticated(page);
 
-    const res = await apiRequest(page, '/api/onboarding/deep-link');
+    const relayToken = await createRelayMobileToken(page);
+
+    const res = await apiRequest(page, '/api/onboarding/deep-link', {
+      headers: { 'X-API-Token': relayToken.token },
+    });
     if (res.status() === 402) {
       test.skip(true, 'Relay feature not licensed');
       return;
@@ -215,6 +274,8 @@ test.describe.serial('Journey: Relay Pairing → Mobile Connection', () => {
       typeof url === 'string' && url.length > 0,
       'Deep link response must contain a non-empty url field',
     ).toBeTruthy();
+    expect(url).toContain('auth_token=');
+    expect(url).toContain(encodeURIComponent(relayToken.token));
   });
 
   test('relay settings visible in UI', async ({ page }, testInfo) => {
