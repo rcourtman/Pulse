@@ -163,8 +163,10 @@ to discover where to correct provider configuration.
 That same runtime-versus-infrastructure distinction should route through the
 shared finding-presentation helper instead of being re-inferred separately by
 the summary card and the findings list. The active finding row should surface
-the same Patrol runtime classification with an explicit badge such as
-`Patrol runtime`.
+the same Patrol runtime classification with a runtime-qualified severity badge
+such as `Runtime issue` or `Runtime critical`, rather than pairing a generic
+infrastructure severity chip like `warning` with a second Patrol-runtime
+classification badge.
 That same shared finding-presentation helper should also own Patrol finding
 subject labels, so Patrol-owned synthetic service findings render as
 `Patrol runtime` rather than leaking backend resource internals like

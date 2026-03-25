@@ -226,6 +226,12 @@ export interface PatrolFindingsBadgePresentation {
   toneClasses: string;
 }
 
+export interface FindingSeverityPresentation {
+  label: string;
+  badgeClasses: string;
+  uppercase: boolean;
+}
+
 export const getFindingSourceLabel = (source: UnifiedFinding['source'] | string): string =>
   FINDING_SOURCE_LABELS[source] || source;
 
@@ -235,6 +241,34 @@ export const getFindingSourceBadgeClasses = (source: UnifiedFinding['source'] | 
 export const getFindingSeverityBadgeClasses = (
   severity: UnifiedFinding['severity'] | string,
 ): string => FINDING_SEVERITY_CLASSES[severity] || DEFAULT_BADGE_CLASSES;
+
+export const getFindingSeverityPresentation = (
+  finding: Pick<UnifiedFinding, 'severity' | 'resourceId' | 'resourceName' | 'title'>,
+): FindingSeverityPresentation => {
+  if (!isPatrolRuntimeFinding(finding)) {
+    return {
+      label: String(finding.severity),
+      badgeClasses: getFindingSeverityBadgeClasses(finding.severity),
+      uppercase: true,
+    };
+  }
+
+  if (finding.severity === 'critical') {
+    return {
+      label: 'Runtime critical',
+      badgeClasses:
+        'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-900 dark:text-red-300',
+      uppercase: false,
+    };
+  }
+
+  return {
+    label: 'Runtime issue',
+    badgeClasses:
+      'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-900 dark:text-sky-300',
+    uppercase: false,
+  };
+};
 
 export const getFindingStatusBadgeClasses = (status: string): string =>
   FINDING_STATUS_BADGE_CLASSES[status] || DEFAULT_BADGE_CLASSES;

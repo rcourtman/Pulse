@@ -17,6 +17,7 @@ import {
   getFindingRecencyPresentation,
   getFindingLoopStateBadgeClasses,
   getFindingSeverityBadgeClasses,
+  getFindingSeverityPresentation,
   getFindingStatusBadgeClasses,
   getFindingStatusLabel,
   getFindingSeverityToneClasses,
@@ -136,6 +137,37 @@ describe('aiFindingPresentation', () => {
 
     it('contains compact tone classes for critical severity', () => {
       expect(getFindingSeverityToneClasses('critical')).toContain('bg-red-100');
+    });
+
+    it('keeps ordinary infrastructure severity badges generic', () => {
+      expect(
+        getFindingSeverityPresentation({
+          severity: 'warning',
+          resourceId: 'vm-101',
+          resourceName: 'db-01',
+          title: 'Disk nearly full',
+        }),
+      ).toEqual({
+        label: 'warning',
+        badgeClasses: getFindingSeverityBadgeClasses('warning'),
+        uppercase: true,
+      });
+    });
+
+    it('renders runtime-qualified severity badges for patrol runtime findings', () => {
+      expect(
+        getFindingSeverityPresentation({
+          severity: 'warning',
+          resourceId: 'ai-service',
+          resourceName: 'Pulse Patrol Service',
+          title: 'Pulse Patrol: Insufficient API credits',
+        }),
+      ).toEqual({
+        label: 'Runtime issue',
+        badgeClasses:
+          'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-900 dark:text-sky-300',
+        uppercase: false,
+      });
     });
 
     it('uses patrol runtime badge tones when only runtime findings are active', () => {
@@ -439,12 +471,12 @@ describe('aiFindingPresentation', () => {
       expect(findingsPanelSource).toContain('{formatTime(recency.timestamp)}');
     });
 
-    it('surfaces patrol runtime findings with the shared patrol runtime badge', () => {
+    it('routes row badges through the shared severity presentation helper', () => {
       expect(findingsPanelSource).toContain(
-        'const patrolFindingClassification = getPatrolFindingClassification(finding);',
+        'const severityPresentation = getFindingSeverityPresentation(finding);',
       );
-      expect(findingsPanelSource).toContain("patrolFindingClassification.kind === 'runtime'");
-      expect(findingsPanelSource).toContain('{patrolFindingClassification.label}');
+      expect(findingsPanelSource).toContain('severityPresentation.badgeClasses');
+      expect(findingsPanelSource).toContain('severityPresentation.label');
     });
 
     it('uses the shared finding subject presentation instead of raw patrol service resource tokens', () => {

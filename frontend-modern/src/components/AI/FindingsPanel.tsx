@@ -36,6 +36,7 @@ import {
   formatFindingLifecycleType,
   formatFindingLoopState,
   getFindingActiveRuntimeSortOrder,
+  getFindingSeverityPresentation,
   getFindingSeveritySortOrder,
   getFindingResolutionReason,
   getFindingLoopStateBadgeClasses,
@@ -47,7 +48,6 @@ import {
   getFindingManualControlsPresentation,
   getFindingPrimaryActionPresentation,
   getFindingSubjectPresentation,
-  getPatrolFindingClassification,
   getFindingRecencyPresentation,
   hasFindingInvestigationDetails,
   getInvestigationOutcomeBadgeClasses,
@@ -412,9 +412,9 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
   // Render a single finding item
   const renderFindingItem = (finding: UnifiedFinding, showSourceBadge: boolean = false) => {
     const recency = getFindingRecencyPresentation(finding);
-    const patrolFindingClassification = getPatrolFindingClassification(finding);
     const subject = getFindingSubjectPresentation(finding);
     const manualControls = getFindingManualControlsPresentation(finding);
+    const severityPresentation = getFindingSeverityPresentation(finding);
 
     return (
       <div
@@ -455,18 +455,11 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                 {getFindingSourceLabel(finding.source)}
               </span>
             </Show>
-            <Show when={patrolFindingClassification.kind === 'runtime'}>
-              <span
-                class={`px-1.5 py-0.5 border text-[10px] font-medium rounded ${patrolFindingClassification.badgeClasses}`}
-              >
-                {patrolFindingClassification.label}
-              </span>
-            </Show>
             {/* Severity badge */}
             <span
-              class={`px-1.5 py-0.5 border text-[10px] font-medium rounded uppercase ${getFindingSeverityBadgeClasses(finding.severity)}`}
+              class={`px-1.5 py-0.5 border text-[10px] font-medium rounded ${severityPresentation.uppercase ? 'uppercase' : ''} ${severityPresentation.badgeClasses}`}
             >
-              {finding.severity}
+              {severityPresentation.label}
             </span>
             {/* Alert-triggered badge */}
             <Show when={hasTriggeringAlert(finding)}>
