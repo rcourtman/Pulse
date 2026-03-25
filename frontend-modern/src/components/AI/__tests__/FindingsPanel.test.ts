@@ -167,7 +167,9 @@ describe('aiFindingPresentation', () => {
     });
 
     it('keeps the findings card header functional instead of repeating product marketing copy', () => {
-      expect(findingsPanelSource).toContain('Patrol findings');
+      expect(findingsPanelSource).not.toContain(
+        '<span class="font-medium text-base-content">Patrol findings</span>',
+      );
       expect(findingsPanelSource).not.toContain('Pulse Patrol Findings');
       expect(findingsPanelSource).not.toContain('AI-discovered insights');
     });
