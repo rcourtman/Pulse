@@ -273,7 +273,7 @@ jobs:
               echo "- Rollback command: \`${{ steps.rehearsal.outputs.rollback_command }}\`"
             fi
             if [ -n "${{ steps.rehearsal.outputs.soak_hours }}" ]; then
-              echo "- RC soak hours at rehearsal time: ${{ steps.rehearsal.outputs.soak_hours }}"
+              echo "- Prerelease soak hours at rehearsal time: ${{ steps.rehearsal.outputs.soak_hours }}"
             fi
             if [ -n "${{ steps.rehearsal.outputs.ga_date }}" ]; then
               echo "- Planned GA date: ${{ steps.rehearsal.outputs.ga_date }}"

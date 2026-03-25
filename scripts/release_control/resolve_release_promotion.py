@@ -151,7 +151,7 @@ def resolve_metadata(
                 raise ValueError("hotfix_reason is required when hotfix_exception is true.")
         elif soak_hours_value < 72:
             raise ValueError(
-                f"Stable promotion {tag} has only {soak_hours_value} hours of RC soak since {promoted_from_tag}; minimum is 72 hours unless hotfix_exception is true."
+                f"Stable promotion {tag} has only {soak_hours_value} hours of prerelease soak since {promoted_from_tag}; minimum is 72 hours unless hotfix_exception is true."
             )
 
         if version == "6.0.0":

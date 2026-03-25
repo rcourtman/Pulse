@@ -85,7 +85,7 @@ class ResolveReleasePromotionTest(unittest.TestCase):
             )
 
     def test_stable_rejects_short_soak_without_hotfix(self) -> None:
-        with self.assertRaisesRegex(ValueError, "minimum is 72 hours unless hotfix_exception is true"):
+        with self.assertRaisesRegex(ValueError, "hours of prerelease soak"):
             resolver.resolve_metadata(
                 version="6.0.1",
                 promoted_from_tag_input="6.0.1-rc.1",

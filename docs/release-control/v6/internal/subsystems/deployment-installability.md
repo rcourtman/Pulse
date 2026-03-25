@@ -104,7 +104,7 @@ The same governed promotion path must now stay explicit too:
 `scripts/release_control/resolve_release_promotion.py` is the canonical owner
 for stable-versus-prerelease metadata validation shared by `.github/workflows/release-dry-run.yml`
 and `.github/workflows/create-release.yml`. Promotion rollback targets, promoted
-RC lineage, soak checks, and GA/v5 notice metadata may not drift between those
+prerelease lineage, soak checks, and GA/v5 notice metadata may not drift between those
 two workflows through duplicated inline shell validation.
 Those same governed release workflows also own the operator-facing wording for
 that promotion metadata. Human-visible workflow inputs, summaries, and error

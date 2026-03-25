@@ -8,7 +8,7 @@ Use this as the final gate before cutting a Pulse v6 pre-release.
 - If the mobile app is part of the release, run the mobile checks from `/Volumes/Development/pulse/repos/pulse-mobile`.
 - Record pass/fail notes inline in this file or in the release ticket as each section is completed.
 - Use `HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md` for the trust-critical hosted, relay, mobile, entitlement, org-scope, and API-token checks that must be manually confirmed before release.
-- Follow `RELEASE_PROMOTION_POLICY.md` for channel routing, RC soak, stable promotion, and rollback expectations.
+- Follow `RELEASE_PROMOTION_POLICY.md` for channel routing, prerelease soak, stable promotion, and rollback expectations.
 
 ## Current Status
 - Automated command-driven checks completed on 2026-03-06 are marked `[x]` below.
@@ -26,11 +26,11 @@ Use this as the final gate before cutting a Pulse v6 pre-release.
 - High-risk release confidence now lives in `docs/release-control/v6/internal/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md` and should be cleared alongside this checklist.
 
 ## Promotion Policy
-- [ ] Record the previous stable tag and exact rollback pin command before publishing a new RC or stable release.
+- [ ] Record the previous stable tag and exact rollback pin command before publishing a new prerelease or stable release.
 - [ ] For the GA/stable candidate, confirm the release pipeline has already been exercised on a real prerelease tag, not only linted or YAML-parsed.
 - [ ] For stable promotion, confirm the candidate commit has already shipped on `rc`.
-- [ ] For stable promotion, confirm the chosen `promoted_from_tag` is a prerelease that was actually published through the governed RC path, not an accidental git tag.
-- [ ] For stable promotion, confirm the RC soak window is at least 72 hours or document the hotfix exception explicitly.
+- [ ] For stable promotion, confirm the chosen `promoted_from_tag` is a prerelease that was actually published through the governed prerelease path, not an accidental git tag.
+- [ ] For stable promotion, confirm the prerelease soak window is at least 72 hours or document the hotfix exception explicitly.
 - [ ] For stable promotion, confirm paid production tenants are not being moved onto an unvalidated build.
 - [ ] For GA/stable promotion, confirm `V5_MAINTENANCE_SUPPORT_POLICY.md` is still the intended policy and replace any placeholder GA notice dates with the exact v6 GA date and exact v5 end-of-support date that will ship with the announcement.
 - [ ] For GA/stable promotion, confirm the default-branch copy of `.github/workflows/release-dry-run.yml` already accepts the governed stable rehearsal metadata envelope (`promoted_from_tag`, `rollback_version`, `ga_date`, `v5_eos_date`) through `workflow_dispatch`, because GitHub validates dispatch inputs against the default branch even when dispatching `pulse/v6-release`.
@@ -272,6 +272,6 @@ Mark a Pulse v6 build stable-promotion ready only if all of the following are tr
 - [ ] The `Promotion Policy` section above is complete.
 - [ ] Applicable items in `HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md` are cleared.
 - [ ] The rollback target and exact reinstall command are recorded.
-- [ ] The release pipeline has already been exercised on the candidate RC path in a real run, not only statically validated.
+- [ ] The release pipeline has already been exercised on the candidate prerelease path in a real run, not only statically validated.
 - [ ] The v5 maintenance-only support policy, exact GA/EOS dates, and release-note notice are written and ready to publish.
-- [ ] The RC-to-GA rehearsal record and dry-run artifact are linked from the release ticket.
+- [ ] The prerelease-to-GA rehearsal record and dry-run artifact are linked from the release ticket.

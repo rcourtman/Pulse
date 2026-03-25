@@ -24,7 +24,7 @@ Add these secrets to your GitHub repository settings (`Settings` → `Secrets an
 ### How It Works
 
 1. **Trigger**: Runs automatically when a GitHub release is published
-2. **Filter**: Only runs for stable releases (skips RC/pre-releases)
+2. **Filter**: Only runs for stable releases (skips prereleases)
 3. **Update**: SSHs to demo server and runs the install script
 4. **Verify**: Checks that the new version is running and mock mode is active
 5. **Cleanup**: Removes SSH key from runner
