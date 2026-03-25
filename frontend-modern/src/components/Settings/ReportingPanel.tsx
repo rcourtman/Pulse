@@ -71,6 +71,7 @@ export function ReportingPanel() {
   const inventoryDefinition = () => reportingCatalog()?.vmInventoryExport ?? null;
   const lockedState = () => reportingCatalog()?.lockedState ?? null;
   const guidance = () => reportingCatalog()?.guidance ?? null;
+  const catalogReady = () => reportingCatalog() !== null;
   const supportsMetricFilter = () => performanceReport()?.supportsMetricFilter ?? false;
   const supportsCustomTitle = () => performanceReport()?.supportsCustomTitle ?? false;
   const selectedRange = (): ReportingRangeValue => range() ?? performanceReport()!.defaultRange;
@@ -95,13 +96,34 @@ export function ReportingPanel() {
 
   return (
     <div class="space-y-6">
+      <Show when={reportingCatalogLoading() && !catalogReady()}>
+        <OperationsPanel
+          title="Reporting"
+          description="Loading reporting surfaces..."
+          icon={<BarChart class="w-5 h-5" strokeWidth={2} />}
+        >
+          <div class="p-4 sm:p-6">
+            <p class="text-sm text-muted">Loading reporting surfaces...</p>
+          </div>
+        </OperationsPanel>
+      </Show>
+
+      <Show when={reportingCatalogError() && !catalogReady()}>
+        <OperationsPanel
+          title="Reporting"
+          description="Reporting surfaces are currently unavailable."
+          icon={<BarChart class="w-5 h-5" strokeWidth={2} />}
+        >
+          <div class="p-4 sm:p-6">
+            <p class="text-sm text-warning">{reportingCatalogError()}</p>
+          </div>
+        </OperationsPanel>
+      </Show>
+
       <Show when={isLocked()}>
         <OperationsPanel
-          title={reportingCatalog()?.title ?? 'Detailed Reporting'}
-          description={
-            reportingCatalog()?.description ??
-            'Generate performance reports and current-state exports across infrastructure and workloads.'
-          }
+          title={reportingCatalog()!.title}
+          description={reportingCatalog()!.description}
           icon={<BarChart class="w-5 h-5" strokeWidth={2} />}
         >
           <div class="p-4 sm:p-6">
@@ -122,9 +144,7 @@ export function ReportingPanel() {
                   target="_blank"
                   rel="noopener noreferrer"
                   class={getUpgradeActionButtonClass()}
-                  onClick={() =>
-                    trackUpgradeClicked('settings_reporting_panel', 'advanced_reporting')
-                  }
+                  onClick={() => trackUpgradeClicked('settings_reporting_panel', reportingCatalog()!.id)}
                 >
                   {UPGRADE_ACTION_LABEL}
                 </a>
@@ -146,11 +166,8 @@ export function ReportingPanel() {
 
       <Show when={isReportingEnabled()}>
         <OperationsPanel
-          title={reportingCatalog()?.title ?? 'Detailed Reporting'}
-          description={
-            reportingCatalog()?.description ??
-            'Generate performance reports and current-state exports across infrastructure and workloads.'
-          }
+          title={reportingCatalog()!.title}
+          description={reportingCatalog()!.description}
           icon={<BarChart class="w-5 h-5" strokeWidth={2} />}
         >
           <div class="space-y-6 p-4 sm:p-6">

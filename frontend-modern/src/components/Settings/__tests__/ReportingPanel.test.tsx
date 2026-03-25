@@ -176,4 +176,19 @@ describe('ReportingPanel', () => {
       screen.getByText('Catalog-owned explainer for when to use each reporting surface.'),
     ).toBeInTheDocument();
   });
+
+  it('shows a generic loading shell before the reporting catalog arrives', () => {
+    useReportingPanelStateMock.mockReturnValue(
+      buildState({
+        isReportingEnabled: () => false,
+        reportingCatalog: () => null,
+        reportingCatalogLoading: () => true,
+      }),
+    );
+
+    render(() => <ReportingPanel />);
+
+    expect(screen.getByText('Reporting')).toBeInTheDocument();
+    expect(screen.getAllByText('Loading reporting surfaces...').length).toBeGreaterThan(0);
+  });
 });

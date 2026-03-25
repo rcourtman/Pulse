@@ -47,11 +47,19 @@ export const useReportingPanelState = () => {
   const [reportingCatalogRequested, setReportingCatalogRequested] = createSignal(false);
   const [title, setTitle] = createSignal('');
   const [startingTrial, setStartingTrial] = createSignal(false);
+  const reportingFeatureId = () => reportingCatalog()?.id ?? '';
 
-  const isLocked = () => licenseLoaded() && !hasFeature('advanced_reporting');
+  const isLocked = () =>
+    licenseLoaded() &&
+    reportingFeatureId() !== '' &&
+    !hasFeature(reportingFeatureId());
   const canStartTrial = () => entitlements()?.trial_eligible !== false;
-  const isReportingEnabled = () => licenseLoaded() && hasFeature('advanced_reporting');
-  const upgradeActionUrl = () => getUpgradeActionUrlOrFallback('advanced_reporting');
+  const isReportingEnabled = () =>
+    licenseLoaded() &&
+    reportingFeatureId() !== '' &&
+    hasFeature(reportingFeatureId());
+  const upgradeActionUrl = () =>
+    reportingFeatureId() === '' ? '' : getUpgradeActionUrlOrFallback(reportingFeatureId());
 
   onMount(() => {
     loadLicenseStatus();
@@ -60,7 +68,7 @@ export const useReportingPanelState = () => {
   createEffect((wasVisible: boolean) => {
     const visible = isLocked();
     if (visible && !wasVisible) {
-      trackPaywallViewed('advanced_reporting', 'settings_reporting_panel');
+      trackPaywallViewed(reportingFeatureId(), 'settings_reporting_panel');
     }
     return visible;
   }, false);

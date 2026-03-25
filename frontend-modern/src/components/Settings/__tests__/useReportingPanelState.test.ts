@@ -156,6 +156,7 @@ describe('useReportingPanelState', () => {
     expect(apiFetchMock).toHaveBeenCalledWith('/api/admin/reports/catalog');
     expect(hookState.reportingCatalog()?.title).toBe('Detailed Reporting');
     expect(hookState.reportingCatalog()?.lockedState.title).toBe('Advanced Reporting (Pro)');
+    expect(hookState.isLocked()).toBe(true);
 
     dispose();
   });

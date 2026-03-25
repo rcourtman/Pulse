@@ -1086,6 +1086,7 @@ describe('Settings architecture guardrails', () => {
     expect(reportingPanelSource).toContain('@/components/Settings/reportingCatalogModel');
     expect(reportingPanelSource).toContain('@/components/Settings/reportingPanelModel');
     expect(reportingPanelSource).toContain('reportingCatalog');
+    expect(reportingPanelSource).toContain('title="Reporting"');
     expect(reportingPanelSource).not.toContain('loadLicenseStatus()');
     expect(reportingPanelSource).not.toContain('startProTrial()');
     expect(reportingPanelSource).not.toContain("apiFetch('/api/admin/reports/generate");
@@ -1097,10 +1098,12 @@ describe('Settings architecture guardrails', () => {
     expect(reportingPanelStateSource).toContain('buildReportingRequest');
     expect(reportingPanelStateSource).toContain('buildReportingCatalogRequest');
     expect(reportingPanelStateSource).toContain('parseReportingCatalog');
+    expect(reportingPanelStateSource).toContain('reportingFeatureId');
     expect(reportingPanelStateSource).toContain('!licenseLoaded()');
     expect(reportingPanelStateSource).not.toContain('!isReportingEnabled()');
     expect(reportingPanelStateSource).toContain('buildVMInventoryExportRequest');
     expect(reportingPanelStateSource).toContain('getReportingGenerateSuccessMessage');
+    expect(reportingPanelStateSource).not.toContain("'advanced_reporting'");
     expect(reportingPanelStateSource).not.toContain('getTrialAlreadyUsedMessage()');
     expect(reportingCatalogModelSource).toContain('export function buildReportingCatalogRequest');
     expect(reportingCatalogModelSource).toContain('export function parseReportingCatalog');
@@ -1108,6 +1111,7 @@ describe('Settings architecture guardrails', () => {
     expect(reportingCatalogModelSource).toContain('interface ReportingGuidanceDefinition');
     expect(reportingPanelSource).not.toContain('Advanced Reporting (Pro)');
     expect(reportingPanelSource).not.toContain('Advanced Insights');
+    expect(reportingPanelSource).not.toContain('Detailed Reporting');
     expect(reportingPanelSource).not.toContain(
       'Performance reports come from the historical metrics store',
     );

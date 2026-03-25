@@ -203,6 +203,12 @@ parsed backend definition.
 That same settings shell must also read the reporting catalog for locked users,
 not just entitled users, so the paywalled reporting panel does not drift onto a
 separate frontend-owned title or description contract.
+That same settings shell must now also treat the reporting catalog as the
+feature-identity source once it loads. `ReportingPanel.tsx` and
+`useReportingPanelState.ts` may use a generic loading or error shell before the
+catalog is available, but they must not hardcode the reporting feature key or
+the entitled and locked panel title and description once the catalog has
+loaded.
 That same catalog-owned contract also includes the locked teaser copy itself:
 `ReportingPanel.tsx` may style or place the paywall content, but the locked
 title and description must come from the parsed reporting catalog instead of
