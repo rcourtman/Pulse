@@ -196,6 +196,11 @@ export interface FindingEmptyStateCopy {
   body?: string;
 }
 
+export interface FindingRecencyPresentation {
+  label: string;
+  timestamp: string;
+}
+
 export const getFindingSourceLabel = (source: UnifiedFinding['source'] | string): string =>
   FINDING_SOURCE_LABELS[source] || source;
 
@@ -223,6 +228,22 @@ export const getFindingSeveritySortOrder = (
 export const getFindingSeverityCompactLabel = (
   severity: UnifiedFinding['severity'] | string,
 ): string => FINDING_SEVERITY_COMPACT_LABELS[severity] || String(severity).toUpperCase();
+
+export const getFindingRecencyPresentation = (
+  finding: Pick<UnifiedFinding, 'status' | 'detectedAt' | 'lastSeenAt'>,
+): FindingRecencyPresentation => {
+  if (finding.status === 'active' && finding.lastSeenAt) {
+    return {
+      label: 'last seen',
+      timestamp: finding.lastSeenAt,
+    };
+  }
+
+  return {
+    label: 'detected',
+    timestamp: finding.detectedAt,
+  };
+};
 
 export const getInvestigationStatusBadgeClasses = (status: InvestigationStatus): string =>
   INVESTIGATION_STATUS_CLASSES[status] || DEFAULT_BADGE_CLASSES;

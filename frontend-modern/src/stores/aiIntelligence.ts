@@ -111,6 +111,7 @@ export interface UnifiedFinding {
   description: string;
   recommendation?: string;
   detectedAt: string;
+  lastSeenAt?: string;
   resolvedAt?: string;
   acknowledgedAt?: string;
   snoozedUntil?: string;
@@ -290,6 +291,7 @@ export const aiIntelligenceStore = {
           description: item.description,
           recommendation: item.recommendation,
           detectedAt: item.detected_at,
+          lastSeenAt: item.last_seen_at || item.detected_at,
           resolvedAt: item.resolved_at,
           acknowledgedAt: item.acknowledged_at,
           snoozedUntil: item.snoozed_until,

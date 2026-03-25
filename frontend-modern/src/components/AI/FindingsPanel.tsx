@@ -43,6 +43,7 @@ import {
   getFindingStatusLabel,
   getFindingSourceBadgeClasses,
   getFindingSourceLabel,
+  getFindingRecencyPresentation,
   hasFindingInvestigationDetails,
   getInvestigationOutcomeBadgeClasses,
   getInvestigationOutcomeLabel,
@@ -194,7 +195,9 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
         if (aAcked !== bAcked) return aAcked - bAcked;
       }
 
-      return new Date(b.detectedAt).getTime() - new Date(a.detectedAt).getTime();
+      const aRecency = getFindingRecencyPresentation(a);
+      const bRecency = getFindingRecencyPresentation(b);
+      return new Date(bRecency.timestamp).getTime() - new Date(aRecency.timestamp).getTime();
     });
 
     // Limit items
@@ -396,8 +399,11 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
   };
 
   // Render a single finding item
-  const renderFindingItem = (finding: UnifiedFinding, showSourceBadge: boolean = false) => (
-    <div
+  const renderFindingItem = (finding: UnifiedFinding, showSourceBadge: boolean = false) => {
+    const recency = getFindingRecencyPresentation(finding);
+
+    return (
+      <div
       id={`finding-${finding.id}`}
       class={`p-3 cursor-pointer transition-colors ${
         finding.status === 'active'
@@ -536,7 +542,8 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
           </div>
           {/* Resource info */}
           <div class="text-xs text-muted mt-1">
-            {finding.resourceName} ({finding.resourceType}) - {formatTime(finding.detectedAt)}
+            {finding.resourceName} ({finding.resourceType}) - {recency.label}{' '}
+            {formatTime(recency.timestamp)}
             <Show when={finding.status === 'resolved' && finding.resolvedAt}>
               <span class="ml-2 text-green-600 dark:text-green-400">
                 {' · '}
@@ -638,8 +645,9 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
 
       {/* Expanded content */}
       <Show when={expandedId() === finding.id}>{renderExpandedContent(finding)}</Show>
-    </div>
-  );
+      </div>
+    );
+  };
 
   // Render expanded content for a finding
   const renderExpandedContent = (finding: UnifiedFinding) => (

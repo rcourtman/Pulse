@@ -203,6 +203,11 @@ separators rather than CSS-only spacing. Badge counts should preserve readable
 plain-text output such as `Findings 1` and `Runs 30`, and metadata trails
 should use textual separators like `· acknowledged 22d ago` so copied or
 extracted Patrol output does not collapse words together.
+That same findings contract must preserve and use `last_seen_at` for active
+Patrol findings. Recurring active issues should read as `last seen ...` and
+sort by current observation recency rather than presenting only the original
+`detected_at`, which makes still-active Patrol service issues look stale when
+they were re-observed on recent runs.
 That same finding row should avoid redundant state stacking. When an active
 finding is already explicitly marked `Acknowledged`, the UI should not also add
 the baseline `detected` loop-state badge beside it; loop-state badges only add

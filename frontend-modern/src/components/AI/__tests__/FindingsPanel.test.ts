@@ -9,6 +9,7 @@ import {
   getFindingSeverityCompactLabel,
   getFindingSeveritySortOrder,
   getFindingResolutionReason,
+  getFindingRecencyPresentation,
   getFindingLoopStateBadgeClasses,
   getFindingSeverityBadgeClasses,
   getFindingStatusBadgeClasses,
@@ -129,6 +130,34 @@ describe('aiFindingPresentation', () => {
     });
   });
 
+  describe('findingRecencyPresentation', () => {
+    it('uses last seen recency for active findings', () => {
+      expect(
+        getFindingRecencyPresentation({
+          status: 'active',
+          detectedAt: '2026-03-01T00:00:00Z',
+          lastSeenAt: '2026-03-25T12:00:00Z',
+        }),
+      ).toEqual({
+        label: 'last seen',
+        timestamp: '2026-03-25T12:00:00Z',
+      });
+    });
+
+    it('falls back to detected recency for inactive findings', () => {
+      expect(
+        getFindingRecencyPresentation({
+          status: 'resolved',
+          detectedAt: '2026-03-01T00:00:00Z',
+          lastSeenAt: '2026-03-25T12:00:00Z',
+        }),
+      ).toEqual({
+        label: 'detected',
+        timestamp: '2026-03-01T00:00:00Z',
+      });
+    });
+  });
+
   describe('filterPresentation', () => {
     it('builds canonical filter options', () => {
       expect(
@@ -208,6 +237,12 @@ describe('aiFindingPresentation', () => {
       expect(findingsPanelSource).toContain(
         "!(finding.acknowledgedAt && finding.loopState === 'detected')",
       );
+    });
+
+    it('uses canonical finding recency presentation instead of raw detected timestamps for active rows', () => {
+      expect(findingsPanelSource).toContain('const recency = getFindingRecencyPresentation(finding);');
+      expect(findingsPanelSource).toContain("{recency.label}{' '}");
+      expect(findingsPanelSource).toContain('{formatTime(recency.timestamp)}');
     });
   });
 
