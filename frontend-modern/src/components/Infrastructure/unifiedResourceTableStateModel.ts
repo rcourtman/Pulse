@@ -1,5 +1,5 @@
 import type { Resource } from '@/types/resource';
-import { getPreferredResourceDisplayName } from '@/utils/resourceIdentity';
+import { getPreferredInfrastructureDisplayName } from '@/utils/resourceIdentity';
 import {
   sortResources,
   type ResourceGroup,
@@ -38,7 +38,7 @@ export const HOST_TABLE_WINDOW_SIZE = 137;
 export const buildResourceLabelById = (resources: Resource[]): Map<string, string> => {
   const map = new Map<string, string>();
   for (const resource of resources) {
-    map.set(resource.id, getPreferredResourceDisplayName(resource));
+    map.set(resource.id, getPreferredInfrastructureDisplayName(resource));
   }
   return map;
 };

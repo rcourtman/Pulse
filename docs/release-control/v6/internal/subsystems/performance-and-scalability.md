@@ -218,6 +218,12 @@ org-scope switching, and metadata refresh, and
 owns workload-route synchronization, deep-link normalization, and route-scoped
 filter contracts. Future dashboard hot-path changes must extend through those
 owners instead of accreting back into `frontend-modern/src/components/Dashboard/Dashboard.tsx`.
+The shared infrastructure table hot path now also treats operator-facing
+resource identity as a protected boundary: sorting, searching, summary-series
+matching, and row titles on the infrastructure page must use the canonical
+local instance identity rather than governed AI-summary text, so performance
+work cannot “optimize” the table into ambiguous labels that collapse multiple
+resources into the same visible name.
 That derived workload owner now also routes grouped row windowing through
 `frontend-modern/src/components/Dashboard/useGroupedTableWindowing.ts`, which
 owns row-window thresholds, overscan behavior, reveal-index clamping, and

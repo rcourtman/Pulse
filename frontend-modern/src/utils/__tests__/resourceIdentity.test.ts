@@ -13,6 +13,7 @@ import {
   getPreferredResourceClusterName,
   getPreferredResourceKubernetesContext,
   getPreferredResourceDisplayName,
+  getPreferredInfrastructureDisplayName,
   getPreferredResourceHostname,
   getPreferredWorkloadsAgentHint,
   getPrimaryResourceIdentity,
@@ -480,6 +481,25 @@ describe('resourceIdentity', () => {
         }),
       ),
     ).toBe('backup server (online)');
+
+    expect(
+      getPreferredInfrastructureDisplayName(
+        makeResource({
+          name: 'pbs-main',
+          displayName: 'PBS Main',
+          type: 'pbs',
+          policy: {
+            sensitivity: 'sensitive',
+            routing: {
+              scope: 'local-first',
+              redact: ['hostname', 'platform-id'],
+            },
+          },
+          aiSafeSummary:
+            'backup server resource; status online; sources pbs; 1 child resources; redacted for cloud summary',
+        }),
+      ),
+    ).toBe('PBS Main');
 
     expect(
       getPreferredResourceDisplayName(

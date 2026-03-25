@@ -110,5 +110,20 @@ describe('resourceDetailMappers', () => {
       expect(agent?.id).toBe('agent-canonical');
       expect(agent?.id).not.toBe('resource:host:hash-1');
     });
+
+    it('preserves the local infrastructure display name for governed resources', () => {
+      const agent = toAgentFromResource({
+        ...createHybridHostResource(),
+        name: 'secret-host',
+        displayName: 'Tower',
+        policy: {
+          sensitivity: 'restricted',
+          routing: { scope: 'local-only', redact: ['hostname', 'alias'] },
+        },
+        aiSafeSummary: 'restricted host summary safe for remote AI consumption',
+      });
+
+      expect(agent?.displayName).toBe('Tower');
+    });
   });
 });

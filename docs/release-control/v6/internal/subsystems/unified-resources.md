@@ -251,12 +251,12 @@ and it no longer repeats that same provenance as a separate `Mode` row because
 the drawer header badges already own canonical source display,
 and the drawer header no longer carries the technical primary identity line;
 that canonical identifier now lives in the `Identity` card as `Primary ID`,
-and governed consumer identity labels now split from governed detail summaries:
-table rows, selectors, and other primary UI labels must collapse generated
-policy summaries such as `type; status; sources; redaction suffix` down to a
-concise non-sensitive identity label like `backup server (online)`, while the
-drawer governance summary and other explanation surfaces still show the full
-canonical `aiSafeSummary`,
+and local operator identity labels now split from governed detail summaries:
+infrastructure tables, selectors, links, and drawer headings must preserve the
+canonical local instance identity (`displayName`, canonical display name,
+hostname, then primary ID fallback) so service and host surfaces stay uniquely
+addressable for operators, while the drawer governance summary and other
+explanation surfaces still show the full canonical `aiSafeSummary`,
 `resourceDetailDrawerServiceModel.ts` owns the pure Docker/PBS/PMG service
 summary and breakdown derivations that feed the overview service-details
 surface,

@@ -356,6 +356,12 @@ export const getPreferredResourceDisplayName = (resource: Resource): string =>
       getPreferredResourceHostname(resource) ||
       getPrimaryResourceIdentity(resource);
 
+export const getPreferredInfrastructureDisplayName = (resource: Resource): string =>
+  asTrimmedString(resource.displayName) ||
+  asTrimmedString(getCanonicalIdentityRecord(resource)?.displayName) ||
+  getPreferredResourceHostname(resource) ||
+  getPrimaryResourceIdentity(resource);
+
 export const getPreferredWorkloadsAgentHint = (resource: Resource): string | undefined => {
   const platformData = getPlatformDataRecord(resource);
   const proxmox = platformData?.proxmox as Record<string, unknown> | undefined;

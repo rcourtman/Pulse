@@ -12,7 +12,7 @@ import {
 } from '@/utils/resourceBadgePresentation';
 import {
   getPreferredResourceClusterName,
-  getPreferredResourceDisplayName,
+  getPreferredInfrastructureDisplayName,
 } from '@/utils/resourceIdentity';
 import { areSystemSettingsLoaded, shouldHideDockerUpdateActions } from '@/stores/systemSettings';
 import {
@@ -73,7 +73,7 @@ export const useResourceDetailDrawerDerivedState = (
   const { resource, resolveResourceLabel: resolveResourceLabelInput, debugEnabled, resourceIntelligence } =
     options;
 
-  const displayName = createMemo(() => getPreferredResourceDisplayName(resource));
+  const displayName = createMemo(() => getPreferredInfrastructureDisplayName(resource));
   const kubernetesClusterName = createMemo(() => getPreferredResourceClusterName(resource) ?? '');
   const resolveResourceLabel = (resourceId: string): string =>
     resolveResourceLabelInput?.(resourceId)?.trim() || resourceId;

@@ -5,7 +5,7 @@ import {
   hasDockerWorkloadsScope,
 } from '@/utils/agentResources';
 import {
-  getPreferredResourceDisplayName,
+  getPreferredInfrastructureDisplayName,
   getPreferredWorkloadsAgentHint,
   getPreferredResourceKubernetesContext,
 } from '@/utils/resourceIdentity';
@@ -24,7 +24,7 @@ const resolveKubernetesContext = (resource: Resource): string | undefined => {
   const kubernetesContext = getPreferredResourceKubernetesContext(resource);
   if (resource.type === 'k8s-cluster') {
     const displayLabel = requiresGovernedResourceDisplay(resource.policy)
-      ? getPreferredResourceDisplayName(resource)
+      ? getPreferredInfrastructureDisplayName(resource)
       : resource.displayName?.trim() || resource.name?.trim() || undefined;
     return firstNonEmpty([
       kubernetesContext,

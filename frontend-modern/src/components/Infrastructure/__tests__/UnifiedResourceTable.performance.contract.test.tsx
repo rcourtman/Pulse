@@ -4,7 +4,7 @@ import type { Resource } from '@/types/resource';
 import { UnifiedResourceTable } from '@/components/Infrastructure/UnifiedResourceTable';
 import { ResourceFacetSummary } from '@/components/Infrastructure/ResourceFacetSummary';
 import { formatSensorName } from '@/components/Infrastructure/resourceDetailMappers';
-import { getPreferredResourceDisplayName } from '@/utils/resourceIdentity';
+import { getPreferredInfrastructureDisplayName } from '@/utils/resourceIdentity';
 import unifiedResourceTableSource from '@/components/Infrastructure/UnifiedResourceTable.tsx?raw';
 import unifiedResourceTableStateSource from '@/components/Infrastructure/useUnifiedResourceTableState.ts?raw';
 import unifiedResourceTableViewportSyncSource from '@/components/Infrastructure/useUnifiedResourceTableViewportSync.ts?raw';
@@ -274,7 +274,7 @@ describe('UnifiedResourceTable performance contract', () => {
       expect(filtered[0]?.platformData?.sources).toEqual(['proxmox']);
     });
 
-    it('keeps governed resource search aligned with the safe display label', () => {
+    it('keeps governed resource search aligned with the infrastructure display label', () => {
       const governedResource = makeResource(9, {
         name: 'secret-host-9',
         displayName: 'secret-host-9',
@@ -285,8 +285,8 @@ describe('UnifiedResourceTable performance contract', () => {
         aiSafeSummary: 'Production Host',
       });
 
-      expect(matchesSearch(governedResource, 'Production')).toBe(true);
-      expect(matchesSearch(governedResource, 'secret-host-9')).toBe(false);
+      expect(matchesSearch(governedResource, 'Production')).toBe(false);
+      expect(matchesSearch(governedResource, 'secret-host-9')).toBe(true);
     });
 
     it('suppresses the default policy posture badges in host-table rows while preserving exceptional policy badges', async () => {
@@ -564,12 +564,9 @@ describe('UnifiedResourceTable performance contract', () => {
       await waitFor(() => {
         expect(getAllByText('Restricted').length).toBeGreaterThan(0);
       });
-      expect(getPreferredResourceDisplayName(resources[0]!)).toBe(
-        'restricted host summary safe for remote AI consumption',
-      );
-      expect(getByTitle('restricted host summary safe for remote AI consumption')).toBeInTheDocument();
-      expect(queryByText('Sensitive Host')).toBeNull();
-      expect(queryByText('sensitive-host')).toBeNull();
+      expect(getPreferredInfrastructureDisplayName(resources[0]!)).toBe('Sensitive Host');
+      expect(getByTitle('Sensitive Host')).toBeInTheDocument();
+      expect(queryByText('Sensitive Host')).toBeInTheDocument();
     });
 
     it('Profile M: caps mounted rows when windowing is active', async () => {

@@ -17,7 +17,7 @@ import {
 } from '@/utils/resourceBadgePresentation';
 import { getAgentStatusIndicator } from '@/utils/status';
 import { getServiceHealthSummaryPresentation } from '@/utils/serviceHealthPresentation';
-import { getPreferredResourceDisplayName } from '@/utils/resourceIdentity';
+import { getPreferredInfrastructureDisplayName } from '@/utils/resourceIdentity';
 import { shouldShowResourceAlternateName } from '@/utils/resourcePolicyPresentation';
 import { ResourceDetailDrawer } from './ResourceDetailDrawer';
 import { ResourceFacetSummary } from './ResourceFacetSummary';
@@ -103,7 +103,9 @@ export const UnifiedResourcePMGTableSection: Component<UnifiedResourcePMGTableSe
                 const isHighlighted = createMemo(
                   () => tableProps.highlightedResourceId === resource.id,
                 );
-                const displayName = createMemo(() => getPreferredResourceDisplayName(resource));
+                const displayName = createMemo(() =>
+                  getPreferredInfrastructureDisplayName(resource),
+                );
                 const serviceLink = createMemo(
                   () => buildServiceDetailLinks(resource)[0] ?? null,
                 );

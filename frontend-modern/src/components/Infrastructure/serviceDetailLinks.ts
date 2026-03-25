@@ -1,6 +1,6 @@
 import type { Resource } from '@/types/resource';
 import { buildRecoveryPath, PMG_THRESHOLDS_PATH } from '@/routing/resourceLinks';
-import { getPreferredResourceDisplayName } from '@/utils/resourceIdentity';
+import { getPreferredInfrastructureDisplayName } from '@/utils/resourceIdentity';
 
 export type ServiceDetailLink = {
   href: string;
@@ -10,7 +10,7 @@ export type ServiceDetailLink = {
 };
 
 export const buildServiceDetailLinks = (resource: Resource): ServiceDetailLink[] => {
-  const label = getPreferredResourceDisplayName(resource);
+  const label = getPreferredInfrastructureDisplayName(resource);
 
   if (resource.type === 'pbs') {
     return [

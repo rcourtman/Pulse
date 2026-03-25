@@ -11,7 +11,7 @@ import {
 } from '@/utils/agentResources';
 import {
   getPreferredResourceClusterName,
-  getPreferredResourceDisplayName,
+  getPreferredInfrastructureDisplayName,
   getPreferredResourceHostname,
 } from '@/utils/resourceIdentity';
 
@@ -59,7 +59,7 @@ const asNumber = (value: unknown): number | undefined =>
 
 const getPreferredHostLabel = (resource: Resource): string =>
   getPreferredResourceHostname(resource) ||
-  getPreferredResourceDisplayName(resource) ||
+  getPreferredInfrastructureDisplayName(resource) ||
   resource.id;
 
 export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null => {
@@ -154,7 +154,7 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
     platformData?.agent?.hostname ||
     asString(dockerPlatformData?.hostname) ||
     getPreferredResourceHostname(resource) ||
-    getPreferredResourceDisplayName(resource) ||
+    getPreferredInfrastructureDisplayName(resource) ||
     resource.platformId ||
     resource.id;
   const workloadAgentId =

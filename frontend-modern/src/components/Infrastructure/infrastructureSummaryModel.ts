@@ -7,7 +7,7 @@ import {
   hasAgentFacet,
 } from '@/utils/agentResources';
 import {
-  getPreferredResourceDisplayName,
+  getPreferredInfrastructureDisplayName,
   getPreferredResourceHostname,
   getResourceIdentityAliases,
   getNormalizedIdentityLookupVariants,
@@ -66,7 +66,7 @@ const getNormalizedResourceIdentifiers = (resource: Resource): Set<string> =>
   new Set<string>([
     ...getNormalizedIdentityLookupVariants(resource.id),
     ...getNormalizedIdentityLookupVariants(resource.platformId),
-    ...getNormalizedIdentityLookupVariants(getPreferredResourceDisplayName(resource)),
+    ...getNormalizedIdentityLookupVariants(getPreferredInfrastructureDisplayName(resource)),
     ...getNormalizedIdentityLookupVariants(getPreferredResourceHostname(resource)),
     ...getResourceIdentityAliases(resource).flatMap((value) =>
       getNormalizedIdentityLookupVariants(value),
@@ -216,7 +216,7 @@ export function buildInfrastructureSummarySeries(
         metricSeries('diskwrite'),
       ),
       color: getChartSeriesColor(index),
-      name: getPreferredResourceDisplayName(resource),
+      name: getPreferredInfrastructureDisplayName(resource),
     };
   });
 }

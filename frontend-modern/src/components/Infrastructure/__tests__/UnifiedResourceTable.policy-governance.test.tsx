@@ -70,9 +70,9 @@ describe('UnifiedResourceTable governance presentation', () => {
 
     expect(getByText('Restricted')).toBeInTheDocument();
     expect(getByText('Local Only')).toBeInTheDocument();
-    expect(getByText('restricted host summary safe for remote AI consumption')).toBeInTheDocument();
+    expect(getByText('Sensitive Host')).toBeInTheDocument();
+    expect(queryByText('restricted host summary safe for remote AI consumption')).toBeNull();
     expect(queryByText('(sensitive-host)')).toBeNull();
-    expect(queryByText('Sensitive Host')).toBeNull();
   });
 
   it('surfaces resource facet counts in the resource row', () => {

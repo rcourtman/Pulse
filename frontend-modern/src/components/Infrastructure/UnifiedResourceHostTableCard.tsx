@@ -23,7 +23,7 @@ import {
   getUnifiedSourceBadges,
 } from '@/utils/resourceBadgePresentation';
 import { getAgentStatusIndicator } from '@/utils/status';
-import { getPreferredResourceDisplayName } from '@/utils/resourceIdentity';
+import { getPreferredInfrastructureDisplayName } from '@/utils/resourceIdentity';
 import {
   getResourcePolicyTableBadges,
   shouldShowResourceAlternateName,
@@ -184,7 +184,9 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                   const isHighlighted = createMemo(
                     () => tableProps.highlightedResourceId === resource.id,
                   );
-                  const displayName = createMemo(() => getPreferredResourceDisplayName(resource));
+                  const displayName = createMemo(() =>
+                    getPreferredInfrastructureDisplayName(resource),
+                  );
                   const statusIndicator = createMemo(() =>
                     getAgentStatusIndicator({ status: resource.status }),
                   );

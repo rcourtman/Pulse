@@ -10,7 +10,10 @@ import type {
 import type { Resource, ResourceMetric } from '@/types/resource';
 import { formatTemperature } from '@/utils/temperature';
 import { getActionableAgentIdFromResource } from '@/utils/agentResources';
-import { getPreferredResourceDisplayName, getPreferredResourceHostname } from '@/utils/resourceIdentity';
+import {
+  getPreferredInfrastructureDisplayName,
+  getPreferredResourceHostname,
+} from '@/utils/resourceIdentity';
 import { titleCaseDelimitedLabel } from '@/utils/textPresentation';
 export { getSourceTypeLabel as formatSourceType } from '@/utils/sourceTypePresentation';
 
@@ -166,7 +169,7 @@ const asString = (value: unknown): string | undefined =>
 
 const getPreferredHostLabel = (resource: Resource): string =>
   getPreferredResourceHostname(resource) ||
-  getPreferredResourceDisplayName(resource) ||
+  getPreferredInfrastructureDisplayName(resource) ||
   resource.id;
 
 export const buildMemory = (metric?: ResourceMetric, fallback?: Partial<Memory>): Memory => {
@@ -234,7 +237,7 @@ export const toNodeFromProxmox = (resource: Resource): Node | null => {
   return {
     id: resource.id,
     name: proxmox.nodeName ?? getPreferredHostLabel(resource),
-    displayName: getPreferredResourceDisplayName(resource),
+    displayName: getPreferredInfrastructureDisplayName(resource),
     instance: resource.platformId ?? resource.id,
     host: proxmox.nodeName ?? getPreferredHostLabel(resource),
     status: resource.status,
@@ -280,7 +283,7 @@ export const toAgentFromResource = (
   return {
     id: agentId,
     hostname,
-    displayName: getPreferredResourceDisplayName(resource),
+    displayName: getPreferredInfrastructureDisplayName(resource),
     platform: agent.platform,
     osName: agent.osName ?? 'Unknown',
     osVersion: agent.osVersion ?? '',
