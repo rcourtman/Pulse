@@ -141,7 +141,7 @@ const (
 func NewDefaultAIConfig() *AIConfig {
 	return &AIConfig{
 		Enabled:    false,
-		Model:      DefaultAIModelAnthropic,
+		Model:      DefaultModelForProvider(AIProviderAnthropic),
 		AuthMethod: AuthMethodAPIKey,
 		// Patrol defaults - enabled when AI is enabled
 		// Default to 6 hour intervals (much more token-efficient than 15 min)
@@ -346,19 +346,8 @@ func (c *AIConfig) GetModel() string {
 	// This handles the case where user configures Ollama but doesn't explicitly select a model
 	configured := c.GetConfiguredProviders()
 	if len(configured) == 1 {
-		switch configured[0] {
-		case AIProviderAnthropic:
-			return DefaultAIModelAnthropic
-		case AIProviderOpenAI:
-			return DefaultAIModelOpenAI
-		case AIProviderOpenRouter:
-			return DefaultAIModelOpenRouter
-		case AIProviderOllama:
-			return DefaultAIModelOllama
-		case AIProviderDeepSeek:
-			return DefaultAIModelDeepSeek
-		case AIProviderGemini:
-			return DefaultAIModelGemini
+		if defaultModel := DefaultModelForProvider(configured[0]); defaultModel != "" {
+			return defaultModel
 		}
 	}
 

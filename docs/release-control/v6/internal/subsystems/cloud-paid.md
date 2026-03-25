@@ -583,6 +583,17 @@ bootstrap/admin-role assignment and rollback path for hosted signup failures.
 Hosted billing-state normalization now follows the same rule: a missing
 `plan_version` must remain missing instead of being synthesized from
 `subscription_state`, while explicit trial defaults remain explicit.
+Hosted trial bootstrap and hosted entitlement refresh now also own quickstart
+credit seeding as part of that same persisted billing boundary. New hosted
+trial workspaces and later lease-refresh rewrites must preserve
+`quickstart_credits_granted` plus its grant timestamp instead of resetting the
+workspace to zero hosted quickstart inventory after signup or entitlement
+renewal.
+Hosted AI runtime defaults are part of the same boundary as well: when a cloud
+tenant falls back to provider defaults, the persisted model identifier must
+remain canonical `provider:model` data rather than a bare provider-local alias,
+so hosted enterprise runtime startup does not fail before chat or approvals can
+initialize.
 Hosted release builds must also accept the trial-activation public key from
 runtime environment when `PULSE_HOSTED_MODE=true`, because hosted tenants
 receive that verification key from control-plane deployment rather than from

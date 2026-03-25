@@ -142,6 +142,7 @@ Own canonical runtime payload shapes between backend and frontend.
 17. Keep hosted tenant browser-session precedence on the shared auth boundary: `internal/api/auth.go`, `internal/api/contract_test.go`, and hosted tenant callers must treat a valid `pulse_session` as authoritative before any API-only token fallback or no-local-auth anonymous fallback, so cloud handoff can continue into protected hosted routes without flattening the operator back to `anonymous` or forcing a browser session through bearer-token-only mode after the tenant has minted API tokens.
 18. Keep tenant settings-scope authorization aligned with org management: `internal/api/security_setup_fix.go`, `internal/api/contract_test.go`, and settings-bound hosted callers must allow the current non-default org owner/admin membership to exercise privileged tenant routes, rather than requiring a separate configured local admin identity after hosted handoff.
 19. Keep mobile onboarding payload reads aligned with the server-owned relay-mobile credential: `internal/api/router_routes_ai_relay.go`, `internal/api/onboarding_handlers.go`, and `internal/api/contract_test.go` must allow the dedicated `relay:mobile:access` scope to reach the governed QR, deep-link, and connection-validation payloads without reintroducing a broader `settings:read` requirement for token-authenticated pairing clients.
+20. Keep hosted billing-state quickstart payload fields on the shared API contract: `internal/api/hosted_entitlement_refresh.go`, `internal/api/subscription_state_handlers.go`, and `internal/api/contract_test.go` must preserve `quickstart_credits_granted`, `quickstart_credits_used`, and `quickstart_credits_granted_at` through hosted signup, hosted lease refresh, and billing-state reads instead of letting lease rewrites silently erase seeded quickstart inventory.
 
 ## Forbidden Paths
 
@@ -1235,6 +1236,13 @@ That quickstart transport contract must also preserve the distinction between
 credit inventory and live runtime path: zero remaining credits alone must not
 force a blocked or exhausted operator presentation while Patrol is active on a
 configured non-quickstart provider path.
+Hosted billing-state payloads now also carry the canonical quickstart grant
+metadata used by hosted bootstrap and refresh flows. Billing reads and contract
+proofs must preserve `quickstart_credits_granted`,
+`quickstart_credits_used`, and `quickstart_credits_granted_at` as backend-
+owned fields, so hosted entitlement refresh cannot silently drop a workspace
+back to "no quickstart inventory" just because the lease or trial state was
+rewritten.
 That same Patrol status contract now also carries a canonical `runtime_state`
 field, so the frontend can distinguish blocked, running, disabled, active,
 and unavailable Patrol runtime states without deriving operator status from

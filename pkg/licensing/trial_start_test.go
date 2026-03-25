@@ -234,4 +234,10 @@ func TestBuildTrialBillingStateWithPlan(t *testing.T) {
 	if *state.TrialEndsAt != now.Add(72*time.Hour).Unix() {
 		t.Fatalf("trial_ends_at=%d, want %d", *state.TrialEndsAt, now.Add(72*time.Hour).Unix())
 	}
+	if !state.QuickstartCreditsGranted {
+		t.Fatal("expected quickstart credits to be granted for new trial workspaces")
+	}
+	if state.QuickstartCreditsGrantedAt == nil {
+		t.Fatal("expected quickstart credits grant timestamp to be populated")
+	}
 }

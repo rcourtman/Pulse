@@ -223,6 +223,11 @@ before any API-only token fallback or optional-auth anonymous fallback so
 operators can mint relay-mobile credentials and continue onboarding from the
 hosted runtime itself even after that tenant has already minted managed API
 tokens.
+That same lifecycle-adjacent hosted entitlement path must also preserve the
+trial quickstart grant fields already seeded into billing state. Hosted setup
+and pairing may depend on the shared `internal/api/` entitlement refresh, but
+that refresh must not erase quickstart bootstrap inventory while it rewrites
+lease-backed plan and capability data.
 The same setup boundary also depends on canonical org-management privilege
 surviving the next step: once the request is scoped to a hosted tenant org,
 shared `internal/api/security_setup_fix.go` helpers must allow that org's

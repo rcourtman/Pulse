@@ -75,6 +75,12 @@ func TestHostedLifecycle(t *testing.T) {
 		if stored.TrialEndsAt == nil {
 			t.Fatal("expected trial_ends_at to be populated")
 		}
+		if !stored.QuickstartCreditsGranted {
+			t.Fatal("expected hosted signup billing state to grant quickstart credits")
+		}
+		if stored.QuickstartCreditsGrantedAt == nil {
+			t.Fatal("expected hosted signup quickstart grant timestamp to be populated")
+		}
 
 		expectedCaps := append([]string(nil), cloudCapabilitiesFromLicensing()...)
 		sort.Strings(expectedCaps)

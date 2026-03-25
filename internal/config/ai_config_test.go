@@ -394,42 +394,42 @@ func TestAIConfig_GetModel(t *testing.T) {
 			config: AIConfig{
 				AnthropicAPIKey: "key",
 			},
-			expected: DefaultAIModelAnthropic,
+			expected: DefaultModelForProvider(AIProviderAnthropic),
 		},
 		{
 			name: "single provider configured - openai",
 			config: AIConfig{
 				OpenAIAPIKey: "key",
 			},
-			expected: DefaultAIModelOpenAI,
+			expected: DefaultModelForProvider(AIProviderOpenAI),
 		},
 		{
 			name: "single provider configured - openrouter",
 			config: AIConfig{
 				OpenRouterAPIKey: "key",
 			},
-			expected: DefaultAIModelOpenRouter,
+			expected: DefaultModelForProvider(AIProviderOpenRouter),
 		},
 		{
 			name: "single provider configured - deepseek",
 			config: AIConfig{
 				DeepSeekAPIKey: "key",
 			},
-			expected: DefaultAIModelDeepSeek,
+			expected: DefaultModelForProvider(AIProviderDeepSeek),
 		},
 		{
 			name: "single provider configured - gemini",
 			config: AIConfig{
 				GeminiAPIKey: "key",
 			},
-			expected: DefaultAIModelGemini,
+			expected: DefaultModelForProvider(AIProviderGemini),
 		},
 		{
 			name: "single provider configured - ollama",
 			config: AIConfig{
 				OllamaBaseURL: "http://localhost:11434",
 			},
-			expected: DefaultAIModelOllama,
+			expected: DefaultModelForProvider(AIProviderOllama),
 		},
 		{
 			name: "multiple providers configured (no default)",
@@ -444,7 +444,7 @@ func TestAIConfig_GetModel(t *testing.T) {
 			config: AIConfig{
 				OllamaBaseURL: "http://localhost:11434",
 			},
-			expected: DefaultAIModelOllama,
+			expected: DefaultModelForProvider(AIProviderOllama),
 		},
 		{
 			name:     "no model/provider",
@@ -673,6 +673,9 @@ func TestNewDefaultAIConfig(t *testing.T) {
 	}
 	if config.PatrolIntervalMinutes != 360 {
 		t.Errorf("Default patrol interval should be 360, got %d", config.PatrolIntervalMinutes)
+	}
+	if config.Model != DefaultModelForProvider(AIProviderAnthropic) {
+		t.Errorf("Default model should be %q, got %q", DefaultModelForProvider(AIProviderAnthropic), config.Model)
 	}
 	if !config.PatrolEnabled {
 		t.Error("Default patrol should be enabled")

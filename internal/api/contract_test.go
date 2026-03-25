@@ -210,6 +210,39 @@ func TestContract_HostedSignupResponseJSONSnapshot(t *testing.T) {
 	assertJSONSnapshot(t, got, want)
 }
 
+func TestContract_BillingStateQuickstartJSONSnapshot(t *testing.T) {
+	grantedAt := time.Date(2026, 3, 25, 14, 30, 0, 0, time.UTC).Unix()
+
+	payload := billingState{
+		Capabilities:               []string{"ai_autofix", "ai_patrol"},
+		Limits:                     map[string]int64{"max_monitored_systems": 25},
+		MetersEnabled:              []string{},
+		PlanVersion:                "cloud_starter",
+		SubscriptionState:          subscriptionStateActiveValue,
+		QuickstartCreditsGranted:   true,
+		QuickstartCreditsUsed:      3,
+		QuickstartCreditsGrantedAt: &grantedAt,
+	}
+
+	got, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal billing state: %v", err)
+	}
+
+	const want = `{
+		"capabilities":["ai_autofix","ai_patrol"],
+		"limits":{"max_monitored_systems":25},
+		"meters_enabled":[],
+		"plan_version":"cloud_starter",
+		"subscription_state":"active",
+		"quickstart_credits_granted":true,
+		"quickstart_credits_used":3,
+		"quickstart_credits_granted_at":1774449000
+	}`
+
+	assertJSONSnapshot(t, got, want)
+}
+
 func TestContract_StripeWebhookHandlersUseCanonicalRuntimeDataDir(t *testing.T) {
 	envDir := t.TempDir()
 	t.Setenv("PULSE_DATA_DIR", envDir)

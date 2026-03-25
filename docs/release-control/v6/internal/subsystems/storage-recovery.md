@@ -166,6 +166,12 @@ ledger explanation reads: storage- and recovery-adjacent surfaces may coexist
 with counted monitored-system inventory, but any support-facing count
 reasoning must come from the canonical unified-resource grouping explanation
 payload rather than from storage or recovery heuristics.
+That same shared hosted-entitlement refresh path must also preserve the
+canonical quickstart grant metadata carried in billing state. Storage- and
+recovery-adjacent hosted tenants may share Patrol-backed investigation and
+recovery context with the rest of the app, but the shared `internal/api/`
+lease refresh must not clear quickstart inventory and leave adjacent product
+surfaces inferring a fake "unavailable" runtime from rewritten billing state.
 That adjacent ledger read must also preserve canonical grouped system status,
 including `warning`, so recovery- and storage-adjacent support views do not
 flatten governed degraded state into a fake `unknown` label when the shared
