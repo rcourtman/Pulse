@@ -464,12 +464,21 @@ describe('aiFindingPresentation', () => {
       expect(findingsPanelSource).toContain('const showFilterControls = createMemo(');
       expect(findingsPanelSource).toContain('const useRunSnapshotScopedControls = createMemo(');
       expect(findingsPanelSource).toContain('const runSnapshotScopedPatrolFindings = createMemo(');
-      expect(findingsPanelSource).toContain('scopedNeedsAttentionCount()');
-      expect(findingsPanelSource).toContain('scopedPendingApprovalCount()');
+      expect(findingsPanelSource).toContain('const filterCounts = createMemo(() => ({');
+      expect(findingsPanelSource).toContain('filterCounts().needsAttentionCount > 0');
+      expect(findingsPanelSource).toContain('filterCounts().pendingApprovalCount > 0');
       expect(findingsPanelSource).toContain('allPatrolFindings().length > 0');
-      expect(findingsPanelSource).toContain('aiIntelligenceStore.needsAttentionCount > 0');
-      expect(findingsPanelSource).toContain('aiIntelligenceStore.pendingApprovalCount > 0');
       expect(findingsPanelSource).toContain('<Show when={showFilterControls()}>');
+    });
+
+    it('auto-resets conditional filters from the same scoped count model used by the filter bar', () => {
+      expect(findingsPanelSource).toContain(
+        "if (filter() === 'attention' && filterCounts().needsAttentionCount === 0)",
+      );
+      expect(findingsPanelSource).toContain(
+        "if (filter() === 'approvals' && filterCounts().pendingApprovalCount === 0)",
+      );
+      expect(findingsPanelSource).toContain('buildFindingFilterOptions(filterCounts())');
     });
 
     it('uses explicit textual separators in finding metadata instead of relying on visual spacing', () => {

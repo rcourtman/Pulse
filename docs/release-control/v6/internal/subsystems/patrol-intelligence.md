@@ -259,6 +259,11 @@ That same snapshot scoping must also apply to the `Findings` tab badge itself.
 When the selected run carries an explicit empty `finding_ids` snapshot, or when
 the run lacks snapshot ids entirely, the tab must fail closed instead of
 borrowing global active-finding counts and tones from outside the selected run.
+That same scoped count model must drive conditional findings filters too. The
+`Needs Attention` and `Approvals` buckets, their counts, and the auto-reset
+logic that returns the operator to `Active` when a bucket disappears must all
+read from the same snapshot-aware count source rather than mixing
+snapshot-scoped pills with global queue truth.
 That same findings surface should keep its section chrome functional rather
 than promotional. Inside the Patrol findings tab, the selected tab already
 names the surface, so the findings card should not add another in-card product

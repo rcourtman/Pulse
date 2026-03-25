@@ -144,16 +144,6 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     }
   });
 
-  // Auto-reset filter when the conditional filter buttons disappear
-  createEffect(() => {
-    if (filter() === 'attention' && aiIntelligenceStore.needsAttentionCount === 0) {
-      setFilter('active');
-    }
-    if (filter() === 'approvals' && aiIntelligenceStore.pendingApprovalCount === 0) {
-      setFilter('active');
-    }
-  });
-
   // Filter and sort findings
   const filteredFindings = createMemo(() => {
     let findings = [...aiIntelligenceStore.findings];
@@ -253,21 +243,20 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     );
     return runSnapshotScopedPatrolFindings().filter((finding) => approvalIds.has(finding.id)).length;
   });
+  const filterCounts = createMemo(() => ({
+    needsAttentionCount: useRunSnapshotScopedControls()
+      ? scopedNeedsAttentionCount()
+      : aiIntelligenceStore.needsAttentionCount,
+    pendingApprovalCount: useRunSnapshotScopedControls()
+      ? scopedPendingApprovalCount()
+      : aiIntelligenceStore.pendingApprovalCount,
+  }));
   const patrolFindings = createMemo(() =>
     filteredFindings().filter(
       (f) => f.source !== 'threshold' && !f.isThreshold && !hasTriggeringAlert(f),
     ),
   );
-  const filterOptions = createMemo(() =>
-    buildFindingFilterOptions({
-      needsAttentionCount: useRunSnapshotScopedControls()
-        ? scopedNeedsAttentionCount()
-        : aiIntelligenceStore.needsAttentionCount,
-      pendingApprovalCount: useRunSnapshotScopedControls()
-        ? scopedPendingApprovalCount()
-        : aiIntelligenceStore.pendingApprovalCount,
-    }),
-  );
+  const filterOptions = createMemo(() => buildFindingFilterOptions(filterCounts()));
   const emptyStateCopy = createMemo(() =>
     getPatrolFindingsEmptyState({
       filter: filter(),
@@ -278,16 +267,25 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     }),
   );
   const emptyStateTone = createMemo(() => getSemanticTonePresentation(emptyStateCopy().tone));
+  // Auto-reset filter when the conditional filter buttons disappear
+  createEffect(() => {
+    if (filter() === 'attention' && filterCounts().needsAttentionCount === 0) {
+      setFilter('active');
+    }
+    if (filter() === 'approvals' && filterCounts().pendingApprovalCount === 0) {
+      setFilter('active');
+    }
+  });
   const showFilterControls = createMemo(
     () =>
       props.showControls !== false &&
       (useRunSnapshotScopedControls()
         ? runSnapshotScopedPatrolFindings().length > 0 ||
-          scopedNeedsAttentionCount() > 0 ||
-          scopedPendingApprovalCount() > 0
+          filterCounts().needsAttentionCount > 0 ||
+          filterCounts().pendingApprovalCount > 0
         : allPatrolFindings().length > 0 ||
-          aiIntelligenceStore.needsAttentionCount > 0 ||
-          aiIntelligenceStore.pendingApprovalCount > 0),
+          filterCounts().needsAttentionCount > 0 ||
+          filterCounts().pendingApprovalCount > 0),
   );
 
   const isOutOfScope = (finding: UnifiedFinding): boolean => {
