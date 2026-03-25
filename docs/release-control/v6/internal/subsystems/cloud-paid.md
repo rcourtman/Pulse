@@ -243,6 +243,11 @@ success-notification, and canonical denial handling through
 `frontend-modern/src/utils/trialStartAction.ts` instead of carrying local
 `startProTrial()` redirect/error branches that drift from backend commercial
 truth.
+That same rule also covers the self-hosted pricing page in
+`frontend-modern/src/pages/PricingV6.tsx`: pricing CTA state may choose when to
+switch from trial to upgrade presentation, but the actual hosted handoff and
+backend denial classification must still flow through the shared trial-start
+owner instead of parsing raw trial-start status codes inline.
 The hosted trial handoff page is part of that same boundary as well. It may
 still use a secure hosted Stripe-backed session internally, but the customer
 copy must present the flow as starting a trial for the originating Pulse

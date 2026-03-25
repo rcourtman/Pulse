@@ -76,4 +76,26 @@ describe('runStartProTrialAction', () => {
     expect(showSuccess).not.toHaveBeenCalled();
     expect(navigate).not.toHaveBeenCalled();
   });
+
+  it('invokes the optional error hook with the raw backend error payload', async () => {
+    const onError = vi.fn();
+    const error = {
+      status: 409,
+      code: 'trial_already_used',
+      message: 'Trial already used',
+    };
+    startProTrialMock.mockRejectedValue(error);
+
+    await expect(
+      runStartProTrialAction({
+        showSuccess,
+        showError,
+        navigate,
+        onError,
+      }),
+    ).resolves.toBe('error');
+
+    expect(onError).toHaveBeenCalledWith(error);
+    expect(showError).toHaveBeenCalledWith('Trial already used');
+  });
 });

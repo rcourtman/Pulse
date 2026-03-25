@@ -20,6 +20,8 @@ export interface TrialStartErrorLike {
   message?: string;
 }
 
+export type TrialStartErrorKind = 'already_used' | 'retry_later' | 'other';
+
 export function getProTrialStartedMessage(): string {
   return 'Pro trial started';
 }
@@ -32,7 +34,7 @@ export function getTrialTryAgainLaterMessage(): string {
   return 'Try again later';
 }
 
-function normalizeTrialStartError(error?: unknown): TrialStartErrorLike | null {
+export function normalizeTrialStartError(error?: unknown): TrialStartErrorLike | null {
   if (!error) return null;
   if (typeof error === 'string') return { message: error };
   if (typeof error !== 'object') return null;
@@ -45,15 +47,27 @@ function normalizeTrialStartError(error?: unknown): TrialStartErrorLike | null {
   };
 }
 
+export function getTrialStartErrorKind(error?: unknown): TrialStartErrorKind {
+  const normalized = normalizeTrialStartError(error);
+  if (normalized?.code === 'trial_already_used') {
+    return 'already_used';
+  }
+  if (normalized?.status === 429) {
+    return 'retry_later';
+  }
+  return 'other';
+}
+
 export function getTrialStartErrorMessage(
   error?: unknown,
   options: TrialStartErrorOptions = {},
 ): string {
   const normalized = normalizeTrialStartError(error);
-  if (normalized?.code === 'trial_already_used') {
+  const kind = getTrialStartErrorKind(normalized);
+  if (kind === 'already_used') {
     return getTrialAlreadyUsedMessage();
   }
-  if (normalized?.status === 429) {
+  if (kind === 'retry_later') {
     return getTrialTryAgainLaterMessage();
   }
   if (normalized?.message?.trim()) {

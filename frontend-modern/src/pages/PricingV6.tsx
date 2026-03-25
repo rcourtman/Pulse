@@ -14,11 +14,10 @@ import {
   entitlements,
   getUpgradeActionUrlOrFallback,
   loadLicenseStatus,
-  startProTrial,
 } from '@/stores/license';
 import { showToast } from '@/utils/toast';
 import { logger } from '@/utils/logger';
-import { getTrialStartErrorMessage } from '@/utils/upgradePresentation';
+import { getTrialStartErrorKind } from '@/utils/upgradePresentation';
 import {
   SELF_HOSTED_FEATURE_ROWS,
   SELF_HOSTED_PLAN_BY_TIER,
@@ -26,6 +25,7 @@ import {
   type SelfHostedPlanDefinition,
   type SelfHostedTierKey,
 } from '@/utils/selfHostedPlans';
+import { runStartProTrialAction } from '@/utils/trialStartAction';
 
 // ---------------------------------------------------------------------------
 // Shared sub-components
@@ -181,22 +181,20 @@ export default function PricingV6() {
     setStartingTrial(true);
 
     try {
-      const result = await startProTrial();
-      if (result.outcome === 'redirect') {
-        if (typeof window !== 'undefined') {
-          window.location.href = result.actionUrl;
-        }
-        return;
+      const outcome = await runStartProTrialAction({
+        successMessage: 'Pro trial started (14 days).',
+        showSuccess: (message) => showToast('success', message),
+        showError: setTrialMessage,
+        onError: (error) => {
+          if (getTrialStartErrorKind(error) === 'already_used') {
+            setTrialCtaMode('upgrade');
+          }
+          logger.warn('[PricingV6] Trial start request failed', error);
+        },
+      });
+      if (outcome === 'activated') {
+        await loadLicenseStatus(true);
       }
-      showToast('success', 'Pro trial started (14 days).');
-      await loadLicenseStatus(true);
-    } catch (error) {
-      const trialError = error as { code?: string } | null;
-      if (trialError?.code === 'trial_already_used') {
-        setTrialCtaMode('upgrade');
-      }
-      logger.warn('[PricingV6] Trial start request failed', error);
-      setTrialMessage(getTrialStartErrorMessage(error));
     } finally {
       setStartingTrial(false);
     }

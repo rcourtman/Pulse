@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  getTrialStartErrorKind,
   getProTrialStartedMessage,
   getTrialAlreadyUsedMessage,
   getTrialStartErrorMessage,
+  normalizeTrialStartError,
   getTrialTryAgainLaterMessage,
   getUpgradeActionButtonClass,
   UPGRADE_ACTION_LABEL,
@@ -28,6 +30,14 @@ describe('upgradePresentation', () => {
     expect(getTrialStartErrorMessage('temporary failure')).toBe('temporary failure');
     expect(getTrialStartErrorMessage({ code: 'trial_already_used' })).toBe('Trial already used');
     expect(getTrialStartErrorMessage({ status: 429 })).toBe('Try again later');
+    expect(getTrialStartErrorKind({ code: 'trial_already_used' })).toBe('already_used');
+    expect(getTrialStartErrorKind({ status: 429 })).toBe('retry_later');
+    expect(getTrialStartErrorKind({ message: 'temporary failure' })).toBe('other');
+    expect(normalizeTrialStartError({ status: 409, code: 'trial_not_available' })).toEqual({
+      status: 409,
+      code: 'trial_not_available',
+      message: undefined,
+    });
     expect(
       getTrialStartErrorMessage({
         code: 'trial_not_available',

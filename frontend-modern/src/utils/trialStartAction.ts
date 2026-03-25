@@ -5,6 +5,7 @@ export type StartProTrialActionOutcome = 'activated' | 'redirect' | 'error';
 
 export interface RunStartProTrialActionOptions {
   branded?: boolean;
+  onError?: (error: unknown) => void;
   successMessage?: string;
   showSuccess: (message: string) => void;
   showError: (message: string) => void;
@@ -32,6 +33,7 @@ export async function runStartProTrialAction(
     showSuccess(successMessage ?? getProTrialStartedMessage());
     return 'activated';
   } catch (error) {
+    options.onError?.(error);
     showError(getTrialStartErrorMessage(error, { branded }));
     return 'error';
   }
