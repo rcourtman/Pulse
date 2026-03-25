@@ -958,9 +958,11 @@ func (s *FindingsStore) Add(f *Finding) bool {
 		if wasResolved {
 			prevResolvedAt := existing.ResolvedAt
 			prevResolveReason := existing.ResolveReason
+			hadAcknowledgement := existing.AcknowledgedAt != nil
 			existing.ResolvedAt = nil
 			existing.AutoResolved = false
 			existing.ResolveReason = ""
+			existing.AcknowledgedAt = nil
 			// Reset investigation loop metadata when a previously resolved issue reappears.
 			existing.InvestigationSessionID = ""
 			existing.InvestigationStatus = ""
@@ -976,6 +978,9 @@ func (s *FindingsStore) Add(f *Finding) bool {
 			}
 			if prevResolveReason != "" {
 				meta["previous_resolve_reason"] = prevResolveReason
+			}
+			if hadAcknowledgement {
+				meta["previous_acknowledged"] = "true"
 			}
 			s.appendLifecycleLocked(existing, "regressed", "Finding re-detected after resolution", string(FindingLoopStateResolved), string(FindingLoopStateDetected), meta)
 			if existing.IsActive() {

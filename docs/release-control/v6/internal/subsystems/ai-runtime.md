@@ -508,6 +508,10 @@ so the full-run seed/reconcile path must not auto-resolve them as
 `Resource no longer exists in infrastructure` just because `ai-service` is not
 present in the infrastructure snapshot. Those findings stay active until
 Patrol actually succeeds or resolves them for a Patrol-owned reason.
+The shared findings lifecycle must also treat a regressed issue as a new active
+occurrence. When a resolved finding reappears, `internal/ai/findings.go` must
+clear any stale acknowledgement timestamp from the prior occurrence instead of
+carrying that acknowledgement forward onto the regressed active issue.
 AI chat tool-name labels, pending-tool headers, and assistant status copy now
 also route through the shared frontend identifier-label helper, so the chat
 surfaces do not keep their own underscore-stripping behavior separate from

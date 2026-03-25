@@ -76,9 +76,66 @@ func TestFindingsStore_RegressionIncrementsAndRecordsLifecycleEvent(t *testing.T
 	if got.LastRegressionAt == nil {
 		t.Fatal("expected lastRegressionAt to be set")
 	}
+	if got.AcknowledgedAt != nil {
+		t.Fatal("expected acknowledgement to clear when the finding regresses")
+	}
 	foundRegressed := false
 	for _, e := range got.Lifecycle {
 		if e.Type == "regressed" {
+			foundRegressed = true
+			break
+		}
+	}
+	if !foundRegressed {
+		t.Fatal("expected regressed lifecycle event")
+	}
+}
+
+func TestFindingsStore_RegressionClearsPriorAcknowledgement(t *testing.T) {
+	store := NewFindingsStore()
+	f := &Finding{
+		ID:           "lf-ack-regress",
+		ResourceID:   "vm-202",
+		ResourceName: "api",
+		Severity:     FindingSeverityWarning,
+		Category:     FindingCategoryReliability,
+		Title:        "Restart loop",
+		Description:  "Service repeatedly restarts",
+	}
+	if !store.Add(f) {
+		t.Fatal("expected first add to create finding")
+	}
+	if !store.Acknowledge(f.ID) {
+		t.Fatal("expected acknowledge to succeed")
+	}
+	if !store.Resolve(f.ID, true) {
+		t.Fatal("expected resolve to succeed")
+	}
+	if store.Add(&Finding{
+		ID:           f.ID,
+		ResourceID:   "vm-202",
+		ResourceName: "api",
+		Severity:     FindingSeverityWarning,
+		Category:     FindingCategoryReliability,
+		Title:        "Restart loop",
+		Description:  "Service repeatedly restarts again",
+	}) {
+		t.Fatal("expected second add to update existing finding")
+	}
+
+	got := store.Get(f.ID)
+	if got == nil {
+		t.Fatal("expected finding to exist")
+	}
+	if got.AcknowledgedAt != nil {
+		t.Fatal("expected acknowledgement to clear after regression")
+	}
+	foundRegressed := false
+	for _, e := range got.Lifecycle {
+		if e.Type == "regressed" {
+			if e.Metadata["previous_acknowledged"] != "true" {
+				t.Fatal("expected regressed lifecycle event to note prior acknowledgement")
+			}
 			foundRegressed = true
 			break
 		}
