@@ -116,6 +116,25 @@ describe('RunHistoryEntry', () => {
     });
   });
 
+  it('fails closed for legacy runs without snapshot finding ids', () => {
+    render(() => (
+      <RunHistoryEntry
+        run={{
+          ...run,
+          id: 'run-missing-finding-ids',
+          finding_ids: undefined,
+        }}
+        isLive={false}
+        patrolStream={patrolStream}
+        selected={true}
+        onSelect={vi.fn()}
+      />
+    ));
+
+    expect(screen.queryByTestId('findings-panel')).not.toBeInTheDocument();
+    expect(findingsPanelState.latestProps).toBeNull();
+  });
+
   it('uses a shared coverage summary when a scoped run checked fewer resources than its scope', () => {
     render(() => (
       <RunHistoryEntry
@@ -149,6 +168,8 @@ describe('RunHistoryEntry', () => {
         (element.textContent?.includes('Patrol completed with issues requiring review.') ??
           false),
       ),
+    ).toBeInTheDocument();
+  });
 
   it('keeps zero-coverage scoped runs on the shared coverage narrative', () => {
     render(() => (
@@ -176,8 +197,11 @@ describe('RunHistoryEntry', () => {
         element?.tagName === 'P' &&
         (element.textContent?.includes('Checked 0 of 2 scoped resources') ?? false) &&
         (element.textContent?.includes('453ms') ?? false) &&
-        (element.textContent?.includes('Patrol completed with issues requiring review.') ?? false),
+        (element.textContent?.includes('Patrol completed with issues requiring review.') ??
+          false),
+      ),
     ).toBeInTheDocument();
+    expect(screen.queryByText(/^Patrol completed in 453ms/)).not.toBeInTheDocument();
   });
 
   it('does not claim all clear when the run still had existing issues', () => {

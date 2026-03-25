@@ -264,6 +264,10 @@ That same scoped count model must drive conditional findings filters too. The
 logic that returns the operator to `Active` when a bucket disappears must all
 read from the same snapshot-aware count source rather than mixing
 snapshot-scoped pills with global queue truth.
+That same fail-closed snapshot rule applies to inline run-history findings as
+well. Expanded run cards may render inline findings only when the run carries
+an explicit `finding_ids` snapshot; legacy runs without snapshot ids must stay
+unknown rather than being coerced into an empty findings snapshot.
 That same findings surface should keep its section chrome functional rather
 than promotional. Inside the Patrol findings tab, the selected tab already
 names the surface, so the findings card should not add another in-card product
