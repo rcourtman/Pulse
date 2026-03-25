@@ -13,7 +13,6 @@ type ReportingAdminEndpoints interface {
 	HandleGetReportingCatalog(http.ResponseWriter, *http.Request)
 	HandleGenerateReport(http.ResponseWriter, *http.Request)
 	HandleGenerateMultiReport(http.ResponseWriter, *http.Request)
-	HandleGetVMInventoryDefinition(http.ResponseWriter, *http.Request)
 	HandleExportVMInventory(http.ResponseWriter, *http.Request)
 }
 

@@ -223,10 +223,10 @@ state VM facts, but `internal/api/reporting_inventory_handlers.go` and
 `internal/api/router_routes_licensing.go` remain API/reporting transport
 ownership rather than storage/recovery contract ownership.
 That adjacent reporting transport now also includes a reporting catalog route
-plus a VM inventory definition route that own panel copy, stable column
-schema, and filename prefix. Storage and recovery flows may read those facts
-when they need fleet context, but they must not fork their own reporting or
-inventory column contract.
+whose nested VM inventory definition owns panel copy, stable column schema,
+and filename prefix. Storage and recovery flows may read those facts when they
+need fleet context, but they must not fork their own reporting or inventory
+column contract.
 That catalog route is intentionally metadata-readable without the
 `advanced_reporting` feature gate so locked admin reporting shells can stay on
 the same API-owned definition before upsell; storage- and recovery-adjacent

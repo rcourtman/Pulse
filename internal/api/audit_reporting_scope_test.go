@@ -50,7 +50,6 @@ func TestReportingEndpointsRequireSettingsReadScope(t *testing.T) {
 		"/api/admin/reports/catalog",
 		"/api/admin/reports/generate",
 		"/api/admin/reports/generate-multi",
-		"/api/admin/reports/inventory/vms/definition",
 		"/api/admin/reports/inventory/vms/export",
 	}
 

@@ -450,7 +450,6 @@ var allRouteAllowlist = []string{
 	"/api/admin/reports/generate",
 	"/api/admin/reports/generate-multi",
 	"/api/admin/reports/catalog",
-	"/api/admin/reports/inventory/vms/definition",
 	"/api/admin/reports/inventory/vms/export",
 	"/api/admin/webhooks/audit",
 	"/api/security/change-password",

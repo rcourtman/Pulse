@@ -11,7 +11,6 @@ import (
 type testReportingAdminEndpoints struct {
 	catalogCalls         int
 	generateCalls        int
-	definitionCalls      int
 	exportInventoryCalls int
 }
 
@@ -24,10 +23,6 @@ func (t *testReportingAdminEndpoints) HandleGenerateReport(http.ResponseWriter, 
 }
 
 func (t *testReportingAdminEndpoints) HandleGenerateMultiReport(http.ResponseWriter, *http.Request) {}
-
-func (t *testReportingAdminEndpoints) HandleGetVMInventoryDefinition(http.ResponseWriter, *http.Request) {
-	t.definitionCalls++
-}
 
 func (t *testReportingAdminEndpoints) HandleExportVMInventory(http.ResponseWriter, *http.Request) {
 	t.exportInventoryCalls++
@@ -103,21 +98,5 @@ func TestResolveReportingAdminEndpoints_UsesDefaultCatalogHandler(t *testing.T) 
 	resolved.HandleGetReportingCatalog(rec, req)
 	if defaults.catalogCalls != 1 {
 		t.Fatalf("expected default reporting catalog handler call, got %d", defaults.catalogCalls)
-	}
-}
-
-func TestResolveReportingAdminEndpoints_UsesDefaultInventoryDefinitionHandler(t *testing.T) {
-	SetReportingAdminEndpointsBinder(nil)
-	t.Cleanup(func() {
-		SetReportingAdminEndpointsBinder(nil)
-	})
-
-	defaults := &testReportingAdminEndpoints{}
-	resolved := resolveReportingAdminEndpoints(defaults, extensions.ReportingAdminRuntime{})
-	req := httptest.NewRequest(http.MethodGet, "/api/admin/reports/inventory/vms/definition", nil)
-	rec := httptest.NewRecorder()
-	resolved.HandleGetVMInventoryDefinition(rec, req)
-	if defaults.definitionCalls != 1 {
-		t.Fatalf("expected default VM inventory definition handler call, got %d", defaults.definitionCalls)
 	}
 }

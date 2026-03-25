@@ -307,44 +307,6 @@ func TestReportingHandlers_GetReportingCatalog_ReturnsCanonicalDefinition(t *tes
 	}
 }
 
-func TestReportingHandlers_GetVMInventoryDefinition_MethodNotAllowed(t *testing.T) {
-	handler := NewReportingHandlers(nil, nil)
-	req := httptest.NewRequest(http.MethodPost, "/api/admin/reports/inventory/vms/definition", nil)
-	rr := httptest.NewRecorder()
-
-	handler.HandleGetVMInventoryDefinition(rr, req)
-
-	if rr.Code != http.StatusMethodNotAllowed {
-		t.Fatalf("expected status %d, got %d", http.StatusMethodNotAllowed, rr.Code)
-	}
-}
-
-func TestReportingHandlers_GetVMInventoryDefinition_ReturnsCanonicalDefinition(t *testing.T) {
-	handler := NewReportingHandlers(nil, nil)
-	req := httptest.NewRequest(http.MethodGet, "/api/admin/reports/inventory/vms/definition", nil)
-	rr := httptest.NewRecorder()
-
-	handler.HandleGetVMInventoryDefinition(rr, req)
-
-	if rr.Code != http.StatusOK {
-		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, rr.Code, rr.Body.String())
-	}
-	if contentType := rr.Header().Get("Content-Type"); !strings.Contains(contentType, "application/json") {
-		t.Fatalf("expected JSON content type, got %q", contentType)
-	}
-
-	var payload reporting.VMInventoryExportDefinition
-	if err := json.NewDecoder(rr.Body).Decode(&payload); err != nil {
-		t.Fatalf("decode definition payload: %v", err)
-	}
-	if payload.ID != "vm_inventory" || payload.Format != reporting.FormatCSV {
-		t.Fatalf("unexpected VM inventory definition payload: %+v", payload)
-	}
-	if len(payload.Columns) == 0 || payload.Columns[3].Label != "Pool" {
-		t.Fatalf("expected canonical Pool column in definition payload, got %+v", payload.Columns)
-	}
-}
-
 func TestReportingHandlers_ExportVMInventory_InvalidFormat(t *testing.T) {
 	handler := NewReportingHandlers(nil, nil)
 	req := httptest.NewRequest(http.MethodGet, "/api/admin/reports/inventory/vms/export?format=pdf", nil)

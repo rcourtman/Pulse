@@ -177,7 +177,7 @@ with that export, but `internal/api/reporting_inventory_handlers.go` and
 `internal/api/router_routes_licensing.go` remain API-owned reporting transport,
 not lifecycle-owned inventory or install behavior.
 That adjacent reporting transport now also includes a reporting catalog route
-plus a VM inventory definition route that own panel copy, performance report
+whose nested VM inventory definition owns panel copy, performance report
 options, export title, column schema, and filename prefixes. Lifecycle-
 adjacent install and fleet surfaces may read those facts, but they must not
 redefine reporting or inventory schema locally.
