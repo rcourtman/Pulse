@@ -37,8 +37,8 @@ import {
 export const useReportingPanelState = () => {
   const [selectedResources, setSelectedResources] = createSignal<SelectedResource[]>([]);
   const [metricType, setMetricType] = createSignal('');
-  const [format, setFormat] = createSignal<ReportingFormat>('pdf');
-  const [range, setRange] = createSignal<ReportingRangeValue>('24h');
+  const [format, setFormat] = createSignal<ReportingFormat | null>(null);
+  const [range, setRange] = createSignal<ReportingRangeValue | null>(null);
   const [generating, setGenerating] = createSignal(false);
   const [exportingInventory, setExportingInventory] = createSignal(false);
   const [reportingCatalog, setReportingCatalog] = createSignal<ReportingCatalog | null>(null);
@@ -104,10 +104,16 @@ export const useReportingPanelState = () => {
     if (!performanceReport) {
       return;
     }
-    if (!performanceReport.formats.some((candidate) => candidate.value === format())) {
+    if (
+      format() === null ||
+      !performanceReport.formats.some((candidate) => candidate.value === format())
+    ) {
       setFormat(performanceReport.defaultFormat);
     }
-    if (!performanceReport.ranges.some((candidate) => candidate.key === range())) {
+    if (
+      range() === null ||
+      !performanceReport.ranges.some((candidate) => candidate.key === range())
+    ) {
       setRange(performanceReport.defaultRange);
     }
   });
@@ -151,10 +157,12 @@ export const useReportingPanelState = () => {
       if (!performanceReport) {
         throw new Error(getReportingGenerateErrorMessage());
       }
-      const start = getReportingRangeStart(range(), now, performanceReport);
+      const selectedFormat = format() ?? performanceReport.defaultFormat;
+      const selectedRange = range() ?? performanceReport.defaultRange;
+      const start = getReportingRangeStart(selectedRange, now, performanceReport);
       const request = buildReportingRequest({
         end: now.toISOString(),
-        format: format(),
+        format: selectedFormat,
         metricType: metricType(),
         now,
         resources,

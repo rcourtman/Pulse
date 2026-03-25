@@ -192,6 +192,13 @@ request builder may not assume metric filtering or custom titles are always
 available; they must honor `supportsMetricFilter` and `supportsCustomTitle`
 from the backend catalog and avoid emitting unsupported controls or request
 parameters from frontend-local defaults.
+That same backend-owned catalog also owns the initial reporting selections and
+transport details. `useReportingPanelState.ts`,
+`reportingPanelModel.ts`, and `reportingInventoryExportModel.ts` may not seed
+format/range selections from legacy frontend constants or invent fallback
+report endpoints, filename prefixes, or range windows when the catalog is
+present; the first valid selection and all request semantics must come from the
+parsed backend definition.
 The shared updates settings owner also defines the user-facing framing for
 rc-tagged builds. `frontend-modern/src/components/Settings/updatesSettingsModel.ts`
 and `frontend-modern/src/utils/updatesPresentation.ts` must present that

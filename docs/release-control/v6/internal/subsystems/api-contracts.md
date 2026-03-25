@@ -237,6 +237,11 @@ must derive allowed formats, default format selection, multi-resource limits,
 optional metric/title field emission, default fallback range window, and
 attachment filename prefixes from the canonical reporting definition instead of
 hardcoding a second local contract.
+That same catalog contract is also authoritative for frontend request builders:
+consumers may validate or reject malformed payloads, but they must not invent
+replacement report endpoints, filename prefixes, export routes, or default
+range windows from frontend-local fallback constants once the catalog has been
+accepted.
 The `/api/resources` serializer now also refreshes canonical identity and
 policy metadata through the shared unified-resource helper before it writes
 the payload, so backend and frontend contract tests stay aligned on one

@@ -71,6 +71,8 @@ export function ReportingPanel() {
   const inventoryDefinition = () => reportingCatalog()?.vmInventoryExport ?? null;
   const supportsMetricFilter = () => performanceReport()?.supportsMetricFilter ?? false;
   const supportsCustomTitle = () => performanceReport()?.supportsCustomTitle ?? false;
+  const selectedRange = (): ReportingRangeValue => range() ?? performanceReport()!.defaultRange;
+  const selectedFormat = (): ReportingFormat => format() ?? performanceReport()!.defaultFormat;
   const optionalFieldCount = () =>
     Number(supportsMetricFilter()) + Number(supportsCustomTitle());
   const optionalFieldGridClass = () =>
@@ -213,7 +215,7 @@ export function ReportingPanel() {
                     <FilterButtonGroup
                       class="sm:grid-cols-3"
                       options={rangeFilterOptions()}
-                      value={range()}
+                      value={selectedRange()}
                       onChange={setRange}
                       variant="prominent"
                     />
@@ -223,7 +225,7 @@ export function ReportingPanel() {
                     <FilterButtonGroup
                       class="sm:grid-cols-2"
                       options={formatFilterOptions()}
-                      value={format()}
+                      value={selectedFormat()}
                       onChange={setFormat}
                       variant="prominent"
                     />

@@ -21,20 +21,20 @@ export interface ReportingInventoryExportDefinition {
   columns: ReportingInventoryExportColumnDefinition[];
 }
 
-export function buildVMInventoryExportFilename(now: Date, filenamePrefix = 'vm-inventory'): string {
+export function buildVMInventoryExportFilename(now: Date, filenamePrefix: string): string {
   const date = now.toISOString().split('T')[0];
   return `${filenamePrefix}-${date}.csv`;
 }
 
 export function buildVMInventoryExportRequest(
   now: Date,
-  definition?: Pick<ReportingInventoryExportDefinition, 'exportEndpoint' | 'filenamePrefix'> | null,
+  definition: Pick<ReportingInventoryExportDefinition, 'exportEndpoint' | 'filenamePrefix'>,
 ): ReportingInventoryExportRequestDefinition {
   const params = new URLSearchParams({ format: 'csv' });
   return {
-    filename: buildVMInventoryExportFilename(now, definition?.filenamePrefix ?? 'vm-inventory'),
+    filename: buildVMInventoryExportFilename(now, definition.filenamePrefix),
     request: {
-      url: `${definition?.exportEndpoint ?? '/api/admin/reports/inventory/vms/export'}?${params.toString()}`,
+      url: `${definition.exportEndpoint}?${params.toString()}`,
     },
   };
 }
@@ -76,6 +76,10 @@ export function parseVMInventoryExportDefinition(
       description: column.description,
     };
   });
+
+  if (columns.length === 0) {
+    throw new Error('Invalid VM inventory export definition payload');
+  }
 
   return {
     id: candidate.id,

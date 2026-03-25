@@ -166,4 +166,51 @@ describe('reporting panel model', () => {
       '2026-02-18T12:00:00.000Z',
     );
   });
+
+  it('falls back to the backend-defined default range instead of a frontend constant', () => {
+    const now = new Date('2026-03-20T12:00:00.000Z');
+
+    expect(
+      getReportingRangeStart('missing', now, {
+        ...performanceDefinition,
+        defaultRange: '7d',
+      }).toISOString(),
+    ).toBe('2026-03-13T12:00:00.000Z');
+  });
+
+  it('uses backend-defined endpoints and filename prefixes without frontend fallbacks', () => {
+    const now = new Date('2026-03-20T12:34:56.000Z');
+    const resources: SelectedResource[] = [
+      {
+        id: 'agent-1',
+        type: 'agent',
+        name: 'node-a',
+      },
+      {
+        id: 'vm-1',
+        type: 'vm',
+        name: 'vm-a',
+      },
+    ];
+
+    const request = buildReportingRequest(
+      {
+        end: now.toISOString(),
+        format: 'csv',
+        metricType: '',
+        now,
+        resources,
+        start: '2026-03-19T12:34:56.000Z',
+        title: '',
+      },
+      {
+        ...performanceDefinition,
+        multiResourceEndpoint: '/api/custom/reports/export',
+        multiFilenamePrefix: 'estate',
+      },
+    );
+
+    expect(request.filename).toBe('estate-2026-03-20.csv');
+    expect(request.request.url).toBe('/api/custom/reports/export');
+  });
 });

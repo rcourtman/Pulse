@@ -8,7 +8,7 @@ import {
 describe('reporting inventory export model', () => {
   it('builds a VM inventory export filename', () => {
     const now = new Date('2026-03-20T12:34:56.000Z');
-    expect(buildVMInventoryExportFilename(now)).toBe('vm-inventory-2026-03-20.csv');
+    expect(buildVMInventoryExportFilename(now, 'vm-inventory')).toBe('vm-inventory-2026-03-20.csv');
   });
 
   it('builds the canonical VM inventory export request', () => {
@@ -46,5 +46,19 @@ describe('reporting inventory export model', () => {
       label: 'Pool',
       description: 'Canonical Proxmox pool membership.',
     });
+  });
+
+  it('rejects inventory definitions without declared columns', () => {
+    expect(() =>
+      parseVMInventoryExportDefinition({
+        id: 'vm_inventory',
+        title: 'VM Inventory Export',
+        description: 'Current-state VM inventory',
+        format: 'csv',
+        exportEndpoint: '/api/admin/reports/inventory/vms/export',
+        filenamePrefix: 'vm-inventory',
+        columns: [],
+      }),
+    ).toThrow('Invalid VM inventory export definition payload');
   });
 });

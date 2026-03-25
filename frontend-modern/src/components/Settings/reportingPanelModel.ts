@@ -32,14 +32,16 @@ export interface ReportingRequestDefinition {
 export function getReportingRangeStart(
   range: ReportingRangeValue,
   now: Date,
-  definition?: Pick<ReportingPerformanceReportDefinition, 'defaultRange' | 'ranges'> | null,
+  definition: Pick<ReportingPerformanceReportDefinition, 'defaultRange' | 'ranges'>,
 ): Date {
   const start = new Date(now);
   const resolvedRange =
-    definition?.ranges.find((candidate) => candidate.key === range) ??
-    definition?.ranges.find((candidate) => candidate.key === definition.defaultRange) ??
-    null;
-  start.setHours(start.getHours() - (resolvedRange?.windowHours ?? 24));
+    definition.ranges.find((candidate) => candidate.key === range) ??
+    definition.ranges.find((candidate) => candidate.key === definition.defaultRange);
+  if (!resolvedRange) {
+    throw new Error('Invalid reporting range definition');
+  }
+  start.setHours(start.getHours() - resolvedRange.windowHours);
   return start;
 }
 
@@ -55,21 +57,21 @@ export function buildReportingFilename(
   format: ReportingFormat,
   resourceName: string | null,
   now: Date,
-  definition?: Pick<
+  definition: Pick<
     ReportingPerformanceReportDefinition,
     'multiFilenamePrefix' | 'singleFilenamePrefix'
-  > | null,
+  >,
 ): string {
   const date = now.toISOString().split('T')[0];
   if (resourceName) {
-    return `${definition?.singleFilenamePrefix ?? 'report'}-${resourceName}-${date}.${format}`;
+    return `${definition.singleFilenamePrefix}-${resourceName}-${date}.${format}`;
   }
-  return `${definition?.multiFilenamePrefix ?? 'fleet-report'}-${date}.${format}`;
+  return `${definition.multiFilenamePrefix}-${date}.${format}`;
 }
 
 export function buildReportingRequest(
   context: ReportingRequestContext,
-  definition?: Pick<
+  definition: Pick<
     ReportingPerformanceReportDefinition,
     | 'multiFilenamePrefix'
     | 'multiResourceEndpoint'
@@ -77,11 +79,10 @@ export function buildReportingRequest(
     | 'singleResourceEndpoint'
     | 'supportsCustomTitle'
     | 'supportsMetricFilter'
-  > | null,
+  >,
 ): ReportingRequestDefinition {
-  const metricType =
-    definition?.supportsMetricFilter === false ? '' : context.metricType.trim();
-  const customTitle = definition?.supportsCustomTitle === false ? '' : context.title.trim();
+  const metricType = definition.supportsMetricFilter === false ? '' : context.metricType.trim();
+  const customTitle = definition.supportsCustomTitle === false ? '' : context.title.trim();
 
   if (context.resources.length === 1) {
     const resource = context.resources[0];
@@ -101,7 +102,7 @@ export function buildReportingRequest(
     return {
       filename: buildReportingFilename(context.format, resource.name, context.now, definition),
       request: {
-        url: `${definition?.singleResourceEndpoint ?? '/api/admin/reports/generate'}?${params.toString()}`,
+        url: `${definition.singleResourceEndpoint}?${params.toString()}`,
       },
     };
   }
@@ -109,7 +110,7 @@ export function buildReportingRequest(
   return {
     filename: buildReportingFilename(context.format, null, context.now, definition),
     request: {
-      url: definition?.multiResourceEndpoint ?? '/api/admin/reports/generate-multi',
+      url: definition.multiResourceEndpoint,
       init: {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
