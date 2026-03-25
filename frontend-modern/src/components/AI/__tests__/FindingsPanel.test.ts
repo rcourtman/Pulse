@@ -6,6 +6,7 @@ import {
   formatFindingLifecycleType,
   formatFindingLoopState,
   getFindingEmptyStateCopy,
+  getFindingManualControlsPresentation,
   getFindingPrimaryActionPresentation,
   getFindingSubjectPresentation,
   getPatrolFindingClassification,
@@ -245,6 +246,36 @@ describe('aiFindingPresentation', () => {
     });
   });
 
+  describe('findingManualControlsPresentation', () => {
+    it('disables generic feedback controls for patrol runtime findings', () => {
+      expect(
+        getFindingManualControlsPresentation({
+          resourceId: 'ai-service',
+          resourceName: 'Pulse Patrol Service',
+          title: 'Pulse Patrol: Insufficient API credits',
+        }),
+      ).toEqual({
+        acknowledge: false,
+        snooze: false,
+        dismiss: false,
+      });
+    });
+
+    it('keeps generic feedback controls for infrastructure findings', () => {
+      expect(
+        getFindingManualControlsPresentation({
+          resourceId: 'vm-101',
+          resourceName: 'db-01',
+          title: 'Disk nearly full',
+        }),
+      ).toEqual({
+        acknowledge: true,
+        snooze: true,
+        dismiss: true,
+      });
+    });
+  });
+
   describe('filterPresentation', () => {
     it('builds canonical filter options', () => {
       expect(
@@ -298,6 +329,13 @@ describe('aiFindingPresentation', () => {
       expect(findingsPanelSource).toContain('getFindingPrimaryActionPresentation');
       expect(findingsPanelSource).toContain('{action().label}');
       expect(findingsPanelSource).toContain("href={action().href}");
+    });
+
+    it('routes generic finding controls through the shared manual-controls helper', () => {
+      expect(findingsPanelSource).toContain('getFindingManualControlsPresentation(finding)');
+      expect(findingsPanelSource).toContain('manualControls.acknowledge');
+      expect(findingsPanelSource).toContain('manualControls.snooze');
+      expect(findingsPanelSource).toContain('manualControls.dismiss');
     });
 
     it('only shows the sort control when there are multiple Patrol findings to sort', () => {

@@ -5182,6 +5182,12 @@ func (h *AISettingsHandler) HandleAcknowledgeFinding(w http.ResponseWriter, r *h
 		http.Error(w, "Finding not found", http.StatusNotFound)
 		return
 	}
+	if foundInPatrol {
+		if err := patrol.RejectManualActionForRuntimeFinding(req.FindingID, "acknowledged"); err != nil {
+			http.Error(w, err.Error(), http.StatusConflict)
+			return
+		}
+	}
 
 	// Acknowledge in patrol findings if it exists there
 	if foundInPatrol {
@@ -5302,6 +5308,12 @@ func (h *AISettingsHandler) HandleSnoozeFinding(w http.ResponseWriter, r *http.R
 		http.Error(w, "Finding not found or already resolved", http.StatusNotFound)
 		return
 	}
+	if foundInPatrol {
+		if err := patrol.RejectManualActionForRuntimeFinding(req.FindingID, "snoozed"); err != nil {
+			http.Error(w, err.Error(), http.StatusConflict)
+			return
+		}
+	}
 
 	// Snooze in patrol findings if it exists there
 	if foundInPatrol {
@@ -5382,6 +5394,10 @@ func (h *AISettingsHandler) HandleResolveFinding(w http.ResponseWriter, r *http.
 	finding := findings.Get(req.FindingID)
 	if finding == nil {
 		http.Error(w, "Finding not found or already resolved", http.StatusNotFound)
+		return
+	}
+	if err := patrol.RejectManualActionForRuntimeFinding(req.FindingID, "resolved"); err != nil {
+		http.Error(w, err.Error(), http.StatusConflict)
 		return
 	}
 
@@ -5569,6 +5585,12 @@ func (h *AISettingsHandler) HandleDismissFinding(w http.ResponseWriter, r *http.
 		http.Error(w, "Finding not found", http.StatusNotFound)
 		return
 	}
+	if foundInPatrol {
+		if err := patrol.RejectManualActionForRuntimeFinding(req.FindingID, "dismissed"); err != nil {
+			http.Error(w, err.Error(), http.StatusConflict)
+			return
+		}
+	}
 
 	// Dismiss in patrol findings if it exists there
 	if foundInPatrol {
@@ -5664,6 +5686,10 @@ func (h *AISettingsHandler) HandleSuppressFinding(w http.ResponseWriter, r *http
 	finding := findings.Get(req.FindingID)
 	if finding == nil {
 		http.Error(w, "Finding not found", http.StatusNotFound)
+		return
+	}
+	if err := patrol.RejectManualActionForRuntimeFinding(req.FindingID, "suppressed"); err != nil {
+		http.Error(w, err.Error(), http.StatusConflict)
 		return
 	}
 

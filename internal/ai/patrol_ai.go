@@ -3297,10 +3297,6 @@ func (p *PatrolService) seedIntelligenceContext(intel seedIntelligence, now time
 	return sb.String()
 }
 
-func patrolFindingUsesSyntheticRuntimeResource(f *Finding) bool {
-	return f != nil && (f.Key == "ai-patrol-error" || f.ResourceID == "ai-service")
-}
-
 // seedFindingsAndContext builds the thresholds, active findings, dismissed findings, and user notes sections.
 func (p *PatrolService) seedFindingsAndContextState(scope *PatrolScope, snap patrolRuntimeState) (string, []string) {
 	var sb strings.Builder

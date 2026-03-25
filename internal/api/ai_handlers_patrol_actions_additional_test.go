@@ -77,6 +77,43 @@ func addUnifiedFinding(store *unified.UnifiedStore, id string, detectedAt time.T
 	return finding
 }
 
+func addPatrolRuntimeFinding(t *testing.T, patrol *ai.PatrolService, id string, detectedAt time.Time) *ai.Finding {
+	t.Helper()
+
+	finding := &ai.Finding{
+		ID:           id,
+		Key:          "ai-patrol-error",
+		Severity:     ai.FindingSeverityWarning,
+		Category:     ai.FindingCategoryReliability,
+		Title:        "Pulse Patrol: Insufficient API credits",
+		Description:  "Patrol could not complete because provider credits are exhausted",
+		ResourceID:   "ai-service",
+		ResourceName: "Pulse Patrol Service",
+		ResourceType: "service",
+		DetectedAt:   detectedAt,
+		LastSeenAt:   detectedAt,
+	}
+	patrol.GetFindings().Add(finding)
+	return finding
+}
+
+func addUnifiedRuntimeFinding(store *unified.UnifiedStore, id string, detectedAt time.Time) *unified.UnifiedFinding {
+	finding := &unified.UnifiedFinding{
+		ID:           id,
+		Source:       unified.SourceAIPatrol,
+		Severity:     unified.SeverityWarning,
+		Category:     unified.CategoryReliability,
+		ResourceID:   "ai-service",
+		ResourceName: "Pulse Patrol Service",
+		ResourceType: "service",
+		Title:        "Pulse Patrol: Insufficient API credits",
+		Description:  "Patrol could not complete because provider credits are exhausted",
+		DetectedAt:   detectedAt,
+	}
+	store.AddFromAI(finding)
+	return finding
+}
+
 type stubQuickstartCreditManager struct {
 	remaining int
 }
@@ -473,6 +510,116 @@ func TestHandleSuppressFinding_SetsSuppressed(t *testing.T) {
 	stats := learningStore.GetStatistics()
 	if stats.TotalFeedbackRecords != 1 {
 		t.Fatalf("feedback records = %d, want 1", stats.TotalFeedbackRecords)
+	}
+}
+
+func TestHandlePatrolRuntimeFindingActions_AreRejected(t *testing.T) {
+	handler, patrol, unifiedStore, learningStore := setupAIHandlerWithPatrol(t)
+
+	detectedAt := time.Now().Add(-30 * time.Minute)
+	addPatrolRuntimeFinding(t, patrol, "finding-runtime", detectedAt)
+	addUnifiedRuntimeFinding(unifiedStore, "finding-runtime", detectedAt)
+
+	tests := []struct {
+		name       string
+		path       string
+		body       string
+		handler    func(http.ResponseWriter, *http.Request)
+		wantPhrase string
+	}{
+		{
+			name:       "acknowledge",
+			path:       "/api/ai/patrol/acknowledge",
+			body:       `{"finding_id":"finding-runtime"}`,
+			handler:    handler.HandleAcknowledgeFinding,
+			wantPhrase: "cannot be acknowledged manually",
+		},
+		{
+			name:       "snooze",
+			path:       "/api/ai/patrol/snooze",
+			body:       `{"finding_id":"finding-runtime","duration_hours":24}`,
+			handler:    handler.HandleSnoozeFinding,
+			wantPhrase: "cannot be snoozed manually",
+		},
+		{
+			name:       "resolve",
+			path:       "/api/ai/patrol/resolve",
+			body:       `{"finding_id":"finding-runtime"}`,
+			handler:    handler.HandleResolveFinding,
+			wantPhrase: "cannot be resolved manually",
+		},
+		{
+			name:       "dismiss",
+			path:       "/api/ai/patrol/dismiss",
+			body:       `{"finding_id":"finding-runtime","reason":"expected_behavior","note":"ignore"}`,
+			handler:    handler.HandleDismissFinding,
+			wantPhrase: "cannot be dismissed manually",
+		},
+		{
+			name:       "suppress",
+			path:       "/api/ai/patrol/suppress",
+			body:       `{"finding_id":"finding-runtime"}`,
+			handler:    handler.HandleSuppressFinding,
+			wantPhrase: "cannot be suppressed manually",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, tt.path, strings.NewReader(tt.body))
+			rec := httptest.NewRecorder()
+
+			tt.handler(rec, req)
+
+			if rec.Code != http.StatusConflict {
+				t.Fatalf("status = %d, want 409", rec.Code)
+			}
+			if !strings.Contains(rec.Body.String(), tt.wantPhrase) {
+				t.Fatalf("expected response to contain %q, got %q", tt.wantPhrase, rec.Body.String())
+			}
+		})
+	}
+
+	patrolFinding := patrol.GetFindings().Get("finding-runtime")
+	if patrolFinding == nil {
+		t.Fatal("expected runtime finding to remain present")
+	}
+	if patrolFinding.AcknowledgedAt != nil {
+		t.Fatal("expected runtime finding to remain unacknowledged")
+	}
+	if patrolFinding.SnoozedUntil != nil {
+		t.Fatal("expected runtime finding to remain unsnoozed")
+	}
+	if patrolFinding.ResolvedAt != nil {
+		t.Fatal("expected runtime finding to remain unresolved")
+	}
+	if patrolFinding.DismissedReason != "" {
+		t.Fatalf("expected runtime finding to remain undismissed, got %q", patrolFinding.DismissedReason)
+	}
+	if patrolFinding.Suppressed {
+		t.Fatal("expected runtime finding to remain unsuppressed")
+	}
+
+	unifiedFinding := unifiedStore.Get("finding-runtime")
+	if unifiedFinding == nil {
+		t.Fatal("expected unified runtime finding to remain present")
+	}
+	if unifiedFinding.AcknowledgedAt != nil {
+		t.Fatal("expected unified runtime finding to remain unacknowledged")
+	}
+	if unifiedFinding.SnoozedUntil != nil {
+		t.Fatal("expected unified runtime finding to remain unsnoozed")
+	}
+	if unifiedFinding.ResolvedAt != nil {
+		t.Fatal("expected unified runtime finding to remain unresolved")
+	}
+	if unifiedFinding.DismissedReason != "" {
+		t.Fatalf("expected unified runtime finding to remain undismissed, got %q", unifiedFinding.DismissedReason)
+	}
+
+	stats := learningStore.GetStatistics()
+	if stats.TotalFeedbackRecords != 0 {
+		t.Fatalf("feedback records = %d, want 0", stats.TotalFeedbackRecords)
 	}
 }
 

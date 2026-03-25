@@ -20,6 +20,22 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+const (
+	patrolRuntimeFindingKey = "ai-patrol-error"
+	patrolRuntimeResourceID = "ai-service"
+)
+
+func patrolFindingUsesSyntheticRuntimeResource(f *Finding) bool {
+	return f != nil && (f.Key == patrolRuntimeFindingKey || f.ResourceID == patrolRuntimeResourceID)
+}
+
+func patrolRuntimeFindingManualActionError(action string) error {
+	return fmt.Errorf(
+		"Patrol runtime findings cannot be %s manually; update AI settings and rerun Patrol",
+		action,
+	)
+}
+
 // recordFinding stores a finding, syncs it to the unified store, and triggers follow-up actions.
 func (p *PatrolService) recordFinding(f *Finding) bool {
 	if p == nil || p.findings == nil || f == nil {
@@ -42,7 +58,7 @@ func (p *PatrolService) recordFinding(f *Finding) bool {
 
 		// Generate remediation plan for actionable findings
 		// Skip internal error findings (not actionable by users)
-		if !(stored.Key == "ai-patrol-error" || stored.ResourceID == "ai-service") {
+		if !patrolFindingUsesSyntheticRuntimeResource(stored) {
 			p.generateRemediationPlan(stored)
 		}
 
@@ -72,6 +88,22 @@ func (p *PatrolService) recordFinding(f *Finding) bool {
 	p.MaybeInvestigateFinding(stored)
 
 	return isNew
+}
+
+// RejectManualActionForRuntimeFinding fails closed when a manual lifecycle action targets
+// a Patrol-owned runtime finding such as the synthetic ai-service provider/runtime error.
+func (p *PatrolService) RejectManualActionForRuntimeFinding(findingID string, action string) error {
+	if p == nil || p.findings == nil {
+		return fmt.Errorf("finding not found: %s", findingID)
+	}
+	finding := p.findings.Get(findingID)
+	if finding == nil {
+		return fmt.Errorf("finding not found: %s", findingID)
+	}
+	if patrolFindingUsesSyntheticRuntimeResource(finding) {
+		return patrolRuntimeFindingManualActionError(action)
+	}
+	return nil
 }
 
 func (p *PatrolService) setBlockedReason(reason string) {
@@ -546,6 +578,9 @@ func (p *PatrolService) DismissFinding(findingID string, reason string, note str
 	finding := p.findings.Get(findingID)
 	if finding == nil {
 		return fmt.Errorf("finding not found: %s", findingID)
+	}
+	if patrolFindingUsesSyntheticRuntimeResource(finding) {
+		return patrolRuntimeFindingManualActionError("dismissed")
 	}
 
 	// Dismiss the finding:

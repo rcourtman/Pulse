@@ -514,6 +514,11 @@ so the full-run seed/reconcile path must not auto-resolve them as
 `Resource no longer exists in infrastructure` just because `ai-service` is not
 present in the infrastructure snapshot. Those findings stay active until
 Patrol actually succeeds or resolves them for a Patrol-owned reason.
+Because those findings represent Patrol blindness rather than operator-triaged
+infrastructure noise, the Patrol runtime must also reject manual acknowledge,
+snooze, dismiss, resolve, and suppress actions against synthetic `ai-service`
+runtime findings. The canonical recovery path is to correct AI/provider
+configuration and let Patrol re-evaluate the runtime condition on the next run.
 The shared findings lifecycle must also treat a regressed issue as a new active
 occurrence. When a resolved finding reappears, `internal/ai/findings.go` must
 clear any stale acknowledgement timestamp from the prior occurrence instead of

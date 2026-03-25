@@ -216,6 +216,12 @@ export interface FindingPrimaryActionPresentation {
   href: string;
 }
 
+export interface FindingManualControlsPresentation {
+  acknowledge: boolean;
+  snooze: boolean;
+  dismiss: boolean;
+}
+
 export const getFindingSourceLabel = (source: UnifiedFinding['source'] | string): string =>
   FINDING_SOURCE_LABELS[source] || source;
 
@@ -305,6 +311,21 @@ export const getFindingPrimaryActionPresentation = (
 
   return undefined;
 };
+
+export const getFindingManualControlsPresentation = (
+  finding: Pick<UnifiedFinding, 'resourceId' | 'resourceName' | 'title'>,
+): FindingManualControlsPresentation =>
+  isPatrolRuntimeFinding(finding)
+    ? {
+        acknowledge: false,
+        snooze: false,
+        dismiss: false,
+      }
+    : {
+        acknowledge: true,
+        snooze: true,
+        dismiss: true,
+      };
 
 export const getFindingRecencyPresentation = (
   finding: Pick<UnifiedFinding, 'status' | 'detectedAt' | 'lastSeenAt'>,

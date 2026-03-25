@@ -43,6 +43,7 @@ import {
   getFindingStatusLabel,
   getFindingSourceBadgeClasses,
   getFindingSourceLabel,
+  getFindingManualControlsPresentation,
   getFindingPrimaryActionPresentation,
   getFindingSubjectPresentation,
   getPatrolFindingClassification,
@@ -408,6 +409,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     const recency = getFindingRecencyPresentation(finding);
     const patrolFindingClassification = getPatrolFindingClassification(finding);
     const subject = getFindingSubjectPresentation(finding);
+    const manualControls = getFindingManualControlsPresentation(finding);
 
     return (
       <div
@@ -588,7 +590,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
         {/* Actions */}
         <div class="flex items-center gap-1 shrink-0">
           <Show when={finding.status === 'active'}>
-            <Show when={!finding.acknowledgedAt}>
+            <Show when={manualControls.acknowledge && !finding.acknowledgedAt}>
               <button
                 type="button"
                 onClick={(e) => handleAcknowledge(finding, e)}
@@ -606,38 +608,42 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                 </svg>
               </button>
             </Show>
-            <button
-              type="button"
-              onClick={(e) => handleSnooze(finding, 24, e)}
-              class="p-1 text-slate-400 hover:text-muted"
-              title="Snooze 24h"
-              disabled={actionLoading() === finding.id}
-            >
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
-            </button>
-            <button
-              type="button"
-              onClick={(e) => handleStartDismiss(finding, 'will_fix_later', e)}
-              class="p-1 text-slate-400 hover:text-muted"
-              title="Dismiss"
-              disabled={actionLoading() === finding.id}
-            >
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
-            </button>
+            <Show when={manualControls.snooze}>
+              <button
+                type="button"
+                onClick={(e) => handleSnooze(finding, 24, e)}
+                class="p-1 text-slate-400 hover:text-muted"
+                title="Snooze 24h"
+                disabled={actionLoading() === finding.id}
+              >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+              </button>
+            </Show>
+            <Show when={manualControls.dismiss}>
+              <button
+                type="button"
+                onClick={(e) => handleStartDismiss(finding, 'will_fix_later', e)}
+                class="p-1 text-slate-400 hover:text-muted"
+                title="Dismiss"
+                disabled={actionLoading() === finding.id}
+              >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
+            </Show>
           </Show>
           {/* Expand indicator */}
           <svg
@@ -839,7 +845,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
 
       <Show when={finding.status === 'active'}>
         <div class="mt-3 flex flex-wrap gap-2 text-xs">
-          <Show when={!finding.acknowledgedAt}>
+          <Show when={manualControls.acknowledge && !finding.acknowledgedAt}>
             <button
               type="button"
               onClick={(e) => handleAcknowledge(finding, e)}
@@ -849,54 +855,62 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
               Acknowledge
             </button>
           </Show>
-          <button
-            type="button"
-            onClick={(e) => handleSnooze(finding, 1, e)}
-            class="px-2 py-1 rounded border border-border hover:bg-surface-hover"
-            disabled={actionLoading() === finding.id}
-          >
-            Snooze 1h
-          </button>
-          <button
-            type="button"
-            onClick={(e) => handleSnooze(finding, 24, e)}
-            class="px-2 py-1 rounded border border-border hover:bg-surface-hover"
-            disabled={actionLoading() === finding.id}
-          >
-            Snooze 24h
-          </button>
-          <button
-            type="button"
-            onClick={(e) => handleSnooze(finding, 168, e)}
-            class="px-2 py-1 rounded border border-border hover:bg-surface-hover"
-            disabled={actionLoading() === finding.id}
-          >
-            Snooze 7d
-          </button>
-          <button
-            type="button"
-            onClick={(e) => handleStartDismiss(finding, 'not_an_issue', e)}
-            class="px-2 py-1 rounded border border-border text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900"
-            disabled={actionLoading() === finding.id}
-          >
-            Dismiss: Not an issue
-          </button>
-          <button
-            type="button"
-            onClick={(e) => handleStartDismiss(finding, 'expected_behavior', e)}
-            class="px-2 py-1 rounded border border-border hover:bg-surface-hover"
-            disabled={actionLoading() === finding.id}
-          >
-            Dismiss: Expected
-          </button>
-          <button
-            type="button"
-            onClick={(e) => handleStartDismiss(finding, 'will_fix_later', e)}
-            class="px-2 py-1 rounded border border-border hover:bg-surface-hover"
-            disabled={actionLoading() === finding.id}
-          >
-            Dismiss: Later
-          </button>
+          <Show when={manualControls.snooze}>
+            <>
+              <button
+                type="button"
+                onClick={(e) => handleSnooze(finding, 1, e)}
+                class="px-2 py-1 rounded border border-border hover:bg-surface-hover"
+                disabled={actionLoading() === finding.id}
+              >
+                Snooze 1h
+              </button>
+              <button
+                type="button"
+                onClick={(e) => handleSnooze(finding, 24, e)}
+                class="px-2 py-1 rounded border border-border hover:bg-surface-hover"
+                disabled={actionLoading() === finding.id}
+              >
+                Snooze 24h
+              </button>
+              <button
+                type="button"
+                onClick={(e) => handleSnooze(finding, 168, e)}
+                class="px-2 py-1 rounded border border-border hover:bg-surface-hover"
+                disabled={actionLoading() === finding.id}
+              >
+                Snooze 7d
+              </button>
+            </>
+          </Show>
+          <Show when={manualControls.dismiss}>
+            <>
+              <button
+                type="button"
+                onClick={(e) => handleStartDismiss(finding, 'not_an_issue', e)}
+                class="px-2 py-1 rounded border border-border text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900"
+                disabled={actionLoading() === finding.id}
+              >
+                Dismiss: Not an issue
+              </button>
+              <button
+                type="button"
+                onClick={(e) => handleStartDismiss(finding, 'expected_behavior', e)}
+                class="px-2 py-1 rounded border border-border hover:bg-surface-hover"
+                disabled={actionLoading() === finding.id}
+              >
+                Dismiss: Expected
+              </button>
+              <button
+                type="button"
+                onClick={(e) => handleStartDismiss(finding, 'will_fix_later', e)}
+                class="px-2 py-1 rounded border border-border hover:bg-surface-hover"
+                disabled={actionLoading() === finding.id}
+              >
+                Dismiss: Later
+              </button>
+            </>
+          </Show>
         </div>
       </Show>
       {/* Inline dismiss confirmation */}

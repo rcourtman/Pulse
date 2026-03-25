@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -86,6 +87,37 @@ func TestPatrolService_DismissFinding(t *testing.T) {
 
 	if err := ps.DismissFinding("f1", "bad_reason", ""); err == nil {
 		t.Fatal("expected error for invalid dismissal reason")
+	}
+}
+
+func TestPatrolService_DismissFinding_RejectsPatrolRuntimeFinding(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+	f := &Finding{
+		ID:           "runtime-1",
+		Key:          patrolRuntimeFindingKey,
+		Severity:     FindingSeverityWarning,
+		Category:     FindingCategoryReliability,
+		ResourceID:   patrolRuntimeResourceID,
+		ResourceName: "Pulse Patrol Service",
+		ResourceType: "service",
+		Title:        "Pulse Patrol: Insufficient API credits",
+	}
+	ps.findings.Add(f)
+
+	err := ps.DismissFinding("runtime-1", "not_an_issue", "ignore it")
+	if err == nil {
+		t.Fatal("expected Patrol runtime finding dismissal to be rejected")
+	}
+	if got := err.Error(); !strings.Contains(got, "cannot be dismissed manually") {
+		t.Fatalf("unexpected error: %q", got)
+	}
+
+	stored := ps.findings.Get("runtime-1")
+	if stored == nil {
+		t.Fatal("expected runtime finding to remain present")
+	}
+	if stored.DismissedReason != "" {
+		t.Fatalf("expected runtime finding to remain active, got dismissed reason %q", stored.DismissedReason)
 	}
 }
 

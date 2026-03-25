@@ -175,6 +175,12 @@ for Patrol-owned runtime findings as well. Expanded runtime-finding rows should
 offer the same direct `Open AI Settings` action that the top assessment uses,
 instead of falling back to only generic acknowledge, snooze, or dismiss
 controls.
+That same contract must fail closed on manual lifecycle controls too. Patrol
+runtime findings are Patrol-owned impairment signals, not ordinary estate
+findings, so the findings list must not offer generic acknowledge, snooze,
+dismiss, resolve, or suppress controls for them. The correct operator path is
+to fix AI/provider configuration and rerun Patrol, optionally adding context
+notes, rather than hiding the runtime issue.
 The summary recency chip must follow the same governed scope distinction. When
 the latest completed activity was only a scoped run, the summary should label
 that timestamp as `Last activity` instead of `Last patrol`; `Last full patrol`
