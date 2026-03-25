@@ -1,4 +1,5 @@
 import type { PatrolRunRecord, PatrolRuntimeState } from '@/api/patrol';
+import type { UnifiedFinding } from '@/stores/aiIntelligence';
 import type { IntelligenceHealthScore } from '@/types/aiIntelligence';
 import type { SemanticTone } from '@/utils/semanticTonePresentation';
 import { getPatrolRuntimePresentation } from '@/utils/patrolRuntimePresentation';
@@ -36,6 +37,11 @@ export interface PatrolRecencyPresentation {
   label: string;
   timestamp?: string;
 }
+
+type PatrolAssessmentFinding = Pick<
+  UnifiedFinding,
+  'resourceId' | 'resourceName' | 'title' | 'severity' | 'status'
+>;
 
 export const PATROL_NO_ISSUES_LABEL = 'No issues found';
 
@@ -90,21 +96,101 @@ function formatFindingCount(count: number, severity: 'critical' | 'warning'): st
   return `${count} active ${severity} finding${count === 1 ? '' : 's'}`;
 }
 
+function isPatrolRuntimeFinding(finding: PatrolAssessmentFinding): boolean {
+  const resourceId = String(finding.resourceId || '').trim().toLowerCase();
+  const resourceName = String(finding.resourceName || '').trim().toLowerCase();
+  const title = String(finding.title || '').trim().toLowerCase();
+
+  return (
+    resourceId === 'ai-service' ||
+    resourceName === 'pulse patrol service' ||
+    title.startsWith('pulse patrol:')
+  );
+}
+
+function classifyActiveFindings(activeFindings: PatrolAssessmentFinding[] | undefined) {
+  const runtimeCritical = (activeFindings ?? []).filter(
+    (finding) =>
+      finding.status === 'active' &&
+      finding.severity === 'critical' &&
+      isPatrolRuntimeFinding(finding),
+  ).length;
+  const runtimeWarning = (activeFindings ?? []).filter(
+    (finding) =>
+      finding.status === 'active' &&
+      finding.severity === 'warning' &&
+      isPatrolRuntimeFinding(finding),
+  ).length;
+  const infrastructureCritical = (activeFindings ?? []).filter(
+    (finding) =>
+      finding.status === 'active' &&
+      finding.severity === 'critical' &&
+      !isPatrolRuntimeFinding(finding),
+  ).length;
+  const infrastructureWarning = (activeFindings ?? []).filter(
+    (finding) =>
+      finding.status === 'active' &&
+      finding.severity === 'warning' &&
+      !isPatrolRuntimeFinding(finding),
+  ).length;
+
+  return {
+    runtimeCritical,
+    runtimeWarning,
+    infrastructureCritical,
+    infrastructureWarning,
+    runtimeTotal: runtimeCritical + runtimeWarning,
+    infrastructureTotal: infrastructureCritical + infrastructureWarning,
+  };
+}
+
+function joinAssessmentParts(parts: string[]): string {
+  if (parts.length <= 1) return parts[0] ?? '';
+  if (parts.length === 2) return `${parts[0]} and ${parts[1]}`;
+  return `${parts.slice(0, -1).join(', ')}, and ${parts.at(-1)}`;
+}
+
 function getFindingAssessmentDescription(args: {
   criticalFindings?: number;
   warningFindings?: number;
   overallHealth?: IntelligenceHealthScore;
+  activeFindings?: PatrolAssessmentFinding[];
 }): string {
   const criticalFindings = args.criticalFindings ?? 0;
   const warningFindings = args.warningFindings ?? 0;
   const hasCoverageGap = Boolean(
     args.overallHealth?.factors.some((factor) => factor.category === 'coverage'),
   );
+  const classified = classifyActiveFindings(args.activeFindings);
+  const findingSummaryParts: string[] = [];
+
+  if (classified.infrastructureCritical > 0) {
+    findingSummaryParts.push(
+      `${formatFindingCount(classified.infrastructureCritical, 'critical')} in your infrastructure`,
+    );
+  }
+  if (classified.infrastructureWarning > 0) {
+    findingSummaryParts.push(
+      `${formatFindingCount(classified.infrastructureWarning, 'warning')} in your infrastructure`,
+    );
+  }
+  if (classified.runtimeCritical > 0) {
+    findingSummaryParts.push(
+      `${formatFindingCount(classified.runtimeCritical, 'critical')} about its own runtime`,
+    );
+  }
+  if (classified.runtimeWarning > 0) {
+    findingSummaryParts.push(
+      `${formatFindingCount(classified.runtimeWarning, 'warning')} about its own runtime`,
+    );
+  }
 
   const findingSummary =
-    criticalFindings > 0
-      ? `Patrol surfaced ${formatFindingCount(criticalFindings, 'critical')}.`
-      : `Patrol surfaced ${formatFindingCount(warningFindings, 'warning')}.`;
+    findingSummaryParts.length > 0
+      ? `Patrol surfaced ${joinAssessmentParts(findingSummaryParts)}.`
+      : criticalFindings > 0
+        ? `Patrol surfaced ${formatFindingCount(criticalFindings, 'critical')}.`
+        : `Patrol surfaced ${formatFindingCount(warningFindings, 'warning')}.`;
 
   if (hasCoverageGap) {
     return `${findingSummary} Recent coverage is also incomplete, so the rest of your infrastructure is not fully verified.`;
@@ -141,7 +227,10 @@ export function getPatrolAssessmentPresentation(args: {
   blockedReason?: string;
   criticalFindings?: number;
   warningFindings?: number;
+  activeFindings?: PatrolAssessmentFinding[];
 }): PatrolAssessmentPresentation {
+  const classified = classifyActiveFindings(args.activeFindings);
+
   if (
     args.runtimeState === 'blocked' ||
     args.runtimeState === 'disabled' ||
@@ -158,6 +247,16 @@ export function getPatrolAssessmentPresentation(args: {
   }
 
   if ((args.criticalFindings ?? 0) > 0) {
+    if (classified.infrastructureTotal === 0 && classified.runtimeTotal > 0) {
+      return {
+        title: 'Critical Patrol runtime issue',
+        description: getFindingAssessmentDescription(args),
+        eyebrow: 'Patrol assessment',
+        compactLabel: 'Patrol runtime issue',
+        tone: 'error',
+      };
+    }
+
     return {
       title: 'Critical issues detected',
       description: getFindingAssessmentDescription(args),
@@ -168,6 +267,16 @@ export function getPatrolAssessmentPresentation(args: {
   }
 
   if ((args.warningFindings ?? 0) > 0) {
+    if (classified.infrastructureTotal === 0 && classified.runtimeTotal > 0) {
+      return {
+        title: 'Patrol runtime issue',
+        description: getFindingAssessmentDescription(args),
+        eyebrow: 'Patrol assessment',
+        compactLabel: 'Patrol runtime issue',
+        tone: 'warning',
+      };
+    }
+
     return {
       title: 'Issues detected',
       description: getFindingAssessmentDescription(args),

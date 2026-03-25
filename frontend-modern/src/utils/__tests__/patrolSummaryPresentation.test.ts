@@ -107,6 +107,45 @@ describe('getPatrolSummaryPresentation', () => {
     });
   });
 
+  it('classifies patrol-owned service failures as runtime issues instead of infrastructure issues', () => {
+    expect(
+      getPatrolAssessmentPresentation({
+        overallHealth: {
+          score: 60,
+          grade: 'C',
+          trend: 'stable',
+          factors: [
+            {
+              name: 'Patrol coverage incomplete',
+              impact: -0.35,
+              description: 'Patrol coverage is incomplete.',
+              category: 'coverage',
+            },
+          ],
+          prediction:
+            'Patrol coverage is incomplete: recent activity was limited to scoped runs and ended with errors, so overall health is not fully verified.',
+        },
+        warningFindings: 1,
+        activeFindings: [
+          {
+            status: 'active',
+            severity: 'warning',
+            resourceId: 'ai-service',
+            resourceName: 'Pulse Patrol Service',
+            title: 'Pulse Patrol: Insufficient API credits',
+          },
+        ] as never,
+      }),
+    ).toEqual({
+      title: 'Patrol runtime issue',
+      description:
+        'Patrol surfaced 1 active warning finding about its own runtime. Recent coverage is also incomplete, so the rest of your infrastructure is not fully verified.',
+      eyebrow: 'Patrol assessment',
+      compactLabel: 'Patrol runtime issue',
+      tone: 'warning',
+    });
+  });
+
   it('keeps no-issues copy only for fully healthy patrol states', () => {
     expect(
       getPatrolNoIssuesPresentation({

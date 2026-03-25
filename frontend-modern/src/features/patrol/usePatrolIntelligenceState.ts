@@ -605,6 +605,15 @@ export function usePatrolIntelligenceState() {
     };
   };
 
+  const activePatrolFindings = () =>
+    aiIntelligenceStore.findings.filter(
+      (finding) =>
+        finding.status === 'active' &&
+        finding.source !== 'threshold' &&
+        !finding.isThreshold &&
+        !hasTriggeringAlert(finding),
+    );
+
   onMount(async () => {
     await Promise.all([
       loadLicenseStatus(),
@@ -644,6 +653,7 @@ export function usePatrolIntelligenceState() {
 
   return {
     activeTab,
+    activePatrolFindings,
     activityRefreshTrigger,
     alertAnalysisUpgradeUrl,
     alertAnalysisLocked,

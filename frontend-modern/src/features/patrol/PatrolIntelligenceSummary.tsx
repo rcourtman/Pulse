@@ -46,6 +46,7 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
       blockedReason: state.blockedReason(),
       criticalFindings: summaryStats().criticalFindings,
       warningFindings: summaryStats().warningFindings,
+      activeFindings: state.activePatrolFindings(),
     }),
   );
   const assessmentTonePresentation = createMemo(() =>

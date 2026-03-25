@@ -142,6 +142,12 @@ must not pair an `Issues detected` headline with a raw coverage-only
 `overall_health.prediction` sentence from a separate source; when active
 findings and incomplete verification are both true, the Patrol summary should
 describe both in one canonical assessment message.
+That same assessment contract must also distinguish Patrol-owned runtime
+findings from infrastructure findings. When the only active Patrol findings are
+synthetic Patrol service/runtime conditions such as the `ai-service`
+provider-credit failure, the top assessment should read as a Patrol runtime
+issue rather than implying infrastructure issues were detected across the
+estate.
 The summary recency chip must follow the same governed scope distinction. When
 the latest completed activity was only a scoped run, the summary should label
 that timestamp as `Last activity` instead of `Last patrol`; `Last full patrol`

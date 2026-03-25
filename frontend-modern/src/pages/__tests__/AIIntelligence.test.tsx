@@ -889,12 +889,14 @@ describe('AIIntelligence entitlement gating', () => {
     intelligenceState.findings = [
       {
         id: 'finding-1',
-        source: 'patrol',
+        source: 'ai-patrol',
         isThreshold: false,
         status: 'active',
         severity: 'warning',
-        resourceId: 'svc-patrol',
+        resourceId: 'ai-service',
+        resourceName: 'Pulse Patrol Service',
         resourceType: 'service',
+        title: 'Pulse Patrol: Insufficient API credits',
         detectedAt: '2026-03-12T09:57:00Z',
       },
     ];
@@ -938,10 +940,10 @@ describe('AIIntelligence entitlement gating', () => {
     render(() => <AIIntelligence />);
 
     await waitFor(() => {
-      expect(screen.getByText('Issues detected')).toBeInTheDocument();
+      expect(screen.getByText('Patrol runtime issue')).toBeInTheDocument();
       expect(
         screen.getByText(
-          'Patrol surfaced 1 active warning finding. Recent coverage is also incomplete, so the rest of your infrastructure is not fully verified.',
+          'Patrol surfaced 1 active warning finding about its own runtime. Recent coverage is also incomplete, so the rest of your infrastructure is not fully verified.',
         ),
       ).toBeInTheDocument();
     });
