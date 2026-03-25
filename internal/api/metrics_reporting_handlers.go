@@ -75,6 +75,29 @@ func normalizePerformanceReportOptionalFields(
 	return normalizedMetricType, normalizedTitle
 }
 
+func normalizePerformanceReportTimeRange(
+	definition reporting.PerformanceReportDefinition,
+	startRaw string,
+	endRaw string,
+	now time.Time,
+) (time.Time, time.Time) {
+	end := now
+	if strings.TrimSpace(endRaw) != "" {
+		if parsed, err := time.Parse(time.RFC3339, endRaw); err == nil {
+			end = parsed
+		}
+	}
+
+	start := end.Add(-definition.DefaultRangeDuration())
+	if strings.TrimSpace(startRaw) != "" {
+		if parsed, err := time.Parse(time.RFC3339, startRaw); err == nil {
+			start = parsed
+		}
+	}
+
+	return start, end
+}
+
 type reportingEnrichmentSnapshot struct {
 	Nodes            []models.Node
 	VMs              []models.VM
@@ -326,20 +349,12 @@ func (h *ReportingHandlers) HandleGenerateReport(w http.ResponseWriter, r *http.
 		q.Get("title"),
 	)
 
-	// Parse range
-	end := time.Now()
-	if q.Get("end") != "" {
-		if t, err := time.Parse(time.RFC3339, q.Get("end")); err == nil {
-			end = t
-		}
-	}
-
-	start := end.Add(-24 * time.Hour)
-	if q.Get("start") != "" {
-		if t, err := time.Parse(time.RFC3339, q.Get("start")); err == nil {
-			start = t
-		}
-	}
+	start, end := normalizePerformanceReportTimeRange(
+		definition,
+		q.Get("start"),
+		q.Get("end"),
+		time.Now(),
+	)
 
 	req := reporting.MetricReportRequest{
 		ResourceType: resourceType,
@@ -671,19 +686,7 @@ func (h *ReportingHandlers) HandleGenerateMultiReport(w http.ResponseWriter, r *
 	}
 	metricType, title := normalizePerformanceReportOptionalFields(definition, body.MetricType, body.Title)
 
-	// Parse time range
-	end := time.Now()
-	if body.End != "" {
-		if t, err := time.Parse(time.RFC3339, body.End); err == nil {
-			end = t
-		}
-	}
-	start := end.Add(-24 * time.Hour)
-	if body.Start != "" {
-		if t, err := time.Parse(time.RFC3339, body.Start); err == nil {
-			start = t
-		}
-	}
+	start, end := normalizePerformanceReportTimeRange(definition, body.Start, body.End, time.Now())
 
 	// Build multi-report request
 	multiReq := reporting.MultiReportRequest{

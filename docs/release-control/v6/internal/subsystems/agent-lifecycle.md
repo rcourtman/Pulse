@@ -184,8 +184,9 @@ redefine reporting or inventory schema locally.
 That same API-owned performance-report definition also governs transport-side
 validation and attachment naming. Lifecycle-adjacent fleet surfaces may depend
 on those downloads, but they must treat allowed formats, multi-resource caps,
-optional metric/title support, and filename prefixes as API-owned reporting
-contract rather than mirroring local constants.
+optional metric/title support, default fallback range windows, and filename
+prefixes as API-owned reporting contract rather than mirroring local
+constants.
 That adjacent export contract now also carries canonical Proxmox pool
 membership for each VM row. Lifecycle-adjacent install and fleet surfaces may
 reuse those current-state facts, but they must still treat the pool column as

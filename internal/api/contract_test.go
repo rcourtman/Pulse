@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -495,6 +496,35 @@ func TestContract_PerformanceReportTransportUsesCatalogDefinition(t *testing.T) 
 	}
 	if engine.lastReq.MetricType != "cpu" || engine.lastReq.Title != "Node report" {
 		t.Fatalf("expected trimmed canonical optional fields, got %+v", engine.lastReq)
+	}
+}
+
+func TestContract_PerformanceReportTransportUsesCatalogDefaultRange(t *testing.T) {
+	engine := &stubReportingEngine{data: []byte("report"), contentType: "application/pdf"}
+	original := reporting.GetEngine()
+	reporting.SetEngine(engine)
+	t.Cleanup(func() { reporting.SetEngine(original) })
+
+	handler := NewReportingHandlers(nil, nil)
+	end := time.Date(2026, 3, 25, 15, 0, 0, 0, time.UTC)
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/api/reporting?resourceType=node&resourceId=node-1&end="+url.QueryEscape(end.Format(time.RFC3339)),
+		nil,
+	)
+	rec := httptest.NewRecorder()
+
+	handler.HandleGenerateReport(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	definition := reporting.DescribePerformanceReport()
+	if got := engine.lastReq.Start; !got.Equal(end.Add(-definition.DefaultRangeDuration())) {
+		t.Fatalf("expected canonical default start time, got %s", got)
+	}
+	if !engine.lastReq.End.Equal(end) {
+		t.Fatalf("expected canonical end time, got %s", engine.lastReq.End)
 	}
 }
 

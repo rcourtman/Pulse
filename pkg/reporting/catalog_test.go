@@ -1,6 +1,9 @@
 package reporting
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestDescribeReportingCatalog_DefinesCanonicalSurfaces(t *testing.T) {
 	catalog := DescribeReportingCatalog()
@@ -33,5 +36,13 @@ func TestPerformanceReportDefinition_SupportsFormat(t *testing.T) {
 	}
 	if definition.SupportsFormat(ReportFormat("xlsx")) {
 		t.Fatalf("did not expect xlsx to be supported")
+	}
+}
+
+func TestPerformanceReportDefinition_DefaultRangeDuration(t *testing.T) {
+	definition := DescribePerformanceReport()
+
+	if got := definition.DefaultRangeDuration(); got != 24*time.Hour {
+		t.Fatalf("default range duration = %s, want %s", got, 24*time.Hour)
 	}
 }

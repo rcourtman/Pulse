@@ -1,5 +1,7 @@
 package reporting
 
+import "time"
+
 // ReportingFormatDefinition describes one supported output format for an
 // operator-facing reporting surface.
 type ReportingFormatDefinition struct {
@@ -54,6 +56,17 @@ func (d PerformanceReportDefinition) SupportsFormat(format ReportFormat) bool {
 		}
 	}
 	return false
+}
+
+// DefaultRangeDuration returns the canonical fallback time window for the
+// performance reporting surface.
+func (d PerformanceReportDefinition) DefaultRangeDuration() time.Duration {
+	for _, candidate := range d.Ranges {
+		if candidate.Key == d.DefaultRange {
+			return time.Duration(candidate.WindowHours) * time.Hour
+		}
+	}
+	return 24 * time.Hour
 }
 
 // DescribePerformanceReport returns the canonical definition for Pulse's

@@ -417,6 +417,34 @@ func TestReportingHandlers_GenerateMultiReport_TrimsOptionalFieldsAndUsesCanonic
 	}
 }
 
+func TestReportingHandlers_GenerateReport_UsesCatalogDefaultRangeDuration(t *testing.T) {
+	engine := &stubReportingEngine{data: []byte("report"), contentType: "application/pdf"}
+	original := reporting.GetEngine()
+	reporting.SetEngine(engine)
+	t.Cleanup(func() { reporting.SetEngine(original) })
+
+	handler := NewReportingHandlers(nil, nil)
+	end := time.Date(2026, 3, 25, 15, 0, 0, 0, time.UTC)
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/api/reporting?format=pdf&resourceType=node&resourceId=node-1&end="+url.QueryEscape(end.Format(time.RFC3339)),
+		nil,
+	)
+	rr := httptest.NewRecorder()
+
+	handler.HandleGenerateReport(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, rr.Code, rr.Body.String())
+	}
+	if got := engine.lastReq.Start; !got.Equal(end.Add(-reporting.DescribePerformanceReport().DefaultRangeDuration())) {
+		t.Fatalf("expected canonical default start, got %s", got)
+	}
+	if !engine.lastReq.End.Equal(end) {
+		t.Fatalf("expected canonical end time, got %s", engine.lastReq.End)
+	}
+}
+
 func TestReportingHandlers_ExportVMInventory_EmptySnapshotStillReturnsCSVHeader(t *testing.T) {
 	handler := NewReportingHandlers(nil, nil)
 	req := httptest.NewRequest(http.MethodGet, "/api/admin/reports/inventory/vms/export", nil)
