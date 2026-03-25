@@ -76,8 +76,8 @@ func (m *Manager) CreateAndStart(ctx context.Context, tenantID, tenantDataDir st
 	if err := m.ensureDaemonReachable(ctx); err != nil {
 		return "", err
 	}
-	if err := prepareImmutableMountSources(tenantDataDir, tenantRuntimeUID, tenantRuntimeGID); err != nil {
-		return "", fmt.Errorf("prepare immutable tenant mounts for %s: %w", tenantID, err)
+	if err := prepareTenantRuntimeMountSources(tenantDataDir, tenantRuntimeUID, tenantRuntimeGID); err != nil {
+		return "", fmt.Errorf("prepare tenant runtime mounts for %s: %w", tenantID, err)
 	}
 
 	labels := TraefikLabels(tenantID, m.cfg.BaseDomain, m.cfg.ContainerPort)
@@ -126,9 +126,16 @@ func (m *Manager) CreateAndStart(ctx context.Context, tenantID, tenantDataDir st
 
 func tenantImmutableOwnershipPaths() []string {
 	return []string{
-		"/etc/pulse/billing.json",
 		"/etc/pulse/secrets/handoff.key",
 		"/etc/pulse/.cloud_handoff_key",
+	}
+}
+
+func tenantRuntimeOwnershipPaths() []string {
+	return []string{
+		"billing.json",
+		filepath.Join("secrets", "handoff.key"),
+		".cloud_handoff_key",
 	}
 }
 
@@ -164,12 +171,6 @@ func tenantMounts(tenantDataDir string) []mount.Mount {
 		},
 		{
 			Type:     mount.TypeBind,
-			Source:   filepath.Join(tenantDataDir, "billing.json"),
-			Target:   "/etc/pulse/billing.json",
-			ReadOnly: true,
-		},
-		{
-			Type:     mount.TypeBind,
 			Source:   filepath.Join(tenantDataDir, "secrets", "handoff.key"),
 			Target:   "/etc/pulse/secrets/handoff.key",
 			ReadOnly: true,
@@ -183,12 +184,8 @@ func tenantMounts(tenantDataDir string) []mount.Mount {
 	}
 }
 
-func prepareImmutableMountSources(tenantDataDir string, uid, gid int) error {
-	for _, relPath := range []string{
-		"billing.json",
-		filepath.Join("secrets", "handoff.key"),
-		".cloud_handoff_key",
-	} {
+func prepareTenantRuntimeMountSources(tenantDataDir string, uid, gid int) error {
+	for _, relPath := range tenantRuntimeOwnershipPaths() {
 		path := filepath.Join(tenantDataDir, relPath)
 		if err := os.Chmod(path, 0o600); err != nil {
 			return fmt.Errorf("chmod %s: %w", path, err)

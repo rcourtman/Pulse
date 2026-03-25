@@ -14,7 +14,6 @@ func TestTenantImmutableOwnershipPaths(t *testing.T) {
 
 	got := tenantImmutableOwnershipPaths()
 	want := []string{
-		"/etc/pulse/billing.json",
 		"/etc/pulse/secrets/handoff.key",
 		"/etc/pulse/.cloud_handoff_key",
 	}
@@ -34,8 +33,8 @@ func TestTenantMountsKeepImmutableFilesReadOnly(t *testing.T) {
 	tenantDataDir := filepath.Join("/tmp", "tenant-data")
 	mounts := tenantMounts(tenantDataDir)
 
-	if len(mounts) != 4 {
-		t.Fatalf("len(mounts) = %d, want 4", len(mounts))
+	if len(mounts) != 3 {
+		t.Fatalf("len(mounts) = %d, want 3", len(mounts))
 	}
 
 	if mounts[0].Target != "/etc/pulse" {
@@ -58,9 +57,14 @@ func TestTenantMountsKeepImmutableFilesReadOnly(t *testing.T) {
 		}
 	}
 
-	checkMount(1, "/etc/pulse/billing.json", filepath.Join(tenantDataDir, "billing.json"))
-	checkMount(2, "/etc/pulse/secrets/handoff.key", filepath.Join(tenantDataDir, "secrets", "handoff.key"))
-	checkMount(3, "/etc/pulse/.cloud_handoff_key", filepath.Join(tenantDataDir, ".cloud_handoff_key"))
+	for _, mounted := range mounts {
+		if mounted.Target == "/etc/pulse/billing.json" {
+			t.Fatalf("billing.json should be writable through the tenant data mount, got dedicated mount %+v", mounted)
+		}
+	}
+
+	checkMount(1, "/etc/pulse/secrets/handoff.key", filepath.Join(tenantDataDir, "secrets", "handoff.key"))
+	checkMount(2, "/etc/pulse/.cloud_handoff_key", filepath.Join(tenantDataDir, ".cloud_handoff_key"))
 }
 
 func TestTenantEnvIncludesImmutableOwnershipContract(t *testing.T) {
@@ -74,8 +78,8 @@ func TestTenantEnvIncludesImmutableOwnershipContract(t *testing.T) {
 		"PULSE_MULTI_TENANT_ENABLED=true": true,
 		"PUID=1000":                       true,
 		"PGID=1000":                       true,
-		"PULSE_PUBLIC_URL=https://t-example.cloud.pulserelay.pro":                                                            true,
-		immutableOwnershipPathsEnv + "=/etc/pulse/billing.json:/etc/pulse/secrets/handoff.key:/etc/pulse/.cloud_handoff_key": true,
+		"PULSE_PUBLIC_URL=https://t-example.cloud.pulserelay.pro":                                    true,
+		immutableOwnershipPathsEnv + "=/etc/pulse/secrets/handoff.key:/etc/pulse/.cloud_handoff_key": true,
 	}
 	if len(env) != len(want) {
 		t.Fatalf("len(env) = %d, want %d", len(env), len(want))
@@ -105,7 +109,7 @@ func TestTenantEnvOmitsPublicURLWithoutTenantContext(t *testing.T) {
 	}
 }
 
-func TestPrepareImmutableMountSourcesAlignsOwnershipAndPermissions(t *testing.T) {
+func TestPrepareTenantRuntimeMountSourcesAlignsOwnershipAndPermissions(t *testing.T) {
 	t.Parallel()
 
 	tenantDataDir := t.TempDir()
@@ -127,8 +131,8 @@ func TestPrepareImmutableMountSourcesAlignsOwnershipAndPermissions(t *testing.T)
 
 	uid := os.Getuid()
 	gid := os.Getgid()
-	if err := prepareImmutableMountSources(tenantDataDir, uid, gid); err != nil {
-		t.Fatalf("prepareImmutableMountSources: %v", err)
+	if err := prepareTenantRuntimeMountSources(tenantDataDir, uid, gid); err != nil {
+		t.Fatalf("prepareTenantRuntimeMountSources: %v", err)
 	}
 
 	for _, path := range paths {
@@ -189,7 +193,7 @@ func TestCreateAndStartFailsBeforeImmutablePrepWhenDockerUnavailable(t *testing.
 	if !strings.Contains(err.Error(), "ping docker daemon") {
 		t.Fatalf("CreateAndStart error = %v, want ping docker daemon failure", err)
 	}
-	if strings.Contains(err.Error(), "prepare immutable tenant mounts") {
+	if strings.Contains(err.Error(), "prepare tenant runtime mounts") {
 		t.Fatalf("CreateAndStart error = %v, want daemon failure before mount preparation", err)
 	}
 }

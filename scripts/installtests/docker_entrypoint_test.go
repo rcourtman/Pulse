@@ -30,11 +30,11 @@ func TestDockerEntrypointSkipsImmutableOwnershipPaths(t *testing.T) {
 	}
 
 	immutablePaths := []string{
-		filepath.Join(root, "billing.json"),
 		filepath.Join(secretsDir, "handoff.key"),
 		filepath.Join(root, ".cloud_handoff_key"),
 	}
 	mutablePaths := []string{
+		filepath.Join(root, "billing.json"),
 		filepath.Join(root, "system.json"),
 		filepath.Join(root, ".env"),
 	}
