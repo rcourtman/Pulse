@@ -150,7 +150,9 @@ describe('RunHistoryEntry', () => {
         'This run predates findings snapshots, so run-specific findings cannot be fully verified.',
       ),
     ).toBeInTheDocument();
+    expect(screen.getByText('Snapshot unavailable')).toBeInTheDocument();
     expect(screen.queryByText('All clear — no new issues.')).not.toBeInTheDocument();
+    expect(screen.queryByText(/^All clear$/)).not.toBeInTheDocument();
   });
 
   it('uses a shared coverage summary when a scoped run checked fewer resources than its scope', () => {

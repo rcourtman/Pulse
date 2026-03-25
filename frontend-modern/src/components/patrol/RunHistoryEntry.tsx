@@ -358,7 +358,19 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
                 </span>
               </Show>
               <Show
-                when={runIsHealthy && run.new_findings === 0 && run.existing_findings === 0}
+                when={!hasFindingsSnapshot && run.new_findings === 0 && run.existing_findings === 0}
+              >
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300">
+                  <ActivityIcon class="w-3 h-3" /> Snapshot unavailable
+                </span>
+              </Show>
+              <Show
+                when={
+                  hasFindingsSnapshot &&
+                  runIsHealthy &&
+                  run.new_findings === 0 &&
+                  run.existing_findings === 0
+                }
               >
                 <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">
                   <CheckCircleIcon class="w-3 h-3" /> All clear

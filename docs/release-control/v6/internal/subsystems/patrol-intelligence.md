@@ -281,6 +281,10 @@ That same trust rule applies inside expanded run-history narratives. A legacy
 run without findings snapshot ids must not render an `All clear` conclusion
 just because its aggregate counters are zero; the narrative should explicitly
 state that run-specific findings could not be fully verified.
+That same truthfulness rule applies to the expanded run outcomes strip. Legacy
+runs without findings snapshot ids must not render a green `All clear` outcome
+badge from zero aggregate counters; they should show an explicit snapshot
+unavailable state instead.
 That same findings surface should keep its section chrome functional rather
 than promotional. Inside the Patrol findings tab, the selected tab already
 names the surface, so the findings card should not add another in-card product
