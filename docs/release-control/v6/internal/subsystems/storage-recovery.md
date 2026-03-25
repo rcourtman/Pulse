@@ -867,9 +867,10 @@ fallback bootstrap or disable heuristics.
 That same shared `internal/api/` boundary also owns hosted browser-session
 precedence for adjacent protected reads. Storage- and recovery-adjacent hosted
 surfaces may run without local auth configured, but a valid tenant
-`pulse_session` must still authenticate before the anonymous optional-auth
-fallback so hosted recovery, onboarding, and support flows do not silently
-degrade into unauthenticated state after cloud handoff.
+`pulse_session` must still authenticate before any API-only token fallback or
+the anonymous optional-auth fallback so hosted recovery, onboarding, and
+support flows do not silently degrade into unauthenticated state or bearer-
+token-only mode after cloud handoff.
 That same shared settings helper layer must then preserve canonical
 org-management privilege for non-default tenant requests. Storage- and
 recovery-adjacent hosted flows that reuse settings-bound helpers must allow

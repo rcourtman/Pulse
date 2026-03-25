@@ -511,31 +511,6 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 		}
 	}
 
-	// API-only mode: when only API token is configured (no password auth)
-	if cfg.AuthUser == "" && cfg.AuthPass == "" && cfg.HasAPITokens() {
-		if providedToken, provided := explicitAPITokenFromRequest(r); provided {
-			if record, ok := validateGlobalAPITokenLocked(cfg, providedToken); ok {
-				attachAPITokenRecord(r, record)
-				if authenticatedUser := apiTokenAuthenticatedUser(record); authenticatedUser != "" {
-					w.Header().Set("X-Authenticated-User", authenticatedUser)
-				}
-				w.Header().Set("X-Auth-Method", "api_token")
-				return true
-			}
-			if w != nil {
-				http.Error(w, "Invalid API token", http.StatusUnauthorized)
-			}
-			return false
-		}
-
-		// Require a valid token for all requests in API-only mode
-		if w != nil {
-			w.Header().Set("WWW-Authenticate", `Bearer realm="API token required; supply via Authorization header or X-API-Token header"`)
-			http.Error(w, "API token required via Authorization header or X-API-Token header", http.StatusUnauthorized)
-		}
-		return false
-	}
-
 	log.Debug().
 		Str("configured_user", cfg.AuthUser).
 		Bool("has_pass", cfg.AuthPass != "").
@@ -568,7 +543,9 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 		}
 	}
 
-	// Check session cookie (for WebSocket and UI)
+	// Check session cookie (for WebSocket and UI). Hosted cloud-handoff and
+	// other browser-session flows must stay authoritative even when the runtime
+	// also has API tokens configured.
 	if cookie, err := readSessionCookie(r); err == nil && cookie.Value != "" {
 		// Use ValidateAndExtendSession for sliding expiration
 		if ValidateAndExtendSession(cookie.Value) {
@@ -602,6 +579,18 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 			Str("path", r.URL.Path).
 			Bool("has_cf_headers", r.Header.Get("CF-Ray") != "").
 			Msg("No session cookie found")
+	}
+
+	// API-only mode: when only API tokens are configured (no password auth),
+	// explicit token credentials still win above and a valid session still wins
+	// above for hosted/cloud-handoff browser flows. If neither is present, fail
+	// closed and require a token.
+	if cfg.AuthUser == "" && cfg.AuthPass == "" && cfg.HasAPITokens() {
+		if w != nil {
+			w.Header().Set("WWW-Authenticate", `Bearer realm="API token required; supply via Authorization header or X-API-Token header"`)
+			http.Error(w, "API token required via Authorization header or X-API-Token header", http.StatusUnauthorized)
+		}
+		return false
 	}
 
 	// If no auth is configured at all, allow access unless SSO is enabled.

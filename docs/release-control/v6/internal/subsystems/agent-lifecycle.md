@@ -219,8 +219,10 @@ That same hosted setup boundary also depends on tenant browser sessions staying
 canonical after cloud handoff. Lifecycle-adjacent mobile pairing and hosted
 admin setup routes may run without local credentials configured, but shared
 `internal/api/auth.go` helpers must still honor a valid hosted `pulse_session`
-before any optional-auth anonymous fallback so operators can mint relay-mobile
-credentials and continue onboarding from the hosted runtime itself.
+before any API-only token fallback or optional-auth anonymous fallback so
+operators can mint relay-mobile credentials and continue onboarding from the
+hosted runtime itself even after that tenant has already minted managed API
+tokens.
 The same setup boundary also depends on canonical org-management privilege
 surviving the next step: once the request is scoped to a hosted tenant org,
 shared `internal/api/security_setup_fix.go` helpers must allow that org's

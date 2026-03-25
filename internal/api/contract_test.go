@@ -856,6 +856,13 @@ func TestContract_HostedSessionAuthPrecedesAnonymousFallback(t *testing.T) {
 	store := GetSessionStore()
 	sessionToken := generateSessionToken()
 	store.CreateSession(sessionToken, 24*time.Hour, "contract-test", "127.0.0.1", "hosted-owner@example.com")
+	record, err := config.NewAPITokenRecord("hosted-contract-token.12345678", "hosted-contract", []string{config.ScopeSettingsWrite})
+	if err != nil {
+		t.Fatalf("NewAPITokenRecord: %v", err)
+	}
+	cfg := &config.Config{
+		APITokens: []config.APITokenRecord{*record},
+	}
 
 	req := httptest.NewRequest(http.MethodGet, "/api/security/tokens/relay-mobile", nil)
 	req.AddCookie(&http.Cookie{
@@ -864,7 +871,7 @@ func TestContract_HostedSessionAuthPrecedesAnonymousFallback(t *testing.T) {
 	})
 	rec := httptest.NewRecorder()
 
-	if !CheckAuth(&config.Config{}, rec, req) {
+	if !CheckAuth(cfg, rec, req) {
 		t.Fatal("CheckAuth() = false, want true for valid hosted browser session")
 	}
 	if got := rec.Header().Get("X-Authenticated-User"); got != "hosted-owner@example.com" {
