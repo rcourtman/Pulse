@@ -167,8 +167,8 @@ var trialSignupPageTemplate = template.Must(template.New("trial-signup-page").Pa
     <div class="card">
       <div class="hero">
         <div class="eyebrow">Pulse Pro Trial</div>
-        <h1>Start a 14-day Pro trial for {{.ReturnTarget}}</h1>
-        <p>Checkout creates the trial entitlement for this Pulse instance directly. I only keep your work email as a fallback record if recovery or support is ever needed.</p>
+        <h1>Start your 14-day Pro trial for {{.ReturnTarget}}</h1>
+        <p>Pulse uses a secure hosted handoff to create the trial entitlement for this specific instance and send you straight back here. I only keep your work email as a recovery contact if this browser session is lost.</p>
       </div>
       <div class="content">
         <div class="form-col">
@@ -178,7 +178,7 @@ var trialSignupPageTemplate = template.Must(template.New("trial-signup-page").Pa
 
           {{if .Verified}}
           <h2>Backup link confirmed</h2>
-          <p>This fallback link is valid. Continue to secure checkout to register the Pro trial for this Pulse instance.</p>
+          <p>This recovery link is valid. Continue securely to finish starting the Pro trial for this Pulse instance.</p>
 
           <div class="summary">
             <strong>Work email</strong>
@@ -195,12 +195,12 @@ var trialSignupPageTemplate = template.Must(template.New("trial-signup-page").Pa
 
           <form method="POST" action="/api/trial-signup/checkout">
             <input type="hidden" name="verified_token" value="{{.VerifiedToken}}">
-            <button class="cta" type="submit">Continue To Secure Checkout</button>
+            <button class="cta" type="submit">Continue To Secure Trial Setup</button>
           </form>
-          <p class="fine">This backup link is optional. Checkout remains the authoritative handoff for this entitlement.</p>
+          <p class="fine">This recovery link is optional. The secure trial session remains the authoritative entitlement handoff.</p>
           {{else}}
-          <h2>Continue to secure checkout</h2>
-          <p>Start checkout from this Pulse-initiated session. Email is attached as backup contact information only.</p>
+          <h2>Continue securely</h2>
+          <p>Start the secure trial handoff from this Pulse-initiated session. Email is attached as a recovery contact only.</p>
 
           <form method="POST" action="/api/trial-signup/checkout">
             <input type="hidden" name="org_id" value="{{.OrgID}}">
@@ -209,7 +209,7 @@ var trialSignupPageTemplate = template.Must(template.New("trial-signup-page").Pa
 
             <div class="row">
               <div>
-                <label for="name">Full Name</label>
+                <label for="name">Name</label>
                 <input id="name" name="name" type="text" value="{{.Name}}" autocomplete="name" required>
               </div>
               <div>
@@ -218,12 +218,12 @@ var trialSignupPageTemplate = template.Must(template.New("trial-signup-page").Pa
               </div>
             </div>
 
-            <label for="company">Company</label>
+            <label for="company">Company (optional)</label>
             <input id="company" name="company" type="text" value="{{.Company}}" autocomplete="organization">
 
-            <button class="cta" type="submit">Continue To Secure Checkout</button>
+            <button class="cta" type="submit">Continue To Secure Trial Setup</button>
           </form>
-          <p class="fine">Email is backup only. The checkout session and the signed return to Pulse carry the entitlement.</p>
+          <p class="fine">Email is used as a recovery contact only. The secure session and signed return to Pulse carry the entitlement.</p>
           {{end}}
         </div>
 
@@ -236,10 +236,10 @@ var trialSignupPageTemplate = template.Must(template.New("trial-signup-page").Pa
             <strong>Workspace</strong>
             <div>{{.OrgID}}</div>
           </div>
-          <p class="mini">After checkout completes, Pulse sends you back to the exact instance that opened this flow.</p>
+          <p class="mini">After secure setup completes, Pulse sends you back to the exact instance that opened this flow.</p>
           <ol class="steps">
-            <li>Create a secure checkout session for this Pulse instance.</li>
-            <li>Complete secure setup for the 14-day Pro trial.</li>
+            <li>Open a secure trial session for this Pulse instance.</li>
+            <li>Confirm the 14-day Pro trial handoff.</li>
             <li>Return to Pulse and activate the entitlement immediately.</li>
           </ol>
         </div>
@@ -356,7 +356,7 @@ var trialSignupSuccessTemplate = template.Must(template.New("trial-signup-succes
     <div class="card">
       <div class="eyebrow">Pulse Pro Trial</div>
       <h1>Trial entitlement ready</h1>
-      <p>Checkout completed successfully. This session has prepared the signed activation handoff for {{.ReturnTarget}}.</p>
+      <p>Secure trial setup completed successfully. This session has prepared the signed activation handoff for {{.ReturnTarget}}.</p>
 
       <div class="status">
         Pulse can activate the Pro trial immediately when you return to the originating instance.
@@ -374,7 +374,7 @@ var trialSignupSuccessTemplate = template.Must(template.New("trial-signup-succes
       </div>
 
       <a class="cta" href="{{.ActivateURL}}">Return To Pulse</a>
-      <p class="fine">Email is only a fallback record. The checkout session and this signed return are the authoritative entitlement handoff.</p>
+      <p class="fine">Email is only a recovery contact. The secure session and this signed return are the authoritative entitlement handoff.</p>
     </div>
   </div>
 </body>

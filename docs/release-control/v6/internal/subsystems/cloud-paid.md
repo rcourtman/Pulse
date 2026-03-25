@@ -231,6 +231,12 @@ The top-level authenticated shell is part of that same customer-facing
 boundary: cloud-paid trial prompts may appear in owned commercial surfaces, but
 the app shell must not force a global, persistent Pro trial nudge that
 overrides the primary runtime chrome for every signed-in user.
+The hosted trial handoff page is part of that same boundary as well. It may
+still use a secure hosted Stripe-backed session internally, but the customer
+copy must present the flow as starting a trial for the originating Pulse
+instance, not as a generic purchase funnel. Recovery-contact fields such as
+work email and optional company name must remain clearly secondary to the
+instance-bound entitlement handoff.
 redefined inline in settings feature gates, Pro license panels, or trial
 upgrade nudges.
 That same disclosure copy must stay professional and customer-facing. The

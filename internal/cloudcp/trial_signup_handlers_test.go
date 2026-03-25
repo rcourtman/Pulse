@@ -29,7 +29,7 @@ func TestTrialSignupHandleStartProTrialRendersCheckoutForm(t *testing.T) {
 		t.Fatalf("status=%d, want %d", rec.Code, http.StatusOK)
 	}
 	body := rec.Body.String()
-	if !strings.Contains(body, "Continue to secure checkout") {
+	if !strings.Contains(body, "Continue To Secure Trial Setup") {
 		t.Fatalf("expected checkout CTA in response body")
 	}
 	if !strings.Contains(body, "pulse.example.com:7655") {
@@ -249,7 +249,7 @@ func TestTrialSignupHandleVerifyEmailRendersVerifiedState(t *testing.T) {
 		t.Fatalf("status=%d, want %d body=%q", rec.Code, http.StatusOK, rec.Body.String())
 	}
 	body := rec.Body.String()
-	if !strings.Contains(body, "Backup link confirmed") || !strings.Contains(body, "Continue To Secure Checkout") {
+	if !strings.Contains(body, "Backup link confirmed") || !strings.Contains(body, "Continue To Secure Trial Setup") {
 		t.Fatalf("expected verified state in response body")
 	}
 }
