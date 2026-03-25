@@ -1477,12 +1477,12 @@ class StatusAuditTest(unittest.TestCase):
                 )
 
             self.assertIn(
-                "VERSION is a stable release string while the active target is still a non-GA v6-rc-stabilization and release_ready is false; the repo is carrying a GA candidate on an RC-held line.",
+                "VERSION is a stable release string while the active target is still a non-GA v6-rc-stabilization and release_ready is false; the repo is carrying a GA candidate on a prerelease-held line.",
                 report["warnings"],
             )
             pretty = render_pretty(report)
             self.assertIn("current_version=6.0.0", pretty)
-            self.assertIn("repo is carrying a GA candidate on an RC-held line", pretty)
+            self.assertIn("repo is carrying a GA candidate on a prerelease-held line", pretty)
 
     def test_open_decisions_and_release_gates_derive_repo_scope_from_lane_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

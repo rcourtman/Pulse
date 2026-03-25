@@ -33,10 +33,10 @@ RC_READY_ASSERTIONS_BLOCKER = (
     "Required rc-ready assertions remain pending or blocked in status.json.readiness_assertions."
 )
 RC_OPEN_DECISIONS_BLOCKER = (
-    "RC-blocking operational decisions remain in status.json.open_decisions."
+    "Prerelease-blocking operational decisions remain in status.json.open_decisions."
 )
 RC_RELEASE_GATES_BLOCKER = (
-    "RC-blocking high-risk release gates remain pending or blocked in status.json.release_gates."
+    "Prerelease-blocking high-risk release gates remain pending or blocked in status.json.release_gates."
 )
 RELEASE_READY_ASSERTIONS_BLOCKER = (
     "Required release-ready assertions remain pending or blocked in status.json.readiness_assertions."
@@ -2907,7 +2907,7 @@ def audit_status_payload(
             warnings.append(
                 "VERSION is a stable release string while the active target is still a non-GA "
                 f"{active_target_id or 'target'} and release_ready is false; "
-                "the repo is carrying a GA candidate on an RC-held line."
+                "the repo is carrying a GA candidate on a prerelease-held line."
             )
 
     overclosed_release_gates = [
