@@ -1073,10 +1073,14 @@ func summarizeRecentPatrolCoverage(
 
 	var recentErrors int
 	var hasSuccessfulFullRun bool
+	var hasRecentFullRun bool
 	var scopedRuns int
 	for _, run := range relevant {
 		if run.ErrorCount > 0 || strings.EqualFold(strings.TrimSpace(run.Status), "error") {
 			recentErrors++
+		}
+		if !isScopedPatrolRun(run) {
+			hasRecentFullRun = true
 		}
 		if isSuccessfulFullPatrolRun(run) {
 			hasSuccessfulFullRun = true
@@ -1087,6 +1091,12 @@ func summarizeRecentPatrolCoverage(
 	}
 
 	switch {
+	case !hasSuccessfulFullRun && hasRecentFullRun && recentErrors > 0:
+		return patrolCoverageFactor{
+			name:        "Patrol coverage incomplete",
+			description: "Patrol coverage is incomplete: a recent full patrol ended with errors, so overall health is not fully verified.",
+			impact:      35,
+		}, true
 	case !hasSuccessfulFullRun && recentErrors > 0:
 		return patrolCoverageFactor{
 			name:        "Patrol coverage incomplete",

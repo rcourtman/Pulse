@@ -199,6 +199,56 @@ func TestIntelligence_GetSummary_DegradesWhenRecentPatrolCoverageIsScopedAndErro
 	}
 }
 
+func TestIntelligence_GetSummary_DegradesWhenRecentFullPatrolErrored(t *testing.T) {
+	intel := NewIntelligence(IntelligenceConfig{})
+	runHistory := NewPatrolRunHistoryStore(10)
+	now := time.Now()
+	runHistory.Add(PatrolRunRecord{
+		ID:               "patrol-error-1",
+		Type:             "patrol",
+		TriggerReason:    "startup",
+		CompletedAt:      now.Add(-1 * time.Minute),
+		ErrorCount:       1,
+		Status:           "error",
+		ResourcesChecked: 58,
+	})
+	runHistory.Add(PatrolRunRecord{
+		ID:               "scoped-error-1",
+		Type:             "scoped",
+		TriggerReason:    "alert_fired",
+		CompletedAt:      now.Add(-30 * time.Second),
+		ErrorCount:       1,
+		Status:           "error",
+		ResourcesChecked: 1,
+	})
+	intel.SetRunHistoryStore(runHistory)
+
+	summary := intel.GetSummary()
+	if summary.OverallHealth.Score >= 100 {
+		t.Fatalf("expected reduced health score, got %f", summary.OverallHealth.Score)
+	}
+	if summary.OverallHealth.Grade == HealthGradeA {
+		t.Fatalf("expected non-A grade, got %s", summary.OverallHealth.Grade)
+	}
+	want := "Patrol coverage is incomplete: a recent full patrol ended with errors, so overall health is not fully verified."
+	if summary.OverallHealth.Prediction != want {
+		t.Fatalf("expected full-patrol coverage warning, got %q", summary.OverallHealth.Prediction)
+	}
+	foundCoverageFactor := false
+	for _, factor := range summary.OverallHealth.Factors {
+		if factor.Category != "coverage" {
+			continue
+		}
+		foundCoverageFactor = true
+		if factor.Description != want {
+			t.Fatalf("expected matching coverage factor description, got %q", factor.Description)
+		}
+	}
+	if !foundCoverageFactor {
+		t.Fatal("expected coverage factor in overall health")
+	}
+}
+
 func TestIntelligence_getLearningStats(t *testing.T) {
 	intel := NewIntelligence(IntelligenceConfig{})
 	knowledgeStore, err := knowledge.NewStore(t.TempDir())
