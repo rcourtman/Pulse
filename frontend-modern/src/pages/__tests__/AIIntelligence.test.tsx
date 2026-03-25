@@ -600,6 +600,12 @@ describe('AIIntelligence entitlement gating', () => {
       expect(screen.getByText('No active issues detected')).toBeInTheDocument();
     });
 
+    const findingsPanel = screen.getByTestId('findings-panel');
+    const contextHeading = screen.getByText('Investigation context');
+    expect(
+      Boolean(findingsPanel.compareDocumentPosition(contextHeading) & Node.DOCUMENT_POSITION_FOLLOWING),
+    ).toBe(true);
+
     expect(screen.getByText(/Health A · 91\/100/)).toBeInTheDocument();
     expect(screen.getByText('Investigation context')).toBeInTheDocument();
     expect(screen.getByText('1 recent change · 4 governed resources')).toBeInTheDocument();

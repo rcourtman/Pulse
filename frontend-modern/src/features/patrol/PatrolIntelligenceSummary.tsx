@@ -13,9 +13,6 @@ import {
 } from '@/utils/patrolSummaryPresentation';
 import { getPatrolRuntimePresentation } from '@/utils/patrolRuntimePresentation';
 import { getSemanticTonePresentation } from '@/utils/semanticTonePresentation';
-import { ResourcePolicySummary } from '@/components/Infrastructure/ResourcePolicySummary';
-import { ResourceCorrelationSummary } from '@/components/Infrastructure/ResourceCorrelationSummary';
-import { ResourceChangeSummary } from '@/components/Infrastructure/ResourceChangeSummary';
 import { formatRelativeTime } from '@/utils/format';
 import type { PatrolIntelligenceState } from './usePatrolIntelligenceState';
 
@@ -190,66 +187,7 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
                     </div>
                   </div>
                 </div>
-
               </div>
-
-              <Show when={state.hasInvestigationContext()}>
-                <div class="mt-4 rounded-md border border-border-subtle bg-base/90 p-3">
-                  <div class="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <p class="text-xs font-semibold uppercase tracking-[0.16em] text-muted">
-                        Investigation context
-                      </p>
-                      <p class="mt-1 text-sm text-muted">
-                        Secondary change and policy signals for deeper investigation.
-                      </p>
-                      <Show when={state.investigationContextSummary()}>
-                        <p class="mt-1 text-xs text-base-content">
-                          {state.investigationContextSummary()}
-                        </p>
-                      </Show>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => state.setShowInvestigationContext((value) => !value)}
-                      class="inline-flex items-center rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover"
-                    >
-                      {state.showInvestigationContext() ? 'Hide context' : 'Show context'}
-                    </button>
-                  </div>
-
-                  <Show when={state.showInvestigationContext()}>
-                    <div class="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-                      <Show when={state.recentChangeCount() > 0}>
-                        <ResourceChangeSummary
-                          class="space-y-0"
-                          title="Recent changes"
-                          subtitle="Last 24 hours"
-                          changes={summary().recent_changes}
-                          maxChanges={3}
-                          compact
-                        />
-                      </Show>
-
-                      <div class="space-y-4">
-                        <Show when={state.correlations().length > 0}>
-                          <ResourceCorrelationSummary
-                            title="Correlations"
-                            correlations={state.correlations()}
-                            summaryText={`${state.correlationTotal()} total`}
-                          />
-                        </Show>
-
-                        <ResourcePolicySummary
-                          posture={state.policyPosture()}
-                          title="Policy posture"
-                        />
-                      </div>
-                    </div>
-                  </Show>
-                </div>
-              </Show>
             </section>
           )}
         </Show>

@@ -192,6 +192,10 @@ operator whether Patrol recently completed a successful full patrol, only ran
 scoped alert-triggered checks, or ended its most recent full patrol with
 errors, so the page does not leave trust and coverage as implicit background
 knowledge.
+The same hierarchy applies to investigation context. Correlations, recent
+changes, and policy posture are secondary evidence for deeper investigation, so
+the `Investigation context` section belongs beneath the primary findings/history
+workspace rather than inside the assessment card itself.
 The Patrol status bar should stay factual and operational within that same
 hierarchy. `frontend-modern/src/components/patrol/PatrolStatusBar.tsx` is a
 recent-activity strip, not a second health verdict: when Patrol is active it
