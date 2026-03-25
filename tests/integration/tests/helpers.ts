@@ -9,14 +9,14 @@ import { fileURLToPath } from 'node:url';
 import { Browser, Page, expect } from '@playwright/test';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const repoRoot = path.resolve(__dirname, '..', '..', '..');
+const managedHotDevPidPath = path.join(repoRoot, 'tmp', 'hot-dev.bg.pid');
 const runtimeStatePath = (() => {
   const configuredPath = String(process.env.PULSE_E2E_RUNTIME_STATE_PATH || '').trim();
   if (configuredPath === '') {
-    return path.resolve(__dirname, '..', '..', '..', 'tmp', 'e2e-runtime-state.json');
+    return path.resolve(repoRoot, 'tmp', 'e2e-runtime-state.json');
   }
-  return path.isAbsolute(configuredPath)
-    ? configuredPath
-    : path.resolve(__dirname, '..', '..', '..', configuredPath);
+  return path.isAbsolute(configuredPath) ? configuredPath : path.resolve(repoRoot, configuredPath);
 })();
 
 type RuntimeState = {
@@ -38,6 +38,21 @@ const runtimeBaseURL = (): string | null => {
   return typeof parsed?.baseURL === 'string' && parsed.baseURL.trim() !== ''
     ? parsed.baseURL.trim()
     : null;
+};
+
+const managedDevBrowserBaseURL = (): string | null => {
+  try {
+    const pid = Number.parseInt(fs.readFileSync(managedHotDevPidPath, 'utf8').trim(), 10);
+    if (!Number.isInteger(pid) || pid <= 0) {
+      return null;
+    }
+    process.kill(pid, 0);
+    const host = String(process.env.FRONTEND_DEV_HOST || '').trim() || '127.0.0.1';
+    const port = String(process.env.FRONTEND_DEV_PORT || '').trim() || '5173';
+    return `http://${host}:${port}`;
+  } catch {
+    return null;
+  }
 };
 
 const runtimePrimaryAPIToken = (): string => {
@@ -383,6 +398,7 @@ export async function createAuthenticatedStorageState(
       process.env.PULSE_BASE_URL ||
       process.env.PLAYWRIGHT_BASE_URL ||
       runtimeBaseURL() ||
+      managedDevBrowserBaseURL() ||
       'http://localhost:7655',
   });
   const page = await context.newPage();
@@ -620,6 +636,7 @@ export async function apiRequest(page: Page, endpoint: string, options: any = {}
     process.env.PULSE_BASE_URL ||
     process.env.PLAYWRIGHT_BASE_URL ||
     runtimeBaseURL() ||
+    managedDevBrowserBaseURL() ||
     'http://localhost:7655'
   ).replace(/\/+$/, '');
 

@@ -285,6 +285,13 @@ the embedded frontend or test/standalone UI. They may not present `7655` as
 the generic local Pulse browser target in a way that can be confused with the
 managed hot-dev shell, whose canonical browser entrypoint remains
 `http://127.0.0.1:5173`.
+That same browser-target rule applies to the integration harness defaults.
+`tests/integration/playwright.config.ts` and the shared integration browser/API
+helpers may only fall back to `http://localhost:7655` after honoring an
+explicit base URL, runtime-state file, and any active managed `hot-dev`
+session. If `hot-dev-bg` is already running, ad hoc Playwright/browser helpers
+must prefer the managed shell on `http://127.0.0.1:5173` instead of silently
+teaching the backend port as the default local browser target.
 That runtime-guidance rule also applies to successful launcher startup output:
 `hot-dev-bg` must identify `http://127.0.0.1:5173` as the browser entrypoint
 and present `7655` as the managed backend dependency, rather than advertising

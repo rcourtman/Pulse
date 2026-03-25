@@ -4,15 +4,17 @@ import { fileURLToPath } from 'node:url';
 import { defineConfig, devices } from '@playwright/test';
 
 const configDir = path.dirname(fileURLToPath(import.meta.url));
+const repoRoot = path.resolve(configDir, '..', '..');
+const managedHotDevPidPath = path.join(repoRoot, 'tmp', 'hot-dev.bg.pid');
 const runtimeStatePath = (() => {
   const configuredPath = String(process.env.PULSE_E2E_RUNTIME_STATE_PATH || '').trim();
   if (configuredPath === '') {
-    return path.resolve(configDir, '..', '..', 'tmp', 'e2e-runtime-state.json');
+    return path.resolve(repoRoot, 'tmp', 'e2e-runtime-state.json');
   }
-  return path.isAbsolute(configuredPath)
-    ? configuredPath
-    : path.resolve(configDir, '..', '..', configuredPath);
+  return path.isAbsolute(configuredPath) ? configuredPath : path.resolve(repoRoot, configuredPath);
 })();
+
+const trim = (value: unknown): string => String(value ?? '').trim();
 
 const loadRuntimeBaseURL = (): string | null => {
   try {
@@ -21,6 +23,21 @@ const loadRuntimeBaseURL = (): string | null => {
     return typeof parsed.baseURL === 'string' && parsed.baseURL.trim() !== ''
       ? parsed.baseURL.trim()
       : null;
+  } catch {
+    return null;
+  }
+};
+
+const managedDevBrowserBaseURL = (): string | null => {
+  try {
+    const pid = Number.parseInt(fs.readFileSync(managedHotDevPidPath, 'utf8').trim(), 10);
+    if (!Number.isInteger(pid) || pid <= 0) {
+      return null;
+    }
+    process.kill(pid, 0);
+    const host = trim(process.env.FRONTEND_DEV_HOST) || '127.0.0.1';
+    const port = trim(process.env.FRONTEND_DEV_PORT) || '5173';
+    return `http://${host}:${port}`;
   } catch {
     return null;
   }
@@ -65,6 +82,7 @@ export default defineConfig({
       process.env.PULSE_BASE_URL ||
       process.env.PLAYWRIGHT_BASE_URL ||
       loadRuntimeBaseURL() ||
+      managedDevBrowserBaseURL() ||
       'http://localhost:7655',
 
     /* Allow testing against self-signed TLS when explicitly enabled */

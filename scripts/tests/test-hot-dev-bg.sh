@@ -612,6 +612,25 @@ test_acceptance_doc_distinguishes_embedded_frontend_from_hot_dev() {
   assert_contains "acceptance doc distinguishes managed hot-dev shell" "${output}" "managed hot-dev browser shell on \`http://127.0.0.1:5173\`"
 }
 
+test_playwright_defaults_prefer_managed_hot_dev_runtime() {
+  local output
+  output="$(cat "${ROOT_DIR}/tests/integration/playwright.config.ts")"
+
+  assert_contains "playwright config checks managed hot-dev pid" "${output}" "managedHotDevPidPath"
+  assert_contains "playwright config computes managed browser base url" "${output}" "managedDevBrowserBaseURL"
+  assert_contains "playwright config prefers runtime-state first" "${output}" "loadRuntimeBaseURL() ||"
+  assert_contains "playwright config prefers managed dev browser before embedded fallback" "${output}" "managedDevBrowserBaseURL() ||"
+}
+
+test_integration_helpers_prefer_managed_hot_dev_runtime() {
+  local output
+  output="$(cat "${ROOT_DIR}/tests/integration/tests/helpers.ts")"
+
+  assert_contains "integration helpers check managed hot-dev pid" "${output}" "managedHotDevPidPath"
+  assert_contains "integration helpers compute managed browser base url" "${output}" "managedDevBrowserBaseURL"
+  assert_contains "integration helpers prefer managed browser before embedded fallback" "${output}" "managedDevBrowserBaseURL() ||"
+}
+
 test_clean_mock_alerts_prefers_managed_runtime() {
   local test_dir fake_bin alert_history fake_hot_dev_bg action_log output
   test_dir="$(mktemp -d)"
