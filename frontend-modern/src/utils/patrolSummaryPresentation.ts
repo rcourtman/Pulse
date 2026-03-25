@@ -143,6 +143,22 @@ function classifyActiveFindings(activeFindings: PatrolAssessmentFinding[] | unde
   };
 }
 
+export function getPatrolScoreChipLabel(args: {
+  overallHealth?: IntelligenceHealthScore;
+  activeFindings?: PatrolAssessmentFinding[];
+}): string {
+  const classified = classifyActiveFindings(args.activeFindings);
+  const hasCoverageGap = Boolean(
+    args.overallHealth?.factors.some((factor) => factor.category === 'coverage'),
+  );
+
+  if (hasCoverageGap || (classified.infrastructureTotal === 0 && classified.runtimeTotal > 0)) {
+    return 'Assessment';
+  }
+
+  return 'Health';
+}
+
 function joinAssessmentParts(parts: string[]): string {
   if (parts.length <= 1) return parts[0] ?? '';
   if (parts.length === 2) return `${parts[0]} and ${parts[1]}`;

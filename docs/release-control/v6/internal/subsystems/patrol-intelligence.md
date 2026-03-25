@@ -137,6 +137,10 @@ supporting evidence. Secondary metric strips must not render `No issues found`
 when the same governed overall-health summary says coverage is incomplete or
 health still requires attention; that compact summary state now belongs to the
 shared `frontend-modern/src/utils/patrolSummaryPresentation.ts` helper.
+That supporting score chip must also avoid overstating infrastructure truth.
+When the current state is dominated by incomplete coverage or Patrol-owned
+runtime failures, the chip should read as an `Assessment` grade rather than an
+`Health` grade; `Health` belongs to verified healthy infrastructure states.
 That same helper also owns the primary assessment explanation. The summary card
 must not pair an `Issues detected` headline with a raw coverage-only
 `overall_health.prediction` sentence from a separate source; when active

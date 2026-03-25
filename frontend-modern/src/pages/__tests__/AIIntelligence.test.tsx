@@ -948,6 +948,8 @@ describe('AIIntelligence entitlement gating', () => {
       ).toBeInTheDocument();
     });
 
+    expect(screen.getByText(/Assessment C · 60\/100/)).toBeInTheDocument();
+
     expect(screen.getByRole('button', { name: 'Findings' }).textContent).toBe('Findings 1');
 
     expect(

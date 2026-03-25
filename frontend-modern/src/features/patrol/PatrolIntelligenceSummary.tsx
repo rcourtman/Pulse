@@ -7,6 +7,7 @@ import AlertTriangleIcon from 'lucide-solid/icons/alert-triangle';
 import {
   getPatrolAssessmentPresentation,
   getPatrolRecencyPresentation,
+  getPatrolScoreChipLabel,
   getPatrolVerificationPresentation,
   getPatrolSummaryPresentation,
 } from '@/utils/patrolSummaryPresentation';
@@ -77,6 +78,12 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
   );
   const fixedSummaryPresentation = createMemo(() =>
     getPatrolSummaryPresentation('success', summaryStats().fixedCount > 0),
+  );
+  const scoreChipLabel = createMemo(() =>
+    getPatrolScoreChipLabel({
+      overallHealth: state.intelligenceSummary()?.overall_health,
+      activeFindings: state.activePatrolFindings(),
+    }),
   );
 
   return (
@@ -157,7 +164,7 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
                     <p class="mt-1 text-sm text-base-content">{assessment().description}</p>
                     <div class="mt-3 flex flex-wrap items-center gap-2">
                       <span class="rounded-full border border-border-subtle bg-base px-2.5 py-1 text-xs font-medium text-base-content">
-                        Health {summary().overall_health.grade} ·{' '}
+                        {scoreChipLabel()} {summary().overall_health.grade} ·{' '}
                         {Math.round(summary().overall_health.score)}/100
                       </span>
                     </div>

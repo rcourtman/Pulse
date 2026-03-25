@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   getPatrolAssessmentPresentation,
   getPatrolRecencyPresentation,
+  getPatrolScoreChipLabel,
   getPatrolVerificationPresentation,
   getPatrolNoIssuesPresentation,
   getPatrolSummaryPresentation,
@@ -144,6 +145,51 @@ describe('getPatrolSummaryPresentation', () => {
       compactLabel: 'Patrol runtime issue',
       tone: 'warning',
     });
+  });
+
+  it('uses assessment labeling for coverage or runtime-limited score states', () => {
+    expect(
+      getPatrolScoreChipLabel({
+        overallHealth: {
+          score: 60,
+          grade: 'C',
+          trend: 'stable',
+          factors: [
+            {
+              name: 'Patrol coverage incomplete',
+              impact: -0.35,
+              description: 'Patrol coverage is incomplete.',
+              category: 'coverage',
+            },
+          ],
+          prediction: 'Patrol coverage is incomplete.',
+        },
+        activeFindings: [
+          {
+            status: 'active',
+            severity: 'warning',
+            resourceId: 'ai-service',
+            resourceName: 'Pulse Patrol Service',
+            title: 'Pulse Patrol: Insufficient API credits',
+          },
+        ] as never,
+      }),
+    ).toBe('Assessment');
+  });
+
+  it('keeps health labeling for verified healthy states', () => {
+    expect(
+      getPatrolScoreChipLabel({
+        overallHealth: {
+          score: 100,
+          grade: 'A',
+          trend: 'stable',
+          factors: [],
+          prediction: 'Infrastructure is healthy with no significant issues detected.',
+        },
+        activeFindings: [],
+      }),
+    ).toBe('Health');
   });
 
   it('keeps no-issues copy only for fully healthy patrol states', () => {
