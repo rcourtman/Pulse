@@ -31,6 +31,10 @@ const findingsPanelSource = readFileSync(
   resolve(__dirname, '..', 'FindingsPanel.tsx'),
   'utf-8',
 );
+const patrolWorkspaceSource = readFileSync(
+  resolve(__dirname, '..', '..', '..', 'features', 'patrol', 'PatrolIntelligenceWorkspace.tsx'),
+  'utf-8',
+);
 
 describe('aiFindingPresentation', () => {
   describe('severity presentation', () => {
@@ -185,6 +189,19 @@ describe('aiFindingPresentation', () => {
       expect(findingsPanelSource).toContain('aiIntelligenceStore.needsAttentionCount > 0');
       expect(findingsPanelSource).toContain('aiIntelligenceStore.pendingApprovalCount > 0');
       expect(findingsPanelSource).toContain('<Show when={showFilterControls()}>');
+    });
+
+    it('uses explicit textual separators in finding metadata instead of relying on visual spacing', () => {
+      expect(findingsPanelSource).toContain("{' · '}acknowledged");
+      expect(findingsPanelSource).toContain("{' · '}last investigated");
+      expect(findingsPanelSource).toContain("{' · '}snoozed until");
+    });
+
+    it('uses explicit textual separators for patrol tab badges instead of css-only spacing', () => {
+      expect(patrolWorkspaceSource).toContain("aria-hidden=\"true\"");
+      expect(patrolWorkspaceSource).toContain("{' '}");
+      expect(patrolWorkspaceSource).toContain('{state.summaryStats().totalActive}');
+      expect(patrolWorkspaceSource).toContain('{state.displayRunHistory().length}');
     });
   });
 

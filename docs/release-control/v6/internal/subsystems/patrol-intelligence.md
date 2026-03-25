@@ -187,10 +187,9 @@ explain the absence of active findings without repeating `Last activity`,
 `Next run`, or interval schedule details that already belong to the header and
 verification hierarchy above.
 That same findings surface should keep its section chrome functional rather
-than promotional. Inside the Patrol findings tab, the card header should use a
-direct label such as `Patrol findings` and should not add extra product
-restatement or marketing subtitles that compete with the page-level Patrol
-header above.
+than promotional. Inside the Patrol findings tab, the selected tab already
+names the surface, so the findings card should not add another in-card product
+header or marketing subtitle that simply repeats the tab-level context.
 That same control bar should also stay proportional to the current findings
 set. Sort controls belong only when there are multiple Patrol findings to
 order; the empty state or single-finding state should not spend header space
@@ -199,6 +198,11 @@ The same proportionality rule applies to the findings filter bar itself. When
 there are no Patrol findings and no special approval or attention queues to
 navigate, the findings surface should not render filter pills that lead only
 to the same empty state.
+Tab badges and finding metadata in that same surface also need explicit textual
+separators rather than CSS-only spacing. Badge counts should preserve readable
+plain-text output such as `Findings 1` and `Runs 30`, and metadata trails
+should use textual separators like `· acknowledged 22d ago` so copied or
+extracted Patrol output does not collapse words together.
 When Patrol is currently running, that strip should still stay factual rather
 than switching to another verdict label: the runtime may add an explicit
 in-progress indicator, but the primary activity label remains recent activity

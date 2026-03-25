@@ -946,6 +946,8 @@ describe('AIIntelligence entitlement gating', () => {
       ).toBeInTheDocument();
     });
 
+    expect(screen.getByRole('button', { name: 'Findings' }).textContent).toBe('Findings 1');
+
     expect(
       screen.queryByText(
         'Patrol coverage is incomplete: recent activity was limited to scoped runs and ended with errors, so overall health is not fully verified.',

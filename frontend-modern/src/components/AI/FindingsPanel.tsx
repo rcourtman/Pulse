@@ -538,27 +538,28 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
             {finding.resourceName} ({finding.resourceType}) - {formatTime(finding.detectedAt)}
             <Show when={finding.status === 'resolved' && finding.resolvedAt}>
               <span class="ml-2 text-green-600 dark:text-green-400">
+                {' · '}
                 {getResolutionReason(finding)}
               </span>
             </Show>
             <Show when={finding.dismissedReason}>
               <span class="ml-2 text-muted">
-                ({formatIdentifierLabel(finding.dismissedReason)})
+                {' · '}({formatIdentifierLabel(finding.dismissedReason)})
               </span>
             </Show>
             <Show when={finding.status === 'snoozed' && finding.snoozedUntil}>
               <span class="ml-2 text-blue-500 dark:text-blue-400">
-                snoozed until {formatTime(finding.snoozedUntil!)}
+                {' · '}snoozed until {formatTime(finding.snoozedUntil!)}
               </span>
             </Show>
             <Show when={finding.acknowledgedAt && finding.status === 'active'}>
               <span class="ml-2 text-muted">
-                acknowledged {formatTime(finding.acknowledgedAt!)}
+                {' · '}acknowledged {formatTime(finding.acknowledgedAt!)}
               </span>
             </Show>
             <Show when={finding.status === 'active' && finding.lastInvestigatedAt}>
               <span class="ml-2 text-muted">
-                last investigated {formatTime(finding.lastInvestigatedAt!)}
+                {' · '}last investigated {formatTime(finding.lastInvestigatedAt!)}
               </span>
             </Show>
           </div>

@@ -47,8 +47,10 @@ export function PatrolIntelligenceWorkspace(props: { state: PatrolIntelligenceSt
           Findings
           <Show when={state.summaryStats().totalActive > 0}>
             <span
+              aria-hidden="true"
               class={`ml-1.5 px-1.5 py-0.5 text-xs rounded-full ${getFindingSeverityToneClasses(state.summaryStats().criticalFindings > 0 ? 'critical' : 'warning')}`}
             >
+              {' '}
               {state.summaryStats().totalActive}
             </span>
           </Show>
@@ -67,7 +69,11 @@ export function PatrolIntelligenceWorkspace(props: { state: PatrolIntelligenceSt
         >
           Runs
           <Show when={state.displayRunHistory().length > 0}>
-            <span class="ml-1.5 px-1.5 py-0.5 text-xs rounded-full bg-surface-alt text-muted">
+            <span
+              aria-hidden="true"
+              class="ml-1.5 px-1.5 py-0.5 text-xs rounded-full bg-surface-alt text-muted"
+            >
+              {' '}
               {state.displayRunHistory().length}
             </span>
           </Show>
