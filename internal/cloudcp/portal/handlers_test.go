@@ -41,6 +41,26 @@ func doRequest(t *testing.T, h http.Handler, req *http.Request) *httptest.Respon
 	return rec
 }
 
+func renderPortalHTML(t *testing.T, data portalPageData) string {
+	t.Helper()
+	rec := httptest.NewRecorder()
+	renderPortalPage(rec, data.Nonce, data.Email, data.Accounts)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("renderPortalPage returned %d", rec.Code)
+	}
+	return rec.Body.String()
+}
+
+func renderLoginHTML(t *testing.T, nonce string) string {
+	t.Helper()
+	rec := httptest.NewRecorder()
+	renderLoginPage(rec, nonce)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("renderLoginPage returned %d", rec.Code)
+	}
+	return rec.Body.String()
+}
+
 type dashboardResp struct {
 	Account struct {
 		ID          string               `json:"id"`
@@ -604,11 +624,7 @@ func TestPortalPageTemplate_TeamManagementRendered(t *testing.T) {
 		},
 	}
 
-	var buf strings.Builder
-	if err := portalPageTmpl.Execute(&buf, data); err != nil {
-		t.Fatalf("template execute: %v", err)
-	}
-	html := buf.String()
+	html := renderPortalHTML(t, data)
 
 	// Account-specific markup (only rendered when CanManage=true).
 	mustContain := []string{
@@ -648,11 +664,7 @@ func TestPortalPageTemplate_TeamManagementHiddenForNonManagers(t *testing.T) {
 		},
 	}
 
-	var buf strings.Builder
-	if err := portalPageTmpl.Execute(&buf, data); err != nil {
-		t.Fatalf("template execute: %v", err)
-	}
-	html := buf.String()
+	html := renderPortalHTML(t, data)
 
 	// Account-specific team markup must NOT appear.
 	mustNotContain := []string{
@@ -686,11 +698,8 @@ func TestPortalPageTemplate_ActorRolePassedToSection(t *testing.T) {
 					},
 				},
 			}
-			var buf strings.Builder
-			if err := portalPageTmpl.Execute(&buf, data); err != nil {
-				t.Fatalf("template execute: %v", err)
-			}
-			if !strings.Contains(buf.String(), `data-actor-role="`+role+`"`) {
+			html := renderPortalHTML(t, data)
+			if !strings.Contains(html, `data-actor-role="`+role+`"`) {
 				t.Errorf("expected data-actor-role=%q in rendered HTML", role)
 			}
 		})
@@ -713,11 +722,7 @@ func TestPortalPageTemplate_AccountServicesRendered(t *testing.T) {
 		},
 	}
 
-	var buf strings.Builder
-	if err := portalPageTmpl.Execute(&buf, data); err != nil {
-		t.Fatalf("template execute: %v", err)
-	}
-	html := buf.String()
+	html := renderPortalHTML(t, data)
 
 	mustContain := []string{
 		"<title>Pulse Account</title>",
@@ -749,11 +754,7 @@ func TestPortalPageTemplate_AccountServicesRendered(t *testing.T) {
 }
 
 func TestPortalLoginTemplate_UsesPulseAccountBranding(t *testing.T) {
-	var buf strings.Builder
-	if err := loginPageTmpl.Execute(&buf, struct{ Nonce string }{Nonce: "test-nonce"}); err != nil {
-		t.Fatalf("template execute: %v", err)
-	}
-	html := buf.String()
+	html := renderLoginHTML(t, "test-nonce")
 
 	mustContain := []string{
 		"<title>Pulse Account — Sign In</title>",

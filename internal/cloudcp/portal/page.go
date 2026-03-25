@@ -1,6 +1,7 @@
 package portal
 
 import (
+	"html/template"
 	"net/http"
 	"time"
 
@@ -38,6 +39,14 @@ type portalPageData struct {
 	PublicSiteURL string
 	SupportEmail  string
 	Accounts      []portalPageAccount
+	Styles        template.CSS
+	Script        template.JS
+}
+
+type loginPageData struct {
+	Nonce  string
+	Styles template.CSS
+	Script template.JS
 }
 
 const (
@@ -168,6 +177,8 @@ func renderPortalPage(w http.ResponseWriter, nonce, email string, accounts []por
 		PublicSiteURL: defaultPublicSiteURL,
 		SupportEmail:  defaultSupportEmail,
 		Accounts:      accounts,
+		Styles:        portalStyles,
+		Script:        portalScript,
 	}); err != nil {
 		log.Error().Err(err).Msg("cloudcp.portal.page: render portal page")
 	}
@@ -176,7 +187,11 @@ func renderPortalPage(w http.ResponseWriter, nonce, email string, accounts []por
 func renderLoginPage(w http.ResponseWriter, nonce string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	if err := loginPageTmpl.Execute(w, struct{ Nonce string }{Nonce: nonce}); err != nil {
+	if err := loginPageTmpl.Execute(w, loginPageData{
+		Nonce:  nonce,
+		Styles: loginStyles,
+		Script: loginScript,
+	}); err != nil {
 		log.Error().Err(err).Msg("cloudcp.portal.page: render login page")
 	}
 }
