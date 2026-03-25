@@ -139,7 +139,7 @@ describe('getPatrolSummaryPresentation', () => {
     ).toEqual({
       title: 'Patrol runtime issue',
       description:
-        'Patrol surfaced 1 active warning finding about its own runtime. Recent coverage is also incomplete, so the rest of your infrastructure is not fully verified.',
+        'Patrol has an active runtime issue: Insufficient API credits. Recent coverage is also incomplete, so the rest of your infrastructure is not fully verified.',
       eyebrow: 'Patrol assessment',
       compactLabel: 'Patrol runtime issue',
       tone: 'warning',

@@ -97,6 +97,16 @@ function formatFindingCount(count: number, severity: 'critical' | 'warning'): st
   return `${count} active ${severity} finding${count === 1 ? '' : 's'}`;
 }
 
+function getRuntimeFindingSummaryLabel(finding: PatrolAssessmentFinding | undefined): string {
+  const title = String(finding?.title || '').trim();
+  if (!title) {
+    return 'a Patrol runtime issue';
+  }
+
+  const trimmedTitle = title.replace(/^pulse patrol:\s*/i, '').trim();
+  return trimmedTitle || title;
+}
+
 function classifyActiveFindings(activeFindings: PatrolAssessmentFinding[] | undefined) {
   const runtimeCritical = (activeFindings ?? []).filter(
     (finding) =>
@@ -151,6 +161,28 @@ function getFindingAssessmentDescription(args: {
     args.overallHealth?.factors.some((factor) => factor.category === 'coverage'),
   );
   const classified = classifyActiveFindings(args.activeFindings);
+  const activeRuntimeFindings = (args.activeFindings ?? []).filter(
+    (finding) => finding.status === 'active' && isPatrolRuntimeFinding(finding),
+  );
+
+  if (classified.infrastructureTotal === 0 && classified.runtimeTotal === 1) {
+    const runtimeFinding = activeRuntimeFindings[0];
+    const runtimeLabel = getRuntimeFindingSummaryLabel(runtimeFinding);
+    const runtimeSummary =
+      runtimeFinding?.severity === 'critical'
+        ? `Patrol is currently blocked by a critical runtime issue: ${runtimeLabel}.`
+        : `Patrol has an active runtime issue: ${runtimeLabel}.`;
+
+    if (hasCoverageGap) {
+      return `${runtimeSummary} Recent coverage is also incomplete, so the rest of your infrastructure is not fully verified.`;
+    }
+
+    return (
+      args.overallHealth?.prediction?.trim() ||
+      `${runtimeSummary} Review the Patrol runtime issue for more detail.`
+    );
+  }
+
   const findingSummaryParts: string[] = [];
 
   if (classified.infrastructureCritical > 0) {

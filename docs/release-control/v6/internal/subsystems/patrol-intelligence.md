@@ -147,7 +147,10 @@ findings from infrastructure findings. When the only active Patrol findings are
 synthetic Patrol service/runtime conditions such as the `ai-service`
 provider-credit failure, the top assessment should read as a Patrol runtime
 issue rather than implying infrastructure issues were detected across the
-estate.
+estate. When there is exactly one active Patrol runtime finding, that same
+assessment copy should name the concrete runtime failure, such as
+`Insufficient API credits`, instead of reducing the state to a generic count of
+runtime findings.
 That same runtime-versus-infrastructure distinction should route through the
 shared finding-presentation helper instead of being re-inferred separately by
 the summary card and the findings list. The active finding row should surface

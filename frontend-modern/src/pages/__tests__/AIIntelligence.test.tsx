@@ -943,7 +943,7 @@ describe('AIIntelligence entitlement gating', () => {
       expect(screen.getByText('Patrol runtime issue')).toBeInTheDocument();
       expect(
         screen.getByText(
-          'Patrol surfaced 1 active warning finding about its own runtime. Recent coverage is also incomplete, so the rest of your infrastructure is not fully verified.',
+          'Patrol has an active runtime issue: Insufficient API credits. Recent coverage is also incomplete, so the rest of your infrastructure is not fully verified.',
         ),
       ).toBeInTheDocument();
     });
