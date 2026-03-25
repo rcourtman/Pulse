@@ -1,0 +1,978 @@
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pulse Account</title>
+  <style nonce="{{.Nonce}}">
+    :root { color-scheme: light; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f1f5f9; color: #0f172a; }
+    header { background: #1e293b; color: #f8fafc; padding: 12px 24px; display: flex; align-items: center; justify-content: space-between; }
+    header .brand { font-weight: 700; font-size: 18px; letter-spacing: -0.3px; }
+    header .user-info { display: flex; align-items: center; gap: 16px; font-size: 13px; color: #94a3b8; }
+    header .logout-btn { background: none; border: 1px solid #475569; color: #94a3b8; border-radius: 6px; padding: 5px 12px; cursor: pointer; font-size: 13px; }
+    header .logout-btn:hover { border-color: #94a3b8; color: #f8fafc; }
+    .main { max-width: 860px; margin: 32px auto; padding: 0 16px 48px; }
+    .account-section { margin-bottom: 40px; }
+    .account-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+    .account-header h2 { margin: 0; font-size: 20px; font-weight: 700; }
+    .badge { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .badge-msp { background: #dbeafe; color: #1e40af; }
+    .badge-cloud { background: #dcfce7; color: #166534; }
+    .badge-individual { background: #dcfce7; color: #166534; }
+    .badge-healthy { background: #dcfce7; color: #166534; }
+    .badge-unhealthy { background: #fee2e2; color: #991b1b; }
+    .badge-active { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
+    .badge-suspended { background: #fef9c3; color: #854d0e; border: 1px solid #fef08a; }
+    .badge-failed { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+    .badge-provisioning { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+    .badge-canceled { background: #f1f5f9; color: #64748b; border: 1px solid #e2e8f0; }
+    .badge-deleting { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+    .workspace-list { display: flex; flex-direction: column; gap: 10px; }
+    .workspace-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px 18px; display: flex; align-items: center; justify-content: space-between; gap: 12px; box-shadow: 0 1px 3px rgba(15,23,42,.04); }
+    .workspace-card:hover { border-color: #cbd5e1; }
+    .ws-info { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .ws-name { font-weight: 600; font-size: 15px; }
+    .ws-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .ws-created { font-size: 11px; color: #94a3b8; }
+    .ws-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+    .btn-primary { background: #1d4ed8; color: #fff; border: 0; border-radius: 8px; padding: 8px 18px; font-size: 14px; font-weight: 600; cursor: pointer; text-decoration: none; display: inline-block; }
+    .btn-primary:hover { background: #1e40af; }
+    .btn-secondary { background: #fff; color: #334155; border: 1px solid #cbd5e1; border-radius: 8px; padding: 7px 14px; font-size: 13px; font-weight: 500; cursor: pointer; }
+    .btn-secondary:hover { background: #f8fafc; border-color: #94a3b8; }
+    .btn-danger { background: #fff; color: #dc2626; border: 1px solid #fca5a5; border-radius: 8px; padding: 7px 14px; font-size: 13px; cursor: pointer; }
+    .btn-danger:hover { background: #fef2f2; }
+    .account-actions { margin-top: 14px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .add-workspace-form { margin-top: 12px; display: none; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px; }
+    .add-workspace-form.visible { display: block; }
+    .add-workspace-form label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+    .add-workspace-form input { width: 100%; border: 1px solid #cbd5e1; border-radius: 8px; padding: 8px 12px; font-size: 14px; margin-bottom: 10px; }
+    .add-workspace-form .form-actions { display: flex; gap: 8px; }
+    .team-section { margin-top: 12px; display: none; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px; }
+    .team-section.visible { display: block; }
+    .team-section h3 { margin: 0 0 12px; font-size: 15px; font-weight: 700; }
+    .team-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    .team-table th { text-align: left; font-size: 12px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; padding: 6px 8px; border-bottom: 1px solid #e2e8f0; }
+    .team-table td { padding: 8px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+    .team-table select { border: 1px solid #cbd5e1; border-radius: 6px; padding: 4px 8px; font-size: 13px; background: #fff; }
+    .team-table .btn-remove { background: none; border: none; color: #dc2626; cursor: pointer; font-size: 13px; padding: 4px 8px; }
+    .team-table .btn-remove:hover { text-decoration: underline; }
+    .team-invite { margin-top: 12px; display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; }
+    .team-invite label { font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px; }
+    .team-invite input { border: 1px solid #cbd5e1; border-radius: 8px; padding: 8px 12px; font-size: 14px; min-width: 200px; }
+    .team-invite select { border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px 10px; font-size: 14px; background: #fff; }
+    .intro-card { background: linear-gradient(145deg, #fff, #f8fafc); border: 1px solid #dbe4f0; border-radius: 16px; padding: 22px 24px; margin-bottom: 24px; box-shadow: 0 10px 24px rgba(15,23,42,.05); }
+    .intro-card h1 { margin: 0 0 8px; font-size: 26px; line-height: 1.1; }
+    .intro-card p { margin: 0; color: #475569; font-size: 15px; line-height: 1.6; max-width: 760px; }
+    .service-section { margin-top: 40px; }
+    .service-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+    .service-header h2 { margin: 0; font-size: 20px; font-weight: 700; }
+    .service-note { font-size: 13px; color: #64748b; max-width: 680px; }
+    .service-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+    .service-card { display: block; text-decoration: none; color: inherit; background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; box-shadow: 0 1px 3px rgba(15,23,42,.04); }
+    .service-card:hover { border-color: #93c5fd; box-shadow: 0 6px 18px rgba(29,78,216,.08); }
+    .service-card-button { width: 100%; text-align: left; border: 1px solid #e2e8f0; cursor: pointer; font: inherit; }
+    .service-card h3 { margin: 0 0 6px; font-size: 16px; font-weight: 700; }
+    .service-card p { margin: 0; font-size: 14px; color: #64748b; line-height: 1.5; }
+    .service-panel { display: none; margin-top: 14px; background: #fff; border: 1px solid #dbe4f0; border-radius: 12px; padding: 18px; }
+    .service-panel.visible { display: block; }
+    .service-panel h3 { margin: 0 0 8px; font-size: 17px; }
+    .service-panel p { margin: 0 0 14px; font-size: 14px; color: #64748b; }
+    .service-panel label { display: block; margin-bottom: 6px; font-size: 13px; font-weight: 600; color: #475569; }
+    .service-panel input, .service-panel textarea { width: 100%; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px 12px; font: inherit; box-sizing: border-box; background: #fff; color: #0f172a; }
+    .service-panel input:focus, .service-panel textarea:focus { outline: 2px solid #93c5fd; border-color: #1d4ed8; }
+    .service-panel textarea { min-height: 120px; resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .service-panel .form-group { margin-bottom: 14px; }
+    .service-panel .form-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .service-panel .helper-text { margin-top: 10px; font-size: 13px; color: #64748b; }
+    .service-panel .helper-text a { color: #1d4ed8; }
+    .service-panel .result-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-top: 14px; }
+    .service-panel .result-meta-label { font-size: 12px; color: #64748b; margin-bottom: 4px; }
+    .service-panel .result-meta-value { font-size: 14px; color: #0f172a; word-break: break-word; }
+    .service-panel .subsection { margin-top: 18px; padding-top: 18px; border-top: 1px solid #e2e8f0; }
+    .service-panel .subsection:first-of-type { margin-top: 0; padding-top: 0; border-top: none; }
+    .service-panel .subsection h4 { margin: 0 0 8px; font-size: 15px; font-weight: 700; }
+    .service-panel .warning { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; border-radius: 8px; padding: 12px; font-size: 13px; line-height: 1.5; margin-bottom: 12px; }
+    .service-panel .checkbox-row { display: flex; align-items: flex-start; gap: 10px; margin: 12px 0; }
+    .service-panel .checkbox-row input[type="checkbox"] { width: 18px; height: 18px; margin-top: 2px; flex-shrink: 0; }
+    .service-panel .checkbox-row span { font-size: 13px; color: #475569; line-height: 1.5; }
+    .service-status { margin-top: 12px; padding: 10px 12px; border-radius: 8px; font-size: 13px; display: none; }
+    .service-status.visible { display: block; }
+    .service-status.error { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+    .service-status.success { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
+    .empty-state { background: #fff; border: 1px dashed #cbd5e1; border-radius: 10px; padding: 32px; text-align: center; color: #64748b; }
+    .empty-state p { margin: 0; font-size: 15px; }
+    .spinner { display: none; width: 18px; height: 18px; border: 2px solid #93c5fd; border-top-color: #1d4ed8; border-radius: 50%; animation: spin 0.6s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .toast { position: fixed; bottom: 24px; right: 24px; background: #1e293b; color: #f8fafc; border-radius: 8px; padding: 12px 20px; font-size: 14px; display: none; z-index: 100; }
+    .toast.visible { display: block; animation: fadein 0.2s; }
+    @keyframes fadein { from { opacity: 0; transform: translateY(8px); } }
+    .toast.error { background: #991b1b; }
+    @media (max-width: 560px) {
+      .workspace-card { flex-direction: column; align-items: flex-start; }
+      .ws-actions { align-self: stretch; }
+      .ws-actions form, .ws-actions .btn-primary { width: 100%; text-align: center; }
+    }
+  </style>
+</head>
+<body>
+<header>
+  <span class="brand">Pulse Account</span>
+  <div class="user-info">
+    <span>{{.Email}}</span>
+    <button class="logout-btn" id="logout-btn">Sign out</button>
+  </div>
+</header>
+
+<main class="main">
+  <section class="intro-card">
+    <h1>Pulse Account</h1>
+    <p>Manage hosted Cloud and MSP workspaces here today. Self-hosted license and recovery tools still live on the public commercial surface during the current rollout, and are linked below so the account experience does not stay fragmented forever.</p>
+  </section>
+  {{if eq (len .Accounts) 0}}
+  <div class="empty-state" style="margin-top:48px">
+    <p>No workspaces found. If you just signed up, check your email for setup instructions.</p>
+    <p style="margin-top:12px;font-size:13px">Need help? Contact <a href="mailto:{{.SupportEmail}}" style="color:#1d4ed8">{{.SupportEmail}}</a></p>
+  </div>
+  {{else}}
+  {{range $ai, $account := .Accounts}}
+  <section class="account-section">
+    <div class="account-header">
+      <h2>{{$account.Name}}</h2>
+      <span class="badge badge-{{$account.Kind}}">{{$account.KindLabel}}</span>
+      {{if eq $account.Role "owner"}}<span class="badge" style="background:#f1f5f9;color:#64748b">Owner</span>
+      {{else if eq $account.Role "admin"}}<span class="badge" style="background:#f1f5f9;color:#64748b">Admin</span>
+      {{else if eq $account.Role "tech"}}<span class="badge" style="background:#f1f5f9;color:#64748b">Tech</span>{{end}}
+    </div>
+
+    {{if eq (len $account.Workspaces) 0}}
+    <div class="empty-state"><p>No workspaces yet. Create one to get started.</p></div>
+    {{else}}
+    <div class="workspace-list">
+      {{range $wi, $ws := $account.Workspaces}}
+      <div class="workspace-card">
+        <div class="ws-info">
+          <span class="ws-name">{{$ws.DisplayName}}</span>
+          <div class="ws-meta">
+            {{if $ws.Healthy}}
+            <span class="badge badge-healthy">Healthy</span>
+            {{else}}
+            <span class="badge badge-unhealthy">Checking</span>
+            {{end}}
+            <span class="badge badge-{{$ws.State}}">{{$ws.State}}</span>
+            <span class="ws-created">Created {{$ws.CreatedAt.Format "Jan 2, 2006"}}</span>
+          </div>
+        </div>
+        <div class="ws-actions">
+          {{if eq $ws.State "active"}}
+          <form method="POST" action="/api/accounts/{{$account.ID}}/tenants/{{$ws.ID}}/handoff">
+            <button type="submit" class="btn-primary">Open →</button>
+          </form>
+          {{else}}
+          <span style="font-size:13px;color:#94a3b8">{{$ws.State}}</span>
+          {{end}}
+          {{if and $account.CanManage (or (eq $ws.State "active") (eq $ws.State "suspended") (eq $ws.State "failed"))}}
+          <button class="btn-danger" onclick="suspendOrDelete(event,'{{$account.ID}}','{{$ws.ID}}','{{$ws.State}}','{{$ws.DisplayName}}')">⋯</button>
+          {{end}}
+        </div>
+      </div>
+      {{end}}
+    </div>
+    {{end}}
+
+    {{if $account.CanManage}}
+    <div class="account-actions">
+      {{if eq $account.Kind "msp"}}
+      <button class="btn-secondary" id="add-ws-btn-{{$account.ID}}" onclick="toggleAddWorkspace('{{$account.ID}}')">+ Add workspace</button>
+      {{end}}
+      {{if $account.HasBilling}}
+      <button class="btn-secondary" onclick="openBilling('{{$account.ID}}')">Manage billing</button>
+      {{end}}
+      <button class="btn-secondary" id="team-btn-{{$account.ID}}" onclick="toggleTeam('{{$account.ID}}','{{$account.Role}}')">Manage team</button>
+    </div>
+
+    <div class="team-section" id="team-section-{{$account.ID}}" data-actor-role="{{$account.Role}}">
+      <h3>Team members</h3>
+      <table class="team-table">
+        <thead><tr><th>Email</th><th>Role</th><th></th></tr></thead>
+        <tbody id="team-list-{{$account.ID}}">
+          <tr><td colspan="3" style="color:#94a3b8;text-align:center;padding:16px">Loading…</td></tr>
+        </tbody>
+      </table>
+      <div class="team-invite">
+        <div><label for="invite-email-{{$account.ID}}">Email</label><input type="email" id="invite-email-{{$account.ID}}" placeholder="user@example.com" autocomplete="off"></div>
+        <div><label for="invite-role-{{$account.ID}}">Role</label><select id="invite-role-{{$account.ID}}"><option value="admin">Admin</option><option value="tech">Tech</option><option value="read_only">Read-only</option></select></div>
+        <button class="btn-primary" style="padding:8px 14px;font-size:13px" onclick="inviteMember('{{$account.ID}}')">Invite</button>
+      </div>
+    </div>
+
+    {{if eq $account.Kind "msp"}}
+    <div class="add-workspace-form" id="add-ws-form-{{$account.ID}}">
+      <label for="ws-name-{{$account.ID}}">Workspace name (e.g. client name)</label>
+      <input type="text" id="ws-name-{{$account.ID}}" placeholder="Acme Corp" maxlength="80" autocomplete="off">
+      <div class="form-actions">
+        <button class="btn-primary" onclick="createWorkspace('{{$account.ID}}')">Create workspace</button>
+        <button class="btn-secondary" onclick="toggleAddWorkspace('{{$account.ID}}')">Cancel</button>
+        <div class="spinner" id="ws-spinner-{{$account.ID}}"></div>
+      </div>
+    </div>
+    {{end}}
+    {{end}}
+  </section>
+  {{end}}
+  {{end}}
+
+  <section class="service-section">
+    <div class="service-header">
+      <h2>Other account services</h2>
+      <div class="service-note">Self-hosted commercial account actions now live here. The public utility pages remain as compatibility entry points, not the primary account surface.</div>
+    </div>
+    <div class="service-grid">
+      <button class="service-card service-card-button" type="button" id="open-manage-service">
+        <h3>Manage subscriptions</h3>
+        <p>Open Stripe billing access for existing self-hosted subscriptions without leaving the Pulse Account shell.</p>
+      </button>
+      <button class="service-card service-card-button" type="button" id="open-retrieve-service">
+        <h3>Retrieve licenses</h3>
+        <p>Recover the latest active self-hosted license and invoice link for a commercial email address.</p>
+      </button>
+      <button class="service-card service-card-button" type="button" id="open-refund-service">
+        <h3>Refund requests</h3>
+        <p>Request an immediate self-serve refund for eligible self-hosted purchases with explicit revocation confirmation.</p>
+      </button>
+      <button class="service-card service-card-button" type="button" id="open-data-service">
+        <h3>Data and privacy</h3>
+        <p>Request commercial data export or deletion without leaving the account shell.</p>
+      </button>
+    </div>
+
+    <div class="service-panel" id="manage-service-panel">
+      <h3>Manage subscriptions</h3>
+      <p>Request a verification code for the commercial email, then open the Stripe customer portal for billing changes, invoices, and subscription actions.</p>
+      <div id="manage-inline-step1">
+        <div class="form-group">
+          <label for="manage-inline-email">Email address</label>
+          <input type="email" id="manage-inline-email" value="{{.Email}}" autocomplete="email">
+        </div>
+        <div class="form-actions">
+          <button class="btn-primary" type="button" id="manage-inline-request">Send Verification Code</button>
+        </div>
+      </div>
+      <div id="manage-inline-step2" style="display:none">
+        <div class="form-group">
+          <label for="manage-inline-code">Verification code</label>
+          <input type="text" id="manage-inline-code" inputmode="numeric" pattern="[0-9]{6}" placeholder="123456">
+        </div>
+        <div class="form-actions">
+          <button class="btn-primary" type="button" id="manage-inline-confirm">Open Customer Portal</button>
+        </div>
+        <div class="helper-text">Need a new code? <a href="#" id="manage-inline-resend">Send again</a></div>
+      </div>
+      <div class="service-status" id="manage-inline-status"></div>
+    </div>
+
+    <div class="service-panel" id="retrieve-service-panel">
+      <h3>Retrieve licenses</h3>
+      <p>Request a verification code for the commercial email, then reveal the current active self-hosted license without leaving Pulse Account.</p>
+      <div id="retrieve-inline-step1">
+        <div class="form-group">
+          <label for="retrieve-inline-email">Email address</label>
+          <input type="email" id="retrieve-inline-email" value="{{.Email}}" autocomplete="email">
+        </div>
+        <div class="form-actions">
+          <button class="btn-primary" type="button" id="retrieve-inline-request">Send Verification Code</button>
+        </div>
+      </div>
+      <div id="retrieve-inline-step2" style="display:none">
+        <div class="form-group">
+          <label for="retrieve-inline-code">Verification code</label>
+          <input type="text" id="retrieve-inline-code" inputmode="numeric" pattern="[0-9]{6}" placeholder="123456">
+        </div>
+        <div class="form-actions">
+          <button class="btn-primary" type="button" id="retrieve-inline-confirm">Show License</button>
+          <button class="btn-secondary" type="button" id="retrieve-inline-copy" style="display:none">Copy License Key</button>
+          <a class="btn-secondary" id="retrieve-inline-invoice" href="#" target="_blank" rel="noopener" style="display:none">View Invoice</a>
+        </div>
+        <div class="helper-text">Use the latest active self-hosted license for this commercial email.</div>
+      </div>
+      <div class="service-status" id="retrieve-inline-status"></div>
+      <div id="retrieve-inline-result" style="display:none; margin-top:14px">
+        <label for="retrieve-inline-token">License key</label>
+        <textarea id="retrieve-inline-token" readonly></textarea>
+        <div class="result-grid">
+          <div>
+            <div class="result-meta-label">Plan</div>
+            <div class="result-meta-value" id="retrieve-inline-tier"></div>
+          </div>
+          <div>
+            <div class="result-meta-label">Issued</div>
+            <div class="result-meta-value" id="retrieve-inline-issued"></div>
+          </div>
+          <div>
+            <div class="result-meta-label">Expires</div>
+            <div class="result-meta-value" id="retrieve-inline-expires"></div>
+          </div>
+          <div>
+            <div class="result-meta-label">Purchase Email</div>
+            <div class="result-meta-value" id="retrieve-inline-email-value"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="service-panel" id="refund-service-panel">
+      <h3>Refund requests</h3>
+      <p>Process an eligible self-serve refund for a self-hosted purchase. This revokes the associated license immediately.</p>
+      <div class="warning">
+        <strong>Warning:</strong> completing a refund immediately revokes the affected license. This should only be used when the refund window and commercial contract allow it.
+      </div>
+      <div class="form-group">
+        <label for="refund-inline-email">Email address</label>
+        <input type="email" id="refund-inline-email" value="{{.Email}}" autocomplete="email">
+      </div>
+      <div class="form-group">
+        <label for="refund-inline-token">License key</label>
+        <input type="text" id="refund-inline-token" placeholder="pulse_xxxxx">
+      </div>
+      <div class="form-actions">
+        <button class="btn-danger" type="button" id="refund-inline-submit">Process Refund</button>
+      </div>
+      <div class="helper-text">If this purchase is not eligible for self-serve refund, use the public support path instead: <a href="{{.PublicSiteURL}}/refund.html?email={{.Email}}">open refund support page</a>.</div>
+      <div class="service-status" id="refund-inline-status"></div>
+    </div>
+
+    <div class="service-panel" id="data-service-panel">
+      <h3>Data and privacy</h3>
+      <p>Request export or deletion of the commercial data tied to an email address. Payment data held directly by Stripe still requires support handling.</p>
+
+      <div class="subsection">
+        <h4>Export My Data</h4>
+        <div id="data-export-step1">
+          <div class="form-group">
+            <label for="data-export-email">Email address</label>
+            <input type="email" id="data-export-email" value="{{.Email}}" autocomplete="email">
+          </div>
+          <div class="form-actions">
+            <button class="btn-primary" type="button" id="data-export-request">Send Verification Code</button>
+          </div>
+        </div>
+        <div id="data-export-step2" style="display:none">
+          <div class="form-group">
+            <label for="data-export-code">Verification code</label>
+            <input type="text" id="data-export-code" inputmode="numeric" pattern="[0-9]{6}" placeholder="123456">
+          </div>
+          <div class="form-actions">
+            <button class="btn-primary" type="button" id="data-export-confirm">Export My Data</button>
+          </div>
+          <div class="helper-text">Need a new code? <a href="#" id="data-export-resend">Send again</a></div>
+        </div>
+        <div class="service-status" id="data-export-status"></div>
+        <div id="data-export-result" style="display:none; margin-top:14px">
+          <label for="data-export-payload">Export payload</label>
+          <textarea id="data-export-payload" readonly></textarea>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <h4>Delete My Data</h4>
+        <div class="warning">
+          <strong>Warning:</strong> deleting commercial data also revokes license records and cannot be undone.
+        </div>
+        <div id="data-delete-step1">
+          <div class="form-group">
+            <label for="data-delete-email">Email address</label>
+            <input type="email" id="data-delete-email" value="{{.Email}}" autocomplete="email">
+          </div>
+          <div class="form-actions">
+            <button class="btn-danger" type="button" id="data-delete-request">Send Verification Code</button>
+          </div>
+        </div>
+        <div id="data-delete-step2" style="display:none">
+          <div class="form-group">
+            <label for="data-delete-code">Verification code</label>
+            <input type="text" id="data-delete-code" inputmode="numeric" pattern="[0-9]{6}" placeholder="123456">
+          </div>
+          <div class="checkbox-row">
+            <input type="checkbox" id="data-delete-confirm-check">
+            <span>I understand this permanently deletes my commercial data and revokes associated licenses.</span>
+          </div>
+          <div class="form-actions">
+            <button class="btn-danger" type="button" id="data-delete-confirm">Delete My Data</button>
+          </div>
+          <div class="helper-text">Need a new code? <a href="#" id="data-delete-resend">Send again</a></div>
+        </div>
+        <div class="service-status" id="data-delete-status"></div>
+      </div>
+      <div class="helper-text">Payment-card data stays with Stripe. For Stripe deletion support, contact <a href="mailto:{{.SupportEmail}}">{{.SupportEmail}}</a>.</div>
+    </div>
+  </section>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script nonce="{{.Nonce}}">
+const LICENSE_API_BASE = 'https://license.pulserelay.pro';
+
+function showToast(msg, isError) {
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast visible' + (isError ? ' error' : '');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(function() { t.className = 'toast'; }, 4000);
+}
+
+document.getElementById('logout-btn').onclick = async function() {
+  this.disabled = true;
+  this.textContent = 'Signing out…';
+  try {
+    await fetch('/auth/logout', { method: 'POST' });
+  } catch(_) {}
+  window.location.href = '/portal';
+};
+
+function toggleServicePanel(panelID) {
+  var panels = ['manage-service-panel', 'retrieve-service-panel', 'refund-service-panel', 'data-service-panel'];
+  for (var i = 0; i < panels.length; i++) {
+    var panel = document.getElementById(panels[i]);
+    panel.classList.toggle('visible', panels[i] === panelID ? !panel.classList.contains('visible') : false);
+  }
+}
+
+function setServiceStatus(id, message, isError) {
+  var el = document.getElementById(id);
+  el.textContent = message;
+  el.className = 'service-status visible' + (isError ? ' error' : ' success');
+}
+
+document.getElementById('open-manage-service').onclick = function() {
+  toggleServicePanel('manage-service-panel');
+  document.getElementById('manage-inline-email').focus();
+};
+
+document.getElementById('open-retrieve-service').onclick = function() {
+  toggleServicePanel('retrieve-service-panel');
+  document.getElementById('retrieve-inline-email').focus();
+};
+
+document.getElementById('open-refund-service').onclick = function() {
+  toggleServicePanel('refund-service-panel');
+  document.getElementById('refund-inline-email').focus();
+};
+
+document.getElementById('open-data-service').onclick = function() {
+  toggleServicePanel('data-service-panel');
+  document.getElementById('data-export-email').focus();
+};
+
+var pendingManageEmail = '';
+var pendingRetrieveEmail = '';
+var pendingExportEmail = '';
+var pendingDeleteEmail = '';
+
+document.getElementById('manage-inline-request').onclick = async function() {
+  var email = document.getElementById('manage-inline-email').value.trim();
+  if (!email) { document.getElementById('manage-inline-email').focus(); return; }
+  this.disabled = true;
+  this.textContent = 'Sending...';
+  try {
+    var res = await fetch(LICENSE_API_BASE + '/v1/manage/request', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email })
+    });
+    var data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to send verification code');
+    pendingManageEmail = email;
+    document.getElementById('manage-inline-step2').style.display = 'block';
+    setServiceStatus('manage-inline-status', 'Verification code sent. Check your email.', false);
+  } catch (err) {
+    setServiceStatus('manage-inline-status', err.message, true);
+  } finally {
+    this.disabled = false;
+    this.textContent = 'Send Verification Code';
+  }
+};
+
+document.getElementById('manage-inline-resend').onclick = async function(e) {
+  e.preventDefault();
+  if (!pendingManageEmail) return;
+  try {
+    var res = await fetch(LICENSE_API_BASE + '/v1/manage/request', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: pendingManageEmail })
+    });
+    var data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to send verification code');
+    setServiceStatus('manage-inline-status', 'New verification code sent.', false);
+  } catch (err) {
+    setServiceStatus('manage-inline-status', err.message, true);
+  }
+};
+
+document.getElementById('manage-inline-confirm').onclick = async function() {
+  var code = document.getElementById('manage-inline-code').value.trim();
+  if (!pendingManageEmail || !code) return;
+  this.disabled = true;
+  this.textContent = 'Redirecting...';
+  try {
+    var res = await fetch(LICENSE_API_BASE + '/v1/manage', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: pendingManageEmail, code: code })
+    });
+    var data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to open customer portal');
+    window.location.href = data.url;
+  } catch (err) {
+    setServiceStatus('manage-inline-status', err.message, true);
+    this.disabled = false;
+    this.textContent = 'Open Customer Portal';
+  }
+};
+
+document.getElementById('retrieve-inline-request').onclick = async function() {
+  var email = document.getElementById('retrieve-inline-email').value.trim();
+  if (!email) { document.getElementById('retrieve-inline-email').focus(); return; }
+  this.disabled = true;
+  this.textContent = 'Sending...';
+  document.getElementById('retrieve-inline-result').style.display = 'none';
+  try {
+    var res = await fetch(LICENSE_API_BASE + '/v1/retrieve-license/request', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email })
+    });
+    var data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to send verification code');
+    pendingRetrieveEmail = email;
+    document.getElementById('retrieve-inline-step2').style.display = 'block';
+    setServiceStatus('retrieve-inline-status', 'Verification code sent. Check your email.', false);
+  } catch (err) {
+    setServiceStatus('retrieve-inline-status', err.message, true);
+  } finally {
+    this.disabled = false;
+    this.textContent = 'Send Verification Code';
+  }
+};
+
+document.getElementById('retrieve-inline-confirm').onclick = async function() {
+  var code = document.getElementById('retrieve-inline-code').value.trim();
+  if (!pendingRetrieveEmail || !code) return;
+  this.disabled = true;
+  this.textContent = 'Loading...';
+  try {
+    var res = await fetch(LICENSE_API_BASE + '/v1/retrieve-license', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: pendingRetrieveEmail, code: code })
+    });
+    var data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to retrieve license');
+    var license = data.license;
+    document.getElementById('retrieve-inline-token').value = license.token;
+    document.getElementById('retrieve-inline-tier').textContent = license.tier;
+    document.getElementById('retrieve-inline-issued').textContent = new Date(license.issued_at).toLocaleString();
+    document.getElementById('retrieve-inline-expires').textContent = license.expires_at ? new Date(license.expires_at).toLocaleString() : 'Does not expire';
+    document.getElementById('retrieve-inline-email-value').textContent = license.email;
+    document.getElementById('retrieve-inline-result').style.display = 'block';
+    document.getElementById('retrieve-inline-copy').style.display = 'inline-block';
+    if (license.invoice_url) {
+      var invoice = document.getElementById('retrieve-inline-invoice');
+      invoice.href = license.invoice_url;
+      invoice.style.display = 'inline-block';
+    }
+    setServiceStatus('retrieve-inline-status', 'License retrieved successfully.', false);
+  } catch (err) {
+    setServiceStatus('retrieve-inline-status', err.message, true);
+  } finally {
+    this.disabled = false;
+    this.textContent = 'Show License';
+  }
+};
+
+document.getElementById('retrieve-inline-copy').onclick = async function() {
+  var token = document.getElementById('retrieve-inline-token').value;
+  if (!token) return;
+  try {
+    await navigator.clipboard.writeText(token);
+    setServiceStatus('retrieve-inline-status', 'License key copied to clipboard.', false);
+  } catch (_) {
+    setServiceStatus('retrieve-inline-status', 'Failed to copy automatically. Please copy the key manually.', true);
+  }
+};
+
+document.getElementById('refund-inline-submit').onclick = async function() {
+  var email = document.getElementById('refund-inline-email').value.trim();
+  var token = document.getElementById('refund-inline-token').value.trim();
+  if (!email || !token) return;
+  if (!confirm('Are you sure? This will immediately revoke the license and request the refund.')) return;
+  this.disabled = true;
+  this.textContent = 'Processing...';
+  try {
+    var res = await fetch(LICENSE_API_BASE + '/v1/self-refund', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email, token: token })
+    });
+    var data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Refund failed');
+    document.getElementById('refund-inline-token').value = '';
+    setServiceStatus('refund-inline-status', 'Success! Your refund has been processed. Stripe will follow up by email.', false);
+  } catch (err) {
+    setServiceStatus('refund-inline-status', err.message, true);
+  } finally {
+    this.disabled = false;
+    this.textContent = 'Process Refund';
+  }
+};
+
+document.getElementById('data-export-request').onclick = async function() {
+  var email = document.getElementById('data-export-email').value.trim();
+  if (!email) return;
+  this.disabled = true;
+  this.textContent = 'Sending...';
+  document.getElementById('data-export-result').style.display = 'none';
+  try {
+    var res = await fetch(LICENSE_API_BASE + '/v1/gdpr/request-export', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email })
+    });
+    var data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Request failed');
+    pendingExportEmail = email;
+    document.getElementById('data-export-step2').style.display = 'block';
+    setServiceStatus('data-export-status', 'Verification code sent. Check your email.', false);
+  } catch (err) {
+    setServiceStatus('data-export-status', err.message, true);
+  } finally {
+    this.disabled = false;
+    this.textContent = 'Send Verification Code';
+  }
+};
+
+document.getElementById('data-export-resend').onclick = async function(e) {
+  e.preventDefault();
+  if (!pendingExportEmail) return;
+  try {
+    var res = await fetch(LICENSE_API_BASE + '/v1/gdpr/request-export', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: pendingExportEmail })
+    });
+    var data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Request failed');
+    setServiceStatus('data-export-status', 'New verification code sent.', false);
+  } catch (err) {
+    setServiceStatus('data-export-status', err.message, true);
+  }
+};
+
+document.getElementById('data-export-confirm').onclick = async function() {
+  var code = document.getElementById('data-export-code').value.trim();
+  if (!pendingExportEmail || !code) return;
+  this.disabled = true;
+  this.textContent = 'Exporting...';
+  try {
+    var res = await fetch(LICENSE_API_BASE + '/v1/gdpr/export', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: pendingExportEmail, code: code })
+    });
+    var data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Export failed');
+    document.getElementById('data-export-payload').value = JSON.stringify(data, null, 2);
+    document.getElementById('data-export-result').style.display = 'block';
+    setServiceStatus('data-export-status', 'Data export retrieved successfully.', false);
+    document.getElementById('data-export-code').value = '';
+    pendingExportEmail = '';
+    document.getElementById('data-export-step2').style.display = 'none';
+  } catch (err) {
+    setServiceStatus('data-export-status', err.message, true);
+  } finally {
+    this.disabled = false;
+    this.textContent = 'Export My Data';
+  }
+};
+
+document.getElementById('data-delete-request').onclick = async function() {
+  var email = document.getElementById('data-delete-email').value.trim();
+  if (!email) return;
+  this.disabled = true;
+  this.textContent = 'Sending...';
+  try {
+    var res = await fetch(LICENSE_API_BASE + '/v1/gdpr/request-delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email })
+    });
+    var data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Request failed');
+    pendingDeleteEmail = email;
+    document.getElementById('data-delete-step2').style.display = 'block';
+    setServiceStatus('data-delete-status', 'Verification code sent. Check your email.', false);
+  } catch (err) {
+    setServiceStatus('data-delete-status', err.message, true);
+  } finally {
+    this.disabled = false;
+    this.textContent = 'Send Verification Code';
+  }
+};
+
+document.getElementById('data-delete-resend').onclick = async function(e) {
+  e.preventDefault();
+  if (!pendingDeleteEmail) return;
+  try {
+    var res = await fetch(LICENSE_API_BASE + '/v1/gdpr/request-delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: pendingDeleteEmail })
+    });
+    var data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Request failed');
+    setServiceStatus('data-delete-status', 'New verification code sent.', false);
+  } catch (err) {
+    setServiceStatus('data-delete-status', err.message, true);
+  }
+};
+
+document.getElementById('data-delete-confirm').onclick = async function() {
+  var code = document.getElementById('data-delete-code').value.trim();
+  if (!pendingDeleteEmail || !code) return;
+  if (!document.getElementById('data-delete-confirm-check').checked) {
+    setServiceStatus('data-delete-status', 'You must confirm that you understand this action is permanent.', true);
+    return;
+  }
+  this.disabled = true;
+  this.textContent = 'Deleting...';
+  try {
+    var res = await fetch(LICENSE_API_BASE + '/v1/gdpr/confirm-delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: pendingDeleteEmail, code: code })
+    });
+    var data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Deletion failed');
+    setServiceStatus('data-delete-status', data.deleted_count > 0 && data.stripe_reminder ? data.message + ' ' + data.stripe_reminder : data.message, false);
+    document.getElementById('data-delete-step2').style.display = 'none';
+    document.getElementById('data-delete-code').value = '';
+    document.getElementById('data-delete-confirm-check').checked = false;
+    pendingDeleteEmail = '';
+  } catch (err) {
+    setServiceStatus('data-delete-status', err.message, true);
+  } finally {
+    this.disabled = false;
+    this.textContent = 'Delete My Data';
+  }
+};
+
+function toggleAddWorkspace(accountID) {
+  var form = document.getElementById('add-ws-form-' + accountID);
+  var visible = form.classList.contains('visible');
+  form.classList.toggle('visible', !visible);
+  if (!visible) {
+    document.getElementById('ws-name-' + accountID).focus();
+  }
+}
+
+async function createWorkspace(accountID) {
+  var nameEl = document.getElementById('ws-name-' + accountID);
+  var name = nameEl.value.trim();
+  if (!name) { nameEl.focus(); return; }
+  var spinner = document.getElementById('ws-spinner-' + accountID);
+  spinner.style.display = 'block';
+  try {
+    var resp = await fetch('/api/accounts/' + accountID + '/tenants', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ display_name: name })
+    });
+    if (!resp.ok) {
+      var err = await resp.json().catch(function() { return {}; });
+      showToast((err && err.error) || 'Failed to create workspace', true);
+      return;
+    }
+    showToast('Workspace created!');
+    setTimeout(function() { window.location.reload(); }, 800);
+  } catch(e) {
+    showToast('Network error. Please try again.', true);
+  } finally {
+    spinner.style.display = 'none';
+  }
+}
+
+function suspendOrDelete(evt, accountID, tenantID, state, name) {
+  evt.stopPropagation();
+  var action = state === 'active' ? 'Suspend' : 'Delete';
+  if (!confirm(action + ' workspace "' + name + '"?')) return;
+  var method = state === 'active' ? 'PATCH' : 'DELETE';
+  var body = state === 'active' ? JSON.stringify({ state: 'suspended' }) : undefined;
+  fetch('/api/accounts/' + accountID + '/tenants/' + tenantID, {
+    method: method,
+    headers: body ? { 'Content-Type': 'application/json' } : {},
+    body: body
+  }).then(function(r) {
+    if (r.ok) {
+      showToast(action + 'd workspace.');
+      setTimeout(function() { window.location.reload(); }, 800);
+    } else {
+      showToast('Failed to ' + action.toLowerCase() + ' workspace.', true);
+    }
+  }).catch(function() {
+    showToast('Network error.', true);
+  });
+}
+
+async function openBilling(accountID) {
+  try {
+    var r = await fetch('/api/portal/billing?account_id=' + encodeURIComponent(accountID), { method: 'POST' });
+    if (!r.ok) {
+      var err = await r.json().catch(function() { return {}; });
+      showToast((err && err.error) || 'Failed to open billing portal.', true);
+      return;
+    }
+    var data = await r.json();
+    if (data && data.url) {
+      window.location.href = data.url;
+    } else {
+      showToast('Failed to open billing portal.', true);
+    }
+  } catch(e) {
+    showToast('Network error.', true);
+  }
+}
+
+function toggleTeam(accountID) {
+  var section = document.getElementById('team-section-' + accountID);
+  var visible = section.classList.contains('visible');
+  section.classList.toggle('visible', !visible);
+  if (!visible) loadTeam(accountID);
+}
+
+function setTbodyMessage(tbody, msg, isError) {
+  tbody.textContent = '';
+  var tr = document.createElement('tr');
+  var td = document.createElement('td');
+  td.setAttribute('colspan', '3');
+  td.style.cssText = 'text-align:center;padding:16px;color:' + (isError ? '#991b1b' : '#94a3b8');
+  td.textContent = msg;
+  tr.appendChild(td);
+  tbody.appendChild(tr);
+}
+
+async function loadTeam(accountID) {
+  var tbody = document.getElementById('team-list-' + accountID);
+  var section = document.getElementById('team-section-' + accountID);
+  var actorRole = section.getAttribute('data-actor-role') || '';
+  var isOwner = actorRole === 'owner';
+  setTbodyMessage(tbody, 'Loading\u2026', false);
+  try {
+    var r = await fetch('/api/accounts/' + encodeURIComponent(accountID) + '/members');
+    if (!r.ok) { setTbodyMessage(tbody, 'Failed to load team.', true); return; }
+    var members = await r.json();
+    if (!members || members.length === 0) {
+      setTbodyMessage(tbody, 'No team members.', false);
+      return;
+    }
+    var allRoles = ['owner','admin','tech','read_only'];
+    var nonOwnerRoles = ['admin','tech','read_only'];
+    tbody.textContent = '';
+    for (var i = 0; i < members.length; i++) {
+      (function(m) {
+        var tr = document.createElement('tr');
+        var tdEmail = document.createElement('td');
+        tdEmail.textContent = m.email;
+        tr.appendChild(tdEmail);
+        var tdRole = document.createElement('td');
+        if (m.role === 'owner' && !isOwner) {
+          tdRole.textContent = 'owner';
+        } else {
+          var sel = document.createElement('select');
+          var roles = isOwner ? allRoles : nonOwnerRoles;
+          for (var j = 0; j < roles.length; j++) {
+            var opt = document.createElement('option');
+            opt.value = roles[j];
+            opt.textContent = roles[j].replace('_', ' ');
+            if (m.role === roles[j]) opt.selected = true;
+            sel.appendChild(opt);
+          }
+          sel.addEventListener('change', function() { changeRole(accountID, m.user_id, this.value); });
+          tdRole.appendChild(sel);
+        }
+        tr.appendChild(tdRole);
+        var tdAction = document.createElement('td');
+        if (!(m.role === 'owner' && !isOwner)) {
+          var btn = document.createElement('button');
+          btn.className = 'btn-remove';
+          btn.textContent = 'Remove';
+          btn.addEventListener('click', function() { removeMember(accountID, m.user_id, m.email); });
+          tdAction.appendChild(btn);
+        }
+        tr.appendChild(tdAction);
+        tbody.appendChild(tr);
+      })(members[i]);
+    }
+  } catch(e) {
+    setTbodyMessage(tbody, 'Network error.', true);
+  }
+}
+
+async function inviteMember(accountID) {
+  var emailEl = document.getElementById('invite-email-' + accountID);
+  var roleEl = document.getElementById('invite-role-' + accountID);
+  var email = emailEl.value.trim();
+  if (!email) { emailEl.focus(); return; }
+  try {
+    var r = await fetch('/api/accounts/' + encodeURIComponent(accountID) + '/members', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email, role: roleEl.value })
+    });
+    if (r.status === 409) { showToast('Member already exists.', true); return; }
+    if (!r.ok) {
+      var err = await r.text();
+      showToast(err || 'Failed to invite member.', true);
+      return;
+    }
+    emailEl.value = '';
+    showToast('Member invited!');
+    loadTeam(accountID);
+  } catch(e) {
+    showToast('Network error.', true);
+  }
+}
+
+async function changeRole(accountID, userID, newRole) {
+  try {
+    var r = await fetch('/api/accounts/' + encodeURIComponent(accountID) + '/members/' + encodeURIComponent(userID), {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role: newRole })
+    });
+    if (r.status === 409) { showToast('Cannot demote last owner.', true); loadTeam(accountID); return; }
+    if (!r.ok) { showToast('Failed to update role.', true); loadTeam(accountID); return; }
+    showToast('Role updated.');
+  } catch(e) {
+    showToast('Network error.', true);
+    loadTeam(accountID);
+  }
+}
+
+async function removeMember(accountID, userID, email) {
+  if (!confirm('Remove ' + email + ' from this account?')) return;
+  try {
+    var r = await fetch('/api/accounts/' + encodeURIComponent(accountID) + '/members/' + encodeURIComponent(userID), {
+      method: 'DELETE'
+    });
+    if (r.status === 409) { showToast('Cannot remove last owner.', true); return; }
+    if (!r.ok) { showToast('Failed to remove member.', true); return; }
+    showToast('Member removed.');
+    loadTeam(accountID);
+  } catch(e) {
+    showToast('Network error.', true);
+  }
+}
+</script>
+</body>
+</html>
