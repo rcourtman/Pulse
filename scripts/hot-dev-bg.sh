@@ -20,6 +20,7 @@ ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 PID_FILE="${HOT_DEV_BG_PID_FILE:-${ROOT_DIR}/tmp/hot-dev.bg.pid}"
 LOG_FILE="${HOT_DEV_BG_LOG_FILE:-${ROOT_DIR}/tmp/hot-dev.bg.log}"
+HOT_DEV_VERIFY_LOCK="${HOT_DEV_VERIFY_LOCK_FILE:-${ROOT_DIR}/tmp/hot-dev.verify.lock}"
 
 FRONTEND_DEV_HOST="${FRONTEND_DEV_HOST:-127.0.0.1}"
 FRONTEND_DEV_PORT="${FRONTEND_DEV_PORT:-5173}"
@@ -433,7 +434,16 @@ start_hot_dev_child() {
   PULSE_DEV_API_URL="${PULSE_DEV_API_URL}" \
   PULSE_DEV_WS_URL="${PULSE_DEV_WS_URL}" \
   ROOT_DIR="${ROOT_DIR}" \
-  "${ROOT_DIR}/scripts/hot-dev.sh" &
+  python3 - <<'PY' &
+import os
+
+os.setsid()
+os.execve(
+    os.path.join(os.environ["ROOT_DIR"], "scripts", "hot-dev.sh"),
+    [os.path.join(os.environ["ROOT_DIR"], "scripts", "hot-dev.sh")],
+    os.environ.copy(),
+)
+PY
   HOT_DEV_CHILD_PID="$!"
 }
 
@@ -442,17 +452,17 @@ stop_hot_dev_child() {
   local retries=30
 
   [[ -n "${child_pid}" ]] || return 0
-  kill -TERM "${child_pid}" 2>/dev/null || true
+  kill -TERM "-${child_pid}" 2>/dev/null || kill -TERM "${child_pid}" 2>/dev/null || true
 
   while (( retries > 0 )); do
-    if ! kill -0 "${child_pid}" 2>/dev/null; then
+    if ! kill -0 "-${child_pid}" 2>/dev/null && ! kill -0 "${child_pid}" 2>/dev/null; then
       return 0
     fi
     sleep 0.5
     retries=$((retries - 1))
   done
 
-  kill -KILL "${child_pid}" 2>/dev/null || true
+  kill -KILL "-${child_pid}" 2>/dev/null || kill -KILL "${child_pid}" 2>/dev/null || true
 }
 
 run_supervised_session() {
@@ -489,6 +499,7 @@ run_supervised_session() {
       exit 0
     fi
 
+    stop_hot_dev_child "${child_pid}"
     log "Managed runtime child exited unexpectedly (pid: ${child_pid}, exit: ${child_exit}). Restarting..."
     sleep "${restart_delay}"
   done
@@ -758,6 +769,18 @@ runtime_healthy() {
   http_status_ok "${frontend_code}" && http_status_ok "${proxy_code}" && http_status_ok "${backend_code}"
 }
 
+write_verify_lock() {
+  mkdir -p "$(dirname "${HOT_DEV_VERIFY_LOCK}")"
+  cat > "${HOT_DEV_VERIFY_LOCK}" <<EOF
+pid=$$
+created_at=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+EOF
+}
+
+clear_verify_lock() {
+  rm -f "${HOT_DEV_VERIFY_LOCK}"
+}
+
 run_verify_proof_command() {
   local verify_command integration_dir
   integration_dir="${ROOT_DIR}/tests/integration"
@@ -769,9 +792,11 @@ run_verify_proof_command() {
       PULSE_E2E_USE_HOT_DEV=1 \
       PULSE_E2E_USERNAME="${PULSE_E2E_USERNAME:-admin}" \
       PULSE_E2E_PASSWORD="${PULSE_E2E_PASSWORD:-admin}" \
-      npm test -- \
+      HOT_DEV_VERIFY_LOCK_FILE="${HOT_DEV_VERIFY_LOCK}" \
+      node ./scripts/run-playwright.mjs \
         tests/16-dev-runtime-recovery.spec.ts \
         tests/17-recovery-layout.spec.ts \
+        tests/18-patrol-runtime-state.spec.ts \
         --project=chromium
     )
     return
@@ -782,13 +807,14 @@ run_verify_proof_command() {
     PULSE_E2E_USE_HOT_DEV=1 \
     PULSE_E2E_USERNAME="${PULSE_E2E_USERNAME:-admin}" \
     PULSE_E2E_PASSWORD="${PULSE_E2E_PASSWORD:-admin}" \
+    HOT_DEV_VERIFY_LOCK_FILE="${HOT_DEV_VERIFY_LOCK}" \
     bash -lc "${verify_command}"
   )
 }
 
 verify_bg() {
   local takeover="${1:-false}"
-  local managed_pid
+  local managed_pid verify_rc
 
   require_python
 
@@ -817,7 +843,15 @@ verify_bg() {
   fi
 
   log "Running managed dev-runtime browser verification proofs..."
-  run_verify_proof_command
+  write_verify_lock
+  if run_verify_proof_command; then
+    verify_rc=0
+  else
+    verify_rc=$?
+  fi
+  clear_verify_lock
+
+  return "${verify_rc}"
 }
 
 launchd_session_bg() {

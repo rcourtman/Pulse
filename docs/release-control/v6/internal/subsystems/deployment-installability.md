@@ -161,10 +161,23 @@ piggybacking on installer proof coverage for unrelated deployment scripts.
 That same dev-runtime orchestration boundary also owns watcher stability for
 the managed local stack: `scripts/hot-dev.sh` may only rebuild the backend for
 runtime Go sources, not `*_test.go` churn, and it must suppress `pulse` binary
-change events produced by its own successful managed rebuilds or startup build.
+change events produced by its own successful managed rebuilds, managed backend
+restarts, or startup build.
 Otherwise unrelated parallel test edits or hot-dev's own binary output can
 tear down `7655`, produce transient `5173` proxy failures, and undermine the
 canonical browser-runtime proof path.
+`scripts/hot-dev-bg.sh` must also supervise `scripts/hot-dev.sh` in an isolated
+child session so an unexpected owner-process death cannot leave orphaned
+watchers or health monitors behind. When the supervisor replaces the managed
+child, it must terminate the old child process group before starting the next
+one.
+`scripts/hot-dev-bg.sh verify` must also establish a managed verification lock
+for the duration of the proof pack, pass that lock path into the integration
+runner, and keep the lock owned by the actual browser-proof process lifetime
+across pretest, Playwright, and posttest. `scripts/hot-dev.sh` must honor that
+lock by suppressing source-triggered rebuilds and manual `pulse` binary restart
+churn while the owning proof process is still alive. Stale verify locks must
+clear themselves automatically once the owning process exits.
 That same launcher boundary also owns its CLI contract: managed commands such
 as `start --takeover` and `restart --takeover` must preserve the takeover flag
 through the actual script entrypoint instead of silently dropping second-arg

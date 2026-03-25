@@ -157,6 +157,7 @@ import os
 print(f\"mode={os.environ.get('\''PULSE_E2E_USE_HOT_DEV'\'')}\")
 print(f\"username={os.environ.get('\''PULSE_E2E_USERNAME'\'')}\")
 print(f\"password={os.environ.get('\''PULSE_E2E_PASSWORD'\'')}\")
+print(f\"lock={os.environ.get('\''HOT_DEV_VERIFY_LOCK_FILE'\'')}\")
 PY"
       run_verify_proof_command
     '
@@ -165,6 +166,7 @@ PY"
   assert_contains "verify proof forces managed hot-dev mode" "${output}" "mode=1"
   assert_contains "verify proof defaults username" "${output}" "username=admin"
   assert_contains "verify proof defaults password" "${output}" "password=admin"
+  assert_contains "verify proof passes the managed runtime lock path" "${output}" "lock=${ROOT_DIR}/tmp/hot-dev.verify.lock"
 }
 
 test_default_verify_command_runs_runtime_and_layout_proofs() {
@@ -174,13 +176,13 @@ test_default_verify_command_runs_runtime_and_layout_proofs() {
   fake_bin="${test_dir}/bin"
   mkdir -p "${fake_bin}"
 
-  cat > "${fake_bin}/npm" <<'EOF'
+  cat > "${fake_bin}/node" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 printf 'cwd=%s\n' "$PWD"
 printf 'args=%s\n' "$*"
 EOF
-  chmod +x "${fake_bin}/npm"
+  chmod +x "${fake_bin}/node"
 
   output="$(
     FAKE_BIN_PATH="${fake_bin}" \
@@ -193,9 +195,52 @@ EOF
   )"
 
   assert_contains "default verify proof runs from integration harness" "${output}" "cwd=${ROOT_DIR}/tests/integration"
+  assert_contains "default verify proof runs through the dedicated Playwright harness" "${output}" "args=./scripts/run-playwright.mjs"
   assert_contains "default verify proof includes dev runtime recovery spec" "${output}" "tests/16-dev-runtime-recovery.spec.ts"
   assert_contains "default verify proof includes recovery layout spec" "${output}" "tests/17-recovery-layout.spec.ts"
+  assert_contains "default verify proof includes patrol runtime-state spec" "${output}" "tests/18-patrol-runtime-state.spec.ts"
   assert_contains "default verify proof keeps chromium project pin" "${output}" "--project=chromium"
+}
+
+test_verify_bg_holds_runtime_lock_for_proof_duration() {
+  local output
+  output="$(
+    HOT_DEV_BG_PATH="${HOT_DEV_BG}" \
+    bash -lc '
+      source "${HOT_DEV_BG_PATH}"
+      set +e
+      HOT_DEV_VERIFY_LOCK="$(mktemp)"
+      rm -f "${HOT_DEV_VERIFY_LOCK}"
+      require_python(){ :; }
+      is_running(){ return 0; }
+      managed_session_pid(){ printf "4242\n"; }
+      has_unmanaged_listeners(){ return 1; }
+      runtime_healthy(){ return 0; }
+      run_verify_proof_command() {
+        if [[ -f "${HOT_DEV_VERIFY_LOCK}" ]]; then
+          printf "lock_present=yes\n"
+          cat "${HOT_DEV_VERIFY_LOCK}"
+        else
+          printf "lock_present=no\n"
+        fi
+        return 7
+      }
+
+      verify_bg false
+      status=$?
+      printf "verify_status=%s\n" "${status}"
+      if [[ -f "${HOT_DEV_VERIFY_LOCK}" ]]; then
+        printf "lock_after=yes\n"
+      else
+        printf "lock_after=no\n"
+      fi
+    '
+  )"
+
+  assert_contains "verify holds the runtime lock while proofs run" "${output}" "lock_present=yes"
+  assert_contains "verify lock records the owning process id" "${output}" "pid="
+  assert_contains "verify returns the underlying proof failure code" "${output}" "verify_status=7"
+  assert_contains "verify clears the runtime lock after proofs finish" "${output}" "lock_after=no"
 }
 
 test_takeover_avoids_killing_current_shell_lineage() {
@@ -328,6 +373,25 @@ test_supervisor_restarts_unexpected_child_exit() {
 
   assert_contains "supervisor reports unexpected child exit" "${output}" "Managed runtime child exited unexpectedly"
   assert_contains "supervisor restarts hot-dev child after exit" "${output}" "starts=2"
+}
+
+test_stop_hot_dev_child_targets_child_process_group() {
+  local output
+  output="$(
+    HOT_DEV_BG_PATH="${HOT_DEV_BG}" \
+    bash -lc '
+      source "${HOT_DEV_BG_PATH}"
+      kill() {
+        if [[ "${1:-}" == "-0" ]]; then
+          return 1
+        fi
+        printf "kill %s\n" "$*"
+      }
+      stop_hot_dev_child 4242
+    '
+  )"
+
+  assert_contains "stop_hot_dev_child terminates the isolated child process group" "${output}" "kill -TERM -4242"
 }
 
 test_launchd_wrapper_uses_managed_supervisor() {
@@ -485,6 +549,8 @@ test_hot_dev_script_ignores_test_only_backend_churn() {
   assert_contains "hot-dev watcher routes rebuild decisions through shared helper" "${output}" 'should_rebuild_backend_for_change "$changed_file"'
   assert_contains "hot-dev watcher suppresses self-build binary restart loops" "${output}" 'if manual_build_event_suppressed; then'
   assert_contains "hot-dev watcher suppresses startup self-build pulse events" "${output}" 'SELF_BUILD_IGNORE_UNTIL=$((WATCHER_READY_AT + HOT_DEV_WATCHER_STARTUP_GRACE_SECONDS + 5))'
+  assert_contains "hot-dev watcher seeds the startup pulse marker" "${output}" 'LAST_PULSE_BINARY_MARKER="$(file_event_marker "${ROOT_DIR}/pulse" || true)"'
+  assert_contains "hot-dev watcher suppresses source churn during managed verification" "${output}" 'verify_lock_active'
 }
 
 test_hot_dev_bg_script_advertises_managed_entrypoint() {
@@ -511,12 +577,21 @@ test_hot_dev_bg_usage_prefers_managed_wrappers() {
 
 test_integration_readme_uses_managed_backend_restart_wrapper() {
   local output
-  output="$(sed -n '132,150p' "${INTEGRATION_README}")"
+  output="$(
+    awk '
+      /^### Run Against The Managed Hot-Dev Browser Runtime$/ { capture=1 }
+      capture { print }
+      /^For deterministic paid-feature runs against an existing instance, provide one of:$/ {
+        exit
+      }
+    ' "${INTEGRATION_README}"
+  )"
 
   assert_contains "integration readme documents managed backend restart wrapper" "${output}" "npm run dev:backend-restart"
   assert_contains "integration readme documents owner-process recovery proof" "${output}" "kills the supervised"
   assert_contains "integration readme names the owner process" "${output}" "owner process"
   assert_contains "integration readme documents recovery layout proof" "${output}" "tests/17-recovery-layout.spec.ts"
+  assert_contains "integration readme documents patrol runtime-state proof" "${output}" "tests/18-patrol-runtime-state.spec.ts"
   assert_not_contains "integration readme no longer documents raw backend restart script" "${output}" "./scripts/hot-dev-bg.sh backend-restart"
 }
 
@@ -745,10 +820,12 @@ main() {
   test_cli_parses_takeover_flag
   test_verify_command_injects_managed_runtime_env
   test_default_verify_command_runs_runtime_and_layout_proofs
+  test_verify_bg_holds_runtime_lock_for_proof_duration
   test_takeover_avoids_killing_current_shell_lineage
   test_launchd_session_supervises_managed_runtime
   test_start_bg_reports_browser_entrypoint
   test_supervisor_restarts_unexpected_child_exit
+  test_stop_hot_dev_child_targets_child_process_group
   test_launchd_wrapper_uses_managed_supervisor
   test_launchd_setup_advertises_managed_runtime_controls
   test_root_package_exposes_managed_runtime_entrypoints

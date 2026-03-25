@@ -47,6 +47,9 @@ End-to-end Playwright tests that validate critical user flows against a running 
   - Mocks a realistic Recovery dataset with human-readable subject labels
   - Proves the focused history table fits the desktop wrapper without horizontal overflow
   - Proves the `Outcome` column stays visible at the right edge
+- `tests/18-patrol-runtime-state.spec.ts` — Patrol runtime-state browser guard:
+  - Mocks a blocked Patrol runtime with stale healthy summary payloads
+  - Proves the real `/ai` route shows Patrol as paused and suppresses stale healthy summary copy
 
 ## Running Tests
 
@@ -140,10 +143,11 @@ Equivalent direct proof command from the integration harness:
 cd tests/integration
 PULSE_E2E_USE_HOT_DEV=1 \
 PULSE_E2E_SKIP_PLAYWRIGHT_INSTALL=1 \
-npm test -- tests/16-dev-runtime-recovery.spec.ts tests/17-recovery-layout.spec.ts --project=chromium
+npm test -- tests/16-dev-runtime-recovery.spec.ts tests/17-recovery-layout.spec.ts tests/18-patrol-runtime-state.spec.ts --project=chromium
 ```
 
 This mode attaches Playwright to the canonical dev browser entrypoint on `http://127.0.0.1:5173`, uses `scripts/hot-dev-bg.sh` as the runtime control surface, and writes browser runtime connection state for Playwright instead of targeting the backend port directly.
+When you run the wrapper as `npm run dev:verify`, the managed launcher hands a verification-lock path into the integration runner, and the runner holds that lock for the actual pretest, Playwright, and posttest lifetime so unrelated backend source churn does not invalidate the recovery proofs mid-run.
 
 If the managed runtime is not already running, the harness starts it. If you need the harness to reclaim existing unmanaged `5173`/`7655` listeners first, add `PULSE_E2E_HOT_DEV_TAKEOVER=1`.
 

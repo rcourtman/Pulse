@@ -30,6 +30,10 @@ function hotDevBackendURL(env = process.env) {
   return `http://${host}:${port}`;
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function run(command, args, options = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, { ...options });
@@ -147,6 +151,75 @@ async function ensureHealthyStatus(env = process.env) {
   return output;
 }
 
+async function waitForStableManagedRuntime({
+  env = process.env,
+  timeoutMs = 60_000,
+  sampleIntervalMs = 2_000,
+  requiredStableSamples = 2,
+} = {}) {
+  const startedAt = Date.now();
+  let stableSamples = 0;
+  let previousSnapshot = null;
+  let lastError = null;
+
+  while (Date.now() - startedAt < timeoutMs) {
+    try {
+      const statusOutput = await ensureHealthyStatus(env);
+      const supervisorPid = managedSupervisorPidFromStatus(statusOutput);
+      const frontendPid = managedListenerPidFromStatus(
+        statusOutput,
+        trim(env.FRONTEND_DEV_PORT) || '5173',
+      );
+      const backendPid = managedListenerPidFromStatus(
+        statusOutput,
+        trim(env.PULSE_DEV_API_PORT) || '7655',
+      );
+      const ownerPid = await managedHotDevOwnerPid(env);
+      const snapshot = {
+        supervisorPid,
+        ownerPid,
+        frontendPid,
+        backendPid,
+      };
+
+      if (!supervisorPid || !ownerPid || !frontendPid || !backendPid) {
+        throw new Error(`Managed dev runtime is healthy but missing stable pid markers:\n${statusOutput}`);
+      }
+
+      if (
+        previousSnapshot &&
+        previousSnapshot.supervisorPid === snapshot.supervisorPid &&
+        previousSnapshot.ownerPid === snapshot.ownerPid &&
+        previousSnapshot.frontendPid === snapshot.frontendPid &&
+        previousSnapshot.backendPid === snapshot.backendPid
+      ) {
+        stableSamples += 1;
+      } else {
+        stableSamples = 1;
+      }
+
+      previousSnapshot = snapshot;
+      if (stableSamples >= requiredStableSamples) {
+        return snapshot;
+      }
+    } catch (error) {
+      lastError = error;
+      stableSamples = 0;
+      previousSnapshot = null;
+    }
+
+    await sleep(sampleIntervalMs);
+  }
+
+  const reason =
+    lastError instanceof Error
+      ? lastError.message
+      : String(lastError || 'runtime never reached a stable healthy state');
+  throw new Error(
+    `Managed dev runtime did not stabilize within ${timeoutMs}ms: ${reason}`,
+  );
+}
+
 export async function startManagedDevRuntime({
   env = process.env,
   logger = console,
@@ -168,7 +241,7 @@ export async function startManagedDevRuntime({
     throw new Error(`hot-dev-bg start failed: ${startResult.stderr || startResult.stdout}`);
   }
 
-  await ensureHealthyStatus(env);
+  await waitForStableManagedRuntime({ env });
 
   const runtimeState = {
     managedDevRuntime: true,
@@ -187,13 +260,14 @@ export async function startManagedDevRuntime({
 export async function restartManagedDevRuntimeBackend({
   env = process.env,
 } = {}) {
-  const beforePid = await managedBackendPid(env);
+  const beforeRuntime = await waitForStableManagedRuntime({ env });
+  const beforePid = beforeRuntime.backendPid;
   const result = await runHotDevBg(['backend-restart'], env);
   if (result.code !== 0) {
     throw new Error(`hot-dev-bg backend-restart failed: ${result.stderr || result.stdout}`);
   }
-  await ensureHealthyStatus(env);
-  const afterPid = await managedBackendPid(env);
+  const stableRuntime = await waitForStableManagedRuntime({ env });
+  const afterPid = stableRuntime.backendPid;
   if (!beforePid || !afterPid || beforePid === afterPid) {
     throw new Error(`Managed backend restart did not replace the backend listener (before=${beforePid || 'missing'}, after=${afterPid || 'missing'})`);
   }
@@ -203,7 +277,8 @@ export async function restartManagedDevRuntimeBackend({
 export async function killManagedDevRuntimeOwnerProcess({
   env = process.env,
 } = {}) {
-  const beforeOwnerPid = await managedHotDevOwnerPid(env);
+  const beforeRuntime = await waitForStableManagedRuntime({ env });
+  const beforeOwnerPid = beforeRuntime.ownerPid;
   if (!beforeOwnerPid) {
     throw new Error('Managed hot-dev owner pid could not be resolved');
   }
@@ -217,8 +292,13 @@ export async function killManagedDevRuntimeOwnerProcess({
     throw new Error(`kill -KILL ${beforeOwnerPid} failed: ${killResult.stderr || killResult.stdout}`);
   }
 
-  await ensureHealthyStatus(env);
-  const afterOwnerPid = await managedHotDevOwnerPid(env);
+  const stableRuntime = await waitForStableManagedRuntime({
+    env,
+    timeoutMs: 90_000,
+    sampleIntervalMs: 3_000,
+    requiredStableSamples: 3,
+  });
+  const afterOwnerPid = stableRuntime.ownerPid;
   if (!afterOwnerPid || beforeOwnerPid === afterOwnerPid) {
     throw new Error(`Managed hot-dev owner was not replaced after kill (before=${beforeOwnerPid}, after=${afterOwnerPid || 'missing'})`);
   }

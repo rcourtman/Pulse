@@ -192,6 +192,7 @@ export ALLOWED_ORIGINS
 
 EXTRA_CLEANUP_PORT=$((PULSE_DEV_API_PORT + 1))
 HOT_DEV_RESTART_SENTINEL="${ROOT_DIR}/tmp/hot-dev.restart"
+HOT_DEV_VERIFY_LOCK="${HOT_DEV_VERIFY_LOCK_FILE:-${ROOT_DIR}/tmp/hot-dev.verify.lock}"
 HOT_DEV_WATCHER_STARTUP_GRACE_SECONDS="${HOT_DEV_WATCHER_STARTUP_GRACE_SECONDS:-5}"
 
 # --- Startup Checks ---
@@ -517,6 +518,8 @@ log_info "Starting backend file watcher..."
     WATCHER_READY_AT=$(date +%s)
     LAST_RESTART_TIME=0
     SELF_BUILD_IGNORE_UNTIL=$((WATCHER_READY_AT + HOT_DEV_WATCHER_STARTUP_GRACE_SECONDS + 5))
+    LAST_RESTART_SENTINEL_MARKER=""
+    LAST_PULSE_BINARY_MARKER=""
 
     watcher_within_startup_grace() {
         local now
@@ -545,6 +548,39 @@ log_info "Starting backend file watcher..."
         return 0
     }
 
+    file_event_marker() {
+        local file_path=$1
+
+        [[ -e "${file_path}" ]] || return 1
+
+        if stat -f '%m:%z' "${file_path}" >/dev/null 2>&1; then
+            stat -f '%m:%z' "${file_path}"
+        else
+            stat -c '%Y:%s' "${file_path}"
+        fi
+    }
+
+    LAST_PULSE_BINARY_MARKER="$(file_event_marker "${ROOT_DIR}/pulse" || true)"
+
+    verify_lock_active() {
+        local owner_pid
+
+        [[ -f "${HOT_DEV_VERIFY_LOCK}" ]] || return 1
+
+        owner_pid="$(awk -F= '/^pid=/{print $2; exit}' "${HOT_DEV_VERIFY_LOCK}" 2>/dev/null || true)"
+        if [[ -z "${owner_pid}" ]]; then
+            rm -f "${HOT_DEV_VERIFY_LOCK}"
+            return 1
+        fi
+
+        if ! kill -0 "${owner_pid}" 2>/dev/null; then
+            rm -f "${HOT_DEV_VERIFY_LOCK}"
+            return 1
+        fi
+
+        return 0
+    }
+
     restart_backend() {
         # Debounce: skip if we restarted less than 3 seconds ago
         local now
@@ -553,6 +589,7 @@ log_info "Starting backend file watcher..."
             return
         fi
         LAST_RESTART_TIME=$now
+        mark_self_build_output
 
         log_info "Restarting backend..."
 
@@ -647,14 +684,29 @@ log_info "Starting backend file watcher..."
                 continue
             fi
             if [[ "$changed_file" == "${HOT_DEV_RESTART_SENTINEL}" ]]; then
+                event_marker="$(file_event_marker "${HOT_DEV_RESTART_SENTINEL}" || true)"
+                if [[ -n "${event_marker}" && "${event_marker}" == "${LAST_RESTART_SENTINEL_MARKER}" ]]; then
+                    continue
+                fi
+                LAST_RESTART_SENTINEL_MARKER="${event_marker}"
                 log_info "🚀 Managed restart requested, restarting backend..."
                 restart_backend
             elif [[ "$changed_file" == "${ROOT_DIR}/pulse" ]]; then
+                if verify_lock_active; then
+                    continue
+                fi
                 if manual_build_event_suppressed; then
                     continue
                 fi
+                event_marker="$(file_event_marker "${ROOT_DIR}/pulse" || true)"
+                if [[ -n "${event_marker}" && "${event_marker}" == "${LAST_PULSE_BINARY_MARKER}" ]]; then
+                    continue
+                fi
+                LAST_PULSE_BINARY_MARKER="${event_marker}"
                 log_info "🚀 Manual build detected (pulse binary changed), restarting..."
                 restart_backend
+            elif verify_lock_active; then
+                continue
             elif should_rebuild_backend_for_change "$changed_file"; then
                 rebuild_backend "$changed_file"
             fi
@@ -675,11 +727,24 @@ log_info "Starting backend file watcher..."
                 continue
             fi
             if [[ "$changed_file" == "${HOT_DEV_RESTART_SENTINEL}" ]]; then
+                event_marker="$(file_event_marker "${HOT_DEV_RESTART_SENTINEL}" || true)"
+                if [[ -n "${event_marker}" && "${event_marker}" == "${LAST_RESTART_SENTINEL_MARKER}" ]]; then
+                    continue
+                fi
+                LAST_RESTART_SENTINEL_MARKER="${event_marker}"
                 log_info "🚀 Managed restart requested, restarting backend..."
             else
+                if verify_lock_active; then
+                    continue
+                fi
                 if manual_build_event_suppressed; then
                     continue
                 fi
+                event_marker="$(file_event_marker "${ROOT_DIR}/pulse" || true)"
+                if [[ -n "${event_marker}" && "${event_marker}" == "${LAST_PULSE_BINARY_MARKER}" ]]; then
+                    continue
+                fi
+                LAST_PULSE_BINARY_MARKER="${event_marker}"
                 log_info "🚀 Manual build detected (pulse binary changed), restarting..."
             fi
             restart_backend
@@ -692,6 +757,9 @@ log_info "Starting backend file watcher..."
             --include '\.go$' \
             "${ROOT_DIR}/cmd" "${ROOT_DIR}/internal" "${ROOT_DIR}/pkg" 2>/dev/null | \
         while read -r changed_file; do
+            if verify_lock_active; then
+                continue
+            fi
             if should_rebuild_backend_for_change "$changed_file"; then
                 rebuild_backend "$changed_file"
             fi

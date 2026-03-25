@@ -549,7 +549,6 @@ type trialSignupFailureKind string
 const (
 	trialSignupFailureRetryable   trialSignupFailureKind = "retryable"
 	trialSignupFailureConflict    trialSignupFailureKind = "conflict"
-	trialSignupFailureInvalidLink trialSignupFailureKind = "invalid_link"
 	trialSignupFailureUnavailable trialSignupFailureKind = "unavailable"
 )
 
@@ -619,14 +618,6 @@ func (h *TrialSignupHandlers) HandleRequestVerification(w http.ResponseWriter, r
 		Company:       strings.TrimSpace(r.FormValue("company")),
 		ReturnTarget:  summarizeTrialReturnTarget(r.FormValue("return_url")),
 	}
-	unavailable := func(status int, message string) {
-		h.renderTrialSignupFailurePage(w, r, status, trialSignupFailureDataForPage(
-			h.cfg,
-			data,
-			trialSignupFailureUnavailable,
-			message,
-		))
-	}
 	if strings.TrimSpace(data.InstanceToken) == "" {
 		data.ErrorMessage = "This trial request must be started from Pulse. Return to Pulse Settings > Pro License and try again."
 		h.renderTrialSignupPage(w, r, http.StatusBadRequest, data)
@@ -656,7 +647,8 @@ func (h *TrialSignupHandlers) HandleRequestVerification(w http.ResponseWriter, r
 		pendingRecord, err := h.verificationStore.FindPendingVerificationByEmail(data.Email, h.now().UTC())
 		if err != nil {
 			log.Error().Err(err).Str("email", data.Email).Msg("trial signup pending verification lookup failed")
-			unavailable(http.StatusInternalServerError, "Unable to validate trial eligibility right now. Please try again.")
+			data.ErrorMessage = "Unable to validate trial eligibility right now. Please try again."
+			h.renderTrialSignupPage(w, r, http.StatusInternalServerError, data)
 			return
 		}
 		if pendingRecord != nil {
@@ -667,21 +659,19 @@ func (h *TrialSignupHandlers) HandleRequestVerification(w http.ResponseWriter, r
 		conflict, err := h.verificationStore.FindIssuedTrialConflict(data.Email, data.Company)
 		if err != nil {
 			log.Error().Err(err).Str("email", data.Email).Msg("trial signup issuance lookup failed")
-			unavailable(http.StatusInternalServerError, "Unable to validate trial eligibility right now. Please try again.")
+			data.ErrorMessage = "Unable to validate trial eligibility right now. Please try again."
+			h.renderTrialSignupPage(w, r, http.StatusInternalServerError, data)
 			return
 		}
 		if conflict != nil {
-			h.renderTrialSignupFailurePage(w, r, http.StatusConflict, trialSignupFailureDataForPage(
-				h.cfg,
-				data,
-				trialSignupFailureConflict,
-				trialSignupIssuanceConflictMessage(conflict),
-			))
+			data.ErrorMessage = trialSignupIssuanceConflictMessage(conflict)
+			h.renderTrialSignupPage(w, r, http.StatusConflict, data)
 			return
 		}
 	}
 	if h.emailSender == nil || h.cfg == nil || strings.TrimSpace(h.cfg.EmailFrom) == "" || h.verificationStore == nil {
-		unavailable(http.StatusServiceUnavailable, "Email verification is not configured yet. Please contact support.")
+		data.ErrorMessage = "Email verification is not configured yet. Please contact support."
+		h.renderTrialSignupPage(w, r, http.StatusServiceUnavailable, data)
 		return
 	}
 
@@ -697,14 +687,16 @@ func (h *TrialSignupHandlers) HandleRequestVerification(w http.ResponseWriter, r
 	})
 	if err != nil {
 		log.Error().Err(err).Str("email", data.Email).Msg("trial signup verification record creation failed")
-		unavailable(http.StatusInternalServerError, "Unable to prepare the verification link. Please try again.")
+		data.ErrorMessage = "Unable to prepare the verification link. Please try again."
+		h.renderTrialSignupPage(w, r, http.StatusInternalServerError, data)
 		return
 	}
 
 	verifyURL := buildTrialSignupVerificationURL(h.cfg.BaseURL, token)
 	if err := h.sendTrialVerificationEmail(data.Email, verifyURL); err != nil {
 		log.Error().Err(err).Str("email", data.Email).Msg("trial signup verification email send failed")
-		unavailable(http.StatusBadGateway, "Unable to send the verification email. Please try again.")
+		data.ErrorMessage = "Unable to send the verification email. Please try again."
+		h.renderTrialSignupPage(w, r, http.StatusBadGateway, data)
 		return
 	}
 
@@ -723,23 +715,19 @@ func (h *TrialSignupHandlers) HandleVerifyEmail(w http.ResponseWriter, r *http.R
 		record, err := h.verificationStore.ConsumeVerification(token, h.now().UTC())
 		if err != nil {
 			log.Warn().Err(err).Msg("trial signup verification token invalid")
-			h.renderTrialSignupFailurePage(w, r, http.StatusBadRequest, trialSignupFailureDataForPage(
-				h.cfg,
-				trialSignupPageData{ReturnTarget: "your Pulse instance"},
-				trialSignupFailureInvalidLink,
-				"That verification link is invalid or expired. Return to Pulse to request a fresh backup email.",
-			))
+			h.renderTrialSignupPage(w, r, http.StatusBadRequest, trialSignupPageData{
+				ErrorMessage: "That verification link is invalid or expired. Request a fresh email from Pulse and try again.",
+				ReturnTarget: "your Pulse instance",
+			})
 			return
 		}
 		verifiedToken, err := h.verificationStore.IssueCheckoutToken(record.ID, h.now().UTC(), trialSignupVerificationTTL)
 		if err != nil {
 			log.Error().Err(err).Str("request_id", record.ID).Msg("trial checkout token issuance failed")
-			h.renderTrialSignupFailurePage(w, r, http.StatusInternalServerError, trialSignupFailureDataForPage(
-				h.cfg,
-				trialSignupPageData{ReturnTarget: summarizeTrialReturnTarget(record.ReturnURL)},
-				trialSignupFailureUnavailable,
-				"Unable to continue to trial checkout. Please try again.",
-			))
+			h.renderTrialSignupPage(w, r, http.StatusInternalServerError, trialSignupPageData{
+				ErrorMessage: "Unable to continue to trial checkout. Please try again.",
+				ReturnTarget: summarizeTrialReturnTarget(record.ReturnURL),
+			})
 			return
 		}
 		http.Redirect(w, r, buildTrialSignupVerifiedURL(h.cfg.BaseURL, verifiedToken, false), http.StatusSeeOther)
@@ -750,12 +738,10 @@ func (h *TrialSignupHandlers) HandleVerifyEmail(w http.ResponseWriter, r *http.R
 	record, err := h.lookupVerifiedTrialSignupRecord(verifiedToken)
 	if err != nil {
 		log.Warn().Err(err).Msg("trial signup verified state invalid")
-		h.renderTrialSignupFailurePage(w, r, http.StatusBadRequest, trialSignupFailureDataForPage(
-			h.cfg,
-			trialSignupPageData{ReturnTarget: "your Pulse instance"},
-			trialSignupFailureInvalidLink,
-			"That verification link is invalid or expired. Return to Pulse to request a fresh backup email.",
-		))
+		h.renderTrialSignupPage(w, r, http.StatusBadRequest, trialSignupPageData{
+			ErrorMessage: "That verification link is invalid or expired. Request a fresh email from Pulse and try again.",
+			ReturnTarget: "your Pulse instance",
+		})
 		return
 	}
 
@@ -786,24 +772,14 @@ func (h *TrialSignupHandlers) HandleCheckout(w http.ResponseWriter, r *http.Requ
 	verifiedToken := strings.TrimSpace(r.FormValue("verified_token"))
 	record := &TrialSignupRecord{}
 	data := trialSignupPageData{}
-	unavailable := func(status int, message string) {
-		h.renderTrialSignupFailurePage(w, r, status, trialSignupFailureDataForPage(
-			h.cfg,
-			data,
-			trialSignupFailureUnavailable,
-			message,
-		))
-	}
 	if verifiedToken != "" {
 		verifiedRecord, err := h.lookupVerifiedTrialSignupRecord(verifiedToken)
 		if err != nil {
 			log.Warn().Err(err).Msg("trial signup checkout requested without valid verified token")
-			h.renderTrialSignupFailurePage(w, r, http.StatusBadRequest, trialSignupFailureDataForPage(
-				h.cfg,
-				trialSignupPageData{ReturnTarget: "your Pulse instance"},
-				trialSignupFailureInvalidLink,
-				"That backup link is invalid or expired. Return to Pulse to create a fresh secure trial session.",
-			))
+			h.renderTrialSignupPage(w, r, http.StatusBadRequest, trialSignupPageData{
+				ErrorMessage: "That backup link is invalid or expired. Restart from Pulse to create a fresh checkout session.",
+				ReturnTarget: "your Pulse instance",
+			})
 			return
 		}
 		record = verifiedRecord
@@ -854,22 +830,20 @@ func (h *TrialSignupHandlers) HandleCheckout(w http.ResponseWriter, r *http.Requ
 			return
 		}
 		if h.verificationStore == nil {
-			unavailable(http.StatusServiceUnavailable, "Trial checkout is unavailable right now. Please try again.")
+			data.ErrorMessage = "Trial checkout is unavailable right now. Please try again."
+			h.renderTrialSignupPage(w, r, http.StatusServiceUnavailable, data)
 			return
 		}
 		conflict, err := h.verificationStore.FindIssuedTrialConflict(data.Email, data.Company)
 		if err != nil {
 			log.Error().Err(err).Str("email", data.Email).Msg("trial signup issuance lookup failed")
-			unavailable(http.StatusInternalServerError, "Unable to validate trial eligibility right now. Please try again.")
+			data.ErrorMessage = "Unable to validate trial eligibility right now. Please try again."
+			h.renderTrialSignupPage(w, r, http.StatusInternalServerError, data)
 			return
 		}
 		if conflict != nil {
-			h.renderTrialSignupFailurePage(w, r, http.StatusConflict, trialSignupFailureDataForPage(
-				h.cfg,
-				data,
-				trialSignupFailureConflict,
-				trialSignupIssuanceConflictMessage(conflict),
-			))
+			data.ErrorMessage = trialSignupIssuanceConflictMessage(conflict)
+			h.renderTrialSignupPage(w, r, http.StatusConflict, data)
 			return
 		}
 		record = &TrialSignupRecord{
@@ -883,7 +857,8 @@ func (h *TrialSignupHandlers) HandleCheckout(w http.ResponseWriter, r *http.Requ
 		}
 		if err := h.verificationStore.CreateCheckoutRequest(record); err != nil {
 			log.Error().Err(err).Str("email", data.Email).Msg("trial signup checkout request creation failed")
-			unavailable(http.StatusInternalServerError, "Unable to prepare checkout. Please try again.")
+			data.ErrorMessage = "Unable to prepare checkout. Please try again."
+			h.renderTrialSignupPage(w, r, http.StatusInternalServerError, data)
 			return
 		}
 	}
@@ -894,7 +869,8 @@ func (h *TrialSignupHandlers) HandleCheckout(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	if strings.TrimSpace(h.cfg.StripeAPIKey) == "" || strings.TrimSpace(h.cfg.TrialSignupPriceID) == "" {
-		unavailable(http.StatusServiceUnavailable, "Checkout is not configured yet. Please contact support.")
+		data.ErrorMessage = "Checkout is not configured yet. Please contact support."
+		h.renderTrialSignupPage(w, r, http.StatusServiceUnavailable, data)
 		return
 	}
 
@@ -941,7 +917,8 @@ func (h *TrialSignupHandlers) HandleCheckout(w http.ResponseWriter, r *http.Requ
 			Str("org_id", data.OrgID).
 			Str("email", data.Email).
 			Msg("trial signup checkout session creation failed")
-		unavailable(http.StatusBadGateway, "Unable to create checkout session. Please try again.")
+		data.ErrorMessage = "Unable to create checkout session. Please try again."
+		h.renderTrialSignupPage(w, r, http.StatusBadGateway, data)
 		return
 	}
 	if err := h.verificationStore.MarkCheckoutStarted(record.ID, session.ID, h.now().UTC()); err != nil {
@@ -1417,10 +1394,6 @@ func trialSignupFailureDataForPage(cfg *CPConfig, data trialSignupPageData, kind
 		title = "Trial already used"
 		statusMessage = "This trial request cannot be restarted for the same recovery contact or organization."
 		finePrint = "Upgrade the existing account or contact support if you need help reconciling prior trial usage."
-	case trialSignupFailureInvalidLink:
-		title = "Backup link expired"
-		statusMessage = "This backup link can no longer continue the hosted trial handoff."
-		finePrint = "Return to Pulse to request a fresh backup email or restart the secure trial setup."
 	case trialSignupFailureUnavailable:
 		title = "Trial setup is unavailable"
 		statusMessage = "Pulse could not finish the secure trial handoff right now."

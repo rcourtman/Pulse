@@ -104,15 +104,15 @@ Canonical local dev commands:
 
 - `npm run dev` — start the managed runtime and reclaim the canonical dev ports if an older unmanaged session is still using them
 - `npm run dev:status` — show frontend shell health, proxied API health, direct backend health, and listener ownership
-- `npm run dev:verify` — run the managed browser proof pack against the live dev runtime, including runtime recovery and the desktop Recovery layout guard
+- `npm run dev:verify` — run the managed browser proof pack against the live dev runtime, including runtime recovery, the Patrol blocked-runtime page contract, and the desktop Recovery layout guard while the launcher suppresses unrelated backend rebuild churn for the duration of the proof pack
 - `npm run dev:logs` — tail the managed runtime log
 - `npm run dev:backend-restart` — bounce only the managed backend through the launcher contract
 - `npm run dev:stop` — stop the managed runtime
 - `npm run dev:foreground` — run the foreground hot-reload launcher intentionally if you need an attached shell
 
 If `npm run dev:verify` passes, the managed dev shell, proxy path, backend
-health endpoint, browser recovery path, and Recovery desktop history-table
-layout are all aligned.
+health endpoint, browser recovery path, Patrol blocked-runtime page behavior,
+and Recovery desktop history-table layout are all aligned.
 
 ## 📚 Documentation
 

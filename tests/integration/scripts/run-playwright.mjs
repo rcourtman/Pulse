@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { spawn } from 'node:child_process';
+import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -29,6 +30,30 @@ function buildRunScopedEnv(env = process.env) {
   };
 }
 
+function managedVerifyLockPath(env = process.env) {
+  const configuredPath = String(env.HOT_DEV_VERIFY_LOCK_FILE || '').trim();
+  return configuredPath || path.join(repoRoot, 'tmp', 'hot-dev.verify.lock');
+}
+
+async function writeManagedVerifyLock(env = process.env) {
+  if (!['1', 'true', 'yes', 'on'].includes(String(env.PULSE_E2E_USE_HOT_DEV || '').trim().toLowerCase())) {
+    return;
+  }
+
+  const lockPath = managedVerifyLockPath(env);
+  await fs.mkdir(path.dirname(lockPath), { recursive: true });
+  await fs.writeFile(
+    lockPath,
+    `pid=${process.pid}\ncreated_at=${new Date().toISOString()}\nrun_id=${String(env.PULSE_E2E_RUN_ID || '').trim()}\n`,
+    'utf8',
+  );
+}
+
+async function clearManagedVerifyLock(env = process.env) {
+  const lockPath = managedVerifyLockPath(env);
+  await fs.rm(lockPath, { force: true });
+}
+
 const run = (command, args, options = {}) =>
   new Promise((resolve, reject) => {
     const child = spawn(command, args, { stdio: 'inherit', ...options });
@@ -40,6 +65,7 @@ let exitCode = 0;
 const childEnv = buildRunScopedEnv();
 
 try {
+  await writeManagedVerifyLock(childEnv);
   const pretestCode = await run(nodeCmd, ['./scripts/pretest.mjs'], { env: childEnv });
   if (pretestCode !== 0) {
     process.exit(pretestCode);
@@ -51,6 +77,7 @@ try {
   if (exitCode === 0 && posttestCode !== 0) {
     exitCode = posttestCode;
   }
+  await clearManagedVerifyLock(childEnv);
 }
 
 process.exit(exitCode);

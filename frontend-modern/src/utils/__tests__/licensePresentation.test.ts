@@ -106,18 +106,6 @@ describe('licensePresentation', () => {
       title: 'Trial activated',
       tone: expect.stringContaining('green'),
     });
-    expect(getTrialActivationNotice('replayed')).toMatchObject({
-      title: 'Trial already activated',
-      tone: expect.stringContaining('sky'),
-    });
-    expect(getTrialActivationNotice('invalid')).toMatchObject({
-      title: 'Activation link invalid',
-      body: expect.stringContaining('fresh secure trial handoff'),
-    });
-    expect(getTrialActivationNotice('unavailable')).toMatchObject({
-      title: 'Activation unavailable',
-      body: expect.stringContaining('Refresh the billing state below'),
-    });
     expect(getTrialActivationNotice('ineligible')).toMatchObject({
       title: 'Trial not available',
       tone: expect.stringContaining('red'),

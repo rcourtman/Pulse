@@ -16,11 +16,9 @@ const clearLicenseMock = vi.fn();
 const notificationSuccessMock = vi.fn();
 const notificationErrorMock = vi.fn();
 const useLocationMock = vi.fn(() => ({ search: '' }));
-const navigateMock = vi.fn();
 
 vi.mock('@solidjs/router', () => ({
   useLocation: () => useLocationMock(),
-  useNavigate: () => navigateMock,
 }));
 
 vi.mock('@/stores/license', () => ({
@@ -64,7 +62,6 @@ describe('ProLicensePanel', () => {
     notificationSuccessMock.mockReset();
     notificationErrorMock.mockReset();
     useLocationMock.mockReset();
-    navigateMock.mockReset();
     loadLicenseStatusMock.mockResolvedValue(undefined);
     startProTrialMock.mockResolvedValue(undefined);
     activateLicenseMock.mockResolvedValue({ success: true });
@@ -302,11 +299,7 @@ describe('ProLicensePanel', () => {
   });
 
   it('shows the hosted activation success banner on the Pro settings route', async () => {
-    useLocationMock.mockReturnValue({
-      search: '?trial=activated',
-      pathname: '/settings/system/billing',
-      hash: '',
-    });
+    useLocationMock.mockReturnValue({ search: '?trial=activated' });
 
     render(() => <ProLicensePanel />);
 
@@ -314,10 +307,6 @@ describe('ProLicensePanel', () => {
     expect(
       screen.getByText(/Pulse activated the Pro trial for this instance/i),
     ).toBeInTheDocument();
-    expect(navigateMock).toHaveBeenCalledWith('/settings/system/billing', {
-      replace: true,
-      scroll: false,
-    });
   });
 
   it('shows a migration-pending notice and hides the trial CTA', async () => {

@@ -207,19 +207,19 @@ export const getTrialActivationNotice = (result?: string | null): LicenseInlineN
       return {
         tone: 'border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-900 text-red-900 dark:text-red-100',
         title: 'Activation link invalid',
-        body: 'That activation handoff is invalid or expired. Return to Pulse Pro settings on this instance and start a fresh secure trial handoff.',
+        body: 'That activation handoff is invalid or expired. Start the hosted checkout flow again from this Pulse instance.',
       };
     case 'replayed':
       return {
-        tone: 'border-sky-200 dark:border-sky-900 bg-sky-50 dark:bg-sky-900 text-sky-900 dark:text-sky-100',
-        title: 'Trial already activated',
-        body: 'This activation handoff was already redeemed for this instance. Use the current entitlement state below as the source of truth.',
+        tone: 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-900 text-amber-900 dark:text-amber-100',
+        title: 'Activation link already used',
+        body: 'This checkout handoff was already redeemed. Use the current entitlement state below or start a new checkout if needed.',
       };
     case 'unavailable':
       return {
         tone: 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-900 text-amber-900 dark:text-amber-100',
         title: 'Activation unavailable',
-        body: 'Pulse could not finish activation right now. Refresh the billing state below, then retry the return link or start the secure trial handoff again from this instance if needed.',
+        body: 'Pulse could not finish activation right now. Retry the return link from checkout or start the flow again from this instance.',
       };
     case 'ineligible':
       return {
