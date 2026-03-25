@@ -391,7 +391,7 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
                 {((run.input_tokens || 0) + (run.output_tokens || 0)).toLocaleString()} tokens
               </span>
             </Show>
-            <Show when={run.type === 'scoped'}>
+            <Show when={run.type === 'scoped' && !coverageSummary}>
               <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 dark:bg-blue-900 dark:text-blue-400 text-[10px] font-medium">
                 {formatScope(run) || 'Scoped'}
               </span>

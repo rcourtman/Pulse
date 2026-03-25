@@ -423,6 +423,10 @@ dedicated `frontend-modern/src/features/patrol/patrolInvestigationContextModel.t
 owner, so the Patrol hook composes one canonical payload-to-summary derivation
 instead of rebuilding recent-change, correlation, and governed-resource count
 copy inline.
+That same normalization applies to supporting effort strips inside the expanded
+run card. Once the run presenter is already carrying canonical coverage copy,
+secondary chips must not reintroduce a raw `Scoped to N resources` variant that
+re-opens the same ambiguity.
 The Patrol page's run-history tab label is now also tightened to `Runs`, while
 the underlying run-history panel remains canonical for snapshot filtering and
 tool-call inspection. That copy change is intentional: run history is support

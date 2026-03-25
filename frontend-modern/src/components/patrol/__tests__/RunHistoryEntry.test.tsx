@@ -139,6 +139,7 @@ describe('RunHistoryEntry', () => {
     expect(screen.getByText('• Checked 1 of 2 scoped resources')).toBeInTheDocument();
     expect(screen.getByText('Resources checked (1 of 2 scoped)')).toBeInTheDocument();
     expect(screen.queryByText('• 1 resources')).not.toBeInTheDocument();
+    expect(screen.queryByText('Scoped to 2 resources')).not.toBeInTheDocument();
     expect(
       screen.getByText((_, element) =>
         element?.tagName === 'P' &&
