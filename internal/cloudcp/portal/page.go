@@ -91,10 +91,10 @@ const (
 	defaultPublicSiteURL        = "https://pulserelay.pro"
 	defaultSupportEmail         = "support@pulserelay.pro"
 	defaultCommercialAPIBaseURL = "https://license.pulserelay.pro"
-	defaultPortalPath           = "/portal"
-	defaultLogoutPath           = "/auth/logout"
-	defaultAccountAPIBasePath   = "/api/accounts"
-	defaultPortalAPIBasePath    = "/api/portal"
+	defaultPortalPath           = PortalPagePath
+	defaultLogoutPath           = PortalLogoutPath
+	defaultAccountAPIBasePath   = PortalAccountAPIBasePath
+	defaultPortalAPIBasePath    = PortalAPIBasePath
 )
 
 var errPortalAuthRequired = errors.New("portal auth required")

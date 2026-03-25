@@ -30,8 +30,8 @@ func newTestRegistry(t *testing.T) *registry.TenantRegistry {
 
 func newTestMux(reg *registry.TenantRegistry) *http.ServeMux {
 	mux := http.NewServeMux()
-	mux.Handle("/api/portal/dashboard", admin.AdminKeyMiddleware("secret-key", HandlePortalDashboard(reg)))
-	mux.Handle("/api/portal/workspaces/{tenant_id}", admin.AdminKeyMiddleware("secret-key", HandlePortalWorkspaceDetail(reg)))
+	mux.Handle(PortalDashboardPath, admin.AdminKeyMiddleware("secret-key", HandlePortalDashboard(reg)))
+	mux.Handle(PortalWorkspacePath, admin.AdminKeyMiddleware("secret-key", HandlePortalWorkspaceDetail(reg)))
 	return mux
 }
 
@@ -786,10 +786,10 @@ func TestPortalPageTemplate_AccountServicesRendered(t *testing.T) {
 		"Pulse Account",
 		`id="pulse-account-bootstrap"`,
 		`"commercial_api_base_url":"https://license.pulserelay.pro"`,
-		`"portal_path":"/portal"`,
-		`"logout_path":"/auth/logout"`,
-		`"account_api_base_path":"/api/accounts"`,
-		`"portal_api_base_path":"/api/portal"`,
+		fmt.Sprintf(`"portal_path":"%s"`, PortalPagePath),
+		fmt.Sprintf(`"logout_path":"%s"`, PortalLogoutPath),
+		fmt.Sprintf(`"account_api_base_path":"%s"`, PortalAccountAPIBasePath),
+		fmt.Sprintf(`"portal_api_base_path":"%s"`, PortalAPIBasePath),
 		`"email":"owner@example.com"`,
 		`"accounts":[{"id":"a_test"`,
 		"Other account services",
@@ -859,16 +859,16 @@ func TestBuildPortalBootstrapJSON_Contract(t *testing.T) {
 	if got := payload["commercial_api_base_url"]; got != "https://license.pulserelay.pro" {
 		t.Fatalf("commercial_api_base_url = %#v", got)
 	}
-	if got := payload["portal_path"]; got != "/portal" {
+	if got := payload["portal_path"]; got != PortalPagePath {
 		t.Fatalf("portal_path = %#v", got)
 	}
-	if got := payload["logout_path"]; got != "/auth/logout" {
+	if got := payload["logout_path"]; got != PortalLogoutPath {
 		t.Fatalf("logout_path = %#v", got)
 	}
-	if got := payload["account_api_base_path"]; got != "/api/accounts" {
+	if got := payload["account_api_base_path"]; got != PortalAccountAPIBasePath {
 		t.Fatalf("account_api_base_path = %#v", got)
 	}
-	if got := payload["portal_api_base_path"]; got != "/api/portal" {
+	if got := payload["portal_api_base_path"]; got != PortalAPIBasePath {
 		t.Fatalf("portal_api_base_path = %#v", got)
 	}
 
@@ -933,7 +933,7 @@ func TestHandlePortalBootstrap_Success(t *testing.T) {
 	if got := payload["email"]; got != "owner@example.com" {
 		t.Fatalf("email = %#v", got)
 	}
-	if got := payload["portal_api_base_path"]; got != "/api/portal" {
+	if got := payload["portal_api_base_path"]; got != PortalAPIBasePath {
 		t.Fatalf("portal_api_base_path = %#v", got)
 	}
 	accounts, ok := payload["accounts"].([]any)
@@ -1005,7 +1005,7 @@ func TestPortalBootstrapHTMLAndHandlerStayInSync(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	claims, err := validatePortalSessionClaims(httptest.NewRequest(http.MethodGet, "/portal", nil), nil, nil)
+	claims, err := validatePortalSessionClaims(httptest.NewRequest(http.MethodGet, PortalPagePath, nil), nil, nil)
 	if err == nil || claims != nil {
 		t.Fatal("expected nil-session validation to require auth")
 	}
@@ -1026,7 +1026,7 @@ func TestPortalBootstrapHTMLAndHandlerStayInSync(t *testing.T) {
 		t.Fatalf("bootstrap status = %d, want %d", rec.Code, http.StatusOK)
 	}
 
-	claimsReq := httptest.NewRequest(http.MethodGet, "/portal", nil)
+	claimsReq := httptest.NewRequest(http.MethodGet, PortalPagePath, nil)
 	claimsReq.Header.Set("Authorization", "Bearer "+token)
 	validClaims, err := validatePortalSessionClaims(claimsReq, sessionSvc, reg)
 	if err != nil {
