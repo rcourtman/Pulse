@@ -1,13 +1,8 @@
 import { createMemo, createSignal, onCleanup, onMount } from 'solid-js';
-import { licenseStatus, startProTrial } from '@/stores/license';
+import { licenseStatus } from '@/stores/license';
 import { notificationStore } from '@/stores/notifications';
 import { isUpsellSnoozed, snoozeUpsell } from '@/utils/snooze';
-import {
-  getProTrialStartedMessage,
-  getTrialAlreadyUsedMessage,
-  getTrialStartErrorMessage,
-  getTrialTryAgainLaterMessage,
-} from '@/utils/upgradePresentation';
+import { runStartProTrialAction } from '@/utils/trialStartAction';
 import {
   ACTIVE_USE_TRIAL_NUDGE_FIRST_SEEN_KEY,
   ACTIVE_USE_TRIAL_NUDGE_REFRESH_MS,
@@ -66,27 +61,11 @@ export function useActiveUseTrialNudgeState() {
 
     setStartingTrial(true);
     try {
-      const result = await startProTrial();
-      if (result?.outcome === 'redirect') {
-        if (typeof window !== 'undefined') {
-          window.location.href = result.actionUrl;
-        }
-        return;
-      }
-      notificationStore.success(getProTrialStartedMessage());
-    } catch (error) {
-      const statusCode = (error as { status?: number } | null)?.status;
-      if (statusCode === 409) {
-        notificationStore.error(getTrialAlreadyUsedMessage());
-      } else if (statusCode === 429) {
-        notificationStore.error(getTrialTryAgainLaterMessage());
-      } else {
-        notificationStore.error(
-          getTrialStartErrorMessage(error instanceof Error ? error.message : undefined, {
-            branded: true,
-          }),
-        );
-      }
+      await runStartProTrialAction({
+        branded: true,
+        showSuccess: notificationStore.success,
+        showError: notificationStore.error,
+      });
     } finally {
       setStartingTrial(false);
     }

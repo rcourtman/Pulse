@@ -35,6 +35,8 @@ describe('NodeModal guardrails', () => {
     expect(nodeModalSetupGuideSectionSource).toContain("await state.copyProxmoxAgentInstallCommand(");
     expect(nodeModalMonitoringSectionSource).toContain('title="Monitoring coverage"');
     expect(nodeModalStatusFooterSource).toContain('Start your free 14-day trial');
+    expect(nodeModalStateSource).toContain('runStartProTrialAction({');
+    expect(nodeModalStateSource).not.toContain('startProTrial()');
   });
 
   it('keeps the manual PVE permission snippet aligned with the canonical setup script', () => {

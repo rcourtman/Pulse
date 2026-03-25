@@ -7,7 +7,6 @@ import {
   hasFeature,
   loadLicenseStatus,
   licenseLoaded,
-  startProTrial,
   entitlements,
 } from '@/stores/license';
 import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/upgradeMetrics';
@@ -28,10 +27,7 @@ import {
   getSSOProvidersLoadErrorMessage,
   getSSOTestResultPresentation,
 } from '@/utils/ssoProviderPresentation';
-import {
-  getProTrialStartedMessage,
-  getTrialStartErrorMessage,
-} from '@/utils/upgradePresentation';
+import { runStartProTrialAction } from '@/utils/trialStartAction';
 import type {
   MetadataPreview,
   ProviderForm,
@@ -81,14 +77,10 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
     }
     setStartingTrial(true);
     try {
-      const result = await startProTrial();
-      if (result?.outcome === 'redirect') {
-        window.location.href = result.actionUrl;
-        return;
-      }
-      notificationStore.success(getProTrialStartedMessage());
-    } catch (err) {
-      notificationStore.error(getTrialStartErrorMessage(err));
+      await runStartProTrialAction({
+        showSuccess: notificationStore.success,
+        showError: notificationStore.error,
+      });
     } finally {
       setStartingTrial(false);
     }

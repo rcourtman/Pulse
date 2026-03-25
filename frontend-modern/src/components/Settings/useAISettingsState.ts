@@ -15,7 +15,6 @@ import {
   getUpgradeActionUrlOrFallback,
   hasFeature,
   loadLicenseStatus,
-  startProTrial,
 } from '@/stores/license';
 import { notificationStore } from '@/stores/notifications';
 import type { AISettings as AISettingsType, AIProvider, AuthMethod } from '@/types/ai';
@@ -38,11 +37,8 @@ import {
 } from '@/utils/aiSettingsPresentation';
 import { logger } from '@/utils/logger';
 import { showSuccess, showWarning } from '@/utils/toast';
+import { runStartProTrialAction } from '@/utils/trialStartAction';
 import { trackPaywallViewed } from '@/utils/upgradeMetrics';
-import {
-  getProTrialStartedMessage,
-  getTrialStartErrorMessage,
-} from '@/utils/upgradePresentation';
 
 export const useAISettingsState = () => {
   const [settings, setSettings] = createSignal<AISettingsType | null>(null);
@@ -278,14 +274,10 @@ export const useAISettingsState = () => {
     if (startingTrial()) return;
     setStartingTrial(true);
     try {
-      const result = await startProTrial();
-      if (result?.outcome === 'redirect') {
-        window.location.href = result.actionUrl;
-        return;
-      }
-      showSuccess(getProTrialStartedMessage());
-    } catch (error) {
-      showWarning(getTrialStartErrorMessage(error));
+      await runStartProTrialAction({
+        showSuccess,
+        showError: showWarning,
+      });
     } finally {
       setStartingTrial(false);
     }

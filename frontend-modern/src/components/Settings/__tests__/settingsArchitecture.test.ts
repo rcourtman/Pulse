@@ -529,6 +529,8 @@ describe('Settings architecture guardrails', () => {
     expect(monitoredSystemDefinitionDisclosureSource).not.toContain('{props.summary}');
     expect(proLicensePanelStateSource).toContain('buildSelfHostedCommercialPlanModel');
     expect(proLicensePanelStateSource).toContain('loadLicenseStatus(true)');
+    expect(proLicensePanelStateSource).toContain('runStartProTrialAction({');
+    expect(proLicensePanelStateSource).not.toContain('startProTrial()');
     expect(proLicensePlanSectionSource).toContain('CommercialStatGrid');
     expect(proLicensePlanSectionSource).toContain('getLicenseStatusLoadingState');
     expect(monitoredSystemPresentationSource).toContain('export function getMonitoredSystemLedgerPresentation');
@@ -568,6 +570,8 @@ describe('Settings architecture guardrails', () => {
     expect(relaySettingsPanelStateSource).toContain("trackPaywallViewed('relay', 'settings_relay_panel')");
     expect(relaySettingsPanelStateSource).toContain('setInterval(() => void loadStatus(), 5000)');
     expect(relaySettingsPanelStateSource).toContain('QRCode.toDataURL(payload.deep_link');
+    expect(relaySettingsPanelStateSource).toContain('runStartProTrialAction({');
+    expect(relaySettingsPanelStateSource).not.toContain('startProTrial()');
     expect(relayPairingSectionSource).toContain('getRelayDiagnosticClass');
     expect(relayPairingSectionSource).toContain('Pair New Device');
   });
@@ -757,7 +761,8 @@ describe('Settings architecture guardrails', () => {
     expect(userAssignmentsPanelSource).not.toContain('const loadData = async');
     expect(rbacFeatureGateSectionSource).toContain('trackUpgradeClicked');
     expect(rbacFeatureGateStateSource).toContain('trackPaywallViewed');
-    expect(rbacFeatureGateStateSource).toContain('startProTrial');
+    expect(rbacFeatureGateStateSource).toContain('runStartProTrialAction({');
+    expect(rbacFeatureGateStateSource).not.toContain('startProTrial()');
     expect(rolesEditorDialogSource).toContain('RBAC_PERMISSION_ACTIONS');
     expect(rolesPanelStateSource).toContain('RBACAPI.getRoles');
     expect(rolesPanelStateSource).toContain('RBACAPI.saveRole');
@@ -948,6 +953,8 @@ describe('Settings architecture guardrails', () => {
     expect(nodeModalStateSource).toContain('const [quickSetupBootstrap, setQuickSetupBootstrap] =');
     expect(nodeModalStateSource).toContain('const handleTestConnection = async () =>');
     expect(nodeModalStateSource).toContain("const PROXMOX_SETUP_HOST_REQUIRED_MESSAGE = 'Proxmox setup host is required';");
+    expect(nodeModalStateSource).toContain('runStartProTrialAction({');
+    expect(nodeModalStateSource).not.toContain('startProTrial()');
   });
 
   it('keeps AI settings sub-surfaces behind extracted runtime owners', () => {
@@ -980,7 +987,8 @@ describe('Settings architecture guardrails', () => {
     expect(aiSettingsStateSource).toContain('const handleSave = async (event?: Event) =>');
     expect(aiSettingsStateSource).toContain('const handleEnabledToggle = async (newValue: boolean) =>');
     expect(aiSettingsStateSource).toContain('AIAPI.getSettings()');
-    expect(aiSettingsStateSource).toContain('showWarning(getTrialStartErrorMessage(error));');
+    expect(aiSettingsStateSource).toContain('runStartProTrialAction({');
+    expect(aiSettingsStateSource).not.toContain('startProTrial()');
     expect(aiSettingsStateSource).not.toContain('getTrialAlreadyUsedMessage()');
   });
 
@@ -1034,10 +1042,10 @@ describe('Settings architecture guardrails', () => {
     expect(reportingPanelSource).not.toContain('window.URL.createObjectURL');
     expect(reportingPanelStateSource).toContain('export const useReportingPanelState =');
     expect(reportingPanelStateSource).toContain('loadLicenseStatus');
-    expect(reportingPanelStateSource).toContain('startProTrial');
+    expect(reportingPanelStateSource).toContain('runStartProTrialAction({');
+    expect(reportingPanelStateSource).not.toContain('startProTrial()');
     expect(reportingPanelStateSource).toContain('buildReportingRequest');
     expect(reportingPanelStateSource).toContain('getReportingGenerateSuccessMessage');
-    expect(reportingPanelStateSource).toContain('showWarning(getTrialStartErrorMessage(error));');
     expect(reportingPanelStateSource).not.toContain('getTrialAlreadyUsedMessage()');
     expect(reportingPanelModelSource).toContain('export function getReportingRangeStart');
     expect(reportingPanelModelSource).toContain('export function buildReportingRequest');
@@ -1063,7 +1071,8 @@ describe('Settings architecture guardrails', () => {
     expect(auditLogStateSource).toContain('const fetchAuditEvents = async (');
     expect(auditLogStateSource).toContain('const verifyAllEvents = async (');
     expect(auditLogStateSource).toContain('trackPaywallViewed');
-    expect(auditLogStateSource).toContain('showWarning(getTrialStartErrorMessage(err));');
+    expect(auditLogStateSource).toContain('runStartProTrialAction({');
+    expect(auditLogStateSource).not.toContain('startProTrial()');
     expect(auditLogStateSource).not.toContain('getTrialAlreadyUsedMessage()');
   });
 
@@ -1078,7 +1087,8 @@ describe('Settings architecture guardrails', () => {
     expect(auditWebhookStateSource).toContain('const fetchWebhooks = async () =>');
     expect(auditWebhookStateSource).toContain('const saveWebhooks = async (urls: string[]) =>');
     expect(auditWebhookStateSource).toContain('trackPaywallViewed');
-    expect(auditWebhookStateSource).toContain('showWarning(getTrialStartErrorMessage(error));');
+    expect(auditWebhookStateSource).toContain('runStartProTrialAction({');
+    expect(auditWebhookStateSource).not.toContain('startProTrial()');
     expect(auditWebhookStateSource).not.toContain('getTrialAlreadyUsedMessage()');
   });
 
@@ -1094,9 +1104,8 @@ describe('Settings architecture guardrails', () => {
     expect(ssoProvidersStateSource).toContain('const loadProviders = async () =>');
     expect(ssoProvidersStateSource).toContain('const handleSave = async (event?: Event) =>');
     expect(ssoProvidersStateSource).toContain('const testConnection = async () =>');
-    expect(ssoProvidersStateSource).toContain(
-      'notificationStore.error(getTrialStartErrorMessage(err));',
-    );
+    expect(ssoProvidersStateSource).toContain('runStartProTrialAction({');
+    expect(ssoProvidersStateSource).not.toContain('startProTrial()');
     expect(ssoProvidersStateSource).not.toContain('getTrialAlreadyUsedMessage()');
     expect(ssoProvidersModelSource).toContain('export const createEmptyProviderForm =');
     expect(ssoProvidersModelSource).toContain('export const mapProviderDetailsToForm =');

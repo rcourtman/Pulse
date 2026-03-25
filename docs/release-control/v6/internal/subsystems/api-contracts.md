@@ -203,6 +203,12 @@ The same facet bundle contract now also returns grouped
 `recentChangeSourceAdapters` counts by canonical source adapter, so the
 shared drawer and summary chips can distinguish Docker, Proxmox, TrueNAS, and
 ops-helper provenance without inventing frontend-local integration heuristics.
+Client consumers of the node setup transport now also share the canonical
+trial-start action helper in `frontend-modern/src/utils/trialStartAction.ts`
+for the NodeModal Pro upgrade path. The NodesAPI client remains the source of
+truth for setup/install requests, while hosted trial redirects and denial copy
+must flow through the shared trial-start owner rather than a second client-side
+status-code map inside node setup state.
 Canonical timeline entries now also preserve correlation context in
 `relatedResources`, so the history surface can explain which neighboring
 resources moved with restart, anomaly, config, state transition, and

@@ -27,17 +27,11 @@ import {
   hasFeature,
   licenseStatus,
   loadLicenseStatus,
-  startProTrial,
 } from '@/stores/license';
 import { getCanonicalScopeResourceIds } from '@/utils/patrolFormat';
 import { buildPatrolInvestigationContextSummary } from './patrolInvestigationContextModel';
-import {
-  getProTrialStartedMessage,
-  getTrialAlreadyUsedMessage,
-  getTrialStartErrorMessage,
-  getTrialTryAgainLaterMessage,
-} from '@/utils/upgradePresentation';
 import { trackPaywallViewed } from '@/utils/upgradeMetrics';
+import { runStartProTrialAction } from '@/utils/trialStartAction';
 
 interface ModelInfo {
   id: string;
@@ -171,36 +165,26 @@ export function usePatrolIntelligenceState() {
   const autoFixLocked = createMemo(() => !hasFeature('ai_autofix'));
 
   const canStartTrial = createMemo(() => {
-    const state = licenseStatus()?.subscription_state;
-    if (!state) return false;
-    return state !== 'active' && state !== 'trial';
+    const entitlements = licenseStatus();
+    if (!entitlements) return false;
+    if (
+      entitlements.subscription_state === 'active' ||
+      entitlements.subscription_state === 'trial'
+    ) {
+      return false;
+    }
+    return entitlements.trial_eligible !== false;
   });
 
   async function handleStartTrial() {
     if (startingTrial()) return;
     setStartingTrial(true);
     try {
-      const result = await startProTrial();
-      if (result?.outcome === 'redirect') {
-        if (typeof window !== 'undefined') {
-          window.location.href = result.actionUrl;
-        }
-        return;
-      }
-      notificationStore.success(getProTrialStartedMessage());
-    } catch (err) {
-      const statusCode = (err as { status?: number } | null)?.status;
-      if (statusCode === 409) {
-        notificationStore.error(getTrialAlreadyUsedMessage());
-      } else if (statusCode === 429) {
-        notificationStore.error(getTrialTryAgainLaterMessage());
-      } else {
-        notificationStore.error(
-          getTrialStartErrorMessage(err instanceof Error ? err.message : undefined, {
-            branded: true,
-          }),
-        );
-      }
+      await runStartProTrialAction({
+        branded: true,
+        showSuccess: notificationStore.success,
+        showError: notificationStore.error,
+      });
     } finally {
       setStartingTrial(false);
     }

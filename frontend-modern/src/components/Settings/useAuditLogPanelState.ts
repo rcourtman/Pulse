@@ -13,13 +13,9 @@ import {
   hasFeature,
   licenseLoaded,
   loadLicenseStatus,
-  startProTrial,
 } from '@/stores/license';
 import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/upgradeMetrics';
-import {
-  getProTrialStartedMessage,
-  getTrialStartErrorMessage,
-} from '@/utils/upgradePresentation';
+import { runStartProTrialAction } from '@/utils/trialStartAction';
 
 export interface AuditEvent {
   id: string;
@@ -526,14 +522,10 @@ export const useAuditLogPanelState = () => {
     if (startingTrial()) return;
     setStartingTrial(true);
     try {
-      const result = await startProTrial();
-      if (result?.outcome === 'redirect') {
-        window.location.href = result.actionUrl;
-        return;
-      }
-      showSuccess(getProTrialStartedMessage());
-    } catch (err) {
-      showWarning(getTrialStartErrorMessage(err));
+      await runStartProTrialAction({
+        showSuccess,
+        showError: showWarning,
+      });
     } finally {
       setStartingTrial(false);
     }

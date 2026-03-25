@@ -5,7 +5,6 @@ import {
   hasFeature,
   licenseLoaded,
   loadLicenseStatus,
-  startProTrial,
 } from '@/stores/license';
 import { trackPaywallViewed } from '@/utils/upgradeMetrics';
 import { showError, showSuccess } from '@/utils/toast';
@@ -14,6 +13,7 @@ import { OnboardingAPI, type OnboardingQRResponse } from '@/api/onboarding';
 import { SecurityAPI, type APITokenRecord } from '@/api/security';
 import { logger } from '@/utils/logger';
 import { getRelayConnectionPresentation } from '@/utils/relayPresentation';
+import { runStartProTrialAction } from '@/utils/trialStartAction';
 import QRCode from 'qrcode';
 
 export interface RelaySettingsPanelProps {
@@ -153,19 +153,11 @@ export function useRelaySettingsPanelState(props: RelaySettingsPanelProps) {
     if (startingTrial()) return;
     setStartingTrial(true);
     try {
-      const result = await startProTrial();
-      if (result?.outcome === 'redirect') {
-        window.location.href = result.actionUrl;
-        return;
-      }
-      showSuccess('Remote access trial started');
-    } catch (error) {
-      const statusCode = (error as { status?: number } | null)?.status;
-      if (statusCode === 409) {
-        showError('Trial already used');
-      } else {
-        showError(error instanceof Error ? error.message : 'Failed to start trial');
-      }
+      await runStartProTrialAction({
+        successMessage: 'Remote access trial started',
+        showSuccess,
+        showError,
+      });
     } finally {
       setStartingTrial(false);
     }

@@ -12,16 +12,12 @@ import {
   licenseStatus,
   loadLicenseStatus,
   maxHistoryDays,
-  startProTrial,
 } from '@/stores/license';
 import { calculateOptimalPoints } from '@/utils/downsample';
 import { setupCanvasDPR } from '@/utils/canvasRenderQueue';
 import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/upgradeMetrics';
 import { notificationStore } from '@/stores/notifications';
-import {
-  getProTrialStartedMessage,
-  getTrialStartErrorMessage,
-} from '@/utils/upgradePresentation';
+import { runStartProTrialAction } from '@/utils/trialStartAction';
 import {
   HISTORY_CHART_RANGES,
   createHistoryChartGeometry,
@@ -66,16 +62,11 @@ export function useHistoryChartState(props: HistoryChartProps, refs: HistoryChar
     if (startingTrial()) return;
     setStartingTrial(true);
     try {
-      const result = await startProTrial();
-      if (result?.outcome === 'redirect') {
-        if (typeof window !== 'undefined') {
-          window.location.href = result.actionUrl;
-        }
-        return;
-      }
-      notificationStore.success(getProTrialStartedMessage());
-    } catch (err) {
-      notificationStore.error(getTrialStartErrorMessage(err, { branded: true }));
+      await runStartProTrialAction({
+        branded: true,
+        showSuccess: notificationStore.success,
+        showError: notificationStore.error,
+      });
     } finally {
       setStartingTrial(false);
     }

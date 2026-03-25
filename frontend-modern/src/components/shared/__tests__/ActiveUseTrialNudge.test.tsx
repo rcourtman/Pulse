@@ -89,7 +89,8 @@ describe('ActiveUseTrialNudge', () => {
     expect(activeUseTrialNudgeStateSource).toContain('createMemo');
     expect(activeUseTrialNudgeStateSource).toContain('window.localStorage');
     expect(activeUseTrialNudgeStateSource).toContain('setInterval');
-    expect(activeUseTrialNudgeStateSource).toContain('startProTrial');
+    expect(activeUseTrialNudgeStateSource).toContain('runStartProTrialAction');
+    expect(activeUseTrialNudgeStateSource).not.toContain('startProTrial()');
     expect(activeUseTrialNudgeStateSource).toContain('snoozeUpsell');
 
     expect(activeUseTrialNudgeModelSource).toContain('ACTIVE_USE_TRIAL_NUDGE_SNOOZE_KEY');

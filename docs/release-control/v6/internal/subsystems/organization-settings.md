@@ -160,3 +160,8 @@ through the canonical upgrade presentation helper instead of collapsing every
 trial-start conflict into a generic already-used message. Organization settings
 paywalls should only map the explicit canonical trial helper outputs, not
 re-interpret status codes locally.
+The RBAC feature-gate state now also depends on the shared
+`frontend-modern/src/utils/trialStartAction.ts` owner for hosted handoff and
+success/error orchestration. Organization settings paywalls must not keep a
+lane-local `startProTrial()` branch once that shared helper covers the same
+runtime contract.

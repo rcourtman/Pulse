@@ -8,18 +8,14 @@ import {
   hasFeature,
   licenseLoaded,
   loadLicenseStatus,
-  startProTrial,
 } from '@/stores/license';
 import { trackPaywallViewed } from '@/utils/upgradeMetrics';
-import {
-  getProTrialStartedMessage,
-  getTrialStartErrorMessage,
-} from '@/utils/upgradePresentation';
 import {
   getReportingGenerateErrorMessage,
   getReportingGenerateSelectionRequiredMessage,
   getReportingGenerateSuccessMessage,
 } from '@/utils/reportingPresentation';
+import { runStartProTrialAction } from '@/utils/trialStartAction';
 import {
   buildReportingRequest,
   getReportingRangeStart,
@@ -57,14 +53,10 @@ export const useReportingPanelState = () => {
     if (startingTrial()) return;
     setStartingTrial(true);
     try {
-      const result = await startProTrial();
-      if (result?.outcome === 'redirect') {
-        window.location.href = result.actionUrl;
-        return;
-      }
-      showSuccess(getProTrialStartedMessage());
-    } catch (error) {
-      showWarning(getTrialStartErrorMessage(error));
+      await runStartProTrialAction({
+        showSuccess,
+        showError: showWarning,
+      });
     } finally {
       setStartingTrial(false);
     }

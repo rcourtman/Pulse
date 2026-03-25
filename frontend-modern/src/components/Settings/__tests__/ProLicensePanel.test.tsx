@@ -454,6 +454,8 @@ describe('ProLicensePanel', () => {
     expect(proLicensePanelStateSource).toContain('useLocation');
     expect(proLicensePanelStateSource).toContain('loadLicenseStatus(true)');
     expect(proLicensePanelStateSource).toContain('buildSelfHostedCommercialPlanModel');
+    expect(proLicensePanelStateSource).toContain('runStartProTrialAction({');
+    expect(proLicensePanelStateSource).not.toContain('startProTrial()');
     expect(proLicensePlanSectionSource).toContain('getLicenseStatusLoadingState');
     expect(proLicensePlanSectionSource).toContain('getNoActiveProLicenseState');
   });

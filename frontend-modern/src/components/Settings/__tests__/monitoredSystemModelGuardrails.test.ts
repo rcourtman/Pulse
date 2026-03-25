@@ -466,7 +466,8 @@ describe('monitored-system model guardrails', () => {
     expect(relayOnboardingCardStateSource).toContain('loadLicenseStatus()');
     expect(relayOnboardingCardStateSource).toContain('RelayAPI.getStatus()');
     expect(relayOnboardingCardStateSource).toContain('trackPaywallViewed');
-    expect(relayOnboardingCardStateSource).toContain('startProTrial()');
+    expect(relayOnboardingCardStateSource).toContain('runStartProTrialAction({');
+    expect(relayOnboardingCardStateSource).not.toContain('startProTrial()');
     expect(infrastructureInstallStateSource).toContain('STORAGE_KEYS.SETUP_HANDOFF');
     expect(infrastructureInstallerSectionSource).toContain(
       'Security configured. Save these first-run credentials now.',
@@ -1242,7 +1243,8 @@ describe('monitored-system model guardrails', () => {
     expect(rolesEditorDialogSource).toContain('RBAC_PERMISSION_RESOURCES');
     expect(rbacFeatureGateSectionSource).toContain('trackUpgradeClicked');
     expect(rbacFeatureGateStateSource).toContain('trackPaywallViewed');
-    expect(rbacFeatureGateStateSource).toContain('startProTrial');
+    expect(rbacFeatureGateStateSource).toContain('runStartProTrialAction({');
+    expect(rbacFeatureGateStateSource).not.toContain('startProTrial()');
     expect(userAssignmentsDialogSource).toContain('Effective Permissions Preview');
     expect(userAssignmentsPanelStateSource).toContain('RBACAPI.getUsers');
     expect(userAssignmentsPanelStateSource).toContain('RBACAPI.updateUserRoles');

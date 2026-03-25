@@ -5,13 +5,12 @@ import {
   hasFeature,
   licenseLoaded,
   loadLicenseStatus,
-  startProTrial,
 } from '@/stores/license';
 import { logger } from '@/utils/logger';
 import { isUpsellSnoozed, snoozeUpsell } from '@/utils/snooze';
 import { showError, showSuccess } from '@/utils/toast';
 import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/upgradeMetrics';
-import { getTrialStartErrorMessage } from '@/utils/upgradePresentation';
+import { runStartProTrialAction } from '@/utils/trialStartAction';
 
 const SNOOZE_KEY = 'pulse_relay_onboarding_snoozed';
 const RELAY_SETTINGS_PATH = '/settings/system-relay';
@@ -109,21 +108,17 @@ export function useRelayOnboardingCardState() {
 
     setTrialStarting(true);
     try {
-      const result = await startProTrial();
-      if (result?.outcome === 'redirect') {
-        if (typeof window !== 'undefined') {
-          window.location.href = result.actionUrl;
-        }
-        return;
+      const outcome = await runStartProTrialAction({
+        branded: true,
+        successMessage: 'Trial started. Relay is now available.',
+        showSuccess,
+        showError,
+      });
+      if (outcome === 'activated') {
+        await loadLicenseStatus(true);
+        setStatusLoaded(false);
+        void loadRelayStatusOnce();
       }
-
-      showSuccess('Trial started. Relay is now available.');
-      await loadLicenseStatus(true);
-      setStatusLoaded(false);
-      void loadRelayStatusOnce();
-    } catch (error) {
-      logger.warn('[RelayOnboardingCard] Failed to start trial', error);
-      showError(getTrialStartErrorMessage(error, { branded: true }));
     } finally {
       setTrialStarting(false);
     }

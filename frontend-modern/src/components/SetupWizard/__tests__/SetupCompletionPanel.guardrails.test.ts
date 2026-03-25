@@ -12,6 +12,8 @@ describe('SetupCompletionPanel guardrails', () => {
     expect(setupCompletionPanelSource).toContain('Use the Infrastructure Install workspace to:');
     expect(setupCompletionPanelSource).toContain('generate Unified Agent tokens');
     expect(setupCompletionPanelSource).toContain('configure TLS and custom CA options');
+    expect(setupCompletionPanelSource).toContain('runStartProTrialAction({');
+    expect(setupCompletionPanelSource).not.toContain('getUpgradeActionUrlOrFallback');
   });
 
   it('describes setup completion through the unified resource model instead of legacy install-command copy', () => {

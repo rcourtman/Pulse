@@ -4,15 +4,11 @@ import {
   hasFeature,
   licenseLoaded,
   loadLicenseStatus,
-  startProTrial,
 } from '@/stores/license';
 import { notificationStore } from '@/stores/notifications';
 import { getRBACFeatureGateCopy, type RBACFeatureGateCopy } from '@/utils/rbacPresentation';
 import { trackPaywallViewed } from '@/utils/upgradeMetrics';
-import {
-  getProTrialStartedMessage,
-  getTrialStartErrorMessage,
-} from '@/utils/upgradePresentation';
+import { runStartProTrialAction } from '@/utils/trialStartAction';
 
 export type RBACFeatureGateKind = 'roles' | 'user-assignments';
 export type RBACFeatureGateLocation =
@@ -54,14 +50,10 @@ export function useRBACFeatureGateState(options: UseRBACFeatureGateStateOptions)
     if (startingTrial()) return;
     setStartingTrial(true);
     try {
-      const result = await startProTrial();
-      if (result?.outcome === 'redirect') {
-        window.location.href = result.actionUrl;
-        return;
-      }
-      notificationStore.success(getProTrialStartedMessage());
-    } catch (err) {
-      notificationStore.error(getTrialStartErrorMessage(err));
+      await runStartProTrialAction({
+        showSuccess: notificationStore.success,
+        showError: notificationStore.error,
+      });
     } finally {
       setStartingTrial(false);
     }

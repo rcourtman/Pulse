@@ -9,16 +9,11 @@ import { Component, Show, createSignal, createResource, createMemo } from 'solid
 import { aiIntelligenceStore } from '@/stores/aiIntelligence';
 import { notificationStore } from '@/stores/notifications';
 import { aiChatStore } from '@/stores/aiChat';
-import { hasFeature, licenseStatus, startProTrial } from '@/stores/license';
+import { hasFeature, licenseStatus } from '@/stores/license';
 import { AIAPI, type ApprovalRequest, type ApprovalExecutionResult } from '@/api/ai';
 import { getApprovalRiskPresentation } from '@/utils/approvalRiskPresentation';
 import { RemediationStatus } from './RemediationStatus';
-import {
-  getProTrialStartedMessage,
-  getTrialAlreadyUsedMessage,
-  getTrialStartErrorMessage,
-  getTrialTryAgainLaterMessage,
-} from '@/utils/upgradePresentation';
+import { runStartProTrialAction } from '@/utils/trialStartAction';
 
 interface ApprovalSectionProps {
   findingId: string;
@@ -59,27 +54,11 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
     if (startingTrial()) return;
     setStartingTrial(true);
     try {
-      const result = await startProTrial();
-      if (result?.outcome === 'redirect') {
-        if (typeof window !== 'undefined') {
-          window.location.href = result.actionUrl;
-        }
-        return;
-      }
-      notificationStore.success(getProTrialStartedMessage());
-    } catch (err) {
-      const statusCode = (err as { status?: number } | null)?.status;
-      if (statusCode === 409) {
-        notificationStore.error(getTrialAlreadyUsedMessage());
-      } else if (statusCode === 429) {
-        notificationStore.error(getTrialTryAgainLaterMessage());
-      } else {
-        notificationStore.error(
-          getTrialStartErrorMessage(err instanceof Error ? err.message : undefined, {
-            branded: true,
-          }),
-        );
-      }
+      await runStartProTrialAction({
+        branded: true,
+        showSuccess: notificationStore.success,
+        showError: notificationStore.error,
+      });
     } finally {
       setStartingTrial(false);
     }

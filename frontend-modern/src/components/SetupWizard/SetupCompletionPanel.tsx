@@ -24,8 +24,6 @@ import {
 import {
   loadLicenseStatus,
   entitlements,
-  getUpgradeActionUrlOrFallback,
-  startProTrial,
 } from '@/stores/license';
 import {
   RELAY_ONBOARDING_SETUP_LABEL,
@@ -33,6 +31,7 @@ import {
   RELAY_ONBOARDING_TRIAL_HINT,
   RELAY_ONBOARDING_TRIAL_STARTING_LABEL,
 } from '@/utils/relayPresentation';
+import { runStartProTrialAction } from '@/utils/trialStartAction';
 import type { WizardState } from '../SetupWizard';
 
 interface CompleteStepProps {
@@ -299,23 +298,15 @@ Keep these credentials secure!
 
     setTrialStarting(true);
     try {
-      const result = await startProTrial();
-      if (result?.outcome === 'redirect') {
-        if (typeof window !== 'undefined') {
-          window.location.href = result.actionUrl;
-        }
-        return;
-      }
-
-      showSuccess('14-day Pro trial started! Set up Relay to monitor from your phone.');
-      setTrialStarted(true);
-      await loadLicenseStatus(true);
-    } catch (err) {
-      logger.warn('[SetupCompletionPanel] Failed to start trial; falling back to upgrade URL', err);
-      showError('Unable to start trial. Redirecting to upgrade options...');
-      const upgradeUrl = getUpgradeActionUrlOrFallback('relay');
-      if (typeof window !== 'undefined') {
-        window.location.href = upgradeUrl;
+      const outcome = await runStartProTrialAction({
+        branded: true,
+        successMessage: '14-day Pro trial started! Set up Relay to monitor from your phone.',
+        showSuccess,
+        showError,
+      });
+      if (outcome === 'activated') {
+        setTrialStarted(true);
+        await loadLicenseStatus(true);
       }
     } finally {
       setTrialStarting(false);

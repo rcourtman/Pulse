@@ -4,7 +4,7 @@ import type { NodeConfig } from '@/types/nodes';
 import { notificationStore } from '@/stores/notifications';
 import { NodesAPI } from '@/api/nodes';
 import type { ProxmoxSetupCommandResponse } from '@/api/nodes';
-import { licenseStatus, startProTrial } from '@/stores/license';
+import { licenseStatus } from '@/stores/license';
 import { copyToClipboard } from '@/utils/clipboard';
 import { logger } from '@/utils/logger';
 import {
@@ -13,12 +13,7 @@ import {
   getNodeModalTestResultPresentation,
   type NodeModalFormData,
 } from '@/utils/nodeModalPresentation';
-import {
-  getProTrialStartedMessage,
-  getTrialAlreadyUsedMessage,
-  getTrialStartErrorMessage,
-  getTrialTryAgainLaterMessage,
-} from '@/utils/upgradePresentation';
+import { runStartProTrialAction } from '@/utils/trialStartAction';
 
 import { deriveNameFromHost, type NodeModalProps } from './nodeModalModel';
 
@@ -71,27 +66,11 @@ export const useNodeModalState = (props: NodeModalProps) => {
     if (startingTrial()) return;
     setStartingTrial(true);
     try {
-      const result = await startProTrial();
-      if (result?.outcome === 'redirect') {
-        if (typeof window !== 'undefined') {
-          window.location.href = result.actionUrl;
-        }
-        return;
-      }
-      notificationStore.success(getProTrialStartedMessage());
-    } catch (err) {
-      const statusCode = (err as { status?: number } | null)?.status;
-      if (statusCode === 409) {
-        notificationStore.error(getTrialAlreadyUsedMessage());
-      } else if (statusCode === 429) {
-        notificationStore.error(getTrialTryAgainLaterMessage());
-      } else {
-        notificationStore.error(
-          getTrialStartErrorMessage(err instanceof Error ? err.message : undefined, {
-            branded: true,
-          }),
-        );
-      }
+      await runStartProTrialAction({
+        branded: true,
+        showSuccess: notificationStore.success,
+        showError: notificationStore.error,
+      });
     } finally {
       setStartingTrial(false);
     }

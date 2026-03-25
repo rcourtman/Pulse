@@ -1564,7 +1564,8 @@ describe('frontend resource type boundaries', () => {
     expect(relayOnboardingCardSource).not.toContain('RelayAPI.getStatus()');
     expect(relayOnboardingCardStateSource).toContain('RelayAPI.getStatus()');
     expect(relayOnboardingCardStateSource).toContain('loadLicenseStatus()');
-    expect(relayOnboardingCardStateSource).toContain('startProTrial()');
+    expect(relayOnboardingCardStateSource).toContain('runStartProTrialAction({');
+    expect(relayOnboardingCardStateSource).not.toContain('startProTrial()');
     expect(organizationBillingPanelSource).not.toContain('normalizeOrgScope(getOrgID())');
     expect(organizationBillingPanelSource).not.toContain('createSignal(');
     expect(billingAdminPanelSource).not.toContain('createSignal(');

@@ -210,8 +210,12 @@ Shared trial CTA handling is now part of that same primitive boundary for
 settings and shared paywalls. Shared/settings runtime owners must derive trial
 eligibility from the canonical entitlements payload, including
 `trial_eligible`, and route operator-facing failure copy through
-`frontend-modern/src/utils/upgradePresentation.ts` instead of open-coding local
-409/429 branches that drift from backend denial reasons.
+`frontend-modern/src/utils/upgradePresentation.ts`. The trial-start runtime
+handoff itself is now centralized in
+`frontend-modern/src/utils/trialStartAction.ts`; settings/shared paywalls and
+onboarding surfaces must use that owner for redirect, success-notification, and
+canonical denial handling instead of open-coding local `startProTrial()`
+branches or re-interpreting backend status codes.
 Top-level route files are now also expected to stay thin when a feature owns
 the real product surface. `frontend-modern/src/pages/Infrastructure.tsx` now
 acts only as the route boundary, while

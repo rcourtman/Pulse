@@ -231,6 +231,13 @@ The top-level authenticated shell is part of that same customer-facing
 boundary: cloud-paid trial prompts may appear in owned commercial surfaces, but
 the app shell must not force a global, persistent Pro trial nudge that
 overrides the primary runtime chrome for every signed-in user.
+The shared trial-start runtime is part of that same cloud-paid boundary.
+Commercial relay, onboarding, setup, Pro settings, and shared paywall
+surfaces may customize success copy, but they must route hosted handoff,
+success-notification, and canonical denial handling through
+`frontend-modern/src/utils/trialStartAction.ts` instead of carrying local
+`startProTrial()` redirect/error branches that drift from backend commercial
+truth.
 The hosted trial handoff page is part of that same boundary as well. It may
 still use a secure hosted Stripe-backed session internally, but the customer
 copy must present the flow as starting a trial for the originating Pulse

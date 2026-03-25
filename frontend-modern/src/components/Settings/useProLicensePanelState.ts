@@ -6,13 +6,8 @@ import {
   licenseLoadError,
   licenseStatus,
   loadLicenseStatus,
-  startProTrial,
 } from '@/stores/license';
 import { LicenseAPI } from '@/api/license';
-import {
-  getProTrialStartedMessage,
-  getTrialStartErrorMessage,
-} from '@/utils/upgradePresentation';
 import {
   formatLicensePlanVersion,
   getCommercialMigrationNotice,
@@ -23,6 +18,7 @@ import {
   getTrialActivationNotice,
 } from '@/utils/licensePresentation';
 import { buildSelfHostedCommercialPlanModel } from '@/utils/commercialBillingModel';
+import { runStartProTrialAction } from '@/utils/trialStartAction';
 
 const formatDate = (value?: string | null) => {
   if (!value) return 'Not available';
@@ -76,16 +72,11 @@ export function useProLicensePanelState() {
     if (startingTrial()) return;
     setStartingTrial(true);
     try {
-      const result = await startProTrial();
-      if (result?.outcome === 'redirect') {
-        if (typeof window !== 'undefined') {
-          window.location.href = result.actionUrl;
-        }
-        return;
-      }
-      notificationStore.success(getProTrialStartedMessage());
-    } catch (error) {
-      notificationStore.error(getTrialStartErrorMessage(error, { branded: true }));
+      await runStartProTrialAction({
+        branded: true,
+        showSuccess: notificationStore.success,
+        showError: notificationStore.error,
+      });
     } finally {
       setStartingTrial(false);
     }

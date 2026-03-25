@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
+import relayOnboardingCardStateSource from '../useRelayOnboardingCardState.ts?raw';
 
 // ── Hoisted mocks ──────────────────────────────────────────────────────
 
@@ -125,6 +126,11 @@ function setupWithoutRelayFeature() {
 // ── Tests ───────────────────────────────────────────────────────────────
 
 describe('RelayOnboardingCard', () => {
+  it('keeps relay onboarding trial flow on the shared trial action owner', () => {
+    expect(relayOnboardingCardStateSource).toContain('runStartProTrialAction({');
+    expect(relayOnboardingCardStateSource).not.toContain('startProTrial()');
+  });
+
   beforeEach(() => {
     resetAllMocks();
   });

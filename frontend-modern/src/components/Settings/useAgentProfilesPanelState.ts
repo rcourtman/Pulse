@@ -17,22 +17,19 @@ import {
   licenseLoaded,
   licenseLoading,
   loadLicenseStatus,
-  startProTrial,
 } from '@/stores/license';
 import type { ConnectedInfrastructureItem } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import { formatRelativeTime } from '@/utils/format';
 import { logger } from '@/utils/logger';
 import {
-  getProTrialStartedMessage,
-  getTrialAlreadyUsedMessage,
-  getTrialStartErrorMessage,
   getUpgradeActionButtonClass,
   UPGRADE_ACTION_LABEL,
   UPGRADE_TRIAL_LABEL,
   UPGRADE_TRIAL_LINK_CLASS,
 } from '@/utils/upgradePresentation';
 import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/upgradeMetrics';
+import { runStartProTrialAction } from '@/utils/trialStartAction';
 import { KNOWN_SETTINGS } from './agentProfileSettings';
 import {
   getActionableAgentIdFromResource,
@@ -218,21 +215,10 @@ export const useAgentProfilesPanelState = () => {
     if (startingTrial()) return;
     setStartingTrial(true);
     try {
-      const result = await startProTrial();
-      if (result?.outcome === 'redirect') {
-        window.location.href = result.actionUrl;
-        return;
-      }
-      notificationStore.success(getProTrialStartedMessage());
-    } catch (err) {
-      const statusCode = (err as { status?: number } | null)?.status;
-      if (statusCode === 409) {
-        notificationStore.error(getTrialAlreadyUsedMessage());
-      } else {
-        notificationStore.error(
-          getTrialStartErrorMessage(err instanceof Error ? err.message : undefined),
-        );
-      }
+      await runStartProTrialAction({
+        showSuccess: notificationStore.success,
+        showError: notificationStore.error,
+      });
     } finally {
       setStartingTrial(false);
     }

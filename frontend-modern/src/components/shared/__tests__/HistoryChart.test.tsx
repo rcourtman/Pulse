@@ -69,9 +69,8 @@ describe('HistoryChart', () => {
     expect(historyChartStateSource).toContain('export function useHistoryChartState');
     expect(historyChartStateSource).toContain('HISTORY_CHART_RANGES');
     expect(historyChartStateSource).toContain('return ent.trial_eligible !== false;');
-    expect(historyChartStateSource).toContain(
-      'notificationStore.error(getTrialStartErrorMessage(err, { branded: true }));',
-    );
+    expect(historyChartStateSource).toContain('runStartProTrialAction({');
+    expect(historyChartStateSource).not.toContain('startProTrial()');
     expect(historyChartStateSource).not.toContain('getTrialAlreadyUsedMessage()');
     expect(historyChartStateSource).not.toContain('getTrialTryAgainLaterMessage()');
 
