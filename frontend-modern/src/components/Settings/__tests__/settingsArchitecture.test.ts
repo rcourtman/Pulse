@@ -1099,7 +1099,7 @@ describe('Settings architecture guardrails', () => {
     expect(reportingPanelStateSource).toContain('buildReportingCatalogRequest');
     expect(reportingPanelStateSource).toContain('parseReportingCatalog');
     expect(reportingPanelStateSource).toContain('reportingFeatureId');
-    expect(reportingPanelStateSource).toContain('!licenseLoaded()');
+    expect(reportingPanelStateSource).not.toContain('!licenseLoaded()');
     expect(reportingPanelStateSource).not.toContain('!isReportingEnabled()');
     expect(reportingPanelStateSource).toContain('buildVMInventoryExportRequest');
     expect(reportingPanelStateSource).toContain('getReportingGenerateSuccessMessage');

@@ -74,12 +74,7 @@ export const useReportingPanelState = () => {
   }, false);
 
   createEffect(() => {
-    if (
-      !licenseLoaded() ||
-      reportingCatalog() ||
-      reportingCatalogLoading() ||
-      reportingCatalogRequested()
-    ) {
+    if (reportingCatalog() || reportingCatalogLoading() || reportingCatalogRequested()) {
       return;
     }
 

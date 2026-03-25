@@ -209,6 +209,9 @@ feature-identity source once it loads. `ReportingPanel.tsx` and
 catalog is available, but they must not hardcode the reporting feature key or
 the entitled and locked panel title and description once the catalog has
 loaded.
+The same metadata route is readable without the reporting feature gate, so the
+settings shell must not delay the catalog fetch on `licenseLoaded()` before it
+can render its canonical loading, locked, or entitled states.
 That same catalog-owned contract also includes the locked teaser copy itself:
 `ReportingPanel.tsx` may style or place the paywall content, but the locked
 title and description must come from the parsed reporting catalog instead of

@@ -160,4 +160,54 @@ describe('useReportingPanelState', () => {
 
     dispose();
   });
+
+  it('loads the reporting catalog before license readiness settles', async () => {
+    vi.resetModules();
+
+    apiFetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify(catalogPayload), { status: 200 }));
+    hasReportingFeature = false;
+    loadLicenseStatusMock = vi.fn();
+
+    vi.doMock('@/utils/apiClient', () => ({
+      apiFetch: apiFetchMock,
+    }));
+
+    vi.doMock('@/utils/toast', () => ({
+      showSuccess: vi.fn(),
+      showWarning: vi.fn(),
+    }));
+
+    vi.doMock('@/utils/trialStartAction', () => ({
+      runStartProTrialAction: vi.fn(),
+    }));
+
+    vi.doMock('@/utils/upgradeMetrics', () => ({
+      trackPaywallViewed: vi.fn(),
+    }));
+
+    vi.doMock('@/stores/license', () => ({
+      entitlements: vi.fn(() => ({ trial_eligible: true })),
+      getUpgradeActionUrlOrFallback: vi.fn(() => '/pricing'),
+      hasFeature: vi.fn(() => false),
+      licenseLoaded: vi.fn(() => false),
+      loadLicenseStatus: loadLicenseStatusMock,
+    }));
+
+    ({ useReportingPanelState } = await import('../useReportingPanelState'));
+
+    const { hookState, dispose } = mountHook();
+
+    await flushAsync();
+    await flushAsync();
+
+    expect(loadLicenseStatusMock).toHaveBeenCalledOnce();
+    expect(apiFetchMock).toHaveBeenCalledWith('/api/admin/reports/catalog');
+    expect(hookState.reportingCatalog()?.title).toBe('Detailed Reporting');
+    expect(hookState.isLocked()).toBe(false);
+    expect(hookState.isReportingEnabled()).toBe(false);
+
+    dispose();
+  });
 });
