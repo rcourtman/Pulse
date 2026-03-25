@@ -4,7 +4,6 @@ import type { UnifiedFinding } from '@/stores/aiIntelligence';
 import { aiIntelligenceStore } from '@/stores/aiIntelligence';
 import type { ApprovalRequest } from '@/api/ai';
 import { hasFeature } from '@/stores/license';
-import { sortFindingsForAttentionQueue } from '@/utils/aiFindingPresentation';
 
 export interface DashboardActions {
   pendingApprovals: Accessor<ApprovalRequest[]>;
@@ -55,7 +54,7 @@ export function useDashboardActions(alertsList: Accessor<Alert[]>): DashboardAct
 
   const findingsNeedingAttention = createMemo(() => {
     if (!hasPatrol()) return [];
-    return sortFindingsForAttentionQueue(aiIntelligenceStore.findingsNeedingAttention);
+    return aiIntelligenceStore.findingsNeedingAttention;
   });
 
   const totalActionCount = createMemo(

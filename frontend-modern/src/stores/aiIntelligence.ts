@@ -22,6 +22,7 @@ import {
   doesFindingNeedAttention,
   hasPendingInvestigationFixApproval,
   isPatrolInvestigationFixApproval,
+  sortFindingsForAttentionQueue,
 } from '@/utils/aiFindingPresentation';
 import { getApprovalExpiryTime, isLivePendingApproval } from '@/utils/approvalState';
 import { logger } from '@/utils/logger';
@@ -453,7 +454,9 @@ export const aiIntelligenceStore = {
 
   get findingsNeedingAttention() {
     const approvals = getLivePendingApprovals();
-    return unifiedFindings().filter((finding) => doesFindingNeedAttention(finding, approvals));
+    return sortFindingsForAttentionQueue(
+      unifiedFindings().filter((finding) => doesFindingNeedAttention(finding, approvals)),
+    );
   },
 
   get needsAttentionCount() {

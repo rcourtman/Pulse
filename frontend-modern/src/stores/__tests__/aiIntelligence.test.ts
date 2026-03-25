@@ -427,4 +427,51 @@ describe('aiIntelligenceStore', () => {
     await aiIntelligenceStore.loadPendingApprovals();
     vi.useRealTimers();
   });
+
+  it('sorts Patrol runtime findings to the top of the shared needs-attention queue', async () => {
+    vi.mocked(AIAPI.getUnifiedFindings).mockResolvedValueOnce({
+      findings: [
+        {
+          id: 'infra-warning',
+          source: 'ai-patrol',
+          severity: 'warning',
+          category: 'infrastructure',
+          resource_id: 'instance:node:101',
+          resource_name: 'db-01',
+          resource_type: 'host',
+          title: 'Disk nearly full',
+          description: 'Storage usage is high.',
+          detected_at: '2026-03-01T00:00:00Z',
+          status: 'active',
+          investigation_outcome: 'fix_verification_unknown',
+        },
+        {
+          id: 'runtime-warning',
+          source: 'ai-patrol',
+          severity: 'warning',
+          category: 'service',
+          resource_id: 'ai-service',
+          resource_name: 'Pulse Patrol Service',
+          resource_type: 'service',
+          title: 'Pulse Patrol: Insufficient API credits',
+          description: 'Provider credits are exhausted.',
+          detected_at: '2026-03-01T00:01:00Z',
+          last_seen_at: '2026-03-01T00:05:00Z',
+          status: 'active',
+          investigation_outcome: 'fix_failed',
+        },
+      ],
+      count: 2,
+    });
+
+    vi.mocked(AIAPI.getPendingApprovals).mockResolvedValueOnce([]);
+
+    await aiIntelligenceStore.loadFindings();
+    await aiIntelligenceStore.loadPendingApprovals();
+
+    expect(aiIntelligenceStore.findingsNeedingAttention.map((finding) => finding.id)).toEqual([
+      'runtime-warning',
+      'infra-warning',
+    ]);
+  });
 });

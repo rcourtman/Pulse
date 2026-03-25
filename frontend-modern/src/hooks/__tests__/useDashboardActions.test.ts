@@ -31,7 +31,6 @@ vi.mock('@/utils/logger', () => ({
 
 import { AIAPI } from '@/api/ai';
 import { useDashboardActions } from '@/hooks/useDashboardActions';
-import { sortFindingsForAttentionQueue } from '@/utils/aiFindingPresentation';
 
 describe('useDashboardActions', () => {
   beforeEach(() => {
@@ -109,29 +108,60 @@ describe('useDashboardActions', () => {
     dispose();
   });
 
-  it('prioritizes Patrol runtime findings in the dashboard attention queue', () => {
-    expect(
-      sortFindingsForAttentionQueue([
+  it('surfaces the store-owned attention ordering unchanged', async () => {
+    vi.mocked(AIAPI.getUnifiedFindings).mockResolvedValue({
+      findings: [
         {
           id: 'infra-warning',
-          status: 'active',
+          source: 'ai-patrol',
           severity: 'warning',
-          resourceId: 'vm-101',
-          resourceName: 'db-01',
+          category: 'infrastructure',
+          resource_id: 'instance:node:101',
+          resource_name: 'db-01',
+          resource_type: 'host',
           title: 'Disk nearly full',
-          detectedAt: '2026-03-01T00:00:00Z',
-        } as never,
+          description: 'Storage usage is high.',
+          detected_at: '2026-03-01T00:00:00Z',
+          status: 'active',
+          investigation_outcome: 'fix_verification_unknown',
+        },
         {
           id: 'runtime-warning',
-          status: 'active',
+          source: 'ai-patrol',
           severity: 'warning',
-          resourceId: 'ai-service',
-          resourceName: 'Pulse Patrol Service',
+          category: 'service',
+          resource_id: 'ai-service',
+          resource_name: 'Pulse Patrol Service',
+          resource_type: 'service',
           title: 'Pulse Patrol: Insufficient API credits',
-          lastSeenAt: '2026-03-01T00:05:00Z',
-          detectedAt: '2026-03-01T00:01:00Z',
-        } as never,
-      ]).map((finding) => finding.id),
-    ).toEqual(['runtime-warning', 'infra-warning']);
+          description: 'Provider credits are exhausted.',
+          detected_at: '2026-03-01T00:01:00Z',
+          last_seen_at: '2026-03-01T00:05:00Z',
+          status: 'active',
+          investigation_outcome: 'fix_failed',
+        },
+      ],
+      count: 2,
+    } as never);
+    vi.mocked(AIAPI.getPendingApprovals).mockResolvedValue([] as never);
+
+    let dispose!: () => void;
+    let actions!: ReturnType<typeof useDashboardActions>;
+
+    createRoot((d) => {
+      dispose = d;
+      const [alertsList] = createSignal<Alert[]>([]);
+      actions = useDashboardActions(alertsList);
+    });
+
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(actions.findingsNeedingAttention().map((finding) => finding.id)).toEqual([
+      'runtime-warning',
+      'infra-warning',
+    ]);
+
+    dispose();
   });
 });
