@@ -34,10 +34,16 @@ export interface ReportingPerformanceReportDefinition {
   supportsCustomTitle: boolean;
 }
 
+export interface ReportingLockedStateDefinition {
+  title: string;
+  description: string;
+}
+
 export interface ReportingCatalog {
   id: string;
   title: string;
   description: string;
+  lockedState: ReportingLockedStateDefinition;
   performanceReport: ReportingPerformanceReportDefinition;
   vmInventoryExport: ReportingInventoryExportDefinition;
 }
@@ -146,6 +152,21 @@ function parseReportingPerformanceReportDefinition(
   };
 }
 
+function parseReportingLockedStateDefinition(input: unknown): ReportingLockedStateDefinition {
+  if (!input || typeof input !== 'object') {
+    throw new Error('Invalid reporting catalog payload');
+  }
+  const candidate = input as Partial<ReportingLockedStateDefinition>;
+  if (typeof candidate.title !== 'string' || typeof candidate.description !== 'string') {
+    throw new Error('Invalid reporting catalog payload');
+  }
+
+  return {
+    title: candidate.title,
+    description: candidate.description,
+  };
+}
+
 export function parseReportingCatalog(input: unknown): ReportingCatalog {
   if (!input || typeof input !== 'object') {
     throw new Error('Invalid reporting catalog payload');
@@ -163,6 +184,7 @@ export function parseReportingCatalog(input: unknown): ReportingCatalog {
     id: candidate.id,
     title: candidate.title,
     description: candidate.description,
+    lockedState: parseReportingLockedStateDefinition(candidate.lockedState),
     performanceReport: parseReportingPerformanceReportDefinition(candidate.performanceReport),
     vmInventoryExport: parseVMInventoryExportDefinition(candidate.vmInventoryExport),
   };

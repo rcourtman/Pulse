@@ -8,6 +8,10 @@ const baseCatalogPayload = {
   id: 'advanced_reporting',
   title: 'Detailed Reporting',
   description: 'Canonical reporting surfaces',
+  lockedState: {
+    title: 'Advanced Reporting (Pro)',
+    description: 'Canonical locked reporting teaser',
+  },
   performanceReport: {
     id: 'performance_reports',
     title: 'Performance Reports',
@@ -61,6 +65,7 @@ describe('reporting catalog model', () => {
   it('parses the canonical reporting catalog payload', () => {
     const catalog = parseReportingCatalog(baseCatalogPayload);
 
+    expect(catalog.lockedState.title).toBe('Advanced Reporting (Pro)');
     expect(catalog.performanceReport.defaultFormat).toBe('pdf');
     expect(catalog.performanceReport.ranges[0].windowHours).toBe(24);
     expect(catalog.vmInventoryExport.exportEndpoint).toBe(
@@ -96,6 +101,17 @@ describe('reporting catalog model', () => {
               windowHours: 24,
             },
           ],
+        },
+      }),
+    ).toThrow('Invalid reporting catalog payload');
+  });
+
+  it('rejects a catalog whose locked-state teaser is incomplete', () => {
+    expect(() =>
+      parseReportingCatalog({
+        ...baseCatalogPayload,
+        lockedState: {
+          title: 'Advanced Reporting (Pro)',
         },
       }),
     ).toThrow('Invalid reporting catalog payload');

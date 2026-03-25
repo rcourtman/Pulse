@@ -39,12 +39,18 @@ type PerformanceReportDefinition struct {
 
 // ReportingCatalog describes the backend-owned admin reporting surface for the
 // Pulse settings UI.
+type ReportingLockedStateDefinition struct {
+	Title       string `json:"title"`
+	Description string `json:"description"`
+}
+
 type ReportingCatalog struct {
-	ID                string                      `json:"id"`
-	Title             string                      `json:"title"`
-	Description       string                      `json:"description"`
-	PerformanceReport PerformanceReportDefinition `json:"performanceReport"`
-	VMInventoryExport VMInventoryExportDefinition `json:"vmInventoryExport"`
+	ID                string                         `json:"id"`
+	Title             string                         `json:"title"`
+	Description       string                         `json:"description"`
+	LockedState       ReportingLockedStateDefinition `json:"lockedState"`
+	PerformanceReport PerformanceReportDefinition    `json:"performanceReport"`
+	VMInventoryExport VMInventoryExportDefinition    `json:"vmInventoryExport"`
 }
 
 // SupportsFormat reports whether the performance reporting surface allows the
@@ -101,9 +107,13 @@ func DescribePerformanceReport() PerformanceReportDefinition {
 // definition for the advanced reporting feature.
 func DescribeReportingCatalog() ReportingCatalog {
 	return ReportingCatalog{
-		ID:                "advanced_reporting",
-		Title:             "Detailed Reporting",
-		Description:       "Generate performance reports and current-state exports across infrastructure and workloads.",
+		ID:          "advanced_reporting",
+		Title:       "Detailed Reporting",
+		Description: "Generate performance reports and current-state exports across infrastructure and workloads.",
+		LockedState: ReportingLockedStateDefinition{
+			Title:       "Advanced Reporting (Pro)",
+			Description: "Generate PDF and CSV performance reports plus current-state VM inventory exports across infrastructure and workload resources.",
+		},
 		PerformanceReport: DescribePerformanceReport(),
 		VMInventoryExport: DescribeVMInventoryExport(),
 	}

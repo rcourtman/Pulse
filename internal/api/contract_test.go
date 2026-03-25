@@ -349,6 +349,10 @@ func TestContract_ReportingCatalogJSONSnapshot(t *testing.T) {
 		"id":"advanced_reporting",
 		"title":"Detailed Reporting",
 		"description":"Generate performance reports and current-state exports across infrastructure and workloads.",
+		"lockedState":{
+			"title":"Advanced Reporting (Pro)",
+			"description":"Generate PDF and CSV performance reports plus current-state VM inventory exports across infrastructure and workload resources."
+		},
 		"performanceReport":{
 			"id":"performance_reports",
 			"title":"Performance Reports",

@@ -23,6 +23,10 @@ const baseCatalog = {
   id: 'advanced_reporting',
   title: 'Detailed Reporting',
   description: 'Canonical reporting surfaces',
+  lockedState: {
+    title: 'Advanced Reporting (Pro)',
+    description: 'Canonical locked reporting teaser',
+  },
   performanceReport: {
     id: 'performance_reports',
     title: 'Performance Reports',
@@ -125,5 +129,26 @@ describe('ReportingPanel', () => {
 
     expect(screen.queryByLabelText('Metric Type (Optional)')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Report Title')).not.toBeInTheDocument();
+  });
+
+  it('uses catalog-owned locked teaser copy for the paywalled shell', () => {
+    useReportingPanelStateMock.mockReturnValue(
+      buildState({
+        isLocked: () => true,
+        isReportingEnabled: () => false,
+        reportingCatalog: () => ({
+          ...baseCatalog,
+          lockedState: {
+            title: 'Reporting for Paid Workflows',
+            description: 'Catalog-owned locked teaser copy',
+          },
+        }),
+      }),
+    );
+
+    render(() => <ReportingPanel />);
+
+    expect(screen.getByText('Reporting for Paid Workflows')).toBeInTheDocument();
+    expect(screen.getByText('Catalog-owned locked teaser copy')).toBeInTheDocument();
   });
 });

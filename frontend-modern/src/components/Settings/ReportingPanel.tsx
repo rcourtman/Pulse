@@ -69,6 +69,7 @@ export function ReportingPanel() {
 
   const performanceReport = () => reportingCatalog()?.performanceReport ?? null;
   const inventoryDefinition = () => reportingCatalog()?.vmInventoryExport ?? null;
+  const lockedState = () => reportingCatalog()?.lockedState ?? null;
   const supportsMetricFilter = () => performanceReport()?.supportsMetricFilter ?? false;
   const supportsCustomTitle = () => performanceReport()?.supportsCustomTitle ?? false;
   const selectedRange = (): ReportingRangeValue => range() ?? performanceReport()!.defaultRange;
@@ -105,11 +106,14 @@ export function ReportingPanel() {
           <div class="p-4 sm:p-6">
             <div class="flex flex-col sm:flex-row items-center gap-4">
               <div class="flex-1 text-center sm:text-left">
-                <h4 class="text-base font-semibold text-base-content">Advanced Reporting (Pro)</h4>
-                <p class="text-sm text-muted mt-1">
-                  Generate PDF and CSV performance reports plus current-state VM inventory exports
-                  across infrastructure and workload resources.
-                </p>
+                <Show when={lockedState()}>
+                  {(state) => (
+                    <>
+                      <h4 class="text-base font-semibold text-base-content">{state().title}</h4>
+                      <p class="text-sm text-muted mt-1">{state().description}</p>
+                    </>
+                  )}
+                </Show>
               </div>
               <div class="flex flex-col sm:flex-row items-center gap-2">
                 <a

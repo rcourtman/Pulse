@@ -202,6 +202,10 @@ parsed backend definition.
 That same settings shell must also read the reporting catalog for locked users,
 not just entitled users, so the paywalled reporting panel does not drift onto a
 separate frontend-owned title or description contract.
+That same catalog-owned contract also includes the locked teaser copy itself:
+`ReportingPanel.tsx` may style or place the paywall content, but the locked
+title and description must come from the parsed reporting catalog instead of
+hardcoded component strings.
 The shared updates settings owner also defines the user-facing framing for
 rc-tagged builds. `frontend-modern/src/components/Settings/updatesSettingsModel.ts`
 and `frontend-modern/src/utils/updatesPresentation.ts` must present that

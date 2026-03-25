@@ -1104,6 +1104,8 @@ describe('Settings architecture guardrails', () => {
     expect(reportingPanelStateSource).not.toContain('getTrialAlreadyUsedMessage()');
     expect(reportingCatalogModelSource).toContain('export function buildReportingCatalogRequest');
     expect(reportingCatalogModelSource).toContain('export function parseReportingCatalog');
+    expect(reportingCatalogModelSource).toContain('interface ReportingLockedStateDefinition');
+    expect(reportingPanelSource).not.toContain('Advanced Reporting (Pro)');
     expect(reportingPanelModelSource).toContain('export function getReportingRangeStart');
     expect(reportingPanelModelSource).toContain('export function buildReportingRequest');
     expect(reportingPanelModelSource).toContain('export function buildReportingFilename');

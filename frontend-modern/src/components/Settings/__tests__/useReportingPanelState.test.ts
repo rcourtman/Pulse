@@ -14,6 +14,10 @@ const catalogPayload = {
   id: 'advanced_reporting',
   title: 'Detailed Reporting',
   description: 'Canonical reporting surfaces',
+  lockedState: {
+    title: 'Advanced Reporting (Pro)',
+    description: 'Canonical locked reporting teaser',
+  },
   performanceReport: {
     id: 'performance_reports',
     title: 'Performance Reports',
@@ -147,6 +151,7 @@ describe('useReportingPanelState', () => {
 
     expect(apiFetchMock).toHaveBeenCalledWith('/api/admin/reports/catalog');
     expect(hookState.reportingCatalog()?.title).toBe('Detailed Reporting');
+    expect(hookState.reportingCatalog()?.lockedState.title).toBe('Advanced Reporting (Pro)');
 
     dispose();
   });
