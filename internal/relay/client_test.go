@@ -1502,6 +1502,9 @@ func TestClient_SendPushNotification(t *testing.T) {
 		if payload.Title != "Test Push" {
 			t.Errorf("payload title: got %q, want %q", payload.Title, "Test Push")
 		}
+		if payload.InstanceID != "inst_push" {
+			t.Errorf("payload instance_id: got %q, want %q", payload.InstanceID, "inst_push")
+		}
 	case <-time.After(3 * time.Second):
 		t.Fatal("timed out waiting for PUSH_NOTIFICATION frame")
 	}

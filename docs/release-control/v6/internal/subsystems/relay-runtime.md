@@ -22,7 +22,8 @@ bridging.
 ## Canonical Files
 
 1. `internal/relay/client.go`
-2. `internal/config/persistence_relay.go`
+2. `internal/relay/protocol.go`
+3. `internal/config/persistence_relay.go`
 
 ## Shared Boundaries
 
@@ -31,8 +32,9 @@ bridging.
 ## Extension Points
 
 1. Add or change desktop relay reconnect, registration, drain, proxy-stream, or encrypted channel behavior through `internal/relay/`
-2. Add or change persisted relay enablement, server URL, or reconnect-safe default loading through `internal/config/persistence_relay.go`
-3. Keep desktop relay changes aligned with the governed mobile and server relay surfaces represented by the L7 lane evidence
+2. Add or change relay control payload schemas, including mobile-visible push notification metadata, through `internal/relay/protocol.go`
+3. Add or change persisted relay enablement, server URL, or reconnect-safe default loading through `internal/config/persistence_relay.go`
+4. Keep desktop relay changes aligned with the governed mobile and server relay surfaces represented by the L7 lane evidence
 
 ## Forbidden Paths
 
@@ -62,6 +64,11 @@ Relay status truthfulness is part of the same contract. If the client is in a
 governed reconnect or license-pause window, `ClientStatus.reconnect_in` must
 reflect that delay instead of silently presenting a disconnected state with no
 retry timing.
+Relay push notification identity is part of this same owned contract. The
+canonical `PUSH_NOTIFICATION` payload must carry the authoritative
+`instance_id` when the desktop relay client serializes it so multi-pairing
+mobile routing and repair flows cannot reinterpret a queued approval or
+finding against whichever instance happens to be active later.
 The relay HTTP proxy boundary is also part of this owned surface. Relay DATA
 requests must normalize outer method/path whitespace before building the local
 Pulse API request so trivial spacing drift does not cause a valid proxied

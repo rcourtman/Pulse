@@ -301,6 +301,16 @@ func (c *Client) Status() ClientStatus {
 // Returns ErrNotConnected if the client has not completed registration
 // with the relay server.
 func (c *Client) SendPushNotification(notification PushNotificationPayload) error {
+	c.mu.RLock()
+	instanceID := c.instanceID
+	ch := c.sendCh
+	connected := c.connected
+	c.mu.RUnlock()
+
+	if notification.InstanceID == "" {
+		notification.InstanceID = instanceID
+	}
+
 	frame, err := NewControlFrame(FramePushNotification, 0, notification)
 	if err != nil {
 		return fmt.Errorf("build push frame: %w", err)
@@ -309,11 +319,6 @@ func (c *Client) SendPushNotification(notification PushNotificationPayload) erro
 	if err != nil {
 		return fmt.Errorf("encode push frame: %w", err)
 	}
-
-	c.mu.RLock()
-	ch := c.sendCh
-	connected := c.connected
-	c.mu.RUnlock()
 
 	if ch == nil || !connected {
 		return ErrNotConnected
