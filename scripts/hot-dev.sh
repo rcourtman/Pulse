@@ -192,6 +192,7 @@ export ALLOWED_ORIGINS
 
 EXTRA_CLEANUP_PORT=$((PULSE_DEV_API_PORT + 1))
 HOT_DEV_RESTART_SENTINEL="${ROOT_DIR}/tmp/hot-dev.restart"
+HOT_DEV_WATCHER_STARTUP_GRACE_SECONDS="${HOT_DEV_WATCHER_STARTUP_GRACE_SECONDS:-5}"
 
 # --- Startup Checks ---
 
@@ -272,7 +273,9 @@ set -o pipefail
 log_info "Ports are clean!"
 
 mkdir -p "$(dirname "${HOT_DEV_RESTART_SENTINEL}")"
-touch "${HOT_DEV_RESTART_SENTINEL}"
+if [[ ! -e "${HOT_DEV_RESTART_SENTINEL}" ]]; then
+    : > "${HOT_DEV_RESTART_SENTINEL}"
+fi
 
 # Self-restart check
 check_script_change() {
@@ -512,6 +515,13 @@ log_info "Starting backend file watcher..."
     cd "${ROOT_DIR}"
     
     LAST_RESTART_TIME=0
+    WATCHER_READY_AT=$(date +%s)
+
+    watcher_within_startup_grace() {
+        local now
+        now=$(date +%s)
+        (( now - WATCHER_READY_AT < HOT_DEV_WATCHER_STARTUP_GRACE_SECONDS ))
+    }
 
     restart_backend() {
         # Debounce: skip if we restarted less than 3 seconds ago
@@ -610,6 +620,9 @@ log_info "Starting backend file watcher..."
             "${ROOT_DIR}/cmd" "${ROOT_DIR}/internal" "${ROOT_DIR}/pkg" "${ROOT_DIR}/pulse" "${HOT_DEV_RESTART_SENTINEL}" 2>/dev/null | \
         while read -r event changed_file; do
             check_script_change "$@"
+            if watcher_within_startup_grace && { [[ "$changed_file" == "${HOT_DEV_RESTART_SENTINEL}" ]] || [[ "$changed_file" == "${ROOT_DIR}/pulse" ]]; }; then
+                continue
+            fi
             if [[ "$changed_file" == "${HOT_DEV_RESTART_SENTINEL}" ]]; then
                 log_info "🚀 Managed restart requested, restarting backend..."
                 restart_backend
@@ -632,6 +645,9 @@ log_info "Starting backend file watcher..."
         fswatch --event Created --event Updated --event Renamed --event AttributeModified \
             "${ROOT_DIR}/pulse" "${HOT_DEV_RESTART_SENTINEL}" 2>/dev/null | \
         while read -r changed_file; do
+            if watcher_within_startup_grace && { [[ "$changed_file" == "${HOT_DEV_RESTART_SENTINEL}" ]] || [[ "$changed_file" == "${ROOT_DIR}/pulse" ]]; }; then
+                continue
+            fi
             if [[ "$changed_file" == "${HOT_DEV_RESTART_SENTINEL}" ]]; then
                 log_info "🚀 Managed restart requested, restarting backend..."
             else

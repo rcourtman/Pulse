@@ -239,6 +239,10 @@ sufficient management. The default managed runtime must supervise that child
 and restart it when the owner process exits unexpectedly, so a killed or wedged
 foreground owner does not leave both `5173` and `7655` down until a human
 notices.
+That self-healing guarantee must be covered by the canonical managed browser
+proof pack as well: `dev:verify` must prove both backend-bounce recovery and
+owner-process-death recovery on the browser entrypoint, rather than leaving the
+supervision contract to shell-only smoke tests.
 The same wrapper-first rule applies to launcher help text: `hot-dev-bg` usage
 output must present the repo-root npm entrypoints first and reserve raw
 subcommands as secondary script-local controls for direct troubleshooting.

@@ -59,13 +59,80 @@ function statusReportsRunning(output) {
   return output.includes('[hot-dev-bg] Running');
 }
 
-async function ensureHealthyStatus(env = process.env) {
+async function managedRuntimeStatusOutput(env = process.env) {
   const status = await runHotDevBg(['status'], env);
   if (status.code !== 0) {
     throw new Error(`hot-dev-bg status failed: ${status.stderr || status.stdout}`);
   }
 
-  const output = `${status.stdout}${status.stderr}`;
+  return `${status.stdout}${status.stderr}`;
+}
+
+function managedSupervisorPidFromStatus(output) {
+  const match = output.match(/\[hot-dev-bg\] Running \(pid: (\d+)\)/);
+  return match?.[1] || '';
+}
+
+function managedListenerPidFromStatus(output, port) {
+  const escapedPort = String(port).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = output.match(new RegExp(`\\[hot-dev-bg\\] Port ${escapedPort}: managed listener pid=(\\d+)`));
+  return match?.[1] || '';
+}
+
+async function managedBackendPid(env = process.env) {
+  const statusOutput = await managedRuntimeStatusOutput(env);
+  return managedListenerPidFromStatus(statusOutput, trim(env.PULSE_DEV_API_PORT) || '7655');
+}
+
+async function managedHotDevOwnerPid(env = process.env) {
+  const statusOutput = await managedRuntimeStatusOutput(env);
+  const supervisorPid = managedSupervisorPidFromStatus(statusOutput);
+  if (!supervisorPid) {
+    throw new Error(`Managed dev runtime is not running:\n${statusOutput}`);
+  }
+
+  const psResult = await run(
+    'ps',
+    ['-axo', 'pid=,ppid=,pgid=,command='],
+    { env: { ...process.env, ...env } },
+  );
+  if (psResult.code !== 0) {
+    throw new Error(`ps failed while locating managed hot-dev owner: ${psResult.stderr || psResult.stdout}`);
+  }
+
+  const ownerLines = `${psResult.stdout}${psResult.stderr}`
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => {
+      const match = line.match(/^(\d+)\s+(\d+)\s+(\d+)\s+(.+)$/);
+      if (!match) {
+        return false;
+      }
+      const [, , ppid, pgid, command] = match;
+      if (!command.includes('/scripts/hot-dev.sh')) {
+        return false;
+      }
+      return ppid === supervisorPid || pgid === supervisorPid;
+    })
+    .sort((left, right) => {
+      const leftPid = Number(left.match(/^(\d+)/)?.[1] || '0');
+      const rightPid = Number(right.match(/^(\d+)/)?.[1] || '0');
+      return leftPid - rightPid;
+    });
+
+  const ownerLine = ownerLines[0] || '';
+  if (!ownerLine) {
+    throw new Error(
+      `Managed hot-dev owner process was not found under supervisor ${supervisorPid}:\n${psResult.stdout}`,
+    );
+  }
+
+  const ownerMatch = ownerLine.match(/^(\d+)\s+/);
+  return ownerMatch?.[1] || '';
+}
+
+async function ensureHealthyStatus(env = process.env) {
+  const output = await managedRuntimeStatusOutput(env);
   const requiredMarkers = [
     '[hot-dev-bg] Frontend shell HTTP: 200',
     '[hot-dev-bg] Frontend proxy /api/health: 200',
@@ -120,11 +187,42 @@ export async function startManagedDevRuntime({
 export async function restartManagedDevRuntimeBackend({
   env = process.env,
 } = {}) {
+  const beforePid = await managedBackendPid(env);
   const result = await runHotDevBg(['backend-restart'], env);
   if (result.code !== 0) {
     throw new Error(`hot-dev-bg backend-restart failed: ${result.stderr || result.stdout}`);
   }
   await ensureHealthyStatus(env);
+  const afterPid = await managedBackendPid(env);
+  if (!beforePid || !afterPid || beforePid === afterPid) {
+    throw new Error(`Managed backend restart did not replace the backend listener (before=${beforePid || 'missing'}, after=${afterPid || 'missing'})`);
+  }
+  return { beforePid, afterPid };
+}
+
+export async function killManagedDevRuntimeOwnerProcess({
+  env = process.env,
+} = {}) {
+  const beforeOwnerPid = await managedHotDevOwnerPid(env);
+  if (!beforeOwnerPid) {
+    throw new Error('Managed hot-dev owner pid could not be resolved');
+  }
+
+  const killResult = await run(
+    'kill',
+    ['-KILL', beforeOwnerPid],
+    { env: { ...process.env, ...env } },
+  );
+  if (killResult.code !== 0) {
+    throw new Error(`kill -KILL ${beforeOwnerPid} failed: ${killResult.stderr || killResult.stdout}`);
+  }
+
+  await ensureHealthyStatus(env);
+  const afterOwnerPid = await managedHotDevOwnerPid(env);
+  if (!afterOwnerPid || beforeOwnerPid === afterOwnerPid) {
+    throw new Error(`Managed hot-dev owner was not replaced after kill (before=${beforeOwnerPid}, after=${afterOwnerPid || 'missing'})`);
+  }
+  return { beforeOwnerPid, afterOwnerPid };
 }
 
 export async function stopManagedDevRuntime({

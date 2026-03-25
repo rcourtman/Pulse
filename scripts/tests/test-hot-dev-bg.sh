@@ -503,6 +503,8 @@ test_integration_readme_uses_managed_backend_restart_wrapper() {
   output="$(sed -n '132,150p' "${INTEGRATION_README}")"
 
   assert_contains "integration readme documents managed backend restart wrapper" "${output}" "npm run dev:backend-restart"
+  assert_contains "integration readme documents owner-process recovery proof" "${output}" "kills the supervised"
+  assert_contains "integration readme names the owner process" "${output}" "owner process"
   assert_contains "integration readme documents recovery layout proof" "${output}" "tests/17-recovery-layout.spec.ts"
   assert_not_contains "integration readme no longer documents raw backend restart script" "${output}" "./scripts/hot-dev-bg.sh backend-restart"
 }
