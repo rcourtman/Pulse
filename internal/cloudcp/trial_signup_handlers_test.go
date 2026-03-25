@@ -186,9 +186,13 @@ func TestTrialSignupHandleRequestVerificationRejectsEmailThatAlreadyUsedTrial(t 
 	if rec.Code != http.StatusConflict {
 		t.Fatalf("status=%d, want %d body=%q", rec.Code, http.StatusConflict, rec.Body.String())
 	}
-	if !strings.Contains(rec.Body.String(), "recovery email has already used a Pulse Pro trial") {
-		t.Fatalf("expected duplicate trial message, got %q", rec.Body.String())
-	}
+	assertTrialSignupFailurePageContains(t, rec.Body.String(),
+		"Trial already used",
+		"This recovery email has already used a Pulse Pro trial.",
+		"pulse.example.com",
+		"This trial request cannot be restarted for the same recovery contact or organization.",
+	)
+	assertTrialSignupFailurePageOmits(t, rec.Body.String(), "Continue To Secure Trial Setup", "<form")
 }
 
 func TestTrialSignupHandleRequestVerificationRejectsCorporateDomainReuse(t *testing.T) {
@@ -232,9 +236,13 @@ func TestTrialSignupHandleRequestVerificationRejectsCorporateDomainReuse(t *test
 	if secondRec.Code != http.StatusConflict {
 		t.Fatalf("status=%d, want %d body=%q", secondRec.Code, http.StatusConflict, secondRec.Body.String())
 	}
-	if !strings.Contains(secondRec.Body.String(), "organization has already used a Pulse Pro trial") {
-		t.Fatalf("expected organization duplicate trial message, got %q", secondRec.Body.String())
-	}
+	assertTrialSignupFailurePageContains(t, secondRec.Body.String(),
+		"Trial already used",
+		"This organization has already used a Pulse Pro trial.",
+		"pulse.example.com",
+		"This trial request cannot be restarted for the same recovery contact or organization.",
+	)
+	assertTrialSignupFailurePageOmits(t, secondRec.Body.String(), "Continue To Secure Trial Setup", "<form")
 }
 
 func TestTrialSignupHandleVerifyEmailConsumesSingleUseToken(t *testing.T) {
@@ -435,9 +443,13 @@ func TestTrialSignupHandleCheckoutRejectsEmailThatAlreadyUsedTrial(t *testing.T)
 	if rec.Code != http.StatusConflict {
 		t.Fatalf("status=%d, want %d body=%q", rec.Code, http.StatusConflict, rec.Body.String())
 	}
-	if !strings.Contains(rec.Body.String(), "recovery email has already used a Pulse Pro trial") {
-		t.Fatalf("expected duplicate email trial message, got %q", rec.Body.String())
-	}
+	assertTrialSignupFailurePageContains(t, rec.Body.String(),
+		"Trial already used",
+		"This recovery email has already used a Pulse Pro trial.",
+		"pulse.example.com",
+		"This trial request cannot be restarted for the same recovery contact or organization.",
+	)
+	assertTrialSignupFailurePageOmits(t, rec.Body.String(), "Continue To Secure Trial Setup", "<form")
 }
 
 func TestTrialSignupHandleCompleteRedirectsWithActivationToken(t *testing.T) {

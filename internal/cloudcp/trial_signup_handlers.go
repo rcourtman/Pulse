@@ -664,8 +664,12 @@ func (h *TrialSignupHandlers) HandleRequestVerification(w http.ResponseWriter, r
 			return
 		}
 		if conflict != nil {
-			data.ErrorMessage = trialSignupIssuanceConflictMessage(conflict)
-			h.renderTrialSignupPage(w, r, http.StatusConflict, data)
+			h.renderTrialSignupFailurePage(w, r, http.StatusConflict, trialSignupFailureDataForPage(
+				h.cfg,
+				data,
+				trialSignupFailureConflict,
+				trialSignupIssuanceConflictMessage(conflict),
+			))
 			return
 		}
 	}
@@ -842,8 +846,12 @@ func (h *TrialSignupHandlers) HandleCheckout(w http.ResponseWriter, r *http.Requ
 			return
 		}
 		if conflict != nil {
-			data.ErrorMessage = trialSignupIssuanceConflictMessage(conflict)
-			h.renderTrialSignupPage(w, r, http.StatusConflict, data)
+			h.renderTrialSignupFailurePage(w, r, http.StatusConflict, trialSignupFailureDataForPage(
+				h.cfg,
+				data,
+				trialSignupFailureConflict,
+				trialSignupIssuanceConflictMessage(conflict),
+			))
 			return
 		}
 		record = &TrialSignupRecord{
