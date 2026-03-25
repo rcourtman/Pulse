@@ -264,21 +264,12 @@ test_launchd_session_supervises_managed_runtime() {
 }
 
 test_start_bg_reports_browser_entrypoint() {
-  local test_dir fake_bin output
+  local test_dir output
   test_dir="$(mktemp -d)"
   temp_dirs+=("${test_dir}")
-  fake_bin="${test_dir}/bin"
-  mkdir -p "${fake_bin}"
-
-  cat > "${fake_bin}/python3" <<'EOF'
-#!/usr/bin/env bash
-printf '4242\n'
-EOF
-  chmod +x "${fake_bin}/python3"
 
   output="$(
     HOT_DEV_BG_PATH="${HOT_DEV_BG}" \
-    PATH="${fake_bin}:$PATH" \
     bash -lc '
       source "${HOT_DEV_BG_PATH}"
       PID_FILE="'"${test_dir}"'/hot-dev-bg.pid"
@@ -288,13 +279,54 @@ EOF
       has_unmanaged_listeners(){ return 1; }
       is_running(){ return 1; }
       wait_for_managed_listener(){ return 0; }
+      spawn_detached_supervisor(){ printf "4242\n"; }
       start_bg false
     '
   )"
 
+  assert_contains "start reports managed runtime supervisor pid" "${output}" "Started managed runtime supervisor (pid: 4242)"
   assert_contains "start reports browser entrypoint" "${output}" "Browser entrypoint: http://127.0.0.1:5173"
   assert_contains "start reports managed backend" "${output}" "Managed backend:  http://127.0.0.1:7655"
   assert_not_contains "start no longer reports generic frontend url" "${output}" "Frontend: http://127.0.0.1:5173"
+}
+
+test_supervisor_restarts_unexpected_child_exit() {
+  local output
+  output="$(
+    HOT_DEV_BG_PATH="${HOT_DEV_BG}" \
+    bash -lc '
+      source "${HOT_DEV_BG_PATH}"
+      set +e
+      test_dir="$(mktemp -d)"
+      trap "rm -rf \"$test_dir\"" EXIT
+      count_file="${test_dir}/starts"
+      printf "0\n" > "${count_file}"
+      start_hot_dev_child() {
+        count="$(cat "${count_file}")"
+        count=$((count + 1))
+        printf "%s\n" "${count}" > "${count_file}"
+        if [[ "${count}" -eq 1 ]]; then
+          (exit 7) &
+        else
+          (sleep 30) &
+        fi
+        HOT_DEV_CHILD_PID="$!"
+      }
+      stop_hot_dev_child() {
+        kill -TERM "${1}" 2>/dev/null || true
+      }
+      HOT_DEV_BG_SUPERVISOR_RESTART_DELAY=0.1
+      run_supervised_session &
+      supervisor_pid=$!
+      sleep 0.5
+      kill -TERM "${supervisor_pid}"
+      wait "${supervisor_pid}"
+      printf "starts=%s\n" "$(cat "${count_file}")"
+    '
+  )"
+
+  assert_contains "supervisor reports unexpected child exit" "${output}" "Managed runtime child exited unexpectedly"
+  assert_contains "supervisor restarts hot-dev child after exit" "${output}" "starts=2"
 }
 
 test_launchd_wrapper_uses_managed_supervisor() {
@@ -446,7 +478,7 @@ test_hot_dev_script_advertises_foreground_escape_hatch() {
 
 test_hot_dev_bg_script_advertises_managed_entrypoint() {
   local output
-  output="$(sed -n '1,780p' "${ROOT_DIR}/scripts/hot-dev-bg.sh")"
+  output="$(cat "${ROOT_DIR}/scripts/hot-dev-bg.sh")"
 
   assert_contains "hot-dev-bg usage points to managed runtime first" "${output}" "npm run dev                             # Canonical managed dev runtime"
   assert_contains "hot-dev-bg still documents direct launcher start" "${output}" "./scripts/hot-dev-bg.sh start [--takeover]"
@@ -703,6 +735,7 @@ main() {
   test_takeover_avoids_killing_current_shell_lineage
   test_launchd_session_supervises_managed_runtime
   test_start_bg_reports_browser_entrypoint
+  test_supervisor_restarts_unexpected_child_exit
   test_launchd_wrapper_uses_managed_supervisor
   test_launchd_setup_advertises_managed_runtime_controls
   test_root_package_exposes_managed_runtime_entrypoints

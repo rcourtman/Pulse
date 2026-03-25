@@ -425,6 +425,110 @@ require_python() {
   command -v python3 >/dev/null 2>&1 || fail "python3 is required"
 }
 
+start_hot_dev_child() {
+  FRONTEND_DEV_HOST="${FRONTEND_DEV_HOST}" \
+  FRONTEND_DEV_PORT="${FRONTEND_DEV_PORT}" \
+  PULSE_DEV_API_HOST="${PULSE_DEV_API_HOST}" \
+  PULSE_DEV_API_PORT="${PULSE_DEV_API_PORT}" \
+  PULSE_DEV_API_URL="${PULSE_DEV_API_URL}" \
+  PULSE_DEV_WS_URL="${PULSE_DEV_WS_URL}" \
+  ROOT_DIR="${ROOT_DIR}" \
+  "${ROOT_DIR}/scripts/hot-dev.sh" &
+  HOT_DEV_CHILD_PID="$!"
+}
+
+stop_hot_dev_child() {
+  local child_pid="${1:-}"
+  local retries=30
+
+  [[ -n "${child_pid}" ]] || return 0
+  kill -TERM "${child_pid}" 2>/dev/null || true
+
+  while (( retries > 0 )); do
+    if ! kill -0 "${child_pid}" 2>/dev/null; then
+      return 0
+    fi
+    sleep 0.5
+    retries=$((retries - 1))
+  done
+
+  kill -KILL "${child_pid}" 2>/dev/null || true
+}
+
+run_supervised_session() {
+  local restart_delay="${HOT_DEV_BG_SUPERVISOR_RESTART_DELAY:-1}"
+  local child_pid=""
+  local child_exit=0
+  local shutdown_requested="false"
+
+  supervisor_stop() {
+    shutdown_requested="true"
+    if [[ -n "${child_pid}" ]] && kill -0 "${child_pid}" 2>/dev/null; then
+      stop_hot_dev_child "${child_pid}"
+      wait "${child_pid}" 2>/dev/null || true
+    fi
+    exit 0
+  }
+
+  trap supervisor_stop TERM INT HUP
+
+  while true; do
+    HOT_DEV_CHILD_PID=""
+    start_hot_dev_child
+    child_pid="${HOT_DEV_CHILD_PID:-}"
+    [[ -n "${child_pid}" ]] || fail "Managed runtime supervisor failed to start hot-dev"
+    log "Supervisor started hot-dev child (pid: ${child_pid})"
+
+    if wait "${child_pid}"; then
+      child_exit=0
+    else
+      child_exit=$?
+    fi
+
+    if [[ "${shutdown_requested}" == "true" ]]; then
+      exit 0
+    fi
+
+    log "Managed runtime child exited unexpectedly (pid: ${child_pid}, exit: ${child_exit}). Restarting..."
+    sleep "${restart_delay}"
+  done
+}
+
+spawn_detached_supervisor() {
+  FRONTEND_DEV_HOST="${FRONTEND_DEV_HOST}" \
+  FRONTEND_DEV_PORT="${FRONTEND_DEV_PORT}" \
+  PULSE_DEV_API_HOST="${PULSE_DEV_API_HOST}" \
+  PULSE_DEV_API_PORT="${PULSE_DEV_API_PORT}" \
+  PULSE_DEV_API_URL="${PULSE_DEV_API_URL}" \
+  PULSE_DEV_WS_URL="${PULSE_DEV_WS_URL}" \
+  ROOT_DIR="${ROOT_DIR}" \
+  LOG_FILE="${LOG_FILE}" \
+  HOT_DEV_BG_SCRIPT="${ROOT_DIR}/scripts/hot-dev-bg.sh" \
+  python3 - <<'PY'
+import os
+import subprocess
+
+root_dir = os.environ["ROOT_DIR"]
+log_file = os.environ["LOG_FILE"]
+cmd = [os.environ["HOT_DEV_BG_SCRIPT"], "supervise"]
+
+env = os.environ.copy()
+
+with open(log_file, "ab", buffering=0) as log:
+    proc = subprocess.Popen(
+        cmd,
+        cwd=root_dir,
+        stdin=subprocess.DEVNULL,
+        stdout=log,
+        stderr=subprocess.STDOUT,
+        start_new_session=True,
+        env=env,
+    )
+
+print(proc.pid)
+PY
+}
+
 start_bg() {
   local takeover="${1:-false}"
   require_python
@@ -466,49 +570,17 @@ start_bg() {
   fi
 
   local pid
-  pid="$(
-    FRONTEND_DEV_HOST="${FRONTEND_DEV_HOST}" \
-    FRONTEND_DEV_PORT="${FRONTEND_DEV_PORT}" \
-    PULSE_DEV_API_HOST="${PULSE_DEV_API_HOST}" \
-    PULSE_DEV_API_PORT="${PULSE_DEV_API_PORT}" \
-    PULSE_DEV_API_URL="${PULSE_DEV_API_URL}" \
-    PULSE_DEV_WS_URL="${PULSE_DEV_WS_URL}" \
-    ROOT_DIR="${ROOT_DIR}" \
-    LOG_FILE="${LOG_FILE}" \
-    python3 - <<'PY'
-import os
-import subprocess
+  pid="$(spawn_detached_supervisor)"
 
-root_dir = os.environ["ROOT_DIR"]
-log_file = os.environ["LOG_FILE"]
-cmd = [os.path.join(root_dir, "scripts", "hot-dev.sh")]
-
-env = os.environ.copy()
-
-with open(log_file, "ab", buffering=0) as log:
-    proc = subprocess.Popen(
-        cmd,
-        cwd=root_dir,
-        stdin=subprocess.DEVNULL,
-        stdout=log,
-        stderr=subprocess.STDOUT,
-        start_new_session=True,
-        env=env,
-    )
-
-print(proc.pid)
-PY
-  )"
-
-  [[ -n "${pid}" ]] || fail "Failed to start hot-dev"
+  [[ -n "${pid}" ]] || fail "Failed to start managed runtime supervisor"
   printf "%s\n" "${pid}" > "${PID_FILE}"
 
-  log "Started hot-dev (pid: ${pid})"
+  log "Started managed runtime supervisor (pid: ${pid})"
   log "Waiting for managed backend listener on port ${PULSE_DEV_API_PORT}..."
   if ! wait_for_managed_listener "${PULSE_DEV_API_PORT}" "${pid}" 90; then
     log "Backend did not start. Showing recent logs:"
     tail -n 80 "${LOG_FILE}" || true
-    fail "hot-dev startup failed"
+    fail "managed runtime startup failed"
   fi
 
   if ! wait_for_managed_listener "${FRONTEND_DEV_PORT}" "${pid}" 90; then
@@ -841,7 +913,7 @@ parse_takeover_flag() {
       usage
       return 1
       ;;
-    stop|backend-restart|status|logs)
+    stop|backend-restart|status|logs|supervise)
       if [[ -n "${flag}" ]]; then
         usage
         return 1
@@ -862,6 +934,7 @@ main() {
   takeover="$(parse_takeover_flag "$@")" || exit 1
 
   case "${command}" in
+    supervise) run_supervised_session ;;
     start)
       start_bg "${takeover}"
       ;;

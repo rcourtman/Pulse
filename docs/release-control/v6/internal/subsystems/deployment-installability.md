@@ -233,6 +233,12 @@ That runtime-guidance rule also applies to successful launcher startup output:
 `hot-dev-bg` must identify `http://127.0.0.1:5173` as the browser entrypoint
 and present `7655` as the managed backend dependency, rather than advertising
 frontend and backend URLs as if they were equal browser targets.
+The managed repo-root `npm run dev` path must also be self-healing at the
+launcher layer: `hot-dev-bg` may not treat a detached `hot-dev.sh` child as
+sufficient management. The default managed runtime must supervise that child
+and restart it when the owner process exits unexpectedly, so a killed or wedged
+foreground owner does not leave both `5173` and `7655` down until a human
+notices.
 The same wrapper-first rule applies to launcher help text: `hot-dev-bg` usage
 output must present the repo-root npm entrypoints first and reserve raw
 subcommands as secondary script-local controls for direct troubleshooting.
