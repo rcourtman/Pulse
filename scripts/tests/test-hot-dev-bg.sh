@@ -595,6 +595,23 @@ test_integration_readme_uses_managed_backend_restart_wrapper() {
   assert_not_contains "integration readme no longer documents raw backend restart script" "${output}" "./scripts/hot-dev-bg.sh backend-restart"
 }
 
+test_integration_quick_start_distinguishes_embedded_frontend_from_hot_dev() {
+  local output
+  output="$(sed -n '82,102p' "${ROOT_DIR}/tests/integration/QUICK_START.md")"
+
+  assert_contains "integration quick start labels 7655 as embedded frontend" "${output}" "Pulse test UI (embedded frontend)"
+  assert_contains "integration quick start points local managed dev runtime to 5173" "${output}" "http://127.0.0.1:5173"
+  assert_contains "integration quick start names hot-dev browser shell" "${output}" "canonical hot-dev browser shell"
+}
+
+test_acceptance_doc_distinguishes_embedded_frontend_from_hot_dev() {
+  local output
+  output="$(sed -n '412,420p' "${ROOT_DIR}/docs/architecture/v6-acceptance-tests.md")"
+
+  assert_contains "acceptance doc keeps embedded frontend wording" "${output}" "against the embedded frontend at \`http://localhost:7655\`"
+  assert_contains "acceptance doc distinguishes managed hot-dev shell" "${output}" "managed hot-dev browser shell on \`http://127.0.0.1:5173\`"
+}
+
 test_clean_mock_alerts_prefers_managed_runtime() {
   local test_dir fake_bin alert_history fake_hot_dev_bg action_log output
   test_dir="$(mktemp -d)"

@@ -278,6 +278,13 @@ That same wrapper rule also applies to the managed recovery-proof docs in
 bounce or verify the local managed runtime, they must use the repo-root wrapper
 surface such as `npm run dev:backend-restart` instead of documenting raw
 launcher commands directly.
+That same operator-clarity rule applies anywhere the repo names a local browser
+target. Docs that refer to the backend-served standalone or docker UI on
+`http://127.0.0.1:7655` or `http://localhost:7655` must label it explicitly as
+the embedded frontend or test/standalone UI. They may not present `7655` as
+the generic local Pulse browser target in a way that can be confused with the
+managed hot-dev shell, whose canonical browser entrypoint remains
+`http://127.0.0.1:5173`.
 That runtime-guidance rule also applies to successful launcher startup output:
 `hot-dev-bg` must identify `http://127.0.0.1:5173` as the browser entrypoint
 and present `7655` as the managed backend dependency, rather than advertising

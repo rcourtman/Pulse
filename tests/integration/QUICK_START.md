@@ -85,11 +85,16 @@ npm run docker:rebuild
 
 While the test environment is running:
 
-- **Pulse UI**: <http://localhost:7655>
+- **Pulse test UI (embedded frontend)**: <http://localhost:7655>
 - **Mock GitHub API**: <http://localhost:8080>
 - **Health checks**:
   - <http://localhost:7655/api/health>
   - <http://localhost:8080/health>
+
+For the repo-local managed dev runtime, use `npm run dev` from the repo root
+and browse `http://127.0.0.1:5173` instead. `:7655` in this quick start is the
+backend-served test UI inside the docker environment, not the canonical
+hot-dev browser shell.
 
 ## Viewing Test Results
 
