@@ -983,6 +983,16 @@ describe('AIIntelligence entitlement gating', () => {
     hasFeatureMock.mockReturnValue(true);
     licenseStatusMock.mockReturnValue({ subscription_state: 'active' });
     getPatrolStatusMock.mockResolvedValue(defaultPatrolStatus({ license_required: false }));
+    intelligenceState.findings = [
+      {
+        id: 'finding-runtime',
+        status: 'active',
+        severity: 'warning',
+        resourceId: 'ai-service',
+        resourceName: 'Pulse Patrol Service',
+        title: 'Pulse Patrol: Insufficient API credits',
+      },
+    ];
     runHistoryState.selection = {
       id: 'run-empty',
       started_at: '2026-03-12T10:00:00Z',
@@ -1019,7 +1029,6 @@ describe('AIIntelligence entitlement gating', () => {
     await waitFor(() => {
       expect(getPatrolStatusMock).toHaveBeenCalled();
       expect(findingsPanelState.latestProps).not.toBeNull();
-      runSnapshotId: 'run-empty',
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'Runs' }));
@@ -1030,12 +1039,15 @@ describe('AIIntelligence entitlement gating', () => {
       expect(screen.getByText(/Filtered to run/i)).toBeInTheDocument();
     });
 
+    expect(screen.getByRole('button', { name: 'Findings' }).textContent).toBe('Findings');
+
     expect(findingsPanelState.latestProps).toMatchObject({
       filterOverride: 'all',
       filterFindingIds: [],
       scopeResourceIds: ['expanded-a', 'expanded-b'],
       scopeResourceTypes: ['vm'],
       showScopeWarnings: true,
+      runSnapshotId: 'run-empty',
     });
   });
 
@@ -1079,7 +1091,6 @@ describe('AIIntelligence entitlement gating', () => {
     await waitFor(() => {
       expect(getPatrolStatusMock).toHaveBeenCalled();
       expect(findingsPanelState.latestProps).not.toBeNull();
-      runSnapshotId: 'run-empty-effective-scope',
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'Runs' }));
@@ -1096,6 +1107,7 @@ describe('AIIntelligence entitlement gating', () => {
       scopeResourceIds: [],
       scopeResourceTypes: ['vm'],
       showScopeWarnings: true,
+      runSnapshotId: 'run-empty-effective-scope',
     });
   });
 
@@ -1103,6 +1115,16 @@ describe('AIIntelligence entitlement gating', () => {
     hasFeatureMock.mockReturnValue(true);
     licenseStatusMock.mockReturnValue({ subscription_state: 'active' });
     getPatrolStatusMock.mockResolvedValue(defaultPatrolStatus({ license_required: false }));
+    intelligenceState.findings = [
+      {
+        id: 'finding-runtime',
+        status: 'active',
+        severity: 'warning',
+        resourceId: 'ai-service',
+        resourceName: 'Pulse Patrol Service',
+        title: 'Pulse Patrol: Insufficient API credits',
+      },
+    ];
     runHistoryState.selection = {
       id: 'run-missing-snapshot',
       started_at: '2026-03-12T10:10:00Z',
@@ -1138,7 +1160,6 @@ describe('AIIntelligence entitlement gating', () => {
     await waitFor(() => {
       expect(getPatrolStatusMock).toHaveBeenCalled();
       expect(findingsPanelState.latestProps).not.toBeNull();
-      runSnapshotId: 'run-missing-snapshot',
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'Runs' }));
@@ -1149,12 +1170,15 @@ describe('AIIntelligence entitlement gating', () => {
       expect(screen.getByText(/Filtered to run/i)).toBeInTheDocument();
     });
 
+    expect(screen.getByRole('button', { name: 'Findings' }).textContent).toBe('Findings');
+
     expect(findingsPanelState.latestProps).toMatchObject({
       filterOverride: 'all',
       filterFindingIds: undefined,
       scopeResourceIds: ['expanded-a'],
       scopeResourceTypes: ['vm'],
       showScopeWarnings: true,
+      runSnapshotId: 'run-missing-snapshot',
     });
   });
 });

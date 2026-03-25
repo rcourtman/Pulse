@@ -437,6 +437,19 @@ export function usePatrolIntelligenceState() {
   });
 
   const selectedRunScopeResourceIds = createMemo(() => getCanonicalScopeResourceIds(selectedRun()));
+  const allPatrolFindings = createMemo(() =>
+    aiIntelligenceStore.findings.filter(
+      (finding) =>
+        finding.source !== 'threshold' && !finding.isThreshold && !hasTriggeringAlert(finding),
+    ),
+  );
+  const selectedRunPatrolFindings = createMemo(() => {
+    const run = selectedRun();
+    if (!run) return null;
+    if (run.finding_ids === undefined) return undefined;
+    const snapshotFindingIds = new Set(run.finding_ids);
+    return allPatrolFindings().filter((finding) => snapshotFindingIds.has(finding.id));
+  });
 
   const intelligenceSummary = createMemo(() => aiIntelligenceStore.intelligenceSummary);
   const policyPosture = createMemo(() => intelligenceSummary()?.policy_posture);
@@ -584,11 +597,7 @@ export function usePatrolIntelligenceState() {
   }
 
   const summaryStats = () => {
-    const allFindings = aiIntelligenceStore.findings;
-    const patrolFindings = allFindings.filter(
-      (finding) =>
-        finding.source !== 'threshold' && !finding.isThreshold && !hasTriggeringAlert(finding),
-    );
+    const patrolFindings = allPatrolFindings();
     const activeFindings = patrolFindings.filter((finding) => finding.status === 'active');
 
     return {
@@ -606,13 +615,24 @@ export function usePatrolIntelligenceState() {
   };
 
   const activePatrolFindings = () =>
-    aiIntelligenceStore.findings.filter(
-      (finding) =>
-        finding.status === 'active' &&
-        finding.source !== 'threshold' &&
-        !finding.isThreshold &&
-        !hasTriggeringAlert(finding),
-    );
+    allPatrolFindings().filter((finding) => finding.status === 'active');
+  const findingsTabBadgeFindings = createMemo(() => {
+    const snapshotFindings = selectedRunPatrolFindings();
+    if (snapshotFindings === null) {
+      return activePatrolFindings();
+    }
+    return snapshotFindings ?? [];
+  });
+  const findingsTabBadgeCount = createMemo(() => {
+    const snapshotFindings = selectedRunPatrolFindings();
+    if (snapshotFindings === null) {
+      return activePatrolFindings().length;
+    }
+    if (snapshotFindings === undefined) {
+      return undefined;
+    }
+    return snapshotFindings.length;
+  });
 
   onMount(async () => {
     await Promise.all([
@@ -670,6 +690,8 @@ export function usePatrolIntelligenceState() {
     clearScrollToFindingTimer,
     defaultModel,
     displayRunHistory,
+    findingsTabBadgeCount,
+    findingsTabBadgeFindings,
     findingsFilterOverride,
     fullModeUnlocked,
     handleAlertTriggeredAnalysisChange,

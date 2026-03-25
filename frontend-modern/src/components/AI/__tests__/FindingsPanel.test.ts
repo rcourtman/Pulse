@@ -481,12 +481,13 @@ describe('aiFindingPresentation', () => {
     it('uses explicit textual separators for patrol tab badges instead of css-only spacing', () => {
       expect(patrolWorkspaceSource).toContain("aria-hidden=\"true\"");
       expect(patrolWorkspaceSource).toContain("{' '}");
-      expect(patrolWorkspaceSource).toContain('{state.summaryStats().totalActive}');
+      expect(patrolWorkspaceSource).toContain('{state.findingsTabBadgeCount()}');
       expect(patrolWorkspaceSource).toContain('{state.displayRunHistory().length}');
     });
 
     it('routes the findings tab badge tone through the shared patrol findings badge helper', () => {
       expect(patrolWorkspaceSource).toContain('getPatrolFindingsBadgePresentation');
+      expect(patrolWorkspaceSource).toContain('state.findingsTabBadgeFindings()');
       expect(patrolWorkspaceSource).toContain('findingsBadgePresentation().toneClasses');
     });
 

@@ -255,6 +255,10 @@ That same snapshot scoping must apply to the findings control bar too. When the
 user is looking at an explicit run snapshot, filter pills and their attention
 or approval counts must derive from that snapshot-scoped finding set rather
 than borrowing global Patrol finding counts from outside the selected run.
+That same snapshot scoping must also apply to the `Findings` tab badge itself.
+When the selected run carries an explicit empty `finding_ids` snapshot, or when
+the run lacks snapshot ids entirely, the tab must fail closed instead of
+borrowing global active-finding counts and tones from outside the selected run.
 That same findings surface should keep its section chrome functional rather
 than promotional. Inside the Patrol findings tab, the selected tab already
 names the surface, so the findings card should not add another in-card product

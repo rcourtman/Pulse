@@ -11,7 +11,8 @@ import type { PatrolIntelligenceState } from './usePatrolIntelligenceState';
 
 export function PatrolIntelligenceWorkspace(props: { state: PatrolIntelligenceState }) {
   const state = props.state;
-  const findingsBadgePresentation = () => getPatrolFindingsBadgePresentation(state.activePatrolFindings());
+  const findingsBadgePresentation = () =>
+    getPatrolFindingsBadgePresentation(state.findingsTabBadgeFindings());
 
   return (
     <>
@@ -49,13 +50,13 @@ export function PatrolIntelligenceWorkspace(props: { state: PatrolIntelligenceSt
           }`}
         >
           Findings
-          <Show when={state.summaryStats().totalActive > 0}>
+          <Show when={(state.findingsTabBadgeCount() ?? 0) > 0}>
             <span
               aria-hidden="true"
               class={`ml-1.5 px-1.5 py-0.5 text-xs rounded-full ${findingsBadgePresentation().toneClasses}`}
             >
               {' '}
-              {state.summaryStats().totalActive}
+              {state.findingsTabBadgeCount()}
             </span>
           </Show>
         </button>
@@ -108,11 +109,11 @@ export function PatrolIntelligenceWorkspace(props: { state: PatrolIntelligenceSt
           filterFindingIds={state.selectedRunFindingIds()}
           scopeResourceIds={state.selectedRunScopeResourceIds()}
           scopeResourceTypes={state.selectedRun()?.scope_resource_types}
-          runSnapshot={state.selectedRun() ?? undefined}
           showScopeWarnings={Boolean(state.selectedRun())}
           runtimeState={state.runtimeState()}
           blockedReason={state.blockedReason()}
           overallHealth={state.intelligenceSummary()?.overall_health}
+          runSnapshot={state.selectedRun() ?? undefined}
         />
       </Show>
 
