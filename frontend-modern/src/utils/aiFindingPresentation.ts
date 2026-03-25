@@ -433,6 +433,33 @@ export const getFindingManualControlsPresentation = (
         dismiss: true,
       };
 
+export const sortFindingsForAttentionQueue = (
+  findings: UnifiedFinding[],
+): UnifiedFinding[] =>
+  [...findings].sort((a, b) => {
+    const aOutcome =
+      a.status === 'active' && a.investigationOutcome
+        ? getInvestigationOutcomeSortOrder(a.investigationOutcome)
+        : 3;
+    const bOutcome =
+      b.status === 'active' && b.investigationOutcome
+        ? getInvestigationOutcomeSortOrder(b.investigationOutcome)
+        : 3;
+    if (aOutcome !== bOutcome) return aOutcome - bOutcome;
+
+    const aSeverity = getFindingSeveritySortOrder(a.severity);
+    const bSeverity = getFindingSeveritySortOrder(b.severity);
+    if (aSeverity !== bSeverity) return aSeverity - bSeverity;
+
+    const aRuntime = getFindingActiveRuntimeSortOrder(a);
+    const bRuntime = getFindingActiveRuntimeSortOrder(b);
+    if (aRuntime !== bRuntime) return aRuntime - bRuntime;
+
+    const aRecency = getFindingRecencyPresentation(a);
+    const bRecency = getFindingRecencyPresentation(b);
+    return new Date(bRecency.timestamp).getTime() - new Date(aRecency.timestamp).getTime();
+  });
+
 export const getFindingRecencyPresentation = (
   finding: Pick<UnifiedFinding, 'status' | 'detectedAt' | 'lastSeenAt'>,
 ): FindingRecencyPresentation => {

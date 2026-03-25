@@ -609,6 +609,11 @@ primary-action/manual-control contracts from
 `frontend-modern/src/utils/aiFindingPresentation.ts` rather than rendering raw
 `Pulse Patrol:` titles or generic snooze/dismiss controls that the Patrol
 runtime lifecycle rejects.
+That same boundary must also consume the shared attention-queue ordering from
+`frontend-modern/src/utils/aiFindingPresentation.ts` through
+`frontend-modern/src/hooks/useDashboardActions.ts`, so Patrol-blinding runtime
+issues sort ahead of same-severity infrastructure findings in the dashboard
+action panel instead of inheriting arbitrary store order.
 
 Feature-owned alert shells under `frontend-modern/src/features/alerts/` now
 also treat shared action runtime as a first-class feature owner instead of

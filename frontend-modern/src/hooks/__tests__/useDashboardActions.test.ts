@@ -31,6 +31,7 @@ vi.mock('@/utils/logger', () => ({
 
 import { AIAPI } from '@/api/ai';
 import { useDashboardActions } from '@/hooks/useDashboardActions';
+import { sortFindingsForAttentionQueue } from '@/utils/aiFindingPresentation';
 
 describe('useDashboardActions', () => {
   beforeEach(() => {
@@ -106,5 +107,31 @@ describe('useDashboardActions', () => {
     expect(vi.mocked(AIAPI.getPendingApprovals)).toHaveBeenCalledTimes(1);
 
     dispose();
+  });
+
+  it('prioritizes Patrol runtime findings in the dashboard attention queue', () => {
+    expect(
+      sortFindingsForAttentionQueue([
+        {
+          id: 'infra-warning',
+          status: 'active',
+          severity: 'warning',
+          resourceId: 'vm-101',
+          resourceName: 'db-01',
+          title: 'Disk nearly full',
+          detectedAt: '2026-03-01T00:00:00Z',
+        } as never,
+        {
+          id: 'runtime-warning',
+          status: 'active',
+          severity: 'warning',
+          resourceId: 'ai-service',
+          resourceName: 'Pulse Patrol Service',
+          title: 'Pulse Patrol: Insufficient API credits',
+          lastSeenAt: '2026-03-01T00:05:00Z',
+          detectedAt: '2026-03-01T00:01:00Z',
+        } as never,
+      ]).map((finding) => finding.id),
+    ).toEqual(['runtime-warning', 'infra-warning']);
   });
 });
