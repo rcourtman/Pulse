@@ -428,6 +428,10 @@ Zero-coverage scoped runs must also fail closed as `Checked 0 of N scoped
 resources` rather than drifting back to a scope-only headline.
 run card. Once the run presenter is already carrying canonical coverage copy,
 secondary chips must not reintroduce a raw `Scoped to N resources` variant that
+That same zero-coverage rule also applies to the expanded narrative sentence.
+When Patrol checked none of a known scoped set, the run summary must still say
+`Checked 0 of N scoped resources` rather than reverting to a generic `Patrol
+completed` sentence that hides the failed coverage.
 re-opens the same ambiguity.
 The Patrol page's run-history tab label is now also tightened to `Runs`, while
 the underlying run-history panel remains canonical for snapshot filtering and

@@ -149,6 +149,34 @@ describe('RunHistoryEntry', () => {
         (element.textContent?.includes('Patrol completed with issues requiring review.') ??
           false),
       ),
+
+  it('keeps zero-coverage scoped runs on the shared coverage narrative', () => {
+    render(() => (
+      <RunHistoryEntry
+        run={{
+          ...run,
+          id: 'run-zero-coverage-scope',
+          duration_ms: 453,
+          effective_scope_resource_ids: ['expanded-a', 'expanded-b'],
+          resources_checked: 0,
+          error_count: 1,
+          status: 'error',
+        }}
+        isLive={false}
+        patrolStream={patrolStream}
+        selected={true}
+        onSelect={vi.fn()}
+      />
+    ));
+
+    expect(screen.getByText('• Checked 0 of 2 scoped resources')).toBeInTheDocument();
+    expect(screen.queryByText('Scoped to 2 resources')).not.toBeInTheDocument();
+    expect(
+      screen.getByText((_, element) =>
+        element?.tagName === 'P' &&
+        (element.textContent?.includes('Checked 0 of 2 scoped resources') ?? false) &&
+        (element.textContent?.includes('453ms') ?? false) &&
+        (element.textContent?.includes('Patrol completed with issues requiring review.') ?? false),
     ).toBeInTheDocument();
   });
 

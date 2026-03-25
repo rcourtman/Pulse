@@ -197,7 +197,7 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
           <div class="mt-3 flex items-start gap-2 text-sm text-base-content">
             <SparklesIcon class="w-4 h-4 text-blue-500 dark:text-blue-400 mt-0.5 flex-shrink-0" />
             <p>
-              {run.resources_checked > 0 ? (
+              {coverageSummary ? (
                 <>
                   {coverageSummary}{' '}
                   {formatDurationMs(run.duration_ms) ? (
