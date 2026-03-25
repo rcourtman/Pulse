@@ -146,6 +146,9 @@ The summary recency chip must follow the same governed scope distinction. When
 the latest completed activity was only a scoped run, the summary should label
 that timestamp as `Last activity` instead of `Last patrol`; `Last full patrol`
 belongs only to the most recent completed full Patrol run.
+That same recency contract also applies to the header metadata row. The top
+header must not revert to a generic `Last:` timestamp when the rest of Patrol
+is explicitly distinguishing activity from full verification recency.
 That summary surface must also avoid reintroducing a second compact assessment
 or verification layer beneath the primary card. Supporting metric strips
 belong to counts and outcomes such as active findings, critical findings,

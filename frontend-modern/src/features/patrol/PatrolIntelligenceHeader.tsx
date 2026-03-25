@@ -13,6 +13,7 @@ import { groupModelsByProvider } from '@/utils/patrolFormat';
 import { getAIQuickstartCreditsPresentation } from '@/utils/aiQuickstartPresentation';
 import { buildPatrolScheduleOptions } from '@/utils/aiPatrolSchedulePresentation';
 import { getPatrolRuntimePresentation } from '@/utils/patrolRuntimePresentation';
+import { getPatrolRecencyPresentation } from '@/utils/patrolSummaryPresentation';
 import type { PatrolIntelligenceState } from './usePatrolIntelligenceState';
 
 export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState }) {
@@ -26,6 +27,12 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
   const scheduleOptions = createMemo(() => buildPatrolScheduleOptions(state.patrolInterval()));
   const runtimePresentation = createMemo(() =>
     getPatrolRuntimePresentation(state.runtimeState(), state.blockedReason()),
+  );
+  const recency = createMemo(() =>
+    getPatrolRecencyPresentation({
+      runs: state.patrolRunHistory() ?? [],
+      lastPatrolAt: state.patrolStatus()?.last_patrol_at,
+    }),
   );
   const showQuickstartStatus = createMemo(() => {
     const patrolStatus = state.patrolStatus();
@@ -61,11 +68,11 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
         class="mb-3"
         actions={
           <div class="flex flex-wrap items-center justify-end gap-3">
-            <Show when={state.patrolStatus()?.last_patrol_at}>
+            <Show when={recency().timestamp}>
               <div class="hidden sm:flex items-center gap-3 text-xs text-muted">
                 <span>
-                  Last:{' '}
-                  {formatRelativeTime(state.patrolStatus()?.last_patrol_at, {
+                  {recency().label}:{' '}
+                  {formatRelativeTime(recency().timestamp, {
                     compact: true,
                     emptyText: 'Never',
                   })}
