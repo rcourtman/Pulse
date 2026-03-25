@@ -7,6 +7,7 @@ import {
   getPatrolRunStatusPresentation,
   isPatrolRunHealthy,
   getRunHistoryLoadingState,
+  getRunHistorySelectionHint,
   getToolCallsLoadingState,
   getToolCallsUnavailableState,
   getToolCallResultBadgeClass,
@@ -114,5 +115,24 @@ describe('patrolRunPresentation', () => {
     expect(getRunHistoryLoadingState()).toBe('Loading run history…');
     expect(getToolCallsLoadingState()).toBe('Loading tool calls...');
     expect(getToolCallsUnavailableState()).toBe('Tool call details not available for this run.');
+  });
+
+  it('warns when visible runs include legacy findings snapshots', () => {
+    expect(
+      getRunHistorySelectionHint([
+        { finding_ids: [] },
+        { finding_ids: undefined },
+      ]),
+    ).toBe(
+      'Select a run to filter findings when available. Some older runs do not include findings snapshots.',
+    );
+  });
+
+  it('explains selected legacy runs in the run-history shell', () => {
+    expect(
+      getRunHistorySelectionHint([{ finding_ids: [] }], { finding_ids: undefined }),
+    ).toBe(
+      'Selected run predates findings snapshots; run-scoped findings cannot be fully verified.',
+    );
   });
 });

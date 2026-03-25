@@ -132,6 +132,21 @@ export function getRunHistoryLoadingState(): string {
   return 'Loading run history…';
 }
 
+export function getRunHistorySelectionHint(
+  runs: Array<Pick<PatrolRunRecord, 'finding_ids'>>,
+  selectedRun?: Pick<PatrolRunRecord, 'finding_ids'> | null,
+): string {
+  if (selectedRun && selectedRun.finding_ids === undefined) {
+    return 'Selected run predates findings snapshots; run-scoped findings cannot be fully verified.';
+  }
+
+  if (runs.some((run) => run.finding_ids === undefined)) {
+    return 'Select a run to filter findings when available. Some older runs do not include findings snapshots.';
+  }
+
+  return 'Select a run to filter findings to that snapshot';
+}
+
 export function getToolCallsLoadingState(): string {
   return 'Loading tool calls...';
 }

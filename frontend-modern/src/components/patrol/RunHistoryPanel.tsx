@@ -2,7 +2,10 @@ import { For, Show } from 'solid-js';
 import type { Accessor } from 'solid-js';
 import type { PatrolRunRecord } from '@/api/patrol';
 import { getRunHistoryEmptyState } from '@/utils/patrolEmptyStatePresentation';
-import { getRunHistoryLoadingState } from '@/utils/patrolRunPresentation';
+import {
+  getRunHistoryLoadingState,
+  getRunHistorySelectionHint,
+} from '@/utils/patrolRunPresentation';
 import { RunHistoryEntry } from './RunHistoryEntry';
 
 import RefreshCwIcon from 'lucide-solid/icons/refresh-cw';
@@ -35,7 +38,9 @@ export function RunHistoryPanel(props: RunHistoryPanelProps) {
       <div class="flex items-center justify-between mb-4">
         <div>
           <h2 class="text-sm font-semibold text-base-content">Recent patrol runs</h2>
-          <p class="text-xs text-muted">Select a run to filter findings to that snapshot</p>
+          <p class="text-xs text-muted">
+            {getRunHistorySelectionHint(props.runs, props.selectedRun)}
+          </p>
         </div>
         <Show when={props.selectedRun}>
           <button

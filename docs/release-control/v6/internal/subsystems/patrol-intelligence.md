@@ -296,6 +296,11 @@ That same rule applies to run-status badges. A legacy run without findings
 snapshot ids must not keep a green `healthy` badge when the surrounding UI is
 saying findings verification is unavailable; the canonical run-status
 presentation should downgrade that state to a neutral `completed` badge.
+That same truthfulness rule applies to the run-history shell copy. The `Recent
+patrol runs` helper text must not promise that every visible run can filter
+findings to a concrete snapshot; when visible runs include legacy entries
+without `finding_ids`, or when the selected run itself predates findings
+snapshots, the shell should say so explicitly.
 That same findings surface should keep its section chrome functional rather
 than promotional. Inside the Patrol findings tab, the selected tab already
 names the surface, so the findings card should not add another in-card product
