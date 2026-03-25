@@ -251,6 +251,10 @@ func (s *Service) createProviderForExplore(modelStr string) (providers.Streaming
 			baseURL = "http://localhost:11434"
 		}
 		return providers.NewOllamaClient(modelName, baseURL, exploreHTTPTimeout), nil
+	case config.AIProviderQuickstart:
+		// Quickstart uses the hosted proxy and does not require a BYOK key.
+		// The orgID carries the hosted workspace identity for credit accounting.
+		return providers.NewQuickstartClient(s.orgID), nil
 	default:
 		return nil, fmt.Errorf("unsupported provider: %s", providerName)
 	}

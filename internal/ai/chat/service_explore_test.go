@@ -360,6 +360,29 @@ func TestResolveExploreProvider_FallsBackToNextExplicitModel(t *testing.T) {
 	}
 }
 
+func TestResolveExploreProvider_SupportsQuickstartModel(t *testing.T) {
+	svc := NewService(Config{
+		AIConfig: &config.AIConfig{
+			Enabled:        true,
+			DiscoveryModel: config.AIProviderQuickstart + ":" + config.DefaultAIModelQuickstart,
+		},
+		StateProvider: &mockStateProvider{},
+		AgentServer:   &mockAgentServer{},
+	})
+	svc.orgID = "t-hosted"
+
+	provider, model := svc.resolveExploreProvider("", "", nil)
+	if provider == nil {
+		t.Fatal("expected explore provider resolution to succeed for quickstart")
+	}
+	if model != "quickstart:minimax-2.5m" {
+		t.Fatalf("expected quickstart explore model, got %q", model)
+	}
+	if provider.Name() != config.AIProviderQuickstart {
+		t.Fatalf("expected quickstart provider, got %q", provider.Name())
+	}
+}
+
 func TestService_ExecuteStream_ExplorePrepassFailureStillRunsMain(t *testing.T) {
 	t.Setenv(exploreEnabledEnvVar, "true")
 

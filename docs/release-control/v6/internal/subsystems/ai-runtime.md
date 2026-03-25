@@ -88,6 +88,12 @@ may exist only as an explicit environment-controlled rollout escape hatch, and
 the canonical quickstart proxy contract remains an OpenAI-compatible server-owned
 surface that lives behind the public license API rather than a tenant-local or
 mobile-local adapter.
+That same provider-model contract applies to the chat explore pre-pass in
+`internal/ai/chat/service_explore.go`: any runtime model that is valid for the
+main chat execution path, including `quickstart:minimax-2.5m`, must resolve
+through the dedicated explore provider path as well. Explore must not reject
+the canonical quickstart provider while the main chat loop accepts it, because
+hosted tenants rely on the same governed quickstart model before BYOK exists.
 
 The same runtime ownership now includes the customer-facing AI usage and cost
 surface. `frontend-modern/src/components/AI/AICostDashboard.tsx` is the
