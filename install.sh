@@ -2133,13 +2133,13 @@ download_pulse() {
                 CONFIGURED_CHANNEL=$(cat "$CONFIG_DIR/system.json" 2>/dev/null | grep -o '"updateChannel"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/.*"\([^"]*\)"$/\1/' || true)
                 if [[ "$CONFIGURED_CHANNEL" == "rc" ]]; then
                     UPDATE_CHANNEL="rc"
-                    print_info "RC channel detected in configuration"
+                    print_info "Prerelease channel detected in configuration"
                 fi
             fi
         fi
 
         # Get appropriate release based on channel (with timeout)
-        # Both stable and RC channels now use /releases endpoint to handle draft releases
+        # Both stable and prerelease channels now use /releases endpoint to handle draft releases
         if command -v timeout >/dev/null 2>&1; then
             RELEASES_JSON=$(timeout 15 curl -s --connect-timeout 10 --max-time 30 https://api.github.com/repos/$GITHUB_REPO/releases 2>/dev/null || true)
         else
@@ -2148,7 +2148,7 @@ download_pulse() {
 
         if [[ -n "$RELEASES_JSON" ]]; then
             if [[ "$UPDATE_CHANNEL" == "rc" ]]; then
-                # RC channel: Get latest release (including pre-releases, but skip drafts)
+                # Prerelease channel: get latest release (including prereleases, but skip drafts)
                 if command -v jq >/dev/null 2>&1; then
                     LATEST_RELEASE=$(echo "$RELEASES_JSON" | jq -r '[.[] | select(.draft == false)][0].tag_name' 2>/dev/null || true)
                 else
@@ -3428,7 +3428,7 @@ main() {
         fi
         
         if [[ -n "$RC_VERSION" ]] && [[ "$RC_VERSION" != "$STABLE_VERSION" ]] && [[ "$RC_VERSION" != "$CURRENT_VERSION" ]]; then
-            echo "${menu_option}) Update to $RC_VERSION (release candidate)"
+            echo "${menu_option}) Update to $RC_VERSION (prerelease preview)"
             ((menu_option++))
         fi
         

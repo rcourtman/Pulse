@@ -42,7 +42,7 @@ func mockGitHubReleases(releases []ReleaseInfo) *httptest.Server {
 	}))
 }
 
-func TestRCUpdateNotifications(t *testing.T) {
+func TestPrereleaseUpdateNotifications(t *testing.T) {
 	tests := []struct {
 		name            string
 		currentVersion  string
@@ -52,7 +52,7 @@ func TestRCUpdateNotifications(t *testing.T) {
 		description     string
 	}{
 		{
-			name:           "RC user with newer RC available",
+			name:           "prerelease user with newer prerelease available",
 			currentVersion: "4.22.0-rc.1",
 			releases: []ReleaseInfo{
 				{TagName: "v4.22.0-rc.3", Prerelease: true},
@@ -61,10 +61,10 @@ func TestRCUpdateNotifications(t *testing.T) {
 			},
 			expectedVersion: "v4.22.0-rc.3",
 			expectUpdate:    true,
-			description:     "RC users should see newer RC releases",
+			description:     "Prerelease users should see newer prerelease releases",
 		},
 		{
-			name:           "RC user with newer stable available",
+			name:           "prerelease user with newer stable available",
 			currentVersion: "4.22.0-rc.3",
 			releases: []ReleaseInfo{
 				{TagName: "v4.22.0", Prerelease: false},
@@ -73,10 +73,10 @@ func TestRCUpdateNotifications(t *testing.T) {
 			},
 			expectedVersion: "v4.22.0",
 			expectUpdate:    true,
-			description:     "RC users should see newer stable releases (stable > RC for same version)",
+			description:     "Prerelease users should see newer stable releases (stable > prerelease for the same version)",
 		},
 		{
-			name:           "RC user with both newer RC and stable (stable wins)",
+			name:           "prerelease user with both newer prerelease and stable (stable wins)",
 			currentVersion: "4.22.0-rc.1",
 			releases: []ReleaseInfo{
 				{TagName: "v4.23.0-rc.1", Prerelease: true},
@@ -86,10 +86,10 @@ func TestRCUpdateNotifications(t *testing.T) {
 			},
 			expectedVersion: "v4.23.0-rc.1",
 			expectUpdate:    true,
-			description:     "When both RC and stable are available, return the highest version",
+			description:     "When both a prerelease and stable release are available, return the highest version",
 		},
 		{
-			name:           "RC user with only older releases",
+			name:           "prerelease user with only older releases",
 			currentVersion: "4.23.0-rc.1",
 			releases: []ReleaseInfo{
 				{TagName: "v4.22.0", Prerelease: false},
@@ -97,10 +97,10 @@ func TestRCUpdateNotifications(t *testing.T) {
 			},
 			expectedVersion: "v4.22.0",
 			expectUpdate:    true, // Returns latest version even if not newer (Available will be false)
-			description:     "Returns latest stable version even when user is on newer RC",
+			description:     "Returns the latest stable version even when the user is on a newer prerelease",
 		},
 		{
-			name:           "RC user already on latest stable",
+			name:           "prerelease user already on latest stable",
 			currentVersion: "4.22.0-rc.1",
 			releases: []ReleaseInfo{
 				{TagName: "v4.22.0", Prerelease: false},
@@ -108,7 +108,7 @@ func TestRCUpdateNotifications(t *testing.T) {
 			},
 			expectedVersion: "v4.22.0",
 			expectUpdate:    true,
-			description:     "RC user should see stable release even if RC number is same (4.22.0 > 4.22.0-rc.1)",
+			description:     "A prerelease user should see the stable release even when the prerelease number matches (4.22.0 > 4.22.0-rc.1)",
 		},
 	}
 
@@ -149,6 +149,36 @@ func TestRCUpdateNotifications(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestPrereleaseUpdateLogCopy(t *testing.T) {
+	content, err := os.ReadFile("manager.go")
+	if err != nil {
+		t.Fatalf("read manager.go: %v", err)
+	}
+
+	source := string(content)
+	required := []string{
+		`Found stable update for prerelease user`,
+		`Found prerelease update`,
+		`On latest prerelease version`,
+	}
+	for _, needle := range required {
+		if !strings.Contains(source, needle) {
+			t.Fatalf("manager.go missing prerelease runtime log fragment: %s", needle)
+		}
+	}
+
+	forbidden := []string{
+		`Found stable update for RC user`,
+		`Found RC update`,
+		`On latest RC version`,
+	}
+	for _, needle := range forbidden {
+		if strings.Contains(source, needle) {
+			t.Fatalf("manager.go preserved stale release-candidate runtime log fragment: %s", needle)
+		}
 	}
 }
 

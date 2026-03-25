@@ -111,6 +111,11 @@ that promotion metadata. Human-visible workflow inputs, summaries, and error
 messages must describe the path as a prerelease or preview flow rather than
 implying a near-ready release candidate, while machine-owned identifiers such
 as `rc`, `rc-to-ga-*`, and `v6.0.0-rc.1` remain the canonical internal keys.
+That same prerelease framing requirement also applies to installer and update
+runtime copy: `install.sh`, `scripts/pulse-auto-update.sh`, and
+`internal/updates/manager.go` must present `rc`-tagged builds as prerelease or
+preview paths in menus, operator diagnostics, and runtime logs rather than as
+release-candidate promises.
 Those same workflows must also fetch and dispatch the governed release branch
 derived from release-control metadata instead of hardcoding `pulse/v6`,
 `pulse/v6-release`, or any later branch literal inline.
@@ -190,6 +195,10 @@ That same managed browser proof pack must also keep the desktop Recovery page
 layout guard on the canonical entrypoint, so `dev:verify` catches right-edge
 history-table overflow regressions introduced by more human-readable subject
 labels instead of leaving that check as a hidden one-off Playwright command.
+That same proof pack must also keep the Patrol blocked-runtime page contract on
+the canonical entrypoint, so `dev:verify` catches stale healthy-summary
+regressions where the real `/ai` route would otherwise look healthy even after
+the backend reports `runtime_state=blocked`.
 That same launcher boundary now also owns the one-command verification entry
 point for that proof. `./scripts/hot-dev-bg.sh verify` must prepare a coherent
 managed runtime, run the canonical browser recovery proof with the managed dev
@@ -257,9 +266,10 @@ and restart it when the owner process exits unexpectedly, so a killed or wedged
 foreground owner does not leave both `5173` and `7655` down until a human
 notices.
 That self-healing guarantee must be covered by the canonical managed browser
-proof pack as well: `dev:verify` must prove both backend-bounce recovery and
-owner-process-death recovery on the browser entrypoint, rather than leaving the
-supervision contract to shell-only smoke tests.
+proof pack as well: `dev:verify` must prove backend-bounce recovery,
+owner-process-death recovery, and the Patrol blocked-runtime page contract on
+the browser entrypoint, rather than leaving supervision and Patrol-shell drift
+to shell-only smoke tests.
 The same wrapper-first rule applies to launcher help text: `hot-dev-bg` usage
 output must present the repo-root npm entrypoints first and reserve raw
 subcommands as secondary script-local controls for direct troubleshooting.

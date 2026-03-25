@@ -32,7 +32,7 @@ check_auto_updates_enabled() {
             exit 0
         fi
         if [[ "$channel" == "rc" ]]; then
-            log info "RC channel detected; unattended auto-updates run only on stable"
+            log info "Prerelease channel detected; unattended auto-updates run only on stable"
             exit 0
         fi
     fi

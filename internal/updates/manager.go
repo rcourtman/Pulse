@@ -714,12 +714,12 @@ func (m *Manager) getLatestReleaseForChannel(ctx context.Context, channel string
 	}
 
 	// Find latest release based on channel
-	// RC channel: return newest release (RC or stable), even if not newer than current
+	// Prerelease channel: return newest release (prerelease or stable), even if not newer than current
 	// Stable channel: return newest stable release, even if not newer than current
 	// The caller will determine if it's actually an update by comparing versions
 	if channel == "rc" {
-		// For RC channel: find newest release (RC or stable)
-		// RC users should see both RCs and stable releases
+		// For the prerelease channel: find newest release (prerelease or stable)
+		// Prerelease users should see both prereleases and stable releases
 		var newestRC *ReleaseInfo
 		var newestStable *ReleaseInfo
 
@@ -737,7 +737,7 @@ func (m *Manager) getLatestReleaseForChannel(ctx context.Context, channel string
 			}
 
 			if releases[i].Prerelease {
-				// Track newest RC
+				// Track newest prerelease
 				if newestRC == nil {
 					newestRC = &releases[i]
 				} else {
@@ -767,7 +767,7 @@ func (m *Manager) getLatestReleaseForChannel(ctx context.Context, channel string
 			if stableVer.IsNewerThan(rcVer) {
 				isUpdate := stableVer.IsNewerThan(currentVer)
 				if isUpdate {
-					log.Info().Str("version", newestStable.TagName).Msg("Found stable update for RC user")
+					log.Info().Str("version", newestStable.TagName).Msg("Found stable update for prerelease user")
 				} else {
 					log.Info().Str("version", newestStable.TagName).Msg("On latest stable version")
 				}
@@ -775,15 +775,15 @@ func (m *Manager) getLatestReleaseForChannel(ctx context.Context, channel string
 			}
 			isUpdate := rcVer.IsNewerThan(currentVer)
 			if isUpdate {
-				log.Info().Str("version", newestRC.TagName).Msg("Found RC update")
+				log.Info().Str("version", newestRC.TagName).Msg("Found prerelease update")
 			} else {
-				log.Info().Str("version", newestRC.TagName).Msg("On latest RC version")
+				log.Info().Str("version", newestRC.TagName).Msg("On latest prerelease version")
 			}
 			return newestRC, nil
 		} else if newestStable != nil {
 			isUpdate := newestStable.TagName != currentVer.String()
 			if isUpdate {
-				log.Info().Str("version", newestStable.TagName).Msg("Found stable update for RC user")
+				log.Info().Str("version", newestStable.TagName).Msg("Found stable update for prerelease user")
 			} else {
 				log.Info().Str("version", newestStable.TagName).Msg("On latest stable version")
 			}
@@ -791,9 +791,9 @@ func (m *Manager) getLatestReleaseForChannel(ctx context.Context, channel string
 		} else if newestRC != nil {
 			isUpdate := newestRC.TagName != currentVer.String()
 			if isUpdate {
-				log.Info().Str("version", newestRC.TagName).Msg("Found RC update")
+				log.Info().Str("version", newestRC.TagName).Msg("Found prerelease update")
 			} else {
-				log.Info().Str("version", newestRC.TagName).Msg("On latest RC version")
+				log.Info().Str("version", newestRC.TagName).Msg("On latest prerelease version")
 			}
 			return newestRC, nil
 		}

@@ -113,3 +113,44 @@ func TestRootInstallScriptAutoRegisterUsesSecureContractShape(t *testing.T) {
 		}
 	}
 }
+
+func TestPrereleaseUpdateCopyUsesPreviewFraming(t *testing.T) {
+	rootInstall, err := os.ReadFile(filepath.Join("..", "..", "install.sh"))
+	if err != nil {
+		t.Fatalf("read root install.sh: %v", err)
+	}
+
+	installScript := string(rootInstall)
+	requiredInstall := []string{
+		`Update to $RC_VERSION (prerelease preview)`,
+		`Prerelease channel detected in configuration`,
+		`Prerelease channel: get latest release (including prereleases, but skip drafts)`,
+	}
+	for _, needle := range requiredInstall {
+		if !strings.Contains(installScript, needle) {
+			t.Fatalf("root install.sh missing prerelease framing fragment: %s", needle)
+		}
+	}
+	forbiddenInstall := []string{
+		`Update to $RC_VERSION (release candidate)`,
+		`RC channel detected in configuration`,
+		`RC channel: Get latest release (including pre-releases, but skip drafts)`,
+	}
+	for _, needle := range forbiddenInstall {
+		if strings.Contains(installScript, needle) {
+			t.Fatalf("root install.sh preserved stale release-candidate framing fragment: %s", needle)
+		}
+	}
+
+	autoUpdate, err := os.ReadFile(filepath.Join("..", "..", "scripts", "pulse-auto-update.sh"))
+	if err != nil {
+		t.Fatalf("read pulse-auto-update.sh: %v", err)
+	}
+	autoUpdateScript := string(autoUpdate)
+	if !strings.Contains(autoUpdateScript, `Prerelease channel detected; unattended auto-updates run only on stable`) {
+		t.Fatalf("pulse-auto-update.sh missing prerelease channel log message")
+	}
+	if strings.Contains(autoUpdateScript, `RC channel detected; unattended auto-updates run only on stable`) {
+		t.Fatalf("pulse-auto-update.sh preserved stale release-candidate channel log message")
+	}
+}
