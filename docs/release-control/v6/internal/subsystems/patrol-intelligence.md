@@ -173,6 +173,10 @@ formatting future schedule timestamps through generic relative-time helpers;
 otherwise the findings footer can contradict the header by rendering the same
 next scheduled patrol as `just now` while the main Patrol shell correctly
 shows a multi-hour countdown.
+That footer must also use the canonical Patrol recency label rather than a
+generic `Last:` prefix, so scoped-only recent activity is rendered as
+`Last activity` and does not silently revert to patrol/full-verification
+language in the findings surface.
 When Patrol is currently running, that strip should still stay factual rather
 than switching to another verdict label: the runtime may add an explicit
 in-progress indicator, but the primary activity label remains recent activity

@@ -163,6 +163,11 @@ describe('aiFindingPresentation', () => {
       expect(findingsPanelSource).toContain('<CountdownTimer targetDate={props.nextPatrolAt!} prefix="Next: " />');
       expect(findingsPanelSource).not.toContain('Next: {formatTime(props.nextPatrolAt!)}');
     });
+
+    it('uses the supplied canonical patrol recency label in the footer', () => {
+      expect(findingsPanelSource).toContain("{props.lastPatrolLabel ?? 'Last'}: {formatTime(props.lastPatrolAt!)}");
+      expect(findingsPanelSource).not.toContain('<span>Last: {formatTime(props.lastPatrolAt!)}</span>');
+    });
   });
 
   describe('sourceColors', () => {

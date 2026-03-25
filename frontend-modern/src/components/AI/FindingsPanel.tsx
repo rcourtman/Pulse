@@ -61,6 +61,7 @@ interface FindingsPanelProps {
   showControls?: boolean;
   nextPatrolAt?: string;
   lastPatrolAt?: string;
+  lastPatrolLabel?: string;
   patrolIntervalMs?: number;
   scopeResourceIds?: string[];
   scopeResourceTypes?: string[];
@@ -1161,7 +1162,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                                   d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
                                 />
                               </svg>
-                              <span>Last: {formatTime(props.lastPatrolAt!)}</span>
+                              <span>{props.lastPatrolLabel ?? 'Last'}: {formatTime(props.lastPatrolAt!)}</span>
                             </div>
                           </Show>
                           <Show when={props.nextPatrolAt}>
