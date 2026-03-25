@@ -155,6 +155,11 @@ estate. When there is exactly one active Patrol runtime finding, that same
 assessment copy should name the concrete runtime failure, such as
 `Insufficient API credits`, instead of reducing the state to a generic count of
 runtime findings.
+That same runtime-owned assessment must expose the fix path directly. When the
+primary Patrol issue is a Patrol runtime/provider problem rather than an
+infrastructure finding, the summary card should offer a direct `Open AI
+Settings` action instead of making the operator dig through the findings list
+to discover where to correct provider configuration.
 That same runtime-versus-infrastructure distinction should route through the
 shared finding-presentation helper instead of being re-inferred separately by
 the summary card and the findings list. The active finding row should surface

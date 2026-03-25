@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   getPatrolAssessmentPresentation,
+  getPatrolAssessmentAction,
   getPatrolRecencyPresentation,
   getPatrolScoreChipLabel,
   getPatrolVerificationPresentation,
@@ -175,6 +176,41 @@ describe('getPatrolSummaryPresentation', () => {
         ] as never,
       }),
     ).toBe('Assessment');
+  });
+
+  it('offers a direct AI settings action for Patrol runtime issues', () => {
+    expect(
+      getPatrolAssessmentAction({
+        activeFindings: [
+          {
+            status: 'active',
+            severity: 'warning',
+            resourceId: 'ai-service',
+            resourceName: 'Pulse Patrol Service',
+            title: 'Pulse Patrol: Insufficient API credits',
+          },
+        ] as never,
+      }),
+    ).toEqual({
+      label: 'Open AI Settings',
+      href: '/settings/system-ai',
+    });
+  });
+
+  it('does not offer an AI settings action for infrastructure findings', () => {
+    expect(
+      getPatrolAssessmentAction({
+        activeFindings: [
+          {
+            status: 'active',
+            severity: 'warning',
+            resourceId: 'vm-100',
+            resourceName: 'web-1',
+            title: 'Disk nearly full',
+          },
+        ] as never,
+      }),
+    ).toBeUndefined();
   });
 
   it('keeps health labeling for verified healthy states', () => {

@@ -955,6 +955,10 @@ describe('AIIntelligence entitlement gating', () => {
     });
 
     expect(screen.getByText(/Assessment C · 60\/100/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open AI Settings' })).toHaveAttribute(
+      'href',
+      '/settings/system-ai',
+    );
 
     expect(screen.getByRole('button', { name: 'Findings' }).textContent).toBe('Findings 1');
 

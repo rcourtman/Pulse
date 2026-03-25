@@ -5,6 +5,7 @@ import CheckCircleIcon from 'lucide-solid/icons/check-circle';
 import AlertCircleIcon from 'lucide-solid/icons/alert-circle';
 import AlertTriangleIcon from 'lucide-solid/icons/alert-triangle';
 import {
+  getPatrolAssessmentAction,
   getPatrolAssessmentPresentation,
   getPatrolRecencyPresentation,
   getPatrolScoreChipLabel,
@@ -79,6 +80,11 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
   const scoreChipLabel = createMemo(() =>
     getPatrolScoreChipLabel({
       overallHealth: state.intelligenceSummary()?.overall_health,
+      activeFindings: state.activePatrolFindings(),
+    }),
+  );
+  const assessmentAction = createMemo(() =>
+    getPatrolAssessmentAction({
       activeFindings: state.activePatrolFindings(),
     }),
   );
@@ -159,6 +165,18 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
                       {assessment().title}
                     </h2>
                     <p class="mt-1 text-sm text-base-content">{assessment().description}</p>
+                    <Show when={assessmentAction()}>
+                      {(action) => (
+                        <div class="mt-3">
+                          <a
+                            href={action().href}
+                            class="inline-flex items-center rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-semibold text-base-content transition-colors hover:bg-surface-hover"
+                          >
+                            {action().label}
+                          </a>
+                        </div>
+                      )}
+                    </Show>
                     <div class="mt-3 flex flex-wrap items-center gap-2">
                       <span class="rounded-full border border-border-subtle bg-base px-2.5 py-1 text-xs font-medium text-base-content">
                         {scoreChipLabel()} {summary().overall_health.grade} ·{' '}

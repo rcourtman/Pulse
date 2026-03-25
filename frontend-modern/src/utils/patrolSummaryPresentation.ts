@@ -26,6 +26,11 @@ export interface PatrolAssessmentPresentation {
   tone: SemanticTone;
 }
 
+export interface PatrolAssessmentAction {
+  label: string;
+  href: string;
+}
+
 export interface PatrolVerificationPresentation {
   title: string;
   description: string;
@@ -157,6 +162,20 @@ export function getPatrolScoreChipLabel(args: {
   }
 
   return 'Health';
+}
+
+export function getPatrolAssessmentAction(args: {
+  activeFindings?: PatrolAssessmentFinding[];
+}): PatrolAssessmentAction | undefined {
+  const classified = classifyActiveFindings(args.activeFindings);
+  if (classified.infrastructureTotal === 0 && classified.runtimeTotal > 0) {
+    return {
+      label: 'Open AI Settings',
+      href: '/settings/system-ai',
+    };
+  }
+
+  return undefined;
 }
 
 function joinAssessmentParts(parts: string[]): string {
