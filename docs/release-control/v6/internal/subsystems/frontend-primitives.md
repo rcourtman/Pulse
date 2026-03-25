@@ -601,6 +601,14 @@ of drifting back into a page-local dashboard panel cluster.
 that same dashboard overview boundary so the problem-resource severity contract
 stays shared with `ProblemResourcesTable.tsx` instead of floating as an
 unowned helper.
+That same dashboard overview boundary must consume the governed Patrol finding
+presentation helpers when it surfaces Patrol findings in compact form. In
+`frontend-modern/src/features/dashboardOverview/ActionRequiredPanel.tsx`,
+Patrol-owned runtime findings must use the shared compact badge, title, and
+primary-action/manual-control contracts from
+`frontend-modern/src/utils/aiFindingPresentation.ts` rather than rendering raw
+`Pulse Patrol:` titles or generic snooze/dismiss controls that the Patrol
+runtime lifecycle rejects.
 
 Feature-owned alert shells under `frontend-modern/src/features/alerts/` now
 also treat shared action runtime as a first-class feature owner instead of

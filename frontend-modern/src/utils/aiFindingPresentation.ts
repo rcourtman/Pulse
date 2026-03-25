@@ -236,6 +236,11 @@ export interface FindingSeverityPresentation {
   uppercase: boolean;
 }
 
+export interface FindingCompactBadgePresentation {
+  label: string;
+  badgeClasses: string;
+}
+
 export const getFindingSourceLabel = (source: UnifiedFinding['source'] | string): string =>
   FINDING_SOURCE_LABELS[source] || source;
 
@@ -319,6 +324,23 @@ export const getPatrolFindingsBadgePresentation = (
 export const getFindingSeverityCompactLabel = (
   severity: UnifiedFinding['severity'] | string,
 ): string => FINDING_SEVERITY_COMPACT_LABELS[severity] || String(severity).toUpperCase();
+
+export const getFindingCompactBadgePresentation = (
+  finding: Pick<UnifiedFinding, 'severity' | 'resourceId' | 'resourceName' | 'title'>,
+): FindingCompactBadgePresentation => {
+  if (isPatrolRuntimeFinding(finding)) {
+    const severityPresentation = getFindingSeverityPresentation(finding);
+    return {
+      label: severityPresentation.label,
+      badgeClasses: severityPresentation.badgeClasses,
+    };
+  }
+
+  return {
+    label: getFindingSeverityCompactLabel(finding.severity),
+    badgeClasses: getFindingSeverityBadgeClasses(finding.severity),
+  };
+};
 
 export const isPatrolRuntimeFinding = (
   finding: Pick<UnifiedFinding, 'resourceId' | 'resourceName' | 'title'>,

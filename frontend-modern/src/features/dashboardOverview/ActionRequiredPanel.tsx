@@ -6,10 +6,12 @@ import { notificationStore } from '@/stores/notifications';
 import { AlertsAPI } from '@/api/alerts';
 import { hasFeature } from '@/stores/license';
 import { formatRelativeTime } from '@/utils/format';
-import { getAlertSeverityBadgeClass } from '@/utils/alertSeverityPresentation';
 import { getApprovalRiskPresentation } from '@/utils/approvalRiskPresentation';
 import {
-  getFindingSeverityCompactLabel,
+  getFindingCompactBadgePresentation,
+  getFindingManualControlsPresentation,
+  getFindingPrimaryActionPresentation,
+  getFindingTitlePresentation,
   getInvestigationOutcomeBadgeClasses,
   getInvestigationOutcomeLabel,
 } from '@/utils/aiFindingPresentation';
@@ -265,60 +267,80 @@ function FindingsAttentionRows(props: { findings: UnifiedFinding[] }) {
       </p>
       <ul class="space-y-1" role="list">
         <For each={props.findings}>
-          {(finding) => (
-            <li class="flex items-center gap-2 py-1.5 px-2 -mx-2 rounded hover:bg-surface-hover transition-colors">
-              <span class={getAlertSeverityBadgeClass(finding.severity)}>
-                {getFindingSeverityCompactLabel(finding.severity)}
-              </span>
-              <p
-                class="min-w-0 text-xs font-medium text-base-content truncate flex-1"
-                title={finding.title}
-              >
-                {finding.title}
-              </p>
-              <Show when={finding.investigationOutcome}>
-                {(outcome) => (
-                  <span
-                    class={`shrink-0 inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-medium ${getInvestigationOutcomeBadgeClasses(outcome())}`}
+          {(finding) => {
+            const compactBadge = getFindingCompactBadgePresentation(finding);
+            const title = getFindingTitlePresentation(finding).label;
+            const primaryAction = getFindingPrimaryActionPresentation(finding);
+            const manualControls = getFindingManualControlsPresentation(finding);
+
+            return (
+              <li class="flex items-center gap-2 py-1.5 px-2 -mx-2 rounded hover:bg-surface-hover transition-colors">
+                <span class={compactBadge.badgeClasses}>{compactBadge.label}</span>
+                <p class="min-w-0 text-xs font-medium text-base-content truncate flex-1" title={title}>
+                  {title}
+                </p>
+                <Show when={finding.investigationOutcome}>
+                  {(outcome) => (
+                    <span
+                      class={`shrink-0 inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-medium ${getInvestigationOutcomeBadgeClasses(outcome())}`}
+                    >
+                      {getInvestigationOutcomeLabel(outcome())}
+                    </span>
+                  )}
+                </Show>
+                <div class="shrink-0 flex items-center gap-1">
+                  <Show
+                    when={primaryAction}
+                    fallback={
+                      <button
+                        type="button"
+                        onClick={() => handleReinvestigate(finding)}
+                        disabled={actionLoading() === finding.id}
+                        class="flex items-center gap-1 px-2 py-1 text-[10px] font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900 rounded transition-colors disabled:opacity-50"
+                        title="Re-investigate this finding"
+                      >
+                        <RefreshCwIcon
+                          class={`w-3 h-3 ${actionLoading() === finding.id ? 'animate-spin' : ''}`}
+                        />
+                        Retry
+                      </button>
+                    }
                   >
-                    {getInvestigationOutcomeLabel(outcome())}
-                  </span>
-                )}
-              </Show>
-              <div class="shrink-0 flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => handleReinvestigate(finding)}
-                  disabled={actionLoading() === finding.id}
-                  class="flex items-center gap-1 px-2 py-1 text-[10px] font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900 rounded transition-colors disabled:opacity-50"
-                  title="Re-investigate this finding"
-                >
-                  <RefreshCwIcon
-                    class={`w-3 h-3 ${actionLoading() === finding.id ? 'animate-spin' : ''}`}
-                  />
-                  Retry
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleSnooze(finding)}
-                  disabled={actionLoading() === finding.id}
-                  class="px-2 py-1 text-[10px] font-medium text-muted hover:bg-surface-hover rounded transition-colors disabled:opacity-50"
-                  title="Snooze for 24 hours"
-                >
-                  Snooze
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleDismiss(finding)}
-                  disabled={actionLoading() === finding.id}
-                  class="px-2 py-1 text-[10px] font-medium text-muted hover:bg-surface-hover rounded transition-colors disabled:opacity-50"
-                  title="Dismiss this finding"
-                >
-                  Dismiss
-                </button>
-              </div>
-            </li>
-          )}
+                    {(action) => (
+                      <a
+                        href={action().href}
+                        class="px-2 py-1 text-[10px] font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900 rounded transition-colors"
+                      >
+                        {action().label}
+                      </a>
+                    )}
+                  </Show>
+                  <Show when={manualControls.snooze}>
+                    <button
+                      type="button"
+                      onClick={() => handleSnooze(finding)}
+                      disabled={actionLoading() === finding.id}
+                      class="px-2 py-1 text-[10px] font-medium text-muted hover:bg-surface-hover rounded transition-colors disabled:opacity-50"
+                      title="Snooze for 24 hours"
+                    >
+                      Snooze
+                    </button>
+                  </Show>
+                  <Show when={manualControls.dismiss}>
+                    <button
+                      type="button"
+                      onClick={() => handleDismiss(finding)}
+                      disabled={actionLoading() === finding.id}
+                      class="px-2 py-1 text-[10px] font-medium text-muted hover:bg-surface-hover rounded transition-colors disabled:opacity-50"
+                      title="Dismiss this finding"
+                    >
+                      Dismiss
+                    </button>
+                  </Show>
+                </div>
+              </li>
+            );
+          }}
         </For>
       </ul>
       <Show when={props.findings.length > 5}>
