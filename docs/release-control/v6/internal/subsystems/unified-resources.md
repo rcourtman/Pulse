@@ -893,6 +893,11 @@ Future resource-to-runtime mapping changes should extend these unified-resource
 owners instead of rebuilding ad hoc platform-data parsing or action-target
 fallback logic inside alerts, settings, recovery, AI, or infrastructure-local
 state owners.
+Those runtime adapters must preserve the same operator-facing local identity
+boundary as the infrastructure tables and selectors: node, PBS, and PMG view
+models keep canonical local instance labels for summary rows, drawers, and
+settings selectors, while governed summaries remain available for policy/detail
+surfaces rather than replacing per-instance operator identity.
 `ResourceFacetSummary` now consumes the shared
 `frontend-modern/src/utils/resourceChangePresentation.ts` label helper for
 canonical change kinds, source types, and adapter provenance, so the chip

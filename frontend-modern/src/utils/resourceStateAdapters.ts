@@ -23,8 +23,8 @@ import type {
 import type { Resource } from '@/types/resource';
 import { getActionableAgentIdFromResource } from '@/utils/agentResources';
 import {
+  getPreferredInfrastructureDisplayName,
   getPreferredResourceClusterName,
-  getPreferredResourceDisplayName,
   getPreferredResourceHostname,
 } from '@/utils/resourceIdentity';
 
@@ -186,7 +186,7 @@ export const nodeFromResource = (resource: Resource): Node | null => {
   const cpuInfo = asRecord(proxmox?.cpuInfo);
   const preferredHostLabel =
     getPreferredResourceHostname(resource) ||
-    getPreferredResourceDisplayName(resource) ||
+    getPreferredInfrastructureDisplayName(resource) ||
     resource.id;
   const instance =
     asString(proxmox?.instance) ||
@@ -200,7 +200,7 @@ export const nodeFromResource = (resource: Resource): Node | null => {
   return {
     id: resource.id,
     name,
-    displayName: getPreferredResourceDisplayName(resource),
+    displayName: getPreferredInfrastructureDisplayName(resource),
     instance,
     host: asString(proxmox?.nodeName) || preferredHostLabel,
     guestURL:
@@ -354,7 +354,7 @@ export const pbsInstanceFromResource = (resource: Resource): PBSInstance | null 
 
   return {
     id: asString(pbs?.instanceId) || resource.id,
-    name: getPreferredResourceDisplayName(resource),
+    name: getPreferredInfrastructureDisplayName(resource),
     host,
     guestURL:
       asString((resource as unknown as Record<string, unknown>).customURL) ||
@@ -521,7 +521,7 @@ export const pmgInstanceFromResource = (resource: Resource): PMGInstance | null 
 
   return {
     id: asString(pmg?.instanceId) || resource.id,
-    name: getPreferredResourceDisplayName(resource),
+    name: getPreferredInfrastructureDisplayName(resource),
     host,
     guestURL:
       asString((resource as unknown as Record<string, unknown>).customURL) ||

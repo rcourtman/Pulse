@@ -91,6 +91,32 @@ describe('resourceStateAdapters nodeFromResource', () => {
     expect(node?.clusterName).toBeUndefined();
   });
 
+  it('keeps node operator labels on local identity when governed summaries exist', () => {
+    const node = nodeFromResource({
+      ...createNodeResource({
+        proxmox: {},
+      } as Record<string, unknown>),
+      name: '',
+      displayName: 'Tower',
+      platformId: 'tower-id',
+      policy: {
+        display: {
+          mode: 'governed',
+          summary: 'host resource; status online; source agent',
+        },
+      } as Resource['policy'],
+      canonicalIdentity: {
+        displayName: 'Tower',
+        hostname: 'tower.local',
+        platformId: 'tower-id',
+      },
+    } as Resource);
+
+    expect(node?.name).toBe('tower.local');
+    expect(node?.displayName).toBe('Tower');
+    expect(node?.host).toBe('tower.local');
+  });
+
   it('projects the canonical cluster name through the shared helper', () => {
     const node = nodeFromResource(
       createNodeResource({
@@ -115,6 +141,28 @@ describe('resourceStateAdapters nodeFromResource', () => {
     expect(instance?.host).toBe('https://pbs-service.local:8007');
   });
 
+  it('keeps PBS operator labels on local identity when governed summaries exist', () => {
+    const instance = pbsInstanceFromResource(
+      createServiceResource(
+        'pbs',
+        {
+          pbs: { hostname: 'pbs-service.local', instanceId: 'pbs-instance-1' },
+        },
+        {
+          displayName: 'PBS Main',
+          policy: {
+            display: {
+              mode: 'governed',
+              summary: 'backup server resource; status online; sources pbs',
+            },
+          } as Resource['policy'],
+        },
+      ),
+    );
+
+    expect(instance?.name).toBe('PBS Main');
+  });
+
   it('maps PMG identity through shared hostname fallback when displayName is absent', () => {
     const instance = pmgInstanceFromResource(
       createServiceResource(
@@ -128,5 +176,27 @@ describe('resourceStateAdapters nodeFromResource', () => {
 
     expect(instance?.name).toBe('pmg-service.local');
     expect(instance?.host).toBe('https://pmg-service.local:8006');
+  });
+
+  it('keeps PMG operator labels on local identity when governed summaries exist', () => {
+    const instance = pmgInstanceFromResource(
+      createServiceResource(
+        'pmg',
+        {
+          pmg: { hostname: 'pmg-service.local', instanceId: 'pmg-instance-1' },
+        },
+        {
+          displayName: 'PMG Main',
+          policy: {
+            display: {
+              mode: 'governed',
+              summary: 'mail gateway resource; status online; sources pmg',
+            },
+          } as Resource['policy'],
+        },
+      ),
+    );
+
+    expect(instance?.name).toBe('PMG Main');
   });
 });
