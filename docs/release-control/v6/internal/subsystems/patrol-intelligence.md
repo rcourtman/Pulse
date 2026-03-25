@@ -106,6 +106,9 @@ render contract: the header chip, primary summary card, and status bar must
 all route through the shared `frontend-modern/src/utils/patrolRuntimePresentation.ts`
 helper plus the backend `runtime_state` payload instead of inferring operator
 state from the last healthy summary snapshot or run history alone.
+That active-runtime label must stay operational rather than verdict-like: the
+header chip should communicate that Patrol is enabled or available, not imply
+that infrastructure health is currently good merely because the runtime is on.
 That render rule now also has browser-level proof in
 `tests/integration/tests/18-patrol-runtime-state.spec.ts`: when the backend
 reports `runtime_state=blocked`, the real `/ai` route must show Patrol as

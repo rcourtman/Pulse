@@ -46,10 +46,10 @@ export function getPatrolRuntimePresentation(
     case 'active':
     default:
       return {
-        label: 'Patrol Active',
-        title: 'Patrol summary',
-        description: 'Pulse Patrol is monitoring your infrastructure.',
-        tone: 'success',
+        label: 'Patrol enabled',
+        title: 'Patrol enabled',
+        description: 'Pulse Patrol is available to monitor and analyze your infrastructure.',
+        tone: 'info',
       };
   }
 }

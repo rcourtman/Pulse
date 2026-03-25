@@ -726,7 +726,7 @@ describe('AIIntelligence entitlement gating', () => {
 
     await waitFor(() => {
       expect(getPatrolStatusMock).toHaveBeenCalled();
-      expect(screen.getByText('Patrol Active')).toBeInTheDocument();
+      expect(screen.getByText('Patrol enabled')).toBeInTheDocument();
     });
 
     expect(screen.queryByText('Credits exhausted — connect API key')).not.toBeInTheDocument();
