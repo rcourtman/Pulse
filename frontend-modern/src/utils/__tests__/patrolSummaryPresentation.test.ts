@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   getPatrolAssessmentPresentation,
+  getPatrolRecencyPresentation,
   getPatrolVerificationPresentation,
   getPatrolNoIssuesPresentation,
   getPatrolSummaryPresentation,
@@ -205,6 +206,85 @@ describe('getPatrolSummaryPresentation', () => {
         'Recent activity was limited to scoped alert fired runs over 1 resource, so Patrol has not recently re-verified your full infrastructure.',
       compactLabel: 'Partial verification',
       tone: 'warning',
+    });
+  });
+
+  it('labels scoped recency as activity rather than patrol', () => {
+    expect(
+      getPatrolRecencyPresentation({
+        runs: [
+          {
+            id: 'run-1',
+            started_at: '2026-03-12T09:58:00Z',
+            completed_at: '2026-03-12T09:59:00Z',
+            duration_ms: 60000,
+            type: 'scoped',
+            trigger_reason: 'alert_fired',
+            resources_checked: 1,
+            nodes_checked: 0,
+            guests_checked: 0,
+            docker_checked: 0,
+            storage_checked: 0,
+            hosts_checked: 0,
+            pbs_checked: 0,
+            pmg_checked: 0,
+            kubernetes_checked: 0,
+            new_findings: 0,
+            existing_findings: 0,
+            rejected_findings: 0,
+            resolved_findings: 0,
+            auto_fix_count: 0,
+            findings_summary: '',
+            finding_ids: [],
+            error_count: 1,
+            status: 'error',
+            triage_flags: 0,
+            tool_call_count: 0,
+          },
+        ] as never,
+      }),
+    ).toEqual({
+      label: 'Last activity',
+      timestamp: '2026-03-12T09:59:00Z',
+    });
+  });
+
+  it('labels full patrol recency explicitly when the latest completed run is full', () => {
+    expect(
+      getPatrolRecencyPresentation({
+        runs: [
+          {
+            id: 'run-1',
+            started_at: '2026-03-12T09:50:00Z',
+            completed_at: '2026-03-12T09:57:00Z',
+            duration_ms: 420000,
+            type: 'patrol',
+            resources_checked: 58,
+            nodes_checked: 0,
+            guests_checked: 0,
+            docker_checked: 0,
+            storage_checked: 0,
+            hosts_checked: 0,
+            pbs_checked: 0,
+            pmg_checked: 0,
+            kubernetes_checked: 0,
+            new_findings: 0,
+            existing_findings: 1,
+            rejected_findings: 0,
+            resolved_findings: 0,
+            auto_fix_count: 0,
+            findings_summary: '1 warning',
+            finding_ids: ['finding-1'],
+            error_count: 0,
+            status: 'issues_found',
+            triage_flags: 0,
+            tool_call_count: 0,
+          },
+        ] as never,
+      }),
+    ).toEqual({
+      label: 'Last full patrol',
+      timestamp: '2026-03-12T09:57:00Z',
     });
   });
 });

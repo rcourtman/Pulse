@@ -6,6 +6,7 @@ import AlertCircleIcon from 'lucide-solid/icons/alert-circle';
 import AlertTriangleIcon from 'lucide-solid/icons/alert-triangle';
 import {
   getPatrolAssessmentPresentation,
+  getPatrolRecencyPresentation,
   getPatrolVerificationPresentation,
   getPatrolSummaryPresentation,
 } from '@/utils/patrolSummaryPresentation';
@@ -67,6 +68,12 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
       blockedReason: state.blockedReason(),
     }),
   );
+  const recency = createMemo(() =>
+    getPatrolRecencyPresentation({
+      runs: state.patrolRunHistory() ?? [],
+      lastPatrolAt: state.patrolStatus()?.last_patrol_at,
+    }),
+  );
   const fixedSummaryPresentation = createMemo(() =>
     getPatrolSummaryPresentation('success', summaryStats().fixedCount > 0),
   );
@@ -87,10 +94,10 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
                 {runtimePresentation().label}
               </h2>
               <p class="mt-1 text-sm text-base-content">{runtimePresentation().description}</p>
-              <Show when={state.patrolStatus()?.last_patrol_at}>
+              <Show when={recency().timestamp}>
                 <p class="mt-2 text-xs text-muted">
-                  Last completed patrol{' '}
-                  {formatRelativeTime(state.patrolStatus()!.last_patrol_at, {
+                  {recency().label}{' '}
+                  {formatRelativeTime(recency().timestamp!, {
                     compact: true,
                     emptyText: 'never',
                   })}
@@ -155,10 +162,10 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
                       <span class="rounded-full border border-border-subtle bg-base px-2.5 py-1 text-xs font-medium text-base-content">
                         Active findings {summaryStats().totalActive}
                       </span>
-                      <Show when={state.patrolStatus()?.last_patrol_at}>
+                      <Show when={recency().timestamp}>
                         <span class="rounded-full border border-border-subtle bg-base px-2.5 py-1 text-xs font-medium text-base-content">
-                          Last patrol{' '}
-                          {formatRelativeTime(state.patrolStatus()!.last_patrol_at, {
+                          {recency().label}{' '}
+                          {formatRelativeTime(recency().timestamp!, {
                             compact: true,
                             emptyText: 'never',
                           })}

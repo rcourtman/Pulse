@@ -32,6 +32,11 @@ export interface PatrolVerificationPresentation {
   lastFullRunAt?: string;
 }
 
+export interface PatrolRecencyPresentation {
+  label: string;
+  timestamp?: string;
+}
+
 export const PATROL_NO_ISSUES_LABEL = 'No issues found';
 
 const QUIET_ICON_CONTAINER = 'bg-surface border-border';
@@ -273,6 +278,30 @@ export function getPatrolVerificationPresentation(args: {
     description: 'Patrol has not completed a recent full verification run yet.',
     compactLabel: 'Verification pending',
     tone: 'info',
+  };
+}
+
+export function getPatrolRecencyPresentation(args: {
+  runs?: PatrolRunRecord[];
+  lastPatrolAt?: string;
+}): PatrolRecencyPresentation {
+  const latestCompletedRun = (args.runs ?? []).find((run) => isCompletedPatrolRun(run));
+  if (latestCompletedRun?.completed_at) {
+    return {
+      label: isFullPatrolRun(latestCompletedRun) ? 'Last full patrol' : 'Last activity',
+      timestamp: latestCompletedRun.completed_at,
+    };
+  }
+
+  if (args.lastPatrolAt?.trim()) {
+    return {
+      label: 'Last activity',
+      timestamp: args.lastPatrolAt,
+    };
+  }
+
+  return {
+    label: 'Last activity',
   };
 }
 

@@ -817,10 +817,12 @@ describe('AIIntelligence entitlement gating', () => {
     await waitFor(() => {
       expect(screen.getAllByText('Coverage incomplete').length).toBeGreaterThan(0);
       expect(screen.getByText('No recent full patrol')).toBeInTheDocument();
+      expect(screen.getByText(/Last activity/i)).toBeInTheDocument();
       expect(screen.getByText('Warnings')).toBeInTheDocument();
     });
 
     expect(screen.queryByText('No issues found')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Last patrol/i)).not.toBeInTheDocument();
     expect(screen.queryByText('Partial verification')).not.toBeInTheDocument();
     expect(
       screen.getAllByText(
