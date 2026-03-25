@@ -18,7 +18,6 @@ import {
 import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/upgradeMetrics';
 import {
   getProTrialStartedMessage,
-  getTrialAlreadyUsedMessage,
   getTrialStartErrorMessage,
 } from '@/utils/upgradePresentation';
 
@@ -534,12 +533,7 @@ export const useAuditLogPanelState = () => {
       }
       showSuccess(getProTrialStartedMessage());
     } catch (err) {
-      const statusCode = (err as { status?: number } | null)?.status;
-      if (statusCode === 409) {
-        showWarning(getTrialAlreadyUsedMessage());
-      } else {
-        showWarning(getTrialStartErrorMessage(err instanceof Error ? err.message : undefined));
-      }
+      showWarning(getTrialStartErrorMessage(err));
     } finally {
       setStartingTrial(false);
     }

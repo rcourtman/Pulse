@@ -68,6 +68,12 @@ describe('HistoryChart', () => {
     expect(historyChartStateSource).toContain('setupCanvasDPR');
     expect(historyChartStateSource).toContain('export function useHistoryChartState');
     expect(historyChartStateSource).toContain('HISTORY_CHART_RANGES');
+    expect(historyChartStateSource).toContain('return ent.trial_eligible !== false;');
+    expect(historyChartStateSource).toContain(
+      'notificationStore.error(getTrialStartErrorMessage(err, { branded: true }));',
+    );
+    expect(historyChartStateSource).not.toContain('getTrialAlreadyUsedMessage()');
+    expect(historyChartStateSource).not.toContain('getTrialTryAgainLaterMessage()');
 
     expect(historyChartModelSource).toContain('formatHistoryChartTooltipValue');
     expect(historyChartModelSource).toContain('HISTORY_CHART_RANGES');

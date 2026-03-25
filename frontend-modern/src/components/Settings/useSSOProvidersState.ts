@@ -30,7 +30,6 @@ import {
 } from '@/utils/ssoProviderPresentation';
 import {
   getProTrialStartedMessage,
-  getTrialAlreadyUsedMessage,
   getTrialStartErrorMessage,
 } from '@/utils/upgradePresentation';
 import type {
@@ -89,14 +88,7 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
       }
       notificationStore.success(getProTrialStartedMessage());
     } catch (err) {
-      const statusCode = (err as { status?: number } | null)?.status;
-      if (statusCode === 409) {
-        notificationStore.error(getTrialAlreadyUsedMessage());
-      } else {
-        notificationStore.error(
-          getTrialStartErrorMessage(err instanceof Error ? err.message : undefined),
-        );
-      }
+      notificationStore.error(getTrialStartErrorMessage(err));
     } finally {
       setStartingTrial(false);
     }

@@ -13,7 +13,6 @@ import {
 import { trackPaywallViewed } from '@/utils/upgradeMetrics';
 import {
   getProTrialStartedMessage,
-  getTrialAlreadyUsedMessage,
   getTrialStartErrorMessage,
 } from '@/utils/upgradePresentation';
 import {
@@ -65,12 +64,7 @@ export const useReportingPanelState = () => {
       }
       showSuccess(getProTrialStartedMessage());
     } catch (error) {
-      const statusCode = (error as { status?: number } | null)?.status;
-      if (statusCode === 409) {
-        showWarning(getTrialAlreadyUsedMessage());
-      } else {
-        showWarning(getTrialStartErrorMessage(error instanceof Error ? error.message : undefined));
-      }
+      showWarning(getTrialStartErrorMessage(error));
     } finally {
       setStartingTrial(false);
     }

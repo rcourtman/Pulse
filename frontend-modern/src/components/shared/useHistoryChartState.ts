@@ -20,9 +20,7 @@ import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/upgradeMetrics'
 import { notificationStore } from '@/stores/notifications';
 import {
   getProTrialStartedMessage,
-  getTrialAlreadyUsedMessage,
   getTrialStartErrorMessage,
-  getTrialTryAgainLaterMessage,
 } from '@/utils/upgradePresentation';
 import {
   HISTORY_CHART_RANGES,
@@ -58,9 +56,10 @@ export function useHistoryChartState(props: HistoryChartProps, refs: HistoryChar
   const [hoveredPoint, setHoveredPoint] = createSignal<HistoryChartHoverPoint | null>(null);
 
   const canStartTrial = createMemo(() => {
-    const state = licenseStatus()?.subscription_state;
-    if (!state) return false;
-    return state !== 'active' && state !== 'trial';
+    const ent = licenseStatus();
+    if (!ent) return false;
+    if (ent.subscription_state === 'active' || ent.subscription_state === 'trial') return false;
+    return ent.trial_eligible !== false;
   });
 
   const handleStartTrial = async () => {
@@ -76,18 +75,7 @@ export function useHistoryChartState(props: HistoryChartProps, refs: HistoryChar
       }
       notificationStore.success(getProTrialStartedMessage());
     } catch (err) {
-      const statusCode = (err as { status?: number } | null)?.status;
-      if (statusCode === 409) {
-        notificationStore.error(getTrialAlreadyUsedMessage());
-      } else if (statusCode === 429) {
-        notificationStore.error(getTrialTryAgainLaterMessage());
-      } else {
-        notificationStore.error(
-          getTrialStartErrorMessage(err instanceof Error ? err.message : undefined, {
-            branded: true,
-          }),
-        );
-      }
+      notificationStore.error(getTrialStartErrorMessage(err, { branded: true }));
     } finally {
       setStartingTrial(false);
     }

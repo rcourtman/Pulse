@@ -980,6 +980,8 @@ describe('Settings architecture guardrails', () => {
     expect(aiSettingsStateSource).toContain('const handleSave = async (event?: Event) =>');
     expect(aiSettingsStateSource).toContain('const handleEnabledToggle = async (newValue: boolean) =>');
     expect(aiSettingsStateSource).toContain('AIAPI.getSettings()');
+    expect(aiSettingsStateSource).toContain('showWarning(getTrialStartErrorMessage(error));');
+    expect(aiSettingsStateSource).not.toContain('getTrialAlreadyUsedMessage()');
   });
 
   it('keeps the updates settings shell behind extracted install-guide owners', () => {
@@ -1035,6 +1037,8 @@ describe('Settings architecture guardrails', () => {
     expect(reportingPanelStateSource).toContain('startProTrial');
     expect(reportingPanelStateSource).toContain('buildReportingRequest');
     expect(reportingPanelStateSource).toContain('getReportingGenerateSuccessMessage');
+    expect(reportingPanelStateSource).toContain('showWarning(getTrialStartErrorMessage(error));');
+    expect(reportingPanelStateSource).not.toContain('getTrialAlreadyUsedMessage()');
     expect(reportingPanelModelSource).toContain('export function getReportingRangeStart');
     expect(reportingPanelModelSource).toContain('export function buildReportingRequest');
     expect(reportingPanelModelSource).toContain('export function buildReportingFilename');
@@ -1059,6 +1063,8 @@ describe('Settings architecture guardrails', () => {
     expect(auditLogStateSource).toContain('const fetchAuditEvents = async (');
     expect(auditLogStateSource).toContain('const verifyAllEvents = async (');
     expect(auditLogStateSource).toContain('trackPaywallViewed');
+    expect(auditLogStateSource).toContain('showWarning(getTrialStartErrorMessage(err));');
+    expect(auditLogStateSource).not.toContain('getTrialAlreadyUsedMessage()');
   });
 
   it('keeps the audit webhook shell behind an extracted runtime owner', () => {
@@ -1072,6 +1078,8 @@ describe('Settings architecture guardrails', () => {
     expect(auditWebhookStateSource).toContain('const fetchWebhooks = async () =>');
     expect(auditWebhookStateSource).toContain('const saveWebhooks = async (urls: string[]) =>');
     expect(auditWebhookStateSource).toContain('trackPaywallViewed');
+    expect(auditWebhookStateSource).toContain('showWarning(getTrialStartErrorMessage(error));');
+    expect(auditWebhookStateSource).not.toContain('getTrialAlreadyUsedMessage()');
   });
 
   it('keeps the SSO providers shell behind extracted runtime owners', () => {
@@ -1086,6 +1094,10 @@ describe('Settings architecture guardrails', () => {
     expect(ssoProvidersStateSource).toContain('const loadProviders = async () =>');
     expect(ssoProvidersStateSource).toContain('const handleSave = async (event?: Event) =>');
     expect(ssoProvidersStateSource).toContain('const testConnection = async () =>');
+    expect(ssoProvidersStateSource).toContain(
+      'notificationStore.error(getTrialStartErrorMessage(err));',
+    );
+    expect(ssoProvidersStateSource).not.toContain('getTrialAlreadyUsedMessage()');
     expect(ssoProvidersModelSource).toContain('export const createEmptyProviderForm =');
     expect(ssoProvidersModelSource).toContain('export const mapProviderDetailsToForm =');
     expect(ssoProvidersModelSource).toContain('export const buildProviderPayload =');
