@@ -4,16 +4,10 @@ import { ApprovalBanner, PatrolStatusBar, RunHistoryPanel } from '@/components/p
 import { getFindingSeverityToneClasses } from '@/utils/aiFindingPresentation';
 import { formatRelativeTime } from '@/utils/format';
 import { formatTriggerReason } from '@/utils/patrolFormat';
-import { getPatrolRecencyPresentation } from '@/utils/patrolSummaryPresentation';
 import type { PatrolIntelligenceState } from './usePatrolIntelligenceState';
 
 export function PatrolIntelligenceWorkspace(props: { state: PatrolIntelligenceState }) {
   const state = props.state;
-  const recency = () =>
-    getPatrolRecencyPresentation({
-      runs: state.patrolRunHistory() ?? [],
-      lastPatrolAt: state.patrolStatus()?.last_patrol_at,
-    });
 
   return (
     <>
@@ -100,10 +94,6 @@ export function PatrolIntelligenceWorkspace(props: { state: PatrolIntelligenceSt
         </Show>
 
         <FindingsPanel
-          nextPatrolAt={state.patrolStatus()?.next_patrol_at}
-          lastPatrolAt={state.patrolStatus()?.last_patrol_at}
-          lastPatrolLabel={recency().label}
-          patrolIntervalMs={state.patrolStatus()?.interval_ms}
           filterOverride={state.selectedRun() ? 'all' : state.findingsFilterOverride()}
           filterFindingIds={state.selectedRunFindingIds()}
           scopeResourceIds={state.selectedRunScopeResourceIds()}

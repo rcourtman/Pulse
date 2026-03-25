@@ -12,6 +12,10 @@ const { findingsPanelState, runHistoryState, intelligenceState } = vi.hoisted(()
       scopeResourceIds?: string[];
       scopeResourceTypes?: string[];
       showScopeWarnings?: boolean;
+      nextPatrolAt?: string;
+      lastPatrolAt?: string;
+      lastPatrolLabel?: string;
+      patrolIntervalMs?: number;
     } | null,
   },
   runHistoryState: {
@@ -192,6 +196,12 @@ vi.mock('@/components/AI/FindingsPanel', () => ({
         : undefined,
       showScopeWarnings:
         typeof props.showScopeWarnings === 'boolean' ? props.showScopeWarnings : undefined,
+      nextPatrolAt: typeof props.nextPatrolAt === 'string' ? props.nextPatrolAt : undefined,
+      lastPatrolAt: typeof props.lastPatrolAt === 'string' ? props.lastPatrolAt : undefined,
+      lastPatrolLabel:
+        typeof props.lastPatrolLabel === 'string' ? props.lastPatrolLabel : undefined,
+      patrolIntervalMs:
+        typeof props.patrolIntervalMs === 'number' ? props.patrolIntervalMs : undefined,
     };
     return <div data-testid="findings-panel" />;
   },
@@ -821,6 +831,7 @@ describe('AIIntelligence entitlement gating', () => {
       expect(screen.getAllByText('Active findings')).toHaveLength(1);
       expect(screen.getAllByText('Warnings')).toHaveLength(1);
       expect(screen.getAllByText('Critical')).toHaveLength(1);
+      expect(findingsPanelState.latestProps).not.toBeNull();
     });
 
     expect(screen.queryByText('No issues found')).not.toBeInTheDocument();
@@ -832,6 +843,10 @@ describe('AIIntelligence entitlement gating', () => {
         'Patrol coverage is incomplete: recent activity was limited to scoped runs and ended with errors, so overall health is not fully verified.',
       ),
     ).toHaveLength(1);
+    expect(findingsPanelState.latestProps?.nextPatrolAt).toBeUndefined();
+    expect(findingsPanelState.latestProps?.lastPatrolAt).toBeUndefined();
+    expect(findingsPanelState.latestProps?.lastPatrolLabel).toBeUndefined();
+    expect(findingsPanelState.latestProps?.patrolIntervalMs).toBeUndefined();
   });
 
   it('describes both findings and incomplete coverage when active issues exist', async () => {

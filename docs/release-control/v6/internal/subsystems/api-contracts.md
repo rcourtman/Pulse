@@ -175,6 +175,7 @@ Own canonical runtime payload shapes between backend and frontend.
 9. Treat active Patrol runtime transport as compatible with factual activity surfaces: when the runtime is currently running, frontend consumers may surface in-progress activity context, but they must not replace the activity strip with a second assessment verdict derived from runtime state alone
 10. Treat Patrol recency as a singular transport-driven fact: once header metadata, verification copy, or the findings footer already present the governed Patrol timing context, frontend summary consumers must not derive an extra timing pill from the same payloads inside the primary summary card
 11. Treat Patrol findings counts as a singular supporting surface as well: when the summary shell already exposes count cards for active findings, warnings, criticals, and fixes, the primary assessment card must not repeat those same payload-derived counts as secondary badges
+12. Treat Patrol schedule and recency as header-owned metadata on the main Patrol page: findings empty-state consumers should not receive or restate `next_patrol_at`, `last_patrol_at`, or interval timing once those transport fields are already presented by the primary header and verification shell
 
 ## Current State
 

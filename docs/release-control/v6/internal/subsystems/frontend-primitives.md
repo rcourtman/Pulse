@@ -204,6 +204,10 @@ The same ownership split applies to supporting counts: if the Patrol summary
 surface renders the metric strip for active findings, warnings, criticals, and
 fixes, the primary summary card should not repeat those same counts in badge
 form beside the assessment and verification copy.
+That same ownership rule applies to empty-state timing metadata. When the
+Patrol page header already carries schedule and recency context, the findings
+empty state should not add its own footer for `Last activity`, `Next run`, or
+run interval text.
 Those supporting cards must also keep their content factual and count-based:
 active findings, critical findings, warnings, and fixes are valid secondary
 readouts, while labels such as `Issues detected` or `Partial verification`

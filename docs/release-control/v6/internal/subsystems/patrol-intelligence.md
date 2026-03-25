@@ -180,17 +180,12 @@ plain-text renders: the latest-run segment must keep an explicit textual
 separator between run kind and result, so degraded entries read as
 `Scoped run · error` rather than collapsing into concatenated strings like
 `Scoped runerror`.
-That same Patrol-owned timing contract also applies to the findings empty
-state footer. `frontend-modern/src/components/AI/FindingsPanel.tsx` must use
-the canonical Patrol countdown semantics for `next_patrol_at` instead of
-formatting future schedule timestamps through generic relative-time helpers;
-otherwise the findings footer can contradict the header by rendering the same
-next scheduled patrol as `just now` while the main Patrol shell correctly
-shows a multi-hour countdown.
-That footer must also use the canonical Patrol recency label rather than a
-generic `Last:` prefix, so scoped-only recent activity is rendered as
-`Last activity` and does not silently revert to patrol/full-verification
-language in the findings surface.
+The findings empty state must also stay subordinate to the Patrol header and
+assessment shell rather than mirroring their timing metadata. In the primary
+Patrol page, `frontend-modern/src/components/AI/FindingsPanel.tsx` should
+explain the absence of active findings without repeating `Last activity`,
+`Next run`, or interval schedule details that already belong to the header and
+verification hierarchy above.
 When Patrol is currently running, that strip should still stay factual rather
 than switching to another verdict label: the runtime may add an explicit
 in-progress indicator, but the primary activity label remains recent activity

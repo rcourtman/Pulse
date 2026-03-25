@@ -16,7 +16,7 @@ import { Card } from '@/components/shared/Card';
 import { aiIntelligenceStore, type UnifiedFinding } from '@/stores/aiIntelligence';
 import { notificationStore } from '@/stores/notifications';
 import { aiChatStore } from '@/stores/aiChat';
-import { InvestigationSection, ApprovalSection, CountdownTimer } from '@/components/patrol';
+import { InvestigationSection, ApprovalSection } from '@/components/patrol';
 import { AIAPI, type RemediationPlan } from '@/api/ai';
 import type { PatrolRuntimeState } from '@/api/patrol';
 import { getApprovalRiskPresentation } from '@/utils/approvalRiskPresentation';
@@ -59,10 +59,6 @@ interface FindingsPanelProps {
   filterOverride?: 'all' | 'active' | 'resolved' | 'approvals' | 'attention';
   filterFindingIds?: string[];
   showControls?: boolean;
-  nextPatrolAt?: string;
-  lastPatrolAt?: string;
-  lastPatrolLabel?: string;
-  patrolIntervalMs?: number;
   scopeResourceIds?: string[];
   scopeResourceTypes?: string[];
   showScopeWarnings?: boolean;
@@ -380,18 +376,6 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
   };
 
   const formatTime = (isoString: string) => formatRelativeTime(isoString, { compact: true });
-
-  const formatInterval = (ms: number) => {
-    const hours = Math.floor(ms / 3600000);
-    const minutes = Math.floor((ms % 3600000) / 60000);
-    if (hours >= 24) {
-      const days = Math.floor(hours / 24);
-      return days === 1 ? '1 day' : `${days} days`;
-    }
-    if (hours > 0 && minutes > 0) return `${hours}h ${minutes}m`;
-    if (hours > 0) return hours === 1 ? '1 hour' : `${hours} hours`;
-    return minutes === 1 ? '1 minute' : `${minutes} minutes`;
-  };
 
   // Get meaningful resolution reason based on finding type
   const getResolutionReason = (finding: UnifiedFinding): string => {
@@ -1144,70 +1128,6 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                         <p class="text-xs mt-1">{emptyStateCopy().body}</p>
                       </Show>
                     </div>
-                    <Show when={props.nextPatrolAt || props.lastPatrolAt || props.patrolIntervalMs}>
-                      <div class="mt-2 pt-3 border-t border-border w-full max-w-xs">
-                        <div class="flex items-center justify-center gap-4 text-xs">
-                          <Show when={props.lastPatrolAt}>
-                            <div class="flex items-center gap-1.5">
-                              <svg
-                                class="w-3.5 h-3.5"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path
-                                  stroke-linecap="round"
-                                  stroke-linejoin="round"
-                                  stroke-width="2"
-                                  d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                                />
-                              </svg>
-                              <span>{props.lastPatrolLabel ?? 'Last'}: {formatTime(props.lastPatrolAt!)}</span>
-                            </div>
-                          </Show>
-                          <Show when={props.nextPatrolAt}>
-                            <div class="flex items-center gap-1.5 text-blue-600 dark:text-blue-400">
-                              <svg
-                                class="w-3.5 h-3.5"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path
-                                  stroke-linecap="round"
-                                  stroke-linejoin="round"
-                                  stroke-width="2"
-                                  d="M13 10V3L4 14h7v7l9-11h-7z"
-                                />
-                              </svg>
-                              <CountdownTimer targetDate={props.nextPatrolAt!} prefix="Next: " />
-                            </div>
-                          </Show>
-                          <Show
-                            when={
-                              !props.nextPatrolAt && !props.lastPatrolAt && props.patrolIntervalMs
-                            }
-                          >
-                            <div class="flex items-center gap-1.5 text-muted">
-                              <svg
-                                class="w-3.5 h-3.5"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path
-                                  stroke-linecap="round"
-                                  stroke-linejoin="round"
-                                  stroke-width="2"
-                                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                                />
-                              </svg>
-                              <span>Runs every {formatInterval(props.patrolIntervalMs!)}</span>
-                            </div>
-                          </Show>
-                        </div>
-                      </div>
-                    </Show>
                   </div>
                 </Show>
                 <Show when={filter() === 'attention'}>{emptyStateCopy().title}</Show>
