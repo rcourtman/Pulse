@@ -1,5 +1,5 @@
 import { createMemo, createSignal, onMount } from 'solid-js';
-import { useLocation } from '@solidjs/router';
+import { useLocation, useNavigate } from '@solidjs/router';
 import { notificationStore } from '@/stores/notifications';
 import {
   isMultiTenantEnabled,
@@ -36,11 +36,13 @@ const formatUnixDate = (value?: number) => {
 
 export function useProLicensePanelState() {
   const location = useLocation();
+  const navigate = useNavigate();
   const [licenseKey, setLicenseKey] = createSignal('');
   const [loading, setLoading] = createSignal(false);
   const [activating, setActivating] = createSignal(false);
   const [clearing, setClearing] = createSignal(false);
   const [startingTrial, setStartingTrial] = createSignal(false);
+  const [trialActivationResult, setTrialActivationResult] = createSignal('');
 
   const entitlements = createMemo(() => licenseStatus());
   const subscriptionState = createMemo(() => entitlements()?.subscription_state);
@@ -54,6 +56,15 @@ export function useProLicensePanelState() {
   };
 
   onMount(() => {
+    const params = new URLSearchParams(location.search);
+    const result = params.get('trial')?.trim().toLowerCase() ?? '';
+    if (result) {
+      setTrialActivationResult(result);
+      params.delete('trial');
+      const nextSearch = params.toString();
+      const nextPath = `${location.pathname}${nextSearch ? `?${nextSearch}` : ''}${location.hash ?? ''}`;
+      navigate(nextPath, { replace: true, scroll: false });
+    }
     void loadPanelData();
   });
 
@@ -161,8 +172,7 @@ export function useProLicensePanelState() {
   );
 
   const trialActivationNotice = createMemo(() => {
-    const params = new URLSearchParams(location.search);
-    return getTrialActivationNotice(params.get('trial')?.trim().toLowerCase() ?? '');
+    return getTrialActivationNotice(trialActivationResult());
   });
 
   const commercialMigrationNotice = createMemo(() =>
