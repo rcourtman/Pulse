@@ -211,6 +211,10 @@ export interface FindingSubjectPresentation {
   label: string;
 }
 
+export interface FindingTitlePresentation {
+  label: string;
+}
+
 export interface FindingPrimaryActionPresentation {
   label: string;
   href: string;
@@ -362,6 +366,20 @@ export const getFindingSubjectPresentation = (
 
   return {
     label: `${resourceName} (${formatIdentifierLabel(resourceType)})`,
+  };
+};
+
+export const getFindingTitlePresentation = (
+  finding: Pick<UnifiedFinding, 'resourceId' | 'resourceName' | 'title'>,
+): FindingTitlePresentation => {
+  const rawTitle = String(finding.title || '').trim();
+  if (!isPatrolRuntimeFinding(finding)) {
+    return { label: rawTitle };
+  }
+
+  const normalizedTitle = rawTitle.replace(/^Pulse Patrol:\s*/i, '').trim();
+  return {
+    label: normalizedTitle || rawTitle || 'Patrol runtime issue',
   };
 };
 

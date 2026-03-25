@@ -172,6 +172,11 @@ subject labels, so Patrol-owned synthetic service findings render as
 `Patrol runtime` rather than leaking backend resource internals like
 `Pulse Patrol Service (service)` into the primary findings row or assistant
 handoff prompts.
+That same title presentation contract should normalize Patrol-owned finding
+titles too. The primary findings row, assistant handoff copy, and inline
+approval surfaces should present runtime findings as `Insufficient API credits`
+rather than repeating the product prefix as `Pulse Patrol: Insufficient API
+credits` once the surrounding UI already makes the Patrol context explicit.
 That same finding presentation contract should own the primary remediation path
 for Patrol-owned runtime findings as well. Expanded runtime-finding rows should
 offer the same direct `Open AI Settings` action that the top assessment uses,

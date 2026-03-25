@@ -48,6 +48,7 @@ import {
   getFindingManualControlsPresentation,
   getFindingPrimaryActionPresentation,
   getFindingSubjectPresentation,
+  getFindingTitlePresentation,
   getFindingRecencyPresentation,
   hasFindingInvestigationDetails,
   getInvestigationOutcomeBadgeClasses,
@@ -371,8 +372,9 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
   const handleDiscussWithAssistant = (finding: UnifiedFinding, e: Event) => {
     e.stopPropagation();
     const subject = getFindingSubjectPresentation(finding).label;
+    const title = getFindingTitlePresentation(finding).label;
     aiChatStore.openWithPrompt(
-      `I'd like to discuss this Patrol finding: "${finding.title}" on ${subject}.\n\n${finding.description}`,
+      `I'd like to discuss this Patrol finding: "${title}" on ${subject}.\n\n${finding.description}`,
       { targetType: finding.resourceType, targetId: finding.resourceId, findingId: finding.id },
     );
   };
@@ -380,9 +382,10 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
   const handleOpenPlanInAssistant = (finding: UnifiedFinding, plan: RemediationPlan, e: Event) => {
     e.stopPropagation();
     const subject = getFindingSubjectPresentation(finding).label;
+    const title = getFindingTitlePresentation(finding).label;
 
     let prompt = `Pulse Patrol generated a remediation plan for a finding. Please help me apply it safely.\n\n`;
-    prompt += `**Finding:** ${finding.title} on ${subject}\n`;
+    prompt += `**Finding:** ${title} on ${subject}\n`;
     if (plan.title) prompt += `**Plan:** ${plan.title}\n`;
     if (plan.risk_level) prompt += `**Risk level:** ${plan.risk_level}\n`;
     if (plan.description) prompt += `\n**Plan context:** ${plan.description}\n`;
@@ -413,6 +416,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
   const renderFindingItem = (finding: UnifiedFinding, showSourceBadge: boolean = false) => {
     const recency = getFindingRecencyPresentation(finding);
     const subject = getFindingSubjectPresentation(finding);
+    const title = getFindingTitlePresentation(finding);
     const manualControls = getFindingManualControlsPresentation(finding);
     const severityPresentation = getFindingSeverityPresentation(finding);
 
@@ -551,7 +555,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                 finding.status === 'active' ? 'text-base-content' : 'text-muted'
               }`}
             >
-              {finding.title}
+              {title.label}
             </span>
           </div>
           {/* Resource info */}
@@ -977,7 +981,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
         <ApprovalSection
           findingId={finding.id}
           investigationOutcome={finding.investigationOutcome}
-          findingTitle={finding.title}
+          findingTitle={getFindingTitlePresentation(finding).label}
           resourceName={finding.resourceName}
           resourceType={finding.resourceType}
           resourceId={finding.resourceId}

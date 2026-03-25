@@ -10,6 +10,7 @@ import {
   getFindingManualControlsPresentation,
   getFindingPrimaryActionPresentation,
   getFindingSubjectPresentation,
+  getFindingTitlePresentation,
   getPatrolFindingClassification,
   getFindingSeverityCompactLabel,
   getFindingSeveritySortOrder,
@@ -331,6 +332,32 @@ describe('aiFindingPresentation', () => {
     });
   });
 
+  describe('findingTitlePresentation', () => {
+    it('strips the product prefix from Patrol runtime finding titles', () => {
+      expect(
+        getFindingTitlePresentation({
+          resourceId: 'ai-service',
+          resourceName: 'Pulse Patrol Service',
+          title: 'Pulse Patrol: Insufficient API credits',
+        }),
+      ).toEqual({
+        label: 'Insufficient API credits',
+      });
+    });
+
+    it('keeps infrastructure finding titles unchanged', () => {
+      expect(
+        getFindingTitlePresentation({
+          resourceId: 'vm-101',
+          resourceName: 'db-01',
+          title: 'Disk nearly full',
+        }),
+      ).toEqual({
+        label: 'Disk nearly full',
+      });
+    });
+  });
+
   describe('findingManualControlsPresentation', () => {
     it('disables generic feedback controls for patrol runtime findings', () => {
       expect(
@@ -477,6 +504,14 @@ describe('aiFindingPresentation', () => {
       );
       expect(findingsPanelSource).toContain('severityPresentation.badgeClasses');
       expect(findingsPanelSource).toContain('severityPresentation.label');
+    });
+
+    it('routes visible finding titles through the shared title presentation helper', () => {
+      expect(findingsPanelSource).toContain('const title = getFindingTitlePresentation(finding);');
+      expect(findingsPanelSource).toContain('{title.label}');
+      expect(findingsPanelSource).toContain(
+        'findingTitle={getFindingTitlePresentation(finding).label}',
+      );
     });
 
     it('uses the shared finding subject presentation instead of raw patrol service resource tokens', () => {
