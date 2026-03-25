@@ -31,6 +31,19 @@ export interface PatrolAssessmentAction {
   href: string;
 }
 
+export interface PatrolSummaryMetricState {
+  primaryLabel: string;
+  primaryValue: number;
+  primarySeverity: 'critical' | 'warning';
+  secondaryLabel: string;
+  secondaryValue: number;
+  secondarySeverity: 'critical' | 'warning';
+  criticalLabel: string;
+  criticalValue: number;
+  fixedLabel: string;
+  fixedValue: number;
+}
+
 export interface PatrolVerificationPresentation {
   title: string;
   description: string;
@@ -145,6 +158,27 @@ function classifyActiveFindings(activeFindings: PatrolAssessmentFinding[] | unde
     infrastructureWarning,
     runtimeTotal: runtimeCritical + runtimeWarning,
     infrastructureTotal: infrastructureCritical + infrastructureWarning,
+  };
+}
+
+export function getPatrolSummaryMetricState(args: {
+  activeFindings?: PatrolAssessmentFinding[];
+  fixedCount?: number;
+}): PatrolSummaryMetricState {
+  const classified = classifyActiveFindings(args.activeFindings);
+  const hasRuntimeIssues = classified.runtimeTotal > 0;
+
+  return {
+    primaryLabel: hasRuntimeIssues ? 'Infrastructure findings' : 'Active findings',
+    primaryValue: classified.infrastructureTotal,
+    primarySeverity: classified.infrastructureCritical > 0 ? 'critical' : 'warning',
+    secondaryLabel: hasRuntimeIssues ? 'Runtime issues' : 'Warnings',
+    secondaryValue: hasRuntimeIssues ? classified.runtimeTotal : classified.infrastructureWarning,
+    secondarySeverity: classified.runtimeCritical > 0 ? 'critical' : 'warning',
+    criticalLabel: 'Critical',
+    criticalValue: classified.infrastructureCritical + classified.runtimeCritical,
+    fixedLabel: 'Fixed',
+    fixedValue: args.fixedCount ?? 0,
   };
 }
 

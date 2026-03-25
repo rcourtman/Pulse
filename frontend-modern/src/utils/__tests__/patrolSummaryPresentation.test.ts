@@ -4,6 +4,7 @@ import {
   getPatrolAssessmentAction,
   getPatrolRecencyPresentation,
   getPatrolScoreChipLabel,
+  getPatrolSummaryMetricState,
   getPatrolVerificationPresentation,
   getPatrolNoIssuesPresentation,
   getPatrolSummaryPresentation,
@@ -211,6 +212,62 @@ describe('getPatrolSummaryPresentation', () => {
         ] as never,
       }),
     ).toBeUndefined();
+  });
+
+  it('splits infrastructure findings from patrol runtime issues in supporting metrics', () => {
+    expect(
+      getPatrolSummaryMetricState({
+        activeFindings: [
+          {
+            status: 'active',
+            severity: 'warning',
+            resourceId: 'ai-service',
+            resourceName: 'Pulse Patrol Service',
+            title: 'Pulse Patrol: Insufficient API credits',
+          },
+        ] as never,
+        fixedCount: 0,
+      }),
+    ).toEqual({
+      primaryLabel: 'Infrastructure findings',
+      primaryValue: 0,
+      primarySeverity: 'warning',
+      secondaryLabel: 'Runtime issues',
+      secondaryValue: 1,
+      secondarySeverity: 'warning',
+      criticalLabel: 'Critical',
+      criticalValue: 0,
+      fixedLabel: 'Fixed',
+      fixedValue: 0,
+    });
+  });
+
+  it('keeps active findings and warnings labels when only infrastructure findings are active', () => {
+    expect(
+      getPatrolSummaryMetricState({
+        activeFindings: [
+          {
+            status: 'active',
+            severity: 'warning',
+            resourceId: 'vm-101',
+            resourceName: 'db-01',
+            title: 'Disk nearly full',
+          },
+        ] as never,
+        fixedCount: 2,
+      }),
+    ).toEqual({
+      primaryLabel: 'Active findings',
+      primaryValue: 1,
+      primarySeverity: 'warning',
+      secondaryLabel: 'Warnings',
+      secondaryValue: 1,
+      secondarySeverity: 'warning',
+      criticalLabel: 'Critical',
+      criticalValue: 0,
+      fixedLabel: 'Fixed',
+      fixedValue: 2,
+    });
   });
 
   it('keeps health labeling for verified healthy states', () => {

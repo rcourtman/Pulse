@@ -9,6 +9,7 @@ import {
   getPatrolAssessmentPresentation,
   getPatrolRecencyPresentation,
   getPatrolScoreChipLabel,
+  getPatrolSummaryMetricState,
   getPatrolVerificationPresentation,
   getPatrolSummaryPresentation,
 } from '@/utils/patrolSummaryPresentation';
@@ -23,8 +24,14 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
   const criticalSummaryPresentation = createMemo(() =>
     getPatrolSummaryPresentation('critical', summaryStats().criticalFindings > 0),
   );
+  const metricState = createMemo(() =>
+    getPatrolSummaryMetricState({
+      activeFindings: state.activePatrolFindings(),
+      fixedCount: summaryStats().fixedCount,
+    }),
+  );
   const warningSummaryPresentation = createMemo(() =>
-    getPatrolSummaryPresentation('warning', summaryStats().warningFindings > 0),
+    getPatrolSummaryPresentation(metricState().secondarySeverity, metricState().secondaryValue > 0),
   );
   const runtimePresentation = createMemo(() =>
     getPatrolRuntimePresentation(state.runtimeState(), state.blockedReason()),
@@ -53,12 +60,8 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
   );
   const activeFindingsSummaryPresentation = createMemo(() =>
     getPatrolSummaryPresentation(
-      summaryStats().criticalFindings > 0
-        ? 'critical'
-        : summaryStats().totalActive > 0
-          ? 'warning'
-          : 'warning',
-      summaryStats().totalActive > 0,
+      metricState().primarySeverity,
+      metricState().primaryValue > 0,
     ),
   );
   const verification = createMemo(() =>
@@ -241,9 +244,9 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
                 </Show>
               </div>
               <div>
-                <p class="text-xs text-muted">Active findings</p>
+                <p class="text-xs text-muted">{metricState().primaryLabel}</p>
                 <p class={`text-lg font-bold ${activeFindingsSummaryPresentation().valueClass}`}>
-                  {summaryStats().totalActive}
+                  {metricState().primaryValue}
                 </p>
               </div>
             </div>
@@ -257,9 +260,9 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
                 <ActivityIcon class={`w-4 h-4 ${warningSummaryPresentation().iconClass}`} />
               </div>
               <div>
-                <p class="text-xs text-muted">Warnings</p>
+                <p class="text-xs text-muted">{metricState().secondaryLabel}</p>
                 <p class={`text-lg font-bold ${warningSummaryPresentation().valueClass}`}>
-                  {state.summaryStats().warningFindings}
+                  {metricState().secondaryValue}
                 </p>
               </div>
             </div>
@@ -273,9 +276,9 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
                 <ShieldAlertIcon class={`w-4 h-4 ${criticalSummaryPresentation().iconClass}`} />
               </div>
               <div>
-                <p class="text-xs text-muted">Critical</p>
+                <p class="text-xs text-muted">{metricState().criticalLabel}</p>
                 <p class={`text-lg font-bold ${criticalSummaryPresentation().valueClass}`}>
-                  {state.summaryStats().criticalFindings}
+                  {metricState().criticalValue}
                 </p>
               </div>
             </div>
@@ -289,9 +292,9 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
                 <CheckCircleIcon class={`w-4 h-4 ${fixedSummaryPresentation().iconClass}`} />
               </div>
               <div>
-                <p class="text-xs text-muted">Fixed</p>
+                <p class="text-xs text-muted">{metricState().fixedLabel}</p>
                 <p class={`text-lg font-bold ${fixedSummaryPresentation().valueClass}`}>
-                  {state.summaryStats().fixedCount}
+                  {metricState().fixedValue}
                 </p>
               </div>
             </div>

@@ -181,6 +181,11 @@ findings, so the findings list must not offer generic acknowledge, snooze,
 dismiss, resolve, or suppress controls for them. The correct operator path is
 to fix AI/provider configuration and rerun Patrol, optionally adding context
 notes, rather than hiding the runtime issue.
+That same runtime-versus-infrastructure split must carry through the summary
+metrics strip as well. When Patrol-owned runtime issues are active, the
+supporting metrics must stop counting them under generic infrastructure
+`Warnings` or `Active findings`; the strip should break out `Runtime issues`
+separately and reserve infrastructure finding counts for actual estate issues.
 The summary recency chip must follow the same governed scope distinction. When
 the latest completed activity was only a scoped run, the summary should label
 that timestamp as `Last activity` instead of `Last patrol`; `Last full patrol`
