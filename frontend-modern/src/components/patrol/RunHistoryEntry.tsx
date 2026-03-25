@@ -188,6 +188,9 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
           <Show when={run.rejected_findings}>
             <span class="text-muted">• {run.rejected_findings} rejected</span>
           </Show>
+          <Show when={!hasFindingsSnapshot && run.new_findings === 0 && run.existing_findings === 0}>
+            <span class="text-blue-600 dark:text-blue-400">• Findings snapshot unavailable</span>
+          </Show>
         </div>
       </button>
 

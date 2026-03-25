@@ -131,6 +131,7 @@ describe('RunHistoryEntry', () => {
       />
     ));
 
+    expect(screen.getByText('• Findings snapshot unavailable')).toBeInTheDocument();
     expect(screen.getByTestId('findings-panel')).toBeInTheDocument();
     expect(findingsPanelState.latestProps).toMatchObject({
       filterFindingIds: undefined,

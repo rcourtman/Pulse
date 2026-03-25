@@ -289,6 +289,9 @@ That same caveat belongs in compact latest-run summaries too. When the most
 recent Patrol run predates findings snapshots, the status bar's latest-run
 segment should say that findings snapshot data is unavailable instead of
 flattening the run into a plain healthy-looking summary.
+That same caveat belongs in collapsed run-history rows. Legacy runs without
+findings snapshot ids must carry an explicit snapshot-unavailable marker in the
+top row instead of looking like a clean zero-findings run until expanded.
 That same findings surface should keep its section chrome functional rather
 than promotional. Inside the Patrol findings tab, the selected tab already
 names the surface, so the findings card should not add another in-card product
