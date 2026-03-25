@@ -123,11 +123,11 @@ Pulse v6 is ready when these outcomes land together:
 1. Unified resource model is stable and expansion-ready.
 2. Product quality feels polished and trustable out of the box.
 3. Commercial packaging materially improves conversion and revenue.
-4. Stable or GA promotion happens only after RC validation, not as the first
+4. Stable or GA promotion happens only after prerelease validation, not as the first
    customer exposure.
 
 Pulse v6 has a bridge-release direction, but the current stabilization target
-stays on the monitoring-and-alerting RC floor rather than the finished private
+stays on the monitoring-and-alerting prerelease floor rather than the finished private
 operational broker.
 For this profile, "bridge release" means the product should stop reading as a
 monitoring product growing sideways only where the surfaced case is already
@@ -387,12 +387,12 @@ Assertion design rules:
    v6 pricing change until they cancel. Renewal and entitlement continuity
    must preserve that grandfathered price state; any return after cancellation
    must use current v6 pricing.
-10. Pulse Mobile does not need desktop parity to stop blocking the v6 RC line.
-    The mobile usefulness floor for RC is narrower: preserve at least one
+10. Pulse Mobile does not need desktop parity to stop blocking the v6 prerelease line.
+    The mobile usefulness floor for prerelease is narrower: preserve at least one
     trusted paired instance across relaunches, expose relay/runtime state
     clearly in the main shell, fail closed into a recoverable disconnected
     state on stale or revoked access, and keep live approvals useful and
-    recoverable. Broader parity and expansion remain post-RC scope.
+    recoverable. Broader parity and expansion remain post-prerelease scope.
 11. The minimum required update set for canonical work is a floor, not a lane
     closure rule. Agents should push the current lane to a coherent,
     defensible stop point and complete the next obvious same-lane work when it

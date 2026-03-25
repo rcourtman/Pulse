@@ -7,7 +7,7 @@ Status: ACTIVE
 
 Pulse v6 has a bridge-release direction from "monitoring product growing
 sideways" toward "resource + policy + control platform," but the current
-stabilization target stays on the monitoring-and-alerting RC floor until that
+stabilization target stays on the monitoring-and-alerting prerelease floor until that
 direction is proven.
 
 It is not a universal agent sandbox.
@@ -146,7 +146,7 @@ broader surfaced case is proven.
 - Resource change intelligence: retained as hidden backend
   foundations in the current L6/L13 overlap, while the surfaced lane stays
   deferred until the cross-resource investigation case is proven.
-- Policy-aware data governance: the next surfaced target after RC stabilization,
+- Policy-aware data governance: the next surfaced target after prerelease stabilization,
   promoted from the current L6/L14 overlap.
 - Action governance and auditability: promoted from the current L6/L14 trust
   surfaces and adjacent approvals work.
