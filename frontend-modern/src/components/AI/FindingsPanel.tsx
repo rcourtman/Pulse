@@ -145,7 +145,14 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
   });
 
   // Filter and sort findings
+  const hasUnknownRunSnapshot = createMemo(
+    () => props.runSnapshot !== undefined && props.filterFindingIds === undefined,
+  );
   const filteredFindings = createMemo(() => {
+    if (hasUnknownRunSnapshot()) {
+      return [];
+    }
+
     let findings = [...aiIntelligenceStore.findings];
 
     // Filter by resource if specified
@@ -224,6 +231,9 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     ),
   );
   const runSnapshotScopedPatrolFindings = createMemo(() => {
+    if (hasUnknownRunSnapshot()) {
+      return [];
+    }
     if (props.filterFindingIds === undefined) {
       return allPatrolFindings();
     }
@@ -231,7 +241,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     return allPatrolFindings().filter((finding) => snapshotFindingIds.has(finding.id));
   });
   const useRunSnapshotScopedControls = createMemo(
-    () => props.runSnapshot !== undefined && props.filterFindingIds !== undefined,
+    () => props.runSnapshot !== undefined,
   );
   const scopedNeedsAttentionCount = createMemo(() => {
     const attentionIds = new Set(aiIntelligenceStore.findingsNeedingAttention.map((f) => f.id));

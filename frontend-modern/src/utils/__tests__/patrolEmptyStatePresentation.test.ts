@@ -144,4 +144,24 @@ describe('patrolEmptyStatePresentation', () => {
       tone: 'warning',
     });
   });
+
+  it('fails closed when a selected run has no findings snapshot ids', () => {
+    expect(
+      getPatrolFindingsEmptyState({
+        filter: 'all',
+        runSnapshot: {
+          resources_checked: 1,
+          scope_resource_ids: ['seed-resource'],
+          effective_scope_resource_ids: ['expanded-a'],
+          finding_ids: undefined,
+          status: 'issues_found',
+          error_count: 0,
+        },
+      }),
+    ).toEqual({
+      title: 'Findings snapshot unavailable for this run',
+      body: 'This Patrol run predates findings snapshots, so run-specific findings cannot be verified.',
+      tone: 'warning',
+    });
+  });
 });

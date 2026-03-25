@@ -122,6 +122,14 @@ function getPatrolRunSnapshotEmptyState(
   };
 }
 
+function getPatrolRunSnapshotUnavailableEmptyState(): PatrolFindingsEmptyStateCopy {
+  return {
+    title: 'Findings snapshot unavailable for this run',
+    body: 'This Patrol run predates findings snapshots, so run-specific findings cannot be verified.',
+    tone: 'warning',
+  };
+}
+
 export function getPatrolFindingsEmptyState(args: {
   filter: FindingsFilter;
   overallHealth?: IntelligenceHealthScore;
@@ -136,6 +144,14 @@ export function getPatrolFindingsEmptyState(args: {
     args.runSnapshot.finding_ids.length === 0
   ) {
     return getPatrolRunSnapshotEmptyState(args.runSnapshot);
+  }
+
+  if (
+    args.filter === 'all' &&
+    args.runSnapshot &&
+    args.runSnapshot.finding_ids === undefined
+  ) {
+    return getPatrolRunSnapshotUnavailableEmptyState();
   }
 
   if (args.filter !== 'active') {

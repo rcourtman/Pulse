@@ -268,6 +268,10 @@ That same fail-closed snapshot rule applies to inline run-history findings as
 well. Expanded run cards may render inline findings only when the run carries
 an explicit `finding_ids` snapshot; legacy runs without snapshot ids must stay
 unknown rather than being coerced into an empty findings snapshot.
+That same rule applies to the primary findings workspace when a run is
+selected. A selected run without `finding_ids` must not borrow global Patrol
+findings, filter buckets, or queue counts; the findings surface should enter an
+explicit snapshot-unavailable state instead.
 That same findings surface should keep its section chrome functional rather
 than promotional. Inside the Patrol findings tab, the selected tab already
 names the surface, so the findings card should not add another in-card product

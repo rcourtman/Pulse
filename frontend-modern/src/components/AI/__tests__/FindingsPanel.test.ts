@@ -462,6 +462,7 @@ describe('aiFindingPresentation', () => {
 
     it('hides the filter bar when there are no Patrol findings or special buckets to navigate', () => {
       expect(findingsPanelSource).toContain('const showFilterControls = createMemo(');
+      expect(findingsPanelSource).toContain('const hasUnknownRunSnapshot = createMemo(');
       expect(findingsPanelSource).toContain('const useRunSnapshotScopedControls = createMemo(');
       expect(findingsPanelSource).toContain('const runSnapshotScopedPatrolFindings = createMemo(');
       expect(findingsPanelSource).toContain('const filterCounts = createMemo(() => ({');
@@ -479,6 +480,14 @@ describe('aiFindingPresentation', () => {
         "if (filter() === 'approvals' && filterCounts().pendingApprovalCount === 0)",
       );
       expect(findingsPanelSource).toContain('buildFindingFilterOptions(filterCounts())');
+    });
+
+    it('fails closed on legacy run snapshots instead of showing global findings in a selected run view', () => {
+      expect(findingsPanelSource).toContain('if (hasUnknownRunSnapshot()) {');
+      expect(findingsPanelSource).toContain('return [];');
+      expect(findingsPanelSource).toContain(
+        "() => props.runSnapshot !== undefined && props.filterFindingIds === undefined",
+      );
     });
 
     it('uses explicit textual separators in finding metadata instead of relying on visual spacing', () => {
