@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/admin"
+	cpauth "github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/auth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
 	stripe "github.com/stripe/stripe-go/v82"
 )
@@ -59,6 +60,46 @@ func renderLoginHTML(t *testing.T, nonce string) string {
 		t.Fatalf("renderLoginPage returned %d", rec.Code)
 	}
 	return rec.Body.String()
+}
+
+func newPortalSessionFixture(t *testing.T) (*registry.TenantRegistry, *cpauth.Service, string, string, string) {
+	t.Helper()
+
+	reg := newTestRegistry(t)
+	accountID, err := registry.GenerateAccountID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	userID, err := registry.GenerateUserID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateAccount(&registry.Account{ID: accountID, Kind: registry.AccountKindIndividual, DisplayName: "Portal Account"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateUser(&registry.User{ID: userID, Email: "owner@example.com"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateMembership(&registry.AccountMembership{
+		AccountID: accountID,
+		UserID:    userID,
+		Role:      registry.MemberRoleOwner,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	sessionSvc, err := cpauth.NewService(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+	t.Cleanup(sessionSvc.Close)
+
+	token, err := sessionSvc.GenerateSessionToken(userID, "owner@example.com", cpauth.SessionTTL)
+	if err != nil {
+		t.Fatalf("GenerateSessionToken: %v", err)
+	}
+
+	return reg, sessionSvc, token, accountID, userID
 }
 
 type dashboardResp struct {
@@ -843,6 +884,77 @@ func TestBuildPortalBootstrapJSON_Contract(t *testing.T) {
 	}
 	if got := workspace["healthy"]; got != true {
 		t.Fatalf("workspace healthy = %#v", got)
+	}
+}
+
+func TestHandlePortalBootstrap_Success(t *testing.T) {
+	reg, sessionSvc, token, accountID, _ := newPortalSessionFixture(t)
+
+	if err := reg.Create(&registry.Tenant{
+		ID:            "t_bootstrap",
+		AccountID:     accountID,
+		DisplayName:   "Bootstrap Workspace",
+		State:         registry.TenantStateActive,
+		CreatedAt:     time.Date(2026, 3, 25, 10, 0, 0, 0, time.UTC),
+		HealthCheckOK: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/portal/bootstrap", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+	HandlePortalBootstrap(sessionSvc, reg).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d (body=%q)", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("unmarshal bootstrap response: %v", err)
+	}
+	if got := payload["email"]; got != "owner@example.com" {
+		t.Fatalf("email = %#v", got)
+	}
+	if got := payload["portal_api_base_path"]; got != "/api/portal" {
+		t.Fatalf("portal_api_base_path = %#v", got)
+	}
+	accounts, ok := payload["accounts"].([]any)
+	if !ok || len(accounts) != 1 {
+		t.Fatalf("accounts = %#v", payload["accounts"])
+	}
+	account, ok := accounts[0].(map[string]any)
+	if !ok {
+		t.Fatalf("account = %#v", accounts[0])
+	}
+	workspaces, ok := account["workspaces"].([]any)
+	if !ok || len(workspaces) != 1 {
+		t.Fatalf("workspaces = %#v", account["workspaces"])
+	}
+	workspace, ok := workspaces[0].(map[string]any)
+	if !ok {
+		t.Fatalf("workspace = %#v", workspaces[0])
+	}
+	if got := workspace["display_name"]; got != "Bootstrap Workspace" {
+		t.Fatalf("workspace display_name = %#v", got)
+	}
+}
+
+func TestHandlePortalBootstrap_RequiresAuth(t *testing.T) {
+	reg := newTestRegistry(t)
+	sessionSvc, err := cpauth.NewService(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+	t.Cleanup(sessionSvc.Close)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/portal/bootstrap", nil)
+	rec := httptest.NewRecorder()
+	HandlePortalBootstrap(sessionSvc, reg).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
 	}
 }
 

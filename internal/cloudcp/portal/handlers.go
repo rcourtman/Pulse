@@ -2,10 +2,12 @@ package portal
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"time"
 
+	cpauth "github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/auth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
 	"github.com/rs/zerolog/log"
 	stripe "github.com/stripe/stripe-go/v82"
@@ -201,6 +203,45 @@ func HandlePortalWorkspaceDetail(reg *registry.TenantRegistry) http.HandlerFunc 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		encodeJSON(w, resp)
+	}
+}
+
+// HandlePortalBootstrap returns the renderer-owned Pulse Account bootstrap payload.
+// Route: GET /api/portal/bootstrap
+//
+// Auth: control-plane session.
+func HandlePortalBootstrap(sessionSvc *cpauth.Service, reg *registry.TenantRegistry) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		if sessionSvc == nil || reg == nil {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+
+		claims, err := validatePortalSessionClaims(r, sessionSvc, reg)
+		if err != nil {
+			if errors.Is(err, errPortalAuthRequired) {
+				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				return
+			}
+			log.Error().Err(err).Msg("cloudcp.portal.bootstrap: validate session")
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+
+		accounts, err := loadPortalAccountsForUser(reg, claims.UserID)
+		if err != nil {
+			log.Error().Err(err).Str("user_id", claims.UserID).Msg("cloudcp.portal.bootstrap: load accounts")
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		encodeJSON(w, buildPortalBootstrapData(claims.Email, accounts))
 	}
 }
 

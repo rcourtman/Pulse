@@ -2,6 +2,7 @@ package portal
 
 import (
 	"encoding/json"
+	"errors"
 	"html/template"
 	"net/http"
 	"time"
@@ -96,6 +97,8 @@ const (
 	defaultPortalAPIBasePath    = "/api/portal"
 )
 
+var errPortalAuthRequired = errors.New("portal auth required")
+
 // HandlePortalPage serves the MSP/Cloud portal dashboard (browser-facing HTML).
 // Route: GET /portal
 //   - No session or invalid session -> shows a magic-link login form
@@ -109,105 +112,121 @@ func HandlePortalPage(sessionSvc *cpauth.Service, reg *registry.TenantRegistry) 
 
 		nonce := cpsec.NonceFromContext(r.Context())
 
-		// Validate session from cookie or Bearer token.
-		token := cpauth.SessionTokenFromRequest(r)
-		if token == "" || sessionSvc == nil || reg == nil {
-			renderLoginPage(w, nonce)
-			return
-		}
-
-		claims, err := sessionSvc.ValidateSessionToken(token)
+		claims, err := validatePortalSessionClaims(r, sessionSvc, reg)
 		if err != nil {
 			renderLoginPage(w, nonce)
 			return
 		}
-		sessionVersion, err := reg.GetUserSessionVersion(claims.UserID)
+		accounts, err := loadPortalAccountsForUser(reg, claims.UserID)
 		if err != nil {
-			log.Error().Err(err).Str("user_id", claims.UserID).Msg("cloudcp.portal.page: get session version")
-			renderLoginPage(w, nonce)
-			return
-		}
-		if claims.SessionVersion != sessionVersion {
-			renderLoginPage(w, nonce)
-			return
-		}
-
-		accountIDs, err := reg.ListAccountsByUser(claims.UserID)
-		if err != nil {
-			log.Error().Err(err).Str("user_id", claims.UserID).Msg("cloudcp.portal.page: list accounts by user")
+			log.Error().Err(err).Str("user_id", claims.UserID).Msg("cloudcp.portal.page: load accounts")
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
 
-		accounts := make([]portalPageAccount, 0, len(accountIDs))
-		for _, accountID := range accountIDs {
-			a, err := reg.GetAccount(accountID)
-			if err != nil {
-				log.Error().Err(err).Str("account_id", accountID).Msg("cloudcp.portal.page: get account")
+		renderPortalPage(w, nonce, claims.Email, accounts)
+	}
+}
+
+func validatePortalSessionClaims(r *http.Request, sessionSvc *cpauth.Service, reg *registry.TenantRegistry) (*cpauth.SessionClaims, error) {
+	if r == nil || sessionSvc == nil || reg == nil {
+		return nil, errPortalAuthRequired
+	}
+
+	token := cpauth.SessionTokenFromRequest(r)
+	if token == "" {
+		return nil, errPortalAuthRequired
+	}
+
+	claims, err := sessionSvc.ValidateSessionToken(token)
+	if err != nil {
+		return nil, errPortalAuthRequired
+	}
+
+	sessionVersion, err := reg.GetUserSessionVersion(claims.UserID)
+	if err != nil {
+		return nil, err
+	}
+	if claims.SessionVersion != sessionVersion {
+		return nil, errPortalAuthRequired
+	}
+	return claims, nil
+}
+
+func loadPortalAccountsForUser(reg *registry.TenantRegistry, userID string) ([]portalPageAccount, error) {
+	accountIDs, err := reg.ListAccountsByUser(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	accounts := make([]portalPageAccount, 0, len(accountIDs))
+	for _, accountID := range accountIDs {
+		a, err := reg.GetAccount(accountID)
+		if err != nil {
+			log.Error().Err(err).Str("account_id", accountID).Msg("cloudcp.portal.page: get account")
+			continue
+		}
+		if a == nil {
+			continue
+		}
+
+		m, err := reg.GetMembership(accountID, userID)
+		if err != nil {
+			log.Error().Err(err).Str("account_id", accountID).Str("user_id", userID).Msg("cloudcp.portal.page: get membership")
+			continue
+		}
+		if m == nil {
+			continue
+		}
+
+		tenants, err := reg.ListByAccountID(accountID)
+		if err != nil {
+			log.Error().Err(err).Str("account_id", accountID).Msg("cloudcp.portal.page: list tenants")
+			continue
+		}
+
+		workspaces := make([]portalPageWorkspace, 0, len(tenants))
+		for _, t := range tenants {
+			if t == nil {
 				continue
 			}
-			if a == nil {
+			if t.State == registry.TenantStateDeleted || t.State == registry.TenantStateDeleting {
 				continue
 			}
-
-			m, err := reg.GetMembership(accountID, claims.UserID)
-			if err != nil {
-				log.Error().Err(err).Str("account_id", accountID).Str("user_id", claims.UserID).Msg("cloudcp.portal.page: get membership")
-				continue
-			}
-			if m == nil {
-				continue
-			}
-
-			tenants, err := reg.ListByAccountID(accountID)
-			if err != nil {
-				log.Error().Err(err).Str("account_id", accountID).Msg("cloudcp.portal.page: list tenants")
-				continue
-			}
-
-			workspaces := make([]portalPageWorkspace, 0, len(tenants))
-			for _, t := range tenants {
-				if t == nil {
-					continue
-				}
-				if t.State == registry.TenantStateDeleted || t.State == registry.TenantStateDeleting {
-					continue
-				}
-				workspaces = append(workspaces, portalPageWorkspace{
-					ID:          t.ID,
-					DisplayName: t.DisplayName,
-					State:       string(t.State),
-					Healthy:     t.HealthCheckOK,
-					CreatedAt:   t.CreatedAt,
-				})
-			}
-
-			kindLabel := "Cloud"
-			if a.Kind == registry.AccountKindMSP {
-				kindLabel = "MSP"
-			}
-
-			hasBilling := false
-			if sa, saErr := reg.GetStripeAccount(accountID); saErr != nil {
-				log.Warn().Err(saErr).Str("account_id", accountID).Msg("cloudcp.portal.page: lookup stripe account for billing button")
-			} else if sa != nil && sa.StripeCustomerID != "" {
-				hasBilling = true
-			}
-
-			accounts = append(accounts, portalPageAccount{
-				ID:         a.ID,
-				Kind:       string(a.Kind),
-				KindLabel:  kindLabel,
-				Name:       a.DisplayName,
-				Role:       string(m.Role),
-				CanManage:  m.Role == registry.MemberRoleOwner || m.Role == registry.MemberRoleAdmin,
-				HasBilling: hasBilling,
-				Workspaces: workspaces,
+			workspaces = append(workspaces, portalPageWorkspace{
+				ID:          t.ID,
+				DisplayName: t.DisplayName,
+				State:       string(t.State),
+				Healthy:     t.HealthCheckOK,
+				CreatedAt:   t.CreatedAt,
 			})
 		}
 
-		renderPortalPage(w, nonce, claims.Email, accounts)
+		kindLabel := "Cloud"
+		if a.Kind == registry.AccountKindMSP {
+			kindLabel = "MSP"
+		}
+
+		hasBilling := false
+		if sa, saErr := reg.GetStripeAccount(accountID); saErr != nil {
+			log.Warn().Err(saErr).Str("account_id", accountID).Msg("cloudcp.portal.page: lookup stripe account for billing button")
+		} else if sa != nil && sa.StripeCustomerID != "" {
+			hasBilling = true
+		}
+
+		accounts = append(accounts, portalPageAccount{
+			ID:         a.ID,
+			Kind:       string(a.Kind),
+			KindLabel:  kindLabel,
+			Name:       a.DisplayName,
+			Role:       string(m.Role),
+			CanManage:  m.Role == registry.MemberRoleOwner || m.Role == registry.MemberRoleAdmin,
+			HasBilling: hasBilling,
+			Workspaces: workspaces,
+		})
 	}
+
+	return accounts, nil
 }
 
 func renderPortalPage(w http.ResponseWriter, nonce, email string, accounts []portalPageAccount) {
@@ -250,6 +269,14 @@ func renderLoginPage(w http.ResponseWriter, nonce string) {
 }
 
 func buildPortalBootstrapJSON(email string, accounts []portalPageAccount) (template.JS, error) {
+	payload, err := json.Marshal(buildPortalBootstrapData(email, accounts))
+	if err != nil {
+		return "", err
+	}
+	return template.JS(payload), nil
+}
+
+func buildPortalBootstrapData(email string, accounts []portalPageAccount) portalBootstrapData {
 	bootstrapAccounts := make([]portalBootstrapAccount, 0, len(accounts))
 	for _, account := range accounts {
 		workspaces := make([]portalBootstrapWorkspace, 0, len(account.Workspaces))
@@ -273,7 +300,7 @@ func buildPortalBootstrapJSON(email string, accounts []portalPageAccount) (templ
 		})
 	}
 
-	payload, err := json.Marshal(portalBootstrapData{
+	return portalBootstrapData{
 		Email:                email,
 		PublicSiteURL:        defaultPublicSiteURL,
 		SupportEmail:         defaultSupportEmail,
@@ -283,9 +310,5 @@ func buildPortalBootstrapJSON(email string, accounts []portalPageAccount) (templ
 		AccountAPIBasePath:   defaultAccountAPIBasePath,
 		PortalAPIBasePath:    defaultPortalAPIBasePath,
 		Accounts:             bootstrapAccounts,
-	})
-	if err != nil {
-		return "", err
 	}
-	return template.JS(payload), nil
 }

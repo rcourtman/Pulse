@@ -235,6 +235,10 @@ frontend state seam for:
 2. hosted account and workspace summaries
 3. public/commercial edge URLs needed by the account shell
 
+The portal package also owns a dedicated bootstrap JSON handler shape for the
+same contract, so route wiring can promote the shell toward a maintained
+frontend/API split without inventing a second state model.
+
 New frontend work should extend that contract deliberately instead of adding
 one-off data attributes or baking production hostnames into static assets.
 
