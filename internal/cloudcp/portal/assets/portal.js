@@ -1,4 +1,5 @@
-const LICENSE_API_BASE = 'https://license.pulserelay.pro';
+var portalRoot = document.querySelector('[data-commercial-api-base]');
+var LICENSE_API_BASE = portalRoot ? (portalRoot.getAttribute('data-commercial-api-base') || '') : '';
 
 function showToast(msg, isError) {
   var t = document.getElementById('toast');

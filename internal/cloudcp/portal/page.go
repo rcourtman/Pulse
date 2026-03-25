@@ -34,13 +34,14 @@ type portalPageAccount struct {
 
 // portalPageData is passed to the portal HTML template.
 type portalPageData struct {
-	Nonce         string
-	Email         string
-	PublicSiteURL string
-	SupportEmail  string
-	Accounts      []portalPageAccount
-	Styles        template.CSS
-	Script        template.JS
+	Nonce                string
+	Email                string
+	PublicSiteURL        string
+	SupportEmail         string
+	CommercialAPIBaseURL string
+	Accounts             []portalPageAccount
+	Styles               template.CSS
+	Script               template.JS
 }
 
 type loginPageData struct {
@@ -50,8 +51,9 @@ type loginPageData struct {
 }
 
 const (
-	defaultPublicSiteURL = "https://pulserelay.pro"
-	defaultSupportEmail  = "support@pulserelay.pro"
+	defaultPublicSiteURL        = "https://pulserelay.pro"
+	defaultSupportEmail         = "support@pulserelay.pro"
+	defaultCommercialAPIBaseURL = "https://license.pulserelay.pro"
 )
 
 // HandlePortalPage serves the MSP/Cloud portal dashboard (browser-facing HTML).
@@ -172,13 +174,14 @@ func renderPortalPage(w http.ResponseWriter, nonce, email string, accounts []por
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	if err := portalPageTmpl.Execute(w, portalPageData{
-		Nonce:         nonce,
-		Email:         email,
-		PublicSiteURL: defaultPublicSiteURL,
-		SupportEmail:  defaultSupportEmail,
-		Accounts:      accounts,
-		Styles:        portalStyles,
-		Script:        portalScript,
+		Nonce:                nonce,
+		Email:                email,
+		PublicSiteURL:        defaultPublicSiteURL,
+		SupportEmail:         defaultSupportEmail,
+		CommercialAPIBaseURL: defaultCommercialAPIBaseURL,
+		Accounts:             accounts,
+		Styles:               portalStyles,
+		Script:               portalScript,
 	}); err != nil {
 		log.Error().Err(err).Msg("cloudcp.portal.page: render portal page")
 	}

@@ -727,6 +727,7 @@ func TestPortalPageTemplate_AccountServicesRendered(t *testing.T) {
 	mustContain := []string{
 		"<title>Pulse Account</title>",
 		"Pulse Account",
+		`data-commercial-api-base="https://license.pulserelay.pro"`,
 		"Other account services",
 		`id="open-manage-service"`,
 		`id="open-retrieve-service"`,
@@ -750,6 +751,9 @@ func TestPortalPageTemplate_AccountServicesRendered(t *testing.T) {
 		if !strings.Contains(html, needle) {
 			t.Errorf("expected %q in rendered HTML", needle)
 		}
+	}
+	if strings.Contains(html, `const LICENSE_API_BASE = 'https://license.pulserelay.pro';`) {
+		t.Errorf("expected commercial API base URL to be renderer-owned, not hardcoded in the asset")
 	}
 }
 
