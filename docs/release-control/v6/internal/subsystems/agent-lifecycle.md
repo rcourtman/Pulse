@@ -598,6 +598,11 @@ runtime owner separate: `AgentProfilesPanel.tsx` is the surface shell, while
 `useAgentProfilesPanelState.ts` owns license gating, AI availability, profile
 load/save mutations, assignment resync, and modal form lifecycle so the panel
 does not carry a second inline controller.
+That same connected profile-assignment surface must also preserve canonical
+local operator identity for monitored systems. When governed resources such as
+PBS or PMG appear in the assignment list, the panel must keep the local
+instance label for ordering and row display instead of substituting governed
+summary text, so profile assignment remains instance-specific.
 Canonical Proxmox auto-register must also preserve the legacy DHCP continuity
 contract: when a node reruns registration from a new IP but presents the
 same canonical node name and deterministic Pulse-managed token identity, Pulse

@@ -38,6 +38,7 @@ import {
   isAgentProfileAssignableResource,
 } from '@/utils/agentResources';
 import {
+  getPreferredInfrastructureDisplayName,
   getPreferredNamedEntityLabel,
   getPreferredResourceDisplayName,
   getPreferredResourceHostname,
@@ -140,8 +141,8 @@ export const useAgentProfilesPanelState = () => {
       .sort((a, b) => {
         const byPriority = resourcePriority(a.resource) - resourcePriority(b.resource);
         if (byPriority !== 0) return byPriority;
-        const aName = getPreferredResourceDisplayName(a.resource);
-        const bName = getPreferredResourceDisplayName(b.resource);
+        const aName = getPreferredInfrastructureDisplayName(a.resource);
+        const bName = getPreferredInfrastructureDisplayName(b.resource);
         return aName.localeCompare(bName);
       });
 
@@ -156,7 +157,7 @@ export const useAgentProfilesPanelState = () => {
         id: assignmentId,
         assignmentId,
         hostname: getPreferredResourceHostname(resource) || 'Unknown',
-        displayName: resource.displayName,
+        displayName: getPreferredInfrastructureDisplayName(resource),
         status: resource.status || 'unknown',
         lastSeen: resource.lastSeen,
       }))

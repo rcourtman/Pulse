@@ -562,6 +562,54 @@ describe('AgentProfilesPanel V6 agent ID handling', () => {
     });
   });
 
+  it('keeps governed infrastructure assignments on local operator identity', async () => {
+    mockResources = [
+      makeAgentResource({
+        id: 'pbs-resource-id',
+        type: 'pbs',
+        name: 'redacted-pbs',
+        displayName: 'PBS Main',
+        platformId: 'pbs-main',
+        platformType: 'proxmox-pbs',
+        sourceType: 'api',
+        identity: { hostname: 'pbs.local' },
+        agent: { agentId: 'pbs-agent-1' },
+        policy: {
+          display: {
+            mode: 'governed',
+            summary: 'backup server resource; status online; sources pbs',
+          },
+        } as Record<string, unknown>,
+      }),
+    ];
+    mockWsStore.state.connectedInfrastructure = [
+      makeHostInfrastructureItem({
+        id: 'pbs-resource-id',
+        name: 'PBS Main',
+        displayName: 'PBS Main',
+        hostname: 'pbs.local',
+        scopeAgentId: 'pbs-agent-1',
+        surfaces: [
+          {
+            id: 'agent:pbs-agent-1',
+            kind: 'agent',
+            label: 'PBS data',
+            controlId: 'pbs-agent-1',
+          },
+        ],
+      }),
+    ];
+
+    render(() => <AgentProfilesPanel />);
+
+    await waitFor(() => {
+      expect(screen.getByText('PBS Main')).toBeInTheDocument();
+    });
+    expect(
+      screen.queryByText('backup server resource; status online; sources pbs'),
+    ).not.toBeInTheDocument();
+  });
+
   it('surfaces malformed profile list responses instead of failing open to an empty state', async () => {
     listProfilesMock.mockRejectedValueOnce(new Error('Invalid agent profile list response from Pulse.'));
 
