@@ -221,6 +221,22 @@ The `customer-account-portal` lane should deliver:
    memberships, and recovery
 4. de-duplication of fragmented public utility flows where a real authenticated
    account area is the better product shape
+5. a renderer-owned frontend bootstrap contract for the account shell, so a
+   maintained frontend can consume canonical account state without scraping
+   ad-hoc DOM attributes or hardcoded production URLs
+
+### Current frontend seam
+
+The current `/portal` shell now emits a machine-owned bootstrap payload in a
+`pulse-account-bootstrap` JSON script tag. That payload is the canonical
+frontend state seam for:
+
+1. account identity context
+2. hosted account and workspace summaries
+3. public/commercial edge URLs needed by the account shell
+
+New frontend work should extend that contract deliberately instead of adding
+one-off data attributes or baking production hostnames into static assets.
 
 ### Post-lane follow-on
 

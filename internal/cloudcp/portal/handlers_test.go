@@ -760,6 +760,73 @@ func TestPortalPageTemplate_AccountServicesRendered(t *testing.T) {
 	}
 }
 
+func TestBuildPortalBootstrapJSON_Contract(t *testing.T) {
+	bootstrapJSON, err := buildPortalBootstrapJSON("owner@example.com", []portalPageAccount{
+		{
+			ID:         "a_test",
+			Kind:       "cloud",
+			KindLabel:  "Cloud",
+			Name:       "Test Account",
+			Role:       "owner",
+			CanManage:  true,
+			HasBilling: true,
+			Workspaces: []portalPageWorkspace{
+				{
+					ID:          "t_one",
+					DisplayName: "Tenant One",
+					State:       "active",
+					Healthy:     true,
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("buildPortalBootstrapJSON: %v", err)
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(bootstrapJSON), &payload); err != nil {
+		t.Fatalf("unmarshal bootstrap JSON: %v", err)
+	}
+
+	if got := payload["email"]; got != "owner@example.com" {
+		t.Fatalf("email = %#v, want owner@example.com", got)
+	}
+	if got := payload["commercial_api_base_url"]; got != "https://license.pulserelay.pro" {
+		t.Fatalf("commercial_api_base_url = %#v", got)
+	}
+
+	accounts, ok := payload["accounts"].([]any)
+	if !ok || len(accounts) != 1 {
+		t.Fatalf("accounts = %#v, want one account", payload["accounts"])
+	}
+	account, ok := accounts[0].(map[string]any)
+	if !ok {
+		t.Fatalf("account payload = %#v", accounts[0])
+	}
+	if got := account["id"]; got != "a_test" {
+		t.Fatalf("account id = %#v", got)
+	}
+	if got := account["can_manage"]; got != true {
+		t.Fatalf("account can_manage = %#v", got)
+	}
+
+	workspaces, ok := account["workspaces"].([]any)
+	if !ok || len(workspaces) != 1 {
+		t.Fatalf("workspaces = %#v, want one workspace", account["workspaces"])
+	}
+	workspace, ok := workspaces[0].(map[string]any)
+	if !ok {
+		t.Fatalf("workspace payload = %#v", workspaces[0])
+	}
+	if got := workspace["display_name"]; got != "Tenant One" {
+		t.Fatalf("workspace display_name = %#v", got)
+	}
+	if got := workspace["healthy"]; got != true {
+		t.Fatalf("workspace healthy = %#v", got)
+	}
+}
+
 func TestPortalLoginTemplate_UsesPulseAccountBranding(t *testing.T) {
 	html := renderLoginHTML(t, "test-nonce")
 
