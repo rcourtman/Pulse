@@ -80,6 +80,14 @@ governed floor is ready.
 `internal/ai/` is the live backend AI engine. It owns chat execution, Patrol
 orchestration, findings generation, investigation support, quickstart and
 provider selection, remediation flow, and cost persistence.
+That quickstart ownership includes the public proxy dependency under
+`internal/ai/providers/quickstart.go`: the runtime must default to the owned
+commercial API edge at `https://license.pulserelay.pro/v1/quickstart/patrol`
+instead of depending on an ungoverned standalone hostname. Runtime overrides
+may exist only as an explicit environment-controlled rollout escape hatch, and
+the canonical quickstart proxy contract remains an OpenAI-compatible server-owned
+surface that lives behind the public license API rather than a tenant-local or
+mobile-local adapter.
 
 The same runtime ownership now includes the customer-facing AI usage and cost
 surface. `frontend-modern/src/components/AI/AICostDashboard.tsx` is the

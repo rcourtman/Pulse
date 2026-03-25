@@ -7,15 +7,17 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/rs/zerolog/log"
 )
 
 const (
-	// quickstartProxyURL is the Pulse-hosted proxy that forwards to MiniMax.
+	// defaultQuickstartProxyURL is the owned public quickstart proxy surface.
 	// The API key lives server-side — self-hosted binaries never see it.
-	quickstartProxyURL = "https://api.pulserelay.pro/v1/quickstart/patrol"
+	defaultQuickstartProxyURL = "https://license.pulserelay.pro/v1/quickstart/patrol"
 
 	quickstartModel          = "minimax-2.5m"
 	quickstartRequestTimeout = 300 * time.Second // 5 minutes
@@ -24,12 +26,19 @@ const (
 )
 
 // QuickstartClient implements the Provider interface for the Pulse-hosted
-// quickstart proxy. It forwards patrol chat requests to the MiniMax 2.5M
-// model via api.pulserelay.pro so users don't need their own API key.
+// quickstart proxy. It forwards patrol chat requests through the public
+// commercial API edge so users don't need their own API key.
 type QuickstartClient struct {
 	// licenseID identifies the workspace (for rate limiting / credit tracking server-side).
 	licenseID string
 	client    *http.Client
+}
+
+func quickstartProxyURL() string {
+	if override := strings.TrimSpace(os.Getenv("PULSE_AI_QUICKSTART_PROXY_URL")); override != "" {
+		return override
+	}
+	return defaultQuickstartProxyURL
 }
 
 // NewQuickstartClient creates a quickstart provider that uses the hosted proxy.
@@ -90,7 +99,7 @@ func (c *QuickstartClient) Chat(ctx context.Context, req ChatRequest) (*ChatResp
 			}
 		}
 
-		httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, quickstartProxyURL, bytes.NewReader(body))
+		httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, quickstartProxyURL(), bytes.NewReader(body))
 		if err != nil {
 			return nil, fmt.Errorf("quickstart: create request: %w", err)
 		}
@@ -144,7 +153,7 @@ func (c *QuickstartClient) Chat(ctx context.Context, req ChatRequest) (*ChatResp
 // TestConnection validates connectivity to the quickstart proxy.
 func (c *QuickstartClient) TestConnection(ctx context.Context) error {
 	// Simple connectivity check — send a minimal request.
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, quickstartProxyURL, bytes.NewReader([]byte(`{"messages":[],"license_id":"`+c.licenseID+`"}`)))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, quickstartProxyURL(), bytes.NewReader([]byte(`{"messages":[],"license_id":"`+c.licenseID+`"}`)))
 	if err != nil {
 		return fmt.Errorf("quickstart: create test request: %w", err)
 	}
