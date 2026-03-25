@@ -14,7 +14,7 @@ import {
   getActionableDockerRuntimeIdFromResource,
   hasAgentFacet as resourceHasAgentFacet,
 } from '@/utils/agentResources';
-import { getPreferredResourceDisplayName } from '@/utils/resourceIdentity';
+import { getPreferredInfrastructureDisplayName } from '@/utils/resourceIdentity';
 import type { Resource } from '@/types/resource';
 
 export const API_TOKEN_SCOPES_DOC_URL =
@@ -159,7 +159,7 @@ export const buildDockerTokenUsage = (resources: Resource[]): Map<string, APITok
     if (!tokenId) continue;
     appendUsageEntry(usage, tokenId, {
       id: dockerActionIdForResource(resource),
-      label: getPreferredResourceDisplayName(resource),
+      label: getPreferredInfrastructureDisplayName(resource),
     });
   }
   return usage;
@@ -172,7 +172,7 @@ export const buildAgentTokenUsage = (resources: Resource[]): Map<string, APIToke
     if (!tokenId) continue;
     appendUsageEntry(usage, tokenId, {
       id: agentActionIdForResource(resource),
-      label: getPreferredResourceDisplayName(resource),
+      label: getPreferredInfrastructureDisplayName(resource),
     });
   }
   return usage;

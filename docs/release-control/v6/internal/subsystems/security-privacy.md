@@ -286,6 +286,12 @@ canonical scope constants. `apiTokenManagerModel.ts` may expose a
 `getAPITokenScopePresets()` factory, but it must not freeze preset scope data
 at module-load time in a way that can break security settings initialization in
 production chunks.
+That same revoke/usage surface must also preserve canonical local operator
+identity for the runtimes currently bound to a token. When token usage is
+attributed to Docker hosts, agents, PBS, PMG, or similar monitored systems,
+the security settings UI must keep the local instance name instead of swapping
+in governed summary text, so the operator can revoke credentials against the
+correct concrete system.
 That same governed AI trust boundary also covers unified-resource context
 posture derivation: `internal/ai/resource_context_policy_model.go` is now the
 canonical owner for the policy-posture summary, local-only count, and

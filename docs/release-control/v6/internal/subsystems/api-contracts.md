@@ -177,6 +177,12 @@ Own canonical runtime payload shapes between backend and frontend.
 
 The API layer already uses contract tests in many places, but every major live
 contract should continue moving toward canonical-only runtime shapes.
+The shared API-token management surface now also preserves canonical local
+operator identity when explaining where a token is currently in use. Runtime
+and infrastructure usage labels in the revoke flow keep the local instance
+name for Docker hosts, agents, PBS, PMG, and similar monitored systems
+instead of replacing those identities with governed summary text, so
+revocation decisions remain instance-specific and auditable.
 The unified resource API payload now carries the richer domain facets directly
 through the owned backend response: resource objects can expose canonical
 `capabilities`, `relationships`, `recentChanges`, and derived `facetCounts`

@@ -242,6 +242,55 @@ describe('APITokenManager', () => {
     });
   });
 
+  it('keeps governed infrastructure token usage labels on local operator identity', async () => {
+    listTokensMock.mockResolvedValue([
+      makeToken({
+        id: 'token-runtime',
+        name: 'Runtime token',
+        scopes: [AGENT_REPORT_SCOPE],
+      }),
+    ]);
+
+    mockResources = [
+      makeResource({
+        id: 'pbs-resource',
+        type: 'pbs',
+        name: 'redacted-pbs',
+        displayName: 'PBS Main',
+        platformType: 'proxmox-pbs',
+        sourceType: 'api',
+        policy: {
+          display: {
+            mode: 'governed',
+            summary: 'backup server resource; status online; sources pbs',
+          },
+        } as Record<string, unknown>,
+        platformData: {
+          pbs: {
+            hostname: 'pbs.local',
+            instanceId: 'pbs-main',
+          },
+          agent: {
+            agentId: 'pbs-agent-1',
+            tokenId: 'token-runtime',
+          },
+        } as Record<string, unknown>,
+      }),
+    ];
+
+    render(() => <APITokenManager onTokensChanged={vi.fn()} canManage />);
+
+    const runtimeName = await screen.findByText('Runtime token');
+    const row = runtimeName.closest('tr');
+    expect(row).toBeTruthy();
+    expect(within(row as HTMLTableRowElement).getByText('PBS Main')).toBeInTheDocument();
+    expect(
+      within(row as HTMLTableRowElement).queryByText(
+        'backup server resource; status online; sources pbs',
+      ),
+    ).not.toBeInTheDocument();
+  });
+
   it('surfaces scope denial when token generation is blocked by caller scope', async () => {
     createTokenMock.mockRejectedValueOnce(
       Object.assign(new Error('Cannot grant scope "monitoring:read": your token does not have this scope'), {
