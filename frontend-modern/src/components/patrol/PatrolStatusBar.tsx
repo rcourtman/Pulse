@@ -162,9 +162,8 @@ export const PatrolStatusBar: Component<PatrolStatusBarProps> = (props) => {
 
             <Show when={s().lastRun}>
               <span class="text-xs text-muted">
-                Latest: {s().lastRunTypeLabel}
-                <span class="mx-1 text-muted">·</span>
-                <span class={`ml-1.5 px-1.5 py-0.5 rounded ${s().lastRunStatus.badgeClass}`}>
+                Latest: {s().lastRunTypeLabel} <span class="text-muted">·</span>{' '}
+                <span class={`px-1.5 py-0.5 rounded ${s().lastRunStatus.badgeClass}`}>
                   {s().lastRunStatus.label}
                 </span>
               </span>
