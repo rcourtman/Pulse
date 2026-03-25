@@ -273,6 +273,10 @@ That same rule applies to the primary findings workspace when a run is
 selected. A selected run without `finding_ids` must not borrow global Patrol
 findings, filter buckets, or queue counts; the findings surface should enter an
 explicit snapshot-unavailable state instead.
+That same unknown-snapshot state should be visible in the selected-run shell
+too. When the operator is filtered to a legacy run without findings snapshot
+ids, the selected-run banner should explicitly say that findings snapshot data
+is unavailable instead of implying a fully verifiable run-scoped findings view.
 That same findings surface should keep its section chrome functional rather
 than promotional. Inside the Patrol findings tab, the selected tab already
 names the surface, so the findings card should not add another in-card product

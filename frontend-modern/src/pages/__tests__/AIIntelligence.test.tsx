@@ -1039,6 +1039,7 @@ describe('AIIntelligence entitlement gating', () => {
       expect(screen.getByText(/Filtered to run/i)).toBeInTheDocument();
     });
 
+    expect(screen.queryByText('Findings snapshot unavailable')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Findings' }).textContent).toBe('Findings');
 
     expect(findingsPanelState.latestProps).toMatchObject({
@@ -1101,6 +1102,7 @@ describe('AIIntelligence entitlement gating', () => {
       expect(screen.getByText(/Filtered to run/i)).toBeInTheDocument();
     });
 
+    expect(screen.queryByText('Findings snapshot unavailable')).not.toBeInTheDocument();
     expect(findingsPanelState.latestProps).toMatchObject({
       filterOverride: 'all',
       filterFindingIds: [],
@@ -1170,6 +1172,7 @@ describe('AIIntelligence entitlement gating', () => {
       expect(screen.getByText(/Filtered to run/i)).toBeInTheDocument();
     });
 
+    expect(screen.getByText(/Findings snapshot unavailable/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Findings' }).textContent).toBe('Findings');
 
     expect(findingsPanelState.latestProps).toMatchObject({

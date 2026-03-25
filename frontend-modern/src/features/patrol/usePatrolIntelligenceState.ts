@@ -435,6 +435,11 @@ export function usePatrolIntelligenceState() {
     if (!run) return undefined;
     return run.finding_ids;
   });
+  const selectedRunHasFindingsSnapshot = createMemo(() => {
+    const run = selectedRun();
+    if (!run) return undefined;
+    return run.finding_ids !== undefined;
+  });
 
   const selectedRunScopeResourceIds = createMemo(() => getCanonicalScopeResourceIds(selectedRun()));
   const allPatrolFindings = createMemo(() =>
@@ -726,6 +731,7 @@ export function usePatrolIntelligenceState() {
     saveAdvancedSettings,
     selectedRun,
     selectedRunFindingIds,
+    selectedRunHasFindingsSnapshot,
     selectedRunScopeResourceIds,
     setActiveTab,
     setAdvancedSettingsRef,

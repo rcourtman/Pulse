@@ -92,6 +92,9 @@ export function PatrolIntelligenceWorkspace(props: { state: PatrolIntelligenceSt
               <span>
                 Filtered to run {formatRelativeTime(run().started_at, { compact: true })} (
                 {formatTriggerReason(run().trigger_reason)})
+                <Show when={state.selectedRunHasFindingsSnapshot() === false}>
+                  {' · '}Findings snapshot unavailable
+                </Show>
               </span>
               <button
                 type="button"
