@@ -28,6 +28,7 @@ const (
 var (
 	relayMobileChatCompatibleScopes    = []string{config.ScopeRelayMobileAccess, config.ScopeAIChat}
 	relayMobileExecuteCompatibleScopes = []string{config.ScopeRelayMobileAccess, config.ScopeAIExecute}
+	relayMobileOnboardingScopes        = []string{config.ScopeRelayMobileAccess, config.ScopeSettingsRead}
 )
 
 func (r *Router) registerAIRelayRoutesGroup() {
@@ -85,20 +86,20 @@ func (r *Router) registerAIRelayRoutesGroup() {
 	r.mux.HandleFunc("GET /api/settings/relay", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, RequireLicenseFeature(r.licenseHandlers, featureRelayKey, r.handleGetRelayConfig))))
 	r.mux.HandleFunc("PUT /api/settings/relay", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, RequireLicenseFeature(r.licenseHandlers, featureRelayKey, r.handleUpdateRelayConfig))))
 	r.mux.HandleFunc("GET /api/settings/relay/status", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, RequireLicenseFeature(r.licenseHandlers, featureRelayKey, r.handleGetRelayStatus))))
-	r.mux.HandleFunc("GET /api/onboarding/qr", RequireAuth(r.config, RequireScope(config.ScopeSettingsRead, func(w http.ResponseWriter, req *http.Request) {
-		if !ensureSettingsReadScope(r.config, w, req) {
+	r.mux.HandleFunc("GET /api/onboarding/qr", RequireAuth(r.config, RequireAnyScope(relayMobileOnboardingScopes, func(w http.ResponseWriter, req *http.Request) {
+		if getAPITokenRecordFromRequest(req) == nil && !ensureSettingsReadScope(r.config, w, req) {
 			return
 		}
 		RequireLicenseFeature(r.licenseHandlers, featureRelayKey, r.handleGetOnboardingQR)(w, req)
 	})))
-	r.mux.HandleFunc("POST /api/onboarding/validate", RequireAuth(r.config, RequireScope(config.ScopeSettingsRead, func(w http.ResponseWriter, req *http.Request) {
-		if !ensureSettingsReadScope(r.config, w, req) {
+	r.mux.HandleFunc("POST /api/onboarding/validate", RequireAuth(r.config, RequireAnyScope(relayMobileOnboardingScopes, func(w http.ResponseWriter, req *http.Request) {
+		if getAPITokenRecordFromRequest(req) == nil && !ensureSettingsReadScope(r.config, w, req) {
 			return
 		}
 		RequireLicenseFeature(r.licenseHandlers, featureRelayKey, r.handleValidateOnboardingConnection)(w, req)
 	})))
-	r.mux.HandleFunc("GET /api/onboarding/deep-link", RequireAuth(r.config, RequireScope(config.ScopeSettingsRead, func(w http.ResponseWriter, req *http.Request) {
-		if !ensureSettingsReadScope(r.config, w, req) {
+	r.mux.HandleFunc("GET /api/onboarding/deep-link", RequireAuth(r.config, RequireAnyScope(relayMobileOnboardingScopes, func(w http.ResponseWriter, req *http.Request) {
+		if getAPITokenRecordFromRequest(req) == nil && !ensureSettingsReadScope(r.config, w, req) {
 			return
 		}
 		RequireLicenseFeature(r.licenseHandlers, featureRelayKey, r.handleGetOnboardingDeepLink)(w, req)

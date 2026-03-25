@@ -141,6 +141,7 @@ Own canonical runtime payload shapes between backend and frontend.
 16. Keep Pulse Mobile relay credential minting and permission ownership on backend ownership: `internal/api/router_routes_auth_security.go`, `internal/api/security_tokens.go`, `internal/api/auth.go`, `internal/api/router_routes_ai_relay.go`, and `frontend-modern/src/api/security.ts` may expose the canonical mobile runtime token creator and governed route gates, but browser callers must only consume that route and must not define the mobile runtime scope, compatibility gate list, or token-purpose metadata locally.
 17. Keep hosted tenant browser-session precedence on the shared auth boundary: `internal/api/auth.go`, `internal/api/contract_test.go`, and hosted tenant callers must treat a valid `pulse_session` as authoritative before any no-local-auth anonymous fallback, so cloud handoff can continue into protected hosted routes without flattening the operator back to `anonymous`.
 18. Keep tenant settings-scope authorization aligned with org management: `internal/api/security_setup_fix.go`, `internal/api/contract_test.go`, and settings-bound hosted callers must allow the current non-default org owner/admin membership to exercise privileged tenant routes, rather than requiring a separate configured local admin identity after hosted handoff.
+19. Keep mobile onboarding payload reads aligned with the server-owned relay-mobile credential: `internal/api/router_routes_ai_relay.go`, `internal/api/onboarding_handlers.go`, and `internal/api/contract_test.go` must allow the dedicated `relay:mobile:access` scope to reach the governed QR, deep-link, and connection-validation payloads without reintroducing a broader `settings:read` requirement for token-authenticated pairing clients.
 
 ## Forbidden Paths
 
@@ -1589,6 +1590,11 @@ request is scoped to a non-default org, `internal/api/security_setup_fix.go`
 must honor the org's owner/admin membership model for settings-bound routes
 such as relay-mobile token minting, instead of requiring a separate configured
 local admin username that hosted tenants do not carry.
+The same onboarding boundary in `internal/api/router_routes_ai_relay.go` must
+also accept the dedicated `relay:mobile:access` scope for
+`/api/onboarding/qr`, `/api/onboarding/validate`, and
+`/api/onboarding/deep-link`, because those payloads are the canonical
+bootstrap surface for the server-minted mobile credential.
 The shared security token contract now also includes single-record metadata
 reads. `internal/api/security_tokens.go`,
 `internal/api/router_routes_auth_security.go`,

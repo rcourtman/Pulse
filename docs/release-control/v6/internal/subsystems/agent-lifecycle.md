@@ -227,6 +227,12 @@ shared `internal/api/security_setup_fix.go` helpers must allow that org's
 owner/admin membership to exercise settings-bound pairing routes instead of
 requiring a separate configured local admin username that does not exist on
 hosted tenants.
+The same setup boundary also owns the dedicated relay-mobile bootstrap read:
+once the backend mints the server-owned Pulse Mobile credential, the QR,
+deep-link, and validation reads in `internal/api/router_routes_ai_relay.go`
+must accept that `relay:mobile:access` scope directly instead of demanding the
+broader settings-read privilege that the pairing token was never meant to
+carry.
 The direct Proxmox fallback workspace now also lives explicitly inside this
 lifecycle boundary: `InfrastructureWorkspace.tsx`,
 `infrastructureWorkspaceModel.ts`,

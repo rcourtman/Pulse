@@ -1302,6 +1302,9 @@ func TestRelayMobileAccessScopeAllowsGovernedMobileRuntimeEndpoints(t *testing.T
 		path   string
 		body   string
 	}{
+		{method: http.MethodGet, path: "/api/onboarding/qr", body: ""},
+		{method: http.MethodPost, path: "/api/onboarding/validate", body: `{}`},
+		{method: http.MethodGet, path: "/api/onboarding/deep-link", body: ""},
 		{method: http.MethodGet, path: "/api/ai/patrol/findings", body: ""},
 		{method: http.MethodGet, path: "/api/ai/findings/finding-1/investigation", body: ""},
 		{method: http.MethodGet, path: "/api/ai/findings/finding-1/investigation/messages", body: ""},
