@@ -277,6 +277,10 @@ The self-hosted activation return notice on `/settings/system-pro` is part of
 that same boundary: the `trial` query result is a one-shot handoff outcome and
 must be consumed into owned UI state, then removed from the URL rather than
 becoming sticky page state across refresh and sharing.
+That same shared notice owner must also keep activation-result framing
+customer-facing: replayed handoffs should confirm the current entitlement state
+rather than reading like a fresh failure, while invalid and unavailable states
+should direct the operator back to the secure trial handoff on this instance.
 That same hosted owner also applies after Stripe returns to
 `/trial-signup/complete`: customer-facing completion failures must stay inside
 owned trial UX rather than dropping raw control-plane error strings, and they
