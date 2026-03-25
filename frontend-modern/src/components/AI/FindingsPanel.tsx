@@ -463,6 +463,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
               when={
                 finding.status === 'active' &&
                 finding.loopState &&
+                !(finding.acknowledgedAt && finding.loopState === 'detected') &&
                 !finding.investigationStatus &&
                 !finding.investigationOutcome
               }

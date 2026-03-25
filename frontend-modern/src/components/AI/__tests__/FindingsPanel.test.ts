@@ -203,6 +203,12 @@ describe('aiFindingPresentation', () => {
       expect(patrolWorkspaceSource).toContain('{state.summaryStats().totalActive}');
       expect(patrolWorkspaceSource).toContain('{state.displayRunHistory().length}');
     });
+
+    it('does not stack a detected loop-state badge on top of acknowledged active findings', () => {
+      expect(findingsPanelSource).toContain(
+        "!(finding.acknowledgedAt && finding.loopState === 'detected')",
+      );
+    });
   });
 
   describe('sourceColors', () => {

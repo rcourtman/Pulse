@@ -203,6 +203,10 @@ separators rather than CSS-only spacing. Badge counts should preserve readable
 plain-text output such as `Findings 1` and `Runs 30`, and metadata trails
 should use textual separators like `· acknowledged 22d ago` so copied or
 extracted Patrol output does not collapse words together.
+That same finding row should avoid redundant state stacking. When an active
+finding is already explicitly marked `Acknowledged`, the UI should not also add
+the baseline `detected` loop-state badge beside it; loop-state badges only add
+value there when they communicate a more specific Patrol state.
 When Patrol is currently running, that strip should still stay factual rather
 than switching to another verdict label: the runtime may add an explicit
 in-progress indicator, but the primary activity label remains recent activity
