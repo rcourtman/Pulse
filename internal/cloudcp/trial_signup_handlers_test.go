@@ -266,9 +266,13 @@ func TestTrialSignupHandleVerifyEmailConsumesSingleUseToken(t *testing.T) {
 	if secondRec.Code != http.StatusBadRequest {
 		t.Fatalf("second verify status=%d, want %d body=%q", secondRec.Code, http.StatusBadRequest, secondRec.Body.String())
 	}
-	if !strings.Contains(secondRec.Body.String(), "invalid or expired") {
-		t.Fatalf("expected invalid link message, got %q", secondRec.Body.String())
-	}
+	assertTrialSignupFailurePageContains(t, secondRec.Body.String(),
+		"Backup link expired",
+		"That verification link is invalid or expired. Return to Pulse to request a fresh backup email.",
+		"your Pulse instance",
+		"This backup link can no longer continue the hosted trial handoff.",
+	)
+	assertTrialSignupFailurePageOmits(t, secondRec.Body.String(), "Continue To Secure Trial Setup", "<form")
 }
 
 func TestTrialSignupHandleVerifyEmailRendersVerifiedState(t *testing.T) {
@@ -448,6 +452,27 @@ func TestTrialSignupHandleCheckoutRejectsEmailThatAlreadyUsedTrial(t *testing.T)
 		"This recovery email has already used a Pulse Pro trial.",
 		"pulse.example.com",
 		"This trial request cannot be restarted for the same recovery contact or organization.",
+	)
+	assertTrialSignupFailurePageOmits(t, rec.Body.String(), "Continue To Secure Trial Setup", "<form")
+}
+
+func TestTrialSignupHandleCheckoutRejectsInvalidVerifiedTokenAsOutcomePage(t *testing.T) {
+	h, _, _ := newTrialSignupTestHandler(t)
+	form := url.Values{"verified_token": {"not_a_real_verified_token"}}
+	req := httptest.NewRequest(http.MethodPost, "/api/trial-signup/checkout", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	h.HandleCheckout(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d, want %d body=%q", rec.Code, http.StatusBadRequest, rec.Body.String())
+	}
+	assertTrialSignupFailurePageContains(t, rec.Body.String(),
+		"Backup link expired",
+		"That backup link is invalid or expired. Return to Pulse to create a fresh secure trial session.",
+		"your Pulse instance",
+		"This backup link can no longer continue the hosted trial handoff.",
 	)
 	assertTrialSignupFailurePageOmits(t, rec.Body.String(), "Continue To Secure Trial Setup", "<form")
 }

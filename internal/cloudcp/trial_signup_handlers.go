@@ -549,6 +549,7 @@ type trialSignupFailureKind string
 const (
 	trialSignupFailureRetryable   trialSignupFailureKind = "retryable"
 	trialSignupFailureConflict    trialSignupFailureKind = "conflict"
+	trialSignupFailureInvalidLink trialSignupFailureKind = "invalid_link"
 	trialSignupFailureUnavailable trialSignupFailureKind = "unavailable"
 )
 
@@ -719,10 +720,12 @@ func (h *TrialSignupHandlers) HandleVerifyEmail(w http.ResponseWriter, r *http.R
 		record, err := h.verificationStore.ConsumeVerification(token, h.now().UTC())
 		if err != nil {
 			log.Warn().Err(err).Msg("trial signup verification token invalid")
-			h.renderTrialSignupPage(w, r, http.StatusBadRequest, trialSignupPageData{
-				ErrorMessage: "That verification link is invalid or expired. Request a fresh email from Pulse and try again.",
-				ReturnTarget: "your Pulse instance",
-			})
+			h.renderTrialSignupFailurePage(w, r, http.StatusBadRequest, trialSignupFailureDataForPage(
+				h.cfg,
+				trialSignupPageData{ReturnTarget: "your Pulse instance"},
+				trialSignupFailureInvalidLink,
+				"That verification link is invalid or expired. Return to Pulse to request a fresh backup email.",
+			))
 			return
 		}
 		verifiedToken, err := h.verificationStore.IssueCheckoutToken(record.ID, h.now().UTC(), trialSignupVerificationTTL)
@@ -742,10 +745,12 @@ func (h *TrialSignupHandlers) HandleVerifyEmail(w http.ResponseWriter, r *http.R
 	record, err := h.lookupVerifiedTrialSignupRecord(verifiedToken)
 	if err != nil {
 		log.Warn().Err(err).Msg("trial signup verified state invalid")
-		h.renderTrialSignupPage(w, r, http.StatusBadRequest, trialSignupPageData{
-			ErrorMessage: "That verification link is invalid or expired. Request a fresh email from Pulse and try again.",
-			ReturnTarget: "your Pulse instance",
-		})
+		h.renderTrialSignupFailurePage(w, r, http.StatusBadRequest, trialSignupFailureDataForPage(
+			h.cfg,
+			trialSignupPageData{ReturnTarget: "your Pulse instance"},
+			trialSignupFailureInvalidLink,
+			"That verification link is invalid or expired. Return to Pulse to request a fresh backup email.",
+		))
 		return
 	}
 
@@ -780,10 +785,12 @@ func (h *TrialSignupHandlers) HandleCheckout(w http.ResponseWriter, r *http.Requ
 		verifiedRecord, err := h.lookupVerifiedTrialSignupRecord(verifiedToken)
 		if err != nil {
 			log.Warn().Err(err).Msg("trial signup checkout requested without valid verified token")
-			h.renderTrialSignupPage(w, r, http.StatusBadRequest, trialSignupPageData{
-				ErrorMessage: "That backup link is invalid or expired. Restart from Pulse to create a fresh checkout session.",
-				ReturnTarget: "your Pulse instance",
-			})
+			h.renderTrialSignupFailurePage(w, r, http.StatusBadRequest, trialSignupFailureDataForPage(
+				h.cfg,
+				trialSignupPageData{ReturnTarget: "your Pulse instance"},
+				trialSignupFailureInvalidLink,
+				"That backup link is invalid or expired. Return to Pulse to create a fresh secure trial session.",
+			))
 			return
 		}
 		record = verifiedRecord
@@ -1402,6 +1409,10 @@ func trialSignupFailureDataForPage(cfg *CPConfig, data trialSignupPageData, kind
 		title = "Trial already used"
 		statusMessage = "This trial request cannot be restarted for the same recovery contact or organization."
 		finePrint = "Upgrade the existing account or contact support if you need help reconciling prior trial usage."
+	case trialSignupFailureInvalidLink:
+		title = "Backup link expired"
+		statusMessage = "This backup link can no longer continue the hosted trial handoff."
+		finePrint = "Return to Pulse to request a fresh backup email or restart the secure trial setup."
 	case trialSignupFailureUnavailable:
 		title = "Trial setup is unavailable"
 		statusMessage = "Pulse could not finish the secure trial handoff right now."

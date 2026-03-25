@@ -268,6 +268,8 @@ instance-bound entitlement handoff. Hosted form-stage issuance conflicts must
 also preserve the canonical reason shape: duplicate recovery-email usage must
 not be flattened into an organization-level message, and terminal conflicts
 must render as owned hosted outcome UX rather than editable inline form state.
+Expired or invalid hosted backup-link states must follow that same rule rather
+than falling back to a form with missing Pulse initiation context.
 That same hosted owner also applies after Stripe returns to
 `/trial-signup/complete`: customer-facing completion failures must stay inside
 owned trial UX rather than dropping raw control-plane error strings, and they
