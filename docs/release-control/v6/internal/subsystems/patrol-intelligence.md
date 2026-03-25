@@ -285,6 +285,10 @@ That same truthfulness rule applies to the expanded run outcomes strip. Legacy
 runs without findings snapshot ids must not render a green `All clear` outcome
 badge from zero aggregate counters; they should show an explicit snapshot
 unavailable state instead.
+That same caveat belongs in compact latest-run summaries too. When the most
+recent Patrol run predates findings snapshots, the status bar's latest-run
+segment should say that findings snapshot data is unavailable instead of
+flattening the run into a plain healthy-looking summary.
 That same findings surface should keep its section chrome functional rather
 than promotional. Inside the Patrol findings tab, the selected tab already
 names the surface, so the findings card should not add another in-card product

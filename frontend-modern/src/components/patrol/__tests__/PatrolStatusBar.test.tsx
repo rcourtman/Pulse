@@ -65,6 +65,50 @@ describe('PatrolStatusBar', () => {
     expect(screen.getByText('healthy')).toBeInTheDocument();
   });
 
+  it('flags latest runs whose findings snapshot is unavailable', async () => {
+    getPatrolRunHistoryMock.mockResolvedValue([
+      {
+        id: 'run-legacy-healthy',
+        started_at: '2026-03-12T10:00:00Z',
+        completed_at: '2026-03-12T10:01:00Z',
+        duration_ms: 60000,
+        type: 'patrol',
+        resources_checked: 1,
+        nodes_checked: 0,
+        guests_checked: 0,
+        docker_checked: 0,
+        storage_checked: 0,
+        hosts_checked: 0,
+        pbs_checked: 0,
+        pmg_checked: 0,
+        kubernetes_checked: 0,
+        new_findings: 0,
+        existing_findings: 0,
+        rejected_findings: 0,
+        resolved_findings: 0,
+        auto_fix_count: 0,
+        findings_summary: 'All clear',
+        finding_ids: undefined,
+        error_count: 0,
+        status: 'healthy',
+        triage_flags: 0,
+        tool_call_count: 0,
+      },
+    ]);
+
+    render(() => <PatrolStatusBar refreshTrigger={1} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Recent activity')).toBeInTheDocument();
+    });
+
+    const latestRunSection = screen.getByText('Latest: Full patrol').closest('span');
+    expect(latestRunSection).not.toBeNull();
+    expect(latestRunSection).toHaveTextContent(
+      'Latest: Full patrol · healthy · Findings snapshot unavailable',
+    );
+  });
+
   it('shows patrol paused when the runtime is blocked even if the last run was healthy', async () => {
     getPatrolRunHistoryMock.mockResolvedValue([
       {

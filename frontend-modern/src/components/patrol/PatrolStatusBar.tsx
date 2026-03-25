@@ -61,6 +61,7 @@ export const PatrolStatusBar: Component<PatrolStatusBarProps> = (props) => {
       lastRunTrigger: formatTriggerReason(lastRun?.trigger_reason),
       lastRunTypeLabel: getPatrolRunKindLabel(lastRun?.type),
       lastRunStatus,
+      lastRunHasFindingsSnapshot: lastRun?.finding_ids !== undefined,
     };
   });
 
@@ -166,6 +167,13 @@ export const PatrolStatusBar: Component<PatrolStatusBarProps> = (props) => {
                 <span class={`px-1.5 py-0.5 rounded ${s().lastRunStatus.badgeClass}`}>
                   {s().lastRunStatus.label}
                 </span>
+                <Show when={s().lastRunHasFindingsSnapshot === false}>
+                  {' '}
+                  <span class="text-muted">·</span>{' '}
+                  <span class="text-blue-600 dark:text-blue-400">
+                    Findings snapshot unavailable
+                  </span>
+                </Show>
               </span>
             </Show>
 
