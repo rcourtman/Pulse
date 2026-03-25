@@ -511,20 +511,6 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 		}
 	}
 
-	// If no auth is configured at all, allow access unless SSO is enabled.
-	if cfg.AuthUser == "" && cfg.AuthPass == "" && !cfg.HasAPITokens() && cfg.ProxyAuthSecret == "" {
-		if hasEnabledSSOProvidersForAuth(cfg) {
-			log.Debug().Msg("SSO enabled without local credentials, authentication required")
-		} else {
-			log.Debug().Msg("No auth configured, allowing access as 'anonymous'")
-			if w != nil {
-				w.Header().Set("X-Authenticated-User", "anonymous")
-				w.Header().Set("X-Auth-Method", "none")
-			}
-			return true
-		}
-	}
-
 	// API-only mode: when only API token is configured (no password auth)
 	if cfg.AuthUser == "" && cfg.AuthPass == "" && cfg.HasAPITokens() {
 		if providedToken, provided := explicitAPITokenFromRequest(r); provided {
@@ -616,6 +602,22 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 			Str("path", r.URL.Path).
 			Bool("has_cf_headers", r.Header.Get("CF-Ray") != "").
 			Msg("No session cookie found")
+	}
+
+	// If no auth is configured at all, allow access unless SSO is enabled.
+	// A valid session still wins above, so hosted/cloud-handoff browser sessions
+	// do not get flattened into anonymous access.
+	if cfg.AuthUser == "" && cfg.AuthPass == "" && !cfg.HasAPITokens() && cfg.ProxyAuthSecret == "" {
+		if hasEnabledSSOProvidersForAuth(cfg) {
+			log.Debug().Msg("SSO enabled without local credentials, authentication required")
+		} else {
+			log.Debug().Msg("No auth configured, allowing access as 'anonymous'")
+			if w != nil {
+				w.Header().Set("X-Authenticated-User", "anonymous")
+				w.Header().Set("X-Auth-Method", "none")
+			}
+			return true
+		}
 	}
 
 	// Check basic auth

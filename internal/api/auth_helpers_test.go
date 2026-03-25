@@ -913,6 +913,12 @@ func TestCheckAuth_ValidSessionWithSlidingExpiration(t *testing.T) {
 	if !result {
 		t.Error("CheckAuth should return true for valid session with sliding expiration")
 	}
+	if got := w.Header().Get("X-Authenticated-User"); got != "testuser" {
+		t.Fatalf("X-Authenticated-User = %q, want testuser", got)
+	}
+	if got := w.Header().Get("X-Auth-Method"); got != "session" {
+		t.Fatalf("X-Auth-Method = %q, want session", got)
+	}
 }
 
 func TestCheckAuth_NoAuthConfigured(t *testing.T) {

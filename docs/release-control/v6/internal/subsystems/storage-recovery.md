@@ -864,3 +864,9 @@ billing state grants relay, the shared runtime helper must persist the
 canonical hosted relay config and keep subsequent reads on that same
 machine-owned state instead of letting adjacent surfaces invent their own
 fallback bootstrap or disable heuristics.
+That same shared `internal/api/` boundary also owns hosted browser-session
+precedence for adjacent protected reads. Storage- and recovery-adjacent hosted
+surfaces may run without local auth configured, but a valid tenant
+`pulse_session` must still authenticate before the anonymous optional-auth
+fallback so hosted recovery, onboarding, and support flows do not silently
+degrade into unauthenticated state after cloud handoff.

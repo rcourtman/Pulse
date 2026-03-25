@@ -215,6 +215,12 @@ relay, the shared backend helper must auto-bootstrap the canonical relay
 runtime state that onboarding and relay-status reads consume, while still
 preserving explicit operator-owned disablement when a real relay config was
 already written.
+That same hosted setup boundary also depends on tenant browser sessions staying
+canonical after cloud handoff. Lifecycle-adjacent mobile pairing and hosted
+admin setup routes may run without local credentials configured, but shared
+`internal/api/auth.go` helpers must still honor a valid hosted `pulse_session`
+before any optional-auth anonymous fallback so operators can mint relay-mobile
+credentials and continue onboarding from the hosted runtime itself.
 The direct Proxmox fallback workspace now also lives explicitly inside this
 lifecycle boundary: `InfrastructureWorkspace.tsx`,
 `infrastructureWorkspaceModel.ts`,

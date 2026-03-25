@@ -847,6 +847,34 @@ func TestContract_PersistentAuthStoresRequireExplicitInitialization(t *testing.T
 	assertPanics("recovery token store", func() { _ = GetRecoveryTokenStore() })
 }
 
+func TestContract_HostedSessionAuthPrecedesAnonymousFallback(t *testing.T) {
+	resetPersistentAuthStoresForTests()
+	t.Cleanup(resetPersistentAuthStoresForTests)
+
+	InitSessionStore(t.TempDir())
+
+	store := GetSessionStore()
+	sessionToken := generateSessionToken()
+	store.CreateSession(sessionToken, 24*time.Hour, "contract-test", "127.0.0.1", "hosted-owner@example.com")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/security/tokens/relay-mobile", nil)
+	req.AddCookie(&http.Cookie{
+		Name:  "pulse_session",
+		Value: sessionToken,
+	})
+	rec := httptest.NewRecorder()
+
+	if !CheckAuth(&config.Config{}, rec, req) {
+		t.Fatal("CheckAuth() = false, want true for valid hosted browser session")
+	}
+	if got := rec.Header().Get("X-Authenticated-User"); got != "hosted-owner@example.com" {
+		t.Fatalf("X-Authenticated-User = %q, want hosted-owner@example.com", got)
+	}
+	if got := rec.Header().Get("X-Auth-Method"); got != "session" {
+		t.Fatalf("X-Auth-Method = %q, want session", got)
+	}
+}
+
 func TestContract_UnifiedAgentReportResponseJSONSnapshot(t *testing.T) {
 	payload := map[string]any{
 		"success":   true,

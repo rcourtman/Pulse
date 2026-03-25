@@ -139,6 +139,7 @@ Own canonical runtime payload shapes between backend and frontend.
 14. Keep Patrol quickstart transport semantics explicit as well: zero remaining quickstart credits are inventory data, not a standalone runtime-state override, so frontend consumers may only present the exhausted quickstart warning when the payload still reports `using_quickstart` or a runtime state that is blocked by quickstart exhaustion.
 15. Keep Patrol intelligence summary transport semantics single-voiced: the canonical overall-health payload and Patrol run-history payload together must support one primary assessment plus one explicit verification explanation, and frontend consumers must not need to derive a second compact assessment or verification verdict row from the same payloads beneath the primary summary card.
 16. Keep Pulse Mobile relay credential minting and permission ownership on backend ownership: `internal/api/router_routes_auth_security.go`, `internal/api/security_tokens.go`, `internal/api/auth.go`, `internal/api/router_routes_ai_relay.go`, and `frontend-modern/src/api/security.ts` may expose the canonical mobile runtime token creator and governed route gates, but browser callers must only consume that route and must not define the mobile runtime scope, compatibility gate list, or token-purpose metadata locally.
+17. Keep hosted tenant browser-session precedence on the shared auth boundary: `internal/api/auth.go`, `internal/api/contract_test.go`, and hosted tenant callers must treat a valid `pulse_session` as authoritative before any no-local-auth anonymous fallback, so cloud handoff can continue into protected hosted routes without flattening the operator back to `anonymous`.
 
 ## Forbidden Paths
 
@@ -1574,6 +1575,13 @@ when hosted auth handoff preserves a non-default tenant org like `t-...`,
 instance-level hosted billing lease from `default` if that tenant org has no
 org-local billing state of its own, rather than failing closed into
 `subscription_required` on first entry.
+That same hosted browser-session contract must also remain authoritative once
+the handoff lands on the tenant runtime: when a valid `pulse_session` cookie
+is present, shared `internal/api/auth.go` helpers must authenticate that
+session before any no-local-auth anonymous fallback is considered, so hosted
+protected routes such as relay-mobile token minting, onboarding reads, and
+billing-admin/API surfaces stay reachable after cloud handoff instead of
+flattening the operator back to `anonymous`.
 The shared security token contract now also includes single-record metadata
 reads. `internal/api/security_tokens.go`,
 `internal/api/router_routes_auth_security.go`,
