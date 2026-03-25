@@ -1,19 +1,17 @@
 import { test, expect } from '@playwright/test';
-import { ensureAuthenticated, navigateToSettings, apiRequest } from './helpers';
+import { ensureAuthenticated, ensureFirstRunExperience, navigateToSettings, apiRequest } from './helpers';
 
 /**
  * Dedicated first-session E2E test covering the full journey:
- *   wizard → dashboard → settings discovery → gated panel guards
+ *   wizard → infrastructure operations handoff → settings discovery → gated panel guards
  *
  * This satisfies L8 score-8 criteria: "Dedicated first-session E2E test
- * (wizard → dashboard → settings discovery)."
+ * (wizard → settings discovery)" with the current canonical first-run handoff
+ * landing in Infrastructure Operations install rather than the legacy dashboard.
  *
- * NOTE: The wizard step is handled by `ensureAuthenticated()` which calls
- * `maybeCompleteSetupWizard()` only when security is not yet configured.
- * In full-suite runs (file 11), prior tests will have already bootstrapped,
- * so the wizard step is a no-op. This is correct — the test validates the
- * post-wizard first-session UX regardless of whether this run performed
- * the actual wizard flow.
+ * The opening test in this file forces the backend into deterministic
+ * first-run state through the dev/test reset route, then completes the real
+ * setup wizard before the rest of the suite continues through normal auth.
  */
 
 type EntitlementPayload = {
@@ -28,13 +26,16 @@ type EntitlementPayload = {
 const SETTINGS_SIDEBAR = '[aria-label="Settings navigation"]';
 
 test.describe.serial('First-session experience', () => {
-  test('wizard completes and lands on dashboard', async ({ page }, testInfo) => {
+  test('wizard completes and lands on infrastructure operations', async ({ page }, testInfo) => {
     test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop-only first-session coverage');
 
-    await ensureAuthenticated(page);
+    await ensureFirstRunExperience(page);
 
-    // After setup wizard + login the app must land on the infrastructure dashboard.
-    await expect(page).toHaveURL(/\/(infrastructure|proxmox\/overview|dashboard|nodes)/);
+    // First-run security now hands off directly into the Infrastructure Operations install flow.
+    await expect(page).toHaveURL(/\/settings\/infrastructure\/install/);
+    await expect(
+      page.getByRole('heading', { name: 'Infrastructure Operations', exact: true }).first(),
+    ).toBeVisible();
     await expect(page.locator('#root')).toBeVisible();
 
     // The main content area should be rendered (not stuck on a spinner/blank).

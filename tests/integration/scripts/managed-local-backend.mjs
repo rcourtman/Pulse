@@ -90,6 +90,7 @@ export function buildManagedLocalBackendEnv(state, env = process.env) {
     PULSE_DEV: 'true',
     PULSE_E2E_BILLING_STATE_PATH: state.billingStatePath,
     PULSE_E2E_BOOTSTRAP_TOKEN: trim(env.PULSE_E2E_BOOTSTRAP_TOKEN) || DEFAULT_E2E_BOOTSTRAP_TOKEN,
+    PULSE_E2E_PRIMARY_API_TOKEN: trim(env.PULSE_E2E_PRIMARY_API_TOKEN) || DEFAULT_E2E_PRIMARY_API_TOKEN,
     ALLOWED_ORIGINS: trim(env.ALLOWED_ORIGINS) || allowedOrigins.join(','),
   };
 
@@ -480,6 +481,7 @@ export async function startManagedLocalBackend({
       dataDir: state.dataDir,
       logPath: state.logPath,
       billingStatePath: state.billingStatePath,
+      primaryAPIToken: backendEnv.PULSE_E2E_PRIMARY_API_TOKEN,
     };
     await writeRuntimeState(runtimeState, env);
     logger.log(`[integration] Started managed local backend at ${state.baseURL} (pid ${child.pid})`);

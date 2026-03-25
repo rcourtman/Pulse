@@ -2499,6 +2499,61 @@ func TestContract_QuickSecuritySetupBootstrapRetrievalGuidance(t *testing.T) {
 	}
 }
 
+func TestContract_ResetFirstRunSecurityResponseJSONSnapshot(t *testing.T) {
+	t.Setenv("PULSE_DEV", "true")
+	t.Setenv("NODE_ENV", "")
+
+	record := newTokenRecord(t, "contract-reset-first-run-token-123.12345678", []string{config.ScopeSettingsWrite}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	cfg.AuthUser = "admin"
+	cfg.AuthPass = "hashed-password"
+
+	envPath, err := writeAuthEnvFile(cfg.ConfigPath, cfg.DataPath, []byte("PULSE_AUTH_USER='admin'\n"))
+	if err != nil {
+		t.Fatalf("writeAuthEnvFile: %v", err)
+	}
+
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	req := httptest.NewRequest(http.MethodPost, "/api/security/dev/reset-first-run", nil)
+	req.Header.Set("X-API-Token", "contract-reset-first-run-token-123.12345678")
+	rec := httptest.NewRecorder()
+
+	router.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("reset-first-run status = %d, want 200 (%s)", rec.Code, rec.Body.String())
+	}
+
+	var payload firstRunResetResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode reset-first-run response: %v", err)
+	}
+	if strings.TrimSpace(payload.BootstrapToken) == "" {
+		t.Fatal("reset-first-run response missing bootstrapToken")
+	}
+	if got, want := payload.BootstrapTokenPath, filepath.Join(cfg.DataPath, bootstrapTokenFilename); got != want {
+		t.Fatalf("reset-first-run bootstrapTokenPath = %q, want %q", got, want)
+	}
+	if _, err := os.Stat(envPath); !os.IsNotExist(err) {
+		t.Fatalf("reset-first-run should remove auth env file, stat err = %v", err)
+	}
+
+	got, err := json.Marshal(firstRunResetResponse{
+		BootstrapToken:     "bootstrap-token-placeholder",
+		BootstrapTokenPath: "bootstrap-token-path-placeholder",
+	})
+	if err != nil {
+		t.Fatalf("marshal reset-first-run response snapshot: %v", err)
+	}
+
+	const want = `{
+		"bootstrapToken":"bootstrap-token-placeholder",
+		"bootstrapTokenPath":"bootstrap-token-path-placeholder"
+	}`
+
+	assertJSONSnapshot(t, got, want)
+}
+
 func TestContract_SetupScriptURLResponseJSONSnapshot(t *testing.T) {
 	payload := map[string]any{
 		"type":              "pve",

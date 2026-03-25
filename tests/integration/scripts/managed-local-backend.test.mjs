@@ -50,6 +50,7 @@ test('buildManagedLocalBackendEnv seeds auth, bootstrap token, and billing path'
   assert.equal(env.PULSE_DATA_DIR, state.dataDir);
   assert.equal(env.PULSE_E2E_BILLING_STATE_PATH, state.billingStatePath);
   assert.equal(env.PULSE_E2E_BOOTSTRAP_TOKEN.length > 0, true);
+  assert.equal(env.PULSE_E2E_PRIMARY_API_TOKEN.length > 0, true);
   assert.equal(env.PULSE_METRICS_PORT, '0');
   assert.equal('ALLOW_ADMIN_BYPASS' in env, false);
   assert.equal(env.PULSE_MULTI_TENANT_ENABLED, 'true');

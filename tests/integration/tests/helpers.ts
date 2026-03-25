@@ -19,16 +19,30 @@ const runtimeStatePath = (() => {
     : path.resolve(__dirname, '..', '..', '..', configuredPath);
 })();
 
-const runtimeBaseURL = (): string | null => {
+type RuntimeState = {
+  baseURL?: string;
+  primaryAPIToken?: string;
+};
+
+const readRuntimeState = (): RuntimeState | null => {
   try {
     const raw = fs.readFileSync(runtimeStatePath, 'utf8');
-    const parsed = JSON.parse(raw) as { baseURL?: string };
-    return typeof parsed.baseURL === 'string' && parsed.baseURL.trim() !== ''
-      ? parsed.baseURL.trim()
-      : null;
+    return JSON.parse(raw) as RuntimeState;
   } catch {
     return null;
   }
+};
+
+const runtimeBaseURL = (): string | null => {
+  const parsed = readRuntimeState();
+  return typeof parsed?.baseURL === 'string' && parsed.baseURL.trim() !== ''
+    ? parsed.baseURL.trim()
+    : null;
+};
+
+const runtimePrimaryAPIToken = (): string => {
+  const parsed = readRuntimeState();
+  return typeof parsed?.primaryAPIToken === 'string' ? parsed.primaryAPIToken.trim() : '';
 };
 
 /**
@@ -44,9 +58,25 @@ const DEFAULT_E2E_BOOTSTRAP_TOKEN = '0123456789abcdef0123456789abcdef0123456789a
 
 export const E2E_CREDENTIALS = {
   bootstrapToken: process.env.PULSE_E2E_BOOTSTRAP_TOKEN || DEFAULT_E2E_BOOTSTRAP_TOKEN,
+  primaryApiToken: process.env.PULSE_E2E_PRIMARY_API_TOKEN || runtimePrimaryAPIToken(),
   username: process.env.PULSE_E2E_USERNAME || ADMIN_CREDENTIALS.username,
   password: process.env.PULSE_E2E_PASSWORD || ADMIN_CREDENTIALS.password,
 };
+
+async function waitForAppShell(page: Page, timeoutMs = 20_000) {
+  await page.waitForLoadState('domcontentloaded');
+
+  // The raw HTML shell contains a noscript fallback. Wait for the SPA to
+  // mount before making route-specific assertions against wizard/login UI.
+  await page.waitForFunction(
+    () => {
+      const root = document.getElementById('root');
+      return root !== null && root.children.length > 0;
+    },
+    undefined,
+    { timeout: timeoutMs },
+  );
+}
 
 export async function waitForPulseReady(page: Page, timeoutMs = 120_000) {
   const startedAt = Date.now();
@@ -70,27 +100,17 @@ type SecurityStatus = {
   hasAuthentication?: boolean;
 };
 
-export async function getSecurityStatus(page: Page): Promise<SecurityStatus> {
-  const res = await page.request.get('/api/security/status');
-  if (!res.ok()) {
-    throw new Error(`Failed to fetch security status: ${res.status()}`);
-  }
-  return (await res.json()) as SecurityStatus;
-}
+type ResetFirstRunResponse = {
+  bootstrapToken?: string;
+};
 
-export async function maybeCompleteSetupWizard(page: Page) {
-  const security = await getSecurityStatus(page);
-  if (security.hasAuthentication !== false) {
-    return;
-  }
-
-  if (!E2E_CREDENTIALS.bootstrapToken) {
-    throw new Error(
-      'Pulse requires first-run setup but PULSE_E2E_BOOTSTRAP_TOKEN is not set (or is empty)',
-    );
+async function completeSetupWizard(page: Page, bootstrapToken: string) {
+  if (!bootstrapToken) {
+    throw new Error('Pulse requires first-run setup but no bootstrap token is available');
   }
 
   await page.goto('/');
+  await waitForAppShell(page);
 
   const wizard = page.getByRole('main', { name: 'Pulse Setup Wizard' });
   await expect(wizard).toBeVisible();
@@ -100,7 +120,7 @@ export async function maybeCompleteSetupWizard(page: Page) {
   const continueButton = wizard.getByRole('button', { name: /continue to setup|continue/i });
   const finishButton = wizard.getByRole('button', { name: /go to dashboard|skip for now/i });
 
-  await page.getByPlaceholder('Paste your bootstrap token').fill(E2E_CREDENTIALS.bootstrapToken);
+  await page.getByPlaceholder('Paste your bootstrap token').fill(bootstrapToken);
 
   // Welcome step auto-submits pasted tokens; only click Continue if no transition happened.
   let onSecurityStep = false;
@@ -134,7 +154,6 @@ export async function maybeCompleteSetupWizard(page: Page) {
           clickedCustomPassword = true;
           break;
         } catch (error) {
-          // The step can transition to complete while waiting; handle that as success.
           if (await securityConfigured.isVisible({ timeout: 250 }).catch(() => false)) {
             onCompleteStep = true;
             break;
@@ -152,7 +171,17 @@ export async function maybeCompleteSetupWizard(page: Page) {
         await wizard.locator('input[type="password"]').nth(1).fill(E2E_CREDENTIALS.password);
 
         await wizard.getByRole('button', { name: /create account/i }).click();
-        await expect(securityConfigured).toBeVisible();
+        await expect
+          .poll(async () => {
+            if (await securityConfigured.isVisible({ timeout: 250 }).catch(() => false)) {
+              return 'complete';
+            }
+            if (/\/settings\/infrastructure\/install/.test(page.url())) {
+              return 'handoff';
+            }
+            return 'pending';
+          })
+          .not.toBe('pending');
         onCompleteStep = true;
       }
     } else {
@@ -162,11 +191,86 @@ export async function maybeCompleteSetupWizard(page: Page) {
   }
 
   if (onCompleteStep) {
-    await finishButton.scrollIntoViewIfNeeded();
-    await finishButton.click({ timeout: 10_000 });
+    const finishVisible = await finishButton.isVisible({ timeout: 500 }).catch(() => false);
+    if (finishVisible) {
+      await finishButton.scrollIntoViewIfNeeded();
+      await finishButton.click({ timeout: 10_000 });
+    }
   }
 
   await page.waitForLoadState('domcontentloaded');
+}
+
+export async function getSecurityStatus(page: Page): Promise<SecurityStatus> {
+  const res = await page.request.get('/api/security/status');
+  if (!res.ok()) {
+    throw new Error(`Failed to fetch security status: ${res.status()}`);
+  }
+  return (await res.json()) as SecurityStatus;
+}
+
+export async function maybeCompleteSetupWizard(page: Page) {
+  const security = await getSecurityStatus(page);
+  if (security.hasAuthentication !== false) {
+    return;
+  }
+
+  await completeSetupWizard(page, E2E_CREDENTIALS.bootstrapToken);
+}
+
+export async function ensureFirstRunExperience(page: Page) {
+  await page.addInitScript(() => {
+    localStorage.setItem('pulse_whats_new_v2_shown', 'true');
+  });
+  await waitForPulseReady(page);
+
+  let bootstrapToken = E2E_CREDENTIALS.bootstrapToken;
+  const security = await getSecurityStatus(page);
+  if (security.hasAuthentication !== false) {
+    let resetRes = await apiRequest(page, '/api/security/dev/reset-first-run', {
+      method: 'POST',
+      headers: E2E_CREDENTIALS.primaryApiToken
+        ? { 'X-API-Token': E2E_CREDENTIALS.primaryApiToken }
+        : undefined,
+    });
+    if (resetRes.status() === 401 && !E2E_CREDENTIALS.primaryApiToken) {
+      await login(page);
+      resetRes = await apiRequest(page, '/api/security/dev/reset-first-run', {
+        method: 'POST',
+      });
+    }
+    if (!resetRes.ok()) {
+      throw new Error(`Failed to reset first-run state: ${resetRes.status()} ${await resetRes.text()}`);
+    }
+
+    const payload = (await resetRes.json()) as ResetFirstRunResponse;
+    bootstrapToken = String(payload.bootstrapToken || '').trim();
+    if (bootstrapToken === '') {
+      throw new Error('First-run reset response did not include a bootstrap token');
+    }
+
+    await expect
+      .poll(async () => {
+        const current = await getSecurityStatus(page);
+        return current.hasAuthentication === false;
+      })
+      .toBe(true);
+
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    await page.evaluate(() => {
+      window.localStorage.clear();
+      window.sessionStorage.clear();
+    });
+    await page.context().clearCookies();
+  }
+
+  await completeSetupWizard(page, bootstrapToken);
+  const firstRunLandingPattern =
+    /\/(settings\/infrastructure\/install|proxmox|dashboard|nodes|hosts|docker|infrastructure)/;
+  if (!firstRunLandingPattern.test(page.url())) {
+    await login(page);
+  }
+  await expect(page).toHaveURL(firstRunLandingPattern);
 }
 
 /**
@@ -185,20 +289,7 @@ export async function loginAsAdmin(page: Page) {
 
 export async function login(page: Page, credentials = E2E_CREDENTIALS) {
   await page.goto('/');
-  await page.waitForLoadState('domcontentloaded');
-
-  // Wait for SPA JavaScript to execute. The raw HTML shell contains a
-  // "You need to enable JavaScript" noscript message. Under load (e.g.
-  // running the full journey suite sequentially), Vite can take several
-  // seconds to serve the JS bundle. Wait for #root to have meaningful
-  // child content before looking for login form or authenticated route.
-  await page.waitForFunction(
-    () => {
-      const root = document.getElementById('root');
-      return root !== null && root.children.length > 0;
-    },
-    { timeout: 20_000 },
-  );
+  await waitForAppShell(page);
 
   const authenticatedURL = /\/(proxmox|dashboard|nodes|hosts|docker|infrastructure)/;
   const usernameInput = page.locator('input[name="username"]');

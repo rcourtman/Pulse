@@ -458,6 +458,10 @@ That same shared boundary also assumes manual auth env writes and auth-status
 reads resolve `.env` through the shared auth-path helper, so storage-adjacent
 recovery and setup flows do not keep neighboring `/etc/pulse/.env` fallback
 logic alive after the runtime data-dir authority has been centralized.
+The same boundary also owns first-session reset cleanup during managed-backend
+proof: the dev-only `/api/security/dev/reset-first-run` route must clear auth
+env and persisted API-token state through the shared helpers, and adjacent test
+or recovery tooling may not delete those files directly.
 That same shared `internal/api/` dependency also assumes generated developer
 warnings keep the local browser/runtime split accurate: the embedded frontend
 notice under `internal/api/DO_NOT_EDIT_FRONTEND_HERE.md` may describe `:7655`

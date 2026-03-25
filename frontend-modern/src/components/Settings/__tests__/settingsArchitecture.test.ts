@@ -910,9 +910,13 @@ describe('Settings architecture guardrails', () => {
     expect(apiTokenManagerStateSource).toContain('const [tokens, setTokens] = createSignal<APITokenRecord[]>([])');
     expect(apiTokenManagerStateSource).toContain('const loadTokens = async () =>');
     expect(apiTokenManagerStateSource).toContain('SecurityAPI.listTokens()');
+    expect(apiTokenManagerStateSource).toContain('const scopePresets = getAPITokenScopePresets();');
+    expect(apiTokenManagerStateSource).not.toContain('const scopePresets = API_TOKEN_SCOPE_PRESETS;');
     expect(apiTokenManagerModelSource).toContain('export const hasAgentScopeResource =');
     expect(apiTokenManagerModelSource).toContain('export const buildDockerTokenUsage =');
     expect(apiTokenManagerModelSource).toContain('export const buildAgentTokenUsage =');
+    expect(apiTokenManagerModelSource).toContain('export const getAPITokenScopePresets = (): APITokenPreset[] => [');
+    expect(apiTokenManagerModelSource).not.toContain('export const API_TOKEN_SCOPE_PRESETS = [');
   });
 
   it('keeps the node setup modal shell behind extracted state and model owners', () => {

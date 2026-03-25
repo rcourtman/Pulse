@@ -751,6 +751,12 @@ through the supported `pulse bootstrap-token` command, but `.bootstrap_token`
 may not remain a raw plaintext secret file on disk. Canonical runtime
 persistence must encrypt that token at rest and rewrite any legacy plaintext
 bootstrap-token file immediately into the encrypted canonical format on load.
+That same first-session contract also owns the dev/test reset response used by
+managed-backend proof: `/api/security/dev/reset-first-run` may exist only for
+development verification, must require authenticated `settings:write`, must
+clear persisted auth state through the shared auth-env and token-persistence
+helpers, and must return the regenerated `bootstrapToken` together with the
+canonical `bootstrapTokenPath` needed to re-enter first-run deterministically.
 That same setup-token-only contract must also keep missing-token failures
 specific: `/api/auto-register` may not answer a missing `authToken` request
 with a generic authentication error after the route has been narrowed to the
@@ -1445,6 +1451,11 @@ both sides instead of relying only on broad settings-surface coverage on the
 security side: token settings changes must continue to carry the direct
 `api-token-management-surface` API-contract proof together with the
 security-side surface proof.
+That same boundary must also keep token scope presets lazily derived from the
+canonical scope constants: `apiTokenManagerModel.ts` may expose
+`getAPITokenScopePresets()`, but it must not publish an eagerly evaluated
+top-level preset array that can reintroduce settings-chunk initialization-order
+failures in production bundles.
 That same boundary now also includes
 `frontend-modern/src/utils/apiTokenPresentation.ts`, so token load/create/
 revoke errors keep one governed customer-facing message source instead of

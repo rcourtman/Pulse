@@ -23,13 +23,13 @@ import { logger } from '@/utils/logger';
 import { getPulseBaseUrl } from '@/utils/url';
 import {
   API_TOKEN_SCOPES_DOC_URL,
-  API_TOKEN_SCOPE_PRESETS,
   API_TOKEN_WILDCARD_SCOPE,
   agentActionIdForResource,
   buildAgentTokenUsage,
   buildDockerTokenUsage,
   countWildcardTokens,
   dockerActionIdForResource,
+  getAPITokenScopePresets,
   getAPITokenDialogName,
   getAPITokenHint,
   groupAPITokenScopes,
@@ -77,6 +77,7 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
   const scopedTokenCount = createMemo(() => totalTokens() - wildcardCount());
   const hasWildcardTokens = createMemo(() => wildcardCount() > 0);
   const scopeGroups = createMemo(() => groupAPITokenScopes());
+  const scopePresets = getAPITokenScopePresets();
   const isFullAccessSelected = () =>
     selectedScopes().length === 0 || selectedScopes().includes(API_TOKEN_WILDCARD_SCOPE);
 
@@ -340,7 +341,7 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
     reopenTokenDialog,
     scopedTokenCount,
     scopeGroups,
-    scopePresets: API_TOKEN_SCOPE_PRESETS,
+    scopePresets,
     selectedScopes,
     setCreateSectionRef,
     setNameInput,

@@ -38,7 +38,7 @@ type ScopeOption = (typeof API_SCOPE_OPTIONS)[number];
 
 const API_TOKEN_SCOPE_GROUP_ORDER: ScopeGroup[] = ['Monitoring', 'Agents', 'Settings'];
 
-export const API_TOKEN_SCOPE_PRESETS: APITokenPreset[] = [
+export const getAPITokenScopePresets = (): APITokenPreset[] => [
   {
     label: 'Kiosk / Dashboard',
     scopes: [MONITORING_READ_SCOPE],

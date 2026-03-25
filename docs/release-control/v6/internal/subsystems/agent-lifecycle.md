@@ -548,6 +548,11 @@ That same shared `internal/api/` boundary also assumes manual auth env writes
 and first-session status reads resolve the `.env` path through the shared
 auth-path helper, so lifecycle-adjacent setup and password flows do not each
 reconstruct their own `/etc/pulse/.env` fallback logic.
+The same proof boundary also owns deterministic first-run re-entry for the
+managed local backend: integration helpers may use the seeded runtime-state
+primary API token to call the dev-only `/api/security/dev/reset-first-run`
+route, but they may not recreate auth teardown by deleting files or rebuilding
+bootstrap state outside the canonical backend path.
 That same shared `internal/api/` boundary also assumes generated developer
 warnings do not mis-teach the local runtime split: the embedded frontend notice
 under `internal/api/DO_NOT_EDIT_FRONTEND_HERE.md` may point operators to the
@@ -984,6 +989,11 @@ the active onboarding contract. The primary install guidance text in the wizard
 must switch with that mode as well: tokenless onboarding may not keep
 advertising automatic token rotation after each copy once the active transport
 is explicitly tokenless.
+The same first-session contract now also owns the landing handoff after secure
+setup: RC-proof and helpers must treat direct navigation into
+`/settings/infrastructure/install` as the canonical completion path, rather
+than assuming the legacy dashboard-only landing still defines successful
+wizard completion.
 That same `SetupCompletionPanel` boundary must also stay on the direct
 `setup-completion-install-surface` proof path, rather than relying only on shared
 helper coverage or downstream install tests to catch lifecycle drift in the

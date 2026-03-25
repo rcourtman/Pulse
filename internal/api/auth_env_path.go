@@ -40,3 +40,14 @@ func writeAuthEnvFile(configPath string, dataPath string, content []byte) (strin
 	}
 	return "", lastErr
 }
+
+func removeAuthEnvFiles(configPath string, dataPath string) error {
+	paths := resolveAuthEnvWritePaths(configPath, dataPath)
+	var lastErr error
+	for _, envPath := range paths {
+		if err := os.Remove(envPath); err != nil && !os.IsNotExist(err) {
+			lastErr = err
+		}
+	}
+	return lastErr
+}

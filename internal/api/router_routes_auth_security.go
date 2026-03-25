@@ -366,6 +366,7 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 
 	// Quick security setup route - using fixed version
 	r.mux.HandleFunc("/api/security/quick-setup", handleQuickSecuritySetupFixed(r))
+	r.mux.HandleFunc("/api/security/dev/reset-first-run", r.handleResetFirstRunSecurity)
 
 	// API token regeneration endpoint
 	r.mux.HandleFunc("/api/security/regenerate-token", r.HandleRegenerateAPIToken)

@@ -240,6 +240,10 @@ plaintext secret file on disk. Canonical runtime persistence must keep the
 token encrypted at rest, and any legacy plaintext bootstrap-token file must be
 treated only as migration input that is rewritten immediately into the
 encrypted canonical format on load.
+Managed first-session proof may reset that boundary only through the dev-only
+`/api/security/dev/reset-first-run` route under authenticated
+`settings:write`; harnesses may not scrape `.env`, delete persisted token
+state, or recreate bootstrap material through lane-local teardown logic.
 That same trust rule also applies to persisted relay client secrets:
 `internal/config/persistence_relay.go` may only accept plaintext `relay.enc`
 files as migration input. Once relay config can be read, canonical runtime
@@ -277,6 +281,11 @@ stale `pulse-hot-dev` service name or any lane-local restart folklore.
 continue to carry the direct `security-settings-surfaces` proof path together
 with the API-contract token-management proof instead of borrowing coverage only
 from broader settings-shell or API ownership.
+That same token-settings surface must also derive presets lazily from the
+canonical scope constants. `apiTokenManagerModel.ts` may expose a
+`getAPITokenScopePresets()` factory, but it must not freeze preset scope data
+at module-load time in a way that can break security settings initialization in
+production chunks.
 That same governed AI trust boundary also covers unified-resource context
 posture derivation: `internal/ai/resource_context_policy_model.go` is now the
 canonical owner for the policy-posture summary, local-only count, and
