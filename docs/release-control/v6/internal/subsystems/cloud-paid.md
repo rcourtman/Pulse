@@ -218,6 +218,19 @@ presentation helpers through `frontend-modern/src/utils/licensePresentation.ts`
 and `frontend-modern/src/utils/upgradePresentation.ts`. Commercial tier labels,
 feature minimum-tier messaging, migration/trial notices, billing-admin status
 labels, and upgrade CTA styling must extend those helpers instead of being
+forked into per-surface status-code branches that drift from backend error
+truth. Trial initiation surfaces must preserve backend denial messages when the
+request is blocked for migration, active commercial state, or other operational
+reasons, and only map the explicit canonical cases (`trial_already_used`,
+rate-limit retry) to fixed copy.
+Hosted self-serve trial leases are also part of that same contract. A redeemed
+hosted trial must carry the canonical Pro capability set and the authoritative
+`limits.max_monitored_systems` cap inside the signed lease rather than relying
+on downstream runtime fallback to infer a limit from trial state alone.
+The top-level authenticated shell is part of that same customer-facing
+boundary: cloud-paid trial prompts may appear in owned commercial surfaces, but
+the app shell must not force a global, persistent Pro trial nudge that
+overrides the primary runtime chrome for every signed-in user.
 redefined inline in settings feature gates, Pro license panels, or trial
 upgrade nudges.
 That same disclosure copy must stay professional and customer-facing. The

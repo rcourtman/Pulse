@@ -350,10 +350,9 @@ describe('RelayOnboardingCard', () => {
       }
     });
 
-    it('shows error toast and redirects to upgrade URL when trial fails', async () => {
+    it('shows the backend error and does not redirect when trial fails', async () => {
       setupWithoutRelayFeature();
       startProTrialMock.mockRejectedValue(new Error('server error'));
-      getUpgradeActionUrlOrFallbackMock.mockReturnValue('/pricing?feature=relay');
 
       const originalLocation = window.location;
       Object.defineProperty(window, 'location', {
@@ -371,12 +370,10 @@ describe('RelayOnboardingCard', () => {
         fireEvent.click(screen.getByText(/or start a Pro trial/));
 
         await waitFor(() => {
-          expect(showErrorMock).toHaveBeenCalledWith(
-            'Unable to start trial. Redirecting to upgrade options...',
-          );
+          expect(showErrorMock).toHaveBeenCalledWith('server error');
         });
 
-        expect(window.location.href).toBe('/pricing?feature=relay');
+        expect(window.location.href).toBe('');
       } finally {
         Object.defineProperty(window, 'location', {
           writable: true,

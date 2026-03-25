@@ -14,6 +14,12 @@ export interface TrialStartErrorOptions {
   branded?: boolean;
 }
 
+export interface TrialStartErrorLike {
+  status?: number;
+  code?: string;
+  message?: string;
+}
+
 export function getProTrialStartedMessage(): string {
   return 'Pro trial started';
 }
@@ -26,11 +32,33 @@ export function getTrialTryAgainLaterMessage(): string {
   return 'Try again later';
 }
 
+function normalizeTrialStartError(error?: unknown): TrialStartErrorLike | null {
+  if (!error) return null;
+  if (typeof error === 'string') return { message: error };
+  if (typeof error !== 'object') return null;
+
+  const value = error as TrialStartErrorLike;
+  return {
+    status: value.status,
+    code: value.code,
+    message: value.message,
+  };
+}
+
 export function getTrialStartErrorMessage(
-  message?: string,
+  error?: unknown,
   options: TrialStartErrorOptions = {},
 ): string {
-  if (message) return message;
+  const normalized = normalizeTrialStartError(error);
+  if (normalized?.code === 'trial_already_used') {
+    return getTrialAlreadyUsedMessage();
+  }
+  if (normalized?.status === 429) {
+    return getTrialTryAgainLaterMessage();
+  }
+  if (normalized?.message?.trim()) {
+    return normalized.message.trim();
+  }
   return options.branded ? 'Failed to start Pro trial' : 'Failed to start trial';
 }
 

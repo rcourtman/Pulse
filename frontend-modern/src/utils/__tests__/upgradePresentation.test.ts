@@ -26,6 +26,14 @@ describe('upgradePresentation', () => {
       'Failed to start Pro trial',
     );
     expect(getTrialStartErrorMessage('temporary failure')).toBe('temporary failure');
+    expect(getTrialStartErrorMessage({ code: 'trial_already_used' })).toBe('Trial already used');
+    expect(getTrialStartErrorMessage({ status: 429 })).toBe('Try again later');
+    expect(
+      getTrialStartErrorMessage({
+        code: 'trial_not_available',
+        message: 'Trial cannot be started while migration is pending',
+      }),
+    ).toBe('Trial cannot be started while migration is pending');
   });
 
   it('returns the primary upgrade action button classes by default', () => {

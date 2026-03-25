@@ -575,7 +575,13 @@ func buildPaidEntitlementLeaseClaims(ctx *tenantLeaseContext, instanceHost strin
 }
 
 func buildTrialLeaseClaims(ctx trialEntitlementContext, now time.Time) pkglicensing.EntitlementLeaseClaims {
-	trialState := pkglicensing.BuildTrialBillingState(ctx.trialStartedAt.UTC(), pkglicensing.TierFeatures[pkglicensing.TierPro])
+	trialCapabilities, trialLimits := pkglicensing.DeriveEntitlements(
+		pkglicensing.TierPro,
+		nil,
+		pkglicensing.TierMonitoredSystemLimits[pkglicensing.TierPro],
+		0,
+	)
+	trialState := pkglicensing.BuildTrialBillingState(ctx.trialStartedAt.UTC(), trialCapabilities)
 	return pkglicensing.EntitlementLeaseClaims{
 		OrgID:             strings.TrimSpace(ctx.orgID),
 		Email:             strings.TrimSpace(ctx.email),
@@ -583,7 +589,7 @@ func buildTrialLeaseClaims(ctx trialEntitlementContext, now time.Time) pkglicens
 		PlanVersion:       trialState.PlanVersion,
 		SubscriptionState: trialState.SubscriptionState,
 		Capabilities:      append([]string(nil), trialState.Capabilities...),
-		Limits:            map[string]int64{},
+		Limits:            trialLimits,
 		MetersEnabled:     []string{},
 		TrialStartedAt:    trialState.TrialStartedAt,
 		TrialEndsAt:       trialState.TrialEndsAt,

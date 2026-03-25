@@ -89,7 +89,7 @@ describe('license store', () => {
       upgrade_reasons: [],
       tier: 'free',
       hosted_mode: false,
-      trial_eligible: true,
+      trial_eligible: false,
       legacy_connections: {
         proxmox_nodes: 0,
         docker_hosts: 0,

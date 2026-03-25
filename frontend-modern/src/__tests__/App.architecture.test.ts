@@ -15,6 +15,7 @@ describe('App architecture', () => {
     );
     expect(appSource).not.toContain('function ConnectionStatusBadge(');
     expect(appSource).not.toContain('function AppLayout(');
+    expect(appSource).not.toContain('ActiveUseTrialNudge');
     expect(appSource).not.toContain('const [organizations, setOrganizations] = createSignal(');
     expect(appSource).not.toContain('const [themePreference, setThemePreference] =');
     expect(appSource).not.toContain('const [activeOrgID, setActiveOrgID] = createSignal(');

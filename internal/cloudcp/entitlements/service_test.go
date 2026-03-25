@@ -284,4 +284,12 @@ func TestRedeemTrialEntitlementAndRefresh(t *testing.T) {
 	if claims.SubscriptionState != pkglicensing.SubStateTrial {
 		t.Fatalf("claims.SubscriptionState=%q, want %q", claims.SubscriptionState, pkglicensing.SubStateTrial)
 	}
+	if got := claims.Limits[pkglicensing.MaxMonitoredSystemsLicenseGateKey]; got != int64(pkglicensing.TierMonitoredSystemLimits[pkglicensing.TierPro]) {
+		t.Fatalf(
+			"claims.Limits[%s]=%d, want %d",
+			pkglicensing.MaxMonitoredSystemsLicenseGateKey,
+			got,
+			pkglicensing.TierMonitoredSystemLimits[pkglicensing.TierPro],
+		)
+	}
 }

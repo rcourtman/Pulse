@@ -73,7 +73,9 @@ describe('PricingV6', () => {
 
   it('imports the shared self-hosted pricing model instead of redefining it locally', () => {
     expect(pricingV6Source).toContain("@/utils/selfHostedPlans");
+    expect(pricingV6Source).toContain("@/utils/upgradePresentation");
     expect(pricingV6Source).not.toContain('const TIERS =');
     expect(pricingV6Source).not.toContain('const FEATURE_ROWS');
+    expect(pricingV6Source).not.toContain("setTrialMessage('Trial already used.')");
   });
 });

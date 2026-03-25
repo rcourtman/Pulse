@@ -18,6 +18,7 @@ import {
 } from '@/stores/license';
 import { showToast } from '@/utils/toast';
 import { logger } from '@/utils/logger';
+import { getTrialStartErrorMessage } from '@/utils/upgradePresentation';
 import {
   SELF_HOSTED_FEATURE_ROWS,
   SELF_HOSTED_PLAN_BY_TIER,
@@ -190,18 +191,12 @@ export default function PricingV6() {
       showToast('success', 'Pro trial started (14 days).');
       await loadLicenseStatus(true);
     } catch (error) {
-      const statusCode = (error as { status?: number } | null)?.status;
-      if (statusCode === 429) {
-        setTrialMessage('Try again later.');
-        return;
-      }
-      if (statusCode === 409) {
+      const trialError = error as { code?: string } | null;
+      if (trialError?.code === 'trial_already_used') {
         setTrialCtaMode('upgrade');
-        setTrialMessage('Trial already used.');
-        return;
       }
       logger.warn('[PricingV6] Trial start request failed', error);
-      setTrialMessage('Failed to start trial.');
+      setTrialMessage(getTrialStartErrorMessage(error));
     } finally {
       setStartingTrial(false);
     }

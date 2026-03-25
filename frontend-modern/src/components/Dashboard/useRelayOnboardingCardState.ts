@@ -2,7 +2,6 @@ import { createEffect, createMemo, createSignal, onMount } from 'solid-js';
 import { useNavigate } from '@solidjs/router';
 import { RelayAPI, type RelayStatus } from '@/api/relay';
 import {
-  getUpgradeActionUrlOrFallback,
   hasFeature,
   licenseLoaded,
   loadLicenseStatus,
@@ -12,6 +11,7 @@ import { logger } from '@/utils/logger';
 import { isUpsellSnoozed, snoozeUpsell } from '@/utils/snooze';
 import { showError, showSuccess } from '@/utils/toast';
 import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/upgradeMetrics';
+import { getTrialStartErrorMessage } from '@/utils/upgradePresentation';
 
 const SNOOZE_KEY = 'pulse_relay_onboarding_snoozed';
 const RELAY_SETTINGS_PATH = '/settings/system-relay';
@@ -122,12 +122,8 @@ export function useRelayOnboardingCardState() {
       setStatusLoaded(false);
       void loadRelayStatusOnce();
     } catch (error) {
-      logger.warn('[RelayOnboardingCard] Failed to start trial; falling back to upgrade URL', error);
-      showError('Unable to start trial. Redirecting to upgrade options...');
-      const upgradeUrl = getUpgradeActionUrlOrFallback('relay');
-      if (typeof window !== 'undefined') {
-        window.location.href = upgradeUrl;
-      }
+      logger.warn('[RelayOnboardingCard] Failed to start trial', error);
+      showError(getTrialStartErrorMessage(error, { branded: true }));
     } finally {
       setTrialStarting(false);
     }
