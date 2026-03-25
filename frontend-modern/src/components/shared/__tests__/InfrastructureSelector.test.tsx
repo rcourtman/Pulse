@@ -4,6 +4,8 @@ import infrastructureSelectorSource from '@/components/shared/InfrastructureSele
 import infrastructureSelectorModelSource from '@/components/shared/infrastructureSelectorModel.ts?raw';
 import infrastructureSelectorStateSource from '@/components/shared/useInfrastructureSelectorState.ts?raw';
 import { InfrastructureSelector } from '@/components/shared/InfrastructureSelector';
+import { buildInfrastructureSelectorAgents } from '@/components/shared/infrastructureSelectorModel';
+import type { Resource } from '@/types/resource';
 
 const infrastructureSummaryTableMock = vi.fn(
   (props: { onNodeClick: (nodeId: string, nodeType: 'pve' | 'pbs') => void; selectedNode: string | null }) => (
@@ -108,5 +110,47 @@ describe('InfrastructureSelector', () => {
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(onNodeSelect).toHaveBeenLastCalledWith(null, null);
     await waitFor(() => expect(table).toHaveTextContent('none'));
+  });
+
+  it('keeps shared selector agent labels on canonical local infrastructure identity', () => {
+    const resources = [
+      {
+        id: 'pbs-sensitive',
+        type: 'pbs',
+        name: 'redacted-pbs',
+        displayName: 'PBS Main',
+        status: 'online',
+        platformId: 'pbs-main',
+        lastSeen: Date.now(),
+        policy: {
+          display: {
+            mode: 'governed',
+            summary: 'backup server resource; status online; sources pbs',
+          },
+        },
+        platformData: {
+          agent: {
+            hostname: 'pbs.internal',
+            memory: { total: 16, used: 8, free: 8, usage: 50 },
+            disks: [],
+            networkInterfaces: [],
+            raid: [],
+          },
+        },
+        agent: {
+          memory: { total: 16, used: 8, free: 8, usage: 50 },
+          disks: [],
+          networkInterfaces: [],
+          raid: [],
+        },
+      },
+    ] as Resource[];
+
+    expect(buildInfrastructureSelectorAgents(resources)).toEqual([
+      expect.objectContaining({
+        id: 'pbs-sensitive',
+        displayName: 'PBS Main',
+      }),
+    ]);
   });
 });

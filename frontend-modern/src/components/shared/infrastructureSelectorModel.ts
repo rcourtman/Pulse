@@ -3,7 +3,7 @@ import type { Agent, Node } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import { nodeFromResource, pbsInstanceFromResource } from '@/utils/resourceStateAdapters';
 import {
-  getPreferredResourceDisplayName,
+  getPreferredInfrastructureDisplayName,
   getPreferredResourceHostname,
 } from '@/utils/resourceIdentity';
 import {
@@ -120,7 +120,7 @@ export function buildInfrastructureSelectorAgents(resources: Resource[]): Agent[
     agentsById.set(hostId, {
       id: hostId,
       hostname,
-      displayName: getPreferredResourceDisplayName(resource),
+      displayName: getPreferredInfrastructureDisplayName(resource),
       platform: asString(agent.platform),
       osName: asString(agent.osName),
       osVersion: asString(agent.osVersion),

@@ -263,6 +263,12 @@ resource-family counts, agent-backed node-summary projection, unified-node and
 PBS-instance projection, and recovery backup-count derivation. Future
 infrastructure-selector work should extend those owners instead of pushing
 resource aggregation or selection lifecycle back into the shared shell.
+That shared selector projection must also preserve canonical local operator
+identity for agent-backed infrastructure labels. Governed or AI-safe resource
+summaries may inform policy/detail surfaces, but the selector's summary and
+drawer-facing agent labels must continue to use the same local instance
+identity boundary as the operator-facing infrastructure tables so multiple PBS,
+PMG, or other governed resources remain distinguishable.
 The shared infrastructure details drawer now follows that same owner split.
 `frontend-modern/src/components/shared/InfrastructureDetailsDrawer.tsx` stays
 the render shell, `frontend-modern/src/components/shared/useInfrastructureDetailsDrawerState.ts`
