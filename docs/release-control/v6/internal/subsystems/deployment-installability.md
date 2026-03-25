@@ -31,31 +31,33 @@ server-side update execution surfaces.
 9. `.github/workflows/publish-helm-chart.yml`
 10. `.github/workflows/release-dry-run.yml`
 11. `.github/workflows/update-demo-server.yml`
-12. `package.json`
-13. `frontend-modern/package.json`
-14. `scripts/build-release.sh`
-15. `scripts/clean-mock-alerts.sh`
-16. `scripts/com.pulse.hot-dev.plist.template`
-17. `scripts/dev-check.sh`
-18. `scripts/dev-launchd-setup.sh`
-19. `scripts/dev-launchd-wrapper.sh`
-20. `scripts/hot-dev-bg.sh`
-21. `scripts/hot-dev.sh`
-22. `scripts/install-container-agent.sh`
-23. `scripts/install.ps1`
-24. `scripts/install.sh`
-25. `scripts/pulse-auto-update.sh`
-26. `scripts/release_control/resolve_release_promotion.py`
-27. `scripts/release_ldflags.sh`
-28. `scripts/trigger-release-dry-run.sh`
-29. `scripts/trigger-release.sh`
-30. `scripts/toggle-mock.sh`
-31. `tests/integration/playwright.config.ts`
-32. `tests/integration/QUICK_START.md`
-33. `tests/integration/README.md`
-34. `tests/integration/scripts/managed-dev-runtime.mjs`
-35. `tests/integration/tests/helpers.ts`
-36. `tests/integration/tests/runtime-defaults.ts`
+12. `docs/releases/V6_PRERELEASE_RUNBOOK.md`
+13. `package.json`
+14. `frontend-modern/package.json`
+15. `scripts/build-release.sh`
+16. `scripts/check-workflow-dispatch-inputs.py`
+17. `scripts/clean-mock-alerts.sh`
+18. `scripts/com.pulse.hot-dev.plist.template`
+19. `scripts/dev-check.sh`
+20. `scripts/dev-launchd-setup.sh`
+21. `scripts/dev-launchd-wrapper.sh`
+22. `scripts/hot-dev-bg.sh`
+23. `scripts/hot-dev.sh`
+24. `scripts/install-container-agent.sh`
+25. `scripts/install.ps1`
+26. `scripts/install.sh`
+27. `scripts/pulse-auto-update.sh`
+28. `scripts/release_control/resolve_release_promotion.py`
+29. `scripts/release_ldflags.sh`
+30. `scripts/trigger-release-dry-run.sh`
+31. `scripts/trigger-release.sh`
+32. `scripts/toggle-mock.sh`
+33. `tests/integration/playwright.config.ts`
+34. `tests/integration/QUICK_START.md`
+35. `tests/integration/README.md`
+36. `tests/integration/scripts/managed-dev-runtime.mjs`
+37. `tests/integration/tests/helpers.ts`
+38. `tests/integration/tests/runtime-defaults.ts`
 
 ## Shared Boundaries
 
@@ -67,11 +69,11 @@ server-side update execution surfaces.
 ## Extension Points
 
 1. Add or change deployment-type detection, update planning, or apply behavior through `internal/updates/`
-2. Add or change release-build metadata injection, release artifact assembly, or governed promotion metadata resolution through `scripts/build-release.sh`, `scripts/release_ldflags.sh`, `scripts/release_control/resolve_release_promotion.py`, `Dockerfile`, the operator dispatch helpers `scripts/trigger-release.sh` and `scripts/trigger-release-dry-run.sh`, and the governed release workflows `.github/workflows/create-release.yml`, `.github/workflows/deploy-demo-server.yml`, `.github/workflows/helm-pages.yml`, `.github/workflows/publish-docker.yml`, `.github/workflows/publish-helm-chart.yml`, `.github/workflows/promote-floating-tags.yml`, `.github/workflows/release-dry-run.yml`, and `.github/workflows/update-demo-server.yml`
+2. Add or change release-build metadata injection, release artifact assembly, or governed promotion metadata resolution through `scripts/build-release.sh`, `scripts/release_ldflags.sh`, `scripts/check-workflow-dispatch-inputs.py`, `scripts/release_control/resolve_release_promotion.py`, `Dockerfile`, `docs/releases/V6_PRERELEASE_RUNBOOK.md`, the operator dispatch helpers `scripts/trigger-release.sh` and `scripts/trigger-release-dry-run.sh`, and the governed release workflows `.github/workflows/create-release.yml`, `.github/workflows/deploy-demo-server.yml`, `.github/workflows/helm-pages.yml`, `.github/workflows/publish-docker.yml`, `.github/workflows/publish-helm-chart.yml`, `.github/workflows/promote-floating-tags.yml`, `.github/workflows/release-dry-run.yml`, and `.github/workflows/update-demo-server.yml`
 3. Add or change shell installer, Windows installer, container-agent installer, or auto-update script behavior through `scripts/install.sh`, `scripts/install.ps1`, `scripts/install-container-agent.sh`, and `scripts/pulse-auto-update.sh`
 4. Add or change server update transport through `internal/api/updates.go` and `frontend-modern/src/api/updates.ts`
 5. Add or change local dev-runtime orchestration, managed ownership, browser-runtime proof wiring, frontend/backend coherence diagnostics, canonical developer entry wrappers, or dev-runtime helper control surfaces through `scripts/hot-dev.sh`, `scripts/hot-dev-bg.sh`, `Makefile`, `package.json`, `frontend-modern/package.json`, `scripts/dev-check.sh`, `scripts/toggle-mock.sh`, `scripts/clean-mock-alerts.sh`, `scripts/dev-launchd-setup.sh`, `scripts/dev-launchd-wrapper.sh`, `scripts/com.pulse.hot-dev.plist.template`, `tests/integration/scripts/managed-dev-runtime.mjs`, `tests/integration/playwright.config.ts`, `tests/integration/tests/helpers.ts`, `tests/integration/tests/runtime-defaults.ts`, `tests/integration/README.md`, and `tests/integration/QUICK_START.md`
-6. Add or change governed release-promotion workflow inputs, operator-facing promotion metadata, artifact publication lineage enforcement, or stable-promotion rehearsal summaries through `.github/workflows/create-release.yml`, `.github/workflows/helm-pages.yml`, `.github/workflows/publish-docker.yml`, `.github/workflows/publish-helm-chart.yml`, `.github/workflows/promote-floating-tags.yml`, `.github/workflows/release-dry-run.yml`, `.github/workflows/update-demo-server.yml`, `scripts/trigger-release.sh`, and `scripts/trigger-release-dry-run.sh`
+6. Add or change governed release-promotion workflow inputs, operator-facing promotion metadata, artifact publication lineage enforcement, or stable-promotion rehearsal summaries through `.github/workflows/create-release.yml`, `.github/workflows/helm-pages.yml`, `.github/workflows/publish-docker.yml`, `.github/workflows/publish-helm-chart.yml`, `.github/workflows/promote-floating-tags.yml`, `.github/workflows/release-dry-run.yml`, `.github/workflows/update-demo-server.yml`, `docs/releases/V6_PRERELEASE_RUNBOOK.md`, `scripts/check-workflow-dispatch-inputs.py`, `scripts/trigger-release.sh`, and `scripts/trigger-release-dry-run.sh`
 
 ## Forbidden Paths
 
