@@ -160,6 +160,36 @@ func TestTrialSignupHandleRequestVerificationRejectsPendingVerificationResend(t 
 	}
 }
 
+func TestTrialSignupHandleRequestVerificationReturnsUnavailableOutcomeWhenEmailVerificationNotConfigured(t *testing.T) {
+	h, _, _ := newTrialSignupTestHandler(t)
+	h.emailSender = nil
+
+	form := url.Values{
+		"org_id":         {"default"},
+		"return_url":     {"https://pulse.example.com/auth/trial-activate"},
+		"instance_token": {"tsi_test"},
+		"name":           {"Test User"},
+		"email":          {"owner@example.com"},
+		"company":        {"Pulse Labs"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/trial-signup/request-verification", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	h.HandleRequestVerification(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status=%d, want %d body=%q", rec.Code, http.StatusServiceUnavailable, rec.Body.String())
+	}
+	assertTrialSignupFailurePageContains(t, rec.Body.String(),
+		"Trial setup is unavailable",
+		"Email verification is not configured yet. Please contact support.",
+		"pulse.example.com",
+		"Pulse could not finish the secure trial handoff right now.",
+	)
+	assertTrialSignupFailurePageOmits(t, rec.Body.String(), "Continue To Secure Trial Setup", "<form")
+}
+
 func TestTrialSignupHandleRequestVerificationRejectsEmailThatAlreadyUsedTrial(t *testing.T) {
 	h, store, sender := newTrialSignupTestHandler(t)
 	rawToken := requestTrialVerification(t, h, sender)
@@ -376,6 +406,35 @@ func TestTrialSignupHandleCheckoutRedirectsToStripe(t *testing.T) {
 	if record.CheckoutSessionID != "cs_test_new" {
 		t.Fatalf("checkout_session_id=%q, want %q", record.CheckoutSessionID, "cs_test_new")
 	}
+}
+
+func TestTrialSignupHandleCheckoutReturnsUnavailableOutcomeWhenCheckoutNotConfigured(t *testing.T) {
+	h, _, _ := newTrialSignupTestHandler(t)
+
+	form := url.Values{
+		"org_id":         {"default"},
+		"return_url":     {"https://pulse.example.com/auth/trial-activate"},
+		"instance_token": {"tsi_test"},
+		"name":           {"Test User"},
+		"email":          {"owner@example.com"},
+		"company":        {"Pulse Labs"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/trial-signup/checkout", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	h.HandleCheckout(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status=%d, want %d body=%q", rec.Code, http.StatusServiceUnavailable, rec.Body.String())
+	}
+	assertTrialSignupFailurePageContains(t, rec.Body.String(),
+		"Trial setup is unavailable",
+		"Checkout is not configured yet. Please contact support.",
+		"pulse.example.com",
+		"Pulse could not finish the secure trial handoff right now.",
+	)
+	assertTrialSignupFailurePageOmits(t, rec.Body.String(), "Continue To Secure Trial Setup", "<form")
 }
 
 func TestTrialSignupHandleCheckoutCreatesFreshSessionWhenRecordAlreadyHasSession(t *testing.T) {
