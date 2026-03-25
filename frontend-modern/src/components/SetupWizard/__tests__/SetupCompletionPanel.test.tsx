@@ -192,6 +192,41 @@ describe('SetupCompletionPanel', () => {
     expect(onComplete).toHaveBeenCalledWith('/');
   });
 
+  it('keeps connected governed infrastructure on local operator identity', async () => {
+    apiFetchJSONMock.mockResolvedValue({
+      resources: [
+        {
+          id: 'pbs-1',
+          type: 'pbs',
+          name: 'redacted-pbs',
+          displayName: 'PBS Main',
+          status: 'online',
+          agent: { agentId: 'pbs-1' },
+          platformData: {
+            pbs: { hostname: 'pbs.local', instanceId: 'pbs-main' },
+          },
+          policy: {
+            display: {
+              mode: 'governed',
+              summary: 'backup server resource; status online; sources pbs',
+            },
+          },
+        },
+      ],
+    });
+
+    render(() => <SetupCompletionPanel state={baseState} onComplete={vi.fn()} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Connected (1 agent)')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('PBS Main')).toBeInTheDocument();
+    expect(
+      screen.queryByText('backup server resource; status online; sources pbs'),
+    ).not.toBeInTheDocument();
+  });
+
   it('routes relay setup through the canonical settings destination', async () => {
     const onComplete = vi.fn();
     apiFetchJSONMock.mockResolvedValue({

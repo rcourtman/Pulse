@@ -18,7 +18,7 @@ import {
   trackUpgradeClicked,
 } from '@/utils/upgradeMetrics';
 import {
-  getPreferredResourceDisplayName,
+  getPreferredInfrastructureDisplayName,
   getPreferredResourceHostname,
 } from '@/utils/resourceIdentity';
 import {
@@ -90,7 +90,7 @@ const hasAgentFacet = (resource: Resource): boolean => resourceHasAgentFacet(res
 const toNodeSummaryShape = (resource: Resource) => {
   const platformData = pd(resource);
   const proxmox = asRecord(platformData?.proxmox);
-  const name = getPreferredResourceDisplayName(resource);
+  const name = getPreferredInfrastructureDisplayName(resource);
   return {
     id: resource.id,
     name,
@@ -101,7 +101,7 @@ const toNodeSummaryShape = (resource: Resource) => {
 
 const toAgentSummaryShape = (resource: Resource) => {
   const hostname = getPreferredResourceHostname(resource) || resource.id;
-  const name = getPreferredResourceDisplayName(resource);
+  const name = getPreferredInfrastructureDisplayName(resource);
   const id = getActionableAgentIdFromResource(resource) || resource.id;
   return {
     id,

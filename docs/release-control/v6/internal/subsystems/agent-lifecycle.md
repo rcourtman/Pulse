@@ -970,6 +970,11 @@ inventory. It may not present Docker, Kubernetes, Proxmox, or TrueNAS as
 competing primary onboarding paths, nor fall back to logo-led feature
 brochure copy that obscures the unified-resource contract the wizard is
 supposed to introduce.
+That same connected-systems summary must preserve canonical local operator
+identity for newly connected infrastructure. When governed resources such as
+PBS or PMG appear in the setup-completion poll, the surface must show their
+local instance labels instead of replacing those identities with governed
+summary text, so the operator can tell which system actually connected.
 That same first-session setup-completion surface must also honor the lane's
 optional-auth install contract: when Pulse does not require API tokens, the
 wizard may switch to tokenless install commands only after an explicit operator

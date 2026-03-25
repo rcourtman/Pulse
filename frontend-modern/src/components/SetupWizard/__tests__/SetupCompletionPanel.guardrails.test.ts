@@ -29,6 +29,11 @@ describe('SetupCompletionPanel guardrails', () => {
     expect(setupCompletionPanelSource).not.toContain('ProxmoxIcon');
   });
 
+  it('keeps connected infrastructure labels on the canonical local identity helper', () => {
+    expect(setupCompletionPanelSource).toContain('getPreferredInfrastructureDisplayName');
+    expect(setupCompletionPanelSource).not.toContain('getPreferredResourceDisplayName(resource)');
+  });
+
   it('does not reintroduce a separate setup-wizard install command surface', () => {
     expect(setupCompletionPanelSource).not.toContain('buildUnixAgentInstallCommand');
     expect(setupCompletionPanelSource).not.toContain('buildWindowsAgentInstallCommand');
