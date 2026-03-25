@@ -402,10 +402,16 @@ Triggers a test alert to all configured channels.
   - Endpoint fails closed if URL validation runtime is unavailable.
 
 ### Advanced Reporting (Pro)
+- `GET /api/admin/reports/catalog` (admin, `settings:read`)
+  - Returns the canonical reporting catalog for the settings surface, including locked-state teaser copy, performance-report options, and the nested VM inventory export definition.
+  - Metadata route: readable without the `advanced_reporting` feature so locked admin surfaces can render the same reporting definition before upsell.
 - `GET /api/admin/reports/generate` (admin, `settings:read`)
   - Query params: `format` (pdf/csv, default `pdf`), `resourceType`, `resourceId`, `metricType` (optional), `start`/`end` (RFC3339, optional; defaults to last 24h), `title` (optional)
 - `POST /api/admin/reports/generate-multi` (admin, `settings:read`)
   - Body fields: `resources` (1-50 entries of `{resourceType,resourceId}`), `format`, `metricType` (optional), `start`/`end` (RFC3339, optional; defaults to last 24h), `title` (optional)
+- `GET /api/admin/reports/inventory/vms/export` (admin, `settings:read`)
+  - Query params: `format` (`csv` only; optional and defaults to `csv`)
+  - Exports the current fleet-wide VM inventory as spreadsheet-friendly CSV using the canonical runtime model.
 
 Validation and limits:
 - `start` and `end` must be RFC3339 when provided.
@@ -414,6 +420,7 @@ Validation and limits:
 - `metricType` must match `[a-zA-Z0-9._:-]+` and be <= 64 chars.
 - `title` must be <= 256 chars.
 - Multi-report body max size is 1MB and rejects trailing payload or unknown JSON fields.
+- VM inventory export only accepts `csv`.
 
 Common reporting error codes:
 - `invalid_format`, `missing_params`, `invalid_resource_type`, `invalid_resource_id`
