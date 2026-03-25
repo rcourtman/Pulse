@@ -430,19 +430,17 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
           <RunToolCallTrace runId={run.id} toolCallCount={run.tool_call_count} />
 
           {/* Section 7: Inline Findings */}
-          <Show when={run.finding_ids !== undefined}>
-            <div class="mt-3 pt-3 border-t border-blue-200 dark:border-blue-800">
-              <FindingsPanel
-                filterFindingIds={run.finding_ids}
-                filterOverride="all"
-                scopeResourceIds={canonicalScopeResourceIds}
-                scopeResourceTypes={run.scope_resource_types}
-                showScopeWarnings={true}
-                showControls={false}
-                runSnapshot={run}
-              />
-            </div>
-          </Show>
+          <div class="mt-3 pt-3 border-t border-blue-200 dark:border-blue-800">
+            <FindingsPanel
+              filterFindingIds={run.finding_ids}
+              filterOverride="all"
+              scopeResourceIds={canonicalScopeResourceIds}
+              scopeResourceTypes={run.scope_resource_types}
+              showScopeWarnings={true}
+              showControls={false}
+              runSnapshot={run}
+            />
+          </div>
         </div>
       </Show>
     </div>

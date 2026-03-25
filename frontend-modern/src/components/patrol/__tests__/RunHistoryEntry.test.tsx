@@ -116,7 +116,7 @@ describe('RunHistoryEntry', () => {
     });
   });
 
-  it('fails closed for legacy runs without snapshot finding ids', () => {
+  it('renders the inline findings panel in snapshot-unavailable mode for legacy runs without finding ids', () => {
     render(() => (
       <RunHistoryEntry
         run={{
@@ -131,8 +131,20 @@ describe('RunHistoryEntry', () => {
       />
     ));
 
-    expect(screen.queryByTestId('findings-panel')).not.toBeInTheDocument();
-    expect(findingsPanelState.latestProps).toBeNull();
+    expect(screen.getByTestId('findings-panel')).toBeInTheDocument();
+    expect(findingsPanelState.latestProps).toMatchObject({
+      filterFindingIds: undefined,
+      filterOverride: 'all',
+      scopeResourceIds: [],
+      scopeResourceTypes: ['vm'],
+      showControls: false,
+      showScopeWarnings: true,
+      runSnapshot: {
+        ...run,
+        id: 'run-missing-finding-ids',
+        finding_ids: undefined,
+      },
+    });
   });
 
   it('uses a shared coverage summary when a scoped run checked fewer resources than its scope', () => {

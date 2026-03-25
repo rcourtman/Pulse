@@ -265,9 +265,10 @@ logic that returns the operator to `Active` when a bucket disappears must all
 read from the same snapshot-aware count source rather than mixing
 snapshot-scoped pills with global queue truth.
 That same fail-closed snapshot rule applies to inline run-history findings as
-well. Expanded run cards may render inline findings only when the run carries
-an explicit `finding_ids` snapshot; legacy runs without snapshot ids must stay
-unknown rather than being coerced into an empty findings snapshot.
+well. Expanded run cards should route through the same snapshot-aware findings
+surface as the primary workspace, so legacy runs without `finding_ids` still
+show an explicit snapshot-unavailable state instead of disappearing or being
+coerced into an empty findings snapshot.
 That same rule applies to the primary findings workspace when a run is
 selected. A selected run without `finding_ids` must not borrow global Patrol
 findings, filter buckets, or queue counts; the findings surface should enter an
