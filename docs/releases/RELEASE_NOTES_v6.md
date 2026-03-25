@@ -1,68 +1,66 @@
-# Pulse v6.0.0 Release Notes
+# Pulse v6.0.0-rc.1 Notes
 
-Pulse v6 is a major architectural update focused on unified resources, a reorganized product surface, newer licensing and entitlement flows, and the foundations for relay, mobile, storage, and hosted-mode improvements. For RC1, the aim is simple: let a small set of interested users try it early and report what still needs work before GA.
+`v6.0.0-rc.1` is a low-key Pulse v6 release candidate for users who want to test early and report issues before the stable `v6.0.0` release.
 
-## RC1 Preview Notes
+This note is intentionally brief. I will publish the fuller Pulse v6 release notes with the final GA release.
 
-`v6.0.0-rc.1` is a low-key release candidate intended for a small group of keen users who want to try Pulse v6 early and send feedback before GA.
+## Before You Try It
 
 - I do not recommend upgrading a production Pulse v5 installation yet.
+- Pulse v5 remains the current stable line during the v6 RC period.
 - If you want to test v6, use a staging instance, lab environment, or separate non-production install first.
-- Existing Pulse Pro users with valid v5 Pro/Lifetime licenses can test the RC: upgraded installs can auto-exchange persisted v5 licenses into the v6 activation model, and the v6 license panel can also accept a valid v5 key as migration input if needed.
-- If you try RC1, the most useful outcome is feedback about onboarding, upgrade friction, regressions, and anything that feels unfinished or unreliable.
-- This RC note is intentionally brief. I will publish the fuller v6 changelog with the final GA release.
+- Keep console access and a current backup available before upgrading.
 
----
+## Upgrade FAQ
 
-## Pulse v5 Support Transition
+### Do I need to uninstall Pulse v5 first?
 
-The first stable `v6.0.0` release will publish these exact calendar dates once
-the RC-to-GA gate is actually cleared:
+No. Test Pulse v6 as an upgrade, not as a tear-down-and-rebuild exercise.
 
-- Pulse v5 entered maintenance-only support on `2026-03-24`.
-- I will ship only critical security, critical correctness or data-loss,
-  installer or updater failure, licensing or billing blocker, and safe
-  migration blocker fixes for existing v5 users until `2026-06-22`.
-- After `2026-06-22`, Pulse v5 is end-of-support and new fixes land on v6
-  unless I publish an explicit exception.
+### Does upgrading the Pulse server to v6 automatically update my unified agents?
 
-This notice must stay aligned with
-`docs/release-control/v6/internal/V5_MAINTENANCE_SUPPORT_POLICY.md`.
+No. The server upgrade and unified-agent upgrade are separate.
 
----
+If you install Pulse v6, your existing agents do not all switch to v6 automatically just because the server changed.
 
-## What To Try
+### If I want to test the full v6 agent path, what should I do?
 
-If you install RC1, the most useful feedback is around these flows:
+After upgrading the server, update existing agents separately using the command generated from:
 
-- upgrading a non-production v5 install to v6
-- first-session onboarding and general navigation
-- unified Infrastructure, Workloads, Storage, and Recovery views
+`Settings -> Unified Agents -> Installation commands`
+
+That is the supported v5-to-v6 crossover path for agent testing.
+
+### Do I need to uninstall existing v5 agents before updating them?
+
+No. Existing v5 unified agents should be upgraded in place when testing them against a v6 server.
+
+### What about Pulse Pro licensing?
+
+If you already have a valid Pulse v5 Pro or Lifetime license, Pulse v6 can migrate it into the v6 activation model.
+
+If the automatic exchange does not complete, retry from the v6 license panel. You can enter either:
+
+- a Pulse v6 activation key
+- a valid Pulse v5 Pro or Lifetime key for migration
+
+### Will my old bookmarks and familiar pages still work?
+
+Not necessarily. v6 reorganizes the product around Dashboard, Infrastructure, Workloads, Storage, and Recovery, and legacy page aliases have been removed.
+
+If you rely on old bookmarks or runbooks, expect to update them.
+
+## What Feedback Is Most Useful
+
+- v5 to v6 upgrade friction
+- first-session onboarding and navigation
+- unified-agent update experience after server upgrade
 - Pulse Pro activation or v5 license migration
-- Relay/mobile pairing if you already use those features
-- obvious regressions, missing data, rough edges, or anything that feels unreliable
-
-## Highlights
-
-- **Unified v6 resource model and navigation**: Pulse now centers the product around canonical unified resources and task-oriented views instead of the older platform-specific top-level surfaces.
-- **New dashboard and page structure**: Dashboard, Infrastructure, Workloads, Storage, and Recovery are the main v6 surfaces, with updated search, keyboard navigation, and mobile navigation behavior.
-- **Entitlements and licensing rebuilt for v6**: Pulse now uses a fuller entitlement model, including v5 Pro/Lifetime license exchange into the v6 activation flow.
-- **Relay and mobile groundwork**: Remote access, pairing, and push-notification plumbing are now part of the v6 product surface.
-- **TrueNAS, storage, and recovery improvements**: v6 expands storage visibility and recovery tracking while bringing more infrastructure into the same model.
-- **Hosted and multi-tenant foundations**: The core hosted-mode and organization boundaries are in place, but these remain opt-in and are not the main point of this RC.
-
-## Notable Changes For Existing Users
-
-- **Navigation changed substantially**: v6 is organized around Dashboard, Infrastructure, Workloads, Storage, and Recovery.
-- **Pulse Pro activation changed**: existing v5 Pro/Lifetime licenses can migrate into the v6 activation flow.
-- **Remote access and mobile groundwork are now part of the product surface**: if you use relay features already, RC1 feedback there is especially useful.
-- **This is still a preview build**: expect rough edges, incomplete polish, and some regressions compared with a mature v5 install.
-
----
+- regressions, broken flows, or anything that feels unreliable
 
 ## More Detail
 
-If you want the operator-facing upgrade and migration details, use these docs instead of this RC summary:
+If you want the operator-facing migration and upgrade details, use these docs:
 
 - `docs/UPGRADE_v6.md`
 - `docs/PULSE_PRO.md`
