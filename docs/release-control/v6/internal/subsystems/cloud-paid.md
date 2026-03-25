@@ -269,7 +269,9 @@ That same hosted owner also applies after Stripe returns to
 `/trial-signup/complete`: customer-facing completion failures must stay inside
 owned trial UX rather than dropping raw control-plane error strings, and they
 may only offer a direct "Start Trial Again" restart path when the original
-Pulse return target and initiation binding are still known.
+Pulse return target and initiation binding are still known. Terminal conflicts
+such as "trial already used" must not present restart as the recommended next
+step.
 That same rule applies to the self-hosted Pro settings panel. Trial start
 errors in `frontend-modern/src/components/Settings/useProLicensePanelState.ts`
 must route through the shared cloud-paid presentation helper so backend denial

@@ -1080,8 +1080,9 @@ func TestTrialSignupHandleCompleteRejectsDuplicateIssuedEmail(t *testing.T) {
 		"Trial already used",
 		"This recovery email has already used a Pulse Pro trial.",
 		"pulse.example.com",
-		"Start Trial Again",
+		"This trial request cannot be restarted for the same recovery contact or organization.",
 	)
+	assertTrialSignupFailurePageOmits(t, rec.Body.String(), "Start Trial Again")
 }
 
 func TestTrialSignupHandleCompleteRejectsDuplicateCorporateDomainIssuedEmail(t *testing.T) {
@@ -1154,8 +1155,9 @@ func TestTrialSignupHandleCompleteRejectsDuplicateCorporateDomainIssuedEmail(t *
 		"Trial already used",
 		"This organization has already used a Pulse Pro trial.",
 		"pulse.example.com",
-		"Start Trial Again",
+		"This trial request cannot be restarted for the same recovery contact or organization.",
 	)
+	assertTrialSignupFailurePageOmits(t, rec.Body.String(), "Start Trial Again")
 }
 
 func TestTrialSignupHandleCompleteRejectsCheckoutSessionMismatch(t *testing.T) {
@@ -1422,6 +1424,15 @@ func assertTrialSignupFailurePageContains(t *testing.T, body string, parts ...st
 	for _, part := range parts {
 		if !strings.Contains(body, part) {
 			t.Fatalf("expected response body to contain %q, got %q", part, body)
+		}
+	}
+}
+
+func assertTrialSignupFailurePageOmits(t *testing.T, body string, parts ...string) {
+	t.Helper()
+	for _, part := range parts {
+		if strings.Contains(body, part) {
+			t.Fatalf("expected response body to omit %q, got %q", part, body)
 		}
 	}
 }
