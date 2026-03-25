@@ -3,6 +3,7 @@ package portal
 import (
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"net/http"
 	"net/http/httptest"
 	"sort"
@@ -60,6 +61,21 @@ func renderLoginHTML(t *testing.T, nonce string) string {
 		t.Fatalf("renderLoginPage returned %d", rec.Code)
 	}
 	return rec.Body.String()
+}
+
+func extractPortalBootstrapJSONFromHTML(t *testing.T, html string) string {
+	t.Helper()
+	startMarker := `<script id="pulse-account-bootstrap" type="application/json">`
+	start := strings.Index(html, startMarker)
+	if start < 0 {
+		t.Fatal("bootstrap script tag not found in portal HTML")
+	}
+	start += len(startMarker)
+	end := strings.Index(html[start:], `</script>`)
+	if end < 0 {
+		t.Fatal("bootstrap script closing tag not found in portal HTML")
+	}
+	return html[start : start+end]
 }
 
 func newPortalSessionFixture(t *testing.T) (*registry.TenantRegistry, *cpauth.Service, string, string, string) {
@@ -973,6 +989,83 @@ func TestHandlePortalBootstrap_RevokedSessionUnauthorized(t *testing.T) {
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
 	}
+}
+
+func TestPortalBootstrapHTMLAndHandlerStayInSync(t *testing.T) {
+	reg, sessionSvc, token, accountID, _ := newPortalSessionFixture(t)
+
+	if err := reg.Create(&registry.Tenant{
+		ID:            "t_sync",
+		AccountID:     accountID,
+		DisplayName:   "Sync Workspace",
+		State:         registry.TenantStateActive,
+		CreatedAt:     time.Date(2026, 3, 25, 11, 0, 0, 0, time.UTC),
+		HealthCheckOK: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	claims, err := validatePortalSessionClaims(httptest.NewRequest(http.MethodGet, "/portal", nil), nil, nil)
+	if err == nil || claims != nil {
+		t.Fatal("expected nil-session validation to require auth")
+	}
+
+	loadedAccounts, err := loadPortalAccountsForUser(reg, strings.TrimSpace("u_missing"))
+	if err != nil {
+		t.Fatalf("loadPortalAccountsForUser for missing user: %v", err)
+	}
+	if len(loadedAccounts) != 0 {
+		t.Fatalf("missing user accounts = %d, want 0", len(loadedAccounts))
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/portal/bootstrap", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+	HandlePortalBootstrap(sessionSvc, reg).ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("bootstrap status = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	claimsReq := httptest.NewRequest(http.MethodGet, "/portal", nil)
+	claimsReq.Header.Set("Authorization", "Bearer "+token)
+	validClaims, err := validatePortalSessionClaims(claimsReq, sessionSvc, reg)
+	if err != nil {
+		t.Fatalf("validatePortalSessionClaims: %v", err)
+	}
+	accounts, err := loadPortalAccountsForUser(reg, validClaims.UserID)
+	if err != nil {
+		t.Fatalf("loadPortalAccountsForUser: %v", err)
+	}
+	html := renderPortalHTML(t, portalPageData{
+		Nonce:                "test-nonce",
+		Email:                validClaims.Email,
+		PublicSiteURL:        defaultPublicSiteURL,
+		SupportEmail:         defaultSupportEmail,
+		CommercialAPIBaseURL: defaultCommercialAPIBaseURL,
+		PortalPath:           defaultPortalPath,
+		LogoutPath:           defaultLogoutPath,
+		AccountAPIBasePath:   defaultAccountAPIBasePath,
+		PortalAPIBasePath:    defaultPortalAPIBasePath,
+		Accounts:             accounts,
+		Styles:               portalStyles,
+		Script:               portalScript,
+		BootstrapJSON:        mustBootstrapJSON(t, validClaims.Email, accounts),
+	})
+
+	handlerJSON := strings.TrimSpace(rec.Body.String())
+	pageJSON := strings.TrimSpace(extractPortalBootstrapJSONFromHTML(t, html))
+	if handlerJSON != pageJSON {
+		t.Fatalf("bootstrap payload drift:\nhandler=%s\npage=%s", handlerJSON, pageJSON)
+	}
+}
+
+func mustBootstrapJSON(t *testing.T, email string, accounts []portalPageAccount) template.JS {
+	t.Helper()
+	bootstrapJSON, err := buildPortalBootstrapJSON(email, accounts)
+	if err != nil {
+		t.Fatalf("buildPortalBootstrapJSON: %v", err)
+	}
+	return bootstrapJSON
 }
 
 func TestPortalLoginTemplate_UsesPulseAccountBranding(t *testing.T) {
