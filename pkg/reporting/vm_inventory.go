@@ -24,6 +24,7 @@ type VMInventoryExportDefinition struct {
 	Title          string                            `json:"title"`
 	Description    string                            `json:"description"`
 	Format         ReportFormat                      `json:"format"`
+	ExportEndpoint string                            `json:"exportEndpoint"`
 	FilenamePrefix string                            `json:"filenamePrefix"`
 	Columns        []InventoryExportColumnDefinition `json:"columns"`
 }
@@ -58,6 +59,7 @@ func DescribeVMInventoryExport() VMInventoryExportDefinition {
 		Title:          "VM Inventory Export",
 		Description:    "Export the current fleet-wide VM inventory as CSV using the canonical runtime model. Includes VM identity, placement, CPU, memory allocation, disk allocation, and disk usage columns.",
 		Format:         FormatCSV,
+		ExportEndpoint: "/api/admin/reports/inventory/vms/export",
 		FilenamePrefix: "vm-inventory",
 		Columns: []InventoryExportColumnDefinition{
 			{Key: "resource_id", Label: "Resource ID", Description: "Canonical Pulse resource ID for the VM."},

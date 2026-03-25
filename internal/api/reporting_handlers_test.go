@@ -237,6 +237,47 @@ func TestReportingHandlers_ExportVMInventory_MethodNotAllowed(t *testing.T) {
 	}
 }
 
+func TestReportingHandlers_GetReportingCatalog_MethodNotAllowed(t *testing.T) {
+	handler := NewReportingHandlers(nil, nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/admin/reports/catalog", nil)
+	rr := httptest.NewRecorder()
+
+	handler.HandleGetReportingCatalog(rr, req)
+
+	if rr.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected status %d, got %d", http.StatusMethodNotAllowed, rr.Code)
+	}
+}
+
+func TestReportingHandlers_GetReportingCatalog_ReturnsCanonicalDefinition(t *testing.T) {
+	handler := NewReportingHandlers(nil, nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/reports/catalog", nil)
+	rr := httptest.NewRecorder()
+
+	handler.HandleGetReportingCatalog(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rr.Code)
+	}
+	if got := rr.Header().Get("Content-Type"); !strings.Contains(got, "application/json") {
+		t.Fatalf("expected JSON content-type, got %q", got)
+	}
+
+	var payload reporting.ReportingCatalog
+	if err := json.NewDecoder(rr.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode catalog response: %v", err)
+	}
+	if payload.ID != "advanced_reporting" {
+		t.Fatalf("expected advanced_reporting id, got %q", payload.ID)
+	}
+	if payload.PerformanceReport.ID != "performance_reports" {
+		t.Fatalf("expected performance report definition, got %#v", payload.PerformanceReport)
+	}
+	if payload.VMInventoryExport.ID != "vm_inventory" {
+		t.Fatalf("expected vm inventory definition, got %#v", payload.VMInventoryExport)
+	}
+}
+
 func TestReportingHandlers_GetVMInventoryDefinition_MethodNotAllowed(t *testing.T) {
 	handler := NewReportingHandlers(nil, nil)
 	req := httptest.NewRequest(http.MethodPost, "/api/admin/reports/inventory/vms/definition", nil)

@@ -47,6 +47,7 @@ func TestReportingEndpointsRequireSettingsReadScope(t *testing.T) {
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
 
 	paths := []string{
+		"/api/admin/reports/catalog",
 		"/api/admin/reports/generate",
 		"/api/admin/reports/generate-multi",
 		"/api/admin/reports/inventory/vms/definition",

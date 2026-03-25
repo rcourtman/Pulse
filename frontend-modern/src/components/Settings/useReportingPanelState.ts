@@ -11,6 +11,7 @@ import {
 } from '@/stores/license';
 import { trackPaywallViewed } from '@/utils/upgradeMetrics';
 import {
+  getReportingCatalogErrorMessage,
   getReportingGenerateErrorMessage,
   getReportingGenerateSelectionRequiredMessage,
   getReportingGenerateSuccessMessage,
@@ -21,15 +22,17 @@ import { runStartProTrialAction } from '@/utils/trialStartAction';
 import {
   buildReportingRequest,
   getReportingRangeStart,
-  type ReportingFormat,
   type ReportingRangeValue,
 } from '@/components/Settings/reportingPanelModel';
 import {
-  buildVMInventoryExportDefinitionRequest,
   buildVMInventoryExportRequest,
-  parseVMInventoryExportDefinition,
-  type ReportingInventoryExportDefinition,
 } from '@/components/Settings/reportingInventoryExportModel';
+import {
+  buildReportingCatalogRequest,
+  parseReportingCatalog,
+  type ReportingCatalog,
+  type ReportingFormat,
+} from '@/components/Settings/reportingCatalogModel';
 
 export const useReportingPanelState = () => {
   const [selectedResources, setSelectedResources] = createSignal<SelectedResource[]>([]);
@@ -38,11 +41,10 @@ export const useReportingPanelState = () => {
   const [range, setRange] = createSignal<ReportingRangeValue>('24h');
   const [generating, setGenerating] = createSignal(false);
   const [exportingInventory, setExportingInventory] = createSignal(false);
-  const [inventoryDefinition, setInventoryDefinition] =
-    createSignal<ReportingInventoryExportDefinition | null>(null);
-  const [inventoryDefinitionLoading, setInventoryDefinitionLoading] = createSignal(false);
-  const [inventoryDefinitionError, setInventoryDefinitionError] = createSignal('');
-  const [inventoryDefinitionRequested, setInventoryDefinitionRequested] = createSignal(false);
+  const [reportingCatalog, setReportingCatalog] = createSignal<ReportingCatalog | null>(null);
+  const [reportingCatalogLoading, setReportingCatalogLoading] = createSignal(false);
+  const [reportingCatalogError, setReportingCatalogError] = createSignal('');
+  const [reportingCatalogRequested, setReportingCatalogRequested] = createSignal(false);
   const [title, setTitle] = createSignal('');
   const [startingTrial, setStartingTrial] = createSignal(false);
 
@@ -66,35 +68,48 @@ export const useReportingPanelState = () => {
   createEffect(() => {
     if (
       !isReportingEnabled() ||
-      inventoryDefinition() ||
-      inventoryDefinitionLoading() ||
-      inventoryDefinitionRequested()
+      reportingCatalog() ||
+      reportingCatalogLoading() ||
+      reportingCatalogRequested()
     ) {
       return;
     }
 
     void (async () => {
-      setInventoryDefinitionRequested(true);
-      setInventoryDefinitionLoading(true);
-      setInventoryDefinitionError('');
+      setReportingCatalogRequested(true);
+      setReportingCatalogLoading(true);
+      setReportingCatalogError('');
       try {
-        const request = buildVMInventoryExportDefinitionRequest();
+        const request = buildReportingCatalogRequest();
         const response = await apiFetch(request.url);
         if (!response.ok) {
           const text = await response.text();
-          throw new Error(text || getReportingInventoryExportErrorMessage());
+          throw new Error(text || getReportingCatalogErrorMessage());
         }
 
-        setInventoryDefinition(parseVMInventoryExportDefinition(await response.json()));
+        setReportingCatalog(parseReportingCatalog(await response.json()));
       } catch (error) {
-        console.error('VM inventory export definition error:', error);
-        setInventoryDefinitionError(
-          error instanceof Error ? error.message : getReportingInventoryExportErrorMessage(),
+        console.error('Reporting catalog error:', error);
+        setReportingCatalogError(
+          error instanceof Error ? error.message : getReportingCatalogErrorMessage(),
         );
       } finally {
-        setInventoryDefinitionLoading(false);
+        setReportingCatalogLoading(false);
       }
     })();
+  });
+
+  createEffect(() => {
+    const performanceReport = reportingCatalog()?.performanceReport;
+    if (!performanceReport) {
+      return;
+    }
+    if (!performanceReport.formats.some((candidate) => candidate.value === format())) {
+      setFormat(performanceReport.defaultFormat);
+    }
+    if (!performanceReport.ranges.some((candidate) => candidate.key === range())) {
+      setRange(performanceReport.defaultRange);
+    }
   });
 
   const handleStartTrial = async () => {
@@ -132,7 +147,11 @@ export const useReportingPanelState = () => {
     setGenerating(true);
     try {
       const now = new Date();
-      const start = getReportingRangeStart(range(), now);
+      const performanceReport = reportingCatalog()?.performanceReport;
+      if (!performanceReport) {
+        throw new Error(getReportingGenerateErrorMessage());
+      }
+      const start = getReportingRangeStart(range(), now, performanceReport);
       const request = buildReportingRequest({
         end: now.toISOString(),
         format: format(),
@@ -141,7 +160,7 @@ export const useReportingPanelState = () => {
         resources,
         start: start.toISOString(),
         title: title(),
-      });
+      }, performanceReport);
 
       const response = await apiFetch(request.request.url, request.request.init);
       if (!response.ok) {
@@ -165,7 +184,11 @@ export const useReportingPanelState = () => {
 
     setExportingInventory(true);
     try {
-      const request = buildVMInventoryExportRequest(new Date(), inventoryDefinition());
+      const inventoryDefinition = reportingCatalog()?.vmInventoryExport;
+      if (!inventoryDefinition) {
+        throw new Error(getReportingInventoryExportErrorMessage());
+      }
+      const request = buildVMInventoryExportRequest(new Date(), inventoryDefinition);
       const response = await apiFetch(request.request.url);
       if (!response.ok) {
         const text = await response.text();
@@ -192,13 +215,13 @@ export const useReportingPanelState = () => {
     generating,
     handleGenerate,
     handleStartTrial,
-    inventoryDefinition,
-    inventoryDefinitionError,
-    inventoryDefinitionLoading,
     isLocked,
     isReportingEnabled,
     metricType,
     range,
+    reportingCatalog,
+    reportingCatalogError,
+    reportingCatalogLoading,
     selectedResources,
     setFormat,
     setMetricType,

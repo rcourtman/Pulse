@@ -169,16 +169,18 @@ The settings reporting shell now also owns a deliberate split between
 historical performance reports and current-state VM inventory export.
 `frontend-modern/src/components/Settings/ReportingPanel.tsx`,
 `frontend-modern/src/components/Settings/useReportingPanelState.ts`,
+`frontend-modern/src/components/Settings/reportingCatalogModel.ts`,
 `frontend-modern/src/components/Settings/reportingPanelModel.ts`, and
 `frontend-modern/src/components/Settings/reportingInventoryExportModel.ts` must
 keep those as separate operator jobs with separate request builders and success
 copy, rather than collapsing inventory export back into the metrics-report
 controls.
-That same settings shell must now also render VM inventory export schema from
-the backend-owned definition contract rather than hardcoding column copy in the
-panel. The frontend model may validate and present the definition, but the
-canonical title, description, filename prefix, and column list belong to the
-API reporting contract.
+That same settings shell must now also render both historical performance
+options and VM inventory schema from the backend-owned reporting catalog rather
+than hardcoding panel copy, routes, or range presets in the frontend. The
+frontend models may validate and present the catalog, but the canonical panel
+title, descriptions, endpoints, filename prefixes, range windows, and column
+list belong to the API reporting contract.
 The shared updates settings owner also defines the user-facing framing for
 rc-tagged builds. `frontend-modern/src/components/Settings/updatesSettingsModel.ts`
 and `frontend-modern/src/utils/updatesPresentation.ts` must present that

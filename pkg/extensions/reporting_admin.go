@@ -10,6 +10,7 @@ import (
 
 // ReportingAdminEndpoints defines the enterprise reporting admin endpoint surface.
 type ReportingAdminEndpoints interface {
+	HandleGetReportingCatalog(http.ResponseWriter, *http.Request)
 	HandleGenerateReport(http.ResponseWriter, *http.Request)
 	HandleGenerateMultiReport(http.ResponseWriter, *http.Request)
 	HandleGetVMInventoryDefinition(http.ResponseWriter, *http.Request)

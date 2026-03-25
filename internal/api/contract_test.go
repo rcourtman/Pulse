@@ -329,6 +329,143 @@ func TestContract_VMInventoryExportCSVHeaders(t *testing.T) {
 	}
 }
 
+func TestContract_ReportingCatalogJSONSnapshot(t *testing.T) {
+	handler := NewReportingHandlers(nil, nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/reports/catalog", nil)
+	rec := httptest.NewRecorder()
+
+	handler.HandleGetReportingCatalog(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	if got := rec.Header().Get("Content-Type"); got != "application/json" {
+		t.Fatalf("expected json content type, got %q", got)
+	}
+
+	const want = `{
+		"id":"advanced_reporting",
+		"title":"Detailed Reporting",
+		"description":"Generate performance reports and current-state exports across infrastructure and workloads.",
+		"performanceReport":{
+			"id":"performance_reports",
+			"title":"Performance Reports",
+			"description":"Generate PDF summaries or CSV metric exports from historical monitoring data for one or more selected resources.",
+			"singleResourceEndpoint":"/api/admin/reports/generate",
+			"multiResourceEndpoint":"/api/admin/reports/generate-multi",
+			"singleFilenamePrefix":"report",
+			"multiFilenamePrefix":"fleet-report",
+			"formats":[
+				{
+					"value":"pdf",
+					"label":"PDF Report"
+				},
+				{
+					"value":"csv",
+					"label":"CSV Data"
+				}
+			],
+			"defaultFormat":"pdf",
+			"ranges":[
+				{
+					"key":"24h",
+					"label":"Last 24 Hours",
+					"description":"Current-day operational summary for short-term regressions.",
+					"windowHours":24
+				},
+				{
+					"key":"7d",
+					"label":"Last 7 Days",
+					"description":"Weekly trend window for recent performance changes.",
+					"windowHours":168
+				},
+				{
+					"key":"30d",
+					"label":"Last 30 Days",
+					"description":"Monthly review window for sustained capacity or reliability shifts.",
+					"windowHours":720
+				}
+			],
+			"defaultRange":"24h",
+			"multiResourceMax":50,
+			"supportsMetricFilter":true,
+			"supportsCustomTitle":true
+		},
+		"vmInventoryExport":{
+			"id":"vm_inventory",
+			"title":"VM Inventory Export",
+			"description":"Export the current fleet-wide VM inventory as CSV using the canonical runtime model. Includes VM identity, placement, CPU, memory allocation, disk allocation, and disk usage columns.",
+			"format":"csv",
+			"exportEndpoint":"/api/admin/reports/inventory/vms/export",
+			"filenamePrefix":"vm-inventory",
+			"columns":[
+				{
+					"key":"resource_id",
+					"label":"Resource ID",
+					"description":"Canonical Pulse resource ID for the VM."
+				},
+				{
+					"key":"instance",
+					"label":"Instance",
+					"description":"Configured Proxmox instance or cluster name."
+				},
+				{
+					"key":"node",
+					"label":"Node",
+					"description":"Proxmox node currently hosting the VM."
+				},
+				{
+					"key":"pool",
+					"label":"Pool",
+					"description":"Canonical Proxmox pool membership when the platform reports one."
+				},
+				{
+					"key":"vmid",
+					"label":"VMID",
+					"description":"Numeric Proxmox VM identifier."
+				},
+				{
+					"key":"vm_name",
+					"label":"VM Name",
+					"description":"Current VM display name from the runtime model."
+				},
+				{
+					"key":"status",
+					"label":"Status",
+					"description":"Canonical runtime status for the VM."
+				},
+				{
+					"key":"cpu_cores",
+					"label":"CPU Cores",
+					"description":"Allocated virtual CPU core count."
+				},
+				{
+					"key":"memory_allocated_bytes",
+					"label":"Memory Allocated Bytes",
+					"description":"Configured memory allocation in bytes."
+				},
+				{
+					"key":"disk_allocated_bytes",
+					"label":"Disk Allocated Bytes",
+					"description":"Total allocated disk capacity in bytes across the VM."
+				},
+				{
+					"key":"disk_used_bytes",
+					"label":"Disk Used Bytes",
+					"description":"Current used disk bytes from the canonical runtime disk view."
+				},
+				{
+					"key":"disk_status_reason",
+					"label":"Disk Status Reason",
+					"description":"Reason disk usage is partial or unavailable when the runtime cannot provide a full guest view."
+				}
+			]
+		}
+	}`
+
+	assertJSONSnapshot(t, rec.Body.Bytes(), want)
+}
+
 func TestContract_VMInventoryExportDefinitionJSONSnapshot(t *testing.T) {
 	handler := NewReportingHandlers(nil, nil)
 	req := httptest.NewRequest(http.MethodGet, "/api/admin/reports/inventory/vms/definition", nil)
@@ -348,6 +485,7 @@ func TestContract_VMInventoryExportDefinitionJSONSnapshot(t *testing.T) {
 		"title":"VM Inventory Export",
 		"description":"Export the current fleet-wide VM inventory as CSV using the canonical runtime model. Includes VM identity, placement, CPU, memory allocation, disk allocation, and disk usage columns.",
 		"format":"csv",
+		"exportEndpoint":"/api/admin/reports/inventory/vms/export",
 		"filenamePrefix":"vm-inventory",
 		"columns":[
 			{

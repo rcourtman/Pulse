@@ -21,6 +21,10 @@ export function getReportingGenerateErrorMessage(): string {
   return 'Failed to generate report';
 }
 
+export function getReportingCatalogErrorMessage(): string {
+  return 'Failed to load reporting surfaces';
+}
+
 export function getReportingInventoryExportSuccessMessage(): string {
   return 'VM inventory export generated successfully';
 }

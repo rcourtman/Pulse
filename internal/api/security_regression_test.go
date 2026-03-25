@@ -2900,6 +2900,7 @@ func TestReportingEndpointsRequireLicenseFeature(t *testing.T) {
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
 
 	paths := []string{
+		"/api/admin/reports/catalog",
 		"/api/admin/reports/generate",
 		"/api/admin/reports/generate-multi",
 	}
@@ -3156,6 +3157,7 @@ func TestPermissionProtectedEndpointsDenyWhenAuthorizerBlocks(t *testing.T) {
 		{method: http.MethodPut, path: "/api/admin/users/alice/roles", body: `{"roleIds":["role-1"]}`},
 		{method: http.MethodPost, path: "/api/admin/users/alice/roles", body: `{"roleIds":["role-1"]}`},
 		{method: http.MethodGet, path: "/api/admin/users/alice/permissions", body: ""},
+		{method: http.MethodGet, path: "/api/admin/reports/catalog", body: ""},
 		{method: http.MethodGet, path: "/api/admin/reports/generate", body: ""},
 		{method: http.MethodPost, path: "/api/admin/reports/generate-multi", body: `{}`},
 		{method: http.MethodGet, path: "/api/admin/webhooks/audit", body: ""},

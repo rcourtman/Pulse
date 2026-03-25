@@ -126,6 +126,7 @@ import ssoProviderPresentationSource from '@/utils/ssoProviderPresentation.ts?ra
 import systemSettingsPresentationSource from '@/utils/systemSettingsPresentation.ts?raw';
 import updatesPresentationSource from '@/utils/updatesPresentation.ts?raw';
 import diagnosticsStateSource from '../useDiagnosticsPanelState.ts?raw';
+import reportingCatalogModelSource from '../reportingCatalogModel.ts?raw';
 import reportingPanelModelSource from '../reportingPanelModel.ts?raw';
 import reportingInventoryExportModelSource from '../reportingInventoryExportModel.ts?raw';
 import reportingPanelSource from '../ReportingPanel.tsx?raw';
@@ -1082,8 +1083,9 @@ describe('Settings architecture guardrails', () => {
   it('keeps the reporting shell behind extracted runtime and model owners', () => {
     expect(reportingPanelSource).toContain('@/components/Settings/OperationsPanel');
     expect(reportingPanelSource).toContain('@/components/Settings/useReportingPanelState');
+    expect(reportingPanelSource).toContain('@/components/Settings/reportingCatalogModel');
     expect(reportingPanelSource).toContain('@/components/Settings/reportingPanelModel');
-    expect(reportingPanelSource).toContain('VM Inventory Export');
+    expect(reportingPanelSource).toContain('reportingCatalog');
     expect(reportingPanelSource).not.toContain('loadLicenseStatus()');
     expect(reportingPanelSource).not.toContain('startProTrial()');
     expect(reportingPanelSource).not.toContain("apiFetch('/api/admin/reports/generate");
@@ -1093,18 +1095,18 @@ describe('Settings architecture guardrails', () => {
     expect(reportingPanelStateSource).toContain('runStartProTrialAction({');
     expect(reportingPanelStateSource).not.toContain('startProTrial()');
     expect(reportingPanelStateSource).toContain('buildReportingRequest');
-    expect(reportingPanelStateSource).toContain('buildVMInventoryExportDefinitionRequest');
+    expect(reportingPanelStateSource).toContain('buildReportingCatalogRequest');
+    expect(reportingPanelStateSource).toContain('parseReportingCatalog');
     expect(reportingPanelStateSource).toContain('buildVMInventoryExportRequest');
     expect(reportingPanelStateSource).toContain('getReportingGenerateSuccessMessage');
     expect(reportingPanelStateSource).not.toContain('getTrialAlreadyUsedMessage()');
+    expect(reportingCatalogModelSource).toContain('export function buildReportingCatalogRequest');
+    expect(reportingCatalogModelSource).toContain('export function parseReportingCatalog');
     expect(reportingPanelModelSource).toContain('export function getReportingRangeStart');
     expect(reportingPanelModelSource).toContain('export function buildReportingRequest');
     expect(reportingPanelModelSource).toContain('export function buildReportingFilename');
     expect(reportingInventoryExportModelSource).toContain(
       'export function buildVMInventoryExportFilename',
-    );
-    expect(reportingInventoryExportModelSource).toContain(
-      'export function buildVMInventoryExportDefinitionRequest',
     );
     expect(reportingInventoryExportModelSource).toContain(
       'export function parseVMInventoryExportDefinition',

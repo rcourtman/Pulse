@@ -177,6 +177,12 @@ func (r *Router) registerOrgLicenseRoutesGroup(orgHandlers *OrgHandlers, rbacHan
 	}))
 
 	// Advanced Reporting routes
+	r.mux.HandleFunc("/api/admin/reports/catalog", RequirePermission(r.config, r.authorizer, auth.ActionRead, auth.ResourceNodes, func(w http.ResponseWriter, req *http.Request) {
+		if !ensureAdminSession(r.config, w, req) {
+			return
+		}
+		RequireLicenseFeature(r.licenseHandlers, featureAdvancedReportingValue, RequireScope(config.ScopeSettingsRead, reportingAdminEndpoints.HandleGetReportingCatalog))(w, req)
+	}))
 	r.mux.HandleFunc("/api/admin/reports/generate", RequirePermission(r.config, r.authorizer, auth.ActionRead, auth.ResourceNodes, func(w http.ResponseWriter, req *http.Request) {
 		if !ensureAdminSession(r.config, w, req) {
 			return
@@ -298,6 +304,14 @@ type reportingAdminEndpointAdapter struct {
 }
 
 var _ extensions.ReportingAdminEndpoints = reportingAdminEndpointAdapter{}
+
+func (a reportingAdminEndpointAdapter) HandleGetReportingCatalog(w http.ResponseWriter, req *http.Request) {
+	if a.handlers == nil {
+		writeErrorResponse(w, http.StatusNotImplemented, "reporting_unavailable", "Reporting is not available", nil)
+		return
+	}
+	a.handlers.HandleGetReportingCatalog(w, req)
+}
 
 func (a reportingAdminEndpointAdapter) HandleGenerateReport(w http.ResponseWriter, req *http.Request) {
 	if a.handlers == nil {

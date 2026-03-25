@@ -61,6 +61,7 @@ import aiRuntimeControlsSectionSource from '../AIRuntimeControlsSection.tsx?raw'
 import aiSettingsStatusAndActionsSource from '../AISettingsStatusAndActions.tsx?raw';
 import aiSettingsStateSource from '../useAISettingsState.ts?raw';
 import reportingPanelSource from '../ReportingPanel.tsx?raw';
+import reportingCatalogModelSource from '../reportingCatalogModel.ts?raw';
 import reportingPanelModelSource from '../reportingPanelModel.ts?raw';
 import reportingInventoryExportModelSource from '../reportingInventoryExportModel.ts?raw';
 import updatesSettingsPanelSource from '../UpdatesSettingsPanel.tsx?raw';
@@ -598,14 +599,14 @@ describe('monitored-system model guardrails', () => {
     expect(agentProfileSuggestionPresentationSource).toContain(
       'export function getAgentProfileSuggestionRiskHints',
     );
-    expect(reportingPanelSource).toContain('REPORTING_RANGE_OPTIONS');
     expect(reportingPanelSource).toContain('FilterButtonGroup');
     expect(reportingPanelSource).toContain('CalloutCard');
     expect(reportingPanelSource).toContain('variant="prominent"');
     expect(reportingPanelSource).toContain('@/utils/upgradePresentation');
     expect(reportingPanelSource).toContain('@/components/Settings/useReportingPanelState');
+    expect(reportingPanelSource).toContain('@/components/Settings/reportingCatalogModel');
     expect(reportingPanelSource).toContain('@/components/Settings/reportingPanelModel');
-    expect(reportingPanelSource).toContain('VM Inventory Export');
+    expect(reportingPanelSource).toContain('reportingCatalog');
     expect(reportingPanelSource).toContain('getUpgradeActionButtonClass');
     expect(reportingPanelSource).toContain('UPGRADE_ACTION_LABEL');
     expect(reportingPanelSource).toContain('UPGRADE_TRIAL_LABEL');
@@ -614,17 +615,20 @@ describe('monitored-system model guardrails', () => {
     expect(reportingPanelSource).not.toContain("<For each={['24h', '7d', '30d']}>");
     expect(reportingPanelSource).not.toContain('window.URL.createObjectURL');
     expect(reportingPanelStateSource).toContain('buildReportingRequest');
+    expect(reportingPanelStateSource).toContain('buildReportingCatalogRequest');
+    expect(reportingPanelStateSource).toContain('parseReportingCatalog');
     expect(reportingPanelStateSource).toContain('getReportingGenerateSelectionRequiredMessage');
     expect(reportingPanelStateSource).toContain('getReportingGenerateSuccessMessage');
     expect(reportingPanelStateSource).toContain('getReportingGenerateErrorMessage');
     expect(reportingPanelStateSource).toContain('buildVMInventoryExportRequest');
     expect(reportingPanelStateSource).toContain('getReportingInventoryExportSuccessMessage');
+    expect(reportingCatalogModelSource).toContain('export function buildReportingCatalogRequest');
+    expect(reportingCatalogModelSource).toContain('export function parseReportingCatalog');
     expect(reportingPanelModelSource).toContain('export function getReportingRangeStart');
     expect(reportingPanelModelSource).toContain('export function buildReportingRequest');
     expect(reportingInventoryExportModelSource).toContain(
       'export function buildVMInventoryExportRequest',
     );
-    expect(reportingPresentationSource).toContain('export const REPORTING_RANGE_OPTIONS');
     expect(reportingPresentationSource).toContain(
       'export function getReportingGenerateSelectionRequiredMessage',
     );

@@ -9,9 +9,14 @@ import (
 )
 
 type testReportingAdminEndpoints struct {
+	catalogCalls         int
 	generateCalls        int
 	definitionCalls      int
 	exportInventoryCalls int
+}
+
+func (t *testReportingAdminEndpoints) HandleGetReportingCatalog(http.ResponseWriter, *http.Request) {
+	t.catalogCalls++
 }
 
 func (t *testReportingAdminEndpoints) HandleGenerateReport(http.ResponseWriter, *http.Request) {
@@ -82,6 +87,22 @@ func TestResolveReportingAdminEndpoints_UsesDefaultInventoryHandler(t *testing.T
 	resolved.HandleExportVMInventory(rec, req)
 	if defaults.exportInventoryCalls != 1 {
 		t.Fatalf("expected default VM inventory handler call, got %d", defaults.exportInventoryCalls)
+	}
+}
+
+func TestResolveReportingAdminEndpoints_UsesDefaultCatalogHandler(t *testing.T) {
+	SetReportingAdminEndpointsBinder(nil)
+	t.Cleanup(func() {
+		SetReportingAdminEndpointsBinder(nil)
+	})
+
+	defaults := &testReportingAdminEndpoints{}
+	resolved := resolveReportingAdminEndpoints(defaults, extensions.ReportingAdminRuntime{})
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/reports/catalog", nil)
+	rec := httptest.NewRecorder()
+	resolved.HandleGetReportingCatalog(rec, req)
+	if defaults.catalogCalls != 1 {
+		t.Fatalf("expected default reporting catalog handler call, got %d", defaults.catalogCalls)
 	}
 }
 

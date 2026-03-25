@@ -16,6 +16,7 @@ export interface ReportingInventoryExportDefinition {
   title: string;
   description: string;
   format: 'csv';
+  exportEndpoint: string;
   filenamePrefix: string;
   columns: ReportingInventoryExportColumnDefinition[];
 }
@@ -25,21 +26,15 @@ export function buildVMInventoryExportFilename(now: Date, filenamePrefix = 'vm-i
   return `${filenamePrefix}-${date}.csv`;
 }
 
-export function buildVMInventoryExportDefinitionRequest(): { url: string } {
-  return {
-    url: '/api/admin/reports/inventory/vms/definition',
-  };
-}
-
 export function buildVMInventoryExportRequest(
   now: Date,
-  definition?: Pick<ReportingInventoryExportDefinition, 'filenamePrefix'> | null,
+  definition?: Pick<ReportingInventoryExportDefinition, 'exportEndpoint' | 'filenamePrefix'> | null,
 ): ReportingInventoryExportRequestDefinition {
   const params = new URLSearchParams({ format: 'csv' });
   return {
     filename: buildVMInventoryExportFilename(now, definition?.filenamePrefix ?? 'vm-inventory'),
     request: {
-      url: `/api/admin/reports/inventory/vms/export?${params.toString()}`,
+      url: `${definition?.exportEndpoint ?? '/api/admin/reports/inventory/vms/export'}?${params.toString()}`,
     },
   };
 }
@@ -57,6 +52,7 @@ export function parseVMInventoryExportDefinition(
     typeof candidate.title !== 'string' ||
     typeof candidate.description !== 'string' ||
     candidate.format !== 'csv' ||
+    typeof candidate.exportEndpoint !== 'string' ||
     typeof candidate.filenamePrefix !== 'string' ||
     !Array.isArray(candidate.columns)
   ) {
@@ -86,6 +82,7 @@ export function parseVMInventoryExportDefinition(
     title: candidate.title,
     description: candidate.description,
     format: 'csv',
+    exportEndpoint: candidate.exportEndpoint,
     filenamePrefix: candidate.filenamePrefix,
     columns,
   };

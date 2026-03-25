@@ -217,14 +217,16 @@ The reporting API contract now also treats current-state fleet inventory as a
 first-class surface separate from historical metrics reports.
 `internal/api/reporting_inventory_handlers.go`,
 `internal/api/router_routes_licensing.go`, and the settings reporting shell now
-own `/api/admin/reports/inventory/vms/definition` plus
-`/api/admin/reports/inventory/vms/export` as the canonical VM inventory
-contract. The definition endpoint owns the operator-facing title, description,
-filename prefix, and stable column schema, while the export endpoint remains
-the spreadsheet-shaped CSV transport. That export is intentionally not comment-
-prefixed like the legacy metrics CSV, and it now carries Proxmox pool
-membership from the canonical unified VM runtime model instead of inferring or
-reconstructing that field locally inside the frontend or handler.
+own `/api/admin/reports/catalog` as the canonical operator-facing reporting
+catalog plus `/api/admin/reports/inventory/vms/definition` and
+`/api/admin/reports/inventory/vms/export` as the stable VM inventory sub-
+contract. The catalog endpoint owns the reporting panel title, description,
+historical performance report options, and nested VM inventory definition,
+while the export endpoint remains the spreadsheet-shaped CSV transport. That
+export is intentionally not comment-prefixed like the legacy metrics CSV, and
+it now carries Proxmox pool membership from the canonical unified VM runtime
+model instead of inferring or reconstructing that field locally inside the
+frontend or handler.
 The `/api/resources` serializer now also refreshes canonical identity and
 policy metadata through the shared unified-resource helper before it writes
 the payload, so backend and frontend contract tests stay aligned on one

@@ -1,9 +1,11 @@
-import type { ReportingRangeOption } from '@/utils/reportingPresentation';
 import { toReportingResourceType } from '@/utils/reportingResourceTypes';
 import type { SelectedResource } from '@/components/Settings/ResourcePicker';
+import type {
+  ReportingFormat,
+  ReportingPerformanceReportDefinition,
+} from '@/components/Settings/reportingCatalogModel';
 
-export type ReportingRangeValue = ReportingRangeOption['value'];
-export type ReportingFormat = 'pdf' | 'csv';
+export type ReportingRangeValue = string;
 
 export interface ReportingRequestContext {
   end: string;
@@ -27,11 +29,17 @@ export interface ReportingRequestDefinition {
   };
 }
 
-export function getReportingRangeStart(range: ReportingRangeValue, now: Date): Date {
+export function getReportingRangeStart(
+  range: ReportingRangeValue,
+  now: Date,
+  definition?: Pick<ReportingPerformanceReportDefinition, 'defaultRange' | 'ranges'> | null,
+): Date {
   const start = new Date(now);
-  if (range === '24h') start.setHours(start.getHours() - 24);
-  else if (range === '7d') start.setDate(start.getDate() - 7);
-  else if (range === '30d') start.setDate(start.getDate() - 30);
+  const resolvedRange =
+    definition?.ranges.find((candidate) => candidate.key === range) ??
+    definition?.ranges.find((candidate) => candidate.key === definition.defaultRange) ??
+    null;
+  start.setHours(start.getHours() - (resolvedRange?.windowHours ?? 24));
   return start;
 }
 
@@ -47,15 +55,25 @@ export function buildReportingFilename(
   format: ReportingFormat,
   resourceName: string | null,
   now: Date,
+  definition?: Pick<
+    ReportingPerformanceReportDefinition,
+    'multiFilenamePrefix' | 'singleFilenamePrefix'
+  > | null,
 ): string {
   const date = now.toISOString().split('T')[0];
   if (resourceName) {
-    return `report-${resourceName}-${date}.${format}`;
+    return `${definition?.singleFilenamePrefix ?? 'report'}-${resourceName}-${date}.${format}`;
   }
-  return `fleet-report-${date}.${format}`;
+  return `${definition?.multiFilenamePrefix ?? 'fleet-report'}-${date}.${format}`;
 }
 
-export function buildReportingRequest(context: ReportingRequestContext): ReportingRequestDefinition {
+export function buildReportingRequest(
+  context: ReportingRequestContext,
+  definition?: Pick<
+    ReportingPerformanceReportDefinition,
+    'multiFilenamePrefix' | 'multiResourceEndpoint' | 'singleFilenamePrefix' | 'singleResourceEndpoint'
+  > | null,
+): ReportingRequestDefinition {
   if (context.resources.length === 1) {
     const resource = context.resources[0];
     const params = new URLSearchParams({
@@ -72,17 +90,17 @@ export function buildReportingRequest(context: ReportingRequestContext): Reporti
     }
 
     return {
-      filename: buildReportingFilename(context.format, resource.name, context.now),
+      filename: buildReportingFilename(context.format, resource.name, context.now, definition),
       request: {
-        url: `/api/admin/reports/generate?${params.toString()}`,
+        url: `${definition?.singleResourceEndpoint ?? '/api/admin/reports/generate'}?${params.toString()}`,
       },
     };
   }
 
   return {
-    filename: buildReportingFilename(context.format, null, context.now),
+    filename: buildReportingFilename(context.format, null, context.now, definition),
     request: {
-      url: '/api/admin/reports/generate-multi',
+      url: definition?.multiResourceEndpoint ?? '/api/admin/reports/generate-multi',
       init: {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
