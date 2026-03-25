@@ -152,6 +152,7 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
   const canonicalScopeResourceIds = getCanonicalScopeResourceIds(run);
   const runIsHealthy = isPatrolRunHealthy(run.status, run.error_count);
   const coverageSummary = getPatrolRunCoverageSummary(run);
+  const hasFindingsSnapshot = run.finding_ids !== undefined;
 
   return (
     <div
@@ -249,6 +250,11 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
                   No new issues, but <strong>{run.existing_findings}</strong> existing issue
                   {run.existing_findings !== 1 ? 's' : ''} remain.
                 </>
+              ) : !hasFindingsSnapshot ? (
+                <span class="text-blue-600 dark:text-blue-400">
+                  This run predates findings snapshots, so run-specific findings cannot be fully
+                  verified.
+                </span>
               ) : runIsHealthy ? (
                 <span class="text-green-600 dark:text-green-400">All clear — no new issues.</span>
               ) : (

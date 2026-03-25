@@ -145,6 +145,12 @@ describe('RunHistoryEntry', () => {
         finding_ids: undefined,
       },
     });
+    expect(
+      screen.getByText(
+        'This run predates findings snapshots, so run-specific findings cannot be fully verified.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('All clear — no new issues.')).not.toBeInTheDocument();
   });
 
   it('uses a shared coverage summary when a scoped run checked fewer resources than its scope', () => {
