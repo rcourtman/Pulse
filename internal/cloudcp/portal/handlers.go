@@ -241,7 +241,7 @@ func HandlePortalBootstrap(sessionSvc *cpauth.Service, reg *registry.TenantRegis
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		encodeJSON(w, buildPortalBootstrapData(claims.Email, accounts))
+		encodeJSON(w, BuildBootstrapData(claims.Email, accounts))
 	}
 }
 

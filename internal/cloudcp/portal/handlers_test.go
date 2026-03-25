@@ -825,7 +825,7 @@ func TestPortalPageTemplate_AccountServicesRendered(t *testing.T) {
 }
 
 func TestBuildPortalBootstrapJSON_Contract(t *testing.T) {
-	bootstrapJSON, err := buildPortalBootstrapJSON("owner@example.com", []portalPageAccount{
+	bootstrapJSON, err := MarshalBootstrapJSON("owner@example.com", []portalPageAccount{
 		{
 			ID:         "a_test",
 			Kind:       "cloud",
@@ -845,7 +845,7 @@ func TestBuildPortalBootstrapJSON_Contract(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("buildPortalBootstrapJSON: %v", err)
+		t.Fatalf("MarshalBootstrapJSON: %v", err)
 	}
 
 	var payload map[string]any
@@ -1061,9 +1061,9 @@ func TestPortalBootstrapHTMLAndHandlerStayInSync(t *testing.T) {
 
 func mustBootstrapJSON(t *testing.T, email string, accounts []portalPageAccount) template.JS {
 	t.Helper()
-	bootstrapJSON, err := buildPortalBootstrapJSON(email, accounts)
+	bootstrapJSON, err := MarshalBootstrapJSON(email, accounts)
 	if err != nil {
-		t.Fatalf("buildPortalBootstrapJSON: %v", err)
+		t.Fatalf("MarshalBootstrapJSON: %v", err)
 	}
 	return bootstrapJSON
 }

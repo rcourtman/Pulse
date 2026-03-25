@@ -57,34 +57,34 @@ type loginPageData struct {
 	Script template.JS
 }
 
-type portalBootstrapWorkspace struct {
+type BootstrapWorkspace struct {
 	ID          string `json:"id"`
 	DisplayName string `json:"display_name"`
 	State       string `json:"state"`
 	Healthy     bool   `json:"healthy"`
 }
 
-type portalBootstrapAccount struct {
-	ID         string                     `json:"id"`
-	Kind       string                     `json:"kind"`
-	KindLabel  string                     `json:"kind_label"`
-	Name       string                     `json:"name"`
-	Role       string                     `json:"role"`
-	CanManage  bool                       `json:"can_manage"`
-	HasBilling bool                       `json:"has_billing"`
-	Workspaces []portalBootstrapWorkspace `json:"workspaces"`
+type BootstrapAccount struct {
+	ID         string               `json:"id"`
+	Kind       string               `json:"kind"`
+	KindLabel  string               `json:"kind_label"`
+	Name       string               `json:"name"`
+	Role       string               `json:"role"`
+	CanManage  bool                 `json:"can_manage"`
+	HasBilling bool                 `json:"has_billing"`
+	Workspaces []BootstrapWorkspace `json:"workspaces"`
 }
 
-type portalBootstrapData struct {
-	Email                string                   `json:"email"`
-	PublicSiteURL        string                   `json:"public_site_url"`
-	SupportEmail         string                   `json:"support_email"`
-	CommercialAPIBaseURL string                   `json:"commercial_api_base_url"`
-	PortalPath           string                   `json:"portal_path"`
-	LogoutPath           string                   `json:"logout_path"`
-	AccountAPIBasePath   string                   `json:"account_api_base_path"`
-	PortalAPIBasePath    string                   `json:"portal_api_base_path"`
-	Accounts             []portalBootstrapAccount `json:"accounts"`
+type BootstrapData struct {
+	Email                string             `json:"email"`
+	PublicSiteURL        string             `json:"public_site_url"`
+	SupportEmail         string             `json:"support_email"`
+	CommercialAPIBaseURL string             `json:"commercial_api_base_url"`
+	PortalPath           string             `json:"portal_path"`
+	LogoutPath           string             `json:"logout_path"`
+	AccountAPIBasePath   string             `json:"account_api_base_path"`
+	PortalAPIBasePath    string             `json:"portal_api_base_path"`
+	Accounts             []BootstrapAccount `json:"accounts"`
 }
 
 const (
@@ -232,7 +232,7 @@ func loadPortalAccountsForUser(reg *registry.TenantRegistry, userID string) ([]p
 func renderPortalPage(w http.ResponseWriter, nonce, email string, accounts []portalPageAccount) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	bootstrapJSON, err := buildPortalBootstrapJSON(email, accounts)
+	bootstrapJSON, err := MarshalBootstrapJSON(email, accounts)
 	if err != nil {
 		log.Error().Err(err).Msg("cloudcp.portal.page: marshal bootstrap data")
 		bootstrapJSON = template.JS(`{}`)
@@ -268,27 +268,27 @@ func renderLoginPage(w http.ResponseWriter, nonce string) {
 	}
 }
 
-func buildPortalBootstrapJSON(email string, accounts []portalPageAccount) (template.JS, error) {
-	payload, err := json.Marshal(buildPortalBootstrapData(email, accounts))
+func MarshalBootstrapJSON(email string, accounts []portalPageAccount) (template.JS, error) {
+	payload, err := json.Marshal(BuildBootstrapData(email, accounts))
 	if err != nil {
 		return "", err
 	}
 	return template.JS(payload), nil
 }
 
-func buildPortalBootstrapData(email string, accounts []portalPageAccount) portalBootstrapData {
-	bootstrapAccounts := make([]portalBootstrapAccount, 0, len(accounts))
+func BuildBootstrapData(email string, accounts []portalPageAccount) BootstrapData {
+	bootstrapAccounts := make([]BootstrapAccount, 0, len(accounts))
 	for _, account := range accounts {
-		workspaces := make([]portalBootstrapWorkspace, 0, len(account.Workspaces))
+		workspaces := make([]BootstrapWorkspace, 0, len(account.Workspaces))
 		for _, workspace := range account.Workspaces {
-			workspaces = append(workspaces, portalBootstrapWorkspace{
+			workspaces = append(workspaces, BootstrapWorkspace{
 				ID:          workspace.ID,
 				DisplayName: workspace.DisplayName,
 				State:       workspace.State,
 				Healthy:     workspace.Healthy,
 			})
 		}
-		bootstrapAccounts = append(bootstrapAccounts, portalBootstrapAccount{
+		bootstrapAccounts = append(bootstrapAccounts, BootstrapAccount{
 			ID:         account.ID,
 			Kind:       account.Kind,
 			KindLabel:  account.KindLabel,
@@ -300,7 +300,7 @@ func buildPortalBootstrapData(email string, accounts []portalPageAccount) portal
 		})
 	}
 
-	return portalBootstrapData{
+	return BootstrapData{
 		Email:                email,
 		PublicSiteURL:        defaultPublicSiteURL,
 		SupportEmail:         defaultSupportEmail,
