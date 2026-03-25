@@ -197,9 +197,9 @@ map.
 If the active profile discovers product scope that the current lane taxonomy
 does not model cleanly, that gap should still be recorded even when it sits
 outside the active target floor.
-For release targets, `rc_ready` means a governed prerelease candidate can be
-cut, while `release_ready` means stable or GA promotion readiness after RC
-validation.
+For release targets, `rc_ready` means a governed prerelease build can be
+cut, while `release_ready` means stable or GA promotion readiness after
+prerelease validation.
 Executable readiness proof runs should follow that same phase boundary: the
 active target should pull in only the readiness blocking levels required for
 its completion rule, not future-phase proof suites by default.
