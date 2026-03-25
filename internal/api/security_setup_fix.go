@@ -65,12 +65,11 @@ func ensureAdminSession(cfg *config.Config, w http.ResponseWriter, req *http.Req
 			return true
 		}
 
-		// Org-scoped tenant sessions preserve the org owner as the canonical
-		// privileged actor for settings-bound routes.
+		// Org-scoped tenant sessions preserve canonical org management
+		// privileges for settings-bound routes.
 		if org := GetOrganization(req.Context()); org != nil {
 			orgID := strings.TrimSpace(org.ID)
-			orgOwner := strings.TrimSpace(org.OwnerUserID)
-			if orgID != "" && orgID != "default" && orgOwner != "" && strings.EqualFold(sessionUser, orgOwner) {
+			if orgID != "" && orgID != "default" && org.CanUserManage(sessionUser) {
 				return true
 			}
 		}

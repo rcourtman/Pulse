@@ -507,30 +507,34 @@ func TestEnsureSettingsWriteScopeAllowsConfiguredAdminSession(t *testing.T) {
 	}
 }
 
-func TestEnsureSettingsWriteScopeAllowsOrgOwnerSession(t *testing.T) {
+func TestEnsureSettingsWriteScopeAllowsOrgManagerSession(t *testing.T) {
 	cfg := &config.Config{
 		AuthUser: "platform-admin",
 	}
 
 	sessionToken := "settings-write-owner-" + time.Now().Format("150405.000000002")
-	GetSessionStore().CreateSession(sessionToken, time.Hour, "agent", "127.0.0.1", "alice")
+	GetSessionStore().CreateSession(sessionToken, time.Hour, "agent", "127.0.0.1", "legacy-owner")
 
 	req := httptest.NewRequest(http.MethodPost, "/api/security/test", nil)
 	req.AddCookie(&http.Cookie{Name: "pulse_session", Value: sessionToken})
 	req = req.WithContext(context.WithValue(req.Context(), OrgContextKey, &models.Organization{
 		ID:          "org-a",
 		DisplayName: "Org A",
-		OwnerUserID: "alice",
+		OwnerUserID: "operator-owner",
+		Members: []models.OrganizationMember{
+			{UserID: "legacy-owner", Role: models.OrgRoleOwner},
+			{UserID: "operator-owner", Role: models.OrgRoleOwner},
+		},
 	}))
 
 	rr := httptest.NewRecorder()
 	result := ensureSettingsWriteScope(cfg, rr, req)
 
 	if !result {
-		t.Fatal("ensureSettingsWriteScope should allow org owner session users")
+		t.Fatal("ensureSettingsWriteScope should allow org manager session users")
 	}
 	if rr.Code != http.StatusOK {
-		t.Fatalf("expected 200 for org owner session, got %d", rr.Code)
+		t.Fatalf("expected 200 for org manager session, got %d", rr.Code)
 	}
 }
 

@@ -221,11 +221,12 @@ admin setup routes may run without local credentials configured, but shared
 `internal/api/auth.go` helpers must still honor a valid hosted `pulse_session`
 before any optional-auth anonymous fallback so operators can mint relay-mobile
 credentials and continue onboarding from the hosted runtime itself.
-The same setup boundary also depends on org-owned privilege surviving the next
-step: once the request is scoped to a hosted tenant org, shared
-`internal/api/security_setup_fix.go` helpers must allow that org owner session
-to exercise settings-bound pairing routes instead of requiring a separate
-configured local admin username that does not exist on hosted tenants.
+The same setup boundary also depends on canonical org-management privilege
+surviving the next step: once the request is scoped to a hosted tenant org,
+shared `internal/api/security_setup_fix.go` helpers must allow that org's
+owner/admin membership to exercise settings-bound pairing routes instead of
+requiring a separate configured local admin username that does not exist on
+hosted tenants.
 The direct Proxmox fallback workspace now also lives explicitly inside this
 lifecycle boundary: `InfrastructureWorkspace.tsx`,
 `infrastructureWorkspaceModel.ts`,

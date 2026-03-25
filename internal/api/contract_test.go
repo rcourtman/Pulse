@@ -875,7 +875,7 @@ func TestContract_HostedSessionAuthPrecedesAnonymousFallback(t *testing.T) {
 	}
 }
 
-func TestContract_HostedOrgOwnerSessionCanMintRelayMobileToken(t *testing.T) {
+func TestContract_HostedOrgManagerSessionCanMintRelayMobileToken(t *testing.T) {
 	defer SetMultiTenantEnabled(false)
 	SetMultiTenantEnabled(true)
 	t.Setenv("PULSE_DEV", "true")
@@ -897,9 +897,10 @@ func TestContract_HostedOrgOwnerSessionCanMintRelayMobileToken(t *testing.T) {
 	org := &models.Organization{
 		ID:          "org-a",
 		DisplayName: "Org A",
-		OwnerUserID: "alice",
+		OwnerUserID: "operator-owner",
 		Members: []models.OrganizationMember{
-			{UserID: "alice", Role: models.OrgRoleOwner, AddedAt: time.Now()},
+			{UserID: "legacy-owner", Role: models.OrgRoleOwner, AddedAt: time.Now()},
+			{UserID: "operator-owner", Role: models.OrgRoleOwner, AddedAt: time.Now()},
 		},
 	}
 	if err := mtp.SaveOrganization(org); err != nil {
@@ -909,7 +910,7 @@ func TestContract_HostedOrgOwnerSessionCanMintRelayMobileToken(t *testing.T) {
 	router := newMultiTenantRouter(t, cfg)
 
 	sessionToken := "relay-owner-session-" + strings.ReplaceAll(time.Now().UTC().Format(time.RFC3339Nano), ":", "-")
-	GetSessionStore().CreateSession(sessionToken, time.Hour, "agent", "127.0.0.1", "alice")
+	GetSessionStore().CreateSession(sessionToken, time.Hour, "agent", "127.0.0.1", "legacy-owner")
 
 	req := httptest.NewRequest(http.MethodPost, "/api/security/tokens/relay-mobile", strings.NewReader(`{}`))
 	req.Header.Set("Content-Type", "application/json")
@@ -934,8 +935,8 @@ func TestContract_HostedOrgOwnerSessionCanMintRelayMobileToken(t *testing.T) {
 	if payload.Token == "" {
 		t.Fatal("expected relay mobile token in response")
 	}
-	if payload.Record.OwnerUserID != "alice" {
-		t.Fatalf("ownerUserId = %q, want alice", payload.Record.OwnerUserID)
+	if payload.Record.OwnerUserID != "legacy-owner" {
+		t.Fatalf("ownerUserId = %q, want legacy-owner", payload.Record.OwnerUserID)
 	}
 	if len(cfg.APITokens) != 1 {
 		t.Fatalf("expected one stored token, got %d", len(cfg.APITokens))

@@ -870,9 +870,9 @@ surfaces may run without local auth configured, but a valid tenant
 `pulse_session` must still authenticate before the anonymous optional-auth
 fallback so hosted recovery, onboarding, and support flows do not silently
 degrade into unauthenticated state after cloud handoff.
-That same shared settings helper layer must then preserve org-owned privilege
-for non-default tenant requests. Storage- and recovery-adjacent hosted flows
-that reuse settings-bound helpers must allow the current org owner session to
-continue through privileged tenant routes after cloud handoff instead of
-requiring a separate configured local admin identity that hosted tenants do
-not carry.
+That same shared settings helper layer must then preserve canonical
+org-management privilege for non-default tenant requests. Storage- and
+recovery-adjacent hosted flows that reuse settings-bound helpers must allow
+the current org owner/admin membership to continue through privileged tenant
+routes after cloud handoff instead of requiring a separate configured local
+admin identity that hosted tenants do not carry.
