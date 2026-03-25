@@ -102,6 +102,9 @@ export function PatrolIntelligenceWorkspace(props: { state: PatrolIntelligenceSt
           scopeResourceIds={state.selectedRunScopeResourceIds()}
           scopeResourceTypes={state.selectedRun()?.scope_resource_types}
           showScopeWarnings={Boolean(state.selectedRun())}
+          runtimeState={state.runtimeState()}
+          blockedReason={state.blockedReason()}
+          overallHealth={state.intelligenceSummary()?.overall_health}
         />
       </Show>
 

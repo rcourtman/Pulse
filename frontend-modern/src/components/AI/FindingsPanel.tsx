@@ -18,17 +18,23 @@ import { notificationStore } from '@/stores/notifications';
 import { aiChatStore } from '@/stores/aiChat';
 import { InvestigationSection, ApprovalSection } from '@/components/patrol';
 import { AIAPI, type RemediationPlan } from '@/api/ai';
+import type { PatrolRuntimeState } from '@/api/patrol';
 import { getApprovalRiskPresentation } from '@/utils/approvalRiskPresentation';
 import { formatRelativeTime } from '@/utils/format';
 import { getFindingAlertIdentifier, hasTriggeringAlert } from '@/utils/findingAlertIdentity';
 import { logger } from '@/utils/logger';
 import { segmentedButtonClass } from '@/utils/segmentedButton';
+import { getSemanticTonePresentation } from '@/utils/semanticTonePresentation';
 import { formatIdentifierLabel } from '@/utils/textPresentation';
+import type { IntelligenceHealthScore } from '@/types/aiIntelligence';
+import { getPatrolFindingsEmptyState } from '@/utils/patrolEmptyStatePresentation';
+import CheckCircleIcon from 'lucide-solid/icons/check-circle';
+import AlertCircleIcon from 'lucide-solid/icons/alert-circle';
+import AlertTriangleIcon from 'lucide-solid/icons/alert-triangle';
 import {
   buildFindingFilterOptions,
   formatFindingLifecycleType,
   formatFindingLoopState,
-  getFindingEmptyStateCopy,
   getFindingSeveritySortOrder,
   getFindingResolutionReason,
   getFindingLoopStateBadgeClasses,
@@ -59,6 +65,9 @@ interface FindingsPanelProps {
   scopeResourceIds?: string[];
   scopeResourceTypes?: string[];
   showScopeWarnings?: boolean;
+  runtimeState?: PatrolRuntimeState;
+  blockedReason?: string;
+  overallHealth?: IntelligenceHealthScore;
 }
 
 export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
@@ -211,7 +220,15 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       pendingApprovalCount: aiIntelligenceStore.pendingApprovalCount,
     }),
   );
-  const emptyStateCopy = createMemo(() => getFindingEmptyStateCopy(filter()));
+  const emptyStateCopy = createMemo(() =>
+    getPatrolFindingsEmptyState({
+      filter: filter(),
+      overallHealth: props.overallHealth,
+      runtimeState: props.runtimeState,
+      blockedReason: props.blockedReason,
+    }),
+  );
+  const emptyStateTone = createMemo(() => getSemanticTonePresentation(emptyStateCopy().tone));
 
   const isOutOfScope = (finding: UnifiedFinding): boolean => {
     if (!props.showScopeWarnings) {
@@ -1094,19 +1111,32 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
               <div class="p-6 text-sm text-muted text-center">
                 <Show when={filter() === 'active'}>
                   <div class="flex flex-col items-center gap-3">
-                    <svg
-                      class="w-10 h-10 text-green-500"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
+                    <Show
+                      when={emptyStateCopy().tone === 'success'}
+                      fallback={
+                        <Show
+                          when={emptyStateCopy().tone === 'error'}
+                          fallback={
+                            <Show
+                              when={emptyStateCopy().tone === 'warning'}
+                              fallback={
+                                <AlertCircleIcon
+                                  class={`w-10 h-10 ${emptyStateTone().iconClass}`}
+                                />
+                              }
+                            >
+                              <AlertTriangleIcon
+                                class={`w-10 h-10 ${emptyStateTone().iconClass}`}
+                              />
+                            </Show>
+                          }
+                        >
+                          <AlertTriangleIcon class={`w-10 h-10 ${emptyStateTone().iconClass}`} />
+                        </Show>
+                      }
                     >
-                      <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                      />
-                    </svg>
+                      <CheckCircleIcon class={`w-10 h-10 ${emptyStateTone().iconClass}`} />
+                    </Show>
                     <div>
                       <p class="font-medium text-base-content">{emptyStateCopy().title}</p>
                       <Show when={emptyStateCopy().body}>

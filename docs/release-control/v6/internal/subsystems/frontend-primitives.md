@@ -182,6 +182,11 @@ Those same feature-owned header badges must also stay aligned to the owning
 runtime state instead of surfacing stale auxiliary counters as primary status;
 an exhausted quickstart-credit badge cannot override an otherwise active Patrol
 runtime unless quickstart exhaustion is the active blocker.
+That same route-owned presentation rule also governs Patrol findings empty
+states: shared section shells under `frontend-modern/src/features/patrol/`
+must not render a green healthy empty state from `0 active findings` alone
+when the owning Patrol runtime or overall-health summary is degraded, blocked,
+or not fully verified.
 `frontend-modern/src/components/shared/TagBadges.tsx` is now also the
 canonical tag-badge primitive. Dashboard workload rows and the unified-resource
 detail drawer must import that shared owner instead of keeping a dashboard-local

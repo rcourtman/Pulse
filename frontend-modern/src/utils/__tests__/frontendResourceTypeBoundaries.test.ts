@@ -4471,6 +4471,9 @@ describe('frontend resource type boundaries', () => {
       'export function getInvestigationSectionState',
     );
     expect(patrolEmptyStatePresentationSource).toContain('export function getRunHistoryEmptyState');
+    expect(patrolEmptyStatePresentationSource).toContain(
+      'export function getPatrolFindingsEmptyState',
+    );
     expect(patrolRunPresentationSource).toContain('export function getRunHistoryLoadingState');
     expect(patrolRunPresentationSource).toContain('export function getToolCallsLoadingState');
     expect(patrolRunPresentationSource).toContain('export function getToolCallsUnavailableState');
