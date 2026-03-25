@@ -23,27 +23,34 @@ server-side update execution surfaces.
 1. `internal/updates/`
 2. `internal/api/updates.go`
 3. `frontend-modern/src/api/updates.ts`
-4. `scripts/build-release.sh`
-5. `scripts/release_ldflags.sh`
-6. `scripts/install.ps1`
-7. `scripts/install.sh`
-8. `scripts/install-container-agent.sh`
-9. `scripts/pulse-auto-update.sh`
-10. `scripts/hot-dev.sh`
-11. `scripts/hot-dev-bg.sh`
-12. `tests/integration/scripts/managed-dev-runtime.mjs`
-13. `package.json`
-14. `frontend-modern/package.json`
-15. `scripts/dev-check.sh`
-16. `scripts/toggle-mock.sh`
-17. `scripts/clean-mock-alerts.sh`
-18. `scripts/dev-launchd-setup.sh`
-19. `scripts/dev-launchd-wrapper.sh`
-20. `scripts/com.pulse.hot-dev.plist.template`
-21. `.github/workflows/create-release.yml`
-22. `.github/workflows/release-dry-run.yml`
-23. `.github/workflows/publish-docker.yml`
-24. `.github/workflows/promote-floating-tags.yml`
+4. `.github/workflows/create-release.yml`
+5. `.github/workflows/deploy-demo-server.yml`
+6. `.github/workflows/publish-docker.yml`
+7. `.github/workflows/promote-floating-tags.yml`
+8. `.github/workflows/release-dry-run.yml`
+9. `package.json`
+10. `frontend-modern/package.json`
+11. `scripts/build-release.sh`
+12. `scripts/clean-mock-alerts.sh`
+13. `scripts/com.pulse.hot-dev.plist.template`
+14. `scripts/dev-check.sh`
+15. `scripts/dev-launchd-setup.sh`
+16. `scripts/dev-launchd-wrapper.sh`
+17. `scripts/hot-dev-bg.sh`
+18. `scripts/hot-dev.sh`
+19. `scripts/install-container-agent.sh`
+20. `scripts/install.ps1`
+21. `scripts/install.sh`
+22. `scripts/pulse-auto-update.sh`
+23. `scripts/release_control/resolve_release_promotion.py`
+24. `scripts/release_ldflags.sh`
+25. `scripts/toggle-mock.sh`
+26. `tests/integration/playwright.config.ts`
+27. `tests/integration/QUICK_START.md`
+28. `tests/integration/README.md`
+29. `tests/integration/scripts/managed-dev-runtime.mjs`
+30. `tests/integration/tests/helpers.ts`
+31. `tests/integration/tests/runtime-defaults.ts`
 
 ## Shared Boundaries
 
@@ -55,11 +62,11 @@ server-side update execution surfaces.
 ## Extension Points
 
 1. Add or change deployment-type detection, update planning, or apply behavior through `internal/updates/`
-2. Add or change release-build metadata injection, release artifact assembly, or governed promotion metadata resolution through `scripts/build-release.sh`, `scripts/release_ldflags.sh`, and `scripts/release_control/resolve_release_promotion.py`, plus the container Dockerfile and governed release workflows that consume those same contracts
+2. Add or change release-build metadata injection, release artifact assembly, or governed promotion metadata resolution through `scripts/build-release.sh`, `scripts/release_ldflags.sh`, `scripts/release_control/resolve_release_promotion.py`, `Dockerfile`, and the governed release workflows `.github/workflows/create-release.yml`, `.github/workflows/deploy-demo-server.yml`, `.github/workflows/publish-docker.yml`, `.github/workflows/promote-floating-tags.yml`, and `.github/workflows/release-dry-run.yml`
 3. Add or change shell installer, Windows installer, container-agent installer, or auto-update script behavior through `scripts/install.sh`, `scripts/install.ps1`, `scripts/install-container-agent.sh`, and `scripts/pulse-auto-update.sh`
 4. Add or change server update transport through `internal/api/updates.go` and `frontend-modern/src/api/updates.ts`
-5. Add or change local dev-runtime orchestration, managed ownership, browser-runtime proof wiring, frontend/backend coherence diagnostics, canonical developer entry wrappers, or dev-runtime helper control surfaces through `scripts/hot-dev.sh`, `scripts/hot-dev-bg.sh`, `tests/integration/scripts/managed-dev-runtime.mjs`, `package.json`, `frontend-modern/package.json`, `scripts/dev-check.sh`, `scripts/toggle-mock.sh`, `scripts/clean-mock-alerts.sh`, `scripts/dev-launchd-setup.sh`, `scripts/dev-launchd-wrapper.sh`, and `scripts/com.pulse.hot-dev.plist.template`
-6. Add or change governed release-promotion workflow inputs, operator-facing promotion metadata, prerelease lineage enforcement, or stable-promotion rehearsal summaries through `.github/workflows/create-release.yml`, `.github/workflows/release-dry-run.yml`, `.github/workflows/publish-docker.yml`, and `.github/workflows/promote-floating-tags.yml`
+5. Add or change local dev-runtime orchestration, managed ownership, browser-runtime proof wiring, frontend/backend coherence diagnostics, canonical developer entry wrappers, or dev-runtime helper control surfaces through `scripts/hot-dev.sh`, `scripts/hot-dev-bg.sh`, `Makefile`, `package.json`, `frontend-modern/package.json`, `scripts/dev-check.sh`, `scripts/toggle-mock.sh`, `scripts/clean-mock-alerts.sh`, `scripts/dev-launchd-setup.sh`, `scripts/dev-launchd-wrapper.sh`, `scripts/com.pulse.hot-dev.plist.template`, `tests/integration/scripts/managed-dev-runtime.mjs`, `tests/integration/playwright.config.ts`, `tests/integration/tests/helpers.ts`, `tests/integration/tests/runtime-defaults.ts`, `tests/integration/README.md`, and `tests/integration/QUICK_START.md`
+6. Add or change governed release-promotion workflow inputs, operator-facing promotion metadata, prerelease lineage enforcement, or stable-promotion rehearsal summaries through `.github/workflows/create-release.yml`, `.github/workflows/publish-docker.yml`, `.github/workflows/promote-floating-tags.yml`, and `.github/workflows/release-dry-run.yml`
 
 ## Forbidden Paths
 

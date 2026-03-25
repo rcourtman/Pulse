@@ -2136,6 +2136,8 @@
       "owned_files": [
         ".github/workflows/create-release.yml",
         ".github/workflows/deploy-demo-server.yml",
+        ".github/workflows/promote-floating-tags.yml",
+        ".github/workflows/publish-docker.yml",
         ".github/workflows/release-dry-run.yml",
         "Dockerfile",
         "frontend-modern/package.json",
@@ -2205,6 +2207,8 @@
             "match_prefixes": [],
             "match_files": [
               ".github/workflows/create-release.yml",
+              ".github/workflows/promote-floating-tags.yml",
+              ".github/workflows/publish-docker.yml",
               ".github/workflows/release-dry-run.yml",
               "scripts/release_control/resolve_release_promotion.py"
             ],
