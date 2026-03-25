@@ -87,7 +87,35 @@ jobs:
           fi
           
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "release_tag=v${VERSION}" >> "$GITHUB_OUTPUT"
           echo "Chart version: $VERSION"
+
+      - name: Validate release line policy
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          RELEASE_TAG: ${{ steps.version.outputs.release_tag }}
+        run: |
+          set -euo pipefail
+
+          REQUIRED_BRANCH="$(python3 scripts/release_control/control_plane.py --branch-for-version "${VERSION}")"
+
+          if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
+            git fetch --prune --unshallow origin
+          fi
+          git fetch --prune origin "${REQUIRED_BRANCH}" --tags
+
+          if ! git rev-parse -q --verify "refs/tags/${RELEASE_TAG}" >/dev/null; then
+            echo "::error::Tag ${RELEASE_TAG} does not exist. Helm pages release must map to a real Git tag."
+            exit 1
+          fi
+
+          TAG_COMMIT="$(git rev-list -n1 "refs/tags/${RELEASE_TAG}")"
+          if ! git merge-base --is-ancestor "$TAG_COMMIT" "origin/${REQUIRED_BRANCH}"; then
+            echo "::error::Tag ${RELEASE_TAG} is not reachable from origin/${REQUIRED_BRANCH}. Refusing cross-line Helm pages release."
+            exit 1
+          fi
+
+          echo "[OK] ${RELEASE_TAG} validated against release line ${REQUIRED_BRANCH}"
 
       - name: Update Chart.yaml version
         run: |
