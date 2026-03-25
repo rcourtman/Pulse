@@ -34,6 +34,7 @@ type FileQuickstartCreditManager struct {
 	mu           sync.Mutex
 	billingStore *config.FileBillingStore
 	orgID        string
+	orgResolver  func() string
 	aiConfig     func() *config.AIConfig // Getter for current AI config (for BYOK check)
 	licenseID    string                  // Workspace identifier for the proxy
 }
@@ -45,19 +46,44 @@ func NewFileQuickstartCreditManager(
 	aiConfigGetter func() *config.AIConfig,
 	licenseID string,
 ) *FileQuickstartCreditManager {
+	return NewFileQuickstartCreditManagerWithOrgResolver(billingStore, orgID, nil, aiConfigGetter, licenseID)
+}
+
+// NewFileQuickstartCreditManagerWithOrgResolver creates a credit manager that
+// can resolve the effective billing org dynamically for each read/write.
+func NewFileQuickstartCreditManagerWithOrgResolver(
+	billingStore *config.FileBillingStore,
+	orgID string,
+	orgResolver func() string,
+	aiConfigGetter func() *config.AIConfig,
+	licenseID string,
+) *FileQuickstartCreditManager {
 	return &FileQuickstartCreditManager{
 		billingStore: billingStore,
 		orgID:        orgID,
+		orgResolver:  orgResolver,
 		aiConfig:     aiConfigGetter,
 		licenseID:    licenseID,
 	}
+}
+
+func (m *FileQuickstartCreditManager) effectiveOrgID() string {
+	if m == nil {
+		return ""
+	}
+	if m.orgResolver != nil {
+		if resolved := m.orgResolver(); resolved != "" {
+			return resolved
+		}
+	}
+	return m.orgID
 }
 
 func (m *FileQuickstartCreditManager) getBillingState() *pkglicensing.BillingState {
 	if m.billingStore == nil {
 		return nil
 	}
-	state, err := m.billingStore.GetBillingState(m.orgID)
+	state, err := m.billingStore.GetBillingState(m.effectiveOrgID())
 	if err != nil {
 		log.Warn().Err(err).Msg("Quickstart: failed to read billing state")
 		return nil
@@ -85,7 +111,8 @@ func (m *FileQuickstartCreditManager) ConsumeCredit() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	state, err := m.billingStore.GetBillingState(m.orgID)
+	effectiveOrgID := m.effectiveOrgID()
+	state, err := m.billingStore.GetBillingState(effectiveOrgID)
 	if err != nil {
 		return fmt.Errorf("quickstart: read billing state: %w", err)
 	}
@@ -97,7 +124,7 @@ func (m *FileQuickstartCreditManager) ConsumeCredit() error {
 		return fmt.Errorf("quickstart: no credits remaining")
 	}
 
-	if err := m.billingStore.SaveBillingState(m.orgID, state); err != nil {
+	if err := m.billingStore.SaveBillingState(effectiveOrgID, state); err != nil {
 		return fmt.Errorf("quickstart: save billing state: %w", err)
 	}
 
@@ -129,7 +156,8 @@ func (m *FileQuickstartCreditManager) GrantCredits() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	state, err := m.billingStore.GetBillingState(m.orgID)
+	effectiveOrgID := m.effectiveOrgID()
+	state, err := m.billingStore.GetBillingState(effectiveOrgID)
 	if err != nil {
 		return fmt.Errorf("quickstart: read billing state: %w", err)
 	}
@@ -142,7 +170,7 @@ func (m *FileQuickstartCreditManager) GrantCredits() error {
 		return nil
 	}
 
-	if err := m.billingStore.SaveBillingState(m.orgID, state); err != nil {
+	if err := m.billingStore.SaveBillingState(effectiveOrgID, state); err != nil {
 		return fmt.Errorf("quickstart: save billing state: %w", err)
 	}
 

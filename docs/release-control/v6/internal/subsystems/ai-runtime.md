@@ -125,7 +125,11 @@ canonical hosted billing state instead of falling back to a synthetic
 must persist one machine-owned quickstart-backed AI config with the canonical
 `quickstart:minimax-2.5m` runtime models so Chat and Patrol can start before
 the operator visits AI Settings, while any explicitly written AI config
-remains authoritative and must not be overwritten by hosted bootstrap.
+remains authoritative and must not be overwritten by hosted bootstrap. When
+the request runs under a hosted tenant org with no org-local billing lease,
+the same AI runtime path must inherit the default hosted lease for bootstrap
+and quickstart-credit reads so tenant-scoped Chat, Patrol, and AI Settings
+stay aligned with the machine-owned hosted entitlement state.
 The same ownership includes the Pulse query tool schema under
 `internal/ai/tools/`: topology-query input names must stay canonical inside
 the AI runtime itself, so new tool arguments such as `max_proxmox_nodes`

@@ -115,6 +115,12 @@ The recovery backend is a real product boundary, not just a helper package:
 `internal/recovery/` owns per-tenant SQLite persistence, rollup derivation,
 query filtering, and recovery-point indexing for the `/api/recovery/*`
 surfaces.
+That shared `internal/api/` dependency now also assumes hosted tenant AI
+bootstrap and chat-runtime reads resolve through one effective hosted billing
+lease before storage- or recovery-adjacent runtime consumers inspect
+assistant availability, so recovery points, restore guidance, and related
+operator surfaces do not read a tenant-org AI readiness state that diverges
+from the machine-owned hosted entitlement already governing the instance.
 The recovery frontend now also separates that ownership more explicitly:
 `frontend-modern/src/features/recovery/useRecoverySurfaceState.ts` owns
 canonical route parsing, filter/query state, transport hook inputs, and URL

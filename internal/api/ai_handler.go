@@ -351,16 +351,23 @@ func (h *AIHandler) initTenantService(ctx context.Context, orgID string) AIServi
 		return nil
 	}
 
+	tenantCtx := context.WithValue(backgroundContext(ctx), OrgIDContextKey, orgID)
 	persistence, err := mtPersistence.GetPersistence(orgID)
 	if err != nil {
 		log.Warn().Str("orgID", orgID).Err(err).Msg("Failed to get persistence for AI service")
 		return nil
 	}
 
-	// We need the config to get the data directory
-	aiCfg, err := persistence.LoadAIConfig()
-	if err != nil {
-		log.Warn().Str("orgID", orgID).Err(err).Msg("Failed to load AI config for tenant service initialization")
+	// Tenant chat startup must use the same hosted-aware config path as
+	// /api/settings/ai so hosted orgs do not race into a synthetic disabled/default config.
+	aiCfg := h.loadAIConfig(tenantCtx)
+	if aiCfg == nil {
+		log.Info().Str("orgID", orgID).Msg("AI config is nil for tenant service initialization")
+		return nil
+	}
+	if !aiCfg.Enabled {
+		log.Info().Str("orgID", orgID).Bool("enabled", aiCfg.Enabled).Msg("AI is disabled in tenant config")
+		return nil
 	}
 
 	dataDir := h.getDataDir(aiCfg, persistence.DataDir())
@@ -387,6 +394,7 @@ func (h *AIHandler) initTenantService(ctx context.Context, orgID string) AIServi
 	svc := newChatService(chatCfg)
 	if err := svc.Start(ctx); err != nil {
 		log.Error().Str("orgID", orgID).Err(err).Msg("Failed to start AI service for tenant")
+		return nil
 	}
 
 	return svc

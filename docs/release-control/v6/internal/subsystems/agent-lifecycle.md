@@ -144,6 +144,11 @@ This subsystem now sits under the dedicated agent lifecycle and fleet
 operations lane so install, registration, update continuity, profile
 management, and fleet safety stop hiding inside architecture, migration, or
 monitoring work.
+That shared `internal/api/` dependency now also assumes hosted tenant AI and
+relay bootstrap reads use one effective hosted billing lease before
+lifecycle-adjacent flows inspect runtime readiness, so install and setup
+surfaces do not observe a tenant-org Pulse Assistant state that disagrees
+with the machine-owned hosted entitlement already backing the same instance.
 
 Agent lifecycle owns the install/register/update continuity surfaces, but it
 does not own unified-resource history or control-plane timeline persistence.

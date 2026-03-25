@@ -51,10 +51,9 @@ func ensureHostedAIQuickstartBillingState(billingBaseDir, orgID string) (*billin
 	if billingBaseDir == "" {
 		return nil, nil
 	}
-	orgID = normalizeHostedEntitlementOrgID(orgID)
 
 	billingStore := config.NewFileBillingStore(billingBaseDir)
-	state, err := billingStore.GetBillingState(orgID)
+	state, effectiveOrgID, err := loadHostedEffectiveBillingState(billingStore, orgID)
 	if err != nil || state == nil {
 		return state, err
 	}
@@ -64,7 +63,7 @@ func ensureHostedAIQuickstartBillingState(billingBaseDir, orgID string) (*billin
 
 	updated := normalizeBillingStateFromLicensing(state)
 	updated.GrantQuickstartCredits()
-	if err := billingStore.SaveBillingState(orgID, updated); err != nil {
+	if err := billingStore.SaveBillingState(effectiveOrgID, updated); err != nil {
 		return nil, fmt.Errorf("save hosted Pulse Assistant quickstart billing state: %w", err)
 	}
 	return updated, nil

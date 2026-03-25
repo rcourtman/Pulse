@@ -952,6 +952,11 @@ func TestGetService_MultiTenantInitAndCache(t *testing.T) {
 
 	tempDir := t.TempDir()
 	mtp := config.NewMultiTenantPersistence(tempDir)
+	persistence, err := mtp.GetPersistence("acme")
+	if err != nil {
+		t.Fatalf("GetPersistence(acme): %v", err)
+	}
+	saveEnabledTestAIConfig(t, persistence)
 	h := NewAIHandler(mtp, nil, nil)
 
 	mockSvc := new(MockAIService)
@@ -984,6 +989,11 @@ func TestGetService_MultiTenantUsesTenantReadState(t *testing.T) {
 
 	tempDir := t.TempDir()
 	mtp := config.NewMultiTenantPersistence(tempDir)
+	persistence, err := mtp.GetPersistence("acme")
+	if err != nil {
+		t.Fatalf("GetPersistence(acme): %v", err)
+	}
+	saveEnabledTestAIConfig(t, persistence)
 	mtm := monitoring.NewMultiTenantMonitor(&config.Config{}, mtp, nil)
 	t.Cleanup(mtm.Stop)
 
@@ -1017,6 +1027,92 @@ func TestGetService_MultiTenantUsesTenantReadState(t *testing.T) {
 	}
 
 	mockSvc.AssertExpectations(t)
+}
+
+func TestGetService_HostedTenantAutoBootstrapsAndStartsService(t *testing.T) {
+	oldNewService := newChatService
+	defer func() { newChatService = oldNewService }()
+
+	tempDir := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(tempDir)
+	_, err := mtp.GetPersistence("t-tenant")
+	if err != nil {
+		t.Fatalf("GetPersistence(t-tenant): %v", err)
+	}
+	seedHostedAIBillingState(t, mtp, "default")
+
+	h := NewAIHandler(mtp, nil, nil)
+	h.hostedMode = true
+
+	mockSvc := new(MockAIService)
+	mockSvc.On("Start", mock.Anything).Return(nil).Once()
+
+	var gotCfg chat.Config
+	newChatService = func(cfg chat.Config) AIService {
+		gotCfg = cfg
+		return mockSvc
+	}
+
+	ctx := context.WithValue(context.Background(), OrgIDContextKey, "t-tenant")
+	svc := h.GetService(ctx)
+	assert.Same(t, mockSvc, svc)
+
+	if gotCfg.AIConfig == nil {
+		t.Fatal("expected tenant chat service to receive hosted-aware AI config")
+	}
+	assert.True(t, gotCfg.AIConfig.Enabled)
+	assert.Equal(t, config.DefaultModelForProvider(config.AIProviderQuickstart), gotCfg.AIConfig.GetChatModel())
+
+	persistence, err := mtp.GetPersistence("t-tenant")
+	if err != nil {
+		t.Fatalf("GetPersistence(t-tenant): %v", err)
+	}
+	assert.True(t, persistence.HasAIConfig())
+
+	mockSvc.AssertExpectations(t)
+}
+
+func TestGetService_MultiTenantStartFailureDoesNotCacheDeadService(t *testing.T) {
+	oldNewService := newChatService
+	defer func() { newChatService = oldNewService }()
+
+	tempDir := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(tempDir)
+	persistence, err := mtp.GetPersistence("acme")
+	if err != nil {
+		t.Fatalf("GetPersistence(acme): %v", err)
+	}
+	saveEnabledTestAIConfig(t, persistence)
+
+	h := NewAIHandler(mtp, nil, nil)
+
+	failedSvc := new(MockAIService)
+	failedSvc.On("Start", mock.Anything).Return(assert.AnError).Once()
+
+	runningSvc := new(MockAIService)
+	runningSvc.On("Start", mock.Anything).Return(nil).Once()
+
+	created := 0
+	newChatService = func(cfg chat.Config) AIService {
+		created++
+		if created == 1 {
+			return failedSvc
+		}
+		return runningSvc
+	}
+
+	ctx := context.WithValue(context.Background(), OrgIDContextKey, "acme")
+	svc := h.GetService(ctx)
+	assert.Nil(t, svc)
+	_, cached := h.services["acme"]
+	assert.False(t, cached, "failed tenant start should not be cached")
+
+	svc = h.GetService(ctx)
+	assert.Same(t, runningSvc, svc)
+	assert.Equal(t, 2, created)
+
+	failedSvc.AssertExpectations(t)
+	runningSvc.AssertExpectations(t)
 }
 
 func TestSetServiceInitializer_AppliesToExistingServices(t *testing.T) {

@@ -328,9 +328,20 @@ func (h *AISettingsHandler) GetAIService(ctx context.Context) *ai.Service {
 	// internally resolves org paths: base/orgs/<org>/billing.json.
 	billingBaseDir := mtPersistence.BaseDataDir()
 	billingStore := config.NewFileBillingStore(billingBaseDir)
-	qsMgr := ai.NewFileQuickstartCreditManager(
+	qsMgr := ai.NewFileQuickstartCreditManagerWithOrgResolver(
 		billingStore,
 		orgID,
+		func() string {
+			if !h.hostedMode {
+				return orgID
+			}
+			_, effectiveOrgID, err := loadHostedEffectiveBillingState(billingStore, orgID)
+			if err != nil {
+				log.Warn().Str("orgID", orgID).Err(err).Msg("Failed to resolve hosted quickstart billing org fallback")
+				return orgID
+			}
+			return effectiveOrgID
+		},
 		func() *config.AIConfig {
 			cfg, _ := h.loadAIConfigForPersistence(context.Background(), orgID, persistence)
 			return cfg

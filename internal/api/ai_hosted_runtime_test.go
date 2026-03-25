@@ -82,6 +82,44 @@ func TestLoadHostedAwareAIConfig_DoesNotOverrideExplicitAIConfig(t *testing.T) {
 	}
 }
 
+func TestLoadHostedAwareAIConfig_HostedTenantFallsBackToDefaultBillingState(t *testing.T) {
+	baseDir := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(baseDir)
+	persistence, err := mtp.GetPersistence("t-tenant")
+	if err != nil {
+		t.Fatalf("GetPersistence(t-tenant): %v", err)
+	}
+
+	seedHostedAIBillingState(t, mtp, "default")
+
+	loaded, err := loadHostedAwareAIConfig(true, mtp.BaseDataDir(), "t-tenant", persistence)
+	if err != nil {
+		t.Fatalf("loadHostedAwareAIConfig(): %v", err)
+	}
+	if loaded == nil || !loaded.Enabled {
+		t.Fatalf("expected hosted tenant AI config to auto-bootstrap, got %#v", loaded)
+	}
+	if !persistence.HasAIConfig() {
+		t.Fatal("expected hosted tenant AI bootstrap to persist tenant ai config")
+	}
+
+	billingStore := config.NewFileBillingStore(mtp.BaseDataDir())
+	defaultState, err := billingStore.GetBillingState("default")
+	if err != nil {
+		t.Fatalf("GetBillingState(default): %v", err)
+	}
+	if defaultState == nil || !defaultState.QuickstartCreditsGranted {
+		t.Fatal("expected hosted tenant AI bootstrap to reuse default hosted billing state")
+	}
+	tenantState, err := billingStore.GetBillingState("t-tenant")
+	if err != nil {
+		t.Fatalf("GetBillingState(t-tenant): %v", err)
+	}
+	if tenantState != nil && tenantState.SubscriptionState != "" {
+		t.Fatalf("expected tenant org to avoid shadow billing state, got %#v", tenantState)
+	}
+}
+
 func TestAIHandlerStart_HostedAutoBootstrapStartsService(t *testing.T) {
 	oldNewService := newChatService
 	defer func() { newChatService = oldNewService }()

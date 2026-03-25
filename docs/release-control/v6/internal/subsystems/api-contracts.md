@@ -187,6 +187,13 @@ Own canonical runtime payload shapes between backend and frontend.
 
 The API layer already uses contract tests in many places, but every major live
 contract should continue moving toward canonical-only runtime shapes.
+Hosted Pulse Cloud tenant-org AI reads now also follow that same canonical
+rule: `internal/api/ai_hosted_runtime.go`, `internal/api/ai_handlers.go`,
+`internal/api/ai_handler.go`, and `internal/api/hosted_billing_state.go`
+must derive bootstrap and runtime readiness from the effective hosted billing
+lease, falling back to the machine-owned `default` lease when a tenant org
+has no org-local billing state, so `/api/settings/ai`, `/api/ai/status`, and
+`/api/ai/sessions` cannot drift across separate entitlement interpretations.
 The shared API-token management surface now also preserves canonical local
 operator identity when explaining where a token is currently in use. Runtime
 and infrastructure usage labels in the revoke flow keep the local instance
@@ -1641,5 +1648,13 @@ hosted billing lease grants AI capability and carries hosted entitlement
 proof, those read surfaces must persist a canonical quickstart-backed AI
 config with the governed hosted default model instead of returning a synthetic
 `enabled=false` payload that leaves Chat and Patrol unavailable until the
-operator manually saves settings. Once a real AI config exists, that explicit
+operator manually saves settings. Hosted tenant-org reads must also inherit
+the default hosted billing lease whenever no org-local billing state exists,
+so AI bootstrap and quickstart-credit surfaces stay aligned with the same
+machine-owned entitlement source. Once a real AI config exists, that explicit
 operator-owned state must remain authoritative over hosted bootstrap.
+The same hosted contract now also requires tenant Pulse Assistant runtime
+startup to consume that hosted-aware config path and to refuse caching a
+failed tenant chat service, so tenant-org `/api/ai/status` and
+`/api/ai/sessions` cannot stay wedged behind a stale pre-bootstrap service
+after the lease-backed AI config has been persisted.
