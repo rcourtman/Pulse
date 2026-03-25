@@ -658,6 +658,7 @@ func (s *FindingsStore) SetPersistence(p FindingsPersistence) error {
 		// Reset derived indices/caches before rehydrating.
 		s.byResource = make(map[string][]string)
 		s.activeCounts = make(map[FindingSeverity]int)
+		normalizedLoadedState := false
 		if rules != nil {
 			s.suppressionRules = make(map[string]*SuppressionRule, len(rules))
 			for id, r := range rules {
@@ -672,6 +673,9 @@ func (s *FindingsStore) SetPersistence(p FindingsPersistence) error {
 			if f == nil {
 				continue
 			}
+			if normalizeLoadedFinding(f) {
+				normalizedLoadedState = true
+			}
 			// Ensure derived fields are consistent after load.
 			f.syncLoopState()
 			s.findings[id] = f
@@ -681,6 +685,9 @@ func (s *FindingsStore) SetPersistence(p FindingsPersistence) error {
 			}
 		}
 		s.mu.Unlock()
+		if normalizedLoadedState {
+			s.scheduleSave()
+		}
 	}
 	return nil
 }
@@ -864,6 +871,19 @@ func isAllowedLoopTransition(from, to string) bool {
 	default:
 		return true
 	}
+}
+
+func normalizeLoadedFinding(f *Finding) bool {
+	if f == nil {
+		return false
+	}
+
+	if f.ResolvedAt == nil && f.LastRegressionAt != nil && f.AcknowledgedAt != nil && !f.AcknowledgedAt.After(*f.LastRegressionAt) {
+		f.AcknowledgedAt = nil
+		return true
+	}
+
+	return false
 }
 
 // syncLoopStateLocked recomputes loop state and records a lifecycle event if it changed.

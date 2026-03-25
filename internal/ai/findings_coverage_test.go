@@ -78,6 +78,51 @@ func TestFindingsStore_SetPersistence_LoadsFindings(t *testing.T) {
 	}
 }
 
+func TestFindingsStore_SetPersistence_NormalizesRegressedAcknowledgementState(t *testing.T) {
+	store := NewFindingsStore()
+	store.saveDebounce = 5 * time.Millisecond
+	now := time.Now()
+	acknowledgedAt := now.Add(-2 * time.Hour)
+	lastRegressionAt := now.Add(-time.Hour)
+	saved := make(chan map[string]*Finding, 1)
+
+	p := &recordingPersistence{
+		findings: map[string]*Finding{
+			"regressed": {
+				ID:               "regressed",
+				Severity:         FindingSeverityWarning,
+				ResourceID:       "res-3",
+				Title:            "Regressed",
+				LastSeenAt:       now,
+				AcknowledgedAt:   &acknowledgedAt,
+				LastRegressionAt: &lastRegressionAt,
+			},
+		},
+		saved: saved,
+	}
+
+	if err := store.SetPersistence(p); err != nil {
+		t.Fatalf("SetPersistence failed: %v", err)
+	}
+
+	got := store.Get("regressed")
+	if got == nil {
+		t.Fatal("expected finding to load")
+	}
+	if got.AcknowledgedAt != nil {
+		t.Fatal("expected stale acknowledgement to be cleared on load")
+	}
+
+	select {
+	case persisted := <-saved:
+		if persisted["regressed"].AcknowledgedAt != nil {
+			t.Fatal("expected normalized acknowledgement state to be persisted")
+		}
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("timed out waiting for normalized findings save")
+	}
+}
+
 func TestFindingsStore_scheduleSave_NoPersistence(t *testing.T) {
 	store := NewFindingsStore()
 

@@ -511,7 +511,10 @@ Patrol actually succeeds or resolves them for a Patrol-owned reason.
 The shared findings lifecycle must also treat a regressed issue as a new active
 occurrence. When a resolved finding reappears, `internal/ai/findings.go` must
 clear any stale acknowledgement timestamp from the prior occurrence instead of
-carrying that acknowledgement forward onto the regressed active issue.
+carrying that acknowledgement forward onto the regressed active issue. The
+same owner must normalize already-persisted active findings on load when a
+stored acknowledgement predates the last recorded regression, then persist the
+cleaned state back through the canonical findings store.
 AI chat tool-name labels, pending-tool headers, and assistant status copy now
 also route through the shared frontend identifier-label helper, so the chat
 surfaces do not keep their own underscore-stripping behavior separate from
