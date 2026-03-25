@@ -60,6 +60,21 @@ func ensureAdminSession(cfg *config.Config, w http.ResponseWriter, req *http.Req
 		if cfg != nil {
 			configuredAdmin = strings.TrimSpace(cfg.AuthUser)
 		}
+
+		if configuredAdmin != "" && strings.EqualFold(sessionUser, configuredAdmin) {
+			return true
+		}
+
+		// Org-scoped tenant sessions preserve the org owner as the canonical
+		// privileged actor for settings-bound routes.
+		if org := GetOrganization(req.Context()); org != nil {
+			orgID := strings.TrimSpace(org.ID)
+			orgOwner := strings.TrimSpace(org.OwnerUserID)
+			if orgID != "" && orgID != "default" && orgOwner != "" && strings.EqualFold(sessionUser, orgOwner) {
+				return true
+			}
+		}
+
 		if configuredAdmin == "" || !strings.EqualFold(sessionUser, configuredAdmin) {
 			log.Warn().
 				Str("path", req.URL.Path).

@@ -875,6 +875,76 @@ func TestContract_HostedSessionAuthPrecedesAnonymousFallback(t *testing.T) {
 	}
 }
 
+func TestContract_HostedOrgOwnerSessionCanMintRelayMobileToken(t *testing.T) {
+	defer SetMultiTenantEnabled(false)
+	SetMultiTenantEnabled(true)
+	t.Setenv("PULSE_DEV", "true")
+
+	dataDir := t.TempDir()
+	hashed, err := authpkg.HashPassword("Password!1")
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+
+	cfg := &config.Config{
+		DataPath:   dataDir,
+		ConfigPath: dataDir,
+		AuthUser:   "platform-admin",
+		AuthPass:   hashed,
+	}
+
+	mtp := config.NewMultiTenantPersistence(dataDir)
+	org := &models.Organization{
+		ID:          "org-a",
+		DisplayName: "Org A",
+		OwnerUserID: "alice",
+		Members: []models.OrganizationMember{
+			{UserID: "alice", Role: models.OrgRoleOwner, AddedAt: time.Now()},
+		},
+	}
+	if err := mtp.SaveOrganization(org); err != nil {
+		t.Fatalf("save organization: %v", err)
+	}
+
+	router := newMultiTenantRouter(t, cfg)
+
+	sessionToken := "relay-owner-session-" + strings.ReplaceAll(time.Now().UTC().Format(time.RFC3339Nano), ":", "-")
+	GetSessionStore().CreateSession(sessionToken, time.Hour, "agent", "127.0.0.1", "alice")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/security/tokens/relay-mobile", strings.NewReader(`{}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-CSRF-Token", generateCSRFToken(sessionToken))
+	req.Header.Set("X-Pulse-Org-ID", "org-a")
+	req.AddCookie(&http.Cookie{Name: cookieNameSession, Value: sessionToken})
+
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("relay mobile token route status = %d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	var payload struct {
+		Token  string      `json:"token"`
+		Record apiTokenDTO `json:"record"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode relay mobile response: %v", err)
+	}
+	if payload.Token == "" {
+		t.Fatal("expected relay mobile token in response")
+	}
+	if payload.Record.OwnerUserID != "alice" {
+		t.Fatalf("ownerUserId = %q, want alice", payload.Record.OwnerUserID)
+	}
+	if len(cfg.APITokens) != 1 {
+		t.Fatalf("expected one stored token, got %d", len(cfg.APITokens))
+	}
+	if cfg.APITokens[0].OrgID != "org-a" {
+		t.Fatalf("stored token orgId = %q, want org-a", cfg.APITokens[0].OrgID)
+	}
+}
+
 func TestContract_UnifiedAgentReportResponseJSONSnapshot(t *testing.T) {
 	payload := map[string]any{
 		"success":   true,

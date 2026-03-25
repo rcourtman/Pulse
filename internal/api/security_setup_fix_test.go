@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/bootstrap"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
 
@@ -502,6 +504,33 @@ func TestEnsureSettingsWriteScopeAllowsConfiguredAdminSession(t *testing.T) {
 	}
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200 for admin session, got %d", rr.Code)
+	}
+}
+
+func TestEnsureSettingsWriteScopeAllowsOrgOwnerSession(t *testing.T) {
+	cfg := &config.Config{
+		AuthUser: "platform-admin",
+	}
+
+	sessionToken := "settings-write-owner-" + time.Now().Format("150405.000000002")
+	GetSessionStore().CreateSession(sessionToken, time.Hour, "agent", "127.0.0.1", "alice")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/security/test", nil)
+	req.AddCookie(&http.Cookie{Name: "pulse_session", Value: sessionToken})
+	req = req.WithContext(context.WithValue(req.Context(), OrgContextKey, &models.Organization{
+		ID:          "org-a",
+		DisplayName: "Org A",
+		OwnerUserID: "alice",
+	}))
+
+	rr := httptest.NewRecorder()
+	result := ensureSettingsWriteScope(cfg, rr, req)
+
+	if !result {
+		t.Fatal("ensureSettingsWriteScope should allow org owner session users")
+	}
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 for org owner session, got %d", rr.Code)
 	}
 }
 
