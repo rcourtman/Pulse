@@ -958,6 +958,23 @@ func TestHandlePortalBootstrap_RequiresAuth(t *testing.T) {
 	}
 }
 
+func TestHandlePortalBootstrap_RevokedSessionUnauthorized(t *testing.T) {
+	reg, sessionSvc, token, _, userID := newPortalSessionFixture(t)
+
+	if _, err := reg.RevokeUserSessions(userID); err != nil {
+		t.Fatalf("RevokeUserSessions: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/portal/bootstrap", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+	HandlePortalBootstrap(sessionSvc, reg).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
+	}
+}
+
 func TestPortalLoginTemplate_UsesPulseAccountBranding(t *testing.T) {
 	html := renderLoginHTML(t, "test-nonce")
 

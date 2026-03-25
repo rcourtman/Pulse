@@ -189,6 +189,14 @@ Own canonical runtime payload shapes between backend and frontend.
 
 The API layer already uses contract tests in many places, but every major live
 contract should continue moving toward canonical-only runtime shapes.
+The Pulse Account commercial shell now also owns a dedicated bootstrap
+contract in `internal/cloudcp/portal/page.go`, `internal/cloudcp/portal/handlers.go`,
+and `internal/cloudcp/portal/handlers_test.go`. `/api/portal/bootstrap` and
+the in-page `pulse-account-bootstrap` payload must stay shape-identical for
+account identity context, workspace summaries, and renderer-owned public,
+commercial, and control-plane route configuration. New account frontend work
+must extend that shared contract rather than inventing a second local payload
+shape or hardcoding production URLs and route prefixes in static assets.
 Hosted Pulse Cloud tenant-org AI reads now also follow that same canonical
 rule: `internal/api/ai_hosted_runtime.go`, `internal/api/ai_handlers.go`,
 `internal/api/ai_handler.go`, and `internal/api/hosted_billing_state.go`
