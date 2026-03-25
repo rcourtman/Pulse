@@ -1,5 +1,13 @@
-var portalRoot = document.querySelector('[data-commercial-api-base]');
-var LICENSE_API_BASE = portalRoot ? (portalRoot.getAttribute('data-commercial-api-base') || '') : '';
+var bootstrapEl = document.getElementById('pulse-account-bootstrap');
+var portalBootstrap = {};
+if (bootstrapEl) {
+  try {
+    portalBootstrap = JSON.parse(bootstrapEl.textContent || '{}');
+  } catch (_) {
+    portalBootstrap = {};
+  }
+}
+var LICENSE_API_BASE = portalBootstrap.commercial_api_base_url || '';
 
 function showToast(msg, isError) {
   var t = document.getElementById('toast');

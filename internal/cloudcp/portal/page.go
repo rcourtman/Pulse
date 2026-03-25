@@ -1,6 +1,7 @@
 package portal
 
 import (
+	"encoding/json"
 	"html/template"
 	"net/http"
 	"time"
@@ -42,12 +43,39 @@ type portalPageData struct {
 	Accounts             []portalPageAccount
 	Styles               template.CSS
 	Script               template.JS
+	BootstrapJSON        template.JS
 }
 
 type loginPageData struct {
 	Nonce  string
 	Styles template.CSS
 	Script template.JS
+}
+
+type portalBootstrapWorkspace struct {
+	ID          string `json:"id"`
+	DisplayName string `json:"display_name"`
+	State       string `json:"state"`
+	Healthy     bool   `json:"healthy"`
+}
+
+type portalBootstrapAccount struct {
+	ID         string                     `json:"id"`
+	Kind       string                     `json:"kind"`
+	KindLabel  string                     `json:"kind_label"`
+	Name       string                     `json:"name"`
+	Role       string                     `json:"role"`
+	CanManage  bool                       `json:"can_manage"`
+	HasBilling bool                       `json:"has_billing"`
+	Workspaces []portalBootstrapWorkspace `json:"workspaces"`
+}
+
+type portalBootstrapData struct {
+	Email                string                   `json:"email"`
+	PublicSiteURL        string                   `json:"public_site_url"`
+	SupportEmail         string                   `json:"support_email"`
+	CommercialAPIBaseURL string                   `json:"commercial_api_base_url"`
+	Accounts             []portalBootstrapAccount `json:"accounts"`
 }
 
 const (
@@ -173,6 +201,11 @@ func HandlePortalPage(sessionSvc *cpauth.Service, reg *registry.TenantRegistry) 
 func renderPortalPage(w http.ResponseWriter, nonce, email string, accounts []portalPageAccount) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
+	bootstrapJSON, err := buildPortalBootstrapJSON(email, accounts)
+	if err != nil {
+		log.Error().Err(err).Msg("cloudcp.portal.page: marshal bootstrap data")
+		bootstrapJSON = template.JS(`{}`)
+	}
 	if err := portalPageTmpl.Execute(w, portalPageData{
 		Nonce:                nonce,
 		Email:                email,
@@ -182,6 +215,7 @@ func renderPortalPage(w http.ResponseWriter, nonce, email string, accounts []por
 		Accounts:             accounts,
 		Styles:               portalStyles,
 		Script:               portalScript,
+		BootstrapJSON:        bootstrapJSON,
 	}); err != nil {
 		log.Error().Err(err).Msg("cloudcp.portal.page: render portal page")
 	}
@@ -197,4 +231,41 @@ func renderLoginPage(w http.ResponseWriter, nonce string) {
 	}); err != nil {
 		log.Error().Err(err).Msg("cloudcp.portal.page: render login page")
 	}
+}
+
+func buildPortalBootstrapJSON(email string, accounts []portalPageAccount) (template.JS, error) {
+	bootstrapAccounts := make([]portalBootstrapAccount, 0, len(accounts))
+	for _, account := range accounts {
+		workspaces := make([]portalBootstrapWorkspace, 0, len(account.Workspaces))
+		for _, workspace := range account.Workspaces {
+			workspaces = append(workspaces, portalBootstrapWorkspace{
+				ID:          workspace.ID,
+				DisplayName: workspace.DisplayName,
+				State:       workspace.State,
+				Healthy:     workspace.Healthy,
+			})
+		}
+		bootstrapAccounts = append(bootstrapAccounts, portalBootstrapAccount{
+			ID:         account.ID,
+			Kind:       account.Kind,
+			KindLabel:  account.KindLabel,
+			Name:       account.Name,
+			Role:       account.Role,
+			CanManage:  account.CanManage,
+			HasBilling: account.HasBilling,
+			Workspaces: workspaces,
+		})
+	}
+
+	payload, err := json.Marshal(portalBootstrapData{
+		Email:                email,
+		PublicSiteURL:        defaultPublicSiteURL,
+		SupportEmail:         defaultSupportEmail,
+		CommercialAPIBaseURL: defaultCommercialAPIBaseURL,
+		Accounts:             bootstrapAccounts,
+	})
+	if err != nil {
+		return "", err
+	}
+	return template.JS(payload), nil
 }

@@ -727,7 +727,10 @@ func TestPortalPageTemplate_AccountServicesRendered(t *testing.T) {
 	mustContain := []string{
 		"<title>Pulse Account</title>",
 		"Pulse Account",
-		`data-commercial-api-base="https://license.pulserelay.pro"`,
+		`id="pulse-account-bootstrap"`,
+		`"commercial_api_base_url":"https://license.pulserelay.pro"`,
+		`"email":"owner@example.com"`,
+		`"accounts":[{"id":"a_test"`,
 		"Other account services",
 		`id="open-manage-service"`,
 		`id="open-retrieve-service"`,
