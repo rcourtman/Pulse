@@ -159,6 +159,10 @@ The same supporting-chip rule applies to timing: the primary summary card may
 show health and active-finding support, but it should not add another recency
 pill once header metadata, verification, and findings footer already carry the
 governed activity/verification timestamps.
+That summary-card/metrics-strip split also applies to findings counts. The
+primary assessment card may keep health as supporting context, but active
+findings, warning counts, and critical counts belong to the supporting metric
+strip rather than being repeated as duplicate badges inside the primary card.
 That same summary surface must also explain what Patrol actually verified.
 Recent run history should drive a visible verification summary that tells the
 operator whether Patrol recently completed a successful full patrol, only ran

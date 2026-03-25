@@ -159,9 +159,6 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
                         Health {summary().overall_health.grade} ·{' '}
                         {Math.round(summary().overall_health.score)}/100
                       </span>
-                      <span class="rounded-full border border-border-subtle bg-base px-2.5 py-1 text-xs font-medium text-base-content">
-                        Active findings {summaryStats().totalActive}
-                      </span>
                     </div>
 
                     <div class="mt-4 rounded-md border border-border-subtle bg-base/90 p-3">
@@ -186,14 +183,6 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
                   </div>
                 </div>
 
-                <div class="flex flex-wrap items-center gap-2">
-                  <span class="rounded-full border border-border-subtle bg-base px-2.5 py-1 text-xs font-medium text-base-content">
-                    Critical {summary().findings_count.critical}
-                  </span>
-                  <span class="rounded-full border border-border-subtle bg-base px-2.5 py-1 text-xs font-medium text-base-content">
-                    Warning {summary().findings_count.warning}
-                  </span>
-                </div>
               </div>
 
               <Show when={state.hasInvestigationContext()}>

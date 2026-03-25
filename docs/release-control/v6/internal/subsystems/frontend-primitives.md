@@ -200,6 +200,10 @@ That same summary-shell rule also applies to timing metadata: if the header,
 verification card, or findings footer already presents the governed Patrol
 activity timestamp, the summary chip row must not add another recency badge
 that competes with those owned timing surfaces.
+The same ownership split applies to supporting counts: if the Patrol summary
+surface renders the metric strip for active findings, warnings, criticals, and
+fixes, the primary summary card should not repeat those same counts in badge
+form beside the assessment and verification copy.
 Those supporting cards must also keep their content factual and count-based:
 active findings, critical findings, warnings, and fixes are valid secondary
 readouts, while labels such as `Issues detected` or `Partial verification`

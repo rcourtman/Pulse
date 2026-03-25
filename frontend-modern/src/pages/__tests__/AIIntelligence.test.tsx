@@ -818,7 +818,9 @@ describe('AIIntelligence entitlement gating', () => {
       expect(screen.getAllByText('Coverage incomplete').length).toBeGreaterThan(0);
       expect(screen.getByText('No recent full patrol')).toBeInTheDocument();
       expect(screen.getAllByText(/Last activity/i)).toHaveLength(1);
-      expect(screen.getByText('Warnings')).toBeInTheDocument();
+      expect(screen.getAllByText('Active findings')).toHaveLength(1);
+      expect(screen.getAllByText('Warnings')).toHaveLength(1);
+      expect(screen.getAllByText('Critical')).toHaveLength(1);
     });
 
     expect(screen.queryByText('No issues found')).not.toBeInTheDocument();

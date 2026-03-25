@@ -174,6 +174,7 @@ Own canonical runtime payload shapes between backend and frontend.
 8. Treat Patrol summary supporting metrics as readouts, not reinterpretations: when frontend consumers derive cards such as active findings, criticals, warnings, or fixes from the canonical payloads, those cards must stay numeric and must not synthesize new assessment labels like `Issues detected` or verification labels like `Partial verification` beneath the primary summary contract
 9. Treat active Patrol runtime transport as compatible with factual activity surfaces: when the runtime is currently running, frontend consumers may surface in-progress activity context, but they must not replace the activity strip with a second assessment verdict derived from runtime state alone
 10. Treat Patrol recency as a singular transport-driven fact: once header metadata, verification copy, or the findings footer already present the governed Patrol timing context, frontend summary consumers must not derive an extra timing pill from the same payloads inside the primary summary card
+11. Treat Patrol findings counts as a singular supporting surface as well: when the summary shell already exposes count cards for active findings, warnings, criticals, and fixes, the primary assessment card must not repeat those same payload-derived counts as secondary badges
 
 ## Current State
 
