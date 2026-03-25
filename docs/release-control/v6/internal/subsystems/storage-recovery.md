@@ -856,3 +856,11 @@ treat a displayed relay pairing token as disposable once canonical metadata
 shows `lastUsedAt`. Shared transport mutations must preserve used-token
 continuity instead of deleting a credential that an already paired device
 still depends on.
+That same shared backend helper layer now also owns hosted relay bootstrap
+continuity. Storage- and recovery-adjacent consumers may read relay status or
+mobile onboarding payloads, but they must not assume hosted tenants need a
+manual relay settings write before those reads become valid. When hosted
+billing state grants relay, the shared runtime helper must persist the
+canonical hosted relay config and keep subsequent reads on that same
+machine-owned state instead of letting adjacent surfaces invent their own
+fallback bootstrap or disable heuristics.

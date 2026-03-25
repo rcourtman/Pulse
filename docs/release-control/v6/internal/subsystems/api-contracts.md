@@ -55,6 +55,7 @@ Own canonical runtime payload shapes between backend and frontend.
 32. `frontend-modern/src/utils/apiTokenPresentation.ts`
 33. `frontend-modern/src/utils/infrastructureSettingsPresentation.ts`
 34. `internal/api/router_routes_auth_security.go`
+35. `internal/api/relay_hosted_runtime.go`
 
 ## Shared Boundaries
 
@@ -1584,3 +1585,15 @@ server route, not the browser, defines the canonical dedicated
 gates alongside legacy `ai:chat` and `ai:execute` mobile tokens, and the
 token-purpose metadata. The pairing UI only consumes that server-owned
 credential when requesting the onboarding payload.
+That same shared backend API contract now also owns hosted relay bootstrap
+reads. `internal/api/router.go`, `internal/api/onboarding_handlers.go`, and
+`internal/api/relay_hosted_runtime.go` must derive `/api/settings/relay` and
+the mobile onboarding payload from the same runtime helper. In hosted mode,
+when no explicit relay config exists but the default hosted billing lease
+grants `relay` and carries an entitlement JWT plus canonical `instance_host`,
+those read surfaces must auto-bootstrap the persisted relay runtime with the
+default relay server URL, a machine-owned hosted instance secret, and
+generated relay identity metadata instead of requiring a prior manual
+`PUT /api/settings/relay`. The API response contract must continue to expose
+only public relay fields while omitting the hosted instance secret and
+private key.

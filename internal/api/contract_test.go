@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -1893,6 +1894,40 @@ func TestContract_OnboardingQRResponseJSONSnapshot(t *testing.T) {
 	}`
 
 	assertJSONSnapshot(t, got, want)
+}
+
+func TestContract_HostedRelayConfigResponseJSONSnapshot(t *testing.T) {
+	router, _, instanceHost := newHostedRelayRuntimeTestRouter(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/settings/relay", nil)
+	rec := httptest.NewRecorder()
+	router.handleGetRelayConfig(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	cfg, err := router.loadRelayConfigForRuntime(context.Background())
+	if err != nil {
+		t.Fatalf("loadRelayConfigForRuntime() error = %v", err)
+	}
+
+	body := rec.Body.String()
+	if strings.Contains(body, instanceHost) {
+		t.Fatalf("relay config response leaked hosted instance secret %q: %s", instanceHost, body)
+	}
+	if strings.Contains(body, cfg.IdentityPrivateKey) {
+		t.Fatalf("relay config response leaked identity private key: %s", body)
+	}
+
+	want := fmt.Sprintf(`{
+		"enabled":true,
+		"server_url":"%s",
+		"identity_public_key":"%s",
+		"identity_fingerprint":"%s"
+	}`, relay.DefaultServerURL, cfg.IdentityPublicKey, cfg.IdentityFingerprint)
+
+	assertJSONSnapshot(t, rec.Body.Bytes(), want)
 }
 
 func TestContract_UpdatePlanManualFallbackJSONSnapshot(t *testing.T) {

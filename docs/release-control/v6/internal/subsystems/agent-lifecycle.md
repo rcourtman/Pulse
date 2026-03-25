@@ -207,6 +207,14 @@ adjacent setup and install flows may depend on that helper layer, but they may
 only consume the server-owned minting route and the governed compatibility
 gates for the mobile runtime endpoints. They must not recreate broader
 AI-scoped mobile credentials or invent route-local scope exceptions.
+That same lifecycle-adjacent setup path now also depends on the hosted relay
+runtime helper inside `internal/api/`. Hosted Pulse Cloud tenants must not
+require an operator to visit Settings and manually `PUT /api/settings/relay`
+before Pulse Mobile pairing becomes possible. When hosted entitlements grant
+relay, the shared backend helper must auto-bootstrap the canonical relay
+runtime state that onboarding and relay-status reads consume, while still
+preserving explicit operator-owned disablement when a real relay config was
+already written.
 The direct Proxmox fallback workspace now also lives explicitly inside this
 lifecycle boundary: `InfrastructureWorkspace.tsx`,
 `infrastructureWorkspaceModel.ts`,

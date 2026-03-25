@@ -2714,7 +2714,7 @@ func (r *Router) RestartAIChat(ctx context.Context) {
 
 // StartRelay starts the relay client if configured and licensed.
 func (r *Router) StartRelay(ctx context.Context) {
-	cfg, err := r.persistence.LoadRelayConfig()
+	cfg, err := r.loadRelayConfigForRuntime(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to load relay config")
 		return
@@ -2739,18 +2739,7 @@ func (r *Router) StartRelay(ctx context.Context) {
 
 	deps := relay.ClientDeps{
 		LicenseTokenFunc: func() string {
-			if r.licenseHandlers == nil {
-				return ""
-			}
-			svc := r.licenseHandlers.Service(context.Background())
-			if svc == nil {
-				return ""
-			}
-			lic := svc.Current()
-			if lic == nil {
-				return ""
-			}
-			return lic.Raw
+			return r.relayRegistrationToken(context.Background())
 		},
 		TokenValidator: func(token string) bool {
 			config.Mu.Lock()
@@ -2800,7 +2789,7 @@ func (r *Router) StopRelay() {
 }
 
 func (r *Router) handleGetRelayConfig(w http.ResponseWriter, req *http.Request) {
-	cfg, err := r.persistence.LoadRelayConfig()
+	cfg, err := r.loadRelayConfigForRuntime(req.Context())
 	if err != nil {
 		http.Error(w, "failed to load relay config", http.StatusInternalServerError)
 		return

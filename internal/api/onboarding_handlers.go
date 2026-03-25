@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -310,14 +311,7 @@ func (r *Router) buildOnboardingPayload(req *http.Request, relayCfg *relay.Confi
 }
 
 func (r *Router) loadRelayConfigForOnboarding() (*relay.Config, error) {
-	if r != nil && r.persistence != nil {
-		cfg, err := r.persistence.LoadRelayConfig()
-		if err != nil {
-			return nil, err
-		}
-		return cfg, nil
-	}
-	return relay.DefaultConfig(), nil
+	return r.loadRelayConfigForRuntime(context.Background())
 }
 
 func (r *Router) currentRelayInstanceID() string {
