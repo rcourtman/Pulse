@@ -118,10 +118,11 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 	// Hosted Pulse Pro trial signup: public form + checkout + return completion.
 	trialSignupHandlers := NewTrialSignupHandlers(deps.Config, deps.EmailSender, deps.TrialSignupStore, hostedEntitlements)
 	hostedEntitlementHandlers := NewHostedEntitlementHandlers(hostedEntitlements)
-	mux.Handle("/start-pro-trial", trialSignupPageLimiter.Middleware(http.HandlerFunc(trialSignupHandlers.HandleStartProTrial)))
-	mux.Handle("/api/trial-signup/request-verification", trialSignupVerificationLimiter.Middleware(http.HandlerFunc(trialSignupHandlers.HandleRequestVerification)))
-	mux.Handle("/trial-signup/verify", trialSignupVerifyLimiter.Middleware(http.HandlerFunc(trialSignupHandlers.HandleVerifyEmail)))
-	mux.Handle("/api/trial-signup/checkout", trialSignupCheckoutLimiter.Middleware(http.HandlerFunc(trialSignupHandlers.HandleCheckout)))
+	trialSignupRateLimited := trialSignupHandlers.HandleRateLimitedTrialSignup
+	mux.Handle("/start-pro-trial", trialSignupPageLimiter.MiddlewareWithRejected(http.HandlerFunc(trialSignupHandlers.HandleStartProTrial), trialSignupRateLimited))
+	mux.Handle("/api/trial-signup/request-verification", trialSignupVerificationLimiter.MiddlewareWithRejected(http.HandlerFunc(trialSignupHandlers.HandleRequestVerification), trialSignupRateLimited))
+	mux.Handle("/trial-signup/verify", trialSignupVerifyLimiter.MiddlewareWithRejected(http.HandlerFunc(trialSignupHandlers.HandleVerifyEmail), trialSignupRateLimited))
+	mux.Handle("/api/trial-signup/checkout", trialSignupCheckoutLimiter.MiddlewareWithRejected(http.HandlerFunc(trialSignupHandlers.HandleCheckout), trialSignupRateLimited))
 	mux.Handle("/trial-signup/complete", trialSignupCompleteLimiter.Middleware(http.HandlerFunc(trialSignupHandlers.HandleTrialSignupComplete)))
 	mux.Handle("/api/trial-signup/redeem", trialSignupRedeemLimiter.Middleware(http.HandlerFunc(trialSignupHandlers.HandleTrialSignupRedeem)))
 	mux.Handle("/api/entitlements/refresh", hostedEntitlementRefreshLimiter.Middleware(http.HandlerFunc(hostedEntitlementHandlers.HandleRefresh)))

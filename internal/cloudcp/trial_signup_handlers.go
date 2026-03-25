@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/mail"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -1085,6 +1086,88 @@ func (h *TrialSignupHandlers) renderTrialSignupSuccessPage(w http.ResponseWriter
 	if err := trialSignupSuccessTemplate.Execute(w, data); err != nil {
 		log.Error().Err(err).Msg("trial signup success page render failed")
 	}
+}
+
+func (h *TrialSignupHandlers) HandleRateLimitedTrialSignup(w http.ResponseWriter, r *http.Request, retryAfter int) {
+	data := h.trialSignupPageDataFromRequest(r)
+	data.ErrorMessage = trialSignupRateLimitMessage(retryAfter)
+	h.renderTrialSignupPage(w, r, http.StatusTooManyRequests, data)
+}
+
+func (h *TrialSignupHandlers) trialSignupPageDataFromRequest(r *http.Request) trialSignupPageData {
+	data := trialSignupPageData{
+		OrgID:         trialSignupDefaultOrgID,
+		ReturnTarget:  "your Pulse instance",
+		Cancelled:     strings.EqualFold(strings.TrimSpace(r.URL.Query().Get("cancelled")), "1"),
+		VerifiedToken: strings.TrimSpace(r.URL.Query().Get("verified")),
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		q := r.URL.Query()
+		data.OrgID = normalizeTrialOrgID(q.Get("org_id"))
+		data.ReturnURL = strings.TrimSpace(q.Get("return_url"))
+		data.InstanceToken = strings.TrimSpace(q.Get("instance_token"))
+		data.Name = strings.TrimSpace(q.Get("name"))
+		data.Email = strings.TrimSpace(q.Get("email"))
+		data.Company = strings.TrimSpace(q.Get("company"))
+	default:
+		if err := r.ParseForm(); err == nil {
+			data.OrgID = normalizeTrialOrgID(r.FormValue("org_id"))
+			data.ReturnURL = strings.TrimSpace(r.FormValue("return_url"))
+			data.InstanceToken = strings.TrimSpace(r.FormValue("instance_token"))
+			data.Name = strings.TrimSpace(r.FormValue("name"))
+			data.Email = strings.TrimSpace(r.FormValue("email"))
+			data.Company = strings.TrimSpace(r.FormValue("company"))
+			if verifiedToken := strings.TrimSpace(r.FormValue("verified_token")); verifiedToken != "" {
+				data.VerifiedToken = verifiedToken
+			}
+		}
+	}
+
+	if data.ReturnURL != "" {
+		data.ReturnTarget = summarizeTrialReturnTarget(data.ReturnURL)
+	}
+	if data.VerifiedToken == "" {
+		return data
+	}
+
+	record, err := h.lookupVerifiedTrialSignupRecord(data.VerifiedToken)
+	if err != nil || record == nil {
+		return data
+	}
+
+	data.OrgID = record.OrgID
+	data.ReturnURL = record.ReturnURL
+	data.InstanceToken = record.InstanceToken
+	data.ReturnTarget = summarizeTrialReturnTarget(record.ReturnURL)
+	data.Name = record.Name
+	data.Email = record.Email
+	data.Company = record.Company
+	data.Verified = true
+	return data
+}
+
+func trialSignupRateLimitMessage(retryAfter int) string {
+	return "Too many trial setup attempts from this browser. " + humanizeTrialSignupRetryAfter(retryAfter) + "."
+}
+
+func humanizeTrialSignupRetryAfter(retryAfter int) string {
+	if retryAfter <= 0 {
+		return "Try again later"
+	}
+	if retryAfter < 90 {
+		return "Try again in about a minute"
+	}
+	if retryAfter < 3600 {
+		minutes := int((time.Duration(retryAfter)*time.Second + time.Minute - 1) / time.Minute)
+		return "Try again in about " + strconv.Itoa(minutes) + " minutes"
+	}
+	hours := int((time.Duration(retryAfter)*time.Second + time.Hour - 1) / time.Hour)
+	if hours == 1 {
+		return "Try again in about 1 hour"
+	}
+	return "Try again in about " + strconv.Itoa(hours) + " hours"
 }
 
 func (h *TrialSignupHandlers) lookupVerifiedTrialSignupRecord(verifiedToken string) (*TrialSignupRecord, error) {

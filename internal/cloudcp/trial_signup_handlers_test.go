@@ -40,6 +40,34 @@ func TestTrialSignupHandleStartProTrialRendersCheckoutForm(t *testing.T) {
 	}
 }
 
+func TestTrialSignupHandleRateLimitedTrialSignupPreservesVerifiedCheckoutState(t *testing.T) {
+	h, _, sender := newTrialSignupTestHandler(t)
+	rawToken := requestTrialVerification(t, h, sender)
+	verifiedToken := verifyTrialRequest(t, h, rawToken)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/trial-signup/checkout", strings.NewReader(url.Values{
+		"verified_token": {verifiedToken},
+	}.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	h.HandleRateLimitedTrialSignup(rec, req, 120)
+
+	if rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("status=%d, want %d body=%q", rec.Code, http.StatusTooManyRequests, rec.Body.String())
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "Too many trial setup attempts from this browser. Try again in about 2 minutes.") {
+		t.Fatalf("expected rate-limit guidance, got %q", body)
+	}
+	if !strings.Contains(body, "Backup link confirmed") {
+		t.Fatalf("expected verified state to be preserved, got %q", body)
+	}
+	if !strings.Contains(body, "owner@example.com") {
+		t.Fatalf("expected verified email in response body")
+	}
+}
+
 func TestTrialSignupHandleRequestVerificationSendsEmail(t *testing.T) {
 	h, _, sender := newTrialSignupTestHandler(t)
 	form := url.Values{

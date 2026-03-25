@@ -73,6 +73,65 @@ func TestCPRateLimiterMiddleware_TooManyRequests(t *testing.T) {
 	if calls != 1 {
 		t.Fatalf("next handler calls after reject = %d, want 1", calls)
 	}
+	if rec2.Header().Get("Retry-After") == "" {
+		t.Fatal("expected Retry-After header")
+	}
+}
+
+func TestCPRateLimiterMiddlewareWithRejectedUsesCustomHandler(t *testing.T) {
+	rl := NewCPRateLimiter(1, time.Minute)
+	calls := 0
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		w.WriteHeader(http.StatusNoContent)
+	})
+	h := rl.MiddlewareWithRejected(next, func(w http.ResponseWriter, r *http.Request, retryAfter int) {
+		if retryAfter < 1 {
+			t.Fatalf("retryAfter=%d, want positive", retryAfter)
+		}
+		http.Error(w, "custom blocked", http.StatusTooManyRequests)
+	})
+
+	req1 := httptest.NewRequest(http.MethodPost, "/start-pro-trial", nil)
+	req1.RemoteAddr = "198.51.100.7:1234"
+	rec1 := httptest.NewRecorder()
+	h.ServeHTTP(rec1, req1)
+	if rec1.Code != http.StatusNoContent {
+		t.Fatalf("first request status = %d, want %d", rec1.Code, http.StatusNoContent)
+	}
+
+	req2 := httptest.NewRequest(http.MethodPost, "/start-pro-trial", nil)
+	req2.RemoteAddr = "198.51.100.7:1234"
+	rec2 := httptest.NewRecorder()
+	h.ServeHTTP(rec2, req2)
+
+	if rec2.Code != http.StatusTooManyRequests {
+		t.Fatalf("second request status = %d, want %d", rec2.Code, http.StatusTooManyRequests)
+	}
+	if rec2.Body.String() != "custom blocked\n" {
+		t.Fatalf("blocked body=%q, want custom handler body", rec2.Body.String())
+	}
+	if calls != 1 {
+		t.Fatalf("next handler calls=%d, want 1", calls)
+	}
+	if rec2.Header().Get("Retry-After") == "" {
+		t.Fatal("expected Retry-After header")
+	}
+}
+
+func TestCPRateLimiterAllowAtReportsRemainingBackoff(t *testing.T) {
+	rl := NewCPRateLimiter(1, time.Minute)
+	ip := "198.51.100.44"
+	now := time.Unix(1710000000, 0).UTC()
+	rl.attempts[ip] = []time.Time{now.Add(-30 * time.Second)}
+
+	allowed, retryAfter := rl.allowAt(ip, now)
+	if allowed {
+		t.Fatal("expected request to be rejected")
+	}
+	if retryAfter < 29*time.Second || retryAfter > 31*time.Second {
+		t.Fatalf("retryAfter=%v, want about 30s", retryAfter)
+	}
 }
 
 func TestClientIP(t *testing.T) {
