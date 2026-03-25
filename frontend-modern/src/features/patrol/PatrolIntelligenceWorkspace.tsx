@@ -30,6 +30,8 @@ export function PatrolIntelligenceWorkspace(props: { state: PatrolIntelligenceSt
       <PatrolStatusBar
         enabled={state.patrolEnabledLocal()}
         refreshTrigger={state.activityRefreshTrigger()}
+        runtimeState={state.runtimeState()}
+        blockedReason={state.blockedReason()}
       />
 
       <div class="flex items-center gap-1 border-b border-border">

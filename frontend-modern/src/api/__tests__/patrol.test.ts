@@ -5,6 +5,7 @@ vi.mock('@/utils/apiClient', () => ({
 }));
 
 import {
+  getPatrolStatus,
   getPatrolRun,
   getPatrolRunHistory,
   getPatrolRunHistoryWithToolCalls,
@@ -56,6 +57,20 @@ describe('patrol api', () => {
     expect(apiFetchJSONMock).toHaveBeenCalledWith(
       '/api/ai/patrol/runs/run%2F25?include=tool_calls',
     );
+  });
+
+  it('preserves the canonical patrol runtime state payload', async () => {
+    apiFetchJSONMock.mockResolvedValueOnce({
+      runtime_state: 'blocked',
+      blocked_reason: 'Quickstart credits exhausted. Connect your API key to continue using AI Patrol.',
+      healthy: false,
+    } as any);
+
+    await expect(getPatrolStatus()).resolves.toMatchObject({
+      runtime_state: 'blocked',
+      blocked_reason: 'Quickstart credits exhausted. Connect your API key to continue using AI Patrol.',
+      healthy: false,
+    });
   });
 
   it('normalizes patrol run alert identifiers', async () => {

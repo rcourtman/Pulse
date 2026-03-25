@@ -131,7 +131,8 @@ Own canonical runtime payload shapes between backend and frontend.
 10. Add or change infrastructure operations token generation, lookup, assignment, the pure unified-agent inventory/install model, the split infrastructure install/reporting state owners, the split direct-node/discovery infrastructure settings owners, the shared infrastructure-operations state provider/context shell, and reporting/install presentation through `frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx`, `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`, `frontend-modern/src/components/Settings/useInfrastructureConfiguredNodesState.ts`, `frontend-modern/src/components/Settings/useInfrastructureDiscoveryRuntimeState.ts`, `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx`, `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx`, and `frontend-modern/src/components/Settings/useInfrastructureReportingState.tsx`
 11. Keep `internal/api/session_store.go` on a fail-closed auth-persistence boundary: persisted OIDC refresh tokens may only round-trip through encrypted-at-rest session payloads, and any missing-crypto or invalid-ciphertext path must drop the token instead of preserving plaintext-at-rest session state.
 12. Keep tenant AI handler wiring on canonical provider ownership: `internal/api/ai_handlers.go` may wire tenant `ReadState` and tenant-scoped unified-resource providers into AI services, but it must not revive tenant snapshot-provider bridges once Patrol can initialize and verify from those canonical providers directly.
-13. Keep Pulse Mobile relay credential minting and permission ownership on backend ownership: `internal/api/router_routes_auth_security.go`, `internal/api/security_tokens.go`, `internal/api/auth.go`, `internal/api/router_routes_ai_relay.go`, and `frontend-modern/src/api/security.ts` may expose the canonical mobile runtime token creator and governed route gates, but browser callers must only consume that route and must not define the mobile runtime scope, compatibility gate list, or token-purpose metadata locally.
+13. Keep Patrol status transport semantics explicit in that same AI handler layer: the Patrol status endpoint must carry machine-readable runtime availability such as blocked, running, disabled, active, or unavailable rather than asking frontend consumers to infer operator state from stale summaries or run history.
+14. Keep Pulse Mobile relay credential minting and permission ownership on backend ownership: `internal/api/router_routes_auth_security.go`, `internal/api/security_tokens.go`, `internal/api/auth.go`, `internal/api/router_routes_ai_relay.go`, and `frontend-modern/src/api/security.ts` may expose the canonical mobile runtime token creator and governed route gates, but browser callers must only consume that route and must not define the mobile runtime scope, compatibility gate list, or token-purpose metadata locally.
 
 ## Forbidden Paths
 
@@ -162,6 +163,7 @@ Own canonical runtime payload shapes between backend and frontend.
 3. Route runtime changes through the explicit API-contract proof policies in `registry.json`; default fallback proof routing is not allowed
 4. Update this contract when canonical payload ownership changes
 5. Keep `/api/resources` policy metadata aligned across backend payload tests and canonical frontend resource consumers whenever sensitivity or routing fields change
+6. Keep Patrol status payloads explicit enough that the frontend can present blocked runtime state without treating a previously healthy summary snapshot as current runtime truth
 
 ## Current State
 
@@ -1197,11 +1199,20 @@ That same frontend run-history path must also preserve and expose
 deterministic triage-only runs do not collapse into generic "no analysis"
 history entries.
 Patrol status payloads now also treat quickstart credit state as canonical API
-contract data: `/api/ai/patrol/status` must surface
+contract data: the Patrol status endpoint must surface
 `quickstart_credits_remaining`, `quickstart_credits_total`, and
 `using_quickstart` directly from backend runtime state so the frontend can
 render Patrol quickstart availability without local heuristics or shadow
 derived state.
+That same Patrol status contract now also carries a canonical `runtime_state`
+field, so the frontend can distinguish blocked, running, disabled, active,
+and unavailable Patrol runtime states without deriving operator status from
+stale health summaries, last-run history, or local blocked-reason heuristics.
+The backend status payload must derive that blocked runtime state directly
+from current quickstart-credit availability, and it must clear stale
+quickstart-exhausted block metadata once credits or BYOK return, so
+the Patrol status endpoint cannot leave Patrol looking healthy or paused based on
+an out-of-date last-run artifact.
 Patrol mutate endpoints that depend on the background service must also fail
 closed with `503 Service Unavailable` when AI service initialization is absent
 rather than dereferencing a nil service and crashing before a contract response

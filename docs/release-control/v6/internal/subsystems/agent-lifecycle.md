@@ -171,6 +171,11 @@ metadata through the shared unified-resource helper before it returns
 resource payloads, so lifecycle-adjacent links keep the same canonical
 metadata pass as the rest of the resource API instead of composing local
 attach wrappers.
+That same shared `internal/api/` dependency now also keeps Patrol runtime
+availability explicit as API-owned state. Lifecycle-adjacent setup and install
+flows may touch the shared AI handler layer, but they must not collapse a
+blocked Patrol runtime back into generic healthy status just because the last
+successful summary snapshot was green.
 Invalid `sourceAdapter` values are rejected at the API boundary, so the fleet
 lane continues to consume only the canonical adapter set rather than
 introducing a broader compatibility escape hatch.

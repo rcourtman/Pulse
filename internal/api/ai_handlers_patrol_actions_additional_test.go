@@ -119,6 +119,36 @@ func TestHandleGetPatrolStatus_IncludesQuickstartFields(t *testing.T) {
 	}
 }
 
+func TestHandleGetPatrolStatus_DerivesBlockedRuntimeStateForExhaustedQuickstartCredits(t *testing.T) {
+	handler, _, _, _ := setupAIHandlerWithPatrol(t)
+
+	handler.defaultAIService.SetQuickstartCredits(&stubQuickstartCreditManager{remaining: 0})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/patrol/status", nil)
+	rec := httptest.NewRecorder()
+
+	handler.HandleGetPatrolStatus(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+
+	var resp PatrolStatusResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if resp.RuntimeState != ai.PatrolRuntimeStateBlocked {
+		t.Fatalf("runtime_state = %q, want %q", resp.RuntimeState, ai.PatrolRuntimeStateBlocked)
+	}
+	if resp.BlockedReason != "Quickstart credits exhausted. Connect your API key to continue using AI Patrol." {
+		t.Fatalf("blocked_reason = %q", resp.BlockedReason)
+	}
+	if resp.Healthy {
+		t.Fatal("expected blocked patrol response to report healthy=false")
+	}
+}
+
 func TestPatrolActionHandlers_NoAIService_ReturnStructuredServiceUnavailable(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}

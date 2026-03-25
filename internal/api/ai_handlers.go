@@ -4665,19 +4665,20 @@ func (h *AISettingsHandler) HandleOAuthDisconnect(w http.ResponseWriter, r *http
 
 // PatrolStatusResponse is the response for GET /api/ai/patrol/status
 type PatrolStatusResponse struct {
-	Running          bool       `json:"running"`
-	Enabled          bool       `json:"enabled"`
-	LastPatrolAt     *time.Time `json:"last_patrol_at,omitempty"`
-	NextPatrolAt     *time.Time `json:"next_patrol_at,omitempty"`
-	LastDurationMs   int64      `json:"last_duration_ms"`
-	ResourcesChecked int        `json:"resources_checked"`
-	FindingsCount    int        `json:"findings_count"`
-	ErrorCount       int        `json:"error_count"`
-	Healthy          bool       `json:"healthy"`
-	IntervalMs       int64      `json:"interval_ms"` // Patrol interval in milliseconds
-	FixedCount       int        `json:"fixed_count"` // Number of issues auto-fixed by Patrol
-	BlockedReason    string     `json:"blocked_reason,omitempty"`
-	BlockedAt        *time.Time `json:"blocked_at,omitempty"`
+	RuntimeState     ai.PatrolRuntimeState `json:"runtime_state"`
+	Running          bool                  `json:"running"`
+	Enabled          bool                  `json:"enabled"`
+	LastPatrolAt     *time.Time            `json:"last_patrol_at,omitempty"`
+	NextPatrolAt     *time.Time            `json:"next_patrol_at,omitempty"`
+	LastDurationMs   int64                 `json:"last_duration_ms"`
+	ResourcesChecked int                   `json:"resources_checked"`
+	FindingsCount    int                   `json:"findings_count"`
+	ErrorCount       int                   `json:"error_count"`
+	Healthy          bool                  `json:"healthy"`
+	IntervalMs       int64                 `json:"interval_ms"` // Patrol interval in milliseconds
+	FixedCount       int                   `json:"fixed_count"` // Number of issues auto-fixed by Patrol
+	BlockedReason    string                `json:"blocked_reason,omitempty"`
+	BlockedAt        *time.Time            `json:"blocked_at,omitempty"`
 	// Quickstart credit info for Patrol quickstart mode
 	QuickstartCreditsRemaining int  `json:"quickstart_credits_remaining"`
 	QuickstartCreditsTotal     int  `json:"quickstart_credits_total"`
@@ -4717,6 +4718,7 @@ func (h *AISettingsHandler) HandleGetPatrolStatus(w http.ResponseWriter, r *http
 	if aiService == nil {
 		// Service not initialized (e.g. no persistence/config yet). Return safe defaults.
 		response := PatrolStatusResponse{
+			RuntimeState:    ai.PatrolRuntimeStateUnavailable,
 			Running:         false,
 			Enabled:         false,
 			Healthy:         true,
@@ -4736,6 +4738,7 @@ func (h *AISettingsHandler) HandleGetPatrolStatus(w http.ResponseWriter, r *http
 		licenseStatus, _ := aiService.GetLicenseState()
 		hasAutoFixFeature := aiService.HasLicenseFeature(featureAIAutoFixValue)
 		response := PatrolStatusResponse{
+			RuntimeState:    ai.PatrolRuntimeStateUnavailable,
 			Running:         false,
 			Enabled:         false,
 			Healthy:         true,
@@ -4767,6 +4770,7 @@ func (h *AISettingsHandler) HandleGetPatrolStatus(w http.ResponseWriter, r *http
 	}
 
 	response := PatrolStatusResponse{
+		RuntimeState:               status.RuntimeState,
 		Running:                    status.Running,
 		Enabled:                    status.Enabled,
 		LastPatrolAt:               status.LastPatrolAt,

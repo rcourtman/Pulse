@@ -138,8 +138,10 @@ export interface FindingsSummary {
 }
 
 export type LicenseStatus = 'none' | 'active' | 'expired' | 'grace_period';
+export type PatrolRuntimeState = 'unavailable' | 'disabled' | 'running' | 'blocked' | 'active';
 
 export interface PatrolStatus {
+  runtime_state: PatrolRuntimeState;
   running: boolean;
   enabled: boolean;
   last_patrol_at?: string;

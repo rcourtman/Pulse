@@ -455,6 +455,14 @@ The frontend Patrol intelligence page now also consumes that canonical
 summary payload directly through the shared AI client and store, so the
 visible summary card stays aligned with the same recent-change slice that the
 runtime and API contracts expose.
+The Patrol runtime now also exports a canonical `runtime_state` alongside
+`blocked_reason` in the Patrol status payload, so blocked quickstart-credit or
+provider-availability conditions remain part of the governed runtime contract
+instead of being inferred later from the last successful patrol summary.
+That runtime-state contract must be derived from live Patrol runtime inputs,
+not only from the last failed run attempt: exhausted quickstart credits are a
+blocked Patrol runtime immediately, and the backend must also clear any stale
+quickstart block once credits or BYOK configuration return.
 AI chat tool-name labels, pending-tool headers, and assistant status copy now
 also route through the shared frontend identifier-label helper, so the chat
 surfaces do not keep their own underscore-stripping behavior separate from

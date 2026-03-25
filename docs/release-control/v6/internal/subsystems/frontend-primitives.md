@@ -714,6 +714,10 @@ header/banner/summary/workspace section files under
 `frontend-modern/src/features/patrol/` own the heavy render surfaces. Shared
 shell governance should reinforce that pattern instead of letting feature render
 surfaces re-accumulate API and timer orchestration inline.
+That same route-owned page-health rule now also applies to Patrol: a feature
+surface may not present a green or all-clear primary summary when the owning
+runtime contract says the page is blocked or unavailable, even if the last
+successful snapshot was healthy.
 
 Shared primitive consumers that split status-dot tone and status-text tone
 must now keep both values routed through the same exported presentation helper.

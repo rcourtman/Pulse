@@ -12,6 +12,7 @@ import { formatRelativeTime } from '@/utils/format';
 import { groupModelsByProvider } from '@/utils/patrolFormat';
 import { getAIQuickstartCreditsPresentation } from '@/utils/aiQuickstartPresentation';
 import { buildPatrolScheduleOptions } from '@/utils/aiPatrolSchedulePresentation';
+import { getPatrolRuntimePresentation } from '@/utils/patrolRuntimePresentation';
 import type { PatrolIntelligenceState } from './usePatrolIntelligenceState';
 
 export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState }) {
@@ -22,8 +23,9 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
       state.patrolStatus()?.quickstart_credits_total ?? 0,
     ),
   );
-  const scheduleOptions = createMemo(() =>
-    buildPatrolScheduleOptions(state.patrolInterval()),
+  const scheduleOptions = createMemo(() => buildPatrolScheduleOptions(state.patrolInterval()));
+  const runtimePresentation = createMemo(() =>
+    getPatrolRuntimePresentation(state.runtimeState(), state.blockedReason()),
   );
   const patrolModelStale = createMemo(() => {
     const model = state.patrolModel();
@@ -111,9 +113,7 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
             size="sm"
             ariaLabel="Toggle Patrol"
           />
-          <span class="text-sm font-medium text-base-content">
-            {state.patrolEnabledLocal() ? 'Patrol Active' : 'Patrol Disabled'}
-          </span>
+          <span class="text-sm font-medium text-base-content">{runtimePresentation().label}</span>
         </div>
 
         <Show
@@ -238,8 +238,7 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
                     <For each={['monitor', 'approval', 'assisted'] as const}>
                       {(level) => {
                         const isProLocked = () =>
-                          state.autoFixLocked() &&
-                          (level === 'approval' || level === 'assisted');
+                          state.autoFixLocked() && (level === 'approval' || level === 'assisted');
                         const isDisabled = () => !state.patrolEnabledLocal() || isProLocked();
                         const isActive = () =>
                           level === 'assisted'
@@ -369,8 +368,7 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
                       onChange={(e) => state.setFullModeUnlocked(e.currentTarget.checked)}
                       disabled={
                         state.autoFixLocked() ||
-                        !(state.autonomyLevel() === 'assisted' ||
-                          state.autonomyLevel() === 'full')
+                        !(state.autonomyLevel() === 'assisted' || state.autonomyLevel() === 'full')
                       }
                     />
                   </div>

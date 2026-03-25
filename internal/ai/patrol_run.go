@@ -339,7 +339,7 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 		if !aiServiceEnabled {
 			// Distinguish between exhausted credits and no AI configured
 			if qsMgr != nil && !qsMgr.HasBYOK() && !qsMgr.HasCredits() {
-				reason = "Quickstart credits exhausted. Connect your API key to continue using AI Patrol."
+				reason = patrolQuickstartCreditsExhaustedReason
 			} else {
 				reason = "AI not configured - set up a provider in Settings > Pulse Assistant"
 			}
@@ -355,7 +355,7 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 	// Check if using quickstart credits — verify credits remain before starting
 	usingQuickstart := p.aiService != nil && p.aiService.IsUsingQuickstart()
 	if usingQuickstart && qsMgr != nil && !qsMgr.HasCredits() {
-		p.setBlockedReason("Quickstart credits exhausted. Connect your API key to continue using AI Patrol.")
+		p.setBlockedReason(patrolQuickstartCreditsExhaustedReason)
 		log.Info().Msg("AI Patrol: Skipping run - quickstart credits exhausted")
 		return
 	}
@@ -794,7 +794,7 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 		reason := "AI not configured - set up a provider in Settings > Pulse Assistant"
 		if !aiServiceEnabled {
 			if scopedQsMgr != nil && !scopedQsMgr.HasBYOK() && !scopedQsMgr.HasCredits() {
-				reason = "Quickstart credits exhausted. Connect your API key to continue using AI Patrol."
+				reason = patrolQuickstartCreditsExhaustedReason
 			}
 		} else if !llmAllowed {
 			reason = "circuit breaker is open"
@@ -807,7 +807,7 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 
 	// Check if using quickstart credits — verify credits remain before starting
 	if scopedUsingQuickstart && scopedQsMgr != nil && !scopedQsMgr.HasCredits() {
-		p.setBlockedReason("Quickstart credits exhausted. Connect your API key to continue using AI Patrol.")
+		p.setBlockedReason(patrolQuickstartCreditsExhaustedReason)
 		log.Info().Msg("AI Patrol: Skipping scoped run - quickstart credits exhausted")
 		return
 	}
@@ -1507,6 +1507,7 @@ func (p *PatrolService) GetStatus() PatrolStatus {
 	analysisInProgress := p.runInProgress
 
 	status := PatrolStatus{
+		RuntimeState:     PatrolRuntimeStateActive,
 		Running:          analysisInProgress,
 		Enabled:          p.config.Enabled,
 		LastDuration:     p.lastDuration,
@@ -1517,10 +1518,37 @@ func (p *PatrolService) GetStatus() PatrolStatus {
 		BlockedReason:    p.lastBlockedReason,
 	}
 
+	if p.quickstartCredits != nil {
+		status.QuickstartCreditsRemaining = p.quickstartCredits.CreditsRemaining()
+		status.QuickstartCreditsTotal = pkglicensing.QuickstartCreditsTotal
+		status.UsingQuickstart = p.aiService != nil && p.aiService.IsUsingQuickstart()
+	}
+
+	quickstartBlocked := p.config.Enabled &&
+		p.quickstartCredits != nil &&
+		!p.quickstartCredits.HasBYOK() &&
+		!p.quickstartCredits.HasCredits()
+	if quickstartBlocked {
+		status.BlockedReason = patrolQuickstartCreditsExhaustedReason
+	} else if strings.TrimSpace(status.BlockedReason) == patrolQuickstartCreditsExhaustedReason {
+		status.BlockedReason = ""
+	}
+
+	switch {
+	case analysisInProgress:
+		status.RuntimeState = PatrolRuntimeStateRunning
+	case !p.config.Enabled:
+		status.RuntimeState = PatrolRuntimeStateDisabled
+	case strings.TrimSpace(status.BlockedReason) != "":
+		status.RuntimeState = PatrolRuntimeStateBlocked
+	default:
+		status.RuntimeState = PatrolRuntimeStateActive
+	}
+
 	if !p.lastPatrol.IsZero() {
 		status.LastPatrolAt = &p.lastPatrol
 	}
-	if !p.lastBlockedAt.IsZero() {
+	if strings.TrimSpace(status.BlockedReason) != "" && !p.lastBlockedAt.IsZero() {
 		status.BlockedAt = &p.lastBlockedAt
 	}
 
@@ -1532,12 +1560,8 @@ func (p *PatrolService) GetStatus() PatrolStatus {
 
 	summary := p.findings.GetSummary()
 	status.Healthy = summary.IsHealthy()
-
-	// Populate quickstart credit info
-	if p.quickstartCredits != nil {
-		status.QuickstartCreditsRemaining = p.quickstartCredits.CreditsRemaining()
-		status.QuickstartCreditsTotal = pkglicensing.QuickstartCreditsTotal
-		status.UsingQuickstart = p.aiService != nil && p.aiService.IsUsingQuickstart()
+	if status.RuntimeState == PatrolRuntimeStateBlocked {
+		status.Healthy = false
 	}
 
 	return status

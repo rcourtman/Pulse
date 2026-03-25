@@ -6,11 +6,12 @@
  */
 
 import { Component, createResource, createMemo, Show } from 'solid-js';
-import { getPatrolRunHistory, type PatrolRunRecord } from '@/api/patrol';
+import { getPatrolRunHistory, type PatrolRunRecord, type PatrolRuntimeState } from '@/api/patrol';
 import { aiIntelligenceStore } from '@/stores/aiIntelligence';
 import { formatRelativeTime } from '@/utils/format';
 import { formatTriggerReason } from '@/utils/patrolFormat';
 import { isPatrolRunHealthy } from '@/utils/patrolRunPresentation';
+import { getPatrolRuntimePresentation } from '@/utils/patrolRuntimePresentation';
 import CheckCircleIcon from 'lucide-solid/icons/check-circle';
 import AlertCircleIcon from 'lucide-solid/icons/alert-circle';
 import AlertTriangleIcon from 'lucide-solid/icons/alert-triangle';
@@ -18,6 +19,8 @@ import AlertTriangleIcon from 'lucide-solid/icons/alert-triangle';
 interface PatrolStatusBarProps {
   enabled?: boolean;
   refreshTrigger?: number;
+  runtimeState?: PatrolRuntimeState;
+  blockedReason?: string;
 }
 
 export const PatrolStatusBar: Component<PatrolStatusBarProps> = (props) => {
@@ -52,6 +55,18 @@ export const PatrolStatusBar: Component<PatrolStatusBarProps> = (props) => {
   });
 
   const circuitBreaker = () => aiIntelligenceStore.circuitBreakerStatus;
+  const runtimePresentation = createMemo(() =>
+    getPatrolRuntimePresentation(props.runtimeState, props.blockedReason),
+  );
+  const showRuntimeState = createMemo(() => {
+    const runtimeState = props.runtimeState;
+    return (
+      runtimeState === 'blocked' ||
+      runtimeState === 'disabled' ||
+      runtimeState === 'unavailable' ||
+      runtimeState === 'running'
+    );
+  });
 
   return (
     <Show when={!runs.loading && stats()}>
@@ -79,19 +94,49 @@ export const PatrolStatusBar: Component<PatrolStatusBarProps> = (props) => {
             {/* Status */}
             <div class="flex items-center gap-1.5">
               <Show
-                when={s().isHealthy}
+                when={showRuntimeState()}
                 fallback={
-                  <>
-                    <AlertCircleIcon class="w-3.5 h-3.5 text-amber-500" />
-                    <span class="text-amber-600 dark:text-amber-400 font-medium text-xs">
-                      Issues detected
+                  <Show
+                    when={s().isHealthy}
+                    fallback={
+                      <>
+                        <AlertCircleIcon class="w-3.5 h-3.5 text-amber-500" />
+                        <span class="text-amber-600 dark:text-amber-400 font-medium text-xs">
+                          Issues detected
+                        </span>
+                      </>
+                    }
+                  >
+                    <CheckCircleIcon class="w-3.5 h-3.5 text-green-500" />
+                    <span class="text-green-600 dark:text-green-400 font-medium text-xs">
+                      Running normally
                     </span>
-                  </>
+                  </Show>
                 }
               >
-                <CheckCircleIcon class="w-3.5 h-3.5 text-green-500" />
-                <span class="text-green-600 dark:text-green-400 font-medium text-xs">
-                  Running normally
+                <Show
+                  when={runtimePresentation().tone === 'warning'}
+                  fallback={
+                    <Show
+                      when={runtimePresentation().tone === 'error'}
+                      fallback={<AlertCircleIcon class="w-3.5 h-3.5 text-blue-500" />}
+                    >
+                      <AlertTriangleIcon class="w-3.5 h-3.5 text-red-500" />
+                    </Show>
+                  }
+                >
+                  <AlertTriangleIcon class="w-3.5 h-3.5 text-amber-500" />
+                </Show>
+                <span
+                  class={`font-medium text-xs ${
+                    runtimePresentation().tone === 'warning'
+                      ? 'text-amber-600 dark:text-amber-400'
+                      : runtimePresentation().tone === 'error'
+                        ? 'text-red-600 dark:text-red-400'
+                        : 'text-blue-600 dark:text-blue-400'
+                  }`}
+                >
+                  {runtimePresentation().label}
                 </span>
               </Show>
             </div>

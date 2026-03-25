@@ -62,6 +62,52 @@ describe('PatrolStatusBar', () => {
     });
   });
 
+  it('shows patrol paused when the runtime is blocked even if the last run was healthy', async () => {
+    getPatrolRunHistoryMock.mockResolvedValue([
+      {
+        id: 'run-healthy',
+        started_at: '2026-03-12T10:00:00Z',
+        completed_at: '2026-03-12T10:01:00Z',
+        duration_ms: 60000,
+        type: 'patrol',
+        resources_checked: 1,
+        nodes_checked: 0,
+        guests_checked: 0,
+        docker_checked: 0,
+        storage_checked: 0,
+        hosts_checked: 0,
+        pbs_checked: 0,
+        pmg_checked: 0,
+        kubernetes_checked: 0,
+        new_findings: 0,
+        existing_findings: 0,
+        rejected_findings: 0,
+        resolved_findings: 0,
+        auto_fix_count: 0,
+        findings_summary: 'All clear',
+        finding_ids: [],
+        error_count: 0,
+        status: 'healthy',
+        triage_flags: 0,
+        tool_call_count: 0,
+      },
+    ]);
+
+    render(() => (
+      <PatrolStatusBar
+        refreshTrigger={1}
+        runtimeState="blocked"
+        blockedReason="Quickstart credits exhausted. Connect your API key to continue using AI Patrol."
+      />
+    ));
+
+    await waitFor(() => {
+      expect(screen.getByText('Patrol Paused')).toBeInTheDocument();
+    });
+
+    expect(screen.queryByText('Running normally')).not.toBeInTheDocument();
+  });
+
   it('shows issues detected when the last patrol run found issues without transport errors', async () => {
     getPatrolRunHistoryMock.mockResolvedValue([
       {

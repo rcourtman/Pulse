@@ -144,6 +144,10 @@ handlers stay on canonical Patrol runtime wiring: recovery- and
 storage-adjacent API helpers must not revive tenant snapshot-provider bridges
 through `internal/api/ai_handlers.go` once Patrol can initialize from tenant
 `ReadState` and unified-resource providers directly.
+That same adjacent AI handler boundary now also keeps Patrol runtime
+availability explicit as API-owned state. Storage and recovery consumers may
+share the handler layer, but they must not treat a blocked Patrol runtime as
+healthy only because the last completed summary snapshot remained green.
 That same shared dependency also assumes the Patrol-backed recent-changes
 API surface reads through the canonical intelligence facade first, so
 storage and recovery handlers do not bypass the shared unified timeline

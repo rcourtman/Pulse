@@ -7,9 +7,22 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus/testutil"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
+
+type stubPatrolQuickstartCreditManager struct {
+	remaining int
+	byok      bool
+}
+
+func (m *stubPatrolQuickstartCreditManager) HasCredits() bool                { return m.remaining > 0 }
+func (m *stubPatrolQuickstartCreditManager) CreditsRemaining() int           { return m.remaining }
+func (m *stubPatrolQuickstartCreditManager) ConsumeCredit() error            { return nil }
+func (m *stubPatrolQuickstartCreditManager) HasBYOK() bool                   { return m.byok }
+func (m *stubPatrolQuickstartCreditManager) GetProvider() providers.Provider { return nil }
+func (m *stubPatrolQuickstartCreditManager) GrantCredits() error             { return nil }
 
 // --- filterStateByScope tests ---
 
@@ -1451,6 +1464,53 @@ func TestGetStatus_BlockedReason(t *testing.T) {
 	status = ps.GetStatus()
 	if status.BlockedReason != "" {
 		t.Errorf("expected empty blocked reason after clear, got %q", status.BlockedReason)
+	}
+}
+
+func TestGetStatus_QuickstartCreditsExhaustedBlocksRuntimeWithoutWaitingForRun(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+	ps.SetQuickstartCredits(&stubPatrolQuickstartCreditManager{remaining: 0})
+
+	status := ps.GetStatus()
+	if status.RuntimeState != PatrolRuntimeStateBlocked {
+		t.Fatalf("runtime_state = %q, want %q", status.RuntimeState, PatrolRuntimeStateBlocked)
+	}
+	if status.BlockedReason != patrolQuickstartCreditsExhaustedReason {
+		t.Fatalf("blocked_reason = %q, want %q", status.BlockedReason, patrolQuickstartCreditsExhaustedReason)
+	}
+	if status.Healthy {
+		t.Fatal("expected blocked patrol status to report healthy=false")
+	}
+}
+
+func TestGetStatus_ClearsStaleQuickstartBlockedStateWhenCreditsReturn(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+	quickstart := &stubPatrolQuickstartCreditManager{remaining: 0}
+	ps.SetQuickstartCredits(quickstart)
+	ps.setBlockedReason(patrolQuickstartCreditsExhaustedReason)
+
+	blockedStatus := ps.GetStatus()
+	if blockedStatus.RuntimeState != PatrolRuntimeStateBlocked {
+		t.Fatalf("runtime_state = %q, want %q before refill", blockedStatus.RuntimeState, PatrolRuntimeStateBlocked)
+	}
+	if blockedStatus.BlockedAt == nil {
+		t.Fatal("expected blocked_at to be present before refill")
+	}
+
+	quickstart.remaining = 3
+
+	status := ps.GetStatus()
+	if status.RuntimeState != PatrolRuntimeStateActive {
+		t.Fatalf("runtime_state = %q, want %q after refill", status.RuntimeState, PatrolRuntimeStateActive)
+	}
+	if status.BlockedReason != "" {
+		t.Fatalf("expected stale quickstart blocked_reason to clear after refill, got %q", status.BlockedReason)
+	}
+	if status.BlockedAt != nil {
+		t.Fatalf("expected stale quickstart blocked_at to clear after refill, got %v", status.BlockedAt)
+	}
+	if !status.Healthy {
+		t.Fatal("expected refilled quickstart status to return to healthy when there are no findings")
 	}
 }
 

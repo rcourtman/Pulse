@@ -14,6 +14,7 @@ import {
   updatePatrolAutonomySettings,
   type PatrolAutonomyLevel,
   type PatrolRunRecord,
+  type PatrolRuntimeState,
   type PatrolStatus,
 } from '@/api/patrol';
 import { aiIntelligenceStore } from '@/stores/aiIntelligence';
@@ -387,13 +388,19 @@ export function usePatrolIntelligenceState() {
   const licenseRequired = createMemo(() => patrolStatus()?.license_required ?? false);
   const upgradeUrl = createMemo(() => getUpgradeActionUrlOrFallback('ai_autofix'));
   const alertAnalysisUpgradeUrl = createMemo(() => getUpgradeActionUrlOrFallback('ai_alerts'));
+  const runtimeState = createMemo<PatrolRuntimeState>(() => {
+    if (!patrolEnabledLocal()) return 'disabled';
+    return patrolStatus()?.runtime_state ?? 'active';
+  });
   const blockedReason = createMemo(() => patrolStatus()?.blocked_reason?.trim() ?? '');
   const blockedAt = createMemo(() => patrolStatus()?.blocked_at);
-  const showBlockedBanner = createMemo(() => patrolEnabledLocal() && !!blockedReason());
-  const canTriggerPatrol = createMemo(() => patrolEnabledLocal() && !showBlockedBanner());
+  const showBlockedBanner = createMemo(() => runtimeState() === 'blocked');
+  const canTriggerPatrol = createMemo(() => runtimeState() === 'active');
   const triggerPatrolDisabledReason = createMemo(() => {
-    if (!patrolEnabledLocal()) return 'Patrol is disabled';
-    if (showBlockedBanner()) return blockedReason() || 'Patrol is paused';
+    if (runtimeState() === 'disabled') return 'Patrol is disabled';
+    if (runtimeState() === 'blocked') return blockedReason() || 'Patrol is paused';
+    if (runtimeState() === 'running') return 'Patrol is already running';
+    if (runtimeState() === 'unavailable') return 'Patrol service is unavailable';
     return '';
   });
 
@@ -595,7 +602,8 @@ export function usePatrolIntelligenceState() {
   const summaryStats = () => {
     const allFindings = aiIntelligenceStore.findings;
     const patrolFindings = allFindings.filter(
-      (finding) => finding.source !== 'threshold' && !finding.isThreshold && !hasTriggeringAlert(finding),
+      (finding) =>
+        finding.source !== 'threshold' && !finding.isThreshold && !hasTriggeringAlert(finding),
     );
     const activeFindings = patrolFindings.filter((finding) => finding.status === 'active');
 
@@ -694,6 +702,7 @@ export function usePatrolIntelligenceState() {
     patrolInterval,
     patrolModel,
     patrolRunHistory,
+    runtimeState,
     patrolStatus,
     patrolStream,
     policyPosture,

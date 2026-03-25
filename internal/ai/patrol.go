@@ -78,19 +78,32 @@ type AlertResolver interface {
 }
 
 // PatrolStatus represents the current state of the patrol service
+type PatrolRuntimeState string
+
+const (
+	PatrolRuntimeStateUnavailable PatrolRuntimeState = "unavailable"
+	PatrolRuntimeStateDisabled    PatrolRuntimeState = "disabled"
+	PatrolRuntimeStateRunning     PatrolRuntimeState = "running"
+	PatrolRuntimeStateBlocked     PatrolRuntimeState = "blocked"
+	PatrolRuntimeStateActive      PatrolRuntimeState = "active"
+)
+
+const patrolQuickstartCreditsExhaustedReason = "Quickstart credits exhausted. Connect your API key to continue using AI Patrol."
+
 type PatrolStatus struct {
-	Running          bool          `json:"running"`
-	Enabled          bool          `json:"enabled"`
-	LastPatrolAt     *time.Time    `json:"last_patrol_at,omitempty"`
-	NextPatrolAt     *time.Time    `json:"next_patrol_at,omitempty"`
-	LastDuration     time.Duration `json:"last_duration_ms"`
-	ResourcesChecked int           `json:"resources_checked"`
-	FindingsCount    int           `json:"findings_count"`
-	ErrorCount       int           `json:"error_count"`
-	Healthy          bool          `json:"healthy"`
-	IntervalMs       int64         `json:"interval_ms"` // Patrol interval in milliseconds
-	BlockedReason    string        `json:"blocked_reason,omitempty"`
-	BlockedAt        *time.Time    `json:"blocked_at,omitempty"`
+	RuntimeState     PatrolRuntimeState `json:"runtime_state"`
+	Running          bool               `json:"running"`
+	Enabled          bool               `json:"enabled"`
+	LastPatrolAt     *time.Time         `json:"last_patrol_at,omitempty"`
+	NextPatrolAt     *time.Time         `json:"next_patrol_at,omitempty"`
+	LastDuration     time.Duration      `json:"last_duration_ms"`
+	ResourcesChecked int                `json:"resources_checked"`
+	FindingsCount    int                `json:"findings_count"`
+	ErrorCount       int                `json:"error_count"`
+	Healthy          bool               `json:"healthy"`
+	IntervalMs       int64              `json:"interval_ms"` // Patrol interval in milliseconds
+	BlockedReason    string             `json:"blocked_reason,omitempty"`
+	BlockedAt        *time.Time         `json:"blocked_at,omitempty"`
 	// Quickstart credit info for the frontend
 	QuickstartCreditsRemaining int  `json:"quickstart_credits_remaining"`
 	QuickstartCreditsTotal     int  `json:"quickstart_credits_total"`

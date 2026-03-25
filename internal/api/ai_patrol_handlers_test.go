@@ -52,6 +52,9 @@ func TestHandleGetPatrolStatus_NoPatrolService(t *testing.T) {
 	}
 
 	// When patrol service is not initialized, should return safe defaults
+	if resp.RuntimeState != ai.PatrolRuntimeStateUnavailable {
+		t.Errorf("expected RuntimeState %q when patrol not initialized, got %q", ai.PatrolRuntimeStateUnavailable, resp.RuntimeState)
+	}
 	if resp.Running {
 		t.Error("expected Running to be false when patrol not initialized")
 	}
@@ -85,6 +88,9 @@ func TestHandleGetPatrolStatus_NoAIService(t *testing.T) {
 
 	if resp.Running {
 		t.Error("expected Running to be false when AI service missing")
+	}
+	if resp.RuntimeState != ai.PatrolRuntimeStateUnavailable {
+		t.Errorf("expected RuntimeState %q when AI service missing, got %q", ai.PatrolRuntimeStateUnavailable, resp.RuntimeState)
 	}
 	if resp.Enabled {
 		t.Error("expected Enabled to be false when AI service missing")

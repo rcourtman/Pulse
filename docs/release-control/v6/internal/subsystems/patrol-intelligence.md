@@ -45,7 +45,8 @@ Patrol-specific presentation helpers.
 22. `frontend-modern/src/utils/patrolFormat.ts`
 23. `frontend-modern/src/utils/patrolRunPresentation.ts`
 24. `frontend-modern/src/utils/patrolSummaryPresentation.ts`
-25. `frontend-modern/src/utils/textPresentation.ts`
+25. `frontend-modern/src/utils/patrolRuntimePresentation.ts`
+26. `frontend-modern/src/utils/textPresentation.ts`
 
 ## Shared Boundaries
 
@@ -56,10 +57,11 @@ Patrol-specific presentation helpers.
 1. Add or change Patrol page orchestration through `frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts`, keep `frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts` as the canonical investigation-context derivation owner, keep `frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx` as the feature shell, keep the Patrol-owned section files under `frontend-modern/src/features/patrol/` as the heavy render owners, keep `frontend-modern/src/pages/AIIntelligence.tsx` as the route shell, keep `frontend-modern/src/stores/aiIntelligenceSummaryModel.ts` as the canonical AI summary normalization owner, and update `frontend-modern/src/stores/aiIntelligence.ts` together
 2. Add or change Patrol findings, approvals, investigation, or run-history presentation through `frontend-modern/src/components/AI/FindingsPanel.tsx` and `frontend-modern/src/components/patrol/`
 3. Keep remediation execution badge copy and severity styling aligned through `frontend-modern/src/components/patrol/RemediationStatus.tsx` and `frontend-modern/src/utils/remediationPresentation.ts`
-4. Add or change Patrol header quickstart-credit or schedule presentation through `frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx`, `frontend-modern/src/utils/aiQuickstartPresentation.ts`, and `frontend-modern/src/utils/aiPatrolSchedulePresentation.ts`
-5. Keep Patrol and chat identifier-label presentation aligned through the shared `frontend-modern/src/utils/textPresentation.ts`
-6. Keep Patrol and chat stream-matching / mention dedupe aligned through the shared `frontend-modern/src/utils/chatIdentifiers.ts`
-7. Keep Patrol transport and payload changes aligned through the governed AI runtime and API contract transport surfaces
+4. Add or change Patrol header, summary, or status runtime-state presentation through `frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx`, `frontend-modern/src/features/patrol/PatrolIntelligenceSummary.tsx`, `frontend-modern/src/components/patrol/PatrolStatusBar.tsx`, and `frontend-modern/src/utils/patrolRuntimePresentation.ts`
+5. Add or change Patrol header quickstart-credit or schedule presentation through `frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx`, `frontend-modern/src/utils/aiQuickstartPresentation.ts`, and `frontend-modern/src/utils/aiPatrolSchedulePresentation.ts`
+6. Keep Patrol and chat identifier-label presentation aligned through the shared `frontend-modern/src/utils/textPresentation.ts`
+7. Keep Patrol and chat stream-matching / mention dedupe aligned through the shared `frontend-modern/src/utils/chatIdentifiers.ts`
+8. Keep Patrol transport and payload changes aligned through the governed AI runtime and API contract transport surfaces
 
 ## Forbidden Paths
 
@@ -98,6 +100,11 @@ semantics, and `frontend-modern/src/stores/aiIntelligenceSummaryModel.ts` now
 owns the canonical summary normalization so Patrol consumers inherit one
 governed recent-change and policy-posture snapshot instead of reintroducing
 hook-local fallback logic.
+The Patrol page now also treats Patrol runtime availability as a first-class
+render contract: the header chip, primary summary card, and status bar must
+all route through the shared `frontend-modern/src/utils/patrolRuntimePresentation.ts`
+helper plus the backend `runtime_state` payload instead of inferring operator
+state from the last healthy summary snapshot or run history alone.
 hook-local fallback logic.
 The Patrol header now also has explicit helper ownership for its quickstart and
 schedule presentation. `frontend-modern/src/utils/aiQuickstartPresentation.ts`

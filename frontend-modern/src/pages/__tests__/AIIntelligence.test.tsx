@@ -18,78 +18,73 @@ const { findingsPanelState, runHistoryState, intelligenceState } = vi.hoisted(()
     selection: null as Record<string, unknown> | null,
   },
   intelligenceState: {
-    summary: null as
-      | {
-          timestamp: string;
-          overall_health: {
-            score: number;
-            grade: 'A' | 'B' | 'C' | 'D' | 'F';
-            trend: 'improving' | 'stable' | 'declining';
-            factors: Array<Record<string, unknown>>;
-            prediction: string;
-          };
-          findings_count: {
-            critical: number;
-            warning: number;
-            watch: number;
-            info: number;
-            total: number;
-          };
-          predictions_count: number;
-          recent_changes_count: number;
-          recent_changes: Array<{
-            id: string;
-            observedAt: string;
-            resourceId: string;
-            kind: string;
-            sourceType: string;
-            sourceAdapter?: string;
-            confidence: string;
-            reason?: string;
-            relatedResources?: string[];
-          }>;
-          policy_posture?: {
-            total_resources: number;
-            sensitivity_counts: Record<string, number>;
-            routing_counts: Record<string, number>;
-            redaction_counts?: Record<string, number>;
-          };
-          learning: {
-            resources_with_knowledge: number;
-            total_notes: number;
-            resources_with_baselines: number;
-            patterns_detected: number;
-            correlations_learned: number;
-            incidents_tracked: number;
-          };
-        }
-      | null,
-    correlations: null as
-      | {
-          correlations: Array<{
-            source_id: string;
-            source_name: string;
-            source_type: string;
-            target_id: string;
-            target_name: string;
-            target_type: string;
-            event_pattern: string;
-            occurrences: number;
-            avg_delay: number | string;
-            confidence: number;
-            last_seen: string;
-            description?: string;
-          }>;
-          count: number;
-        }
-      | null,
+    summary: null as {
+      timestamp: string;
+      overall_health: {
+        score: number;
+        grade: 'A' | 'B' | 'C' | 'D' | 'F';
+        trend: 'improving' | 'stable' | 'declining';
+        factors: Array<Record<string, unknown>>;
+        prediction: string;
+      };
+      findings_count: {
+        critical: number;
+        warning: number;
+        watch: number;
+        info: number;
+        total: number;
+      };
+      predictions_count: number;
+      recent_changes_count: number;
+      recent_changes: Array<{
+        id: string;
+        observedAt: string;
+        resourceId: string;
+        kind: string;
+        sourceType: string;
+        sourceAdapter?: string;
+        confidence: string;
+        reason?: string;
+        relatedResources?: string[];
+      }>;
+      policy_posture?: {
+        total_resources: number;
+        sensitivity_counts: Record<string, number>;
+        routing_counts: Record<string, number>;
+        redaction_counts?: Record<string, number>;
+      };
+      learning: {
+        resources_with_knowledge: number;
+        total_notes: number;
+        resources_with_baselines: number;
+        patterns_detected: number;
+        correlations_learned: number;
+        incidents_tracked: number;
+      };
+    } | null,
+    correlations: null as {
+      correlations: Array<{
+        source_id: string;
+        source_name: string;
+        source_type: string;
+        target_id: string;
+        target_name: string;
+        target_type: string;
+        event_pattern: string;
+        occurrences: number;
+        avg_delay: number | string;
+        confidence: number;
+        last_seen: string;
+        description?: string;
+      }>;
+      count: number;
+    } | null,
   },
 }));
 
 const getCorrelationsMock = vi.fn();
-const [correlationsState, setCorrelationsState] = createSignal<
-  (typeof intelligenceState)['correlations']
->(null);
+const [correlationsState, setCorrelationsState] =
+  createSignal<(typeof intelligenceState)['correlations']>(null);
 const getPatrolStatusMock = vi.fn();
 const getPatrolAutonomySettingsMock = vi.fn();
 const updatePatrolAutonomySettingsMock = vi.fn();
@@ -182,8 +177,7 @@ vi.mock('@/stores/aiIntelligence', () => {
 vi.mock('@/components/AI/FindingsPanel', () => ({
   FindingsPanel: (props: Record<string, unknown>) => {
     findingsPanelState.latestProps = {
-      filterOverride:
-        typeof props.filterOverride === 'string' ? props.filterOverride : undefined,
+      filterOverride: typeof props.filterOverride === 'string' ? props.filterOverride : undefined,
       filterFindingIds: Array.isArray(props.filterFindingIds)
         ? [...(props.filterFindingIds as string[])]
         : undefined,
@@ -203,9 +197,7 @@ vi.mock('@/components/AI/FindingsPanel', () => ({
 vi.mock('@/components/patrol', () => ({
   ApprovalBanner: () => <div data-testid="approval-banner" />,
   PatrolStatusBar: () => <div data-testid="patrol-status-bar" />,
-  RunHistoryPanel: (props: {
-    onSelectRun?: (run: Record<string, unknown> | null) => void;
-  }) => (
+  RunHistoryPanel: (props: { onSelectRun?: (run: Record<string, unknown> | null) => void }) => (
     <div data-testid="run-history-panel">
       <button type="button" onClick={() => props.onSelectRun?.(runHistoryState.selection)}>
         Select mocked run
@@ -225,10 +217,7 @@ vi.mock('@/hooks/usePatrolStream', () => ({
 }));
 
 vi.mock('@/components/shared/PageHeader', () => ({
-  PageHeader: (props: {
-    title?: string;
-    actions?: unknown;
-  }) => (
+  PageHeader: (props: { title?: string; actions?: unknown }) => (
     <div>
       <h1>{props.title}</h1>
       <div>{props.actions as any}</div>
@@ -270,6 +259,7 @@ vi.mock('@/components/Brand/PulsePatrolLogo', () => ({
 }));
 
 const defaultPatrolStatus = (overrides: Record<string, unknown> = {}) => ({
+  runtime_state: 'active',
   running: false,
   using_quickstart: false,
   quickstart_credits_total: 0,
@@ -342,7 +332,9 @@ describe('AIIntelligence entitlement gating', () => {
       }
       return {};
     });
-    hasFeatureMock.mockImplementation((feature: string) => !['ai_alerts', 'ai_autofix'].includes(feature));
+    hasFeatureMock.mockImplementation(
+      (feature: string) => !['ai_alerts', 'ai_autofix'].includes(feature),
+    );
     licenseStatusMock.mockReturnValue({ subscription_state: 'expired' });
     loadLicenseStatusMock.mockResolvedValue(undefined);
     startProTrialMock.mockResolvedValue({ outcome: 'started' });
@@ -441,13 +433,14 @@ describe('AIIntelligence entitlement gating', () => {
       name: 'Open source resource Storage 1 in Infrastructure',
     });
     expect(storage2Link).toHaveAttribute('href', '/infrastructure?resource=storage-2');
-    expect(screen.getByRole('link', { name: 'Open target resource VM 200 in Infrastructure' }))
-      .toHaveAttribute('href', '/infrastructure?resource=vm-200');
-    expect(screen.getByRole('link', { name: 'Open target resource VM 100 in Infrastructure' }))
-      .toHaveAttribute('href', '/infrastructure?resource=vm-100');
     expect(
-      storage2Link.compareDocumentPosition(storage1Link) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
+      screen.getByRole('link', { name: 'Open target resource VM 200 in Infrastructure' }),
+    ).toHaveAttribute('href', '/infrastructure?resource=vm-200');
+    expect(
+      screen.getByRole('link', { name: 'Open target resource VM 100 in Infrastructure' }),
+    ).toHaveAttribute('href', '/infrastructure?resource=vm-100');
+    expect(
+      storage2Link.compareDocumentPosition(storage1Link) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     expect(screen.getByText('Storage 1')).toBeInTheDocument();
     expect(screen.getByText('VM 100')).toBeInTheDocument();
@@ -624,6 +617,64 @@ describe('AIIntelligence entitlement gating', () => {
     expect(screen.getByText('Local Only')).toBeInTheDocument();
     expect(screen.getByText('Hostname 2')).toBeInTheDocument();
     expect(screen.getByText('IP Address 1')).toBeInTheDocument();
+  });
+
+  it('does not present a healthy patrol summary when patrol is blocked on exhausted quickstart credits', async () => {
+    hasFeatureMock.mockReturnValue(true);
+    licenseStatusMock.mockReturnValue({ subscription_state: 'active' });
+    getPatrolStatusMock.mockResolvedValue(
+      defaultPatrolStatus({
+        runtime_state: 'blocked',
+        using_quickstart: true,
+        quickstart_credits_total: 25,
+        quickstart_credits_remaining: 0,
+        blocked_reason:
+          'Quickstart credits exhausted. Connect your API key to continue using AI Patrol.',
+        last_patrol_at: '2026-03-12T09:57:00Z',
+      }),
+    );
+    intelligenceState.summary = {
+      timestamp: '2026-03-12T10:00:00Z',
+      overall_health: {
+        score: 100,
+        grade: 'A',
+        trend: 'stable',
+        factors: [],
+        prediction: 'Infrastructure is healthy with no significant issues detected.',
+      },
+      findings_count: {
+        critical: 0,
+        warning: 0,
+        watch: 0,
+        info: 0,
+        total: 0,
+      },
+      predictions_count: 0,
+      recent_changes_count: 0,
+      learning: {
+        resources_with_knowledge: 0,
+        total_notes: 0,
+        resources_with_baselines: 0,
+        patterns_detected: 0,
+        correlations_learned: 0,
+        incidents_tracked: 0,
+      },
+    };
+
+    render(() => <AIIntelligence />);
+
+    await waitFor(() => {
+      expect(getPatrolStatusMock).toHaveBeenCalled();
+      expect(screen.getAllByText('Patrol Paused')).toHaveLength(2);
+    });
+
+    expect(screen.getAllByText('Patrol paused').length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText(
+        'Quickstart credits exhausted. Connect your API key to continue using AI Patrol.',
+      ).length,
+    ).toBeGreaterThan(0);
+    expect(screen.queryByText(/Health A · 100\/100/)).not.toBeInTheDocument();
   });
 
   it('treats a selected zero-finding run as an empty snapshot and uses effective scope ids', async () => {

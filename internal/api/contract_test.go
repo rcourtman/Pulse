@@ -3106,6 +3106,7 @@ func TestContract_PatrolStatusResponseJSONSnapshot(t *testing.T) {
 	blockedAt := lastPatrolAt.Add(15 * time.Minute)
 
 	payload := PatrolStatusResponse{
+		RuntimeState:               ai.PatrolRuntimeStateBlocked,
 		Running:                    false,
 		Enabled:                    true,
 		LastPatrolAt:               &lastPatrolAt,
@@ -3137,6 +3138,7 @@ func TestContract_PatrolStatusResponseJSONSnapshot(t *testing.T) {
 	}
 
 	const want = `{
+		"runtime_state":"blocked",
 		"running":false,
 		"enabled":true,
 		"last_patrol_at":"2026-03-12T09:30:00Z",
