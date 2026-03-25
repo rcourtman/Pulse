@@ -200,6 +200,10 @@ Those supporting cards must also keep their content factual and count-based:
 active findings, critical findings, warnings, and fixes are valid secondary
 readouts, while labels such as `Issues detected` or `Partial verification`
 belong only to the primary Patrol assessment and verification surfaces.
+The same applies to the Patrol activity strip during active execution: the
+shared feature surface may add an explicit run-in-progress badge, but the main
+status-strip label remains factual activity copy rather than shifting into a
+second Patrol verdict label while a run is underway.
 `frontend-modern/src/components/shared/TagBadges.tsx` is now also the
 canonical tag-badge primitive. Dashboard workload rows and the unified-resource
 detail drawer must import that shared owner instead of keeping a dashboard-local

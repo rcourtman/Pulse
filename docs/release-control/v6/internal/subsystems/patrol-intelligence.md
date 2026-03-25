@@ -146,6 +146,10 @@ recent-activity strip, not a second health verdict: when Patrol is active it
 should report recent run activity, run kind, latest run result, and run-count
 context instead of emitting another green/amber all-clear headline that can
 drift from the governed assessment summary above it.
+When Patrol is currently running, that strip should still stay factual rather
+than switching to another verdict label: the runtime may add an explicit
+in-progress indicator, but the primary activity label remains recent activity
+instead of a competing Patrol-state verdict.
 That latest run result must come from the effective run outcome, not the raw
 status field alone: shared Patrol run presentation helpers must treat any run
 with execution errors as an error result even when the stored status text is

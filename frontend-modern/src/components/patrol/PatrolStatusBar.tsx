@@ -73,10 +73,10 @@ export const PatrolStatusBar: Component<PatrolStatusBarProps> = (props) => {
     return (
       runtimeState === 'blocked' ||
       runtimeState === 'disabled' ||
-      runtimeState === 'unavailable' ||
-      runtimeState === 'running'
+      runtimeState === 'unavailable'
     );
   });
+  const showRunInProgress = createMemo(() => props.runtimeState === 'running');
 
   return (
     <Show when={!runs.loading && stats()}>
@@ -111,6 +111,11 @@ export const PatrolStatusBar: Component<PatrolStatusBarProps> = (props) => {
                     <span class="text-blue-600 dark:text-blue-400 font-medium text-xs">
                       Recent activity
                     </span>
+                    <Show when={showRunInProgress()}>
+                      <span class="rounded border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-300">
+                        Run in progress
+                      </span>
+                    </Show>
                   </>
                 }
               >

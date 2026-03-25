@@ -195,4 +195,46 @@ describe('PatrolStatusBar', () => {
     expect(within(latestRunSection as HTMLElement).queryByText('healthy')).not.toBeInTheDocument();
     expect(within(latestRunSection as HTMLElement).getByText('error')).toBeInTheDocument();
   });
+
+  it('keeps running patrols factual with a run-in-progress indicator', async () => {
+    getPatrolRunHistoryMock.mockResolvedValue([
+      {
+        id: 'run-startup',
+        started_at: '2026-03-12T10:00:00Z',
+        completed_at: '2026-03-12T10:01:00Z',
+        duration_ms: 60000,
+        type: 'patrol',
+        trigger_reason: 'startup',
+        resources_checked: 57,
+        nodes_checked: 0,
+        guests_checked: 0,
+        docker_checked: 0,
+        storage_checked: 0,
+        hosts_checked: 0,
+        pbs_checked: 0,
+        pmg_checked: 0,
+        kubernetes_checked: 0,
+        new_findings: 0,
+        existing_findings: 0,
+        rejected_findings: 0,
+        resolved_findings: 0,
+        auto_fix_count: 0,
+        findings_summary: 'Completed with errors',
+        finding_ids: [],
+        error_count: 1,
+        status: 'error',
+        triage_flags: 0,
+        tool_call_count: 0,
+      },
+    ]);
+
+    render(() => <PatrolStatusBar refreshTrigger={1} runtimeState="running" />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Recent activity')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('Run in progress')).toBeInTheDocument();
+    expect(screen.queryByText('Patrol Running')).not.toBeInTheDocument();
+  });
 });

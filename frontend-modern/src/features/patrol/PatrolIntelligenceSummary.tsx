@@ -301,14 +301,14 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
           <div class="bg-surface rounded-md border border-border p-3">
             <div class="flex items-center gap-2">
               <div
-                class={`p-1.5 rounded-md border ${criticalSummaryPresentation().iconContainerClass}`}
+                class={`p-1.5 rounded-md border ${warningSummaryPresentation().iconContainerClass}`}
               >
-                <ShieldAlertIcon class={`w-4 h-4 ${criticalSummaryPresentation().iconClass}`} />
+                <ActivityIcon class={`w-4 h-4 ${warningSummaryPresentation().iconClass}`} />
               </div>
               <div>
-                <p class="text-xs text-muted">Critical</p>
-                <p class={`text-lg font-bold ${criticalSummaryPresentation().valueClass}`}>
-                  {state.summaryStats().criticalFindings}
+                <p class="text-xs text-muted">Warnings</p>
+                <p class={`text-lg font-bold ${warningSummaryPresentation().valueClass}`}>
+                  {state.summaryStats().warningFindings}
                 </p>
               </div>
             </div>
