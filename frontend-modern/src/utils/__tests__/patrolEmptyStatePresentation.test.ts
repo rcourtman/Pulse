@@ -124,4 +124,24 @@ describe('patrolEmptyStatePresentation', () => {
       tone: 'success',
     });
   });
+
+  it('describes a selected run snapshot with no recorded findings using coverage-aware copy', () => {
+    expect(
+      getPatrolFindingsEmptyState({
+        filter: 'all',
+        runSnapshot: {
+          resources_checked: 1,
+          scope_resource_ids: ['seed-resource'],
+          effective_scope_resource_ids: ['expanded-a', 'expanded-b'],
+          finding_ids: [],
+          status: 'error',
+          error_count: 1,
+        },
+      }),
+    ).toEqual({
+      title: 'No findings recorded for this run',
+      body: 'Checked 1 of 2 scoped resources. This run recorded no snapshot findings, but it ended with issues requiring review.',
+      tone: 'warning',
+    });
+  });
 });

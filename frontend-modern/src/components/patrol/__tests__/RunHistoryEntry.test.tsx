@@ -24,6 +24,7 @@ vi.mock('@/components/AI/FindingsPanel', () => ({
         : props.scopeResourceTypes,
       showControls: props.showControls,
       showScopeWarnings: props.showScopeWarnings,
+      runSnapshot: props.runSnapshot,
     };
     return <div data-testid="findings-panel" />;
   },
@@ -111,7 +112,43 @@ describe('RunHistoryEntry', () => {
       scopeResourceTypes: ['vm'],
       showControls: false,
       showScopeWarnings: true,
+      runSnapshot: run,
     });
+  });
+
+  it('uses a shared coverage summary when a scoped run checked fewer resources than its scope', () => {
+    render(() => (
+      <RunHistoryEntry
+        run={{
+          ...run,
+          id: 'run-partial-scope',
+          duration_ms: 453,
+          effective_scope_resource_ids: ['expanded-a', 'expanded-b'],
+          resources_checked: 1,
+          guests_checked: 1,
+          error_count: 1,
+          status: 'error',
+        }}
+        isLive={false}
+        patrolStream={patrolStream}
+        selected={true}
+        onSelect={vi.fn()}
+      />
+    ));
+
+    expect(screen.getByText('• Checked 1 of 2 scoped resources')).toBeInTheDocument();
+    expect(screen.getByText('Resources checked (1 of 2 scoped)')).toBeInTheDocument();
+    expect(screen.queryByText('• 1 resources')).not.toBeInTheDocument();
+    expect(
+      screen.getByText((_, element) =>
+        element?.tagName === 'P' &&
+        (element.textContent?.includes('Checked 1 of 2 scoped resources') ??
+          false) &&
+        (element.textContent?.includes('453ms') ?? false) &&
+        (element.textContent?.includes('Patrol completed with issues requiring review.') ??
+          false),
+      ),
+    ).toBeInTheDocument();
   });
 
   it('does not claim all clear when the run still had existing issues', () => {

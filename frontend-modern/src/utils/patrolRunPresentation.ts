@@ -1,9 +1,16 @@
-import type { PatrolRunStatus } from '@/api/patrol';
+import type { PatrolRunRecord, PatrolRunStatus } from '@/api/patrol';
 import { formatIdentifierLabel } from '@/utils/textPresentation';
+import { getCanonicalScopeResourceIds } from '@/utils/patrolFormat';
 
 export interface PatrolRunStatusPresentation {
   badgeClass: string;
   label: string;
+}
+
+function formatResourceCount(count: number, qualifier?: string): string {
+  const normalized = Math.max(0, count || 0);
+  const qualifierPrefix = qualifier ? `${qualifier} ` : '';
+  return `${normalized} ${qualifierPrefix}resource${normalized === 1 ? '' : 's'}`;
 }
 
 function normalizePatrolRunType(type: string | undefined): string {
@@ -81,6 +88,38 @@ export function getToolCallResultTextClass(success: boolean): string {
 
 export function getPatrolRunKindLabel(type: string | undefined): string {
   return normalizePatrolRunType(type) === 'scoped' ? 'Scoped run' : 'Full patrol';
+}
+
+export function getPatrolRunCoverageSummary(run: Pick<PatrolRunRecord, 'resources_checked' | 'scope_resource_ids' | 'effective_scope_resource_ids'>): string {
+  const resourcesChecked = Math.max(0, run.resources_checked || 0);
+  const scopedResourceCount = getCanonicalScopeResourceIds(run)?.length ?? 0;
+
+  if (scopedResourceCount > 0) {
+    if (resourcesChecked > 0 && resourcesChecked < scopedResourceCount) {
+      return `Checked ${resourcesChecked} of ${scopedResourceCount} scoped resources`;
+    }
+    if (resourcesChecked > 0) {
+      return `Checked ${formatResourceCount(resourcesChecked, 'scoped')}`;
+    }
+    return `Scoped to ${formatResourceCount(scopedResourceCount)}`;
+  }
+
+  if (resourcesChecked > 0) {
+    return `Checked ${formatResourceCount(resourcesChecked)}`;
+  }
+
+  return '';
+}
+
+export function getPatrolRunResourcesHeading(run: Pick<PatrolRunRecord, 'resources_checked' | 'scope_resource_ids' | 'effective_scope_resource_ids'>): string {
+  const resourcesChecked = Math.max(0, run.resources_checked || 0);
+  const scopedResourceCount = getCanonicalScopeResourceIds(run)?.length ?? 0;
+
+  if (scopedResourceCount > 0 && resourcesChecked > 0 && resourcesChecked < scopedResourceCount) {
+    return `Resources checked (${resourcesChecked} of ${scopedResourceCount} scoped)`;
+  }
+
+  return `Resources checked (${resourcesChecked})`;
 }
 
 export function getRunHistoryLoadingState(): string {

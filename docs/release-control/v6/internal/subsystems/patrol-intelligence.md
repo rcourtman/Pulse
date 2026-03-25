@@ -202,6 +202,12 @@ the latest completed activity was only a scoped run, the summary should label
 that timestamp as `Last activity` instead of `Last patrol`; `Last full patrol`
 belongs only to the most recent completed full Patrol run.
 That same recency contract also applies to the header metadata row. The top
+That same empty-state contract must become run-snapshot-aware when the user is
+filtering findings to an explicit Patrol run. A selected run with an explicit
+empty `finding_ids` snapshot should explain that no findings were recorded for
+that run and, when applicable, carry the canonical run coverage summary and
+issue caveat instead of falling back to the generic `No Patrol findings to
+display` copy.
 header must not revert to a generic `Last:` timestamp when the rest of Patrol
 is explicitly distinguishing activity from full verification recency.
 That summary surface must also avoid reintroducing a second compact assessment
@@ -366,6 +372,11 @@ and the resource drawer both reflect the same learned edge evidence instead
 of each page fetching its own copy. Both surfaces now render that evidence
 through the shared `frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx`
 card, so the correlation layout stays governed by one component instead of
+Within that same run-history surface, coverage copy must stay canonical across
+the header chips, narrative summary, and selected-run snapshot. Scoped runs
+must not present scope size and checked-resource count as contradictory
+independent facts; the shared run presenter should collapse them into one
+coverage statement such as `Checked 1 of 2 scoped resources`.
 two page-local card implementations. That shared card also owns the
 correlation ordering and truncation rule, so the page and drawer hand it raw
 correlation lists instead of slicing or re-sorting them locally.

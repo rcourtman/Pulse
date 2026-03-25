@@ -1,9 +1,10 @@
-import type { PatrolRuntimeState } from '@/api/patrol';
+import type { PatrolRunRecord, PatrolRuntimeState } from '@/api/patrol';
 import type { FindingsFilter } from '@/utils/aiFindingPresentation';
 import { getFindingEmptyStateCopy } from '@/utils/aiFindingPresentation';
 import { getPatrolRuntimePresentation } from '@/utils/patrolRuntimePresentation';
 import type { SemanticTone } from '@/utils/semanticTonePresentation';
 import type { IntelligenceHealthScore } from '@/types/aiIntelligence';
+import { getPatrolRunCoverageSummary, isPatrolRunHealthy } from '@/utils/patrolRunPresentation';
 
 export function getInvestigationMessagesState(loading: boolean, hasMessages: boolean) {
   if (loading) {
@@ -59,6 +60,17 @@ export interface PatrolFindingsEmptyStateCopy {
   tone: SemanticTone;
 }
 
+interface PatrolRunSnapshotEmptyStateArgs
+  extends Pick<
+    PatrolRunRecord,
+    | 'resources_checked'
+    | 'scope_resource_ids'
+    | 'effective_scope_resource_ids'
+    | 'finding_ids'
+    | 'status'
+    | 'error_count'
+  > {}
+
 const HEALTHY_PATROL_EMPTY_STATE_BODY = 'Your infrastructure looks healthy!';
 const DEGRADED_COVERAGE_EMPTY_STATE_BODY =
   'Patrol has not surfaced active findings, but coverage is incomplete, so this is not a full all-clear.';
@@ -89,12 +101,43 @@ function getDegradedPatrolEmptyStateBody(overallHealth: IntelligenceHealthScore)
   return DEGRADED_HEALTH_EMPTY_STATE_BODY;
 }
 
+function getPatrolRunSnapshotEmptyState(
+  run: PatrolRunSnapshotEmptyStateArgs,
+): PatrolFindingsEmptyStateCopy {
+  const coverageSummary = getPatrolRunCoverageSummary(run);
+  const coveragePrefix = coverageSummary ? `${coverageSummary}. ` : '';
+
+  if (!isPatrolRunHealthy(run.status, run.error_count)) {
+    return {
+      title: 'No findings recorded for this run',
+      body: `${coveragePrefix}This run recorded no snapshot findings, but it ended with issues requiring review.`,
+      tone: 'warning',
+    };
+  }
+
+  return {
+    title: 'No findings recorded for this run',
+    body: `${coveragePrefix}This run recorded no Patrol findings.`,
+    tone: 'info',
+  };
+}
+
 export function getPatrolFindingsEmptyState(args: {
   filter: FindingsFilter;
   overallHealth?: IntelligenceHealthScore;
   runtimeState?: PatrolRuntimeState;
   blockedReason?: string;
+  runSnapshot?: PatrolRunSnapshotEmptyStateArgs;
 }): PatrolFindingsEmptyStateCopy {
+  if (
+    args.filter === 'all' &&
+    args.runSnapshot &&
+    Array.isArray(args.runSnapshot.finding_ids) &&
+    args.runSnapshot.finding_ids.length === 0
+  ) {
+    return getPatrolRunSnapshotEmptyState(args.runSnapshot);
+  }
+
   if (args.filter !== 'active') {
     return {
       ...getFindingEmptyStateCopy(args.filter),

@@ -18,7 +18,7 @@ import { notificationStore } from '@/stores/notifications';
 import { aiChatStore } from '@/stores/aiChat';
 import { InvestigationSection, ApprovalSection } from '@/components/patrol';
 import { AIAPI, type RemediationPlan } from '@/api/ai';
-import type { PatrolRuntimeState } from '@/api/patrol';
+import type { PatrolRunRecord, PatrolRuntimeState } from '@/api/patrol';
 import { getApprovalRiskPresentation } from '@/utils/approvalRiskPresentation';
 import { formatRelativeTime } from '@/utils/format';
 import { getFindingAlertIdentifier, hasTriggeringAlert } from '@/utils/findingAlertIdentity';
@@ -68,6 +68,15 @@ interface FindingsPanelProps {
   showControls?: boolean;
   scopeResourceIds?: string[];
   scopeResourceTypes?: string[];
+  runSnapshot?: Pick<
+    PatrolRunRecord,
+    | 'resources_checked'
+    | 'scope_resource_ids'
+    | 'effective_scope_resource_ids'
+    | 'finding_ids'
+    | 'status'
+    | 'error_count'
+  >;
   showScopeWarnings?: boolean;
   runtimeState?: PatrolRuntimeState;
   blockedReason?: string;
@@ -233,6 +242,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     buildFindingFilterOptions({
       needsAttentionCount: aiIntelligenceStore.needsAttentionCount,
       pendingApprovalCount: aiIntelligenceStore.pendingApprovalCount,
+      runSnapshot: props.runSnapshot,
     }),
   );
   const emptyStateCopy = createMemo(() =>

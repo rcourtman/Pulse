@@ -12,7 +12,12 @@ import {
   sanitizeAnalysis,
 } from '@/utils/patrolFormat';
 import { formatRelativeTime } from '@/utils/format';
-import { getPatrolRunStatusPresentation, isPatrolRunHealthy } from '@/utils/patrolRunPresentation';
+import {
+  getPatrolRunCoverageSummary,
+  getPatrolRunResourcesHeading,
+  getPatrolRunStatusPresentation,
+  isPatrolRunHealthy,
+} from '@/utils/patrolRunPresentation';
 
 import BrainCircuitIcon from 'lucide-solid/icons/brain-circuit';
 import ActivityIcon from 'lucide-solid/icons/activity';
@@ -146,6 +151,7 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
   const runStatus = getPatrolRunStatusPresentation(run.status, run.error_count);
   const canonicalScopeResourceIds = getCanonicalScopeResourceIds(run);
   const runIsHealthy = isPatrolRunHealthy(run.status, run.error_count);
+  const coverageSummary = getPatrolRunCoverageSummary(run);
 
   return (
     <div
@@ -166,14 +172,14 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
           </span>
           <span class={`px-1.5 py-0.5 rounded ${runStatus.badgeClass}`}>{runStatus.label}</span>
           <span>{formatTriggerReason(run.trigger_reason)}</span>
-          <Show when={scopeSummary}>
+          <Show when={scopeSummary && !coverageSummary}>
             <span>• {scopeSummary}</span>
           </Show>
           <Show when={duration}>
             <span>• {duration}</span>
           </Show>
-          <Show when={run.resources_checked}>
-            <span>• {run.resources_checked} resources</span>
+          <Show when={coverageSummary}>
+            <span>• {coverageSummary}</span>
           </Show>
           <Show when={run.new_findings}>
             <span>• {run.new_findings} new</span>
@@ -193,8 +199,7 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
             <p>
               {run.resources_checked > 0 ? (
                 <>
-                  Scanned <strong>{run.resources_checked}</strong> resource
-                  {run.resources_checked !== 1 ? 's' : ''}{' '}
+                  {coverageSummary}{' '}
                   {formatDurationMs(run.duration_ms) ? (
                     <>
                       in <strong>{formatDurationMs(run.duration_ms)}</strong>
@@ -260,7 +265,7 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
               <div class="flex items-center gap-1.5 mb-2">
                 <SearchIcon class="w-3.5 h-3.5 text-muted" />
                 <span class="text-[10px] font-semibold tracking-wider uppercase text-muted">
-                  Resources Scanned ({run.resources_checked})
+                  {getPatrolRunResourcesHeading(run)}
                 </span>
               </div>
               <div class="flex flex-wrap gap-1.5">
@@ -434,6 +439,7 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
                 scopeResourceTypes={run.scope_resource_types}
                 showScopeWarnings={true}
                 showControls={false}
+                runSnapshot={run}
               />
             </div>
           </Show>

@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import type { PatrolRunRecord } from '@/api/patrol';
 import {
   getPatrolRunKindLabel,
+  getPatrolRunCoverageSummary,
+  getPatrolRunResourcesHeading,
   getPatrolRunStatusPresentation,
   isPatrolRunHealthy,
   getRunHistoryLoadingState,
@@ -11,6 +14,24 @@ import {
 } from '@/utils/patrolRunPresentation';
 
 describe('patrolRunPresentation', () => {
+  const scopedCoverageRun: Pick<
+    PatrolRunRecord,
+    'resources_checked' | 'scope_resource_ids' | 'effective_scope_resource_ids'
+  > = {
+    resources_checked: 1,
+    scope_resource_ids: ['seed-resource'],
+    effective_scope_resource_ids: ['expanded-a', 'expanded-b'],
+  };
+
+  const fullCoverageRun: Pick<
+    PatrolRunRecord,
+    'resources_checked' | 'scope_resource_ids' | 'effective_scope_resource_ids'
+  > = {
+    resources_checked: 58,
+    scope_resource_ids: [],
+    effective_scope_resource_ids: [],
+  };
+
   it('maps critical and error runs to danger styling', () => {
     expect(getPatrolRunStatusPresentation('critical').badgeClass).toContain('red-100');
     expect(getPatrolRunStatusPresentation('error').badgeClass).toContain('red-100');
@@ -56,6 +77,20 @@ describe('patrolRunPresentation', () => {
     expect(getPatrolRunKindLabel('scoped')).toBe('Scoped run');
     expect(getPatrolRunKindLabel('patrol')).toBe('Full patrol');
     expect(getPatrolRunKindLabel('')).toBe('Full patrol');
+  });
+
+  it('expresses scoped run coverage against the effective scope', () => {
+    expect(getPatrolRunCoverageSummary(scopedCoverageRun)).toBe(
+      'Checked 1 of 2 scoped resources',
+    );
+    expect(getPatrolRunResourcesHeading(scopedCoverageRun)).toBe(
+      'Resources checked (1 of 2 scoped)',
+    );
+  });
+
+  it('uses checked-resource language for non-scoped coverage summaries', () => {
+    expect(getPatrolRunCoverageSummary(fullCoverageRun)).toBe('Checked 58 resources');
+    expect(getPatrolRunResourcesHeading(fullCoverageRun)).toBe('Resources checked (58)');
   });
 
   it('returns canonical patrol run loading and unavailable copy', () => {

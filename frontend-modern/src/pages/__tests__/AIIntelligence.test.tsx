@@ -16,6 +16,7 @@ const { findingsPanelState, runHistoryState, intelligenceState } = vi.hoisted(()
       lastPatrolAt?: string;
       lastPatrolLabel?: string;
       patrolIntervalMs?: number;
+      runSnapshotId?: string;
     } | null,
   },
   runHistoryState: {
@@ -202,6 +203,12 @@ vi.mock('@/components/AI/FindingsPanel', () => ({
         typeof props.lastPatrolLabel === 'string' ? props.lastPatrolLabel : undefined,
       patrolIntervalMs:
         typeof props.patrolIntervalMs === 'number' ? props.patrolIntervalMs : undefined,
+      runSnapshotId:
+        props.runSnapshot &&
+        typeof props.runSnapshot === 'object' &&
+        typeof (props.runSnapshot as { id?: unknown }).id === 'string'
+          ? ((props.runSnapshot as { id: string }).id ?? undefined)
+          : undefined,
     };
     return <div data-testid="findings-panel" />;
   },
@@ -1012,6 +1019,7 @@ describe('AIIntelligence entitlement gating', () => {
     await waitFor(() => {
       expect(getPatrolStatusMock).toHaveBeenCalled();
       expect(findingsPanelState.latestProps).not.toBeNull();
+      runSnapshotId: 'run-empty',
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'Runs' }));
@@ -1071,6 +1079,7 @@ describe('AIIntelligence entitlement gating', () => {
     await waitFor(() => {
       expect(getPatrolStatusMock).toHaveBeenCalled();
       expect(findingsPanelState.latestProps).not.toBeNull();
+      runSnapshotId: 'run-empty-effective-scope',
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'Runs' }));
@@ -1129,6 +1138,7 @@ describe('AIIntelligence entitlement gating', () => {
     await waitFor(() => {
       expect(getPatrolStatusMock).toHaveBeenCalled();
       expect(findingsPanelState.latestProps).not.toBeNull();
+      runSnapshotId: 'run-missing-snapshot',
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'Runs' }));
