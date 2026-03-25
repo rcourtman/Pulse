@@ -62,6 +62,7 @@ Supporting governance file:
 - `CONSOLIDATION_MAP.md` (legacy-doc demotion and archival map)
 - `RETIREMENT_AUDIT_2026-02-27.md` (file-by-file audited retirement decisions)
 - `internal/CANONICAL_DEVELOPMENT_PROTOCOL.md` (canonical subsystem development protocol)
+- `internal/PULSE_ACCOUNT_PORTAL_SPEC.md` (canonical Pulse Account portal IA, ownership boundaries, and candidate-lane scope)
 - `internal/RELEASE_PROMOTION_POLICY.md` (customer-facing release-train contract for `stable` versus the prerelease `rc` channel)
 - `internal/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md` (manual verification runbook for trust-critical release gates)
 - `internal/RC_TO_GA_REHEARSAL_TEMPLATE.md` (human record template for the non-publish GA rehearsal run)

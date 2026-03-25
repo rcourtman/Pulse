@@ -41,38 +41,41 @@ agreement, and cloud-specific enforcement rules.
 19. `internal/cloudcp/entitlements/service.go`
 20. `internal/cloudcp/registry/registry.go`
 21. `internal/cloudcp/account/tenant_handlers.go`
-22. `internal/cloudcp/stripe/provisioner.go`
-23. `internal/hosted/provisioner.go`
-24. `frontend-modern/src/App.tsx`
-25. `frontend-modern/src/AppLayout.tsx`
-26. `frontend-modern/src/useAppRuntimeState.ts`
-27. `frontend-modern/src/components/Dashboard/RelayOnboardingCard.tsx`
-28. `frontend-modern/src/components/Dashboard/useRelayOnboardingCardState.ts`
-29. `frontend-modern/src/components/Commercial/MonitoredSystemDefinitionDisclosure.tsx`
-30. `frontend-modern/src/components/Settings/BillingAdminPanel.tsx`
-31. `frontend-modern/src/components/Settings/BillingAdminOrganizationsTable.tsx`
-32. `frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx`
-33. `frontend-modern/src/components/Settings/OrganizationBillingLoadingState.tsx`
-34. `frontend-modern/src/components/Settings/MonitoredSystemLedgerPanel.tsx`
-35. `frontend-modern/src/components/Settings/ProLicensePanel.tsx`
-36. `frontend-modern/src/components/Settings/ProLicensePlanSection.tsx`
-37. `frontend-modern/src/components/Settings/CommercialBillingSections.tsx`
-38. `frontend-modern/src/components/Settings/SelfHostedCommercialActivationSection.tsx`
-39. `frontend-modern/src/components/Settings/RelaySettingsPanel.tsx`
-40. `frontend-modern/src/components/Settings/RelayPairingSection.tsx`
-41. `frontend-modern/src/components/Settings/useBillingAdminPanelState.ts`
-42. `frontend-modern/src/components/Settings/useOrganizationBillingPanelState.ts`
-43. `frontend-modern/src/components/Settings/useProLicensePanelState.ts`
-44. `frontend-modern/src/components/Settings/useRelaySettingsPanelState.ts`
-45. `frontend-modern/src/pages/CloudPricing.tsx`
-46. `frontend-modern/src/pages/PricingV6.tsx`
-47. `frontend-modern/src/utils/apiClient.ts`
-48. `frontend-modern/src/utils/cloudPlans.ts`
-49. `frontend-modern/src/utils/commercialBillingModel.ts`
-50. `frontend-modern/src/utils/monitoredSystemPresentation.ts`
-51. `frontend-modern/src/utils/selfHostedPlans.ts`
-52. `frontend-modern/src/utils/licensePresentation.ts`
-53. `frontend-modern/src/utils/upgradePresentation.ts`
+22. `internal/cloudcp/portal/handlers.go`
+23. `internal/cloudcp/portal/page.go`
+24. `internal/cloudcp/routes.go`
+25. `internal/cloudcp/stripe/provisioner.go`
+26. `internal/hosted/provisioner.go`
+27. `frontend-modern/src/App.tsx`
+28. `frontend-modern/src/AppLayout.tsx`
+29. `frontend-modern/src/useAppRuntimeState.ts`
+30. `frontend-modern/src/components/Dashboard/RelayOnboardingCard.tsx`
+31. `frontend-modern/src/components/Dashboard/useRelayOnboardingCardState.ts`
+32. `frontend-modern/src/components/Commercial/MonitoredSystemDefinitionDisclosure.tsx`
+33. `frontend-modern/src/components/Settings/BillingAdminPanel.tsx`
+34. `frontend-modern/src/components/Settings/BillingAdminOrganizationsTable.tsx`
+35. `frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx`
+36. `frontend-modern/src/components/Settings/OrganizationBillingLoadingState.tsx`
+37. `frontend-modern/src/components/Settings/MonitoredSystemLedgerPanel.tsx`
+38. `frontend-modern/src/components/Settings/ProLicensePanel.tsx`
+39. `frontend-modern/src/components/Settings/ProLicensePlanSection.tsx`
+40. `frontend-modern/src/components/Settings/CommercialBillingSections.tsx`
+41. `frontend-modern/src/components/Settings/SelfHostedCommercialActivationSection.tsx`
+42. `frontend-modern/src/components/Settings/RelaySettingsPanel.tsx`
+43. `frontend-modern/src/components/Settings/RelayPairingSection.tsx`
+44. `frontend-modern/src/components/Settings/useBillingAdminPanelState.ts`
+45. `frontend-modern/src/components/Settings/useOrganizationBillingPanelState.ts`
+46. `frontend-modern/src/components/Settings/useProLicensePanelState.ts`
+47. `frontend-modern/src/components/Settings/useRelaySettingsPanelState.ts`
+48. `frontend-modern/src/pages/CloudPricing.tsx`
+49. `frontend-modern/src/pages/PricingV6.tsx`
+50. `frontend-modern/src/utils/apiClient.ts`
+51. `frontend-modern/src/utils/cloudPlans.ts`
+52. `frontend-modern/src/utils/commercialBillingModel.ts`
+53. `frontend-modern/src/utils/monitoredSystemPresentation.ts`
+54. `frontend-modern/src/utils/selfHostedPlans.ts`
+55. `frontend-modern/src/utils/licensePresentation.ts`
+56. `frontend-modern/src/utils/upgradePresentation.ts`
 
 ## Shared Boundaries
 
@@ -87,21 +90,22 @@ agreement, and cloud-specific enforcement rules.
 2. Add or change hosted entitlement issuance through `internal/cloudcp/entitlements/service.go`
 3. Add or change control-plane plan storage through `internal/cloudcp/registry/registry.go`
 4. Add or change MSP account-scoped workspace provisioning entry handlers through `internal/cloudcp/account/tenant_handlers.go`
-5. Add or change Stripe provisioning plan resolution through `internal/cloudcp/stripe/provisioner.go`
-6. Add or change activation/grant lifecycle through `pkg/licensing/service.go`, `pkg/licensing/grant_refresh.go`, and `pkg/licensing/revocation_poll.go`
-7. Add or change license-server transport through `pkg/licensing/license_server_client.go`
-8. Add or change encrypted activation persistence through `pkg/licensing/persistence.go` and `pkg/licensing/activation_store.go`
-9. Add or change hosted trial token semantics through `pkg/licensing/trial_activation.go`
-10. Add or change hosted signup provisioning through `internal/hosted/provisioner.go`
-11. Add or change hosted billing-admin presentation through `frontend-modern/src/components/Settings/BillingAdminPanel.tsx`, `frontend-modern/src/components/Settings/BillingAdminOrganizationsTable.tsx`, and `frontend-modern/src/components/Settings/useBillingAdminPanelState.ts`
-12. Add or change shared commercial plan/usage presentation through `frontend-modern/src/components/Settings/CommercialBillingSections.tsx` and `frontend-modern/src/utils/commercialBillingModel.ts`
-13. Add or change organization billing and usage presentation through `frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx`, `frontend-modern/src/components/Settings/OrganizationBillingLoadingState.tsx`, and `frontend-modern/src/components/Settings/useOrganizationBillingPanelState.ts`
-14. Add or change self-hosted Pro activation, trial, and entitlement actions through `frontend-modern/src/components/Settings/ProLicensePanel.tsx`, `frontend-modern/src/components/Settings/ProLicensePlanSection.tsx`, `frontend-modern/src/components/Settings/SelfHostedCommercialActivationSection.tsx`, and `frontend-modern/src/components/Settings/useProLicensePanelState.ts`
-15. Add or change monitored-system ledger presentation through `frontend-modern/src/components/Settings/MonitoredSystemLedgerPanel.tsx`, `frontend-modern/src/components/Commercial/MonitoredSystemDefinitionDisclosure.tsx`, and `frontend-modern/src/utils/monitoredSystemPresentation.ts`
-16. Add or change paid relay settings and onboarding presentation through `frontend-modern/src/components/Settings/RelaySettingsPanel.tsx`, `frontend-modern/src/components/Settings/RelayPairingSection.tsx`, `frontend-modern/src/components/Settings/useRelaySettingsPanelState.ts`, `frontend-modern/src/components/Dashboard/RelayOnboardingCard.tsx`, and `frontend-modern/src/components/Dashboard/useRelayOnboardingCardState.ts`
-17. Add or change cloud plan presentation through `frontend-modern/src/pages/CloudPricing.tsx`
-18. Add contract tests where runtime and pricing need to stay aligned
-19. Add or change hosted browser org-context bootstrap through `frontend-modern/src/App.tsx`, `frontend-modern/src/AppLayout.tsx`, `frontend-modern/src/useAppRuntimeState.ts`, and `frontend-modern/src/utils/apiClient.ts`
+5. Add or change the hosted account portal API, browser shell, or account-scoped billing handoff through `internal/cloudcp/portal/handlers.go`, `internal/cloudcp/portal/page.go`, and `internal/cloudcp/routes.go`
+6. Add or change Stripe provisioning plan resolution through `internal/cloudcp/stripe/provisioner.go`
+7. Add or change activation/grant lifecycle through `pkg/licensing/service.go`, `pkg/licensing/grant_refresh.go`, and `pkg/licensing/revocation_poll.go`
+8. Add or change license-server transport through `pkg/licensing/license_server_client.go`
+9. Add or change encrypted activation persistence through `pkg/licensing/persistence.go` and `pkg/licensing/activation_store.go`
+10. Add or change hosted trial token semantics through `pkg/licensing/trial_activation.go`
+11. Add or change hosted signup provisioning through `internal/hosted/provisioner.go`
+12. Add or change hosted billing-admin presentation through `frontend-modern/src/components/Settings/BillingAdminPanel.tsx`, `frontend-modern/src/components/Settings/BillingAdminOrganizationsTable.tsx`, and `frontend-modern/src/components/Settings/useBillingAdminPanelState.ts`
+13. Add or change shared commercial plan/usage presentation through `frontend-modern/src/components/Settings/CommercialBillingSections.tsx` and `frontend-modern/src/utils/commercialBillingModel.ts`
+14. Add or change organization billing and usage presentation through `frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx`, `frontend-modern/src/components/Settings/OrganizationBillingLoadingState.tsx`, and `frontend-modern/src/components/Settings/useOrganizationBillingPanelState.ts`
+15. Add or change self-hosted Pro activation, trial, and entitlement actions through `frontend-modern/src/components/Settings/ProLicensePanel.tsx`, `frontend-modern/src/components/Settings/ProLicensePlanSection.tsx`, `frontend-modern/src/components/Settings/SelfHostedCommercialActivationSection.tsx`, and `frontend-modern/src/components/Settings/useProLicensePanelState.ts`
+16. Add or change monitored-system ledger presentation through `frontend-modern/src/components/Settings/MonitoredSystemLedgerPanel.tsx`, `frontend-modern/src/components/Commercial/MonitoredSystemDefinitionDisclosure.tsx`, and `frontend-modern/src/utils/monitoredSystemPresentation.ts`
+17. Add or change paid relay settings and onboarding presentation through `frontend-modern/src/components/Settings/RelaySettingsPanel.tsx`, `frontend-modern/src/components/Settings/RelayPairingSection.tsx`, `frontend-modern/src/components/Settings/useRelaySettingsPanelState.ts`, `frontend-modern/src/components/Dashboard/RelayOnboardingCard.tsx`, and `frontend-modern/src/components/Dashboard/useRelayOnboardingCardState.ts`
+18. Add or change cloud plan presentation through `frontend-modern/src/pages/CloudPricing.tsx`
+19. Add contract tests where runtime and pricing need to stay aligned
+20. Add or change hosted browser org-context bootstrap through `frontend-modern/src/App.tsx`, `frontend-modern/src/AppLayout.tsx`, `frontend-modern/src/useAppRuntimeState.ts`, and `frontend-modern/src/utils/apiClient.ts`
 
 ## Forbidden Paths
 
@@ -696,3 +700,15 @@ displayed pairing token only when canonical token metadata still shows no
 `lastUsedAt`; once a token has been used by a paired device, refreshing or
 hiding the QR must preserve that credential instead of treating it as
 disposable UI state.
+The customer-account surface is now also an explicit cloud-paid ownership
+boundary. Pulse already has a real hosted control-plane portal in
+`internal/cloudcp/portal/`, account/workspace mutation APIs in
+`internal/cloudcp/account/tenant_handlers.go`, and transitional self-hosted
+commercial utility pages in `pulse-pro/landing-page/`, but those surfaces do
+not yet form one coherent Pulse account product. The canonical future shape is
+`docs/release-control/v6/internal/PULSE_ACCOUNT_PORTAL_SPEC.md`: one
+authenticated Pulse account shell that unifies Cloud tenants, self-hosted
+licenses, billing, recovery, and MSP admin surfaces without creating a
+standalone Relay portal. Until that candidate lane lands, new commercial
+account work must extend the governed Pulse account shape rather than spawning
+additional one-off recovery or billing pages.
