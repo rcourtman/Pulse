@@ -1,13 +1,15 @@
-# Pulse v6.0.0-rc.1 Notes
+# Pulse v6.0.0-rc.1 Pre-Release Notes
 
-`v6.0.0-rc.1` is a low-key Pulse v6 release candidate for users who want to test early and report issues before the stable `v6.0.0` release.
+`v6.0.0-rc.1` is an early Pulse v6 pre-release for users who want to test before the stable `v6.0.0` release.
+
+Expect bugs, rough edges, and migration issues. This build is for early testing, not for normal production use.
 
 This note is intentionally brief. I will publish the fuller Pulse v6 release notes with the final GA release.
 
 ## Before You Try It
 
 - I do not recommend upgrading a production Pulse v5 installation yet.
-- Pulse v5 remains the current stable line during the v6 RC period.
+- Pulse v5 remains the current stable line during the v6 pre-release period.
 - If you want to test v6, use a staging instance, lab environment, or separate non-production install first.
 - Keep console access and a current backup available before upgrading.
 
