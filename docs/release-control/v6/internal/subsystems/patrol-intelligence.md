@@ -146,6 +146,11 @@ recent-activity strip, not a second health verdict: when Patrol is active it
 should report recent run activity, run kind, latest run result, and run-count
 context instead of emitting another green/amber all-clear headline that can
 drift from the governed assessment summary above it.
+That recent-activity copy also has to remain intelligible in compact or
+plain-text renders: the latest-run segment must keep an explicit textual
+separator between run kind and result, so degraded entries read as
+`Scoped run · error` rather than collapsing into concatenated strings like
+`Scoped runerror`.
 That same Patrol-owned timing contract also applies to the findings empty
 state footer. `frontend-modern/src/components/AI/FindingsPanel.tsx` must use
 the canonical Patrol countdown semantics for `next_patrol_at` instead of

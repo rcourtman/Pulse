@@ -192,6 +192,7 @@ describe('PatrolStatusBar', () => {
 
     const latestRunSection = screen.getByText('Latest: Scoped run').closest('span');
     expect(latestRunSection).not.toBeNull();
+    expect(within(latestRunSection as HTMLElement).getByText('·')).toBeInTheDocument();
     expect(within(latestRunSection as HTMLElement).queryByText('healthy')).not.toBeInTheDocument();
     expect(within(latestRunSection as HTMLElement).getByText('error')).toBeInTheDocument();
   });
