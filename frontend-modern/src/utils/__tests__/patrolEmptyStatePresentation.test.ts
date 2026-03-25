@@ -59,8 +59,35 @@ describe('patrolEmptyStatePresentation', () => {
       }),
     ).toEqual({
       title: 'No active findings',
-      body: 'Patrol coverage is incomplete: recent activity was limited to scoped runs and ended with errors, so overall health is not fully verified.',
+      body: 'Patrol has not surfaced active findings, but coverage is incomplete, so this is not a full all-clear.',
       tone: 'warning',
+    });
+  });
+
+  it('uses an attention-focused empty state when patrol health is degraded for non-coverage reasons', () => {
+    expect(
+      getPatrolFindingsEmptyState({
+        filter: 'active',
+        overallHealth: {
+          score: 45,
+          grade: 'D',
+          trend: 'declining',
+          factors: [
+            {
+              name: 'Critical unresolved risk',
+              impact: -0.55,
+              description: 'Recent Patrol evidence indicates unresolved infrastructure risk.',
+              category: 'findings',
+            },
+          ],
+          prediction: 'Critical infrastructure risk still requires attention.',
+        },
+        runtimeState: 'active',
+      }),
+    ).toEqual({
+      title: 'No active findings',
+      body: 'Patrol has not surfaced active findings, but the overall Patrol assessment still needs attention.',
+      tone: 'error',
     });
   });
 

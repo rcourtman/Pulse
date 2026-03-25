@@ -120,6 +120,12 @@ overall-health summary is degraded or not fully verified. The green healthy
 empty state belongs only to an actually healthy Patrol summary, while degraded
 coverage or paused-runtime states must surface the governing warning/error copy
 through `frontend-modern/src/utils/patrolEmptyStatePresentation.ts`.
+That degraded empty-state copy must also interpret the finding state rather
+than simply replaying the primary assessment sentence verbatim: when coverage
+is incomplete, the findings panel should tell the operator that Patrol has not
+surfaced active findings but that this is not a full all-clear, so the page
+does not duplicate the summary prediction as if it were a second independent
+status surface.
 The Patrol summary surface must follow that same hierarchy. The primary summary
 headline in `frontend-modern/src/features/patrol/PatrolIntelligenceSummary.tsx`
 should state Patrol's current assessment first, such as verified healthy,

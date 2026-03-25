@@ -818,6 +818,11 @@ describe('AIIntelligence entitlement gating', () => {
 
     expect(screen.queryByText('No issues found')).not.toBeInTheDocument();
     expect(screen.queryByText('Partial verification')).not.toBeInTheDocument();
+    expect(
+      screen.getAllByText(
+        'Patrol coverage is incomplete: recent activity was limited to scoped runs and ended with errors, so overall health is not fully verified.',
+      ),
+    ).toHaveLength(1);
   });
 
   it('treats a selected zero-finding run as an empty snapshot and uses effective scope ids', async () => {

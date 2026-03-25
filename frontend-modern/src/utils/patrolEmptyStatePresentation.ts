@@ -60,6 +60,10 @@ export interface PatrolFindingsEmptyStateCopy {
 }
 
 const HEALTHY_PATROL_EMPTY_STATE_BODY = 'Your infrastructure looks healthy!';
+const DEGRADED_COVERAGE_EMPTY_STATE_BODY =
+  'Patrol has not surfaced active findings, but coverage is incomplete, so this is not a full all-clear.';
+const DEGRADED_HEALTH_EMPTY_STATE_BODY =
+  'Patrol has not surfaced active findings, but the overall Patrol assessment still needs attention.';
 
 function getHealthDegradedTone(overallHealth: IntelligenceHealthScore): SemanticTone {
   return overallHealth.grade === 'D' || overallHealth.grade === 'F' ? 'error' : 'warning';
@@ -75,6 +79,14 @@ function shouldSuppressHealthyEmptyState(overallHealth: IntelligenceHealthScore 
   }
 
   return overallHealth.grade !== 'A';
+}
+
+function getDegradedPatrolEmptyStateBody(overallHealth: IntelligenceHealthScore): string {
+  if (overallHealth.factors.some((factor) => factor.category === 'coverage')) {
+    return DEGRADED_COVERAGE_EMPTY_STATE_BODY;
+  }
+
+  return DEGRADED_HEALTH_EMPTY_STATE_BODY;
 }
 
 export function getPatrolFindingsEmptyState(args: {
@@ -106,9 +118,7 @@ export function getPatrolFindingsEmptyState(args: {
   if (shouldSuppressHealthyEmptyState(args.overallHealth)) {
     return {
       title: 'No active findings',
-      body:
-        args.overallHealth?.prediction?.trim() ||
-        'Patrol has not surfaced active findings, but overall infrastructure health is not fully verified.',
+      body: getDegradedPatrolEmptyStateBody(args.overallHealth!),
       tone: getHealthDegradedTone(args.overallHealth!),
     };
   }
