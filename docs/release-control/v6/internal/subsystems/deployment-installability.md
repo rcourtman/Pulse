@@ -253,6 +253,10 @@ operational parity with the repo-root entry surface for the canonical controls:
 start, status, logs, stop, restart, managed backend restart, verification, and
 the explicit foreground escape hatch. The only intentionally narrower frontend
 workspace exception is the named `dev:frontend-only` raw Vite escape hatch.
+That parity may not be maintained by duplicating raw script paths in two
+package manifests. `frontend-modern/package.json` must delegate those managed
+commands back to the repo-root npm wrapper surface so the workspace-local entry
+points cannot silently drift away from the one canonical operator contract.
 That foreground escape hatch contract also applies to `scripts/hot-dev.sh`
 itself: its self-description and usage guidance must point operators back to
 the canonical managed `npm run dev` path for normal work and reserve
@@ -260,8 +264,9 @@ the canonical managed `npm run dev` path for normal work and reserve
 That same self-description rule applies to `scripts/hot-dev-bg.sh`: even
 though it is the managed control surface underneath the wrappers, its usage
 guidance must still point operators to the canonical repo-root `npm run dev`
-entrypoint for routine startup instead of teaching direct script invocation as
-the primary habit.
+entrypoint for routine startup and label raw subcommands as secondary
+troubleshooting controls instead of teaching direct script invocation as the
+primary habit.
 That operator-guidance rule also applies to the managed launcher's recovery and
 diagnostic messages: when `hot-dev-bg` tells users how to start, restart,
 verify, supervise, or inspect the routine local dev runtime, it must route them

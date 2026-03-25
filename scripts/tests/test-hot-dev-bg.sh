@@ -505,14 +505,14 @@ for key in [
 PY
   )"
 
-  assert_contains "frontend package exposes managed dev start" "${output}" "dev=../scripts/hot-dev-bg.sh start --takeover"
-  assert_contains "frontend package exposes managed dev logs" "${output}" "dev:logs=../scripts/hot-dev-bg.sh logs"
-  assert_contains "frontend package exposes managed dev restart" "${output}" "dev:restart=../scripts/hot-dev-bg.sh restart --takeover"
-  assert_contains "frontend package exposes managed backend restart" "${output}" "dev:backend-restart=../scripts/hot-dev-bg.sh backend-restart"
-  assert_contains "frontend package exposes managed dev status" "${output}" "dev:status=../scripts/hot-dev-bg.sh status"
-  assert_contains "frontend package exposes managed dev stop" "${output}" "dev:stop=../scripts/hot-dev-bg.sh stop"
-  assert_contains "frontend package exposes managed dev verify" "${output}" "dev:verify=../scripts/hot-dev-bg.sh verify --takeover"
-  assert_contains "frontend package keeps foreground managed launcher" "${output}" "dev:foreground=../scripts/hot-dev.sh"
+  assert_contains "frontend package delegates managed dev start to repo-root wrapper" "${output}" "dev=npm --prefix .. run dev"
+  assert_contains "frontend package delegates managed dev logs to repo-root wrapper" "${output}" "dev:logs=npm --prefix .. run dev:logs"
+  assert_contains "frontend package delegates managed dev restart to repo-root wrapper" "${output}" "dev:restart=npm --prefix .. run dev:restart"
+  assert_contains "frontend package delegates managed backend restart to repo-root wrapper" "${output}" "dev:backend-restart=npm --prefix .. run dev:backend-restart"
+  assert_contains "frontend package delegates managed dev status to repo-root wrapper" "${output}" "dev:status=npm --prefix .. run dev:status"
+  assert_contains "frontend package delegates managed dev stop to repo-root wrapper" "${output}" "dev:stop=npm --prefix .. run dev:stop"
+  assert_contains "frontend package delegates managed dev verify to repo-root wrapper" "${output}" "dev:verify=npm --prefix .. run dev:verify"
+  assert_contains "frontend package delegates foreground escape hatch to repo-root wrapper" "${output}" "dev:foreground=npm --prefix .. run dev:foreground"
   assert_contains "frontend package keeps explicit frontend-only escape hatch" "${output}" "dev:frontend-only=vite"
 }
 
@@ -558,7 +558,7 @@ test_hot_dev_bg_script_advertises_managed_entrypoint() {
   output="$(cat "${ROOT_DIR}/scripts/hot-dev-bg.sh")"
 
   assert_contains "hot-dev-bg usage points to managed runtime first" "${output}" "npm run dev                             # Canonical managed dev runtime"
-  assert_contains "hot-dev-bg still documents direct launcher start" "${output}" "./scripts/hot-dev-bg.sh start [--takeover]"
+  assert_contains "hot-dev-bg documents direct launcher as troubleshooting only" "${output}" "./scripts/hot-dev-bg.sh <command>       # Direct troubleshooting only"
   assert_contains "hot-dev-bg routes log guidance to managed wrapper" "${output}" "Check logs with: npm run dev:logs"
   assert_contains "hot-dev-bg routes verify guidance to managed wrapper" "${output}" "Rerun with: npm run dev:verify"
   assert_contains "hot-dev-bg routes launchd supervision guidance to managed wrapper" "${output}" "Rerun with: npm run dev"
@@ -571,7 +571,7 @@ test_hot_dev_bg_usage_prefers_managed_wrappers() {
   assert_contains "hot-dev-bg usage shows managed entrypoints heading" "${output}" "Managed entrypoints:"
   assert_contains "hot-dev-bg usage advertises npm dev wrapper" "${output}" "npm run dev"
   assert_contains "hot-dev-bg usage advertises npm verify wrapper" "${output}" "npm run dev:verify"
-  assert_contains "hot-dev-bg usage retains raw command list" "${output}" "Commands:"
+  assert_contains "hot-dev-bg usage labels raw commands as troubleshooting-only" "${output}" "Direct troubleshooting subcommands:"
   assert_contains "hot-dev-bg usage retains direct start subcommand" "${output}" "start [--takeover]"
 }
 

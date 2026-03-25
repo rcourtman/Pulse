@@ -146,7 +146,7 @@ PULSE_E2E_SKIP_PLAYWRIGHT_INSTALL=1 \
 npm test -- tests/16-dev-runtime-recovery.spec.ts tests/17-recovery-layout.spec.ts tests/18-patrol-runtime-state.spec.ts --project=chromium
 ```
 
-This mode attaches Playwright to the canonical dev browser entrypoint on `http://127.0.0.1:5173`, uses `scripts/hot-dev-bg.sh` as the runtime control surface, and writes browser runtime connection state for Playwright instead of targeting the backend port directly.
+This mode attaches Playwright to the canonical dev browser entrypoint on `http://127.0.0.1:5173`, uses the repo-root managed runtime wrappers as the control surface, and writes browser runtime connection state for Playwright instead of targeting the backend port directly. Those wrappers are backed by `scripts/hot-dev-bg.sh`, but the wrapper surface is the canonical operator contract.
 When you run the wrapper as `npm run dev:verify`, the managed launcher hands a verification-lock path into the integration runner, and the runner holds that lock for the actual pretest, Playwright, and posttest lifetime so unrelated backend source churn does not invalidate the recovery proofs mid-run.
 
 If the managed runtime is not already running, the harness starts it. If you need the harness to reclaim existing unmanaged `5173`/`7655` listeners first, add `PULSE_E2E_HOT_DEV_TAKEOVER=1`.

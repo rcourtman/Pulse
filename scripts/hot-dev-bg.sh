@@ -4,14 +4,12 @@
 #
 # Usage:
 #   npm run dev                             # Canonical managed dev runtime
-#   ./scripts/hot-dev-bg.sh start [--takeover]
-#   ./scripts/hot-dev-bg.sh stop
-#   ./scripts/hot-dev-bg.sh restart
-#   ./scripts/hot-dev-bg.sh backend-restart
-#   ./scripts/hot-dev-bg.sh launchd-session [--takeover]
-#   ./scripts/hot-dev-bg.sh verify [--takeover]
-#   ./scripts/hot-dev-bg.sh status
-#   ./scripts/hot-dev-bg.sh logs
+#   npm run dev:status
+#   npm run dev:logs
+#   npm run dev:restart
+#   npm run dev:backend-restart
+#   npm run dev:verify
+#   ./scripts/hot-dev-bg.sh <command>       # Direct troubleshooting only
 
 set -euo pipefail
 
@@ -918,7 +916,7 @@ Managed entrypoints:
   npm run dev:verify
   npm run dev:foreground
 
-Commands:
+Direct troubleshooting subcommands:
   start [--takeover]
   stop
   restart
