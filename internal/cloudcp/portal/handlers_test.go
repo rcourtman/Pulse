@@ -725,13 +725,21 @@ func TestPortalPageTemplate_AccountServicesRendered(t *testing.T) {
 		"Other account services",
 		`id="open-manage-service"`,
 		`id="open-retrieve-service"`,
+		`id="open-refund-service"`,
+		`id="open-data-service"`,
 		`id="manage-service-panel"`,
 		`id="retrieve-service-panel"`,
+		`id="refund-service-panel"`,
+		`id="data-service-panel"`,
 		`fetch(LICENSE_API_BASE + '/v1/manage/request'`,
 		`fetch(LICENSE_API_BASE + '/v1/retrieve-license/request'`,
+		`fetch(LICENSE_API_BASE + '/v1/self-refund'`,
+		`fetch(LICENSE_API_BASE + '/v1/gdpr/request-export'`,
+		`fetch(LICENSE_API_BASE + '/v1/gdpr/export'`,
+		`fetch(LICENSE_API_BASE + '/v1/gdpr/request-delete'`,
+		`fetch(LICENSE_API_BASE + '/v1/gdpr/confirm-delete'`,
 		`href="https://pulserelay.pro/refund.html?email=owner%40example.com"`,
-		`href="https://pulserelay.pro/data.html?email=owner%40example.com"`,
-		"Manage and retrieve self-hosted commercial licenses here first",
+		"commercial account actions now live here",
 	}
 	for _, needle := range mustContain {
 		if !strings.Contains(html, needle) {

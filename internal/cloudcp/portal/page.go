@@ -138,6 +138,13 @@ var portalPageTmpl = template.Must(template.New("portal").Parse(`<!DOCTYPE html>
     .service-panel .result-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-top: 14px; }
     .service-panel .result-meta-label { font-size: 12px; color: #64748b; margin-bottom: 4px; }
     .service-panel .result-meta-value { font-size: 14px; color: #0f172a; word-break: break-word; }
+    .service-panel .subsection { margin-top: 18px; padding-top: 18px; border-top: 1px solid #e2e8f0; }
+    .service-panel .subsection:first-of-type { margin-top: 0; padding-top: 0; border-top: none; }
+    .service-panel .subsection h4 { margin: 0 0 8px; font-size: 15px; font-weight: 700; }
+    .service-panel .warning { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; border-radius: 8px; padding: 12px; font-size: 13px; line-height: 1.5; margin-bottom: 12px; }
+    .service-panel .checkbox-row { display: flex; align-items: flex-start; gap: 10px; margin: 12px 0; }
+    .service-panel .checkbox-row input[type="checkbox"] { width: 18px; height: 18px; margin-top: 2px; flex-shrink: 0; }
+    .service-panel .checkbox-row span { font-size: 13px; color: #475569; line-height: 1.5; }
     .service-status { margin-top: 12px; padding: 10px 12px; border-radius: 8px; font-size: 13px; display: none; }
     .service-status.visible { display: block; }
     .service-status.error { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
@@ -267,7 +274,7 @@ var portalPageTmpl = template.Must(template.New("portal").Parse(`<!DOCTYPE html>
   <section class="service-section">
     <div class="service-header">
       <h2>Other account services</h2>
-      <div class="service-note">Manage and retrieve self-hosted commercial licenses here first. Refund and privacy requests still use the existing public support flows during the current rollout.</div>
+      <div class="service-note">Self-hosted commercial account actions now live here. The public utility pages remain as compatibility entry points, not the primary account surface.</div>
     </div>
     <div class="service-grid">
       <button class="service-card service-card-button" type="button" id="open-manage-service">
@@ -278,14 +285,14 @@ var portalPageTmpl = template.Must(template.New("portal").Parse(`<!DOCTYPE html>
         <h3>Retrieve licenses</h3>
         <p>Recover the latest active self-hosted license and invoice link for a commercial email address.</p>
       </button>
-      <a class="service-card" href="{{.PublicSiteURL}}/refund.html?email={{.Email}}">
+      <button class="service-card service-card-button" type="button" id="open-refund-service">
         <h3>Refund requests</h3>
-        <p>Use the current refund path for commercial purchases that need review or reversal.</p>
-      </a>
-      <a class="service-card" href="{{.PublicSiteURL}}/data.html?email={{.Email}}">
+        <p>Request an immediate self-serve refund for eligible self-hosted purchases with explicit revocation confirmation.</p>
+      </button>
+      <button class="service-card service-card-button" type="button" id="open-data-service">
         <h3>Data and privacy</h3>
-        <p>Use the current data-request surface for privacy, export, and deletion requests.</p>
-      </a>
+        <p>Request commercial data export or deletion without leaving the account shell.</p>
+      </button>
     </div>
 
     <div class="service-panel" id="manage-service-panel">
@@ -361,6 +368,92 @@ var portalPageTmpl = template.Must(template.New("portal").Parse(`<!DOCTYPE html>
         </div>
       </div>
     </div>
+
+    <div class="service-panel" id="refund-service-panel">
+      <h3>Refund requests</h3>
+      <p>Process an eligible self-serve refund for a self-hosted purchase. This revokes the associated license immediately.</p>
+      <div class="warning">
+        <strong>Warning:</strong> completing a refund immediately revokes the affected license. This should only be used when the refund window and commercial contract allow it.
+      </div>
+      <div class="form-group">
+        <label for="refund-inline-email">Email address</label>
+        <input type="email" id="refund-inline-email" value="{{.Email}}" autocomplete="email">
+      </div>
+      <div class="form-group">
+        <label for="refund-inline-token">License key</label>
+        <input type="text" id="refund-inline-token" placeholder="pulse_xxxxx">
+      </div>
+      <div class="form-actions">
+        <button class="btn-danger" type="button" id="refund-inline-submit">Process Refund</button>
+      </div>
+      <div class="helper-text">If this purchase is not eligible for self-serve refund, use the public support path instead: <a href="{{.PublicSiteURL}}/refund.html?email={{.Email}}">open refund support page</a>.</div>
+      <div class="service-status" id="refund-inline-status"></div>
+    </div>
+
+    <div class="service-panel" id="data-service-panel">
+      <h3>Data and privacy</h3>
+      <p>Request export or deletion of the commercial data tied to an email address. Payment data held directly by Stripe still requires support handling.</p>
+
+      <div class="subsection">
+        <h4>Export My Data</h4>
+        <div id="data-export-step1">
+          <div class="form-group">
+            <label for="data-export-email">Email address</label>
+            <input type="email" id="data-export-email" value="{{.Email}}" autocomplete="email">
+          </div>
+          <div class="form-actions">
+            <button class="btn-primary" type="button" id="data-export-request">Send Verification Code</button>
+          </div>
+        </div>
+        <div id="data-export-step2" style="display:none">
+          <div class="form-group">
+            <label for="data-export-code">Verification code</label>
+            <input type="text" id="data-export-code" inputmode="numeric" pattern="[0-9]{6}" placeholder="123456">
+          </div>
+          <div class="form-actions">
+            <button class="btn-primary" type="button" id="data-export-confirm">Export My Data</button>
+          </div>
+          <div class="helper-text">Need a new code? <a href="#" id="data-export-resend">Send again</a></div>
+        </div>
+        <div class="service-status" id="data-export-status"></div>
+        <div id="data-export-result" style="display:none; margin-top:14px">
+          <label for="data-export-payload">Export payload</label>
+          <textarea id="data-export-payload" readonly></textarea>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <h4>Delete My Data</h4>
+        <div class="warning">
+          <strong>Warning:</strong> deleting commercial data also revokes license records and cannot be undone.
+        </div>
+        <div id="data-delete-step1">
+          <div class="form-group">
+            <label for="data-delete-email">Email address</label>
+            <input type="email" id="data-delete-email" value="{{.Email}}" autocomplete="email">
+          </div>
+          <div class="form-actions">
+            <button class="btn-danger" type="button" id="data-delete-request">Send Verification Code</button>
+          </div>
+        </div>
+        <div id="data-delete-step2" style="display:none">
+          <div class="form-group">
+            <label for="data-delete-code">Verification code</label>
+            <input type="text" id="data-delete-code" inputmode="numeric" pattern="[0-9]{6}" placeholder="123456">
+          </div>
+          <div class="checkbox-row">
+            <input type="checkbox" id="data-delete-confirm-check">
+            <span>I understand this permanently deletes my commercial data and revokes associated licenses.</span>
+          </div>
+          <div class="form-actions">
+            <button class="btn-danger" type="button" id="data-delete-confirm">Delete My Data</button>
+          </div>
+          <div class="helper-text">Need a new code? <a href="#" id="data-delete-resend">Send again</a></div>
+        </div>
+        <div class="service-status" id="data-delete-status"></div>
+      </div>
+      <div class="helper-text">Payment-card data stays with Stripe. For Stripe deletion support, contact <a href="mailto:{{.SupportEmail}}">{{.SupportEmail}}</a>.</div>
+    </div>
   </section>
 </main>
 
@@ -387,7 +480,7 @@ document.getElementById('logout-btn').onclick = async function() {
 };
 
 function toggleServicePanel(panelID) {
-  var panels = ['manage-service-panel', 'retrieve-service-panel'];
+  var panels = ['manage-service-panel', 'retrieve-service-panel', 'refund-service-panel', 'data-service-panel'];
   for (var i = 0; i < panels.length; i++) {
     var panel = document.getElementById(panels[i]);
     panel.classList.toggle('visible', panels[i] === panelID ? !panel.classList.contains('visible') : false);
@@ -410,8 +503,20 @@ document.getElementById('open-retrieve-service').onclick = function() {
   document.getElementById('retrieve-inline-email').focus();
 };
 
+document.getElementById('open-refund-service').onclick = function() {
+  toggleServicePanel('refund-service-panel');
+  document.getElementById('refund-inline-email').focus();
+};
+
+document.getElementById('open-data-service').onclick = function() {
+  toggleServicePanel('data-service-panel');
+  document.getElementById('data-export-email').focus();
+};
+
 var pendingManageEmail = '';
 var pendingRetrieveEmail = '';
+var pendingExportEmail = '';
+var pendingDeleteEmail = '';
 
 document.getElementById('manage-inline-request').onclick = async function() {
   var email = document.getElementById('manage-inline-email').value.trim();
@@ -543,6 +648,171 @@ document.getElementById('retrieve-inline-copy').onclick = async function() {
     setServiceStatus('retrieve-inline-status', 'License key copied to clipboard.', false);
   } catch (_) {
     setServiceStatus('retrieve-inline-status', 'Failed to copy automatically. Please copy the key manually.', true);
+  }
+};
+
+document.getElementById('refund-inline-submit').onclick = async function() {
+  var email = document.getElementById('refund-inline-email').value.trim();
+  var token = document.getElementById('refund-inline-token').value.trim();
+  if (!email || !token) return;
+  if (!confirm('Are you sure? This will immediately revoke the license and request the refund.')) return;
+  this.disabled = true;
+  this.textContent = 'Processing...';
+  try {
+    var res = await fetch(LICENSE_API_BASE + '/v1/self-refund', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email, token: token })
+    });
+    var data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Refund failed');
+    document.getElementById('refund-inline-token').value = '';
+    setServiceStatus('refund-inline-status', 'Success! Your refund has been processed. Stripe will follow up by email.', false);
+  } catch (err) {
+    setServiceStatus('refund-inline-status', err.message, true);
+  } finally {
+    this.disabled = false;
+    this.textContent = 'Process Refund';
+  }
+};
+
+document.getElementById('data-export-request').onclick = async function() {
+  var email = document.getElementById('data-export-email').value.trim();
+  if (!email) return;
+  this.disabled = true;
+  this.textContent = 'Sending...';
+  document.getElementById('data-export-result').style.display = 'none';
+  try {
+    var res = await fetch(LICENSE_API_BASE + '/v1/gdpr/request-export', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email })
+    });
+    var data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Request failed');
+    pendingExportEmail = email;
+    document.getElementById('data-export-step2').style.display = 'block';
+    setServiceStatus('data-export-status', 'Verification code sent. Check your email.', false);
+  } catch (err) {
+    setServiceStatus('data-export-status', err.message, true);
+  } finally {
+    this.disabled = false;
+    this.textContent = 'Send Verification Code';
+  }
+};
+
+document.getElementById('data-export-resend').onclick = async function(e) {
+  e.preventDefault();
+  if (!pendingExportEmail) return;
+  try {
+    var res = await fetch(LICENSE_API_BASE + '/v1/gdpr/request-export', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: pendingExportEmail })
+    });
+    var data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Request failed');
+    setServiceStatus('data-export-status', 'New verification code sent.', false);
+  } catch (err) {
+    setServiceStatus('data-export-status', err.message, true);
+  }
+};
+
+document.getElementById('data-export-confirm').onclick = async function() {
+  var code = document.getElementById('data-export-code').value.trim();
+  if (!pendingExportEmail || !code) return;
+  this.disabled = true;
+  this.textContent = 'Exporting...';
+  try {
+    var res = await fetch(LICENSE_API_BASE + '/v1/gdpr/export', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: pendingExportEmail, code: code })
+    });
+    var data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Export failed');
+    document.getElementById('data-export-payload').value = JSON.stringify(data, null, 2);
+    document.getElementById('data-export-result').style.display = 'block';
+    setServiceStatus('data-export-status', 'Data export retrieved successfully.', false);
+    document.getElementById('data-export-code').value = '';
+    pendingExportEmail = '';
+    document.getElementById('data-export-step2').style.display = 'none';
+  } catch (err) {
+    setServiceStatus('data-export-status', err.message, true);
+  } finally {
+    this.disabled = false;
+    this.textContent = 'Export My Data';
+  }
+};
+
+document.getElementById('data-delete-request').onclick = async function() {
+  var email = document.getElementById('data-delete-email').value.trim();
+  if (!email) return;
+  this.disabled = true;
+  this.textContent = 'Sending...';
+  try {
+    var res = await fetch(LICENSE_API_BASE + '/v1/gdpr/request-delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email })
+    });
+    var data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Request failed');
+    pendingDeleteEmail = email;
+    document.getElementById('data-delete-step2').style.display = 'block';
+    setServiceStatus('data-delete-status', 'Verification code sent. Check your email.', false);
+  } catch (err) {
+    setServiceStatus('data-delete-status', err.message, true);
+  } finally {
+    this.disabled = false;
+    this.textContent = 'Send Verification Code';
+  }
+};
+
+document.getElementById('data-delete-resend').onclick = async function(e) {
+  e.preventDefault();
+  if (!pendingDeleteEmail) return;
+  try {
+    var res = await fetch(LICENSE_API_BASE + '/v1/gdpr/request-delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: pendingDeleteEmail })
+    });
+    var data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Request failed');
+    setServiceStatus('data-delete-status', 'New verification code sent.', false);
+  } catch (err) {
+    setServiceStatus('data-delete-status', err.message, true);
+  }
+};
+
+document.getElementById('data-delete-confirm').onclick = async function() {
+  var code = document.getElementById('data-delete-code').value.trim();
+  if (!pendingDeleteEmail || !code) return;
+  if (!document.getElementById('data-delete-confirm-check').checked) {
+    setServiceStatus('data-delete-status', 'You must confirm that you understand this action is permanent.', true);
+    return;
+  }
+  this.disabled = true;
+  this.textContent = 'Deleting...';
+  try {
+    var res = await fetch(LICENSE_API_BASE + '/v1/gdpr/confirm-delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: pendingDeleteEmail, code: code })
+    });
+    var data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Deletion failed');
+    setServiceStatus('data-delete-status', data.deleted_count > 0 && data.stripe_reminder ? data.message + ' ' + data.stripe_reminder : data.message, false);
+    document.getElementById('data-delete-step2').style.display = 'none';
+    document.getElementById('data-delete-code').value = '';
+    document.getElementById('data-delete-confirm-check').checked = false;
+    pendingDeleteEmail = '';
+  } catch (err) {
+    setServiceStatus('data-delete-status', err.message, true);
+  } finally {
+    this.disabled = false;
+    this.textContent = 'Delete My Data';
   }
 };
 
