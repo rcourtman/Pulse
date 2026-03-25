@@ -514,13 +514,35 @@ log_info "Starting backend file watcher..."
 (
     cd "${ROOT_DIR}"
     
-    LAST_RESTART_TIME=0
     WATCHER_READY_AT=$(date +%s)
+    LAST_RESTART_TIME=0
+    SELF_BUILD_IGNORE_UNTIL=$((WATCHER_READY_AT + HOT_DEV_WATCHER_STARTUP_GRACE_SECONDS + 5))
 
     watcher_within_startup_grace() {
         local now
         now=$(date +%s)
         (( now - WATCHER_READY_AT < HOT_DEV_WATCHER_STARTUP_GRACE_SECONDS ))
+    }
+
+    mark_self_build_output() {
+        local now
+        now=$(date +%s)
+        SELF_BUILD_IGNORE_UNTIL=$((now + 5))
+    }
+
+    manual_build_event_suppressed() {
+        local now
+        now=$(date +%s)
+        (( now < SELF_BUILD_IGNORE_UNTIL ))
+    }
+
+    should_rebuild_backend_for_change() {
+        local changed_file=$1
+
+        [[ "${changed_file}" == *.go ]] || return 1
+        [[ "${changed_file}" == *_test.go ]] && return 1
+
+        return 0
     }
 
     restart_backend() {
@@ -604,6 +626,7 @@ log_info "Starting backend file watcher..."
 
         # Use the same build logic as the initial build.
         if build_backend_binary; then
+            mark_self_build_output
             restart_backend
         else
             log_error "✗ Build failed; keeping the current backend process running."
@@ -627,9 +650,12 @@ log_info "Starting backend file watcher..."
                 log_info "🚀 Managed restart requested, restarting backend..."
                 restart_backend
             elif [[ "$changed_file" == "${ROOT_DIR}/pulse" ]]; then
+                if manual_build_event_suppressed; then
+                    continue
+                fi
                 log_info "🚀 Manual build detected (pulse binary changed), restarting..."
                 restart_backend
-            elif [[ "$changed_file" == *.go ]] || [[ "$event" =~ CREATE|DELETE|MOVED|ATTRIB ]]; then
+            elif should_rebuild_backend_for_change "$changed_file"; then
                 rebuild_backend "$changed_file"
             fi
         done
@@ -651,6 +677,9 @@ log_info "Starting backend file watcher..."
             if [[ "$changed_file" == "${HOT_DEV_RESTART_SENTINEL}" ]]; then
                 log_info "🚀 Managed restart requested, restarting backend..."
             else
+                if manual_build_event_suppressed; then
+                    continue
+                fi
                 log_info "🚀 Manual build detected (pulse binary changed), restarting..."
             fi
             restart_backend
@@ -663,8 +692,7 @@ log_info "Starting backend file watcher..."
             --include '\.go$' \
             "${ROOT_DIR}/cmd" "${ROOT_DIR}/internal" "${ROOT_DIR}/pkg" 2>/dev/null | \
         while read -r changed_file; do
-            # fswatch sends absolute paths, simple check for .go extension
-            if [[ "$changed_file" == *.go ]]; then
+            if should_rebuild_backend_for_change "$changed_file"; then
                 rebuild_backend "$changed_file"
             fi
         done

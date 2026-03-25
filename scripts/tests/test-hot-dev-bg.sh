@@ -6,6 +6,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 HOT_DEV_BG="${ROOT_DIR}/scripts/hot-dev-bg.sh"
+HOT_DEV="${ROOT_DIR}/scripts/hot-dev.sh"
 CLEAN_MOCK_ALERTS="${ROOT_DIR}/scripts/clean-mock-alerts.sh"
 DEV_CHECK="${ROOT_DIR}/scripts/dev-check.sh"
 PACKAGE_JSON="${ROOT_DIR}/package.json"
@@ -468,12 +469,22 @@ test_makefile_routes_managed_runtime_through_npm() {
 
 test_hot_dev_script_advertises_foreground_escape_hatch() {
   local output
-  output="$(sed -n '1,30p' "${ROOT_DIR}/scripts/hot-dev.sh")"
+  output="$(sed -n '1,30p' "${HOT_DEV}")"
 
   assert_contains "hot-dev header identifies foreground escape hatch" "${output}" "hot-dev.sh - Foreground Pulse dev runtime escape hatch"
   assert_contains "hot-dev usage points to managed runtime first" "${output}" "npm run dev                             # Canonical managed dev runtime"
   assert_contains "hot-dev usage reserves direct script for manual troubleshooting" "${output}" "./scripts/hot-dev.sh                    # Foreground/manual runtime troubleshooting"
   assert_not_contains "hot-dev usage no longer claims standard dev mode" "${output}" "Standard dev mode"
+}
+
+test_hot_dev_script_ignores_test_only_backend_churn() {
+  local output
+  output="$(cat "${HOT_DEV}")"
+
+  assert_contains "hot-dev watcher ignores Go test files" "${output}" '[[ "${changed_file}" == *_test.go ]] && return 1'
+  assert_contains "hot-dev watcher routes rebuild decisions through shared helper" "${output}" 'should_rebuild_backend_for_change "$changed_file"'
+  assert_contains "hot-dev watcher suppresses self-build binary restart loops" "${output}" 'if manual_build_event_suppressed; then'
+  assert_contains "hot-dev watcher suppresses startup self-build pulse events" "${output}" 'SELF_BUILD_IGNORE_UNTIL=$((WATCHER_READY_AT + HOT_DEV_WATCHER_STARTUP_GRACE_SECONDS + 5))'
 }
 
 test_hot_dev_bg_script_advertises_managed_entrypoint() {
@@ -744,6 +755,7 @@ main() {
   test_frontend_package_exposes_managed_runtime_entrypoints
   test_makefile_routes_managed_runtime_through_npm
   test_hot_dev_script_advertises_foreground_escape_hatch
+  test_hot_dev_script_ignores_test_only_backend_churn
   test_hot_dev_bg_script_advertises_managed_entrypoint
   test_hot_dev_bg_usage_prefers_managed_wrappers
   test_integration_readme_uses_managed_backend_restart_wrapper

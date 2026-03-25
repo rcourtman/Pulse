@@ -153,6 +153,13 @@ to be listening.
 Changes to `scripts/hot-dev.sh` and `scripts/hot-dev-bg.sh` must therefore
 stay on their own direct dev-runtime orchestration proof path instead of
 piggybacking on installer proof coverage for unrelated deployment scripts.
+That same dev-runtime orchestration boundary also owns watcher stability for
+the managed local stack: `scripts/hot-dev.sh` may only rebuild the backend for
+runtime Go sources, not `*_test.go` churn, and it must suppress `pulse` binary
+change events produced by its own successful managed rebuilds or startup build.
+Otherwise unrelated parallel test edits or hot-dev's own binary output can
+tear down `7655`, produce transient `5173` proxy failures, and undermine the
+canonical browser-runtime proof path.
 That same launcher boundary also owns its CLI contract: managed commands such
 as `start --takeover` and `restart --takeover` must preserve the takeover flag
 through the actual script entrypoint instead of silently dropping second-arg
