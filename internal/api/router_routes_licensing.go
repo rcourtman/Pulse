@@ -189,6 +189,12 @@ func (r *Router) registerOrgLicenseRoutesGroup(orgHandlers *OrgHandlers, rbacHan
 		}
 		RequireLicenseFeature(r.licenseHandlers, featureAdvancedReportingValue, RequireScope(config.ScopeSettingsRead, reportingAdminEndpoints.HandleGenerateMultiReport))(w, req)
 	}))
+	r.mux.HandleFunc("/api/admin/reports/inventory/vms/export", RequirePermission(r.config, r.authorizer, auth.ActionRead, auth.ResourceNodes, func(w http.ResponseWriter, req *http.Request) {
+		if !ensureAdminSession(r.config, w, req) {
+			return
+		}
+		RequireLicenseFeature(r.licenseHandlers, featureAdvancedReportingValue, RequireScope(config.ScopeSettingsRead, reportingAdminEndpoints.HandleExportVMInventory))(w, req)
+	}))
 
 	// Audit Webhook routes
 	r.mux.HandleFunc("/api/admin/webhooks/audit", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceAuditLogs, func(w http.ResponseWriter, req *http.Request) {
@@ -301,6 +307,14 @@ func (a reportingAdminEndpointAdapter) HandleGenerateMultiReport(w http.Response
 		return
 	}
 	a.handlers.HandleGenerateMultiReport(w, req)
+}
+
+func (a reportingAdminEndpointAdapter) HandleExportVMInventory(w http.ResponseWriter, req *http.Request) {
+	if a.handlers == nil {
+		writeErrorResponse(w, http.StatusNotImplemented, "reporting_unavailable", "Reporting is not available", nil)
+		return
+	}
+	a.handlers.HandleExportVMInventory(w, req)
 }
 
 func newRBACAdminRuntime(handlers *RBACHandlers) extensions.RBACAdminRuntime {

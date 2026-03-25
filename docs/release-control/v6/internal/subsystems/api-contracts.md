@@ -57,6 +57,8 @@ Own canonical runtime payload shapes between backend and frontend.
 34. `internal/api/router_routes_auth_security.go`
 35. `internal/api/relay_hosted_runtime.go`
 36. `internal/api/ai_hosted_runtime.go`
+37. `internal/api/router_routes_licensing.go`
+38. `internal/api/reporting_inventory_handlers.go`
 
 ## Shared Boundaries
 
@@ -211,6 +213,15 @@ The same resource contract now also exposes a dedicated
 `/api/resources/{id}/timeline` history endpoint and bundled facet reads under
 `/api/resources/{id}/facets`, so operators can inspect change history without
 depending on a monolithic resource payload.
+The reporting API contract now also treats current-state fleet inventory as a
+first-class surface separate from historical metrics reports.
+`internal/api/reporting_inventory_handlers.go`,
+`internal/api/router_routes_licensing.go`, and the settings reporting shell now
+own `/api/admin/reports/inventory/vms/export` as the canonical VM inventory CSV
+contract. That export is intentionally spreadsheet-shaped rather than comment-
+prefixed like the legacy metrics CSV, and it currently omits Proxmox pool
+membership until that field exists on the canonical unified VM runtime model
+instead of being inferred locally by the frontend or handler.
 The `/api/resources` serializer now also refreshes canonical identity and
 policy metadata through the shared unified-resource helper before it writes
 the payload, so backend and frontend contract tests stay aligned on one

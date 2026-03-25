@@ -62,6 +62,7 @@ import aiSettingsStatusAndActionsSource from '../AISettingsStatusAndActions.tsx?
 import aiSettingsStateSource from '../useAISettingsState.ts?raw';
 import reportingPanelSource from '../ReportingPanel.tsx?raw';
 import reportingPanelModelSource from '../reportingPanelModel.ts?raw';
+import reportingInventoryExportModelSource from '../reportingInventoryExportModel.ts?raw';
 import updatesSettingsPanelSource from '../UpdatesSettingsPanel.tsx?raw';
 import suggestProfileModalSource from '../SuggestProfileModal.tsx?raw';
 import aiIntelligenceSource from '@/pages/AIIntelligence.tsx?raw';
@@ -218,7 +219,7 @@ const recoverySource = [
 
 describe('monitored-system model guardrails', () => {
   it('keeps AgentProfilesPanel on unified resources (not host-only slices)', () => {
-    expect(agentProfilesPanelSource).toContain("import { useAgentProfilesPanelState }");
+    expect(agentProfilesPanelSource).toContain('import { useAgentProfilesPanelState }');
     expect(agentProfilesPanelSource).toContain('useAgentProfilesPanelState()');
     expect(agentProfilesPanelSource).toContain('@/utils/agentProfilesPresentation');
     expect(agentProfilesPanelSource).toContain('getAgentProfilesEmptyState');
@@ -249,7 +250,9 @@ describe('monitored-system model guardrails', () => {
     expect(agentLedgerPanelSource).not.toContain('function statusVariant(');
     expect(monitoredSystemLedgerApiSource).toContain('@/utils/monitoredSystemPresentation');
     expect(monitoredSystemLedgerApiSource).toContain('getMonitoredSystemStatusFallbackSummary');
-    expect(monitoredSystemLedgerApiSource).toContain('getMonitoredSystemExplanationFallbackSummary');
+    expect(monitoredSystemLedgerApiSource).toContain(
+      'getMonitoredSystemExplanationFallbackSummary',
+    );
     expect(monitoredSystemLedgerApiSource).toContain('type MonitoredSystemLedgerRawEntry =');
     expect(monitoredSystemLedgerApiSource).toContain('systems?: MonitoredSystemLedgerRawEntry[];');
     expect(monitoredSystemLedgerApiSource).toContain('reported_at: string;');
@@ -274,7 +277,7 @@ describe('monitored-system model guardrails', () => {
   });
 
   it('keeps APITokenManager runtime usage mapped from unified resources', () => {
-    expect(apiTokenManagerSource).toContain("import { useAPITokenManagerState }");
+    expect(apiTokenManagerSource).toContain('import { useAPITokenManagerState }');
     expect(apiTokenManagerSource).toContain('useAPITokenManagerState(props)');
     expect(apiTokenManagerSource).not.toContain('const agentCapableResources = createMemo(() =>');
     expect(apiTokenManagerSource).not.toContain('@/utils/apiTokenPresentation');
@@ -316,9 +319,7 @@ describe('monitored-system model guardrails', () => {
     expect(infrastructureOperationsStateSource).not.toContain('previousHostTypes');
     expect(infrastructureOperationsStateSource).not.toContain('const allHosts = createMemo(');
     expect(infrastructureOperationsSource).toContain('@/utils/unifiedAgentStatusPresentation');
-    expect(infrastructureOperationsSource).not.toContain(
-      'const MONITORING_STOPPED_STATUS_LABEL =',
-    );
+    expect(infrastructureOperationsSource).not.toContain('const MONITORING_STOPPED_STATUS_LABEL =');
     expect(infrastructureOperationsSource).not.toContain('const ALLOW_RECONNECT_LABEL =');
     expect(infrastructureOperationsStateSource).toContain('withPrivilegeEscalation');
     expect(infrastructureOperationsStateSource).toContain('./useInfrastructureInstallState');
@@ -339,9 +340,7 @@ describe('monitored-system model guardrails', () => {
     expect(infrastructureOperationsSource).toContain('@/utils/unifiedAgentStatusPresentation');
     expect(infrastructureOperationsSource).not.toContain('const statusBadgeClass =');
     expect(infrastructureOperationsSource).not.toContain('const statusBadgeClasses =');
-    expect(infrastructureOperationsSource).toContain(
-      'getUnifiedAgentLookupStatusPresentation',
-    );
+    expect(infrastructureOperationsSource).toContain('getUnifiedAgentLookupStatusPresentation');
     expect(unifiedAgentStatusPresentationSource).toContain(
       'export function getUnifiedAgentStatusPresentation',
     );
@@ -397,9 +396,7 @@ describe('monitored-system model guardrails', () => {
     expect(infrastructureOperationsSource).not.toContain(
       'No host identifiers are available to stop monitoring.',
     );
-    expect(infrastructureOperationsSource).not.toContain(
-      'Failed to update agent configuration',
-    );
+    expect(infrastructureOperationsSource).not.toContain('Failed to update agent configuration');
     expect(infrastructureOperationsSource).not.toContain('Uninstall command copied');
     expect(infrastructureOperationsSource).not.toContain('Upgrade command copied');
     expect(infrastructureOperationsSource).not.toContain(
@@ -425,7 +422,9 @@ describe('monitored-system model guardrails', () => {
     expect(proxmoxSettingsPanelSource).not.toContain('setPrefillNode(');
     expect(proxmoxSettingsPanelSource).not.toContain('const renderConfiguredTable = () =>');
     expect(proxmoxSettingsPanelSource).not.toContain('const renderNodeModal = (type: NodeType)');
-    expect(proxmoxSettingsPanelSource).not.toContain('No discovery matches for this Proxmox type yet.');
+    expect(proxmoxSettingsPanelSource).not.toContain(
+      'No discovery matches for this Proxmox type yet.',
+    );
     expect(proxmoxSettingsPanelSource).not.toContain('What happens next');
     expect(proxmoxConfiguredNodesTableSource).toContain('PveNodesTable');
     expect(proxmoxDirectConnectionsCardSource).toContain('getSettingsConfigurationLoadingState');
@@ -523,7 +522,9 @@ describe('monitored-system model guardrails', () => {
     expect(aiSettingsSource).not.toContain("'Failed to update Pulse Assistant setting'");
     expect(aiSettingsSource).not.toContain('const normalizeControlLevel =');
     expect(aiSettingsSource).not.toContain('const errorMessages: Record<string, string> =');
-    expect(aiSettingsShellSource).not.toContain('const [loading, setLoading] = createSignal(false);');
+    expect(aiSettingsShellSource).not.toContain(
+      'const [loading, setLoading] = createSignal(false);',
+    );
     expect(aiSettingsShellSource).not.toContain('const handleSave = async (event?: Event) =>');
     expect(aiSettingsShellSource).not.toContain('Chat Session Maintenance');
     expect(aiSettingsShellSource).not.toContain('Discovery Settings');
@@ -532,7 +533,9 @@ describe('monitored-system model guardrails', () => {
     expect(aiSettingsStateSource).toContain('export type AISettingsState =');
     expect(aiSettingsStateSource).toContain('const [loading, setLoading] = createSignal(false);');
     expect(aiSettingsStateSource).toContain('const handleSave = async (event?: Event) =>');
-    expect(aiSettingsStateSource).toContain('const handleEnabledToggle = async (newValue: boolean) =>');
+    expect(aiSettingsStateSource).toContain(
+      'const handleEnabledToggle = async (newValue: boolean) =>',
+    );
     expect(aiControlLevelPresentationSource).toContain('export function normalizeAIControlLevel');
     expect(aiControlLevelPresentationSource).toContain(
       'export function getAIControlLevelPanelClass',
@@ -602,6 +605,7 @@ describe('monitored-system model guardrails', () => {
     expect(reportingPanelSource).toContain('@/utils/upgradePresentation');
     expect(reportingPanelSource).toContain('@/components/Settings/useReportingPanelState');
     expect(reportingPanelSource).toContain('@/components/Settings/reportingPanelModel');
+    expect(reportingPanelSource).toContain('VM Inventory Export');
     expect(reportingPanelSource).toContain('getUpgradeActionButtonClass');
     expect(reportingPanelSource).toContain('UPGRADE_ACTION_LABEL');
     expect(reportingPanelSource).toContain('UPGRADE_TRIAL_LABEL');
@@ -613,8 +617,13 @@ describe('monitored-system model guardrails', () => {
     expect(reportingPanelStateSource).toContain('getReportingGenerateSelectionRequiredMessage');
     expect(reportingPanelStateSource).toContain('getReportingGenerateSuccessMessage');
     expect(reportingPanelStateSource).toContain('getReportingGenerateErrorMessage');
+    expect(reportingPanelStateSource).toContain('buildVMInventoryExportRequest');
+    expect(reportingPanelStateSource).toContain('getReportingInventoryExportSuccessMessage');
     expect(reportingPanelModelSource).toContain('export function getReportingRangeStart');
     expect(reportingPanelModelSource).toContain('export function buildReportingRequest');
+    expect(reportingInventoryExportModelSource).toContain(
+      'export function buildVMInventoryExportRequest',
+    );
     expect(reportingPresentationSource).toContain('export const REPORTING_RANGE_OPTIONS');
     expect(reportingPresentationSource).toContain(
       'export function getReportingGenerateSelectionRequiredMessage',
@@ -625,13 +634,16 @@ describe('monitored-system model guardrails', () => {
     expect(reportingPresentationSource).toContain(
       'export function getReportingGenerateErrorMessage',
     );
+    expect(reportingPresentationSource).toContain(
+      'export function getReportingInventoryExportSuccessMessage',
+    );
     expect(reportingPresentationSource).not.toContain('getReportingToggleButtonClass');
     expect(aiIntelligenceSource).toContain(
       "import { PatrolIntelligenceSurface } from '@/features/patrol/PatrolIntelligenceSurface';",
     );
     expect(aiIntelligenceSource).not.toContain('buildPatrolScheduleOptions');
     expect(aiIntelligenceSource).not.toContain('PATROL_NO_ISSUES_LABEL');
-    expect(patrolIntelligenceSurfaceSource).toContain("./usePatrolIntelligenceState");
+    expect(patrolIntelligenceSurfaceSource).toContain('./usePatrolIntelligenceState');
     expect(patrolIntelligenceSurfaceSource).toContain('./PatrolIntelligenceHeader');
     expect(patrolIntelligenceSurfaceSource).toContain('./PatrolIntelligenceBanners');
     expect(patrolIntelligenceSurfaceSource).toContain('./PatrolIntelligenceSummary');
@@ -687,9 +699,13 @@ describe('monitored-system model guardrails', () => {
 
   it('keeps the infrastructure workspace on router-derived view state', () => {
     expect(infrastructureWorkspaceSource).toContain('./infrastructureWorkspaceModel');
-    expect(infrastructureWorkspaceSource).not.toContain('createSignal<InfrastructureWorkspaceView>');
+    expect(infrastructureWorkspaceSource).not.toContain(
+      'createSignal<InfrastructureWorkspaceView>',
+    );
     expect(infrastructureWorkspaceSource).not.toContain('setActiveView(');
-    expect(infrastructureWorkspaceSource).not.toContain("navigate('/settings/infrastructure/proxmox')");
+    expect(infrastructureWorkspaceSource).not.toContain(
+      "navigate('/settings/infrastructure/proxmox')",
+    );
     expect(infrastructureWorkspaceModelSource).toContain(
       'export function getInfrastructureWorkspaceViewFromPath',
     );
@@ -752,9 +768,7 @@ describe('monitored-system model guardrails', () => {
     expect(organizationAccessMembersSectionSource).toContain(
       '@/utils/organizationSettingsPresentation',
     );
-    expect(organizationAccessManagementSectionSource).toContain(
-      'ORGANIZATION_MEMBER_ROLE_OPTIONS',
-    );
+    expect(organizationAccessManagementSectionSource).toContain('ORGANIZATION_MEMBER_ROLE_OPTIONS');
     expect(organizationAccessMembersSectionSource).toContain('ORGANIZATION_MEMBER_ROLE_OPTIONS');
     expect(organizationAccessMembersSectionSource).toContain('roleBadgeClass');
     expect(organizationAccessMembersSectionSource).toContain('formatOrgDate');
@@ -777,9 +791,9 @@ describe('monitored-system model guardrails', () => {
     expect(organizationAccessStateSource).not.toContain(
       "notificationStore.error(error instanceof Error ? error.message : 'Failed to remove member')",
     );
-    expect(organizationAccessStateSource).not.toContain("notificationStore.success(`Updated ");
-    expect(organizationAccessStateSource).not.toContain("notificationStore.success(`Added ");
-    expect(organizationAccessStateSource).not.toContain("notificationStore.success(`Removed ");
+    expect(organizationAccessStateSource).not.toContain('notificationStore.success(`Updated ');
+    expect(organizationAccessStateSource).not.toContain('notificationStore.success(`Added ');
+    expect(organizationAccessStateSource).not.toContain('notificationStore.success(`Removed ');
     expect(organizationOverviewPanelSource).toContain('./useOrganizationOverviewPanelState');
     expect(organizationOverviewPanelSource).toContain('./OrganizationOverviewLoadingState');
     expect(organizationOverviewPanelSource).toContain('./OrganizationOverviewDetailsSection');
@@ -811,7 +825,9 @@ describe('monitored-system model guardrails', () => {
     expect(organizationOverviewStateSource).not.toContain(
       "notificationStore.success('Organization name updated')",
     );
-    expect(organizationSharingCreateSectionSource).toContain('@/utils/organizationRolePresentation');
+    expect(organizationSharingCreateSectionSource).toContain(
+      '@/utils/organizationRolePresentation',
+    );
     expect(organizationSharingStateSource).toContain('@/utils/organizationSettingsPresentation');
     expect(organizationSharingCreateSectionSource).toContain('ORGANIZATION_SHARE_ROLE_OPTIONS');
     expect(organizationOutgoingSharesSectionSource).toContain('normalizeOrganizationShareRole');
@@ -885,7 +901,9 @@ describe('monitored-system model guardrails', () => {
     expect(alertsPageSource).not.toContain('const agentResources = createMemo(');
     expect(alertsPageSource).not.toContain("resourceType: 'Agent Disk'");
     expect(alertsConfigurationSurfaceSource).toContain('<ThresholdsTab');
-    expect(thresholdsTableStateSource).toContain("import { useThresholdsData } from './useThresholdsData';");
+    expect(thresholdsTableStateSource).toContain(
+      "import { useThresholdsData } from './useThresholdsData';",
+    );
     expect(thresholdsDataHookSource).toContain('useThresholdsHostData');
     expect(thresholdsHostDataHookSource).toContain("resourceType: 'Agent Disk'");
     expect(thresholdsHostDataHookSource).not.toContain("resourceType: 'Host Disk'");
@@ -914,13 +932,9 @@ describe('monitored-system model guardrails', () => {
     );
     expect(infrastructureSelectorSource).not.toContain("resource.type === 'truenas'");
     expect(infrastructureSelectorStateSource).toContain('useResources');
-    expect(infrastructureSelectorModelSource).toContain(
-      'hasInfrastructureSelectorAgentFacet',
-    );
+    expect(infrastructureSelectorModelSource).toContain('hasInfrastructureSelectorAgentFacet');
     expect(infrastructureSelectorModelSource).toContain("resource.type === 'truenas'");
-    expect(infrastructureSelectorModelSource).not.toContain(
-      'if (hostLikeResources.length === 0',
-    );
+    expect(infrastructureSelectorModelSource).not.toContain('if (hostLikeResources.length === 0');
     expect(guestRowCellsSource).toContain('getDashboardGuestBackupStatusPresentation');
     expect(guestRowCellsSource).toContain('getDashboardGuestBackupTooltip');
     expect(guestRowCellsSource).toContain('getDashboardGuestNetworkEmptyState');
@@ -1269,7 +1283,9 @@ describe('monitored-system model guardrails', () => {
     expect(thresholdsTableStateSource).toContain('/thresholds/agents');
     expect(thresholdsHostDataHookSource).toContain("resourceType: 'Agent Disk'");
     expect(thresholdsTableStateSource).toContain('getAlertThresholdsSectionTitles');
-    expect(thresholdsTableAgentDisksSectionSource).toContain('title={state.sectionTitles.agentDisks}');
+    expect(thresholdsTableAgentDisksSectionSource).toContain(
+      'title={state.sectionTitles.agentDisks}',
+    );
     expect(thresholdsHostDataHookSource).not.toContain("resourceType: 'Host Disk'");
     expect(thresholdsHostDataHookSource).toContain('props.agentDefaults');
     expect(thresholdsTableStateSource).not.toContain('props.hostDefaults');
@@ -1496,7 +1512,9 @@ describe('monitored-system model guardrails', () => {
     expect(infrastructureDiscoveryRuntimeStateSource).toContain(
       '@/utils/infrastructureSettingsPresentation',
     );
-    expect(infrastructureDiscoveryRuntimeStateSource).toContain('getDiscoveryScanStartErrorMessage');
+    expect(infrastructureDiscoveryRuntimeStateSource).toContain(
+      'getDiscoveryScanStartErrorMessage',
+    );
     expect(infrastructureDiscoveryRuntimeStateSource).toContain(
       'getDiscoverySettingUpdateErrorMessage',
     );

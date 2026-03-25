@@ -1,0 +1,57 @@
+package reporting
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestGenerateVMInventoryCSV_SortsRowsAndWritesHeader(t *testing.T) {
+	data := VMInventoryData{
+		Rows: []VMInventoryRow{
+			{
+				ResourceID:           "vm-20",
+				Instance:             "lab-b",
+				Node:                 "node-2",
+				VMID:                 20,
+				Name:                 "beta",
+				Status:               "online",
+				CPUCores:             4,
+				MemoryAllocatedBytes: 8192,
+				DiskAllocatedBytes:   20000,
+				DiskUsedBytes:        15000,
+			},
+			{
+				ResourceID:           "vm-10",
+				Instance:             "lab-a",
+				Node:                 "node-1",
+				VMID:                 10,
+				Name:                 "alpha",
+				Status:               "warning",
+				CPUCores:             2,
+				MemoryAllocatedBytes: 4096,
+				DiskAllocatedBytes:   10000,
+				DiskUsedBytes:        5000,
+				DiskStatusReason:     "guest agent offline",
+			},
+		},
+	}
+
+	got, err := GenerateVMInventoryCSV(data)
+	if err != nil {
+		t.Fatalf("GenerateVMInventoryCSV returned error: %v", err)
+	}
+
+	lines := strings.Split(strings.TrimSpace(string(got)), "\n")
+	if len(lines) != 3 {
+		t.Fatalf("expected header plus two rows, got %d lines: %q", len(lines), string(got))
+	}
+	if !strings.Contains(lines[0], "Resource ID,Instance,Node,VMID,VM Name") {
+		t.Fatalf("expected spreadsheet-friendly header row, got %q", lines[0])
+	}
+	if !strings.Contains(lines[1], "vm-10,lab-a,node-1,10,alpha,warning,2,4096,10000,5000,guest agent offline") {
+		t.Fatalf("expected rows sorted by instance/node/name, got first data row %q", lines[1])
+	}
+	if !strings.Contains(lines[2], "vm-20,lab-b,node-2,20,beta,online,4,8192,20000,15000,") {
+		t.Fatalf("expected second data row for vm-20, got %q", lines[2])
+	}
+}

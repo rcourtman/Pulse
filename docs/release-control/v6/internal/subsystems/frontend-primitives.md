@@ -67,9 +67,10 @@ work extends shared components instead of creating new local variants.
 39. `frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx`
 40. `frontend-modern/src/components/Settings/ReportingPanel.tsx`
 41. `frontend-modern/src/components/Settings/reportingPanelModel.ts`
-42. `frontend-modern/src/components/Settings/useReportingPanelState.ts`
-43. `frontend-modern/src/utils/reportingPresentation.ts`
-44. `frontend-modern/src/utils/updatesPresentation.ts`
+42. `frontend-modern/src/components/Settings/reportingInventoryExportModel.ts`
+43. `frontend-modern/src/components/Settings/useReportingPanelState.ts`
+44. `frontend-modern/src/utils/reportingPresentation.ts`
+45. `frontend-modern/src/utils/updatesPresentation.ts`
 44. `frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts`
 45. `tests/integration/tests/15-settings-shell-consistency.spec.ts`
 46. `frontend-modern/src/components/shared/PageControls.guardrails.test.ts`
@@ -164,6 +165,15 @@ The subsystem registry now also requires explicit proof-policy coverage for all
 shared runtime files, and shared-component guardrails fail if raw table
 composition is reintroduced in new shared components outside the canonical
 allowlist.
+The settings reporting shell now also owns a deliberate split between
+historical performance reports and current-state VM inventory export.
+`frontend-modern/src/components/Settings/ReportingPanel.tsx`,
+`frontend-modern/src/components/Settings/useReportingPanelState.ts`,
+`frontend-modern/src/components/Settings/reportingPanelModel.ts`, and
+`frontend-modern/src/components/Settings/reportingInventoryExportModel.ts` must
+keep those as separate operator jobs with separate request builders and success
+copy, rather than collapsing inventory export back into the metrics-report
+controls.
 The shared updates settings owner also defines the user-facing framing for
 rc-tagged builds. `frontend-modern/src/components/Settings/updatesSettingsModel.ts`
 and `frontend-modern/src/utils/updatesPresentation.ts` must present that

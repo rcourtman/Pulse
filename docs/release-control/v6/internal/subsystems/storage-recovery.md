@@ -217,6 +217,11 @@ The same shared API runtime now also exposes dedicated
 `/api/resources/{id}/facets` surface, but storage and recovery must continue
 to treat those as adjacent governed API ownership rather than storage/recovery
 timeline ownership.
+That same adjacent API layer now also exposes a VM inventory CSV export for the
+reporting surface. Storage and recovery workflows may consume similar current-
+state VM facts, but `internal/api/reporting_inventory_handlers.go` and
+`internal/api/router_routes_licensing.go` remain API/reporting transport
+ownership rather than storage/recovery contract ownership.
 Those resource timeline reads now also accept governed kind and source-type
 filters plus source-adapter filters, with filtered history counts owned by the
 unified-resource store so storage and recovery views can consume the same

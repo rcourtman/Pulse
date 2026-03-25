@@ -306,6 +306,29 @@ func TestContract_HostedAISettingsAutoBootstrapJSONSnapshot(t *testing.T) {
 	assertJSONSnapshot(t, rec.Body.Bytes(), want)
 }
 
+func TestContract_VMInventoryExportCSVHeaders(t *testing.T) {
+	handler := NewReportingHandlers(nil, nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/reports/inventory/vms/export?format=csv", nil)
+	rec := httptest.NewRecorder()
+
+	handler.HandleExportVMInventory(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	if got := rec.Header().Get("Content-Type"); got != "text/csv; charset=utf-8" {
+		t.Fatalf("expected csv content type, got %q", got)
+	}
+	if got := rec.Header().Get("Content-Disposition"); !strings.HasPrefix(got, "attachment; filename=\"vm-inventory-") {
+		t.Fatalf("expected VM inventory attachment filename, got %q", got)
+	}
+
+	const want = "Resource ID,Instance,Node,VMID,VM Name,Status,CPU Cores,Memory Allocated Bytes,Disk Allocated Bytes,Disk Used Bytes,Disk Status Reason\n"
+	if got := rec.Body.String(); got != want {
+		t.Fatalf("unexpected VM inventory CSV header row:\nwant %q\ngot  %q", want, got)
+	}
+}
+
 func TestContract_HostedTenantAISettingsFallbackJSONSnapshot(t *testing.T) {
 	t.Setenv("PULSE_HOSTED_MODE", "true")
 

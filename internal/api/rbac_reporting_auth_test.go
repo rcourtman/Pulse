@@ -39,6 +39,7 @@ func TestReportingEndpointsRequireAuthInAPIMode(t *testing.T) {
 	}{
 		{method: http.MethodGet, path: "/api/admin/reports/generate", body: ""},
 		{method: http.MethodPost, path: "/api/admin/reports/generate-multi", body: `{}`},
+		{method: http.MethodGet, path: "/api/admin/reports/inventory/vms/export", body: ""},
 	}
 
 	for _, tc := range cases {

@@ -12,6 +12,7 @@ import (
 type ReportingAdminEndpoints interface {
 	HandleGenerateReport(http.ResponseWriter, *http.Request)
 	HandleGenerateMultiReport(http.ResponseWriter, *http.Request)
+	HandleExportVMInventory(http.ResponseWriter, *http.Request)
 }
 
 // WriteReportingErrorFunc writes a structured reporting error response.

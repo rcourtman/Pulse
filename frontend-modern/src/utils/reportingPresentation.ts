@@ -20,3 +20,11 @@ export function getReportingGenerateSuccessMessage(): string {
 export function getReportingGenerateErrorMessage(): string {
   return 'Failed to generate report';
 }
+
+export function getReportingInventoryExportSuccessMessage(): string {
+  return 'VM inventory export generated successfully';
+}
+
+export function getReportingInventoryExportErrorMessage(): string {
+  return 'Failed to generate VM inventory export';
+}

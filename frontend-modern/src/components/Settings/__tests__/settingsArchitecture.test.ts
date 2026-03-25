@@ -127,6 +127,7 @@ import systemSettingsPresentationSource from '@/utils/systemSettingsPresentation
 import updatesPresentationSource from '@/utils/updatesPresentation.ts?raw';
 import diagnosticsStateSource from '../useDiagnosticsPanelState.ts?raw';
 import reportingPanelModelSource from '../reportingPanelModel.ts?raw';
+import reportingInventoryExportModelSource from '../reportingInventoryExportModel.ts?raw';
 import reportingPanelSource from '../ReportingPanel.tsx?raw';
 import reportingPanelStateSource from '../useReportingPanelState.ts?raw';
 import systemLogsPanelSource from '../SystemLogsPanel.tsx?raw';
@@ -206,6 +207,7 @@ const extractedModules = [
   '../UpdateInstallGuide.tsx',
   '../ReportingPanel.tsx',
   '../reportingPanelModel.ts',
+  '../reportingInventoryExportModel.ts',
   '../ProLicensePlanSection.tsx',
   '../RelayPairingSection.tsx',
   '../OrganizationOverviewLoadingState.tsx',
@@ -468,7 +470,9 @@ describe('Settings architecture guardrails', () => {
     expect(settingsPanelRegistryHookSource).not.toContain('backupPollingEnabled: params.');
     expect(settingsInfrastructurePanelPropsSource).toContain('pbsInstanceFromResource');
     expect(settingsInfrastructurePanelPropsSource).toContain('pmgInstanceFromResource');
-    expect(settingsInfrastructurePanelPropsSource).toContain('const agentStateResources = createMemo');
+    expect(settingsInfrastructurePanelPropsSource).toContain(
+      'const agentStateResources = createMemo',
+    );
     expect(settingsInfrastructurePanelPropsSource).toContain('getInfrastructurePanelProps');
     expect(settingsNavigationModelSource).toContain('export type SettingsTab =');
     expect(settingsNavigationModelSource).toContain('export const DEFAULT_SETTINGS_TAB');
@@ -511,7 +515,9 @@ describe('Settings architecture guardrails', () => {
     expect(proLicensePanelSource).not.toContain('useLocation()');
     expect(monitoredSystemLedgerPanelSource).toContain('@/utils/monitoredSystemPresentation');
     expect(monitoredSystemLedgerPanelSource).toContain('getMonitoredSystemLedgerPresentation');
-    expect(monitoredSystemLedgerPanelSource).toContain('getMonitoredSystemCountingDetailsToggleLabel');
+    expect(monitoredSystemLedgerPanelSource).toContain(
+      'getMonitoredSystemCountingDetailsToggleLabel',
+    );
     expect(monitoredSystemLedgerPanelSource).not.toContain('No monitored systems counted.');
     expect(monitoredSystemLedgerPanelSource).not.toContain('Current status');
     expect(monitoredSystemLedgerPanelSource).toContain('getMonitoredSystemLedgerDescription');
@@ -520,9 +526,7 @@ describe('Settings architecture guardrails', () => {
     expect(monitoredSystemDefinitionDisclosureSource).toContain(
       '@/utils/monitoredSystemPresentation',
     );
-    expect(monitoredSystemDefinitionDisclosureSource).toContain(
-      'getMonitoredSystemBriefSummary',
-    );
+    expect(monitoredSystemDefinitionDisclosureSource).toContain('getMonitoredSystemBriefSummary');
     expect(monitoredSystemDefinitionDisclosureSource).toContain(
       'getMonitoredSystemDisclosureToggleLabel',
     );
@@ -534,7 +538,9 @@ describe('Settings architecture guardrails', () => {
     expect(proLicensePanelStateSource).not.toContain('startProTrial()');
     expect(proLicensePlanSectionSource).toContain('CommercialStatGrid');
     expect(proLicensePlanSectionSource).toContain('getLicenseStatusLoadingState');
-    expect(monitoredSystemPresentationSource).toContain('export function getMonitoredSystemLedgerPresentation');
+    expect(monitoredSystemPresentationSource).toContain(
+      'export function getMonitoredSystemLedgerPresentation',
+    );
     expect(monitoredSystemPresentationSource).toContain(
       'export function getMonitoredSystemCountingDetailsToggleLabel',
     );
@@ -568,7 +574,9 @@ describe('Settings architecture guardrails', () => {
     expect(relaySettingsPanelSource).toContain('./RelayPairingSection');
     expect(relaySettingsPanelSource).not.toContain('createSignal(');
     expect(relaySettingsPanelSource).not.toContain('QRCode.toDataURL(');
-    expect(relaySettingsPanelStateSource).toContain("trackPaywallViewed('relay', 'settings_relay_panel')");
+    expect(relaySettingsPanelStateSource).toContain(
+      "trackPaywallViewed('relay', 'settings_relay_panel')",
+    );
     expect(relaySettingsPanelStateSource).toContain('setInterval(() => void loadStatus(), 5000)');
     expect(relaySettingsPanelStateSource).toContain('QRCode.toDataURL(payload.deep_link');
     expect(relaySettingsPanelStateSource).toContain('runStartProTrialAction({');
@@ -659,7 +667,9 @@ describe('Settings architecture guardrails', () => {
     expect(proxmoxDirectWorkspaceSource).toContain('./ProxmoxNodeModalStack');
     expect(proxmoxSettingsPanelSource).not.toContain('const renderConfiguredTable = () =>');
     expect(proxmoxSettingsPanelSource).not.toContain('const renderNodeModal = (type: NodeType)');
-    expect(proxmoxSettingsPanelSource).not.toContain('No discovery matches for this Proxmox type yet.');
+    expect(proxmoxSettingsPanelSource).not.toContain(
+      'No discovery matches for this Proxmox type yet.',
+    );
     expect(proxmoxSettingsPanelSource).not.toContain('What happens next');
     expect(proxmoxConfiguredNodesTableSource).toContain('PveNodesTable');
     expect(proxmoxConfiguredNodesTableSource).toContain('PbsNodesTable');
@@ -718,12 +728,8 @@ describe('Settings architecture guardrails', () => {
     expect(organizationAccessManagementSectionSource).toContain(
       'getOrganizationAccessManageRequiredMessage',
     );
-    expect(organizationAccessManagementSectionSource).toContain(
-      'ORGANIZATION_MEMBER_ROLE_OPTIONS',
-    );
-    expect(organizationAccessMembersSectionSource).toContain(
-      'getOrganizationAccessEmptyState',
-    );
+    expect(organizationAccessManagementSectionSource).toContain('ORGANIZATION_MEMBER_ROLE_OPTIONS');
+    expect(organizationAccessMembersSectionSource).toContain('getOrganizationAccessEmptyState');
     expect(organizationAccessMembersSectionSource).toContain('formatOrgDate');
     expect(organizationAccessLoadingStateSource).toContain('animate-pulse');
   });
@@ -802,7 +808,9 @@ describe('Settings architecture guardrails', () => {
     expect(infrastructureWorkspaceSource).not.toContain('Add and manage infrastructure');
     expect(infrastructureWorkspaceSource).not.toContain('tracking-[0.22em]');
     expect(infrastructureWorkspaceSource).toContain('./infrastructureWorkspaceModel');
-    expect(infrastructureWorkspaceSource).not.toContain('createSignal<InfrastructureWorkspaceView>');
+    expect(infrastructureWorkspaceSource).not.toContain(
+      'createSignal<InfrastructureWorkspaceView>',
+    );
     expect(infrastructureWorkspaceSource).not.toContain('createEffect(() =>');
     expect(infrastructureWorkspaceSource).toContain('InfrastructureInstallPanel');
     expect(infrastructureWorkspaceSource).toContain('InfrastructureReportingPanel');
@@ -816,10 +824,14 @@ describe('Settings architecture guardrails', () => {
     );
     expect(infrastructureReportingPanelSource).not.toContain('Direct Proxmox connections');
     expect(infrastructureReportingPanelSource).not.toContain('Manage direct connections');
-    expect(infrastructureOperationsControllerSource).toContain('InfrastructureOperationsStateProvider');
+    expect(infrastructureOperationsControllerSource).toContain(
+      'InfrastructureOperationsStateProvider',
+    );
     expect(infrastructureOperationsControllerSource).toContain('InfrastructureInstallerSection');
     expect(infrastructureOperationsControllerSource).toContain('InfrastructureInventorySection');
-    expect(infrastructureOperationsControllerSource).toContain('InfrastructureStopMonitoringDialog');
+    expect(infrastructureOperationsControllerSource).toContain(
+      'InfrastructureStopMonitoringDialog',
+    );
     expect(infrastructureOperationsStateSource).toContain(
       'export const useInfrastructureOperationsState',
     );
@@ -834,13 +846,17 @@ describe('Settings architecture guardrails', () => {
     expect(infrastructureOperationsStateSource).not.toContain('const renderInstallerSection =');
     expect(infrastructureOperationsStateSource).not.toContain('const renderInventorySection =');
     expect(infrastructureOperationsStateSource).not.toContain('const renderStopMonitoringDialog =');
-    expect(infrastructureInstallStateSource).toContain('export const useInfrastructureInstallState');
+    expect(infrastructureInstallStateSource).toContain(
+      'export const useInfrastructureInstallState',
+    );
     expect(infrastructureReportingStateSource).toContain(
       'export const useInfrastructureReportingState',
     );
     expect(infrastructureInstallerSectionSource).toContain('useInfrastructureOperationsContext');
     expect(infrastructureInventorySectionSource).toContain('useInfrastructureOperationsContext');
-    expect(infrastructureStopMonitoringDialogSource).toContain('useInfrastructureOperationsContext');
+    expect(infrastructureStopMonitoringDialogSource).toContain(
+      'useInfrastructureOperationsContext',
+    );
     expect(infrastructureActiveRowDetailsSource).toContain('useInfrastructureOperationsContext');
     expect(infrastructureIgnoredRowDetailsSource).toContain('useInfrastructureOperationsContext');
     expect(infrastructureWorkspaceModelSource).toContain(
@@ -855,9 +871,7 @@ describe('Settings architecture guardrails', () => {
     expect(infrastructureDirectConnectionsSummaryCardSource).toContain(
       'Direct Proxmox connections',
     );
-    expect(infrastructureDirectConnectionsSummaryCardSource).toContain(
-      'Manage direct connections',
-    );
+    expect(infrastructureDirectConnectionsSummaryCardSource).toContain('Manage direct connections');
     expect(infrastructureInstallPanelSource).not.toContain('<PageHeader');
     expect(infrastructureReportingPanelSource).not.toContain('<PageHeader');
   });
@@ -882,17 +896,23 @@ describe('Settings architecture guardrails', () => {
     expect(infrastructureSettingsStateSource).toContain("from './infrastructureSettingsModel'");
     expect(infrastructureSettingsStateSource).not.toContain('NodesAPI.getNodes');
     expect(infrastructureSettingsStateSource).not.toContain('SettingsAPI.updateSystemSettings');
-    expect(infrastructureSettingsStateSource).not.toContain("const [nodes, setNodes] = createSignal");
     expect(infrastructureSettingsStateSource).not.toContain(
-      "const [discoveredNodes, setDiscoveredNodes] = createSignal",
+      'const [nodes, setNodes] = createSignal',
     );
-    expect(infrastructureConfiguredNodesStateSource).toContain('export const useInfrastructureConfiguredNodesState');
+    expect(infrastructureSettingsStateSource).not.toContain(
+      'const [discoveredNodes, setDiscoveredNodes] = createSignal',
+    );
+    expect(infrastructureConfiguredNodesStateSource).toContain(
+      'export const useInfrastructureConfiguredNodesState',
+    );
     expect(infrastructureConfiguredNodesStateSource).toContain('NodesAPI.getNodes');
     expect(infrastructureConfiguredNodesStateSource).toContain('NodesAPI.updateNode');
     expect(infrastructureConfiguredNodesStateSource).toContain('NodesAPI.deleteNode');
     expect(infrastructureConfiguredNodesStateSource).toContain('NodesAPI.refreshClusterNodes');
     expect(infrastructureConfiguredNodesStateSource).not.toContain("apiFetch('/api/discover'");
-    expect(infrastructureConfiguredNodesStateSource).not.toContain('SettingsAPI.updateSystemSettings');
+    expect(infrastructureConfiguredNodesStateSource).not.toContain(
+      'SettingsAPI.updateSystemSettings',
+    );
     expect(infrastructureDiscoveryRuntimeStateSource).toContain(
       'export const useInfrastructureDiscoveryRuntimeState',
     );
@@ -909,19 +929,29 @@ describe('Settings architecture guardrails', () => {
 
   it('keeps the API token manager shell behind extracted state and model owners', () => {
     expect(apiTokenManagerSource).toContain('./useAPITokenManagerState');
-    expect(apiTokenManagerSource).not.toContain('const [tokens, setTokens] = createSignal<APITokenRecord[]>([])');
+    expect(apiTokenManagerSource).not.toContain(
+      'const [tokens, setTokens] = createSignal<APITokenRecord[]>([])',
+    );
     expect(apiTokenManagerSource).not.toContain('const loadTokens = async () =>');
-    expect(apiTokenManagerSource).not.toContain('const hasAgentScopeResource = (resource: Resource)');
+    expect(apiTokenManagerSource).not.toContain(
+      'const hasAgentScopeResource = (resource: Resource)',
+    );
     expect(apiTokenManagerStateSource).toContain('export const useAPITokenManagerState =');
-    expect(apiTokenManagerStateSource).toContain('const [tokens, setTokens] = createSignal<APITokenRecord[]>([])');
+    expect(apiTokenManagerStateSource).toContain(
+      'const [tokens, setTokens] = createSignal<APITokenRecord[]>([])',
+    );
     expect(apiTokenManagerStateSource).toContain('const loadTokens = async () =>');
     expect(apiTokenManagerStateSource).toContain('SecurityAPI.listTokens()');
     expect(apiTokenManagerStateSource).toContain('const scopePresets = getAPITokenScopePresets();');
-    expect(apiTokenManagerStateSource).not.toContain('const scopePresets = API_TOKEN_SCOPE_PRESETS;');
+    expect(apiTokenManagerStateSource).not.toContain(
+      'const scopePresets = API_TOKEN_SCOPE_PRESETS;',
+    );
     expect(apiTokenManagerModelSource).toContain('export const hasAgentScopeResource =');
     expect(apiTokenManagerModelSource).toContain('export const buildDockerTokenUsage =');
     expect(apiTokenManagerModelSource).toContain('export const buildAgentTokenUsage =');
-    expect(apiTokenManagerModelSource).toContain('export const getAPITokenScopePresets = (): APITokenPreset[] => [');
+    expect(apiTokenManagerModelSource).toContain(
+      'export const getAPITokenScopePresets = (): APITokenPreset[] => [',
+    );
     expect(apiTokenManagerModelSource).not.toContain('export const API_TOKEN_SCOPE_PRESETS = [');
   });
 
@@ -950,10 +980,14 @@ describe('Settings architecture guardrails', () => {
     expect(nodeModalModelSource).toContain('export const deriveNameFromHost =');
     expect(nodeModalModelSource).toContain('export const PVE_MANUAL_PERMISSION_COMMAND = `');
     expect(nodeModalStateSource).toContain('export const useNodeModalState =');
-    expect(nodeModalStateSource).toContain('export type NodeModalState = ReturnType<typeof useNodeModalState>;');
+    expect(nodeModalStateSource).toContain(
+      'export type NodeModalState = ReturnType<typeof useNodeModalState>;',
+    );
     expect(nodeModalStateSource).toContain('const [quickSetupBootstrap, setQuickSetupBootstrap] =');
     expect(nodeModalStateSource).toContain('const handleTestConnection = async () =>');
-    expect(nodeModalStateSource).toContain("const PROXMOX_SETUP_HOST_REQUIRED_MESSAGE = 'Proxmox setup host is required';");
+    expect(nodeModalStateSource).toContain(
+      "const PROXMOX_SETUP_HOST_REQUIRED_MESSAGE = 'Proxmox setup host is required';",
+    );
     expect(nodeModalStateSource).toContain('runStartProTrialAction({');
     expect(nodeModalStateSource).not.toContain('startProTrial()');
   });
@@ -965,13 +999,17 @@ describe('Settings architecture guardrails', () => {
     expect(aiSettingsPanelSource).toContain('@/components/Settings/AISettingsStatusAndActions');
     expect(aiSettingsPanelSource).toContain('@/components/Settings/AISettingsDialogs');
     expect(aiSettingsPanelSource).toContain('@/components/Settings/useAISettingsState');
-    expect(aiSettingsPanelSource).not.toContain('const [loading, setLoading] = createSignal(false);');
+    expect(aiSettingsPanelSource).not.toContain(
+      'const [loading, setLoading] = createSignal(false);',
+    );
     expect(aiSettingsPanelSource).not.toContain('const handleSave = async (event?: Event) =>');
     expect(aiSettingsPanelSource).not.toContain('AIAPI.getSettings()');
     expect(aiSettingsPanelSource).not.toContain('Chat Session Maintenance');
     expect(aiSettingsPanelSource).not.toContain('Discovery Settings');
     expect(aiSettingsPanelSource).not.toContain('Pulse Permission Level');
-    expect(aiModelSelectionSectionSource).toContain('@/components/Settings/AIProviderConfigurationSection');
+    expect(aiModelSelectionSectionSource).toContain(
+      '@/components/Settings/AIProviderConfigurationSection',
+    );
     expect(aiModelSelectionSectionSource).toContain('@/components/Settings/aiSettingsModel');
     expect(aiModelSelectionSectionSource).toContain('Advanced Model Selection');
     expect(aiRuntimeControlsSectionSource).toContain('Discovery Settings');
@@ -986,7 +1024,9 @@ describe('Settings architecture guardrails', () => {
     expect(aiSettingsStateSource).toContain('export const useAISettingsState =');
     expect(aiSettingsStateSource).toContain('const [loading, setLoading] = createSignal(false);');
     expect(aiSettingsStateSource).toContain('const handleSave = async (event?: Event) =>');
-    expect(aiSettingsStateSource).toContain('const handleEnabledToggle = async (newValue: boolean) =>');
+    expect(aiSettingsStateSource).toContain(
+      'const handleEnabledToggle = async (newValue: boolean) =>',
+    );
     expect(aiSettingsStateSource).toContain('AIAPI.getSettings()');
     expect(aiSettingsStateSource).toContain('runStartProTrialAction({');
     expect(aiSettingsStateSource).not.toContain('startProTrial()');
@@ -1007,12 +1047,14 @@ describe('Settings architecture guardrails', () => {
     expect(updateInstallGuideSource).toContain('@/components/Settings/CopyCommandBlock');
     expect(updateInstallGuideSource).toContain('buildUpdateInstallGuide');
     expect(copyCommandBlockSource).toContain('export function CopyCommandBlock');
-    expect(copyCommandBlockSource).toContain("aria-label=\"Copy to clipboard\"");
+    expect(copyCommandBlockSource).toContain('aria-label="Copy to clipboard"');
     expect(updatesSettingsModelSource).toContain('export function getUpdateChannelCardOptions');
     expect(updatesSettingsModelSource).toContain('export function buildUpdateInstallGuide');
     expect(updatesSettingsModelSource).toContain("title: 'Pre-release'");
     expect(updatesSettingsModelSource).not.toContain('Release Candidate');
-    expect(updatesPresentationSource).toContain('Pre-release builds stay on a manual preview channel.');
+    expect(updatesPresentationSource).toContain(
+      'Pre-release builds stay on a manual preview channel.',
+    );
     expect(updatesPresentationSource).not.toContain('RC is a manual preview channel.');
   });
 
@@ -1041,6 +1083,7 @@ describe('Settings architecture guardrails', () => {
     expect(reportingPanelSource).toContain('@/components/Settings/OperationsPanel');
     expect(reportingPanelSource).toContain('@/components/Settings/useReportingPanelState');
     expect(reportingPanelSource).toContain('@/components/Settings/reportingPanelModel');
+    expect(reportingPanelSource).toContain('VM Inventory Export');
     expect(reportingPanelSource).not.toContain('loadLicenseStatus()');
     expect(reportingPanelSource).not.toContain('startProTrial()');
     expect(reportingPanelSource).not.toContain("apiFetch('/api/admin/reports/generate");
@@ -1050,11 +1093,15 @@ describe('Settings architecture guardrails', () => {
     expect(reportingPanelStateSource).toContain('runStartProTrialAction({');
     expect(reportingPanelStateSource).not.toContain('startProTrial()');
     expect(reportingPanelStateSource).toContain('buildReportingRequest');
+    expect(reportingPanelStateSource).toContain('buildVMInventoryExportRequest');
     expect(reportingPanelStateSource).toContain('getReportingGenerateSuccessMessage');
     expect(reportingPanelStateSource).not.toContain('getTrialAlreadyUsedMessage()');
     expect(reportingPanelModelSource).toContain('export function getReportingRangeStart');
     expect(reportingPanelModelSource).toContain('export function buildReportingRequest');
     expect(reportingPanelModelSource).toContain('export function buildReportingFilename');
+    expect(reportingInventoryExportModelSource).toContain(
+      'export function buildVMInventoryExportFilename',
+    );
   });
 
   it('keeps the shared operations wrapper rooted at SettingsPanel', () => {
@@ -1116,8 +1163,12 @@ describe('Settings architecture guardrails', () => {
     expect(ssoProvidersModelSource).toContain('export const mapProviderDetailsToForm =');
     expect(ssoProvidersModelSource).toContain('export const buildProviderPayload =');
     expect(ssoProvidersModelSource).toContain('export const buildProviderTestPayload =');
-    expect(ssoProviderPresentationSource).toContain('export function getSSOProviderEmptyStateTitle');
-    expect(ssoProviderPresentationSource).toContain('export function getSSOProvidersLoadErrorMessage');
+    expect(ssoProviderPresentationSource).toContain(
+      'export function getSSOProviderEmptyStateTitle',
+    );
+    expect(ssoProviderPresentationSource).toContain(
+      'export function getSSOProvidersLoadErrorMessage',
+    );
   });
 
   it('keeps shared system settings presentation extracted from panel and state owners', () => {

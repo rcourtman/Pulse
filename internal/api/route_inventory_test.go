@@ -449,6 +449,7 @@ var allRouteAllowlist = []string{
 	"POST /api/admin/rbac/reset-admin",
 	"/api/admin/reports/generate",
 	"/api/admin/reports/generate-multi",
+	"/api/admin/reports/inventory/vms/export",
 	"/api/admin/webhooks/audit",
 	"/api/security/change-password",
 	"/api/security/dev/reset-first-run",

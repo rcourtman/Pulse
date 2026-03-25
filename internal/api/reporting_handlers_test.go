@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/reporting"
 )
 
@@ -221,5 +222,96 @@ func TestSanitizeFilename(t *testing.T) {
 	got := sanitizeFilename(raw)
 	if strings.ContainsAny(got, "\"\\/\r\n") {
 		t.Fatalf("sanitizeFilename did not remove unsafe characters: %q", got)
+	}
+}
+
+func TestReportingHandlers_ExportVMInventory_MethodNotAllowed(t *testing.T) {
+	handler := NewReportingHandlers(nil, nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/admin/reports/inventory/vms/export", nil)
+	rr := httptest.NewRecorder()
+
+	handler.HandleExportVMInventory(rr, req)
+
+	if rr.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected status %d, got %d", http.StatusMethodNotAllowed, rr.Code)
+	}
+}
+
+func TestReportingHandlers_ExportVMInventory_InvalidFormat(t *testing.T) {
+	handler := NewReportingHandlers(nil, nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/reports/inventory/vms/export?format=pdf", nil)
+	rr := httptest.NewRecorder()
+
+	handler.HandleExportVMInventory(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusBadRequest, rr.Code, rr.Body.String())
+	}
+}
+
+func TestReportingHandlers_ExportVMInventory_EmptySnapshotStillReturnsCSVHeader(t *testing.T) {
+	handler := NewReportingHandlers(nil, nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/reports/inventory/vms/export", nil)
+	rr := httptest.NewRecorder()
+
+	handler.HandleExportVMInventory(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, rr.Code, rr.Body.String())
+	}
+	if contentType := rr.Header().Get("Content-Type"); !strings.Contains(contentType, "text/csv") {
+		t.Fatalf("expected CSV content type, got %q", contentType)
+	}
+	if !strings.Contains(rr.Body.String(), "Resource ID,Instance,Node,VMID,VM Name") {
+		t.Fatalf("expected CSV header row, got %q", rr.Body.String())
+	}
+}
+
+func TestBuildVMInventoryRows_UsesCanonicalFieldsAndDiskFallback(t *testing.T) {
+	total := int64(16 * 1024)
+	resources := []unifiedresources.Resource{
+		{
+			ID:     "vm-101",
+			Type:   unifiedresources.ResourceTypeVM,
+			Name:   "app-vm",
+			Status: unifiedresources.StatusWarning,
+			Metrics: &unifiedresources.ResourceMetrics{
+				Memory: &unifiedresources.MetricValue{Total: &total},
+			},
+			Proxmox: &unifiedresources.ProxmoxData{
+				Instance:         "lab",
+				NodeName:         "pve-a",
+				VMID:             101,
+				CPUs:             4,
+				DiskStatusReason: "guest agent offline",
+				Disks: []unifiedresources.DiskInfo{
+					{Device: "scsi0", Total: 100 * 1024, Used: 40 * 1024},
+					{Device: "scsi1", Total: 50 * 1024, Used: 10 * 1024},
+				},
+			},
+		},
+		{
+			ID:   "node-1",
+			Type: unifiedresources.ResourceTypeAgent,
+			Name: "node-a",
+		},
+	}
+
+	rows := buildVMInventoryRows(resources)
+	if len(rows) != 1 {
+		t.Fatalf("expected one VM row, got %d", len(rows))
+	}
+	row := rows[0]
+	if row.ResourceID != "vm-101" || row.Name != "app-vm" || row.Instance != "lab" || row.Node != "pve-a" {
+		t.Fatalf("unexpected inventory row identity: %+v", row)
+	}
+	if row.CPUCores != 4 || row.MemoryAllocatedBytes != total {
+		t.Fatalf("expected CPU and memory totals from canonical model, got %+v", row)
+	}
+	if row.DiskAllocatedBytes != 150*1024 || row.DiskUsedBytes != 50*1024 {
+		t.Fatalf("expected disk totals to fall back to per-disk sums, got %+v", row)
+	}
+	if row.DiskStatusReason != "guest agent offline" {
+		t.Fatalf("expected disk status reason to be preserved, got %+v", row)
 	}
 }

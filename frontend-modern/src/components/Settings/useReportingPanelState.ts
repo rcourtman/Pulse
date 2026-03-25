@@ -14,6 +14,8 @@ import {
   getReportingGenerateErrorMessage,
   getReportingGenerateSelectionRequiredMessage,
   getReportingGenerateSuccessMessage,
+  getReportingInventoryExportErrorMessage,
+  getReportingInventoryExportSuccessMessage,
 } from '@/utils/reportingPresentation';
 import { runStartProTrialAction } from '@/utils/trialStartAction';
 import {
@@ -22,6 +24,7 @@ import {
   type ReportingFormat,
   type ReportingRangeValue,
 } from '@/components/Settings/reportingPanelModel';
+import { buildVMInventoryExportRequest } from '@/components/Settings/reportingInventoryExportModel';
 
 export const useReportingPanelState = () => {
   const [selectedResources, setSelectedResources] = createSignal<SelectedResource[]>([]);
@@ -29,6 +32,7 @@ export const useReportingPanelState = () => {
   const [format, setFormat] = createSignal<ReportingFormat>('pdf');
   const [range, setRange] = createSignal<ReportingRangeValue>('24h');
   const [generating, setGenerating] = createSignal(false);
+  const [exportingInventory, setExportingInventory] = createSignal(false);
   const [title, setTitle] = createSignal('');
   const [startingTrial, setStartingTrial] = createSignal(false);
 
@@ -62,6 +66,18 @@ export const useReportingPanelState = () => {
     }
   };
 
+  const downloadResponseBlob = async (filename: string, response: Response) => {
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(anchor);
+  };
+
   const handleGenerate = async () => {
     const resources = selectedResources();
     if (resources.length === 0) {
@@ -89,15 +105,7 @@ export const useReportingPanelState = () => {
         throw new Error(text || getReportingGenerateErrorMessage());
       }
 
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const anchor = document.createElement('a');
-      anchor.href = url;
-      anchor.download = request.filename;
-      document.body.appendChild(anchor);
-      anchor.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(anchor);
+      await downloadResponseBlob(request.filename, response);
 
       showSuccess(getReportingGenerateSuccessMessage());
     } catch (error) {
@@ -108,9 +116,35 @@ export const useReportingPanelState = () => {
     }
   };
 
+  const handleExportVMInventory = async () => {
+    if (exportingInventory()) return;
+
+    setExportingInventory(true);
+    try {
+      const request = buildVMInventoryExportRequest(new Date());
+      const response = await apiFetch(request.request.url);
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || getReportingInventoryExportErrorMessage());
+      }
+
+      await downloadResponseBlob(request.filename, response);
+      showSuccess(getReportingInventoryExportSuccessMessage());
+    } catch (error) {
+      console.error('VM inventory export error:', error);
+      showWarning(
+        error instanceof Error ? error.message : getReportingInventoryExportErrorMessage(),
+      );
+    } finally {
+      setExportingInventory(false);
+    }
+  };
+
   return {
     canStartTrial,
+    exportingInventory,
     format,
+    handleExportVMInventory,
     generating,
     handleGenerate,
     handleStartTrial,

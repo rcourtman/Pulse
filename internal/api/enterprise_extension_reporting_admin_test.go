@@ -9,7 +9,8 @@ import (
 )
 
 type testReportingAdminEndpoints struct {
-	generateCalls int
+	generateCalls        int
+	exportInventoryCalls int
 }
 
 func (t *testReportingAdminEndpoints) HandleGenerateReport(http.ResponseWriter, *http.Request) {
@@ -17,6 +18,10 @@ func (t *testReportingAdminEndpoints) HandleGenerateReport(http.ResponseWriter, 
 }
 
 func (t *testReportingAdminEndpoints) HandleGenerateMultiReport(http.ResponseWriter, *http.Request) {}
+
+func (t *testReportingAdminEndpoints) HandleExportVMInventory(http.ResponseWriter, *http.Request) {
+	t.exportInventoryCalls++
+}
 
 func TestResolveReportingAdminEndpoints_DefaultWhenBinderNil(t *testing.T) {
 	SetReportingAdminEndpointsBinder(nil)
@@ -56,5 +61,21 @@ func TestResolveReportingAdminEndpoints_UsesBinderOverride(t *testing.T) {
 	}
 	if override.generateCalls != 1 {
 		t.Fatalf("expected override reporting handler call, got %d", override.generateCalls)
+	}
+}
+
+func TestResolveReportingAdminEndpoints_UsesDefaultInventoryHandler(t *testing.T) {
+	SetReportingAdminEndpointsBinder(nil)
+	t.Cleanup(func() {
+		SetReportingAdminEndpointsBinder(nil)
+	})
+
+	defaults := &testReportingAdminEndpoints{}
+	resolved := resolveReportingAdminEndpoints(defaults, extensions.ReportingAdminRuntime{})
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/reports/inventory/vms/export", nil)
+	rec := httptest.NewRecorder()
+	resolved.HandleExportVMInventory(rec, req)
+	if defaults.exportInventoryCalls != 1 {
+		t.Fatalf("expected default VM inventory handler call, got %d", defaults.exportInventoryCalls)
 	}
 }
