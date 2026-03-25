@@ -3297,6 +3297,10 @@ func (p *PatrolService) seedIntelligenceContext(intel seedIntelligence, now time
 	return sb.String()
 }
 
+func patrolFindingUsesSyntheticRuntimeResource(f *Finding) bool {
+	return f != nil && (f.Key == "ai-patrol-error" || f.ResourceID == "ai-service")
+}
+
 // seedFindingsAndContext builds the thresholds, active findings, dismissed findings, and user notes sections.
 func (p *PatrolService) seedFindingsAndContextState(scope *PatrolScope, snap patrolRuntimeState) (string, []string) {
 	var sb strings.Builder
@@ -3327,8 +3331,9 @@ func (p *PatrolService) seedFindingsAndContextState(scope *PatrolScope, snap pat
 		sb.WriteString("# Active Findings to Re-check\n")
 		sb.WriteString("Verify whether these findings are still valid. Resolve any that are no longer issues.\n\n")
 		for _, f := range activeFindings {
-			inScopedState := !stateHasScopedResources || scopedResources[f.ResourceID] || scopedResources[f.ResourceName]
-			inGlobalState := !stateHasGlobalResources || globalResources[f.ResourceID] || globalResources[f.ResourceName]
+			usesSyntheticRuntimeResource := patrolFindingUsesSyntheticRuntimeResource(f)
+			inScopedState := usesSyntheticRuntimeResource || !stateHasScopedResources || scopedResources[f.ResourceID] || scopedResources[f.ResourceName]
+			inGlobalState := usesSyntheticRuntimeResource || !stateHasGlobalResources || globalResources[f.ResourceID] || globalResources[f.ResourceName]
 
 			// Auto-resolve findings only when the resource is gone from the full current state.
 			// Scoped patrols should skip out-of-scope findings, not resolve them as deleted.

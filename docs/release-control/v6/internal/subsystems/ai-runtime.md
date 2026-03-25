@@ -493,6 +493,13 @@ The Patrol startup scheduler must preserve that coverage guarantee as well:
 `internal/ai/patrol_run.go` may skip the startup full patrol only when recent
 run history already includes a successful full Patrol run, not merely because
 some recent scoped alert-triggered run exists.
+The Patrol runtime also owns synthetic Patrol service findings canonically.
+Provider-credit and provider-auth failures raised against the synthetic
+`ai-service` Patrol resource are runtime conditions, not inventory resources,
+so the full-run seed/reconcile path must not auto-resolve them as
+`Resource no longer exists in infrastructure` just because `ai-service` is not
+present in the infrastructure snapshot. Those findings stay active until
+Patrol actually succeeds or resolves them for a Patrol-owned reason.
 AI chat tool-name labels, pending-tool headers, and assistant status copy now
 also route through the shared frontend identifier-label helper, so the chat
 surfaces do not keep their own underscore-stripping behavior separate from

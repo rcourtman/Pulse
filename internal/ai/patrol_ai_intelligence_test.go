@@ -655,6 +655,44 @@ func TestSeedFindingsAndContext_ScopedPatrolSkipsOutOfScopeFindingsWithoutResolv
 	}
 }
 
+func TestSeedFindingsAndContext_KeepsSyntheticPatrolServiceFindings(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+
+	serviceFinding := &Finding{
+		ID:           generateFindingID("ai-service", "reliability", "ai-patrol-error"),
+		Key:          "ai-patrol-error",
+		ResourceID:   "ai-service",
+		ResourceName: "Pulse Patrol Service",
+		ResourceType: "service",
+		Title:        "Pulse Patrol: Insufficient API credits",
+		Severity:     FindingSeverityWarning,
+		Category:     FindingCategoryReliability,
+		DetectedAt:   time.Now().Add(-2 * time.Hour),
+		LastSeenAt:   time.Now().Add(-time.Hour),
+	}
+	ps.findings.Add(serviceFinding)
+
+	node1 := ur.NewNodeView(&ur.Resource{ID: "node-1", Name: "node-1"})
+	ps.SetReadState(&mockReadState{nodes: []*ur.NodeView{&node1}})
+
+	runtime := newPatrolRuntimeState(models.StateSnapshot{
+		Nodes: []models.Node{{ID: "node-1", Name: "node-1"}},
+	})
+	runtime.readState = &mockReadState{nodes: []*ur.NodeView{&node1}}
+
+	output, seeded := ps.seedFindingsAndContextState(&PatrolScope{ResourceIDs: []string{"node-1"}}, runtime)
+
+	if serviceFinding.ResolvedAt != nil {
+		t.Fatalf("expected synthetic Patrol service finding to remain active, got resolved at %v", serviceFinding.ResolvedAt)
+	}
+	if len(seeded) != 1 || seeded[0] != serviceFinding.ID {
+		t.Fatalf("expected synthetic Patrol service finding to stay seeded, got %v", seeded)
+	}
+	if !strings.Contains(output, serviceFinding.Title) {
+		t.Fatalf("expected synthetic Patrol service finding in output, got: %s", output)
+	}
+}
+
 func TestSeedFindingsAndContext_ScopedPatrolWithoutRuntimeResourcesOmitsGlobalKnowledge(t *testing.T) {
 	ps := NewPatrolService(nil, nil)
 
