@@ -196,6 +196,10 @@ The same hierarchy also applies inside the Patrol summary shell: once the
 primary summary card states Patrol's assessment and verification basis,
 supporting metric strips under that card must stay metric-oriented and must
 not repeat assessment or verification labels as a second compact verdict row.
+That same summary-shell rule also applies to timing metadata: if the header,
+verification card, or findings footer already presents the governed Patrol
+activity timestamp, the summary chip row must not add another recency badge
+that competes with those owned timing surfaces.
 Those supporting cards must also keep their content factual and count-based:
 active findings, critical findings, warnings, and fixes are valid secondary
 readouts, while labels such as `Issues detected` or `Partial verification`

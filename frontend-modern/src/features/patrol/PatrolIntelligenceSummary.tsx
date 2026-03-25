@@ -162,15 +162,6 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
                       <span class="rounded-full border border-border-subtle bg-base px-2.5 py-1 text-xs font-medium text-base-content">
                         Active findings {summaryStats().totalActive}
                       </span>
-                      <Show when={recency().timestamp}>
-                        <span class="rounded-full border border-border-subtle bg-base px-2.5 py-1 text-xs font-medium text-base-content">
-                          {recency().label}{' '}
-                          {formatRelativeTime(recency().timestamp!, {
-                            compact: true,
-                            emptyText: 'never',
-                          })}
-                        </span>
-                      </Show>
                     </div>
 
                     <div class="mt-4 rounded-md border border-border-subtle bg-base/90 p-3">
