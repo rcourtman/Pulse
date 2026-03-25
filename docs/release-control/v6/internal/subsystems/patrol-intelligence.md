@@ -170,6 +170,11 @@ subject labels, so Patrol-owned synthetic service findings render as
 `Patrol runtime` rather than leaking backend resource internals like
 `Pulse Patrol Service (service)` into the primary findings row or assistant
 handoff prompts.
+That same finding presentation contract should own the primary remediation path
+for Patrol-owned runtime findings as well. Expanded runtime-finding rows should
+offer the same direct `Open AI Settings` action that the top assessment uses,
+instead of falling back to only generic acknowledge, snooze, or dismiss
+controls.
 The summary recency chip must follow the same governed scope distinction. When
 the latest completed activity was only a scoped run, the summary should label
 that timestamp as `Last activity` instead of `Last patrol`; `Last full patrol`

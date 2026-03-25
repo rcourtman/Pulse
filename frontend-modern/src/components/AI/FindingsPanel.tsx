@@ -43,6 +43,7 @@ import {
   getFindingStatusLabel,
   getFindingSourceBadgeClasses,
   getFindingSourceLabel,
+  getFindingPrimaryActionPresentation,
   getFindingSubjectPresentation,
   getPatrolFindingClassification,
   getFindingRecencyPresentation,
@@ -664,6 +665,24 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
   // Render expanded content for a finding
   const renderExpandedContent = (finding: UnifiedFinding) => (
     <div class="mt-3 pt-3 border-t border-border-subtle">
+      {(() => {
+        const primaryAction = getFindingPrimaryActionPresentation(finding);
+        return (
+          <Show when={primaryAction}>
+            {(action) => (
+              <div class="mb-3">
+                <a
+                  href={action().href}
+                  onClick={(e) => e.stopPropagation()}
+                  class="inline-flex items-center rounded border border-border bg-surface px-2.5 py-1.5 text-xs font-semibold text-base-content transition-colors hover:bg-surface-hover"
+                >
+                  {action().label}
+                </a>
+              </div>
+            )}
+          </Show>
+        );
+      })()}
       <Show when={hasTriggeringAlert(finding)}>
         <div class="text-xs text-amber-700 dark:text-amber-300 mb-2">
           Triggered by alert{finding.alertType ? ` (${finding.alertType})` : ''} • Identifier{' '}

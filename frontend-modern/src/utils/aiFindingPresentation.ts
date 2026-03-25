@@ -211,6 +211,11 @@ export interface FindingSubjectPresentation {
   label: string;
 }
 
+export interface FindingPrimaryActionPresentation {
+  label: string;
+  href: string;
+}
+
 export const getFindingSourceLabel = (source: UnifiedFinding['source'] | string): string =>
   FINDING_SOURCE_LABELS[source] || source;
 
@@ -286,6 +291,19 @@ export const getFindingSubjectPresentation = (
   return {
     label: `${resourceName} (${formatIdentifierLabel(resourceType)})`,
   };
+};
+
+export const getFindingPrimaryActionPresentation = (
+  finding: Pick<UnifiedFinding, 'resourceId' | 'resourceName' | 'title'>,
+): FindingPrimaryActionPresentation | undefined => {
+  if (isPatrolRuntimeFinding(finding)) {
+    return {
+      label: 'Open AI Settings',
+      href: '/settings/system-ai',
+    };
+  }
+
+  return undefined;
 };
 
 export const getFindingRecencyPresentation = (

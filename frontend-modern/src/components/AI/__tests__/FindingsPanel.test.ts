@@ -6,6 +6,7 @@ import {
   formatFindingLifecycleType,
   formatFindingLoopState,
   getFindingEmptyStateCopy,
+  getFindingPrimaryActionPresentation,
   getFindingSubjectPresentation,
   getPatrolFindingClassification,
   getFindingSeverityCompactLabel,
@@ -219,6 +220,31 @@ describe('aiFindingPresentation', () => {
     });
   });
 
+  describe('findingPrimaryActionPresentation', () => {
+    it('offers AI settings as the primary action for Patrol runtime findings', () => {
+      expect(
+        getFindingPrimaryActionPresentation({
+          resourceId: 'ai-service',
+          resourceName: 'Pulse Patrol Service',
+          title: 'Pulse Patrol: Insufficient API credits',
+        }),
+      ).toEqual({
+        label: 'Open AI Settings',
+        href: '/settings/system-ai',
+      });
+    });
+
+    it('does not expose AI settings as the primary action for infrastructure findings', () => {
+      expect(
+        getFindingPrimaryActionPresentation({
+          resourceId: 'vm-101',
+          resourceName: 'db-01',
+          title: 'Disk nearly full',
+        }),
+      ).toBeUndefined();
+    });
+  });
+
   describe('filterPresentation', () => {
     it('builds canonical filter options', () => {
       expect(
@@ -266,6 +292,12 @@ describe('aiFindingPresentation', () => {
       );
       expect(findingsPanelSource).not.toContain('Pulse Patrol Findings');
       expect(findingsPanelSource).not.toContain('AI-discovered insights');
+    });
+
+    it('exposes the canonical primary action for Patrol runtime findings inside the expanded row', () => {
+      expect(findingsPanelSource).toContain('getFindingPrimaryActionPresentation');
+      expect(findingsPanelSource).toContain('{action().label}');
+      expect(findingsPanelSource).toContain("href={action().href}");
     });
 
     it('only shows the sort control when there are multiple Patrol findings to sort', () => {
