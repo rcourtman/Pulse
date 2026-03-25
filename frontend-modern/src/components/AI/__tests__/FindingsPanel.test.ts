@@ -176,6 +176,14 @@ describe('aiFindingPresentation', () => {
       expect(findingsPanelSource).toContain('<Show when={patrolFindings().length > 1}>');
       expect(findingsPanelSource).toContain('<option value="severity">By Severity</option>');
     });
+
+    it('hides the filter bar when there are no Patrol findings or special buckets to navigate', () => {
+      expect(findingsPanelSource).toContain('const showFilterControls = createMemo(');
+      expect(findingsPanelSource).toContain('allPatrolFindings().length > 0');
+      expect(findingsPanelSource).toContain('aiIntelligenceStore.needsAttentionCount > 0');
+      expect(findingsPanelSource).toContain('aiIntelligenceStore.pendingApprovalCount > 0');
+      expect(findingsPanelSource).toContain('<Show when={showFilterControls()}>');
+    });
   });
 
   describe('sourceColors', () => {

@@ -206,6 +206,11 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
   });
 
   // Filter to only show Patrol findings (exclude threshold alerts)
+  const allPatrolFindings = createMemo(() =>
+    aiIntelligenceStore.findings.filter(
+      (f) => f.source !== 'threshold' && !f.isThreshold && !hasTriggeringAlert(f),
+    ),
+  );
   const patrolFindings = createMemo(() =>
     filteredFindings().filter(
       (f) => f.source !== 'threshold' && !f.isThreshold && !hasTriggeringAlert(f),
@@ -226,6 +231,13 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     }),
   );
   const emptyStateTone = createMemo(() => getSemanticTonePresentation(emptyStateCopy().tone));
+  const showFilterControls = createMemo(
+    () =>
+      props.showControls !== false &&
+      (allPatrolFindings().length > 0 ||
+        aiIntelligenceStore.needsAttentionCount > 0 ||
+        aiIntelligenceStore.pendingApprovalCount > 0),
+  );
 
   const isOutOfScope = (finding: UnifiedFinding): boolean => {
     if (!props.showScopeWarnings) {
@@ -1009,7 +1021,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
   return (
     <div class="space-y-4">
       {/* Controls */}
-      <Show when={props.showControls !== false}>
+      <Show when={showFilterControls()}>
         <div class="flex items-center justify-between">
           <div class="flex text-xs">
             <For each={filterOptions()}>

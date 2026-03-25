@@ -195,6 +195,10 @@ That same control bar should also stay proportional to the current findings
 set. Sort controls belong only when there are multiple Patrol findings to
 order; the empty state or single-finding state should not spend header space
 on a no-op sort selector.
+The same proportionality rule applies to the findings filter bar itself. When
+there are no Patrol findings and no special approval or attention queues to
+navigate, the findings surface should not render filter pills that lead only
+to the same empty state.
 When Patrol is currently running, that strip should still stay factual rather
 than switching to another verdict label: the runtime may add an explicit
 in-progress indicator, but the primary activity label remains recent activity
