@@ -692,8 +692,9 @@ func TestPortalPageTemplate_TeamManagementRendered(t *testing.T) {
 		`id="team-list-a_managed"`,    // member list tbody
 		`id="invite-email-a_managed"`, // invite email input
 		`id="invite-role-a_managed"`,  // invite role select
-		`toggleTeam('a_managed'`,      // button onclick references account ID
-		`inviteMember('a_managed'`,
+		`data-action="toggle-team"`,
+		`data-action="invite-member"`,
+		`data-account-id="a_managed"`,
 	}
 	for _, needle := range mustContain {
 		if !strings.Contains(html, needle) {
@@ -811,6 +812,11 @@ func TestPortalPageTemplate_AccountServicesRendered(t *testing.T) {
 		`fetch(LICENSE_API_BASE + '/v1/gdpr/confirm-delete'`,
 		`if (!await refreshBootstrap())`,
 		`refreshAccountTeamSection(accountID)`,
+		`document.addEventListener('click'`,
+		`document.addEventListener('change'`,
+		`data-action="open-billing"`,
+		`data-action="create-workspace"`,
+		`data-action="workspace-manage"`,
 		`href="https://pulserelay.pro/refund.html?email=owner%40example.com"`,
 		"commercial account actions now live here",
 	}
@@ -827,6 +833,9 @@ func TestPortalPageTemplate_AccountServicesRendered(t *testing.T) {
 	}
 	if strings.Contains(html, `showToast('Member invited!');`+"\n"+`    loadTeam(accountID);`) {
 		t.Errorf("expected membership mutations to refresh the account bootstrap instead of only repainting the team table")
+	}
+	if strings.Contains(html, `onclick="`) {
+		t.Errorf("expected portal shell interactions to be delegated through data-action attributes instead of inline onclick handlers")
 	}
 	if strings.Contains(html, `await fetch('/auth/logout'`) {
 		t.Errorf("expected portal paths to be renderer-owned, not hardcoded in the asset")

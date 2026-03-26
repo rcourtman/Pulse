@@ -56,7 +56,7 @@ function renderWorkspaceCard(account, workspace) {
 
   var manageAction = '';
   if (account.can_manage && (state === 'active' || state === 'suspended' || state === 'failed')) {
-    manageAction = '<button class="btn-danger" onclick="suspendOrDelete(event,\'' + escapeAttr(account.id) + '\',\'' + escapeAttr(workspace.id) + '\',\'' + escapeAttr(state) + '\',\'' + escapeAttr(workspace.display_name) + '\')">⋯</button>';
+    manageAction = '<button type="button" class="btn-danger" data-action="workspace-manage" data-account-id="' + escapeAttr(account.id) + '" data-workspace-id="' + escapeAttr(workspace.id) + '" data-workspace-state="' + escapeAttr(state) + '" data-workspace-name="' + escapeAttr(workspace.display_name) + '">⋯</button>';
   }
 
   var createdMeta = createdLabel ? '<span class="ws-created">Created ' + escapeHTML(createdLabel) + '</span>' : '';
@@ -96,12 +96,12 @@ function renderAccountSection(account) {
   if (account.can_manage) {
     actions = '<div class="account-actions">' +
       (account.kind === 'msp'
-        ? '<button class="btn-secondary" id="add-ws-btn-' + escapeAttr(account.id) + '" onclick="toggleAddWorkspace(\'' + escapeAttr(account.id) + '\')">+ Add workspace</button>'
+        ? '<button type="button" class="btn-secondary" id="add-ws-btn-' + escapeAttr(account.id) + '" data-action="toggle-add-workspace" data-account-id="' + escapeAttr(account.id) + '">+ Add workspace</button>'
         : '') +
       (account.has_billing
-        ? '<button class="btn-secondary" onclick="openBilling(\'' + escapeAttr(account.id) + '\')">Manage billing</button>'
+        ? '<button type="button" class="btn-secondary" data-action="open-billing" data-account-id="' + escapeAttr(account.id) + '">Manage billing</button>'
         : '') +
-      '<button class="btn-secondary" id="team-btn-' + escapeAttr(account.id) + '" onclick="toggleTeam(\'' + escapeAttr(account.id) + '\',\'' + escapeAttr(account.role) + '\')">Manage team</button>' +
+      '<button type="button" class="btn-secondary" id="team-btn-' + escapeAttr(account.id) + '" data-action="toggle-team" data-account-id="' + escapeAttr(account.id) + '">Manage team</button>' +
     '</div>';
 
     teamSection = '' +
@@ -116,7 +116,7 @@ function renderAccountSection(account) {
         '<div class="team-invite">' +
           '<div><label for="invite-email-' + escapeAttr(account.id) + '">Email</label><input type="email" id="invite-email-' + escapeAttr(account.id) + '" placeholder="user@example.com" autocomplete="off"></div>' +
           '<div><label for="invite-role-' + escapeAttr(account.id) + '">Role</label><select id="invite-role-' + escapeAttr(account.id) + '"><option value="admin">Admin</option><option value="tech">Tech</option><option value="read_only">Read-only</option></select></div>' +
-          '<button class="btn-primary" style="padding:8px 14px;font-size:13px" onclick="inviteMember(\'' + escapeAttr(account.id) + '\')">Invite</button>' +
+          '<button type="button" class="btn-primary" style="padding:8px 14px;font-size:13px" data-action="invite-member" data-account-id="' + escapeAttr(account.id) + '">Invite</button>' +
         '</div>' +
       '</div>';
 
@@ -126,8 +126,8 @@ function renderAccountSection(account) {
           '<label for="ws-name-' + escapeAttr(account.id) + '">Workspace name (e.g. client name)</label>' +
           '<input type="text" id="ws-name-' + escapeAttr(account.id) + '" placeholder="Acme Corp" maxlength="80" autocomplete="off">' +
           '<div class="form-actions">' +
-            '<button class="btn-primary" onclick="createWorkspace(\'' + escapeAttr(account.id) + '\')">Create workspace</button>' +
-            '<button class="btn-secondary" onclick="toggleAddWorkspace(\'' + escapeAttr(account.id) + '\')">Cancel</button>' +
+            '<button type="button" class="btn-primary" data-action="create-workspace" data-account-id="' + escapeAttr(account.id) + '">Create workspace</button>' +
+            '<button type="button" class="btn-secondary" data-action="toggle-add-workspace" data-account-id="' + escapeAttr(account.id) + '">Cancel</button>' +
             '<div class="spinner" id="ws-spinner-' + escapeAttr(account.id) + '"></div>' +
           '</div>' +
         '</div>';
@@ -207,6 +207,66 @@ document.getElementById('logout-btn').onclick = async function() {
 
 applyBootstrap(portalBootstrap);
 refreshBootstrap();
+
+document.addEventListener('click', function(event) {
+  var actionEl = event.target.closest('[data-action]');
+  if (!actionEl) return;
+  var action = actionEl.getAttribute('data-action') || '';
+  var accountID = actionEl.getAttribute('data-account-id') || '';
+
+  switch (action) {
+    case 'toggle-add-workspace':
+      event.preventDefault();
+      toggleAddWorkspace(accountID);
+      return;
+    case 'open-billing':
+      event.preventDefault();
+      openBilling(accountID);
+      return;
+    case 'toggle-team':
+      event.preventDefault();
+      toggleTeam(accountID);
+      return;
+    case 'invite-member':
+      event.preventDefault();
+      inviteMember(accountID);
+      return;
+    case 'create-workspace':
+      event.preventDefault();
+      createWorkspace(accountID);
+      return;
+    case 'workspace-manage':
+      event.preventDefault();
+      suspendOrDelete(
+        event,
+        accountID,
+        actionEl.getAttribute('data-workspace-id') || '',
+        actionEl.getAttribute('data-workspace-state') || '',
+        actionEl.getAttribute('data-workspace-name') || ''
+      );
+      return;
+    case 'remove-member':
+      event.preventDefault();
+      removeMember(
+        accountID,
+        actionEl.getAttribute('data-user-id') || '',
+        actionEl.getAttribute('data-member-email') || ''
+      );
+      return;
+    default:
+      return;
+  }
+});
+
+document.addEventListener('change', function(event) {
+  var target = event.target;
+  if (!target || target.getAttribute('data-action') !== 'change-role') return;
+  changeRole(
+    target.getAttribute('data-account-id') || '',
+    target.getAttribute('data-user-id') || '',
+    target.value
+  );
+});
 
 function toggleServicePanel(panelID) {
   var panels = ['manage-service-panel', 'retrieve-service-panel', 'refund-service-panel', 'data-service-panel'];
@@ -684,16 +744,22 @@ async function loadTeam(accountID) {
             if (m.role === roles[j]) opt.selected = true;
             sel.appendChild(opt);
           }
-          sel.addEventListener('change', function() { changeRole(accountID, m.user_id, this.value); });
+          sel.setAttribute('data-action', 'change-role');
+          sel.setAttribute('data-account-id', accountID);
+          sel.setAttribute('data-user-id', m.user_id);
           tdRole.appendChild(sel);
         }
         tr.appendChild(tdRole);
         var tdAction = document.createElement('td');
         if (!(m.role === 'owner' && !isOwner)) {
           var btn = document.createElement('button');
+          btn.type = 'button';
           btn.className = 'btn-remove';
           btn.textContent = 'Remove';
-          btn.addEventListener('click', function() { removeMember(accountID, m.user_id, m.email); });
+          btn.setAttribute('data-action', 'remove-member');
+          btn.setAttribute('data-account-id', accountID);
+          btn.setAttribute('data-user-id', m.user_id);
+          btn.setAttribute('data-member-email', m.email);
           tdAction.appendChild(btn);
         }
         tr.appendChild(tdAction);

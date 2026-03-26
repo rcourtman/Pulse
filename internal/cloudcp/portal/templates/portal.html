@@ -65,7 +65,7 @@
           <span style="font-size:13px;color:#94a3b8">{{$ws.State}}</span>
           {{end}}
           {{if and $account.CanManage (or (eq $ws.State "active") (eq $ws.State "suspended") (eq $ws.State "failed"))}}
-          <button class="btn-danger" onclick="suspendOrDelete(event,'{{$account.ID}}','{{$ws.ID}}','{{$ws.State}}','{{$ws.DisplayName}}')">⋯</button>
+          <button type="button" class="btn-danger" data-action="workspace-manage" data-account-id="{{$account.ID}}" data-workspace-id="{{$ws.ID}}" data-workspace-state="{{$ws.State}}" data-workspace-name="{{$ws.DisplayName}}">⋯</button>
           {{end}}
         </div>
       </div>
@@ -76,12 +76,12 @@
     {{if $account.CanManage}}
     <div class="account-actions">
       {{if eq $account.Kind "msp"}}
-      <button class="btn-secondary" id="add-ws-btn-{{$account.ID}}" onclick="toggleAddWorkspace('{{$account.ID}}')">+ Add workspace</button>
+      <button type="button" class="btn-secondary" id="add-ws-btn-{{$account.ID}}" data-action="toggle-add-workspace" data-account-id="{{$account.ID}}">+ Add workspace</button>
       {{end}}
       {{if $account.HasBilling}}
-      <button class="btn-secondary" onclick="openBilling('{{$account.ID}}')">Manage billing</button>
+      <button type="button" class="btn-secondary" data-action="open-billing" data-account-id="{{$account.ID}}">Manage billing</button>
       {{end}}
-      <button class="btn-secondary" id="team-btn-{{$account.ID}}" onclick="toggleTeam('{{$account.ID}}','{{$account.Role}}')">Manage team</button>
+      <button type="button" class="btn-secondary" id="team-btn-{{$account.ID}}" data-action="toggle-team" data-account-id="{{$account.ID}}">Manage team</button>
     </div>
 
     <div class="team-section" id="team-section-{{$account.ID}}" data-actor-role="{{$account.Role}}">
@@ -95,7 +95,7 @@
       <div class="team-invite">
         <div><label for="invite-email-{{$account.ID}}">Email</label><input type="email" id="invite-email-{{$account.ID}}" placeholder="user@example.com" autocomplete="off"></div>
         <div><label for="invite-role-{{$account.ID}}">Role</label><select id="invite-role-{{$account.ID}}"><option value="admin">Admin</option><option value="tech">Tech</option><option value="read_only">Read-only</option></select></div>
-        <button class="btn-primary" style="padding:8px 14px;font-size:13px" onclick="inviteMember('{{$account.ID}}')">Invite</button>
+        <button type="button" class="btn-primary" style="padding:8px 14px;font-size:13px" data-action="invite-member" data-account-id="{{$account.ID}}">Invite</button>
       </div>
     </div>
 
@@ -104,8 +104,8 @@
       <label for="ws-name-{{$account.ID}}">Workspace name (e.g. client name)</label>
       <input type="text" id="ws-name-{{$account.ID}}" placeholder="Acme Corp" maxlength="80" autocomplete="off">
       <div class="form-actions">
-        <button class="btn-primary" onclick="createWorkspace('{{$account.ID}}')">Create workspace</button>
-        <button class="btn-secondary" onclick="toggleAddWorkspace('{{$account.ID}}')">Cancel</button>
+        <button type="button" class="btn-primary" data-action="create-workspace" data-account-id="{{$account.ID}}">Create workspace</button>
+        <button type="button" class="btn-secondary" data-action="toggle-add-workspace" data-account-id="{{$account.ID}}">Cancel</button>
         <div class="spinner" id="ws-spinner-{{$account.ID}}"></div>
       </div>
     </div>
