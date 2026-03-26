@@ -703,6 +703,11 @@ shape. `frontend-modern/src/utils/recoveryPlatformModel.ts`,
 transport display aliases like `subjectLabel` and `subjectType` into canonical
 runtime `itemLabel` and `itemType` fields before recovery presenters consume
 the model.
+The same shared recovery-column boundary must keep legacy `subject` and
+`source` column ids at migration-only scope once
+`frontend-modern/src/hooks/useColumnVisibility.ts` owns alias rewrites.
+Recovery table runtime helpers and render switches should operate on canonical
+`item` and `platform` ids rather than carrying the deleted ids as live cases.
 That same shared recovery state owner now also keeps `platform` as the
 canonical route and transport filter name for operator-facing recovery links,
 while any accepted legacy `provider` aliases remain parser compatibility only.

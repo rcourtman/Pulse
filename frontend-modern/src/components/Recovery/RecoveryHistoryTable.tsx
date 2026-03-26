@@ -225,7 +225,6 @@ export const RecoveryHistoryTable: Component<RecoveryHistoryTableProps> = (props
                                     </TableCell>
                                   );
                                 case 'item':
-                                case 'subject':
                                   return (
                                     <TableCell
                                       class="max-w-[420px] whitespace-nowrap px-3 py-0.5 text-base-content"
@@ -294,8 +293,7 @@ export const RecoveryHistoryTable: Component<RecoveryHistoryTableProps> = (props
                                       {namespace || '—'}
                                     </TableCell>
                                   );
-                                case 'platform':
-                                case 'source': {
+                                case 'platform': {
                                   const badge = getSourcePlatformBadge(platform);
                                   return (
                                     <TableCell class="whitespace-nowrap px-3 py-0.5 text-center">

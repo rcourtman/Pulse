@@ -43,20 +43,18 @@ describe('recoveryTablePresentation', () => {
     expect(RECOVERY_ARTIFACT_COLUMN_LABELS.type).toBe('Item Type');
     expect(RECOVERY_ARTIFACT_COLUMN_LABELS.item).toBe('Item');
     expect(RECOVERY_ARTIFACT_COLUMN_LABELS.platform).toBe('Platform');
-    expect(RECOVERY_ARTIFACT_COLUMN_LABELS.subject).toBe('Item');
-    expect(RECOVERY_ARTIFACT_COLUMN_LABELS.source).toBe('Platform');
     expect(RECOVERY_ARTIFACT_COLUMN_LABELS.cluster).toBe('Cluster / Site');
     expect(RECOVERY_ARTIFACT_COLUMN_LABELS.nodeAgent).toBe('Host / Agent');
     expect(RECOVERY_ARTIFACT_COLUMN_LABELS.namespace).toBe('Namespace / Group');
     expect(getRecoveryArtifactColumnLabel('type', 'Type')).toBe('Item Type');
     expect(getRecoveryArtifactColumnLabel('item', 'Item')).toBe('Item');
     expect(getRecoveryArtifactColumnLabel('platform', 'Platform')).toBe('Platform');
-    expect(getRecoveryArtifactColumnLabel('subject', 'Subject')).toBe('Item');
-    expect(getRecoveryArtifactColumnLabel('source', 'Source')).toBe('Platform');
     expect(getRecoveryArtifactColumnLabel('cluster', 'Cluster')).toBe('Cluster / Site');
     expect(getRecoveryArtifactColumnLabel('nodeAgent', 'Node')).toBe('Host / Agent');
     expect(getRecoveryArtifactColumnLabel('namespace', 'Namespace')).toBe('Namespace / Group');
     expect(getRecoveryArtifactColumnLabel('outcome', 'Outcome')).toBe('Outcome');
+    expect(getRecoveryArtifactColumnLabel('subject', 'Subject')).toBe('Subject');
+    expect(getRecoveryArtifactColumnLabel('source', 'Source')).toBe('Source');
   });
 
   it('derives time text classes from event recency', () => {
@@ -111,7 +109,7 @@ describe('recoveryTablePresentation', () => {
     expect(getRecoveryArtifactColumnHeaderClass('time')).toContain('text-right');
     expect(getRecoveryArtifactColumnHeaderClass('type')).toContain('w-[96px]');
     expect(getRecoveryArtifactColumnHeaderClass('item')).toContain('w-[248px]');
-    expect(getRecoveryArtifactColumnHeaderClass('subject')).toContain('w-[248px]');
+    expect(getRecoveryArtifactColumnHeaderClass('subject')).toBe('');
     expect(getRecoveryArtifactTableMinWidth(['time', 'item', 'outcome'])).toBe('980px');
     expect(
       getRecoveryArtifactTableMinWidth([

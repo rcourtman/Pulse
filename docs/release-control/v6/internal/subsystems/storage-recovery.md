@@ -180,7 +180,9 @@ canonical as well. Recovery inventory and event-history columns should use
 `item` and `platform` identities rather than preserving `subject` and `source`
 as the primary runtime model, and any saved legacy column IDs must migrate at
 the shared column-visibility boundary instead of forcing recovery renderers to
-carry deleted column identities indefinitely.
+carry deleted column identities indefinitely. Once that migration exists,
+recovery tables and shared table presenters should not continue accepting
+legacy `subject` and `source` ids in the live runtime path.
 That same runtime-helper contract should prefer `item` terminology in shared
 recovery presenters too. Helper exports that resolve labels or item-type badges
 should expose canonical item-facing names, while any retained `subject` aliases

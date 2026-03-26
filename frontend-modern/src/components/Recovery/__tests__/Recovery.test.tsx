@@ -402,6 +402,8 @@ describe('Recovery', () => {
     const historyTable = tables[tables.length - 1];
     expect(within(historyTable).getByText('Item')).toBeInTheDocument();
     expect(within(historyTable).getByText('Platform')).toBeInTheDocument();
+    expect(within(historyTable).queryByText('Subject')).not.toBeInTheDocument();
+    expect(within(historyTable).queryByText('Source')).not.toBeInTheDocument();
     expect(within(historyTable).queryByText('Cluster / Site')).not.toBeInTheDocument();
   });
 

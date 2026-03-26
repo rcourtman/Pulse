@@ -28,8 +28,6 @@ export const RECOVERY_ARTIFACT_COLUMN_LABELS: Record<string, string> = {
   type: 'Item Type',
   item: 'Item',
   platform: 'Platform',
-  subject: 'Item',
-  source: 'Platform',
 };
 
 const RECOVERY_ARTIFACT_COLUMN_SPECS: Record<string, { headerClass: string; minWidthPx: number }> = {
@@ -37,12 +35,10 @@ const RECOVERY_ARTIFACT_COLUMN_SPECS: Record<string, { headerClass: string; minW
   type: { headerClass: 'w-[96px] text-center', minWidthPx: 96 },
   item: { headerClass: 'w-[248px]', minWidthPx: 248 },
   platform: { headerClass: 'w-[78px] text-center', minWidthPx: 78 },
-  subject: { headerClass: 'w-[248px]', minWidthPx: 248 },
   entityId: { headerClass: 'w-[84px]', minWidthPx: 84 },
   cluster: { headerClass: 'w-[120px]', minWidthPx: 120 },
   nodeAgent: { headerClass: 'w-[120px]', minWidthPx: 120 },
   namespace: { headerClass: 'w-[120px]', minWidthPx: 120 },
-  source: { headerClass: 'w-[78px] text-center', minWidthPx: 78 },
   verified: { headerClass: 'w-[56px] text-center', minWidthPx: 56 },
   size: { headerClass: 'w-[92px] text-right', minWidthPx: 92 },
   method: { headerClass: 'w-[84px] text-center', minWidthPx: 84 },
