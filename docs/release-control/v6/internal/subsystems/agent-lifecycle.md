@@ -646,6 +646,11 @@ stay owned by the configured router data path: session, CSRF, and
 recovery-token runtime state may not silently bind themselves to hidden
 `/etc/pulse` fallback initialization or retain old-path state after a
 reconfiguration.
+That same shared `internal/api/` dependency also assumes those auth stores
+tear down synchronously when lifecycle-adjacent routers or hosted runtimes are
+reconfigured: session and CSRF workers may not rely on best-effort background
+signals that can wedge teardown, block temp-path cleanup, or leave first-
+session and hosted handoff validation hanging behind a stale auth worker.
 That same path-ownership rule also applies to bootstrap-token recovery and
 adjacent hosted billing side effects that share the `internal/api/` boundary:
 CLI/bootstrap retrieval, webhook dedupe state, and customer-index persistence

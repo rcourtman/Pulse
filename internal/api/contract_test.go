@@ -1446,6 +1446,38 @@ func TestContract_HostedSessionAuthPrecedesAnonymousFallback(t *testing.T) {
 	}
 }
 
+func TestContract_UniversalRateLimitStateIsScopedPerRouterConfig(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	first := UniversalRateLimitMiddlewareWithConfig(newEndpointRateLimitConfig(), handler)
+	second := UniversalRateLimitMiddlewareWithConfig(newEndpointRateLimitConfig(), handler)
+
+	makeRequest := func(target http.Handler) *httptest.ResponseRecorder {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodPost, "/api/auth/login", nil)
+		req.RemoteAddr = "198.51.100.25:12345"
+		rec := httptest.NewRecorder()
+		target.ServeHTTP(rec, req)
+		return rec
+	}
+
+	for i := 0; i < 10; i++ {
+		if rec := makeRequest(first); rec.Code != http.StatusOK {
+			t.Fatalf("first router request %d status = %d, want %d", i+1, rec.Code, http.StatusOK)
+		}
+	}
+
+	if rec := makeRequest(first); rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("first router overflow status = %d, want %d", rec.Code, http.StatusTooManyRequests)
+	}
+
+	if rec := makeRequest(second); rec.Code != http.StatusOK {
+		t.Fatalf("second router first request status = %d, want %d", rec.Code, http.StatusOK)
+	}
+}
+
 func TestContract_HostedOrgManagerSessionCanMintRelayMobileToken(t *testing.T) {
 	defer SetMultiTenantEnabled(false)
 	SetMultiTenantEnabled(true)

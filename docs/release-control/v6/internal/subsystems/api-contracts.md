@@ -160,6 +160,7 @@ Own canonical runtime payload shapes between backend and frontend.
 19. Keep mobile onboarding payload reads aligned with the server-owned relay-mobile credential: `internal/api/router_routes_ai_relay.go`, `internal/api/onboarding_handlers.go`, and `internal/api/contract_test.go` must allow the dedicated `relay:mobile:access` scope to reach the governed QR, deep-link, and connection-validation payloads without reintroducing a broader `settings:read` requirement for token-authenticated pairing clients.
 20. Keep hosted billing-state quickstart payload fields on the shared API contract: `internal/api/hosted_entitlement_refresh.go`, `internal/api/subscription_state_handlers.go`, and `internal/api/contract_test.go` must preserve `quickstart_credits_granted`, `quickstart_credits_used`, and `quickstart_credits_granted_at` through hosted signup, hosted lease refresh, and billing-state reads instead of letting lease rewrites silently erase seeded quickstart inventory.
 21. Keep hosted AI settings bootstrap on the shared API contract: `internal/api/ai_hosted_runtime.go`, `internal/api/ai_handlers.go`, `internal/api/ai_handler.go`, and `internal/api/contract_test.go` must treat a missing `ai.enc` in hosted mode as a canonical bootstrap condition, persist one machine-owned quickstart-backed AI config when hosted entitlements grant AI capability, and preserve that configured settings payload as the same public contract that Chat, Patrol, and AI Settings consume.
+22. Keep shared auth-store and universal rate-limit behavior on canonical router ownership: `internal/api/router.go`, `internal/api/rate_limit_config.go`, `internal/api/session_store.go`, `internal/api/csrf_store.go`, `internal/api/cloud_handoff_handlers.go`, and `internal/api/contract_test.go` must keep session/CSRF persistence scoped to the configured runtime data path, shut those workers down synchronously during router teardown or reinitialization, preserve hosted browser-session precedence during handoff-adjacent auth checks, and ensure hosted rate-limit presentation plus in-memory limiter counters stay owned by the current router instance instead of leaking across fresh routers or test harnesses.
 
 ## Forbidden Paths
 
@@ -1593,6 +1594,11 @@ session, CSRF, and recovery-token stores may not silently self-initialize on
 `sync.Once`; the configured router data path must remain the canonical owner of
 those persistence stores, and reinitializing that data path must replace the
 old runtime store rather than leaking prior-path state forward.
+That same auth-persistence boundary also owns teardown semantics: session and
+CSRF persistence workers must stop synchronously when the runtime shuts down or
+reinitializes, rather than depending on best-effort background signals that can
+leave hosted auth checks, handoff tests, or temp-dir cleanup blocked behind a
+worker that never observes shutdown.
 That same configured-path rule also applies to runtime auth/config reloads:
 `internal/config/watcher.go` may use `PULSE_AUTH_CONFIG_DIR` only as an
 explicit override, but otherwise it must watch the resolved runtime
@@ -1732,6 +1738,12 @@ is considered, so hosted protected routes such as relay-mobile token minting,
 onboarding reads, and billing-admin/API surfaces stay reachable after cloud
 handoff instead of flattening the operator back to `anonymous` or demanding a
 bearer token from the browser as soon as the tenant has minted one.
+That same hosted entry boundary also owns rate-limit presentation and state
+scoping for canonical router surfaces: hosted trial-signup verification and
+checkout routes must render the hosted rate-limit guidance instead of a bare
+generic `Too Many Requests`, and the universal API limiter must stay scoped to
+the owning router configuration so one router instance or test harness cannot
+poison a fresh router's contract state through leaked in-memory counters.
 That same shared settings-scope contract must then preserve canonical
 org-management privilege on the tenant side: when a hosted or multi-tenant
 request is scoped to a non-default org, `internal/api/security_setup_fix.go`

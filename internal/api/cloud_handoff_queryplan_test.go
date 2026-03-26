@@ -13,7 +13,7 @@ func TestJTIReplayStoreQueryPlanUsesExpiryIndex(t *testing.T) {
 
 	store, now := newJTIReplayPlanTestStore(t)
 
-	plan := explainHandoffQueryPlan(t, store.db, `DELETE FROM handoff_jti WHERE expires_at <= ?`, now.Unix())
+	plan := explainHandoffQueryPlan(t, store.db, deleteExpiredHandoffJTIQuery, now.Unix())
 
 	if containsHandoffFullTableScan(plan) {
 		t.Fatalf("cleanup query uses full table scan on handoff_jti\nPlan:\n%s", plan)

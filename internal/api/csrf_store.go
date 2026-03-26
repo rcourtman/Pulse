@@ -151,9 +151,8 @@ func (c *CSRFTokenStore) Shutdown() {
 		if c.saveTicker != nil {
 			c.saveTicker.Stop()
 		}
-		select {
-		case c.stopChan <- true:
-		default:
+		if c.stopChan != nil {
+			close(c.stopChan)
 		}
 	})
 	if c.workerDone != nil {

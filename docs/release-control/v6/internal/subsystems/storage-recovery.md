@@ -121,6 +121,12 @@ The recovery backend is a real product boundary, not just a helper package:
 `internal/recovery/` owns per-tenant SQLite persistence, rollup derivation,
 query filtering, and recovery-point indexing for the `/api/recovery/*`
 surfaces.
+That same shared `internal/api/` dependency also assumes auth-persistence
+teardown is synchronous when recovery-adjacent runtimes reinitialize. Session,
+CSRF, and recovery-token workers may not leave stale background goroutines or
+half-shutdown path ownership behind, because hosted handoff, recovery
+inspection, and adjacent temp-path tests all depend on the same canonical
+runtime data-dir authority being replaceable without hangs or leaked state.
 That shared `internal/api/` dependency now also assumes hosted tenant AI
 bootstrap and chat-runtime reads resolve through one effective hosted billing
 lease before storage- or recovery-adjacent runtime consumers inspect

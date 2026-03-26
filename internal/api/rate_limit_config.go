@@ -21,9 +21,8 @@ type EndpointRateLimitConfig struct {
 
 var globalRateLimitConfig *EndpointRateLimitConfig
 
-// InitializeRateLimiters sets up rate limiters for all endpoint categories
-func InitializeRateLimiters() {
-	globalRateLimitConfig = &EndpointRateLimitConfig{
+func newEndpointRateLimitConfig() *EndpointRateLimitConfig {
+	return &EndpointRateLimitConfig{
 		// Authentication endpoints: strict limits to prevent brute force
 		AuthEndpoints: NewRateLimiter(10, 1*time.Minute), // 10 attempts per minute
 
@@ -50,12 +49,24 @@ func InitializeRateLimiters() {
 	}
 }
 
-// GetRateLimiterForEndpoint returns the appropriate rate limiter for a given endpoint
-func GetRateLimiterForEndpoint(path string, method string) *RateLimiter {
+func ensureGlobalRateLimitConfig() *EndpointRateLimitConfig {
 	if globalRateLimitConfig == nil {
 		InitializeRateLimiters()
 	}
+	return globalRateLimitConfig
+}
 
+// InitializeRateLimiters sets up rate limiters for all endpoint categories
+func InitializeRateLimiters() {
+	globalRateLimitConfig = newEndpointRateLimitConfig()
+}
+
+// GetRateLimiterForEndpoint returns the appropriate rate limiter for a given endpoint
+func GetRateLimiterForEndpoint(path string, method string) *RateLimiter {
+	return getRateLimiterForEndpoint(ensureGlobalRateLimitConfig(), path, method)
+}
+
+func getRateLimiterForEndpoint(cfg *EndpointRateLimitConfig, path string, method string) *RateLimiter {
 	// Normalize path
 	path = strings.ToLower(path)
 
@@ -67,18 +78,18 @@ func GetRateLimiterForEndpoint(path string, method string) *RateLimiter {
 		strings.Contains(path, "/api/security/regenerate-token") ||
 		strings.Contains(path, "/api/security/validate-token") ||
 		strings.Contains(path, "/api/auth") {
-		return globalRateLimitConfig.AuthEndpoints
+		return cfg.AuthEndpoints
 	}
 
 	// Recovery endpoints
 	if strings.Contains(path, "/api/security/recovery") {
-		return globalRateLimitConfig.RecoveryEndpoints
+		return cfg.RecoveryEndpoints
 	}
 
 	// Export/Import endpoints
 	if strings.Contains(path, "/api/config/export") ||
 		strings.Contains(path, "/api/config/import") {
-		return globalRateLimitConfig.ExportEndpoints
+		return cfg.ExportEndpoints
 	}
 
 	// Configuration endpoints (write operations only)
@@ -86,24 +97,24 @@ func GetRateLimiterForEndpoint(path string, method string) *RateLimiter {
 		strings.Contains(path, "/api/config/system") ||
 		strings.Contains(path, "/api/config/webhooks") ||
 		strings.Contains(path, "/api/config/alerts")) {
-		return globalRateLimitConfig.ConfigEndpoints
+		return cfg.ConfigEndpoints
 	}
 
 	// Configuration read endpoints get higher limits to prevent UI issues
 	if method == "GET" && (strings.Contains(path, "/api/config/") ||
 		strings.Contains(path, "/api/discover") ||
 		strings.Contains(path, "/api/security/status")) {
-		return globalRateLimitConfig.PublicEndpoints // Use higher limit for reads
+		return cfg.PublicEndpoints // Use higher limit for reads
 	}
 
 	// Update endpoints
 	if strings.Contains(path, "/api/updates") {
-		return globalRateLimitConfig.UpdateEndpoints
+		return cfg.UpdateEndpoints
 	}
 
 	// WebSocket endpoints
 	if strings.Contains(path, "/ws") {
-		return globalRateLimitConfig.WebSocketEndpoints
+		return cfg.WebSocketEndpoints
 	}
 
 	// Public endpoints (no auth required)
@@ -111,20 +122,22 @@ func GetRateLimiterForEndpoint(path string, method string) *RateLimiter {
 		strings.Contains(path, "/api/version") ||
 		strings.Contains(path, "/api/security/status") ||
 		strings.Contains(path, "/metrics") {
-		return globalRateLimitConfig.PublicEndpoints
+		return cfg.PublicEndpoints
 	}
 
 	// Default to general API rate limiter
-	return globalRateLimitConfig.GeneralAPI
+	return cfg.GeneralAPI
 }
 
 // UniversalRateLimitMiddleware applies appropriate rate limiting to all endpoints
 func UniversalRateLimitMiddleware(next http.Handler) http.Handler {
-	// Initialize rate limiters if not already done
-	if globalRateLimitConfig == nil {
-		InitializeRateLimiters()
-	}
+	return UniversalRateLimitMiddlewareWithConfig(ensureGlobalRateLimitConfig(), next)
+}
 
+func UniversalRateLimitMiddlewareWithConfig(cfg *EndpointRateLimitConfig, next http.Handler) http.Handler {
+	if cfg == nil {
+		cfg = newEndpointRateLimitConfig()
+	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Skip rate limiting for static assets
 		if !strings.HasPrefix(r.URL.Path, "/api") && !strings.HasPrefix(r.URL.Path, "/ws") {
@@ -156,7 +169,7 @@ func UniversalRateLimitMiddleware(next http.Handler) http.Handler {
 		}
 
 		// Get appropriate rate limiter for this endpoint
-		limiter := GetRateLimiterForEndpoint(r.URL.Path, r.Method)
+		limiter := getRateLimiterForEndpoint(cfg, r.URL.Path, r.Method)
 
 		// Check rate limit
 		if !limiter.Allow(ip) {

@@ -17,6 +17,8 @@ import (
 // settings:write API token for route-level /api/ai/test/{provider} tests.
 func setupTestProviderRouter(t *testing.T, ollamaURL string) (*Router, string) {
 	t.Helper()
+	resetPersistentAuthStoresForTests()
+	t.Cleanup(resetPersistentAuthStoresForTests)
 
 	rawToken := "ai-test-provider-route-token-" + t.Name() + ".12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsWrite}, nil)
@@ -32,6 +34,7 @@ func setupTestProviderRouter(t *testing.T, ollamaURL string) (*Router, string) {
 	}
 
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	t.Cleanup(router.shutdownBackgroundWorkers)
 	router.aiSettingsHandler.defaultConfig = cfg
 	router.aiSettingsHandler.defaultPersistence = persistence
 	svc := ai.NewService(persistence, nil)

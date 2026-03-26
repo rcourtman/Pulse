@@ -833,3 +833,20 @@ func TestSessionStore_LoadHashedSessions_DropsRefreshTokenWithoutCrypto(t *testi
 		t.Fatalf("expected refresh token to be dropped without crypto, got %q", session.OIDCRefreshToken)
 	}
 }
+
+func TestSessionStore_ShutdownReturnsWithoutWaitingForWorkerReceive(t *testing.T) {
+	dir := t.TempDir()
+	store := NewSessionStore(dir)
+
+	done := make(chan struct{})
+	go func() {
+		store.Shutdown()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("Shutdown should not block waiting for the background worker to receive a stop signal")
+	}
+}

@@ -41,6 +41,10 @@ type jtiReplayStore struct {
 	initErr   error
 }
 
+const deleteExpiredHandoffJTIQuery = `
+DELETE FROM handoff_jti INDEXED BY idx_handoff_jti_expires_at
+WHERE expires_at <= ?`
+
 func (s *jtiReplayStore) init() {
 	s.once.Do(func() {
 		dir := filepath.Clean(s.configDir)
@@ -132,7 +136,7 @@ func (s *jtiReplayStore) checkAndStore(jti string, expiresAt time.Time) (stored 
 	defer s.mu.Unlock()
 
 	now := time.Now().UTC().Unix()
-	if _, err := s.db.Exec(`DELETE FROM handoff_jti WHERE expires_at <= ?`, now); err != nil {
+	if _, err := s.db.Exec(deleteExpiredHandoffJTIQuery, now); err != nil {
 		return false, fmt.Errorf("cleanup handoff jti: %w", err)
 	}
 

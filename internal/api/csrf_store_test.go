@@ -673,3 +673,22 @@ func TestCSRFTokenStore_InitReconfiguresDataPath(t *testing.T) {
 		t.Fatalf("expected reconfigured csrf tokens file to exist: %v", err)
 	}
 }
+
+func TestCSRFTokenStore_ShutdownReturnsWithoutWaitingForWorkerReceive(t *testing.T) {
+	storeDir := t.TempDir()
+	InitCSRFStore(storeDir)
+	store := GetCSRFStore()
+	t.Cleanup(resetCSRFStoreForTests)
+
+	done := make(chan struct{})
+	go func() {
+		store.Shutdown()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("Shutdown should not block waiting for the background worker to receive a stop signal")
+	}
+}

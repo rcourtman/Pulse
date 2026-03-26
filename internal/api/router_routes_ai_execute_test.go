@@ -18,6 +18,8 @@ import (
 // ai:execute API token for route-level /api/ai/execute tests.
 func setupExecuteRouter(t *testing.T, ollamaURL string) (*Router, string) {
 	t.Helper()
+	resetPersistentAuthStoresForTests()
+	t.Cleanup(resetPersistentAuthStoresForTests)
 
 	rawToken := "ai-execute-route-token-" + t.Name() + ".12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeAIExecute}, nil)
@@ -33,6 +35,7 @@ func setupExecuteRouter(t *testing.T, ollamaURL string) (*Router, string) {
 	}
 
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	t.Cleanup(router.shutdownBackgroundWorkers)
 	router.aiSettingsHandler.defaultConfig = cfg
 	router.aiSettingsHandler.defaultPersistence = persistence
 	svc := ai.NewService(persistence, nil)
