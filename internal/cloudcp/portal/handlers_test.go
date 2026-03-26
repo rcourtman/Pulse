@@ -781,6 +781,7 @@ func TestPortalPageTemplate_AccountServicesRendered(t *testing.T) {
 
 	mustContain := []string{
 		"<title>Pulse Account</title>",
+		`<link rel="icon" href="/favicon.svg" type="image/svg+xml">`,
 		`id="portal-user-info"`,
 		`id="portal-app-root"`,
 		`id="pulse-account-bootstrap"`,
@@ -1074,6 +1075,7 @@ func TestPortalPageTemplate_UsesPulseAccountBrandingWhenSignedOut(t *testing.T) 
 
 	mustContain := []string{
 		"<title>Pulse Account</title>",
+		`<link rel="icon" href="/favicon.svg" type="image/svg+xml">`,
 		"Pulse Account",
 		`id="portal-app-root"`,
 		"Enter the commercial email address for your Pulse account.",

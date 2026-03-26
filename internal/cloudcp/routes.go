@@ -69,6 +69,8 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 	// Health / readiness are unauthenticated liveness/readiness probes.
 	mux.HandleFunc("/healthz", admin.HandleHealthz)
 	mux.HandleFunc("/readyz", admin.HandleReadyz(deps.Registry))
+	mux.HandleFunc("/favicon.svg", handleControlPlaneFaviconSVG)
+	mux.HandleFunc("/favicon.ico", handleControlPlaneFaviconICO)
 
 	// Status and metrics are private by default.
 	statusHandler := http.HandlerFunc(admin.HandleStatus(deps.Registry, deps.Version))
