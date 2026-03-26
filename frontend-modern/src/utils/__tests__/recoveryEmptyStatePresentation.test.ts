@@ -48,7 +48,7 @@ describe('recoveryEmptyStatePresentation', () => {
   it('returns the recovery-history filter empty state copy', () => {
     expect(getRecoveryHistoryEmptyState()).toEqual({
       title: 'No recovery history matches your filters',
-      description: 'Adjust your search, provider, method, status, or verification filters.',
+      description: 'Adjust your search, platform, method, status, or verification filters.',
     });
   });
 });

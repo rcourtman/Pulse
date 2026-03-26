@@ -694,6 +694,12 @@ Recovery frontend decode and derived option builders must treat payload
 to legacy `provider` / `providers` aliases for compatibility, so route,
 filter, and table state do not keep backend-era vocabulary alive as the
 default client model.
+That normalization belongs at the shared recovery transport boundary in
+`frontend-modern/src/hooks/useRecoveryPoints.ts` and
+`frontend-modern/src/hooks/useRecoveryRollups.ts`, not in individual tables,
+drawers, or summary cards. Recovery components should receive canonical
+platform-first runtime models rather than re-deriving legacy alias fallback
+locally.
 Recovery section owners under `frontend-modern/src/components/Recovery/` must
 consume that shared `platform` filter surface directly. They must not keep
 recovery-local `provider` route/query vocabulary alive behind renamed labels,

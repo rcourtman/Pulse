@@ -384,18 +384,18 @@ export function buildRecoveryPlatformCoverage(
   let multiPlatformCount = 0;
 
   for (const rollup of rollups) {
-    const providers = Array.from(
+    const platforms = Array.from(
       new Set(
         getRecoveryRollupPlatforms(rollup)
-          .map((provider) => normalizeSourcePlatformQueryValue(String(provider || '').trim()))
+          .map((platform) => normalizeSourcePlatformQueryValue(String(platform || '').trim()))
           .filter(Boolean),
       ),
     );
-    const resolvedProviders = providers.length > 0 ? providers : ['generic'];
-    if (resolvedProviders.length > 1) multiPlatformCount += 1;
+    const resolvedPlatforms = platforms.length > 0 ? platforms : ['generic'];
+    if (resolvedPlatforms.length > 1) multiPlatformCount += 1;
 
-    for (const provider of resolvedProviders) {
-      counts.set(provider, (counts.get(provider) || 0) + 1);
+    for (const platform of resolvedPlatforms) {
+      counts.set(platform, (counts.get(platform) || 0) + 1);
     }
   }
 

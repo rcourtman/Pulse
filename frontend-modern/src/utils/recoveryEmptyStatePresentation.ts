@@ -32,7 +32,7 @@ export function getRecoveryActivityEmptyState() {
 export function getRecoveryHistoryEmptyState() {
   return {
     title: 'No recovery history matches your filters',
-    description: 'Adjust your search, provider, method, status, or verification filters.',
+    description: 'Adjust your search, platform, method, status, or verification filters.',
   } as const;
 }
 

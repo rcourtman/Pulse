@@ -134,11 +134,11 @@ export const RecoveryProtectedInventorySection: Component<
         }
         case 'source': {
           const leftSource = getRecoveryRollupPlatforms(left)
-            .map((provider) => getSourcePlatformLabel(String(provider)))
+            .map((platform) => getSourcePlatformLabel(String(platform)))
             .sort()
             .join(',');
           const rightSource = getRecoveryRollupPlatforms(right)
-            .map((provider) => getSourcePlatformLabel(String(provider)))
+            .map((platform) => getSourcePlatformLabel(String(platform)))
             .sort()
             .join(',');
           return multiplier * leftSource.localeCompare(rightSource);
@@ -369,8 +369,8 @@ export const RecoveryProtectedInventorySection: Component<
                   const attemptMs = rollup.lastAttemptAt ? Date.parse(rollup.lastAttemptAt) : 0;
                   const successMs = rollup.lastSuccessAt ? Date.parse(rollup.lastSuccessAt) : 0;
                   const outcome = normalizeRecoveryOutcome(rollup.lastOutcome);
-                  const providers = getRecoveryRollupPlatforms(rollup)
-                    .map((provider) => String(provider || '').trim())
+                  const platforms = getRecoveryRollupPlatforms(rollup)
+                    .map((platform) => String(platform || '').trim())
                     .filter(Boolean)
                     .sort((left, right) =>
                       getSourcePlatformLabel(left).localeCompare(getSourcePlatformLabel(right)),
@@ -437,12 +437,12 @@ export const RecoveryProtectedInventorySection: Component<
 
                       <TableCell class="hidden lg:table-cell whitespace-nowrap px-3 py-0.5">
                         <div class="flex flex-wrap gap-1.5">
-                          <For each={providers}>
-                            {(provider) => {
-                              const badge = getSourcePlatformBadge(provider);
+                          <For each={platforms}>
+                            {(platform) => {
+                              const badge = getSourcePlatformBadge(platform);
                               return (
                                 <span class={badge?.classes || ''}>
-                                  {badge?.label || getSourcePlatformLabel(provider)}
+                                  {badge?.label || getSourcePlatformLabel(platform)}
                                 </span>
                               );
                             }}

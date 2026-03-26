@@ -110,10 +110,10 @@ const Recovery: Component = () => {
     const resourceIndex = resourcesById();
 
     const result = rollups().filter((rollup) => {
-      const providers = getRecoveryRollupPlatforms(rollup)
+      const platforms = getRecoveryRollupPlatforms(rollup)
         .map((entry) => String(entry || '').trim())
         .filter(Boolean);
-      if (platform && !providers.includes(platform)) return false;
+      if (platform && !platforms.includes(platform)) return false;
       const rollupItemType = normalizeRecoveryItemTypeQueryValue(
         rollup.display?.itemType || rollup.display?.subjectType || rollup.subjectRef?.type,
       );
@@ -128,7 +128,7 @@ const Recovery: Component = () => {
         rollup.subjectRef?.type || '',
         rollup.subjectRef?.namespace || '',
         rollup.subjectRef?.name || '',
-        providers.join(' '),
+        platforms.join(' '),
         rollup.lastOutcome || '',
       ]
         .filter(Boolean)

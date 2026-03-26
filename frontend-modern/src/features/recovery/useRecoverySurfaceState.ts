@@ -331,8 +331,8 @@ export function useRecoverySurfaceState() {
   const platformOptions = createMemo(() => {
     const platforms = new Set<string>();
     for (const rollup of rollups()) {
-      for (const provider of getRecoveryRollupPlatforms(rollup)) {
-        const normalized = normalizeSourcePlatformQueryValue(String(provider || '').trim());
+      for (const platform of getRecoveryRollupPlatforms(rollup)) {
+        const normalized = normalizeSourcePlatformQueryValue(String(platform || '').trim());
         if (normalized) platforms.add(normalized);
       }
     }

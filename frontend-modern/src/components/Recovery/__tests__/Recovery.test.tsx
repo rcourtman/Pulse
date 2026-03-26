@@ -310,6 +310,43 @@ describe('Recovery', () => {
     expect(screen.getByText('Platform Mix')).toBeInTheDocument();
   });
 
+  it('normalizes legacy provider-shaped recovery payloads before rendering', async () => {
+    rollupsPayload.push({
+      rollupId: 'ext:legacy-provider-rollup',
+      subjectRef: { type: 'truenas-dataset', name: 'tank/legacy', id: 'tank/legacy' },
+      lastAttemptAt: '2026-02-12T08:00:00.000Z',
+      lastSuccessAt: '2026-02-12T08:00:00.000Z',
+      lastOutcome: 'success',
+      providers: ['truenas'],
+    });
+    pointsByRollupId['ext:legacy-provider-rollup'] = [
+      {
+        id: 'legacy-point',
+        provider: 'truenas',
+        kind: 'snapshot',
+        mode: 'snapshot',
+        outcome: 'success',
+        completedAt: '2026-02-12T08:00:00.000Z',
+        display: { itemType: 'dataset', subjectType: 'truenas-dataset' },
+      },
+    ];
+
+    try {
+      render(() => <Recovery />);
+
+      expect(await screen.findByText('tank/legacy')).toBeInTheDocument();
+      expect(screen.getAllByText('TrueNAS').length).toBeGreaterThan(0);
+
+      fireEvent.click(screen.getByText('tank/legacy'));
+
+      expect(await screen.findByText('Recovery Events')).toBeInTheDocument();
+      expect(screen.getAllByText('TrueNAS').length).toBeGreaterThan(0);
+    } finally {
+      rollupsPayload.pop();
+      delete pointsByRollupId['ext:legacy-provider-rollup'];
+    }
+  });
+
   it('keeps recovery history width aligned with canonical column specs', async () => {
     render(() => <Recovery />);
 

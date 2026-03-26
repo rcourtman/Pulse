@@ -403,6 +403,11 @@ implementation detail: `frontend-modern/src/hooks/useRecoveryPoints.ts`,
 `frontend-modern/src/hooks/useRecoveryRollups.ts` must stay on the explicit
 `recovery-product-surface` proof path instead of inheriting release-control
 coverage only through `frontend-modern/src/pages/RecoveryRoute.tsx`.
+Those same hooks now also own recovery transport normalization at the frontend
+boundary: raw compatibility fields such as `provider` / `providers` may be
+accepted from older `/api/recovery/*` payloads, but the runtime values they
+return to the rest of the recovery UI must be canonical `platform` /
+`platforms` models.
 That same rule applies to the dashboard recovery entry points too:
 `frontend-modern/src/hooks/useDashboardRecovery.ts`,
 `frontend-modern/src/pages/Dashboard.tsx`,

@@ -169,7 +169,7 @@ export const RecoveryHistoryTable: Component<RecoveryHistoryTableProps> = (props
                         ? formatRecoveryTimeOnly(tsMs)
                         : '—';
                     const subjectType = getRecoverySubjectTypeLabel(point);
-                    const provider = normalizeSourcePlatformQueryValue(getRecoveryPointPlatform(point));
+                    const platform = normalizeSourcePlatformQueryValue(getRecoveryPointPlatform(point));
                     const mode =
                       normalizeRecoveryModeQueryValue(String(point.mode || '').toLowerCase()) ||
                       'local';
@@ -294,13 +294,13 @@ export const RecoveryHistoryTable: Component<RecoveryHistoryTableProps> = (props
                                     </TableCell>
                                   );
                                 case 'source': {
-                                  const badge = getSourcePlatformBadge(provider);
+                                  const badge = getSourcePlatformBadge(platform);
                                   return (
                                     <TableCell class="whitespace-nowrap px-3 py-0.5 text-center">
                                       <span
                                         class={`${badge?.classes || ''} inline-flex min-w-[3.25rem] justify-center px-1.5 py-px text-[9px] font-medium`}
                                       >
-                                        {badge?.label || getSourcePlatformLabel(provider)}
+                                        {badge?.label || getSourcePlatformLabel(platform)}
                                       </span>
                                     </TableCell>
                                   );

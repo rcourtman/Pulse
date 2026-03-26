@@ -1,6 +1,7 @@
 import { createResource, onCleanup } from 'solid-js';
 import { apiFetchJSON } from '@/utils/apiClient';
-import type { ProtectionRollup, RecoveryRollupsResponse } from '@/types/recovery';
+import type { ProtectionRollup, RecoveryRollupsTransportResponse } from '@/types/recovery';
+import { normalizeRecoveryRollupsResponse } from '@/utils/recoveryPlatformModel';
 
 const RECOVERY_ROLLUPS_URL = '/api/recovery/rollups';
 const PAGE_LIMIT = 500;
@@ -90,8 +91,9 @@ async function fetchRecoveryRollups(
 
   for (let page = 1; page <= MAX_PAGES; page += 1) {
     const url = buildURL(page, PAGE_LIMIT, query);
-    const resp = await apiFetchJSON<RecoveryRollupsResponse>(url);
-    rollups.push(...(resp?.data || []));
+    const response = await apiFetchJSON<RecoveryRollupsTransportResponse>(url);
+    const resp = normalizeRecoveryRollupsResponse(response);
+    rollups.push(...resp.data);
     if (!resp?.meta || (resp.data || []).length < PAGE_LIMIT || page >= resp.meta.totalPages) {
       break;
     }

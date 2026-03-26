@@ -72,18 +72,16 @@ const usageBarColorClass = (usagePercent: number): string => {
 export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props) => {
   const { state } = useWebSocket();
   const point = () => props.point;
-  const providerKey = createMemo(() =>
+  const platformKey = createMemo(() =>
     normalizeSourcePlatformQueryValue(getRecoveryPointPlatform(point())),
   );
-  const providerLabel = createMemo(() =>
-    getSourcePlatformLabel(providerKey() || getRecoveryPointPlatform(point())),
+  const platformLabel = createMemo(() =>
+    getSourcePlatformLabel(platformKey() || getRecoveryPointPlatform(point())),
   );
-  const providerBadge = createMemo(() =>
-    getSourcePlatformBadge(providerKey() || getRecoveryPointPlatform(point())),
+  const platformBadge = createMemo(() =>
+    getSourcePlatformBadge(platformKey() || getRecoveryPointPlatform(point())),
   );
-  const isPbsProvider = createMemo(
-    () => providerKey() === 'proxmox-pbs',
-  );
+  const isPbsProvider = createMemo(() => platformKey() === 'proxmox-pbs');
 
   const pbsComment = createMemo(() => {
     const value = point().details?.comment;
@@ -128,7 +126,7 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
     },
   );
 
-  const hasProviderDetails = createMemo(
+  const hasPlatformDetails = createMemo(
     () =>
       isPbsProvider() &&
       (pbsComment().length > 0 ||
@@ -164,7 +162,7 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
 
     pairs.push({ k: 'ID', v: p.id });
     if (itemType && itemType !== 'Unknown') pairs.push({ k: 'Item Type', v: itemType });
-    pairs.push({ k: 'Platform', v: providerLabel() || 'n/a' });
+    pairs.push({ k: 'Platform', v: platformLabel() || 'n/a' });
     for (const entry of getRecoveryPointLocationEntries(p)) {
       pairs.push({ k: entry.label, v: entry.value });
     }
@@ -277,7 +275,7 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
         </div>
       </div>
 
-      <Show when={hasProviderDetails()}>
+      <Show when={hasPlatformDetails()}>
         <div class="rounded border border-border bg-surface p-3">
           <div class="flex flex-wrap items-start justify-between gap-3">
             <div>
@@ -288,7 +286,7 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
                 Platform-specific recovery metadata, verification state, and target health.
               </div>
             </div>
-            <Show when={providerBadge()}>
+            <Show when={platformBadge()}>
               {(badge) => (
                 <span class={badge().classes} title={badge().title}>
                   {badge().label}

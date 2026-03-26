@@ -1,6 +1,11 @@
 import { Accessor, createMemo, createResource, onCleanup } from 'solid-js';
 import { apiFetchJSON } from '@/utils/apiClient';
-import type { RecoveryPoint, RecoveryPointsResponse } from '@/types/recovery';
+import type {
+  RecoveryPoint,
+  RecoveryPointsResponse,
+  RecoveryPointsTransportResponse,
+} from '@/types/recovery';
+import { normalizeRecoveryPointsResponse } from '@/utils/recoveryPlatformModel';
 
 const RECOVERY_POINTS_URL = '/api/recovery/points';
 const DEFAULT_LIMIT = 200;
@@ -112,7 +117,8 @@ async function fetchRecoveryPointsResponse(
   query: RecoveryPointsQuery | undefined,
 ): Promise<RecoveryPointsResponse> {
   const url = buildURL(query);
-  return apiFetchJSON<RecoveryPointsResponse>(url);
+  const response = await apiFetchJSON<RecoveryPointsTransportResponse>(url);
+  return normalizeRecoveryPointsResponse(response);
 }
 
 export function useRecoveryPoints(query?: Accessor<RecoveryPointsQuery | null | undefined>) {

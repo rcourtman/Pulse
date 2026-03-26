@@ -1,5 +1,4 @@
 export type RecoveryPlatform = string;
-export type RecoveryProvider = RecoveryPlatform;
 export type RecoveryKind = 'snapshot' | 'backup' | 'other' | (string & {});
 export type RecoveryMode = 'snapshot' | 'local' | 'remote' | (string & {});
 export type RecoveryOutcome =
@@ -37,7 +36,6 @@ export interface RecoveryPointDisplay {
 export interface RecoveryPoint {
   id: string;
   platform?: RecoveryPlatform;
-  provider?: RecoveryProvider;
   kind: RecoveryKind;
   mode: RecoveryMode;
   outcome: RecoveryOutcome;
@@ -65,14 +63,25 @@ export interface RecoveryPoint {
   display?: RecoveryPointDisplay | null;
 }
 
+export interface RecoveryPointTransport extends RecoveryPoint {
+  provider?: RecoveryPlatform;
+}
+
+export interface RecoveryResponseMeta {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
+
 export interface RecoveryPointsResponse {
   data: RecoveryPoint[];
-  meta: {
-    page: number;
-    limit: number;
-    total: number;
-    totalPages: number;
-  };
+  meta: RecoveryResponseMeta;
+}
+
+export interface RecoveryPointsTransportResponse {
+  data: RecoveryPointTransport[];
+  meta: RecoveryResponseMeta;
 }
 
 export interface ProtectionRollup {
@@ -86,17 +95,20 @@ export interface ProtectionRollup {
   lastOutcome: RecoveryOutcome;
 
   platforms?: RecoveryPlatform[];
-  providers?: RecoveryProvider[];
+}
+
+export interface ProtectionRollupTransport extends ProtectionRollup {
+  providers?: RecoveryPlatform[];
 }
 
 export interface RecoveryRollupsResponse {
   data: ProtectionRollup[];
-  meta: {
-    page: number;
-    limit: number;
-    total: number;
-    totalPages: number;
-  };
+  meta: RecoveryResponseMeta;
+}
+
+export interface RecoveryRollupsTransportResponse {
+  data: ProtectionRollupTransport[];
+  meta: RecoveryResponseMeta;
 }
 
 export interface RecoveryPointsSeriesBucket {
