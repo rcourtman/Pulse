@@ -3,9 +3,11 @@ package cloudcp
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	cpauth "github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/auth"
+	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/portal"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
 )
 
@@ -225,7 +227,7 @@ func TestRegisterRoutes_LogoutRevokesSession(t *testing.T) {
 		Version:    "test",
 	})
 
-	logoutReq := httptest.NewRequest(http.MethodPost, "/auth/logout", nil)
+	logoutReq := httptest.NewRequest(http.MethodPost, portal.PortalLogoutPath, nil)
 	logoutReq.Header.Set("Authorization", "Bearer "+token)
 	logoutRec := httptest.NewRecorder()
 	mux.ServeHTTP(logoutRec, logoutReq)
@@ -239,5 +241,101 @@ func TestRegisterRoutes_LogoutRevokesSession(t *testing.T) {
 	mux.ServeHTTP(afterRec, afterReq)
 	if afterRec.Code != http.StatusUnauthorized {
 		t.Fatalf("post-logout status = %d, want %d (body=%q)", afterRec.Code, http.StatusUnauthorized, afterRec.Body.String())
+	}
+}
+
+func TestRegisterRoutes_PortalBootstrapRequiresSession(t *testing.T) {
+	dir := t.TempDir()
+	reg, err := registry.NewTenantRegistry(dir)
+	if err != nil {
+		t.Fatalf("NewTenantRegistry: %v", err)
+	}
+	t.Cleanup(func() { _ = reg.Close() })
+
+	accountID, err := registry.GenerateAccountID()
+	if err != nil {
+		t.Fatalf("GenerateAccountID: %v", err)
+	}
+	if err := reg.CreateAccount(&registry.Account{
+		ID:          accountID,
+		Kind:        registry.AccountKindIndividual,
+		DisplayName: "Hosted Account",
+	}); err != nil {
+		t.Fatalf("CreateAccount: %v", err)
+	}
+
+	userID, err := registry.GenerateUserID()
+	if err != nil {
+		t.Fatalf("GenerateUserID: %v", err)
+	}
+	if err := reg.CreateUser(&registry.User{
+		ID:    userID,
+		Email: "owner@example.com",
+	}); err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+	if err := reg.CreateMembership(&registry.AccountMembership{
+		AccountID: accountID,
+		UserID:    userID,
+		Role:      registry.MemberRoleOwner,
+	}); err != nil {
+		t.Fatalf("CreateMembership: %v", err)
+	}
+
+	magicSvc, err := cpauth.NewService(dir)
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+	t.Cleanup(magicSvc.Close)
+
+	token, err := magicSvc.GenerateSessionToken(userID, "owner@example.com", cpauth.SessionTTL)
+	if err != nil {
+		t.Fatalf("GenerateSessionToken: %v", err)
+	}
+
+	mux := http.NewServeMux()
+	RegisterRoutes(mux, &Deps{
+		Config: &CPConfig{
+			DataDir:             dir,
+			AdminKey:            "test-admin-key",
+			BaseURL:             "https://cloud.example.com",
+			StripeWebhookSecret: "whsec_test",
+		},
+		Registry:   reg,
+		MagicLinks: magicSvc,
+		Version:    "test",
+	})
+
+	unauthReq := httptest.NewRequest(http.MethodGet, portal.PortalBootstrapPath, nil)
+	unauthRec := httptest.NewRecorder()
+	mux.ServeHTTP(unauthRec, unauthReq)
+	if unauthRec.Code != http.StatusUnauthorized {
+		t.Fatalf("unauth status = %d, want %d (body=%q)", unauthRec.Code, http.StatusUnauthorized, unauthRec.Body.String())
+	}
+
+	authReq := httptest.NewRequest(http.MethodGet, portal.PortalBootstrapPath, nil)
+	authReq.Header.Set("Authorization", "Bearer "+token)
+	authRec := httptest.NewRecorder()
+	mux.ServeHTTP(authRec, authReq)
+	if authRec.Code != http.StatusOK {
+		t.Fatalf("auth status = %d, want %d (body=%q)", authRec.Code, http.StatusOK, authRec.Body.String())
+	}
+	if !strings.Contains(authRec.Body.String(), "\"email\":\"owner@example.com\"") {
+		t.Fatalf("expected bootstrap payload to include owner email, body=%q", authRec.Body.String())
+	}
+	if !strings.Contains(authRec.Body.String(), "\"id\":\""+accountID+"\"") {
+		t.Fatalf("expected bootstrap payload to include account id, body=%q", authRec.Body.String())
+	}
+
+	if _, err := reg.RevokeUserSessions(userID); err != nil {
+		t.Fatalf("RevokeUserSessions: %v", err)
+	}
+
+	revokedReq := httptest.NewRequest(http.MethodGet, portal.PortalBootstrapPath, nil)
+	revokedReq.Header.Set("Authorization", "Bearer "+token)
+	revokedRec := httptest.NewRecorder()
+	mux.ServeHTTP(revokedRec, revokedReq)
+	if revokedRec.Code != http.StatusUnauthorized {
+		t.Fatalf("revoked status = %d, want %d (body=%q)", revokedRec.Code, http.StatusUnauthorized, revokedRec.Body.String())
 	}
 }

@@ -112,17 +112,16 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 	baseDomain := baseDomainFromURL(deps.Config.BaseURL)
 	mux.Handle("/auth/magic-link/verify", magicLinkVerifyLimiter.Middleware(http.HandlerFunc(cpauth.HandleMagicLinkVerify(deps.MagicLinks, deps.Registry, deps.Config.TenantsDir(), baseDomain))))
 	if deps.MagicLinks != nil {
-		mux.Handle("/auth/logout", sessionAuthLimiter.Middleware(sessionAuth(cpauth.HandleLogout(deps.Registry))))
+		mux.Handle(portal.PortalLogoutPath, sessionAuthLimiter.Middleware(sessionAuth(cpauth.HandleLogout(deps.Registry))))
 	}
 
 	// Hosted Pulse Pro trial signup: public form + checkout + return completion.
 	trialSignupHandlers := NewTrialSignupHandlers(deps.Config, deps.EmailSender, deps.TrialSignupStore, hostedEntitlements)
 	hostedEntitlementHandlers := NewHostedEntitlementHandlers(hostedEntitlements)
-	trialSignupRateLimited := trialSignupHandlers.HandleRateLimitedTrialSignup
-	mux.Handle("/start-pro-trial", trialSignupPageLimiter.MiddlewareWithRejected(http.HandlerFunc(trialSignupHandlers.HandleStartProTrial), trialSignupRateLimited))
-	mux.Handle("/api/trial-signup/request-verification", trialSignupVerificationLimiter.MiddlewareWithRejected(http.HandlerFunc(trialSignupHandlers.HandleRequestVerification), trialSignupRateLimited))
-	mux.Handle("/trial-signup/verify", trialSignupVerifyLimiter.MiddlewareWithRejected(http.HandlerFunc(trialSignupHandlers.HandleVerifyEmail), trialSignupRateLimited))
-	mux.Handle("/api/trial-signup/checkout", trialSignupCheckoutLimiter.MiddlewareWithRejected(http.HandlerFunc(trialSignupHandlers.HandleCheckout), trialSignupRateLimited))
+	mux.Handle("/start-pro-trial", trialSignupPageLimiter.Middleware(http.HandlerFunc(trialSignupHandlers.HandleStartProTrial)))
+	mux.Handle("/api/trial-signup/request-verification", trialSignupVerificationLimiter.Middleware(http.HandlerFunc(trialSignupHandlers.HandleRequestVerification)))
+	mux.Handle("/trial-signup/verify", trialSignupVerifyLimiter.Middleware(http.HandlerFunc(trialSignupHandlers.HandleVerifyEmail)))
+	mux.Handle("/api/trial-signup/checkout", trialSignupCheckoutLimiter.Middleware(http.HandlerFunc(trialSignupHandlers.HandleCheckout)))
 	mux.Handle("/trial-signup/complete", trialSignupCompleteLimiter.Middleware(http.HandlerFunc(trialSignupHandlers.HandleTrialSignupComplete)))
 	mux.Handle("/api/trial-signup/redeem", trialSignupRedeemLimiter.Middleware(http.HandlerFunc(trialSignupHandlers.HandleTrialSignupRedeem)))
 	mux.Handle("/api/entitlements/refresh", hostedEntitlementRefreshLimiter.Middleware(http.HandlerFunc(hostedEntitlementHandlers.HandleRefresh)))
@@ -223,17 +222,18 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 	mux.Handle("/api/accounts/{account_id}/tenants/{tenant_id}/handoff", accountAPILimiter.Middleware(accountSessionAuth(accountIDFromPath, handoffHandler)))
 
 	// MSP portal API (session + account-membership authenticated)
-	mux.Handle("/api/portal/dashboard", portalAPILimiter.Middleware(accountSessionAuth(accountIDFromPortalRequest, portal.HandlePortalDashboard(deps.Registry))))
-	mux.Handle("/api/portal/workspaces/{tenant_id}", portalAPILimiter.Middleware(accountSessionAuth(accountIDFromPortalRequest, portal.HandlePortalWorkspaceDetail(deps.Registry))))
+	mux.Handle(portal.PortalBootstrapPath, portalAPILimiter.Middleware(sessionAuth(portal.HandlePortalBootstrap(deps.MagicLinks, deps.Registry))))
+	mux.Handle(portal.PortalDashboardPath, portalAPILimiter.Middleware(accountSessionAuth(accountIDFromPortalRequest, portal.HandlePortalDashboard(deps.Registry))))
+	mux.Handle(portal.PortalWorkspacePath, portalAPILimiter.Middleware(accountSessionAuth(accountIDFromPortalRequest, portal.HandlePortalWorkspaceDetail(deps.Registry))))
 
 	// Stripe Customer Portal redirect (session + account-membership authenticated)
 	billingCfg := portal.BillingPortalConfig{
 		StripeAPIKey: deps.Config.StripeAPIKey,
-		ReturnURL:    buildCPURL(deps.Config.BaseURL, "/portal", nil),
+		ReturnURL:    buildCPURL(deps.Config.BaseURL, portal.PortalPagePath, nil),
 	}
-	mux.Handle("/api/portal/billing", portalAPILimiter.Middleware(accountSessionAuth(accountIDFromPortalRequest, portal.HandleBillingPortalRedirect(deps.Registry, billingCfg))))
+	mux.Handle(portal.PortalBillingPath, portalAPILimiter.Middleware(accountSessionAuth(accountIDFromPortalRequest, portal.HandleBillingPortalRedirect(deps.Registry, billingCfg))))
 
 	// MSP/Cloud portal HTML page — self-authenticating (shows login form if no session)
 	portalPageLimiter := NewCPRateLimiter(60, time.Minute)
-	mux.Handle("/portal", portalPageLimiter.Middleware(http.HandlerFunc(portal.HandlePortalPage(deps.MagicLinks, deps.Registry))))
+	mux.Handle(portal.PortalPagePath, portalPageLimiter.Middleware(http.HandlerFunc(portal.HandlePortalPage(deps.MagicLinks, deps.Registry))))
 }
