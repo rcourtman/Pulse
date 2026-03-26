@@ -373,6 +373,69 @@ describe('Recovery', () => {
     }
   });
 
+  it('renders degraded recovery records when item refs and details metadata are omitted', async () => {
+    rollupsPayload.push({
+      rollupId: 'res:pvc-1',
+      itemResourceId: 'pvc-1',
+      display: {
+        itemLabel: 'default/data',
+        itemType: 'pvc',
+      },
+      lastAttemptAt: '2026-02-15T11:00:00.000Z',
+      lastSuccessAt: '2026-02-15T11:00:00.000Z',
+      lastOutcome: 'success',
+      platforms: ['kubernetes'],
+    });
+    pointsByRollupId['res:pvc-1'] = [
+      {
+        id: 'pvc-point-1',
+        platform: 'kubernetes',
+        kind: 'snapshot',
+        mode: 'snapshot',
+        outcome: 'success',
+        completedAt: '2026-02-15T11:00:00.000Z',
+        display: {
+          itemLabel: 'default/data',
+          itemType: 'pvc',
+          namespaceLabel: 'default',
+          detailsSummary: 'Immutable copy',
+        },
+      },
+    ];
+
+    try {
+      render(() => <Recovery />);
+
+      const item = await screen.findByText('default/data');
+      fireEvent.click(item);
+
+      await screen.findByText('Recovery Events');
+      const tables = await screen.findAllByRole('table');
+      const historyTable = tables[tables.length - 1];
+      expect(within(historyTable).getByText('default/data')).toBeInTheDocument();
+      expect(within(historyTable).getByText('PVC')).toBeInTheDocument();
+      expect(within(historyTable).getByText('K8s')).toBeInTheDocument();
+      expect(within(historyTable).getByText('Immutable copy')).toBeInTheDocument();
+
+      fireEvent.click(within(historyTable).getByText('11:00'));
+
+      const detailsPanel = await screen.findByText('Recovery Point Details');
+      const detailsCell = detailsPanel.closest('td');
+      expect(detailsCell).not.toBeNull();
+      expect(within(detailsCell as HTMLTableCellElement).getByText('Item Type')).toBeInTheDocument();
+      expect(within(detailsCell as HTMLTableCellElement).getByText('PVC')).toBeInTheDocument();
+      expect(
+        within(detailsCell as HTMLTableCellElement).getByText('Namespace / Group'),
+      ).toBeInTheDocument();
+      expect(within(detailsCell as HTMLTableCellElement).getByText('default')).toBeInTheDocument();
+      expect(within(detailsCell as HTMLTableCellElement).queryByText('Item Ref')).not.toBeInTheDocument();
+      expect(within(detailsCell as HTMLTableCellElement).queryByText('Target Ref')).not.toBeInTheDocument();
+    } finally {
+      rollupsPayload.pop();
+      delete pointsByRollupId['res:pvc-1'];
+    }
+  });
+
   it('keeps recovery history width aligned with canonical column specs', async () => {
     render(() => <Recovery />);
 

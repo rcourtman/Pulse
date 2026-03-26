@@ -163,4 +163,56 @@ describe('recoveryPlatformModel', () => {
       meta: { page: 1, limit: 100, total: 1, totalPages: 1 },
     });
   });
+
+  it('preserves display fallback data when degraded recovery metadata fields are omitted', () => {
+    expect(
+      normalizeRecoveryPoint({
+        id: 'point-malformed',
+        provider: 'kubernetes',
+        kind: 'snapshot',
+        mode: 'snapshot',
+        outcome: 'success',
+        subjectResourceId: 'pvc-1',
+        display: {
+          subjectLabel: 'default/data',
+          subjectType: 'k8s-pvc',
+          detailsSummary: 'Immutable copy',
+        },
+      }),
+    ).toEqual({
+      id: 'point-malformed',
+      platform: 'kubernetes',
+      kind: 'snapshot',
+      mode: 'snapshot',
+      outcome: 'success',
+      itemResourceId: 'pvc-1',
+      display: {
+        itemLabel: 'default/data',
+        itemType: 'k8s-pvc',
+        detailsSummary: 'Immutable copy',
+      },
+    });
+
+    expect(
+      normalizeRecoveryRollup({
+        rollupId: 'rollup-malformed',
+        lastOutcome: 'warning',
+        subjectResourceId: 'pvc-1',
+        providers: ['kubernetes'],
+        display: {
+          subjectLabel: 'default/data',
+          subjectType: 'k8s-pvc',
+        },
+      }),
+    ).toEqual({
+      rollupId: 'rollup-malformed',
+      lastOutcome: 'warning',
+      itemResourceId: 'pvc-1',
+      platforms: ['kubernetes'],
+      display: {
+        itemLabel: 'default/data',
+        itemType: 'k8s-pvc',
+      },
+    });
+  });
 });
