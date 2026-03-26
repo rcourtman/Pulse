@@ -37,6 +37,7 @@ export interface PortalLoginState {
   emailValue: string;
   request: PortalMutationState;
   success: boolean;
+  successMessage: string;
 }
 
 export interface PortalTeamMember {

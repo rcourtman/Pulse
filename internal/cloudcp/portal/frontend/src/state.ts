@@ -39,6 +39,7 @@ export function createPortalLoginState(): PortalLoginState {
     emailValue: '',
     request: createMutationState(),
     success: false,
+    successMessage: '',
   };
 }
 

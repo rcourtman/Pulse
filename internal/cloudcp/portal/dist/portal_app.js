@@ -373,7 +373,8 @@
     return {
       emailValue: "",
       request: createMutationState(),
-      success: false
+      success: false,
+      successMessage: ""
     };
   }
   function createPortalAccountState() {
@@ -710,6 +711,7 @@
   }
 
   // src/auth_controller.ts
+  var GENERIC_MAGIC_LINK_MESSAGE = "If that email is registered, you'll receive a magic link shortly.";
   function asHTMLElement2(target) {
     return target instanceof HTMLElement ? target : null;
   }
@@ -732,12 +734,14 @@
       deps.store.updateLoginState(function(nextState) {
         beginMutationState(nextState.request);
         nextState.success = false;
+        nextState.successMessage = "";
       });
       try {
-        await deps.api.requestMagicLink(email);
+        var response = await deps.api.requestMagicLink(email);
         deps.store.updateLoginState(function(nextState) {
           succeedMutationState(nextState.request);
           nextState.success = true;
+          nextState.successMessage = String(response && response.message || "").trim() || GENERIC_MAGIC_LINK_MESSAGE;
         });
         return;
       } catch (error) {
@@ -745,6 +749,7 @@
           deps.store.updateLoginState(function(nextState) {
             succeedMutationState(nextState.request);
             nextState.success = true;
+            nextState.successMessage = GENERIC_MAGIC_LINK_MESSAGE;
           });
           return;
         }
@@ -769,6 +774,7 @@
             event.preventDefault();
             deps.store.updateLoginState(function(nextState) {
               nextState.success = false;
+              nextState.successMessage = "";
               resetMutationState(nextState.request);
             });
             void sendMagicLink();
@@ -1441,7 +1447,7 @@
     if (context.loginState.request.error) {
       statusHTML = '<div class="service-status visible error">' + escapeHTML(context.loginState.request.error) + "</div>";
     } else if (context.loginState.success) {
-      statusHTML = `<div class="service-status visible success">Magic link sent. Check your inbox and click the link to sign in.<br><br><strong>Don't see it?</strong> <a href="#" data-portal-action="resend-magic-link">Send a new link</a>.</div>`;
+      statusHTML = '<div class="service-status visible success">' + escapeHTML(context.loginState.successMessage || "If that email is registered, you'll receive a magic link shortly.") + `<br><br><strong>Don't see it?</strong> <a href="#" data-portal-action="resend-magic-link">Send a new link</a>.</div>`;
     }
     return '<section class="intro-card"><h1>Pulse Account</h1><p>Sign in to manage Cloud workspaces, MSP access, and commercial account services from one account surface.</p></section><section class="service-section"><div class="service-panel visible"><h3>Sign in</h3><p>Enter the commercial email address for your Pulse account. I will send a magic link so you can open Pulse Account without managing a password.</p><div class="form-group"><label for="portal-login-email">Email address</label><input id="portal-login-email" type="email" autocomplete="email" placeholder="you@example.com" value="' + escapeAttr(context.loginState.emailValue || "") + '" data-portal-input="login-email"></div><div class="form-actions"><button class="btn-primary" id="portal-login-send" type="button" data-portal-action="send-magic-link">' + (context.loginState.request.pending ? "Sending\u2026" : "Send magic link") + '</button><a class="btn-secondary link-button" href="' + escapeAttr(context.signupPath) + '">Create an account</a></div>' + statusHTML + "</div></section>";
   }

@@ -20,6 +20,11 @@ export interface PortalBillingResponse {
   url?: string;
 }
 
+export interface PortalMagicLinkResponse {
+  success?: boolean;
+  message?: string;
+}
+
 export interface PortalWorkspaceCreateRequest {
   display_name: string;
 }
@@ -35,7 +40,7 @@ export interface PortalMemberRoleRequest {
 
 export interface PortalAPI {
   fetchBootstrap(): Promise<PortalBootstrapData>;
-  requestMagicLink(email: string): Promise<void>;
+  requestMagicLink(email: string): Promise<PortalMagicLinkResponse>;
   logout(): Promise<void>;
   postCommercialJSON<T>(path: string, body: Record<string, unknown>): Promise<T>;
   createWorkspace(accountID: string, body: PortalWorkspaceCreateRequest): Promise<void>;
@@ -125,7 +130,7 @@ export function createPortalAPI(context: PortalAPIContext): PortalAPI {
       }, 'Failed to refresh account state.');
     },
     requestMagicLink: function(email: string) {
-      return request<void>(bootstrap().magic_link_request_path, {
+      return request<PortalMagicLinkResponse>(bootstrap().magic_link_request_path, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email }),

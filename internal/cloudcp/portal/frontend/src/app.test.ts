@@ -186,7 +186,10 @@ describe('portal app', function() {
       email: '',
       accounts: [],
     });
-    var fetchMock = vi.fn().mockResolvedValue(jsonResponse({}));
+    var fetchMock = vi.fn().mockResolvedValue(jsonResponse({
+      success: true,
+      message: "If that email is registered, you'll receive a magic link shortly.",
+    }));
     vi.stubGlobal('fetch', fetchMock);
 
     installPortalApp({
@@ -209,7 +212,7 @@ describe('portal app', function() {
         body: JSON.stringify({ email: 'buyer@example.com' }),
       })
     );
-    expect(document.getElementById('portal-app-root')?.textContent).toContain('Magic link sent. Check your inbox and click the link to sign in.');
+    expect(document.getElementById('portal-app-root')?.textContent).toContain("If that email is registered, you'll receive a magic link shortly.");
   });
 
   it('completes the retrieve-license flow through the real authenticated app shell', async function() {

@@ -16,6 +16,8 @@ export interface AuthController {
   getLoginState: () => PortalLoginState;
 }
 
+const GENERIC_MAGIC_LINK_MESSAGE = "If that email is registered, you'll receive a magic link shortly.";
+
 function asHTMLElement(target: EventTarget | null): HTMLElement | null {
   return target instanceof HTMLElement ? target : null;
 }
@@ -41,12 +43,14 @@ export function installAuthController(deps: AuthControllerDeps): AuthController 
     deps.store.updateLoginState(function(nextState) {
       beginMutationState(nextState.request);
       nextState.success = false;
+      nextState.successMessage = '';
     });
     try {
-      await deps.api.requestMagicLink(email);
+      var response = await deps.api.requestMagicLink(email);
       deps.store.updateLoginState(function(nextState) {
         succeedMutationState(nextState.request);
         nextState.success = true;
+        nextState.successMessage = String(response && response.message || '').trim() || GENERIC_MAGIC_LINK_MESSAGE;
       });
       return;
     } catch (error) {
@@ -54,6 +58,7 @@ export function installAuthController(deps: AuthControllerDeps): AuthController 
         deps.store.updateLoginState(function(nextState) {
           succeedMutationState(nextState.request);
           nextState.success = true;
+          nextState.successMessage = GENERIC_MAGIC_LINK_MESSAGE;
         });
         return;
       }
@@ -81,6 +86,7 @@ export function installAuthController(deps: AuthControllerDeps): AuthController 
           event.preventDefault();
           deps.store.updateLoginState(function(nextState) {
             nextState.success = false;
+            nextState.successMessage = '';
             resetMutationState(nextState.request);
           });
           void sendMagicLink();
