@@ -325,6 +325,11 @@ That widening still has to respect runtime feature flags. A capability like
 `multi_tenant` must stay absent from dev/demo entitlement payloads until the
 process also has `PULSE_MULTI_TENANT_ENABLED=true`; otherwise admin shells
 drift into impossible routes that the same backend still rejects as disabled.
+The same rule applies to placeholder or plan-marker capabilities as well:
+dev/demo entitlement payloads must not advertise non-operable entries like
+`white_label`, `multi_user`, or `unlimited` just because they exist in tier
+metadata, when the current runtime does not expose a corresponding usable
+feature surface.
 The `/api/resources` serializer now also refreshes canonical identity and
 policy metadata through the shared unified-resource helper before it writes
 the payload, so backend and frontend contract tests stay aligned on one

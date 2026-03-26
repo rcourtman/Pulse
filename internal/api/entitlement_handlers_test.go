@@ -390,6 +390,15 @@ func TestEntitlementHandler_DevModeMirrorsFeatureGateCapabilities(t *testing.T) 
 	if containsCapability(payload.Capabilities, license.FeatureMultiTenant) {
 		t.Fatalf("expected dev entitlements to omit %q while runtime flag is disabled, got %v", license.FeatureMultiTenant, payload.Capabilities)
 	}
+	for _, feature := range []string{
+		license.FeatureMultiUser,
+		license.FeatureWhiteLabel,
+		license.FeatureUnlimited,
+	} {
+		if containsCapability(payload.Capabilities, feature) {
+			t.Fatalf("expected dev entitlements to omit non-runtime capability %q, got %v", feature, payload.Capabilities)
+		}
+	}
 	if len(payload.UpgradeReasons) != 0 {
 		t.Fatalf("expected no upgrade reasons in dev mode, got %v", payload.UpgradeReasons)
 	}

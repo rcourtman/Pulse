@@ -194,6 +194,14 @@ func TestServiceStatus_DevModeAdvertisesOnlyRuntimeEnabledFeaturesWithoutLicense
 	if containsStringValue(status.Features, FeatureMultiTenant) {
 		t.Fatalf("status.Features unexpectedly includes %q when runtime flag is disabled: %v", FeatureMultiTenant, status.Features)
 	}
+	for _, feature := range []string{FeatureMultiUser, FeatureWhiteLabel, FeatureUnlimited} {
+		if svc.HasFeature(feature) {
+			t.Fatalf("HasFeature(%q)=true, want false for non-runtime dev capability", feature)
+		}
+		if containsStringValue(status.Features, feature) {
+			t.Fatalf("status.Features unexpectedly includes %q in dev mode: %v", feature, status.Features)
+		}
+	}
 }
 
 func TestServiceStatus_DevModeIncludesMultiTenantWhenRuntimeEnabled(t *testing.T) {

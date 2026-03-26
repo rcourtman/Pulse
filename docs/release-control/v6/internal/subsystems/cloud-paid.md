@@ -692,6 +692,11 @@ That dev widening is still bounded by runtime readiness rather than marketing
 intent: `multi_tenant` is not a valid advertised dev capability unless the
 process also has `PULSE_MULTI_TENANT_ENABLED=true`, because the org API surface
 is intentionally disabled otherwise.
+The same runtime-readiness rule also excludes placeholder and plan-marker
+entries like `white_label`, `multi_user`, and `unlimited` from dev/demo
+entitlement payloads when there is no corresponding operable runtime surface;
+those belong in tier metadata and plan semantics, not in live capability
+advertising for a free dev shell.
 Cloud/MSP live price IDs are no longer an open fill-in task either. The audit
 record `docs/release-control/v6/records/cloud-msp-price-audit-2026-03-13.md`
 verified that the 13 canonical Cloud/MSP v6 `price_*` IDs are present in the
