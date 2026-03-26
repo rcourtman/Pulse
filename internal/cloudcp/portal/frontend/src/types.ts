@@ -46,12 +46,24 @@ export interface PortalTeamMember {
   user_id: string;
 }
 
+export type AsyncStatus = 'idle' | 'loading' | 'ready' | 'error';
+
+export interface PortalQueryState<T> {
+  status: AsyncStatus;
+  data: T;
+  error: string;
+}
+
+export interface PortalMutationState {
+  pending: boolean;
+  error: string;
+}
+
 export interface PortalAccountUIEntry {
   addWorkspaceOpen: boolean;
+  createWorkspace: PortalMutationState;
   teamVisible: boolean;
-  teamLoading: boolean;
-  teamError: string;
-  teamMembers: PortalTeamMember[];
+  teamQuery: PortalQueryState<PortalTeamMember[]>;
 }
 
 export interface PortalAccountState {

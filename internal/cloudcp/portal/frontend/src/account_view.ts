@@ -69,8 +69,12 @@ function renderTeamMemberActionCell(accountID: string, member: PortalTeamMember,
 
 export function renderAddWorkspaceSection(accountID: string, entry: PortalAccountUIEntry): void {
   var form = getElement<HTMLElement>('add-ws-form-' + accountID);
+  var spinner = getElement<HTMLElement>('ws-spinner-' + accountID);
   if (!form) return;
   form.classList.toggle('visible', entry.addWorkspaceOpen);
+  if (spinner) {
+    spinner.style.display = entry.createWorkspace.pending ? 'block' : 'none';
+  }
 }
 
 export function renderTeamSection(accountID: string, entry: PortalAccountUIEntry): void {
@@ -85,22 +89,22 @@ export function renderTeamSection(accountID: string, entry: PortalAccountUIEntry
   if (!entry.teamVisible) {
     return;
   }
-  if (entry.teamLoading) {
+  if (entry.teamQuery.status === 'loading') {
     setTbodyMessage(tbody, 'Loading…', false);
     return;
   }
-  if (entry.teamError) {
-    setTbodyMessage(tbody, entry.teamError, true);
+  if (entry.teamQuery.status === 'error') {
+    setTbodyMessage(tbody, entry.teamQuery.error, true);
     return;
   }
-  if (!entry.teamMembers.length) {
+  if (!entry.teamQuery.data.length) {
     setTbodyMessage(tbody, 'No team members.', false);
     return;
   }
 
   tbody.textContent = '';
-  for (var i = 0; i < entry.teamMembers.length; i += 1) {
-    var member = entry.teamMembers[i];
+  for (var i = 0; i < entry.teamQuery.data.length; i += 1) {
+    var member = entry.teamQuery.data[i];
     var tr = document.createElement('tr');
     var tdEmail = document.createElement('td');
     tdEmail.textContent = member.email;

@@ -86,6 +86,7 @@ describe('account runtime', function() {
     runtime.toggleAddWorkspace('acct_1');
     expect(document.getElementById('add-ws-form-acct_1')?.classList.contains('visible')).toBe(true);
     expect(deps.store.getAccountState().byAccountID.acct_1.addWorkspaceOpen).toBe(true);
+    expect(deps.store.getAccountState().byAccountID.acct_1.createWorkspace.pending).toBe(false);
 
     await runtime.createWorkspace('acct_1');
     await flushAsync();
@@ -101,6 +102,7 @@ describe('account runtime', function() {
     expect(deps.refreshBootstrap).toHaveBeenCalled();
     expect(deps.showToast).toHaveBeenCalledWith('Workspace created!');
     expect(deps.store.getAccountState().byAccountID.acct_1.addWorkspaceOpen).toBe(false);
+    expect(deps.store.getAccountState().byAccountID.acct_1.createWorkspace.pending).toBe(false);
     expect((document.getElementById('ws-spinner-acct_1') as HTMLElement).style.display).toBe('none');
   });
 
@@ -124,7 +126,8 @@ describe('account runtime', function() {
     await flushAsync();
 
     expect(deps.store.getAccountState().byAccountID.acct_1.teamVisible).toBe(true);
-    expect(deps.store.getAccountState().byAccountID.acct_1.teamMembers).toHaveLength(1);
+    expect(deps.store.getAccountState().byAccountID.acct_1.teamQuery.status).toBe('ready');
+    expect(deps.store.getAccountState().byAccountID.acct_1.teamQuery.data).toHaveLength(1);
     var roleSelect = document.querySelector('[data-action="change-role"]') as HTMLSelectElement | null;
     expect(roleSelect).not.toBeNull();
     expect(roleSelect?.value).toBe('owner');

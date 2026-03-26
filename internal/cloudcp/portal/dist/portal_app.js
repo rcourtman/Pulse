@@ -59,8 +59,12 @@
   }
   function renderAddWorkspaceSection(accountID, entry) {
     var form = getElement("add-ws-form-" + accountID);
+    var spinner = getElement("ws-spinner-" + accountID);
     if (!form) return;
     form.classList.toggle("visible", entry.addWorkspaceOpen);
+    if (spinner) {
+      spinner.style.display = entry.createWorkspace.pending ? "block" : "none";
+    }
   }
   function renderTeamSection(accountID, entry) {
     var section = getElement("team-section-" + accountID);
@@ -72,21 +76,21 @@
     if (!entry.teamVisible) {
       return;
     }
-    if (entry.teamLoading) {
+    if (entry.teamQuery.status === "loading") {
       setTbodyMessage(tbody, "Loading\u2026", false);
       return;
     }
-    if (entry.teamError) {
-      setTbodyMessage(tbody, entry.teamError, true);
+    if (entry.teamQuery.status === "error") {
+      setTbodyMessage(tbody, entry.teamQuery.error, true);
       return;
     }
-    if (!entry.teamMembers.length) {
+    if (!entry.teamQuery.data.length) {
       setTbodyMessage(tbody, "No team members.", false);
       return;
     }
     tbody.textContent = "";
-    for (var i = 0; i < entry.teamMembers.length; i += 1) {
-      var member = entry.teamMembers[i];
+    for (var i = 0; i < entry.teamQuery.data.length; i += 1) {
+      var member = entry.teamQuery.data[i];
       var tr = document.createElement("tr");
       var tdEmail = document.createElement("td");
       tdEmail.textContent = member.email;
@@ -346,14 +350,26 @@
       byAccountID: {}
     };
   }
+  function createMutationState() {
+    return {
+      pending: false,
+      error: ""
+    };
+  }
+  function createQueryState(data) {
+    return {
+      status: "idle",
+      data,
+      error: ""
+    };
+  }
   function ensurePortalAccountUIEntry(accountState, accountID) {
     if (!accountState.byAccountID[accountID]) {
       accountState.byAccountID[accountID] = {
         addWorkspaceOpen: false,
+        createWorkspace: createMutationState(),
         teamVisible: false,
-        teamLoading: false,
-        teamError: "",
-        teamMembers: []
+        teamQuery: createQueryState([])
       };
     }
     return accountState.byAccountID[accountID];
@@ -473,23 +489,24 @@
       deps.store.updateAccountState(function(accountState) {
         var entry = ensurePortalAccountUIEntry(accountState, accountID);
         entry.teamVisible = true;
-        entry.teamLoading = true;
-        entry.teamError = "";
-        entry.teamMembers = [];
+        entry.teamQuery.status = "loading";
+        entry.teamQuery.error = "";
+        entry.teamQuery.data = [];
       });
       try {
         var members = await deps.api.listMembers(accountID);
         deps.store.updateAccountState(function(accountState) {
           var entry = ensurePortalAccountUIEntry(accountState, accountID);
-          entry.teamLoading = false;
-          entry.teamError = "";
-          entry.teamMembers = Array.isArray(members) ? members : [];
+          entry.teamQuery.status = "ready";
+          entry.teamQuery.error = "";
+          entry.teamQuery.data = Array.isArray(members) ? members : [];
         });
       } catch (error) {
         deps.store.updateAccountState(function(accountState) {
           var entry = ensurePortalAccountUIEntry(accountState, accountID);
-          entry.teamLoading = false;
-          entry.teamError = error instanceof Error ? error.message : "Network error.";
+          entry.teamQuery.status = "error";
+          entry.teamQuery.error = error instanceof Error ? error.message : "Network error.";
+          entry.teamQuery.data = [];
         });
       }
     };
@@ -527,8 +544,11 @@
         nameEl.focus();
         return;
       }
-      var spinner = getElement("ws-spinner-" + accountID);
-      if (spinner) spinner.style.display = "block";
+      deps.store.updateAccountState(function(accountState) {
+        var entry = ensurePortalAccountUIEntry(accountState, accountID);
+        entry.createWorkspace.pending = true;
+        entry.createWorkspace.error = "";
+      });
       try {
         await deps.api.createWorkspace(accountID, { display_name: name });
         if (!await refreshOrRedirect()) {
@@ -537,12 +557,21 @@
         deps.store.updateAccountState(function(accountState) {
           var entry = ensurePortalAccountUIEntry(accountState, accountID);
           entry.addWorkspaceOpen = false;
+          entry.createWorkspace.pending = false;
+          entry.createWorkspace.error = "";
         });
         deps.showToast("Workspace created!");
       } catch (error) {
+        deps.store.updateAccountState(function(accountState) {
+          var entry = ensurePortalAccountUIEntry(accountState, accountID);
+          entry.createWorkspace.error = error instanceof Error ? error.message : "Failed to create workspace.";
+        }, { notify: false });
         deps.showToast(error instanceof Error ? error.message : "Failed to create workspace.", true);
       } finally {
-        if (spinner) spinner.style.display = "none";
+        deps.store.updateAccountState(function(accountState) {
+          var entry = ensurePortalAccountUIEntry(accountState, accountID);
+          entry.createWorkspace.pending = false;
+        });
       }
     };
     var manageWorkspace = async function(evt, accountID, tenantID, state, name) {

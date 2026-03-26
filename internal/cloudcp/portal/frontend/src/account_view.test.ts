@@ -6,10 +6,16 @@ import type { PortalAccountState, PortalAccountUIEntry } from './types';
 function createEntry(overrides: Partial<PortalAccountUIEntry> = {}): PortalAccountUIEntry {
   return {
     addWorkspaceOpen: false,
+    createWorkspace: {
+      pending: false,
+      error: '',
+    },
     teamVisible: false,
-    teamLoading: false,
-    teamError: '',
-    teamMembers: [],
+    teamQuery: {
+      status: 'idle',
+      error: '',
+      data: [],
+    },
     ...overrides,
   };
 }
@@ -20,10 +26,19 @@ describe('account view', function() {
   });
 
   it('renders add-workspace visibility from account UI state', function() {
-    document.body.innerHTML = '<div id="add-ws-form-acct_1" class="add-workspace-form"></div>';
+    document.body.innerHTML =
+      '<div id="add-ws-form-acct_1" class="add-workspace-form"></div>' +
+      '<div id="ws-spinner-acct_1" style="display:none"></div>';
 
     renderAddWorkspaceSection('acct_1', createEntry({ addWorkspaceOpen: true }));
     expect(document.getElementById('add-ws-form-acct_1')?.classList.contains('visible')).toBe(true);
+    expect((document.getElementById('ws-spinner-acct_1') as HTMLElement).style.display).toBe('none');
+
+    renderAddWorkspaceSection('acct_1', createEntry({
+      addWorkspaceOpen: true,
+      createWorkspace: { pending: true, error: '' },
+    }));
+    expect((document.getElementById('ws-spinner-acct_1') as HTMLElement).style.display).toBe('block');
 
     renderAddWorkspaceSection('acct_1', createEntry({ addWorkspaceOpen: false }));
     expect(document.getElementById('add-ws-form-acct_1')?.classList.contains('visible')).toBe(false);
@@ -35,17 +50,27 @@ describe('account view', function() {
       '<table><tbody id="team-list-acct_1"></tbody></table>' +
       '</div>';
 
-    renderTeamSection('acct_1', createEntry({ teamVisible: true, teamLoading: true }));
+    renderTeamSection('acct_1', createEntry({
+      teamVisible: true,
+      teamQuery: { status: 'loading', error: '', data: [] },
+    }));
     expect(document.getElementById('team-list-acct_1')?.textContent).toContain('Loading');
 
-    renderTeamSection('acct_1', createEntry({ teamVisible: true, teamError: 'Failed to load team.' }));
+    renderTeamSection('acct_1', createEntry({
+      teamVisible: true,
+      teamQuery: { status: 'error', error: 'Failed to load team.', data: [] },
+    }));
     expect(document.getElementById('team-list-acct_1')?.textContent).toContain('Failed to load team.');
 
     renderTeamSection(
       'acct_1',
       createEntry({
         teamVisible: true,
-        teamMembers: [{ email: 'owner@example.com', role: 'owner', user_id: 'u1' }],
+        teamQuery: {
+          status: 'ready',
+          error: '',
+          data: [{ email: 'owner@example.com', role: 'owner', user_id: 'u1' }],
+        },
       })
     );
     expect(document.querySelector('[data-action="change-role"]')).not.toBeNull();
@@ -54,9 +79,9 @@ describe('account view', function() {
 
   it('renders account UI for every tracked account entry', function() {
     document.body.innerHTML =
-      '<div id="add-ws-form-acct_1" class="add-workspace-form"></div>' +
+      '<div id="add-ws-form-acct_1" class="add-workspace-form"></div><div id="ws-spinner-acct_1"></div>' +
       '<div id="team-section-acct_1" class="team-section" data-actor-role="admin"><table><tbody id="team-list-acct_1"></tbody></table></div>' +
-      '<div id="add-ws-form-acct_2" class="add-workspace-form"></div>' +
+      '<div id="add-ws-form-acct_2" class="add-workspace-form"></div><div id="ws-spinner-acct_2"></div>' +
       '<div id="team-section-acct_2" class="team-section" data-actor-role="owner"><table><tbody id="team-list-acct_2"></tbody></table></div>';
 
     var state: PortalAccountState = {
@@ -65,7 +90,11 @@ describe('account view', function() {
         acct_2: createEntry({
           addWorkspaceOpen: false,
           teamVisible: true,
-          teamMembers: [{ email: 'tech@example.com', role: 'tech', user_id: 'u2' }],
+          teamQuery: {
+            status: 'ready',
+            error: '',
+            data: [{ email: 'tech@example.com', role: 'tech', user_id: 'u2' }],
+          },
         }),
       },
     };

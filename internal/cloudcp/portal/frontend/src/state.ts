@@ -1,11 +1,14 @@
 import type {
+  PortalMutationState,
   PortalAccountState,
   PortalAccountUIEntry,
   PortalLoginState,
   PortalServiceFlowID,
   PortalServiceState,
+  PortalQueryState,
   RefundState,
   ServiceStatus,
+  PortalTeamMember,
   VerificationFlowState,
 } from './types';
 
@@ -46,14 +49,28 @@ export function createPortalAccountState(): PortalAccountState {
   };
 }
 
+export function createMutationState(): PortalMutationState {
+  return {
+    pending: false,
+    error: '',
+  };
+}
+
+export function createQueryState<T>(data: T): PortalQueryState<T> {
+  return {
+    status: 'idle',
+    data: data,
+    error: '',
+  };
+}
+
 export function ensurePortalAccountUIEntry(accountState: PortalAccountState, accountID: string): PortalAccountUIEntry {
   if (!accountState.byAccountID[accountID]) {
     accountState.byAccountID[accountID] = {
       addWorkspaceOpen: false,
+      createWorkspace: createMutationState(),
       teamVisible: false,
-      teamLoading: false,
-      teamError: '',
-      teamMembers: [],
+      teamQuery: createQueryState<PortalTeamMember[]>([]),
     };
   }
   return accountState.byAccountID[accountID];
