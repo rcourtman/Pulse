@@ -29,6 +29,24 @@ type VMInventoryExportDefinition struct {
 	Columns        []InventoryExportColumnDefinition `json:"columns"`
 }
 
+// SupportsFormat reports whether the inventory export allows the given output
+// format.
+func (d VMInventoryExportDefinition) SupportsFormat(format ReportFormat) bool {
+	return format == d.Format
+}
+
+// InvalidFormatError returns the canonical validation message for unsupported
+// VM inventory formats.
+func (d VMInventoryExportDefinition) InvalidFormatError() string {
+	return invalidFormatErrorMessage([]ReportFormat{d.Format})
+}
+
+// AttachmentFilename returns the canonical attachment filename for a VM
+// inventory export.
+func (d VMInventoryExportDefinition) AttachmentFilename(generatedAt time.Time) string {
+	return fmt.Sprintf("%s-%s.%s", d.FilenamePrefix, reportingDateStamp(generatedAt), d.Format)
+}
+
 // VMInventoryData captures the current-state VM inventory export payload.
 type VMInventoryData struct {
 	GeneratedAt time.Time

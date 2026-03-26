@@ -555,6 +555,55 @@ func TestContract_PerformanceReportTransportUsesCatalogDefaultRange(t *testing.T
 	}
 }
 
+func TestContract_ReportingInvalidFormatErrorsUseCatalogDefinitions(t *testing.T) {
+	engine := &stubReportingEngine{data: []byte("report"), contentType: "application/pdf"}
+	original := reporting.GetEngine()
+	reporting.SetEngine(engine)
+	t.Cleanup(func() { reporting.SetEngine(original) })
+
+	handler := NewReportingHandlers(nil, nil)
+
+	reportReq := httptest.NewRequest(
+		http.MethodGet,
+		"/api/reporting?format=xlsx&resourceType=node&resourceId=node-1",
+		nil,
+	)
+	reportRec := httptest.NewRecorder()
+	handler.HandleGenerateReport(reportRec, reportReq)
+	if reportRec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for invalid performance report format, got %d body=%s", reportRec.Code, reportRec.Body.String())
+	}
+	var reportPayload struct {
+		Error string `json:"error"`
+	}
+	if err := json.NewDecoder(reportRec.Body).Decode(&reportPayload); err != nil {
+		t.Fatalf("decode performance invalid-format response: %v", err)
+	}
+	if reportPayload.Error != reporting.DescribePerformanceReport().InvalidFormatError() {
+		t.Fatalf("expected canonical performance invalid-format error, got %q", reportPayload.Error)
+	}
+
+	inventoryReq := httptest.NewRequest(
+		http.MethodGet,
+		"/api/admin/reports/inventory/vms/export?format=pdf",
+		nil,
+	)
+	inventoryRec := httptest.NewRecorder()
+	handler.HandleExportVMInventory(inventoryRec, inventoryReq)
+	if inventoryRec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for invalid inventory format, got %d body=%s", inventoryRec.Code, inventoryRec.Body.String())
+	}
+	var inventoryPayload struct {
+		Error string `json:"error"`
+	}
+	if err := json.NewDecoder(inventoryRec.Body).Decode(&inventoryPayload); err != nil {
+		t.Fatalf("decode inventory invalid-format response: %v", err)
+	}
+	if inventoryPayload.Error != reporting.DescribeVMInventoryExport().InvalidFormatError() {
+		t.Fatalf("expected canonical inventory invalid-format error, got %q", inventoryPayload.Error)
+	}
+}
+
 func TestContract_HostedTenantAISettingsFallbackJSONSnapshot(t *testing.T) {
 	t.Setenv("PULSE_HOSTED_MODE", "true")
 

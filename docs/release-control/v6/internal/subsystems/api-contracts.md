@@ -267,13 +267,13 @@ That same catalog payload also owns the optional performance-report capability
 surface: `supportsMetricFilter` and `supportsCustomTitle` are contract flags,
 not UI hints, so frontend consumers and request builders must not render or
 emit unsupported metric-filter or custom-title fields from local assumptions.
-The same performance-report catalog definition also owns backend transport
-validation and download semantics. `internal/api/metrics_reporting_handlers.go`
-must derive allowed formats, default format selection, multi-resource limits,
-optional metric/title field emission, canonical default-title fallback,
-default fallback range window, and
-attachment filename prefixes from the canonical reporting definition instead of
-hardcoding a second local contract.
+The same reporting catalog and inventory export definitions also own backend
+transport validation and download semantics. `internal/api/metrics_reporting_handlers.go`
+and `internal/api/reporting_inventory_handlers.go` must derive allowed formats,
+default format selection, multi-resource limits, optional metric/title field
+emission, canonical default-title fallback, default fallback range window,
+attachment filename stems, and invalid-format validation copy from the
+canonical reporting definitions instead of hardcoding a second local contract.
 Frontend consumers may still keep a local fallback filename for defensive
 download behavior, but when the server returns `Content-Disposition` they must
 prefer that attachment filename as the canonical transport output.

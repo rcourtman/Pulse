@@ -282,8 +282,9 @@ report/export routes.
 That same API-owned performance-report definition also governs transport-side
 validation and attachment naming. Storage and recovery flows may consume those
 downloads, but they must treat allowed formats, multi-resource caps, optional
-metric/title support, default fallback range windows, and filename prefixes as
-API/reporting contract rather than rebuilding local reporting constants.
+metric/title support, default fallback range windows, attachment filename
+stems, and invalid-format validation copy as API/reporting contract rather than
+rebuilding local reporting constants.
 That adjacent export contract now also includes canonical Proxmox pool
 membership for each VM row. Storage and recovery flows may use those current-
 state facts when they need fleet context, but they must consume the API-owned

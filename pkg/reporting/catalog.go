@@ -1,6 +1,10 @@
 package reporting
 
-import "time"
+import (
+	"fmt"
+	"strings"
+	"time"
+)
 
 // ReportingFormatDefinition describes one supported output format for an
 // operator-facing reporting surface.
@@ -70,6 +74,28 @@ func (d PerformanceReportDefinition) SupportsFormat(format ReportFormat) bool {
 	return false
 }
 
+// InvalidFormatError returns the canonical validation message for unsupported
+// performance report formats.
+func (d PerformanceReportDefinition) InvalidFormatError() string {
+	allowed := make([]ReportFormat, 0, len(d.Formats))
+	for _, candidate := range d.Formats {
+		allowed = append(allowed, candidate.Value)
+	}
+	return invalidFormatErrorMessage(allowed)
+}
+
+// SingleAttachmentFilename returns the canonical attachment filename for a
+// single-resource performance report download.
+func (d PerformanceReportDefinition) SingleAttachmentFilename(resourceID string, generatedAt time.Time, format ReportFormat) string {
+	return fmt.Sprintf("%s-%s-%s.%s", d.SingleFilenamePrefix, resourceID, reportingDateStamp(generatedAt), format)
+}
+
+// MultiAttachmentFilename returns the canonical attachment filename for a
+// multi-resource performance report download.
+func (d PerformanceReportDefinition) MultiAttachmentFilename(generatedAt time.Time, format ReportFormat) string {
+	return fmt.Sprintf("%s-%s.%s", d.MultiFilenamePrefix, reportingDateStamp(generatedAt), format)
+}
+
 // DefaultRangeDuration returns the canonical fallback time window for the
 // performance reporting surface.
 func (d PerformanceReportDefinition) DefaultRangeDuration() time.Duration {
@@ -79,6 +105,30 @@ func (d PerformanceReportDefinition) DefaultRangeDuration() time.Duration {
 		}
 	}
 	return 24 * time.Hour
+}
+
+func invalidFormatErrorMessage(allowed []ReportFormat) string {
+	quoted := make([]string, 0, len(allowed))
+	for _, format := range allowed {
+		if format == "" {
+			continue
+		}
+		quoted = append(quoted, fmt.Sprintf("%q", format))
+	}
+	if len(quoted) == 0 {
+		return "Format is not supported"
+	}
+	if len(quoted) == 1 {
+		return fmt.Sprintf("Format must be %s", quoted[0])
+	}
+	if len(quoted) == 2 {
+		return fmt.Sprintf("Format must be %s or %s", quoted[0], quoted[1])
+	}
+	return fmt.Sprintf("Format must be %s, or %s", strings.Join(quoted[:len(quoted)-1], ", "), quoted[len(quoted)-1])
+}
+
+func reportingDateStamp(generatedAt time.Time) string {
+	return generatedAt.UTC().Format("20060102")
 }
 
 // DescribePerformanceReport returns the canonical definition for Pulse's

@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -52,7 +53,7 @@ func normalizePerformanceReportFormat(raw string, definition reporting.Performan
 		format = definition.DefaultFormat
 	}
 	if !definition.SupportsFormat(format) {
-		return "", fmt.Errorf("Format must be 'pdf' or 'csv'")
+		return "", errors.New(definition.InvalidFormatError())
 	}
 	return format, nil
 }
@@ -381,7 +382,7 @@ func (h *ReportingHandlers) HandleGenerateReport(w http.ResponseWriter, r *http.
 	w.Header().Set("Content-Type", contentType)
 	// Build safe filename - sanitize resourceID to prevent header injection
 	safeResourceID := sanitizeFilename(resourceID)
-	filename := fmt.Sprintf("%s-%s-%s.%s", definition.SingleFilenamePrefix, safeResourceID, time.Now().Format("20060102"), format)
+	filename := definition.SingleAttachmentFilename(safeResourceID, time.Now().UTC(), format)
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
 	w.Write(data)
 }
@@ -742,7 +743,7 @@ func (h *ReportingHandlers) HandleGenerateMultiReport(w http.ResponseWriter, r *
 	}
 
 	w.Header().Set("Content-Type", contentType)
-	filename := fmt.Sprintf("%s-%s.%s", definition.MultiFilenamePrefix, time.Now().Format("20060102"), format)
+	filename := definition.MultiAttachmentFilename(time.Now().UTC(), format)
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
 	w.Write(data)
 }

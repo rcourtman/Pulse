@@ -317,6 +317,15 @@ func TestReportingHandlers_ExportVMInventory_InvalidFormat(t *testing.T) {
 	if rr.Code != http.StatusBadRequest {
 		t.Fatalf("expected status %d, got %d body=%s", http.StatusBadRequest, rr.Code, rr.Body.String())
 	}
+	var payload struct {
+		Error string `json:"error"`
+	}
+	if err := json.NewDecoder(rr.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode invalid-format response: %v", err)
+	}
+	if payload.Error != reporting.DescribeVMInventoryExport().InvalidFormatError() {
+		t.Fatalf("expected canonical inventory invalid-format error, got %q", payload.Error)
+	}
 }
 
 func TestReportingHandlers_GenerateMultiReport_UsesCatalogLimit(t *testing.T) {

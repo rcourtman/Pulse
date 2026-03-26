@@ -52,3 +52,41 @@ func TestPerformanceReportDefinition_DefaultRangeDuration(t *testing.T) {
 		t.Fatalf("default range duration = %s, want %s", got, 24*time.Hour)
 	}
 }
+
+func TestPerformanceReportDefinition_InvalidFormatError(t *testing.T) {
+	definition := DescribePerformanceReport()
+
+	if got := definition.InvalidFormatError(); got != `Format must be "pdf" or "csv"` {
+		t.Fatalf("invalid format error = %q", got)
+	}
+}
+
+func TestPerformanceReportDefinition_AttachmentFilenamesUseUTCDateStamp(t *testing.T) {
+	definition := DescribePerformanceReport()
+	generatedAt := time.Date(2026, 3, 26, 0, 30, 0, 0, time.FixedZone("late", -7*60*60))
+
+	if got := definition.SingleAttachmentFilename("node-1", generatedAt, FormatPDF); got != "report-node-1-20260326.pdf" {
+		t.Fatalf("single attachment filename = %q", got)
+	}
+	if got := definition.MultiAttachmentFilename(generatedAt, FormatCSV); got != "fleet-report-20260326.csv" {
+		t.Fatalf("multi attachment filename = %q", got)
+	}
+}
+
+func TestVMInventoryExportDefinition_FormatContract(t *testing.T) {
+	definition := DescribeVMInventoryExport()
+	generatedAt := time.Date(2026, 3, 26, 23, 30, 0, 0, time.FixedZone("early", 2*60*60))
+
+	if !definition.SupportsFormat(FormatCSV) {
+		t.Fatalf("expected csv inventory export support")
+	}
+	if definition.SupportsFormat(FormatPDF) {
+		t.Fatalf("did not expect pdf inventory export support")
+	}
+	if got := definition.InvalidFormatError(); got != `Format must be "csv"` {
+		t.Fatalf("invalid inventory format error = %q", got)
+	}
+	if got := definition.AttachmentFilename(generatedAt); got != "vm-inventory-20260326.csv" {
+		t.Fatalf("inventory attachment filename = %q", got)
+	}
+}

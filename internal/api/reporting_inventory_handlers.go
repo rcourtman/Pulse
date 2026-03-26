@@ -16,12 +16,13 @@ func (h *ReportingHandlers) HandleExportVMInventory(w http.ResponseWriter, r *ht
 		return
 	}
 
+	definition := reporting.DescribeVMInventoryExport()
 	format := reporting.ReportFormat(r.URL.Query().Get("format"))
 	if format == "" {
-		format = reporting.FormatCSV
+		format = definition.Format
 	}
-	if format != reporting.FormatCSV {
-		writeErrorResponse(w, http.StatusBadRequest, "invalid_format", "Format must be 'csv'", nil)
+	if !definition.SupportsFormat(format) {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_format", definition.InvalidFormatError(), nil)
 		return
 	}
 
@@ -32,8 +33,9 @@ func (h *ReportingHandlers) HandleExportVMInventory(w http.ResponseWriter, r *ht
 		}
 	}
 
+	generatedAt := time.Now().UTC()
 	data, err := reporting.GenerateVMInventoryCSV(reporting.VMInventoryData{
-		GeneratedAt: time.Now().UTC(),
+		GeneratedAt: generatedAt,
 		Rows:        buildVMInventoryRows(snapshot.Resources),
 	})
 	if err != nil {
@@ -42,7 +44,7 @@ func (h *ReportingHandlers) HandleExportVMInventory(w http.ResponseWriter, r *ht
 	}
 
 	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
-	filename := fmt.Sprintf("vm-inventory-%s.csv", time.Now().Format("20060102"))
+	filename := definition.AttachmentFilename(generatedAt)
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
 	_, _ = w.Write(data)
 }
