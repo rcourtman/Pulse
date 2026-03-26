@@ -1,14 +1,21 @@
 package api
 
 import (
+	"context"
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"path/filepath"
 	"testing"
+	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
+	recoverymanager "github.com/rcourtman/pulse-go-rewrite/internal/recovery/manager"
+	_ "modernc.org/sqlite"
 )
 
 func TestParseRecoveryPlatformQuery(t *testing.T) {
@@ -239,4 +246,204 @@ func TestBuildRecoveryRollupPayloadExposesCanonicalItemRefField(t *testing.T) {
 	if payload.SubjectRef == nil || payload.SubjectRef.Name != "tank/apps" {
 		t.Fatalf("payload.SubjectRef = %#v, want compatibility subject ref", payload.SubjectRef)
 	}
+}
+
+func TestHandleListPointsToleratesMalformedPersistedMetadata(t *testing.T) {
+	t.Parallel()
+
+	handler, dbPath := newRecoveryHandlerWithPersistedPoint(t, recovery.RecoveryPoint{
+		ID:          "point-bad-json",
+		Provider:    recovery.ProviderKubernetes,
+		Kind:        recovery.KindSnapshot,
+		Mode:        recovery.ModeSnapshot,
+		Outcome:     recovery.OutcomeSuccess,
+		StartedAt:   timePtr(time.Date(2026, 2, 20, 12, 0, 0, 0, time.UTC)),
+		CompletedAt: timePtr(time.Date(2026, 2, 20, 12, 0, 0, 0, time.UTC)),
+		SubjectRef: &recovery.ExternalRef{
+			Type:      "k8s-pvc",
+			Namespace: "default",
+			Name:      "data",
+		},
+		RepositoryRef: &recovery.ExternalRef{
+			Type: "velero-backup-storage-location",
+			Name: "repo-a",
+		},
+		Details: map[string]any{"foo": "bar"},
+	})
+
+	corruptRecoveryRowJSON(t, dbPath, "point-bad-json", true, true, true)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/recovery/points?limit=500", nil)
+	rec := httptest.NewRecorder()
+
+	handler.HandleListPoints(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("HandleListPoints() status = %d, want %d body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	var resp struct {
+		Data []struct {
+			ID            string         `json:"id"`
+			ItemRef       map[string]any `json:"itemRef"`
+			SubjectRef    map[string]any `json:"subjectRef"`
+			RepositoryRef map[string]any `json:"repositoryRef"`
+			Details       map[string]any `json:"details"`
+			Display       struct {
+				SubjectLabel string `json:"subjectLabel"`
+				ItemType     string `json:"itemType"`
+			} `json:"display"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+	if len(resp.Data) != 1 {
+		t.Fatalf("expected exactly 1 point, got %d", len(resp.Data))
+	}
+	point := resp.Data[0]
+	if point.ID != "point-bad-json" {
+		t.Fatalf("point.ID = %q, want point-bad-json", point.ID)
+	}
+	if point.ItemRef != nil || point.SubjectRef != nil || point.RepositoryRef != nil || point.Details != nil {
+		t.Fatalf("expected malformed metadata fields to be omitted, got itemRef=%#v subjectRef=%#v repositoryRef=%#v details=%#v", point.ItemRef, point.SubjectRef, point.RepositoryRef, point.Details)
+	}
+	if point.Display.SubjectLabel != "default/data" {
+		t.Fatalf("display.subjectLabel = %q, want %q", point.Display.SubjectLabel, "default/data")
+	}
+	if point.Display.ItemType != "pvc" {
+		t.Fatalf("display.itemType = %q, want %q", point.Display.ItemType, "pvc")
+	}
+}
+
+func TestHandleListRollupsToleratesMalformedPersistedMetadata(t *testing.T) {
+	t.Parallel()
+
+	handler, dbPath := newRecoveryHandlerWithPersistedPoint(t, recovery.RecoveryPoint{
+		ID:          "rollup-bad-json",
+		Provider:    recovery.ProviderTrueNAS,
+		Kind:        recovery.KindSnapshot,
+		Mode:        recovery.ModeSnapshot,
+		Outcome:     recovery.OutcomeSuccess,
+		StartedAt:   timePtr(time.Date(2026, 2, 21, 12, 0, 0, 0, time.UTC)),
+		CompletedAt: timePtr(time.Date(2026, 2, 21, 12, 0, 0, 0, time.UTC)),
+		SubjectRef: &recovery.ExternalRef{
+			Type: "truenas-dataset",
+			Name: "tank/apps",
+			ID:   "tank/apps",
+		},
+	})
+
+	corruptRecoveryRowJSON(t, dbPath, "rollup-bad-json", true, false, false)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/recovery/rollups?limit=500", nil)
+	rec := httptest.NewRecorder()
+
+	handler.HandleListRollups(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("HandleListRollups() status = %d, want %d body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	var resp struct {
+		Data []struct {
+			RollupID    string         `json:"rollupId"`
+			ItemRef     map[string]any `json:"itemRef"`
+			SubjectRef  map[string]any `json:"subjectRef"`
+			LastOutcome string         `json:"lastOutcome"`
+			Display     struct {
+				SubjectLabel string `json:"subjectLabel"`
+				ItemType     string `json:"itemType"`
+			} `json:"display"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+	if len(resp.Data) != 1 {
+		t.Fatalf("expected exactly 1 rollup, got %d", len(resp.Data))
+	}
+	rollup := resp.Data[0]
+	if rollup.ItemRef != nil || rollup.SubjectRef != nil {
+		t.Fatalf("expected malformed item refs to be omitted, got itemRef=%#v subjectRef=%#v", rollup.ItemRef, rollup.SubjectRef)
+	}
+	if rollup.Display.SubjectLabel != "tank/apps" {
+		t.Fatalf("display.subjectLabel = %q, want %q", rollup.Display.SubjectLabel, "tank/apps")
+	}
+	if rollup.Display.ItemType != "dataset" {
+		t.Fatalf("display.itemType = %q, want %q", rollup.Display.ItemType, "dataset")
+	}
+	if rollup.LastOutcome != "success" {
+		t.Fatalf("lastOutcome = %q, want %q", rollup.LastOutcome, "success")
+	}
+}
+
+func newRecoveryHandlerWithPersistedPoint(t *testing.T, point recovery.RecoveryPoint) (*RecoveryHandlers, string) {
+	t.Helper()
+
+	baseDir := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(baseDir)
+	manager := recoverymanager.New(mtp)
+	store, err := manager.StoreForOrg("default")
+	if err != nil {
+		t.Fatalf("StoreForOrg(default): %v", err)
+	}
+	if err := store.UpsertPoints(context.Background(), []recovery.RecoveryPoint{point}); err != nil {
+		t.Fatalf("UpsertPoints(): %v", err)
+	}
+
+	persistence, err := mtp.GetPersistence("default")
+	if err != nil {
+		t.Fatalf("GetPersistence(default): %v", err)
+	}
+
+	return NewRecoveryHandlers(manager), filepath.Join(persistence.DataDir(), "recovery", "recovery.db")
+}
+
+func corruptRecoveryRowJSON(t *testing.T, dbPath string, rowID string, corruptSubject bool, corruptRepository bool, corruptDetails bool) {
+	t.Helper()
+
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("sql.Open(%q): %v", dbPath, err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+
+	assignments := make([]string, 0, 3)
+	if corruptSubject {
+		assignments = append(assignments, "subject_ref_json = '{'")
+	}
+	if corruptRepository {
+		assignments = append(assignments, "repository_ref_json = '{'")
+	}
+	if corruptDetails {
+		assignments = append(assignments, "details_json = '{'")
+	}
+	if len(assignments) == 0 {
+		t.Fatal("corruptRecoveryRowJSON called without any fields to corrupt")
+	}
+
+	query := "UPDATE recovery_points SET " + joinCSV(assignments) + " WHERE id = ?"
+	if _, err := db.ExecContext(context.Background(), query, rowID); err != nil {
+		t.Fatalf("corrupt recovery row json: %v", err)
+	}
+}
+
+func joinCSV(parts []string) string {
+	switch len(parts) {
+	case 0:
+		return ""
+	case 1:
+		return parts[0]
+	default:
+		out := parts[0]
+		for _, part := range parts[1:] {
+			out += ", " + part
+		}
+		return out
+	}
+}
+
+func timePtr(t time.Time) *time.Time {
+	return &t
 }
