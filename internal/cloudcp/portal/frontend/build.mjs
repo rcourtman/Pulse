@@ -15,10 +15,13 @@ const lockPath = path.join(repoRoot, 'tmp', 'locks', 'pulse-account-frontend-bui
 const manifestPath = path.join(distRoot, 'build_manifest.json');
 const buildInputs = [
   'package.json',
+  'tsconfig.json',
   'build.mjs',
   'src/index.ts',
   'src/shell.ts',
   'src/services.ts',
+  'src/runtime.ts',
+  'src/types.ts',
   'src/styles.css',
 ];
 

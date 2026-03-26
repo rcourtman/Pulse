@@ -66,8 +66,11 @@ Own canonical runtime payload shapes between backend and frontend.
 43. `internal/cloudcp/portal/frontend/src/index.ts`
 44. `internal/cloudcp/portal/frontend/src/shell.ts`
 45. `internal/cloudcp/portal/frontend/src/services.ts`
-46. `internal/cloudcp/portal/frontend/src/styles.css`
-47. `internal/cloudcp/portal/frontend_sync_test.go`
+46. `internal/cloudcp/portal/frontend/src/runtime.ts`
+47. `internal/cloudcp/portal/frontend/src/types.ts`
+48. `internal/cloudcp/portal/frontend/src/styles.css`
+49. `internal/cloudcp/portal/frontend/tsconfig.json`
+50. `internal/cloudcp/portal/frontend_sync_test.go`
 
 ## Shared Boundaries
 
@@ -214,7 +217,11 @@ DOM-scraped account facts in static assets. That canonical renderer now lives
 under `internal/cloudcp/portal/frontend/`, is embedded from
 `internal/cloudcp/portal/dist/`, and is guarded by
 `internal/cloudcp/portal/frontend_sync_test.go`, so the maintained frontend
-sources and the committed embedded bundle cannot drift silently.
+sources and the committed embedded bundle cannot drift silently. The maintained
+portal source tree now also owns explicit runtime/bootstrap type definitions
+plus a package-local `tsc --noEmit` gate, so future account-shell work should
+extend the typed source boundary instead of reviving opaque global runtime
+objects or untyped embedded asset edits.
 Hosted Pulse Cloud tenant-org AI reads now also follow that same canonical
 rule: `internal/api/ai_hosted_runtime.go`, `internal/api/ai_handlers.go`,
 `internal/api/ai_handler.go`, and `internal/api/hosted_billing_state.go`

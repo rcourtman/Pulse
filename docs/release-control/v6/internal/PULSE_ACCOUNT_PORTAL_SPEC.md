@@ -254,9 +254,10 @@ New frontend work should extend that contract deliberately instead of adding
 one-off data attributes or baking production hostnames into static assets. The
 maintained frontend source now lives under `internal/cloudcp/portal/frontend/`,
 is embedded from `internal/cloudcp/portal/dist/`, and is guarded by
-`internal/cloudcp/portal/frontend_sync_test.go`, so Pulse Account frontend work
-should extend that source tree and rebuild the committed bundle instead of
-editing embedded script or CSS blobs directly.
+`internal/cloudcp/portal/frontend_sync_test.go` plus the package-local
+typecheck/build steps, so Pulse Account frontend work should extend that source
+tree and rebuild the committed bundle instead of editing embedded script or CSS
+blobs directly.
 
 ### Post-lane follow-on
 

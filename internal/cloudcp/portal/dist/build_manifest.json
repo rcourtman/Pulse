@@ -1,11 +1,14 @@
 {
-  "source_hash": "f9e071bc97f6d800cf831621a677dbb409502e721382b74a36bb72586181848f",
+  "source_hash": "79525f2dc457afa11c45be4179e152100b2df66f42e6a0ea3b887bf2190a54d8",
   "build_inputs": [
     "package.json",
+    "tsconfig.json",
     "build.mjs",
     "src/index.ts",
     "src/shell.ts",
     "src/services.ts",
+    "src/runtime.ts",
+    "src/types.ts",
     "src/styles.css"
   ]
 }

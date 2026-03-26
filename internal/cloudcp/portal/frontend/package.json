@@ -3,9 +3,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "node build.mjs"
+    "build": "node build.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "devDependencies": {
-    "esbuild": "^0.25.12"
+    "esbuild": "^0.25.12",
+    "typescript": "^5.9.3"
   }
 }

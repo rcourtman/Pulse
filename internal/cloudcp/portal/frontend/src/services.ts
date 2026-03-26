@@ -1,5 +1,37 @@
-(function() {
-  var runtime = window.PulseAccountPortal || {};
+import { PORTAL_RENDER_EVENT, getBootstrap, getCommercialAPIBaseURL as readCommercialAPIBaseURL } from './runtime';
+import type { RefundState, ServiceStatus, VerificationFlowState } from './types';
+
+type FlowID = 'manage' | 'retrieve' | 'export' | 'delete';
+
+interface VerificationFlowDefinition {
+  requestPath: string;
+  confirmPath: string;
+  panelID: string;
+  emailInputID: string;
+  codeInputID?: string;
+  requestButtonID: string;
+  confirmButtonID?: string;
+  step2ID?: string;
+  statusID: string;
+  requestLabel: string;
+  requestPendingLabel: string;
+  confirmLabel?: string;
+  confirmPendingLabel?: string;
+  requestSuccessMessage: string;
+  resendSuccessMessage: string;
+  requestErrorMessage: string;
+  confirmErrorMessage: string;
+  readEmailValue?: () => string;
+  readCodeValue?: () => string;
+  onRequestStart?: () => void;
+  beforeConfirm?: () => boolean;
+  onConfirmSuccess: (data: any, email?: string) => void;
+  renderPanel: (flowState: VerificationFlowState) => void;
+  renderResult?: (result: unknown) => void;
+}
+
+type FormValueElement = HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
+
   var serviceState = {
     openPanelID: '',
     flows: {
@@ -14,9 +46,9 @@
       submitting: false,
       status: emptyStatus(),
     },
-  };
+  } as { openPanelID: string; flows: Record<FlowID, VerificationFlowState>; refund: RefundState };
 
-  function newVerificationFlowState() {
+  function newVerificationFlowState(): VerificationFlowState {
     return {
       pendingEmail: '',
       requesting: false,
@@ -30,7 +62,7 @@
     };
   }
 
-  function emptyStatus() {
+  function emptyStatus(): ServiceStatus {
     return {
       visible: false,
       message: '',
@@ -39,11 +71,15 @@
   }
 
   function getCommercialAPIBaseURL() {
-    return runtime.getCommercialAPIBaseURL ? runtime.getCommercialAPIBaseURL() : '';
+    return readCommercialAPIBaseURL();
   }
 
-  function getElement(id) {
-    return document.getElementById(id);
+  function getElement<T extends HTMLElement = HTMLElement>(id): T | null {
+    return document.getElementById(id) as T | null;
+  }
+
+  function asHTMLElement(target: EventTarget | null): HTMLElement | null {
+    return target instanceof HTMLElement ? target : null;
   }
 
   function escapeText(value) {
@@ -60,12 +96,12 @@
   }
 
   function readValue(id) {
-    var el = getElement(id);
+    var el = getElement<FormValueElement>(id);
     return el ? el.value.trim() : '';
   }
 
   function focusElement(id) {
-    var el = getElement(id);
+    var el = getElement<FormValueElement>(id);
     if (el) el.focus();
   }
 
@@ -84,7 +120,7 @@
   }
 
   function setValue(id, value) {
-    var el = getElement(id);
+    var el = getElement<FormValueElement>(id);
     if (el) {
       el.value = value;
     }
@@ -98,7 +134,7 @@
     });
   }
 
-  function setFlowStatus(flowID, message, isError) {
+  function setFlowStatus(flowID: FlowID, message, isError) {
     serviceState.flows[flowID].status = {
       visible: true,
       message: message,
@@ -106,7 +142,7 @@
     };
   }
 
-  function clearFlowStatus(flowID) {
+  function clearFlowStatus(flowID: FlowID) {
     serviceState.flows[flowID].status = emptyStatus();
   }
 
@@ -131,7 +167,7 @@
   }
 
   function renderButton(id, disabled, label) {
-    var button = getElement(id);
+    var button = getElement<HTMLButtonElement>(id);
     if (!button) return;
     button.disabled = disabled;
     button.textContent = label;
@@ -186,7 +222,7 @@
   function renderRefundPanel() {
     var root = getElement('refund-service-root');
     if (!root) return;
-    var bootstrap = runtime.getBootstrap ? (runtime.getBootstrap() || {}) : {};
+    var bootstrap = getBootstrap();
     var refundSupportURL = (bootstrap.public_site_url || '') + '/refund.html?email=' + encodeURIComponent(serviceState.refund.emailValue || '');
     root.innerHTML = '' +
       '<h3>Refund requests</h3>' +
@@ -207,7 +243,7 @@
       '<div class="service-status" id="refund-inline-status"></div>';
   }
 
-  function resetVerificationFlow(flowID) {
+  function resetVerificationFlow(flowID: FlowID) {
     var flow = verificationFlows[flowID];
     if (!flow) return;
     var previous = serviceState.flows[flowID];
@@ -218,7 +254,7 @@
     }
   }
 
-  var verificationFlows = {
+  var verificationFlows: Record<FlowID, VerificationFlowDefinition> = {
     manage: {
       requestPath: '/v1/manage/request',
       confirmPath: '/v1/manage',
@@ -310,7 +346,14 @@
       renderPanel: function(flowState) {
         var root = getElement('retrieve-service-root');
         if (!root) return;
-        var result = flowState.result;
+        var result = flowState.result as {
+          invoice_url?: string;
+          token?: string;
+          tier?: string;
+          issued_at?: string;
+          expires_at?: string | null;
+          email?: string;
+        } | null;
         var invoiceURL = result && result.invoice_url ? result.invoice_url : '#';
         var invoiceDisplay = result && result.invoice_url ? 'inline-block' : 'none';
         var copyDisplay = result ? 'inline-block' : 'none';
@@ -450,7 +493,7 @@
         return serviceState.flows.delete.codeValue;
       },
       beforeConfirm: function() {
-        if (!getElement('data-delete-confirm-check').checked) {
+        if (!getElement<HTMLInputElement>('data-delete-confirm-check')?.checked) {
           setFlowStatus('delete', 'You must confirm that you understand this action is permanent.', true);
           renderFlow('delete');
           return false;
@@ -458,7 +501,10 @@
         return true;
       },
       onConfirmSuccess: function(data) {
-        getElement('data-delete-confirm-check').checked = false;
+        var checkbox = getElement<HTMLInputElement>('data-delete-confirm-check');
+        if (checkbox) {
+          checkbox.checked = false;
+        }
         resetVerificationFlow('delete');
         setFlowStatus('delete', data.deleted_count > 0 && data.stripe_reminder ? data.message + ' ' + data.stripe_reminder : data.message, false);
       },
@@ -496,7 +542,7 @@
     }
   };
 
-  async function requestVerificationCode(flowID) {
+  async function requestVerificationCode(flowID: FlowID) {
     var flow = verificationFlows[flowID];
     if (!flow) return;
     var email = flow.readEmailValue ? flow.readEmailValue() : readValue(flow.emailInputID);
@@ -504,7 +550,9 @@
       focusElement(flow.emailInputID);
       return;
     }
-    flow.onRequestStart();
+    if (flow.onRequestStart) {
+      flow.onRequestStart();
+    }
     serviceState.flows[flowID].requesting = true;
     clearFlowStatus(flowID);
     renderFlow(flowID);
@@ -523,7 +571,7 @@
     }
   }
 
-  async function resendVerificationCode(flowID, event) {
+  async function resendVerificationCode(flowID: FlowID, event) {
     if (event) event.preventDefault();
     var flow = verificationFlows[flowID];
     if (!flow) return;
@@ -540,7 +588,7 @@
     renderFlow(flowID);
   }
 
-  async function confirmVerificationCode(flowID) {
+  async function confirmVerificationCode(flowID: FlowID) {
     var flow = verificationFlows[flowID];
     if (!flow) return;
     var email = serviceState.flows[flowID].pendingEmail;
@@ -565,7 +613,8 @@
   }
 
   async function copyRetrievedLicense() {
-    var token = serviceState.flows.retrieve.result ? serviceState.flows.retrieve.result.token : '';
+    var result = serviceState.flows.retrieve.result as { token?: string } | null;
+    var token = result && result.token ? result.token : '';
     if (!token) return;
     try {
       await navigator.clipboard.writeText(token);
@@ -599,7 +648,7 @@
   }
 
   function syncServiceStateFromBootstrap() {
-    var bootstrap = runtime.getBootstrap ? (runtime.getBootstrap() || {}) : {};
+    var bootstrap = getBootstrap();
     if (!bootstrap.authenticated) {
       return;
     }
@@ -617,10 +666,10 @@
   }
 
   renderServiceRuntime();
-  document.addEventListener('pulse-account-render', renderServiceRuntime);
+  document.addEventListener(PORTAL_RENDER_EVENT, renderServiceRuntime);
 
   document.addEventListener('click', function(event) {
-    var target = event.target.closest('[data-account-service-action]');
+    var target = asHTMLElement(event.target)?.closest('[data-account-service-action]');
     if (!target) return;
     var action = target.getAttribute('data-account-service-action') || '';
     var panelID = target.getAttribute('data-account-service-panel') || '';
@@ -687,7 +736,7 @@
   });
 
   document.addEventListener('input', function(event) {
-    var target = event.target;
+    var target = asHTMLElement(event.target) as FormValueElement | null;
     if (!target) return;
     var inputKind = target.getAttribute('data-account-service-input') || '';
     switch (inputKind) {
@@ -727,8 +776,7 @@
   });
 
   document.addEventListener('change', function(event) {
-    var target = event.target;
+    var target = asHTMLElement(event.target) as HTMLInputElement | null;
     if (!target || target.id !== 'data-delete-confirm-check') return;
     serviceState.flows.delete.checkboxChecked = !!target.checked;
   });
-})();

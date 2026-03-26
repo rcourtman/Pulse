@@ -1,28 +1,47 @@
-var bootstrapEl = document.getElementById('pulse-account-bootstrap');
-var portalBootstrap = {};
-if (bootstrapEl) {
-  try {
-    portalBootstrap = JSON.parse(bootstrapEl.textContent || '{}');
-  } catch (_) {
-    portalBootstrap = {};
-  }
-}
+import {
+  createAnonymousBootstrap,
+  dispatchPortalRender,
+  getAccountAPIBasePath,
+  getBootstrap,
+  getBootstrapPath,
+  getCommercialAPIBaseURL,
+  getLogoutPath,
+  getMagicLinkRequestPath,
+  getPortalAPIBasePath,
+  getPortalPath,
+  getSignupPath,
+  installRuntime,
+  setBootstrap,
+} from './runtime';
+import type { PortalBootstrapData, PortalLoginState, PortalRuntime } from './types';
 
-var LICENSE_API_BASE = portalBootstrap.commercial_api_base_url || '';
-var PORTAL_PATH = portalBootstrap.portal_path || '/portal';
-var BOOTSTRAP_PATH = portalBootstrap.bootstrap_path || '/api/portal/bootstrap';
-var MAGIC_LINK_REQUEST_PATH = portalBootstrap.magic_link_request_path || '/api/public/magic-link/request';
-var SIGNUP_PATH = portalBootstrap.signup_path || '/signup';
-var LOGOUT_PATH = portalBootstrap.logout_path || '/auth/logout';
-var ACCOUNT_API_BASE_PATH = portalBootstrap.account_api_base_path || '/api/accounts';
-var PORTAL_API_BASE_PATH = portalBootstrap.portal_api_base_path || '/api/portal';
+var portalBootstrap: PortalBootstrapData = getBootstrap();
+var LICENSE_API_BASE = getCommercialAPIBaseURL();
+var PORTAL_PATH = getPortalPath();
+var BOOTSTRAP_PATH = getBootstrapPath();
+var MAGIC_LINK_REQUEST_PATH = getMagicLinkRequestPath();
+var SIGNUP_PATH = getSignupPath();
+var LOGOUT_PATH = getLogoutPath();
+var ACCOUNT_API_BASE_PATH = getAccountAPIBasePath();
+var PORTAL_API_BASE_PATH = getPortalAPIBasePath();
 
-var loginState = {
+var loginState: PortalLoginState = {
   emailValue: '',
   sending: false,
   success: false,
   error: '',
 };
+
+type FormValueElement = HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
+type ToastElement = HTMLElement & { _timer?: ReturnType<typeof setTimeout> };
+
+function getElement<T extends HTMLElement = HTMLElement>(id): T | null {
+  return document.getElementById(id) as T | null;
+}
+
+function asHTMLElement(target: EventTarget | null): HTMLElement | null {
+  return target instanceof HTMLElement ? target : null;
+}
 
 function escapeHTML(value) {
   return String(value || '')
@@ -49,24 +68,6 @@ function roleBadgeHTML(role) {
   if (role === 'admin') return '<span class="badge" style="background:#f1f5f9;color:#64748b">Admin</span>';
   if (role === 'tech') return '<span class="badge" style="background:#f1f5f9;color:#64748b">Tech</span>';
   return '';
-}
-
-function anonymousBootstrap() {
-  return {
-    authenticated: false,
-    email: '',
-    public_site_url: portalBootstrap.public_site_url || 'https://pulserelay.pro',
-    support_email: portalBootstrap.support_email || 'support@pulserelay.pro',
-    commercial_api_base_url: LICENSE_API_BASE,
-    portal_path: PORTAL_PATH,
-    bootstrap_path: BOOTSTRAP_PATH,
-    magic_link_request_path: MAGIC_LINK_REQUEST_PATH,
-    signup_path: SIGNUP_PATH,
-    logout_path: LOGOUT_PATH,
-    account_api_base_path: ACCOUNT_API_BASE_PATH,
-    portal_api_base_path: PORTAL_API_BASE_PATH,
-    accounts: [],
-  };
 }
 
 function renderHeader() {
@@ -350,10 +351,6 @@ function renderSignedOutPortal() {
   );
 }
 
-function dispatchPortalRender() {
-  document.dispatchEvent(new CustomEvent('pulse-account-render'));
-}
-
 function renderPortalApp() {
   renderHeader();
   var root = document.getElementById('portal-app-root');
@@ -366,15 +363,15 @@ function renderPortalApp() {
 }
 
 function applyBootstrap(data) {
-  portalBootstrap = data || anonymousBootstrap();
-  LICENSE_API_BASE = portalBootstrap.commercial_api_base_url || LICENSE_API_BASE;
-  PORTAL_PATH = portalBootstrap.portal_path || PORTAL_PATH;
-  BOOTSTRAP_PATH = portalBootstrap.bootstrap_path || BOOTSTRAP_PATH;
-  MAGIC_LINK_REQUEST_PATH = portalBootstrap.magic_link_request_path || MAGIC_LINK_REQUEST_PATH;
-  SIGNUP_PATH = portalBootstrap.signup_path || SIGNUP_PATH;
-  LOGOUT_PATH = portalBootstrap.logout_path || LOGOUT_PATH;
-  ACCOUNT_API_BASE_PATH = portalBootstrap.account_api_base_path || ACCOUNT_API_BASE_PATH;
-  PORTAL_API_BASE_PATH = portalBootstrap.portal_api_base_path || PORTAL_API_BASE_PATH;
+  portalBootstrap = setBootstrap(data || createAnonymousBootstrap());
+  LICENSE_API_BASE = getCommercialAPIBaseURL();
+  PORTAL_PATH = getPortalPath();
+  BOOTSTRAP_PATH = getBootstrapPath();
+  MAGIC_LINK_REQUEST_PATH = getMagicLinkRequestPath();
+  SIGNUP_PATH = getSignupPath();
+  LOGOUT_PATH = getLogoutPath();
+  ACCOUNT_API_BASE_PATH = getAccountAPIBasePath();
+  PORTAL_API_BASE_PATH = getPortalAPIBasePath();
   if (!portalBootstrap.authenticated && !loginState.emailValue) {
     loginState.emailValue = portalBootstrap.email || '';
   }
@@ -388,7 +385,7 @@ async function refreshBootstrap() {
       headers: { 'Accept': 'application/json' }
     });
     if (response.status === 401) {
-      applyBootstrap(anonymousBootstrap());
+      applyBootstrap(createAnonymousBootstrap());
       return true;
     }
     if (!response.ok) return false;
@@ -399,8 +396,8 @@ async function refreshBootstrap() {
   return false;
 }
 
-function showToast(msg, isError) {
-  var t = document.getElementById('toast');
+function showToast(msg, isError = false) {
+  var t = getElement<ToastElement>('toast');
   if (!t) return;
   t.textContent = msg;
   t.className = 'toast visible' + (isError ? ' error' : '');
@@ -419,7 +416,7 @@ function resetLoginState(options) {
 async function sendMagicLink() {
   var email = String(loginState.emailValue || '').trim();
   if (!email) {
-    var input = document.getElementById('portal-login-email');
+    var input = getElement<FormValueElement>('portal-login-email');
     if (input) input.focus();
     return;
   }
@@ -451,7 +448,7 @@ async function sendMagicLink() {
   renderPortalApp();
 }
 
-window.PulseAccountPortal = {
+var portalRuntime: PortalRuntime = {
   getBootstrap: function() {
     return portalBootstrap;
   },
@@ -470,9 +467,10 @@ window.PulseAccountPortal = {
   refreshBootstrap: refreshBootstrap,
   showToast: showToast,
 };
+installRuntime(portalRuntime);
 
 document.addEventListener('click', function(event) {
-  var portalActionEl = event.target.closest('[data-portal-action]');
+  var portalActionEl = asHTMLElement(event.target)?.closest('[data-portal-action]');
   if (portalActionEl) {
     var portalAction = portalActionEl.getAttribute('data-portal-action') || '';
     switch (portalAction) {
@@ -492,7 +490,7 @@ document.addEventListener('click', function(event) {
     }
   }
 
-  var logoutBtn = event.target.closest('#logout-btn');
+  var logoutBtn = asHTMLElement(event.target)?.closest('#logout-btn') as HTMLButtonElement | null;
   if (logoutBtn) {
     event.preventDefault();
     logoutBtn.disabled = true;
@@ -506,7 +504,7 @@ document.addEventListener('click', function(event) {
     return;
   }
 
-  var actionEl = event.target.closest('[data-action]');
+  var actionEl = asHTMLElement(event.target)?.closest('[data-action]');
   if (!actionEl) return;
   var action = actionEl.getAttribute('data-action') || '';
   var accountID = actionEl.getAttribute('data-account-id') || '';
@@ -556,7 +554,7 @@ document.addEventListener('click', function(event) {
 });
 
 document.addEventListener('change', function(event) {
-  var target = event.target;
+  var target = asHTMLElement(event.target) as HTMLSelectElement | null;
   if (!target || target.getAttribute('data-action') !== 'change-role') return;
   changeRole(
     target.getAttribute('data-account-id') || '',
@@ -566,7 +564,7 @@ document.addEventListener('change', function(event) {
 });
 
 document.addEventListener('input', function(event) {
-  var target = event.target;
+  var target = asHTMLElement(event.target) as FormValueElement | null;
   if (!target) return;
   if (target.getAttribute('data-portal-input') === 'login-email') {
     loginState.emailValue = target.value;
@@ -579,17 +577,17 @@ function toggleAddWorkspace(accountID) {
   var visible = form.classList.contains('visible');
   form.classList.toggle('visible', !visible);
   if (!visible) {
-    var input = document.getElementById('ws-name-' + accountID);
+    var input = getElement<FormValueElement>('ws-name-' + accountID);
     if (input) input.focus();
   }
 }
 
 async function createWorkspace(accountID) {
-  var nameEl = document.getElementById('ws-name-' + accountID);
+  var nameEl = getElement<FormValueElement>('ws-name-' + accountID);
   if (!nameEl) return;
   var name = nameEl.value.trim();
   if (!name) { nameEl.focus(); return; }
-  var spinner = document.getElementById('ws-spinner-' + accountID);
+  var spinner = getElement('ws-spinner-' + accountID);
   if (spinner) spinner.style.display = 'block';
   try {
     var resp = await fetch(ACCOUNT_API_BASE_PATH + '/' + accountID + '/tenants', {
@@ -757,8 +755,8 @@ async function refreshAccountTeamSection(accountID) {
 }
 
 async function inviteMember(accountID) {
-  var emailEl = document.getElementById('invite-email-' + accountID);
-  var roleEl = document.getElementById('invite-role-' + accountID);
+  var emailEl = getElement<HTMLInputElement>('invite-email-' + accountID);
+  var roleEl = getElement<HTMLSelectElement>('invite-role-' + accountID);
   if (!emailEl || !roleEl) return;
   var email = emailEl.value.trim();
   if (!email) { emailEl.focus(); return; }
