@@ -84,6 +84,340 @@
     };
   }
 
+  // src/account_controller.ts
+  function getElement(id) {
+    return document.getElementById(id);
+  }
+  function asHTMLElement(target) {
+    return target instanceof HTMLElement ? target : null;
+  }
+  function setTbodyMessage(tbody, msg, isError) {
+    tbody.textContent = "";
+    const tr = document.createElement("tr");
+    const td = document.createElement("td");
+    td.setAttribute("colspan", "3");
+    td.style.cssText = "text-align:center;padding:16px;color:" + (isError ? "#991b1b" : "#94a3b8");
+    td.textContent = msg;
+    tr.appendChild(td);
+    tbody.appendChild(tr);
+  }
+  function installAccountController(deps) {
+    const refreshOrRedirect = async () => {
+      if (!await deps.refreshBootstrap()) {
+        window.location.href = deps.getPortalPath();
+        return false;
+      }
+      return true;
+    };
+    const loadTeam = async (accountID) => {
+      const tbody = getElement("team-list-" + accountID);
+      const section = getElement("team-section-" + accountID);
+      if (!tbody || !section) return;
+      const actorRole = section.getAttribute("data-actor-role") || "";
+      const isOwner = actorRole === "owner";
+      setTbodyMessage(tbody, "Loading\u2026", false);
+      try {
+        const r = await fetch(deps.getAccountAPIBasePath() + "/" + encodeURIComponent(accountID) + "/members");
+        if (!r.ok) {
+          setTbodyMessage(tbody, "Failed to load team.", true);
+          return;
+        }
+        const members = await r.json();
+        if (!members || members.length === 0) {
+          setTbodyMessage(tbody, "No team members.", false);
+          return;
+        }
+        const allRoles = ["owner", "admin", "tech", "read_only"];
+        const nonOwnerRoles = ["admin", "tech", "read_only"];
+        tbody.textContent = "";
+        for (let i = 0; i < members.length; i += 1) {
+          const member = members[i];
+          const tr = document.createElement("tr");
+          const tdEmail = document.createElement("td");
+          tdEmail.textContent = member.email;
+          tr.appendChild(tdEmail);
+          const tdRole = document.createElement("td");
+          if (member.role === "owner" && !isOwner) {
+            tdRole.textContent = "owner";
+          } else {
+            const sel = document.createElement("select");
+            const roles = isOwner ? allRoles : nonOwnerRoles;
+            for (let j = 0; j < roles.length; j += 1) {
+              const opt = document.createElement("option");
+              opt.value = roles[j];
+              opt.textContent = roles[j].replace("_", " ");
+              if (member.role === roles[j]) opt.selected = true;
+              sel.appendChild(opt);
+            }
+            sel.setAttribute("data-action", "change-role");
+            sel.setAttribute("data-account-id", accountID);
+            sel.setAttribute("data-user-id", member.user_id);
+            tdRole.appendChild(sel);
+          }
+          tr.appendChild(tdRole);
+          const tdAction = document.createElement("td");
+          if (!(member.role === "owner" && !isOwner)) {
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = "btn-remove";
+            btn.textContent = "Remove";
+            btn.setAttribute("data-action", "remove-member");
+            btn.setAttribute("data-account-id", accountID);
+            btn.setAttribute("data-user-id", member.user_id);
+            btn.setAttribute("data-member-email", member.email);
+            tdAction.appendChild(btn);
+          }
+          tr.appendChild(tdAction);
+          tbody.appendChild(tr);
+        }
+      } catch {
+        setTbodyMessage(tbody, "Network error.", true);
+      }
+    };
+    const refreshAccountTeamSection = async (accountID) => {
+      if (!await refreshOrRedirect()) {
+        return false;
+      }
+      const section = getElement("team-section-" + accountID);
+      if (!section) {
+        return true;
+      }
+      section.classList.add("visible");
+      await loadTeam(accountID);
+      return true;
+    };
+    const toggleAddWorkspace = (accountID) => {
+      const form = getElement("add-ws-form-" + accountID);
+      if (!form) return;
+      const visible = form.classList.contains("visible");
+      form.classList.toggle("visible", !visible);
+      if (!visible) {
+        const input = getElement("ws-name-" + accountID);
+        if (input) input.focus();
+      }
+    };
+    const createWorkspace = async (accountID) => {
+      const nameEl = getElement("ws-name-" + accountID);
+      if (!nameEl) return;
+      const name = nameEl.value.trim();
+      if (!name) {
+        nameEl.focus();
+        return;
+      }
+      const spinner = getElement("ws-spinner-" + accountID);
+      if (spinner) spinner.style.display = "block";
+      try {
+        const resp = await fetch(deps.getAccountAPIBasePath() + "/" + accountID + "/tenants", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ display_name: name })
+        });
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({}));
+          deps.showToast(err && err.error || "Failed to create workspace", true);
+          return;
+        }
+        if (!await refreshOrRedirect()) {
+          return;
+        }
+        deps.showToast("Workspace created!");
+      } catch {
+        deps.showToast("Network error. Please try again.", true);
+      } finally {
+        if (spinner) spinner.style.display = "none";
+      }
+    };
+    const suspendOrDelete = async (evt, accountID, tenantID, state, name) => {
+      evt.stopPropagation();
+      const action = state === "active" ? "Suspend" : "Delete";
+      if (!window.confirm(action + ' workspace "' + name + '"?')) return;
+      const method = state === "active" ? "PATCH" : "DELETE";
+      const body = state === "active" ? JSON.stringify({ state: "suspended" }) : void 0;
+      try {
+        const response = await fetch(deps.getAccountAPIBasePath() + "/" + accountID + "/tenants/" + tenantID, {
+          method,
+          headers: body ? { "Content-Type": "application/json" } : {},
+          body
+        });
+        if (!response.ok) {
+          deps.showToast("Failed to " + action.toLowerCase() + " workspace.", true);
+          return;
+        }
+        if (!await refreshOrRedirect()) {
+          return;
+        }
+        deps.showToast(action + "d workspace.");
+      } catch {
+        deps.showToast("Network error.", true);
+      }
+    };
+    const openBilling = async (accountID) => {
+      try {
+        const r = await fetch(deps.getPortalAPIBasePath() + "/billing?account_id=" + encodeURIComponent(accountID), { method: "POST" });
+        if (!r.ok) {
+          const err = await r.json().catch(() => ({}));
+          deps.showToast(err && err.error || "Failed to open billing portal.", true);
+          return;
+        }
+        const data = await r.json();
+        if (data && data.url) {
+          window.location.href = data.url;
+        } else {
+          deps.showToast("Failed to open billing portal.", true);
+        }
+      } catch {
+        deps.showToast("Network error.", true);
+      }
+    };
+    const toggleTeam = (accountID) => {
+      const section = getElement("team-section-" + accountID);
+      if (!section) return;
+      const visible = section.classList.contains("visible");
+      section.classList.toggle("visible", !visible);
+      if (!visible) {
+        void loadTeam(accountID);
+      }
+    };
+    const inviteMember = async (accountID) => {
+      const emailEl = getElement("invite-email-" + accountID);
+      const roleEl = getElement("invite-role-" + accountID);
+      if (!emailEl || !roleEl) return;
+      const email = emailEl.value.trim();
+      if (!email) {
+        emailEl.focus();
+        return;
+      }
+      try {
+        const r = await fetch(deps.getAccountAPIBasePath() + "/" + encodeURIComponent(accountID) + "/members", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, role: roleEl.value })
+        });
+        if (r.status === 409) {
+          deps.showToast("Member already exists.", true);
+          return;
+        }
+        if (!r.ok) {
+          const err = await r.text();
+          deps.showToast(err || "Failed to invite member.", true);
+          return;
+        }
+        emailEl.value = "";
+        if (!await refreshAccountTeamSection(accountID)) {
+          return;
+        }
+        deps.showToast("Member invited!");
+      } catch {
+        deps.showToast("Network error.", true);
+      }
+    };
+    const changeRole = async (accountID, userID, newRole) => {
+      try {
+        const r = await fetch(deps.getAccountAPIBasePath() + "/" + encodeURIComponent(accountID) + "/members/" + encodeURIComponent(userID), {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ role: newRole })
+        });
+        if (r.status === 409) {
+          deps.showToast("Cannot demote last owner.", true);
+          await loadTeam(accountID);
+          return;
+        }
+        if (!r.ok) {
+          deps.showToast("Failed to update role.", true);
+          await loadTeam(accountID);
+          return;
+        }
+        if (!await refreshAccountTeamSection(accountID)) {
+          return;
+        }
+        deps.showToast("Role updated.");
+      } catch {
+        deps.showToast("Network error.", true);
+        await loadTeam(accountID);
+      }
+    };
+    const removeMember = async (accountID, userID, email) => {
+      if (!window.confirm("Remove " + email + " from this account?")) return;
+      try {
+        const r = await fetch(deps.getAccountAPIBasePath() + "/" + encodeURIComponent(accountID) + "/members/" + encodeURIComponent(userID), {
+          method: "DELETE"
+        });
+        if (r.status === 409) {
+          deps.showToast("Cannot remove last owner.", true);
+          return;
+        }
+        if (!r.ok) {
+          deps.showToast("Failed to remove member.", true);
+          return;
+        }
+        if (!await refreshAccountTeamSection(accountID)) {
+          return;
+        }
+        deps.showToast("Member removed.");
+      } catch {
+        deps.showToast("Network error.", true);
+      }
+    };
+    document.addEventListener("click", function(event) {
+      const actionEl = asHTMLElement(event.target)?.closest("[data-action]");
+      if (!actionEl) return;
+      const action = actionEl.getAttribute("data-action") || "";
+      const accountID = actionEl.getAttribute("data-account-id") || "";
+      switch (action) {
+        case "toggle-add-workspace":
+          event.preventDefault();
+          toggleAddWorkspace(accountID);
+          return;
+        case "open-billing":
+          event.preventDefault();
+          void openBilling(accountID);
+          return;
+        case "toggle-team":
+          event.preventDefault();
+          toggleTeam(accountID);
+          return;
+        case "invite-member":
+          event.preventDefault();
+          void inviteMember(accountID);
+          return;
+        case "create-workspace":
+          event.preventDefault();
+          void createWorkspace(accountID);
+          return;
+        case "workspace-manage":
+          event.preventDefault();
+          void suspendOrDelete(
+            event,
+            accountID,
+            actionEl.getAttribute("data-workspace-id") || "",
+            actionEl.getAttribute("data-workspace-state") || "",
+            actionEl.getAttribute("data-workspace-name") || ""
+          );
+          return;
+        case "remove-member":
+          event.preventDefault();
+          void removeMember(
+            accountID,
+            actionEl.getAttribute("data-user-id") || "",
+            actionEl.getAttribute("data-member-email") || ""
+          );
+          return;
+        default:
+          return;
+      }
+    });
+    document.addEventListener("change", function(event) {
+      const target = asHTMLElement(event.target);
+      if (!target || target.getAttribute("data-action") !== "change-role") return;
+      void changeRole(
+        target.getAttribute("data-account-id") || "",
+        target.getAttribute("data-user-id") || "",
+        target.value
+      );
+    });
+  }
+
   // src/shell.ts
   var portalBootstrap = getBootstrap();
   var LICENSE_API_BASE = getCommercialAPIBaseURL();
@@ -100,10 +434,10 @@
     success: false,
     error: ""
   };
-  function getElement(id) {
+  function getElement2(id) {
     return document.getElementById(id);
   }
-  function asHTMLElement(target) {
+  function asHTMLElement2(target) {
     return target instanceof HTMLElement ? target : null;
   }
   function escapeHTML(value) {
@@ -238,7 +572,7 @@
     return false;
   }
   function showToast(msg, isError = false) {
-    var t = getElement("toast");
+    var t = getElement2("toast");
     if (!t) return;
     t.textContent = msg;
     t.className = "toast visible" + (isError ? " error" : "");
@@ -250,7 +584,7 @@
   async function sendMagicLink() {
     var email = String(loginState.emailValue || "").trim();
     if (!email) {
-      var input = getElement("portal-login-email");
+      var input = getElement2("portal-login-email");
       if (input) input.focus();
       return;
     }
@@ -282,7 +616,7 @@
     renderPortalApp();
   }
   document.addEventListener("click", function(event) {
-    var portalActionEl = asHTMLElement(event.target)?.closest("[data-portal-action]");
+    var portalActionEl = asHTMLElement2(event.target)?.closest("[data-portal-action]");
     if (portalActionEl) {
       var portalAction = portalActionEl.getAttribute("data-portal-action") || "";
       switch (portalAction) {
@@ -301,7 +635,7 @@
           break;
       }
     }
-    var logoutBtn = asHTMLElement(event.target)?.closest("#logout-btn");
+    var logoutBtn = asHTMLElement2(event.target)?.closest("#logout-btn");
     if (logoutBtn) {
       event.preventDefault();
       logoutBtn.disabled = true;
@@ -315,335 +649,27 @@
       })();
       return;
     }
-    var actionEl = asHTMLElement(event.target)?.closest("[data-action]");
-    if (!actionEl) return;
-    var action = actionEl.getAttribute("data-action") || "";
-    var accountID = actionEl.getAttribute("data-account-id") || "";
-    switch (action) {
-      case "toggle-add-workspace":
-        event.preventDefault();
-        toggleAddWorkspace(accountID);
-        return;
-      case "open-billing":
-        event.preventDefault();
-        openBilling(accountID);
-        return;
-      case "toggle-team":
-        event.preventDefault();
-        toggleTeam(accountID);
-        return;
-      case "invite-member":
-        event.preventDefault();
-        inviteMember(accountID);
-        return;
-      case "create-workspace":
-        event.preventDefault();
-        createWorkspace(accountID);
-        return;
-      case "workspace-manage":
-        event.preventDefault();
-        suspendOrDelete(
-          event,
-          accountID,
-          actionEl.getAttribute("data-workspace-id") || "",
-          actionEl.getAttribute("data-workspace-state") || "",
-          actionEl.getAttribute("data-workspace-name") || ""
-        );
-        return;
-      case "remove-member":
-        event.preventDefault();
-        removeMember(
-          accountID,
-          actionEl.getAttribute("data-user-id") || "",
-          actionEl.getAttribute("data-member-email") || ""
-        );
-        return;
-      default:
-        return;
-    }
-  });
-  document.addEventListener("change", function(event) {
-    var target = asHTMLElement(event.target);
-    if (!target || target.getAttribute("data-action") !== "change-role") return;
-    changeRole(
-      target.getAttribute("data-account-id") || "",
-      target.getAttribute("data-user-id") || "",
-      target.value
-    );
   });
   document.addEventListener("input", function(event) {
-    var target = asHTMLElement(event.target);
+    var target = asHTMLElement2(event.target);
     if (!target) return;
     if (target.getAttribute("data-portal-input") === "login-email") {
       loginState.emailValue = target.value;
     }
   });
-  function toggleAddWorkspace(accountID) {
-    var form = document.getElementById("add-ws-form-" + accountID);
-    if (!form) return;
-    var visible = form.classList.contains("visible");
-    form.classList.toggle("visible", !visible);
-    if (!visible) {
-      var input = getElement("ws-name-" + accountID);
-      if (input) input.focus();
-    }
-  }
-  async function createWorkspace(accountID) {
-    var nameEl = getElement("ws-name-" + accountID);
-    if (!nameEl) return;
-    var name = nameEl.value.trim();
-    if (!name) {
-      nameEl.focus();
-      return;
-    }
-    var spinner = getElement("ws-spinner-" + accountID);
-    if (spinner) spinner.style.display = "block";
-    try {
-      var resp = await fetch(ACCOUNT_API_BASE_PATH + "/" + accountID + "/tenants", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ display_name: name })
-      });
-      if (!resp.ok) {
-        var err = await resp.json().catch(function() {
-          return {};
-        });
-        showToast(err && err.error || "Failed to create workspace", true);
-        return;
-      }
-      if (!await refreshBootstrap()) {
-        window.location.href = PORTAL_PATH;
-        return;
-      }
-      showToast("Workspace created!");
-    } catch (_) {
-      showToast("Network error. Please try again.", true);
-    } finally {
-      if (spinner) spinner.style.display = "none";
-    }
-  }
-  async function suspendOrDelete(evt, accountID, tenantID, state, name) {
-    evt.stopPropagation();
-    var action = state === "active" ? "Suspend" : "Delete";
-    if (!confirm(action + ' workspace "' + name + '"?')) return;
-    var method = state === "active" ? "PATCH" : "DELETE";
-    var body = state === "active" ? JSON.stringify({ state: "suspended" }) : void 0;
-    try {
-      var response = await fetch(ACCOUNT_API_BASE_PATH + "/" + accountID + "/tenants/" + tenantID, {
-        method,
-        headers: body ? { "Content-Type": "application/json" } : {},
-        body
-      });
-      if (!response.ok) {
-        showToast("Failed to " + action.toLowerCase() + " workspace.", true);
-        return;
-      }
-      if (!await refreshBootstrap()) {
-        window.location.href = PORTAL_PATH;
-        return;
-      }
-      showToast(action + "d workspace.");
-    } catch (_) {
-      showToast("Network error.", true);
-    }
-  }
-  async function openBilling(accountID) {
-    try {
-      var r = await fetch(PORTAL_API_BASE_PATH + "/billing?account_id=" + encodeURIComponent(accountID), { method: "POST" });
-      if (!r.ok) {
-        var err = await r.json().catch(function() {
-          return {};
-        });
-        showToast(err && err.error || "Failed to open billing portal.", true);
-        return;
-      }
-      var data = await r.json();
-      if (data && data.url) {
-        window.location.href = data.url;
-      } else {
-        showToast("Failed to open billing portal.", true);
-      }
-    } catch (_) {
-      showToast("Network error.", true);
-    }
-  }
-  function toggleTeam(accountID) {
-    var section = document.getElementById("team-section-" + accountID);
-    if (!section) return;
-    var visible = section.classList.contains("visible");
-    section.classList.toggle("visible", !visible);
-    if (!visible) loadTeam(accountID);
-  }
-  function setTbodyMessage(tbody, msg, isError) {
-    tbody.textContent = "";
-    var tr = document.createElement("tr");
-    var td = document.createElement("td");
-    td.setAttribute("colspan", "3");
-    td.style.cssText = "text-align:center;padding:16px;color:" + (isError ? "#991b1b" : "#94a3b8");
-    td.textContent = msg;
-    tr.appendChild(td);
-    tbody.appendChild(tr);
-  }
-  async function loadTeam(accountID) {
-    var tbody = document.getElementById("team-list-" + accountID);
-    var section = document.getElementById("team-section-" + accountID);
-    if (!tbody || !section) return;
-    var actorRole = section.getAttribute("data-actor-role") || "";
-    var isOwner = actorRole === "owner";
-    setTbodyMessage(tbody, "Loading\u2026", false);
-    try {
-      var r = await fetch(ACCOUNT_API_BASE_PATH + "/" + encodeURIComponent(accountID) + "/members");
-      if (!r.ok) {
-        setTbodyMessage(tbody, "Failed to load team.", true);
-        return;
-      }
-      var members = await r.json();
-      if (!members || members.length === 0) {
-        setTbodyMessage(tbody, "No team members.", false);
-        return;
-      }
-      var allRoles = ["owner", "admin", "tech", "read_only"];
-      var nonOwnerRoles = ["admin", "tech", "read_only"];
-      tbody.textContent = "";
-      for (var i = 0; i < members.length; i++) {
-        (function(m) {
-          var tr = document.createElement("tr");
-          var tdEmail = document.createElement("td");
-          tdEmail.textContent = m.email;
-          tr.appendChild(tdEmail);
-          var tdRole = document.createElement("td");
-          if (m.role === "owner" && !isOwner) {
-            tdRole.textContent = "owner";
-          } else {
-            var sel = document.createElement("select");
-            var roles = isOwner ? allRoles : nonOwnerRoles;
-            for (var j = 0; j < roles.length; j++) {
-              var opt = document.createElement("option");
-              opt.value = roles[j];
-              opt.textContent = roles[j].replace("_", " ");
-              if (m.role === roles[j]) opt.selected = true;
-              sel.appendChild(opt);
-            }
-            sel.setAttribute("data-action", "change-role");
-            sel.setAttribute("data-account-id", accountID);
-            sel.setAttribute("data-user-id", m.user_id);
-            tdRole.appendChild(sel);
-          }
-          tr.appendChild(tdRole);
-          var tdAction = document.createElement("td");
-          if (!(m.role === "owner" && !isOwner)) {
-            var btn = document.createElement("button");
-            btn.type = "button";
-            btn.className = "btn-remove";
-            btn.textContent = "Remove";
-            btn.setAttribute("data-action", "remove-member");
-            btn.setAttribute("data-account-id", accountID);
-            btn.setAttribute("data-user-id", m.user_id);
-            btn.setAttribute("data-member-email", m.email);
-            tdAction.appendChild(btn);
-          }
-          tr.appendChild(tdAction);
-          tbody.appendChild(tr);
-        })(members[i]);
-      }
-    } catch (_) {
-      setTbodyMessage(tbody, "Network error.", true);
-    }
-  }
-  async function refreshAccountTeamSection(accountID) {
-    if (!await refreshBootstrap()) {
-      window.location.href = PORTAL_PATH;
-      return false;
-    }
-    var section = document.getElementById("team-section-" + accountID);
-    if (!section) {
-      return true;
-    }
-    section.classList.add("visible");
-    await loadTeam(accountID);
-    return true;
-  }
-  async function inviteMember(accountID) {
-    var emailEl = getElement("invite-email-" + accountID);
-    var roleEl = getElement("invite-role-" + accountID);
-    if (!emailEl || !roleEl) return;
-    var email = emailEl.value.trim();
-    if (!email) {
-      emailEl.focus();
-      return;
-    }
-    try {
-      var r = await fetch(ACCOUNT_API_BASE_PATH + "/" + encodeURIComponent(accountID) + "/members", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, role: roleEl.value })
-      });
-      if (r.status === 409) {
-        showToast("Member already exists.", true);
-        return;
-      }
-      if (!r.ok) {
-        var err = await r.text();
-        showToast(err || "Failed to invite member.", true);
-        return;
-      }
-      emailEl.value = "";
-      if (!await refreshAccountTeamSection(accountID)) {
-        return;
-      }
-      showToast("Member invited!");
-    } catch (_) {
-      showToast("Network error.", true);
-    }
-  }
-  async function changeRole(accountID, userID, newRole) {
-    try {
-      var r = await fetch(ACCOUNT_API_BASE_PATH + "/" + encodeURIComponent(accountID) + "/members/" + encodeURIComponent(userID), {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ role: newRole })
-      });
-      if (r.status === 409) {
-        showToast("Cannot demote last owner.", true);
-        loadTeam(accountID);
-        return;
-      }
-      if (!r.ok) {
-        showToast("Failed to update role.", true);
-        loadTeam(accountID);
-        return;
-      }
-      if (!await refreshAccountTeamSection(accountID)) {
-        return;
-      }
-      showToast("Role updated.");
-    } catch (_) {
-      showToast("Network error.", true);
-      loadTeam(accountID);
-    }
-  }
-  async function removeMember(accountID, userID, email) {
-    if (!confirm("Remove " + email + " from this account?")) return;
-    try {
-      var r = await fetch(ACCOUNT_API_BASE_PATH + "/" + encodeURIComponent(accountID) + "/members/" + encodeURIComponent(userID), {
-        method: "DELETE"
-      });
-      if (r.status === 409) {
-        showToast("Cannot remove last owner.", true);
-        return;
-      }
-      if (!r.ok) {
-        showToast("Failed to remove member.", true);
-        return;
-      }
-      if (!await refreshAccountTeamSection(accountID)) {
-        return;
-      }
-      showToast("Member removed.");
-    } catch (_) {
-      showToast("Network error.", true);
-    }
-  }
+  installAccountController({
+    getAccountAPIBasePath: function() {
+      return ACCOUNT_API_BASE_PATH;
+    },
+    getPortalAPIBasePath: function() {
+      return PORTAL_API_BASE_PATH;
+    },
+    getPortalPath: function() {
+      return PORTAL_PATH;
+    },
+    refreshBootstrap,
+    showToast
+  });
   loginState.emailValue = portalBootstrap.email || "";
   applyBootstrap(portalBootstrap);
   if (portalBootstrap.authenticated) {
@@ -689,10 +715,10 @@
   function getCommercialAPIBaseURL2() {
     return getCommercialAPIBaseURL();
   }
-  function getElement2(id) {
+  function getElement3(id) {
     return document.getElementById(id);
   }
-  function asHTMLElement2(target) {
+  function asHTMLElement3(target) {
     return target instanceof HTMLElement ? target : null;
   }
   function escapeText(value) {
@@ -702,21 +728,21 @@
     return escapeText(value).replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   }
   function readValue(id) {
-    var el = getElement2(id);
+    var el = getElement3(id);
     return el ? el.value.trim() : "";
   }
   function focusElement(id) {
-    var el = getElement2(id);
+    var el = getElement3(id);
     if (el) el.focus();
   }
   function setVisible(id, visible) {
-    var el = getElement2(id);
+    var el = getElement3(id);
     if (el) {
       el.style.display = visible ? "block" : "none";
     }
   }
   function setValue(id, value) {
-    var el = getElement2(id);
+    var el = getElement3(id);
     if (el) {
       el.value = value;
     }
@@ -746,7 +772,7 @@
     };
   }
   function renderStatus(id, status) {
-    var el = getElement2(id);
+    var el = getElement3(id);
     if (!el) return;
     if (!status.visible) {
       el.textContent = "";
@@ -757,7 +783,7 @@
     el.className = "service-status visible" + (status.error ? " error" : " success");
   }
   function renderButton(id, disabled, label) {
-    var button = getElement2(id);
+    var button = getElement3(id);
     if (!button) return;
     button.disabled = disabled;
     button.textContent = label;
@@ -769,7 +795,7 @@
   function renderOpenPanels() {
     var panels = ["manage-service-panel", "retrieve-service-panel", "refund-service-panel", "data-service-panel"];
     for (var i = 0; i < panels.length; i++) {
-      var panel = getElement2(panels[i]);
+      var panel = getElement3(panels[i]);
       if (!panel) continue;
       panel.classList.toggle("visible", panels[i] === serviceState.openPanelID);
     }
@@ -804,7 +830,7 @@
     renderStatus("refund-inline-status", serviceState.refund.status);
   }
   function renderRefundPanel() {
-    var root = getElement2("refund-service-root");
+    var root = getElement3("refund-service-root");
     if (!root) return;
     var bootstrap = getBootstrap();
     var refundSupportURL = (bootstrap.public_site_url || "") + "/refund.html?email=" + encodeURIComponent(serviceState.refund.emailValue || "");
@@ -851,7 +877,7 @@
         window.location.href = data.url;
       },
       renderPanel: function(flowState) {
-        var root = getElement2("manage-service-root");
+        var root = getElement3("manage-service-root");
         if (!root) return;
         root.innerHTML = '<h3>Manage subscriptions</h3><p>Request a verification code for the commercial email, then open the Stripe customer portal for billing changes, invoices, and subscription actions.</p><div id="manage-inline-step1"><div class="form-group"><label for="manage-inline-email">Email address</label><input type="email" id="manage-inline-email" value="' + escapeAttribute(flowState.emailValue || "") + '" autocomplete="email" data-account-service-input="manage-email"></div><div class="form-actions"><button class="btn-primary" type="button" id="manage-inline-request" data-account-service-action="manage-inline-request">Send Verification Code</button></div></div><div id="manage-inline-step2" style="display:' + (flowState.step2Visible ? "block" : "none") + '"><div class="form-group"><label for="manage-inline-code">Verification code</label><input type="text" id="manage-inline-code" value="' + escapeAttribute(flowState.codeValue || "") + '" inputmode="numeric" pattern="[0-9]{6}" placeholder="123456" data-account-service-input="manage-code"></div><div class="form-actions"><button class="btn-primary" type="button" id="manage-inline-confirm" data-account-service-action="manage-inline-confirm">Open Customer Portal</button></div><div class="helper-text">Need a new code? <a href="#" id="manage-inline-resend" data-account-service-action="manage-inline-resend">Send again</a></div></div><div class="service-status" id="manage-inline-status"></div>';
       }
@@ -889,7 +915,7 @@
         setFlowStatus("retrieve", "License retrieved successfully.", false);
       },
       renderPanel: function(flowState) {
-        var root = getElement2("retrieve-service-root");
+        var root = getElement3("retrieve-service-root");
         if (!root) return;
         var result = flowState.result;
         var invoiceURL = result && result.invoice_url ? result.invoice_url : "#";
@@ -937,7 +963,7 @@
         serviceState.flows.export.result = data;
       },
       renderPanel: function(flowState) {
-        var root = getElement2("data-export-root");
+        var root = getElement3("data-export-root");
         if (!root) return;
         var resultDisplay = flowState.result ? "block" : "none";
         root.innerHTML = '<h4>Export My Data</h4><div id="data-export-step1"><div class="form-group"><label for="data-export-email">Email address</label><input type="email" id="data-export-email" value="' + escapeAttribute(flowState.emailValue || "") + '" autocomplete="email" data-account-service-input="data-export-email"></div><div class="form-actions"><button class="btn-primary" type="button" id="data-export-request" data-account-service-action="data-export-request">Send Verification Code</button></div></div><div id="data-export-step2" style="display:' + (flowState.step2Visible ? "block" : "none") + '"><div class="form-group"><label for="data-export-code">Verification code</label><input type="text" id="data-export-code" value="' + escapeAttribute(flowState.codeValue || "") + '" inputmode="numeric" pattern="[0-9]{6}" placeholder="123456" data-account-service-input="data-export-code"></div><div class="form-actions"><button class="btn-primary" type="button" id="data-export-confirm" data-account-service-action="data-export-confirm">Export My Data</button></div><div class="helper-text">Need a new code? <a href="#" id="data-export-resend" data-account-service-action="data-export-resend">Send again</a></div></div><div class="service-status" id="data-export-status"></div><div id="data-export-result" style="display:' + resultDisplay + '; margin-top:14px"><label for="data-export-payload">Export payload</label><textarea id="data-export-payload" readonly>' + escapeText(flowState.result ? JSON.stringify(flowState.result, null, 2) : "") + "</textarea></div>";
@@ -972,7 +998,7 @@
         return serviceState.flows.delete.codeValue;
       },
       beforeConfirm: function() {
-        if (!getElement2("data-delete-confirm-check")?.checked) {
+        if (!getElement3("data-delete-confirm-check")?.checked) {
           setFlowStatus("delete", "You must confirm that you understand this action is permanent.", true);
           renderFlow("delete");
           return false;
@@ -980,7 +1006,7 @@
         return true;
       },
       onConfirmSuccess: function(data) {
-        var checkbox = getElement2("data-delete-confirm-check");
+        var checkbox = getElement3("data-delete-confirm-check");
         if (checkbox) {
           checkbox.checked = false;
         }
@@ -988,7 +1014,7 @@
         setFlowStatus("delete", data.deleted_count > 0 && data.stripe_reminder ? data.message + " " + data.stripe_reminder : data.message, false);
       },
       renderPanel: function(flowState) {
-        var root = getElement2("data-delete-root");
+        var root = getElement3("data-delete-root");
         if (!root) return;
         root.innerHTML = '<h4>Delete My Data</h4><div class="warning"><strong>Warning:</strong> deleting commercial data also revokes license records and cannot be undone.</div><div id="data-delete-step1"><div class="form-group"><label for="data-delete-email">Email address</label><input type="email" id="data-delete-email" value="' + escapeAttribute(flowState.emailValue || "") + '" autocomplete="email" data-account-service-input="data-delete-email"></div><div class="form-actions"><button class="btn-danger" type="button" id="data-delete-request" data-account-service-action="data-delete-request">Send Verification Code</button></div></div><div id="data-delete-step2" style="display:' + (flowState.step2Visible ? "block" : "none") + '"><div class="form-group"><label for="data-delete-code">Verification code</label><input type="text" id="data-delete-code" value="' + escapeAttribute(flowState.codeValue || "") + '" inputmode="numeric" pattern="[0-9]{6}" placeholder="123456" data-account-service-input="data-delete-code"></div><div class="checkbox-row"><input type="checkbox" id="data-delete-confirm-check"' + (flowState.checkboxChecked ? " checked" : "") + '><span>I understand this permanently deletes my commercial data and revokes associated licenses.</span></div><div class="form-actions"><button class="btn-danger" type="button" id="data-delete-confirm" data-account-service-action="data-delete-confirm">Delete My Data</button></div><div class="helper-text">Need a new code? <a href="#" id="data-delete-resend" data-account-service-action="data-delete-resend">Send again</a></div></div><div class="service-status" id="data-delete-status"></div>';
       }
@@ -1113,7 +1139,7 @@
   renderServiceRuntime();
   subscribePortalRender(renderServiceRuntime);
   document.addEventListener("click", function(event) {
-    var target = asHTMLElement2(event.target)?.closest("[data-account-service-action]");
+    var target = asHTMLElement3(event.target)?.closest("[data-account-service-action]");
     if (!target) return;
     var action = target.getAttribute("data-account-service-action") || "";
     var panelID = target.getAttribute("data-account-service-panel") || "";
@@ -1178,7 +1204,7 @@
     }
   });
   document.addEventListener("input", function(event) {
-    var target = asHTMLElement2(event.target);
+    var target = asHTMLElement3(event.target);
     if (!target) return;
     var inputKind = target.getAttribute("data-account-service-input") || "";
     switch (inputKind) {
@@ -1217,7 +1243,7 @@
     }
   });
   document.addEventListener("change", function(event) {
-    var target = asHTMLElement2(event.target);
+    var target = asHTMLElement3(event.target);
     if (!target || target.id !== "data-delete-confirm-check") return;
     serviceState.flows.delete.checkboxChecked = !!target.checked;
   });

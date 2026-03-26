@@ -1,10 +1,11 @@
 {
-  "source_hash": "0106a314ffe90647926e4c341d4d7ae4ff87f7129fd612459ebd6fd472b35241",
+  "source_hash": "649178debfd541a371f48db730d2beb552cc2d4a37467fd2c88f7732d5563313",
   "build_inputs": [
     "package.json",
     "tsconfig.json",
     "build.mjs",
     "src/index.ts",
+    "src/account_controller.ts",
     "src/shell.ts",
     "src/services.ts",
     "src/runtime.ts",

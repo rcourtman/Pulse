@@ -18,6 +18,7 @@ const buildInputs = [
   'tsconfig.json',
   'build.mjs',
   'src/index.ts',
+  'src/account_controller.ts',
   'src/shell.ts',
   'src/services.ts',
   'src/runtime.ts',
