@@ -1,17 +1,8 @@
 import {
-  createAnonymousBootstrap,
-  getAccountAPIBasePath,
-  getBootstrap,
-  getBootstrapPath,
-  getCommercialAPIBaseURL,
-  getLogoutPath,
-  getMagicLinkRequestPath,
-  getPortalAPIBasePath,
-  getPortalPath,
-  getSignupPath,
-  notifyPortalRender,
-  setBootstrap,
+  bootstrapDefaults,
+  portalStore,
 } from './runtime';
+import { createAnonymousBootstrap } from './store';
 import { installAccountController } from './account_controller';
 import { installAuthController } from './auth_controller';
 import {
@@ -19,28 +10,18 @@ import {
   renderHeaderHTML,
   renderSignedOutPortalHTML,
 } from './shell_view';
-import type { PortalBootstrapData } from './types';
-
-var portalBootstrap: PortalBootstrapData = getBootstrap();
-var LICENSE_API_BASE = getCommercialAPIBaseURL();
-var PORTAL_PATH = getPortalPath();
-var BOOTSTRAP_PATH = getBootstrapPath();
-var MAGIC_LINK_REQUEST_PATH = getMagicLinkRequestPath();
-var SIGNUP_PATH = getSignupPath();
-var LOGOUT_PATH = getLogoutPath();
-var ACCOUNT_API_BASE_PATH = getAccountAPIBasePath();
-var PORTAL_API_BASE_PATH = getPortalAPIBasePath();
 
 type ToastElement = HTMLElement & { _timer?: ReturnType<typeof setTimeout> };
 
 function renderHeader() {
   var userInfo = document.getElementById('portal-user-info');
   if (!userInfo) return;
+  var portalBootstrap = portalStore.getBootstrap();
   userInfo.innerHTML = renderHeaderHTML({
     bootstrap: portalBootstrap,
     loginState: authController.getLoginState(),
-    signupPath: SIGNUP_PATH,
-    accountAPIBasePath: ACCOUNT_API_BASE_PATH,
+    signupPath: portalBootstrap.signup_path,
+    accountAPIBasePath: portalBootstrap.account_api_base_path,
   });
 }
 
@@ -48,42 +29,34 @@ function renderPortalApp() {
   renderHeader();
   var root = document.getElementById('portal-app-root');
   if (!root) return;
+  var portalBootstrap = portalStore.getBootstrap();
   var context = {
     bootstrap: portalBootstrap,
     loginState: authController.getLoginState(),
-    signupPath: SIGNUP_PATH,
-    accountAPIBasePath: ACCOUNT_API_BASE_PATH,
+    signupPath: portalBootstrap.signup_path,
+    accountAPIBasePath: portalBootstrap.account_api_base_path,
   };
   root.innerHTML = portalBootstrap.authenticated
     ? renderAuthenticatedPortalHTML(context)
     : renderSignedOutPortalHTML(context);
-  notifyPortalRender();
 }
 
 function applyBootstrap(data) {
-  portalBootstrap = setBootstrap(data || createAnonymousBootstrap());
-  LICENSE_API_BASE = getCommercialAPIBaseURL();
-  PORTAL_PATH = getPortalPath();
-  BOOTSTRAP_PATH = getBootstrapPath();
-  MAGIC_LINK_REQUEST_PATH = getMagicLinkRequestPath();
-  SIGNUP_PATH = getSignupPath();
-  LOGOUT_PATH = getLogoutPath();
-  ACCOUNT_API_BASE_PATH = getAccountAPIBasePath();
-  PORTAL_API_BASE_PATH = getPortalAPIBasePath();
+  var portalBootstrap = portalStore.setBootstrap(data || createAnonymousBootstrap(bootstrapDefaults));
   if (!portalBootstrap.authenticated) {
     authController.syncBootstrapEmail(portalBootstrap.email || '');
   }
-  renderPortalApp();
 }
 
 async function refreshBootstrap() {
-  if (!BOOTSTRAP_PATH) return false;
+  var bootstrap = portalStore.getBootstrap();
+  if (!bootstrap.bootstrap_path) return false;
   try {
-    var response = await fetch(BOOTSTRAP_PATH, {
+    var response = await fetch(bootstrap.bootstrap_path, {
       headers: { 'Accept': 'application/json' }
     });
     if (response.status === 401) {
-      applyBootstrap(createAnonymousBootstrap());
+      applyBootstrap(createAnonymousBootstrap(bootstrapDefaults));
       return true;
     }
     if (!response.ok) return false;
@@ -105,32 +78,36 @@ function showToast(msg, isError = false) {
 
 var authController = installAuthController({
   getMagicLinkRequestPath: function() {
-    return MAGIC_LINK_REQUEST_PATH;
+    return portalStore.getBootstrap().magic_link_request_path;
   },
   getLogoutPath: function() {
-    return LOGOUT_PATH;
+    return portalStore.getBootstrap().logout_path;
   },
   getPortalPath: function() {
-    return PORTAL_PATH;
+    return portalStore.getBootstrap().portal_path;
   },
   renderPortal: renderPortalApp,
 });
 
 installAccountController({
   getAccountAPIBasePath: function() {
-    return ACCOUNT_API_BASE_PATH;
+    return portalStore.getBootstrap().account_api_base_path;
   },
   getPortalAPIBasePath: function() {
-    return PORTAL_API_BASE_PATH;
+    return portalStore.getBootstrap().portal_api_base_path;
   },
   getPortalPath: function() {
-    return PORTAL_PATH;
+    return portalStore.getBootstrap().portal_path;
   },
   refreshBootstrap: refreshBootstrap,
   showToast: showToast
 });
 
-applyBootstrap(portalBootstrap);
-if (portalBootstrap.authenticated) {
+portalStore.subscribe(function() {
+  renderPortalApp();
+});
+
+applyBootstrap(portalStore.getBootstrap());
+if (portalStore.getBootstrap().authenticated) {
   refreshBootstrap();
 }

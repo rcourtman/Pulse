@@ -1,4 +1,4 @@
-import { getBootstrap, getCommercialAPIBaseURL as readCommercialAPIBaseURL, subscribePortalRender } from './runtime';
+import { portalStore } from './runtime';
 import { installServicesController } from './services_controller';
 import {
   clearFlowStatus,
@@ -59,12 +59,8 @@ interface VerificationFlowDefinition {
 
   var serviceState = createPortalServiceState();
 
-  function getCommercialAPIBaseURL() {
-    return readCommercialAPIBaseURL();
-  }
-
   function serviceFetch(path, body) {
-    return fetch(getCommercialAPIBaseURL() + path, {
+    return fetch(portalStore.getBootstrap().commercial_api_base_url + path, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
@@ -103,7 +99,7 @@ interface VerificationFlowDefinition {
   }
 
   function renderRefund() {
-    renderRefundPanel(serviceState.refund, getBootstrap());
+    renderRefundPanel(serviceState.refund, portalStore.getBootstrap());
     renderButton('refund-inline-submit', serviceState.refund.submitting, serviceState.refund.submitting ? 'Processing...' : 'Process Refund');
     renderStatus('refund-inline-status', serviceState.refund.status);
   }
@@ -369,7 +365,7 @@ interface VerificationFlowDefinition {
   }
 
   function syncServiceStateFromBootstrap() {
-    var bootstrap = getBootstrap();
+    var bootstrap = portalStore.getBootstrap();
     if (!bootstrap.authenticated) {
       return;
     }
@@ -383,7 +379,7 @@ interface VerificationFlowDefinition {
   }
 
   renderServiceRuntime();
-  subscribePortalRender(renderServiceRuntime);
+  portalStore.subscribe(renderServiceRuntime);
 
   installServicesController({
     toggleServicePanel,

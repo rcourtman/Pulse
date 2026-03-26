@@ -1,4 +1,43 @@
 (() => {
+  // src/store.ts
+  function createAnonymousBootstrap(bootstrapDefaults2, overrides = {}) {
+    return {
+      authenticated: false,
+      email: "",
+      ...bootstrapDefaults2,
+      ...overrides,
+      accounts: normalizeAccounts(overrides.accounts)
+    };
+  }
+  function normalizeBootstrap(bootstrapDefaults2, raw) {
+    return createAnonymousBootstrap(bootstrapDefaults2, raw || {});
+  }
+  function createPortalStore(bootstrapDefaults2, initialBootstrap) {
+    var bootstrapState = normalizeBootstrap(bootstrapDefaults2, initialBootstrap);
+    var subscribers = /* @__PURE__ */ new Set();
+    return {
+      getBootstrap: function() {
+        return bootstrapState;
+      },
+      setBootstrap: function(nextBootstrap) {
+        bootstrapState = normalizeBootstrap(bootstrapDefaults2, nextBootstrap);
+        subscribers.forEach(function(listener) {
+          listener();
+        });
+        return bootstrapState;
+      },
+      subscribe: function(listener) {
+        subscribers.add(listener);
+        return function() {
+          subscribers.delete(listener);
+        };
+      }
+    };
+  }
+  function normalizeAccounts(accounts) {
+    return Array.isArray(accounts) ? accounts : [];
+  }
+
   // src/runtime.ts
   function readEmbeddedBootstrap() {
     const bootstrapEl = document.getElementById("pulse-account-bootstrap");
@@ -24,65 +63,7 @@
     account_api_base_path: embeddedBootstrap.account_api_base_path || "/api/accounts",
     portal_api_base_path: embeddedBootstrap.portal_api_base_path || "/api/portal"
   };
-  function normalizeAccounts(accounts) {
-    return Array.isArray(accounts) ? accounts : [];
-  }
-  function createAnonymousBootstrap(overrides = {}) {
-    return {
-      authenticated: false,
-      email: "",
-      ...bootstrapDefaults,
-      ...overrides,
-      accounts: normalizeAccounts(overrides.accounts)
-    };
-  }
-  function normalizeBootstrap(raw) {
-    return createAnonymousBootstrap(raw || {});
-  }
-  var bootstrapState = normalizeBootstrap(embeddedBootstrap);
-  var renderSubscribers = /* @__PURE__ */ new Set();
-  function getBootstrap() {
-    return bootstrapState;
-  }
-  function setBootstrap(nextBootstrap) {
-    bootstrapState = normalizeBootstrap(nextBootstrap);
-    return bootstrapState;
-  }
-  function getCommercialAPIBaseURL() {
-    return bootstrapState.commercial_api_base_url;
-  }
-  function getPortalPath() {
-    return bootstrapState.portal_path;
-  }
-  function getBootstrapPath() {
-    return bootstrapState.bootstrap_path;
-  }
-  function getMagicLinkRequestPath() {
-    return bootstrapState.magic_link_request_path;
-  }
-  function getSignupPath() {
-    return bootstrapState.signup_path;
-  }
-  function getLogoutPath() {
-    return bootstrapState.logout_path;
-  }
-  function getAccountAPIBasePath() {
-    return bootstrapState.account_api_base_path;
-  }
-  function getPortalAPIBasePath() {
-    return bootstrapState.portal_api_base_path;
-  }
-  function notifyPortalRender() {
-    renderSubscribers.forEach((listener) => {
-      listener();
-    });
-  }
-  function subscribePortalRender(listener) {
-    renderSubscribers.add(listener);
-    return () => {
-      renderSubscribers.delete(listener);
-    };
-  }
+  var portalStore = createPortalStore(bootstrapDefaults, embeddedBootstrap);
 
   // src/account_controller.ts
   function getElement(id) {
@@ -724,61 +705,45 @@
   }
 
   // src/shell.ts
-  var portalBootstrap = getBootstrap();
-  var LICENSE_API_BASE = getCommercialAPIBaseURL();
-  var PORTAL_PATH = getPortalPath();
-  var BOOTSTRAP_PATH = getBootstrapPath();
-  var MAGIC_LINK_REQUEST_PATH = getMagicLinkRequestPath();
-  var SIGNUP_PATH = getSignupPath();
-  var LOGOUT_PATH = getLogoutPath();
-  var ACCOUNT_API_BASE_PATH = getAccountAPIBasePath();
-  var PORTAL_API_BASE_PATH = getPortalAPIBasePath();
   function renderHeader() {
     var userInfo = document.getElementById("portal-user-info");
     if (!userInfo) return;
+    var portalBootstrap = portalStore.getBootstrap();
     userInfo.innerHTML = renderHeaderHTML({
       bootstrap: portalBootstrap,
       loginState: authController.getLoginState(),
-      signupPath: SIGNUP_PATH,
-      accountAPIBasePath: ACCOUNT_API_BASE_PATH
+      signupPath: portalBootstrap.signup_path,
+      accountAPIBasePath: portalBootstrap.account_api_base_path
     });
   }
   function renderPortalApp() {
     renderHeader();
     var root = document.getElementById("portal-app-root");
     if (!root) return;
+    var portalBootstrap = portalStore.getBootstrap();
     var context = {
       bootstrap: portalBootstrap,
       loginState: authController.getLoginState(),
-      signupPath: SIGNUP_PATH,
-      accountAPIBasePath: ACCOUNT_API_BASE_PATH
+      signupPath: portalBootstrap.signup_path,
+      accountAPIBasePath: portalBootstrap.account_api_base_path
     };
     root.innerHTML = portalBootstrap.authenticated ? renderAuthenticatedPortalHTML(context) : renderSignedOutPortalHTML(context);
-    notifyPortalRender();
   }
   function applyBootstrap(data) {
-    portalBootstrap = setBootstrap(data || createAnonymousBootstrap());
-    LICENSE_API_BASE = getCommercialAPIBaseURL();
-    PORTAL_PATH = getPortalPath();
-    BOOTSTRAP_PATH = getBootstrapPath();
-    MAGIC_LINK_REQUEST_PATH = getMagicLinkRequestPath();
-    SIGNUP_PATH = getSignupPath();
-    LOGOUT_PATH = getLogoutPath();
-    ACCOUNT_API_BASE_PATH = getAccountAPIBasePath();
-    PORTAL_API_BASE_PATH = getPortalAPIBasePath();
+    var portalBootstrap = portalStore.setBootstrap(data || createAnonymousBootstrap(bootstrapDefaults));
     if (!portalBootstrap.authenticated) {
       authController.syncBootstrapEmail(portalBootstrap.email || "");
     }
-    renderPortalApp();
   }
   async function refreshBootstrap() {
-    if (!BOOTSTRAP_PATH) return false;
+    var bootstrap = portalStore.getBootstrap();
+    if (!bootstrap.bootstrap_path) return false;
     try {
-      var response = await fetch(BOOTSTRAP_PATH, {
+      var response = await fetch(bootstrap.bootstrap_path, {
         headers: { "Accept": "application/json" }
       });
       if (response.status === 401) {
-        applyBootstrap(createAnonymousBootstrap());
+        applyBootstrap(createAnonymousBootstrap(bootstrapDefaults));
         return true;
       }
       if (!response.ok) return false;
@@ -801,31 +766,34 @@
   }
   var authController = installAuthController({
     getMagicLinkRequestPath: function() {
-      return MAGIC_LINK_REQUEST_PATH;
+      return portalStore.getBootstrap().magic_link_request_path;
     },
     getLogoutPath: function() {
-      return LOGOUT_PATH;
+      return portalStore.getBootstrap().logout_path;
     },
     getPortalPath: function() {
-      return PORTAL_PATH;
+      return portalStore.getBootstrap().portal_path;
     },
     renderPortal: renderPortalApp
   });
   installAccountController({
     getAccountAPIBasePath: function() {
-      return ACCOUNT_API_BASE_PATH;
+      return portalStore.getBootstrap().account_api_base_path;
     },
     getPortalAPIBasePath: function() {
-      return PORTAL_API_BASE_PATH;
+      return portalStore.getBootstrap().portal_api_base_path;
     },
     getPortalPath: function() {
-      return PORTAL_PATH;
+      return portalStore.getBootstrap().portal_path;
     },
     refreshBootstrap,
     showToast
   });
-  applyBootstrap(portalBootstrap);
-  if (portalBootstrap.authenticated) {
+  portalStore.subscribe(function() {
+    renderPortalApp();
+  });
+  applyBootstrap(portalStore.getBootstrap());
+  if (portalStore.getBootstrap().authenticated) {
     refreshBootstrap();
   }
 
@@ -1008,11 +976,8 @@
 
   // src/services.ts
   var serviceState = createPortalServiceState();
-  function getCommercialAPIBaseURL2() {
-    return getCommercialAPIBaseURL();
-  }
   function serviceFetch(path, body) {
-    return fetch(getCommercialAPIBaseURL2() + path, {
+    return fetch(portalStore.getBootstrap().commercial_api_base_url + path, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body)
@@ -1047,7 +1012,7 @@
     renderRefund();
   }
   function renderRefund() {
-    renderRefundPanel(serviceState.refund, getBootstrap());
+    renderRefundPanel(serviceState.refund, portalStore.getBootstrap());
     renderButton("refund-inline-submit", serviceState.refund.submitting, serviceState.refund.submitting ? "Processing..." : "Process Refund");
     renderStatus("refund-inline-status", serviceState.refund.status);
   }
@@ -1306,7 +1271,7 @@
     }
   }
   function syncServiceStateFromBootstrap() {
-    var bootstrap = getBootstrap();
+    var bootstrap = portalStore.getBootstrap();
     if (!bootstrap.authenticated) {
       return;
     }
@@ -1318,7 +1283,7 @@
     renderAllFlows();
   }
   renderServiceRuntime();
-  subscribePortalRender(renderServiceRuntime);
+  portalStore.subscribe(renderServiceRuntime);
   installServicesController({
     toggleServicePanel,
     focusElement,
