@@ -294,6 +294,12 @@ Reporting time windows follow the same rule: `start` and `end` stay optional,
 but when present they must parse as RFC3339 and `end` must not be earlier than
 `start`; invalid values are a `400 invalid_time_range` transport failure, not a
 silent fallback to the default reporting window.
+The same transport contract also owns reporting-field and body validation:
+`metricType` must stay within the governed character set/length, `title` must
+stay within the governed length cap, and the multi-report JSON body must remain
+strictly parsed with the canonical size ceiling, unknown-field rejection, and
+no trailing payload tolerance instead of accepting malformed operator input and
+drifting onward.
 The catalog route itself is intentionally metadata-readable without the
 `advanced_reporting` feature gate so locked admin surfaces can present the same
 canonical reporting definition before upsell, while report generation and

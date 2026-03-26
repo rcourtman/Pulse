@@ -592,6 +592,41 @@ func TestContract_PerformanceReportTransportRejectsInvalidTimeRange(t *testing.T
 	}
 }
 
+func TestContract_PerformanceReportTransportRejectsOversizedMultiBody(t *testing.T) {
+	engine := &stubReportingEngine{data: []byte("report"), contentType: "application/pdf"}
+	original := reporting.GetEngine()
+	reporting.SetEngine(engine)
+	t.Cleanup(func() { reporting.SetEngine(original) })
+
+	handler := NewReportingHandlers(nil, nil)
+	padding := strings.Repeat("x", reportingMultiReportBodyMax)
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/api/reporting/generate-multi",
+		strings.NewReader(fmt.Sprintf(`{"resources":[{"resourceType":"vm","resourceId":"vm-1"}],"format":"pdf","title":"%s"}`, padding)),
+	)
+	rec := httptest.NewRecorder()
+
+	handler.HandleGenerateMultiReport(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	var payload struct {
+		Code  string `json:"code"`
+		Error string `json:"error"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode oversized-body response: %v", err)
+	}
+	if payload.Code != "body_too_large" {
+		t.Fatalf("expected body_too_large code, got %q", payload.Code)
+	}
+	if payload.Error != "Request body must be 1MB or less" {
+		t.Fatalf("expected canonical oversized-body message, got %q", payload.Error)
+	}
+}
+
 func TestContract_ReportingInvalidFormatErrorsUseCatalogDefinitions(t *testing.T) {
 	engine := &stubReportingEngine{data: []byte("report"), contentType: "application/pdf"}
 	original := reporting.GetEngine()

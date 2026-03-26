@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"regexp"
 	"strings"
@@ -20,6 +21,14 @@ import (
 
 // validResourceID matches safe resource identifiers (includes colon for guest IDs like "instance:node:vmid")
 var validResourceID = regexp.MustCompile(`^[a-zA-Z0-9._:-]+$`)
+var validReportingMetricType = regexp.MustCompile(`^[a-zA-Z0-9._:-]+$`)
+
+const (
+	reportingMaxMetricTypeLength = 64
+	reportingMaxTitleLength      = 256
+	reportingMaxRangeDuration    = 366 * 24 * time.Hour
+	reportingMultiReportBodyMax  = 1 << 20
+)
 
 func normalizeReportResourceType(raw string) (string, error) {
 	trimmed := strings.TrimSpace(raw)
@@ -62,18 +71,24 @@ func normalizePerformanceReportOptionalFields(
 	definition reporting.PerformanceReportDefinition,
 	metricType string,
 	title string,
-) (string, string) {
+) (string, string, error) {
 	normalizedMetricType := strings.TrimSpace(metricType)
 	normalizedTitle := strings.TrimSpace(title)
 
 	if !definition.SupportsMetricFilter {
 		normalizedMetricType = ""
+	} else if normalizedMetricType != "" {
+		if len(normalizedMetricType) > reportingMaxMetricTypeLength || !validReportingMetricType.MatchString(normalizedMetricType) {
+			return "", "", fmt.Errorf("metricType must match [a-zA-Z0-9._:-]+ and be <= %d chars", reportingMaxMetricTypeLength)
+		}
 	}
 	if !definition.SupportsCustomTitle {
 		normalizedTitle = ""
+	} else if len(normalizedTitle) > reportingMaxTitleLength {
+		return "", "", fmt.Errorf("title must be <= %d chars", reportingMaxTitleLength)
 	}
 
-	return normalizedMetricType, normalizedTitle
+	return normalizedMetricType, normalizedTitle, nil
 }
 
 func normalizePerformanceReportTimeRange(
@@ -100,11 +115,41 @@ func normalizePerformanceReportTimeRange(
 		start = parsed
 	}
 
-	if end.Before(start) {
+	if !end.After(start) {
 		return time.Time{}, time.Time{}, fmt.Errorf("end must be after start")
+	}
+	if end.Sub(start) > reportingMaxRangeDuration {
+		return time.Time{}, time.Time{}, fmt.Errorf("report window must be %d days or less", int(reportingMaxRangeDuration/(24*time.Hour)))
 	}
 
 	return start, end, nil
+}
+
+func decodeMultiReportRequestBody(w http.ResponseWriter, r *http.Request) (multiReportRequestBody, bool) {
+	r.Body = http.MaxBytesReader(w, r.Body, reportingMultiReportBodyMax)
+
+	var body multiReportRequestBody
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&body); err != nil {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			writeErrorResponse(w, http.StatusBadRequest, "body_too_large", "Request body must be 1MB or less", nil)
+			return multiReportRequestBody{}, false
+		}
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_body", "Invalid request body", nil)
+		return multiReportRequestBody{}, false
+	}
+	if decoder.More() {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_body", "Invalid request body", nil)
+		return multiReportRequestBody{}, false
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_body", "Invalid request body", nil)
+		return multiReportRequestBody{}, false
+	}
+
+	return body, true
 }
 
 type reportingEnrichmentSnapshot struct {
@@ -352,11 +397,19 @@ func (h *ReportingHandlers) HandleGenerateReport(w http.ResponseWriter, r *http.
 		return
 	}
 
-	metricType, title := normalizePerformanceReportOptionalFields(
+	metricType, title, err := normalizePerformanceReportOptionalFields(
 		definition,
 		q.Get("metricType"),
 		q.Get("title"),
 	)
+	if err != nil {
+		code := "invalid_metric_type"
+		if strings.HasPrefix(err.Error(), "title ") {
+			code = "invalid_title"
+		}
+		writeErrorResponse(w, http.StatusBadRequest, code, err.Error(), nil)
+		return
+	}
 
 	start, end, err := normalizePerformanceReportTimeRange(
 		definition,
@@ -676,9 +729,8 @@ func (h *ReportingHandlers) HandleGenerateMultiReport(w http.ResponseWriter, r *
 	}
 
 	definition := performanceReportDefinition()
-	var body multiReportRequestBody
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeErrorResponse(w, http.StatusBadRequest, "invalid_body", "Invalid request body", nil)
+	body, ok := decodeMultiReportRequestBody(w, r)
+	if !ok {
 		return
 	}
 
@@ -697,7 +749,15 @@ func (h *ReportingHandlers) HandleGenerateMultiReport(w http.ResponseWriter, r *
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_format", err.Error(), nil)
 		return
 	}
-	metricType, title := normalizePerformanceReportOptionalFields(definition, body.MetricType, body.Title)
+	metricType, title, err := normalizePerformanceReportOptionalFields(definition, body.MetricType, body.Title)
+	if err != nil {
+		code := "invalid_metric_type"
+		if strings.HasPrefix(err.Error(), "title ") {
+			code = "invalid_title"
+		}
+		writeErrorResponse(w, http.StatusBadRequest, code, err.Error(), nil)
+		return
+	}
 
 	start, end, err := normalizePerformanceReportTimeRange(definition, body.Start, body.End, time.Now())
 	if err != nil {

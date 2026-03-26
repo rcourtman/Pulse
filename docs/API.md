@@ -417,18 +417,16 @@ Triggers a test alert to all configured channels.
 
 Validation and limits:
 - `start` and `end` must be RFC3339 when provided.
-- Malformed `start`/`end` values, or `end` earlier than `start`, return `400 invalid_time_range`.
-- `start` must be before `end`.
-- Maximum report window is 366 days.
-- `metricType` must match `[a-zA-Z0-9._:-]+` and be <= 64 chars.
-- `title` must be <= 256 chars.
-- Multi-report body max size is 1MB and rejects trailing payload or unknown JSON fields.
+- Malformed `start`/`end` values, `end` not strictly after `start`, or report windows over 366 days return `400 invalid_time_range`.
+- `metricType` must match `[a-zA-Z0-9._:-]+` and be <= 64 chars, otherwise `400 invalid_metric_type`.
+- `title` must be <= 256 chars, otherwise `400 invalid_title`.
+- Multi-report body max size is 1MB; oversized payloads return `400 body_too_large`.
+- Multi-report bodies reject trailing payload and unknown JSON fields with `400 invalid_body`.
 - VM inventory export only accepts `csv`.
 
 Common reporting error codes:
 - `invalid_format`, `missing_params`, `invalid_resource_type`, `invalid_resource_id`
-- `invalid_metric_type`, `invalid_title`
-- `invalid_start`, `invalid_end`, `invalid_range`, `range_too_large`
+- `invalid_metric_type`, `invalid_title`, `invalid_time_range`
 - `no_resources`, `too_many_resources`, `body_too_large`, `invalid_body`
 
 ### Queue and Dead-Letter Tools

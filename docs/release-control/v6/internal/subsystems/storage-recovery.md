@@ -306,6 +306,11 @@ field limits and multi-report request parsing. Storage and recovery consumers
 must treat `metricType`, `title`, request-body size, unknown JSON fields, and
 trailing payload rejection as API-owned validation semantics rather than
 counting on permissive backend coercion.
+Those same transport rules now also carry explicit failure modes that adjacent
+storage and recovery automation must preserve: bad or oversized multi-report
+payloads fail as `invalid_body` or `body_too_large`, and overlong report
+windows or invalid optional fields fail through the API-owned reporting
+validation contract instead of being clipped or normalized locally.
 That adjacent export contract now also includes canonical Proxmox pool
 membership for each VM row. Storage and recovery flows may use those current-
 state facts when they need fleet context, but they must consume the API-owned

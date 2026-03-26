@@ -444,6 +444,11 @@ func TestReportingHandlers_GenerateReport_RejectsInvalidTimeRange(t *testing.T) 
 			url:         "/api/reporting?format=pdf&resourceType=node&resourceId=node-1&start=2026-03-25T12:00:00Z&end=2026-03-25T11:00:00Z",
 			wantMessage: "end must be after start",
 		},
+		{
+			name:        "range too large",
+			url:         "/api/reporting?format=pdf&resourceType=node&resourceId=node-1&start=2025-03-24T12:00:00Z&end=2026-03-25T12:00:01Z",
+			wantMessage: "report window must be 366 days or less",
+		},
 	}
 
 	for _, tc := range tests {
@@ -458,6 +463,61 @@ func TestReportingHandlers_GenerateReport_RejectsInvalidTimeRange(t *testing.T) 
 			}
 			if !strings.Contains(rr.Body.String(), tc.wantMessage) {
 				t.Fatalf("expected error %q, got %s", tc.wantMessage, rr.Body.String())
+			}
+			if engine.lastReq.ResourceID != "" {
+				t.Fatalf("expected engine not to be called, got %+v", engine.lastReq)
+			}
+		})
+	}
+}
+
+func TestReportingHandlers_GenerateReport_RejectsInvalidOptionalFields(t *testing.T) {
+	engine := &stubReportingEngine{data: []byte("report"), contentType: "application/pdf"}
+	original := reporting.GetEngine()
+	reporting.SetEngine(engine)
+	t.Cleanup(func() { reporting.SetEngine(original) })
+
+	handler := NewReportingHandlers(nil, nil)
+	longTitle := strings.Repeat("x", reportingMaxTitleLength+1)
+	tests := []struct {
+		name        string
+		url         string
+		wantCode    string
+		wantMessage string
+	}{
+		{
+			name:        "invalid metric type characters",
+			url:         "/api/reporting?format=pdf&resourceType=node&resourceId=node-1&metricType=" + url.QueryEscape("cpu usage"),
+			wantCode:    "invalid_metric_type",
+			wantMessage: "metricType must match [a-zA-Z0-9._:-]+ and be <= 64 chars",
+		},
+		{
+			name:        "title too long",
+			url:         "/api/reporting?format=pdf&resourceType=node&resourceId=node-1&title=" + url.QueryEscape(longTitle),
+			wantCode:    "invalid_title",
+			wantMessage: "title must be <= 256 chars",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, tc.url, nil)
+			rr := httptest.NewRecorder()
+
+			handler.HandleGenerateReport(rr, req)
+
+			if rr.Code != http.StatusBadRequest {
+				t.Fatalf("expected status %d, got %d body=%s", http.StatusBadRequest, rr.Code, rr.Body.String())
+			}
+			var payload struct {
+				Code  string `json:"code"`
+				Error string `json:"error"`
+			}
+			if err := json.NewDecoder(rr.Body).Decode(&payload); err != nil {
+				t.Fatalf("decode error payload: %v", err)
+			}
+			if payload.Code != tc.wantCode || payload.Error != tc.wantMessage {
+				t.Fatalf("unexpected payload: %+v", payload)
 			}
 			if engine.lastReq.ResourceID != "" {
 				t.Fatalf("expected engine not to be called, got %+v", engine.lastReq)
@@ -494,6 +554,11 @@ func TestReportingHandlers_GenerateMultiReport_RejectsInvalidTimeRange(t *testin
 			body:        `{"resources":[{"resourceType":"vm","resourceId":"vm-1"}],"format":"pdf","start":"2026-03-25T12:00:00Z","end":"2026-03-25T11:00:00Z"}`,
 			wantMessage: "end must be after start",
 		},
+		{
+			name:        "range too large",
+			body:        `{"resources":[{"resourceType":"vm","resourceId":"vm-1"}],"format":"pdf","start":"2025-03-24T12:00:00Z","end":"2026-03-25T12:00:01Z"}`,
+			wantMessage: "report window must be 366 days or less",
+		},
 	}
 
 	for _, tc := range tests {
@@ -513,6 +578,143 @@ func TestReportingHandlers_GenerateMultiReport_RejectsInvalidTimeRange(t *testin
 				t.Fatalf("expected engine not to be called, got %+v", engine.lastMulti)
 			}
 		})
+	}
+}
+
+func TestReportingHandlers_GenerateMultiReport_RejectsInvalidOptionalFields(t *testing.T) {
+	engine := &stubReportingEngine{data: []byte("report"), contentType: "application/pdf"}
+	original := reporting.GetEngine()
+	reporting.SetEngine(engine)
+	t.Cleanup(func() { reporting.SetEngine(original) })
+
+	handler := NewReportingHandlers(nil, nil)
+	longTitle := strings.Repeat("x", reportingMaxTitleLength+1)
+	tests := []struct {
+		name        string
+		body        string
+		wantCode    string
+		wantMessage string
+	}{
+		{
+			name:        "invalid metric type characters",
+			body:        `{"resources":[{"resourceType":"vm","resourceId":"vm-1"}],"format":"pdf","metricType":"cpu usage"}`,
+			wantCode:    "invalid_metric_type",
+			wantMessage: "metricType must match [a-zA-Z0-9._:-]+ and be <= 64 chars",
+		},
+		{
+			name:        "title too long",
+			body:        `{"resources":[{"resourceType":"vm","resourceId":"vm-1"}],"format":"pdf","title":"` + longTitle + `"}`,
+			wantCode:    "invalid_title",
+			wantMessage: "title must be <= 256 chars",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, "/api/reporting/generate-multi", strings.NewReader(tc.body))
+			rr := httptest.NewRecorder()
+
+			handler.HandleGenerateMultiReport(rr, req)
+
+			if rr.Code != http.StatusBadRequest {
+				t.Fatalf("expected status %d, got %d body=%s", http.StatusBadRequest, rr.Code, rr.Body.String())
+			}
+			var payload struct {
+				Code  string `json:"code"`
+				Error string `json:"error"`
+			}
+			if err := json.NewDecoder(rr.Body).Decode(&payload); err != nil {
+				t.Fatalf("decode error payload: %v", err)
+			}
+			if payload.Code != tc.wantCode || payload.Error != tc.wantMessage {
+				t.Fatalf("unexpected payload: %+v", payload)
+			}
+			if len(engine.lastMulti.Resources) != 0 {
+				t.Fatalf("expected engine not to be called, got %+v", engine.lastMulti)
+			}
+		})
+	}
+}
+
+func TestReportingHandlers_GenerateMultiReport_RejectsInvalidBody(t *testing.T) {
+	engine := &stubReportingEngine{data: []byte("report"), contentType: "application/pdf"}
+	original := reporting.GetEngine()
+	reporting.SetEngine(engine)
+	t.Cleanup(func() { reporting.SetEngine(original) })
+
+	handler := NewReportingHandlers(nil, nil)
+	tests := []struct {
+		name     string
+		body     string
+		wantCode string
+	}{
+		{
+			name:     "unknown field",
+			body:     `{"resources":[{"resourceType":"vm","resourceId":"vm-1"}],"format":"pdf","extra":true}`,
+			wantCode: "invalid_body",
+		},
+		{
+			name:     "trailing payload",
+			body:     `{"resources":[{"resourceType":"vm","resourceId":"vm-1"}],"format":"pdf"}{"extra":true}`,
+			wantCode: "invalid_body",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, "/api/reporting/generate-multi", strings.NewReader(tc.body))
+			rr := httptest.NewRecorder()
+
+			handler.HandleGenerateMultiReport(rr, req)
+
+			if rr.Code != http.StatusBadRequest {
+				t.Fatalf("expected status %d, got %d body=%s", http.StatusBadRequest, rr.Code, rr.Body.String())
+			}
+			var payload struct {
+				Code string `json:"code"`
+			}
+			if err := json.NewDecoder(rr.Body).Decode(&payload); err != nil {
+				t.Fatalf("decode error payload: %v", err)
+			}
+			if payload.Code != tc.wantCode {
+				t.Fatalf("expected code %q, got %+v", tc.wantCode, payload)
+			}
+			if len(engine.lastMulti.Resources) != 0 {
+				t.Fatalf("expected engine not to be called, got %+v", engine.lastMulti)
+			}
+		})
+	}
+}
+
+func TestReportingHandlers_GenerateMultiReport_RejectsOversizedBody(t *testing.T) {
+	engine := &stubReportingEngine{data: []byte("report"), contentType: "application/pdf"}
+	original := reporting.GetEngine()
+	reporting.SetEngine(engine)
+	t.Cleanup(func() { reporting.SetEngine(original) })
+
+	handler := NewReportingHandlers(nil, nil)
+	padding := strings.Repeat("x", reportingMultiReportBodyMax)
+	body := fmt.Sprintf(`{"resources":[{"resourceType":"vm","resourceId":"vm-1"}],"format":"pdf","title":"%s"}`, padding)
+	req := httptest.NewRequest(http.MethodPost, "/api/reporting/generate-multi", strings.NewReader(body))
+	rr := httptest.NewRecorder()
+
+	handler.HandleGenerateMultiReport(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusBadRequest, rr.Code, rr.Body.String())
+	}
+	var payload struct {
+		Code  string `json:"code"`
+		Error string `json:"error"`
+	}
+	if err := json.NewDecoder(rr.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode error payload: %v", err)
+	}
+	if payload.Code != "body_too_large" || payload.Error != "Request body must be 1MB or less" {
+		t.Fatalf("unexpected payload: %+v", payload)
+	}
+	if len(engine.lastMulti.Resources) != 0 {
+		t.Fatalf("expected engine not to be called, got %+v", engine.lastMulti)
 	}
 }
 

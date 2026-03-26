@@ -290,6 +290,10 @@ handoff, or scheduled lifecycle flow that triggers performance reports must
 treat reporting `start`/`end` values as optional RFC3339 fields owned by the
 API contract, with malformed or inverted ranges rejected as
 `400 invalid_time_range` rather than silently drifting to a fallback window.
+Those same lifecycle-triggered reporting calls must also stay inside the
+API-owned `metricType`/`title` limits and the strict multi-report JSON body
+rules instead of assuming the backend will coerce malformed payloads into a
+best-effort report.
 The direct Proxmox fallback workspace now also lives explicitly inside this
 lifecycle boundary: `InfrastructureWorkspace.tsx`,
 `infrastructureWorkspaceModel.ts`,
