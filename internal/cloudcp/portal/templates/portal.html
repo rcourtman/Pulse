@@ -21,11 +21,12 @@
     <h1>Pulse Account</h1>
     <p>Manage Cloud workspaces, MSP access, and self-hosted commercial account services from one account surface. Hosted workspace lifecycle lives here today, and the self-hosted billing, license recovery, refund, and privacy tools below now share the same Pulse Account shell instead of staying fragmented across public utility pages.</p>
   </section>
+  <div id="accounts-root">
   {{if eq (len .Accounts) 0}}
-  <div class="empty-state" style="margin-top:48px">
-    <p>No workspaces found. If you just signed up, check your email for setup instructions.</p>
-    <p style="margin-top:12px;font-size:13px">Need help? Contact <a href="mailto:{{.SupportEmail}}" style="color:#1d4ed8">{{.SupportEmail}}</a></p>
-  </div>
+    <div class="empty-state" style="margin-top:48px">
+      <p>No workspaces found. If you just signed up, check your email for setup instructions.</p>
+      <p style="margin-top:12px;font-size:13px">Need help? Contact <a href="mailto:{{.SupportEmail}}" style="color:#1d4ed8">{{.SupportEmail}}</a></p>
+    </div>
   {{else}}
   {{range $ai, $account := .Accounts}}
   <section class="account-section">
@@ -113,6 +114,7 @@
   </section>
   {{end}}
   {{end}}
+  </div>
 
   <section class="service-section">
     <div class="service-header">

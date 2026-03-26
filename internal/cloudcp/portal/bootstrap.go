@@ -3,6 +3,7 @@ package portal
 import (
 	"encoding/json"
 	"html/template"
+	"time"
 )
 
 type BootstrapWorkspace struct {
@@ -10,6 +11,7 @@ type BootstrapWorkspace struct {
 	DisplayName string `json:"display_name"`
 	State       string `json:"state"`
 	Healthy     bool   `json:"healthy"`
+	CreatedAt   string `json:"created_at"`
 }
 
 type BootstrapAccount struct {
@@ -29,6 +31,7 @@ type BootstrapData struct {
 	SupportEmail         string             `json:"support_email"`
 	CommercialAPIBaseURL string             `json:"commercial_api_base_url"`
 	PortalPath           string             `json:"portal_path"`
+	BootstrapPath        string             `json:"bootstrap_path"`
 	LogoutPath           string             `json:"logout_path"`
 	AccountAPIBasePath   string             `json:"account_api_base_path"`
 	PortalAPIBasePath    string             `json:"portal_api_base_path"`
@@ -53,6 +56,7 @@ func BuildBootstrapData(email string, accounts []portalPageAccount) BootstrapDat
 				DisplayName: workspace.DisplayName,
 				State:       workspace.State,
 				Healthy:     workspace.Healthy,
+				CreatedAt:   workspace.CreatedAt.UTC().Format(time.RFC3339),
 			})
 		}
 		bootstrapAccounts = append(bootstrapAccounts, BootstrapAccount{
@@ -73,6 +77,7 @@ func BuildBootstrapData(email string, accounts []portalPageAccount) BootstrapDat
 		SupportEmail:         defaultSupportEmail,
 		CommercialAPIBaseURL: defaultCommercialAPIBaseURL,
 		PortalPath:           defaultPortalPath,
+		BootstrapPath:        PortalBootstrapPath,
 		LogoutPath:           defaultLogoutPath,
 		AccountAPIBasePath:   defaultAccountAPIBasePath,
 		PortalAPIBasePath:    defaultPortalAPIBasePath,

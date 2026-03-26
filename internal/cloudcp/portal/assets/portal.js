@@ -9,9 +9,182 @@ if (bootstrapEl) {
 }
 var LICENSE_API_BASE = portalBootstrap.commercial_api_base_url || '';
 var PORTAL_PATH = portalBootstrap.portal_path || '/portal';
+var BOOTSTRAP_PATH = portalBootstrap.bootstrap_path || '/api/portal/bootstrap';
 var LOGOUT_PATH = portalBootstrap.logout_path || '/auth/logout';
 var ACCOUNT_API_BASE_PATH = portalBootstrap.account_api_base_path || '/api/accounts';
 var PORTAL_API_BASE_PATH = portalBootstrap.portal_api_base_path || '/api/portal';
+
+function escapeHTML(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function escapeAttr(value) {
+  return escapeHTML(value);
+}
+
+function formatWorkspaceDate(value) {
+  if (!value) return '';
+  var date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function roleBadgeHTML(role) {
+  if (role === 'owner') return '<span class="badge" style="background:#f1f5f9;color:#64748b">Owner</span>';
+  if (role === 'admin') return '<span class="badge" style="background:#f1f5f9;color:#64748b">Admin</span>';
+  if (role === 'tech') return '<span class="badge" style="background:#f1f5f9;color:#64748b">Tech</span>';
+  return '';
+}
+
+function renderWorkspaceCard(account, workspace) {
+  var state = String(workspace.state || '');
+  var safeState = escapeHTML(state);
+  var createdLabel = formatWorkspaceDate(workspace.created_at);
+  var openAction = '';
+  if (state === 'active') {
+    openAction = '<form method="POST" action="' + escapeAttr(ACCOUNT_API_BASE_PATH + '/' + account.id + '/tenants/' + workspace.id + '/handoff') + '">' +
+      '<button type="submit" class="btn-primary">Open →</button>' +
+      '</form>';
+  } else {
+    openAction = '<span style="font-size:13px;color:#94a3b8">' + safeState + '</span>';
+  }
+
+  var manageAction = '';
+  if (account.can_manage && (state === 'active' || state === 'suspended' || state === 'failed')) {
+    manageAction = '<button class="btn-danger" onclick="suspendOrDelete(event,\'' + escapeAttr(account.id) + '\',\'' + escapeAttr(workspace.id) + '\',\'' + escapeAttr(state) + '\',\'' + escapeAttr(workspace.display_name) + '\')">⋯</button>';
+  }
+
+  var createdMeta = createdLabel ? '<span class="ws-created">Created ' + escapeHTML(createdLabel) + '</span>' : '';
+  return '' +
+    '<div class="workspace-card">' +
+      '<div class="ws-info">' +
+        '<span class="ws-name">' + escapeHTML(workspace.display_name) + '</span>' +
+        '<div class="ws-meta">' +
+          (workspace.healthy
+            ? '<span class="badge badge-healthy">Healthy</span>'
+            : '<span class="badge badge-unhealthy">Checking</span>') +
+          '<span class="badge badge-' + safeState + '">' + safeState + '</span>' +
+          createdMeta +
+        '</div>' +
+      '</div>' +
+      '<div class="ws-actions">' +
+        openAction +
+        manageAction +
+      '</div>' +
+    '</div>';
+}
+
+function renderAccountSection(account) {
+  var workspaces = Array.isArray(account.workspaces) ? account.workspaces : [];
+  var workspaceHTML = '';
+  if (workspaces.length === 0) {
+    workspaceHTML = '<div class="empty-state"><p>No workspaces yet. Create one to get started.</p></div>';
+  } else {
+    workspaceHTML = '<div class="workspace-list">' + workspaces.map(function(workspace) {
+      return renderWorkspaceCard(account, workspace);
+    }).join('') + '</div>';
+  }
+
+  var actions = '';
+  var teamSection = '';
+  var addWorkspaceForm = '';
+  if (account.can_manage) {
+    actions = '<div class="account-actions">' +
+      (account.kind === 'msp'
+        ? '<button class="btn-secondary" id="add-ws-btn-' + escapeAttr(account.id) + '" onclick="toggleAddWorkspace(\'' + escapeAttr(account.id) + '\')">+ Add workspace</button>'
+        : '') +
+      (account.has_billing
+        ? '<button class="btn-secondary" onclick="openBilling(\'' + escapeAttr(account.id) + '\')">Manage billing</button>'
+        : '') +
+      '<button class="btn-secondary" id="team-btn-' + escapeAttr(account.id) + '" onclick="toggleTeam(\'' + escapeAttr(account.id) + '\',\'' + escapeAttr(account.role) + '\')">Manage team</button>' +
+    '</div>';
+
+    teamSection = '' +
+      '<div class="team-section" id="team-section-' + escapeAttr(account.id) + '" data-actor-role="' + escapeAttr(account.role) + '">' +
+        '<h3>Team members</h3>' +
+        '<table class="team-table">' +
+          '<thead><tr><th>Email</th><th>Role</th><th></th></tr></thead>' +
+          '<tbody id="team-list-' + escapeAttr(account.id) + '">' +
+            '<tr><td colspan="3" style="color:#94a3b8;text-align:center;padding:16px">Loading…</td></tr>' +
+          '</tbody>' +
+        '</table>' +
+        '<div class="team-invite">' +
+          '<div><label for="invite-email-' + escapeAttr(account.id) + '">Email</label><input type="email" id="invite-email-' + escapeAttr(account.id) + '" placeholder="user@example.com" autocomplete="off"></div>' +
+          '<div><label for="invite-role-' + escapeAttr(account.id) + '">Role</label><select id="invite-role-' + escapeAttr(account.id) + '"><option value="admin">Admin</option><option value="tech">Tech</option><option value="read_only">Read-only</option></select></div>' +
+          '<button class="btn-primary" style="padding:8px 14px;font-size:13px" onclick="inviteMember(\'' + escapeAttr(account.id) + '\')">Invite</button>' +
+        '</div>' +
+      '</div>';
+
+    if (account.kind === 'msp') {
+      addWorkspaceForm = '' +
+        '<div class="add-workspace-form" id="add-ws-form-' + escapeAttr(account.id) + '">' +
+          '<label for="ws-name-' + escapeAttr(account.id) + '">Workspace name (e.g. client name)</label>' +
+          '<input type="text" id="ws-name-' + escapeAttr(account.id) + '" placeholder="Acme Corp" maxlength="80" autocomplete="off">' +
+          '<div class="form-actions">' +
+            '<button class="btn-primary" onclick="createWorkspace(\'' + escapeAttr(account.id) + '\')">Create workspace</button>' +
+            '<button class="btn-secondary" onclick="toggleAddWorkspace(\'' + escapeAttr(account.id) + '\')">Cancel</button>' +
+            '<div class="spinner" id="ws-spinner-' + escapeAttr(account.id) + '"></div>' +
+          '</div>' +
+        '</div>';
+    }
+  }
+
+  return '' +
+    '<section class="account-section">' +
+      '<div class="account-header">' +
+        '<h2>' + escapeHTML(account.name) + '</h2>' +
+        '<span class="badge badge-' + escapeHTML(account.kind) + '">' + escapeHTML(account.kind_label) + '</span>' +
+        roleBadgeHTML(account.role) +
+      '</div>' +
+      workspaceHTML +
+      actions +
+      teamSection +
+      addWorkspaceForm +
+    '</section>';
+}
+
+function renderAccounts(accounts) {
+  var root = document.getElementById('accounts-root');
+  if (!root) return;
+  var safeAccounts = Array.isArray(accounts) ? accounts : [];
+  if (safeAccounts.length === 0) {
+    root.innerHTML = '' +
+      '<div class="empty-state" style="margin-top:48px">' +
+        '<p>No workspaces found. If you just signed up, check your email for setup instructions.</p>' +
+        '<p style="margin-top:12px;font-size:13px">Need help? Contact <a href="mailto:' + escapeAttr(portalBootstrap.support_email || '') + '" style="color:#1d4ed8">' + escapeHTML(portalBootstrap.support_email || '') + '</a></p>' +
+      '</div>';
+    return;
+  }
+  root.innerHTML = safeAccounts.map(renderAccountSection).join('');
+}
+
+function applyBootstrap(data) {
+  portalBootstrap = data || {};
+  LICENSE_API_BASE = portalBootstrap.commercial_api_base_url || LICENSE_API_BASE;
+  PORTAL_PATH = portalBootstrap.portal_path || PORTAL_PATH;
+  BOOTSTRAP_PATH = portalBootstrap.bootstrap_path || BOOTSTRAP_PATH;
+  LOGOUT_PATH = portalBootstrap.logout_path || LOGOUT_PATH;
+  ACCOUNT_API_BASE_PATH = portalBootstrap.account_api_base_path || ACCOUNT_API_BASE_PATH;
+  PORTAL_API_BASE_PATH = portalBootstrap.portal_api_base_path || PORTAL_API_BASE_PATH;
+  renderAccounts(portalBootstrap.accounts || []);
+}
+
+async function refreshBootstrap() {
+  if (!BOOTSTRAP_PATH) return;
+  try {
+    var response = await fetch(BOOTSTRAP_PATH, {
+      headers: { 'Accept': 'application/json' }
+    });
+    if (!response.ok) return;
+    var data = await response.json();
+    applyBootstrap(data);
+  } catch (_) {}
+}
 
 function showToast(msg, isError) {
   var t = document.getElementById('toast');
@@ -29,6 +202,9 @@ document.getElementById('logout-btn').onclick = async function() {
   } catch(_) {}
   window.location.href = PORTAL_PATH;
 };
+
+applyBootstrap(portalBootstrap);
+refreshBootstrap();
 
 function toggleServicePanel(panelID) {
   var panels = ['manage-service-panel', 'retrieve-service-panel', 'refund-service-panel', 'data-service-panel'];

@@ -234,6 +234,9 @@ frontend state seam for:
 1. account identity context
 2. hosted account and workspace summaries
 3. public/commercial edge URLs needed by the account shell
+4. the canonical bootstrap route path and stable workspace summary fields, so
+   the frontend can render and refresh account/workspace state from one owned
+   contract instead of depending on server-rendered DOM structure
 
 The portal package also owns a dedicated bootstrap JSON handler shape for the
 same contract, so route wiring can promote the shell toward a maintained

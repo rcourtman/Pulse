@@ -728,7 +728,6 @@ func TestPortalPageTemplate_TeamManagementHiddenForNonManagers(t *testing.T) {
 		`id="team-btn-a_readonly"`,
 		`id="team-section-a_readonly"`,
 		`id="invite-email-a_readonly"`,
-		"Team members",
 	}
 	for _, needle := range mustNotContain {
 		if strings.Contains(html, needle) {
@@ -784,9 +783,11 @@ func TestPortalPageTemplate_AccountServicesRendered(t *testing.T) {
 	mustContain := []string{
 		"<title>Pulse Account</title>",
 		"Pulse Account",
+		`id="accounts-root"`,
 		`id="pulse-account-bootstrap"`,
 		`"commercial_api_base_url":"https://license.pulserelay.pro"`,
 		fmt.Sprintf(`"portal_path":"%s"`, PortalPagePath),
+		fmt.Sprintf(`"bootstrap_path":"%s"`, PortalBootstrapPath),
 		fmt.Sprintf(`"logout_path":"%s"`, PortalLogoutPath),
 		fmt.Sprintf(`"account_api_base_path":"%s"`, PortalAccountAPIBasePath),
 		fmt.Sprintf(`"portal_api_base_path":"%s"`, PortalAPIBasePath),
@@ -862,6 +863,9 @@ func TestBuildPortalBootstrapJSON_Contract(t *testing.T) {
 	if got := payload["portal_path"]; got != PortalPagePath {
 		t.Fatalf("portal_path = %#v", got)
 	}
+	if got := payload["bootstrap_path"]; got != PortalBootstrapPath {
+		t.Fatalf("bootstrap_path = %#v", got)
+	}
 	if got := payload["logout_path"]; got != PortalLogoutPath {
 		t.Fatalf("logout_path = %#v", got)
 	}
@@ -901,6 +905,9 @@ func TestBuildPortalBootstrapJSON_Contract(t *testing.T) {
 	if got := workspace["healthy"]; got != true {
 		t.Fatalf("workspace healthy = %#v", got)
 	}
+	if got := workspace["created_at"]; got != "0001-01-01T00:00:00Z" {
+		t.Fatalf("workspace created_at = %#v", got)
+	}
 }
 
 func TestHandlePortalBootstrap_Success(t *testing.T) {
@@ -936,6 +943,9 @@ func TestHandlePortalBootstrap_Success(t *testing.T) {
 	if got := payload["portal_api_base_path"]; got != PortalAPIBasePath {
 		t.Fatalf("portal_api_base_path = %#v", got)
 	}
+	if got := payload["bootstrap_path"]; got != PortalBootstrapPath {
+		t.Fatalf("bootstrap_path = %#v", got)
+	}
 	accounts, ok := payload["accounts"].([]any)
 	if !ok || len(accounts) != 1 {
 		t.Fatalf("accounts = %#v", payload["accounts"])
@@ -954,6 +964,9 @@ func TestHandlePortalBootstrap_Success(t *testing.T) {
 	}
 	if got := workspace["display_name"]; got != "Bootstrap Workspace" {
 		t.Fatalf("workspace display_name = %#v", got)
+	}
+	if got := workspace["created_at"]; got != "2026-03-25T10:00:00Z" {
+		t.Fatalf("workspace created_at = %#v", got)
 	}
 }
 
