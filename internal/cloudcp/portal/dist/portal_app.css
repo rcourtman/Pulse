@@ -213,6 +213,13 @@ header .logout-btn:hover {
 .btn-danger:hover {
   background: #fef2f2;
 }
+.btn-compact {
+  padding: 8px 14px;
+  font-size: 13px;
+}
+.link-button {
+  text-decoration: none;
+}
 .account-actions {
   margin-top: 14px;
   display: flex;
@@ -284,6 +291,14 @@ header .logout-btn:hover {
   padding: 8px;
   border-bottom: 1px solid #f1f5f9;
   vertical-align: middle;
+}
+.team-message-cell {
+  text-align: center;
+  padding: 16px;
+  color: #94a3b8;
+}
+.team-message-cell.error {
+  color: #991b1b;
 }
 .team-table select {
   border: 1px solid #cbd5e1;
@@ -498,6 +513,9 @@ header .logout-btn:hover {
   color: #0f172a;
   word-break: break-word;
 }
+.service-result {
+  margin-top: 14px;
+}
 .service-panel .subsection {
   margin-top: 18px;
   padding-top: 18px;
@@ -572,14 +590,35 @@ header .logout-btn:hover {
   margin: 0;
   font-size: 15px;
 }
+.empty-state-spaced {
+  margin-top: 48px;
+}
+.support-copy {
+  margin-top: 12px;
+  font-size: 13px;
+}
+.support-link {
+  color: #1d4ed8;
+}
+.badge-role {
+  background: #f1f5f9;
+  color: #64748b;
+}
+.workspace-state-label {
+  font-size: 13px;
+  color: #94a3b8;
+}
 .spinner {
-  display: none;
+  display: inline-block;
   width: 18px;
   height: 18px;
   border: 2px solid #93c5fd;
   border-top-color: #1d4ed8;
   border-radius: 50%;
   animation: spin 0.6s linear infinite;
+}
+[hidden] {
+  display: none !important;
 }
 @keyframes spin {
   to {

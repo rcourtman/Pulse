@@ -33,9 +33,9 @@ function formatWorkspaceDate(value: unknown): string {
 }
 
 function roleBadgeHTML(role: string): string {
-  if (role === 'owner') return '<span class="badge" style="background:#f1f5f9;color:#64748b">Owner</span>';
-  if (role === 'admin') return '<span class="badge" style="background:#f1f5f9;color:#64748b">Admin</span>';
-  if (role === 'tech') return '<span class="badge" style="background:#f1f5f9;color:#64748b">Tech</span>';
+  if (role === 'owner') return '<span class="badge badge-role">Owner</span>';
+  if (role === 'admin') return '<span class="badge badge-role">Admin</span>';
+  if (role === 'tech') return '<span class="badge badge-role">Tech</span>';
   return '';
 }
 
@@ -52,7 +52,7 @@ function renderWorkspaceCard(account: PortalAccountSummary, workspace: PortalWor
       '<button type="submit" class="btn-primary">Open →</button>' +
       '</form>';
   } else {
-    openAction = '<span style="font-size:13px;color:#94a3b8">' + safeState + '</span>';
+    openAction = '<span class="workspace-state-label">' + safeState + '</span>';
   }
 
   var manageAction = '';
@@ -141,7 +141,7 @@ function renderAccountSection(account: PortalAccountSummary, accountAPIBasePath:
       '<tbody id="team-list-' +
       escapeAttr(account.id) +
       '">' +
-      '<tr><td colspan="3" style="color:#94a3b8;text-align:center;padding:16px">Loading…</td></tr>' +
+      '<tr><td colspan="3" class="team-message-cell">Loading…</td></tr>' +
       '</tbody>' +
       '</table>' +
       '<div class="team-invite">' +
@@ -155,7 +155,7 @@ function renderAccountSection(account: PortalAccountSummary, accountAPIBasePath:
       '">Role</label><select id="invite-role-' +
       escapeAttr(account.id) +
       '"><option value="admin">Admin</option><option value="tech">Tech</option><option value="read_only">Read-only</option></select></div>' +
-      '<button type="button" class="btn-primary" style="padding:8px 14px;font-size:13px" data-action="invite-member" data-account-id="' +
+      '<button type="button" class="btn-primary btn-compact" data-action="invite-member" data-account-id="' +
       escapeAttr(account.id) +
       '">Invite</button>' +
       '</div>' +
@@ -181,7 +181,7 @@ function renderAccountSection(account: PortalAccountSummary, accountAPIBasePath:
         '">Cancel</button>' +
         '<div class="spinner" id="ws-spinner-' +
         escapeAttr(account.id) +
-        '"></div>' +
+        '" hidden></div>' +
         '</div>' +
         '</div>';
     }
@@ -209,18 +209,18 @@ export function renderHeaderHTML(context: ShellViewContext): string {
       '<button class="logout-btn" id="logout-btn" type="button">Sign out</button>'
     );
   }
-  return '<a class="logout-btn" href="' + escapeAttr(context.signupPath) + '" style="text-decoration:none">Create account</a>';
+  return '<a class="logout-btn link-button" href="' + escapeAttr(context.signupPath) + '">Create account</a>';
 }
 
 export function renderAccountsHTML(context: ShellViewContext): string {
   var safeAccounts = Array.isArray(context.bootstrap.accounts) ? context.bootstrap.accounts : [];
   if (safeAccounts.length === 0) {
     return (
-      '<div class="empty-state" style="margin-top:48px">' +
+      '<div class="empty-state empty-state-spaced">' +
         '<p>No workspaces found. If you just signed up, check your email for setup instructions.</p>' +
-        '<p style="margin-top:12px;font-size:13px">Need help? Contact <a href="mailto:' +
+        '<p class="support-copy">Need help? Contact <a href="mailto:' +
         escapeAttr(context.bootstrap.support_email || '') +
-        '" style="color:#1d4ed8">' +
+        '" class="support-link">' +
         escapeHTML(context.bootstrap.support_email || '') +
         '</a></p>' +
       '</div>'
@@ -309,7 +309,7 @@ export function renderSignedOutPortalHTML(context: ShellViewContext): string {
           '<button class="btn-primary" id="portal-login-send" type="button" data-portal-action="send-magic-link">' +
           (context.loginState.request.pending ? 'Sending…' : 'Send magic link') +
           '</button>' +
-          '<a class="btn-secondary" href="' + escapeAttr(context.signupPath) + '" style="text-decoration:none">Create an account</a>' +
+          '<a class="btn-secondary link-button" href="' + escapeAttr(context.signupPath) + '">Create an account</a>' +
         '</div>' +
         statusHTML +
       '</div>' +

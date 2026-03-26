@@ -80,7 +80,7 @@ describe('account runtime', function() {
     document.body.innerHTML =
       '<div id="add-ws-form-acct_1" class="add-workspace-form">' +
       '<input id="ws-name-acct_1" value="Acme Corp">' +
-      '<div id="ws-spinner-acct_1" style="display:none"></div>' +
+      '<div id="ws-spinner-acct_1" hidden></div>' +
       '</div>';
 
     runtime.toggleAddWorkspace('acct_1');
@@ -103,7 +103,7 @@ describe('account runtime', function() {
     expect(deps.showToast).toHaveBeenCalledWith('Workspace created!');
     expect(deps.store.getAccountState().byAccountID.acct_1.addWorkspaceOpen).toBe(false);
     expect(deps.store.getAccountState().byAccountID.acct_1.createWorkspace.pending).toBe(false);
-    expect((document.getElementById('ws-spinner-acct_1') as HTMLElement).style.display).toBe('none');
+    expect((document.getElementById('ws-spinner-acct_1') as HTMLElement).hidden).toBe(true);
   });
 
   it('loads and updates team membership from runtime actions', async function() {

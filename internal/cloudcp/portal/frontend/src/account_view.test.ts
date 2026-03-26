@@ -28,17 +28,17 @@ describe('account view', function() {
   it('renders add-workspace visibility from account UI state', function() {
     document.body.innerHTML =
       '<div id="add-ws-form-acct_1" class="add-workspace-form"></div>' +
-      '<div id="ws-spinner-acct_1" style="display:none"></div>';
+      '<div id="ws-spinner-acct_1" hidden></div>';
 
     renderAddWorkspaceSection('acct_1', createEntry({ addWorkspaceOpen: true }));
     expect(document.getElementById('add-ws-form-acct_1')?.classList.contains('visible')).toBe(true);
-    expect((document.getElementById('ws-spinner-acct_1') as HTMLElement).style.display).toBe('none');
+    expect((document.getElementById('ws-spinner-acct_1') as HTMLElement).hidden).toBe(true);
 
     renderAddWorkspaceSection('acct_1', createEntry({
       addWorkspaceOpen: true,
       createWorkspace: { pending: true, error: '' },
     }));
-    expect((document.getElementById('ws-spinner-acct_1') as HTMLElement).style.display).toBe('block');
+    expect((document.getElementById('ws-spinner-acct_1') as HTMLElement).hidden).toBe(false);
 
     renderAddWorkspaceSection('acct_1', createEntry({ addWorkspaceOpen: false }));
     expect(document.getElementById('add-ws-form-acct_1')?.classList.contains('visible')).toBe(false);

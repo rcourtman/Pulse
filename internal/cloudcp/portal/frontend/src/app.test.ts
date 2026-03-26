@@ -295,8 +295,8 @@ describe('portal app', function() {
       }),
     ]);
     expect((store.getServiceState().flows.retrieve.result as { token?: string } | null)?.token).toBe('pulse_token_123');
-    expect((document.getElementById('retrieve-inline-result') as HTMLElement | null)?.style.display).toBe('block');
-    expect((document.getElementById('retrieve-inline-copy') as HTMLButtonElement | null)?.style.display).toBe('inline-block');
+    expect((document.getElementById('retrieve-inline-result') as HTMLElement | null)?.hidden).toBe(false);
+    expect((document.getElementById('retrieve-inline-copy') as HTMLButtonElement | null)?.hidden).toBe(false);
     expect(document.getElementById('retrieve-inline-status')?.textContent).toContain('License retrieved successfully.');
   });
 

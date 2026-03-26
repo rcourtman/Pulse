@@ -36,7 +36,7 @@ export function focusElement(id: string): void {
 export function setVisible(id: string, visible: boolean): void {
   var el = getElement(id);
   if (el) {
-    el.style.display = visible ? 'block' : 'none';
+    el.hidden = !visible;
   }
 }
 
@@ -114,7 +114,7 @@ export function renderManagePanel(flowState: VerificationFlowState): void {
         '<button class="btn-primary" type="button" id="manage-inline-request" data-account-service-action="manage-inline-request">Send Verification Code</button>' +
       '</div>' +
     '</div>' +
-    '<div id="manage-inline-step2" style="display:' + (flowState.step2Visible ? 'block' : 'none') + '">' +
+    '<div id="manage-inline-step2"' + (flowState.step2Visible ? '' : ' hidden') + '>' +
       '<div class="form-group">' +
         '<label for="manage-inline-code">Verification code</label>' +
         '<input type="text" id="manage-inline-code" value="' + escapeAttribute(flowState.codeValue || '') + '" inputmode="numeric" pattern="[0-9]{6}" placeholder="123456" data-account-service-input="manage-code">' +
@@ -139,9 +139,6 @@ export function renderRetrievePanel(flowState: VerificationFlowState): void {
     email?: string;
   } | null;
   var invoiceURL = result && result.invoice_url ? result.invoice_url : '#';
-  var invoiceDisplay = result && result.invoice_url ? 'inline-block' : 'none';
-  var copyDisplay = result ? 'inline-block' : 'none';
-  var resultDisplay = result ? 'block' : 'none';
   root.innerHTML = '' +
     '<h3>Retrieve licenses</h3>' +
     '<p>Request a verification code for the commercial email, then reveal the current active self-hosted license without leaving Pulse Account.</p>' +
@@ -154,20 +151,20 @@ export function renderRetrievePanel(flowState: VerificationFlowState): void {
         '<button class="btn-primary" type="button" id="retrieve-inline-request" data-account-service-action="retrieve-inline-request">Send Verification Code</button>' +
       '</div>' +
     '</div>' +
-    '<div id="retrieve-inline-step2" style="display:' + (flowState.step2Visible ? 'block' : 'none') + '">' +
+    '<div id="retrieve-inline-step2"' + (flowState.step2Visible ? '' : ' hidden') + '>' +
       '<div class="form-group">' +
         '<label for="retrieve-inline-code">Verification code</label>' +
         '<input type="text" id="retrieve-inline-code" value="' + escapeAttribute(flowState.codeValue || '') + '" inputmode="numeric" pattern="[0-9]{6}" placeholder="123456" data-account-service-input="retrieve-code">' +
       '</div>' +
       '<div class="form-actions">' +
         '<button class="btn-primary" type="button" id="retrieve-inline-confirm" data-account-service-action="retrieve-inline-confirm">Show License</button>' +
-        '<button class="btn-secondary" type="button" id="retrieve-inline-copy" data-account-service-action="retrieve-inline-copy" style="display:' + copyDisplay + '">Copy License Key</button>' +
-        '<a class="btn-secondary" id="retrieve-inline-invoice" href="' + escapeAttribute(invoiceURL) + '" target="_blank" rel="noopener" style="display:' + invoiceDisplay + '">View Invoice</a>' +
+        '<button class="btn-secondary" type="button" id="retrieve-inline-copy" data-account-service-action="retrieve-inline-copy"' + (result ? '' : ' hidden') + '>Copy License Key</button>' +
+        '<a class="btn-secondary" id="retrieve-inline-invoice" href="' + escapeAttribute(invoiceURL) + '" target="_blank" rel="noopener"' + (result && result.invoice_url ? '' : ' hidden') + '>View Invoice</a>' +
       '</div>' +
       '<div class="helper-text">Use the latest active self-hosted license for this commercial email.</div>' +
     '</div>' +
     '<div class="service-status" id="retrieve-inline-status"></div>' +
-    '<div id="retrieve-inline-result" style="display:' + resultDisplay + '; margin-top:14px">' +
+    '<div id="retrieve-inline-result" class="service-result"' + (result ? '' : ' hidden') + '>' +
       '<label for="retrieve-inline-token">License key</label>' +
       '<textarea id="retrieve-inline-token" readonly>' + escapeText(result ? result.token : '') + '</textarea>' +
       '<div class="result-grid">' +
@@ -182,7 +179,6 @@ export function renderRetrievePanel(flowState: VerificationFlowState): void {
 export function renderExportPanel(flowState: VerificationFlowState): void {
   var root = getElement('data-export-root');
   if (!root) return;
-  var resultDisplay = flowState.result ? 'block' : 'none';
   root.innerHTML = '' +
     '<h4>Export My Data</h4>' +
     '<div id="data-export-step1">' +
@@ -194,7 +190,7 @@ export function renderExportPanel(flowState: VerificationFlowState): void {
         '<button class="btn-primary" type="button" id="data-export-request" data-account-service-action="data-export-request">Send Verification Code</button>' +
       '</div>' +
     '</div>' +
-    '<div id="data-export-step2" style="display:' + (flowState.step2Visible ? 'block' : 'none') + '">' +
+    '<div id="data-export-step2"' + (flowState.step2Visible ? '' : ' hidden') + '>' +
       '<div class="form-group">' +
         '<label for="data-export-code">Verification code</label>' +
         '<input type="text" id="data-export-code" value="' + escapeAttribute(flowState.codeValue || '') + '" inputmode="numeric" pattern="[0-9]{6}" placeholder="123456" data-account-service-input="data-export-code">' +
@@ -205,7 +201,7 @@ export function renderExportPanel(flowState: VerificationFlowState): void {
       '<div class="helper-text">Need a new code? <a href="#" id="data-export-resend" data-account-service-action="data-export-resend">Send again</a></div>' +
     '</div>' +
     '<div class="service-status" id="data-export-status"></div>' +
-    '<div id="data-export-result" style="display:' + resultDisplay + '; margin-top:14px">' +
+    '<div id="data-export-result" class="service-result"' + (flowState.result ? '' : ' hidden') + '>' +
       '<label for="data-export-payload">Export payload</label>' +
       '<textarea id="data-export-payload" readonly>' + escapeText(flowState.result ? JSON.stringify(flowState.result, null, 2) : '') + '</textarea>' +
     '</div>';
@@ -231,7 +227,7 @@ export function renderDeletePanel(flowState: VerificationFlowState): void {
         '<button class="btn-danger" type="button" id="data-delete-request" data-account-service-action="data-delete-request">Send Verification Code</button>' +
       '</div>' +
     '</div>' +
-    '<div id="data-delete-step2" style="display:' + (flowState.step2Visible ? 'block' : 'none') + '">' +
+    '<div id="data-delete-step2"' + (flowState.step2Visible ? '' : ' hidden') + '>' +
       '<div class="form-group">' +
         '<label for="data-delete-code">Verification code</label>' +
         '<input type="text" id="data-delete-code" value="' + escapeAttribute(flowState.codeValue || '') + '" inputmode="numeric" pattern="[0-9]{6}" placeholder="123456" data-account-service-input="data-delete-code">' +

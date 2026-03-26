@@ -20,7 +20,7 @@ function setTbodyMessage(tbody: HTMLElement, msg: string, isError: boolean): voi
   var tr = document.createElement('tr');
   var td = document.createElement('td');
   td.setAttribute('colspan', '3');
-  td.style.cssText = 'text-align:center;padding:16px;color:' + (isError ? '#991b1b' : '#94a3b8');
+  td.className = 'team-message-cell' + (isError ? ' error' : '');
   td.textContent = msg;
   tr.appendChild(td);
   tbody.appendChild(tr);
@@ -73,7 +73,7 @@ export function renderAddWorkspaceSection(accountID: string, entry: PortalAccoun
   if (!form) return;
   form.classList.toggle('visible', entry.addWorkspaceOpen);
   if (spinner) {
-    spinner.style.display = entry.createWorkspace.pending ? 'block' : 'none';
+    spinner.hidden = !entry.createWorkspace.pending;
   }
 }
 

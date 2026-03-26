@@ -115,12 +115,12 @@ describe('services view', function() {
     var invoiceLink = document.getElementById('retrieve-inline-invoice') as HTMLAnchorElement;
     var tokenArea = document.getElementById('retrieve-inline-token') as HTMLTextAreaElement;
 
-    expect(copyButton.style.display).toBe('inline-block');
+    expect(copyButton.hidden).toBe(false);
     expect(invoiceLink.href).toBe('https://license.pulserelay.pro/invoices/inv_123');
-    expect(invoiceLink.style.display).toBe('inline-block');
+    expect(invoiceLink.hidden).toBe(false);
     expect(tokenArea.value).toBe('pulse_key_123');
     expect(document.getElementById('retrieve-inline-email-value')?.textContent).toBe('buyer@example.com');
-    expect(document.getElementById('retrieve-inline-result')?.style.display).toBe('block');
+    expect((document.getElementById('retrieve-inline-result') as HTMLElement).hidden).toBe(false);
   });
 
   it('renders refund and delete panels from owned state', function() {
@@ -152,13 +152,13 @@ describe('services view', function() {
     expect(refundToken.value).toBe('pulse_token');
     expect(document.getElementById('refund-service-root')?.innerHTML).toContain('/refund.html?email=owner%40example.com');
     expect(deleteCheck.checked).toBe(true);
-    expect(document.getElementById('data-delete-step2')?.style.display).toBe('block');
+    expect((document.getElementById('data-delete-step2') as HTMLElement).hidden).toBe(false);
   });
 
   it('renders export panel and updates export result payload visibility', function() {
     document.body.innerHTML =
       '<div id="data-export-root"></div>' +
-      '<div id="data-export-result" style="display:none"></div>' +
+      '<div id="data-export-result" hidden></div>' +
       '<textarea id="data-export-payload"></textarea>';
 
     renderExportPanel(
@@ -175,8 +175,8 @@ describe('services view', function() {
     renderExportResult(payload);
 
     expect((document.getElementById('data-export-email') as HTMLInputElement).value).toBe('owner@example.com');
-    expect(document.getElementById('data-export-step2')?.style.display).toBe('block');
-    expect(document.getElementById('data-export-result')?.style.display).toBe('block');
+    expect((document.getElementById('data-export-step2') as HTMLElement).hidden).toBe(false);
+    expect((document.getElementById('data-export-result') as HTMLElement).hidden).toBe(false);
     expect((document.getElementById('data-export-payload') as HTMLTextAreaElement).value).toBe(
       JSON.stringify(payload, null, 2)
     );
@@ -202,7 +202,7 @@ describe('services view', function() {
 
     expect((document.getElementById('manage-inline-email') as HTMLInputElement).value).toBe('owner@example.com');
     expect((document.getElementById('manage-inline-code') as HTMLInputElement).value).toBe('123456');
-    expect(document.getElementById('manage-inline-step2')?.style.display).toBe('block');
+    expect((document.getElementById('manage-inline-step2') as HTMLElement).hidden).toBe(false);
     expect(document.getElementById('manage-inline-status')?.className).toContain('success');
     expect(document.getElementById('manage-inline-status')?.textContent).toBe('Code sent.');
   });

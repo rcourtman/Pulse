@@ -36,6 +36,8 @@
     .btn-secondary:hover { background: #f8fafc; border-color: #94a3b8; }
     .btn-danger { background: #fff; color: #dc2626; border: 1px solid #fca5a5; border-radius: 8px; padding: 7px 14px; font-size: 13px; cursor: pointer; }
     .btn-danger:hover { background: #fef2f2; }
+    .btn-compact { padding: 8px 14px; font-size: 13px; }
+    .link-button { text-decoration: none; }
     .account-actions { margin-top: 14px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
     .add-workspace-form { margin-top: 12px; display: none; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px; }
     .add-workspace-form.visible { display: block; }
@@ -48,6 +50,8 @@
     .team-table { width: 100%; border-collapse: collapse; font-size: 14px; }
     .team-table th { text-align: left; font-size: 12px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; padding: 6px 8px; border-bottom: 1px solid #e2e8f0; }
     .team-table td { padding: 8px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+    .team-message-cell { text-align: center; padding: 16px; color: #94a3b8; }
+    .team-message-cell.error { color: #991b1b; }
     .team-table select { border: 1px solid #cbd5e1; border-radius: 6px; padding: 4px 8px; font-size: 13px; background: #fff; }
     .team-table .btn-remove { background: none; border: none; color: #dc2626; cursor: pointer; font-size: 13px; padding: 4px 8px; }
     .team-table .btn-remove:hover { text-decoration: underline; }
@@ -83,6 +87,7 @@
     .service-panel .result-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-top: 14px; }
     .service-panel .result-meta-label { font-size: 12px; color: #64748b; margin-bottom: 4px; }
     .service-panel .result-meta-value { font-size: 14px; color: #0f172a; word-break: break-word; }
+    .service-result { margin-top: 14px; }
     .service-panel .subsection { margin-top: 18px; padding-top: 18px; border-top: 1px solid #e2e8f0; }
     .service-panel .subsection:first-of-type { margin-top: 0; padding-top: 0; border-top: none; }
     .service-panel .subsection h4 { margin: 0 0 8px; font-size: 15px; font-weight: 700; }
@@ -96,7 +101,13 @@
     .service-status.success { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
     .empty-state { background: #fff; border: 1px dashed #cbd5e1; border-radius: 10px; padding: 32px; text-align: center; color: #64748b; }
     .empty-state p { margin: 0; font-size: 15px; }
-    .spinner { display: none; width: 18px; height: 18px; border: 2px solid #93c5fd; border-top-color: #1d4ed8; border-radius: 50%; animation: spin 0.6s linear infinite; }
+    .empty-state-spaced { margin-top: 48px; }
+    .support-copy { margin-top: 12px; font-size: 13px; }
+    .support-link { color: #1d4ed8; }
+    .badge-role { background: #f1f5f9; color: #64748b; }
+    .workspace-state-label { font-size: 13px; color: #94a3b8; }
+    .spinner { display: inline-block; width: 18px; height: 18px; border: 2px solid #93c5fd; border-top-color: #1d4ed8; border-radius: 50%; animation: spin 0.6s linear infinite; }
+    [hidden] { display: none !important; }
     @keyframes spin { to { transform: rotate(360deg); } }
     .toast { position: fixed; bottom: 24px; right: 24px; background: #1e293b; color: #f8fafc; border-radius: 8px; padding: 12px 20px; font-size: 14px; display: none; z-index: 100; }
     .toast.visible { display: block; animation: fadein 0.2s; }
