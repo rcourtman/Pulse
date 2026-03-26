@@ -696,6 +696,13 @@ state, tables, summaries, and point-detail surfaces must resolve rollup and
 point item types through the shared presenter helpers instead of repeating
 `display.itemType` / `subjectType` / `subjectRef.type` fallback chains in
 page-local consumers.
+That same shared recovery decode boundary also owns canonical recovery display
+shape. `frontend-modern/src/utils/recoveryPlatformModel.ts`,
+`frontend-modern/src/hooks/useRecoveryPoints.ts`, and
+`frontend-modern/src/hooks/useRecoveryRollups.ts` must normalize legacy
+transport display aliases like `subjectLabel` and `subjectType` into canonical
+runtime `itemLabel` and `itemType` fields before recovery presenters consume
+the model.
 That same shared recovery state owner now also keeps `platform` as the
 canonical route and transport filter name for operator-facing recovery links,
 while any accepted legacy `provider` aliases remain parser compatibility only.

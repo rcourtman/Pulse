@@ -25,7 +25,7 @@ export function getRecoveryRollupItemLabel(
   resourcesById: Map<string, Resource>,
 ): string {
   const itemResourceId = (rollup.subjectResourceId || '').trim();
-  const displayLabel = String(rollup.display?.subjectLabel || '').trim();
+  const displayLabel = String(rollup.display?.itemLabel || '').trim();
   const linkedResourceLabel = getRecoveryLinkedResourceLabel(itemResourceId, resourcesById);
   if (linkedResourceLabel) return linkedResourceLabel;
   if (displayLabel) return displayLabel;
@@ -48,7 +48,7 @@ export function getRecoveryPointItemLabel(
   resourcesById: Map<string, Resource>,
 ): string {
   const itemResourceId = (point.subjectResourceId || '').trim();
-  const displayLabel = String(point.display?.subjectLabel || '').trim();
+  const displayLabel = String(point.display?.itemLabel || '').trim();
   const linkedResourceLabel = getRecoveryLinkedResourceLabel(itemResourceId, resourcesById);
   if (linkedResourceLabel) return linkedResourceLabel;
   if (displayLabel) return displayLabel;

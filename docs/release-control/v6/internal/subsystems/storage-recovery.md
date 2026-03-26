@@ -190,6 +190,12 @@ Recovery surfaces must resolve rollup and point item types through one shared
 item-type helper instead of repeating `display.itemType` / `subjectType` /
 `subjectRef.type` fallback chains across state, summary, details, and table
 renderers.
+That same hook-boundary normalization also owns the runtime recovery display
+model. Canonical recovery points and rollups must expose `display.itemLabel`
+and `display.itemType` to recovery consumers, while legacy transport fields
+such as `subjectLabel` and `subjectType` remain decode-only compatibility
+aliases in the shared normalization layer instead of leaking into runtime
+presenters.
 That same shared presentation layer also owns the distinction between
 aggregate recovery-method language and single-record recovery-method language.
 Timeline legends and daily breakdowns must use aggregate labels such as

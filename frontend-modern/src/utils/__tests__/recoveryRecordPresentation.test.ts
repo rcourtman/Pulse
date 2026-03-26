@@ -70,12 +70,12 @@ describe('recoveryRecordPresentation', () => {
     const rollup = {
       rollupId: 'res:res-3',
       subjectResourceId: 'res-3',
-      display: { subjectLabel: 'Archive VM' },
+      display: { itemLabel: 'Archive VM' },
     } as ProtectionRollup;
     const linkedPoint = {
       id: 'point-3',
       subjectResourceId: 'res-2',
-      display: { subjectLabel: 'billing-api' },
+      display: { itemLabel: 'billing-api' },
     } as RecoveryPoint;
 
     expect(getRecoveryRollupItemLabel(rollup, resources)).toBe('Archive VM');

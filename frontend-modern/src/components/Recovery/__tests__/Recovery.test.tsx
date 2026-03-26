@@ -261,7 +261,7 @@ describe('Recovery', () => {
     rollupsPayload.push({
       rollupId: 'res:vm-404',
       subjectResourceId: 'vm-404',
-      display: { subjectLabel: 'Archive VM' },
+      display: { itemLabel: 'Archive VM' },
       lastAttemptAt: '2026-02-12T08:00:00.000Z',
       lastSuccessAt: '2026-02-12T08:00:00.000Z',
       lastOutcome: 'success',
@@ -275,7 +275,7 @@ describe('Recovery', () => {
         mode: 'local',
         outcome: 'success',
         completedAt: '2026-02-12T08:00:00.000Z',
-        display: { subjectLabel: 'Archive VM' },
+        display: { itemLabel: 'Archive VM' },
       },
     ];
 

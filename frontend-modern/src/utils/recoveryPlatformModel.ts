@@ -1,6 +1,8 @@
 import type {
   ProtectionRollup,
   ProtectionRollupTransport,
+  RecoveryPointDisplay,
+  RecoveryPointDisplayTransport,
   RecoveryPoint,
   RecoveryPointsResponse,
   RecoveryPointsTransportResponse,
@@ -22,6 +24,29 @@ interface RecoveryRollupPlatformsLike {
   platforms?: string[] | null;
   providers?: string[] | null;
 }
+
+const normalizeRecoveryDisplay = (
+  display: RecoveryPointDisplay | RecoveryPointDisplayTransport | null | undefined,
+): RecoveryPointDisplay | null | undefined => {
+  if (display == null) return display;
+
+  const {
+    itemLabel,
+    itemType,
+    subjectLabel: _subjectLabel,
+    subjectType: _subjectType,
+    ...rest
+  } = display as RecoveryPointDisplayTransport;
+
+  const normalizedItemLabel = toTrimmedString(itemLabel) || toTrimmedString(_subjectLabel);
+  const normalizedItemType = toTrimmedString(itemType) || toTrimmedString(_subjectType);
+
+  return {
+    ...rest,
+    ...(normalizedItemLabel ? { itemLabel: normalizedItemLabel } : {}),
+    ...(normalizedItemType ? { itemType: normalizedItemType } : {}),
+  };
+};
 
 export const getRecoveryPointPlatform = (
   point: RecoveryPointPlatformLike | null | undefined,
@@ -48,17 +73,27 @@ const normalizeRecoveryMeta = (meta: RecoveryResponseMeta | null | undefined): R
 export const normalizeRecoveryPoint = (
   point: RecoveryPointTransport | RecoveryPoint,
 ): RecoveryPoint => {
-  const { provider: _provider, ...rest } = point as RecoveryPointTransport;
+  const { provider: _provider, display, ...rest } = point as RecoveryPointTransport;
   const platform = getRecoveryPointPlatform(point);
-  return platform ? { ...rest, platform } : (rest as RecoveryPoint);
+  const normalizedDisplay = normalizeRecoveryDisplay(display);
+  return {
+    ...(rest as RecoveryPoint),
+    ...(platform ? { platform } : {}),
+    ...(display !== undefined ? { display: normalizedDisplay } : {}),
+  };
 };
 
 export const normalizeRecoveryRollup = (
   rollup: ProtectionRollupTransport | ProtectionRollup,
 ): ProtectionRollup => {
-  const { providers: _providers, ...rest } = rollup as ProtectionRollupTransport;
+  const { providers: _providers, display, ...rest } = rollup as ProtectionRollupTransport;
   const platforms = getRecoveryRollupPlatforms(rollup);
-  return platforms.length > 0 ? { ...rest, platforms } : (rest as ProtectionRollup);
+  const normalizedDisplay = normalizeRecoveryDisplay(display);
+  return {
+    ...(rest as ProtectionRollup),
+    ...(platforms.length > 0 ? { platforms } : {}),
+    ...(display !== undefined ? { display: normalizedDisplay } : {}),
+  };
 };
 
 export const normalizeRecoveryPointsResponse = (

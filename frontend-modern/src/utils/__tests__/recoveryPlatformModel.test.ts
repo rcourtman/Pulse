@@ -48,6 +48,10 @@ describe('recoveryPlatformModel', () => {
         kind: 'backup',
         mode: 'remote',
         outcome: 'success',
+        display: {
+          subjectLabel: 'Archive VM',
+          subjectType: 'proxmox-vm',
+        },
       }),
     ).toEqual({
       id: 'point-1',
@@ -55,6 +59,10 @@ describe('recoveryPlatformModel', () => {
       kind: 'backup',
       mode: 'remote',
       outcome: 'success',
+      display: {
+        itemLabel: 'Archive VM',
+        itemType: 'proxmox-vm',
+      },
     });
 
     expect(
@@ -62,11 +70,19 @@ describe('recoveryPlatformModel', () => {
         rollupId: 'rollup-1',
         lastOutcome: 'success',
         providers: ['proxmox-pbs', 'kubernetes'],
+        display: {
+          subjectLabel: 'Legacy Dataset',
+          subjectType: 'truenas-dataset',
+        },
       }),
     ).toEqual({
       rollupId: 'rollup-1',
       lastOutcome: 'success',
       platforms: ['proxmox-pbs', 'kubernetes'],
+      display: {
+        itemLabel: 'Legacy Dataset',
+        itemType: 'truenas-dataset',
+      },
     });
   });
 

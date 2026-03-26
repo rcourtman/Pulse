@@ -20,8 +20,7 @@ export interface RecoveryExternalRef {
 }
 
 export interface RecoveryPointDisplay {
-  subjectLabel?: string;
-  subjectType?: string;
+  itemLabel?: string;
   itemType?: string;
   isWorkload?: boolean;
   clusterLabel?: string;
@@ -31,6 +30,11 @@ export interface RecoveryPointDisplay {
   entityIdLabel?: string;
   repositoryLabel?: string;
   detailsSummary?: string;
+}
+
+export interface RecoveryPointDisplayTransport extends RecoveryPointDisplay {
+  subjectLabel?: string;
+  subjectType?: string;
 }
 
 export interface RecoveryPoint {
@@ -64,6 +68,7 @@ export interface RecoveryPoint {
 }
 
 export interface RecoveryPointTransport extends RecoveryPoint {
+  display?: RecoveryPointDisplayTransport | null;
   provider?: RecoveryPlatform;
 }
 
@@ -98,6 +103,7 @@ export interface ProtectionRollup {
 }
 
 export interface ProtectionRollupTransport extends ProtectionRollup {
+  display?: RecoveryPointDisplayTransport | null;
   providers?: RecoveryPlatform[];
 }
 
