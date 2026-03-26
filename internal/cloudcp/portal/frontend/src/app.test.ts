@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { installPortalApp } from './app';
+import { createBootstrapDefaults, createPortalRuntime } from './runtime';
 import { createPortalStore } from './store';
 import type { PortalBootstrapData } from './types';
 
@@ -93,5 +94,27 @@ describe('portal app', function() {
     expect(store.getBootstrap().authenticated).toBe(false);
     expect(store.getBootstrap().email).toBe('');
     expect(store.getBootstrap().accounts).toEqual([]);
+  });
+
+  it('starts from the owned runtime factory instead of import-time globals', function() {
+    document.body.innerHTML = `
+      <script id="pulse-account-bootstrap" type="application/json">
+        {"authenticated":true,"email":"owner@example.com","public_site_url":"https://cloud.pulserelay.pro","accounts":[]}
+      </script>
+      <div id="portal-user-info"></div>
+      <div id="portal-app-root"></div>
+      <div id="toast"></div>
+    `;
+
+    var runtime = createPortalRuntime({
+      authenticated: true,
+      email: 'owner@example.com',
+      public_site_url: 'https://cloud.pulserelay.pro',
+      accounts: [],
+    });
+
+    expect(runtime.bootstrapDefaults.public_site_url).toBe('https://cloud.pulserelay.pro');
+    expect(runtime.store.getBootstrap().authenticated).toBe(true);
+    expect(runtime.store.getBootstrap().email).toBe('owner@example.com');
   });
 });

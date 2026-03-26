@@ -678,133 +678,6 @@
     };
   }
 
-  // src/store.ts
-  function createAnonymousBootstrap(bootstrapDefaults2, overrides = {}) {
-    return {
-      authenticated: false,
-      email: "",
-      ...bootstrapDefaults2,
-      ...overrides,
-      accounts: normalizeAccounts(overrides.accounts)
-    };
-  }
-  function normalizeBootstrap(bootstrapDefaults2, raw) {
-    return createAnonymousBootstrap(bootstrapDefaults2, raw || {});
-  }
-  function createPortalStore(bootstrapDefaults2, initialBootstrap) {
-    var bootstrapState = normalizeBootstrap(bootstrapDefaults2, initialBootstrap);
-    var accountState = createPortalAccountState();
-    var loginState = createPortalLoginState();
-    var serviceState = createPortalServiceState();
-    syncLoginStateBootstrapEmail(loginState, bootstrapState.email || "");
-    syncServiceStateBootstrapEmail(serviceState, bootstrapState.email || "");
-    var accountSubscribers = /* @__PURE__ */ new Set();
-    var bootstrapSubscribers = /* @__PURE__ */ new Set();
-    var loginSubscribers = /* @__PURE__ */ new Set();
-    var serviceSubscribers = /* @__PURE__ */ new Set();
-    function notify(subscribers) {
-      subscribers.forEach(function(listener) {
-        listener();
-      });
-    }
-    return {
-      getBootstrap: function() {
-        return bootstrapState;
-      },
-      getAccountState: function() {
-        return accountState;
-      },
-      getLoginState: function() {
-        return loginState;
-      },
-      getServiceState: function() {
-        return serviceState;
-      },
-      setBootstrap: function(nextBootstrap) {
-        bootstrapState = normalizeBootstrap(bootstrapDefaults2, nextBootstrap);
-        syncLoginStateBootstrapEmail(loginState, bootstrapState.email || "");
-        syncServiceStateBootstrapEmail(serviceState, bootstrapState.email || "");
-        notify(bootstrapSubscribers);
-        return bootstrapState;
-      },
-      updateAccountState: function(mutator, options) {
-        mutator(accountState);
-        if (!options || options.notify !== false) {
-          notify(accountSubscribers);
-        }
-        return accountState;
-      },
-      updateLoginState: function(mutator, options) {
-        mutator(loginState);
-        if (!options || options.notify !== false) {
-          notify(loginSubscribers);
-        }
-        return loginState;
-      },
-      updateServiceState: function(mutator, options) {
-        mutator(serviceState);
-        if (!options || options.notify !== false) {
-          notify(serviceSubscribers);
-        }
-        return serviceState;
-      },
-      subscribeBootstrap: function(listener) {
-        bootstrapSubscribers.add(listener);
-        return function() {
-          bootstrapSubscribers.delete(listener);
-        };
-      },
-      subscribeAccount: function(listener) {
-        accountSubscribers.add(listener);
-        return function() {
-          accountSubscribers.delete(listener);
-        };
-      },
-      subscribeLogin: function(listener) {
-        loginSubscribers.add(listener);
-        return function() {
-          loginSubscribers.delete(listener);
-        };
-      },
-      subscribeServices: function(listener) {
-        serviceSubscribers.add(listener);
-        return function() {
-          serviceSubscribers.delete(listener);
-        };
-      }
-    };
-  }
-  function normalizeAccounts(accounts) {
-    return Array.isArray(accounts) ? accounts : [];
-  }
-
-  // src/runtime.ts
-  function readEmbeddedBootstrap() {
-    const bootstrapEl = document.getElementById("pulse-account-bootstrap");
-    if (!bootstrapEl) {
-      return {};
-    }
-    try {
-      return JSON.parse(bootstrapEl.textContent || "{}");
-    } catch {
-      return {};
-    }
-  }
-  var embeddedBootstrap = readEmbeddedBootstrap();
-  var bootstrapDefaults = {
-    public_site_url: embeddedBootstrap.public_site_url || "https://pulserelay.pro",
-    support_email: embeddedBootstrap.support_email || "support@pulserelay.pro",
-    commercial_api_base_url: embeddedBootstrap.commercial_api_base_url || "",
-    portal_path: embeddedBootstrap.portal_path || "/portal",
-    bootstrap_path: embeddedBootstrap.bootstrap_path || "/api/portal/bootstrap",
-    magic_link_request_path: embeddedBootstrap.magic_link_request_path || "/api/public/magic-link/request",
-    signup_path: embeddedBootstrap.signup_path || "/signup",
-    logout_path: embeddedBootstrap.logout_path || "/auth/logout",
-    account_api_base_path: embeddedBootstrap.account_api_base_path || "/api/accounts",
-    portal_api_base_path: embeddedBootstrap.portal_api_base_path || "/api/portal"
-  };
-  var portalStore = createPortalStore(bootstrapDefaults, embeddedBootstrap);
-
   // src/services_view.ts
   function getElement3(id) {
     return document.getElementById(id);
@@ -1496,6 +1369,141 @@
     renderPortalApp();
   }
 
+  // src/store.ts
+  function createAnonymousBootstrap(bootstrapDefaults, overrides = {}) {
+    return {
+      authenticated: false,
+      email: "",
+      ...bootstrapDefaults,
+      ...overrides,
+      accounts: normalizeAccounts(overrides.accounts)
+    };
+  }
+  function normalizeBootstrap(bootstrapDefaults, raw) {
+    return createAnonymousBootstrap(bootstrapDefaults, raw || {});
+  }
+  function createPortalStore(bootstrapDefaults, initialBootstrap) {
+    var bootstrapState = normalizeBootstrap(bootstrapDefaults, initialBootstrap);
+    var accountState = createPortalAccountState();
+    var loginState = createPortalLoginState();
+    var serviceState = createPortalServiceState();
+    syncLoginStateBootstrapEmail(loginState, bootstrapState.email || "");
+    syncServiceStateBootstrapEmail(serviceState, bootstrapState.email || "");
+    var accountSubscribers = /* @__PURE__ */ new Set();
+    var bootstrapSubscribers = /* @__PURE__ */ new Set();
+    var loginSubscribers = /* @__PURE__ */ new Set();
+    var serviceSubscribers = /* @__PURE__ */ new Set();
+    function notify(subscribers) {
+      subscribers.forEach(function(listener) {
+        listener();
+      });
+    }
+    return {
+      getBootstrap: function() {
+        return bootstrapState;
+      },
+      getAccountState: function() {
+        return accountState;
+      },
+      getLoginState: function() {
+        return loginState;
+      },
+      getServiceState: function() {
+        return serviceState;
+      },
+      setBootstrap: function(nextBootstrap) {
+        bootstrapState = normalizeBootstrap(bootstrapDefaults, nextBootstrap);
+        syncLoginStateBootstrapEmail(loginState, bootstrapState.email || "");
+        syncServiceStateBootstrapEmail(serviceState, bootstrapState.email || "");
+        notify(bootstrapSubscribers);
+        return bootstrapState;
+      },
+      updateAccountState: function(mutator, options) {
+        mutator(accountState);
+        if (!options || options.notify !== false) {
+          notify(accountSubscribers);
+        }
+        return accountState;
+      },
+      updateLoginState: function(mutator, options) {
+        mutator(loginState);
+        if (!options || options.notify !== false) {
+          notify(loginSubscribers);
+        }
+        return loginState;
+      },
+      updateServiceState: function(mutator, options) {
+        mutator(serviceState);
+        if (!options || options.notify !== false) {
+          notify(serviceSubscribers);
+        }
+        return serviceState;
+      },
+      subscribeBootstrap: function(listener) {
+        bootstrapSubscribers.add(listener);
+        return function() {
+          bootstrapSubscribers.delete(listener);
+        };
+      },
+      subscribeAccount: function(listener) {
+        accountSubscribers.add(listener);
+        return function() {
+          accountSubscribers.delete(listener);
+        };
+      },
+      subscribeLogin: function(listener) {
+        loginSubscribers.add(listener);
+        return function() {
+          loginSubscribers.delete(listener);
+        };
+      },
+      subscribeServices: function(listener) {
+        serviceSubscribers.add(listener);
+        return function() {
+          serviceSubscribers.delete(listener);
+        };
+      }
+    };
+  }
+  function normalizeAccounts(accounts) {
+    return Array.isArray(accounts) ? accounts : [];
+  }
+
+  // src/runtime.ts
+  function readEmbeddedBootstrap() {
+    const bootstrapEl = document.getElementById("pulse-account-bootstrap");
+    if (!bootstrapEl) {
+      return {};
+    }
+    try {
+      return JSON.parse(bootstrapEl.textContent || "{}");
+    } catch {
+      return {};
+    }
+  }
+  function createBootstrapDefaults(embeddedBootstrap) {
+    return {
+      public_site_url: embeddedBootstrap.public_site_url || "https://pulserelay.pro",
+      support_email: embeddedBootstrap.support_email || "support@pulserelay.pro",
+      commercial_api_base_url: embeddedBootstrap.commercial_api_base_url || "",
+      portal_path: embeddedBootstrap.portal_path || "/portal",
+      bootstrap_path: embeddedBootstrap.bootstrap_path || "/api/portal/bootstrap",
+      magic_link_request_path: embeddedBootstrap.magic_link_request_path || "/api/public/magic-link/request",
+      signup_path: embeddedBootstrap.signup_path || "/signup",
+      logout_path: embeddedBootstrap.logout_path || "/auth/logout",
+      account_api_base_path: embeddedBootstrap.account_api_base_path || "/api/accounts",
+      portal_api_base_path: embeddedBootstrap.portal_api_base_path || "/api/portal"
+    };
+  }
+  function createPortalRuntime(embeddedBootstrap = readEmbeddedBootstrap()) {
+    var bootstrapDefaults = createBootstrapDefaults(embeddedBootstrap);
+    return {
+      bootstrapDefaults,
+      embeddedBootstrap,
+      store: createPortalStore(bootstrapDefaults, embeddedBootstrap)
+    };
+  }
+
   // src/app.ts
   function installPortalApp(deps) {
     function applyBootstrap(data) {
@@ -1556,9 +1564,10 @@
     };
   }
   function startPortalApp() {
+    var runtime = createPortalRuntime();
     return installPortalApp({
-      bootstrapDefaults,
-      store: portalStore
+      bootstrapDefaults: runtime.bootstrapDefaults,
+      store: runtime.store
     });
   }
 

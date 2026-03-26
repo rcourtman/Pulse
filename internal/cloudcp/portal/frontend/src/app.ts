@@ -1,10 +1,10 @@
 import { installAccountController } from './account_controller';
 import { installAccountRuntime } from './account_runtime';
 import { installAuthController } from './auth_controller';
-import { bootstrapDefaults, portalStore } from './runtime';
 import { installServicesRuntime } from './services';
 import { installShell } from './shell';
 import { createAnonymousBootstrap } from './store';
+import { createPortalRuntime } from './runtime';
 import type { PortalStore } from './store';
 import type { PortalBootstrapData } from './types';
 
@@ -90,8 +90,9 @@ export function installPortalApp(deps: PortalAppDeps): PortalApp {
 }
 
 export function startPortalApp(): PortalApp {
+  var runtime = createPortalRuntime();
   return installPortalApp({
-    bootstrapDefaults: bootstrapDefaults,
-    store: portalStore,
+    bootstrapDefaults: runtime.bootstrapDefaults,
+    store: runtime.store,
   });
 }
