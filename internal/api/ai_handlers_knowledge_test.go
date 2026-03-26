@@ -1292,6 +1292,7 @@ func TestKnowledgeEndpoints_RequireAuth(t *testing.T) {
 		AuthPass:   "$2a$10$abcdefghijklmnopqrstuuABCDEFGHIJKLMNOPQRSTUVWXYZ012", // bcrypt hash placeholder
 	}
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	t.Cleanup(router.shutdownBackgroundWorkers)
 
 	endpoints := []struct {
 		method string
@@ -1332,6 +1333,7 @@ func TestKnowledgeEndpoints_RequireAIChatScope(t *testing.T) {
 	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
 	cfg := newTestConfigWithTokens(t, record)
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	t.Cleanup(router.shutdownBackgroundWorkers)
 
 	endpoints := []struct {
 		method string

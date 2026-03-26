@@ -674,6 +674,39 @@ func TestCSRFTokenStore_InitReconfiguresDataPath(t *testing.T) {
 	}
 }
 
+func TestEnsureCSRFStoreReturnsOwnedStoreForPath(t *testing.T) {
+	resetCSRFStoreForTests()
+	t.Cleanup(resetCSRFStoreForTests)
+
+	dirOne := t.TempDir()
+	dirTwo := t.TempDir()
+
+	storeOne := ensureCSRFStore(dirOne)
+	if storeOne == nil {
+		t.Fatal("ensureCSRFStore should initialize a store for a valid data path")
+	}
+	if storeOne != GetCSRFStore() {
+		t.Fatal("ensureCSRFStore should return the active store for the configured data path")
+	}
+
+	storeTwo := ensureCSRFStore(dirTwo)
+	if storeTwo == nil {
+		t.Fatal("ensureCSRFStore should initialize a reconfigured store")
+	}
+	if storeTwo != GetCSRFStore() {
+		t.Fatal("ensureCSRFStore should return the reconfigured active store")
+	}
+	if storeOne == storeTwo {
+		t.Fatal("ensureCSRFStore should return a distinct store after data-path reconfiguration")
+	}
+
+	select {
+	case <-storeOne.workerDone:
+	default:
+		t.Fatal("reconfigured csrf store should shut down the previous worker")
+	}
+}
+
 func TestCSRFTokenStore_ShutdownReturnsWithoutWaitingForWorkerReceive(t *testing.T) {
 	storeDir := t.TempDir()
 	InitCSRFStore(storeDir)

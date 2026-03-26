@@ -126,7 +126,10 @@ teardown is synchronous when recovery-adjacent runtimes reinitialize. Session,
 CSRF, and recovery-token workers may not leave stale background goroutines or
 half-shutdown path ownership behind, because hosted handoff, recovery
 inspection, and adjacent temp-path tests all depend on the same canonical
-runtime data-dir authority being replaceable without hangs or leaked state.
+runtime data-dir authority being replaceable without hangs or leaked state,
+and router teardown must close the exact session, CSRF, and recovery-token
+workers that router initialized instead of assuming a later global auth-store
+binding will clean them up.
 That shared `internal/api/` dependency now also assumes hosted tenant AI
 bootstrap and chat-runtime reads resolve through one effective hosted billing
 lease before storage- or recovery-adjacent runtime consumers inspect

@@ -768,6 +768,39 @@ func TestSessionStore_InitReconfiguresDataPath(t *testing.T) {
 	}
 }
 
+func TestEnsureSessionStoreReturnsOwnedStoreForPath(t *testing.T) {
+	resetSessionStoreForTests()
+	t.Cleanup(resetSessionStoreForTests)
+
+	dirOne := t.TempDir()
+	dirTwo := t.TempDir()
+
+	storeOne := ensureSessionStore(dirOne)
+	if storeOne == nil {
+		t.Fatal("ensureSessionStore should initialize a store for a valid data path")
+	}
+	if storeOne != GetSessionStore() {
+		t.Fatal("ensureSessionStore should return the active store for the configured data path")
+	}
+
+	storeTwo := ensureSessionStore(dirTwo)
+	if storeTwo == nil {
+		t.Fatal("ensureSessionStore should initialize a reconfigured store")
+	}
+	if storeTwo != GetSessionStore() {
+		t.Fatal("ensureSessionStore should return the reconfigured active store")
+	}
+	if storeOne == storeTwo {
+		t.Fatal("ensureSessionStore should return a distinct store after data-path reconfiguration")
+	}
+
+	select {
+	case <-storeOne.workerDone:
+	default:
+		t.Fatal("reconfigured session store should shut down the previous worker")
+	}
+}
+
 func TestSessionStore_SaveUnsafe_DropsRefreshTokenWithoutCrypto(t *testing.T) {
 	tmpDir := t.TempDir()
 	store := &SessionStore{

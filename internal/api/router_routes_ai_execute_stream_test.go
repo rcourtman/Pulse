@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -84,27 +83,7 @@ func TestRouteExecuteStream_NoAuth(t *testing.T) {
 func TestRouteExecuteStream_WrongScope(t *testing.T) {
 	t.Parallel()
 
-	rawToken := "ai-stream-wrong-scope-" + t.Name() + ".12345678"
-	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
-	cfg := newTestConfigWithTokens(t, record)
-
-	persistence := config.NewConfigPersistence(cfg.DataPath)
-	aiCfg := config.NewDefaultAIConfig()
-	aiCfg.Enabled = true
-	aiCfg.Model = "ollama:llama3"
-	aiCfg.OllamaBaseURL = "http://192.0.2.1:11434"
-	if err := persistence.SaveAIConfig(*aiCfg); err != nil {
-		t.Fatalf("SaveAIConfig: %v", err)
-	}
-
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
-	router.aiSettingsHandler.defaultConfig = cfg
-	router.aiSettingsHandler.defaultPersistence = persistence
-	svc := ai.NewService(persistence, nil)
-	if err := svc.LoadConfig(); err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	router.aiSettingsHandler.defaultAIService = svc
+	router, rawToken := setupExecuteRouterForScopes(t, "http://192.0.2.1:11434", []string{config.ScopeSettingsRead}, true)
 
 	body := `{"prompt":"hi"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/ai/execute/stream", strings.NewReader(body))
@@ -183,25 +162,7 @@ func TestRouteExecuteStream_InvalidJSON(t *testing.T) {
 func TestRouteExecuteStream_AIDisabled(t *testing.T) {
 	t.Parallel()
 
-	rawToken := "ai-stream-disabled-" + t.Name() + ".12345678"
-	record := newTokenRecord(t, rawToken, []string{config.ScopeAIExecute}, nil)
-	cfg := newTestConfigWithTokens(t, record)
-
-	persistence := config.NewConfigPersistence(cfg.DataPath)
-	aiCfg := config.NewDefaultAIConfig()
-	aiCfg.Enabled = false
-	if err := persistence.SaveAIConfig(*aiCfg); err != nil {
-		t.Fatalf("SaveAIConfig: %v", err)
-	}
-
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
-	router.aiSettingsHandler.defaultConfig = cfg
-	router.aiSettingsHandler.defaultPersistence = persistence
-	svc := ai.NewService(persistence, nil)
-	if err := svc.LoadConfig(); err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	router.aiSettingsHandler.defaultAIService = svc
+	router, rawToken := setupExecuteRouterForScopes(t, "http://192.0.2.1:11434", []string{config.ScopeAIExecute}, false)
 
 	body := `{"prompt":"hi"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/ai/execute/stream", strings.NewReader(body))

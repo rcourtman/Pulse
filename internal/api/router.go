@@ -110,6 +110,9 @@ type Router struct {
 	oidcManager                *OIDCServiceManager
 	samlManager                *SAMLServiceManager
 	ssoConfig                  *config.SSOConfig
+	sessionStore               *SessionStore
+	csrfStore                  *CSRFTokenStore
+	recoveryTokenStore         *RecoveryTokenStore
 	authorizer                 auth.Authorizer
 	wrapped                    http.Handler
 	serverVersion              string
@@ -173,9 +176,9 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, mtMonitor *monit
 		store = conversionStores[0]
 	}
 
-	// Initialize persistent session and CSRF stores
-	InitSessionStore(cfg.DataPath)
-	InitCSRFStore(cfg.DataPath)
+	// Initialize persistent auth stores and capture the exact workers this router owns.
+	sessionStore := ensureSessionStore(cfg.DataPath)
+	csrfStore := ensureCSRFStore(cfg.DataPath)
 
 	updateHistory, err := updates.NewUpdateHistory(cfg.DataPath)
 	if err != nil {
@@ -206,6 +209,8 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, mtMonitor *monit
 		handoffExchangeRateLimiter: NewRateLimiter(20, 1*time.Minute), // cloud handoff token exchange per minute per IP
 		persistence:                config.NewConfigPersistence(cfg.DataPath),
 		multiTenant:                config.NewMultiTenantPersistence(cfg.DataPath),
+		sessionStore:               sessionStore,
+		csrfStore:                  csrfStore,
 		authorizer:                 auth.GetAuthorizer(),
 		serverVersion:              strings.TrimSpace(serverVersion),
 		projectRoot:                projectRoot,
@@ -577,8 +582,8 @@ func (r *Router) setupRoutes() {
 		}
 	}
 
-	// Initialize recovery token store
-	InitRecoveryTokenStore(r.config.DataPath)
+	// Initialize recovery token store and capture the exact worker this router owns.
+	r.recoveryTokenStore = ensureRecoveryTokenStore(r.config.DataPath)
 
 	r.registerPublicAndAuthRoutes()
 	r.registerMonitoringRoutes(guestMetadataHandler, dockerMetadataHandler, hostMetadataHandler, infraUpdateHandlers)
@@ -2058,6 +2063,15 @@ func (r *Router) ShutdownAIIntelligence() {
 func (r *Router) shutdownBackgroundWorkers() {
 	if r.lifecycleCancel != nil {
 		r.lifecycleCancel()
+	}
+	if r.sessionStore != nil {
+		r.sessionStore.Shutdown()
+	}
+	if r.csrfStore != nil {
+		r.csrfStore.Shutdown()
+	}
+	if r.recoveryTokenStore != nil {
+		r.recoveryTokenStore.Shutdown()
 	}
 	if r.trueNASPoller != nil {
 		r.trueNASPoller.Stop()

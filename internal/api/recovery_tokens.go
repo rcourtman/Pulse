@@ -55,16 +55,20 @@ func recoveryTokenHash(token string) string {
 
 // InitRecoveryTokenStore initializes the recovery token store
 func InitRecoveryTokenStore(dataPath string) {
+	_ = ensureRecoveryTokenStore(dataPath)
+}
+
+func ensureRecoveryTokenStore(dataPath string) *RecoveryTokenStore {
 	newDataPath := strings.TrimSpace(dataPath)
 	if newDataPath == "" {
-		return
+		return nil
 	}
 
 	recoveryStoreMu.Lock()
 	defer recoveryStoreMu.Unlock()
 
 	if recoveryStore != nil && recoveryStoreDataPath == newDataPath {
-		return
+		return recoveryStore
 	}
 
 	oldStore := recoveryStore
@@ -82,6 +86,7 @@ func InitRecoveryTokenStore(dataPath string) {
 	if oldStore != nil {
 		oldStore.Shutdown()
 	}
+	return recoveryStore
 }
 
 // GetRecoveryTokenStore returns the global recovery token store

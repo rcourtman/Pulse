@@ -1478,6 +1478,75 @@ func TestContract_UniversalRateLimitStateIsScopedPerRouterConfig(t *testing.T) {
 	}
 }
 
+func TestContract_RouterShutdownClosesOwnedPersistentAuthStoresAfterGlobalRebind(t *testing.T) {
+	resetPersistentAuthStoresForTests()
+	t.Cleanup(resetPersistentAuthStoresForTests)
+
+	routerOne := NewRouter(&config.Config{DataPath: t.TempDir()}, nil, nil, nil, nil, "1.0.0")
+	routerTwo := NewRouter(&config.Config{DataPath: t.TempDir()}, nil, nil, nil, nil, "1.0.0")
+	t.Cleanup(routerTwo.shutdownBackgroundWorkers)
+
+	if routerOne.sessionStore == nil || routerOne.csrfStore == nil {
+		t.Fatal("routerOne should capture initialized persistent auth stores")
+	}
+	if routerOne.recoveryTokenStore == nil {
+		t.Fatal("routerOne should capture initialized recovery token store")
+	}
+	if routerTwo.sessionStore == nil || routerTwo.csrfStore == nil {
+		t.Fatal("routerTwo should capture initialized persistent auth stores")
+	}
+	if routerTwo.recoveryTokenStore == nil {
+		t.Fatal("routerTwo should capture initialized recovery token store")
+	}
+	if routerOne.sessionStore == routerTwo.sessionStore {
+		t.Fatal("router instances should not share the same session store after rebind")
+	}
+	if routerOne.csrfStore == routerTwo.csrfStore {
+		t.Fatal("router instances should not share the same csrf store after rebind")
+	}
+	if routerOne.recoveryTokenStore == routerTwo.recoveryTokenStore {
+		t.Fatal("router instances should not share the same recovery token store after rebind")
+	}
+
+	routerOne.shutdownBackgroundWorkers()
+
+	select {
+	case <-routerOne.sessionStore.workerDone:
+	default:
+		t.Fatal("routerOne session store worker should be closed after router shutdown")
+	}
+
+	select {
+	case <-routerOne.csrfStore.workerDone:
+	default:
+		t.Fatal("routerOne csrf store worker should be closed after router shutdown")
+	}
+
+	select {
+	case <-routerTwo.sessionStore.workerDone:
+		t.Fatal("routerTwo session store should remain active when routerOne shuts down")
+	default:
+	}
+
+	select {
+	case <-routerTwo.csrfStore.workerDone:
+		t.Fatal("routerTwo csrf store should remain active when routerOne shuts down")
+	default:
+	}
+
+	select {
+	case <-routerOne.recoveryTokenStore.stopCleanup:
+	default:
+		t.Fatal("routerOne recovery token store should be closed after router shutdown")
+	}
+
+	select {
+	case <-routerTwo.recoveryTokenStore.stopCleanup:
+		t.Fatal("routerTwo recovery token store should remain active when routerOne shuts down")
+	default:
+	}
+}
+
 func TestContract_HostedOrgManagerSessionCanMintRelayMobileToken(t *testing.T) {
 	defer SetMultiTenantEnabled(false)
 	SetMultiTenantEnabled(true)

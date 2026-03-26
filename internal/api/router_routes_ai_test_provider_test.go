@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -16,34 +15,11 @@ import (
 // setupTestProviderRouter creates a Router with an Ollama mock server and a valid
 // settings:write API token for route-level /api/ai/test/{provider} tests.
 func setupTestProviderRouter(t *testing.T, ollamaURL string) (*Router, string) {
-	t.Helper()
-	resetPersistentAuthStoresForTests()
-	t.Cleanup(resetPersistentAuthStoresForTests)
+	return setupTestProviderRouterForScopes(t, ollamaURL, []string{config.ScopeSettingsWrite})
+}
 
-	rawToken := "ai-test-provider-route-token-" + t.Name() + ".12345678"
-	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsWrite}, nil)
-	cfg := newTestConfigWithTokens(t, record)
-
-	persistence := config.NewConfigPersistence(cfg.DataPath)
-	aiCfg := config.NewDefaultAIConfig()
-	aiCfg.Enabled = true
-	aiCfg.Model = "ollama:llama3"
-	aiCfg.OllamaBaseURL = ollamaURL
-	if err := persistence.SaveAIConfig(*aiCfg); err != nil {
-		t.Fatalf("SaveAIConfig: %v", err)
-	}
-
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
-	t.Cleanup(router.shutdownBackgroundWorkers)
-	router.aiSettingsHandler.defaultConfig = cfg
-	router.aiSettingsHandler.defaultPersistence = persistence
-	svc := ai.NewService(persistence, nil)
-	if err := svc.LoadConfig(); err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	router.aiSettingsHandler.defaultAIService = svc
-
-	return router, rawToken
+func setupTestProviderRouterForScopes(t *testing.T, ollamaURL string, scopes []string) (*Router, string) {
+	return setupAIRouteRouter(t, newAIRouteTestOptions(scopes, ollamaURL))
 }
 
 // TestRouteTestProvider_Success verifies that POST /api/ai/test/{provider}
@@ -250,11 +226,7 @@ func TestRouteTestProvider_UnknownProvider(t *testing.T) {
 func TestRouteTestProvider_WrongScope(t *testing.T) {
 	t.Parallel()
 
-	rawToken := "ai-test-provider-wrong-scope-" + t.Name() + ".12345678"
-	record := newTokenRecord(t, rawToken, []string{config.ScopeAIExecute}, nil)
-	cfg := newTestConfigWithTokens(t, record)
-
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router, rawToken := setupTestProviderRouterForScopes(t, "http://192.0.2.1:11434", []string{config.ScopeAIExecute})
 
 	req := httptest.NewRequest(http.MethodPost, "/api/ai/test/ollama", nil)
 	req.Header.Set("X-API-Token", rawToken)
