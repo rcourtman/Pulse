@@ -633,6 +633,9 @@ func (s *Service) Status() *LicenseStatus {
 				status.MaxMonitoredSystems = defaultSystems
 			}
 		}
+		if isDemoMode() || isDevMode() {
+			status.Features = allKnownFeatures()
+		}
 		return status
 	}
 
@@ -688,6 +691,10 @@ func (s *Service) Status() *LicenseStatus {
 		status.MaxGuests = 0
 	}
 
+	if isDemoMode() || isDevMode() {
+		status.Features = allKnownFeatures()
+	}
+
 	return status
 }
 
@@ -734,6 +741,17 @@ func evaluatorFeatures(eval *Evaluator) []string {
 
 	// Derive a stable, known capability list from the evaluator by enumerating
 	// all feature keys currently used by tier-based gating.
+	caps := make([]string, 0, len(allKnownFeatures()))
+	for _, feature := range allKnownFeatures() {
+		if eval.HasCapability(feature) {
+			caps = append(caps, feature)
+		}
+	}
+	sort.Strings(caps)
+	return caps
+}
+
+func allKnownFeatures() []string {
 	known := make(map[string]struct{}, 32)
 	for _, features := range TierFeatures {
 		for _, feature := range features {
@@ -741,14 +759,12 @@ func evaluatorFeatures(eval *Evaluator) []string {
 		}
 	}
 
-	caps := make([]string, 0, len(known))
+	out := make([]string, 0, len(known))
 	for feature := range known {
-		if eval.HasCapability(feature) {
-			caps = append(caps, feature)
-		}
+		out = append(out, feature)
 	}
-	sort.Strings(caps)
-	return caps
+	sort.Strings(out)
+	return out
 }
 
 func unionFeatures(a, b []string) []string {

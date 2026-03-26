@@ -316,6 +316,11 @@ must expose `/api/admin/reports/catalog`, but frontend consumers may treat a
 the legacy report-generation transport only; they must not synthesize or guess
 the newer catalog-owned inventory export contract when the backend does not
 provide it.
+The licensing API must also stay internally coherent in local dev mode. When
+backend feature gates are widened by `PULSE_DEV=true` or demo/mock mode,
+`/api/license/entitlements` must advertise the same capability set in
+`capabilities`; it must not leave frontend shells on stale free-tier gating
+while backend `HasFeature()` already treats those features as available.
 The `/api/resources` serializer now also refreshes canonical identity and
 policy metadata through the shared unified-resource helper before it writes
 the payload, so backend and frontend contract tests stay aligned on one

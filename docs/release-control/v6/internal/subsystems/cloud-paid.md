@@ -681,6 +681,12 @@ The runtime entitlement surface now follows the same rule: evaluator/token
 source accessors, hosted-subscription validity rules, and frontend entitlement
 payload construction should move behind explicit proof routes rather than being
 implicitly trusted as part of the catch-all cloud runtime layer.
+That same runtime surface must stay internally coherent in local dev mode. If
+`pkg/licensing/service.go` widens backend `HasFeature()` checks under
+`PULSE_DEV=true` or demo/mock mode, the entitlement payload and any other
+frontend-facing capability contract derived from that service must advertise
+the same capability set instead of leaving paid surfaces artificially locked
+behind stale free-tier capabilities.
 Cloud/MSP live price IDs are no longer an open fill-in task either. The audit
 record `docs/release-control/v6/records/cloud-msp-price-audit-2026-03-13.md`
 verified that the 13 canonical Cloud/MSP v6 `price_*` IDs are present in the

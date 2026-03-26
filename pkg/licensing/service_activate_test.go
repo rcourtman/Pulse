@@ -168,3 +168,32 @@ func TestServiceStatusMissingJWTCloudPlanFailsClosed(t *testing.T) {
 		t.Fatalf("status.MaxMonitoredSystems=%d, want %d", status.MaxMonitoredSystems, UnknownPlanDefaultMonitoredSystemLimit)
 	}
 }
+
+func TestServiceStatus_DevModeAdvertisesAllKnownFeaturesWithoutLicense(t *testing.T) {
+	t.Setenv("PULSE_DEV", "true")
+
+	svc := NewService()
+	status := svc.Status()
+
+	if status.Valid {
+		t.Fatalf("status.Valid=%v, want false", status.Valid)
+	}
+	if status.Tier != TierFree {
+		t.Fatalf("status.Tier=%q, want %q", status.Tier, TierFree)
+	}
+
+	for _, feature := range allKnownFeatures() {
+		if !containsStringValue(status.Features, feature) {
+			t.Fatalf("status.Features missing %q in dev mode: %v", feature, status.Features)
+		}
+	}
+}
+
+func containsStringValue(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
+}

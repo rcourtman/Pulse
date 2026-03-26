@@ -15,6 +15,15 @@ import (
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 )
 
+func containsCapability(values []string, key string) bool {
+	for _, value := range values {
+		if value == key {
+			return true
+		}
+	}
+	return false
+}
+
 func TestBuildEntitlementPayload_ActiveLicense(t *testing.T) {
 	status := &license.LicenseStatus{
 		Valid:               true,
@@ -350,6 +359,45 @@ func TestEntitlementHandler_TrialEligibility_FreshOrgAllowed(t *testing.T) {
 	}
 	if payload.TrialEligibilityReason != "" {
 		t.Fatalf("trial_eligibility_reason=%q, want empty", payload.TrialEligibilityReason)
+	}
+}
+
+func TestEntitlementHandler_DevModeMirrorsFeatureGateCapabilities(t *testing.T) {
+	t.Setenv("PULSE_DEV", "true")
+
+	baseDir := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(baseDir)
+	h := NewLicenseHandlers(mtp, false)
+
+	ctx := context.WithValue(context.Background(), OrgIDContextKey, "default")
+	req := httptest.NewRequest(http.MethodGet, "/api/license/entitlements", nil).WithContext(ctx)
+	rec := httptest.NewRecorder()
+	h.HandleEntitlements(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	var payload EntitlementPayload
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("unmarshal payload failed: %v", err)
+	}
+
+	if !containsCapability(payload.Capabilities, license.FeatureAdvancedReporting) {
+		t.Fatalf("expected dev entitlements to include %q, got %v", license.FeatureAdvancedReporting, payload.Capabilities)
+	}
+	if len(payload.UpgradeReasons) != 0 {
+		t.Fatalf("expected no upgrade reasons in dev mode, got %v", payload.UpgradeReasons)
+	}
+
+	svc, _, err := h.getTenantComponents(ctx)
+	if err != nil {
+		t.Fatalf("getTenantComponents failed: %v", err)
+	}
+	for _, cap := range payload.Capabilities {
+		if !svc.HasFeature(cap) {
+			t.Fatalf("parity mismatch: HasFeature(%q)=false but capability present in payload", cap)
+		}
 	}
 }
 
