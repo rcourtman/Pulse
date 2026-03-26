@@ -455,7 +455,7 @@ func TestSendWebhookWithRetry_StopsOnNonRetryableErrorAfterRetryable(t *testing.
 
 	err := nm.sendWebhookWithRetry(webhook, []byte(`{"test":true}`))
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "status 400")
+	assert.Contains(t, err.Error(), "HTTP 400")
 	assert.Contains(t, err.Error(), "after 2 attempts")
 	assert.Equal(t, 2, attempts)
 }
@@ -510,7 +510,7 @@ func TestSendWebhookWithRetry_PreservesFailedStatusCodeInHistory(t *testing.T) {
 
 	err := nm.sendWebhookWithRetry(webhook, []byte(`{"test":true}`))
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "status 400")
+	assert.Contains(t, err.Error(), "HTTP 400")
 
 	history := nm.GetWebhookHistory()
 	if assert.Len(t, history, 1) {
@@ -738,9 +738,11 @@ func TestIsRetryableWebhookErrorEnhanced(t *testing.T) {
 		{"timeout", true},
 		{"connection refused", true},
 		{"status 429", true},
+		{"http 429", true},
 		{"status 502", true},
 		{"status 404", false},
 		{"status 400", false},
+		{"webhook returned HTTP 400: Bad Request", false},
 	}
 
 	for _, tt := range tests {

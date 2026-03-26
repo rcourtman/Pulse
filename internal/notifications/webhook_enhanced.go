@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"text/template"
@@ -12,6 +13,8 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rs/zerolog/log"
 )
+
+var webhookHTTPStatusPattern = regexp.MustCompile(`\b(?:status|http)\s+(\d{3})\b`)
 
 // EnhancedWebhookConfig extends WebhookConfig with template support
 type EnhancedWebhookConfig struct {
@@ -495,34 +498,38 @@ func isRetryableWebhookError(err error) bool {
 		return true
 	}
 
-	// HTTP status codes that should be retried
-	if strings.Contains(errStr, "status 408") || // Request Timeout
-		strings.Contains(errStr, "status 421") || // Misdirected Request
-		strings.Contains(errStr, "status 423") || // Locked
-		strings.Contains(errStr, "status 425") || // Too Early
-		strings.Contains(errStr, "status 429") || // Rate limited
-		strings.Contains(errStr, "status 502") || // Bad Gateway
-		strings.Contains(errStr, "status 503") || // Service Unavailable
-		strings.Contains(errStr, "status 504") { // Gateway Timeout
-		return true
-	}
-
-	// 5xx server errors are generally retryable
-	for i := 500; i <= 599; i++ {
-		if strings.Contains(errStr, fmt.Sprintf("status %d", i)) {
+	if statusCode, ok := webhookErrorStatusCode(err); ok {
+		switch statusCode {
+		case http.StatusRequestTimeout, http.StatusMisdirectedRequest, http.StatusLocked, http.StatusTooEarly, http.StatusTooManyRequests:
 			return true
 		}
-	}
-
-	// 4xx client errors are generally not retryable
-	for i := 400; i <= 499; i++ {
-		if strings.Contains(errStr, fmt.Sprintf("status %d", i)) {
+		if statusCode >= 500 && statusCode <= 599 {
+			return true
+		}
+		if statusCode >= 400 && statusCode <= 499 {
 			return false
 		}
 	}
 
 	// Default to retryable for unknown errors
 	return true
+}
+
+func webhookErrorStatusCode(err error) (int, bool) {
+	if err == nil {
+		return 0, false
+	}
+
+	match := webhookHTTPStatusPattern.FindStringSubmatch(strings.ToLower(err.Error()))
+	if len(match) != 2 {
+		return 0, false
+	}
+
+	statusCode, parseErr := strconv.Atoi(match[1])
+	if parseErr != nil {
+		return 0, false
+	}
+	return statusCode, true
 }
 
 // executeEnhancedWebhookRequest sends a single enhanced webhook request and returns response metadata.
