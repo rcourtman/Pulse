@@ -17,8 +17,7 @@ type unifiedResourcePolicyContext struct {
 	redactionLabels   []string
 }
 
-func buildUnifiedResourcePolicyContext(resources []unifiedresources.Resource) unifiedResourcePolicyContext {
-	posture := unifiedresources.SummarizePolicyPosture(resources)
+func buildUnifiedResourcePolicyContext(posture *unifiedresources.PolicyPostureSummary) unifiedResourcePolicyContext {
 	context := unifiedResourcePolicyContext{
 		posture:           posture,
 		sensitivityCounts: map[unifiedresources.ResourceSensitivity]int{},

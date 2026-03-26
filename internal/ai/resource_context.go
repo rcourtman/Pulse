@@ -101,7 +101,8 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 		infrastructure := unifiedresources.RefreshCanonicalMetadataSlice(urp.GetInfrastructure())
 		workloads := unifiedresources.RefreshCanonicalMetadataSlice(urp.GetWorkloads())
 		allResources := unifiedresources.RefreshCanonicalMetadataSlice(urp.GetAll())
-		policyContext := buildUnifiedResourcePolicyContext(allResources)
+		policyPosture := unifiedresources.SummarizePolicyPosture(allResources)
+		policyContext := buildUnifiedResourcePolicyContext(policyPosture)
 		byResourceID := make(map[string]unifiedresources.Resource, len(allResources))
 		for _, resource := range allResources {
 			byResourceID[resource.ID] = resource
