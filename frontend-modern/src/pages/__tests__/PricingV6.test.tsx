@@ -80,6 +80,12 @@ describe('PricingV6', () => {
     expect(screen.getByText('15 monitored systems')).toBeInTheDocument();
     expect(screen.getByText('50 monitored systems')).toBeInTheDocument();
     expect(screen.getByText('Feature Comparison')).toBeInTheDocument();
+    expect(screen.getByText('Most Popular')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'See Cloud plans' })).toHaveAttribute('href', '/cloud');
+    expect(screen.getByRole('link', { name: 'See MSP plans' })).toHaveAttribute(
+      'href',
+      'mailto:hello@pulserelay.pro?subject=Pulse%20MSP%20Inquiry',
+    );
     expect(
       screen.queryByText('Billing is based on monitored systems. Child resources are included.'),
     ).not.toBeInTheDocument();

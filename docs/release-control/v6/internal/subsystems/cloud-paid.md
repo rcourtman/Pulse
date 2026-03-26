@@ -512,6 +512,10 @@ The same owner also holds shared hosted commercial copy such as page title,
 introductory description, common Cloud inclusions, setup-step guidance,
 hosted-signup section headings, and primary hosted-signup CTA labels when
 those facts describe the canonical offer rather than one page's local layout.
+The same rule applies to self-hosted pricing framing: page title/description,
+badge copy, primary CTA labels, and adjacent upsell-link copy on
+`PricingV6.tsx` must come from the shared self-hosted plan-definition owner
+rather than page-local strings.
 That same counted-unit boundary also owns the disclosure rule for retail copy:
 default billing and pricing surfaces should use concise monitored-system copy,
 while the full counted-unit definition appears only behind explicit disclosure

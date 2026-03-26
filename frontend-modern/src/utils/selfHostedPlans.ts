@@ -19,6 +19,27 @@ export interface SelfHostedFeatureRow {
   proPlus: boolean | string;
 }
 
+export interface SelfHostedLinkCTA {
+  preface: string;
+  label: string;
+  href: string;
+}
+
+export interface SelfHostedCommercialPresentation {
+  pageTitle: string;
+  pageDescription: string;
+  mostPopularBadge: string;
+  currentPlanLabel: string;
+  includedLabel: string;
+  freeLabel: string;
+  buyRelayLabel: string;
+  upgradeToProLabel: string;
+  upgradeToProPlusLabel: string;
+  startTrialLabel: string;
+  featureComparisonHeading: string;
+  footerLinks: readonly SelfHostedLinkCTA[];
+}
+
 export const SELF_HOSTED_PLAN_DEFINITIONS: readonly SelfHostedPlanDefinition[] = [
   {
     tier: 'community',
@@ -87,6 +108,37 @@ export const SELF_HOSTED_PLAN_BY_TIER: Record<SelfHostedTierKey, SelfHostedPlanD
   pro: SELF_HOSTED_PLAN_DEFINITIONS[2],
   proPlus: SELF_HOSTED_PLAN_DEFINITIONS[3],
 };
+
+export const SELF_HOSTED_COMMERCIAL_PRESENTATION: SelfHostedCommercialPresentation = {
+  pageTitle: 'Pricing',
+  pageDescription: 'Compare tiers and choose what fits.',
+  mostPopularBadge: 'Most Popular',
+  currentPlanLabel: 'Current Plan',
+  includedLabel: 'Included',
+  freeLabel: 'Free',
+  buyRelayLabel: 'Buy Relay',
+  upgradeToProLabel: 'Upgrade to Pro',
+  upgradeToProPlusLabel: 'Upgrade to Pro+',
+  startTrialLabel: 'Start Free 14-day Trial',
+  featureComparisonHeading: 'Feature Comparison',
+  footerLinks: [
+    {
+      preface: 'Need managed hosting?',
+      label: 'See Cloud plans',
+      href: '/cloud',
+    },
+    {
+      preface: 'Managing clients?',
+      label: 'See MSP plans',
+      href: 'mailto:hello@pulserelay.pro?subject=Pulse%20MSP%20Inquiry',
+    },
+    {
+      preface: 'Need more than 50 monitored systems?',
+      label: 'Contact us',
+      href: 'mailto:hello@pulserelay.pro?subject=Pulse%20Enterprise%20Inquiry',
+    },
+  ],
+} as const;
 
 export const SELF_HOSTED_FEATURE_ROWS: readonly SelfHostedFeatureRow[] = [
   {

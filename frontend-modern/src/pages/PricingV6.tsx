@@ -19,6 +19,7 @@ import { showToast } from '@/utils/toast';
 import { logger } from '@/utils/logger';
 import { getTrialStartErrorKind } from '@/utils/upgradePresentation';
 import {
+  SELF_HOSTED_COMMERCIAL_PRESENTATION,
   SELF_HOSTED_FEATURE_ROWS,
   SELF_HOSTED_PLAN_BY_TIER,
   type SelfHostedFeatureRow,
@@ -215,9 +216,9 @@ export default function PricingV6() {
 
   const communityCta = createMemo(() => {
     if (isCurrentTier('free')) {
-      return <TierCtaButton disabled>Current Plan</TierCtaButton>;
+      return <TierCtaButton disabled>{SELF_HOSTED_COMMERCIAL_PRESENTATION.currentPlanLabel}</TierCtaButton>;
     }
-    return <TierCtaLabel>Free</TierCtaLabel>;
+    return <TierCtaLabel>{SELF_HOSTED_COMMERCIAL_PRESENTATION.freeLabel}</TierCtaLabel>;
   });
 
   // Tier rank for comparison — higher rank = higher tier.
@@ -236,11 +237,11 @@ export default function PricingV6() {
 
   const relayCta = createMemo(() => {
     if (isCurrentTier('relay')) {
-      return <TierCtaButton disabled>Current Plan</TierCtaButton>;
+      return <TierCtaButton disabled>{SELF_HOSTED_COMMERCIAL_PRESENTATION.currentPlanLabel}</TierCtaButton>;
     }
     // Users already on a higher tier don't need a Relay CTA.
     if ((TIER_RANK[normalizedTier()] ?? 0) > (TIER_RANK['relay'] ?? 0)) {
-      return <TierCtaLabel>Included</TierCtaLabel>;
+      return <TierCtaLabel>{SELF_HOSTED_COMMERCIAL_PRESENTATION.includedLabel}</TierCtaLabel>;
     }
     return (
       <a
@@ -249,24 +250,24 @@ export default function PricingV6() {
         target="_blank"
         rel="noopener noreferrer"
       >
-        Buy Relay
+        {SELF_HOSTED_COMMERCIAL_PRESENTATION.buyRelayLabel}
       </a>
     );
   });
 
   const proTrialOrUpgrade = createMemo(() => {
     if (isCurrentTier('pro')) {
-      return <TierCtaButton disabled>Current Plan</TierCtaButton>;
+      return <TierCtaButton disabled>{SELF_HOSTED_COMMERCIAL_PRESENTATION.currentPlanLabel}</TierCtaButton>;
     }
     // Users already on a higher tier don't need a Pro CTA.
     if ((TIER_RANK[normalizedTier()] ?? 0) > (TIER_RANK['pro'] ?? 0)) {
-      return <TierCtaLabel>Included</TierCtaLabel>;
+      return <TierCtaLabel>{SELF_HOSTED_COMMERCIAL_PRESENTATION.includedLabel}</TierCtaLabel>;
     }
 
     if (canStartTrial() && trialCtaMode() !== 'upgrade') {
       return (
         <TierCtaButton disabled={startingTrial()} onClick={startTrial}>
-          Start Free 14-day Trial
+          {SELF_HOSTED_COMMERCIAL_PRESENTATION.startTrialLabel}
         </TierCtaButton>
       );
     }
@@ -278,24 +279,24 @@ export default function PricingV6() {
         target="_blank"
         rel="noopener noreferrer"
       >
-        Upgrade to Pro
+        {SELF_HOSTED_COMMERCIAL_PRESENTATION.upgradeToProLabel}
       </a>
     );
   });
 
   const proPlusCta = createMemo(() => {
     if (isCurrentTier('pro_plus')) {
-      return <TierCtaButton disabled>Current Plan</TierCtaButton>;
+      return <TierCtaButton disabled>{SELF_HOSTED_COMMERCIAL_PRESENTATION.currentPlanLabel}</TierCtaButton>;
     }
     // Users already on a higher tier don't need a Pro+ CTA.
     if ((TIER_RANK[normalizedTier()] ?? 0) > (TIER_RANK['pro_plus'] ?? 0)) {
-      return <TierCtaLabel>Included</TierCtaLabel>;
+      return <TierCtaLabel>{SELF_HOSTED_COMMERCIAL_PRESENTATION.includedLabel}</TierCtaLabel>;
     }
 
     if (canStartTrial() && trialCtaMode() !== 'upgrade') {
       return (
         <TierCtaButton disabled={startingTrial()} onClick={startTrial}>
-          Start Free 14-day Trial
+          {SELF_HOSTED_COMMERCIAL_PRESENTATION.startTrialLabel}
         </TierCtaButton>
       );
     }
@@ -307,7 +308,7 @@ export default function PricingV6() {
         target="_blank"
         rel="noopener noreferrer"
       >
-        Upgrade to Pro+
+        {SELF_HOSTED_COMMERCIAL_PRESENTATION.upgradeToProPlusLabel}
       </a>
     );
   });
@@ -316,7 +317,10 @@ export default function PricingV6() {
 
   return (
     <div class="space-y-6">
-      <PageHeader title="Pricing" description="Compare tiers and choose what fits." />
+      <PageHeader
+        title={SELF_HOSTED_COMMERCIAL_PRESENTATION.pageTitle}
+        description={SELF_HOSTED_COMMERCIAL_PRESENTATION.pageDescription}
+      />
 
       {/* Tier cards — 4 columns on desktop, 2 on tablet, 1 on mobile */}
       <div class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -326,7 +330,7 @@ export default function PricingV6() {
           tier={SELF_HOSTED_PLAN_BY_TIER.pro}
           cta={proTrialOrUpgrade}
           highlighted
-          badge="Most Popular"
+          badge={SELF_HOSTED_COMMERCIAL_PRESENTATION.mostPopularBadge}
           message={trialMessage()}
         />
         <TierCard tier={SELF_HOSTED_PLAN_BY_TIER.proPlus} cta={proPlusCta} />
@@ -334,35 +338,23 @@ export default function PricingV6() {
 
       {/* Upsell links */}
       <div class="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-muted">
-        <span>
-          Need managed hosting?{' '}
-          <a href="/cloud" class="text-blue-600 hover:underline dark:text-blue-400">
-            See Cloud plans
-          </a>
-        </span>
-        <span>
-          Managing clients?{' '}
-          <a
-            href="mailto:hello@pulserelay.pro?subject=Pulse%20MSP%20Inquiry"
-            class="text-blue-600 hover:underline dark:text-blue-400"
-          >
-            See MSP plans
-          </a>
-        </span>
-        <span>
-          Need more than 50 monitored systems?{' '}
-          <a
-            href="mailto:hello@pulserelay.pro?subject=Pulse%20Enterprise%20Inquiry"
-            class="text-blue-600 hover:underline dark:text-blue-400"
-          >
-            Contact us
-          </a>
-        </span>
+        <For each={SELF_HOSTED_COMMERCIAL_PRESENTATION.footerLinks}>
+          {(link) => (
+            <span>
+              {link.preface}{' '}
+              <a href={link.href} class="text-blue-600 hover:underline dark:text-blue-400">
+                {link.label}
+              </a>
+            </span>
+          )}
+        </For>
       </div>
 
       {/* Feature comparison table */}
       <Card padding="lg" class="overflow-hidden">
-        <h2 class="text-base font-semibold text-base-content">Feature Comparison</h2>
+        <h2 class="text-base font-semibold text-base-content">
+          {SELF_HOSTED_COMMERCIAL_PRESENTATION.featureComparisonHeading}
+        </h2>
         <div class="mt-4 overflow-x-auto">
           <Table class="min-w-[800px] w-full border-collapse">
             <TableHeader>
