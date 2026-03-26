@@ -29,6 +29,7 @@ const catalogPayload = {
     singleResourceEndpoint: '/api/admin/reports/generate',
     multiResourceEndpoint: '/api/admin/reports/generate-multi',
     singleFilenamePrefix: 'report',
+    singleFilenameSubject: 'resource_id',
     multiFilenamePrefix: 'fleet-report',
     filenameDateStyle: 'utc_yyyymmdd',
     formats: [

@@ -5,6 +5,7 @@ import {
 
 export type ReportingFormat = 'pdf' | 'csv';
 export type ReportingFilenameDateStyle = 'utc_yyyymmdd';
+export type ReportingFilenameSubject = 'resource_id';
 
 export interface ReportingFormatDefinition {
   value: ReportingFormat;
@@ -25,6 +26,7 @@ export interface ReportingPerformanceReportDefinition {
   singleResourceEndpoint: string;
   multiResourceEndpoint: string;
   singleFilenamePrefix: string;
+  singleFilenameSubject: ReportingFilenameSubject;
   multiFilenamePrefix: string;
   filenameDateStyle: ReportingFilenameDateStyle;
   formats: ReportingFormatDefinition[];
@@ -116,6 +118,7 @@ function parseReportingPerformanceReportDefinition(
     typeof candidate.singleResourceEndpoint !== 'string' ||
     typeof candidate.multiResourceEndpoint !== 'string' ||
     typeof candidate.singleFilenamePrefix !== 'string' ||
+    candidate.singleFilenameSubject !== 'resource_id' ||
     typeof candidate.multiFilenamePrefix !== 'string' ||
     candidate.filenameDateStyle !== 'utc_yyyymmdd' ||
     !Array.isArray(candidate.formats) ||
@@ -150,6 +153,7 @@ function parseReportingPerformanceReportDefinition(
     singleResourceEndpoint: candidate.singleResourceEndpoint,
     multiResourceEndpoint: candidate.multiResourceEndpoint,
     singleFilenamePrefix: candidate.singleFilenamePrefix,
+    singleFilenameSubject: candidate.singleFilenameSubject,
     multiFilenamePrefix: candidate.multiFilenamePrefix,
     filenameDateStyle: candidate.filenameDateStyle,
     formats,

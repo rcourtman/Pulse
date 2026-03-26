@@ -23,6 +23,9 @@ func TestDescribeReportingCatalog_DefinesCanonicalSurfaces(t *testing.T) {
 	if catalog.PerformanceReport.MultiResourceMax != 50 {
 		t.Fatalf("multi-resource max = %d, want 50", catalog.PerformanceReport.MultiResourceMax)
 	}
+	if catalog.PerformanceReport.SingleFilenameSubject != FilenameSubjectResourceID {
+		t.Fatalf("single filename subject = %q", catalog.PerformanceReport.SingleFilenameSubject)
+	}
 	if catalog.PerformanceReport.FilenameDateStyle != FilenameDateStyleUTCYYYYMMDD {
 		t.Fatalf("filename date style = %q", catalog.PerformanceReport.FilenameDateStyle)
 	}

@@ -272,8 +272,9 @@ transport validation and download semantics. `internal/api/metrics_reporting_han
 and `internal/api/reporting_inventory_handlers.go` must derive allowed formats,
 default format selection, multi-resource limits, optional metric/title field
 emission, canonical default-title fallback, default fallback range window,
-attachment filename stems, filename date-stamp style, and invalid-format validation copy from the
-canonical reporting definitions instead of hardcoding a second local contract.
+attachment filename stems, single-report filename subject, filename date-stamp
+style, and invalid-format validation copy from the canonical reporting
+definitions instead of hardcoding a second local contract.
 Frontend consumers may still keep a local fallback filename for defensive
 download behavior, but when the server returns `Content-Disposition` they must
 prefer that attachment filename as the canonical transport output.
@@ -1354,9 +1355,15 @@ those same handlers must preserve that normalized shape back out through
 `display.itemType` and facet option payloads instead of forcing frontend
 surfaces to re-derive cross-platform recovery categories from raw
 `subjectType`.
+That same recovery API boundary now treats `platform` as the canonical
+operator-facing query field across `/api/recovery/rollups`, `/api/recovery/points`,
+`/api/recovery/series`, and `/api/recovery/facets`. The handlers may continue
+mapping that boundary onto internal provider fields, but accepted legacy
+`provider` aliases must be compatibility-only input and must not replace the
+canonical transport query shape.
 `internal/api/contract_test.go` is the canonical proof owner for that
 boundary, so route and query compatibility like `itemType` and accepted alias
-inputs such as `type` must be pinned there whenever the shared recovery
+inputs such as `type` or legacy `provider` must be pinned there whenever the shared recovery
 transport shape changes.
 The same rule now also covers optional nested node cluster endpoint collections
 so `frontend-modern/src/api/nodes.ts` does not own its own

@@ -403,7 +403,7 @@ Triggers a test alert to all configured channels.
 
 ### Advanced Reporting (Pro)
 - `GET /api/admin/reports/catalog` (admin, `settings:read`)
-  - Returns the canonical reporting catalog for the settings surface, including locked-state teaser copy, enabled-surface guidance copy, performance-report options, canonical fallback filename date style, and the nested VM inventory export definition.
+  - Returns the canonical reporting catalog for the settings surface, including locked-state teaser copy, enabled-surface guidance copy, performance-report options, canonical single-report filename subject, canonical fallback filename date style, and the nested VM inventory export definition.
   - Metadata route: readable without the `advanced_reporting` feature so locked admin surfaces can render the same reporting definition before upsell.
 - `GET /api/admin/reports/generate` (admin, `settings:read`)
   - Query params: `format` (pdf/csv, default `pdf`), `resourceType`, `resourceId`, `metricType` (optional), `start`/`end` (RFC3339, optional; defaults to last 24h), `title` (optional)

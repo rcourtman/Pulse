@@ -23,6 +23,7 @@ const baseCatalogPayload = {
     singleResourceEndpoint: '/api/admin/reports/generate',
     multiResourceEndpoint: '/api/admin/reports/generate-multi',
     singleFilenamePrefix: 'report',
+    singleFilenameSubject: 'resource_id',
     multiFilenamePrefix: 'fleet-report',
     filenameDateStyle: 'utc_yyyymmdd',
     formats: [
@@ -120,6 +121,18 @@ describe('reporting catalog model', () => {
         performanceReport: {
           ...baseCatalogPayload.performanceReport,
           filenameDateStyle: 'local_yyyy_mm_dd',
+        },
+      }),
+    ).toThrow('Invalid reporting catalog payload');
+  });
+
+  it('rejects a catalog whose single filename subject is unsupported', () => {
+    expect(() =>
+      parseReportingCatalog({
+        ...baseCatalogPayload,
+        performanceReport: {
+          ...baseCatalogPayload.performanceReport,
+          singleFilenameSubject: 'resource_name',
         },
       }),
     ).toThrow('Invalid reporting catalog payload');

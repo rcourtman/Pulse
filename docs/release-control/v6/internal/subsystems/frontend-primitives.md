@@ -201,6 +201,9 @@ or fallback filename date-stamp styles
 when the catalog is
 present; the first valid selection and all request semantics must come from the
 parsed backend definition.
+That same fallback contract also includes the single-report filename subject,
+so frontend download builders may not substitute resource display names when
+the catalog says fallback attachment names are keyed off canonical resource IDs.
 That same reporting transport contract also means the frontend download path
 must prefer the backend `Content-Disposition` filename over any locally built
 fallback name when a report or inventory export response arrives.
@@ -675,6 +678,9 @@ recovery filters such as the provider-neutral `itemType` selector must be
 derived, normalized, and fanned out to inventory, history, activity, facets,
 and series consumers from that shared state owner rather than being recreated
 as page-local toolbar state inside individual recovery sections.
+That same shared recovery state owner now also keeps `platform` as the
+canonical route and transport filter name for operator-facing recovery links,
+while any accepted legacy `provider` aliases remain parser compatibility only.
 `frontend-modern/src/utils/problemResourcePresentation.ts` now also belongs to
 that same dashboard overview boundary so the problem-resource severity contract
 stays shared with `ProblemResourcesTable.tsx` instead of floating as an

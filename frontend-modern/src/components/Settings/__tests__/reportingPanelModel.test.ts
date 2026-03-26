@@ -13,6 +13,7 @@ const performanceDefinition: ReportingPerformanceReportDefinition = {
   singleResourceEndpoint: '/api/admin/reports/generate',
   multiResourceEndpoint: '/api/admin/reports/generate-multi',
   singleFilenamePrefix: 'report',
+  singleFilenameSubject: 'resource_id',
   multiFilenamePrefix: 'fleet-report',
   filenameDateStyle: 'utc_yyyymmdd',
   formats: [
@@ -67,7 +68,7 @@ describe('reporting panel model', () => {
       title: '',
     }, performanceDefinition);
 
-    expect(request.filename).toBe('report-node-a-20260320.pdf');
+    expect(request.filename).toBe('report-agent-1-20260320.pdf');
     expect(request.request.init).toBeUndefined();
     expect(request.request.url).toContain('/api/admin/reports/generate?');
     expect(request.request.url).toContain('resourceType=agent');
@@ -235,5 +236,28 @@ describe('reporting panel model', () => {
 
     expect(request.filename).toBe('estate-20260320.csv');
     expect(request.request.url).toBe('/api/custom/reports/export');
+  });
+
+  it('sanitizes single-resource fallback filenames from the canonical resource id contract', () => {
+    const now = new Date('2026-03-20T12:34:56.000Z');
+    const resources: SelectedResource[] = [
+      {
+        id: 'lab/node:"quoted"\nvm',
+        type: 'agent',
+        name: 'node-a',
+      },
+    ];
+
+    const request = buildReportingRequest({
+      end: now.toISOString(),
+      format: 'pdf',
+      metricType: '',
+      now,
+      resources,
+      start: '2026-03-19T12:34:56.000Z',
+      title: '',
+    }, performanceDefinition);
+
+    expect(request.filename).toBe('report-lab-node-quotedvm-20260320.pdf');
   });
 });

@@ -24,6 +24,8 @@ type ReportingRangeDefinition struct {
 	WindowHours int    `json:"windowHours"`
 }
 
+const FilenameSubjectResourceID = "resource_id"
+
 // PerformanceReportDefinition describes the canonical performance reporting
 // surface exposed to operators.
 type PerformanceReportDefinition struct {
@@ -33,6 +35,7 @@ type PerformanceReportDefinition struct {
 	SingleResourceEndpoint string                      `json:"singleResourceEndpoint"`
 	MultiResourceEndpoint  string                      `json:"multiResourceEndpoint"`
 	SingleFilenamePrefix   string                      `json:"singleFilenamePrefix"`
+	SingleFilenameSubject  string                      `json:"singleFilenameSubject"`
 	MultiFilenamePrefix    string                      `json:"multiFilenamePrefix"`
 	FilenameDateStyle      string                      `json:"filenameDateStyle"`
 	Formats                []ReportingFormatDefinition `json:"formats"`
@@ -149,6 +152,7 @@ func DescribePerformanceReport() PerformanceReportDefinition {
 		SingleResourceEndpoint: "/api/admin/reports/generate",
 		MultiResourceEndpoint:  "/api/admin/reports/generate-multi",
 		SingleFilenamePrefix:   "report",
+		SingleFilenameSubject:  FilenameSubjectResourceID,
 		MultiFilenamePrefix:    "fleet-report",
 		FilenameDateStyle:      FilenameDateStyleUTCYYYYMMDD,
 		Formats: []ReportingFormatDefinition{

@@ -48,18 +48,42 @@ export function getReportingRangeStart(
 
 export function buildReportingFilename(
   format: ReportingFormat,
-  resourceName: string | null,
+  resourceID: string | null,
   now: Date,
   definition: Pick<
     ReportingPerformanceReportDefinition,
-    'filenameDateStyle' | 'multiFilenamePrefix' | 'singleFilenamePrefix'
+    | 'filenameDateStyle'
+    | 'multiFilenamePrefix'
+    | 'singleFilenamePrefix'
+    | 'singleFilenameSubject'
   >,
 ): string {
   const date = formatReportingFilenameDate(now, definition.filenameDateStyle);
-  if (resourceName) {
-    return `${definition.singleFilenamePrefix}-${resourceName}-${date}.${format}`;
+  if (resourceID) {
+    return `${definition.singleFilenamePrefix}-${sanitizeReportingFilenameSubject(resourceID, definition.singleFilenameSubject)}-${date}.${format}`;
   }
   return `${definition.multiFilenamePrefix}-${date}.${format}`;
+}
+
+function sanitizeReportingFilenameSubject(
+  value: string,
+  subject: Pick<ReportingPerformanceReportDefinition, 'singleFilenameSubject'>['singleFilenameSubject'],
+): string {
+  switch (subject) {
+    case 'resource_id': {
+      let sanitized = value;
+      sanitized = sanitized.replaceAll('"', '');
+      sanitized = sanitized.replaceAll('\\', '');
+      sanitized = sanitized.replaceAll('/', '-');
+      sanitized = sanitized.replaceAll(':', '-');
+      sanitized = sanitized.replaceAll('\r', '');
+      sanitized = sanitized.replaceAll('\n', '');
+      if (sanitized.length > 64) {
+        sanitized = sanitized.slice(0, 64);
+      }
+      return sanitized;
+    }
+  }
 }
 
 export function buildReportingRequest(
@@ -70,6 +94,7 @@ export function buildReportingRequest(
     | 'multiResourceEndpoint'
     | 'filenameDateStyle'
     | 'singleFilenamePrefix'
+    | 'singleFilenameSubject'
     | 'singleResourceEndpoint'
     | 'supportsCustomTitle'
     | 'supportsMetricFilter'
@@ -96,7 +121,7 @@ export function buildReportingRequest(
     }
 
     return {
-      filename: buildReportingFilename(context.format, resource.name, context.now, definition),
+      filename: buildReportingFilename(context.format, resource.id, context.now, definition),
       request: {
         url: `${definition.singleResourceEndpoint}?${params.toString()}`,
       },
