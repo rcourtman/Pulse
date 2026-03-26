@@ -235,6 +235,7 @@ scripts/release_control/*
 !scripts/release_control/resolve_release_promotion_test.py
 !scripts/release_control/repo_file_io.py
 !scripts/release_control/repo_file_io_test.py
+!scripts/release_control/record_rc_to_ga_rehearsal.py
 !scripts/release_control/staged_commit_shape_guard.py
 !scripts/release_control/staged_commit_shape_guard_test.py
 !scripts/release_control/status_audit.py
@@ -245,6 +246,10 @@ scripts/release_control/*
 !scripts/release_control/subsystem_contracts_test.py
 !scripts/release_control/subsystem_lookup.py
 !scripts/release_control/subsystem_lookup_test.py
+!scripts/release_control/internal/
+scripts/release_control/internal/*
+!scripts/release_control/internal/record_rc_to_ga_rehearsal.py
+!scripts/release_control/internal/record_rc_to_ga_rehearsal_test.py
 !scripts/release_control/work_claim.py
 !scripts/release_control/work_claim_test.py
 .agent/

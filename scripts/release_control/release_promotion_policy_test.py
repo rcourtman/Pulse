@@ -224,7 +224,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
     def test_blocked_record_tracks_current_target_and_candidate_version(self) -> None:
         blocked = read("docs/release-control/v6/internal/records/rc-to-ga-promotion-readiness-blocked-2026-03-26.md")
         self.assertIn("origin/pulse/v6-release", blocked)
-        self.assertIn("selected remote ref", blocked)
+        self.assertIn("VERSION=6.0.0-rc.1", blocked)
         self.assertIn("artifact-owned candidate stable tag", blocked)
         self.assertIn("artifact-owned promotion channel", blocked)
         self.assertIn("artifact-owned promoted prerelease tag", blocked)
