@@ -4,6 +4,7 @@ import {
 } from './runtime';
 import { createAnonymousBootstrap } from './store';
 import { installAccountController } from './account_controller';
+import { installAccountRuntime } from './account_runtime';
 import { installAuthController } from './auth_controller';
 import {
   renderAuthenticatedPortalHTML,
@@ -77,10 +78,14 @@ installAuthController({
   store: portalStore,
 });
 
-installAccountController({
+var accountRuntime = installAccountRuntime({
   store: portalStore,
   refreshBootstrap: refreshBootstrap,
   showToast: showToast
+});
+
+installAccountController({
+  runtime: accountRuntime,
 });
 
 portalStore.subscribeBootstrap(function() {

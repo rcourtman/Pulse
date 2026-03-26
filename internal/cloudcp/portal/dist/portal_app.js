@@ -375,73 +375,140 @@
 
   // src/account_controller.ts
   function installAccountController(deps) {
-    const getAccountAPIBasePath = () => deps.store.getBootstrap().account_api_base_path;
-    const getPortalAPIBasePath = () => deps.store.getBootstrap().portal_api_base_path;
-    const getPortalPath = () => deps.store.getBootstrap().portal_path;
-    const refreshOrRedirect = async () => {
+    document.addEventListener("click", function(event) {
+      var actionEl = asHTMLElement(event.target)?.closest("[data-action]");
+      if (!actionEl) return;
+      var action = actionEl.getAttribute("data-action") || "";
+      var accountID = actionEl.getAttribute("data-account-id") || "";
+      switch (action) {
+        case "toggle-add-workspace":
+          event.preventDefault();
+          deps.runtime.toggleAddWorkspace(accountID);
+          return;
+        case "open-billing":
+          event.preventDefault();
+          void deps.runtime.openBilling(accountID);
+          return;
+        case "toggle-team":
+          event.preventDefault();
+          deps.runtime.toggleTeam(accountID);
+          return;
+        case "invite-member":
+          event.preventDefault();
+          void deps.runtime.inviteMember(accountID);
+          return;
+        case "create-workspace":
+          event.preventDefault();
+          void deps.runtime.createWorkspace(accountID);
+          return;
+        case "workspace-manage":
+          event.preventDefault();
+          void deps.runtime.manageWorkspace(
+            event,
+            accountID,
+            actionEl.getAttribute("data-workspace-id") || "",
+            actionEl.getAttribute("data-workspace-state") || "",
+            actionEl.getAttribute("data-workspace-name") || ""
+          );
+          return;
+        case "remove-member":
+          event.preventDefault();
+          void deps.runtime.removeMember(
+            accountID,
+            actionEl.getAttribute("data-user-id") || "",
+            actionEl.getAttribute("data-member-email") || ""
+          );
+          return;
+        default:
+          return;
+      }
+    });
+    document.addEventListener("change", function(event) {
+      var target = asHTMLElement(event.target);
+      if (!target || target.getAttribute("data-action") !== "change-role") return;
+      void deps.runtime.changeRole(
+        target.getAttribute("data-account-id") || "",
+        target.getAttribute("data-user-id") || "",
+        target.value
+      );
+    });
+  }
+
+  // src/account_runtime.ts
+  function installAccountRuntime(deps) {
+    var getAccountAPIBasePath = function() {
+      return deps.store.getBootstrap().account_api_base_path;
+    };
+    var getPortalAPIBasePath = function() {
+      return deps.store.getBootstrap().portal_api_base_path;
+    };
+    var getPortalPath = function() {
+      return deps.store.getBootstrap().portal_path;
+    };
+    var refreshOrRedirect = async function() {
       if (!await deps.refreshBootstrap()) {
         window.location.href = getPortalPath();
         return false;
       }
       return true;
     };
-    const renderAccountRuntime = () => {
+    var renderAccountRuntime = function() {
       renderAccountUI(deps.store.getAccountState());
     };
-    const loadTeam = async (accountID) => {
-      const section = getElement("team-section-" + accountID);
+    var loadTeam = async function(accountID) {
+      var section = getElement("team-section-" + accountID);
       if (!section) return;
-      deps.store.updateAccountState((accountState) => {
-        const entry = ensurePortalAccountUIEntry(accountState, accountID);
+      deps.store.updateAccountState(function(accountState) {
+        var entry = ensurePortalAccountUIEntry(accountState, accountID);
         entry.teamVisible = true;
         entry.teamLoading = true;
         entry.teamError = "";
         entry.teamMembers = [];
       });
       try {
-        const r = await fetch(getAccountAPIBasePath() + "/" + encodeURIComponent(accountID) + "/members");
+        var r = await fetch(getAccountAPIBasePath() + "/" + encodeURIComponent(accountID) + "/members");
         if (!r.ok) {
-          deps.store.updateAccountState((accountState) => {
-            const entry = ensurePortalAccountUIEntry(accountState, accountID);
+          deps.store.updateAccountState(function(accountState) {
+            var entry = ensurePortalAccountUIEntry(accountState, accountID);
             entry.teamLoading = false;
             entry.teamError = "Failed to load team.";
           });
           return;
         }
-        const members = await r.json();
-        deps.store.updateAccountState((accountState) => {
-          const entry = ensurePortalAccountUIEntry(accountState, accountID);
+        var members = await r.json();
+        deps.store.updateAccountState(function(accountState) {
+          var entry = ensurePortalAccountUIEntry(accountState, accountID);
           entry.teamLoading = false;
           entry.teamError = "";
           entry.teamMembers = Array.isArray(members) ? members : [];
         });
       } catch {
-        deps.store.updateAccountState((accountState) => {
-          const entry = ensurePortalAccountUIEntry(accountState, accountID);
+        deps.store.updateAccountState(function(accountState) {
+          var entry = ensurePortalAccountUIEntry(accountState, accountID);
           entry.teamLoading = false;
           entry.teamError = "Network error.";
         });
       }
     };
-    const refreshAccountTeamSection = async (accountID) => {
+    var refreshAccountTeamSection = async function(accountID) {
       if (!await refreshOrRedirect()) {
         return false;
       }
-      const section = getElement("team-section-" + accountID);
+      var section = getElement("team-section-" + accountID);
       if (!section) {
         return true;
       }
-      deps.store.updateAccountState((accountState) => {
-        const entry = ensurePortalAccountUIEntry(accountState, accountID);
+      deps.store.updateAccountState(function(accountState) {
+        var entry = ensurePortalAccountUIEntry(accountState, accountID);
         entry.teamVisible = true;
       });
       await loadTeam(accountID);
       return true;
     };
-    const toggleAddWorkspace = (accountID) => {
-      let shouldFocus = false;
-      deps.store.updateAccountState((accountState) => {
-        const entry = ensurePortalAccountUIEntry(accountState, accountID);
+    var toggleAddWorkspace = function(accountID) {
+      var shouldFocus = false;
+      deps.store.updateAccountState(function(accountState) {
+        var entry = ensurePortalAccountUIEntry(accountState, accountID);
         entry.addWorkspaceOpen = !entry.addWorkspaceOpen;
         shouldFocus = entry.addWorkspaceOpen;
       });
@@ -449,32 +516,34 @@
         focusElement("ws-name-" + accountID);
       }
     };
-    const createWorkspace = async (accountID) => {
-      const nameEl = getElement("ws-name-" + accountID);
+    var createWorkspace = async function(accountID) {
+      var nameEl = getElement("ws-name-" + accountID);
       if (!nameEl) return;
-      const name = nameEl.value.trim();
+      var name = nameEl.value.trim();
       if (!name) {
         nameEl.focus();
         return;
       }
-      const spinner = getElement("ws-spinner-" + accountID);
+      var spinner = getElement("ws-spinner-" + accountID);
       if (spinner) spinner.style.display = "block";
       try {
-        const resp = await fetch(getAccountAPIBasePath() + "/" + accountID + "/tenants", {
+        var resp = await fetch(getAccountAPIBasePath() + "/" + accountID + "/tenants", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ display_name: name })
         });
         if (!resp.ok) {
-          const err = await resp.json().catch(() => ({}));
+          var err = await resp.json().catch(function() {
+            return {};
+          });
           deps.showToast(err && err.error || "Failed to create workspace", true);
           return;
         }
         if (!await refreshOrRedirect()) {
           return;
         }
-        deps.store.updateAccountState((accountState) => {
-          const entry = ensurePortalAccountUIEntry(accountState, accountID);
+        deps.store.updateAccountState(function(accountState) {
+          var entry = ensurePortalAccountUIEntry(accountState, accountID);
           entry.addWorkspaceOpen = false;
         });
         deps.showToast("Workspace created!");
@@ -484,14 +553,14 @@
         if (spinner) spinner.style.display = "none";
       }
     };
-    const suspendOrDelete = async (evt, accountID, tenantID, state, name) => {
+    var manageWorkspace = async function(evt, accountID, tenantID, state, name) {
       evt.stopPropagation();
-      const action = state === "active" ? "Suspend" : "Delete";
+      var action = state === "active" ? "Suspend" : "Delete";
       if (!window.confirm(action + ' workspace "' + name + '"?')) return;
-      const method = state === "active" ? "PATCH" : "DELETE";
-      const body = state === "active" ? JSON.stringify({ state: "suspended" }) : void 0;
+      var method = state === "active" ? "PATCH" : "DELETE";
+      var body = state === "active" ? JSON.stringify({ state: "suspended" }) : void 0;
       try {
-        const response = await fetch(getAccountAPIBasePath() + "/" + accountID + "/tenants/" + tenantID, {
+        var response = await fetch(getAccountAPIBasePath() + "/" + accountID + "/tenants/" + tenantID, {
           method,
           headers: body ? { "Content-Type": "application/json" } : {},
           body
@@ -508,15 +577,17 @@
         deps.showToast("Network error.", true);
       }
     };
-    const openBilling = async (accountID) => {
+    var openBilling = async function(accountID) {
       try {
-        const r = await fetch(getPortalAPIBasePath() + "/billing?account_id=" + encodeURIComponent(accountID), { method: "POST" });
+        var r = await fetch(getPortalAPIBasePath() + "/billing?account_id=" + encodeURIComponent(accountID), { method: "POST" });
         if (!r.ok) {
-          const err = await r.json().catch(() => ({}));
+          var err = await r.json().catch(function() {
+            return {};
+          });
           deps.showToast(err && err.error || "Failed to open billing portal.", true);
           return;
         }
-        const data = await r.json();
+        var data = await r.json();
         if (data && data.url) {
           window.location.href = data.url;
         } else {
@@ -526,10 +597,10 @@
         deps.showToast("Network error.", true);
       }
     };
-    const toggleTeam = (accountID) => {
-      let nextVisible = false;
-      deps.store.updateAccountState((accountState) => {
-        const entry = ensurePortalAccountUIEntry(accountState, accountID);
+    var toggleTeam = function(accountID) {
+      var nextVisible = false;
+      deps.store.updateAccountState(function(accountState) {
+        var entry = ensurePortalAccountUIEntry(accountState, accountID);
         entry.teamVisible = !entry.teamVisible;
         nextVisible = entry.teamVisible;
       });
@@ -537,17 +608,17 @@
         void loadTeam(accountID);
       }
     };
-    const inviteMember = async (accountID) => {
-      const emailEl = getElement("invite-email-" + accountID);
-      const roleEl = getElement("invite-role-" + accountID);
+    var inviteMember = async function(accountID) {
+      var emailEl = getElement("invite-email-" + accountID);
+      var roleEl = getElement("invite-role-" + accountID);
       if (!emailEl || !roleEl) return;
-      const email = emailEl.value.trim();
+      var email = emailEl.value.trim();
       if (!email) {
         emailEl.focus();
         return;
       }
       try {
-        const r = await fetch(getAccountAPIBasePath() + "/" + encodeURIComponent(accountID) + "/members", {
+        var r = await fetch(getAccountAPIBasePath() + "/" + encodeURIComponent(accountID) + "/members", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email, role: roleEl.value })
@@ -557,7 +628,7 @@
           return;
         }
         if (!r.ok) {
-          const err = await r.text();
+          var err = await r.text();
           deps.showToast(err || "Failed to invite member.", true);
           return;
         }
@@ -570,9 +641,9 @@
         deps.showToast("Network error.", true);
       }
     };
-    const changeRole = async (accountID, userID, newRole) => {
+    var changeRole = async function(accountID, userID, newRole) {
       try {
-        const r = await fetch(getAccountAPIBasePath() + "/" + encodeURIComponent(accountID) + "/members/" + encodeURIComponent(userID), {
+        var r = await fetch(getAccountAPIBasePath() + "/" + encodeURIComponent(accountID) + "/members/" + encodeURIComponent(userID), {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ role: newRole })
@@ -596,10 +667,10 @@
         await loadTeam(accountID);
       }
     };
-    const removeMember = async (accountID, userID, email) => {
+    var removeMember = async function(accountID, userID, email) {
       if (!window.confirm("Remove " + email + " from this account?")) return;
       try {
-        const r = await fetch(getAccountAPIBasePath() + "/" + encodeURIComponent(accountID) + "/members/" + encodeURIComponent(userID), {
+        var r = await fetch(getAccountAPIBasePath() + "/" + encodeURIComponent(accountID) + "/members/" + encodeURIComponent(userID), {
           method: "DELETE"
         });
         if (r.status === 409) {
@@ -618,65 +689,18 @@
         deps.showToast("Network error.", true);
       }
     };
-    document.addEventListener("click", function(event) {
-      const actionEl = asHTMLElement(event.target)?.closest("[data-action]");
-      if (!actionEl) return;
-      const action = actionEl.getAttribute("data-action") || "";
-      const accountID = actionEl.getAttribute("data-account-id") || "";
-      switch (action) {
-        case "toggle-add-workspace":
-          event.preventDefault();
-          toggleAddWorkspace(accountID);
-          return;
-        case "open-billing":
-          event.preventDefault();
-          void openBilling(accountID);
-          return;
-        case "toggle-team":
-          event.preventDefault();
-          toggleTeam(accountID);
-          return;
-        case "invite-member":
-          event.preventDefault();
-          void inviteMember(accountID);
-          return;
-        case "create-workspace":
-          event.preventDefault();
-          void createWorkspace(accountID);
-          return;
-        case "workspace-manage":
-          event.preventDefault();
-          void suspendOrDelete(
-            event,
-            accountID,
-            actionEl.getAttribute("data-workspace-id") || "",
-            actionEl.getAttribute("data-workspace-state") || "",
-            actionEl.getAttribute("data-workspace-name") || ""
-          );
-          return;
-        case "remove-member":
-          event.preventDefault();
-          void removeMember(
-            accountID,
-            actionEl.getAttribute("data-user-id") || "",
-            actionEl.getAttribute("data-member-email") || ""
-          );
-          return;
-        default:
-          return;
-      }
-    });
-    document.addEventListener("change", function(event) {
-      const target = asHTMLElement(event.target);
-      if (!target || target.getAttribute("data-action") !== "change-role") return;
-      void changeRole(
-        target.getAttribute("data-account-id") || "",
-        target.getAttribute("data-user-id") || "",
-        target.value
-      );
-    });
     deps.store.subscribeAccount(renderAccountRuntime);
     deps.store.subscribeBootstrap(renderAccountRuntime);
+    return {
+      toggleAddWorkspace,
+      openBilling,
+      toggleTeam,
+      inviteMember,
+      createWorkspace,
+      manageWorkspace,
+      removeMember,
+      changeRole
+    };
   }
 
   // src/auth_controller.ts
@@ -927,10 +951,13 @@
   installAuthController({
     store: portalStore
   });
-  installAccountController({
+  var accountRuntime = installAccountRuntime({
     store: portalStore,
     refreshBootstrap,
     showToast
+  });
+  installAccountController({
+    runtime: accountRuntime
   });
   portalStore.subscribeBootstrap(function() {
     renderPortalApp();
