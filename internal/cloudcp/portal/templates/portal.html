@@ -141,28 +141,30 @@
     </div>
 
     <div class="service-panel" id="manage-service-panel">
-      <h3>Manage subscriptions</h3>
-      <p>Request a verification code for the commercial email, then open the Stripe customer portal for billing changes, invoices, and subscription actions.</p>
-      <div id="manage-inline-step1">
-        <div class="form-group">
-          <label for="manage-inline-email">Email address</label>
-          <input type="email" id="manage-inline-email" value="{{.Email}}" autocomplete="email">
+      <div id="manage-service-root">
+        <h3>Manage subscriptions</h3>
+        <p>Request a verification code for the commercial email, then open the Stripe customer portal for billing changes, invoices, and subscription actions.</p>
+        <div id="manage-inline-step1">
+          <div class="form-group">
+            <label for="manage-inline-email">Email address</label>
+            <input type="email" id="manage-inline-email" value="{{.Email}}" autocomplete="email">
+          </div>
+          <div class="form-actions">
+            <button class="btn-primary" type="button" id="manage-inline-request" data-account-service-action="manage-inline-request">Send Verification Code</button>
+          </div>
         </div>
-        <div class="form-actions">
-          <button class="btn-primary" type="button" id="manage-inline-request" data-account-service-action="manage-inline-request">Send Verification Code</button>
+        <div id="manage-inline-step2" style="display:none">
+          <div class="form-group">
+            <label for="manage-inline-code">Verification code</label>
+            <input type="text" id="manage-inline-code" inputmode="numeric" pattern="[0-9]{6}" placeholder="123456">
+          </div>
+          <div class="form-actions">
+            <button class="btn-primary" type="button" id="manage-inline-confirm" data-account-service-action="manage-inline-confirm">Open Customer Portal</button>
+          </div>
+          <div class="helper-text">Need a new code? <a href="#" id="manage-inline-resend" data-account-service-action="manage-inline-resend">Send again</a></div>
         </div>
+        <div class="service-status" id="manage-inline-status"></div>
       </div>
-      <div id="manage-inline-step2" style="display:none">
-        <div class="form-group">
-          <label for="manage-inline-code">Verification code</label>
-          <input type="text" id="manage-inline-code" inputmode="numeric" pattern="[0-9]{6}" placeholder="123456">
-        </div>
-        <div class="form-actions">
-          <button class="btn-primary" type="button" id="manage-inline-confirm" data-account-service-action="manage-inline-confirm">Open Customer Portal</button>
-        </div>
-        <div class="helper-text">Need a new code? <a href="#" id="manage-inline-resend" data-account-service-action="manage-inline-resend">Send again</a></div>
-      </div>
-      <div class="service-status" id="manage-inline-status"></div>
     </div>
 
     <div class="service-panel" id="retrieve-service-panel">
@@ -217,24 +219,26 @@
     </div>
 
     <div class="service-panel" id="refund-service-panel">
-      <h3>Refund requests</h3>
-      <p>Process an eligible self-serve refund for a self-hosted purchase. This revokes the associated license immediately.</p>
-      <div class="warning">
-        <strong>Warning:</strong> completing a refund immediately revokes the affected license. This should only be used when the refund window and commercial contract allow it.
+      <div id="refund-service-root">
+        <h3>Refund requests</h3>
+        <p>Process an eligible self-serve refund for a self-hosted purchase. This revokes the associated license immediately.</p>
+        <div class="warning">
+          <strong>Warning:</strong> completing a refund immediately revokes the affected license. This should only be used when the refund window and commercial contract allow it.
+        </div>
+        <div class="form-group">
+          <label for="refund-inline-email">Email address</label>
+          <input type="email" id="refund-inline-email" value="{{.Email}}" autocomplete="email">
+        </div>
+        <div class="form-group">
+          <label for="refund-inline-token">License key</label>
+          <input type="text" id="refund-inline-token" placeholder="pulse_xxxxx">
+        </div>
+        <div class="form-actions">
+          <button class="btn-danger" type="button" id="refund-inline-submit" data-account-service-action="refund-inline-submit">Process Refund</button>
+        </div>
+        <div class="helper-text">If this purchase is not eligible for self-serve refund, use the public support path instead: <a href="{{.PublicSiteURL}}/refund.html?email={{.Email}}">open refund support page</a>.</div>
+        <div class="service-status" id="refund-inline-status"></div>
       </div>
-      <div class="form-group">
-        <label for="refund-inline-email">Email address</label>
-        <input type="email" id="refund-inline-email" value="{{.Email}}" autocomplete="email">
-      </div>
-      <div class="form-group">
-        <label for="refund-inline-token">License key</label>
-        <input type="text" id="refund-inline-token" placeholder="pulse_xxxxx">
-      </div>
-      <div class="form-actions">
-        <button class="btn-danger" type="button" id="refund-inline-submit" data-account-service-action="refund-inline-submit">Process Refund</button>
-      </div>
-      <div class="helper-text">If this purchase is not eligible for self-serve refund, use the public support path instead: <a href="{{.PublicSiteURL}}/refund.html?email={{.Email}}">open refund support page</a>.</div>
-      <div class="service-status" id="refund-inline-status"></div>
     </div>
 
     <div class="service-panel" id="data-service-panel">
@@ -242,62 +246,66 @@
       <p>Request export or deletion of the commercial data tied to an email address. Payment data held directly by Stripe still requires support handling.</p>
 
       <div class="subsection">
-        <h4>Export My Data</h4>
-        <div id="data-export-step1">
-          <div class="form-group">
-            <label for="data-export-email">Email address</label>
-            <input type="email" id="data-export-email" value="{{.Email}}" autocomplete="email">
+        <div id="data-export-root">
+          <h4>Export My Data</h4>
+          <div id="data-export-step1">
+            <div class="form-group">
+              <label for="data-export-email">Email address</label>
+              <input type="email" id="data-export-email" value="{{.Email}}" autocomplete="email">
+            </div>
+            <div class="form-actions">
+              <button class="btn-primary" type="button" id="data-export-request" data-account-service-action="data-export-request">Send Verification Code</button>
+            </div>
           </div>
-          <div class="form-actions">
-            <button class="btn-primary" type="button" id="data-export-request" data-account-service-action="data-export-request">Send Verification Code</button>
+          <div id="data-export-step2" style="display:none">
+            <div class="form-group">
+              <label for="data-export-code">Verification code</label>
+              <input type="text" id="data-export-code" inputmode="numeric" pattern="[0-9]{6}" placeholder="123456">
+            </div>
+            <div class="form-actions">
+              <button class="btn-primary" type="button" id="data-export-confirm" data-account-service-action="data-export-confirm">Export My Data</button>
+            </div>
+            <div class="helper-text">Need a new code? <a href="#" id="data-export-resend" data-account-service-action="data-export-resend">Send again</a></div>
           </div>
-        </div>
-        <div id="data-export-step2" style="display:none">
-          <div class="form-group">
-            <label for="data-export-code">Verification code</label>
-            <input type="text" id="data-export-code" inputmode="numeric" pattern="[0-9]{6}" placeholder="123456">
+          <div class="service-status" id="data-export-status"></div>
+          <div id="data-export-result" style="display:none; margin-top:14px">
+            <label for="data-export-payload">Export payload</label>
+            <textarea id="data-export-payload" readonly></textarea>
           </div>
-          <div class="form-actions">
-            <button class="btn-primary" type="button" id="data-export-confirm" data-account-service-action="data-export-confirm">Export My Data</button>
-          </div>
-          <div class="helper-text">Need a new code? <a href="#" id="data-export-resend" data-account-service-action="data-export-resend">Send again</a></div>
-        </div>
-        <div class="service-status" id="data-export-status"></div>
-        <div id="data-export-result" style="display:none; margin-top:14px">
-          <label for="data-export-payload">Export payload</label>
-          <textarea id="data-export-payload" readonly></textarea>
         </div>
       </div>
 
       <div class="subsection">
-        <h4>Delete My Data</h4>
-        <div class="warning">
-          <strong>Warning:</strong> deleting commercial data also revokes license records and cannot be undone.
+        <div id="data-delete-root">
+          <h4>Delete My Data</h4>
+          <div class="warning">
+            <strong>Warning:</strong> deleting commercial data also revokes license records and cannot be undone.
+          </div>
+          <div id="data-delete-step1">
+            <div class="form-group">
+              <label for="data-delete-email">Email address</label>
+              <input type="email" id="data-delete-email" value="{{.Email}}" autocomplete="email">
+            </div>
+            <div class="form-actions">
+              <button class="btn-danger" type="button" id="data-delete-request" data-account-service-action="data-delete-request">Send Verification Code</button>
+            </div>
+          </div>
+          <div id="data-delete-step2" style="display:none">
+            <div class="form-group">
+              <label for="data-delete-code">Verification code</label>
+              <input type="text" id="data-delete-code" inputmode="numeric" pattern="[0-9]{6}" placeholder="123456">
+            </div>
+            <div class="checkbox-row">
+              <input type="checkbox" id="data-delete-confirm-check">
+              <span>I understand this permanently deletes my commercial data and revokes associated licenses.</span>
+            </div>
+            <div class="form-actions">
+              <button class="btn-danger" type="button" id="data-delete-confirm" data-account-service-action="data-delete-confirm">Delete My Data</button>
+            </div>
+            <div class="helper-text">Need a new code? <a href="#" id="data-delete-resend" data-account-service-action="data-delete-resend">Send again</a></div>
+          </div>
+          <div class="service-status" id="data-delete-status"></div>
         </div>
-        <div id="data-delete-step1">
-          <div class="form-group">
-            <label for="data-delete-email">Email address</label>
-            <input type="email" id="data-delete-email" value="{{.Email}}" autocomplete="email">
-          </div>
-          <div class="form-actions">
-            <button class="btn-danger" type="button" id="data-delete-request" data-account-service-action="data-delete-request">Send Verification Code</button>
-          </div>
-        </div>
-        <div id="data-delete-step2" style="display:none">
-          <div class="form-group">
-            <label for="data-delete-code">Verification code</label>
-            <input type="text" id="data-delete-code" inputmode="numeric" pattern="[0-9]{6}" placeholder="123456">
-          </div>
-          <div class="checkbox-row">
-            <input type="checkbox" id="data-delete-confirm-check">
-            <span>I understand this permanently deletes my commercial data and revokes associated licenses.</span>
-          </div>
-          <div class="form-actions">
-            <button class="btn-danger" type="button" id="data-delete-confirm" data-account-service-action="data-delete-confirm">Delete My Data</button>
-          </div>
-          <div class="helper-text">Need a new code? <a href="#" id="data-delete-resend" data-account-service-action="data-delete-resend">Send again</a></div>
-        </div>
-        <div class="service-status" id="data-delete-status"></div>
       </div>
       <div class="helper-text">Payment-card data stays with Stripe. For Stripe deletion support, contact <a href="mailto:{{.SupportEmail}}">{{.SupportEmail}}</a>.</div>
     </div>

@@ -3,12 +3,14 @@
   var serviceState = {
     openPanelID: '',
     flows: {
-    manage: newVerificationFlowState(),
-    retrieve: newVerificationFlowState(),
+      manage: newVerificationFlowState(),
+      retrieve: newVerificationFlowState(),
       export: newVerificationFlowState(),
       delete: newVerificationFlowState(),
     },
     refund: {
+      emailValue: '',
+      tokenValue: '',
       submitting: false,
       status: emptyStatus(),
     },
@@ -24,6 +26,7 @@
       result: null,
       emailValue: '',
       codeValue: '',
+      checkboxChecked: false,
     };
   }
 
@@ -175,8 +178,33 @@
   }
 
   function renderRefund() {
+    renderRefundPanel();
     renderButton('refund-inline-submit', serviceState.refund.submitting, serviceState.refund.submitting ? 'Processing...' : 'Process Refund');
     renderStatus('refund-inline-status', serviceState.refund.status);
+  }
+
+  function renderRefundPanel() {
+    var root = getElement('refund-service-root');
+    if (!root) return;
+    var bootstrap = runtime.getBootstrap ? (runtime.getBootstrap() || {}) : {};
+    var refundSupportURL = (bootstrap.public_site_url || '') + '/refund.html?email=' + encodeURIComponent(serviceState.refund.emailValue || '');
+    root.innerHTML = '' +
+      '<h3>Refund requests</h3>' +
+      '<p>Process an eligible self-serve refund for a self-hosted purchase. This revokes the associated license immediately.</p>' +
+      '<div class="warning"><strong>Warning:</strong> completing a refund immediately revokes the affected license. This should only be used when the refund window and commercial contract allow it.</div>' +
+      '<div class="form-group">' +
+        '<label for="refund-inline-email">Email address</label>' +
+        '<input type="email" id="refund-inline-email" value="' + escapeAttribute(serviceState.refund.emailValue || '') + '" autocomplete="email" data-account-service-input="refund-email">' +
+      '</div>' +
+      '<div class="form-group">' +
+        '<label for="refund-inline-token">License key</label>' +
+        '<input type="text" id="refund-inline-token" value="' + escapeAttribute(serviceState.refund.tokenValue || '') + '" placeholder="pulse_xxxxx" data-account-service-input="refund-token">' +
+      '</div>' +
+      '<div class="form-actions">' +
+        '<button class="btn-danger" type="button" id="refund-inline-submit" data-account-service-action="refund-inline-submit">Process Refund</button>' +
+      '</div>' +
+      '<div class="helper-text">If this purchase is not eligible for self-serve refund, use the public support path instead: <a href="' + escapeAttribute(refundSupportURL) + '">open refund support page</a>.</div>' +
+      '<div class="service-status" id="refund-inline-status"></div>';
   }
 
   function resetVerificationFlow(flowID) {
@@ -209,9 +237,42 @@
       resendSuccessMessage: 'New verification code sent.',
       requestErrorMessage: 'Failed to send verification code',
       confirmErrorMessage: 'Failed to open customer portal',
+      readEmailValue: function() {
+        return serviceState.flows.manage.emailValue;
+      },
+      readCodeValue: function() {
+        return serviceState.flows.manage.codeValue;
+      },
       onRequestStart: function() {},
       onConfirmSuccess: function(data) {
         window.location.href = data.url;
+      },
+      renderPanel: function(flowState) {
+        var root = getElement('manage-service-root');
+        if (!root) return;
+        root.innerHTML = '' +
+          '<h3>Manage subscriptions</h3>' +
+          '<p>Request a verification code for the commercial email, then open the Stripe customer portal for billing changes, invoices, and subscription actions.</p>' +
+          '<div id="manage-inline-step1">' +
+            '<div class="form-group">' +
+              '<label for="manage-inline-email">Email address</label>' +
+              '<input type="email" id="manage-inline-email" value="' + escapeAttribute(flowState.emailValue || '') + '" autocomplete="email" data-account-service-input="manage-email">' +
+            '</div>' +
+            '<div class="form-actions">' +
+              '<button class="btn-primary" type="button" id="manage-inline-request" data-account-service-action="manage-inline-request">Send Verification Code</button>' +
+            '</div>' +
+          '</div>' +
+          '<div id="manage-inline-step2" style="display:' + (flowState.step2Visible ? 'block' : 'none') + '">' +
+            '<div class="form-group">' +
+              '<label for="manage-inline-code">Verification code</label>' +
+              '<input type="text" id="manage-inline-code" value="' + escapeAttribute(flowState.codeValue || '') + '" inputmode="numeric" pattern="[0-9]{6}" placeholder="123456" data-account-service-input="manage-code">' +
+            '</div>' +
+            '<div class="form-actions">' +
+              '<button class="btn-primary" type="button" id="manage-inline-confirm" data-account-service-action="manage-inline-confirm">Open Customer Portal</button>' +
+            '</div>' +
+            '<div class="helper-text">Need a new code? <a href="#" id="manage-inline-resend" data-account-service-action="manage-inline-resend">Send again</a></div>' +
+          '</div>' +
+          '<div class="service-status" id="manage-inline-status"></div>';
       }
     },
     retrieve: {
@@ -312,14 +373,52 @@
       resendSuccessMessage: 'New verification code sent.',
       requestErrorMessage: 'Request failed',
       confirmErrorMessage: 'Export failed',
+      readEmailValue: function() {
+        return serviceState.flows.export.emailValue;
+      },
+      readCodeValue: function() {
+        return serviceState.flows.export.codeValue;
+      },
       onRequestStart: function() {
         serviceState.flows.export.result = null;
       },
       onConfirmSuccess: function(data) {
         serviceState.flows.export.result = data;
+        serviceState.flows.export.codeValue = '';
         setFlowStatus('export', 'Data export retrieved successfully.', false);
         resetVerificationFlow('export');
         serviceState.flows.export.result = data;
+      },
+      renderPanel: function(flowState) {
+        var root = getElement('data-export-root');
+        if (!root) return;
+        var resultDisplay = flowState.result ? 'block' : 'none';
+        root.innerHTML = '' +
+          '<h4>Export My Data</h4>' +
+          '<div id="data-export-step1">' +
+            '<div class="form-group">' +
+              '<label for="data-export-email">Email address</label>' +
+              '<input type="email" id="data-export-email" value="' + escapeAttribute(flowState.emailValue || '') + '" autocomplete="email" data-account-service-input="data-export-email">' +
+            '</div>' +
+            '<div class="form-actions">' +
+              '<button class="btn-primary" type="button" id="data-export-request" data-account-service-action="data-export-request">Send Verification Code</button>' +
+            '</div>' +
+          '</div>' +
+          '<div id="data-export-step2" style="display:' + (flowState.step2Visible ? 'block' : 'none') + '">' +
+            '<div class="form-group">' +
+              '<label for="data-export-code">Verification code</label>' +
+              '<input type="text" id="data-export-code" value="' + escapeAttribute(flowState.codeValue || '') + '" inputmode="numeric" pattern="[0-9]{6}" placeholder="123456" data-account-service-input="data-export-code">' +
+            '</div>' +
+            '<div class="form-actions">' +
+              '<button class="btn-primary" type="button" id="data-export-confirm" data-account-service-action="data-export-confirm">Export My Data</button>' +
+            '</div>' +
+            '<div class="helper-text">Need a new code? <a href="#" id="data-export-resend" data-account-service-action="data-export-resend">Send again</a></div>' +
+          '</div>' +
+          '<div class="service-status" id="data-export-status"></div>' +
+          '<div id="data-export-result" style="display:' + resultDisplay + '; margin-top:14px">' +
+            '<label for="data-export-payload">Export payload</label>' +
+            '<textarea id="data-export-payload" readonly>' + escapeText(flowState.result ? JSON.stringify(flowState.result, null, 2) : '') + '</textarea>' +
+          '</div>';
       },
       renderResult: function(result) {
         setVisible('data-export-result', !!result);
@@ -344,6 +443,12 @@
       resendSuccessMessage: 'New verification code sent.',
       requestErrorMessage: 'Request failed',
       confirmErrorMessage: 'Deletion failed',
+      readEmailValue: function() {
+        return serviceState.flows.delete.emailValue;
+      },
+      readCodeValue: function() {
+        return serviceState.flows.delete.codeValue;
+      },
       beforeConfirm: function() {
         if (!getElement('data-delete-confirm-check').checked) {
           setFlowStatus('delete', 'You must confirm that you understand this action is permanent.', true);
@@ -356,6 +461,37 @@
         getElement('data-delete-confirm-check').checked = false;
         resetVerificationFlow('delete');
         setFlowStatus('delete', data.deleted_count > 0 && data.stripe_reminder ? data.message + ' ' + data.stripe_reminder : data.message, false);
+      },
+      renderPanel: function(flowState) {
+        var root = getElement('data-delete-root');
+        if (!root) return;
+        root.innerHTML = '' +
+          '<h4>Delete My Data</h4>' +
+          '<div class="warning"><strong>Warning:</strong> deleting commercial data also revokes license records and cannot be undone.</div>' +
+          '<div id="data-delete-step1">' +
+            '<div class="form-group">' +
+              '<label for="data-delete-email">Email address</label>' +
+              '<input type="email" id="data-delete-email" value="' + escapeAttribute(flowState.emailValue || '') + '" autocomplete="email" data-account-service-input="data-delete-email">' +
+            '</div>' +
+            '<div class="form-actions">' +
+              '<button class="btn-danger" type="button" id="data-delete-request" data-account-service-action="data-delete-request">Send Verification Code</button>' +
+            '</div>' +
+          '</div>' +
+          '<div id="data-delete-step2" style="display:' + (flowState.step2Visible ? 'block' : 'none') + '">' +
+            '<div class="form-group">' +
+              '<label for="data-delete-code">Verification code</label>' +
+              '<input type="text" id="data-delete-code" value="' + escapeAttribute(flowState.codeValue || '') + '" inputmode="numeric" pattern="[0-9]{6}" placeholder="123456" data-account-service-input="data-delete-code">' +
+            '</div>' +
+            '<div class="checkbox-row">' +
+              '<input type="checkbox" id="data-delete-confirm-check"' + (flowState.checkboxChecked ? ' checked' : '') + '>' +
+              '<span>I understand this permanently deletes my commercial data and revokes associated licenses.</span>' +
+            '</div>' +
+            '<div class="form-actions">' +
+              '<button class="btn-danger" type="button" id="data-delete-confirm" data-account-service-action="data-delete-confirm">Delete My Data</button>' +
+            '</div>' +
+            '<div class="helper-text">Need a new code? <a href="#" id="data-delete-resend" data-account-service-action="data-delete-resend">Send again</a></div>' +
+          '</div>' +
+          '<div class="service-status" id="data-delete-status"></div>';
       }
     }
   };
@@ -441,8 +577,8 @@
   }
 
   async function submitRefund() {
-    var email = readValue('refund-inline-email');
-    var token = readValue('refund-inline-token');
+    var email = serviceState.refund.emailValue;
+    var token = serviceState.refund.tokenValue;
     if (!email || !token) return;
     if (!confirm('Are you sure? This will immediately revoke the license and request the refund.')) return;
     serviceState.refund.submitting = true;
@@ -452,7 +588,7 @@
       var res = await serviceFetch('/v1/self-refund', { email: email, token: token });
       var data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Refund failed');
-      setValue('refund-inline-token', '');
+      serviceState.refund.tokenValue = '';
       setRefundStatus('Success! Your refund has been processed. Stripe will follow up by email.', false);
     } catch (err) {
       setRefundStatus(err.message, true);
@@ -463,7 +599,12 @@
   }
 
   renderOpenPanels();
-  serviceState.flows.retrieve.emailValue = (runtime.getBootstrap ? ((runtime.getBootstrap() || {}).email || '') : '');
+  var bootstrap = runtime.getBootstrap ? (runtime.getBootstrap() || {}) : {};
+  serviceState.flows.manage.emailValue = bootstrap.email || '';
+  serviceState.flows.retrieve.emailValue = bootstrap.email || '';
+  serviceState.flows.export.emailValue = bootstrap.email || '';
+  serviceState.flows.delete.emailValue = bootstrap.email || '';
+  serviceState.refund.emailValue = bootstrap.email || '';
   renderAllFlows();
 
   document.addEventListener('click', function(event) {
@@ -538,14 +679,44 @@
     if (!target) return;
     var inputKind = target.getAttribute('data-account-service-input') || '';
     switch (inputKind) {
+      case 'manage-email':
+        serviceState.flows.manage.emailValue = target.value;
+        return;
+      case 'manage-code':
+        serviceState.flows.manage.codeValue = target.value;
+        return;
       case 'retrieve-email':
         serviceState.flows.retrieve.emailValue = target.value;
         return;
       case 'retrieve-code':
         serviceState.flows.retrieve.codeValue = target.value;
         return;
+      case 'refund-email':
+        serviceState.refund.emailValue = target.value;
+        return;
+      case 'refund-token':
+        serviceState.refund.tokenValue = target.value;
+        return;
+      case 'data-export-email':
+        serviceState.flows.export.emailValue = target.value;
+        return;
+      case 'data-export-code':
+        serviceState.flows.export.codeValue = target.value;
+        return;
+      case 'data-delete-email':
+        serviceState.flows.delete.emailValue = target.value;
+        return;
+      case 'data-delete-code':
+        serviceState.flows.delete.codeValue = target.value;
+        return;
       default:
         return;
     }
+  });
+
+  document.addEventListener('change', function(event) {
+    var target = event.target;
+    if (!target || target.id !== 'data-delete-confirm-check') return;
+    serviceState.flows.delete.checkboxChecked = !!target.checked;
   });
 })();
