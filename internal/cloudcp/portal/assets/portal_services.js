@@ -3,8 +3,8 @@
   var serviceState = {
     openPanelID: '',
     flows: {
-      manage: newVerificationFlowState(),
-      retrieve: newVerificationFlowState(),
+    manage: newVerificationFlowState(),
+    retrieve: newVerificationFlowState(),
       export: newVerificationFlowState(),
       delete: newVerificationFlowState(),
     },
@@ -22,6 +22,8 @@
       step2Visible: false,
       status: emptyStatus(),
       result: null,
+      emailValue: '',
+      codeValue: '',
     };
   }
 
@@ -39,6 +41,19 @@
 
   function getElement(id) {
     return document.getElementById(id);
+  }
+
+  function escapeText(value) {
+    return String(value || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+
+  function escapeAttribute(value) {
+    return escapeText(value)
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
   }
 
   function readValue(id) {
@@ -137,6 +152,9 @@
     var flow = verificationFlows[flowID];
     if (!flow) return;
     var flowState = serviceState.flows[flowID];
+    if (flow.renderPanel) {
+      flow.renderPanel(flowState);
+    }
     renderButton(flow.requestButtonID, flowState.requesting, flowState.requesting ? flow.requestPendingLabel : flow.requestLabel);
     renderButton(flow.confirmButtonID, flowState.confirming, flowState.confirming ? flow.confirmPendingLabel : flow.confirmLabel);
     renderStatus(flow.statusID, flowState.status);
@@ -164,7 +182,9 @@
   function resetVerificationFlow(flowID) {
     var flow = verificationFlows[flowID];
     if (!flow) return;
+    var previous = serviceState.flows[flowID];
     serviceState.flows[flowID] = newVerificationFlowState();
+    serviceState.flows[flowID].emailValue = previous.emailValue;
     if (flow.codeInputID) {
       setValue(flow.codeInputID, '');
     }
@@ -212,51 +232,66 @@
       resendSuccessMessage: 'New verification code sent.',
       requestErrorMessage: 'Failed to send verification code',
       confirmErrorMessage: 'Failed to retrieve license',
+      readEmailValue: function() {
+        return serviceState.flows.retrieve.emailValue;
+      },
+      readCodeValue: function() {
+        return serviceState.flows.retrieve.codeValue;
+      },
       onRequestStart: function() {
         serviceState.flows.retrieve.result = null;
       },
       onConfirmSuccess: function(data) {
         serviceState.flows.retrieve.result = data.license;
+        serviceState.flows.retrieve.codeValue = '';
         setFlowStatus('retrieve', 'License retrieved successfully.', false);
       },
+      renderPanel: function(flowState) {
+        var root = getElement('retrieve-service-root');
+        if (!root) return;
+        var result = flowState.result;
+        var invoiceURL = result && result.invoice_url ? result.invoice_url : '#';
+        var invoiceDisplay = result && result.invoice_url ? 'inline-block' : 'none';
+        var copyDisplay = result ? 'inline-block' : 'none';
+        var resultDisplay = result ? 'block' : 'none';
+        root.innerHTML = '' +
+          '<h3>Retrieve licenses</h3>' +
+          '<p>Request a verification code for the commercial email, then reveal the current active self-hosted license without leaving Pulse Account.</p>' +
+          '<div id="retrieve-inline-step1">' +
+            '<div class="form-group">' +
+              '<label for="retrieve-inline-email">Email address</label>' +
+              '<input type="email" id="retrieve-inline-email" value="' + escapeAttribute(flowState.emailValue || '') + '" autocomplete="email" data-account-service-input="retrieve-email">' +
+            '</div>' +
+            '<div class="form-actions">' +
+              '<button class="btn-primary" type="button" id="retrieve-inline-request" data-account-service-action="retrieve-inline-request">Send Verification Code</button>' +
+            '</div>' +
+          '</div>' +
+          '<div id="retrieve-inline-step2" style="display:' + (flowState.step2Visible ? 'block' : 'none') + '">' +
+            '<div class="form-group">' +
+              '<label for="retrieve-inline-code">Verification code</label>' +
+              '<input type="text" id="retrieve-inline-code" value="' + escapeAttribute(flowState.codeValue || '') + '" inputmode="numeric" pattern="[0-9]{6}" placeholder="123456" data-account-service-input="retrieve-code">' +
+            '</div>' +
+            '<div class="form-actions">' +
+              '<button class="btn-primary" type="button" id="retrieve-inline-confirm" data-account-service-action="retrieve-inline-confirm">Show License</button>' +
+              '<button class="btn-secondary" type="button" id="retrieve-inline-copy" data-account-service-action="retrieve-inline-copy" style="display:' + copyDisplay + '">Copy License Key</button>' +
+              '<a class="btn-secondary" id="retrieve-inline-invoice" href="' + escapeAttribute(invoiceURL) + '" target="_blank" rel="noopener" style="display:' + invoiceDisplay + '">View Invoice</a>' +
+            '</div>' +
+            '<div class="helper-text">Use the latest active self-hosted license for this commercial email.</div>' +
+          '</div>' +
+          '<div class="service-status" id="retrieve-inline-status"></div>' +
+          '<div id="retrieve-inline-result" style="display:' + resultDisplay + '; margin-top:14px">' +
+            '<label for="retrieve-inline-token">License key</label>' +
+            '<textarea id="retrieve-inline-token" readonly>' + escapeText(result ? result.token : '') + '</textarea>' +
+            '<div class="result-grid">' +
+              '<div><div class="result-meta-label">Plan</div><div class="result-meta-value" id="retrieve-inline-tier">' + escapeText(result ? result.tier : '') + '</div></div>' +
+              '<div><div class="result-meta-label">Issued</div><div class="result-meta-value" id="retrieve-inline-issued">' + escapeText(result ? new Date(result.issued_at).toLocaleString() : '') + '</div></div>' +
+              '<div><div class="result-meta-label">Expires</div><div class="result-meta-value" id="retrieve-inline-expires">' + escapeText(result ? (result.expires_at ? new Date(result.expires_at).toLocaleString() : 'Does not expire') : '') + '</div></div>' +
+              '<div><div class="result-meta-label">Purchase Email</div><div class="result-meta-value" id="retrieve-inline-email-value">' + escapeText(result ? result.email : '') + '</div></div>' +
+            '</div>' +
+          '</div>';
+      },
       renderResult: function(result) {
-        setVisible('retrieve-inline-result', !!result);
-        if (!result) {
-          setValue('retrieve-inline-token', '');
-          setText('retrieve-inline-tier', '');
-          setText('retrieve-inline-issued', '');
-          setText('retrieve-inline-expires', '');
-          setText('retrieve-inline-email-value', '');
-          var emptyInvoice = getElement('retrieve-inline-invoice');
-          if (emptyInvoice) {
-            emptyInvoice.href = '#';
-            emptyInvoice.style.display = 'none';
-          }
-          var emptyCopy = getElement('retrieve-inline-copy');
-          if (emptyCopy) {
-            emptyCopy.style.display = 'none';
-          }
-          return;
-        }
-        setValue('retrieve-inline-token', result.token);
-        setText('retrieve-inline-tier', result.tier);
-        setText('retrieve-inline-issued', new Date(result.issued_at).toLocaleString());
-        setText('retrieve-inline-expires', result.expires_at ? new Date(result.expires_at).toLocaleString() : 'Does not expire');
-        setText('retrieve-inline-email-value', result.email);
-        var invoice = getElement('retrieve-inline-invoice');
-        if (invoice) {
-          if (result.invoice_url) {
-            invoice.href = result.invoice_url;
-            invoice.style.display = 'inline-block';
-          } else {
-            invoice.href = '#';
-            invoice.style.display = 'none';
-          }
-        }
-        var copy = getElement('retrieve-inline-copy');
-        if (copy) {
-          copy.style.display = 'inline-block';
-        }
+        void result;
       }
     },
     export: {
@@ -328,7 +363,7 @@
   async function requestVerificationCode(flowID) {
     var flow = verificationFlows[flowID];
     if (!flow) return;
-    var email = readValue(flow.emailInputID);
+    var email = flow.readEmailValue ? flow.readEmailValue() : readValue(flow.emailInputID);
     if (!email) {
       focusElement(flow.emailInputID);
       return;
@@ -373,7 +408,7 @@
     var flow = verificationFlows[flowID];
     if (!flow) return;
     var email = serviceState.flows[flowID].pendingEmail;
-    var code = readValue(flow.codeInputID);
+    var code = flow.readCodeValue ? flow.readCodeValue() : readValue(flow.codeInputID);
     if (!email || !code) return;
     if (flow.beforeConfirm && flow.beforeConfirm() === false) {
       return;
@@ -394,7 +429,7 @@
   }
 
   async function copyRetrievedLicense() {
-    var token = getElement('retrieve-inline-token').value;
+    var token = serviceState.flows.retrieve.result ? serviceState.flows.retrieve.result.token : '';
     if (!token) return;
     try {
       await navigator.clipboard.writeText(token);
@@ -428,6 +463,7 @@
   }
 
   renderOpenPanels();
+  serviceState.flows.retrieve.emailValue = (runtime.getBootstrap ? ((runtime.getBootstrap() || {}).email || '') : '');
   renderAllFlows();
 
   document.addEventListener('click', function(event) {
@@ -491,6 +527,22 @@
       case 'data-delete-confirm':
         event.preventDefault();
         confirmVerificationCode('delete');
+        return;
+      default:
+        return;
+    }
+  });
+
+  document.addEventListener('input', function(event) {
+    var target = event.target;
+    if (!target) return;
+    var inputKind = target.getAttribute('data-account-service-input') || '';
+    switch (inputKind) {
+      case 'retrieve-email':
+        serviceState.flows.retrieve.emailValue = target.value;
+        return;
+      case 'retrieve-code':
+        serviceState.flows.retrieve.codeValue = target.value;
         return;
       default:
         return;

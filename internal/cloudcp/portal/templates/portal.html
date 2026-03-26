@@ -166,49 +166,51 @@
     </div>
 
     <div class="service-panel" id="retrieve-service-panel">
-      <h3>Retrieve licenses</h3>
-      <p>Request a verification code for the commercial email, then reveal the current active self-hosted license without leaving Pulse Account.</p>
-      <div id="retrieve-inline-step1">
-        <div class="form-group">
-          <label for="retrieve-inline-email">Email address</label>
-          <input type="email" id="retrieve-inline-email" value="{{.Email}}" autocomplete="email">
-        </div>
-        <div class="form-actions">
-          <button class="btn-primary" type="button" id="retrieve-inline-request" data-account-service-action="retrieve-inline-request">Send Verification Code</button>
-        </div>
-      </div>
-      <div id="retrieve-inline-step2" style="display:none">
-        <div class="form-group">
-          <label for="retrieve-inline-code">Verification code</label>
-          <input type="text" id="retrieve-inline-code" inputmode="numeric" pattern="[0-9]{6}" placeholder="123456">
-        </div>
-        <div class="form-actions">
-          <button class="btn-primary" type="button" id="retrieve-inline-confirm" data-account-service-action="retrieve-inline-confirm">Show License</button>
-          <button class="btn-secondary" type="button" id="retrieve-inline-copy" data-account-service-action="retrieve-inline-copy" style="display:none">Copy License Key</button>
-          <a class="btn-secondary" id="retrieve-inline-invoice" href="#" target="_blank" rel="noopener" style="display:none">View Invoice</a>
-        </div>
-        <div class="helper-text">Use the latest active self-hosted license for this commercial email.</div>
-      </div>
-      <div class="service-status" id="retrieve-inline-status"></div>
-      <div id="retrieve-inline-result" style="display:none; margin-top:14px">
-        <label for="retrieve-inline-token">License key</label>
-        <textarea id="retrieve-inline-token" readonly></textarea>
-        <div class="result-grid">
-          <div>
-            <div class="result-meta-label">Plan</div>
-            <div class="result-meta-value" id="retrieve-inline-tier"></div>
+      <div id="retrieve-service-root">
+        <h3>Retrieve licenses</h3>
+        <p>Request a verification code for the commercial email, then reveal the current active self-hosted license without leaving Pulse Account.</p>
+        <div id="retrieve-inline-step1">
+          <div class="form-group">
+            <label for="retrieve-inline-email">Email address</label>
+            <input type="email" id="retrieve-inline-email" value="{{.Email}}" autocomplete="email">
           </div>
-          <div>
-            <div class="result-meta-label">Issued</div>
-            <div class="result-meta-value" id="retrieve-inline-issued"></div>
+          <div class="form-actions">
+            <button class="btn-primary" type="button" id="retrieve-inline-request" data-account-service-action="retrieve-inline-request">Send Verification Code</button>
           </div>
-          <div>
-            <div class="result-meta-label">Expires</div>
-            <div class="result-meta-value" id="retrieve-inline-expires"></div>
+        </div>
+        <div id="retrieve-inline-step2" style="display:none">
+          <div class="form-group">
+            <label for="retrieve-inline-code">Verification code</label>
+            <input type="text" id="retrieve-inline-code" inputmode="numeric" pattern="[0-9]{6}" placeholder="123456">
           </div>
-          <div>
-            <div class="result-meta-label">Purchase Email</div>
-            <div class="result-meta-value" id="retrieve-inline-email-value"></div>
+          <div class="form-actions">
+            <button class="btn-primary" type="button" id="retrieve-inline-confirm" data-account-service-action="retrieve-inline-confirm">Show License</button>
+            <button class="btn-secondary" type="button" id="retrieve-inline-copy" data-account-service-action="retrieve-inline-copy" style="display:none">Copy License Key</button>
+            <a class="btn-secondary" id="retrieve-inline-invoice" href="#" target="_blank" rel="noopener" style="display:none">View Invoice</a>
+          </div>
+          <div class="helper-text">Use the latest active self-hosted license for this commercial email.</div>
+        </div>
+        <div class="service-status" id="retrieve-inline-status"></div>
+        <div id="retrieve-inline-result" style="display:none; margin-top:14px">
+          <label for="retrieve-inline-token">License key</label>
+          <textarea id="retrieve-inline-token" readonly></textarea>
+          <div class="result-grid">
+            <div>
+              <div class="result-meta-label">Plan</div>
+              <div class="result-meta-value" id="retrieve-inline-tier"></div>
+            </div>
+            <div>
+              <div class="result-meta-label">Issued</div>
+              <div class="result-meta-value" id="retrieve-inline-issued"></div>
+            </div>
+            <div>
+              <div class="result-meta-label">Expires</div>
+              <div class="result-meta-value" id="retrieve-inline-expires"></div>
+            </div>
+            <div>
+              <div class="result-meta-label">Purchase Email</div>
+              <div class="result-meta-value" id="retrieve-inline-email-value"></div>
+            </div>
           </div>
         </div>
       </div>
