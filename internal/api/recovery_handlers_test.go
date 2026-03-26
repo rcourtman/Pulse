@@ -149,6 +149,27 @@ func TestBuildRecoveryPointPayloadExposesCanonicalItemResourceIDField(t *testing
 	}
 }
 
+func TestBuildRecoveryPointPayloadExposesCanonicalItemRefField(t *testing.T) {
+	payload := buildRecoveryPointPayload(recovery.RecoveryPoint{
+		ID:       "point-1",
+		Provider: recovery.Provider("truenas"),
+		Kind:     recovery.Kind("snapshot"),
+		Mode:     recovery.Mode("snapshot"),
+		Outcome:  recovery.Outcome("success"),
+		SubjectRef: &recovery.ExternalRef{
+			Type: "truenas-dataset",
+			Name: "tank/apps",
+		},
+	})
+
+	if payload.ItemRef == nil || payload.ItemRef.Name != "tank/apps" {
+		t.Fatalf("payload.ItemRef = %#v, want canonical item ref", payload.ItemRef)
+	}
+	if payload.SubjectRef == nil || payload.SubjectRef.Name != "tank/apps" {
+		t.Fatalf("payload.SubjectRef = %#v, want compatibility subject ref", payload.SubjectRef)
+	}
+}
+
 func TestHandleListRollupsExposeCanonicalPlatformsPayload(t *testing.T) {
 	prevMock := mock.IsMockEnabled()
 	mock.SetEnabled(true)
@@ -199,5 +220,23 @@ func TestBuildRecoveryRollupPayloadExposesCanonicalItemResourceIDField(t *testin
 	}
 	if payload.SubjectResourceID != "vm-123" {
 		t.Fatalf("payload.SubjectResourceID = %q, want %q", payload.SubjectResourceID, "vm-123")
+	}
+}
+
+func TestBuildRecoveryRollupPayloadExposesCanonicalItemRefField(t *testing.T) {
+	payload := buildRecoveryRollupPayload(recovery.ProtectionRollup{
+		RollupID: "ext:tank-apps",
+		SubjectRef: &recovery.ExternalRef{
+			Type: "truenas-dataset",
+			Name: "tank/apps",
+		},
+		LastOutcome: recovery.Outcome("success"),
+	})
+
+	if payload.ItemRef == nil || payload.ItemRef.Name != "tank/apps" {
+		t.Fatalf("payload.ItemRef = %#v, want canonical item ref", payload.ItemRef)
+	}
+	if payload.SubjectRef == nil || payload.SubjectRef.Name != "tank/apps" {
+		t.Fatalf("payload.SubjectRef = %#v, want compatibility subject ref", payload.SubjectRef)
 	}
 }

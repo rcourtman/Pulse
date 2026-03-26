@@ -32,7 +32,7 @@ const rollupsPayload = [
   },
   {
     rollupId: 'ext:truenas-1',
-    subjectRef: { type: 'truenas-dataset', name: 'tank/apps', id: 'tank/apps' },
+    itemRef: { type: 'truenas-dataset', name: 'tank/apps', id: 'tank/apps' },
     display: { itemType: 'dataset' },
     lastAttemptAt: '2026-02-13T09:00:00.000Z',
     lastSuccessAt: null,

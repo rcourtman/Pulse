@@ -66,6 +66,7 @@ type recoveryPointPayload struct {
 	ItemResourceID       string                         `json:"itemResourceId,omitempty"`
 	SubjectResourceID    string                         `json:"subjectResourceId,omitempty"`
 	RepositoryResourceID string                         `json:"repositoryResourceId,omitempty"`
+	ItemRef              *recovery.ExternalRef          `json:"itemRef,omitempty"`
 	SubjectRef           *recovery.ExternalRef          `json:"subjectRef,omitempty"`
 	RepositoryRef        *recovery.ExternalRef          `json:"repositoryRef,omitempty"`
 	Details              map[string]any                 `json:"details,omitempty"`
@@ -76,6 +77,7 @@ type recoveryRollupPayload struct {
 	RollupID          string                         `json:"rollupId"`
 	ItemResourceID    string                         `json:"itemResourceId,omitempty"`
 	SubjectResourceID string                         `json:"subjectResourceId,omitempty"`
+	ItemRef           *recovery.ExternalRef          `json:"itemRef,omitempty"`
 	SubjectRef        *recovery.ExternalRef          `json:"subjectRef,omitempty"`
 	Display           *recovery.RecoveryPointDisplay `json:"display,omitempty"`
 	LastAttemptAt     *time.Time                     `json:"lastAttemptAt,omitempty"`
@@ -102,6 +104,7 @@ func buildRecoveryPointPayload(point recovery.RecoveryPoint) recoveryPointPayloa
 		ItemResourceID:       point.SubjectResourceID,
 		SubjectResourceID:    point.SubjectResourceID,
 		RepositoryResourceID: point.RepositoryResourceID,
+		ItemRef:              point.SubjectRef,
 		SubjectRef:           point.SubjectRef,
 		RepositoryRef:        point.RepositoryRef,
 		Details:              point.Details,
@@ -114,6 +117,7 @@ func buildRecoveryRollupPayload(rollup recovery.ProtectionRollup) recoveryRollup
 		RollupID:          rollup.RollupID,
 		ItemResourceID:    rollup.SubjectResourceID,
 		SubjectResourceID: rollup.SubjectResourceID,
+		ItemRef:           rollup.SubjectRef,
 		SubjectRef:        rollup.SubjectRef,
 		Display:           rollup.Display,
 		LastAttemptAt:     rollup.LastAttemptAt,

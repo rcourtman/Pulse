@@ -64,7 +64,7 @@ describe('RecoveryPointDetails', () => {
             nodeHostLabel: 'pve-01',
             namespaceLabel: 'Finance',
           },
-          subjectRef: {
+          itemRef: {
             type: 'proxmox-vm',
             name: '100',
           },
@@ -119,7 +119,7 @@ describe('RecoveryPointDetails', () => {
           display: {
             nodeHostLabel: 'tn-scale-01',
           },
-          subjectRef: {
+          itemRef: {
             type: 'truenas-dataset',
             name: 'tank/apps',
           },

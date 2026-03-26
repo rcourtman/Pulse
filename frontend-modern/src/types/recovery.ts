@@ -60,6 +60,7 @@ export interface RecoveryPoint {
 
   itemResourceId?: string;
   repositoryResourceId?: string;
+  itemRef?: RecoveryExternalRef | null;
   subjectRef?: RecoveryExternalRef | null;
   repositoryRef?: RecoveryExternalRef | null;
   details?: Record<string, unknown> | null;
@@ -93,6 +94,7 @@ export interface RecoveryPointsTransportResponse {
 export interface ProtectionRollup {
   rollupId: string;
   itemResourceId?: string;
+  itemRef?: RecoveryExternalRef | null;
   subjectRef?: RecoveryExternalRef | null;
   display?: RecoveryPointDisplay | null;
 

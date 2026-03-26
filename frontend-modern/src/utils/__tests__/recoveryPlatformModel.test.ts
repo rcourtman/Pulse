@@ -49,6 +49,10 @@ describe('recoveryPlatformModel', () => {
         mode: 'remote',
         outcome: 'success',
         subjectResourceId: 'vm-123',
+        subjectRef: {
+          type: 'proxmox-vm',
+          name: 'Archive VM',
+        },
         display: {
           subjectLabel: 'Archive VM',
           subjectType: 'proxmox-vm',
@@ -61,6 +65,10 @@ describe('recoveryPlatformModel', () => {
       mode: 'remote',
       outcome: 'success',
       itemResourceId: 'vm-123',
+      itemRef: {
+        type: 'proxmox-vm',
+        name: 'Archive VM',
+      },
       display: {
         itemLabel: 'Archive VM',
         itemType: 'proxmox-vm',
@@ -72,6 +80,10 @@ describe('recoveryPlatformModel', () => {
         rollupId: 'rollup-1',
         lastOutcome: 'success',
         subjectResourceId: 'vm-123',
+        subjectRef: {
+          type: 'truenas-dataset',
+          name: 'Legacy Dataset',
+        },
         providers: ['proxmox-pbs', 'kubernetes'],
         display: {
           subjectLabel: 'Legacy Dataset',
@@ -82,6 +94,10 @@ describe('recoveryPlatformModel', () => {
       rollupId: 'rollup-1',
       lastOutcome: 'success',
       itemResourceId: 'vm-123',
+      itemRef: {
+        type: 'truenas-dataset',
+        name: 'Legacy Dataset',
+      },
       platforms: ['proxmox-pbs', 'kubernetes'],
       display: {
         itemLabel: 'Legacy Dataset',
@@ -101,6 +117,7 @@ describe('recoveryPlatformModel', () => {
             mode: 'snapshot',
             outcome: 'success',
             subjectResourceId: 'res-1',
+            subjectRef: { type: 'truenas-dataset', name: 'tank/apps' },
           },
         ],
         meta: { page: 1, limit: 100, total: 1, totalPages: 1 },
@@ -114,6 +131,7 @@ describe('recoveryPlatformModel', () => {
             mode: 'snapshot',
             outcome: 'success',
             itemResourceId: 'res-1',
+            itemRef: { type: 'truenas-dataset', name: 'tank/apps' },
           },
       ],
       meta: { page: 1, limit: 100, total: 1, totalPages: 1 },
@@ -126,6 +144,7 @@ describe('recoveryPlatformModel', () => {
             rollupId: 'rollup-1',
             lastOutcome: 'warning',
             subjectResourceId: 'res-1',
+            subjectRef: { type: 'truenas-dataset', name: 'tank/apps' },
             providers: ['truenas'],
           },
         ],
@@ -137,6 +156,7 @@ describe('recoveryPlatformModel', () => {
             rollupId: 'rollup-1',
             lastOutcome: 'warning',
             itemResourceId: 'res-1',
+            itemRef: { type: 'truenas-dataset', name: 'tank/apps' },
             platforms: ['truenas'],
           },
       ],

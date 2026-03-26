@@ -6,7 +6,7 @@ import {
 } from '@/utils/recoveryPlatformModel';
 
 describe('recovery transport', () => {
-  it('normalizes legacy subject resource ids onto canonical item resource ids', () => {
+  it('normalizes legacy subject recovery fields onto canonical item fields', () => {
     expect(
       normalizeRecoveryPointsResponse({
         data: [
@@ -17,6 +17,7 @@ describe('recovery transport', () => {
             mode: 'snapshot',
             outcome: 'success',
             subjectResourceId: 'res-1',
+            subjectRef: { type: 'truenas-dataset', name: 'tank/apps' },
           },
         ],
         meta: { page: 1, limit: 100, total: 1, totalPages: 1 },
@@ -30,6 +31,7 @@ describe('recovery transport', () => {
           mode: 'snapshot',
           outcome: 'success',
           itemResourceId: 'res-1',
+          itemRef: { type: 'truenas-dataset', name: 'tank/apps' },
         },
       ],
       meta: { page: 1, limit: 100, total: 1, totalPages: 1 },
@@ -43,6 +45,7 @@ describe('recovery transport', () => {
             lastOutcome: 'success',
             providers: ['truenas'],
             subjectResourceId: 'res-1',
+            subjectRef: { type: 'truenas-dataset', name: 'tank/apps' },
           },
         ],
         meta: { page: 1, limit: 100, total: 1, totalPages: 1 },
@@ -54,6 +57,7 @@ describe('recovery transport', () => {
           lastOutcome: 'success',
           platforms: ['truenas'],
           itemResourceId: 'res-1',
+          itemRef: { type: 'truenas-dataset', name: 'tank/apps' },
         },
       ],
       meta: { page: 1, limit: 100, total: 1, totalPages: 1 },

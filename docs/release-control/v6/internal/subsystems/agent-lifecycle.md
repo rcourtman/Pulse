@@ -733,6 +733,11 @@ canonical `itemResourceId` filter and payload vocabulary. When lifecycle
 surfaces deep-link into shared recovery handlers or consume recovery payloads,
 they should treat legacy `subjectResourceId` only as an API-layer compatibility
 alias rather than reviving it as the route or runtime model they expose.
+That same lifecycle-adjacent recovery drill-down boundary must also stay on
+canonical `itemRef` payload vocabulary. When lifecycle surfaces consume shared
+recovery point or rollup payloads, they should treat legacy `subjectRef` only
+as an API-layer compatibility alias rather than reviving it as the runtime
+item-reference model they expose back out to operators.
 
 The updater/runtime surfaces must preserve the one-shot `updated_from`
 continuity handoff and the non-TLS continuity path for supported self-hosted

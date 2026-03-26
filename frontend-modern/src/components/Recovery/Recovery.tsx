@@ -129,8 +129,8 @@ const Recovery: Component = () => {
         rollup.itemResourceId || '',
         label,
         rollupItemType,
-        rollup.subjectRef?.namespace || '',
-        rollup.subjectRef?.name || '',
+        rollup.itemRef?.namespace || rollup.subjectRef?.namespace || '',
+        rollup.itemRef?.name || rollup.subjectRef?.name || '',
         platforms.join(' '),
         rollup.lastOutcome || '',
       ]

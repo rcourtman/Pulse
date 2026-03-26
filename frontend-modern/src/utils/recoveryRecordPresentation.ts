@@ -30,7 +30,7 @@ export function getRecoveryRollupItemLabel(
   if (linkedResourceLabel) return linkedResourceLabel;
   if (displayLabel) return displayLabel;
 
-  const ref = rollup.subjectRef || null;
+  const ref = rollup.itemRef || rollup.subjectRef || null;
   if (ref?.namespace && ref?.name) return `${ref.namespace}/${ref.name}`;
   if (ref?.name) return ref.name;
   if (itemResourceId) return itemResourceId;
@@ -53,7 +53,7 @@ export function getRecoveryPointItemLabel(
   if (linkedResourceLabel) return linkedResourceLabel;
   if (displayLabel) return displayLabel;
 
-  const ref = point.subjectRef || null;
+  const ref = point.itemRef || point.subjectRef || null;
   const namespace = String(ref?.namespace || '').trim();
   const name = String(ref?.name || '').trim();
   if (namespace && name) return `${namespace}/${name}`;

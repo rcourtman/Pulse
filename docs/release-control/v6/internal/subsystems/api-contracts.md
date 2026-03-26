@@ -201,6 +201,7 @@ Own canonical runtime payload shapes between backend and frontend.
 14. Keep recovery platform-query vocabulary canonical across that same `/api/recovery/*` surface: operator-facing transport must emit `platform` as the canonical query field, accepted legacy `provider` aliases must remain compatibility-only input, and `internal/api/contract_test.go` must pin that fallback behavior in the same slice as any handler change
 15. Keep recovery payload platform vocabulary canonical across that same `/api/recovery/*` surface: point payloads must expose `platform`, rollup payloads must expose `platforms`, and any compatibility `provider` / `providers` aliases must remain secondary fallback fields rather than replacing the shared response model
 16. Keep recovery linked-resource vocabulary canonical across that same `/api/recovery/*` surface: points and rollups must expose `itemResourceId` as the canonical linked-resource field, accepted legacy `subjectResourceId` aliases must remain compatibility-only input or secondary payload fields, and the shared proof surface must pin that normalization in the same slice as any handler change
+17. Keep recovery external item-reference vocabulary canonical across that same `/api/recovery/*` surface: point and rollup payloads must expose `itemRef` as the canonical external item-reference field, accepted legacy `subjectRef` aliases must remain compatibility-only secondary payload fields, and the shared proof surface must pin that normalization in the same slice as any handler change
 
 ## Current State
 
@@ -1395,6 +1396,11 @@ canonical linked-resource filter and payload field across those same
 remain as compatibility-only input or secondary payload fields during the v6
 transition, but the shared transport contract and frontend decode path must
 normalize them back onto canonical `itemResourceId`.
+That same recovery API boundary must also treat `itemRef` as the canonical
+external item-reference field across point and rollup payloads. Accepted
+legacy `subjectRef` aliases may remain as compatibility-only secondary fields
+during the v6 transition, but the shared transport contract and frontend
+decode path must normalize them back onto canonical `itemRef`.
 That same outbound recovery transport now also treats `platform` and
 `platforms` as the canonical response fields for point and rollup payloads.
 Compatibility `provider` and `providers` fields may remain during the v6

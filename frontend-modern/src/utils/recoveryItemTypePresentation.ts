@@ -16,13 +16,20 @@ interface RecoveryItemTypeLike {
     itemType?: string | null;
     subjectType?: string | null;
   } | null;
+  itemRef?: RecoveryExternalRef | null;
   subjectRef?: RecoveryExternalRef | null;
 }
 
 const getRecoveryItemTypeValue = (
   value: RecoveryItemTypeLike | null | undefined,
 ): string =>
-  String(value?.display?.itemType || value?.display?.subjectType || value?.subjectRef?.type || '');
+  String(
+    value?.display?.itemType ||
+      value?.display?.subjectType ||
+      value?.itemRef?.type ||
+      value?.subjectRef?.type ||
+      '',
+  );
 
 export const normalizeRecoveryItemTypeQueryValue = (
   value: string | null | undefined,

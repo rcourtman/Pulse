@@ -204,6 +204,10 @@ The same canonical boundary applies to linked-resource identifiers. Recovery
 API payloads, query filters, and normalized frontend runtime models should use
 `itemResourceId` as the canonical field while accepting or emitting
 `subjectResourceId` only as a compatibility alias during the transition.
+That same canonical boundary also applies to external item references. Recovery
+API payloads and normalized frontend runtime models should use `itemRef` as
+the canonical item-reference field while treating `subjectRef` only as a
+compatibility alias during the transition.
 That same presenter boundary should also own canonical item-type derivation.
 Recovery surfaces must resolve rollup and point item types through one shared
 item-type helper instead of repeating `display.itemType` / `subjectType` /
