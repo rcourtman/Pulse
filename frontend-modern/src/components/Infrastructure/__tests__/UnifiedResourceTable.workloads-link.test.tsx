@@ -250,7 +250,7 @@ describe('UnifiedResourceTable workloads links', () => {
 
     const pbsLink = getByRole('link', { name: /open pbs backups/i });
     expect(pbsLink).toHaveTextContent('Recovery');
-    expect(pbsLink).toHaveAttribute('href', '/recovery?provider=proxmox-pbs&mode=remote');
+    expect(pbsLink).toHaveAttribute('href', '/recovery?platform=proxmox-pbs&mode=remote');
     const pmgLink = getByRole('link', { name: /open pmg thresholds/i });
     expect(pmgLink).toHaveTextContent('Thresholds');
     expect(pmgLink).toHaveAttribute('href', '/alerts/thresholds/mail-gateway');

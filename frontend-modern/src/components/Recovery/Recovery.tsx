@@ -65,8 +65,8 @@ const Recovery: Component = () => {
     nodeFilter,
     nodeOptions,
     protectedStaleOnly,
-    providerFilter,
-    providerOptions,
+    platformFilter,
+    platformOptions,
     queryFilter,
     recoveryPoints,
     recoveryRollups,
@@ -85,7 +85,7 @@ const Recovery: Component = () => {
     setNamespaceFilter,
     setNodeFilter,
     setProtectedStaleOnly,
-    setProviderFilter,
+    setPlatformFilter,
     setQueryFilter,
     setRollupId,
     setScopeFilter,
@@ -104,7 +104,7 @@ const Recovery: Component = () => {
 
   const baseRollups = createMemo<ProtectionRollup[]>(() => {
     const query = queryFilter().trim().toLowerCase();
-    const provider = providerFilter() === 'all' ? '' : providerFilter();
+    const platform = platformFilter() === 'all' ? '' : platformFilter();
     const itemType = itemTypeFilter() === 'all' ? '' : itemTypeFilter();
     const resourceIndex = resourcesById();
 
@@ -112,7 +112,7 @@ const Recovery: Component = () => {
       const providers = (rollup.providers || [])
         .map((entry) => String(entry || '').trim())
         .filter(Boolean);
-      if (provider && !providers.includes(provider)) return false;
+      if (platform && !providers.includes(platform)) return false;
       const rollupItemType = normalizeRecoveryItemTypeQueryValue(
         rollup.display?.itemType || rollup.display?.subjectType || rollup.subjectRef?.type,
       );
@@ -408,7 +408,7 @@ const Recovery: Component = () => {
   const hasActiveArtifactFilters = createMemo(
     () =>
       queryFilter().trim() !== '' ||
-      providerFilter() !== 'all' ||
+      platformFilter() !== 'all' ||
       itemTypeFilter() !== 'all' ||
       clusterFilter() !== 'all' ||
       modeFilter() !== 'all' ||
@@ -444,7 +444,7 @@ const Recovery: Component = () => {
 
   const resetAllArtifactFilters = () => {
     setQueryFilter('');
-    setProviderFilter('all');
+    setPlatformFilter('all');
     setItemTypeFilter('all');
     setClusterFilter('all');
     setModeFilter('all');
@@ -578,8 +578,8 @@ const Recovery: Component = () => {
             protectedStaleOnly={protectedStaleOnly}
             itemTypeFilter={itemTypeFilter}
             itemTypeOptions={itemTypeOptions}
-            providerFilter={providerFilter}
-            providerOptions={providerOptions}
+            platformFilter={platformFilter}
+            platformOptions={platformOptions}
             queryFilter={queryFilter}
             resourcesById={resourcesById}
             rollups={rollups}
@@ -587,7 +587,7 @@ const Recovery: Component = () => {
             setHistoryOutcomeFilter={setHistoryOutcomeFilter}
             setItemTypeFilter={setItemTypeFilter}
             setProtectedStaleOnly={setProtectedStaleOnly}
-            setProviderFilter={setProviderFilter}
+            setPlatformFilter={setPlatformFilter}
             setQueryFilter={setQueryFilter}
             setVerificationFilter={setVerificationFilter}
           />
@@ -625,8 +625,8 @@ const Recovery: Component = () => {
             namespaceOptions={namespaceOptions}
             nodeFilter={nodeFilter}
             nodeOptions={nodeOptions}
-            providerFilter={providerFilter}
-            providerOptions={providerOptions}
+            platformFilter={platformFilter}
+            platformOptions={platformOptions}
             queryFilter={queryFilter}
             recoveryPoints={recoveryPoints}
             resetAdvancedArtifactFilters={resetAdvancedArtifactFilters}
@@ -640,7 +640,7 @@ const Recovery: Component = () => {
             setModeFilter={setModeFilter}
             setNamespaceFilter={setNamespaceFilter}
             setNodeFilter={setNodeFilter}
-            setProviderFilter={setProviderFilter}
+            setPlatformFilter={setPlatformFilter}
             setQueryFilter={setQueryFilter}
             setScopeFilter={setScopeFilter}
             setVerificationFilter={setVerificationFilter}

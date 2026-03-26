@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -79,6 +80,13 @@ func firstQueryValue(qs map[string][]string, key string) string {
 	return values[0]
 }
 
+func parseRecoveryPlatformQuery(qs url.Values) recovery.Provider {
+	return recovery.Provider(strings.TrimSpace(firstNonEmpty(
+		qs.Get("platform"),
+		qs.Get("provider"),
+	)))
+}
+
 func (h *RecoveryHandlers) HandleListPoints(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -104,7 +112,7 @@ func (h *RecoveryHandlers) HandleListPoints(w http.ResponseWriter, r *http.Reque
 	}
 
 	opts := recovery.ListPointsOptions{
-		Provider:          recovery.Provider(strings.TrimSpace(qs.Get("provider"))),
+		Provider:          parseRecoveryPlatformQuery(qs),
 		Kind:              recovery.Kind(strings.TrimSpace(qs.Get("kind"))),
 		Mode:              recovery.Mode(strings.TrimSpace(qs.Get("mode"))),
 		Outcome:           recovery.Outcome(strings.TrimSpace(qs.Get("outcome"))),
@@ -218,7 +226,7 @@ func (h *RecoveryHandlers) HandleListSeries(w http.ResponseWriter, r *http.Reque
 	tzOffsetMin := parseIntQuery(qs, "tzOffsetMinutes", 0)
 
 	opts := recovery.ListPointsOptions{
-		Provider:          recovery.Provider(strings.TrimSpace(qs.Get("provider"))),
+		Provider:          parseRecoveryPlatformQuery(qs),
 		Kind:              recovery.Kind(strings.TrimSpace(qs.Get("kind"))),
 		Mode:              recovery.Mode(strings.TrimSpace(qs.Get("mode"))),
 		Outcome:           recovery.Outcome(strings.TrimSpace(qs.Get("outcome"))),
@@ -284,7 +292,7 @@ func (h *RecoveryHandlers) HandleListFacets(w http.ResponseWriter, r *http.Reque
 	}
 
 	opts := recovery.ListPointsOptions{
-		Provider:          recovery.Provider(strings.TrimSpace(qs.Get("provider"))),
+		Provider:          parseRecoveryPlatformQuery(qs),
 		Kind:              recovery.Kind(strings.TrimSpace(qs.Get("kind"))),
 		Mode:              recovery.Mode(strings.TrimSpace(qs.Get("mode"))),
 		Outcome:           recovery.Outcome(strings.TrimSpace(qs.Get("outcome"))),
@@ -546,7 +554,7 @@ func (h *RecoveryHandlers) HandleListRollups(w http.ResponseWriter, r *http.Requ
 	}
 
 	opts := recovery.ListPointsOptions{
-		Provider:          recovery.Provider(strings.TrimSpace(qs.Get("provider"))),
+		Provider:          parseRecoveryPlatformQuery(qs),
 		Kind:              recovery.Kind(strings.TrimSpace(qs.Get("kind"))),
 		Mode:              recovery.Mode(strings.TrimSpace(qs.Get("mode"))),
 		Outcome:           recovery.Outcome(strings.TrimSpace(qs.Get("outcome"))),

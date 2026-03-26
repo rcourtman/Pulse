@@ -209,7 +209,7 @@ describe('resource link routing contract', () => {
   it('builds and parses recovery query params', () => {
     const href = buildRecoveryPath({
       view: 'events',
-      provider: 'proxmox-pbs',
+      platform: 'proxmox-pbs',
       stale: '1',
       range: '7',
       cluster: 'cluster-main',
@@ -226,7 +226,7 @@ describe('resource link routing contract', () => {
     const url = new URL(href, 'http://localhost');
     expect(url.pathname).toBe('/recovery');
     expect(url.searchParams.get('view')).toBe('events');
-    expect(url.searchParams.get('provider')).toBe('proxmox-pbs');
+    expect(url.searchParams.get('platform')).toBe('proxmox-pbs');
     expect(url.searchParams.get('stale')).toBe('1');
     expect(url.searchParams.get('range')).toBe('7');
     expect(url.searchParams.get('cluster')).toBe('cluster-main');
@@ -244,7 +244,7 @@ describe('resource link routing contract', () => {
     expect(parsed).toEqual({
       rollupId: '',
       view: 'events',
-      provider: 'proxmox-pbs',
+      platform: 'proxmox-pbs',
       stale: '1',
       range: '7',
       cluster: 'cluster-main',
@@ -259,7 +259,7 @@ describe('resource link routing contract', () => {
       query: 'node:pve1',
     });
 
-    expect(RECOVERY_QUERY_PARAMS.provider).toBe('provider');
+    expect(RECOVERY_QUERY_PARAMS.platform).toBe('platform');
     expect(RECOVERY_QUERY_PARAMS.view).toBe('view');
     expect(RECOVERY_QUERY_PARAMS.stale).toBe('stale');
     expect(RECOVERY_QUERY_PARAMS.range).toBe('range');
@@ -275,12 +275,12 @@ describe('resource link routing contract', () => {
     expect(PMG_THRESHOLDS_PATH).toBe('/alerts/thresholds/mail-gateway');
   });
 
-  it('canonicalizes recovery provider aliases when building and parsing links', () => {
-    expect(buildRecoveryPath({ provider: 'pbs', mode: 'remote' })).toBe(
-      '/recovery?provider=proxmox-pbs&mode=remote',
+  it('canonicalizes recovery platform aliases when building and parsing links', () => {
+    expect(buildRecoveryPath({ platform: 'pbs', mode: 'remote' })).toBe(
+      '/recovery?platform=proxmox-pbs&mode=remote',
     );
     expect(parseRecoveryLinkSearch('?provider=proxmox&mode=local')).toMatchObject({
-      provider: 'proxmox-pve',
+      platform: 'proxmox-pve',
       mode: 'local',
     });
     expect(parseRecoveryLinkSearch('?itemType=proxmox-vm')).toMatchObject({
@@ -289,17 +289,17 @@ describe('resource link routing contract', () => {
   });
 
   it('canonicalizes stale-only recovery route flags to the owned query shape', () => {
-    expect(buildRecoveryPath({ stale: 'true', provider: 'proxmox-pve' })).toBe(
-      '/recovery?provider=proxmox-pve&stale=1',
+    expect(buildRecoveryPath({ stale: 'true', platform: 'proxmox-pve' })).toBe(
+      '/recovery?platform=proxmox-pve&stale=1',
     );
     expect(parseRecoveryLinkSearch('?stale=%201%20')).toMatchObject({ stale: '1' });
   });
 
   it('preserves explicit recovery chart range values in route state', () => {
-    const href = buildRecoveryPath({ range: '30', provider: 'proxmox-pve' });
+    const href = buildRecoveryPath({ range: '30', platform: 'proxmox-pve' });
     const url = new URL(href, 'http://localhost');
     expect(url.pathname).toBe('/recovery');
-    expect(url.searchParams.get('provider')).toBe('proxmox-pve');
+    expect(url.searchParams.get('platform')).toBe('proxmox-pve');
     expect(url.searchParams.get('range')).toBe('30');
     expect(parseRecoveryLinkSearch('?range=90')).toMatchObject({ range: '90' });
   });

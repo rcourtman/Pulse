@@ -13,7 +13,7 @@ export type RecoveryPointsQuery = {
 
   // Primary filters (server-side)
   rollupId?: string | null;
-  provider?: string | null;
+  platform?: string | null;
   kind?: string | null;
   mode?: string | null;
   outcome?: string | null;
@@ -48,7 +48,7 @@ const normalizeQuery = (query: RecoveryPointsQuery | undefined): RecoveryPointsQ
     limit,
 
     rollupId: norm(q.rollupId) || null,
-    provider: norm(q.provider) || null,
+    platform: norm(q.platform) || null,
     kind: norm(q.kind) || null,
     mode: norm(q.mode) || null,
     outcome: norm(q.outcome) || null,
@@ -88,7 +88,7 @@ const buildURL = (query: RecoveryPointsQuery | undefined): string => {
   params.set('limit', String(q.limit || DEFAULT_LIMIT));
 
   if (q.rollupId) params.set('rollupId', q.rollupId);
-  if (q.provider) params.set('provider', q.provider);
+  if (q.platform) params.set('platform', q.platform);
   if (q.kind) params.set('kind', q.kind);
   if (q.mode) params.set('mode', q.mode);
   if (q.outcome) params.set('outcome', q.outcome);

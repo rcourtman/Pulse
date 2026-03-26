@@ -64,8 +64,8 @@ interface RecoveryProtectedInventorySectionProps {
   kioskMode: boolean;
   onSelectRollup: (rollupId: string) => void;
   protectedStaleOnly: Accessor<boolean>;
-  providerFilter: Accessor<string>;
-  providerOptions: Accessor<string[]>;
+  platformFilter: Accessor<string>;
+  platformOptions: Accessor<string[]>;
   queryFilter: Accessor<string>;
   resourcesById: Accessor<Map<string, Resource>>;
   rollups: Accessor<ProtectionRollup[]>;
@@ -73,7 +73,7 @@ interface RecoveryProtectedInventorySectionProps {
   setHistoryOutcomeFilter: (value: 'all' | RecoveryOutcome) => void;
   setItemTypeFilter: (value: string) => void;
   setProtectedStaleOnly: (value: boolean | ((prev: boolean) => boolean)) => void;
-  setProviderFilter: (value: string) => void;
+  setPlatformFilter: (value: string) => void;
   setQueryFilter: (value: string) => void;
   setVerificationFilter: (value: VerificationFilter) => void;
   loading: Accessor<boolean>;
@@ -101,7 +101,7 @@ export const RecoveryProtectedInventorySection: Component<
   const protectedActiveFilterCount = createMemo(() => {
     let count = 0;
     if (props.queryFilter().trim() !== '') count += 1;
-    if (props.providerFilter() !== 'all') count += 1;
+    if (props.platformFilter() !== 'all') count += 1;
     if (props.itemTypeFilter() !== 'all') count += 1;
     if (props.historyOutcomeFilter() !== 'all') count += 1;
     if (props.protectedStaleOnly()) count += 1;
@@ -237,17 +237,17 @@ export const RecoveryProtectedInventorySection: Component<
             </LabeledFilterSelect>
 
             <LabeledFilterSelect
-              id="recovery-provider-filter"
+              id="recovery-platform-filter"
               label="Platform"
-              value={props.providerFilter()}
+              value={props.platformFilter()}
               onChange={(event) =>
-                props.setProviderFilter(
+                props.setPlatformFilter(
                   normalizeSourcePlatformQueryValue(event.currentTarget.value),
                 )
               }
               selectClass="min-w-[10rem] max-w-[14rem]"
             >
-              <For each={props.providerOptions()}>
+              <For each={props.platformOptions()}>
                 {(provider) => (
                   <option value={provider}>
                     {provider === 'all' ? 'All Platforms' : getSourcePlatformLabel(provider)}

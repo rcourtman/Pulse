@@ -2147,6 +2147,23 @@ func TestContract_FilterRecoveryPointsForRollupsIncludesNormalizedFilters(t *tes
 	}
 }
 
+func TestContract_ParseRecoveryPlatformQueryPrefersCanonicalPlatformAlias(t *testing.T) {
+	t.Parallel()
+
+	if got := parseRecoveryPlatformQuery(url.Values{
+		"platform": []string{" truenas "},
+		"provider": []string{"proxmox-pve"},
+	}); got != recovery.Provider("truenas") {
+		t.Fatalf("parseRecoveryPlatformQuery(platform first) = %q, want %q", got, "truenas")
+	}
+
+	if got := parseRecoveryPlatformQuery(url.Values{
+		"provider": []string{" proxmox-pbs "},
+	}); got != recovery.Provider("proxmox-pbs") {
+		t.Fatalf("parseRecoveryPlatformQuery(provider fallback) = %q, want %q", got, "proxmox-pbs")
+	}
+}
+
 func TestContract_BillingStateJSONSnapshot(t *testing.T) {
 	payload := entitlements.BillingState{
 		Capabilities:         []string{"relay", "mobile_app"},

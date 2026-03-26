@@ -72,8 +72,8 @@ interface RecoveryHistorySectionProps {
   namespaceOptions: Accessor<string[]>;
   nodeFilter: Accessor<string>;
   nodeOptions: Accessor<string[]>;
-  providerFilter: Accessor<string>;
-  providerOptions: Accessor<string[]>;
+  platformFilter: Accessor<string>;
+  platformOptions: Accessor<string[]>;
   queryFilter: Accessor<string>;
   recoveryPoints: RecoveryPointsModel;
   resetAdvancedArtifactFilters: () => void;
@@ -87,7 +87,7 @@ interface RecoveryHistorySectionProps {
   setModeFilter: (value: 'all' | ArtifactMode) => void;
   setNamespaceFilter: (value: string) => void;
   setNodeFilter: (value: string) => void;
-  setProviderFilter: (value: string) => void;
+  setPlatformFilter: (value: string) => void;
   setQueryFilter: (value: string) => void;
   setScopeFilter: (value: 'all' | 'workload') => void;
   setVerificationFilter: (value: VerificationFilter) => void;
@@ -121,7 +121,7 @@ export const RecoveryHistorySection: Component<RecoveryHistorySectionProps> = (p
     modeFilter: props.modeFilter,
     namespaceFilter: props.namespaceFilter,
     nodeFilter: props.nodeFilter,
-    providerFilter: props.providerFilter,
+    platformFilter: props.platformFilter,
     queryFilter: props.queryFilter,
     scopeFilter: props.scopeFilter,
     verificationFilter: props.verificationFilter,
@@ -370,18 +370,18 @@ export const RecoveryHistorySection: Component<RecoveryHistorySectionProps> = (p
             </LabeledFilterSelect>
 
             <LabeledFilterSelect
-              id="recovery-provider-filter-history"
+              id="recovery-platform-filter-history"
               label="History platform"
-              value={props.providerFilter()}
+              value={props.platformFilter()}
               onChange={(event) => {
-                props.setProviderFilter(
+                props.setPlatformFilter(
                   normalizeSourcePlatformQueryValue(event.currentTarget.value),
                 );
                 props.setCurrentPage(1);
               }}
               selectClass="min-w-[10rem] max-w-[14rem]"
             >
-              <For each={props.providerOptions()}>
+              <For each={props.platformOptions()}>
                 {(provider) => (
                   <option value={provider}>
                     {provider === 'all' ? 'All Platforms' : getSourcePlatformLabel(provider)}

@@ -58,7 +58,7 @@ const normalizeRecoveryBooleanFlag = (value: string | null | undefined): boolean
   return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on';
 };
 
-const normalizeRecoveryProviderSelection = (value: string | null | undefined): string => {
+const normalizeRecoveryPlatformSelection = (value: string | null | undefined): string => {
   const normalized = normalizeSourcePlatformQueryValue(value);
   if (!normalized || normalized === 'all') return 'all';
   return normalizeSourcePlatformKey(normalized) || 'all';
@@ -78,7 +78,7 @@ export function useRecoverySurfaceState() {
   const [rollupId, setRollupId] = createSignal('');
   const [workspaceView, setWorkspaceView] = createSignal<RecoveryWorkspaceView>('inventory');
   const [queryFilter, setQueryFilter] = createSignal('');
-  const [providerFilter, setProviderFilter] = createSignal('all');
+  const [platformFilter, setPlatformFilter] = createSignal('all');
   const [itemTypeFilter, setItemTypeFilter] = createSignal('all');
   const [clusterFilter, setClusterFilter] = createSignal('all');
   const [modeFilter, setModeFilter] = createSignal<'all' | ArtifactMode>('all');
@@ -124,7 +124,7 @@ export function useRecoverySurfaceState() {
     const vf = verificationFilter();
     return {
       rollupId: rid || null,
-      provider: providerFilter() === 'all' ? null : providerFilter(),
+      platform: platformFilter() === 'all' ? null : platformFilter(),
       itemType: itemTypeFilter() === 'all' ? null : itemTypeFilter(),
       mode: modeFilter() === 'all' ? null : modeFilter(),
       outcome: historyOutcomeFilter() === 'all' ? null : historyOutcomeFilter(),
@@ -149,7 +149,7 @@ export function useRecoverySurfaceState() {
       page: currentPage(),
       limit: 200,
       rollupId: rid || null,
-      provider: providerFilter() === 'all' ? null : providerFilter(),
+      platform: platformFilter() === 'all' ? null : platformFilter(),
       itemType: itemTypeFilter() === 'all' ? null : itemTypeFilter(),
       cluster: clusterFilter() === 'all' ? null : clusterFilter(),
       mode: modeFilter() === 'all' ? null : modeFilter(),
@@ -170,7 +170,7 @@ export function useRecoverySurfaceState() {
     const vf = verificationFilter();
     return {
       rollupId: rid || null,
-      provider: providerFilter() === 'all' ? null : providerFilter(),
+      platform: platformFilter() === 'all' ? null : platformFilter(),
       itemType: itemTypeFilter() === 'all' ? null : itemTypeFilter(),
       cluster: clusterFilter() === 'all' ? null : clusterFilter(),
       mode: modeFilter() === 'all' ? null : modeFilter(),
@@ -191,7 +191,7 @@ export function useRecoverySurfaceState() {
     const vf = verificationFilter();
     return {
       rollupId: rid || null,
-      provider: providerFilter() === 'all' ? null : providerFilter(),
+      platform: platformFilter() === 'all' ? null : platformFilter(),
       itemType: itemTypeFilter() === 'all' ? null : itemTypeFilter(),
       cluster: clusterFilter() === 'all' ? null : clusterFilter(),
       mode: modeFilter() === 'all' ? null : modeFilter(),
@@ -221,7 +221,7 @@ export function useRecoverySurfaceState() {
     const nextRollup = normalizeRecoveryRouteValue(parsed.rollupId);
     const nextView = normalizeRecoveryWorkspaceViewValue(parsed.view);
     const nextQuery = normalizeRecoveryRouteValue(parsed.query);
-    const nextProvider = normalizeRecoveryProviderSelection(parsed.provider || '');
+    const nextPlatform = normalizeRecoveryPlatformSelection(parsed.platform || '');
     const nextItemType = normalizeRecoveryItemTypeSelection(parsed.itemType || '');
     const nextStaleOnly = normalizeRecoveryBooleanFlag(parsed.stale);
     const normalizedRange = normalizeRecoveryRouteValue(parsed.range);
@@ -243,7 +243,7 @@ export function useRecoverySurfaceState() {
     if (nextRollup !== untrack(rollupId)) setRollupId(nextRollup);
     if (resolvedView !== untrack(workspaceView)) setWorkspaceView(resolvedView);
     if (nextQuery !== untrack(queryFilter)) setQueryFilter(nextQuery);
-    if (nextProvider !== untrack(providerFilter)) setProviderFilter(nextProvider);
+    if (nextPlatform !== untrack(platformFilter)) setPlatformFilter(nextPlatform);
     if (nextItemType !== untrack(itemTypeFilter)) setItemTypeFilter(nextItemType);
     if (nextStaleOnly !== untrack(protectedStaleOnly)) setProtectedStaleOnly(nextStaleOnly);
     if (nextRange !== untrack(chartRangeDays)) setChartRangeDays(nextRange as 7 | 30 | 90 | 365);
@@ -280,7 +280,7 @@ export function useRecoverySurfaceState() {
     rollupId();
     workspaceView();
     queryFilter();
-    providerFilter();
+    platformFilter();
     itemTypeFilter();
     clusterFilter();
     modeFilter();
@@ -305,7 +305,7 @@ export function useRecoverySurfaceState() {
       rollupId: rid || null,
       view: workspaceView() !== defaultView ? workspaceView() : null,
       query: queryFilter().trim() || null,
-      provider: providerFilter() !== 'all' ? providerFilter() : null,
+      platform: platformFilter() !== 'all' ? platformFilter() : null,
       itemType: itemTypeFilter() !== 'all' ? itemTypeFilter() : null,
       stale: protectedStaleOnly() ? '1' : null,
       range: chartRangeDays() !== 30 ? String(chartRangeDays()) : null,
@@ -327,19 +327,19 @@ export function useRecoverySurfaceState() {
 
   const facets = createMemo(() => recoveryFacets.facets() || {});
 
-  const providerOptions = createMemo(() => {
-    const providers = new Set<string>();
+  const platformOptions = createMemo(() => {
+    const platforms = new Set<string>();
     for (const rollup of rollups()) {
       for (const provider of rollup.providers || []) {
         const normalized = normalizeSourcePlatformQueryValue(String(provider || '').trim());
-        if (normalized) providers.add(normalized);
+        if (normalized) platforms.add(normalized);
       }
     }
     for (const point of recoveryPoints.points() || []) {
       const normalized = normalizeSourcePlatformQueryValue(String(point?.provider || '').trim());
-      if (normalized) providers.add(normalized);
+      if (normalized) platforms.add(normalized);
     }
-    return ['all', ...buildSourcePlatformOptions(providers).map((option) => option.key)];
+    return ['all', ...buildSourcePlatformOptions(platforms).map((option) => option.key)];
   });
 
   const itemTypeOptions = createMemo(() => {
@@ -436,8 +436,8 @@ export function useRecoverySurfaceState() {
     nodeFilter,
     nodeOptions,
     protectedStaleOnly,
-    providerFilter,
-    providerOptions,
+    platformFilter,
+    platformOptions,
     queryFilter,
     recoveryFacets,
     recoveryPoints,
@@ -457,7 +457,7 @@ export function useRecoverySurfaceState() {
     setNamespaceFilter,
     setNodeFilter,
     setProtectedStaleOnly,
-    setProviderFilter,
+    setPlatformFilter,
     setQueryFilter,
     setRollupId,
     setScopeFilter,

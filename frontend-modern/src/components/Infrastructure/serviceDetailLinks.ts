@@ -15,7 +15,7 @@ export const buildServiceDetailLinks = (resource: Resource): ServiceDetailLink[]
   if (resource.type === 'pbs') {
     return [
       {
-        href: buildRecoveryPath({ provider: 'proxmox-pbs', mode: 'remote' }),
+        href: buildRecoveryPath({ platform: 'proxmox-pbs', mode: 'remote' }),
         label: 'Open in Recovery',
         compactLabel: 'Recovery',
         ariaLabel: `Open PBS backups in Recovery for ${label}`,

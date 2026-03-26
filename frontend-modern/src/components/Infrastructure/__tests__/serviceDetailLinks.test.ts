@@ -31,7 +31,7 @@ describe('buildServiceDetailLinks', () => {
 
     expect(links).toEqual([
       {
-        href: '/recovery?provider=proxmox-pbs&mode=remote',
+        href: '/recovery?platform=proxmox-pbs&mode=remote',
         label: 'Open in Recovery',
         compactLabel: 'Recovery',
         ariaLabel: 'Open PBS backups in Recovery for PBS Main',

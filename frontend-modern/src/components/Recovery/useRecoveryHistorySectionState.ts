@@ -15,7 +15,7 @@ interface UseRecoveryHistorySectionStateParams {
   modeFilter: Accessor<'all' | ArtifactMode>;
   namespaceFilter: Accessor<string>;
   nodeFilter: Accessor<string>;
-  providerFilter: Accessor<string>;
+  platformFilter: Accessor<string>;
   queryFilter: Accessor<string>;
   scopeFilter: Accessor<'all' | 'workload'>;
   verificationFilter: Accessor<VerificationFilter>;
@@ -33,7 +33,7 @@ export function useRecoveryHistorySectionState(
   const historyActiveFilterCount = createMemo(() => {
     let count = 0;
     if (params.queryFilter().trim() !== '') count += 1;
-    if (params.providerFilter() !== 'all') count += 1;
+    if (params.platformFilter() !== 'all') count += 1;
     if (params.itemTypeFilter() !== 'all') count += 1;
     if (params.historyOutcomeFilter() !== 'all') count += 1;
     if (params.scopeFilter() !== 'all') count += 1;
@@ -47,7 +47,7 @@ export function useRecoveryHistorySectionState(
 
   createEffect(() => {
     params.currentPage();
-    params.providerFilter();
+    params.platformFilter();
     params.itemTypeFilter();
     params.historyOutcomeFilter();
     params.scopeFilter();

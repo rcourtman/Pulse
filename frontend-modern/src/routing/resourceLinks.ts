@@ -48,7 +48,7 @@ export const STORAGE_QUERY_PARAMS = {
 export const RECOVERY_QUERY_PARAMS = {
   rollupId: 'rollupId',
   view: 'view',
-  provider: 'provider',
+  platform: 'platform',
   stale: 'stale',
   range: 'range',
   cluster: 'cluster',
@@ -113,6 +113,7 @@ type StorageLinkOptions = {
 type RecoveryLinkOptions = {
   rollupId?: string | null;
   view?: string | null;
+  platform?: string | null;
   provider?: string | null;
   stale?: string | null;
   range?: string | null;
@@ -258,7 +259,12 @@ export const parseRecoveryLinkSearch = (search: string) => {
   return {
     rollupId: normalizeQueryValue(params.get(RECOVERY_QUERY_PARAMS.rollupId)),
     view: normalizeQueryValue(params.get(RECOVERY_QUERY_PARAMS.view)),
-    provider: normalizeSourcePlatformQueryValue(params.get(RECOVERY_QUERY_PARAMS.provider)),
+    platform: normalizeSourcePlatformQueryValue(
+      firstNonEmpty([
+        params.get(RECOVERY_QUERY_PARAMS.platform),
+        params.get('provider'),
+      ]),
+    ),
     stale: normalizeQueryBooleanFlag(params.get(RECOVERY_QUERY_PARAMS.stale)),
     range: normalizeQueryValue(params.get(RECOVERY_QUERY_PARAMS.range)),
     cluster: normalizeQueryValue(params.get(RECOVERY_QUERY_PARAMS.cluster)),
@@ -278,7 +284,9 @@ export const buildRecoveryPath = (options: RecoveryLinkOptions = {}): string => 
   const params = new URLSearchParams();
   const rollupId = normalizeQueryValue(options.rollupId);
   const view = normalizeQueryValue(options.view);
-  const provider = normalizeSourcePlatformQueryValue(options.provider);
+  const platform = normalizeSourcePlatformQueryValue(
+    firstNonEmpty([options.platform, options.provider]),
+  );
   const stale = normalizeQueryBooleanFlag(options.stale);
   const range = normalizeQueryValue(options.range);
   const cluster = normalizeQueryValue(options.cluster);
@@ -294,7 +302,7 @@ export const buildRecoveryPath = (options: RecoveryLinkOptions = {}): string => 
 
   if (rollupId) params.set(RECOVERY_QUERY_PARAMS.rollupId, rollupId);
   if (view) params.set(RECOVERY_QUERY_PARAMS.view, view);
-  if (provider) params.set(RECOVERY_QUERY_PARAMS.provider, provider);
+  if (platform) params.set(RECOVERY_QUERY_PARAMS.platform, platform);
   if (stale) params.set(RECOVERY_QUERY_PARAMS.stale, stale);
   if (range) params.set(RECOVERY_QUERY_PARAMS.range, range);
   if (cluster) params.set(RECOVERY_QUERY_PARAMS.cluster, cluster);

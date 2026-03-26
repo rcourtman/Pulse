@@ -105,13 +105,14 @@ describe('ResourceDetailDrawer service cards', () => {
     expect(queryByText('Job breakdown')).toBeNull();
     expect(queryByText('Types')).toBeNull();
     expect(queryByText('Show job detail')).toBeNull();
+    fireEvent.click(getByRole('button', { name: 'Show access' }));
     fireEvent.click(getByRole('button', { name: 'Show jobs' }));
     expect(getByText('Datastores')).toBeInTheDocument();
     expect(getByText('Jobs')).toBeInTheDocument();
     expect(getByText('Types')).toBeInTheDocument();
     expect(getByRole('link', { name: /open pbs backups/i })).toHaveAttribute(
       'href',
-      '/recovery?provider=proxmox-pbs&mode=remote',
+      '/recovery?platform=proxmox-pbs&mode=remote',
     );
   });
 
@@ -169,6 +170,7 @@ describe('ResourceDetailDrawer service cards', () => {
     expect(pmgSupportContext.getByText('Updated')).toBeInTheDocument();
     expect(getByText('Queue detail').closest('summary')?.textContent).toBe('Queue detail');
     expect(getByText('Mail detail').closest('summary')?.textContent).toBe('Mail detail');
+    fireEvent.click(getByRole('button', { name: 'Show access' }));
     expect(getByRole('link', { name: /open pmg thresholds/i })).toHaveAttribute(
       'href',
       '/alerts/thresholds/mail-gateway',

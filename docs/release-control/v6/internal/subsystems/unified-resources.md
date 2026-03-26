@@ -958,6 +958,11 @@ as `vm`, `dataset`, or `pvc`, and
 aliases like `proxmox-vm` into that shared vocabulary during parse/build, but
 recovery route state must not drift back to raw platform-specific
 `subjectType` values in shared navigation.
+That same route contract also owns the canonical recovery `platform` query.
+`/recovery` links must emit `platform=<owned-source-key>` as the shared
+operator-facing route shape, while accepted legacy `provider` aliases may be
+parsed only as compatibility input that rewrites back to canonical platform
+route state.
 Shared API consumers now also depend on a single registry-list snapshot per
 request when deriving canonical type aggregations for resource list and stats
 responses. Re-reading `registry.List()` for the same `/api/resources` request

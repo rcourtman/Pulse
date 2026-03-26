@@ -90,7 +90,7 @@ querying, and the operator-facing storage health presentation layer.
 8. Letting explicit storage `all` sentinels survive in canonical route state; shared storage URLs must collapse case- or whitespace-variant `all` values for the managed `node` filter back to the canonical unset state so copied links do not preserve a fake active node filter
 9. Letting whitespace-padded recovery timeline params fall off canonical route state; shared recovery URLs must trim and normalize `day`, `range`, `scope`, `status`, `verification`, `cluster`, `node`, `namespace`, `itemType`, and adjacent history filters before the page model validates them so pasted or hand-edited links resolve to the same canonical timeline and filter state as UI-authored routes
 10. Letting explicit recovery `all` sentinels survive in canonical route state; shared recovery URLs must collapse case- or whitespace-variant `all` values for `cluster`, `node`, `namespace`, and `itemType` back to the canonical unset route state so copied links do not preserve fake active filters
-11. Letting non-canonical recovery provider values survive in route or transport state; shared recovery URLs must collapse unsupported or fake `provider` values back to the canonical unset state, and only owned source-platform provider options or canonical aliases may reach rollups, points, series, and facets transport filters
+11. Letting non-canonical recovery platform values survive in route or transport state; shared recovery URLs must collapse unsupported or fake `platform` values back to the canonical unset state, and only owned source-platform options or canonical legacy aliases may reach rollups, points, series, and facets transport filters
 12. Letting protected-item recovery outcome filtering fork from the canonical history status filter; the protected inventory status control must drive the same route-backed `status` field and the same rollups, points, series, and facets transport filters as the history surface instead of keeping a protected-only local outcome branch
 13. Letting visible protected-item filters fall out of shared recovery links; the protected `Stale only` toggle must restore from the canonical recovery URL and rewrite to one owned `stale=1` route form instead of disappearing on refresh or copy/paste
 14. Reintroducing stacked full-width recovery tables as the primary desktop layout; the governed recovery surface must expose one primary data region at a time with explicit protected-items versus recovery-events view switching so Pulse stays inventory-first for Proxmox operators without collapsing the page back into a single-platform backup screen
@@ -158,7 +158,10 @@ That same operator-facing vocabulary should also prefer `item` over backend
 primary recovery headers, tables, focus chips, and detail metadata labels.
 The data model can keep its internal subject/provider fields, but the page
 frame that operators read should present one consistent protected-item and
-platform model from summary through drill-in.
+platform model from summary through drill-in. Shared recovery URLs and
+transport filters should likewise treat `platform` as the canonical
+operator-facing query field, with legacy `provider` aliases accepted only as
+compatibility input that rewrites back to canonical `platform` route state.
 That same shared presentation layer also owns the distinction between
 aggregate recovery-method language and single-record recovery-method language.
 Timeline legends and daily breakdowns must use aggregate labels such as
@@ -479,7 +482,7 @@ coverage only through pages or higher-level recovery components.
 
 Those recovery transport surfaces now also share one normalized filter
 contract: protected-item rollups, point history, facets, and chart series must
-all honor the same provider, canonical `itemType`, cluster, node, namespace,
+all honor the same canonical `platform`, canonical `itemType`, cluster, node, namespace,
 workload-scope, verification, and route-backed free-text `q` filter so the
 protected-items list cannot drift from the timeline and facet state under the
 same active recovery view. That same recovery filter contract now depends on

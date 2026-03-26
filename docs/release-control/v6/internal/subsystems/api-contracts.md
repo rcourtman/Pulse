@@ -198,6 +198,7 @@ Own canonical runtime payload shapes between backend and frontend.
 11. Treat Patrol findings counts as a singular supporting surface as well: when the summary shell already exposes count cards for active findings, warnings, criticals, and fixes, the primary assessment card must not repeat those same payload-derived counts as secondary badges
 12. Treat Patrol schedule and recency as header-owned metadata on the main Patrol page: findings empty-state consumers should not receive or restate `next_patrol_at`, `last_patrol_at`, or interval timing once those transport fields are already presented by the primary header and verification shell
 13. Keep recovery payload filters canonical across `/api/recovery/rollups`, `/api/recovery/points`, `/api/recovery/series`, and `/api/recovery/facets`: when `internal/api/recovery_handlers.go` adds a governed recovery filter or display field such as provider-neutral `itemType`, the same normalized transport must land across all four endpoints and the contract tests must pin both outbound payload shape and accepted query aliases in the same slice
+14. Keep recovery platform-query vocabulary canonical across that same `/api/recovery/*` surface: operator-facing transport must emit `platform` as the canonical query field, accepted legacy `provider` aliases must remain compatibility-only input, and `internal/api/contract_test.go` must pin that fallback behavior in the same slice as any handler change
 
 ## Current State
 
@@ -1361,6 +1362,9 @@ operator-facing query field across `/api/recovery/rollups`, `/api/recovery/point
 mapping that boundary onto internal provider fields, but accepted legacy
 `provider` aliases must be compatibility-only input and must not replace the
 canonical transport query shape.
+`internal/api/contract_test.go` must pin that alias behavior directly, so the
+canonical `platform` query and the legacy `provider` fallback cannot drift
+between recovery endpoints without tripping the shared API proof surface.
 `internal/api/contract_test.go` is the canonical proof owner for that
 boundary, so route and query compatibility like `itemType` and accepted alias
 inputs such as `type` or legacy `provider` must be pinned there whenever the shared recovery

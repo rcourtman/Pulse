@@ -698,6 +698,11 @@ those source-specific labels onto the governed recovery item vocabulary before
 the UI route/filter state sees them, so lifecycle-adjacent drill-downs remain
 coherent across platforms instead of reintroducing Proxmox-native subject
 types as the de facto recovery model.
+That same shared recovery boundary now also treats `platform` as the canonical
+operator-facing filter query for lifecycle-adjacent drill-down links. Any
+legacy `provider` alias support must remain compatibility-only input behind
+the shared API/router layer rather than becoming the route shape lifecycle
+surfaces copy back out to operators.
 
 The updater/runtime surfaces must preserve the one-shot `updated_from`
 continuity handoff and the non-TLS continuity path for supported self-hosted

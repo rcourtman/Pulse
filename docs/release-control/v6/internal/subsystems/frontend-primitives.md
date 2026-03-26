@@ -685,6 +685,11 @@ as page-local toolbar state inside individual recovery sections.
 That same shared recovery state owner now also keeps `platform` as the
 canonical route and transport filter name for operator-facing recovery links,
 while any accepted legacy `provider` aliases remain parser compatibility only.
+Recovery section owners under `frontend-modern/src/components/Recovery/` must
+consume that shared `platform` filter surface directly. They must not keep
+recovery-local `provider` route/query vocabulary alive behind renamed labels,
+or the UI will drift back to backend-shaped navigation even when the copy says
+`Platform`.
 `frontend-modern/src/utils/problemResourcePresentation.ts` now also belongs to
 that same dashboard overview boundary so the problem-resource severity contract
 stays shared with `ProblemResourcesTable.tsx` instead of floating as an

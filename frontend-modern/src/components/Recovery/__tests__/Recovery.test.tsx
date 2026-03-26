@@ -389,7 +389,7 @@ describe('Recovery', () => {
     expect(within(table).getByText('Lab Cluster')).toBeInTheDocument();
   });
 
-  it('filters protected rollups by provider', async () => {
+  it('filters protected rollups by platform', async () => {
     render(() => <Recovery />);
 
     expect(await screen.findByText('VM 123')).toBeInTheDocument();
@@ -397,7 +397,7 @@ describe('Recovery', () => {
     fireEvent.change(screen.getByLabelText('Platform'), { target: { value: 'truenas' } });
 
     await waitFor(() => {
-      expect(navigateSpy).toHaveBeenCalledWith('/recovery?provider=truenas', { replace: true });
+      expect(navigateSpy).toHaveBeenCalledWith('/recovery?platform=truenas', { replace: true });
       expect(screen.queryByText('VM 123')).not.toBeInTheDocument();
     });
     expect(screen.getByText('tank/apps')).toBeInTheDocument();
@@ -405,16 +405,16 @@ describe('Recovery', () => {
     await waitFor(() => {
       const urls = apiFetchMock.mock.calls.map((call) => String(call[0] || ''));
       const hasRollups = urls.some(
-        (url) => url.includes('/api/recovery/rollups') && url.includes('provider=truenas'),
+        (url) => url.includes('/api/recovery/rollups') && url.includes('platform=truenas'),
       );
       const hasPoints = urls.some(
-        (url) => url.includes('/api/recovery/points') && url.includes('provider=truenas'),
+        (url) => url.includes('/api/recovery/points') && url.includes('platform=truenas'),
       );
       const hasSeries = urls.some(
-        (url) => url.includes('/api/recovery/series') && url.includes('provider=truenas'),
+        (url) => url.includes('/api/recovery/series') && url.includes('platform=truenas'),
       );
       const hasFacets = urls.some(
-        (url) => url.includes('/api/recovery/facets') && url.includes('provider=truenas'),
+        (url) => url.includes('/api/recovery/facets') && url.includes('platform=truenas'),
       );
       expect(hasRollups && hasPoints && hasSeries && hasFacets).toBe(true);
     });
@@ -532,18 +532,18 @@ describe('Recovery', () => {
     );
   });
 
-  it('normalizes legacy provider aliases from the URL into canonical history filters', async () => {
+  it('normalizes legacy provider aliases into canonical platform route state', async () => {
     mockLocationSearch = '?provider=proxmox';
     render(() => <Recovery />);
 
     await waitFor(() => {
-      expect(navigateSpy).toHaveBeenCalledWith('/recovery?provider=proxmox-pve', {
+      expect(navigateSpy).toHaveBeenCalledWith('/recovery?platform=proxmox-pve', {
         replace: true,
       });
     });
   });
 
-  it('collapses unknown recovery provider values back to canonical unset state', async () => {
+  it('collapses unknown recovery platform values back to canonical unset state', async () => {
     mockLocationSearch = '?provider=%20custom-provider%20';
 
     render(() => <Recovery />);
@@ -561,7 +561,11 @@ describe('Recovery', () => {
           url.includes('/api/recovery/facets') ||
           url.includes('/api/recovery/series'),
       );
-      expect(filteredUrls.some((url) => url.includes('provider=custom-provider'))).toBe(false);
+      expect(
+        filteredUrls.some(
+          (url) => url.includes('platform=custom-provider') || url.includes('provider=custom-provider'),
+        ),
+      ).toBe(false);
     });
   });
 
@@ -622,6 +626,8 @@ describe('Recovery', () => {
       expect(
         filteredUrls.some(
           (url) =>
+            url.includes('platform=all') ||
+            url.includes('platform=ALL') ||
             url.includes('provider=all') ||
             url.includes('provider=ALL') ||
             url.includes('scope=all') ||
