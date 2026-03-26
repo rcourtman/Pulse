@@ -184,6 +184,65 @@ func TestExecuteListSnapshots(t *testing.T) {
 	assert.Equal(t, "vm100", resp.Snapshots[0].VMName)
 }
 
+func TestExecuteListSnapshots_ToleratesMalformedMetadataWithCanonicalRecoveryFields(t *testing.T) {
+	ctx := context.Background()
+	now := time.Now().UTC()
+	state := models.StateSnapshot{
+		VMs: []models.VM{
+			{
+				ID:       "qemu/pve1/node1/100",
+				VMID:     100,
+				Name:     "vm100",
+				Node:     "node1",
+				Instance: "pve1",
+				Status:   "running",
+			},
+		},
+	}
+
+	exec := NewPulseToolExecutor(ExecutorConfig{
+		StateProvider: &mockStateProvider{state: state},
+		RecoveryPointsProvider: &stubRecoveryPointsProvider{points: []recovery.RecoveryPoint{
+			{
+				ID:        "pve-snapshot:snap1",
+				Provider:  recovery.ProviderProxmoxPVE,
+				Kind:      recovery.KindSnapshot,
+				Mode:      recovery.ModeSnapshot,
+				Outcome:   recovery.OutcomeSuccess,
+				StartedAt: &now,
+				SubjectRef: &recovery.ExternalRef{
+					Type:      "proxmox-vm",
+					Namespace: "pve1",
+					Name:      "100",
+					Class:     "node1",
+				},
+				Display: &recovery.RecoveryPointDisplay{
+					ClusterLabel:   "pve1",
+					NodeHostLabel:  "node1",
+					EntityIDLabel:  "100",
+					ItemType:       "vm",
+					DetailsSummary: "before-upgrade",
+				},
+			},
+		}},
+	})
+	result, err := exec.executeListSnapshots(ctx, map[string]interface{}{
+		"guest_id": "100",
+		"instance": "pve1",
+	})
+	require.NoError(t, err)
+
+	var resp SnapshotsResponse
+	require.NoError(t, json.Unmarshal([]byte(result.Content[0].Text), &resp))
+	require.Len(t, resp.Snapshots, 1)
+	assert.Equal(t, "snap1", resp.Snapshots[0].ID)
+	assert.Equal(t, "vm100", resp.Snapshots[0].VMName)
+	assert.Equal(t, "pve1", resp.Snapshots[0].Instance)
+	assert.Equal(t, "node1", resp.Snapshots[0].Node)
+	assert.Equal(t, "vm", resp.Snapshots[0].Type)
+	assert.Equal(t, "before-upgrade", resp.Snapshots[0].SnapshotName)
+}
+
 func TestExecuteListPBSJobs(t *testing.T) {
 	ctx := context.Background()
 	exec := NewPulseToolExecutor(ExecutorConfig{})
@@ -754,6 +813,58 @@ func TestExecuteListBackupTasks(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(result.Content[0].Text), &resp))
 	require.Len(t, resp.Tasks, 1)
 	assert.Equal(t, "task1", resp.Tasks[0].ID)
+}
+
+func TestExecuteListBackupTasks_ToleratesMalformedMetadataWithCanonicalRecoveryFields(t *testing.T) {
+	ctx := context.Background()
+	now := time.Now().UTC()
+	state := models.StateSnapshot{
+		VMs: []models.VM{
+			{VMID: 101, Name: "vm101"},
+		},
+	}
+
+	exec := NewPulseToolExecutor(ExecutorConfig{
+		StateProvider: &mockStateProvider{state: state},
+		RecoveryPointsProvider: &stubRecoveryPointsProvider{points: []recovery.RecoveryPoint{
+			{
+				ID:        "pve-task:task1",
+				Provider:  recovery.ProviderProxmoxPVE,
+				Kind:      recovery.KindBackup,
+				Mode:      recovery.ModeLocal,
+				Outcome:   recovery.OutcomeSuccess,
+				StartedAt: &now,
+				SubjectRef: &recovery.ExternalRef{
+					Type:      "proxmox-vm",
+					Namespace: "pve1",
+					Name:      "101",
+					Class:     "node1",
+				},
+				Display: &recovery.RecoveryPointDisplay{
+					ClusterLabel:  "pve1",
+					NodeHostLabel: "node1",
+					EntityIDLabel: "101",
+					ItemType:      "vm",
+				},
+			},
+		}},
+	})
+
+	result, err := exec.executeListBackupTasks(ctx, map[string]interface{}{
+		"guest_id": "101",
+		"status":   "ok",
+	})
+	require.NoError(t, err)
+
+	var resp BackupTasksListResponse
+	require.NoError(t, json.Unmarshal([]byte(result.Content[0].Text), &resp))
+	require.Len(t, resp.Tasks, 1)
+	assert.Equal(t, "task1", resp.Tasks[0].ID)
+	assert.Equal(t, "vm101", resp.Tasks[0].VMName)
+	assert.Equal(t, "pve1", resp.Tasks[0].Instance)
+	assert.Equal(t, "node1", resp.Tasks[0].Node)
+	assert.Equal(t, "vm", resp.Tasks[0].Type)
+	assert.Equal(t, "OK", resp.Tasks[0].Status)
 }
 
 func TestExecuteGetSwarmStatus(t *testing.T) {

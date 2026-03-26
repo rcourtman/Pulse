@@ -149,6 +149,13 @@ The same ownership includes the Pulse query tool schema under
 the AI runtime itself, so new tool arguments such as `max_proxmox_nodes`
 cannot reintroduce parallel legacy aliases once the backend query contract is
 renamed.
+That same AI tool ownership also applies to recovery-backed storage reads.
+When `internal/ai/tools/adapters.go` returns recovery points with malformed
+persisted metadata omitted at the shared recovery-store boundary, the storage
+tool runtime in `internal/ai/tools/tools_storage.go` must still keep snapshot
+and backup-task results visible by preferring canonical point fields such as
+`display.clusterLabel`, `display.nodeHostLabel`, `display.entityIdLabel`,
+`display.itemType`, and point outcome before falling back to raw `details`.
 Tenant-scoped AI services must now also follow canonical runtime ownership:
 Patrol may initialize and operate from tenant `ReadState` and unified-resource
 providers without requiring a tenant snapshot-provider bridge, and

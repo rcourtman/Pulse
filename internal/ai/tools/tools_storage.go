@@ -603,6 +603,165 @@ func (e *PulseToolExecutor) legacyPVEBackupTaskPoints() ([]recovery.RecoveryPoin
 	return nil, 0
 }
 
+func recoveryPointDetailString(p recovery.RecoveryPoint, key string) string {
+	if p.Details == nil {
+		return ""
+	}
+	v, ok := p.Details[key]
+	if !ok || v == nil {
+		return ""
+	}
+	if s, ok := v.(string); ok {
+		return strings.TrimSpace(s)
+	}
+	return ""
+}
+
+func recoveryPointDetailInt(p recovery.RecoveryPoint, key string) int {
+	if p.Details == nil {
+		return 0
+	}
+	v, ok := p.Details[key]
+	if !ok || v == nil {
+		return 0
+	}
+	switch n := v.(type) {
+	case int:
+		return n
+	case int64:
+		return int(n)
+	case float64:
+		return int(n)
+	case json.Number:
+		i, _ := n.Int64()
+		return int(i)
+	default:
+		return 0
+	}
+}
+
+func recoveryPointDetailBool(p recovery.RecoveryPoint, key string) bool {
+	if p.Details == nil {
+		return false
+	}
+	v, ok := p.Details[key]
+	if !ok || v == nil {
+		return false
+	}
+	b, ok := v.(bool)
+	return ok && b
+}
+
+func recoveryPointDisplayString(p recovery.RecoveryPoint, value func(*recovery.RecoveryPointDisplay) string) string {
+	if p.Display == nil {
+		return ""
+	}
+	return strings.TrimSpace(value(p.Display))
+}
+
+func parseRecoveryPointVMID(value string) int {
+	vmid, err := strconv.Atoi(strings.TrimSpace(value))
+	if err != nil || vmid <= 0 {
+		return 0
+	}
+	return vmid
+}
+
+func recoveryPointCanonicalGuestType(p recovery.RecoveryPoint) string {
+	raw := recoveryPointDisplayString(p, func(display *recovery.RecoveryPointDisplay) string { return display.ItemType })
+	if raw == "" && p.SubjectRef != nil {
+		raw = strings.TrimSpace(p.SubjectRef.Type)
+	}
+	if raw == "" {
+		raw = recoveryPointDetailString(p, "type")
+	}
+	switch recovery.NormalizeRecoveryItemType(raw) {
+	case "vm":
+		return "vm"
+	case "system-container":
+		return "lxc"
+	default:
+		return strings.TrimSpace(raw)
+	}
+}
+
+func recoveryPointCanonicalInstance(p recovery.RecoveryPoint) string {
+	if value := recoveryPointDisplayString(p, func(display *recovery.RecoveryPointDisplay) string { return display.ClusterLabel }); value != "" {
+		return value
+	}
+	if p.SubjectRef != nil {
+		if value := strings.TrimSpace(p.SubjectRef.Namespace); value != "" {
+			return value
+		}
+	}
+	return recoveryPointDetailString(p, "instance")
+}
+
+func recoveryPointCanonicalNode(p recovery.RecoveryPoint) string {
+	if value := recoveryPointDisplayString(p, func(display *recovery.RecoveryPointDisplay) string { return display.NodeHostLabel }); value != "" {
+		return value
+	}
+	if p.SubjectRef != nil {
+		if value := strings.TrimSpace(p.SubjectRef.Class); value != "" {
+			return value
+		}
+	}
+	return recoveryPointDetailString(p, "node")
+}
+
+func recoveryPointCanonicalVMID(p recovery.RecoveryPoint) int {
+	if value := parseRecoveryPointVMID(recoveryPointDisplayString(p, func(display *recovery.RecoveryPointDisplay) string { return display.EntityIDLabel })); value > 0 {
+		return value
+	}
+	if p.SubjectRef != nil {
+		if value := parseRecoveryPointVMID(p.SubjectRef.Name); value > 0 {
+			return value
+		}
+		if value := parseRecoveryPointVMID(p.SubjectRef.ID); value > 0 {
+			return value
+		}
+	}
+	return recoveryPointDetailInt(p, "vmid")
+}
+
+func recoveryPointCanonicalSnapshotName(p recovery.RecoveryPoint, trimPrefix func(string) string) string {
+	if value := recoveryPointDetailString(p, "snapshotName"); value != "" {
+		return value
+	}
+	if value := recoveryPointDisplayString(p, func(display *recovery.RecoveryPointDisplay) string { return display.DetailsSummary }); value != "" {
+		return value
+	}
+	return trimPrefix(p.ID)
+}
+
+func recoveryPointCanonicalTaskStatus(p recovery.RecoveryPoint) string {
+	if value := recoveryPointDetailString(p, "status"); value != "" {
+		return value
+	}
+	switch p.Outcome {
+	case recovery.OutcomeSuccess:
+		return "OK"
+	case recovery.OutcomeFailed:
+		return "ERROR"
+	case recovery.OutcomeWarning:
+		return "WARNING"
+	case recovery.OutcomeRunning:
+		return "RUNNING"
+	default:
+		return "UNKNOWN"
+	}
+}
+
+func recoveryPointCanonicalTaskError(p recovery.RecoveryPoint) string {
+	if value := recoveryPointDetailString(p, "error"); value != "" {
+		return value
+	}
+	if p.Outcome == recovery.OutcomeFailed || p.Outcome == recovery.OutcomeWarning {
+		return recoveryPointDisplayString(p, func(display *recovery.RecoveryPointDisplay) string { return display.DetailsSummary })
+	}
+	return ""
+}
+
 func (e *PulseToolExecutor) executeListSnapshots(ctx context.Context, args map[string]interface{}) (CallToolResult, error) {
 	if e.backupProvider == nil && e.recoveryPointsProvider == nil {
 		return NewTextResult("State provider not available."), nil
@@ -638,53 +797,6 @@ func (e *PulseToolExecutor) executeListSnapshots(ctx context.Context, args map[s
 		return id
 	}
 
-	getDetailString := func(p recovery.RecoveryPoint, key string) string {
-		if p.Details == nil {
-			return ""
-		}
-		v, ok := p.Details[key]
-		if !ok || v == nil {
-			return ""
-		}
-		if s, ok := v.(string); ok {
-			return strings.TrimSpace(s)
-		}
-		return ""
-	}
-	getDetailInt := func(p recovery.RecoveryPoint, key string) int {
-		if p.Details == nil {
-			return 0
-		}
-		v, ok := p.Details[key]
-		if !ok || v == nil {
-			return 0
-		}
-		switch n := v.(type) {
-		case int:
-			return n
-		case int64:
-			return int(n)
-		case float64:
-			return int(n)
-		case json.Number:
-			i, _ := n.Int64()
-			return int(i)
-		default:
-			return 0
-		}
-	}
-	getDetailBool := func(p recovery.RecoveryPoint, key string) bool {
-		if p.Details == nil {
-			return false
-		}
-		v, ok := p.Details[key]
-		if !ok || v == nil {
-			return false
-		}
-		b, ok := v.(bool)
-		return ok && b
-	}
-
 	if e.recoveryPointsProvider != nil {
 		const pageLimit = 200
 		const maxPages = 20
@@ -715,8 +827,8 @@ func (e *PulseToolExecutor) executeListSnapshots(ctx context.Context, args map[s
 					continue
 				}
 
-				vmid := getDetailInt(p, "vmid")
-				instance := getDetailString(p, "instance")
+				vmid := recoveryPointCanonicalVMID(p)
+				instance := recoveryPointCanonicalInstance(p)
 				if guestIDFilter != "" && strconv.Itoa(vmid) != guestIDFilter {
 					continue
 				}
@@ -735,10 +847,10 @@ func (e *PulseToolExecutor) executeListSnapshots(ctx context.Context, args map[s
 					continue
 				}
 
-				node := getDetailString(p, "node")
-				guestType := getDetailString(p, "type")
-				snapshotName := getDetailString(p, "snapshotName")
-				description := getDetailString(p, "description")
+				node := recoveryPointCanonicalNode(p)
+				guestType := recoveryPointCanonicalGuestType(p)
+				snapshotName := recoveryPointCanonicalSnapshotName(p, trimPrefix)
+				description := recoveryPointDetailString(p, "description")
 
 				var ts time.Time
 				if p.CompletedAt != nil {
@@ -764,7 +876,7 @@ func (e *PulseToolExecutor) executeListSnapshots(ctx context.Context, args map[s
 					SnapshotName: snapshotName,
 					Description:  description,
 					Time:         ts,
-					VMState:      getDetailBool(p, "vmState"),
+					VMState:      recoveryPointDetailBool(p, "vmState"),
 					SizeBytes:    size,
 				})
 				matchedIndex++
@@ -786,8 +898,8 @@ func (e *PulseToolExecutor) executeListSnapshots(ctx context.Context, args map[s
 				continue
 			}
 
-			vmid := getDetailInt(p, "vmid")
-			instance := getDetailString(p, "instance")
+			vmid := recoveryPointCanonicalVMID(p)
+			instance := recoveryPointCanonicalInstance(p)
 
 			// Apply filters
 			if guestIDFilter != "" && strconv.Itoa(vmid) != guestIDFilter {
@@ -809,10 +921,10 @@ func (e *PulseToolExecutor) executeListSnapshots(ctx context.Context, args map[s
 				continue
 			}
 
-			node := getDetailString(p, "node")
-			guestType := getDetailString(p, "type")
-			snapshotName := getDetailString(p, "snapshotName")
-			description := getDetailString(p, "description")
+			node := recoveryPointCanonicalNode(p)
+			guestType := recoveryPointCanonicalGuestType(p)
+			snapshotName := recoveryPointCanonicalSnapshotName(p, trimPrefix)
+			description := recoveryPointDetailString(p, "description")
 
 			var ts time.Time
 			if p.CompletedAt != nil {
@@ -836,7 +948,7 @@ func (e *PulseToolExecutor) executeListSnapshots(ctx context.Context, args map[s
 				SnapshotName: snapshotName,
 				Description:  description,
 				Time:         ts,
-				VMState:      getDetailBool(p, "vmState"),
+				VMState:      recoveryPointDetailBool(p, "vmState"),
 				SizeBytes:    size,
 			})
 			matchedIndex++
@@ -1000,42 +1112,6 @@ func (e *PulseToolExecutor) executeListBackupTasks(ctx context.Context, args map
 		}
 		return id
 	}
-	getDetailString := func(p recovery.RecoveryPoint, key string) string {
-		if p.Details == nil {
-			return ""
-		}
-		v, ok := p.Details[key]
-		if !ok || v == nil {
-			return ""
-		}
-		if s, ok := v.(string); ok {
-			return strings.TrimSpace(s)
-		}
-		return ""
-	}
-	getDetailInt := func(p recovery.RecoveryPoint, key string) int {
-		if p.Details == nil {
-			return 0
-		}
-		v, ok := p.Details[key]
-		if !ok || v == nil {
-			return 0
-		}
-		switch n := v.(type) {
-		case int:
-			return n
-		case int64:
-			return int(n)
-		case float64:
-			return int(n)
-		case json.Number:
-			i, _ := n.Int64()
-			return int(i)
-		default:
-			return 0
-		}
-	}
-
 	if e.recoveryPointsProvider != nil {
 		const pageLimit = 200
 		const maxPages = 20
@@ -1063,12 +1139,12 @@ func (e *PulseToolExecutor) executeListBackupTasks(ctx context.Context, args map
 				}
 				totalCount++
 
-				instance := getDetailString(p, "instance")
-				node := getDetailString(p, "node")
-				vmid := getDetailInt(p, "vmid")
-				status := getDetailString(p, "status")
-				taskType := getDetailString(p, "type")
-				errText := getDetailString(p, "error")
+				instance := recoveryPointCanonicalInstance(p)
+				node := recoveryPointCanonicalNode(p)
+				vmid := recoveryPointCanonicalVMID(p)
+				status := recoveryPointCanonicalTaskStatus(p)
+				taskType := recoveryPointCanonicalGuestType(p)
+				errText := recoveryPointCanonicalTaskError(p)
 
 				// Apply filters
 				if instanceFilter != "" && instance != instanceFilter {
@@ -1130,12 +1206,12 @@ func (e *PulseToolExecutor) executeListBackupTasks(ctx context.Context, args map
 				continue
 			}
 
-			instance := getDetailString(p, "instance")
-			node := getDetailString(p, "node")
-			vmid := getDetailInt(p, "vmid")
-			status := getDetailString(p, "status")
-			taskType := getDetailString(p, "type")
-			errText := getDetailString(p, "error")
+			instance := recoveryPointCanonicalInstance(p)
+			node := recoveryPointCanonicalNode(p)
+			vmid := recoveryPointCanonicalVMID(p)
+			status := recoveryPointCanonicalTaskStatus(p)
+			taskType := recoveryPointCanonicalGuestType(p)
+			errText := recoveryPointCanonicalTaskError(p)
 
 			// Apply filters
 			if instanceFilter != "" && instance != instanceFilter {
