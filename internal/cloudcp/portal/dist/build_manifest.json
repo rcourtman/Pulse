@@ -1,5 +1,5 @@
 {
-  "source_hash": "4af6a846ae6295f7fb1c6f60f1b764cbfa4224664e3751b932d0675229bc0a29",
+  "source_hash": "a0bf793c666d66b4c67754d20f97ea6d329fc972209646646174e0ff4d91479a",
   "build_inputs": [
     "package.json",
     "tsconfig.json",
@@ -14,6 +14,8 @@
     "src/api.ts",
     "src/app.test.ts",
     "src/app.ts",
+    "src/async_state.test.ts",
+    "src/async_state.ts",
     "src/auth_controller.test.ts",
     "src/auth_controller.ts",
     "src/index.ts",

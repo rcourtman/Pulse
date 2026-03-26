@@ -1,3 +1,4 @@
+import { beginMutationState, beginQueryState, failMutationState, failQueryState, resetMutationState, resolveQueryState, succeedMutationState } from './async_state';
 import { PortalAPIError } from './api';
 import type { PortalAPI } from './api';
 import { focusElement, getElement, renderAccountUI as renderAccountUIState } from './account_view';
@@ -46,24 +47,18 @@ export function installAccountRuntime(deps: AccountRuntimeDeps): AccountRuntime 
     deps.store.updateAccountState(function(accountState) {
       var entry = ensurePortalAccountUIEntry(accountState, accountID);
       entry.teamVisible = true;
-      entry.teamQuery.status = 'loading';
-      entry.teamQuery.error = '';
-      entry.teamQuery.data = [];
+      beginQueryState(entry.teamQuery, []);
     });
     try {
       var members = await deps.api.listMembers(accountID) as PortalTeamMember[];
       deps.store.updateAccountState(function(accountState) {
         var entry = ensurePortalAccountUIEntry(accountState, accountID);
-        entry.teamQuery.status = 'ready';
-        entry.teamQuery.error = '';
-        entry.teamQuery.data = Array.isArray(members) ? members : [];
+        resolveQueryState(entry.teamQuery, Array.isArray(members) ? members : []);
       });
     } catch (error) {
       deps.store.updateAccountState(function(accountState) {
         var entry = ensurePortalAccountUIEntry(accountState, accountID);
-        entry.teamQuery.status = 'error';
-        entry.teamQuery.error = error instanceof Error ? error.message : 'Network error.';
-        entry.teamQuery.data = [];
+        failQueryState(entry.teamQuery, [], error instanceof Error ? error.message : 'Network error.');
       });
     }
   };
@@ -106,32 +101,30 @@ export function installAccountRuntime(deps: AccountRuntimeDeps): AccountRuntime 
     }
     deps.store.updateAccountState(function(accountState) {
       var entry = ensurePortalAccountUIEntry(accountState, accountID);
-      entry.createWorkspace.pending = true;
-      entry.createWorkspace.error = '';
+      beginMutationState(entry.createWorkspace);
     });
     try {
       await deps.api.createWorkspace(accountID, { display_name: name });
       if (!await refreshOrRedirect()) {
+        deps.store.updateAccountState(function(accountState) {
+          var entry = ensurePortalAccountUIEntry(accountState, accountID);
+          resetMutationState(entry.createWorkspace);
+        }, { notify: false });
         return;
       }
       deps.store.updateAccountState(function(accountState) {
         var entry = ensurePortalAccountUIEntry(accountState, accountID);
         entry.addWorkspaceOpen = false;
-        entry.createWorkspace.pending = false;
-        entry.createWorkspace.error = '';
+        succeedMutationState(entry.createWorkspace);
       });
       deps.showToast('Workspace created!');
     } catch (error) {
+      var message = error instanceof Error ? error.message : 'Failed to create workspace.';
       deps.store.updateAccountState(function(accountState) {
         var entry = ensurePortalAccountUIEntry(accountState, accountID);
-        entry.createWorkspace.error = error instanceof Error ? error.message : 'Failed to create workspace.';
+        failMutationState(entry.createWorkspace, message);
       }, { notify: false });
-      deps.showToast(error instanceof Error ? error.message : 'Failed to create workspace.', true);
-    } finally {
-      deps.store.updateAccountState(function(accountState) {
-        var entry = ensurePortalAccountUIEntry(accountState, accountID);
-        entry.createWorkspace.pending = false;
-      });
+      deps.showToast(message, true);
     }
   };
 

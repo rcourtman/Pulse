@@ -1,3 +1,4 @@
+import { beginMutationState, failMutationState, resetMutationState, succeedMutationState } from './async_state';
 import { PortalAPIError } from './api';
 import type { PortalAPI } from './api';
 import { createPortalLoginState, syncLoginStateBootstrapEmail } from './state';
@@ -38,34 +39,33 @@ export function installAuthController(deps: AuthControllerDeps): AuthController 
       return;
     }
     deps.store.updateLoginState(function(nextState) {
-      nextState.request.pending = true;
-      nextState.request.error = '';
+      beginMutationState(nextState.request);
       nextState.success = false;
     });
     try {
       await deps.api.requestMagicLink(email);
       deps.store.updateLoginState(function(nextState) {
-        nextState.request.pending = false;
+        succeedMutationState(nextState.request);
         nextState.success = true;
       });
       return;
     } catch (error) {
       if (error instanceof PortalAPIError && error.status === 404) {
         deps.store.updateLoginState(function(nextState) {
-          nextState.request.pending = false;
+          succeedMutationState(nextState.request);
           nextState.success = true;
         });
         return;
       }
       deps.store.updateLoginState(function(nextState) {
-        nextState.request.error = error instanceof PortalAPIError && error.status === 429
-          ? 'Too many requests. Please wait a moment and try again.'
-          : 'Network error. Please check your connection and try again.';
+        failMutationState(
+          nextState.request,
+          error instanceof PortalAPIError && error.status === 429
+            ? 'Too many requests. Please wait a moment and try again.'
+            : 'Network error. Please check your connection and try again.'
+        );
       });
     }
-    deps.store.updateLoginState(function(nextState) {
-      nextState.request.pending = false;
-    });
   }
 
   document.addEventListener('click', function(event) {
@@ -81,7 +81,7 @@ export function installAuthController(deps: AuthControllerDeps): AuthController 
           event.preventDefault();
           deps.store.updateLoginState(function(nextState) {
             nextState.success = false;
-            nextState.request.error = '';
+            resetMutationState(nextState.request);
           });
           void sendMagicLink();
           return;

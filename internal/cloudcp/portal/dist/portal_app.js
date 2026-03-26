@@ -171,6 +171,38 @@
     });
   }
 
+  // src/async_state.ts
+  function resetMutationState(state) {
+    state.pending = false;
+    state.error = "";
+  }
+  function beginMutationState(state) {
+    resetMutationState(state);
+    state.pending = true;
+  }
+  function succeedMutationState(state) {
+    resetMutationState(state);
+  }
+  function failMutationState(state, message) {
+    state.pending = false;
+    state.error = message;
+  }
+  function beginQueryState(state, emptyData) {
+    state.status = "loading";
+    state.error = "";
+    state.data = emptyData;
+  }
+  function resolveQueryState(state, data) {
+    state.status = "ready";
+    state.error = "";
+    state.data = data;
+  }
+  function failQueryState(state, emptyData, message) {
+    state.status = "error";
+    state.error = message;
+    state.data = emptyData;
+  }
+
   // src/api.ts
   var PortalAPIError = class extends Error {
     constructor(message, status = 0, payload = null) {
@@ -488,24 +520,18 @@
       deps.store.updateAccountState(function(accountState) {
         var entry = ensurePortalAccountUIEntry(accountState, accountID);
         entry.teamVisible = true;
-        entry.teamQuery.status = "loading";
-        entry.teamQuery.error = "";
-        entry.teamQuery.data = [];
+        beginQueryState(entry.teamQuery, []);
       });
       try {
         var members = await deps.api.listMembers(accountID);
         deps.store.updateAccountState(function(accountState) {
           var entry = ensurePortalAccountUIEntry(accountState, accountID);
-          entry.teamQuery.status = "ready";
-          entry.teamQuery.error = "";
-          entry.teamQuery.data = Array.isArray(members) ? members : [];
+          resolveQueryState(entry.teamQuery, Array.isArray(members) ? members : []);
         });
       } catch (error) {
         deps.store.updateAccountState(function(accountState) {
           var entry = ensurePortalAccountUIEntry(accountState, accountID);
-          entry.teamQuery.status = "error";
-          entry.teamQuery.error = error instanceof Error ? error.message : "Network error.";
-          entry.teamQuery.data = [];
+          failQueryState(entry.teamQuery, [], error instanceof Error ? error.message : "Network error.");
         });
       }
     };
@@ -545,32 +571,30 @@
       }
       deps.store.updateAccountState(function(accountState) {
         var entry = ensurePortalAccountUIEntry(accountState, accountID);
-        entry.createWorkspace.pending = true;
-        entry.createWorkspace.error = "";
+        beginMutationState(entry.createWorkspace);
       });
       try {
         await deps.api.createWorkspace(accountID, { display_name: name });
         if (!await refreshOrRedirect()) {
+          deps.store.updateAccountState(function(accountState) {
+            var entry = ensurePortalAccountUIEntry(accountState, accountID);
+            resetMutationState(entry.createWorkspace);
+          }, { notify: false });
           return;
         }
         deps.store.updateAccountState(function(accountState) {
           var entry = ensurePortalAccountUIEntry(accountState, accountID);
           entry.addWorkspaceOpen = false;
-          entry.createWorkspace.pending = false;
-          entry.createWorkspace.error = "";
+          succeedMutationState(entry.createWorkspace);
         });
         deps.showToast("Workspace created!");
       } catch (error) {
+        var message = error instanceof Error ? error.message : "Failed to create workspace.";
         deps.store.updateAccountState(function(accountState) {
           var entry = ensurePortalAccountUIEntry(accountState, accountID);
-          entry.createWorkspace.error = error instanceof Error ? error.message : "Failed to create workspace.";
+          failMutationState(entry.createWorkspace, message);
         }, { notify: false });
-        deps.showToast(error instanceof Error ? error.message : "Failed to create workspace.", true);
-      } finally {
-        deps.store.updateAccountState(function(accountState) {
-          var entry = ensurePortalAccountUIEntry(accountState, accountID);
-          entry.createWorkspace.pending = false;
-        });
+        deps.showToast(message, true);
       }
     };
     var manageWorkspace = async function(evt, accountID, tenantID, state, name) {
@@ -706,32 +730,31 @@
         return;
       }
       deps.store.updateLoginState(function(nextState) {
-        nextState.request.pending = true;
-        nextState.request.error = "";
+        beginMutationState(nextState.request);
         nextState.success = false;
       });
       try {
         await deps.api.requestMagicLink(email);
         deps.store.updateLoginState(function(nextState) {
-          nextState.request.pending = false;
+          succeedMutationState(nextState.request);
           nextState.success = true;
         });
         return;
       } catch (error) {
         if (error instanceof PortalAPIError && error.status === 404) {
           deps.store.updateLoginState(function(nextState) {
-            nextState.request.pending = false;
+            succeedMutationState(nextState.request);
             nextState.success = true;
           });
           return;
         }
         deps.store.updateLoginState(function(nextState) {
-          nextState.request.error = error instanceof PortalAPIError && error.status === 429 ? "Too many requests. Please wait a moment and try again." : "Network error. Please check your connection and try again.";
+          failMutationState(
+            nextState.request,
+            error instanceof PortalAPIError && error.status === 429 ? "Too many requests. Please wait a moment and try again." : "Network error. Please check your connection and try again."
+          );
         });
       }
-      deps.store.updateLoginState(function(nextState) {
-        nextState.request.pending = false;
-      });
     }
     document.addEventListener("click", function(event) {
       var portalActionEl = asHTMLElement2(event.target)?.closest("[data-portal-action]");
@@ -746,7 +769,7 @@
             event.preventDefault();
             deps.store.updateLoginState(function(nextState) {
               nextState.success = false;
-              nextState.request.error = "";
+              resetMutationState(nextState.request);
             });
             void sendMagicLink();
             return;
@@ -1201,8 +1224,7 @@
         flow.onRequestStart();
       }
       updateServiceState(function(serviceState) {
-        serviceState.flows[flowID].request.pending = true;
-        serviceState.flows[flowID].request.error = "";
+        beginMutationState(serviceState.flows[flowID].request);
         clearFlowStatus(serviceState, flowID);
       });
       try {
@@ -1210,15 +1232,14 @@
         updateServiceState(function(serviceState) {
           serviceState.flows[flowID].pendingEmail = email;
           serviceState.flows[flowID].step2Visible = !!flow.step2ID;
+          succeedMutationState(serviceState.flows[flowID].request);
           setFlowStatus(serviceState, flowID, flow.requestSuccessMessage, false);
         });
       } catch (err) {
+        var message = err instanceof Error ? err.message : flow.requestErrorMessage;
         updateServiceState(function(serviceState) {
-          setFlowStatus(serviceState, flowID, err instanceof Error ? err.message : flow.requestErrorMessage, true);
-        });
-      } finally {
-        updateServiceState(function(serviceState) {
-          serviceState.flows[flowID].request.pending = false;
+          failMutationState(serviceState.flows[flowID].request, message);
+          setFlowStatus(serviceState, flowID, message, true);
         });
       }
     }
@@ -1249,19 +1270,19 @@
         return;
       }
       updateServiceState(function(serviceState) {
-        serviceState.flows[flowID].confirm.pending = true;
-        serviceState.flows[flowID].confirm.error = "";
+        beginMutationState(serviceState.flows[flowID].confirm);
       });
       try {
         var data = await api.postCommercialJSON(flow.confirmPath, { email, code });
+        updateServiceState(function(serviceState) {
+          succeedMutationState(serviceState.flows[flowID].confirm);
+        }, false);
         flow.onConfirmSuccess(data, email);
       } catch (err) {
+        var message = err instanceof Error ? err.message : flow.confirmErrorMessage;
         updateServiceState(function(serviceState) {
-          setFlowStatus(serviceState, flowID, err instanceof Error ? err.message : flow.confirmErrorMessage, true);
-        });
-      } finally {
-        updateServiceState(function(serviceState) {
-          serviceState.flows[flowID].confirm.pending = false;
+          failMutationState(serviceState.flows[flowID].confirm, message);
+          setFlowStatus(serviceState, flowID, message, true);
         });
       }
     }
@@ -1286,23 +1307,21 @@
       if (!email || !token) return;
       if (!confirm("Are you sure? This will immediately revoke the license and request the refund.")) return;
       updateServiceState(function(serviceState) {
-        serviceState.refund.submit.pending = true;
-        serviceState.refund.submit.error = "";
+        beginMutationState(serviceState.refund.submit);
         serviceState.refund.status = emptyStatus();
       });
       try {
         await api.postCommercialJSON("/v1/self-refund", { email, token });
         updateServiceState(function(serviceState) {
           serviceState.refund.tokenValue = "";
+          succeedMutationState(serviceState.refund.submit);
           setRefundStatus(serviceState, "Success! Your refund has been processed. Stripe will follow up by email.", false);
         });
       } catch (err) {
+        var message = err instanceof Error ? err.message : "Refund failed";
         updateServiceState(function(serviceState) {
-          setRefundStatus(serviceState, err instanceof Error ? err.message : "Refund failed", true);
-        });
-      } finally {
-        updateServiceState(function(serviceState) {
-          serviceState.refund.submit.pending = false;
+          failMutationState(serviceState.refund.submit, message);
+          setRefundStatus(serviceState, message, true);
         });
       }
     }

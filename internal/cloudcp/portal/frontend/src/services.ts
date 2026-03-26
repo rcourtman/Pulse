@@ -1,3 +1,4 @@
+import { beginMutationState, failMutationState, succeedMutationState } from './async_state';
 import type { PortalAPI } from './api';
 import { installServicesController } from './services_controller';
 import {
@@ -309,8 +310,7 @@ export function installServicesRuntime(deps: ServicesRuntimeDeps): void {
       flow.onRequestStart();
     }
     updateServiceState(function(serviceState) {
-      serviceState.flows[flowID].request.pending = true;
-      serviceState.flows[flowID].request.error = '';
+      beginMutationState(serviceState.flows[flowID].request);
       clearFlowStatus(serviceState, flowID);
     });
     try {
@@ -318,15 +318,14 @@ export function installServicesRuntime(deps: ServicesRuntimeDeps): void {
       updateServiceState(function(serviceState) {
         serviceState.flows[flowID].pendingEmail = email;
         serviceState.flows[flowID].step2Visible = !!flow.step2ID;
+        succeedMutationState(serviceState.flows[flowID].request);
         setFlowStatus(serviceState, flowID, flow.requestSuccessMessage, false);
       });
     } catch (err) {
+      var message = err instanceof Error ? err.message : flow.requestErrorMessage;
       updateServiceState(function(serviceState) {
-        setFlowStatus(serviceState, flowID, err instanceof Error ? err.message : flow.requestErrorMessage, true);
-      });
-    } finally {
-      updateServiceState(function(serviceState) {
-        serviceState.flows[flowID].request.pending = false;
+        failMutationState(serviceState.flows[flowID].request, message);
+        setFlowStatus(serviceState, flowID, message, true);
       });
     }
   }
@@ -359,19 +358,19 @@ export function installServicesRuntime(deps: ServicesRuntimeDeps): void {
       return;
     }
     updateServiceState(function(serviceState) {
-      serviceState.flows[flowID].confirm.pending = true;
-      serviceState.flows[flowID].confirm.error = '';
+      beginMutationState(serviceState.flows[flowID].confirm);
     });
     try {
       var data = await api.postCommercialJSON(flow.confirmPath, { email: email, code: code });
+      updateServiceState(function(serviceState) {
+        succeedMutationState(serviceState.flows[flowID].confirm);
+      }, false);
       flow.onConfirmSuccess(data, email);
     } catch (err) {
+      var message = err instanceof Error ? err.message : flow.confirmErrorMessage;
       updateServiceState(function(serviceState) {
-        setFlowStatus(serviceState, flowID, err instanceof Error ? err.message : flow.confirmErrorMessage, true);
-      });
-    } finally {
-      updateServiceState(function(serviceState) {
-        serviceState.flows[flowID].confirm.pending = false;
+        failMutationState(serviceState.flows[flowID].confirm, message);
+        setFlowStatus(serviceState, flowID, message, true);
       });
     }
   }
@@ -398,23 +397,21 @@ export function installServicesRuntime(deps: ServicesRuntimeDeps): void {
     if (!email || !token) return;
     if (!confirm('Are you sure? This will immediately revoke the license and request the refund.')) return;
     updateServiceState(function(serviceState) {
-      serviceState.refund.submit.pending = true;
-      serviceState.refund.submit.error = '';
+      beginMutationState(serviceState.refund.submit);
       serviceState.refund.status = emptyStatus();
     });
     try {
       await api.postCommercialJSON('/v1/self-refund', { email: email, token: token });
       updateServiceState(function(serviceState) {
         serviceState.refund.tokenValue = '';
+        succeedMutationState(serviceState.refund.submit);
         setRefundStatus(serviceState, 'Success! Your refund has been processed. Stripe will follow up by email.', false);
       });
     } catch (err) {
+      var message = err instanceof Error ? err.message : 'Refund failed';
       updateServiceState(function(serviceState) {
-        setRefundStatus(serviceState, err instanceof Error ? err.message : 'Refund failed', true);
-      });
-    } finally {
-      updateServiceState(function(serviceState) {
-        serviceState.refund.submit.pending = false;
+        failMutationState(serviceState.refund.submit, message);
+        setRefundStatus(serviceState, message, true);
       });
     }
   }
