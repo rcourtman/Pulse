@@ -251,49 +251,70 @@ jobs:
         if: always()
         env:
           NOTE: ${{ inputs.note }}
+          REHEARSAL_CONCLUSION: ${{ steps.rehearsal.conclusion }}
+          JOB_CONCLUSION: ${{ job.status }}
         run: |
           mkdir -p release-dry-run
           SUMMARY_FILE="release-dry-run/rc-to-ga-rehearsal-summary.md"
           RUN_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          {
-            echo "# Prerelease-to-GA Rehearsal Summary"
-            echo ""
-            echo "- Workflow run: ${RUN_URL}"
-            echo "- Branch: ${GITHUB_REF_NAME}"
-            echo "- Version: ${{ steps.rehearsal.outputs.version }}"
-            echo "- Candidate stable tag: ${{ steps.rehearsal.outputs.tag }}"
-            echo "- Promotion channel: ${{ steps.rehearsal.outputs.is_prerelease == 'true' && 'rc' || 'stable' }}"
-            if [ -n "${{ steps.rehearsal.outputs.promoted_from_tag }}" ]; then
-              echo "- Promoted prerelease tag: ${{ steps.rehearsal.outputs.promoted_from_tag }}"
-            fi
-            if [ -n "${{ steps.rehearsal.outputs.rollback_tag }}" ]; then
-              echo "- Rollback target: ${{ steps.rehearsal.outputs.rollback_tag }}"
-            fi
-            if [ -n "${{ steps.rehearsal.outputs.rollback_command }}" ]; then
-              echo "- Rollback command: \`${{ steps.rehearsal.outputs.rollback_command }}\`"
-            fi
-            if [ -n "${{ steps.rehearsal.outputs.soak_hours }}" ]; then
-              echo "- Prerelease soak hours at rehearsal time: ${{ steps.rehearsal.outputs.soak_hours }}"
-            fi
-            if [ -n "${{ steps.rehearsal.outputs.ga_date }}" ]; then
-              echo "- Planned GA date: ${{ steps.rehearsal.outputs.ga_date }}"
-            fi
-            if [ -n "${{ steps.rehearsal.outputs.v5_eos_date }}" ]; then
-              echo "- Planned v5 end-of-support date: ${{ steps.rehearsal.outputs.v5_eos_date }}"
-            fi
-            echo "- Hotfix exception: ${{ steps.rehearsal.outputs.hotfix_exception }}"
-            if [ -n "${{ steps.rehearsal.outputs.hotfix_reason }}" ]; then
-              echo "- Hotfix reason: ${{ steps.rehearsal.outputs.hotfix_reason }}"
-            fi
-            if [ -n "${NOTE}" ]; then
-              echo "- Operator note: ${NOTE}"
-            fi
-            echo ""
-            echo "## Result"
-            echo ""
-            echo "This run exercised the non-publish release path and validated the current promotion contract on the selected branch."
-            echo "Record this run URL in the release ticket when clearing \`rc-to-ga-promotion-readiness\`."
-          } > "$SUMMARY_FILE"
+          if [ "${REHEARSAL_CONCLUSION}" != "success" ]; then
+            {
+              echo "# Prerelease-to-GA Rehearsal Summary"
+              echo ""
+              echo "- Workflow run: ${RUN_URL}"
+              echo "- Branch: ${GITHUB_REF_NAME}"
+              echo "- Result: ${JOB_CONCLUSION}"
+              if [ -n "${NOTE}" ]; then
+                echo "- Operator note: ${NOTE}"
+              fi
+              echo ""
+              echo "## Result"
+              echo ""
+              echo "This run did not produce a valid promotion metadata envelope."
+              echo "Do not use this artifact to clear \`rc-to-ga-promotion-readiness\`."
+              echo "Fix the failed rehearsal metadata or branch-state preconditions and rerun the workflow."
+            } > "$SUMMARY_FILE"
+          else
+            {
+              echo "# Prerelease-to-GA Rehearsal Summary"
+              echo ""
+              echo "- Workflow run: ${RUN_URL}"
+              echo "- Branch: ${GITHUB_REF_NAME}"
+              echo "- Version: ${{ steps.rehearsal.outputs.version }}"
+              echo "- Candidate stable tag: ${{ steps.rehearsal.outputs.tag }}"
+              echo "- Promotion channel: ${{ steps.rehearsal.outputs.is_prerelease == 'true' && 'rc' || 'stable' }}"
+              if [ -n "${{ steps.rehearsal.outputs.promoted_from_tag }}" ]; then
+                echo "- Promoted prerelease tag: ${{ steps.rehearsal.outputs.promoted_from_tag }}"
+              fi
+              if [ -n "${{ steps.rehearsal.outputs.rollback_tag }}" ]; then
+                echo "- Rollback target: ${{ steps.rehearsal.outputs.rollback_tag }}"
+              fi
+              if [ -n "${{ steps.rehearsal.outputs.rollback_command }}" ]; then
+                echo "- Rollback command: \`${{ steps.rehearsal.outputs.rollback_command }}\`"
+              fi
+              if [ -n "${{ steps.rehearsal.outputs.soak_hours }}" ]; then
+                echo "- Prerelease soak hours at rehearsal time: ${{ steps.rehearsal.outputs.soak_hours }}"
+              fi
+              if [ -n "${{ steps.rehearsal.outputs.ga_date }}" ]; then
+                echo "- Planned GA date: ${{ steps.rehearsal.outputs.ga_date }}"
+              fi
+              if [ -n "${{ steps.rehearsal.outputs.v5_eos_date }}" ]; then
+                echo "- Planned v5 end-of-support date: ${{ steps.rehearsal.outputs.v5_eos_date }}"
+              fi
+              echo "- Hotfix exception: ${{ steps.rehearsal.outputs.hotfix_exception }}"
+              if [ -n "${{ steps.rehearsal.outputs.hotfix_reason }}" ]; then
+                echo "- Hotfix reason: ${{ steps.rehearsal.outputs.hotfix_reason }}"
+              fi
+              if [ -n "${NOTE}" ]; then
+                echo "- Operator note: ${NOTE}"
+              fi
+              echo ""
+              echo "## Result"
+              echo ""
+              echo "This run exercised the non-publish release path and validated the current promotion contract on the selected branch."
+              echo "Record this run URL in the release ticket when clearing \`rc-to-ga-promotion-readiness\`."
+            } > "$SUMMARY_FILE"
+          fi
 
           cat "$SUMMARY_FILE" >> "$GITHUB_STEP_SUMMARY"
 

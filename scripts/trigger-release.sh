@@ -70,21 +70,22 @@ LOCAL=$(git rev-parse @)
 REMOTE=$(git rev-parse @{u})
 
 if [ "$LOCAL" != "$REMOTE" ]; then
-  echo "⚠️  Warning: Local and remote branches have diverged"
+  echo "❌ Local branch is not fully pushed to origin"
+  echo ""
+  echo "  Local ref:  ${LOCAL}"
+  echo "  Remote ref: ${REMOTE}"
+  echo ""
+  echo "Release automation executes the selected remote ref, not local-only governance state."
+  echo "Push ${CURRENT_BRANCH} to origin before triggering the publish workflow."
   git status -sb
-  echo ""
-  read -p "Continue anyway? [y/N] " -n 1 -r
-  echo ""
-  if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-    echo "Aborted"
-    exit 1
-  fi
+  exit 1
 else
   echo "✓ Up to date with remote"
 fi
 
 python3 scripts/check-workflow-dispatch-inputs.py \
   --workflow-path .github/workflows/create-release.yml \
+  --branch "$CURRENT_BRANCH" \
   --require version \
   --require release_notes \
   --require promoted_from_tag \
@@ -94,7 +95,7 @@ python3 scripts/check-workflow-dispatch-inputs.py \
   --require hotfix_exception \
   --require hotfix_reason \
   --require draft_only
-echo "✓ Default-branch release workflow contract matches governed inputs"
+echo "✓ Remote release-branch publish workflow contract matches governed inputs"
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -229,6 +230,7 @@ echo ""
 echo "Triggering release workflow..."
 if [ -n "$NOTES_FILE" ]; then
   gh workflow run create-release.yml \
+    --ref "$CURRENT_BRANCH" \
     -f version="${VERSION}" \
     -f release_notes="$(cat "$NOTES_FILE")" \
     -f rollback_version="${ROLLBACK_VERSION}" \

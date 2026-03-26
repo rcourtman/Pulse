@@ -121,18 +121,16 @@ def stable_candidate_version(version: str) -> str:
     return version
 
 
-def origin_default_branch() -> str:
-    symbolic_ref = _run_git_optional("symbolic-ref", "refs/remotes/origin/HEAD")
-    if not symbolic_ref:
-        return "main"
-    prefix = "refs/remotes/origin/"
-    if symbolic_ref.startswith(prefix):
-        return symbolic_ref[len(prefix):]
-    return "main"
-
-
 def branch_release_dry_run_workflow(branch: str) -> str | None:
     return _run_git_optional("show", f"origin/{branch}:{RELEASE_DRY_RUN_WORKFLOW}")
+
+
+def local_branch_head(branch: str) -> str | None:
+    return _run_git_optional("rev-parse", branch)
+
+
+def remote_branch_head(branch: str) -> str | None:
+    return _run_git_optional("rev-parse", f"origin/{branch}")
 
 
 def workflow_supports_stable_rehearsal_inputs(content: str | None) -> bool:
@@ -178,10 +176,16 @@ def build_blocked_record(*, record_date: str) -> str:
     rc_commit = _run_git("rev-parse", rc_tag) if rc_tag else ""
     ga_date, v5_eos_date = parse_release_dates()
     target_is_ga_promotion = active_target_id == "v6-ga-promotion"
-    default_branch = origin_default_branch()
-    default_branch_release_dry_run = branch_release_dry_run_workflow(default_branch)
-    default_branch_supports_stable_inputs = workflow_supports_stable_rehearsal_inputs(
-        default_branch_release_dry_run
+    remote_stable_branch_release_dry_run = branch_release_dry_run_workflow(stable_branch)
+    remote_stable_branch_supports_stable_inputs = workflow_supports_stable_rehearsal_inputs(
+        remote_stable_branch_release_dry_run
+    )
+    local_stable_head = local_branch_head(stable_branch)
+    remote_stable_head = remote_branch_head(stable_branch)
+    remote_stable_matches_local = (
+        local_stable_head is not None
+        and remote_stable_head is not None
+        and local_stable_head == remote_stable_head
     )
 
     if version_is_prerelease:
@@ -304,13 +308,29 @@ def build_blocked_record(*, record_date: str) -> str:
                 ]
             )
 
-    if not default_branch_supports_stable_inputs:
+    if remote_stable_head is None:
         blocking_fact_lines.append(
             [
-                f"GitHub still validates `Release Dry Run` workflow dispatch inputs against the",
-                f"default branch `{default_branch}`, whose current workflow contract does not",
-                "accept the governed stable rehearsal metadata envelope (`promoted_from_tag`,",
-                "`rollback_version`, `ga_date`, and `v5_eos_date`).",
+                f"The governed stable rehearsal branch `origin/{stable_branch}` does not exist yet,",
+                "so GitHub cannot exercise the intended remote promotion path for the stable candidate.",
+            ]
+        )
+    elif not remote_stable_matches_local:
+        blocking_fact_lines.append(
+            [
+                f"The selected remote ref `origin/{stable_branch}` is still behind the current",
+                "local governed branch state, so `Release Dry Run` would exercise stale remote",
+                "control-plane metadata instead of the intended candidate.",
+            ]
+        )
+
+    if not remote_stable_branch_supports_stable_inputs:
+        blocking_fact_lines.append(
+            [
+                f"The pushed governed release-branch copy of `{RELEASE_DRY_RUN_WORKFLOW}` on",
+                f"`origin/{stable_branch}` does not yet accept the governed stable rehearsal",
+                "metadata envelope (`promoted_from_tag`, `rollback_version`, `ga_date`, and",
+                "`v5_eos_date`) through `workflow_dispatch`.",
             ]
         )
 
@@ -363,12 +383,12 @@ def build_blocked_record(*, record_date: str) -> str:
         )
 
     required_blocks: list[list[str] | tuple[str, ...] | str] = list(required_step_lines)
-    if not default_branch_supports_stable_inputs:
+    if not remote_stable_branch_supports_stable_inputs:
         required_blocks.append(
             [
                 f"Land the canonical `{RELEASE_DRY_RUN_WORKFLOW}` workflow-dispatch input",
-                f"contract on the default branch `{default_branch}` so GitHub accepts the",
-                f"governed stable rehearsal metadata envelope when dispatching from `{stable_branch}`.",
+                f"contract on the pushed governed release branch `origin/{stable_branch}` so",
+                "the selected remote ref accepts the stable rehearsal metadata envelope.",
             ]
         )
     if not rc_tag:

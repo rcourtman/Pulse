@@ -59,21 +59,22 @@ git fetch origin --quiet
 LOCAL=$(git rev-parse @)
 REMOTE=$(git rev-parse @{u})
 if [ "$LOCAL" != "$REMOTE" ]; then
-  echo "⚠️  Warning: Local and remote branches have diverged"
+  echo "❌ Local branch is not fully pushed to origin"
+  echo ""
+  echo "  Local ref:  ${LOCAL}"
+  echo "  Remote ref: ${REMOTE}"
+  echo ""
+  echo "Release Dry Run executes the selected remote ref, not local-only governance state."
+  echo "Push ${CURRENT_BRANCH} to origin before dispatching the rehearsal."
   git status -sb
-  echo ""
-  read -p "Continue anyway? [y/N] " -n 1 -r
-  echo ""
-  if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-    echo "Aborted"
-    exit 1
-  fi
+  exit 1
 else
   echo "✓ Up to date with remote"
 fi
 
 python3 scripts/check-workflow-dispatch-inputs.py \
   --workflow-path .github/workflows/release-dry-run.yml \
+  --branch "$CURRENT_BRANCH" \
   --require version \
   --require promoted_from_tag \
   --require rollback_version \
@@ -82,7 +83,7 @@ python3 scripts/check-workflow-dispatch-inputs.py \
   --require hotfix_exception \
   --require hotfix_reason \
   --require note
-echo "✓ Default-branch dry-run workflow contract matches governed inputs"
+echo "✓ Remote release-branch dry-run workflow contract matches governed inputs"
 
 ROLLBACK_VERSION=""
 PROMOTED_FROM_TAG=""

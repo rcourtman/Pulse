@@ -80,7 +80,7 @@ def branch_workflow_text(branch: str, workflow_path: str) -> str:
     workflow = _run_git_optional("show", f"origin/{branch}:{workflow_path}")
     if not workflow:
         raise ValueError(
-            f"default branch '{branch}' does not contain workflow '{workflow_path}'"
+            f"remote branch '{branch}' does not contain workflow '{workflow_path}'"
         )
     return workflow
 

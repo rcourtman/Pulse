@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate that the default-branch copy of a workflow accepts required inputs."""
+"""Validate that a selected remote branch copy of a workflow accepts required inputs."""
 
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ def main() -> int:
     if missing:
         missing_display = ", ".join(missing)
         raise SystemExit(
-            f"default-branch workflow contract drift: origin/{branch}:{args.workflow_path} "
+            f"workflow contract drift: origin/{branch}:{args.workflow_path} "
             f"is missing workflow_dispatch inputs: {missing_display}"
         )
     print(

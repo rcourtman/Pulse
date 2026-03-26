@@ -147,8 +147,14 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("Stable v6.0.0 requires ga_date in YYYY-MM-DD form", resolver)
         self.assertIn("release_notes must include the exact ga_date", resolver)
         self.assertIn("check-workflow-dispatch-inputs.py", dry_run_trigger)
+        self.assertIn('--branch "$CURRENT_BRANCH"', dry_run_trigger)
         self.assertIn("release-dry-run.yml", dry_run_trigger)
         self.assertIn("gh workflow run release-dry-run.yml", dry_run_trigger)
+        self.assertIn("Release Dry Run executes the selected remote ref", dry_run_trigger)
+        self.assertNotIn("Continue anyway?", dry_run_trigger)
+        self.assertIn('if [ "${REHEARSAL_CONCLUSION}" != "success" ]; then', workflow)
+        self.assertIn("did not produce a valid promotion metadata envelope", workflow)
+        self.assertIn("Do not use this artifact to clear", workflow)
 
     def test_release_workflow_enforces_rc_lineage_soak_and_v5_notice(self) -> None:
         content = read(".github/workflows/create-release.yml")
@@ -180,18 +186,17 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("Stable v6.0.0 requires v5_eos_date in YYYY-MM-DD form", resolver)
         self.assertIn("release_notes must include the Pulse v5 maintenance-only support notice", resolver)
         self.assertIn("check-workflow-dispatch-inputs.py", helper)
-        self.assertIn(
-            "default branch copy of `.github/workflows/release-dry-run.yml`",
-            policy,
-        )
-        self.assertIn(
-            "GitHub validates dispatch inputs against the default branch",
-            normalize_ws(policy),
-        )
+        self.assertIn('--branch "$CURRENT_BRANCH"', helper)
+        self.assertIn('--ref "$CURRENT_BRANCH"', helper)
+        self.assertIn("Release automation executes the selected remote ref", helper)
+        self.assertNotIn("Continue anyway?", helper)
+        self.assertIn("pushed governed release-branch copy of `.github/workflows/release-dry-run.yml`", policy)
+        self.assertIn("GitHub executes the selected remote ref", normalize_ws(policy))
         checklist = read("docs/release-control/v6/internal/PRE_RELEASE_CHECKLIST.md")
-        self.assertIn("default-branch copy of `.github/workflows/release-dry-run.yml`", checklist)
+        self.assertIn("pushed governed release-branch copy of `.github/workflows/release-dry-run.yml`", checklist)
         self.assertIn("workflow_dispatch", checklist)
-        self.assertIn("dispatching `pulse/v6-release`", checklist)
+        self.assertIn("selected remote ref", normalize_ws(checklist))
+        self.assertIn("local rehearsal branch exactly matches `origin`", checklist)
         self.assertIn("derive the governed release branch from release-control metadata", checklist)
         template = read("docs/release-control/v6/internal/RC_TO_GA_REHEARSAL_TEMPLATE.md")
         self.assertIn("governed release line from `control_plane.json`", template)
@@ -217,9 +222,9 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn(promotion_metadata_envelope(), normalize_ws(runbook))
 
     def test_blocked_record_tracks_current_target_and_candidate_version(self) -> None:
-        blocked = read("docs/release-control/v6/internal/records/rc-to-ga-promotion-readiness-blocked-2026-03-13.md")
-        self.assertIn("exact derived rollback command", blocked)
-        self.assertIn("rollback target and exact derived", blocked)
+        blocked = read("docs/release-control/v6/internal/records/rc-to-ga-promotion-readiness-blocked-2026-03-26.md")
+        self.assertIn("origin/pulse/v6-release", blocked)
+        self.assertIn("selected remote ref", blocked)
         self.assertIn("artifact-owned candidate stable tag", blocked)
         self.assertIn("artifact-owned promotion channel", blocked)
         self.assertIn("artifact-owned promoted prerelease tag", blocked)
@@ -228,7 +233,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("hand-repairing any missing candidate tag, promoted prerelease tag, rollback", blocked)
         matrix = read("docs/release-control/v6/internal/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md")
         self.assertIn(promotion_metadata_envelope(), normalize_ws(matrix))
-        expected = blocked_record.build_blocked_record(record_date="2026-03-13")
+        expected = blocked_record.build_blocked_record(record_date="2026-03-26")
         self.assertEqual(blocked, expected)
 
 
