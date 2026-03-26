@@ -23,9 +23,9 @@ import {
 import { getRecoveryOutcomeBadgeClass } from '@/utils/recoveryOutcomePresentation';
 import {
   getRecoveryPointDetailsSummary,
+  getRecoveryPointItemLabel,
   getRecoveryPointModeLabel,
   getRecoveryPointRepositoryLabel,
-  getRecoveryPointSubjectLabel,
   getRecoveryPointTimestampMs,
   normalizeRecoveryModeQueryValue,
 } from '@/utils/recoveryRecordPresentation';
@@ -34,8 +34,8 @@ import {
   getRecoveryArtifactColumnHeaderClass,
   getRecoveryArtifactRowClass,
   getRecoveryEventTimeTextClass,
-  getRecoverySubjectTypeBadgeClass,
-  getRecoverySubjectTypeLabel,
+  getRecoveryPointItemTypeBadgeClass,
+  getRecoveryPointItemTypeLabel,
   RECOVERY_GROUP_HEADER_ROW_CLASS,
   RECOVERY_GROUP_HEADER_TEXT_CLASS,
 } from '@/utils/recoveryTablePresentation';
@@ -162,13 +162,13 @@ export const RecoveryHistoryTable: Component<RecoveryHistoryTableProps> = (props
                 <For each={group.items}>
                   {(point) => {
                     const resourceIndex = props.resourcesById();
-                    const subject = getRecoveryPointSubjectLabel(point, resourceIndex);
+                    const item = getRecoveryPointItemLabel(point, resourceIndex);
                     const tsMs = getRecoveryPointTimestampMs(point);
                     const timeOnly =
                       point.completedAt && Number.isFinite(tsMs)
                         ? formatRecoveryTimeOnly(tsMs)
                         : '—';
-                    const subjectType = getRecoverySubjectTypeLabel(point);
+                    const itemType = getRecoveryPointItemTypeLabel(point);
                     const platform = normalizeSourcePlatformQueryValue(getRecoveryPointPlatform(point));
                     const mode =
                       normalizeRecoveryModeQueryValue(String(point.mode || '').toLowerCase()) ||
@@ -213,13 +213,13 @@ export const RecoveryHistoryTable: Component<RecoveryHistoryTableProps> = (props
                                 case 'type':
                                   return (
                                     <TableCell class="whitespace-nowrap px-3 py-0.5 text-center">
-                                      <Show when={subjectType} fallback={<span class="text-muted">—</span>}>
+                                      <Show when={itemType} fallback={<span class="text-muted">—</span>}>
                                         <span
-                                          class={`inline-flex min-w-[2.75rem] justify-center rounded px-1.5 py-px text-[9px] font-medium leading-none ${getRecoverySubjectTypeBadgeClass(
+                                          class={`inline-flex min-w-[2.75rem] justify-center rounded px-1.5 py-px text-[9px] font-medium leading-none ${getRecoveryPointItemTypeBadgeClass(
                                             point,
                                           )}`}
                                         >
-                                          {subjectType}
+                                          {itemType}
                                         </span>
                                       </Show>
                                     </TableCell>
@@ -229,11 +229,11 @@ export const RecoveryHistoryTable: Component<RecoveryHistoryTableProps> = (props
                                   return (
                                     <TableCell
                                       class="max-w-[420px] whitespace-nowrap px-3 py-0.5 text-base-content"
-                                      title={subject}
+                                      title={item}
                                     >
                                       <div class="flex min-w-0 max-w-full items-center gap-2">
                                         <span class="min-w-0 flex-1 truncate font-medium">
-                                          {subject}
+                                          {item}
                                         </span>
                                         <span class="inline-flex shrink-0 items-center gap-1">
                                           <Show when={point.immutable === true}>

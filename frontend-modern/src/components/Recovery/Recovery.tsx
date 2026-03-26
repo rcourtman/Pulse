@@ -24,9 +24,9 @@ import {
 import { getRecoveryPointsFailureState } from '@/utils/recoveryEmptyStatePresentation';
 import { normalizeRecoveryOutcome as normalizeOutcome } from '@/utils/recoveryOutcomePresentation';
 import {
-  getRecoveryPointSubjectLabel,
+  getRecoveryPointItemLabel,
   getRecoveryPointTimestampMs,
-  getRecoveryRollupSubjectLabel,
+  getRecoveryRollupItemLabel,
 } from '@/utils/recoveryRecordPresentation';
 import {
   getRecoveryItemTypePresentation,
@@ -124,7 +124,7 @@ const Recovery: Component = () => {
       if (itemType && rollupItemType !== itemType) return false;
 
       if (!query) return true;
-      const label = getRecoveryRollupSubjectLabel(rollup, resourceIndex);
+      const label = getRecoveryRollupItemLabel(rollup, resourceIndex);
       const haystack = [
         rollup.rollupId,
         rollup.subjectResourceId || '',
@@ -213,7 +213,7 @@ const Recovery: Component = () => {
 
   const selectedHistorySubjectLabel = createMemo(() => {
     const rollup = selectedRollup();
-    return rollup ? getRecoveryRollupSubjectLabel(rollup, resourcesById()) : null;
+    return rollup ? getRecoveryRollupItemLabel(rollup, resourcesById()) : null;
   });
 
   const filteredPoints = createMemo<RecoveryPoint[]>(() => {
@@ -235,8 +235,8 @@ const Recovery: Component = () => {
       const leftTimestamp = getRecoveryPointTimestampMs(left);
       const rightTimestamp = getRecoveryPointTimestampMs(right);
       if (leftTimestamp !== rightTimestamp) return rightTimestamp - leftTimestamp;
-      const leftName = getRecoveryPointSubjectLabel(left, resourceIndex);
-      const rightName = getRecoveryPointSubjectLabel(right, resourceIndex);
+      const leftName = getRecoveryPointItemLabel(left, resourceIndex);
+      const rightName = getRecoveryPointItemLabel(right, resourceIndex);
       return leftName.localeCompare(rightName);
     });
   });

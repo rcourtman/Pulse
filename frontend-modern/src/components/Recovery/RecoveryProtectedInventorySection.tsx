@@ -41,7 +41,7 @@ import {
 } from '@/utils/recoveryOutcomePresentation';
 import { getRecoveryIssueRailClass, type RecoveryIssueTone } from '@/utils/recoveryIssuePresentation';
 import { getRecoveryRollupPlatforms } from '@/utils/recoveryPlatformModel';
-import { getRecoveryRollupSubjectLabel } from '@/utils/recoveryRecordPresentation';
+import { getRecoveryRollupItemLabel } from '@/utils/recoveryRecordPresentation';
 import { getSourcePlatformLabel, normalizeSourcePlatformQueryValue } from '@/utils/sourcePlatforms';
 import { titleCaseDelimitedLabel } from '@/utils/textPresentation';
 
@@ -119,8 +119,8 @@ export const RecoveryProtectedInventorySection: Component<
     items.sort((left, right) => {
       switch (sortColumn) {
         case 'item': {
-          const leftLabel = getRecoveryRollupSubjectLabel(left, resourceIndex).toLowerCase();
-          const rightLabel = getRecoveryRollupSubjectLabel(right, resourceIndex).toLowerCase();
+          const leftLabel = getRecoveryRollupItemLabel(left, resourceIndex).toLowerCase();
+          const rightLabel = getRecoveryRollupItemLabel(right, resourceIndex).toLowerCase();
           return multiplier * leftLabel.localeCompare(rightLabel);
         }
         case 'type': {
@@ -365,7 +365,7 @@ export const RecoveryProtectedInventorySection: Component<
               <For each={sortedRollups()}>
                 {(rollup) => {
                   const resourceIndex = props.resourcesById();
-                  const label = getRecoveryRollupSubjectLabel(rollup, resourceIndex);
+                  const label = getRecoveryRollupItemLabel(rollup, resourceIndex);
                   const attemptMs = rollup.lastAttemptAt ? Date.parse(rollup.lastAttemptAt) : 0;
                   const successMs = rollup.lastSuccessAt ? Date.parse(rollup.lastSuccessAt) : 0;
                   const outcome = normalizeRecoveryOutcome(rollup.lastOutcome);

@@ -8,32 +8,32 @@ import { titleCaseDelimitedLabel } from '@/utils/textPresentation';
 export type RecoveryArtifactMode = 'snapshot' | 'local' | 'remote';
 
 const getRecoveryLinkedResourceLabel = (
-  subjectResourceId: string,
+  itemResourceId: string,
   resourcesById: Map<string, Resource>,
 ): string => {
-  if (!subjectResourceId) return '';
-  const resource = resourcesById.get(subjectResourceId);
+  if (!itemResourceId) return '';
+  const resource = resourcesById.get(itemResourceId);
   if (!resource) return '';
   const label = getPreferredResourceDisplayName(resource).trim();
   if (!label) return '';
-  if (label.toLowerCase() === subjectResourceId.toLowerCase()) return '';
+  if (label.toLowerCase() === itemResourceId.toLowerCase()) return '';
   return label;
 };
 
-export function getRecoveryRollupSubjectLabel(
+export function getRecoveryRollupItemLabel(
   rollup: ProtectionRollup,
   resourcesById: Map<string, Resource>,
 ): string {
-  const subjectResourceId = (rollup.subjectResourceId || '').trim();
+  const itemResourceId = (rollup.subjectResourceId || '').trim();
   const displayLabel = String(rollup.display?.subjectLabel || '').trim();
-  const linkedResourceLabel = getRecoveryLinkedResourceLabel(subjectResourceId, resourcesById);
+  const linkedResourceLabel = getRecoveryLinkedResourceLabel(itemResourceId, resourcesById);
   if (linkedResourceLabel) return linkedResourceLabel;
   if (displayLabel) return displayLabel;
 
   const ref = rollup.subjectRef || null;
   if (ref?.namespace && ref?.name) return `${ref.namespace}/${ref.name}`;
   if (ref?.name) return ref.name;
-  if (subjectResourceId) return subjectResourceId;
+  if (itemResourceId) return itemResourceId;
   return rollup.rollupId;
 }
 
@@ -43,13 +43,13 @@ export function getRecoveryPointTimestampMs(point: RecoveryPoint): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-export function getRecoveryPointSubjectLabel(
+export function getRecoveryPointItemLabel(
   point: RecoveryPoint,
   resourcesById: Map<string, Resource>,
 ): string {
-  const subjectResourceId = (point.subjectResourceId || '').trim();
+  const itemResourceId = (point.subjectResourceId || '').trim();
   const displayLabel = String(point.display?.subjectLabel || '').trim();
-  const linkedResourceLabel = getRecoveryLinkedResourceLabel(subjectResourceId, resourcesById);
+  const linkedResourceLabel = getRecoveryLinkedResourceLabel(itemResourceId, resourcesById);
   if (linkedResourceLabel) return linkedResourceLabel;
   if (displayLabel) return displayLabel;
 
@@ -60,8 +60,22 @@ export function getRecoveryPointSubjectLabel(
   if (name) return name;
   const id = String(ref?.id || '').trim();
   if (id) return id;
-  if (subjectResourceId) return subjectResourceId;
+  if (itemResourceId) return itemResourceId;
   return point.id;
+}
+
+export function getRecoveryRollupSubjectLabel(
+  rollup: ProtectionRollup,
+  resourcesById: Map<string, Resource>,
+): string {
+  return getRecoveryRollupItemLabel(rollup, resourcesById);
+}
+
+export function getRecoveryPointSubjectLabel(
+  point: RecoveryPoint,
+  resourcesById: Map<string, Resource>,
+): string {
+  return getRecoveryPointItemLabel(point, resourcesById);
 }
 
 export function getRecoveryPointRepositoryLabel(point: RecoveryPoint): string {

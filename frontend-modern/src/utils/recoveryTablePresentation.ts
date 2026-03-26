@@ -82,14 +82,22 @@ export function getRecoveryArtifactColumnLabel(id: string, fallback?: string): s
   return RECOVERY_ARTIFACT_COLUMN_LABELS[id] || fallback || id;
 }
 
-export function getRecoverySubjectTypeBadgeClass(point: RecoveryPoint): string {
+export function getRecoveryPointItemTypeBadgeClass(point: RecoveryPoint): string {
   return getRecoveryItemTypeBadgeClass(point.display?.itemType || point.display?.subjectType || point.subjectRef?.type);
 }
 
-export function getRecoverySubjectTypeLabel(point: RecoveryPoint): string {
+export function getRecoveryPointItemTypeLabel(point: RecoveryPoint): string {
   return getRecoveryItemTypeLabel(
     point.display?.itemType || point.display?.subjectType || point.subjectRef?.type,
   );
+}
+
+export function getRecoverySubjectTypeBadgeClass(point: RecoveryPoint): string {
+  return getRecoveryPointItemTypeBadgeClass(point);
+}
+
+export function getRecoverySubjectTypeLabel(point: RecoveryPoint): string {
+  return getRecoveryPointItemTypeLabel(point);
 }
 
 export function getRecoveryArtifactColumnHeaderClass(id: string): string {

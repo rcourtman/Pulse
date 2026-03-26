@@ -8,12 +8,12 @@ import {
   getRecoveryEventTimeTextClass,
   getRecoveryGroupNoTimestampLabel,
   getRecoveryHistorySearchPlaceholder,
+  getRecoveryPointItemTypeBadgeClass,
+  getRecoveryPointItemTypeLabel,
   getRecoveryProtectedSearchPlaceholder,
   getRecoveryRollupAgeTextClass,
   getRecoveryRollupIssueTone,
   getRecoverySearchHistoryEmptyMessage,
-  getRecoverySubjectTypeBadgeClass,
-  getRecoverySubjectTypeLabel,
   isRecoveryRollupStale,
   RECOVERY_ADVANCED_FILTER_FIELD_CLASS,
   RECOVERY_ADVANCED_FILTER_LABEL_CLASS,
@@ -79,8 +79,8 @@ describe('recoveryTablePresentation', () => {
       subjectRef: { type: 'proxmox-vm' },
     } as RecoveryPoint;
 
-    expect(getRecoverySubjectTypeLabel(point)).toBe('VM');
-    expect(getRecoverySubjectTypeBadgeClass(point)).toBe(
+    expect(getRecoveryPointItemTypeLabel(point)).toBe('VM');
+    expect(getRecoveryPointItemTypeBadgeClass(point)).toBe(
       'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300',
     );
   });
@@ -91,8 +91,8 @@ describe('recoveryTablePresentation', () => {
       subjectRef: { type: 'proxmox-lxc' },
     } as RecoveryPoint;
 
-    expect(getRecoverySubjectTypeLabel(point)).toBe('Container');
-    expect(getRecoverySubjectTypeBadgeClass(point)).toBe(
+    expect(getRecoveryPointItemTypeLabel(point)).toBe('Container');
+    expect(getRecoveryPointItemTypeBadgeClass(point)).toBe(
       'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
     );
   });
@@ -103,8 +103,8 @@ describe('recoveryTablePresentation', () => {
       subjectRef: { type: 'custom-thing' },
     } as RecoveryPoint;
 
-    expect(getRecoverySubjectTypeLabel(point)).toBe('Custom Thing');
-    expect(getRecoverySubjectTypeBadgeClass(point)).toBe('bg-surface-alt text-base-content');
+    expect(getRecoveryPointItemTypeLabel(point)).toBe('Custom Thing');
+    expect(getRecoveryPointItemTypeBadgeClass(point)).toBe('bg-surface-alt text-base-content');
   });
 
   it('derives artifact header and row classes', () => {

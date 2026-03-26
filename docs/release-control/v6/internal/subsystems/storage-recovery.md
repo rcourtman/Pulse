@@ -181,6 +181,10 @@ canonical as well. Recovery inventory and event-history columns should use
 as the primary runtime model, and any saved legacy column IDs must migrate at
 the shared column-visibility boundary instead of forcing recovery renderers to
 carry deleted column identities indefinitely.
+That same runtime-helper contract should prefer `item` terminology in shared
+recovery presenters too. Helper exports that resolve labels or item-type badges
+should expose canonical item-facing names, while any retained `subject` aliases
+remain compatibility wrappers instead of the primary runtime boundary.
 That same shared presentation layer also owns the distinction between
 aggregate recovery-method language and single-record recovery-method language.
 Timeline legends and daily breakdowns must use aggregate labels such as
@@ -1052,11 +1056,6 @@ surfaces may run without local auth configured, but a valid tenant
 the anonymous optional-auth fallback so hosted recovery, onboarding, and
 support flows do not silently degrade into unauthenticated state or bearer-
 token-only mode after cloud handoff.
-That same hosted recovery boundary must also preserve tenant-context recovery at
-the handoff exchange itself. When older hosted tenant containers are missing
-`PULSE_TENANT_ID`, the shared handoff handler must still recover the tenant
-from hosted runtime context before it mints session cookies, so recovery/support
-entry from Pulse Account does not fail closed with a generic internal error.
 That same shared `internal/api/` boundary also owns hosted AI bootstrap
 continuity. Storage- and recovery-adjacent hosted flows may surface Patrol-
 backed investigation or AI-assisted recovery guidance before an operator has

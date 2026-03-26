@@ -257,7 +257,7 @@ describe('Recovery', () => {
     expect(screen.queryByText('Protected Items')).not.toBeInTheDocument();
   });
 
-  it('renders canonical rollup and history subject labels when linked resources are unavailable', async () => {
+  it('renders canonical rollup and history item labels when linked resources are unavailable', async () => {
     rollupsPayload.push({
       rollupId: 'res:vm-404',
       subjectResourceId: 'vm-404',

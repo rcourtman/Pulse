@@ -2,19 +2,19 @@ import { describe, expect, it } from 'vitest';
 import type { ProtectionRollup, RecoveryPoint } from '@/types/recovery';
 import type { Resource } from '@/types/resource';
 import {
+  getRecoveryPointItemLabel,
   getRecoveryPointDetailsSummary,
   getRecoveryPointKindLabel,
   getRecoveryPointModeLabel,
   getRecoveryPointOutcomeLabel,
   getRecoveryPointRepositoryLabel,
-  getRecoveryPointSubjectLabel,
   getRecoveryPointTimestampMs,
-  getRecoveryRollupSubjectLabel,
+  getRecoveryRollupItemLabel,
   normalizeRecoveryModeQueryValue,
 } from '@/utils/recoveryRecordPresentation';
 
 describe('recoveryRecordPresentation', () => {
-  it('derives rollup and point subject labels from linked resources and refs', () => {
+  it('derives rollup and point item labels from linked resources and refs', () => {
     const resources = new Map<string, Resource>([
       ['res-1', { id: 'res-1', type: 'vm', name: 'db-01' } as Resource],
     ]);
@@ -28,8 +28,8 @@ describe('recoveryRecordPresentation', () => {
       subjectResourceId: 'res-1',
     } as RecoveryPoint;
 
-    expect(getRecoveryRollupSubjectLabel(rollup, resources)).toBe('db-01');
-    expect(getRecoveryPointSubjectLabel(point, resources)).toBe('db-01');
+    expect(getRecoveryRollupItemLabel(rollup, resources)).toBe('db-01');
+    expect(getRecoveryPointItemLabel(point, resources)).toBe('db-01');
   });
 
   it('falls back to refs, repository labels, and details summary', () => {
@@ -41,7 +41,7 @@ describe('recoveryRecordPresentation', () => {
       display: { detailsSummary: 'Immutable and encrypted' },
     } as RecoveryPoint;
 
-    expect(getRecoveryPointSubjectLabel(point, resources)).toBe('prod/api');
+    expect(getRecoveryPointItemLabel(point, resources)).toBe('prod/api');
     expect(getRecoveryPointRepositoryLabel(point)).toBe('pbs:datastore');
     expect(getRecoveryPointDetailsSummary(point)).toBe('Immutable and encrypted');
   });
@@ -78,8 +78,8 @@ describe('recoveryRecordPresentation', () => {
       display: { subjectLabel: 'billing-api' },
     } as RecoveryPoint;
 
-    expect(getRecoveryRollupSubjectLabel(rollup, resources)).toBe('Archive VM');
-    expect(getRecoveryPointSubjectLabel(linkedPoint, resources)).toBe('Payments API');
+    expect(getRecoveryRollupItemLabel(rollup, resources)).toBe('Archive VM');
+    expect(getRecoveryPointItemLabel(linkedPoint, resources)).toBe('Payments API');
   });
 
   it('derives timestamps and normalizes mode query values', () => {
