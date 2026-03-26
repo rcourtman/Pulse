@@ -1,5 +1,5 @@
 {
-  "source_hash": "649178debfd541a371f48db730d2beb552cc2d4a37467fd2c88f7732d5563313",
+  "source_hash": "02327e893b4f909b2352c5c218a0f4600c7d1dba1b38d3fc8daeb1249dde2672",
   "build_inputs": [
     "package.json",
     "tsconfig.json",
@@ -7,6 +7,7 @@
     "src/index.ts",
     "src/account_controller.ts",
     "src/shell.ts",
+    "src/shell_view.ts",
     "src/services.ts",
     "src/runtime.ts",
     "src/types.ts",
