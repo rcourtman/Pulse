@@ -81,7 +81,7 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
   const platformBadge = createMemo(() =>
     getSourcePlatformBadge(platformKey() || getRecoveryPointPlatform(point())),
   );
-  const isPbsProvider = createMemo(() => platformKey() === 'proxmox-pbs');
+  const isPbsPlatform = createMemo(() => platformKey() === 'proxmox-pbs');
 
   const pbsComment = createMemo(() => {
     const value = point().details?.comment;
@@ -103,7 +103,7 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
 
   const matchedDatastore = createMemo<{ datastore: PBSDatastore; instanceName: string } | null>(
     () => {
-      if (!isPbsProvider() || typeof window === 'undefined') return null;
+      if (!isPbsPlatform() || typeof window === 'undefined') return null;
 
       const repositoryRef = point().repositoryRef;
       const instanceName =
@@ -128,7 +128,7 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
 
   const hasPlatformDetails = createMemo(
     () =>
-      isPbsProvider() &&
+      isPbsPlatform() &&
       (pbsComment().length > 0 ||
         pbsOwner().length > 0 ||
         point().immutable === true ||
@@ -332,7 +332,7 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
               </div>
             </Show>
 
-            <Show when={isPbsProvider() && point().verified != null}>
+            <Show when={isPbsPlatform() && point().verified != null}>
               <div class="rounded border border-border bg-surface px-3 py-2 text-xs">
                 <div class="text-[10px] font-semibold uppercase tracking-wide text-muted">
                   Verification

@@ -196,6 +196,10 @@ The same runtime vocabulary rule applies to cross-section recovery props too.
 Live page-to-section boundaries should carry item-focused names like
 `selectedHistoryItemLabel` instead of preserving `subject` labels after the
 shared recovery presenters already expose canonical item terminology.
+That same rule applies to recovery detail helpers. Provider-specific helper
+names like `isPbsProvider` should become platform-specific helpers like
+`isPbsPlatform` once the runtime recovery model is already canonically
+platform-first.
 That same presenter boundary should also own canonical item-type derivation.
 Recovery surfaces must resolve rollup and point item types through one shared
 item-type helper instead of repeating `display.itemType` / `subjectType` /

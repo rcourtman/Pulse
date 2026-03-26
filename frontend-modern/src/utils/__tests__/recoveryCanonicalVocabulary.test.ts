@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import recoveryActivitySectionSource from '@/components/Recovery/RecoveryActivitySection.tsx?raw';
 import recoveryPageSource from '@/components/Recovery/Recovery.tsx?raw';
+import recoveryPointDetailsSource from '@/components/Recovery/RecoveryPointDetails.tsx?raw';
 import recoverySummaryPresentationSource from '@/utils/recoverySummaryPresentation.ts?raw';
 import recoveryHistorySectionSource from '@/components/Recovery/RecoveryHistorySection.tsx?raw';
 import recoveryProtectedInventorySectionSource from '@/components/Recovery/RecoveryProtectedInventorySection.tsx?raw';
@@ -29,6 +30,15 @@ describe('recovery canonical vocabulary', () => {
     expect(recoveryActivitySectionSource).toContain('selectedHistoryItemLabel: Accessor<string | null>;');
     expect(recoveryActivitySectionSource).not.toContain(
       'selectedHistorySubjectLabel: Accessor<string | null>;',
+    );
+  });
+
+  it('keeps recovery detail platform helpers platform-first', () => {
+    expect(recoveryPointDetailsSource).toContain(
+      "const isPbsPlatform = createMemo(() => platformKey() === 'proxmox-pbs');",
+    );
+    expect(recoveryPointDetailsSource).not.toContain(
+      "const isPbsProvider = createMemo(() => platformKey() === 'proxmox-pbs');",
     );
   });
 });

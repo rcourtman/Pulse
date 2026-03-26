@@ -282,8 +282,8 @@ describe('Recovery', () => {
     try {
       render(() => <Recovery />);
 
-      const subject = await screen.findByText('Archive VM');
-      fireEvent.click(subject);
+      const item = await screen.findByText('Archive VM');
+      fireEvent.click(item);
 
       await waitFor(() => {
         expect(navigateSpy).toHaveBeenCalledWith('/recovery?rollupId=res%3Avm-404', {
@@ -376,8 +376,8 @@ describe('Recovery', () => {
   it('keeps recovery history width aligned with canonical column specs', async () => {
     render(() => <Recovery />);
 
-    const subject = await screen.findByText('VM 123');
-    fireEvent.click(subject);
+    const item = await screen.findByText('VM 123');
+    fireEvent.click(item);
 
     await screen.findByText(/Showing 1 - 1 of 1 recovery points/i);
     const tables = await screen.findAllByRole('table');
