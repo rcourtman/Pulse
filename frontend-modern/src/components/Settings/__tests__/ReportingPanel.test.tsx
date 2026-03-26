@@ -84,6 +84,7 @@ function buildState(overrides: Record<string, unknown> = {}) {
     reportingCatalog: () => baseCatalog,
     reportingCatalogError: () => '',
     reportingCatalogLoading: () => false,
+    reloadReportingCatalog: vi.fn(),
     selectedResources: () => [],
     setFormat: vi.fn(),
     setMetricType: vi.fn(),
@@ -190,5 +191,22 @@ describe('ReportingPanel', () => {
 
     expect(screen.getByText('Reporting')).toBeInTheDocument();
     expect(screen.getAllByText('Loading reporting surfaces...').length).toBeGreaterThan(0);
+  });
+
+  it('offers a retry action when the reporting catalog fails to load', () => {
+    const reloadReportingCatalog = vi.fn();
+    useReportingPanelStateMock.mockReturnValue(
+      buildState({
+        isReportingEnabled: () => false,
+        reportingCatalog: () => null,
+        reportingCatalogError: () => 'Reporting unavailable',
+        reloadReportingCatalog,
+      }),
+    );
+
+    render(() => <ReportingPanel />);
+
+    screen.getByRole('button', { name: 'Retry' }).click();
+    expect(reloadReportingCatalog).toHaveBeenCalledOnce();
   });
 });

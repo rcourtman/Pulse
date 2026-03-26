@@ -215,6 +215,10 @@ loaded.
 The same metadata route is readable without the reporting feature gate, so the
 settings shell must not delay the catalog fetch on `licenseLoaded()` before it
 can render its canonical loading, locked, or entitled states.
+That same catalog load must also remain retryable after transient failure.
+`useReportingPanelState.ts` may memoize or dedupe in-flight work, but it must
+not permanently latch a failed first fetch and force operators to reload the
+entire settings page before the reporting shell can recover.
 That same catalog-owned contract also includes the locked teaser copy itself:
 `ReportingPanel.tsx` may style or place the paywall content, but the locked
 title and description must come from the parsed reporting catalog instead of

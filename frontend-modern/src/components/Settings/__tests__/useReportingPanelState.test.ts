@@ -210,4 +210,56 @@ describe('useReportingPanelState', () => {
 
     dispose();
   });
+
+  it('allows retrying the reporting catalog fetch after an initial failure', async () => {
+    vi.resetModules();
+
+    apiFetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response('temporary failure', { status: 500 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(catalogPayload), { status: 200 }));
+
+    vi.doMock('@/utils/apiClient', () => ({
+      apiFetch: apiFetchMock,
+    }));
+
+    vi.doMock('@/utils/toast', () => ({
+      showSuccess: vi.fn(),
+      showWarning: vi.fn(),
+    }));
+
+    vi.doMock('@/utils/trialStartAction', () => ({
+      runStartProTrialAction: vi.fn(),
+    }));
+
+    vi.doMock('@/utils/upgradeMetrics', () => ({
+      trackPaywallViewed: vi.fn(),
+    }));
+
+    vi.doMock('@/stores/license', () => ({
+      entitlements: vi.fn(() => ({ trial_eligible: true })),
+      getUpgradeActionUrlOrFallback: vi.fn(() => '/pricing'),
+      hasFeature: vi.fn((feature: string) => feature === 'advanced_reporting' && hasReportingFeature),
+      licenseLoaded: vi.fn(() => true),
+      loadLicenseStatus: loadLicenseStatusMock,
+    }));
+
+    ({ useReportingPanelState } = await import('../useReportingPanelState'));
+    const { hookState, dispose } = mountHook();
+
+    await flushAsync();
+    await flushAsync();
+
+    expect(hookState.reportingCatalog()).toBeNull();
+    expect(hookState.reportingCatalogError()).toBe('temporary failure');
+
+    hookState.reloadReportingCatalog();
+    await flushAsync();
+    await flushAsync();
+
+    expect(apiFetchMock).toHaveBeenCalledTimes(2);
+    expect(hookState.reportingCatalog()?.title).toBe('Detailed Reporting');
+
+    dispose();
+  });
 });

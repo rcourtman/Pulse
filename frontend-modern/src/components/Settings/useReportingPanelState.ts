@@ -45,7 +45,7 @@ export const useReportingPanelState = () => {
   const [reportingCatalog, setReportingCatalog] = createSignal<ReportingCatalog | null>(null);
   const [reportingCatalogLoading, setReportingCatalogLoading] = createSignal(false);
   const [reportingCatalogError, setReportingCatalogError] = createSignal('');
-  const [reportingCatalogRequested, setReportingCatalogRequested] = createSignal(false);
+  const [reportingCatalogAttempted, setReportingCatalogAttempted] = createSignal(false);
   const [title, setTitle] = createSignal('');
   const [startingTrial, setStartingTrial] = createSignal(false);
   const reportingFeatureId = () => reportingCatalog()?.id ?? '';
@@ -74,33 +74,39 @@ export const useReportingPanelState = () => {
     return visible;
   }, false);
 
-  createEffect(() => {
-    if (reportingCatalog() || reportingCatalogLoading() || reportingCatalogRequested()) {
+  const loadReportingCatalog = async () => {
+    if (reportingCatalogLoading()) {
       return;
     }
 
-    void (async () => {
-      setReportingCatalogRequested(true);
-      setReportingCatalogLoading(true);
-      setReportingCatalogError('');
-      try {
-        const request = buildReportingCatalogRequest();
-        const response = await apiFetch(request.url);
-        if (!response.ok) {
-          const text = await response.text();
-          throw new Error(text || getReportingCatalogErrorMessage());
-        }
-
-        setReportingCatalog(parseReportingCatalog(await response.json()));
-      } catch (error) {
-        console.error('Reporting catalog error:', error);
-        setReportingCatalogError(
-          error instanceof Error ? error.message : getReportingCatalogErrorMessage(),
-        );
-      } finally {
-        setReportingCatalogLoading(false);
+    setReportingCatalogAttempted(true);
+    setReportingCatalogLoading(true);
+    setReportingCatalogError('');
+    try {
+      const request = buildReportingCatalogRequest();
+      const response = await apiFetch(request.url);
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || getReportingCatalogErrorMessage());
       }
-    })();
+
+      setReportingCatalog(parseReportingCatalog(await response.json()));
+    } catch (error) {
+      console.error('Reporting catalog error:', error);
+      setReportingCatalogError(
+        error instanceof Error ? error.message : getReportingCatalogErrorMessage(),
+      );
+    } finally {
+      setReportingCatalogLoading(false);
+    }
+  };
+
+  createEffect(() => {
+    if (reportingCatalog() || reportingCatalogLoading() || reportingCatalogAttempted()) {
+      return;
+    }
+
+    void loadReportingCatalog();
   });
 
   createEffect(() => {
@@ -237,6 +243,12 @@ export const useReportingPanelState = () => {
     reportingCatalog,
     reportingCatalogError,
     reportingCatalogLoading,
+    reloadReportingCatalog: () => {
+      if (reportingCatalogLoading()) {
+        return;
+      }
+      void loadReportingCatalog();
+    },
     selectedResources,
     setFormat,
     setMetricType,

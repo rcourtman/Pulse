@@ -56,6 +56,7 @@ export function ReportingPanel() {
     reportingCatalog,
     reportingCatalogError,
     reportingCatalogLoading,
+    reloadReportingCatalog,
     selectedResources,
     setFormat,
     setMetricType,
@@ -114,8 +115,17 @@ export function ReportingPanel() {
           description="Reporting surfaces are currently unavailable."
           icon={<BarChart class="w-5 h-5" strokeWidth={2} />}
         >
-          <div class="p-4 sm:p-6">
+          <div class="space-y-4 p-4 sm:p-6">
             <p class="text-sm text-warning">{reportingCatalogError()}</p>
+            <div class="flex justify-end">
+              <button
+                type="button"
+                class="rounded-md border border-base-300 bg-base-100 px-4 py-2 text-sm font-medium text-base-content transition-colors hover:bg-base-200"
+                onClick={reloadReportingCatalog}
+              >
+                Retry
+              </button>
+            </div>
           </div>
         </OperationsPanel>
       </Show>
