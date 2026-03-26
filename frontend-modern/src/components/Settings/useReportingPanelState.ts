@@ -17,6 +17,7 @@ import {
   getReportingGenerateSuccessMessage,
   getReportingInventoryExportErrorMessage,
   getReportingInventoryExportSuccessMessage,
+  resolveReportingDownloadFilename,
 } from '@/utils/reportingPresentation';
 import { runStartProTrialAction } from '@/utils/trialStartAction';
 import {
@@ -139,7 +140,10 @@ export const useReportingPanelState = () => {
     const url = window.URL.createObjectURL(blob);
     const anchor = document.createElement('a');
     anchor.href = url;
-    anchor.download = filename;
+    anchor.download = resolveReportingDownloadFilename(
+      response.headers.get('Content-Disposition'),
+      filename,
+    );
     document.body.appendChild(anchor);
     anchor.click();
     window.URL.revokeObjectURL(url);

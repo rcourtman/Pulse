@@ -274,6 +274,9 @@ optional metric/title field emission, canonical default-title fallback,
 default fallback range window, and
 attachment filename prefixes from the canonical reporting definition instead of
 hardcoding a second local contract.
+Frontend consumers may still keep a local fallback filename for defensive
+download behavior, but when the server returns `Content-Disposition` they must
+prefer that attachment filename as the canonical transport output.
 That same catalog contract is also authoritative for frontend request builders:
 consumers may validate or reject malformed payloads, but they must not invent
 replacement report endpoints, filename prefixes, export routes, or default

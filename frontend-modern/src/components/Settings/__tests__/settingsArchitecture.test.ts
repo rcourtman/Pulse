@@ -1103,6 +1103,7 @@ describe('Settings architecture guardrails', () => {
     expect(reportingPanelStateSource).not.toContain('!isReportingEnabled()');
     expect(reportingPanelStateSource).toContain('buildVMInventoryExportRequest');
     expect(reportingPanelStateSource).toContain('getReportingGenerateSuccessMessage');
+    expect(reportingPanelStateSource).toContain('resolveReportingDownloadFilename');
     expect(reportingPanelStateSource).not.toContain("'advanced_reporting'");
     expect(reportingPanelStateSource).not.toContain('getTrialAlreadyUsedMessage()');
     expect(reportingCatalogModelSource).toContain('export function buildReportingCatalogRequest');
