@@ -3,6 +3,7 @@ package portal
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"sort"
@@ -786,7 +787,7 @@ func TestPortalPageTemplate_AccountServicesRendered(t *testing.T) {
 		`id="portal-app-root"`,
 		`id="pulse-account-bootstrap"`,
 		`"authenticated":true`,
-		`"commercial_api_base_url":"https://license.pulserelay.pro"`,
+		fmt.Sprintf(`"commercial_api_base_path":"%s"`, PortalCommercialAPIBasePath),
 		fmt.Sprintf(`"portal_path":"%s"`, PortalPagePath),
 		fmt.Sprintf(`"bootstrap_path":"%s"`, PortalBootstrapPath),
 		fmt.Sprintf(`"magic_link_request_path":"%s"`, PortalMagicLinkRequestPath),
@@ -863,8 +864,8 @@ func TestBuildPortalBootstrapJSON_Contract(t *testing.T) {
 	if got := payload["email"]; got != "owner@example.com" {
 		t.Fatalf("email = %#v, want owner@example.com", got)
 	}
-	if got := payload["commercial_api_base_url"]; got != "https://license.pulserelay.pro" {
-		t.Fatalf("commercial_api_base_url = %#v", got)
+	if got := payload["commercial_api_base_path"]; got != PortalCommercialAPIBasePath {
+		t.Fatalf("commercial_api_base_path = %#v", got)
 	}
 	if got := payload["portal_path"]; got != PortalPagePath {
 		t.Fatalf("portal_path = %#v", got)
@@ -979,6 +980,64 @@ func TestHandlePortalBootstrap_Success(t *testing.T) {
 	}
 	if got := workspace["created_at"]; got != "2026-03-25T10:00:00Z" {
 		t.Fatalf("workspace created_at = %#v", got)
+	}
+}
+
+func TestHandleCommercialProxy_ForwardsAllowedRequest(t *testing.T) {
+	var (
+		gotMethod      string
+		gotPath        string
+		gotContentType string
+		gotBody        string
+	)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		gotMethod = r.Method
+		gotPath = r.URL.Path
+		gotContentType = r.Header.Get("Content-Type")
+		gotBody = string(body)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer upstream.Close()
+
+	req := httptest.NewRequest(http.MethodPost, PortalCommercialAPIBasePath+"/v1/retrieve-license/request", strings.NewReader(`{"email":"owner@example.com"}`))
+	req.SetPathValue("commercial_path", "v1/retrieve-license/request")
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	HandleCommercialProxy(CommercialProxyConfig{BaseURL: upstream.URL}).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d (body=%q)", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	if gotMethod != http.MethodPost {
+		t.Fatalf("upstream method = %q, want %q", gotMethod, http.MethodPost)
+	}
+	if gotPath != "/v1/retrieve-license/request" {
+		t.Fatalf("upstream path = %q, want %q", gotPath, "/v1/retrieve-license/request")
+	}
+	if gotContentType != "application/json" {
+		t.Fatalf("upstream content-type = %q, want %q", gotContentType, "application/json")
+	}
+	if gotBody != `{"email":"owner@example.com"}` {
+		t.Fatalf("upstream body = %q", gotBody)
+	}
+	if rec.Body.String() != `{"ok":true}` {
+		t.Fatalf("response body = %q", rec.Body.String())
+	}
+}
+
+func TestHandleCommercialProxy_RejectsUnknownPath(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, PortalCommercialAPIBasePath+"/v1/not-allowed", strings.NewReader(`{}`))
+	req.SetPathValue("commercial_path", "v1/not-allowed")
+	rec := httptest.NewRecorder()
+
+	HandleCommercialProxy(CommercialProxyConfig{BaseURL: "https://license.pulserelay.pro"}).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusNotFound)
 	}
 }
 

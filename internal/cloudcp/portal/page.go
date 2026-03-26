@@ -42,13 +42,12 @@ type portalPageData struct {
 }
 
 const (
-	defaultPublicSiteURL        = "https://pulserelay.pro"
-	defaultSupportEmail         = "support@pulserelay.pro"
-	defaultCommercialAPIBaseURL = "https://license.pulserelay.pro"
-	defaultPortalPath           = PortalPagePath
-	defaultLogoutPath           = PortalLogoutPath
-	defaultAccountAPIBasePath   = PortalAccountAPIBasePath
-	defaultPortalAPIBasePath    = PortalAPIBasePath
+	defaultPublicSiteURL      = "https://pulserelay.pro"
+	defaultSupportEmail       = "support@pulserelay.pro"
+	defaultPortalPath         = PortalPagePath
+	defaultLogoutPath         = PortalLogoutPath
+	defaultAccountAPIBasePath = PortalAccountAPIBasePath
+	defaultPortalAPIBasePath  = PortalAPIBasePath
 )
 
 var errPortalAuthRequired = errors.New("portal auth required")

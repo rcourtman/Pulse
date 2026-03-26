@@ -142,7 +142,7 @@ export function createPortalAPI(context: PortalAPIContext): PortalAPI {
       }, 'Failed to sign out.');
     },
     postCommercialJSON: function<T>(path: string, body: Record<string, unknown>) {
-      return request<T>(bootstrap().commercial_api_base_url + path, {
+      return request<T>(bootstrap().commercial_api_base_path + path, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),

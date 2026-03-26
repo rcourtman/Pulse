@@ -293,7 +293,7 @@
         }, "Failed to sign out.");
       },
       postCommercialJSON: function(path, body) {
-        return request(bootstrap().commercial_api_base_url + path, {
+        return request(bootstrap().commercial_api_base_path + path, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body)
@@ -1634,7 +1634,7 @@
     return {
       public_site_url: embeddedBootstrap.public_site_url || "https://pulserelay.pro",
       support_email: embeddedBootstrap.support_email || "support@pulserelay.pro",
-      commercial_api_base_url: embeddedBootstrap.commercial_api_base_url || "",
+      commercial_api_base_path: embeddedBootstrap.commercial_api_base_path || "/api/portal/commercial",
       portal_path: embeddedBootstrap.portal_path || "/portal",
       bootstrap_path: embeddedBootstrap.bootstrap_path || "/api/portal/bootstrap",
       magic_link_request_path: embeddedBootstrap.magic_link_request_path || "/api/public/magic-link/request",

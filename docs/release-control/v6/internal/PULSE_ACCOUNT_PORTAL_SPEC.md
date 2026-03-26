@@ -251,7 +251,9 @@ canonical frontend state seam for:
 
 1. account identity context
 2. hosted account and workspace summaries
-3. public/commercial edge URLs needed by the account shell
+3. public-site URLs plus same-origin portal route paths for commercial actions,
+   so the browser shell can stay behind the control-plane CSP instead of
+   calling shared license APIs cross-origin
 4. signed-out versus signed-in shell state, so login, session expiry, and
    authenticated account runtime all inherit one owned page contract instead of
    separate server-rendered templates

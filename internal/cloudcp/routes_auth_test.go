@@ -338,6 +338,13 @@ func TestRegisterRoutes_PortalBootstrapRequiresSession(t *testing.T) {
 	if revokedRec.Code != http.StatusUnauthorized {
 		t.Fatalf("revoked status = %d, want %d (body=%q)", revokedRec.Code, http.StatusUnauthorized, revokedRec.Body.String())
 	}
+
+	commercialReq := httptest.NewRequest(http.MethodPost, portal.PortalCommercialAPIBasePath+"/v1/retrieve-license/request", strings.NewReader(`{"email":"owner@example.com"}`))
+	commercialRec := httptest.NewRecorder()
+	mux.ServeHTTP(commercialRec, commercialReq)
+	if commercialRec.Code != http.StatusUnauthorized {
+		t.Fatalf("portal commercial unauth status = %d, want %d (body=%q)", commercialRec.Code, http.StatusUnauthorized, commercialRec.Body.String())
+	}
 }
 
 func TestRegisterRoutes_PortalPageSessionModes(t *testing.T) {

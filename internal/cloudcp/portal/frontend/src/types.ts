@@ -22,7 +22,7 @@ export interface PortalBootstrapData {
   email: string;
   public_site_url: string;
   support_email: string;
-  commercial_api_base_url: string;
+  commercial_api_base_path: string;
   portal_path: string;
   bootstrap_path: string;
   magic_link_request_path: string;

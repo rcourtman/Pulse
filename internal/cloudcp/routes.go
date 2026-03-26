@@ -230,6 +230,9 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 	mux.Handle(portal.PortalBootstrapPath, portalAPILimiter.Middleware(sessionAuth(portal.HandlePortalBootstrap(deps.MagicLinks, deps.Registry))))
 	mux.Handle(portal.PortalDashboardPath, portalAPILimiter.Middleware(accountSessionAuth(accountIDFromPortalRequest, portal.HandlePortalDashboard(deps.Registry))))
 	mux.Handle(portal.PortalWorkspacePath, portalAPILimiter.Middleware(accountSessionAuth(accountIDFromPortalRequest, portal.HandlePortalWorkspaceDetail(deps.Registry))))
+	mux.Handle(portal.PortalCommercialAPIPath, portalAPILimiter.Middleware(sessionAuth(portal.HandleCommercialProxy(portal.CommercialProxyConfig{
+		BaseURL: deps.Config.LicenseServerURL,
+	}))))
 
 	// Stripe Customer Portal redirect (session + account-membership authenticated)
 	billingCfg := portal.BillingPortalConfig{

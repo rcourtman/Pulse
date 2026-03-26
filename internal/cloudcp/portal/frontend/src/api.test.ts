@@ -8,7 +8,7 @@ const bootstrap: PortalBootstrapData = {
   email: 'owner@example.com',
   public_site_url: 'https://pulserelay.pro',
   support_email: 'support@pulserelay.pro',
-  commercial_api_base_url: 'https://license.pulserelay.pro',
+  commercial_api_base_path: '/api/portal/commercial',
   portal_path: '/portal',
   bootstrap_path: '/api/portal/bootstrap',
   magic_link_request_path: '/api/public/magic-link/request',

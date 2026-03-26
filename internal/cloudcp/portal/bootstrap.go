@@ -26,19 +26,19 @@ type BootstrapAccount struct {
 }
 
 type BootstrapData struct {
-	Authenticated        bool               `json:"authenticated"`
-	Email                string             `json:"email"`
-	PublicSiteURL        string             `json:"public_site_url"`
-	SupportEmail         string             `json:"support_email"`
-	CommercialAPIBaseURL string             `json:"commercial_api_base_url"`
-	PortalPath           string             `json:"portal_path"`
-	BootstrapPath        string             `json:"bootstrap_path"`
-	MagicLinkRequestPath string             `json:"magic_link_request_path"`
-	SignupPath           string             `json:"signup_path"`
-	LogoutPath           string             `json:"logout_path"`
-	AccountAPIBasePath   string             `json:"account_api_base_path"`
-	PortalAPIBasePath    string             `json:"portal_api_base_path"`
-	Accounts             []BootstrapAccount `json:"accounts"`
+	Authenticated         bool               `json:"authenticated"`
+	Email                 string             `json:"email"`
+	PublicSiteURL         string             `json:"public_site_url"`
+	SupportEmail          string             `json:"support_email"`
+	CommercialAPIBasePath string             `json:"commercial_api_base_path"`
+	PortalPath            string             `json:"portal_path"`
+	BootstrapPath         string             `json:"bootstrap_path"`
+	MagicLinkRequestPath  string             `json:"magic_link_request_path"`
+	SignupPath            string             `json:"signup_path"`
+	LogoutPath            string             `json:"logout_path"`
+	AccountAPIBasePath    string             `json:"account_api_base_path"`
+	PortalAPIBasePath     string             `json:"portal_api_base_path"`
+	Accounts              []BootstrapAccount `json:"accounts"`
 }
 
 func MarshalBootstrapJSON(data BootstrapData) (template.JS, error) {
@@ -75,19 +75,19 @@ func BuildBootstrapData(authenticated bool, email string, accounts []portalPageA
 	}
 
 	return BootstrapData{
-		Authenticated:        authenticated,
-		Email:                email,
-		PublicSiteURL:        defaultPublicSiteURL,
-		SupportEmail:         defaultSupportEmail,
-		CommercialAPIBaseURL: defaultCommercialAPIBaseURL,
-		PortalPath:           defaultPortalPath,
-		BootstrapPath:        PortalBootstrapPath,
-		MagicLinkRequestPath: PortalMagicLinkRequestPath,
-		SignupPath:           PortalSignupPath,
-		LogoutPath:           defaultLogoutPath,
-		AccountAPIBasePath:   defaultAccountAPIBasePath,
-		PortalAPIBasePath:    defaultPortalAPIBasePath,
-		Accounts:             bootstrapAccounts,
+		Authenticated:         authenticated,
+		Email:                 email,
+		PublicSiteURL:         defaultPublicSiteURL,
+		SupportEmail:          defaultSupportEmail,
+		CommercialAPIBasePath: PortalCommercialAPIBasePath,
+		PortalPath:            defaultPortalPath,
+		BootstrapPath:         PortalBootstrapPath,
+		MagicLinkRequestPath:  PortalMagicLinkRequestPath,
+		SignupPath:            PortalSignupPath,
+		LogoutPath:            defaultLogoutPath,
+		AccountAPIBasePath:    defaultAccountAPIBasePath,
+		PortalAPIBasePath:     defaultPortalAPIBasePath,
+		Accounts:              bootstrapAccounts,
 	}
 }
 

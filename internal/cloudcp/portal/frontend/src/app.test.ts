@@ -27,7 +27,7 @@ async function flushAsync() {
 const bootstrapDefaults: Omit<PortalBootstrapData, 'authenticated' | 'email' | 'accounts'> = {
   public_site_url: 'https://pulserelay.pro',
   support_email: 'support@pulserelay.pro',
-  commercial_api_base_url: 'https://license.pulserelay.pro',
+  commercial_api_base_path: '/api/portal/commercial',
   portal_path: '/portal',
   bootstrap_path: '/api/portal/bootstrap',
   magic_link_request_path: '/api/public/magic-link/request',
@@ -242,10 +242,10 @@ describe('portal app', function() {
           accounts: accounts,
         });
       }
-      if (url === 'https://license.pulserelay.pro/v1/retrieve-license/request') {
+      if (url === '/api/portal/commercial/v1/retrieve-license/request') {
         return jsonResponse({});
       }
-      if (url === 'https://license.pulserelay.pro/v1/retrieve-license') {
+      if (url === '/api/portal/commercial/v1/retrieve-license') {
         return jsonResponse({
           license: {
             token: 'pulse_token_123',
@@ -284,14 +284,14 @@ describe('portal app', function() {
     await flushAsync();
 
     expect(fetchMock.mock.calls).toContainEqual([
-      'https://license.pulserelay.pro/v1/retrieve-license/request',
+      '/api/portal/commercial/v1/retrieve-license/request',
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({ email: 'owner@example.com' }),
       }),
     ]);
     expect(fetchMock.mock.calls).toContainEqual([
-      'https://license.pulserelay.pro/v1/retrieve-license',
+      '/api/portal/commercial/v1/retrieve-license',
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({ email: 'owner@example.com', code: '123456' }),
