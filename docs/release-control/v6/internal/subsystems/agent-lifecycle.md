@@ -260,6 +260,12 @@ before any API-only token fallback or optional-auth anonymous fallback so
 operators can mint relay-mobile credentials and continue onboarding from the
 hosted runtime itself even after that tenant has already minted managed API
 tokens.
+That same lifecycle-adjacent hosted setup path must also survive legacy tenant
+runtime env drift. When Pulse Account hands an operator into a hosted workspace,
+`internal/api/cloud_handoff_handlers.go` must still recover the canonical
+tenant context from hosted runtime state if `PULSE_TENANT_ID` is missing, so
+lifecycle entry into onboarding, setup, and mobile-pairing surfaces does not
+die before the first authenticated page load.
 That same lifecycle-adjacent hosted setup path also depends on AI bootstrap
 staying canonical before the first settings write. Hosted operators may land
 in Chat, Patrol-backed setup hints, or AI-dependent remediation surfaces

@@ -1465,6 +1465,13 @@ must also project the effective default-org hosted lease when the tenant-local
 billing file has not been materialized yet, so admin billing-state payloads
 stay coherent with the tenant's active entitlement payload instead of briefly
 regressing to local trial/default state.
+That same hosted handoff boundary also owns tenant-context recovery inside the
+tenant runtime itself. When older hosted containers are missing explicit
+`PULSE_TENANT_ID`, `internal/api/cloud_handoff_handlers.go` must recover the
+JWT audience/tenant context from hosted-only runtime inputs like
+`PULSE_PUBLIC_URL` or the hosted tenant request host before it mints the
+browser session, rather than failing a valid control-plane handoff with a
+generic `500 internal error`.
 Canonical missing-resource lookups in governed frontend API clients must now
 also route `404 => null` response handling through shared response helpers in
 `frontend-modern/src/api/responseUtils.ts` rather than open-coding local

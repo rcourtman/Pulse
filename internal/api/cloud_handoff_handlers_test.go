@@ -58,9 +58,11 @@ func TestIsSQLiteUniqueViolation(t *testing.T) {
 
 func TestTenantIDFromRequest(t *testing.T) {
 	t.Run("uses env var when present", func(t *testing.T) {
+		t.Setenv("PULSE_HOSTED_MODE", "")
 		t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "")
 		resetTrustedProxyConfig()
 		t.Setenv("PULSE_TENANT_ID", "env-tenant")
+		t.Setenv("PULSE_PUBLIC_URL", "")
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
 		req.Host = "host-tenant.example.com"
 		req.RemoteAddr = "198.51.100.10:4567"
@@ -71,9 +73,11 @@ func TestTenantIDFromRequest(t *testing.T) {
 	})
 
 	t.Run("extracts subdomain from loopback host", func(t *testing.T) {
+		t.Setenv("PULSE_HOSTED_MODE", "")
 		t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "")
 		resetTrustedProxyConfig()
 		t.Setenv("PULSE_TENANT_ID", "")
+		t.Setenv("PULSE_PUBLIC_URL", "")
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
 		req.Host = "tenant.example.com:8443"
 		req.RemoteAddr = "127.0.0.1:8080"
@@ -84,9 +88,11 @@ func TestTenantIDFromRequest(t *testing.T) {
 	})
 
 	t.Run("returns full loopback host when no dot exists", func(t *testing.T) {
+		t.Setenv("PULSE_HOSTED_MODE", "")
 		t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "")
 		resetTrustedProxyConfig()
 		t.Setenv("PULSE_TENANT_ID", "")
+		t.Setenv("PULSE_PUBLIC_URL", "")
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
 		req.Host = "localhost"
 		req.RemoteAddr = "127.0.0.1:8080"
@@ -97,9 +103,11 @@ func TestTenantIDFromRequest(t *testing.T) {
 	})
 
 	t.Run("extracts tenant from trusted proxy forwarded host", func(t *testing.T) {
+		t.Setenv("PULSE_HOSTED_MODE", "")
 		t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "203.0.113.0/24")
 		resetTrustedProxyConfig()
 		t.Setenv("PULSE_TENANT_ID", "")
+		t.Setenv("PULSE_PUBLIC_URL", "")
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
 		req.RemoteAddr = "203.0.113.10:9443"
 		req.Host = "ignored.example.com"
@@ -110,16 +118,65 @@ func TestTenantIDFromRequest(t *testing.T) {
 		}
 	})
 
-	t.Run("ignores untrusted remote host header", func(t *testing.T) {
+	t.Run("falls back to hosted public url when tenant env is missing", func(t *testing.T) {
+		t.Setenv("PULSE_HOSTED_MODE", "true")
 		t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "")
 		resetTrustedProxyConfig()
 		t.Setenv("PULSE_TENANT_ID", "")
+		t.Setenv("PULSE_PUBLIC_URL", "https://tenant-from-public.cloud.pulserelay.pro")
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.RemoteAddr = "198.51.100.20:1234"
+		req.Host = "untrusted.example.com"
+
+		if got := tenantIDFromRequest(req); got != "tenant-from-public" {
+			t.Fatalf("tenantIDFromRequest() = %q, want %q", got, "tenant-from-public")
+		}
+	})
+
+	t.Run("uses hosted request host when tenant env and public url are missing", func(t *testing.T) {
+		t.Setenv("PULSE_HOSTED_MODE", "true")
+		t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "")
+		resetTrustedProxyConfig()
+		t.Setenv("PULSE_TENANT_ID", "")
+		t.Setenv("PULSE_PUBLIC_URL", "")
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.RemoteAddr = "198.51.100.20:1234"
+		req.Host = "tenant-from-host.cloud.pulserelay.pro"
+
+		if got := tenantIDFromRequest(req); got != "tenant-from-host" {
+			t.Fatalf("tenantIDFromRequest() = %q, want %q", got, "tenant-from-host")
+		}
+	})
+
+	t.Run("ignores untrusted remote host header", func(t *testing.T) {
+		t.Setenv("PULSE_HOSTED_MODE", "")
+		t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "")
+		resetTrustedProxyConfig()
+		t.Setenv("PULSE_TENANT_ID", "")
+		t.Setenv("PULSE_PUBLIC_URL", "")
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
 		req.RemoteAddr = "198.51.100.20:1234"
 		req.Host = "tenant.example.com"
 
 		if got := tenantIDFromRequest(req); got != "" {
 			t.Fatalf("tenantIDFromRequest() = %q, want empty", got)
+		}
+	})
+}
+
+func TestTenantIDFromPublicURL(t *testing.T) {
+	t.Run("extracts tenant from hosted public url", func(t *testing.T) {
+		if got := tenantIDFromPublicURL("https://tenant-a.cloud.pulserelay.pro"); got != "tenant-a" {
+			t.Fatalf("tenantIDFromPublicURL() = %q, want %q", got, "tenant-a")
+		}
+	})
+
+	t.Run("rejects invalid public url", func(t *testing.T) {
+		if got := tenantIDFromPublicURL("://not-a-url"); got != "" {
+			t.Fatalf("tenantIDFromPublicURL() = %q, want empty", got)
+		}
+		if got := tenantIDFromPublicURL("https://cloud.pulserelay.pro"); got != "" {
+			t.Fatalf("tenantIDFromPublicURL() = %q, want empty", got)
 		}
 	})
 }
@@ -218,6 +275,12 @@ func TestJTIReplayStoreSecuresPermissionModes(t *testing.T) {
 func TestHandleHandoffExchange(t *testing.T) {
 	key := []byte("test-handoff-key")
 	configDir := t.TempDir()
+	resetSessionStoreForTests()
+	t.Cleanup(resetSessionStoreForTests)
+	resetCSRFStoreForTests()
+	t.Cleanup(resetCSRFStoreForTests)
+	InitSessionStore(configDir)
+	InitCSRFStore(configDir)
 	secretsDir := filepath.Join(configDir, "secrets")
 	if err := os.MkdirAll(secretsDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll() error = %v", err)
@@ -370,6 +433,12 @@ func TestHandleHandoffExchange(t *testing.T) {
 func TestHandleHandoffExchangeBrowserFlowSetsSessionCookies(t *testing.T) {
 	key := []byte("test-handoff-key")
 	configDir := t.TempDir()
+	resetSessionStoreForTests()
+	t.Cleanup(resetSessionStoreForTests)
+	resetCSRFStoreForTests()
+	t.Cleanup(resetCSRFStoreForTests)
+	InitSessionStore(configDir)
+	InitCSRFStore(configDir)
 	secretsDir := filepath.Join(configDir, "secrets")
 	if err := os.MkdirAll(secretsDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll() error = %v", err)

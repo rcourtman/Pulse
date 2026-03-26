@@ -1052,6 +1052,11 @@ surfaces may run without local auth configured, but a valid tenant
 the anonymous optional-auth fallback so hosted recovery, onboarding, and
 support flows do not silently degrade into unauthenticated state or bearer-
 token-only mode after cloud handoff.
+That same hosted recovery boundary must also preserve tenant-context recovery at
+the handoff exchange itself. When older hosted tenant containers are missing
+`PULSE_TENANT_ID`, the shared handoff handler must still recover the tenant
+from hosted runtime context before it mints session cookies, so recovery/support
+entry from Pulse Account does not fail closed with a generic internal error.
 That same shared `internal/api/` boundary also owns hosted AI bootstrap
 continuity. Storage- and recovery-adjacent hosted flows may surface Patrol-
 backed investigation or AI-assisted recovery guidance before an operator has

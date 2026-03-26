@@ -183,6 +183,14 @@ func tenantIDFromRequest(r *http.Request) string {
 		}
 		return ""
 	}
+	if hostedModeEnabledFromEnv() {
+		if v := tenantIDFromPublicURL(strings.TrimSpace(os.Getenv("PULSE_PUBLIC_URL"))); v != "" {
+			return v
+		}
+	}
+	if hostedRuntimeTenantID := tenantIDFromHostedProxyRequest(r); hostedRuntimeTenantID != "" {
+		return hostedRuntimeTenantID
+	}
 	if r == nil {
 		return ""
 	}
@@ -211,6 +219,46 @@ func tenantIDFromRequest(r *http.Request) string {
 
 	tenantID := host
 	// Host is expected to be "<tenant-id>.<baseDomain>".
+	if i := strings.IndexByte(host, '.'); i > 0 {
+		tenantID = host[:i]
+	}
+	if !isValidOrganizationID(tenantID) {
+		return ""
+	}
+	return tenantID
+}
+
+func tenantIDFromHostedProxyRequest(r *http.Request) string {
+	if r == nil || !hostedModeEnabledFromEnv() {
+		return ""
+	}
+	if v := tenantIDFromPublicURL(strings.TrimSpace(r.Host)); v != "" {
+		return v
+	}
+	return ""
+}
+
+func tenantIDFromPublicURL(publicURL string) string {
+	if publicURL == "" {
+		return ""
+	}
+	if !strings.Contains(publicURL, "://") {
+		publicURL = "https://" + publicURL
+	}
+	parsed, err := url.Parse(publicURL)
+	if err != nil {
+		return ""
+	}
+	host := strings.TrimSpace(parsed.Hostname())
+	if host == "" {
+		return ""
+	}
+	// Hosted tenant URLs follow "<tenant-id>.<base-domain>" and must have a
+	// distinct tenant label ahead of the shared cloud domain.
+	if strings.Count(host, ".") < 3 {
+		return ""
+	}
+	tenantID := host
 	if i := strings.IndexByte(host, '.'); i > 0 {
 		tenantID = host[:i]
 	}

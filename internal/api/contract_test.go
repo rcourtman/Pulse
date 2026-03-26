@@ -2484,6 +2484,12 @@ func TestContract_HostedBillingStateFallbackJSONSnapshot(t *testing.T) {
 func TestContract_HandoffExchangeJSONSnapshot(t *testing.T) {
 	key := []byte("test-handoff-key")
 	configDir := t.TempDir()
+	resetSessionStoreForTests()
+	t.Cleanup(resetSessionStoreForTests)
+	resetCSRFStoreForTests()
+	t.Cleanup(resetCSRFStoreForTests)
+	InitSessionStore(configDir)
+	InitCSRFStore(configDir)
 	secretsDir := filepath.Join(configDir, "secrets")
 	if err := os.MkdirAll(secretsDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll() error = %v", err)
@@ -2494,7 +2500,9 @@ func TestContract_HandoffExchangeJSONSnapshot(t *testing.T) {
 
 	handler := HandleHandoffExchange(configDir)
 	tenantID := "tenant-contract"
+	t.Setenv("PULSE_HOSTED_MODE", "true")
 	t.Setenv("PULSE_TENANT_ID", "")
+	t.Setenv("PULSE_PUBLIC_URL", "")
 	token := signHandoffToken(t, key, cloudHandoffClaims{
 		AccountID: "acct-contract",
 		Email:     "Operator.Owner+Mixed@PulseRelay.Pro",
@@ -2511,9 +2519,7 @@ func TestContract_HandoffExchangeJSONSnapshot(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/cloud/handoff/exchange?token="+token+"&format=json", nil)
 	req.Host = tenantID + ".cloud.pulserelay.pro"
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("X-Forwarded-Host", req.Host)
-	req.Header.Set("X-Forwarded-For", "127.0.0.1")
-	req.RemoteAddr = "127.0.0.1:1234"
+	req.RemoteAddr = "198.51.100.20:1234"
 	rec := httptest.NewRecorder()
 
 	handler(rec, req)
