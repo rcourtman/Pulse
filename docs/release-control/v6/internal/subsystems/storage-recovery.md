@@ -89,6 +89,7 @@ querying, and the operator-facing storage health presentation layer.
 11. Letting non-canonical recovery provider values survive in route or transport state; shared recovery URLs must collapse unsupported or fake `provider` values back to the canonical unset state, and only owned source-platform provider options or canonical aliases may reach rollups, points, series, and facets transport filters
 12. Letting protected-item recovery outcome filtering fork from the canonical history status filter; the protected inventory status control must drive the same route-backed `status` field and the same rollups, points, series, and facets transport filters as the history surface instead of keeping a protected-only local outcome branch
 13. Letting visible protected-item filters fall out of shared recovery links; the protected `Stale only` toggle must restore from the canonical recovery URL and rewrite to one owned `stale=1` route form instead of disappearing on refresh or copy/paste
+14. Reintroducing stacked full-width recovery tables as the primary desktop layout; the governed recovery surface must expose one primary data region at a time with explicit protected-items versus recovery-events view switching so Pulse stays inventory-first for Proxmox operators without collapsing the page back into a single-platform backup screen
 
 ## Completion Obligations
 
@@ -131,6 +132,18 @@ protected inventory, activity, and history presentation layers. The history
 surface is further split so `RecoveryHistorySection.tsx` owns the toolbar and
 controller boundary, `useRecoveryHistorySectionState.ts` owns local section UI
 state, and `RecoveryHistoryTable.tsx` owns the row/detail renderer.
+That composition root now also owns one primary recovery workspace rather than
+stacking protected-inventory and event-history tables on the same desktop page.
+The governed default remains inventory-first so Proxmox-oriented operators land
+on the familiar protected-items view, but drill-in actions such as selecting a
+subject or a timeline day must switch the primary workspace to recovery events
+instead of leaving two competing table surfaces visible at once.
+That same workspace contract also keeps Pulse's provider-neutral recovery model
+explicit in the page language: recovery sections should talk about protected
+items, recovery events, and latest points so PBS backups, TrueNAS snapshots,
+Kubernetes artifacts, and future providers all fit the same first-class UI
+frame without removing the source badges and row-level cues that make Proxmox
+operators productive.
 That history table layout now also derives its minimum width from the same
 canonical column-width spec that owns the header sizing in
 `frontend-modern/src/utils/recoveryTablePresentation.ts`, so longer governed

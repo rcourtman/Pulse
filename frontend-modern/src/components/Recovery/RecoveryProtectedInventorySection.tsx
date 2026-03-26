@@ -146,8 +146,13 @@ export const RecoveryProtectedInventorySection: Component<
     <Card padding="none" tone="card" class="order-3 overflow-hidden">
       <div class="border-b border-border bg-surface-hover px-3 py-2">
         <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div class="text-[11px] font-semibold uppercase tracking-wide text-muted">
-            Protected Inventory
+          <div class="flex flex-col gap-1">
+            <div class="text-[11px] font-semibold uppercase tracking-wide text-muted">
+              Protected Items
+            </div>
+            <div class="text-xs text-muted">
+              Unified subject rollups across backups, snapshots, and replication providers.
+            </div>
           </div>
           <div class="flex flex-wrap items-center gap-2 text-xs text-muted">
             <span>
@@ -280,7 +285,7 @@ export const RecoveryProtectedInventorySection: Component<
                   [
                     ['subject', 'Subject'],
                     ['source', 'Source'],
-                    ['lastBackup', 'Last Backup'],
+                    ['lastBackup', 'Latest Point'],
                     ['outcome', 'Outcome'],
                   ] as const
                 ).map(([column, label]) => (

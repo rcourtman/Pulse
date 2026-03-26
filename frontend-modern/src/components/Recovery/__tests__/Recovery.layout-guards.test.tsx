@@ -1,4 +1,4 @@
-import { render, screen } from '@solidjs/testing-library';
+import { fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 let mockRecoverySurfaceState: any;
@@ -129,11 +129,13 @@ describe('Recovery layout guards', () => {
     vi.clearAllMocks();
   });
 
-  it('keeps the activity chart mounted when history points fail', () => {
+  it('keeps the activity chart mounted when recovery events fail', () => {
     render(() => <Recovery />);
 
     expect(screen.getByTestId('protected-inventory')).toBeInTheDocument();
     expect(screen.getByTestId('activity-chart')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: /recovery events/i }));
+    expect(screen.queryByTestId('protected-inventory')).not.toBeInTheDocument();
     expect(screen.queryByTestId('history-section')).not.toBeInTheDocument();
     expect(screen.getByText('Failed to load recovery points')).toBeInTheDocument();
   });

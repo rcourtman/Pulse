@@ -1,4 +1,4 @@
-import { Show, createEffect, createMemo } from 'solid-js';
+import { Show, createEffect, createMemo, createSignal } from 'solid-js';
 import type { Component } from 'solid-js';
 
 import { RecoveryActivitySection } from '@/components/Recovery/RecoveryActivitySection';
@@ -6,6 +6,7 @@ import { RecoveryHistorySection } from '@/components/Recovery/RecoveryHistorySec
 import { RecoveryProtectedInventorySection } from '@/components/Recovery/RecoveryProtectedInventorySection';
 import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
+import { Subtabs } from '@/components/shared/Subtabs';
 import { useRecoverySurfaceState } from '@/features/recovery/useRecoverySurfaceState';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { useColumnVisibility } from '@/hooks/useColumnVisibility';
@@ -35,11 +36,14 @@ import { getRecoveryTimelineLabelEvery } from '@/utils/recoveryTimelineChartPres
 import { createHiddenCanonicalTypeColumn } from '@/utils/typeColumnDefinition';
 
 const MOBILE_RECOVERY_COLUMNS = new Set(['time', 'subject', 'outcome']);
+type RecoveryWorkspaceView = 'inventory' | 'events';
 
 const Recovery: Component = () => {
   const kioskMode = useKioskMode();
   const { isMobile } = useBreakpoint();
   let historySectionRef: HTMLDivElement | undefined;
+  const [workspaceView, setWorkspaceView] = createSignal<RecoveryWorkspaceView>('inventory');
+  const [workspaceViewInitialized, setWorkspaceViewInitialized] = createSignal(false);
 
   const {
     chartRangeDays,
@@ -331,6 +335,15 @@ const Recovery: Component = () => {
     if (currentPage() > totalPages()) setCurrentPage(totalPages());
   });
 
+  createEffect(() => {
+    const defaultView: RecoveryWorkspaceView =
+      rollupId().trim().length > 0 || selectedDateKey() ? 'events' : 'inventory';
+    if (!workspaceViewInitialized()) {
+      setWorkspaceView(defaultView);
+      setWorkspaceViewInitialized(true);
+    }
+  });
+
   const timeline = createMemo(() => {
     const points = (recoverySeries.series() || []).map((bucket) => ({
       key: String(bucket.day || '').trim(),
@@ -427,6 +440,7 @@ const Recovery: Component = () => {
   };
 
   const handleSelectRollup = (nextRollupId: string) => {
+    setWorkspaceView('events');
     setRollupId(nextRollupId);
     requestAnimationFrame(() =>
       historySectionRef && typeof historySectionRef.scrollIntoView === 'function'
@@ -437,28 +451,6 @@ const Recovery: Component = () => {
 
   return (
     <div data-testid="recovery-page" class="flex flex-col gap-4">
-      <RecoveryProtectedInventorySection
-        filteredRollups={filteredRollups}
-        historyOutcomeFilter={historyOutcomeFilter}
-        isMobile={isMobile()}
-        kioskMode={kioskMode()}
-        loading={() => recoveryRollups.rollups.loading}
-        error={() => recoveryRollups.rollups.error}
-        onSelectRollup={handleSelectRollup}
-        protectedStaleOnly={protectedStaleOnly}
-        providerFilter={providerFilter}
-        providerOptions={providerOptions}
-        queryFilter={queryFilter}
-        resourcesById={resourcesById}
-        rollups={rollups}
-        rollupsSummary={rollupsSummary}
-        setHistoryOutcomeFilter={setHistoryOutcomeFilter}
-        setProtectedStaleOnly={setProtectedStaleOnly}
-        setProviderFilter={setProviderFilter}
-        setQueryFilter={setQueryFilter}
-        setVerificationFilter={setVerificationFilter}
-      />
-
       <RecoveryActivitySection
         activitySummary={activitySummary}
         activeClusterLabel={activeClusterLabel}
@@ -496,13 +488,76 @@ const Recovery: Component = () => {
         }}
         timeline={timeline}
         toggleSelectedDate={(key) => {
+          setWorkspaceView('events');
           setSelectedDateKey((previous) => (previous === key ? null : key));
           setCurrentPage(1);
         }}
       />
 
       <div ref={historySectionRef} class="order-1 flex flex-col gap-4">
-        <Show when={!recoveryPoints.response.loading && recoveryPoints.response.error}>
+        <Card padding="none" tone="card" class="overflow-hidden">
+          <div class="px-3 pt-1">
+            <Subtabs
+              value={workspaceView()}
+              onChange={(value) => setWorkspaceView(value as RecoveryWorkspaceView)}
+              ariaLabel="Recovery data view"
+              tabs={[
+                {
+                  value: 'inventory',
+                  label: (
+                    <span class="inline-flex items-center gap-2">
+                      <span>Protected items</span>
+                      <span class="text-xs text-muted">{filteredRollups().length}</span>
+                    </span>
+                  ),
+                },
+                {
+                  value: 'events',
+                  label: (
+                    <span class="inline-flex items-center gap-2">
+                      <span>Recovery events</span>
+                      <span class="text-xs text-muted">{recoveryPoints.meta().total}</span>
+                    </span>
+                  ),
+                },
+              ]}
+            />
+          </div>
+          <div class="border-b border-border px-3 pb-3 pt-2 text-xs text-muted">
+            <Show
+              when={workspaceView() === 'inventory'}
+              fallback="Cross-platform recovery artifacts grouped by day and filtered through one shared recovery model."
+            >
+              Platform-neutral protection rollups across every connected recovery provider in the selected window.
+            </Show>
+          </div>
+        </Card>
+
+        <Show when={workspaceView() === 'inventory'}>
+          <RecoveryProtectedInventorySection
+            filteredRollups={filteredRollups}
+            historyOutcomeFilter={historyOutcomeFilter}
+            isMobile={isMobile()}
+            kioskMode={kioskMode()}
+            loading={() => recoveryRollups.rollups.loading}
+            error={() => recoveryRollups.rollups.error}
+            onSelectRollup={handleSelectRollup}
+            protectedStaleOnly={protectedStaleOnly}
+            providerFilter={providerFilter}
+            providerOptions={providerOptions}
+            queryFilter={queryFilter}
+            resourcesById={resourcesById}
+            rollups={rollups}
+            rollupsSummary={rollupsSummary}
+            setHistoryOutcomeFilter={setHistoryOutcomeFilter}
+            setProtectedStaleOnly={setProtectedStaleOnly}
+            setProviderFilter={setProviderFilter}
+            setQueryFilter={setQueryFilter}
+            setVerificationFilter={setVerificationFilter}
+          />
+        </Show>
+
+        <Show when={workspaceView() === 'events' && !recoveryPoints.response.loading && recoveryPoints.response.error}>
           <Card padding="sm">
             <EmptyState
               title={getRecoveryPointsFailureState().title}
@@ -513,7 +568,7 @@ const Recovery: Component = () => {
           </Card>
         </Show>
 
-        <Show when={!recoveryPoints.response.error}>
+        <Show when={workspaceView() === 'events' && !recoveryPoints.response.error}>
           <RecoveryHistorySection
             activeAdvancedFilterCount={activeAdvancedFilterCount}
             artifactColumnVisibility={artifactColumnVisibility}

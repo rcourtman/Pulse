@@ -144,6 +144,26 @@ describe('Recovery', () => {
     expect(screen.getByText('tank/apps')).toBeInTheDocument();
   });
 
+  it('shows one primary recovery table at a time with unified recovery labels', async () => {
+    render(() => <Recovery />);
+
+    expect(await screen.findByText('Protected Items')).toBeInTheDocument();
+    await screen.findByText('VM 123');
+    expect(screen.queryByText('Recovery Events')).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getAllByRole('table')).toHaveLength(1);
+    });
+    expect(screen.queryByText('Backups By Date')).not.toBeInTheDocument();
+
+    fireEvent.click(await screen.findByText('VM 123'));
+
+    expect(await screen.findByText('Recovery Events')).toBeInTheDocument();
+    expect(screen.queryByText('Protected Items')).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getAllByRole('table')).toHaveLength(1);
+    });
+  });
+
   it('renders canonical rollup and history subject labels when linked resources are unavailable', async () => {
     rollupsPayload.push({
       rollupId: 'res:vm-404',
@@ -372,6 +392,7 @@ describe('Recovery', () => {
 
     render(() => <Recovery />);
 
+    fireEvent.click(await screen.findByRole('tab', { name: /recovery events/i }));
     fireEvent.click(await screen.findByRole('button', { name: /^filter$/i }));
 
     const clusterSelect = await screen.findByLabelText('Cluster');
@@ -450,6 +471,7 @@ describe('Recovery', () => {
 
     render(() => <Recovery />);
 
+    fireEvent.click(await screen.findByRole('tab', { name: /recovery events/i }));
     fireEvent.click(await screen.findByRole('button', { name: /^filter$/i }));
 
     fireEvent.change(await screen.findByLabelText('Node or agent'), {
@@ -559,7 +581,7 @@ describe('Recovery', () => {
       ).toBe(true);
     });
 
-    expect(screen.getByText('Backups By Date')).toBeInTheDocument();
+    expect(screen.getByText('Recovery Events')).toBeInTheDocument();
     expect(screen.getByText(/Showing 1 - 1 of 1 recovery points/i)).toBeInTheDocument();
 
     if (!delayedPointsReady) {
@@ -578,7 +600,6 @@ describe('Recovery', () => {
   it('narrows recovery point history to the selected timeline day', async () => {
     render(() => <Recovery />);
 
-    await screen.findByText('Backups By Date');
     await waitFor(() => {
       const pointUrls = apiFetchMock.mock.calls
         .map((call) => String(call[0] || ''))
@@ -593,6 +614,7 @@ describe('Recovery', () => {
 
     const timelineButtons = await screen.findAllByRole('button', { name: /recovery points/i });
     fireEvent.click(timelineButtons[0]);
+    await screen.findByText('Recovery Events');
 
     const selectedDay = '2026-02-13';
     const selectedStart = parseRecoveryDateKey(selectedDay);
@@ -632,7 +654,7 @@ describe('Recovery', () => {
 
     render(() => <Recovery />);
 
-    await screen.findByText('Backups By Date');
+    await screen.findByText('Recovery Events');
 
     const selectedStart = parseRecoveryDateKey('2026-02-13');
     selectedStart.setHours(0, 0, 0, 0);
@@ -654,7 +676,7 @@ describe('Recovery', () => {
 
     render(() => <Recovery />);
 
-    await screen.findByText('Backups By Date');
+    await screen.findByText('Recovery Events');
 
     const selectedStart = parseRecoveryDateKey('2026-02-13');
     selectedStart.setHours(0, 0, 0, 0);
@@ -689,7 +711,7 @@ describe('Recovery', () => {
   it('persists the selected timeline range in the recovery URL', async () => {
     render(() => <Recovery />);
 
-    await screen.findByText('Backups By Date');
+    await screen.findByText('Protected Items');
 
     fireEvent.click(await screen.findByRole('button', { name: '7d' }));
 
@@ -703,7 +725,7 @@ describe('Recovery', () => {
 
     render(() => <Recovery />);
 
-    await screen.findByText('Backups By Date');
+    await screen.findByText('Protected Items');
 
     const end = new Date();
     end.setHours(23, 59, 59, 999);
