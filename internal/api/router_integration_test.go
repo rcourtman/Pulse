@@ -2,6 +2,8 @@ package api_test
 
 import (
 	"bytes"
+	"context"
+	"database/sql"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -20,9 +22,12 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
+	recoverymanager "github.com/rcourtman/pulse-go-rewrite/internal/recovery/manager"
 	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 	internalws "github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
+	_ "modernc.org/sqlite"
 )
 
 type integrationServer struct {
@@ -39,8 +44,20 @@ func newIntegrationServer(t *testing.T) *integrationServer {
 func newIntegrationServerWithConfig(t *testing.T, customize func(*config.Config)) *integrationServer {
 	t.Helper()
 
-	t.Setenv("PULSE_MOCK_MODE", "true")
-	mock.SetEnabled(true)
+	tmpDir := t.TempDir()
+	cfg := &config.Config{
+		ConfigPath:     tmpDir,
+		DataPath:       tmpDir,
+		DemoMode:       false,
+		AllowedOrigins: "*",
+		EnvOverrides:   make(map[string]bool),
+	}
+
+	return newIntegrationServerWithRuntimeMode(t, cfg, true, customize)
+}
+
+func newIntegrationServerWithoutMock(t *testing.T, customize func(*config.Config)) *integrationServer {
+	t.Helper()
 
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
@@ -49,6 +66,25 @@ func newIntegrationServerWithConfig(t *testing.T, customize func(*config.Config)
 		DemoMode:       false,
 		AllowedOrigins: "*",
 		EnvOverrides:   make(map[string]bool),
+	}
+
+	return newIntegrationServerWithRuntimeMode(t, cfg, false, customize)
+}
+
+func newIntegrationServerWithRuntimeMode(
+	t *testing.T,
+	cfg *config.Config,
+	mockMode bool,
+	customize func(*config.Config),
+) *integrationServer {
+	t.Helper()
+
+	if mockMode {
+		t.Setenv("PULSE_MOCK_MODE", "true")
+		mock.SetEnabled(true)
+	} else {
+		t.Setenv("PULSE_MOCK_MODE", "false")
+		mock.SetEnabled(false)
 	}
 
 	if customize != nil {
@@ -70,7 +106,7 @@ func newIntegrationServerWithConfig(t *testing.T, customize func(*config.Config)
 	if err != nil {
 		t.Fatalf("failed to create monitor: %v", err)
 	}
-	monitor.SetMockMode(true)
+	monitor.SetMockMode(mockMode)
 
 	hub.SetStateGetter(func(orgID string) interface{} {
 		return monitor.BuildFrontendState()
@@ -105,6 +141,140 @@ func newIntegrationServerWithConfig(t *testing.T, customize func(*config.Config)
 		hub:     hub,
 		config:  cfg,
 	}
+}
+
+func TestRecoveryRollupsEndpointToleratesMalformedPersistedMetadata(t *testing.T) {
+	srv := newIntegrationServerWithoutMock(t, nil)
+
+	dbPath := seedRecoveryPointForIntegration(t, srv.config, recovery.RecoveryPoint{
+		ID:          "router-rollup-bad-json",
+		Provider:    recovery.ProviderTrueNAS,
+		Kind:        recovery.KindSnapshot,
+		Mode:        recovery.ModeSnapshot,
+		Outcome:     recovery.OutcomeSuccess,
+		StartedAt:   timePtrIntegration(time.Date(2026, 2, 22, 12, 0, 0, 0, time.UTC)),
+		CompletedAt: timePtrIntegration(time.Date(2026, 2, 22, 12, 0, 0, 0, time.UTC)),
+		SubjectRef: &recovery.ExternalRef{
+			Type: "truenas-dataset",
+			Name: "tank/apps",
+			ID:   "tank/apps",
+		},
+	})
+	corruptRecoveryIntegrationRowJSON(t, dbPath, "router-rollup-bad-json", true, false, false)
+
+	res, err := http.Get(srv.server.URL + "/api/recovery/rollups?limit=500")
+	if err != nil {
+		t.Fatalf("rollups request failed: %v", err)
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(res.Body)
+		t.Fatalf("unexpected status: got %d want %d, body=%s", res.StatusCode, http.StatusOK, string(body))
+	}
+
+	var payload struct {
+		Data []struct {
+			RollupID    string         `json:"rollupId"`
+			ItemRef     map[string]any `json:"itemRef"`
+			SubjectRef  map[string]any `json:"subjectRef"`
+			LastOutcome string         `json:"lastOutcome"`
+			Display     struct {
+				SubjectLabel string `json:"subjectLabel"`
+				ItemType     string `json:"itemType"`
+			} `json:"display"`
+		} `json:"data"`
+	}
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		t.Fatalf("read rollups response: %v", err)
+	}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		t.Fatalf("unmarshal rollups response: %v", err)
+	}
+	if len(payload.Data) != 1 {
+		t.Fatalf("expected exactly 1 rollup, got %d body=%s", len(payload.Data), string(body))
+	}
+	rollup := payload.Data[0]
+	if rollup.RollupID == "" {
+		t.Fatalf("expected non-empty rollup id, body=%s", string(body))
+	}
+	if rollup.ItemRef != nil || rollup.SubjectRef != nil {
+		t.Fatalf("expected malformed item refs to be omitted, got itemRef=%#v subjectRef=%#v", rollup.ItemRef, rollup.SubjectRef)
+	}
+	if rollup.Display.SubjectLabel != "tank/apps" {
+		t.Fatalf("display.subjectLabel = %q, want %q", rollup.Display.SubjectLabel, "tank/apps")
+	}
+	if rollup.Display.ItemType != "dataset" {
+		t.Fatalf("display.itemType = %q, want %q", rollup.Display.ItemType, "dataset")
+	}
+	if rollup.LastOutcome != "success" {
+		t.Fatalf("lastOutcome = %q, want %q", rollup.LastOutcome, "success")
+	}
+}
+
+func seedRecoveryPointForIntegration(t *testing.T, cfg *config.Config, point recovery.RecoveryPoint) string {
+	t.Helper()
+
+	mtp := config.NewMultiTenantPersistence(cfg.DataPath)
+	manager := recoverymanager.New(mtp)
+	store, err := manager.StoreForOrg("default")
+	if err != nil {
+		t.Fatalf("StoreForOrg(default): %v", err)
+	}
+	if err := store.UpsertPoints(context.Background(), []recovery.RecoveryPoint{point}); err != nil {
+		t.Fatalf("UpsertPoints(): %v", err)
+	}
+
+	return filepath.Join(cfg.DataPath, "recovery", "recovery.db")
+}
+
+func corruptRecoveryIntegrationRowJSON(t *testing.T, dbPath string, rowID string, corruptSubject bool, corruptRepository bool, corruptDetails bool) {
+	t.Helper()
+
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("sql.Open(%q): %v", dbPath, err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+
+	assignments := make([]string, 0, 3)
+	if corruptSubject {
+		assignments = append(assignments, "subject_ref_json = '{'")
+	}
+	if corruptRepository {
+		assignments = append(assignments, "repository_ref_json = '{'")
+	}
+	if corruptDetails {
+		assignments = append(assignments, "details_json = '{'")
+	}
+	if len(assignments) == 0 {
+		t.Fatal("corruptRecoveryIntegrationRowJSON called without any fields to corrupt")
+	}
+
+	query := "UPDATE recovery_points SET " + joinCSVIntegration(assignments) + " WHERE id = ?"
+	if _, err := db.ExecContext(context.Background(), query, rowID); err != nil {
+		t.Fatalf("corrupt recovery row json: %v", err)
+	}
+}
+
+func joinCSVIntegration(parts []string) string {
+	switch len(parts) {
+	case 0:
+		return ""
+	case 1:
+		return parts[0]
+	default:
+		out := parts[0]
+		for _, part := range parts[1:] {
+			out += ", " + part
+		}
+		return out
+	}
+}
+
+func timePtrIntegration(t time.Time) *time.Time {
+	return &t
 }
 
 func TestHealthEndpoint(t *testing.T) {
