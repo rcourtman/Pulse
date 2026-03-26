@@ -57,6 +57,8 @@ describe('RecoverySummary', () => {
     expect(screen.getByText('Recent History')).toBeInTheDocument();
     expect(screen.getByText('Attention Queue')).toBeInTheDocument();
     expect(screen.getByText('Recovery Points')).toBeInTheDocument();
+    expect(screen.getByText('Multi-platform')).toBeInTheDocument();
+    expect(screen.getByText('Primary Platform')).toBeInTheDocument();
     expect(screen.getByText('2 protected')).toBeInTheDocument();
     expect(screen.getByText('2 platforms')).toBeInTheDocument();
     expect(screen.getByText('1 healthy')).toBeInTheDocument();

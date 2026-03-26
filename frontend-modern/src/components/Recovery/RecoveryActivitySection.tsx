@@ -113,7 +113,7 @@ export const RecoveryActivitySection: Component<RecoveryActivitySectionProps> = 
         <div class="flex flex-wrap items-center gap-2">
           <Show when={props.selectedHistorySubjectLabel()}>
             <div class="inline-flex items-center gap-2 rounded-md border border-border bg-surface-alt px-2.5 py-1.5 text-xs">
-              <span class="font-semibold uppercase tracking-wide text-muted">Focused</span>
+              <span class="font-semibold uppercase tracking-wide text-muted">Focused Item</span>
               <span class="max-w-[18rem] truncate font-medium text-base-content">
                 {props.selectedHistorySubjectLabel()}
               </span>

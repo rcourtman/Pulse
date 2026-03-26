@@ -153,6 +153,12 @@ Operator-facing filter and detail labels should likewise prefer `platform`
 wording over implementation-facing `provider` wording, so the recovery surface
 describes the monitored platform families Pulse covers rather than exposing
 backend transport vocabulary as the primary UI model.
+That same operator-facing vocabulary should also prefer `item` over backend
+`subject` wording, and `platform` over generic `source` wording, across the
+primary recovery headers, tables, focus chips, and detail metadata labels.
+The data model can keep its internal subject/provider fields, but the page
+frame that operators read should present one consistent protected-item and
+platform model from summary through drill-in.
 That same shared presentation layer also owns the distinction between
 aggregate recovery-method language and single-record recovery-method language.
 Timeline legends and daily breakdowns must use aggregate labels such as

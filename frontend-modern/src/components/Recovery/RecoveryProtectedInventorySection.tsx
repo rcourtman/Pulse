@@ -24,6 +24,7 @@ import {
   getRecoveryProtectedItemsLoadingState,
 } from '@/utils/recoveryEmptyStatePresentation';
 import {
+  getRecoveryArtifactColumnLabel,
   getRecoveryRollupAgeTextClass,
   getRecoveryRollupIssueTone,
   getRecoveryProtectedSearchPlaceholder,
@@ -151,7 +152,7 @@ export const RecoveryProtectedInventorySection: Component<
               Protected Items
             </div>
             <div class="text-xs text-muted">
-              Unified subject rollups across backups, snapshots, and replication providers.
+              Unified protection inventory across workloads, datasets, and other protected items from every connected platform.
             </div>
           </div>
           <div class="flex flex-wrap items-center gap-2 text-xs text-muted">
@@ -283,8 +284,8 @@ export const RecoveryProtectedInventorySection: Component<
               <TableRow class="bg-surface-alt text-muted border-b border-border">
                 {(
                   [
-                    ['subject', 'Subject'],
-                    ['source', 'Source'],
+                    ['subject', getRecoveryArtifactColumnLabel('subject', 'Subject')],
+                    ['source', getRecoveryArtifactColumnLabel('source', 'Source')],
                     ['lastBackup', 'Latest Point'],
                     ['outcome', 'Outcome'],
                   ] as const

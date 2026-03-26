@@ -142,13 +142,13 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
                   </div>
                 </div>
                 <div>
-                  <div class="text-[10px] uppercase tracking-wide text-muted">Multi-source</div>
+                  <div class="text-[10px] uppercase tracking-wide text-muted">Multi-platform</div>
                   <div class="mt-1 text-2xl font-semibold text-base-content">
                     {platformCoverage().mixedCount}
                   </div>
                 </div>
                 <div>
-                  <div class="text-[10px] uppercase tracking-wide text-muted">Primary</div>
+                  <div class="text-[10px] uppercase tracking-wide text-muted">Primary Platform</div>
                   <div class="mt-1 text-xl font-semibold text-base-content">
                     {platformCoverage().primaryLabel ?? 'n/a'}
                   </div>

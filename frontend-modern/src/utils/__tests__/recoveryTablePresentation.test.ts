@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ProtectionRollup, RecoveryPoint } from '@/types/recovery';
 import {
+  getRecoveryArtifactColumnLabel,
   getRecoveryArtifactColumnHeaderClass,
   getRecoveryArtifactRowClass,
   getRecoveryArtifactTableMinWidth,
@@ -16,6 +17,7 @@ import {
   isRecoveryRollupStale,
   RECOVERY_ADVANCED_FILTER_FIELD_CLASS,
   RECOVERY_ADVANCED_FILTER_LABEL_CLASS,
+  RECOVERY_ARTIFACT_COLUMN_LABELS,
   RECOVERY_GROUP_HEADER_ROW_CLASS,
   RECOVERY_GROUP_HEADER_TEXT_CLASS,
   RECOVERY_GROUP_NO_TIMESTAMP_LABEL,
@@ -38,6 +40,11 @@ describe('recoveryTablePresentation', () => {
     expect(getRecoveryProtectedSearchPlaceholder()).toBe('Search protected items...');
     expect(getRecoveryHistorySearchPlaceholder()).toBe('Search recovery history...');
     expect(getRecoverySearchHistoryEmptyMessage()).toBe('Recent searches appear here.');
+    expect(RECOVERY_ARTIFACT_COLUMN_LABELS.subject).toBe('Item');
+    expect(RECOVERY_ARTIFACT_COLUMN_LABELS.source).toBe('Platform');
+    expect(getRecoveryArtifactColumnLabel('subject', 'Subject')).toBe('Item');
+    expect(getRecoveryArtifactColumnLabel('source', 'Source')).toBe('Platform');
+    expect(getRecoveryArtifactColumnLabel('outcome', 'Outcome')).toBe('Outcome');
   });
 
   it('derives time text classes from event recency', () => {

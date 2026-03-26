@@ -21,6 +21,10 @@ export const RECOVERY_GROUP_NO_TIMESTAMP_LABEL = 'No Timestamp';
 export const RECOVERY_PROTECTED_SEARCH_PLACEHOLDER = 'Search protected items...';
 export const RECOVERY_HISTORY_SEARCH_PLACEHOLDER = 'Search recovery history...';
 export const RECOVERY_SEARCH_HISTORY_EMPTY_MESSAGE = 'Recent searches appear here.';
+export const RECOVERY_ARTIFACT_COLUMN_LABELS: Record<string, string> = {
+  subject: 'Item',
+  source: 'Platform',
+};
 
 const RECOVERY_ARTIFACT_COLUMN_SPECS: Record<string, { headerClass: string; minWidthPx: number }> = {
   time: { headerClass: 'w-[76px] text-right', minWidthPx: 76 },
@@ -65,6 +69,10 @@ export function getRecoveryHistorySearchPlaceholder(): string {
 
 export function getRecoverySearchHistoryEmptyMessage(): string {
   return RECOVERY_SEARCH_HISTORY_EMPTY_MESSAGE;
+}
+
+export function getRecoveryArtifactColumnLabel(id: string, fallback?: string): string {
+  return RECOVERY_ARTIFACT_COLUMN_LABELS[id] || fallback || id;
 }
 
 const normalizeRecoverySubjectTypeKey = (value: string): string =>

@@ -190,6 +190,9 @@ describe('Recovery', () => {
     await waitFor(() => {
       expect(screen.getAllByRole('table')).toHaveLength(1);
     });
+    const inventoryTable = screen.getAllByRole('table')[0];
+    expect(within(inventoryTable).getByText('Item')).toBeInTheDocument();
+    expect(within(inventoryTable).getByText('Platform')).toBeInTheDocument();
     expect(screen.queryByText('Backups By Date')).not.toBeInTheDocument();
 
     fireEvent.click(await screen.findByText('VM 123'));
@@ -199,6 +202,9 @@ describe('Recovery', () => {
     await waitFor(() => {
       expect(screen.getAllByRole('table')).toHaveLength(1);
     });
+    const historyTable = screen.getAllByRole('table')[0];
+    expect(within(historyTable).getByText('Item')).toBeInTheDocument();
+    expect(within(historyTable).getByText('Platform')).toBeInTheDocument();
   });
 
   it('persists the selected recovery workspace view in the route when explicitly changed', async () => {
@@ -277,6 +283,7 @@ describe('Recovery', () => {
     render(() => <Recovery />);
 
     expect(await screen.findByText('2 platforms')).toBeInTheDocument();
+    expect(screen.getByText('Multi-platform')).toBeInTheDocument();
   });
 
   it('keeps recovery history width aligned with canonical column specs', async () => {
@@ -304,7 +311,7 @@ describe('Recovery', () => {
       });
     });
 
-    expect(await screen.findByText('Focused')).toBeInTheDocument();
+    expect(await screen.findByText('Focused Item')).toBeInTheDocument();
     expect(screen.getAllByText('VM 123').length).toBeGreaterThan(0);
     await screen.findByText(/Showing 1 - 1 of 1 recovery points/i);
     const tables = await screen.findAllByRole('table');

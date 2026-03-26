@@ -29,6 +29,7 @@ import {
   getRecoveryRollupSubjectLabel,
 } from '@/utils/recoveryRecordPresentation';
 import {
+  getRecoveryArtifactColumnLabel,
   getRecoveryGroupNoTimestampLabel,
   getRecoveryArtifactTableMinWidth,
   STALE_ISSUE_THRESHOLD_MS,
@@ -279,12 +280,12 @@ const Recovery: Component = () => {
   const artifactColumns: ColumnDef[] = [
     { id: 'time', label: 'Time' },
     createHiddenCanonicalTypeColumn(),
-    { id: 'subject', label: 'Subject' },
+    { id: 'subject', label: getRecoveryArtifactColumnLabel('subject', 'Subject') },
     { id: 'entityId', label: 'ID', toggleable: true },
     { id: 'cluster', label: 'Cluster', toggleable: true },
     { id: 'nodeAgent', label: 'Node/Agent', toggleable: true },
     { id: 'namespace', label: 'Namespace', toggleable: true },
-    { id: 'source', label: 'Source' },
+    { id: 'source', label: getRecoveryArtifactColumnLabel('source', 'Source') },
     { id: 'verified', label: 'Verified', toggleable: true },
     { id: 'size', label: 'Size', toggleable: true },
     { id: 'method', label: 'Method' },
@@ -537,7 +538,7 @@ const Recovery: Component = () => {
               when={workspaceView() === 'inventory'}
               fallback="Cross-platform recovery artifacts grouped by day and filtered through one shared recovery model."
             >
-              Platform-neutral protection rollups across every connected recovery platform in the selected window.
+              Platform-neutral protection inventory across every connected recovery platform in the selected window.
             </Show>
           </div>
         </Card>

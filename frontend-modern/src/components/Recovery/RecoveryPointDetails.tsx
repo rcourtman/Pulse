@@ -165,9 +165,9 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
 
     if (p.verified != null) pairs.push({ k: 'Verified', v: p.verified ? 'Verified' : 'Not Verified' });
     if (p.encrypted != null) pairs.push({ k: 'Encrypted', v: p.encrypted ? 'Encrypted' : 'Not Encrypted' });
-    if (p.subjectResourceId) pairs.push({ k: 'Subject Resource', v: p.subjectResourceId });
+    if (p.subjectResourceId) pairs.push({ k: 'Item Resource', v: p.subjectResourceId });
     if (p.repositoryResourceId) pairs.push({ k: 'Repository Resource', v: p.repositoryResourceId });
-    if (p.subjectRef) pairs.push({ k: 'Subject Ref', v: labelForRef(p.subjectRef) });
+    if (p.subjectRef) pairs.push({ k: 'Item Ref', v: labelForRef(p.subjectRef) });
     if (p.repositoryRef) pairs.push({ k: 'Repository Ref', v: labelForRef(p.repositoryRef) });
 
     const commonDetailKeys = [
