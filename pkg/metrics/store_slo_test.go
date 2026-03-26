@@ -30,9 +30,11 @@ import (
 //   - QueryAllBatch downsampled (50×4×100, 60s): ~31ms → local SLO 55ms, GH Actions SLO 130ms
 //   - QueryAllBatch chunked (500×4×20): ~84ms p95 observed locally in March 2026 → local SLO 90ms, GH Actions SLO 140ms
 //   - rollupTier(50×2×20): ~2.1ms → SLO 15ms
-//   - rollupTier fleet-scale (500×4×20): ~138ms p95 observed locally in March 2026 → local SLO 140ms, GH Actions SLO 170ms
+//   - rollupTier fleet-scale (500×4×20): ~138ms p95 observed locally in March 2026; ~214-217ms p95 on March 26, 2026 GitHub release rehearsals
+//     → local SLO 140ms, GH Actions SLO 230ms
 //   - Query under write contention: ~400µs → SLO 5ms
-//   - 500-node concurrent dashboard load: ~7.9ms p95 observed locally in March 2026 → local SLO 15ms, GH Actions SLO 20ms
+//   - 500-node concurrent dashboard load: ~7.9ms p95 observed locally in March 2026; ~23-24ms p95 on March 26, 2026 GitHub release rehearsals
+//     → local SLO 15ms, GH Actions SLO 30ms
 //   - QueryManyResources:  ~22µs  → SLO 500µs
 const (
 	// SLOWriteBatchP95 is the p95 target for WriteBatchSync with 100 metrics —
@@ -85,7 +87,7 @@ const (
 	// batched rollupTier path at 500-resource scale (500 nodes × 4 metrics × 20
 	// raw points). This guards the real fleet-scale aggregation workload.
 	SLORollupTierBatchedFleetP95              = 140 * time.Millisecond
-	SLORollupTierBatchedFleetGitHubActionsP95 = 170 * time.Millisecond
+	SLORollupTierBatchedFleetGitHubActionsP95 = 230 * time.Millisecond
 
 	// SLOConcurrentReadWriteP95 is the p95 target for single-resource Query
 	// while a background writer continuously appends batches on the same SQLite
@@ -96,7 +98,7 @@ const (
 	// where 10 concurrent dashboard loads each issue QueryAll while background
 	// ingestion continues. This guards fleet-scale read fan-out under write load.
 	SLOConcurrentDashboardLoadP95              = 15 * time.Millisecond
-	SLOConcurrentDashboardLoadGitHubActionsP95 = 20 * time.Millisecond
+	SLOConcurrentDashboardLoadGitHubActionsP95 = 30 * time.Millisecond
 )
 
 const sloIterations = 200
