@@ -369,6 +369,39 @@ header .logout-btn:hover {
   line-height: 1.6;
   max-width: 760px;
 }
+.intro-card-self-hosted {
+  background:
+    linear-gradient(
+      145deg,
+      #fff,
+      #f8fafc 55%,
+      #eef6ff);
+}
+.overview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+.overview-stat {
+  background: rgba(255, 255, 255, .9);
+  border: 1px solid #dbe4f0;
+  border-radius: 12px;
+  padding: 14px 16px;
+}
+.overview-label {
+  display: block;
+  font-size: 12px;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: .4px;
+  margin-bottom: 6px;
+}
+.overview-stat strong {
+  display: block;
+  font-size: 15px;
+  color: #0f172a;
+}
 .service-section {
   margin-top: 40px;
 }
@@ -592,6 +625,13 @@ header .logout-btn:hover {
 }
 .empty-state-spaced {
   margin-top: 48px;
+}
+.empty-state-self-hosted p + p {
+  margin-top: 12px;
+}
+.empty-state-title {
+  font-weight: 700;
+  color: #0f172a;
 }
 .support-copy {
   margin-top: 12px;

@@ -75,7 +75,7 @@ describe('shell view', function() {
   it('renders empty accounts state with support contact', function() {
     var html = renderAccountsHTML(createContext());
 
-    expect(html).toContain('No workspaces found.');
+    expect(html).toContain('No hosted workspaces on this account');
     expect(html).toContain('mailto:support@pulserelay.pro');
     expect(html).toContain('support@pulserelay.pro');
   });
@@ -123,6 +123,18 @@ describe('shell view', function() {
     expect(html).toContain('service-card-button');
     expect(html).toContain('id="open-retrieve-service"');
     expect(html).toContain('id="data-service-panel"');
+  });
+
+  it('renders a self-hosted overview when the signed-in account has no hosted workspaces', function() {
+    var html = renderAuthenticatedPortalHTML(createContext());
+
+    expect(html).toContain('This account currently uses Pulse Account for self-hosted commercial services.');
+    expect(html).toContain('Signed in as');
+    expect(html).toContain('owner@example.com');
+    expect(html).toContain('Hosted access');
+    expect(html).toContain('None on this account');
+    expect(html).toContain('Self-hosted account services');
+    expect(html).not.toContain('Other account services');
   });
 
   it('renders signed-out portal with error and success login states', function() {

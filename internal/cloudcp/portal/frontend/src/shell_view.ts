@@ -12,6 +12,10 @@ export interface ShellViewContext {
   accountAPIBasePath: string;
 }
 
+function hasHostedAccounts(bootstrap: PortalBootstrapData): boolean {
+  return Array.isArray(bootstrap.accounts) && bootstrap.accounts.length > 0;
+}
+
 function escapeHTML(value: unknown): string {
   return String(value || '')
     .replace(/&/g, '&amp;')
@@ -216,8 +220,9 @@ export function renderAccountsHTML(context: ShellViewContext): string {
   var safeAccounts = Array.isArray(context.bootstrap.accounts) ? context.bootstrap.accounts : [];
   if (safeAccounts.length === 0) {
     return (
-      '<div class="empty-state empty-state-spaced">' +
-        '<p>No workspaces found. If you just signed up, check your email for setup instructions.</p>' +
+      '<div class="empty-state empty-state-spaced empty-state-self-hosted">' +
+        '<p class="empty-state-title">No hosted workspaces on this account</p>' +
+        '<p>This Pulse Account is still valid for self-hosted billing, license recovery, refunds, and privacy requests. Hosted Cloud or MSP workspaces will appear here when this account owns them.</p>' +
         '<p class="support-copy">Need help? Contact <a href="mailto:' +
         escapeAttr(context.bootstrap.support_email || '') +
         '" class="support-link">' +
@@ -231,17 +236,51 @@ export function renderAccountsHTML(context: ShellViewContext): string {
   }).join('');
 }
 
-export function renderAuthenticatedPortalHTML(context: ShellViewContext): string {
+function renderAuthenticatedIntroHTML(context: ShellViewContext): string {
+  if (!hasHostedAccounts(context.bootstrap)) {
+    return (
+      '<section class="intro-card intro-card-self-hosted">' +
+        '<h1>Pulse Account</h1>' +
+        '<p>This account currently uses Pulse Account for self-hosted commercial services. When you own hosted Cloud workspaces or MSP access, they will appear here in the same account shell.</p>' +
+        '<div class="overview-grid">' +
+          '<div class="overview-stat">' +
+            '<span class="overview-label">Signed in as</span>' +
+            '<strong>' + escapeHTML(context.bootstrap.email || '') + '</strong>' +
+          '</div>' +
+          '<div class="overview-stat">' +
+            '<span class="overview-label">Hosted access</span>' +
+            '<strong>None on this account</strong>' +
+          '</div>' +
+          '<div class="overview-stat">' +
+            '<span class="overview-label">Self-hosted services</span>' +
+            '<strong>Available below</strong>' +
+          '</div>' +
+        '</div>' +
+      '</section>'
+    );
+  }
+
   return (
     '<section class="intro-card">' +
       '<h1>Pulse Account</h1>' +
       '<p>Manage Cloud workspaces, MSP access, and self-hosted commercial account services from one account surface. Hosted workspace lifecycle lives here today, and the self-hosted billing, license recovery, refund, and privacy tools below now share the same Pulse Account shell instead of staying fragmented across public utility pages.</p>' +
-    '</section>' +
+    '</section>'
+  );
+}
+
+export function renderAuthenticatedPortalHTML(context: ShellViewContext): string {
+  var hostedAccounts = hasHostedAccounts(context.bootstrap);
+  return (
+    renderAuthenticatedIntroHTML(context) +
     '<div id="accounts-root">' + renderAccountsHTML(context) + '</div>' +
     '<section class="service-section">' +
       '<div class="service-header">' +
-        '<h2>Other account services</h2>' +
-        '<div class="service-note">Self-hosted commercial account actions now live here. The public utility pages remain as compatibility entry points, not the primary account surface.</div>' +
+        '<h2>' + (hostedAccounts ? 'Other account services' : 'Self-hosted account services') + '</h2>' +
+        '<div class="service-note">' +
+          (hostedAccounts
+            ? 'Self-hosted commercial account actions now live here. The public utility pages remain as compatibility entry points, not the primary account surface.'
+            : 'Use these tools for subscription, license, refund, and privacy actions on self-hosted commercial accounts. The public utility pages remain as compatibility entry points only.') +
+        '</div>' +
       '</div>' +
       '<div class="service-grid">' +
         '<button class="service-card service-card-button" type="button" id="open-manage-service" data-account-service-action="open-service-panel" data-account-service-panel="manage-service-panel" data-account-service-focus="manage-inline-email">' +

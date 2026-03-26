@@ -62,6 +62,11 @@
     .intro-card { background: linear-gradient(145deg, #fff, #f8fafc); border: 1px solid #dbe4f0; border-radius: 16px; padding: 22px 24px; margin-bottom: 24px; box-shadow: 0 10px 24px rgba(15,23,42,.05); }
     .intro-card h1 { margin: 0 0 8px; font-size: 26px; line-height: 1.1; }
     .intro-card p { margin: 0; color: #475569; font-size: 15px; line-height: 1.6; max-width: 760px; }
+    .intro-card-self-hosted { background: linear-gradient(145deg, #fff, #f8fafc 55%, #eef6ff); }
+    .overview-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-top: 18px; }
+    .overview-stat { background: rgba(255,255,255,.9); border: 1px solid #dbe4f0; border-radius: 12px; padding: 14px 16px; }
+    .overview-label { display: block; font-size: 12px; color: #64748b; text-transform: uppercase; letter-spacing: .4px; margin-bottom: 6px; }
+    .overview-stat strong { display: block; font-size: 15px; color: #0f172a; }
     .service-section { margin-top: 40px; }
     .service-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
     .service-header h2 { margin: 0; font-size: 20px; font-weight: 700; }
@@ -102,6 +107,8 @@
     .empty-state { background: #fff; border: 1px dashed #cbd5e1; border-radius: 10px; padding: 32px; text-align: center; color: #64748b; }
     .empty-state p { margin: 0; font-size: 15px; }
     .empty-state-spaced { margin-top: 48px; }
+    .empty-state-self-hosted p + p { margin-top: 12px; }
+    .empty-state-title { font-weight: 700; color: #0f172a; }
     .support-copy { margin-top: 12px; font-size: 13px; }
     .support-link { color: #1d4ed8; }
     .badge-role { background: #f1f5f9; color: #64748b; }
