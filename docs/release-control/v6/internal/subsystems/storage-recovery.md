@@ -365,9 +365,11 @@ Cluster, node, and namespace facets remain valid supporting filters for
 Proxmox-heavy and Kubernetes-heavy operators, but the governed recovery
 surface must present them through platform-neutral labels such as
 `Cluster / Site`, `Host / Agent`, and `Namespace / Group` across advanced
-filters, active chips, table headers, and point details so the page treats
-placement as optional context inside a multi-platform recovery model rather
-than a Proxmox-native spine.
+filters, active chips, table headers, column-picker entries, and point
+details so the page treats placement as optional context inside a
+multi-platform recovery model rather than a Proxmox-native spine. When
+normalized display labels are present, the visible history rows must prefer
+those labels over raw transport values for the same placement dimensions.
 The recovery table presentation helper now owns the canonical subject-type
 label fallback for recovery rows and delegates its title-casing to the shared
 `frontend-modern/src/utils/textPresentation.ts` helper rather than keeping a

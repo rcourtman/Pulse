@@ -180,9 +180,15 @@ export const RecoveryHistoryTable: Component<RecoveryHistoryTableProps> = (props
                     const repoLabel = getRecoveryPointRepositoryLabel(point);
                     const detailsSummary = getRecoveryPointDetailsSummary(point);
                     const entityId = String(point.entityId || '').trim();
-                    const cluster = String(point.cluster || '').trim();
-                    const nodeAgent = String(point.node || '').trim();
-                    const namespace = String(point.namespace || '').trim();
+                    const cluster = String(
+                      point.display?.clusterLabel || point.cluster || '',
+                    ).trim();
+                    const nodeAgent = String(
+                      point.display?.nodeHostLabel || point.display?.nodeAgentLabel || point.node || '',
+                    ).trim();
+                    const namespace = String(
+                      point.display?.namespaceLabel || point.namespace || '',
+                    ).trim();
 
                     return (
                       <>

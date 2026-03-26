@@ -360,6 +360,30 @@ describe('Recovery', () => {
     expect(within(detailsPanel as HTMLTableCellElement).getByText('Finance')).toBeInTheDocument();
   });
 
+  it('keeps optional history placement columns on the neutral recovery vocabulary', async () => {
+    facetsPayload.clusters = ['lab-cluster'];
+    facetsPayload.nodesAgents = ['pve-01'];
+    facetsPayload.namespaces = ['finance'];
+
+    render(() => <Recovery />);
+
+    fireEvent.click(await screen.findByText('VM 123'));
+    await screen.findByText(/Showing 1 - 1 of 1 recovery points/i);
+
+    fireEvent.click(screen.getByRole('button', { name: /columns/i }));
+
+    expect(await screen.findByText('Cluster / Site')).toBeInTheDocument();
+    expect(screen.getByText('Host / Agent')).toBeInTheDocument();
+    expect(screen.getByText('Namespace / Group')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText('Cluster / Site'));
+
+    const tables = await screen.findAllByRole('table');
+    const table = tables[tables.length - 1];
+    expect(within(table).getByText('Cluster / Site')).toBeInTheDocument();
+    expect(within(table).getByText('Lab Cluster')).toBeInTheDocument();
+  });
+
   it('filters protected rollups by provider', async () => {
     render(() => <Recovery />);
 
