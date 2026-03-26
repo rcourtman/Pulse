@@ -444,8 +444,11 @@ describe('RelaySettingsPanel runtime', () => {
   it('keeps relay settings split into shell, runtime, and pairing owners', () => {
     expect(relaySettingsPanelSource).toContain('./useRelaySettingsPanelState');
     expect(relaySettingsPanelSource).toContain('./RelayPairingSection');
+    expect(relaySettingsPanelSource).toContain('@/utils/upgradePresentation');
+    expect(relaySettingsPanelSource).toContain('UPGRADE_TRIAL_LABEL');
     expect(relaySettingsPanelSource).not.toContain('createSignal(');
     expect(relaySettingsPanelSource).not.toContain('QRCode.toDataURL(');
+    expect(relaySettingsPanelSource).not.toContain('>Start free trial<');
     expect(relaySettingsPanelStateSource).toContain('QRCode.toDataURL(payload.deep_link');
     expect(relaySettingsPanelStateSource).toContain('setInterval(() => void loadStatus(), 5000)');
     expect(relayPairingSectionSource).toContain('getRelayDiagnosticClass');

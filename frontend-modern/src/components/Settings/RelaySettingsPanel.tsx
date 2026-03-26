@@ -16,6 +16,7 @@ import {
   RELAY_PRIMARY_LINK_CLASS,
   RELAY_READONLY_NOTICE_CLASS,
 } from '@/utils/relayPresentation';
+import { UPGRADE_TRIAL_LABEL } from '@/utils/upgradePresentation';
 import { RelayPairingSection } from './RelayPairingSection';
 import {
   useRelaySettingsPanelState,
@@ -63,7 +64,7 @@ export const RelaySettingsPanel: Component<RelaySettingsPanelProps> = (props) =>
                     disabled={state.startingTrial()}
                     class={RELAY_INLINE_ACTION_CLASS}
                   >
-                    Start free trial
+                    {UPGRADE_TRIAL_LABEL}
                   </button>
                 </Show>
               </div>

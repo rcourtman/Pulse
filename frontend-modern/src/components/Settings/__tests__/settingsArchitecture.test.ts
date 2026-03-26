@@ -573,8 +573,11 @@ describe('Settings architecture guardrails', () => {
   it('keeps relay settings split into shell, runtime, and pairing owners', () => {
     expect(relaySettingsPanelSource).toContain('./useRelaySettingsPanelState');
     expect(relaySettingsPanelSource).toContain('./RelayPairingSection');
+    expect(relaySettingsPanelSource).toContain('@/utils/upgradePresentation');
+    expect(relaySettingsPanelSource).toContain('UPGRADE_TRIAL_LABEL');
     expect(relaySettingsPanelSource).not.toContain('createSignal(');
     expect(relaySettingsPanelSource).not.toContain('QRCode.toDataURL(');
+    expect(relaySettingsPanelSource).not.toContain('>Start free trial<');
     expect(relaySettingsPanelStateSource).toContain(
       "trackPaywallViewed('relay', 'settings_relay_panel')",
     );
@@ -1013,8 +1016,13 @@ describe('Settings architecture guardrails', () => {
     );
     expect(aiModelSelectionSectionSource).toContain('@/components/Settings/aiSettingsModel');
     expect(aiModelSelectionSectionSource).toContain('Advanced Model Selection');
+    expect(aiRuntimeControlsSectionSource).toContain('@/utils/upgradePresentation');
+    expect(aiRuntimeControlsSectionSource).toContain('UPGRADE_ACTION_LABEL');
+    expect(aiRuntimeControlsSectionSource).toContain('UPGRADE_TRIAL_LABEL');
     expect(aiRuntimeControlsSectionSource).toContain('Discovery Settings');
     expect(aiRuntimeControlsSectionSource).toContain('Pulse Permission Level');
+    expect(aiRuntimeControlsSectionSource).not.toContain('>Upgrade to Pro<');
+    expect(aiRuntimeControlsSectionSource).not.toContain('>Start free trial<');
     expect(aiChatMaintenanceSectionSource).toContain('Chat Session Maintenance');
     expect(aiSettingsStatusAndActionsSource).toContain('Save changes');
     expect(aiSettingsStatusAndActionsSource).toContain('Test Connection');

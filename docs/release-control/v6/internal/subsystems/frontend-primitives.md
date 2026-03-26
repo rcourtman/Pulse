@@ -333,6 +333,11 @@ handoff itself is now centralized in
 onboarding surfaces must use that owner for redirect, success-notification, and
 canonical denial handling instead of open-coding local `startProTrial()`
 branches or re-interpreting backend status codes.
+That same owner also holds generic settings-paywall CTA labels. Runtime shells
+such as `AIRuntimeControlsSection.tsx` and `RelaySettingsPanel.tsx` must source
+shared labels like `Upgrade to Pro` and `Start free trial` from
+`upgradePresentation.ts` rather than embedding local CTA strings in the panel
+markup.
 Top-level route files are now also expected to stay thin when a feature owns
 the real product surface. `frontend-modern/src/pages/Infrastructure.tsx` now
 acts only as the route boundary, while

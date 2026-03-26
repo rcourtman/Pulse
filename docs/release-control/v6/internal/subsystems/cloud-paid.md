@@ -228,6 +228,11 @@ truth. Trial initiation surfaces must preserve backend denial messages when the
 request is blocked for migration, active commercial state, or other operational
 reasons, and only map the explicit canonical cases (`trial_already_used`,
 rate-limit retry) to fixed copy.
+That same helper boundary also owns generic settings-paywall CTA labels such as
+`Upgrade to Pro` and `Start free trial`; feature panels like
+`AIRuntimeControlsSection.tsx` and `RelaySettingsPanel.tsx` must consume the
+shared upgrade presentation owner instead of embedding those CTA strings
+locally.
 Hosted self-serve trial leases are also part of that same contract. A redeemed
 hosted trial must carry the canonical Pro capability set and the authoritative
 `limits.max_monitored_systems` cap inside the signed lease rather than relying

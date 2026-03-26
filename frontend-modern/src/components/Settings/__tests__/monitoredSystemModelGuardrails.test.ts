@@ -406,8 +406,11 @@ describe('monitored-system model guardrails', () => {
     expect(relaySettingsPanelSource).toContain('./useRelaySettingsPanelState');
     expect(relaySettingsPanelSource).toContain('./RelayPairingSection');
     expect(relaySettingsPanelSource).toContain('getSettingsConfigurationLoadingState');
+    expect(relaySettingsPanelSource).toContain('@/utils/upgradePresentation');
+    expect(relaySettingsPanelSource).toContain('UPGRADE_TRIAL_LABEL');
     expect(relaySettingsPanelSource).not.toContain('createSignal(');
     expect(relaySettingsPanelSource).not.toContain('Loading configuration...');
+    expect(relaySettingsPanelSource).not.toContain('>Start free trial<');
     expect(relaySettingsPanelStateSource).toContain('getRelayConnectionPresentation');
     expect(relaySettingsPanelStateSource).toContain('trackPaywallViewed');
     expect(relayPairingSectionSource).toContain('getRelayDiagnosticClass');
@@ -512,6 +515,9 @@ describe('monitored-system model guardrails', () => {
     expect(aiSettingsShellSource).toContain('@/components/Settings/AIRuntimeControlsSection');
     expect(aiSettingsShellSource).toContain('@/components/Settings/AIChatMaintenanceSection');
     expect(aiSettingsShellSource).toContain('@/components/Settings/AISettingsStatusAndActions');
+    expect(aiRuntimeControlsSectionSource).toContain('@/utils/upgradePresentation');
+    expect(aiRuntimeControlsSectionSource).toContain('UPGRADE_ACTION_LABEL');
+    expect(aiRuntimeControlsSectionSource).toContain('UPGRADE_TRIAL_LABEL');
     expect(aiSettingsSource).not.toContain('Loading Pulse Assistant settings...');
     expect(aiSettingsSource).not.toContain('Loading chat sessions...');
     expect(aiSettingsSource).not.toContain('No chat sessions yet. Start a chat to create one.');
@@ -520,6 +526,8 @@ describe('monitored-system model guardrails', () => {
     expect(aiSettingsSource).not.toContain("'Failed to revert session.'");
     expect(aiSettingsSource).not.toContain("'Failed to save Pulse Assistant settings'");
     expect(aiSettingsSource).not.toContain("'Failed to clear credentials'");
+    expect(aiRuntimeControlsSectionSource).not.toContain('>Upgrade to Pro<');
+    expect(aiRuntimeControlsSectionSource).not.toContain('>Start free trial<');
     expect(aiSettingsSource).not.toContain("'Failed to update Pulse Assistant setting'");
     expect(aiSettingsSource).not.toContain('const normalizeControlLevel =');
     expect(aiSettingsSource).not.toContain('const errorMessages: Record<string, string> =');

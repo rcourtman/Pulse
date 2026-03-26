@@ -9,6 +9,11 @@ import {
   getAIControlLevelPanelClass,
 } from '@/utils/aiControlLevelPresentation';
 import { trackUpgradeClicked } from '@/utils/upgradeMetrics';
+import {
+  UPGRADE_ACTION_LABEL,
+  UPGRADE_TRIAL_LABEL,
+  UPGRADE_TRIAL_LINK_CLASS,
+} from '@/utils/upgradePresentation';
 
 interface AIRuntimeControlsSectionProps {
   state: AISettingsState;
@@ -240,7 +245,7 @@ export const AIRuntimeControlsSection: Component<AIRuntimeControlsSectionProps> 
               rel="noopener noreferrer"
               onClick={() => trackUpgradeClicked('settings_ai_patrol_autofix', 'ai_autofix')}
             >
-              Upgrade to Pro
+              {UPGRADE_ACTION_LABEL}
             </a>{' '}
             to enable autonomous mode.
             <Show when={state.canStartTrial()}>
@@ -249,9 +254,9 @@ export const AIRuntimeControlsSection: Component<AIRuntimeControlsSectionProps> 
                 type="button"
                 onClick={state.handleStartTrial}
                 disabled={state.startingTrial()}
-                class="text-indigo-500 hover:underline disabled:opacity-50"
+                class={UPGRADE_TRIAL_LINK_CLASS}
               >
-                Start free trial
+                {UPGRADE_TRIAL_LABEL}
               </button>
             </Show>
           </p>
