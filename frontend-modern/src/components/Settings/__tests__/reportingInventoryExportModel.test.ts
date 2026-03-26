@@ -8,12 +8,13 @@ import {
 describe('reporting inventory export model', () => {
   it('builds a VM inventory export filename', () => {
     const now = new Date('2026-03-20T12:34:56.000Z');
-    expect(buildVMInventoryExportFilename(now, 'vm-inventory', 'utc_yyyymmdd')).toBe('vm-inventory-20260320.csv');
+    expect(buildVMInventoryExportFilename(now, 'csv', 'vm-inventory', 'utc_yyyymmdd')).toBe('vm-inventory-20260320.csv');
   });
 
   it('builds the canonical VM inventory export request', () => {
     const now = new Date('2026-03-20T12:34:56.000Z');
     const request = buildVMInventoryExportRequest(now, {
+      format: 'csv',
       exportEndpoint: '/api/admin/reports/inventory/vms/export',
       filenamePrefix: 'vm-inventory',
       filenameDateStyle: 'utc_yyyymmdd',
@@ -48,6 +49,7 @@ describe('reporting inventory export model', () => {
       label: 'Pool',
       description: 'Canonical Proxmox pool membership.',
     });
+    expect(definition.format).toBe('csv');
   });
 
   it('rejects inventory definitions without declared columns', () => {

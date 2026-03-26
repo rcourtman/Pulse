@@ -27,24 +27,26 @@ export interface ReportingInventoryExportDefinition {
 
 export function buildVMInventoryExportFilename(
   now: Date,
+  format: ReportingInventoryExportDefinition['format'],
   filenamePrefix: string,
   filenameDateStyle: ReportingFilenameDateStyle,
 ): string {
   const date = formatReportingFilenameDate(now, filenameDateStyle);
-  return `${filenamePrefix}-${date}.csv`;
+  return `${filenamePrefix}-${date}.${format}`;
 }
 
 export function buildVMInventoryExportRequest(
   now: Date,
   definition: Pick<
     ReportingInventoryExportDefinition,
-    'exportEndpoint' | 'filenamePrefix' | 'filenameDateStyle'
+    'exportEndpoint' | 'filenamePrefix' | 'filenameDateStyle' | 'format'
   >,
 ): ReportingInventoryExportRequestDefinition {
-  const params = new URLSearchParams({ format: 'csv' });
+  const params = new URLSearchParams({ format: definition.format });
   return {
     filename: buildVMInventoryExportFilename(
       now,
+      definition.format,
       definition.filenamePrefix,
       definition.filenameDateStyle,
     ),

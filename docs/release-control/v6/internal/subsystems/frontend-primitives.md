@@ -201,6 +201,10 @@ or fallback filename date-stamp styles
 when the catalog is
 present; the first valid selection and all request semantics must come from the
 parsed backend definition.
+The same rule applies to VM inventory export transport details: request
+builders and fallback filenames must derive the export format and extension
+from the parsed inventory definition instead of hardcoding `csv` in frontend
+helpers.
 That same fallback contract also includes the single-report filename subject,
 so frontend download builders may not substitute resource display names when
 the catalog says fallback attachment names are keyed off canonical resource IDs.
