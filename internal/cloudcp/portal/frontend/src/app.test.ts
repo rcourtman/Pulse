@@ -137,6 +137,49 @@ describe('portal app', function() {
     expect(runtime.store.getBootstrap().email).toBe('owner@example.com');
   });
 
+  it('preserves utility handoff intent across the signed-out to authenticated portal transition', function() {
+    var runtime = createPortalRuntime(
+      {
+        authenticated: false,
+        email: '',
+        public_site_url: 'https://cloud.pulserelay.pro',
+        accounts: [],
+      },
+      {
+        email: 'buyer@example.com',
+        openPanelID: 'retrieve-service-panel',
+      }
+    );
+
+    var app = installPortalApp({
+      bootstrapDefaults: runtime.bootstrapDefaults,
+      store: runtime.store,
+    });
+
+    expect((document.getElementById('portal-login-email') as HTMLInputElement | null)?.value).toBe('buyer@example.com');
+
+    app.applyBootstrap({
+      authenticated: true,
+      email: 'buyer@example.com',
+      accounts: [
+        {
+          id: 'acct_1',
+          name: 'Acme MSP',
+          kind: 'msp',
+          kind_label: 'MSP',
+          role: 'owner',
+          can_manage: true,
+          has_billing: true,
+          workspaces: [],
+        },
+      ],
+    });
+
+    expect(document.getElementById('retrieve-service-panel')?.classList.contains('visible')).toBe(true);
+    expect((document.getElementById('retrieve-inline-email') as HTMLInputElement | null)?.value).toBe('buyer@example.com');
+    expect(runtime.store.getServiceState().openPanelID).toBe('retrieve-service-panel');
+  });
+
   it('completes the signed-out magic-link flow through the real shell and auth runtime', async function() {
     var store = createPortalStore(bootstrapDefaults, {
       authenticated: false,
