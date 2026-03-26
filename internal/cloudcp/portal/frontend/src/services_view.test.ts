@@ -34,8 +34,14 @@ function createBootstrap(overrides: Partial<PortalBootstrapData> = {}): PortalBo
 function createFlowState(overrides: Partial<VerificationFlowState> = {}): VerificationFlowState {
   return {
     pendingEmail: '',
-    requesting: false,
-    confirming: false,
+    request: {
+      pending: false,
+      error: '',
+    },
+    confirm: {
+      pending: false,
+      error: '',
+    },
     step2Visible: false,
     status: {
       visible: false,
@@ -54,7 +60,10 @@ function createRefundState(overrides: Partial<RefundState> = {}): RefundState {
   return {
     emailValue: '',
     tokenValue: '',
-    submitting: false,
+    submit: {
+      pending: false,
+      error: '',
+    },
     status: {
       visible: false,
       message: '',

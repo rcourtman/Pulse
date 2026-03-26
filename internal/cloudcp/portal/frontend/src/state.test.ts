@@ -18,6 +18,7 @@ describe('portal state', function() {
     var loginState = createPortalLoginState();
     syncLoginStateBootstrapEmail(loginState, 'first@example.com');
     expect(loginState.emailValue).toBe('first@example.com');
+    expect(loginState.request.pending).toBe(false);
 
     syncLoginStateBootstrapEmail(loginState, 'second@example.com');
     expect(loginState.emailValue).toBe('first@example.com');
@@ -30,6 +31,9 @@ describe('portal state', function() {
     expect(serviceState.flows.manage.emailValue).toBe('owner@example.com');
     expect(serviceState.flows.retrieve.emailValue).toBe('owner@example.com');
     expect(serviceState.refund.emailValue).toBe('owner@example.com');
+    expect(serviceState.flows.manage.request.pending).toBe(false);
+    expect(serviceState.flows.manage.confirm.pending).toBe(false);
+    expect(serviceState.refund.submit.pending).toBe(false);
 
     serviceState.flows.manage.emailValue = 'override@example.com';
     syncServiceStateBootstrapEmail(serviceState, 'owner@example.com');
@@ -61,6 +65,8 @@ describe('portal state', function() {
     serviceState.flows.export.codeValue = '999999';
     serviceState.flows.export.pendingEmail = 'buyer@example.com';
     serviceState.flows.export.result = { ok: true };
+    serviceState.flows.export.request.pending = true;
+    serviceState.flows.export.confirm.pending = true;
     setFlowStatus(serviceState, 'export', 'done', false);
 
     resetVerificationFlowState(serviceState, 'export');
@@ -69,6 +75,8 @@ describe('portal state', function() {
     expect(serviceState.flows.export.codeValue).toBe('');
     expect(serviceState.flows.export.pendingEmail).toBe('');
     expect(serviceState.flows.export.result).toBeNull();
+    expect(serviceState.flows.export.request.pending).toBe(false);
+    expect(serviceState.flows.export.confirm.pending).toBe(false);
     expect(serviceState.flows.export.status.visible).toBe(false);
 
     setFlowStatus(serviceState, 'export', 'broken', true);

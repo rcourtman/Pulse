@@ -23,8 +23,8 @@ export function emptyStatus(): ServiceStatus {
 export function newVerificationFlowState(): VerificationFlowState {
   return {
     pendingEmail: '',
-    requesting: false,
-    confirming: false,
+    request: createMutationState(),
+    confirm: createMutationState(),
     step2Visible: false,
     status: emptyStatus(),
     result: null,
@@ -37,9 +37,8 @@ export function newVerificationFlowState(): VerificationFlowState {
 export function createPortalLoginState(): PortalLoginState {
   return {
     emailValue: '',
-    sending: false,
+    request: createMutationState(),
     success: false,
-    error: '',
   };
 }
 
@@ -88,7 +87,7 @@ export function createPortalServiceState(): PortalServiceState {
     refund: {
       emailValue: '',
       tokenValue: '',
-      submitting: false,
+      submit: createMutationState(),
       status: emptyStatus(),
     },
   };

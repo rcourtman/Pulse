@@ -13,25 +13,36 @@ const repoRoot = path.resolve(frontendRoot, '../../../../');
 const distRoot = path.resolve(frontendRoot, '../dist');
 const lockPath = path.join(repoRoot, 'tmp', 'locks', 'pulse-account-frontend-build.lock');
 const manifestPath = path.join(distRoot, 'build_manifest.json');
-const buildInputs = [
-  'package.json',
-  'tsconfig.json',
-  'build.mjs',
-  'src/index.ts',
-  'src/account_controller.ts',
-  'src/auth_controller.ts',
-  'src/state.ts',
-  'src/shell.ts',
-  'src/shell_view.ts',
-  'src/services.ts',
-  'src/services_controller.ts',
-  'src/services_view.ts',
-  'src/runtime.ts',
-  'src/types.ts',
-  'src/styles.css',
-];
 
-async function computeSourceHash() {
+async function listSourceInputs(relativeDir) {
+  const absoluteDir = path.join(frontendRoot, relativeDir);
+  const entries = await fs.readdir(absoluteDir, { withFileTypes: true });
+  const files = [];
+  for (const entry of entries) {
+    const childRelativePath = path.posix.join(relativeDir, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...await listSourceInputs(childRelativePath));
+      continue;
+    }
+    if (entry.isFile() && /\.(ts|css)$/.test(entry.name)) {
+      files.push(childRelativePath);
+    }
+  }
+  files.sort();
+  return files;
+}
+
+async function getBuildInputs() {
+  const sourceInputs = await listSourceInputs('src');
+  return [
+    'package.json',
+    'tsconfig.json',
+    'build.mjs',
+    ...sourceInputs,
+  ];
+}
+
+async function computeSourceHash(buildInputs) {
   const hash = crypto.createHash('sha256');
   for (const relativePath of buildInputs) {
     hash.update(relativePath);
@@ -45,7 +56,8 @@ async function computeSourceHash() {
 await withExclusiveLock(
   lockPath,
   async () => {
-    const sourceHash = await computeSourceHash();
+    const buildInputs = await getBuildInputs();
+    const sourceHash = await computeSourceHash(buildInputs);
     await fs.mkdir(distRoot, { recursive: true });
     await fs.rm(path.join(distRoot, 'portal_app.js'), { force: true });
     await fs.rm(path.join(distRoot, 'portal_app.css'), { force: true });

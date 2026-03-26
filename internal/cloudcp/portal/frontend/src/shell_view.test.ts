@@ -31,9 +31,11 @@ function createBootstrap(overrides: Partial<PortalBootstrapData> = {}): PortalBo
 function createLoginState(overrides: Partial<PortalLoginState> = {}): PortalLoginState {
   return {
     emailValue: '',
-    sending: false,
+    request: {
+      pending: false,
+      error: '',
+    },
     success: false,
-    error: '',
     ...overrides,
   };
 }
@@ -128,7 +130,10 @@ describe('shell view', function() {
         bootstrap: createBootstrap({ authenticated: false, email: '' }),
         loginState: createLoginState({
           emailValue: 'buyer@example.com',
-          error: 'Invalid email',
+          request: {
+            pending: false,
+            error: 'Invalid email',
+          },
         }),
       })
     );
@@ -138,7 +143,10 @@ describe('shell view', function() {
         loginState: createLoginState({
           emailValue: 'buyer@example.com',
           success: true,
-          sending: false,
+          request: {
+            pending: false,
+            error: '',
+          },
         }),
       })
     );

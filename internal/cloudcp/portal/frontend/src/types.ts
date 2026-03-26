@@ -35,9 +35,8 @@ export interface PortalBootstrapData {
 
 export interface PortalLoginState {
   emailValue: string;
-  sending: boolean;
+  request: PortalMutationState;
   success: boolean;
-  error: string;
 }
 
 export interface PortalTeamMember {
@@ -80,8 +79,8 @@ export interface ServiceStatus {
 
 export interface VerificationFlowState {
   pendingEmail: string;
-  requesting: boolean;
-  confirming: boolean;
+  request: PortalMutationState;
+  confirm: PortalMutationState;
   step2Visible: boolean;
   status: ServiceStatus;
   result: unknown;
@@ -93,7 +92,7 @@ export interface VerificationFlowState {
 export interface RefundState {
   emailValue: string;
   tokenValue: string;
-  submitting: boolean;
+  submit: PortalMutationState;
   status: ServiceStatus;
 }
 

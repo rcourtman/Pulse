@@ -327,8 +327,8 @@
   function newVerificationFlowState() {
     return {
       pendingEmail: "",
-      requesting: false,
-      confirming: false,
+      request: createMutationState(),
+      confirm: createMutationState(),
       step2Visible: false,
       status: emptyStatus(),
       result: null,
@@ -340,9 +340,8 @@
   function createPortalLoginState() {
     return {
       emailValue: "",
-      sending: false,
-      success: false,
-      error: ""
+      request: createMutationState(),
+      success: false
     };
   }
   function createPortalAccountState() {
@@ -386,7 +385,7 @@
       refund: {
         emailValue: "",
         tokenValue: "",
-        submitting: false,
+        submit: createMutationState(),
         status: emptyStatus()
       }
     };
@@ -707,31 +706,31 @@
         return;
       }
       deps.store.updateLoginState(function(nextState) {
-        nextState.sending = true;
-        nextState.error = "";
+        nextState.request.pending = true;
+        nextState.request.error = "";
         nextState.success = false;
       });
       try {
         await deps.api.requestMagicLink(email);
         deps.store.updateLoginState(function(nextState) {
-          nextState.sending = false;
+          nextState.request.pending = false;
           nextState.success = true;
         });
         return;
       } catch (error) {
         if (error instanceof PortalAPIError && error.status === 404) {
           deps.store.updateLoginState(function(nextState) {
-            nextState.sending = false;
+            nextState.request.pending = false;
             nextState.success = true;
           });
           return;
         }
         deps.store.updateLoginState(function(nextState) {
-          nextState.error = error instanceof PortalAPIError && error.status === 429 ? "Too many requests. Please wait a moment and try again." : "Network error. Please check your connection and try again.";
+          nextState.request.error = error instanceof PortalAPIError && error.status === 429 ? "Too many requests. Please wait a moment and try again." : "Network error. Please check your connection and try again.";
         });
       }
       deps.store.updateLoginState(function(nextState) {
-        nextState.sending = false;
+        nextState.request.pending = false;
       });
     }
     document.addEventListener("click", function(event) {
@@ -747,7 +746,7 @@
             event.preventDefault();
             deps.store.updateLoginState(function(nextState) {
               nextState.success = false;
-              nextState.error = "";
+              nextState.request.error = "";
             });
             void sendMagicLink();
             return;
@@ -993,8 +992,8 @@
       if (flow.renderPanel) {
         flow.renderPanel(flowState);
       }
-      renderButton(flow.requestButtonID, flowState.requesting, flowState.requesting ? flow.requestPendingLabel : flow.requestLabel);
-      renderButton(flow.confirmButtonID, flowState.confirming, flowState.confirming ? flow.confirmPendingLabel : flow.confirmLabel);
+      renderButton(flow.requestButtonID, flowState.request.pending, flowState.request.pending ? flow.requestPendingLabel : flow.requestLabel);
+      renderButton(flow.confirmButtonID, flowState.confirm.pending, flowState.confirm.pending ? flow.confirmPendingLabel : flow.confirmLabel);
       renderStatus(flow.statusID, flowState.status);
       if (flow.step2ID) {
         setVisible(flow.step2ID, flowState.step2Visible);
@@ -1013,7 +1012,7 @@
     function renderRefund() {
       var refundState = getServiceState().refund;
       renderRefundPanel(refundState, store.getBootstrap());
-      renderButton("refund-inline-submit", refundState.submitting, refundState.submitting ? "Processing..." : "Process Refund");
+      renderButton("refund-inline-submit", refundState.submit.pending, refundState.submit.pending ? "Processing..." : "Process Refund");
       renderStatus("refund-inline-status", refundState.status);
     }
     function resetVerificationFlow(flowID) {
@@ -1202,7 +1201,8 @@
         flow.onRequestStart();
       }
       updateServiceState(function(serviceState) {
-        serviceState.flows[flowID].requesting = true;
+        serviceState.flows[flowID].request.pending = true;
+        serviceState.flows[flowID].request.error = "";
         clearFlowStatus(serviceState, flowID);
       });
       try {
@@ -1218,7 +1218,7 @@
         });
       } finally {
         updateServiceState(function(serviceState) {
-          serviceState.flows[flowID].requesting = false;
+          serviceState.flows[flowID].request.pending = false;
         });
       }
     }
@@ -1249,7 +1249,8 @@
         return;
       }
       updateServiceState(function(serviceState) {
-        serviceState.flows[flowID].confirming = true;
+        serviceState.flows[flowID].confirm.pending = true;
+        serviceState.flows[flowID].confirm.error = "";
       });
       try {
         var data = await api.postCommercialJSON(flow.confirmPath, { email, code });
@@ -1260,7 +1261,7 @@
         });
       } finally {
         updateServiceState(function(serviceState) {
-          serviceState.flows[flowID].confirming = false;
+          serviceState.flows[flowID].confirm.pending = false;
         });
       }
     }
@@ -1285,7 +1286,8 @@
       if (!email || !token) return;
       if (!confirm("Are you sure? This will immediately revoke the license and request the refund.")) return;
       updateServiceState(function(serviceState) {
-        serviceState.refund.submitting = true;
+        serviceState.refund.submit.pending = true;
+        serviceState.refund.submit.error = "";
         serviceState.refund.status = emptyStatus();
       });
       try {
@@ -1300,7 +1302,7 @@
         });
       } finally {
         updateServiceState(function(serviceState) {
-          serviceState.refund.submitting = false;
+          serviceState.refund.submit.pending = false;
         });
       }
     }
@@ -1420,12 +1422,12 @@
   }
   function renderSignedOutPortalHTML(context) {
     var statusHTML = "";
-    if (context.loginState.error) {
-      statusHTML = '<div class="service-status visible error">' + escapeHTML(context.loginState.error) + "</div>";
+    if (context.loginState.request.error) {
+      statusHTML = '<div class="service-status visible error">' + escapeHTML(context.loginState.request.error) + "</div>";
     } else if (context.loginState.success) {
       statusHTML = `<div class="service-status visible success">Magic link sent. Check your inbox and click the link to sign in.<br><br><strong>Don't see it?</strong> <a href="#" data-portal-action="resend-magic-link">Send a new link</a>.</div>`;
     }
-    return '<section class="intro-card"><h1>Pulse Account</h1><p>Sign in to manage Cloud workspaces, MSP access, and commercial account services from one account surface.</p></section><section class="service-section"><div class="service-panel visible"><h3>Sign in</h3><p>Enter the commercial email address for your Pulse account. I will send a magic link so you can open Pulse Account without managing a password.</p><div class="form-group"><label for="portal-login-email">Email address</label><input id="portal-login-email" type="email" autocomplete="email" placeholder="you@example.com" value="' + escapeAttr(context.loginState.emailValue || "") + '" data-portal-input="login-email"></div><div class="form-actions"><button class="btn-primary" id="portal-login-send" type="button" data-portal-action="send-magic-link">' + (context.loginState.sending ? "Sending\u2026" : "Send magic link") + '</button><a class="btn-secondary" href="' + escapeAttr(context.signupPath) + '" style="text-decoration:none">Create an account</a></div>' + statusHTML + "</div></section>";
+    return '<section class="intro-card"><h1>Pulse Account</h1><p>Sign in to manage Cloud workspaces, MSP access, and commercial account services from one account surface.</p></section><section class="service-section"><div class="service-panel visible"><h3>Sign in</h3><p>Enter the commercial email address for your Pulse account. I will send a magic link so you can open Pulse Account without managing a password.</p><div class="form-group"><label for="portal-login-email">Email address</label><input id="portal-login-email" type="email" autocomplete="email" placeholder="you@example.com" value="' + escapeAttr(context.loginState.emailValue || "") + '" data-portal-input="login-email"></div><div class="form-actions"><button class="btn-primary" id="portal-login-send" type="button" data-portal-action="send-magic-link">' + (context.loginState.request.pending ? "Sending\u2026" : "Send magic link") + '</button><a class="btn-secondary" href="' + escapeAttr(context.signupPath) + '" style="text-decoration:none">Create an account</a></div>' + statusHTML + "</div></section>";
   }
 
   // src/shell.ts

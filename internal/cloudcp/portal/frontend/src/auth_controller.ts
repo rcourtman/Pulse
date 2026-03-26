@@ -38,33 +38,33 @@ export function installAuthController(deps: AuthControllerDeps): AuthController 
       return;
     }
     deps.store.updateLoginState(function(nextState) {
-      nextState.sending = true;
-      nextState.error = '';
+      nextState.request.pending = true;
+      nextState.request.error = '';
       nextState.success = false;
     });
     try {
       await deps.api.requestMagicLink(email);
       deps.store.updateLoginState(function(nextState) {
-        nextState.sending = false;
+        nextState.request.pending = false;
         nextState.success = true;
       });
       return;
     } catch (error) {
       if (error instanceof PortalAPIError && error.status === 404) {
         deps.store.updateLoginState(function(nextState) {
-          nextState.sending = false;
+          nextState.request.pending = false;
           nextState.success = true;
         });
         return;
       }
       deps.store.updateLoginState(function(nextState) {
-        nextState.error = error instanceof PortalAPIError && error.status === 429
+        nextState.request.error = error instanceof PortalAPIError && error.status === 429
           ? 'Too many requests. Please wait a moment and try again.'
           : 'Network error. Please check your connection and try again.';
       });
     }
     deps.store.updateLoginState(function(nextState) {
-      nextState.sending = false;
+      nextState.request.pending = false;
     });
   }
 
@@ -81,7 +81,7 @@ export function installAuthController(deps: AuthControllerDeps): AuthController 
           event.preventDefault();
           deps.store.updateLoginState(function(nextState) {
             nextState.success = false;
-            nextState.error = '';
+            nextState.request.error = '';
           });
           void sendMagicLink();
           return;

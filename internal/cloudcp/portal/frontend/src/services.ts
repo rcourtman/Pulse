@@ -96,8 +96,8 @@ export function installServicesRuntime(deps: ServicesRuntimeDeps): void {
     if (flow.renderPanel) {
       flow.renderPanel(flowState);
     }
-    renderButton(flow.requestButtonID, flowState.requesting, flowState.requesting ? flow.requestPendingLabel : flow.requestLabel);
-    renderButton(flow.confirmButtonID, flowState.confirming, flowState.confirming ? flow.confirmPendingLabel : flow.confirmLabel);
+    renderButton(flow.requestButtonID, flowState.request.pending, flowState.request.pending ? flow.requestPendingLabel : flow.requestLabel);
+    renderButton(flow.confirmButtonID, flowState.confirm.pending, flowState.confirm.pending ? flow.confirmPendingLabel : flow.confirmLabel);
     renderStatus(flow.statusID, flowState.status);
     if (flow.step2ID) {
       setVisible(flow.step2ID, flowState.step2Visible);
@@ -118,7 +118,7 @@ export function installServicesRuntime(deps: ServicesRuntimeDeps): void {
   function renderRefund() {
     var refundState = getServiceState().refund;
     renderRefundPanel(refundState, store.getBootstrap());
-    renderButton('refund-inline-submit', refundState.submitting, refundState.submitting ? 'Processing...' : 'Process Refund');
+    renderButton('refund-inline-submit', refundState.submit.pending, refundState.submit.pending ? 'Processing...' : 'Process Refund');
     renderStatus('refund-inline-status', refundState.status);
   }
 
@@ -309,7 +309,8 @@ export function installServicesRuntime(deps: ServicesRuntimeDeps): void {
       flow.onRequestStart();
     }
     updateServiceState(function(serviceState) {
-      serviceState.flows[flowID].requesting = true;
+      serviceState.flows[flowID].request.pending = true;
+      serviceState.flows[flowID].request.error = '';
       clearFlowStatus(serviceState, flowID);
     });
     try {
@@ -325,7 +326,7 @@ export function installServicesRuntime(deps: ServicesRuntimeDeps): void {
       });
     } finally {
       updateServiceState(function(serviceState) {
-        serviceState.flows[flowID].requesting = false;
+        serviceState.flows[flowID].request.pending = false;
       });
     }
   }
@@ -358,7 +359,8 @@ export function installServicesRuntime(deps: ServicesRuntimeDeps): void {
       return;
     }
     updateServiceState(function(serviceState) {
-      serviceState.flows[flowID].confirming = true;
+      serviceState.flows[flowID].confirm.pending = true;
+      serviceState.flows[flowID].confirm.error = '';
     });
     try {
       var data = await api.postCommercialJSON(flow.confirmPath, { email: email, code: code });
@@ -369,7 +371,7 @@ export function installServicesRuntime(deps: ServicesRuntimeDeps): void {
       });
     } finally {
       updateServiceState(function(serviceState) {
-        serviceState.flows[flowID].confirming = false;
+        serviceState.flows[flowID].confirm.pending = false;
       });
     }
   }
@@ -396,7 +398,8 @@ export function installServicesRuntime(deps: ServicesRuntimeDeps): void {
     if (!email || !token) return;
     if (!confirm('Are you sure? This will immediately revoke the license and request the refund.')) return;
     updateServiceState(function(serviceState) {
-      serviceState.refund.submitting = true;
+      serviceState.refund.submit.pending = true;
+      serviceState.refund.submit.error = '';
       serviceState.refund.status = emptyStatus();
     });
     try {
@@ -411,7 +414,7 @@ export function installServicesRuntime(deps: ServicesRuntimeDeps): void {
       });
     } finally {
       updateServiceState(function(serviceState) {
-        serviceState.refund.submitting = false;
+        serviceState.refund.submit.pending = false;
       });
     }
   }

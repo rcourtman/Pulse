@@ -78,7 +78,8 @@ describe('auth controller', function() {
     document.getElementById('send')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 
     await flushAsync();
-    expect(controller.getLoginState().sending).toBe(false);
+    expect(controller.getLoginState().request.pending).toBe(false);
+    expect(controller.getLoginState().request.error).toBe('');
     expect(controller.getLoginState().success).toBe(true);
     expect(fetch).toHaveBeenCalledWith(
       '/magic-link',

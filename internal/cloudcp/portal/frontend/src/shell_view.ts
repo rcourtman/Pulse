@@ -281,8 +281,8 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
 
 export function renderSignedOutPortalHTML(context: ShellViewContext): string {
   var statusHTML = '';
-  if (context.loginState.error) {
-    statusHTML = '<div class="service-status visible error">' + escapeHTML(context.loginState.error) + '</div>';
+  if (context.loginState.request.error) {
+    statusHTML = '<div class="service-status visible error">' + escapeHTML(context.loginState.request.error) + '</div>';
   } else if (context.loginState.success) {
     statusHTML =
       '<div class="service-status visible success">' +
@@ -307,7 +307,7 @@ export function renderSignedOutPortalHTML(context: ShellViewContext): string {
         '</div>' +
         '<div class="form-actions">' +
           '<button class="btn-primary" id="portal-login-send" type="button" data-portal-action="send-magic-link">' +
-          (context.loginState.sending ? 'Sending…' : 'Send magic link') +
+          (context.loginState.request.pending ? 'Sending…' : 'Send magic link') +
           '</button>' +
           '<a class="btn-secondary" href="' + escapeAttr(context.signupPath) + '" style="text-decoration:none">Create an account</a>' +
         '</div>' +
