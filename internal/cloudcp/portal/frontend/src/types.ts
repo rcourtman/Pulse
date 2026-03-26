@@ -40,6 +40,24 @@ export interface PortalLoginState {
   error: string;
 }
 
+export interface PortalTeamMember {
+  email: string;
+  role: string;
+  user_id: string;
+}
+
+export interface PortalAccountUIEntry {
+  addWorkspaceOpen: boolean;
+  teamVisible: boolean;
+  teamLoading: boolean;
+  teamError: string;
+  teamMembers: PortalTeamMember[];
+}
+
+export interface PortalAccountState {
+  byAccountID: Record<string, PortalAccountUIEntry>;
+}
+
 export type PortalServiceFlowID = 'manage' | 'retrieve' | 'export' | 'delete';
 
 export interface ServiceStatus {

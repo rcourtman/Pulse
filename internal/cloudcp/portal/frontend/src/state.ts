@@ -1,4 +1,6 @@
 import type {
+  PortalAccountState,
+  PortalAccountUIEntry,
   PortalLoginState,
   PortalServiceFlowID,
   PortalServiceState,
@@ -36,6 +38,25 @@ export function createPortalLoginState(): PortalLoginState {
     success: false,
     error: '',
   };
+}
+
+export function createPortalAccountState(): PortalAccountState {
+  return {
+    byAccountID: {},
+  };
+}
+
+export function ensurePortalAccountUIEntry(accountState: PortalAccountState, accountID: string): PortalAccountUIEntry {
+  if (!accountState.byAccountID[accountID]) {
+    accountState.byAccountID[accountID] = {
+      addWorkspaceOpen: false,
+      teamVisible: false,
+      teamLoading: false,
+      teamError: '',
+      teamMembers: [],
+    };
+  }
+  return accountState.byAccountID[accountID];
 }
 
 export function createPortalServiceState(): PortalServiceState {

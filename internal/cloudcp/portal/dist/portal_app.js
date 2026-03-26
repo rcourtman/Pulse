@@ -28,6 +28,23 @@
       error: ""
     };
   }
+  function createPortalAccountState() {
+    return {
+      byAccountID: {}
+    };
+  }
+  function ensurePortalAccountUIEntry(accountState, accountID) {
+    if (!accountState.byAccountID[accountID]) {
+      accountState.byAccountID[accountID] = {
+        addWorkspaceOpen: false,
+        teamVisible: false,
+        teamLoading: false,
+        teamError: "",
+        teamMembers: []
+      };
+    }
+    return accountState.byAccountID[accountID];
+  }
   function createPortalServiceState() {
     return {
       openPanelID: "",
@@ -137,10 +154,12 @@
   }
   function createPortalStore(bootstrapDefaults2, initialBootstrap) {
     var bootstrapState = normalizeBootstrap(bootstrapDefaults2, initialBootstrap);
+    var accountState = createPortalAccountState();
     var loginState = createPortalLoginState();
     var serviceState = createPortalServiceState();
     syncLoginStateBootstrapEmail(loginState, bootstrapState.email || "");
     syncServiceStateBootstrapEmail(serviceState, bootstrapState.email || "");
+    var accountSubscribers = /* @__PURE__ */ new Set();
     var bootstrapSubscribers = /* @__PURE__ */ new Set();
     var loginSubscribers = /* @__PURE__ */ new Set();
     var serviceSubscribers = /* @__PURE__ */ new Set();
@@ -152,6 +171,9 @@
     return {
       getBootstrap: function() {
         return bootstrapState;
+      },
+      getAccountState: function() {
+        return accountState;
       },
       getLoginState: function() {
         return loginState;
@@ -165,6 +187,13 @@
         syncServiceStateBootstrapEmail(serviceState, bootstrapState.email || "");
         notify(bootstrapSubscribers);
         return bootstrapState;
+      },
+      updateAccountState: function(mutator, options) {
+        mutator(accountState);
+        if (!options || options.notify !== false) {
+          notify(accountSubscribers);
+        }
+        return accountState;
       },
       updateLoginState: function(mutator, options) {
         mutator(loginState);
@@ -184,6 +213,12 @@
         bootstrapSubscribers.add(listener);
         return function() {
           bootstrapSubscribers.delete(listener);
+        };
+      },
+      subscribeAccount: function(listener) {
+        accountSubscribers.add(listener);
+        return function() {
+          accountSubscribers.delete(listener);
         };
       },
       subscribeLogin: function(listener) {
@@ -249,76 +284,130 @@
     tbody.appendChild(tr);
   }
   function installAccountController(deps) {
+    const getAccountAPIBasePath = () => deps.store.getBootstrap().account_api_base_path;
+    const getPortalAPIBasePath = () => deps.store.getBootstrap().portal_api_base_path;
+    const getPortalPath = () => deps.store.getBootstrap().portal_path;
     const refreshOrRedirect = async () => {
       if (!await deps.refreshBootstrap()) {
-        window.location.href = deps.getPortalPath();
+        window.location.href = getPortalPath();
         return false;
       }
       return true;
     };
-    const loadTeam = async (accountID) => {
-      const tbody = getElement("team-list-" + accountID);
+    const renderAddWorkspaceSection = (accountID) => {
+      const form = getElement("add-ws-form-" + accountID);
+      if (!form) return;
+      const entry = ensurePortalAccountUIEntry(deps.store.getAccountState(), accountID);
+      form.classList.toggle("visible", entry.addWorkspaceOpen);
+    };
+    const renderTeamSection = (accountID) => {
       const section = getElement("team-section-" + accountID);
-      if (!tbody || !section) return;
+      const tbody = getElement("team-list-" + accountID);
+      if (!section || !tbody) return;
+      const entry = ensurePortalAccountUIEntry(deps.store.getAccountState(), accountID);
       const actorRole = section.getAttribute("data-actor-role") || "";
       const isOwner = actorRole === "owner";
-      setTbodyMessage(tbody, "Loading\u2026", false);
+      section.classList.toggle("visible", entry.teamVisible);
+      if (!entry.teamVisible) {
+        return;
+      }
+      if (entry.teamLoading) {
+        setTbodyMessage(tbody, "Loading\u2026", false);
+        return;
+      }
+      if (entry.teamError) {
+        setTbodyMessage(tbody, entry.teamError, true);
+        return;
+      }
+      if (!entry.teamMembers.length) {
+        setTbodyMessage(tbody, "No team members.", false);
+        return;
+      }
+      const allRoles = ["owner", "admin", "tech", "read_only"];
+      const nonOwnerRoles = ["admin", "tech", "read_only"];
+      tbody.textContent = "";
+      for (let i = 0; i < entry.teamMembers.length; i += 1) {
+        const member = entry.teamMembers[i];
+        const tr = document.createElement("tr");
+        const tdEmail = document.createElement("td");
+        tdEmail.textContent = member.email;
+        tr.appendChild(tdEmail);
+        const tdRole = document.createElement("td");
+        if (member.role === "owner" && !isOwner) {
+          tdRole.textContent = "owner";
+        } else {
+          const sel = document.createElement("select");
+          const roles = isOwner ? allRoles : nonOwnerRoles;
+          for (let j = 0; j < roles.length; j += 1) {
+            const opt = document.createElement("option");
+            opt.value = roles[j];
+            opt.textContent = roles[j].replace("_", " ");
+            if (member.role === roles[j]) opt.selected = true;
+            sel.appendChild(opt);
+          }
+          sel.setAttribute("data-action", "change-role");
+          sel.setAttribute("data-account-id", accountID);
+          sel.setAttribute("data-user-id", member.user_id);
+          tdRole.appendChild(sel);
+        }
+        tr.appendChild(tdRole);
+        const tdAction = document.createElement("td");
+        if (!(member.role === "owner" && !isOwner)) {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "btn-remove";
+          btn.textContent = "Remove";
+          btn.setAttribute("data-action", "remove-member");
+          btn.setAttribute("data-account-id", accountID);
+          btn.setAttribute("data-user-id", member.user_id);
+          btn.setAttribute("data-member-email", member.email);
+          tdAction.appendChild(btn);
+        }
+        tr.appendChild(tdAction);
+        tbody.appendChild(tr);
+      }
+    };
+    const renderAccountUI = () => {
+      const state = deps.store.getAccountState();
+      const accountIDs = Object.keys(state.byAccountID);
+      for (let i = 0; i < accountIDs.length; i += 1) {
+        renderAddWorkspaceSection(accountIDs[i]);
+        renderTeamSection(accountIDs[i]);
+      }
+    };
+    const loadTeam = async (accountID) => {
+      const section = getElement("team-section-" + accountID);
+      if (!section) return;
+      deps.store.updateAccountState((accountState) => {
+        const entry = ensurePortalAccountUIEntry(accountState, accountID);
+        entry.teamVisible = true;
+        entry.teamLoading = true;
+        entry.teamError = "";
+        entry.teamMembers = [];
+      });
       try {
-        const r = await fetch(deps.getAccountAPIBasePath() + "/" + encodeURIComponent(accountID) + "/members");
+        const r = await fetch(getAccountAPIBasePath() + "/" + encodeURIComponent(accountID) + "/members");
         if (!r.ok) {
-          setTbodyMessage(tbody, "Failed to load team.", true);
+          deps.store.updateAccountState((accountState) => {
+            const entry = ensurePortalAccountUIEntry(accountState, accountID);
+            entry.teamLoading = false;
+            entry.teamError = "Failed to load team.";
+          });
           return;
         }
         const members = await r.json();
-        if (!members || members.length === 0) {
-          setTbodyMessage(tbody, "No team members.", false);
-          return;
-        }
-        const allRoles = ["owner", "admin", "tech", "read_only"];
-        const nonOwnerRoles = ["admin", "tech", "read_only"];
-        tbody.textContent = "";
-        for (let i = 0; i < members.length; i += 1) {
-          const member = members[i];
-          const tr = document.createElement("tr");
-          const tdEmail = document.createElement("td");
-          tdEmail.textContent = member.email;
-          tr.appendChild(tdEmail);
-          const tdRole = document.createElement("td");
-          if (member.role === "owner" && !isOwner) {
-            tdRole.textContent = "owner";
-          } else {
-            const sel = document.createElement("select");
-            const roles = isOwner ? allRoles : nonOwnerRoles;
-            for (let j = 0; j < roles.length; j += 1) {
-              const opt = document.createElement("option");
-              opt.value = roles[j];
-              opt.textContent = roles[j].replace("_", " ");
-              if (member.role === roles[j]) opt.selected = true;
-              sel.appendChild(opt);
-            }
-            sel.setAttribute("data-action", "change-role");
-            sel.setAttribute("data-account-id", accountID);
-            sel.setAttribute("data-user-id", member.user_id);
-            tdRole.appendChild(sel);
-          }
-          tr.appendChild(tdRole);
-          const tdAction = document.createElement("td");
-          if (!(member.role === "owner" && !isOwner)) {
-            const btn = document.createElement("button");
-            btn.type = "button";
-            btn.className = "btn-remove";
-            btn.textContent = "Remove";
-            btn.setAttribute("data-action", "remove-member");
-            btn.setAttribute("data-account-id", accountID);
-            btn.setAttribute("data-user-id", member.user_id);
-            btn.setAttribute("data-member-email", member.email);
-            tdAction.appendChild(btn);
-          }
-          tr.appendChild(tdAction);
-          tbody.appendChild(tr);
-        }
+        deps.store.updateAccountState((accountState) => {
+          const entry = ensurePortalAccountUIEntry(accountState, accountID);
+          entry.teamLoading = false;
+          entry.teamError = "";
+          entry.teamMembers = Array.isArray(members) ? members : [];
+        });
       } catch {
-        setTbodyMessage(tbody, "Network error.", true);
+        deps.store.updateAccountState((accountState) => {
+          const entry = ensurePortalAccountUIEntry(accountState, accountID);
+          entry.teamLoading = false;
+          entry.teamError = "Network error.";
+        });
       }
     };
     const refreshAccountTeamSection = async (accountID) => {
@@ -329,16 +418,21 @@
       if (!section) {
         return true;
       }
-      section.classList.add("visible");
+      deps.store.updateAccountState((accountState) => {
+        const entry = ensurePortalAccountUIEntry(accountState, accountID);
+        entry.teamVisible = true;
+      });
       await loadTeam(accountID);
       return true;
     };
     const toggleAddWorkspace = (accountID) => {
-      const form = getElement("add-ws-form-" + accountID);
-      if (!form) return;
-      const visible = form.classList.contains("visible");
-      form.classList.toggle("visible", !visible);
-      if (!visible) {
+      let shouldFocus = false;
+      deps.store.updateAccountState((accountState) => {
+        const entry = ensurePortalAccountUIEntry(accountState, accountID);
+        entry.addWorkspaceOpen = !entry.addWorkspaceOpen;
+        shouldFocus = entry.addWorkspaceOpen;
+      });
+      if (shouldFocus) {
         const input = getElement("ws-name-" + accountID);
         if (input) input.focus();
       }
@@ -354,7 +448,7 @@
       const spinner = getElement("ws-spinner-" + accountID);
       if (spinner) spinner.style.display = "block";
       try {
-        const resp = await fetch(deps.getAccountAPIBasePath() + "/" + accountID + "/tenants", {
+        const resp = await fetch(getAccountAPIBasePath() + "/" + accountID + "/tenants", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ display_name: name })
@@ -367,6 +461,10 @@
         if (!await refreshOrRedirect()) {
           return;
         }
+        deps.store.updateAccountState((accountState) => {
+          const entry = ensurePortalAccountUIEntry(accountState, accountID);
+          entry.addWorkspaceOpen = false;
+        });
         deps.showToast("Workspace created!");
       } catch {
         deps.showToast("Network error. Please try again.", true);
@@ -381,7 +479,7 @@
       const method = state === "active" ? "PATCH" : "DELETE";
       const body = state === "active" ? JSON.stringify({ state: "suspended" }) : void 0;
       try {
-        const response = await fetch(deps.getAccountAPIBasePath() + "/" + accountID + "/tenants/" + tenantID, {
+        const response = await fetch(getAccountAPIBasePath() + "/" + accountID + "/tenants/" + tenantID, {
           method,
           headers: body ? { "Content-Type": "application/json" } : {},
           body
@@ -400,7 +498,7 @@
     };
     const openBilling = async (accountID) => {
       try {
-        const r = await fetch(deps.getPortalAPIBasePath() + "/billing?account_id=" + encodeURIComponent(accountID), { method: "POST" });
+        const r = await fetch(getPortalAPIBasePath() + "/billing?account_id=" + encodeURIComponent(accountID), { method: "POST" });
         if (!r.ok) {
           const err = await r.json().catch(() => ({}));
           deps.showToast(err && err.error || "Failed to open billing portal.", true);
@@ -417,11 +515,13 @@
       }
     };
     const toggleTeam = (accountID) => {
-      const section = getElement("team-section-" + accountID);
-      if (!section) return;
-      const visible = section.classList.contains("visible");
-      section.classList.toggle("visible", !visible);
-      if (!visible) {
+      let nextVisible = false;
+      deps.store.updateAccountState((accountState) => {
+        const entry = ensurePortalAccountUIEntry(accountState, accountID);
+        entry.teamVisible = !entry.teamVisible;
+        nextVisible = entry.teamVisible;
+      });
+      if (nextVisible) {
         void loadTeam(accountID);
       }
     };
@@ -435,7 +535,7 @@
         return;
       }
       try {
-        const r = await fetch(deps.getAccountAPIBasePath() + "/" + encodeURIComponent(accountID) + "/members", {
+        const r = await fetch(getAccountAPIBasePath() + "/" + encodeURIComponent(accountID) + "/members", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email, role: roleEl.value })
@@ -460,7 +560,7 @@
     };
     const changeRole = async (accountID, userID, newRole) => {
       try {
-        const r = await fetch(deps.getAccountAPIBasePath() + "/" + encodeURIComponent(accountID) + "/members/" + encodeURIComponent(userID), {
+        const r = await fetch(getAccountAPIBasePath() + "/" + encodeURIComponent(accountID) + "/members/" + encodeURIComponent(userID), {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ role: newRole })
@@ -487,7 +587,7 @@
     const removeMember = async (accountID, userID, email) => {
       if (!window.confirm("Remove " + email + " from this account?")) return;
       try {
-        const r = await fetch(deps.getAccountAPIBasePath() + "/" + encodeURIComponent(accountID) + "/members/" + encodeURIComponent(userID), {
+        const r = await fetch(getAccountAPIBasePath() + "/" + encodeURIComponent(accountID) + "/members/" + encodeURIComponent(userID), {
           method: "DELETE"
         });
         if (r.status === 409) {
@@ -563,6 +663,8 @@
         target.value
       );
     });
+    deps.store.subscribeAccount(renderAccountUI);
+    deps.store.subscribeBootstrap(renderAccountUI);
   }
 
   // src/auth_controller.ts
@@ -814,15 +916,7 @@
     store: portalStore
   });
   installAccountController({
-    getAccountAPIBasePath: function() {
-      return portalStore.getBootstrap().account_api_base_path;
-    },
-    getPortalAPIBasePath: function() {
-      return portalStore.getBootstrap().portal_api_base_path;
-    },
-    getPortalPath: function() {
-      return portalStore.getBootstrap().portal_path;
-    },
+    store: portalStore,
     refreshBootstrap,
     showToast
   });

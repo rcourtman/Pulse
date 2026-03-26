@@ -78,15 +78,7 @@ installAuthController({
 });
 
 installAccountController({
-  getAccountAPIBasePath: function() {
-    return portalStore.getBootstrap().account_api_base_path;
-  },
-  getPortalAPIBasePath: function() {
-    return portalStore.getBootstrap().portal_api_base_path;
-  },
-  getPortalPath: function() {
-    return portalStore.getBootstrap().portal_path;
-  },
+  store: portalStore,
   refreshBootstrap: refreshBootstrap,
   showToast: showToast
 });

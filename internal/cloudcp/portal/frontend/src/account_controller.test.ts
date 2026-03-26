@@ -1,6 +1,8 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { installAccountController } from './account_controller';
+import { createPortalStore } from './store';
+import type { PortalBootstrapData } from './types';
 
 function jsonResponse(payload: unknown, ok = true, status = ok ? 200 : 500) {
   return {
@@ -21,10 +23,24 @@ async function flushAsync() {
   });
 }
 
+const bootstrapDefaults: Omit<PortalBootstrapData, 'authenticated' | 'email' | 'accounts'> = {
+  public_site_url: 'https://pulserelay.pro',
+  support_email: 'support@pulserelay.pro',
+  commercial_api_base_url: 'https://license.pulserelay.pro',
+  portal_path: '/portal',
+  bootstrap_path: '/api/portal/bootstrap',
+  magic_link_request_path: '/api/public/magic-link/request',
+  signup_path: '/signup',
+  logout_path: '/auth/logout',
+  account_api_base_path: '/api/accounts',
+  portal_api_base_path: '/api/portal',
+};
+
 const deps = {
-  getAccountAPIBasePath: vi.fn(),
-  getPortalAPIBasePath: vi.fn(),
-  getPortalPath: vi.fn(),
+  store: createPortalStore(bootstrapDefaults, {
+    authenticated: true,
+    email: 'owner@example.com',
+  }),
   refreshBootstrap: vi.fn(),
   showToast: vi.fn(),
 };
@@ -37,9 +53,13 @@ describe('account controller', function() {
   beforeEach(function() {
     document.body.innerHTML = '';
     vi.restoreAllMocks();
-    deps.getAccountAPIBasePath = vi.fn().mockReturnValue('/api/accounts');
-    deps.getPortalAPIBasePath = vi.fn().mockReturnValue('/api/portal');
-    deps.getPortalPath = vi.fn().mockReturnValue('/portal');
+    deps.store.setBootstrap({
+      authenticated: true,
+      email: 'owner@example.com',
+    });
+    deps.store.updateAccountState(function(accountState) {
+      accountState.byAccountID = {};
+    }, { notify: false });
     deps.refreshBootstrap = vi.fn().mockResolvedValue(true);
     deps.showToast = vi.fn();
   });
@@ -57,6 +77,7 @@ describe('account controller', function() {
 
     document.getElementById('toggle')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     expect(document.getElementById('add-ws-form-acct_1')?.classList.contains('visible')).toBe(true);
+    expect(deps.store.getAccountState().byAccountID.acct_1.addWorkspaceOpen).toBe(true);
 
     document.getElementById('create')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     await flushAsync();
@@ -71,6 +92,7 @@ describe('account controller', function() {
     );
     expect(deps.refreshBootstrap).toHaveBeenCalled();
     expect(deps.showToast).toHaveBeenCalledWith('Workspace created!');
+    expect(deps.store.getAccountState().byAccountID.acct_1.addWorkspaceOpen).toBe(false);
     expect((document.getElementById('ws-spinner-acct_1') as HTMLElement).style.display).toBe('none');
   });
 
@@ -94,6 +116,8 @@ describe('account controller', function() {
     document.getElementById('team-toggle')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     await flushAsync();
 
+    expect(deps.store.getAccountState().byAccountID.acct_1.teamVisible).toBe(true);
+    expect(deps.store.getAccountState().byAccountID.acct_1.teamMembers).toHaveLength(1);
     var roleSelect = document.querySelector('[data-action="change-role"]') as HTMLSelectElement | null;
     expect(roleSelect).not.toBeNull();
     expect(roleSelect?.value).toBe('owner');

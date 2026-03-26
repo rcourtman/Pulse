@@ -1,10 +1,11 @@
 import {
+  createPortalAccountState,
   createPortalLoginState,
   createPortalServiceState,
   syncLoginStateBootstrapEmail,
   syncServiceStateBootstrapEmail,
 } from './state';
-import type { PortalBootstrapData, PortalLoginState, PortalServiceState } from './types';
+import type { PortalAccountState, PortalBootstrapData, PortalLoginState, PortalServiceState } from './types';
 
 interface MutationOptions {
   notify?: boolean;
@@ -12,11 +13,14 @@ interface MutationOptions {
 
 export interface PortalStore {
   getBootstrap(): PortalBootstrapData;
+  getAccountState(): PortalAccountState;
   getLoginState(): PortalLoginState;
   getServiceState(): PortalServiceState;
   setBootstrap(nextBootstrap: Partial<PortalBootstrapData> | PortalBootstrapData): PortalBootstrapData;
+  updateAccountState(mutator: (state: PortalAccountState) => void, options?: MutationOptions): PortalAccountState;
   updateLoginState(mutator: (state: PortalLoginState) => void, options?: MutationOptions): PortalLoginState;
   updateServiceState(mutator: (state: PortalServiceState) => void, options?: MutationOptions): PortalServiceState;
+  subscribeAccount(listener: () => void): () => void;
   subscribeBootstrap(listener: () => void): () => void;
   subscribeLogin(listener: () => void): () => void;
   subscribeServices(listener: () => void): () => void;
@@ -47,10 +51,12 @@ export function createPortalStore(
   initialBootstrap: Partial<PortalBootstrapData> | null | undefined
 ): PortalStore {
   var bootstrapState = normalizeBootstrap(bootstrapDefaults, initialBootstrap);
+  var accountState = createPortalAccountState();
   var loginState = createPortalLoginState();
   var serviceState = createPortalServiceState();
   syncLoginStateBootstrapEmail(loginState, bootstrapState.email || '');
   syncServiceStateBootstrapEmail(serviceState, bootstrapState.email || '');
+  var accountSubscribers = new Set<() => void>();
   var bootstrapSubscribers = new Set<() => void>();
   var loginSubscribers = new Set<() => void>();
   var serviceSubscribers = new Set<() => void>();
@@ -65,6 +71,9 @@ export function createPortalStore(
     getBootstrap: function() {
       return bootstrapState;
     },
+    getAccountState: function() {
+      return accountState;
+    },
     getLoginState: function() {
       return loginState;
     },
@@ -77,6 +86,13 @@ export function createPortalStore(
       syncServiceStateBootstrapEmail(serviceState, bootstrapState.email || '');
       notify(bootstrapSubscribers);
       return bootstrapState;
+    },
+    updateAccountState: function(mutator, options) {
+      mutator(accountState);
+      if (!options || options.notify !== false) {
+        notify(accountSubscribers);
+      }
+      return accountState;
     },
     updateLoginState: function(mutator, options) {
       mutator(loginState);
@@ -96,6 +112,12 @@ export function createPortalStore(
       bootstrapSubscribers.add(listener);
       return function() {
         bootstrapSubscribers.delete(listener);
+      };
+    },
+    subscribeAccount: function(listener) {
+      accountSubscribers.add(listener);
+      return function() {
+        accountSubscribers.delete(listener);
       };
     },
     subscribeLogin: function(listener) {

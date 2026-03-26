@@ -1,7 +1,9 @@
+import { ensurePortalAccountUIEntry } from './state';
+import type { PortalStore } from './store';
+import type { PortalTeamMember } from './types';
+
 export interface AccountControllerDeps {
-  getAccountAPIBasePath(): string;
-  getPortalAPIBasePath(): string;
-  getPortalPath(): string;
+  store: PortalStore;
   refreshBootstrap(): Promise<boolean>;
   showToast(message: string, isError?: boolean): void;
 }
@@ -28,79 +30,139 @@ function setTbodyMessage(tbody: HTMLElement, msg: string, isError: boolean): voi
 }
 
 export function installAccountController(deps: AccountControllerDeps): void {
+  const getAccountAPIBasePath = (): string => deps.store.getBootstrap().account_api_base_path;
+  const getPortalAPIBasePath = (): string => deps.store.getBootstrap().portal_api_base_path;
+  const getPortalPath = (): string => deps.store.getBootstrap().portal_path;
+
   const refreshOrRedirect = async (): Promise<boolean> => {
     if (!await deps.refreshBootstrap()) {
-      window.location.href = deps.getPortalPath();
+      window.location.href = getPortalPath();
       return false;
     }
     return true;
   };
 
-  const loadTeam = async (accountID: string): Promise<void> => {
-    const tbody = getElement<HTMLElement>('team-list-' + accountID);
+  const renderAddWorkspaceSection = (accountID: string): void => {
+    const form = getElement<HTMLElement>('add-ws-form-' + accountID);
+    if (!form) return;
+    const entry = ensurePortalAccountUIEntry(deps.store.getAccountState(), accountID);
+    form.classList.toggle('visible', entry.addWorkspaceOpen);
+  };
+
+  const renderTeamSection = (accountID: string): void => {
     const section = getElement<HTMLElement>('team-section-' + accountID);
-    if (!tbody || !section) return;
+    const tbody = getElement<HTMLElement>('team-list-' + accountID);
+    if (!section || !tbody) return;
+    const entry = ensurePortalAccountUIEntry(deps.store.getAccountState(), accountID);
     const actorRole = section.getAttribute('data-actor-role') || '';
     const isOwner = actorRole === 'owner';
-    setTbodyMessage(tbody, 'Loading…', false);
+    section.classList.toggle('visible', entry.teamVisible);
+
+    if (!entry.teamVisible) {
+      return;
+    }
+    if (entry.teamLoading) {
+      setTbodyMessage(tbody, 'Loading…', false);
+      return;
+    }
+    if (entry.teamError) {
+      setTbodyMessage(tbody, entry.teamError, true);
+      return;
+    }
+    if (!entry.teamMembers.length) {
+      setTbodyMessage(tbody, 'No team members.', false);
+      return;
+    }
+
+    const allRoles = ['owner', 'admin', 'tech', 'read_only'];
+    const nonOwnerRoles = ['admin', 'tech', 'read_only'];
+    tbody.textContent = '';
+    for (let i = 0; i < entry.teamMembers.length; i += 1) {
+      const member = entry.teamMembers[i];
+      const tr = document.createElement('tr');
+      const tdEmail = document.createElement('td');
+      tdEmail.textContent = member.email;
+      tr.appendChild(tdEmail);
+
+      const tdRole = document.createElement('td');
+      if (member.role === 'owner' && !isOwner) {
+        tdRole.textContent = 'owner';
+      } else {
+        const sel = document.createElement('select');
+        const roles = isOwner ? allRoles : nonOwnerRoles;
+        for (let j = 0; j < roles.length; j += 1) {
+          const opt = document.createElement('option');
+          opt.value = roles[j];
+          opt.textContent = roles[j].replace('_', ' ');
+          if (member.role === roles[j]) opt.selected = true;
+          sel.appendChild(opt);
+        }
+        sel.setAttribute('data-action', 'change-role');
+        sel.setAttribute('data-account-id', accountID);
+        sel.setAttribute('data-user-id', member.user_id);
+        tdRole.appendChild(sel);
+      }
+      tr.appendChild(tdRole);
+
+      const tdAction = document.createElement('td');
+      if (!(member.role === 'owner' && !isOwner)) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn-remove';
+        btn.textContent = 'Remove';
+        btn.setAttribute('data-action', 'remove-member');
+        btn.setAttribute('data-account-id', accountID);
+        btn.setAttribute('data-user-id', member.user_id);
+        btn.setAttribute('data-member-email', member.email);
+        tdAction.appendChild(btn);
+      }
+      tr.appendChild(tdAction);
+      tbody.appendChild(tr);
+    }
+  };
+
+  const renderAccountUI = (): void => {
+    const state = deps.store.getAccountState();
+    const accountIDs = Object.keys(state.byAccountID);
+    for (let i = 0; i < accountIDs.length; i += 1) {
+      renderAddWorkspaceSection(accountIDs[i]);
+      renderTeamSection(accountIDs[i]);
+    }
+  };
+
+  const loadTeam = async (accountID: string): Promise<void> => {
+    const section = getElement<HTMLElement>('team-section-' + accountID);
+    if (!section) return;
+    deps.store.updateAccountState((accountState) => {
+      const entry = ensurePortalAccountUIEntry(accountState, accountID);
+      entry.teamVisible = true;
+      entry.teamLoading = true;
+      entry.teamError = '';
+      entry.teamMembers = [];
+    });
     try {
-      const r = await fetch(deps.getAccountAPIBasePath() + '/' + encodeURIComponent(accountID) + '/members');
+      const r = await fetch(getAccountAPIBasePath() + '/' + encodeURIComponent(accountID) + '/members');
       if (!r.ok) {
-        setTbodyMessage(tbody, 'Failed to load team.', true);
+        deps.store.updateAccountState((accountState) => {
+          const entry = ensurePortalAccountUIEntry(accountState, accountID);
+          entry.teamLoading = false;
+          entry.teamError = 'Failed to load team.';
+        });
         return;
       }
-      const members = await r.json();
-      if (!members || members.length === 0) {
-        setTbodyMessage(tbody, 'No team members.', false);
-        return;
-      }
-      const allRoles = ['owner', 'admin', 'tech', 'read_only'];
-      const nonOwnerRoles = ['admin', 'tech', 'read_only'];
-      tbody.textContent = '';
-      for (let i = 0; i < members.length; i += 1) {
-        const member = members[i];
-        const tr = document.createElement('tr');
-        const tdEmail = document.createElement('td');
-        tdEmail.textContent = member.email;
-        tr.appendChild(tdEmail);
-
-        const tdRole = document.createElement('td');
-        if (member.role === 'owner' && !isOwner) {
-          tdRole.textContent = 'owner';
-        } else {
-          const sel = document.createElement('select');
-          const roles = isOwner ? allRoles : nonOwnerRoles;
-          for (let j = 0; j < roles.length; j += 1) {
-            const opt = document.createElement('option');
-            opt.value = roles[j];
-            opt.textContent = roles[j].replace('_', ' ');
-            if (member.role === roles[j]) opt.selected = true;
-            sel.appendChild(opt);
-          }
-          sel.setAttribute('data-action', 'change-role');
-          sel.setAttribute('data-account-id', accountID);
-          sel.setAttribute('data-user-id', member.user_id);
-          tdRole.appendChild(sel);
-        }
-        tr.appendChild(tdRole);
-
-        const tdAction = document.createElement('td');
-        if (!(member.role === 'owner' && !isOwner)) {
-          const btn = document.createElement('button');
-          btn.type = 'button';
-          btn.className = 'btn-remove';
-          btn.textContent = 'Remove';
-          btn.setAttribute('data-action', 'remove-member');
-          btn.setAttribute('data-account-id', accountID);
-          btn.setAttribute('data-user-id', member.user_id);
-          btn.setAttribute('data-member-email', member.email);
-          tdAction.appendChild(btn);
-        }
-        tr.appendChild(tdAction);
-        tbody.appendChild(tr);
-      }
+      const members = await r.json() as PortalTeamMember[];
+      deps.store.updateAccountState((accountState) => {
+        const entry = ensurePortalAccountUIEntry(accountState, accountID);
+        entry.teamLoading = false;
+        entry.teamError = '';
+        entry.teamMembers = Array.isArray(members) ? members : [];
+      });
     } catch {
-      setTbodyMessage(tbody, 'Network error.', true);
+      deps.store.updateAccountState((accountState) => {
+        const entry = ensurePortalAccountUIEntry(accountState, accountID);
+        entry.teamLoading = false;
+        entry.teamError = 'Network error.';
+      });
     }
   };
 
@@ -112,17 +174,22 @@ export function installAccountController(deps: AccountControllerDeps): void {
     if (!section) {
       return true;
     }
-    section.classList.add('visible');
+    deps.store.updateAccountState((accountState) => {
+      const entry = ensurePortalAccountUIEntry(accountState, accountID);
+      entry.teamVisible = true;
+    });
     await loadTeam(accountID);
     return true;
   };
 
   const toggleAddWorkspace = (accountID: string): void => {
-    const form = getElement<HTMLElement>('add-ws-form-' + accountID);
-    if (!form) return;
-    const visible = form.classList.contains('visible');
-    form.classList.toggle('visible', !visible);
-    if (!visible) {
+    let shouldFocus = false;
+    deps.store.updateAccountState((accountState) => {
+      const entry = ensurePortalAccountUIEntry(accountState, accountID);
+      entry.addWorkspaceOpen = !entry.addWorkspaceOpen;
+      shouldFocus = entry.addWorkspaceOpen;
+    });
+    if (shouldFocus) {
       const input = getElement<FormValueElement>('ws-name-' + accountID);
       if (input) input.focus();
     }
@@ -139,7 +206,7 @@ export function installAccountController(deps: AccountControllerDeps): void {
     const spinner = getElement<HTMLElement>('ws-spinner-' + accountID);
     if (spinner) spinner.style.display = 'block';
     try {
-      const resp = await fetch(deps.getAccountAPIBasePath() + '/' + accountID + '/tenants', {
+      const resp = await fetch(getAccountAPIBasePath() + '/' + accountID + '/tenants', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ display_name: name }),
@@ -152,6 +219,10 @@ export function installAccountController(deps: AccountControllerDeps): void {
       if (!await refreshOrRedirect()) {
         return;
       }
+      deps.store.updateAccountState((accountState) => {
+        const entry = ensurePortalAccountUIEntry(accountState, accountID);
+        entry.addWorkspaceOpen = false;
+      });
       deps.showToast('Workspace created!');
     } catch {
       deps.showToast('Network error. Please try again.', true);
@@ -167,7 +238,7 @@ export function installAccountController(deps: AccountControllerDeps): void {
     const method = state === 'active' ? 'PATCH' : 'DELETE';
     const body = state === 'active' ? JSON.stringify({ state: 'suspended' }) : undefined;
     try {
-      const response = await fetch(deps.getAccountAPIBasePath() + '/' + accountID + '/tenants/' + tenantID, {
+      const response = await fetch(getAccountAPIBasePath() + '/' + accountID + '/tenants/' + tenantID, {
         method,
         headers: body ? { 'Content-Type': 'application/json' } : {},
         body,
@@ -187,7 +258,7 @@ export function installAccountController(deps: AccountControllerDeps): void {
 
   const openBilling = async (accountID: string): Promise<void> => {
     try {
-      const r = await fetch(deps.getPortalAPIBasePath() + '/billing?account_id=' + encodeURIComponent(accountID), { method: 'POST' });
+      const r = await fetch(getPortalAPIBasePath() + '/billing?account_id=' + encodeURIComponent(accountID), { method: 'POST' });
       if (!r.ok) {
         const err = await r.json().catch(() => ({}));
         deps.showToast((err && err.error) || 'Failed to open billing portal.', true);
@@ -205,11 +276,13 @@ export function installAccountController(deps: AccountControllerDeps): void {
   };
 
   const toggleTeam = (accountID: string): void => {
-    const section = getElement<HTMLElement>('team-section-' + accountID);
-    if (!section) return;
-    const visible = section.classList.contains('visible');
-    section.classList.toggle('visible', !visible);
-    if (!visible) {
+    let nextVisible = false;
+    deps.store.updateAccountState((accountState) => {
+      const entry = ensurePortalAccountUIEntry(accountState, accountID);
+      entry.teamVisible = !entry.teamVisible;
+      nextVisible = entry.teamVisible;
+    });
+    if (nextVisible) {
       void loadTeam(accountID);
     }
   };
@@ -224,7 +297,7 @@ export function installAccountController(deps: AccountControllerDeps): void {
       return;
     }
     try {
-      const r = await fetch(deps.getAccountAPIBasePath() + '/' + encodeURIComponent(accountID) + '/members', {
+      const r = await fetch(getAccountAPIBasePath() + '/' + encodeURIComponent(accountID) + '/members', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, role: roleEl.value }),
@@ -250,7 +323,7 @@ export function installAccountController(deps: AccountControllerDeps): void {
 
   const changeRole = async (accountID: string, userID: string, newRole: string): Promise<void> => {
     try {
-      const r = await fetch(deps.getAccountAPIBasePath() + '/' + encodeURIComponent(accountID) + '/members/' + encodeURIComponent(userID), {
+      const r = await fetch(getAccountAPIBasePath() + '/' + encodeURIComponent(accountID) + '/members/' + encodeURIComponent(userID), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ role: newRole }),
@@ -278,7 +351,7 @@ export function installAccountController(deps: AccountControllerDeps): void {
   const removeMember = async (accountID: string, userID: string, email: string): Promise<void> => {
     if (!window.confirm('Remove ' + email + ' from this account?')) return;
     try {
-      const r = await fetch(deps.getAccountAPIBasePath() + '/' + encodeURIComponent(accountID) + '/members/' + encodeURIComponent(userID), {
+      const r = await fetch(getAccountAPIBasePath() + '/' + encodeURIComponent(accountID) + '/members/' + encodeURIComponent(userID), {
         method: 'DELETE',
       });
       if (r.status === 409) {
@@ -357,4 +430,7 @@ export function installAccountController(deps: AccountControllerDeps): void {
       target.value,
     );
   });
+
+  deps.store.subscribeAccount(renderAccountUI);
+  deps.store.subscribeBootstrap(renderAccountUI);
 }
