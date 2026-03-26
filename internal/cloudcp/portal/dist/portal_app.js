@@ -1075,7 +1075,7 @@
         },
         onRequestStart: function() {
         },
-        onConfirmSuccess: function(data) {
+        afterConfirmSuccess: function(data) {
           window.location.href = data.url;
         },
         renderPanel: renderManagePanel
@@ -1109,12 +1109,10 @@
             serviceState.flows.retrieve.result = null;
           }, false);
         },
-        onConfirmSuccess: function(data) {
-          updateServiceState(function(serviceState) {
-            serviceState.flows.retrieve.result = data.license;
-            serviceState.flows.retrieve.codeValue = "";
-            setFlowStatus(serviceState, "retrieve", "License retrieved successfully.", false);
-          }, false);
+        applyConfirmSuccessState: function(serviceState, data) {
+          serviceState.flows.retrieve.result = data.license;
+          serviceState.flows.retrieve.codeValue = "";
+          setFlowStatus(serviceState, "retrieve", "License retrieved successfully.", false);
         },
         renderPanel: renderRetrievePanel
       },
@@ -1147,16 +1145,12 @@
             serviceState.flows.export.result = null;
           }, false);
         },
-        onConfirmSuccess: function(data) {
-          updateServiceState(function(serviceState) {
-            serviceState.flows.export.result = data;
-            serviceState.flows.export.codeValue = "";
-            setFlowStatus(serviceState, "export", "Data export retrieved successfully.", false);
-          }, false);
-          resetVerificationFlow("export");
-          updateServiceState(function(serviceState) {
-            serviceState.flows.export.result = data;
-          }, false);
+        applyConfirmSuccessState: function(serviceState, data) {
+          var emailValue = serviceState.flows.export.emailValue;
+          resetVerificationFlowState(serviceState, "export");
+          serviceState.flows.export.emailValue = emailValue;
+          serviceState.flows.export.result = data;
+          setFlowStatus(serviceState, "export", "Data export retrieved successfully.", false);
         },
         renderPanel: renderExportPanel,
         renderResult: renderExportResult
@@ -1194,20 +1188,22 @@
           }
           return true;
         },
-        onConfirmSuccess: function(data) {
+        applyConfirmSuccessState: function(serviceState, data) {
+          var emailValue = serviceState.flows.delete.emailValue;
+          resetVerificationFlowState(serviceState, "delete");
+          serviceState.flows.delete.emailValue = emailValue;
+          setFlowStatus(
+            serviceState,
+            "delete",
+            data.deleted_count > 0 && data.stripe_reminder ? data.message + " " + data.stripe_reminder : data.message,
+            false
+          );
+        },
+        afterConfirmSuccess: function() {
           var checkbox = getElement3("data-delete-confirm-check");
           if (checkbox) {
             checkbox.checked = false;
           }
-          resetVerificationFlow("delete");
-          updateServiceState(function(serviceState) {
-            setFlowStatus(
-              serviceState,
-              "delete",
-              data.deleted_count > 0 && data.stripe_reminder ? data.message + " " + data.stripe_reminder : data.message,
-              false
-            );
-          }, false);
         },
         renderPanel: renderDeletePanel
       }
@@ -1276,8 +1272,13 @@
         var data = await api.postCommercialJSON(flow.confirmPath, { email, code });
         updateServiceState(function(serviceState) {
           succeedMutationState(serviceState.flows[flowID].confirm);
-        }, false);
-        flow.onConfirmSuccess(data, email);
+          if (flow.applyConfirmSuccessState) {
+            flow.applyConfirmSuccessState(serviceState, data, email);
+          }
+        });
+        if (flow.afterConfirmSuccess) {
+          flow.afterConfirmSuccess(data, email);
+        }
       } catch (err) {
         var message = err instanceof Error ? err.message : flow.confirmErrorMessage;
         updateServiceState(function(serviceState) {
