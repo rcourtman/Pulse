@@ -72,7 +72,7 @@ interface RecoveryActivitySectionProps {
   overallRollupsSummary: Accessor<RecoveryRollupSummary>;
   selectedDateKey: Accessor<string | null>;
   selectedDateLabel: Accessor<string>;
-  selectedHistorySubjectLabel: Accessor<string | null>;
+  selectedHistoryItemLabel: Accessor<string | null>;
   setChartRangeDays: (value: 7 | 30 | 90 | 365) => void;
   toggleSelectedDate: (key: string) => void;
   timeline: Accessor<TimelineModel>;
@@ -113,11 +113,11 @@ export const RecoveryActivitySection: Component<RecoveryActivitySectionProps> = 
           </div>
         </div>
         <div class="flex flex-wrap items-center gap-2">
-          <Show when={props.selectedHistorySubjectLabel()}>
+          <Show when={props.selectedHistoryItemLabel()}>
             <div class="inline-flex items-center gap-2 rounded-md border border-border bg-surface-alt px-2.5 py-1.5 text-xs">
               <span class="font-semibold uppercase tracking-wide text-muted">Focused Item</span>
               <span class="max-w-[18rem] truncate font-medium text-base-content">
-                {props.selectedHistorySubjectLabel()}
+                {props.selectedHistoryItemLabel()}
               </span>
             </div>
           </Show>

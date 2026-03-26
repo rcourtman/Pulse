@@ -34,7 +34,7 @@ describe('RecoveryActivitySection', () => {
         overallRollupsSummary={() => ({ total: 2, stale: 0, neverSucceeded: 0 })}
         selectedDateKey={() => null}
         selectedDateLabel={() => ''}
-        selectedHistorySubjectLabel={() => null}
+        selectedHistoryItemLabel={() => null}
         setChartRangeDays={() => undefined}
         timeline={timeline}
         toggleSelectedDate={() => undefined}

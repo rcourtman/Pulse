@@ -192,6 +192,10 @@ summary helpers and platform filter renderers should use canonical `item` and
 `platform` naming internally once compatibility boundaries already exist,
 rather than keeping fresh `subject` or `provider` terminology alive in the
 live recovery runtime path.
+The same runtime vocabulary rule applies to cross-section recovery props too.
+Live page-to-section boundaries should carry item-focused names like
+`selectedHistoryItemLabel` instead of preserving `subject` labels after the
+shared recovery presenters already expose canonical item terminology.
 That same presenter boundary should also own canonical item-type derivation.
 Recovery surfaces must resolve rollup and point item types through one shared
 item-type helper instead of repeating `display.itemType` / `subjectType` /

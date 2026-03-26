@@ -102,7 +102,7 @@ describe('Recovery layout guards', () => {
       scopeFilter: () => 'all',
       selectedDateKey: () => null,
       selectedDateLabel: () => '',
-      selectedHistorySubjectLabel: () => null,
+      selectedHistoryItemLabel: () => null,
       setChartRangeDays: vi.fn(),
       setClusterFilter: vi.fn(),
       setCurrentPage: vi.fn(),

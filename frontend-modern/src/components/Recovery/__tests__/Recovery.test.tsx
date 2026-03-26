@@ -410,8 +410,8 @@ describe('Recovery', () => {
   it('focuses history when a rollup is clicked', async () => {
     render(() => <Recovery />);
 
-    const subject = await screen.findByText('VM 123');
-    fireEvent.click(subject);
+    const item = await screen.findByText('VM 123');
+    fireEvent.click(item);
 
     await waitFor(() => {
       expect(navigateSpy).toHaveBeenCalledWith('/recovery?rollupId=res%3Avm-123', {

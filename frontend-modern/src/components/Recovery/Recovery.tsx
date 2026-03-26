@@ -210,7 +210,7 @@ const Recovery: Component = () => {
     return rollups().find((rollup) => rollup.rollupId === selected) || null;
   });
 
-  const selectedHistorySubjectLabel = createMemo(() => {
+  const selectedHistoryItemLabel = createMemo(() => {
     const rollup = selectedRollup();
     return rollup ? getRecoveryRollupItemLabel(rollup, resourcesById()) : null;
   });
@@ -518,7 +518,7 @@ const Recovery: Component = () => {
         overallRollupsSummary={overallRollupsSummary}
         selectedDateKey={selectedDateKey}
         selectedDateLabel={selectedDateLabel}
-        selectedHistorySubjectLabel={selectedHistorySubjectLabel}
+        selectedHistoryItemLabel={selectedHistoryItemLabel}
         setChartRangeDays={(range) => {
           setChartRangeDays(range);
           setSelectedDateKey(null);
