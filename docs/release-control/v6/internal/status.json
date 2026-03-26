@@ -925,6 +925,11 @@
           "repo": "pulse",
           "path": "internal/hosted/provisioner_test.go",
           "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/cloud-hosted-tier-runtime-readiness-production-recovered-2026-03-26.md",
+          "kind": "file"
         }
       ]
     },
@@ -2641,7 +2646,7 @@
       "owner": "project-owner",
       "blocking_level": "rc-ready",
       "minimum_evidence_tier": "real-external-e2e",
-      "status": "blocked",
+      "status": "passed",
       "verification_doc": "docs/release-control/v6/internal/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
       "lane_ids": [
         "L3",
@@ -2676,6 +2681,12 @@
         {
           "repo": "pulse",
           "path": "docs/release-control/v6/internal/records/cloud-hosted-tier-runtime-readiness-production-followup-2026-03-13.md",
+          "kind": "file",
+          "evidence_tier": "real-external-e2e"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/cloud-hosted-tier-runtime-readiness-production-recovered-2026-03-26.md",
           "kind": "file",
           "evidence_tier": "real-external-e2e"
         }
