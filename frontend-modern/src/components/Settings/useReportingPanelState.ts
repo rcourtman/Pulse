@@ -87,12 +87,11 @@ export const useReportingPanelState = () => {
       const request = buildReportingCatalogRequest();
       const response = await apiFetch(request.url);
       if (!response.ok) {
-        const error = await apiErrorFromResponse(response, getReportingCatalogErrorMessage());
-        if ((error as { status?: number }).status === 404) {
+        if (response.status === 404) {
           setReportingCatalog(buildLegacyReportingCatalogFallback());
           return;
         }
-        throw error;
+        throw await apiErrorFromResponse(response, getReportingCatalogErrorMessage());
       }
 
       setReportingCatalog(parseReportingCatalog(await response.json()));

@@ -1118,6 +1118,10 @@ describe('Settings architecture guardrails', () => {
     expect(reportingPanelSource).not.toContain('Advanced Reporting (Pro)');
     expect(reportingPanelSource).not.toContain('Advanced Insights');
     expect(reportingPanelSource).not.toContain('Detailed Reporting');
+    expect(reportingPanelSource).toContain('<Show when={performanceReport()}>');
+    expect(reportingPanelSource).not.toContain(
+      '<Show when={performanceReport() && inventoryDefinition()}>',
+    );
     expect(reportingPanelSource).not.toContain(
       'Performance reports come from the historical metrics store',
     );

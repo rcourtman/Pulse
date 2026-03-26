@@ -189,7 +189,7 @@ export function ReportingPanel() {
               <p class="text-sm text-warning">{reportingCatalogError()}</p>
             </Show>
 
-            <Show when={performanceReport() && inventoryDefinition()}>
+            <Show when={performanceReport()}>
               <section class="space-y-6">
                 <div class="space-y-2">
                   <h4 class="text-base font-semibold text-base-content">

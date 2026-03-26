@@ -181,6 +181,29 @@ describe('ReportingPanel', () => {
     ).toBeInTheDocument();
   });
 
+  it('renders performance reports when the catalog only exposes the legacy report surface', () => {
+    useReportingPanelStateMock.mockReturnValue(
+      buildState({
+        reportingCatalog: () => ({
+          ...baseCatalog,
+          guidance: {
+            title: 'Advanced Insights',
+            description: 'Performance reports remain available on older backends.',
+          },
+          vmInventoryExport: null,
+        }),
+      }),
+    );
+
+    render(() => <ReportingPanel />);
+
+    expect(screen.getByText('Performance Reports')).toBeInTheDocument();
+    expect(screen.queryByText('VM Inventory Export')).not.toBeInTheDocument();
+    expect(
+      screen.getByText('Performance reports remain available on older backends.'),
+    ).toBeInTheDocument();
+  });
+
   it('shows a generic loading shell before the reporting catalog arrives', () => {
     useReportingPanelStateMock.mockReturnValue(
       buildState({

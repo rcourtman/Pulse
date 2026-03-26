@@ -234,6 +234,11 @@ performance-report transport (`/api/reporting` and `/api/reporting/generate-mult
 so the reporting panel does not go dead on mixed-version installs, but that
 compatibility path is intentionally report-only and must not invent the newer
 catalog-owned VM inventory export surface.
+`ReportingPanel.tsx` must therefore treat `vmInventoryExport` as optional when
+it renders a governed reporting catalog. A legacy compatibility catalog with no
+inventory export still owns a valid enabled reporting surface and must continue
+to render the performance-report workflow instead of collapsing back to the
+unavailable shell.
 That same catalog load must also remain retryable after transient failure.
 `useReportingPanelState.ts` may memoize or dedupe in-flight work, but it must
 not permanently latch a failed first fetch and force operators to reload the
