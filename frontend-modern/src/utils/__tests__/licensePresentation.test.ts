@@ -15,6 +15,7 @@ import {
   getNoActiveProLicenseState,
   getOrganizationBillingLicenseStatusLabel,
   getTrialActivationNotice,
+  isDisplayableLicenseFeature,
 } from '@/utils/licensePresentation';
 
 describe('licensePresentation', () => {
@@ -38,6 +39,14 @@ describe('licensePresentation', () => {
     expect(getLicenseFeatureLabel('ai_patrol')).toBe('Pulse Patrol');
     expect(getLicenseFeatureLabel('mobile_app')).toBe('Mobile App Access');
     expect(getLicenseFeatureLabel('custom_feature')).toBe('Custom Feature');
+  });
+
+  it('hides non-operable capability labels from customer-facing plan surfaces', () => {
+    expect(isDisplayableLicenseFeature('ai_patrol')).toBe(true);
+    expect(isDisplayableLicenseFeature('multi_tenant')).toBe(true);
+    expect(isDisplayableLicenseFeature('multi_user')).toBe(false);
+    expect(isDisplayableLicenseFeature('white_label')).toBe(false);
+    expect(isDisplayableLicenseFeature('unlimited')).toBe(false);
   });
 
   it('returns minimum tier labels for gated features', () => {
@@ -105,6 +114,18 @@ describe('licensePresentation', () => {
     expect(getTrialActivationNotice('activated')).toMatchObject({
       title: 'Trial activated',
       tone: expect.stringContaining('green'),
+    });
+    expect(getTrialActivationNotice('replayed')).toMatchObject({
+      title: 'Trial already activated',
+      tone: expect.stringContaining('sky'),
+    });
+    expect(getTrialActivationNotice('invalid')).toMatchObject({
+      title: 'Activation link invalid',
+      body: expect.stringContaining('fresh secure trial handoff'),
+    });
+    expect(getTrialActivationNotice('unavailable')).toMatchObject({
+      title: 'Activation unavailable',
+      body: expect.stringContaining('Refresh the billing state below'),
     });
     expect(getTrialActivationNotice('ineligible')).toMatchObject({
       title: 'Trial not available',

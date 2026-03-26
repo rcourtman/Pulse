@@ -16,9 +16,11 @@ const clearLicenseMock = vi.fn();
 const notificationSuccessMock = vi.fn();
 const notificationErrorMock = vi.fn();
 const useLocationMock = vi.fn(() => ({ search: '' }));
+const navigateMock = vi.fn();
 
 vi.mock('@solidjs/router', () => ({
   useLocation: () => useLocationMock(),
+  useNavigate: () => navigateMock,
 }));
 
 vi.mock('@/stores/license', () => ({
@@ -62,6 +64,7 @@ describe('ProLicensePanel', () => {
     notificationSuccessMock.mockReset();
     notificationErrorMock.mockReset();
     useLocationMock.mockReset();
+    navigateMock.mockReset();
     loadLicenseStatusMock.mockResolvedValue(undefined);
     startProTrialMock.mockResolvedValue(undefined);
     activateLicenseMock.mockResolvedValue({ success: true });
@@ -236,10 +239,7 @@ describe('ProLicensePanel', () => {
         'ai_alerts',
         'ai_autofix',
         'kubernetes_ai',
-        'multi_user',
-        'white_label',
         'multi_tenant',
-        'unlimited',
       ],
       limits: [],
       subscription_state: 'active',
@@ -268,10 +268,10 @@ describe('ProLicensePanel', () => {
     expect(screen.getByText('Mobile App Access')).toBeInTheDocument();
     expect(screen.getByText('Push Notifications')).toBeInTheDocument();
     expect(screen.getByText('Extended Metric History')).toBeInTheDocument();
-    expect(screen.getByText('Multi-User Mode')).toBeInTheDocument();
-    expect(screen.getByText('White-Label Branding')).toBeInTheDocument();
     expect(screen.getByText('Multi-Tenant Mode')).toBeInTheDocument();
-    expect(screen.getByText('Unlimited Instances')).toBeInTheDocument();
+    expect(screen.queryByText('Multi-User Mode')).not.toBeInTheDocument();
+    expect(screen.queryByText('White-Label Branding')).not.toBeInTheDocument();
+    expect(screen.queryByText('Unlimited Instances')).not.toBeInTheDocument();
   });
 
   it('starts trial and records conversion metric when user clicks start', async () => {
@@ -299,7 +299,11 @@ describe('ProLicensePanel', () => {
   });
 
   it('shows the hosted activation success banner on the Pro settings route', async () => {
-    useLocationMock.mockReturnValue({ search: '?trial=activated' });
+    useLocationMock.mockReturnValue({
+      search: '?trial=activated',
+      pathname: '/settings/system/billing',
+      hash: '',
+    });
 
     render(() => <ProLicensePanel />);
 
@@ -307,6 +311,10 @@ describe('ProLicensePanel', () => {
     expect(
       screen.getByText(/Pulse activated the Pro trial for this instance/i),
     ).toBeInTheDocument();
+    expect(navigateMock).toHaveBeenCalledWith('/settings/system/billing', {
+      replace: true,
+      scroll: false,
+    });
   });
 
   it('shows a migration-pending notice and hides the trial CTA', async () => {

@@ -697,6 +697,12 @@ entries like `white_label`, `multi_user`, and `unlimited` from dev/demo
 entitlement payloads when there is no corresponding operable runtime surface;
 those belong in tier metadata and plan semantics, not in live capability
 advertising for a free dev shell.
+The same distinction applies to customer-facing self-hosted billing
+presentation. `frontend-modern/src/components/Settings/useProLicensePanelState.ts`
+and `frontend-modern/src/utils/licensePresentation.ts` may label operable
+capabilities, but they must not render placeholder or plan-marker entries like
+`white_label`, `multi_user`, or `unlimited` in the Pro plan feature list just
+because those keys exist in tier metadata.
 Cloud/MSP live price IDs are no longer an open fill-in task either. The audit
 record `docs/release-control/v6/records/cloud-msp-price-audit-2026-03-13.md`
 verified that the 13 canonical Cloud/MSP v6 `price_*` IDs are present in the
