@@ -627,6 +627,40 @@ func TestContract_PerformanceReportTransportRejectsOversizedMultiBody(t *testing
 	}
 }
 
+func TestContract_PerformanceReportTransportRejectsInvalidOptionalFieldWithStableCode(t *testing.T) {
+	engine := &stubReportingEngine{data: []byte("report"), contentType: "application/pdf"}
+	original := reporting.GetEngine()
+	reporting.SetEngine(engine)
+	t.Cleanup(func() { reporting.SetEngine(original) })
+
+	handler := NewReportingHandlers(nil, nil)
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/api/reporting?resourceType=node&resourceId=node-1&metricType="+url.QueryEscape("cpu usage"),
+		nil,
+	)
+	rec := httptest.NewRecorder()
+
+	handler.HandleGenerateReport(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	var payload struct {
+		Code  string `json:"code"`
+		Error string `json:"error"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode invalid optional-field response: %v", err)
+	}
+	if payload.Code != "invalid_metric_type" {
+		t.Fatalf("expected invalid_metric_type code, got %q", payload.Code)
+	}
+	if payload.Error != "metricType must match [a-zA-Z0-9._:-]+ and be <= 64 chars" {
+		t.Fatalf("expected canonical invalid_metric_type message, got %q", payload.Error)
+	}
+}
+
 func TestContract_ReportingInvalidFormatErrorsUseCatalogDefinitions(t *testing.T) {
 	engine := &stubReportingEngine{data: []byte("report"), contentType: "application/pdf"}
 	original := reporting.GetEngine()

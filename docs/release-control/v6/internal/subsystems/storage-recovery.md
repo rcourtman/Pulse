@@ -165,6 +165,11 @@ compatibility input that rewrites back to canonical `platform` route state.
 Shared recovery link builders should therefore accept canonical `platform`
 inputs only; legacy `provider` belongs at parse-time compatibility boundaries,
 not in new caller-facing recovery route helpers.
+Cross-surface recovery drill-in links must also declare the correct primary
+workspace instead of relying on the inventory-first page default. When a
+platform service surface such as PBS links into recovery activity, that shared
+entry point should land on canonical `view=events` and describe the destination
+as recovery events rather than reverting to PBS-backup wording.
 That same recovery contract should keep response payloads canonical as well:
 recovery points and protected rollups should expose `platform` and
 `platforms` as the primary transport fields, while any legacy
@@ -311,6 +316,9 @@ storage and recovery automation must preserve: bad or oversized multi-report
 payloads fail as `invalid_body` or `body_too_large`, and overlong report
 windows or invalid optional fields fail through the API-owned reporting
 validation contract instead of being clipped or normalized locally.
+That same API-owned contract also classifies those validation failures with
+stable error codes, so storage and recovery flows must not derive behavior by
+inspecting human-readable error text from adjacent reporting calls.
 That adjacent export contract now also includes canonical Proxmox pool
 membership for each VM row. Storage and recovery flows may use those current-
 state facts when they need fleet context, but they must consume the API-owned

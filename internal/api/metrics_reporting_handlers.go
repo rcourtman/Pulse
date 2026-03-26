@@ -30,6 +30,18 @@ const (
 	reportingMultiReportBodyMax  = 1 << 20
 )
 
+type reportingValidationError struct {
+	code    string
+	message string
+}
+
+func (e *reportingValidationError) Error() string {
+	if e == nil {
+		return ""
+	}
+	return e.message
+}
+
 func normalizeReportResourceType(raw string) (string, error) {
 	trimmed := strings.TrimSpace(raw)
 	if trimmed == "" {
@@ -79,13 +91,19 @@ func normalizePerformanceReportOptionalFields(
 		normalizedMetricType = ""
 	} else if normalizedMetricType != "" {
 		if len(normalizedMetricType) > reportingMaxMetricTypeLength || !validReportingMetricType.MatchString(normalizedMetricType) {
-			return "", "", fmt.Errorf("metricType must match [a-zA-Z0-9._:-]+ and be <= %d chars", reportingMaxMetricTypeLength)
+			return "", "", &reportingValidationError{
+				code:    "invalid_metric_type",
+				message: fmt.Sprintf("metricType must match [a-zA-Z0-9._:-]+ and be <= %d chars", reportingMaxMetricTypeLength),
+			}
 		}
 	}
 	if !definition.SupportsCustomTitle {
 		normalizedTitle = ""
 	} else if len(normalizedTitle) > reportingMaxTitleLength {
-		return "", "", fmt.Errorf("title must be <= %d chars", reportingMaxTitleLength)
+		return "", "", &reportingValidationError{
+			code:    "invalid_title",
+			message: fmt.Sprintf("title must be <= %d chars", reportingMaxTitleLength),
+		}
 	}
 
 	return normalizedMetricType, normalizedTitle, nil
@@ -404,8 +422,9 @@ func (h *ReportingHandlers) HandleGenerateReport(w http.ResponseWriter, r *http.
 	)
 	if err != nil {
 		code := "invalid_metric_type"
-		if strings.HasPrefix(err.Error(), "title ") {
-			code = "invalid_title"
+		var validationErr *reportingValidationError
+		if errors.As(err, &validationErr) && validationErr.code != "" {
+			code = validationErr.code
 		}
 		writeErrorResponse(w, http.StatusBadRequest, code, err.Error(), nil)
 		return
@@ -752,8 +771,9 @@ func (h *ReportingHandlers) HandleGenerateMultiReport(w http.ResponseWriter, r *
 	metricType, title, err := normalizePerformanceReportOptionalFields(definition, body.MetricType, body.Title)
 	if err != nil {
 		code := "invalid_metric_type"
-		if strings.HasPrefix(err.Error(), "title ") {
-			code = "invalid_title"
+		var validationErr *reportingValidationError
+		if errors.As(err, &validationErr) && validationErr.code != "" {
+			code = validationErr.code
 		}
 		writeErrorResponse(w, http.StatusBadRequest, code, err.Error(), nil)
 		return

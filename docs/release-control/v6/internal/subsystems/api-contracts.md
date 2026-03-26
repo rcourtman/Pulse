@@ -300,6 +300,10 @@ stay within the governed length cap, and the multi-report JSON body must remain
 strictly parsed with the canonical size ceiling, unknown-field rejection, and
 no trailing payload tolerance instead of accepting malformed operator input and
 drifting onward.
+Those validation failures also keep stable API error codes owned by the backend
+contract itself; handlers must not infer `invalid_metric_type`,
+`invalid_title`, or similar response codes by parsing their own human-readable
+error text.
 The catalog route itself is intentionally metadata-readable without the
 `advanced_reporting` feature gate so locked admin surfaces can present the same
 canonical reporting definition before upsell, while report generation and

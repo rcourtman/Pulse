@@ -294,6 +294,9 @@ Those same lifecycle-triggered reporting calls must also stay inside the
 API-owned `metricType`/`title` limits and the strict multi-report JSON body
 rules instead of assuming the backend will coerce malformed payloads into a
 best-effort report.
+When those lifecycle-adjacent calls fail validation, adjacent automation should
+rely on the API-owned error codes rather than message-text heuristics, because
+the backend contract owns the reporting validation classification.
 The direct Proxmox fallback workspace now also lives explicitly inside this
 lifecycle boundary: `InfrastructureWorkspace.tsx`,
 `infrastructureWorkspaceModel.ts`,
