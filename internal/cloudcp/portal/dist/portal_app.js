@@ -266,23 +266,114 @@
   };
   var portalStore = createPortalStore(bootstrapDefaults, embeddedBootstrap);
 
-  // src/account_controller.ts
+  // src/account_view.ts
   function getElement(id) {
     return document.getElementById(id);
   }
   function asHTMLElement(target) {
     return target instanceof HTMLElement ? target : null;
   }
+  function focusElement(id) {
+    var input = getElement(id);
+    if (input) input.focus();
+  }
   function setTbodyMessage(tbody, msg, isError) {
     tbody.textContent = "";
-    const tr = document.createElement("tr");
-    const td = document.createElement("td");
+    var tr = document.createElement("tr");
+    var td = document.createElement("td");
     td.setAttribute("colspan", "3");
     td.style.cssText = "text-align:center;padding:16px;color:" + (isError ? "#991b1b" : "#94a3b8");
     td.textContent = msg;
     tr.appendChild(td);
     tbody.appendChild(tr);
   }
+  function renderTeamMemberRoleCell(accountID, member, isOwner) {
+    var tdRole = document.createElement("td");
+    if (member.role === "owner" && !isOwner) {
+      tdRole.textContent = "owner";
+      return tdRole;
+    }
+    var sel = document.createElement("select");
+    var roles = isOwner ? ["owner", "admin", "tech", "read_only"] : ["admin", "tech", "read_only"];
+    for (var j = 0; j < roles.length; j += 1) {
+      var opt = document.createElement("option");
+      opt.value = roles[j];
+      opt.textContent = roles[j].replace("_", " ");
+      if (member.role === roles[j]) opt.selected = true;
+      sel.appendChild(opt);
+    }
+    sel.setAttribute("data-action", "change-role");
+    sel.setAttribute("data-account-id", accountID);
+    sel.setAttribute("data-user-id", member.user_id);
+    tdRole.appendChild(sel);
+    return tdRole;
+  }
+  function renderTeamMemberActionCell(accountID, member, isOwner) {
+    var tdAction = document.createElement("td");
+    if (member.role === "owner" && !isOwner) {
+      return tdAction;
+    }
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "btn-remove";
+    btn.textContent = "Remove";
+    btn.setAttribute("data-action", "remove-member");
+    btn.setAttribute("data-account-id", accountID);
+    btn.setAttribute("data-user-id", member.user_id);
+    btn.setAttribute("data-member-email", member.email);
+    tdAction.appendChild(btn);
+    return tdAction;
+  }
+  function renderAddWorkspaceSection(accountID, entry) {
+    var form = getElement("add-ws-form-" + accountID);
+    if (!form) return;
+    form.classList.toggle("visible", entry.addWorkspaceOpen);
+  }
+  function renderTeamSection(accountID, entry) {
+    var section = getElement("team-section-" + accountID);
+    var tbody = getElement("team-list-" + accountID);
+    if (!section || !tbody) return;
+    var actorRole = section.getAttribute("data-actor-role") || "";
+    var isOwner = actorRole === "owner";
+    section.classList.toggle("visible", entry.teamVisible);
+    if (!entry.teamVisible) {
+      return;
+    }
+    if (entry.teamLoading) {
+      setTbodyMessage(tbody, "Loading\u2026", false);
+      return;
+    }
+    if (entry.teamError) {
+      setTbodyMessage(tbody, entry.teamError, true);
+      return;
+    }
+    if (!entry.teamMembers.length) {
+      setTbodyMessage(tbody, "No team members.", false);
+      return;
+    }
+    tbody.textContent = "";
+    for (var i = 0; i < entry.teamMembers.length; i += 1) {
+      var member = entry.teamMembers[i];
+      var tr = document.createElement("tr");
+      var tdEmail = document.createElement("td");
+      tdEmail.textContent = member.email;
+      tr.appendChild(tdEmail);
+      tr.appendChild(renderTeamMemberRoleCell(accountID, member, isOwner));
+      tr.appendChild(renderTeamMemberActionCell(accountID, member, isOwner));
+      tbody.appendChild(tr);
+    }
+  }
+  function renderAccountUI(accountState) {
+    var accountIDs = Object.keys(accountState.byAccountID);
+    for (var i = 0; i < accountIDs.length; i += 1) {
+      var accountID = accountIDs[i];
+      var entry = accountState.byAccountID[accountID];
+      renderAddWorkspaceSection(accountID, entry);
+      renderTeamSection(accountID, entry);
+    }
+  }
+
+  // src/account_controller.ts
   function installAccountController(deps) {
     const getAccountAPIBasePath = () => deps.store.getBootstrap().account_api_base_path;
     const getPortalAPIBasePath = () => deps.store.getBootstrap().portal_api_base_path;
@@ -294,86 +385,8 @@
       }
       return true;
     };
-    const renderAddWorkspaceSection = (accountID) => {
-      const form = getElement("add-ws-form-" + accountID);
-      if (!form) return;
-      const entry = ensurePortalAccountUIEntry(deps.store.getAccountState(), accountID);
-      form.classList.toggle("visible", entry.addWorkspaceOpen);
-    };
-    const renderTeamSection = (accountID) => {
-      const section = getElement("team-section-" + accountID);
-      const tbody = getElement("team-list-" + accountID);
-      if (!section || !tbody) return;
-      const entry = ensurePortalAccountUIEntry(deps.store.getAccountState(), accountID);
-      const actorRole = section.getAttribute("data-actor-role") || "";
-      const isOwner = actorRole === "owner";
-      section.classList.toggle("visible", entry.teamVisible);
-      if (!entry.teamVisible) {
-        return;
-      }
-      if (entry.teamLoading) {
-        setTbodyMessage(tbody, "Loading\u2026", false);
-        return;
-      }
-      if (entry.teamError) {
-        setTbodyMessage(tbody, entry.teamError, true);
-        return;
-      }
-      if (!entry.teamMembers.length) {
-        setTbodyMessage(tbody, "No team members.", false);
-        return;
-      }
-      const allRoles = ["owner", "admin", "tech", "read_only"];
-      const nonOwnerRoles = ["admin", "tech", "read_only"];
-      tbody.textContent = "";
-      for (let i = 0; i < entry.teamMembers.length; i += 1) {
-        const member = entry.teamMembers[i];
-        const tr = document.createElement("tr");
-        const tdEmail = document.createElement("td");
-        tdEmail.textContent = member.email;
-        tr.appendChild(tdEmail);
-        const tdRole = document.createElement("td");
-        if (member.role === "owner" && !isOwner) {
-          tdRole.textContent = "owner";
-        } else {
-          const sel = document.createElement("select");
-          const roles = isOwner ? allRoles : nonOwnerRoles;
-          for (let j = 0; j < roles.length; j += 1) {
-            const opt = document.createElement("option");
-            opt.value = roles[j];
-            opt.textContent = roles[j].replace("_", " ");
-            if (member.role === roles[j]) opt.selected = true;
-            sel.appendChild(opt);
-          }
-          sel.setAttribute("data-action", "change-role");
-          sel.setAttribute("data-account-id", accountID);
-          sel.setAttribute("data-user-id", member.user_id);
-          tdRole.appendChild(sel);
-        }
-        tr.appendChild(tdRole);
-        const tdAction = document.createElement("td");
-        if (!(member.role === "owner" && !isOwner)) {
-          const btn = document.createElement("button");
-          btn.type = "button";
-          btn.className = "btn-remove";
-          btn.textContent = "Remove";
-          btn.setAttribute("data-action", "remove-member");
-          btn.setAttribute("data-account-id", accountID);
-          btn.setAttribute("data-user-id", member.user_id);
-          btn.setAttribute("data-member-email", member.email);
-          tdAction.appendChild(btn);
-        }
-        tr.appendChild(tdAction);
-        tbody.appendChild(tr);
-      }
-    };
-    const renderAccountUI = () => {
-      const state = deps.store.getAccountState();
-      const accountIDs = Object.keys(state.byAccountID);
-      for (let i = 0; i < accountIDs.length; i += 1) {
-        renderAddWorkspaceSection(accountIDs[i]);
-        renderTeamSection(accountIDs[i]);
-      }
+    const renderAccountRuntime = () => {
+      renderAccountUI(deps.store.getAccountState());
     };
     const loadTeam = async (accountID) => {
       const section = getElement("team-section-" + accountID);
@@ -433,8 +446,7 @@
         shouldFocus = entry.addWorkspaceOpen;
       });
       if (shouldFocus) {
-        const input = getElement("ws-name-" + accountID);
-        if (input) input.focus();
+        focusElement("ws-name-" + accountID);
       }
     };
     const createWorkspace = async (accountID) => {
@@ -663,8 +675,8 @@
         target.value
       );
     });
-    deps.store.subscribeAccount(renderAccountUI);
-    deps.store.subscribeBootstrap(renderAccountUI);
+    deps.store.subscribeAccount(renderAccountRuntime);
+    deps.store.subscribeBootstrap(renderAccountRuntime);
   }
 
   // src/auth_controller.ts
@@ -948,7 +960,7 @@
     var el = getElement3(id);
     return el ? el.value.trim() : "";
   }
-  function focusElement(id) {
+  function focusElement2(id) {
     var el = getElement3(id);
     if (el) el.focus();
   }
@@ -1339,7 +1351,7 @@
     if (!flow) return;
     var email = flow.readEmailValue ? flow.readEmailValue() : readValue(flow.emailInputID);
     if (!email) {
-      focusElement(flow.emailInputID);
+      focusElement2(flow.emailInputID);
       return;
     }
     if (flow.onRequestStart) {
@@ -1465,7 +1477,7 @@
   portalStore.subscribeServices(renderServiceRuntime);
   installServicesController({
     toggleServicePanel,
-    focusElement,
+    focusElement: focusElement2,
     requestVerificationCode: function(flowID) {
       void requestVerificationCode(flowID);
     },

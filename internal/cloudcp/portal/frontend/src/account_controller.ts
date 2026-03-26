@@ -1,3 +1,4 @@
+import { asHTMLElement, focusElement, getElement, renderAccountUI as renderAccountUIState } from './account_view';
 import { ensurePortalAccountUIEntry } from './state';
 import type { PortalStore } from './store';
 import type { PortalTeamMember } from './types';
@@ -6,27 +7,6 @@ export interface AccountControllerDeps {
   store: PortalStore;
   refreshBootstrap(): Promise<boolean>;
   showToast(message: string, isError?: boolean): void;
-}
-
-type FormValueElement = HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
-
-function getElement<T extends HTMLElement = HTMLElement>(id: string): T | null {
-  return document.getElementById(id) as T | null;
-}
-
-function asHTMLElement(target: EventTarget | null): HTMLElement | null {
-  return target instanceof HTMLElement ? target : null;
-}
-
-function setTbodyMessage(tbody: HTMLElement, msg: string, isError: boolean): void {
-  tbody.textContent = '';
-  const tr = document.createElement('tr');
-  const td = document.createElement('td');
-  td.setAttribute('colspan', '3');
-  td.style.cssText = 'text-align:center;padding:16px;color:' + (isError ? '#991b1b' : '#94a3b8');
-  td.textContent = msg;
-  tr.appendChild(td);
-  tbody.appendChild(tr);
 }
 
 export function installAccountController(deps: AccountControllerDeps): void {
@@ -42,92 +22,8 @@ export function installAccountController(deps: AccountControllerDeps): void {
     return true;
   };
 
-  const renderAddWorkspaceSection = (accountID: string): void => {
-    const form = getElement<HTMLElement>('add-ws-form-' + accountID);
-    if (!form) return;
-    const entry = ensurePortalAccountUIEntry(deps.store.getAccountState(), accountID);
-    form.classList.toggle('visible', entry.addWorkspaceOpen);
-  };
-
-  const renderTeamSection = (accountID: string): void => {
-    const section = getElement<HTMLElement>('team-section-' + accountID);
-    const tbody = getElement<HTMLElement>('team-list-' + accountID);
-    if (!section || !tbody) return;
-    const entry = ensurePortalAccountUIEntry(deps.store.getAccountState(), accountID);
-    const actorRole = section.getAttribute('data-actor-role') || '';
-    const isOwner = actorRole === 'owner';
-    section.classList.toggle('visible', entry.teamVisible);
-
-    if (!entry.teamVisible) {
-      return;
-    }
-    if (entry.teamLoading) {
-      setTbodyMessage(tbody, 'Loading…', false);
-      return;
-    }
-    if (entry.teamError) {
-      setTbodyMessage(tbody, entry.teamError, true);
-      return;
-    }
-    if (!entry.teamMembers.length) {
-      setTbodyMessage(tbody, 'No team members.', false);
-      return;
-    }
-
-    const allRoles = ['owner', 'admin', 'tech', 'read_only'];
-    const nonOwnerRoles = ['admin', 'tech', 'read_only'];
-    tbody.textContent = '';
-    for (let i = 0; i < entry.teamMembers.length; i += 1) {
-      const member = entry.teamMembers[i];
-      const tr = document.createElement('tr');
-      const tdEmail = document.createElement('td');
-      tdEmail.textContent = member.email;
-      tr.appendChild(tdEmail);
-
-      const tdRole = document.createElement('td');
-      if (member.role === 'owner' && !isOwner) {
-        tdRole.textContent = 'owner';
-      } else {
-        const sel = document.createElement('select');
-        const roles = isOwner ? allRoles : nonOwnerRoles;
-        for (let j = 0; j < roles.length; j += 1) {
-          const opt = document.createElement('option');
-          opt.value = roles[j];
-          opt.textContent = roles[j].replace('_', ' ');
-          if (member.role === roles[j]) opt.selected = true;
-          sel.appendChild(opt);
-        }
-        sel.setAttribute('data-action', 'change-role');
-        sel.setAttribute('data-account-id', accountID);
-        sel.setAttribute('data-user-id', member.user_id);
-        tdRole.appendChild(sel);
-      }
-      tr.appendChild(tdRole);
-
-      const tdAction = document.createElement('td');
-      if (!(member.role === 'owner' && !isOwner)) {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'btn-remove';
-        btn.textContent = 'Remove';
-        btn.setAttribute('data-action', 'remove-member');
-        btn.setAttribute('data-account-id', accountID);
-        btn.setAttribute('data-user-id', member.user_id);
-        btn.setAttribute('data-member-email', member.email);
-        tdAction.appendChild(btn);
-      }
-      tr.appendChild(tdAction);
-      tbody.appendChild(tr);
-    }
-  };
-
-  const renderAccountUI = (): void => {
-    const state = deps.store.getAccountState();
-    const accountIDs = Object.keys(state.byAccountID);
-    for (let i = 0; i < accountIDs.length; i += 1) {
-      renderAddWorkspaceSection(accountIDs[i]);
-      renderTeamSection(accountIDs[i]);
-    }
+  const renderAccountRuntime = (): void => {
+    renderAccountUIState(deps.store.getAccountState());
   };
 
   const loadTeam = async (accountID: string): Promise<void> => {
@@ -190,13 +86,12 @@ export function installAccountController(deps: AccountControllerDeps): void {
       shouldFocus = entry.addWorkspaceOpen;
     });
     if (shouldFocus) {
-      const input = getElement<FormValueElement>('ws-name-' + accountID);
-      if (input) input.focus();
+      focusElement('ws-name-' + accountID);
     }
   };
 
   const createWorkspace = async (accountID: string): Promise<void> => {
-    const nameEl = getElement<FormValueElement>('ws-name-' + accountID);
+    const nameEl = getElement<HTMLInputElement>('ws-name-' + accountID);
     if (!nameEl) return;
     const name = nameEl.value.trim();
     if (!name) {
@@ -431,6 +326,6 @@ export function installAccountController(deps: AccountControllerDeps): void {
     );
   });
 
-  deps.store.subscribeAccount(renderAccountUI);
-  deps.store.subscribeBootstrap(renderAccountUI);
+  deps.store.subscribeAccount(renderAccountRuntime);
+  deps.store.subscribeBootstrap(renderAccountRuntime);
 }
