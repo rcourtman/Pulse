@@ -4,10 +4,13 @@
   "type": "module",
   "scripts": {
     "build": "node build.mjs",
+    "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "devDependencies": {
     "esbuild": "^0.25.12",
-    "typescript": "^5.9.3"
+    "jsdom": "^24.1.0",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
   }
 }
