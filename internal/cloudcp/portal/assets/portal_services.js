@@ -1,16 +1,75 @@
 (function() {
   var runtime = window.PulseAccountPortal || {};
   var serviceState = {
-    pending: {
-      manage: '',
-      retrieve: '',
-      export: '',
-      delete: '',
+    openPanelID: '',
+    flows: {
+      manage: newVerificationFlowState(),
+      retrieve: newVerificationFlowState(),
+      export: newVerificationFlowState(),
+      delete: newVerificationFlowState(),
+    },
+    refund: {
+      submitting: false,
+      status: emptyStatus(),
     },
   };
 
+  function newVerificationFlowState() {
+    return {
+      pendingEmail: '',
+      requesting: false,
+      confirming: false,
+      step2Visible: false,
+      status: emptyStatus(),
+      result: null,
+    };
+  }
+
+  function emptyStatus() {
+    return {
+      visible: false,
+      message: '',
+      error: false,
+    };
+  }
+
   function getCommercialAPIBaseURL() {
     return runtime.getCommercialAPIBaseURL ? runtime.getCommercialAPIBaseURL() : '';
+  }
+
+  function getElement(id) {
+    return document.getElementById(id);
+  }
+
+  function readValue(id) {
+    var el = getElement(id);
+    return el ? el.value.trim() : '';
+  }
+
+  function focusElement(id) {
+    var el = getElement(id);
+    if (el) el.focus();
+  }
+
+  function setVisible(id, visible) {
+    var el = getElement(id);
+    if (el) {
+      el.style.display = visible ? 'block' : 'none';
+    }
+  }
+
+  function setText(id, value) {
+    var el = getElement(id);
+    if (el) {
+      el.textContent = value;
+    }
+  }
+
+  function setValue(id, value) {
+    var el = getElement(id);
+    if (el) {
+      el.value = value;
+    }
   }
 
   function serviceFetch(path, body) {
@@ -21,141 +80,101 @@
     });
   }
 
-  function getElement(id) {
-    return document.getElementById(id);
+  function setFlowStatus(flowID, message, isError) {
+    serviceState.flows[flowID].status = {
+      visible: true,
+      message: message,
+      error: !!isError,
+    };
   }
 
-  function setServiceStatus(id, message, isError) {
+  function clearFlowStatus(flowID) {
+    serviceState.flows[flowID].status = emptyStatus();
+  }
+
+  function setRefundStatus(message, isError) {
+    serviceState.refund.status = {
+      visible: true,
+      message: message,
+      error: !!isError,
+    };
+  }
+
+  function renderStatus(id, status) {
     var el = getElement(id);
     if (!el) return;
-    el.textContent = message;
-    el.className = 'service-status visible' + (isError ? ' error' : ' success');
+    if (!status.visible) {
+      el.textContent = '';
+      el.className = 'service-status';
+      return;
+    }
+    el.textContent = status.message;
+    el.className = 'service-status visible' + (status.error ? ' error' : ' success');
   }
 
-  function setButtonState(id, disabled, text) {
+  function renderButton(id, disabled, label) {
     var button = getElement(id);
     if (!button) return;
     button.disabled = disabled;
-    button.textContent = text;
-  }
-
-  function focusElement(id) {
-    var el = getElement(id);
-    if (el) el.focus();
-  }
-
-  function readValue(id) {
-    var el = getElement(id);
-    return el ? el.value.trim() : '';
-  }
-
-  function setVisible(id, visible) {
-    var el = getElement(id);
-    if (el) {
-      el.style.display = visible ? 'block' : 'none';
-    }
+    button.textContent = label;
   }
 
   function toggleServicePanel(panelID) {
+    serviceState.openPanelID = serviceState.openPanelID === panelID ? '' : panelID;
+    renderOpenPanels();
+  }
+
+  function renderOpenPanels() {
     var panels = ['manage-service-panel', 'retrieve-service-panel', 'refund-service-panel', 'data-service-panel'];
     for (var i = 0; i < panels.length; i++) {
       var panel = getElement(panels[i]);
       if (!panel) continue;
-      panel.classList.toggle('visible', panels[i] === panelID ? !panel.classList.contains('visible') : false);
+      panel.classList.toggle('visible', panels[i] === serviceState.openPanelID);
     }
   }
 
-  function getFlowConfig(flowID) {
-    return verificationFlows[flowID] || null;
-  }
-
-  async function requestVerificationCode(flowID) {
-    var flow = getFlowConfig(flowID);
+  function renderFlow(flowID) {
+    var flow = verificationFlows[flowID];
     if (!flow) return;
-    var email = readValue(flow.emailInputID);
-    if (!email) {
-      focusElement(flow.emailInputID);
-      return;
-    }
-    if (flow.beforeRequest) {
-      flow.beforeRequest();
-    }
-    setButtonState(flow.requestButtonID, true, flow.requestPendingLabel);
-    try {
-      var res = await serviceFetch(flow.requestPath, { email: email });
-      var data = await res.json();
-      if (!res.ok) throw new Error(data.error || flow.requestErrorMessage);
-      serviceState.pending[flow.stateKey] = email;
-      if (flow.step2ID) {
-        setVisible(flow.step2ID, true);
-      }
-      setServiceStatus(flow.statusID, flow.requestSuccessMessage, false);
-    } catch (err) {
-      setServiceStatus(flow.statusID, err.message, true);
-    } finally {
-      setButtonState(flow.requestButtonID, false, flow.requestLabel);
-    }
-  }
-
-  async function resendVerificationCode(flowID, event) {
-    if (event) event.preventDefault();
-    var flow = getFlowConfig(flowID);
-    if (!flow) return;
-    var email = serviceState.pending[flow.stateKey];
-    if (!email) return;
-    try {
-      var res = await serviceFetch(flow.requestPath, { email: email });
-      var data = await res.json();
-      if (!res.ok) throw new Error(data.error || flow.requestErrorMessage);
-      setServiceStatus(flow.statusID, flow.resendSuccessMessage, false);
-    } catch (err) {
-      setServiceStatus(flow.statusID, err.message, true);
-    }
-  }
-
-  async function confirmVerificationCode(flowID) {
-    var flow = getFlowConfig(flowID);
-    if (!flow) return;
-    var email = serviceState.pending[flow.stateKey];
-    var code = readValue(flow.codeInputID);
-    if (!email || !code) return;
-    if (flow.beforeConfirm && flow.beforeConfirm() === false) {
-      return;
-    }
-    setButtonState(flow.confirmButtonID, true, flow.confirmPendingLabel);
-    try {
-      var res = await serviceFetch(flow.confirmPath, { email: email, code: code });
-      var data = await res.json();
-      if (!res.ok) throw new Error(data.error || flow.confirmErrorMessage);
-      flow.onConfirmSuccess(data, email);
-    } catch (err) {
-      setServiceStatus(flow.statusID, err.message, true);
-      if (flow.restoreOnError !== false) {
-        setButtonState(flow.confirmButtonID, false, flow.confirmLabel);
-      }
-      return;
-    }
-    if (flow.restoreOnSuccess !== false) {
-      setButtonState(flow.confirmButtonID, false, flow.confirmLabel);
-    }
-  }
-
-  function resetVerificationFlow(flow) {
-    serviceState.pending[flow.stateKey] = '';
-    if (flow.codeInputID) {
-      var codeInput = getElement(flow.codeInputID);
-      if (codeInput) codeInput.value = '';
-    }
+    var flowState = serviceState.flows[flowID];
+    renderButton(flow.requestButtonID, flowState.requesting, flowState.requesting ? flow.requestPendingLabel : flow.requestLabel);
+    renderButton(flow.confirmButtonID, flowState.confirming, flowState.confirming ? flow.confirmPendingLabel : flow.confirmLabel);
+    renderStatus(flow.statusID, flowState.status);
     if (flow.step2ID) {
-      setVisible(flow.step2ID, false);
+      setVisible(flow.step2ID, flowState.step2Visible);
+    }
+    if (flow.renderResult) {
+      flow.renderResult(flowState.result);
+    }
+  }
+
+  function renderAllFlows() {
+    renderFlow('manage');
+    renderFlow('retrieve');
+    renderFlow('export');
+    renderFlow('delete');
+    renderRefund();
+  }
+
+  function renderRefund() {
+    renderButton('refund-inline-submit', serviceState.refund.submitting, serviceState.refund.submitting ? 'Processing...' : 'Process Refund');
+    renderStatus('refund-inline-status', serviceState.refund.status);
+  }
+
+  function resetVerificationFlow(flowID) {
+    var flow = verificationFlows[flowID];
+    if (!flow) return;
+    serviceState.flows[flowID] = newVerificationFlowState();
+    if (flow.codeInputID) {
+      setValue(flow.codeInputID, '');
     }
   }
 
   var verificationFlows = {
     manage: {
-      stateKey: 'manage',
       requestPath: '/v1/manage/request',
       confirmPath: '/v1/manage',
+      panelID: 'manage-service-panel',
       emailInputID: 'manage-inline-email',
       codeInputID: 'manage-inline-code',
       requestButtonID: 'manage-inline-request',
@@ -170,15 +189,15 @@
       resendSuccessMessage: 'New verification code sent.',
       requestErrorMessage: 'Failed to send verification code',
       confirmErrorMessage: 'Failed to open customer portal',
-      restoreOnSuccess: false,
+      onRequestStart: function() {},
       onConfirmSuccess: function(data) {
         window.location.href = data.url;
       }
     },
     retrieve: {
-      stateKey: 'retrieve',
       requestPath: '/v1/retrieve-license/request',
       confirmPath: '/v1/retrieve-license',
+      panelID: 'retrieve-service-panel',
       emailInputID: 'retrieve-inline-email',
       codeInputID: 'retrieve-inline-code',
       requestButtonID: 'retrieve-inline-request',
@@ -193,33 +212,57 @@
       resendSuccessMessage: 'New verification code sent.',
       requestErrorMessage: 'Failed to send verification code',
       confirmErrorMessage: 'Failed to retrieve license',
-      beforeRequest: function() {
-        setVisible('retrieve-inline-result', false);
+      onRequestStart: function() {
+        serviceState.flows.retrieve.result = null;
       },
       onConfirmSuccess: function(data) {
-        var license = data.license;
-        getElement('retrieve-inline-token').value = license.token;
-        getElement('retrieve-inline-tier').textContent = license.tier;
-        getElement('retrieve-inline-issued').textContent = new Date(license.issued_at).toLocaleString();
-        getElement('retrieve-inline-expires').textContent = license.expires_at ? new Date(license.expires_at).toLocaleString() : 'Does not expire';
-        getElement('retrieve-inline-email-value').textContent = license.email;
-        setVisible('retrieve-inline-result', true);
-        getElement('retrieve-inline-copy').style.display = 'inline-block';
-        var invoice = getElement('retrieve-inline-invoice');
-        if (license.invoice_url) {
-          invoice.href = license.invoice_url;
-          invoice.style.display = 'inline-block';
-        } else {
-          invoice.href = '#';
-          invoice.style.display = 'none';
+        serviceState.flows.retrieve.result = data.license;
+        setFlowStatus('retrieve', 'License retrieved successfully.', false);
+      },
+      renderResult: function(result) {
+        setVisible('retrieve-inline-result', !!result);
+        if (!result) {
+          setValue('retrieve-inline-token', '');
+          setText('retrieve-inline-tier', '');
+          setText('retrieve-inline-issued', '');
+          setText('retrieve-inline-expires', '');
+          setText('retrieve-inline-email-value', '');
+          var emptyInvoice = getElement('retrieve-inline-invoice');
+          if (emptyInvoice) {
+            emptyInvoice.href = '#';
+            emptyInvoice.style.display = 'none';
+          }
+          var emptyCopy = getElement('retrieve-inline-copy');
+          if (emptyCopy) {
+            emptyCopy.style.display = 'none';
+          }
+          return;
         }
-        setServiceStatus('retrieve-inline-status', 'License retrieved successfully.', false);
+        setValue('retrieve-inline-token', result.token);
+        setText('retrieve-inline-tier', result.tier);
+        setText('retrieve-inline-issued', new Date(result.issued_at).toLocaleString());
+        setText('retrieve-inline-expires', result.expires_at ? new Date(result.expires_at).toLocaleString() : 'Does not expire');
+        setText('retrieve-inline-email-value', result.email);
+        var invoice = getElement('retrieve-inline-invoice');
+        if (invoice) {
+          if (result.invoice_url) {
+            invoice.href = result.invoice_url;
+            invoice.style.display = 'inline-block';
+          } else {
+            invoice.href = '#';
+            invoice.style.display = 'none';
+          }
+        }
+        var copy = getElement('retrieve-inline-copy');
+        if (copy) {
+          copy.style.display = 'inline-block';
+        }
       }
     },
     export: {
-      stateKey: 'export',
       requestPath: '/v1/gdpr/request-export',
       confirmPath: '/v1/gdpr/export',
+      panelID: 'data-service-panel',
       emailInputID: 'data-export-email',
       codeInputID: 'data-export-code',
       requestButtonID: 'data-export-request',
@@ -234,20 +277,24 @@
       resendSuccessMessage: 'New verification code sent.',
       requestErrorMessage: 'Request failed',
       confirmErrorMessage: 'Export failed',
-      beforeRequest: function() {
-        setVisible('data-export-result', false);
+      onRequestStart: function() {
+        serviceState.flows.export.result = null;
       },
       onConfirmSuccess: function(data) {
-        getElement('data-export-payload').value = JSON.stringify(data, null, 2);
-        setVisible('data-export-result', true);
-        setServiceStatus('data-export-status', 'Data export retrieved successfully.', false);
-        resetVerificationFlow(verificationFlows.export);
+        serviceState.flows.export.result = data;
+        setFlowStatus('export', 'Data export retrieved successfully.', false);
+        resetVerificationFlow('export');
+        serviceState.flows.export.result = data;
+      },
+      renderResult: function(result) {
+        setVisible('data-export-result', !!result);
+        setValue('data-export-payload', result ? JSON.stringify(result, null, 2) : '');
       }
     },
     delete: {
-      stateKey: 'delete',
       requestPath: '/v1/gdpr/request-delete',
       confirmPath: '/v1/gdpr/confirm-delete',
+      panelID: 'data-service-panel',
       emailInputID: 'data-delete-email',
       codeInputID: 'data-delete-code',
       requestButtonID: 'data-delete-request',
@@ -264,28 +311,98 @@
       confirmErrorMessage: 'Deletion failed',
       beforeConfirm: function() {
         if (!getElement('data-delete-confirm-check').checked) {
-          setServiceStatus('data-delete-status', 'You must confirm that you understand this action is permanent.', true);
+          setFlowStatus('delete', 'You must confirm that you understand this action is permanent.', true);
+          renderFlow('delete');
           return false;
         }
         return true;
       },
       onConfirmSuccess: function(data) {
-        setServiceStatus('data-delete-status', data.deleted_count > 0 && data.stripe_reminder ? data.message + ' ' + data.stripe_reminder : data.message, false);
         getElement('data-delete-confirm-check').checked = false;
-        resetVerificationFlow(verificationFlows.delete);
+        resetVerificationFlow('delete');
+        setFlowStatus('delete', data.deleted_count > 0 && data.stripe_reminder ? data.message + ' ' + data.stripe_reminder : data.message, false);
       }
     }
   };
+
+  async function requestVerificationCode(flowID) {
+    var flow = verificationFlows[flowID];
+    if (!flow) return;
+    var email = readValue(flow.emailInputID);
+    if (!email) {
+      focusElement(flow.emailInputID);
+      return;
+    }
+    flow.onRequestStart();
+    serviceState.flows[flowID].requesting = true;
+    clearFlowStatus(flowID);
+    renderFlow(flowID);
+    try {
+      var res = await serviceFetch(flow.requestPath, { email: email });
+      var data = await res.json();
+      if (!res.ok) throw new Error(data.error || flow.requestErrorMessage);
+      serviceState.flows[flowID].pendingEmail = email;
+      serviceState.flows[flowID].step2Visible = !!flow.step2ID;
+      setFlowStatus(flowID, flow.requestSuccessMessage, false);
+    } catch (err) {
+      setFlowStatus(flowID, err.message, true);
+    } finally {
+      serviceState.flows[flowID].requesting = false;
+      renderFlow(flowID);
+    }
+  }
+
+  async function resendVerificationCode(flowID, event) {
+    if (event) event.preventDefault();
+    var flow = verificationFlows[flowID];
+    if (!flow) return;
+    var email = serviceState.flows[flowID].pendingEmail;
+    if (!email) return;
+    try {
+      var res = await serviceFetch(flow.requestPath, { email: email });
+      var data = await res.json();
+      if (!res.ok) throw new Error(data.error || flow.requestErrorMessage);
+      setFlowStatus(flowID, flow.resendSuccessMessage, false);
+    } catch (err) {
+      setFlowStatus(flowID, err.message, true);
+    }
+    renderFlow(flowID);
+  }
+
+  async function confirmVerificationCode(flowID) {
+    var flow = verificationFlows[flowID];
+    if (!flow) return;
+    var email = serviceState.flows[flowID].pendingEmail;
+    var code = readValue(flow.codeInputID);
+    if (!email || !code) return;
+    if (flow.beforeConfirm && flow.beforeConfirm() === false) {
+      return;
+    }
+    serviceState.flows[flowID].confirming = true;
+    renderFlow(flowID);
+    try {
+      var res = await serviceFetch(flow.confirmPath, { email: email, code: code });
+      var data = await res.json();
+      if (!res.ok) throw new Error(data.error || flow.confirmErrorMessage);
+      flow.onConfirmSuccess(data, email);
+    } catch (err) {
+      setFlowStatus(flowID, err.message, true);
+    } finally {
+      serviceState.flows[flowID].confirming = false;
+      renderFlow(flowID);
+    }
+  }
 
   async function copyRetrievedLicense() {
     var token = getElement('retrieve-inline-token').value;
     if (!token) return;
     try {
       await navigator.clipboard.writeText(token);
-      setServiceStatus('retrieve-inline-status', 'License key copied to clipboard.', false);
+      setFlowStatus('retrieve', 'License key copied to clipboard.', false);
     } catch (_) {
-      setServiceStatus('retrieve-inline-status', 'Failed to copy automatically. Please copy the key manually.', true);
+      setFlowStatus('retrieve', 'Failed to copy automatically. Please copy the key manually.', true);
     }
+    renderFlow('retrieve');
   }
 
   async function submitRefund() {
@@ -293,19 +410,25 @@
     var token = readValue('refund-inline-token');
     if (!email || !token) return;
     if (!confirm('Are you sure? This will immediately revoke the license and request the refund.')) return;
-    setButtonState('refund-inline-submit', true, 'Processing...');
+    serviceState.refund.submitting = true;
+    serviceState.refund.status = emptyStatus();
+    renderRefund();
     try {
       var res = await serviceFetch('/v1/self-refund', { email: email, token: token });
       var data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Refund failed');
-      getElement('refund-inline-token').value = '';
-      setServiceStatus('refund-inline-status', 'Success! Your refund has been processed. Stripe will follow up by email.', false);
+      setValue('refund-inline-token', '');
+      setRefundStatus('Success! Your refund has been processed. Stripe will follow up by email.', false);
     } catch (err) {
-      setServiceStatus('refund-inline-status', err.message, true);
+      setRefundStatus(err.message, true);
     } finally {
-      setButtonState('refund-inline-submit', false, 'Process Refund');
+      serviceState.refund.submitting = false;
+      renderRefund();
     }
   }
+
+  renderOpenPanels();
+  renderAllFlows();
 
   document.addEventListener('click', function(event) {
     var target = event.target.closest('[data-account-service-action]');
