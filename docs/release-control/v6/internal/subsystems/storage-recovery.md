@@ -218,6 +218,11 @@ metadata. If a stored recovery row contains bad `subject_ref_json`,
 `repository_ref_json`, or `details_json`, the list endpoints should log and
 drop only the malformed derived field for that row rather than returning `500`
 for the entire recovery points or rollups surface.
+That same fail-soft contract also applies to downstream consumers that reuse
+those shared store reads, including recovery-backed reporting, alert rollups,
+and tenant-scoped AI recovery-point adapters. A malformed metadata blob may
+degrade row-local enrichment, but it must not take down adjacent readers that
+consume the same canonical recovery store.
 That same hook-boundary normalization also owns the runtime recovery display
 model. Canonical recovery points and rollups must expose `display.itemLabel`
 and `display.itemType` to recovery consumers, while legacy transport fields
