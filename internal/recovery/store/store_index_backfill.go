@@ -31,6 +31,7 @@ func (s *Store) BackfillIndex(ctx context.Context) error {
 		WHERE
 			(subject_label IS NULL OR subject_label = '' OR
 			 subject_type IS NULL OR
+			 item_type IS NULL OR item_type = '' OR
 			 cluster_label IS NULL OR
 			 node_host_label IS NULL OR
 			 namespace_label IS NULL OR
@@ -94,6 +95,7 @@ func (s *Store) BackfillIndex(ctx context.Context) error {
 		SET
 			subject_label = ?,
 			subject_type = ?,
+			item_type = ?,
 			is_workload = ?,
 			cluster_label = ?,
 			node_host_label = ?,
@@ -147,6 +149,7 @@ func (s *Store) BackfillIndex(ctx context.Context) error {
 			ctx,
 			strings.TrimSpace(idx.SubjectLabel),
 			strings.TrimSpace(idx.SubjectType),
+			strings.TrimSpace(idx.ItemType),
 			isWorkload,
 			strings.TrimSpace(idx.ClusterLabel),
 			strings.TrimSpace(idx.NodeHostLabel),

@@ -11,12 +11,9 @@ import {
   getSourcePlatformPresentation,
   normalizeSourcePlatformQueryValue,
 } from '@/utils/sourcePlatforms';
-import { getResourceTypePresentation } from '@/utils/resourceTypePresentation';
 import {
-  getWorkloadTypePresentation,
-  normalizeWorkloadTypePresentationKey,
-} from '@/utils/workloadTypePresentation';
-import { titleCaseDelimitedLabel } from '@/utils/textPresentation';
+  getRecoveryItemTypePresentation,
+} from '@/utils/recoveryItemTypePresentation';
 
 export const RECOVERY_SUMMARY_TIME_RANGES = ['7d', '30d', '90d', '365d'] as const;
 
@@ -178,74 +175,15 @@ const formatShortDate = (value: string): string => {
   return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
 };
 
-const DEFAULT_RECOVERY_ITEM_TONE =
-  'bg-surface-alt text-base-content dark:bg-surface-alt dark:text-base-content';
-
-const normalizeRecoverySummarySubjectTypeKey = (value: string): string =>
-  value
-    .replace(/^k8s-/, '')
-    .replace(/^proxmox-/, '')
-    .replace(/^truenas-/, '');
-
-const normalizeRecoverySummaryWorkloadType = (
-  value: string,
-): Parameters<typeof getWorkloadTypePresentation>[0] => {
-  const normalized = normalizeRecoverySummarySubjectTypeKey(value.trim().toLowerCase());
-  switch (normalized) {
-    case 'lxc':
-    case 'ct':
-    case 'container':
-      return 'system-container';
-    case 'vm-backup':
-      return 'vm';
-    default:
-      return normalized;
-  }
-};
-
 const getRecoverySummarySubjectTypePresentation = (
   value: string | null | undefined,
 ): { key: string; label: string; toneClass: string } | null => {
-  const raw = String(value || '').trim().toLowerCase();
-  if (!raw) return null;
-
-  const workloadType = normalizeRecoverySummaryWorkloadType(raw);
-  if (normalizeWorkloadTypePresentationKey(workloadType)) {
-    const presentation = getWorkloadTypePresentation(workloadType);
-    return {
-      key: String(workloadType),
-      label: presentation.label,
-      toneClass: presentation.className,
-    };
-  }
-
-  const normalized = normalizeRecoverySummarySubjectTypeKey(raw);
-  const normalizedPresentation = normalized ? getResourceTypePresentation(normalized) : null;
-  if (normalizedPresentation && normalizedPresentation.label !== normalized) {
-    return {
-      key: normalized,
-      label: normalizedPresentation.label,
-      toneClass: normalizedPresentation.badgeClasses,
-    };
-  }
-
-  const rawPresentation = getResourceTypePresentation(raw);
-  if (rawPresentation && rawPresentation.label !== raw) {
-    return {
-      key: normalized || raw,
-      label: rawPresentation.label,
-      toneClass: rawPresentation.badgeClasses,
-    };
-  }
-
-  const fallbackKey = normalized || raw;
+  const presentation = getRecoveryItemTypePresentation(value);
+  if (!presentation) return null;
   return {
-    key: fallbackKey,
-    label: titleCaseDelimitedLabel(fallbackKey, {
-      fallback: 'Unknown',
-      preserveShortAllCaps: true,
-    }),
-    toneClass: DEFAULT_RECOVERY_ITEM_TONE,
+    key: presentation.key,
+    label: presentation.label,
+    toneClass: presentation.badgeClasses,
   };
 };
 
@@ -493,11 +431,13 @@ export function buildRecoveryItemCoverage(
   for (const rollup of rollups) {
     const presentation =
       getRecoverySummarySubjectTypePresentation(
-        String(rollup.display?.subjectType || rollup.subjectRef?.type || '').trim(),
+        String(
+          rollup.display?.itemType || rollup.display?.subjectType || rollup.subjectRef?.type || '',
+        ).trim(),
       ) || {
         key: 'unknown',
         label: 'Unknown',
-        toneClass: DEFAULT_RECOVERY_ITEM_TONE,
+        toneClass: 'bg-surface-alt text-base-content',
       };
 
     const existing = counts.get(presentation.key);

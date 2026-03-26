@@ -96,6 +96,9 @@ func TestStore_ListRollups(t *testing.T) {
 	if got[0].Display == nil || got[0].Display.SubjectLabel != "tank/apps" {
 		t.Fatalf("rollup[0].Display = %#v, want subject label tank/apps", got[0].Display)
 	}
+	if got[0].Display == nil || got[0].Display.ItemType != "dataset" {
+		t.Fatalf("rollup[0].Display = %#v, want item type dataset", got[0].Display)
+	}
 
 	// Second: vm-1 with latest failure at t2 and last success at t1.
 	if got[1].RollupID != "res:vm-1" {
@@ -109,6 +112,9 @@ func TestStore_ListRollups(t *testing.T) {
 	}
 	if got[1].Display == nil || got[1].Display.SubjectLabel != "vm-1" {
 		t.Fatalf("rollup[1].Display = %#v, want subject label vm-1", got[1].Display)
+	}
+	if got[1].Display == nil || got[1].Display.ItemType != "" {
+		t.Fatalf("rollup[1].Display = %#v, want empty item type when subject type is unknown", got[1].Display)
 	}
 	if got[1].LastAttemptAt == nil || !got[1].LastAttemptAt.Equal(t2) {
 		t.Fatalf("rollup[1].LastAttemptAt = %v, want %v", got[1].LastAttemptAt, t2)
@@ -204,5 +210,20 @@ func TestStore_ListRollups(t *testing.T) {
 	}
 	if got3[0].Display == nil || got3[0].Display.SubjectLabel != "default/pod-1" {
 		t.Fatalf("rollup with normalized filters display = %#v, want subject label default/pod-1", got3[0].Display)
+	}
+	if got3[0].Display == nil || got3[0].Display.ItemType != "pod" {
+		t.Fatalf("rollup with normalized filters display = %#v, want item type pod", got3[0].Display)
+	}
+
+	got4, total4, err := store.ListRollups(context.Background(), recovery.ListPointsOptions{
+		Page:     1,
+		Limit:    50,
+		ItemType: "dataset",
+	})
+	if err != nil {
+		t.Fatalf("ListRollups(itemType) error = %v", err)
+	}
+	if total4 != 1 || len(got4) != 1 || got4[0].RollupID == "res:vm-1" {
+		t.Fatalf("ListRollups(itemType) = %#v total=%d, want only dataset rollup", got4, total4)
 	}
 }

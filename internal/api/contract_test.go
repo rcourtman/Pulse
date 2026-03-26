@@ -2049,6 +2049,7 @@ func TestContract_FilterRecoveryPointsForRollupsIncludesNormalizedFilters(t *tes
 			Display: &recovery.RecoveryPointDisplay{
 				SubjectLabel:    "pod-1",
 				SubjectType:     "pod",
+				ItemType:        "pod",
 				ClusterLabel:    "prod-cluster",
 				NodeHostLabel:   "worker-1",
 				NamespaceLabel:  "default",
@@ -2067,6 +2068,7 @@ func TestContract_FilterRecoveryPointsForRollupsIncludesNormalizedFilters(t *tes
 			Display: &recovery.RecoveryPointDisplay{
 				SubjectLabel:   "pod-2",
 				SubjectType:    "pod",
+				ItemType:       "pod",
 				ClusterLabel:   "other-cluster",
 				NodeHostLabel:  "worker-2",
 				NamespaceLabel: "kube-system",
@@ -2077,6 +2079,7 @@ func TestContract_FilterRecoveryPointsForRollupsIncludesNormalizedFilters(t *tes
 
 	filtered := filterRecoveryPointsForRollups(points, recovery.ListPointsOptions{
 		Query:          "repo-a",
+		ItemType:       "pod",
 		ClusterLabel:   "prod-cluster",
 		NodeHostLabel:  "worker-1",
 		NamespaceLabel: "default",

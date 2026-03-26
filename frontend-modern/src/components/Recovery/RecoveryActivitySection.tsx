@@ -56,11 +56,13 @@ interface TimelineModel {
 interface RecoveryActivitySectionProps {
   activitySummary: Accessor<ActivitySummary>;
   activeClusterLabel: Accessor<string>;
+  activeItemTypeLabel: Accessor<string>;
   activeNamespaceLabel: Accessor<string>;
   activeNodeLabel: Accessor<string>;
   chartRangeDays: Accessor<7 | 30 | 90 | 365>;
   clearClusterFilter: () => void;
   clearFocusedRollup: () => void;
+  clearItemTypeFilter: () => void;
   clearNamespaceFilter: () => void;
   clearNodeFilter: () => void;
   clearSelectedDate: () => void;
@@ -142,6 +144,7 @@ export const RecoveryActivitySection: Component<RecoveryActivitySectionProps> = 
     <Show
       when={
         props.selectedDateKey() ||
+        props.activeItemTypeLabel() ||
         props.activeClusterLabel() ||
         props.activeNodeLabel() ||
         props.activeNamespaceLabel()
@@ -174,6 +177,26 @@ export const RecoveryActivitySection: Component<RecoveryActivitySectionProps> = 
                   {props.activeClusterLabel()}
                 </span>
                 <button type="button" onClick={props.clearClusterFilter} class={chip.clearButtonClass}>
+                  Clear
+                </button>
+              </div>
+            );
+          })()}
+        </Show>
+        <Show when={props.activeItemTypeLabel()}>
+          {(() => {
+            const chip = getRecoveryFilterChipPresentation('item-type');
+            return (
+              <div class={chip.className}>
+                <span class="font-medium uppercase tracking-wide">{chip.label}</span>
+                <span class="truncate font-mono text-[10px]" title={props.activeItemTypeLabel()}>
+                  {props.activeItemTypeLabel()}
+                </span>
+                <button
+                  type="button"
+                  onClick={props.clearItemTypeFilter}
+                  class={chip.clearButtonClass}
+                >
                   Clear
                 </button>
               </div>

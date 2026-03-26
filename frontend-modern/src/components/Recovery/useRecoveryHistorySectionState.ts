@@ -11,6 +11,7 @@ interface UseRecoveryHistorySectionStateParams {
   clusterFilter: Accessor<string>;
   currentPage: Accessor<number>;
   historyOutcomeFilter: Accessor<'all' | RecoveryOutcome>;
+  itemTypeFilter: Accessor<string>;
   modeFilter: Accessor<'all' | ArtifactMode>;
   namespaceFilter: Accessor<string>;
   nodeFilter: Accessor<string>;
@@ -33,6 +34,7 @@ export function useRecoveryHistorySectionState(
     let count = 0;
     if (params.queryFilter().trim() !== '') count += 1;
     if (params.providerFilter() !== 'all') count += 1;
+    if (params.itemTypeFilter() !== 'all') count += 1;
     if (params.historyOutcomeFilter() !== 'all') count += 1;
     if (params.scopeFilter() !== 'all') count += 1;
     if (params.modeFilter() !== 'all') count += 1;
@@ -46,6 +48,7 @@ export function useRecoveryHistorySectionState(
   createEffect(() => {
     params.currentPage();
     params.providerFilter();
+    params.itemTypeFilter();
     params.historyOutcomeFilter();
     params.scopeFilter();
     params.modeFilter();

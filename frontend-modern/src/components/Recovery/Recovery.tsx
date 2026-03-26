@@ -29,6 +29,10 @@ import {
   getRecoveryRollupSubjectLabel,
 } from '@/utils/recoveryRecordPresentation';
 import {
+  getRecoveryItemTypePresentation,
+  normalizeRecoveryItemTypeQueryValue,
+} from '@/utils/recoveryItemTypePresentation';
+import {
   getRecoveryArtifactColumnLabel,
   getRecoveryGroupNoTimestampLabel,
   getRecoveryArtifactTableMinWidth,
@@ -53,6 +57,8 @@ const Recovery: Component = () => {
     currentPage,
     facets,
     historyOutcomeFilter,
+    itemTypeFilter,
+    itemTypeOptions,
     modeFilter,
     namespaceFilter,
     namespaceOptions,
@@ -74,6 +80,7 @@ const Recovery: Component = () => {
     setClusterFilter,
     setCurrentPage,
     setHistoryOutcomeFilter,
+    setItemTypeFilter,
     setModeFilter,
     setNamespaceFilter,
     setNodeFilter,
@@ -98,6 +105,7 @@ const Recovery: Component = () => {
   const baseRollups = createMemo<ProtectionRollup[]>(() => {
     const query = queryFilter().trim().toLowerCase();
     const provider = providerFilter() === 'all' ? '' : providerFilter();
+    const itemType = itemTypeFilter() === 'all' ? '' : itemTypeFilter();
     const resourceIndex = resourcesById();
 
     const result = rollups().filter((rollup) => {
@@ -105,6 +113,10 @@ const Recovery: Component = () => {
         .map((entry) => String(entry || '').trim())
         .filter(Boolean);
       if (provider && !providers.includes(provider)) return false;
+      const rollupItemType = normalizeRecoveryItemTypeQueryValue(
+        rollup.display?.itemType || rollup.display?.subjectType || rollup.subjectRef?.type,
+      );
+      if (itemType && rollupItemType !== itemType) return false;
 
       if (!query) return true;
       const label = getRecoveryRollupSubjectLabel(rollup, resourceIndex);
@@ -381,6 +393,10 @@ const Recovery: Component = () => {
   const activeNamespaceLabel = createMemo(() =>
     namespaceFilter() === 'all' ? '' : namespaceFilter(),
   );
+  const activeItemTypeLabel = createMemo(() => {
+    if (itemTypeFilter() === 'all') return '';
+    return getRecoveryItemTypePresentation(itemTypeFilter())?.label || itemTypeFilter();
+  });
   const summaryRange = createMemo<RecoverySummaryRange>(() => {
     const range = chartRangeDays();
     if (range === 7) return '7d';
@@ -393,6 +409,7 @@ const Recovery: Component = () => {
     () =>
       queryFilter().trim() !== '' ||
       providerFilter() !== 'all' ||
+      itemTypeFilter() !== 'all' ||
       clusterFilter() !== 'all' ||
       modeFilter() !== 'all' ||
       historyOutcomeFilter() !== 'all' ||
@@ -428,6 +445,7 @@ const Recovery: Component = () => {
   const resetAllArtifactFilters = () => {
     setQueryFilter('');
     setProviderFilter('all');
+    setItemTypeFilter('all');
     setClusterFilter('all');
     setModeFilter('all');
     setHistoryOutcomeFilter('all');
@@ -464,6 +482,7 @@ const Recovery: Component = () => {
       <RecoveryActivitySection
         activitySummary={activitySummary}
         activeClusterLabel={activeClusterLabel}
+        activeItemTypeLabel={activeItemTypeLabel}
         activeNamespaceLabel={activeNamespaceLabel}
         activeNodeLabel={activeNodeLabel}
         chartRangeDays={chartRangeDays}
@@ -472,6 +491,10 @@ const Recovery: Component = () => {
           setCurrentPage(1);
         }}
         clearFocusedRollup={() => setRollupId('')}
+        clearItemTypeFilter={() => {
+          setItemTypeFilter('all');
+          setCurrentPage(1);
+        }}
         clearNamespaceFilter={() => {
           setNamespaceFilter('all');
           setCurrentPage(1);
@@ -553,6 +576,8 @@ const Recovery: Component = () => {
             error={() => recoveryRollups.rollups.error}
             onSelectRollup={handleSelectRollup}
             protectedStaleOnly={protectedStaleOnly}
+            itemTypeFilter={itemTypeFilter}
+            itemTypeOptions={itemTypeOptions}
             providerFilter={providerFilter}
             providerOptions={providerOptions}
             queryFilter={queryFilter}
@@ -560,6 +585,7 @@ const Recovery: Component = () => {
             rollups={rollups}
             rollupsSummary={rollupsSummary}
             setHistoryOutcomeFilter={setHistoryOutcomeFilter}
+            setItemTypeFilter={setItemTypeFilter}
             setProtectedStaleOnly={setProtectedStaleOnly}
             setProviderFilter={setProviderFilter}
             setQueryFilter={setQueryFilter}
@@ -593,6 +619,8 @@ const Recovery: Component = () => {
             kioskMode={kioskMode()}
             mobileVisibleArtifactColumns={mobileVisibleArtifactColumns}
             modeFilter={modeFilter}
+            itemTypeFilter={itemTypeFilter}
+            itemTypeOptions={itemTypeOptions}
             namespaceFilter={namespaceFilter}
             namespaceOptions={namespaceOptions}
             nodeFilter={nodeFilter}
@@ -608,6 +636,7 @@ const Recovery: Component = () => {
             setClusterFilter={setClusterFilter}
             setCurrentPage={setCurrentPage}
             setHistoryOutcomeFilter={setHistoryOutcomeFilter}
+            setItemTypeFilter={setItemTypeFilter}
             setModeFilter={setModeFilter}
             setNamespaceFilter={setNamespaceFilter}
             setNodeFilter={setNodeFilter}

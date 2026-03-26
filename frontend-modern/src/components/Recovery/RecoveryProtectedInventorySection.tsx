@@ -24,6 +24,10 @@ import {
   getRecoveryProtectedItemsLoadingState,
 } from '@/utils/recoveryEmptyStatePresentation';
 import {
+  getRecoveryItemTypePresentation,
+  normalizeRecoveryItemTypeQueryValue,
+} from '@/utils/recoveryItemTypePresentation';
+import {
   getRecoveryArtifactColumnLabel,
   getRecoveryRollupAgeTextClass,
   getRecoveryRollupIssueTone,
@@ -54,6 +58,8 @@ interface RecoveryRollupSummary {
 interface RecoveryProtectedInventorySectionProps {
   filteredRollups: Accessor<ProtectionRollup[]>;
   historyOutcomeFilter: Accessor<'all' | RecoveryOutcome>;
+  itemTypeFilter: Accessor<string>;
+  itemTypeOptions: Accessor<string[]>;
   isMobile: boolean;
   kioskMode: boolean;
   onSelectRollup: (rollupId: string) => void;
@@ -65,6 +71,7 @@ interface RecoveryProtectedInventorySectionProps {
   rollups: Accessor<ProtectionRollup[]>;
   rollupsSummary: Accessor<RecoveryRollupSummary>;
   setHistoryOutcomeFilter: (value: 'all' | RecoveryOutcome) => void;
+  setItemTypeFilter: (value: string) => void;
   setProtectedStaleOnly: (value: boolean | ((prev: boolean) => boolean)) => void;
   setProviderFilter: (value: string) => void;
   setQueryFilter: (value: string) => void;
@@ -95,6 +102,7 @@ export const RecoveryProtectedInventorySection: Component<
     let count = 0;
     if (props.queryFilter().trim() !== '') count += 1;
     if (props.providerFilter() !== 'all') count += 1;
+    if (props.itemTypeFilter() !== 'all') count += 1;
     if (props.historyOutcomeFilter() !== 'all') count += 1;
     if (props.protectedStaleOnly()) count += 1;
     return count;
@@ -197,6 +205,28 @@ export const RecoveryProtectedInventorySection: Component<
             showFilters={!props.isMobile || protectedFiltersOpen()}
             toolbarClass="lg:flex-nowrap"
           >
+            <LabeledFilterSelect
+              id="recovery-item-type-filter"
+              label="Item Type"
+              value={props.itemTypeFilter()}
+              onChange={(event) =>
+                props.setItemTypeFilter(
+                  normalizeRecoveryItemTypeQueryValue(event.currentTarget.value) || 'all',
+                )
+              }
+              selectClass="min-w-[10rem] max-w-[14rem]"
+            >
+              <For each={props.itemTypeOptions()}>
+                {(itemType) => (
+                  <option value={itemType}>
+                    {itemType === 'all'
+                      ? 'All Item Types'
+                      : getRecoveryItemTypePresentation(itemType)?.label || itemType}
+                  </option>
+                )}
+              </For>
+            </LabeledFilterSelect>
+
             <LabeledFilterSelect
               id="recovery-provider-filter"
               label="Platform"

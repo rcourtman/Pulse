@@ -18,6 +18,10 @@ import {
   normalizeRecoveryModeQueryValue,
 } from '@/utils/recoveryRecordPresentation';
 import {
+  getRecoveryItemTypePresentation,
+  normalizeRecoveryItemTypeQueryValue,
+} from '@/utils/recoveryItemTypePresentation';
+import {
   normalizeRecoveryOutcome as normalizeOutcome,
 } from '@/utils/recoveryOutcomePresentation';
 import type { RecoveryArtifactMode } from '@/utils/recoveryArtifactModePresentation';
@@ -60,6 +64,11 @@ const normalizeRecoveryProviderSelection = (value: string | null | undefined): s
   return normalizeSourcePlatformKey(normalized) || 'all';
 };
 
+const normalizeRecoveryItemTypeSelection = (value: string | null | undefined): string => {
+  const normalized = normalizeRecoveryItemTypeQueryValue(value);
+  return normalized || 'all';
+};
+
 export function useRecoverySurfaceState() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -70,6 +79,7 @@ export function useRecoverySurfaceState() {
   const [workspaceView, setWorkspaceView] = createSignal<RecoveryWorkspaceView>('inventory');
   const [queryFilter, setQueryFilter] = createSignal('');
   const [providerFilter, setProviderFilter] = createSignal('all');
+  const [itemTypeFilter, setItemTypeFilter] = createSignal('all');
   const [clusterFilter, setClusterFilter] = createSignal('all');
   const [modeFilter, setModeFilter] = createSignal<'all' | ArtifactMode>('all');
   const [historyOutcomeFilter, setHistoryOutcomeFilter] = createSignal<'all' | RecoveryOutcome>(
@@ -115,6 +125,7 @@ export function useRecoverySurfaceState() {
     return {
       rollupId: rid || null,
       provider: providerFilter() === 'all' ? null : providerFilter(),
+      itemType: itemTypeFilter() === 'all' ? null : itemTypeFilter(),
       mode: modeFilter() === 'all' ? null : modeFilter(),
       outcome: historyOutcomeFilter() === 'all' ? null : historyOutcomeFilter(),
       q: queryFilter().trim() || null,
@@ -139,6 +150,7 @@ export function useRecoverySurfaceState() {
       limit: 200,
       rollupId: rid || null,
       provider: providerFilter() === 'all' ? null : providerFilter(),
+      itemType: itemTypeFilter() === 'all' ? null : itemTypeFilter(),
       cluster: clusterFilter() === 'all' ? null : clusterFilter(),
       mode: modeFilter() === 'all' ? null : modeFilter(),
       outcome: historyOutcomeFilter() === 'all' ? null : historyOutcomeFilter(),
@@ -159,6 +171,7 @@ export function useRecoverySurfaceState() {
     return {
       rollupId: rid || null,
       provider: providerFilter() === 'all' ? null : providerFilter(),
+      itemType: itemTypeFilter() === 'all' ? null : itemTypeFilter(),
       cluster: clusterFilter() === 'all' ? null : clusterFilter(),
       mode: modeFilter() === 'all' ? null : modeFilter(),
       outcome: historyOutcomeFilter() === 'all' ? null : historyOutcomeFilter(),
@@ -179,6 +192,7 @@ export function useRecoverySurfaceState() {
     return {
       rollupId: rid || null,
       provider: providerFilter() === 'all' ? null : providerFilter(),
+      itemType: itemTypeFilter() === 'all' ? null : itemTypeFilter(),
       cluster: clusterFilter() === 'all' ? null : clusterFilter(),
       mode: modeFilter() === 'all' ? null : modeFilter(),
       outcome: historyOutcomeFilter() === 'all' ? null : historyOutcomeFilter(),
@@ -208,6 +222,7 @@ export function useRecoverySurfaceState() {
     const nextView = normalizeRecoveryWorkspaceViewValue(parsed.view);
     const nextQuery = normalizeRecoveryRouteValue(parsed.query);
     const nextProvider = normalizeRecoveryProviderSelection(parsed.provider || '');
+    const nextItemType = normalizeRecoveryItemTypeSelection(parsed.itemType || '');
     const nextStaleOnly = normalizeRecoveryBooleanFlag(parsed.stale);
     const normalizedRange = normalizeRecoveryRouteValue(parsed.range);
     const nextRange = isRecoveryRangeDays(normalizedRange) ? Number(normalizedRange) : 30;
@@ -229,6 +244,7 @@ export function useRecoverySurfaceState() {
     if (resolvedView !== untrack(workspaceView)) setWorkspaceView(resolvedView);
     if (nextQuery !== untrack(queryFilter)) setQueryFilter(nextQuery);
     if (nextProvider !== untrack(providerFilter)) setProviderFilter(nextProvider);
+    if (nextItemType !== untrack(itemTypeFilter)) setItemTypeFilter(nextItemType);
     if (nextStaleOnly !== untrack(protectedStaleOnly)) setProtectedStaleOnly(nextStaleOnly);
     if (nextRange !== untrack(chartRangeDays)) setChartRangeDays(nextRange as 7 | 30 | 90 | 365);
     if (nextCluster !== untrack(clusterFilter)) setClusterFilter(nextCluster);
@@ -265,6 +281,7 @@ export function useRecoverySurfaceState() {
     workspaceView();
     queryFilter();
     providerFilter();
+    itemTypeFilter();
     clusterFilter();
     modeFilter();
     historyOutcomeFilter();
@@ -289,6 +306,7 @@ export function useRecoverySurfaceState() {
       view: workspaceView() !== defaultView ? workspaceView() : null,
       query: queryFilter().trim() || null,
       provider: providerFilter() !== 'all' ? providerFilter() : null,
+      itemType: itemTypeFilter() !== 'all' ? itemTypeFilter() : null,
       stale: protectedStaleOnly() ? '1' : null,
       range: chartRangeDays() !== 30 ? String(chartRangeDays()) : null,
       cluster: clusterFilter() !== 'all' ? clusterFilter() : null,
@@ -307,6 +325,8 @@ export function useRecoverySurfaceState() {
     }
   });
 
+  const facets = createMemo(() => recoveryFacets.facets() || {});
+
   const providerOptions = createMemo(() => {
     const providers = new Set<string>();
     for (const rollup of rollups()) {
@@ -322,7 +342,39 @@ export function useRecoverySurfaceState() {
     return ['all', ...buildSourcePlatformOptions(providers).map((option) => option.key)];
   });
 
-  const facets = createMemo(() => recoveryFacets.facets() || {});
+  const itemTypeOptions = createMemo(() => {
+    const values = new Set<string>();
+
+    for (const value of facets().itemTypes || []) {
+      const normalized = normalizeRecoveryItemTypeQueryValue(value);
+      if (normalized) values.add(normalized);
+    }
+
+    for (const rollup of rollups()) {
+      const normalized = normalizeRecoveryItemTypeQueryValue(
+        rollup.display?.itemType || rollup.display?.subjectType || rollup.subjectRef?.type,
+      );
+      if (normalized) values.add(normalized);
+    }
+
+    for (const point of recoveryPoints.points() || []) {
+      const normalized = normalizeRecoveryItemTypeQueryValue(
+        point.display?.itemType || point.display?.subjectType || point.subjectRef?.type,
+      );
+      if (normalized) values.add(normalized);
+    }
+
+    const sorted = [...values].sort((left, right) => {
+      const leftLabel = getRecoveryItemTypePresentation(left)?.label || left;
+      const rightLabel = getRecoveryItemTypePresentation(right)?.label || right;
+      return leftLabel.localeCompare(rightLabel);
+    });
+
+    const selected = itemTypeFilter().trim();
+    if (selected && selected !== 'all' && !sorted.includes(selected)) sorted.unshift(selected);
+
+    return ['all', ...sorted];
+  });
 
   const clusterOptions = createMemo(() => {
     const values = (facets().clusters || [])
@@ -376,6 +428,8 @@ export function useRecoverySurfaceState() {
     currentPage,
     facets,
     historyOutcomeFilter,
+    itemTypeFilter,
+    itemTypeOptions,
     modeFilter,
     namespaceFilter,
     namespaceOptions,
@@ -398,6 +452,7 @@ export function useRecoverySurfaceState() {
     setClusterFilter,
     setCurrentPage,
     setHistoryOutcomeFilter,
+    setItemTypeFilter,
     setModeFilter,
     setNamespaceFilter,
     setNodeFilter,

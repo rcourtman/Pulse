@@ -216,6 +216,7 @@ describe('resource link routing contract', () => {
       day: '2026-02-13',
       namespace: 'tenant-a',
       mode: 'remote',
+      itemType: 'vm',
       status: 'failed',
       verification: 'verified',
       scope: 'workload',
@@ -232,6 +233,7 @@ describe('resource link routing contract', () => {
     expect(url.searchParams.get('day')).toBe('2026-02-13');
     expect(url.searchParams.get('namespace')).toBe('tenant-a');
     expect(url.searchParams.get('mode')).toBe('remote');
+    expect(url.searchParams.get('itemType')).toBe('vm');
     expect(url.searchParams.get('scope')).toBe('workload');
     expect(url.searchParams.get('status')).toBe('failed');
     expect(url.searchParams.get('verification')).toBe('verified');
@@ -249,6 +251,7 @@ describe('resource link routing contract', () => {
       day: '2026-02-13',
       namespace: 'tenant-a',
       mode: 'remote',
+      itemType: 'vm',
       scope: 'workload',
       status: 'failed',
       verification: 'verified',
@@ -264,6 +267,7 @@ describe('resource link routing contract', () => {
     expect(RECOVERY_QUERY_PARAMS.day).toBe('day');
     expect(RECOVERY_QUERY_PARAMS.namespace).toBe('namespace');
     expect(RECOVERY_QUERY_PARAMS.mode).toBe('mode');
+    expect(RECOVERY_QUERY_PARAMS.itemType).toBe('itemType');
     expect(RECOVERY_QUERY_PARAMS.scope).toBe('scope');
     expect(RECOVERY_QUERY_PARAMS.verification).toBe('verification');
     expect(RECOVERY_QUERY_PARAMS.query).toBe('q');
@@ -278,6 +282,9 @@ describe('resource link routing contract', () => {
     expect(parseRecoveryLinkSearch('?provider=proxmox&mode=local')).toMatchObject({
       provider: 'proxmox-pve',
       mode: 'local',
+    });
+    expect(parseRecoveryLinkSearch('?itemType=proxmox-vm')).toMatchObject({
+      itemType: 'vm',
     });
   });
 

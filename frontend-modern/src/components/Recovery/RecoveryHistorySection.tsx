@@ -18,6 +18,10 @@ import type { RecoveryOutcome } from '@/types/recovery';
 import type { Resource } from '@/types/resource';
 import { getRecoveryFilterPanelClearClass } from '@/utils/recoveryActionPresentation';
 import { getRecoveryArtifactModePresentation, type RecoveryArtifactMode } from '@/utils/recoveryArtifactModePresentation';
+import {
+  getRecoveryItemTypePresentation,
+  normalizeRecoveryItemTypeQueryValue,
+} from '@/utils/recoveryItemTypePresentation';
 import { normalizeRecoveryModeQueryValue } from '@/utils/recoveryRecordPresentation';
 import {
   getRecoveryHistorySearchPlaceholder,
@@ -54,6 +58,8 @@ interface RecoveryHistorySectionProps {
   groupedByDay: Accessor<RecoveryPointGroup[]>;
   hasActiveArtifactFilters: Accessor<boolean>;
   historyOutcomeFilter: Accessor<'all' | RecoveryOutcome>;
+  itemTypeFilter: Accessor<string>;
+  itemTypeOptions: Accessor<string[]>;
   isMobile: boolean;
   kioskMode: boolean;
   mobileVisibleArtifactColumns: Accessor<ColumnDef[]>;
@@ -73,6 +79,7 @@ interface RecoveryHistorySectionProps {
   setClusterFilter: (value: string) => void;
   setCurrentPage: (value: number) => void;
   setHistoryOutcomeFilter: (value: 'all' | RecoveryOutcome) => void;
+  setItemTypeFilter: (value: string) => void;
   setModeFilter: (value: 'all' | ArtifactMode) => void;
   setNamespaceFilter: (value: string) => void;
   setNodeFilter: (value: string) => void;
@@ -106,6 +113,7 @@ export const RecoveryHistorySection: Component<RecoveryHistorySectionProps> = (p
     clusterFilter: props.clusterFilter,
     currentPage: props.currentPage,
     historyOutcomeFilter: props.historyOutcomeFilter,
+    itemTypeFilter: props.itemTypeFilter,
     modeFilter: props.modeFilter,
     namespaceFilter: props.namespaceFilter,
     nodeFilter: props.nodeFilter,
@@ -322,6 +330,29 @@ export const RecoveryHistorySection: Component<RecoveryHistorySectionProps> = (p
             showFilters={!props.isMobile || historyFiltersOpen()}
             toolbarClass="lg:flex-nowrap"
           >
+            <LabeledFilterSelect
+              id="recovery-item-type-filter-history"
+              label="Item type"
+              value={props.itemTypeFilter()}
+              onChange={(event) => {
+                props.setItemTypeFilter(
+                  normalizeRecoveryItemTypeQueryValue(event.currentTarget.value) || 'all',
+                );
+                props.setCurrentPage(1);
+              }}
+              selectClass="min-w-[10rem] max-w-[14rem]"
+            >
+              <For each={props.itemTypeOptions()}>
+                {(itemType) => (
+                  <option value={itemType}>
+                    {itemType === 'all'
+                      ? 'All Item Types'
+                      : getRecoveryItemTypePresentation(itemType)?.label || itemType}
+                  </option>
+                )}
+              </For>
+            </LabeledFilterSelect>
+
             <LabeledFilterSelect
               id="recovery-provider-filter-history"
               label="History platform"

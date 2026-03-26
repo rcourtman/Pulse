@@ -690,6 +690,14 @@ Shared `internal/api/` recovery transport helpers now also preserve normalized
 filter coherence across rollup, point-history, series, and facet views so
 agent-adjacent protected-resource drill-downs do not fork between protected
 items and history slices under the same active recovery filter set.
+That same shared `internal/api/` recovery boundary must also preserve the
+canonical provider-neutral `itemType` filter and display contract. When
+agent-adjacent recovery data originates from Proxmox, Kubernetes, TrueNAS, or
+other platform-native subjects, the shared transport layer must normalize
+those source-specific labels onto the governed recovery item vocabulary before
+the UI route/filter state sees them, so lifecycle-adjacent drill-downs remain
+coherent across platforms instead of reintroducing Proxmox-native subject
+types as the de facto recovery model.
 
 The updater/runtime surfaces must preserve the one-shot `updated_from`
 continuity handoff and the non-TLS continuity path for supported self-hosted

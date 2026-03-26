@@ -1,4 +1,4 @@
-export type RecoveryFilterChipKind = 'day' | 'cluster' | 'node' | 'namespace';
+export type RecoveryFilterChipKind = 'day' | 'cluster' | 'item-type' | 'node' | 'namespace';
 
 type RecoveryFilterChipPresentation = {
   clearButtonClass: string;
@@ -19,6 +19,11 @@ const CHIP_PRESENTATION: Record<RecoveryFilterChipKind, RecoveryFilterChipPresen
     clearButtonClass: `${CLEAR_BUTTON_BASE_CLASS} hover:bg-blue-100 dark:hover:bg-blue-900`,
     className: `${CHIP_BASE_CLASS} border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-200`,
     label: 'Day',
+  },
+  'item-type': {
+    clearButtonClass: `${CLEAR_BUTTON_BASE_CLASS} hover:bg-fuchsia-100 dark:hover:bg-fuchsia-900`,
+    className: `${CHIP_BASE_CLASS} border-fuchsia-200 bg-fuchsia-50 text-fuchsia-700 dark:border-fuchsia-700 dark:bg-fuchsia-900 dark:text-fuchsia-200`,
+    label: 'Item Type',
   },
   namespace: {
     clearButtonClass: `${CLEAR_BUTTON_BASE_CLASS} hover:bg-violet-100 dark:hover:bg-violet-900`,

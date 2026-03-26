@@ -22,6 +22,7 @@ export interface RecoveryExternalRef {
 export interface RecoveryPointDisplay {
   subjectLabel?: string;
   subjectType?: string;
+  itemType?: string;
   isWorkload?: boolean;
   clusterLabel?: string;
   nodeAgentLabel?: string;
@@ -110,6 +111,7 @@ export interface RecoveryPointsFacets {
   clusters?: string[];
   nodesAgents?: string[];
   namespaces?: string[];
+  itemTypes?: string[];
   hasSize?: boolean;
   hasVerification?: boolean;
   hasEntityId?: boolean;

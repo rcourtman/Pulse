@@ -88,8 +88,8 @@ querying, and the operator-facing storage health presentation layer.
 6. Letting whitespace-padded storage route params hydrate non-canonical page state; shared storage URLs must trim and normalize `tab`, `source`, `status`, `node`, `group`, `sort`, `order`, `query`, and deep-link `resource` before the page model consumes them so pasted or hand-edited links resolve to the same canonical state as UI-authored routes without dropping adjacent unmanaged params
 7. Letting storage `source` aliases or case drift survive in canonical route state; shared storage URLs must rewrite pasted values like `PVE`, `pbs`, or `ALL` to the owned source option values (for example `proxmox-pve`) or the canonical unset state so copied links match the same source filter values the storage toolbar presents
 8. Letting explicit storage `all` sentinels survive in canonical route state; shared storage URLs must collapse case- or whitespace-variant `all` values for the managed `node` filter back to the canonical unset state so copied links do not preserve a fake active node filter
-9. Letting whitespace-padded recovery timeline params fall off canonical route state; shared recovery URLs must trim and normalize `day`, `range`, `scope`, `status`, `verification`, `cluster`, `node`, `namespace`, and adjacent history filters before the page model validates them so pasted or hand-edited links resolve to the same canonical timeline and filter state as UI-authored routes
-10. Letting explicit recovery `all` sentinels survive in canonical route state; shared recovery URLs must collapse case- or whitespace-variant `all` values for `cluster`, `node`, and `namespace` back to the canonical unset route state so copied links do not preserve fake active filters
+9. Letting whitespace-padded recovery timeline params fall off canonical route state; shared recovery URLs must trim and normalize `day`, `range`, `scope`, `status`, `verification`, `cluster`, `node`, `namespace`, `itemType`, and adjacent history filters before the page model validates them so pasted or hand-edited links resolve to the same canonical timeline and filter state as UI-authored routes
+10. Letting explicit recovery `all` sentinels survive in canonical route state; shared recovery URLs must collapse case- or whitespace-variant `all` values for `cluster`, `node`, `namespace`, and `itemType` back to the canonical unset route state so copied links do not preserve fake active filters
 11. Letting non-canonical recovery provider values survive in route or transport state; shared recovery URLs must collapse unsupported or fake `provider` values back to the canonical unset state, and only owned source-platform provider options or canonical aliases may reach rollups, points, series, and facets transport filters
 12. Letting protected-item recovery outcome filtering fork from the canonical history status filter; the protected inventory status control must drive the same route-backed `status` field and the same rollups, points, series, and facets transport filters as the history surface instead of keeping a protected-only local outcome branch
 13. Letting visible protected-item filters fall out of shared recovery links; the protected `Stale only` toggle must restore from the canonical recovery URL and rewrite to one owned `stale=1` route form instead of disappearing on refresh or copy/paste
@@ -448,10 +448,13 @@ coverage only through pages or higher-level recovery components.
 
 Those recovery transport surfaces now also share one normalized filter
 contract: protected-item rollups, point history, facets, and chart series must
-all honor the same provider, cluster, node, namespace, workload-scope,
-verification, and route-backed free-text `q` filter so the protected-items
-list cannot drift from the timeline and facet state under the same active
-recovery view.
+all honor the same provider, canonical `itemType`, cluster, node, namespace,
+workload-scope, verification, and route-backed free-text `q` filter so the
+protected-items list cannot drift from the timeline and facet state under the
+same active recovery view. That same recovery filter contract now depends on
+the canonical recovery index carrying a normalized `itemType` instead of
+forcing each UI surface to re-derive protected item classes from raw
+provider-native `subjectType` values.
 That same recovery product surface keeps the activity timeline available even
 when point-history loading fails: `frontend-modern/src/components/Recovery/Recovery.tsx`
 must continue to render `RecoveryActivitySection` and the point-history error

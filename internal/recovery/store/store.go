@@ -205,6 +205,7 @@ func (s *Store) initSchema() error {
 			details_json TEXT,
 			subject_label TEXT,
 			subject_type TEXT,
+			item_type TEXT,
 			is_workload INTEGER,
 			cluster_label TEXT,
 			node_host_label TEXT,
@@ -221,6 +222,9 @@ func (s *Store) initSchema() error {
 
 		CREATE INDEX IF NOT EXISTS idx_recovery_points_provider_completed
 		ON recovery_points(provider, completed_at_ms);
+
+		CREATE INDEX IF NOT EXISTS idx_recovery_points_item_type_completed
+		ON recovery_points(item_type, completed_at_ms);
 
 		CREATE INDEX IF NOT EXISTS idx_recovery_points_subject_completed
 		ON recovery_points(subject_resource_id, completed_at_ms);
@@ -247,6 +251,7 @@ func (s *Store) initSchema() error {
 	}{
 		{"subject_label", "TEXT"},
 		{"subject_type", "TEXT"},
+		{"item_type", "TEXT"},
 		{"is_workload", "INTEGER"},
 		{"cluster_label", "TEXT"},
 		{"node_host_label", "TEXT"},
@@ -550,11 +555,11 @@ func (s *Store) UpsertPoints(ctx context.Context, points []recovery.RecoveryPoin
 				subject_key, repository_key,
 				subject_resource_id, repository_resource_id,
 				subject_ref_json, repository_ref_json, details_json,
-				subject_label, subject_type, is_workload,
+				subject_label, subject_type, item_type, is_workload,
 				cluster_label, node_host_label, namespace_label, entity_id_label,
 				repository_label, details_summary,
 				created_at_ms, updated_at_ms
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT(id) DO UPDATE SET
 				provider=excluded.provider,
 				kind=excluded.kind,
@@ -575,6 +580,7 @@ func (s *Store) UpsertPoints(ctx context.Context, points []recovery.RecoveryPoin
 				details_json=excluded.details_json,
 				subject_label=excluded.subject_label,
 				subject_type=excluded.subject_type,
+				item_type=excluded.item_type,
 				is_workload=excluded.is_workload,
 				cluster_label=excluded.cluster_label,
 				node_host_label=excluded.node_host_label,
@@ -648,6 +654,7 @@ func (s *Store) UpsertPoints(ctx context.Context, points []recovery.RecoveryPoin
 			nullStringToAny(details),
 			strings.TrimSpace(idx.SubjectLabel),
 			strings.TrimSpace(idx.SubjectType),
+			strings.TrimSpace(idx.ItemType),
 			func() any {
 				if idx.IsWorkload {
 					return 1
@@ -767,6 +774,10 @@ func (s *Store) ListPoints(ctx context.Context, opts recovery.ListPointsOptions)
 		where = append(where, "namespace_label = ?")
 		args = append(args, strings.TrimSpace(opts.NamespaceLabel))
 	}
+	if strings.TrimSpace(opts.ItemType) != "" {
+		where = append(where, "item_type = ?")
+		args = append(args, strings.TrimSpace(opts.ItemType))
+	}
 	if opts.WorkloadOnly {
 		where = append(where, "is_workload = 1")
 	}
@@ -788,6 +799,7 @@ func (s *Store) ListPoints(ctx context.Context, opts recovery.ListPointsOptions)
 				LOWER(id) LIKE ? OR
 				LOWER(subject_label) LIKE ? OR
 				LOWER(subject_type) LIKE ? OR
+				LOWER(item_type) LIKE ? OR
 				LOWER(cluster_label) LIKE ? OR
 				LOWER(node_host_label) LIKE ? OR
 				LOWER(namespace_label) LIKE ? OR
@@ -796,7 +808,7 @@ func (s *Store) ListPoints(ctx context.Context, opts recovery.ListPointsOptions)
 				LOWER(details_summary) LIKE ?
 			)
 		`)
-		for i := 0; i < 9; i++ {
+		for i := 0; i < 10; i++ {
 			args = append(args, needle)
 		}
 	}
@@ -819,7 +831,7 @@ func (s *Store) ListPoints(ctx context.Context, opts recovery.ListPointsOptions)
 			verified, encrypted, immutable,
 			subject_resource_id, repository_resource_id,
 			subject_ref_json, repository_ref_json, details_json
-			, subject_label, subject_type, is_workload,
+			, subject_label, subject_type, item_type, is_workload,
 			cluster_label, node_host_label, namespace_label, entity_id_label,
 			repository_label, details_summary
 		FROM recovery_points
@@ -845,6 +857,7 @@ func (s *Store) ListPoints(ctx context.Context, opts recovery.ListPointsOptions)
 		var subjectRID, repoRID sql.NullString
 		var subjectRefRaw, repoRefRaw, detailsRaw sql.NullString
 		var subjectLabel, subjectType sql.NullString
+		var itemType sql.NullString
 		var isWorkload sql.NullInt64
 		var clusterLabel, nodeHostLabel, namespaceLabel, entityIDLabel sql.NullString
 		var repositoryLabel, detailsSummary sql.NullString
@@ -868,6 +881,7 @@ func (s *Store) ListPoints(ctx context.Context, opts recovery.ListPointsOptions)
 			&detailsRaw,
 			&subjectLabel,
 			&subjectType,
+			&itemType,
 			&isWorkload,
 			&clusterLabel,
 			&nodeHostLabel,
@@ -928,6 +942,7 @@ func (s *Store) ListPoints(ctx context.Context, opts recovery.ListPointsOptions)
 		idx := recovery.PointIndex{
 			SubjectLabel:    strings.TrimSpace(subjectLabel.String),
 			SubjectType:     strings.TrimSpace(subjectType.String),
+			ItemType:        strings.TrimSpace(itemType.String),
 			IsWorkload:      isWorkload.Valid && isWorkload.Int64 != 0,
 			ClusterLabel:    strings.TrimSpace(clusterLabel.String),
 			NodeHostLabel:   strings.TrimSpace(nodeHostLabel.String),
@@ -1016,6 +1031,10 @@ func (s *Store) ListRollups(ctx context.Context, opts recovery.ListPointsOptions
 		where = append(where, "namespace_label = ?")
 		args = append(args, strings.TrimSpace(opts.NamespaceLabel))
 	}
+	if strings.TrimSpace(opts.ItemType) != "" {
+		where = append(where, "item_type = ?")
+		args = append(args, strings.TrimSpace(opts.ItemType))
+	}
 	if opts.WorkloadOnly {
 		where = append(where, "is_workload = 1")
 	}
@@ -1039,6 +1058,7 @@ func (s *Store) ListRollups(ctx context.Context, opts recovery.ListPointsOptions
 				LOWER(outcome) LIKE ? OR
 				LOWER(subject_label) LIKE ? OR
 				LOWER(subject_type) LIKE ? OR
+				LOWER(item_type) LIKE ? OR
 				LOWER(cluster_label) LIKE ? OR
 				LOWER(node_host_label) LIKE ? OR
 				LOWER(namespace_label) LIKE ? OR
@@ -1047,7 +1067,7 @@ func (s *Store) ListRollups(ctx context.Context, opts recovery.ListPointsOptions
 				LOWER(details_summary) LIKE ?
 			)
 		`)
-		for i := 0; i < 12; i++ {
+		for i := 0; i < 13; i++ {
 			args = append(args, needle)
 		}
 	}
@@ -1079,6 +1099,7 @@ func (s *Store) ListRollups(ctx context.Context, opts recovery.ListPointsOptions
 				subject_ref_json,
 				subject_label,
 				subject_type,
+				item_type,
 				is_workload,
 				cluster_label,
 				node_host_label,
@@ -1116,6 +1137,7 @@ func (s *Store) ListRollups(ctx context.Context, opts recovery.ListPointsOptions
 				subject_ref_json,
 				subject_label,
 				subject_type,
+				item_type,
 				is_workload,
 				cluster_label,
 				node_host_label,
@@ -1130,6 +1152,7 @@ func (s *Store) ListRollups(ctx context.Context, opts recovery.ListPointsOptions
 					subject_ref_json,
 					subject_label,
 					subject_type,
+					item_type,
 					is_workload,
 					cluster_label,
 					node_host_label,
@@ -1153,6 +1176,7 @@ func (s *Store) ListRollups(ctx context.Context, opts recovery.ListPointsOptions
 			latest.subject_ref_json,
 			latest.subject_label,
 			latest.subject_type,
+			latest.item_type,
 			latest.is_workload,
 			latest.cluster_label,
 			latest.node_host_label,
@@ -1185,6 +1209,7 @@ func (s *Store) ListRollups(ctx context.Context, opts recovery.ListPointsOptions
 		var subjectRefRaw sql.NullString
 		var subjectLabel sql.NullString
 		var subjectType sql.NullString
+		var itemType sql.NullString
 		var isWorkload sql.NullInt64
 		var clusterLabel sql.NullString
 		var nodeHostLabel sql.NullString
@@ -1203,6 +1228,7 @@ func (s *Store) ListRollups(ctx context.Context, opts recovery.ListPointsOptions
 			&subjectRefRaw,
 			&subjectLabel,
 			&subjectType,
+			&itemType,
 			&isWorkload,
 			&clusterLabel,
 			&nodeHostLabel,
@@ -1257,6 +1283,7 @@ func (s *Store) ListRollups(ctx context.Context, opts recovery.ListPointsOptions
 		display := recovery.PointIndex{
 			SubjectLabel:    strings.TrimSpace(subjectLabel.String),
 			SubjectType:     strings.TrimSpace(subjectType.String),
+			ItemType:        strings.TrimSpace(itemType.String),
 			IsWorkload:      isWorkload.Valid && isWorkload.Int64 != 0,
 			ClusterLabel:    strings.TrimSpace(clusterLabel.String),
 			NodeHostLabel:   strings.TrimSpace(nodeHostLabel.String),

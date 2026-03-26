@@ -23,7 +23,7 @@ const rollupsPayload = [
   {
     rollupId: 'res:vm-123',
     subjectResourceId: 'vm-123',
-    display: { subjectType: 'proxmox-vm' },
+    display: { subjectType: 'proxmox-vm', itemType: 'vm' },
     lastAttemptAt: '2026-02-14T10:00:00.000Z',
     lastSuccessAt: '2026-02-14T10:00:00.000Z',
     lastOutcome: 'success',
@@ -32,6 +32,7 @@ const rollupsPayload = [
   {
     rollupId: 'ext:truenas-1',
     subjectRef: { type: 'truenas-dataset', name: 'tank/apps', id: 'tank/apps' },
+    display: { itemType: 'dataset' },
     lastAttemptAt: '2026-02-13T09:00:00.000Z',
     lastSuccessAt: null,
     lastOutcome: 'failed',
@@ -49,6 +50,7 @@ const pointsByRollupId: Record<string, any[]> = {
       outcome: 'success',
       completedAt: '2026-02-14T10:00:00.000Z',
       sizeBytes: 1234,
+      display: { itemType: 'vm', subjectType: 'proxmox-vm' },
     },
   ],
   'ext:truenas-1': [
@@ -60,6 +62,7 @@ const pointsByRollupId: Record<string, any[]> = {
       outcome: 'failed',
       completedAt: '2026-02-13T09:00:00.000Z',
       sizeBytes: 0,
+      display: { itemType: 'dataset', subjectType: 'truenas-dataset' },
     },
   ],
 };
@@ -131,6 +134,7 @@ describe('Recovery', () => {
       clusters: [],
       nodesAgents: [],
       namespaces: [],
+      itemTypes: ['dataset', 'vm'],
       hasSize: true,
       hasVerification: false,
       hasEntityId: false,
@@ -348,6 +352,37 @@ describe('Recovery', () => {
       );
       const hasFacets = urls.some(
         (url) => url.includes('/api/recovery/facets') && url.includes('provider=truenas'),
+      );
+      expect(hasRollups && hasPoints && hasSeries && hasFacets).toBe(true);
+    });
+  });
+
+  it('filters recovery transport by canonical item type', async () => {
+    render(() => <Recovery />);
+
+    expect(await screen.findByText('VM 123')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Item Type'), { target: { value: 'dataset' } });
+
+    await waitFor(() => {
+      expect(navigateSpy).toHaveBeenCalledWith('/recovery?itemType=dataset', { replace: true });
+      expect(screen.queryByText('VM 123')).not.toBeInTheDocument();
+    });
+    expect(screen.getByText('tank/apps')).toBeInTheDocument();
+
+    await waitFor(() => {
+      const urls = apiFetchMock.mock.calls.map((call) => String(call[0] || ''));
+      const hasRollups = urls.some(
+        (url) => url.includes('/api/recovery/rollups') && url.includes('itemType=dataset'),
+      );
+      const hasPoints = urls.some(
+        (url) => url.includes('/api/recovery/points') && url.includes('itemType=dataset'),
+      );
+      const hasSeries = urls.some(
+        (url) => url.includes('/api/recovery/series') && url.includes('itemType=dataset'),
+      );
+      const hasFacets = urls.some(
+        (url) => url.includes('/api/recovery/facets') && url.includes('itemType=dataset'),
       );
       expect(hasRollups && hasPoints && hasSeries && hasFacets).toBe(true);
     });

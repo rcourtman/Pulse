@@ -1,12 +1,10 @@
 import type { ProtectionRollup, RecoveryOutcome, RecoveryPoint } from '@/types/recovery';
-import { getResourceTypePresentation } from '@/utils/resourceTypePresentation';
 import {
-  getWorkloadTypePresentation,
-  normalizeWorkloadTypePresentationKey,
-} from '@/utils/workloadTypePresentation';
+  getRecoveryItemTypeBadgeClass,
+  getRecoveryItemTypeLabel,
+} from '@/utils/recoveryItemTypePresentation';
 import { normalizeRecoveryOutcome } from '@/utils/recoveryOutcomePresentation';
 import type { RecoveryIssueTone } from '@/utils/recoveryIssuePresentation';
-import { titleCaseDelimitedLabel } from '@/utils/textPresentation';
 
 export const STALE_ISSUE_THRESHOLD_MS = 7 * 24 * 60 * 60 * 1000;
 export const AGING_THRESHOLD_MS = 2 * 24 * 60 * 60 * 1000;
@@ -75,70 +73,14 @@ export function getRecoveryArtifactColumnLabel(id: string, fallback?: string): s
   return RECOVERY_ARTIFACT_COLUMN_LABELS[id] || fallback || id;
 }
 
-const normalizeRecoverySubjectTypeKey = (value: string): string =>
-  value
-    .replace(/^k8s-/, '')
-    .replace(/^proxmox-/, '')
-    .replace(/^truenas-/, '');
-
-const normalizeRecoverySubjectWorkloadType = (
-  value: string,
-): Parameters<typeof getWorkloadTypePresentation>[0] => {
-  const normalized = normalizeRecoverySubjectTypeKey(value.trim().toLowerCase());
-  switch (normalized) {
-    case 'lxc':
-    case 'ct':
-    case 'container':
-      return 'system-container';
-    case 'vm-backup':
-      return 'vm';
-    default:
-      return normalized;
-  }
-};
-
-const getRecoverySubjectTypePresentation = (point: RecoveryPoint) => {
-  const raw = String(point.display?.subjectType || point.subjectRef?.type || '')
-    .trim()
-    .toLowerCase();
-  if (!raw) return null;
-
-  const workloadType = normalizeRecoverySubjectWorkloadType(raw);
-  if (normalizeWorkloadTypePresentationKey(workloadType)) {
-    const presentation = getWorkloadTypePresentation(workloadType);
-    return {
-      label: presentation.label,
-      badgeClasses: presentation.className,
-    };
-  }
-
-  const resourcePresentation = getResourceTypePresentation(normalizeRecoverySubjectTypeKey(raw));
-  if (resourcePresentation) return resourcePresentation;
-  return null;
-};
-
 export function getRecoverySubjectTypeBadgeClass(point: RecoveryPoint): string {
-  const presentation = getRecoverySubjectTypePresentation(point);
-  if (presentation) return presentation.badgeClasses;
-  return 'bg-surface-alt text-base-content';
+  return getRecoveryItemTypeBadgeClass(point.display?.itemType || point.display?.subjectType || point.subjectRef?.type);
 }
 
 export function getRecoverySubjectTypeLabel(point: RecoveryPoint): string {
-  const raw = String(point.display?.subjectType || point.subjectRef?.type || '')
-    .trim()
-    .toLowerCase();
-  if (!raw) return '';
-  const presentation = getRecoverySubjectTypePresentation(point);
-  if (presentation) {
-    if (
-      presentation.label === normalizeRecoverySubjectTypeKey(raw) &&
-      presentation.badgeClasses === 'bg-surface-alt text-base-content'
-    ) {
-      return titleCaseDelimitedLabel(normalizeRecoverySubjectTypeKey(raw));
-    }
-    return presentation.label;
-  }
-  return titleCaseDelimitedLabel(normalizeRecoverySubjectTypeKey(raw));
+  return getRecoveryItemTypeLabel(
+    point.display?.itemType || point.display?.subjectType || point.subjectRef?.type,
+  );
 }
 
 export function getRecoveryArtifactColumnHeaderClass(id: string): string {

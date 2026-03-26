@@ -10,6 +10,7 @@ import (
 type PointIndex struct {
 	SubjectLabel    string
 	SubjectType     string
+	ItemType        string
 	IsWorkload      bool
 	ClusterLabel    string
 	NodeHostLabel   string
@@ -55,22 +56,50 @@ func detailsString(p RecoveryPoint, key string) string {
 	return trimString(p.Details[key])
 }
 
+func NormalizeRecoveryItemType(value string) string {
+	t := strings.ToLower(strings.TrimSpace(value))
+	switch t {
+	case "", "all":
+		return ""
+	case "proxmox-vm", "proxmox-vm-backup", "vm", "vm-backup":
+		return "vm"
+	case "proxmox-lxc", "lxc", "ct", "container", "system-container":
+		return "system-container"
+	case "docker-container", "docker", "app-container":
+		return "app-container"
+	case "oci-container":
+		return "oci-container"
+	case "k8s-pod", "pod":
+		return "pod"
+	case "k8s-pvc", "pvc":
+		return "pvc"
+	case "truenas-dataset", "dataset":
+		return "dataset"
+	case "velero-backup":
+		return "velero-backup"
+	case "proxmox-guest", "guest":
+		return "guest"
+	default:
+		if strings.HasPrefix(t, "proxmox-") {
+			return strings.TrimPrefix(t, "proxmox-")
+		}
+		if strings.HasPrefix(t, "truenas-") {
+			return strings.TrimPrefix(t, "truenas-")
+		}
+		if strings.HasPrefix(t, "k8s-") {
+			return strings.TrimPrefix(t, "k8s-")
+		}
+		return t
+	}
+}
+
 func isWorkloadSubjectType(subjectType string) bool {
-	t := strings.ToLower(strings.TrimSpace(subjectType))
-	if t == "" {
+	switch NormalizeRecoveryItemType(subjectType) {
+	case "vm", "system-container", "app-container", "oci-container", "pod", "pvc", "agent":
+		return true
+	default:
 		return false
 	}
-	// Workload subjects (restore points for things you actually run).
-	if strings.Contains(t, "proxmox-vm") || strings.Contains(t, "proxmox-lxc") {
-		return true
-	}
-	if strings.Contains(t, "docker-container") || strings.Contains(t, "container") {
-		return true
-	}
-	if strings.Contains(t, "k8s-pvc") || strings.Contains(t, "k8s-pod") {
-		return true
-	}
-	return false
 }
 
 func subjectLabel(p RecoveryPoint) string {
@@ -319,6 +348,7 @@ func DeriveIndex(p RecoveryPoint) PointIndex {
 	return PointIndex{
 		SubjectLabel:    subjectLabel(p),
 		SubjectType:     subjectType,
+		ItemType:        NormalizeRecoveryItemType(subjectType),
 		IsWorkload:      isWorkload,
 		ClusterLabel:    clusterLabel(p),
 		NodeHostLabel:   nodeHostLabel(p),
@@ -333,6 +363,7 @@ func DeriveIndex(p RecoveryPoint) PointIndex {
 func (idx PointIndex) ToDisplay() *RecoveryPointDisplay {
 	if strings.TrimSpace(idx.SubjectLabel) == "" &&
 		strings.TrimSpace(idx.SubjectType) == "" &&
+		strings.TrimSpace(idx.ItemType) == "" &&
 		strings.TrimSpace(idx.ClusterLabel) == "" &&
 		strings.TrimSpace(idx.NodeHostLabel) == "" &&
 		strings.TrimSpace(idx.NamespaceLabel) == "" &&
@@ -345,6 +376,7 @@ func (idx PointIndex) ToDisplay() *RecoveryPointDisplay {
 	return &RecoveryPointDisplay{
 		SubjectLabel:    idx.SubjectLabel,
 		SubjectType:     idx.SubjectType,
+		ItemType:        idx.ItemType,
 		IsWorkload:      idx.IsWorkload,
 		ClusterLabel:    idx.ClusterLabel,
 		NodeHostLabel:   idx.NodeHostLabel,

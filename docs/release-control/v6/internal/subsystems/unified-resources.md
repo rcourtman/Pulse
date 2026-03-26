@@ -951,6 +951,13 @@ boolean filter encoding for protected-inventory drill-down state. Visible
 recovery toggles such as `stale` must round-trip through the owned `stale=1`
 query form instead of leaking ad hoc truthy strings or disappearing from
 shared links on reload.
+That same route contract now also owns the canonical recovery `itemType`
+query. `/recovery` links must round-trip a provider-neutral item category such
+as `vm`, `dataset`, or `pvc`, and
+`frontend-modern/src/routing/resourceLinks.ts` may canonicalize provider-native
+aliases like `proxmox-vm` into that shared vocabulary during parse/build, but
+recovery route state must not drift back to raw platform-specific
+`subjectType` values in shared navigation.
 Shared API consumers now also depend on a single registry-list snapshot per
 request when deriving canonical type aggregations for resource list and stats
 responses. Re-reading `registry.List()` for the same `/api/resources` request

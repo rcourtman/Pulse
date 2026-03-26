@@ -71,6 +71,7 @@ Own canonical runtime payload shapes between backend and frontend.
 48. `internal/cloudcp/portal/frontend/src/styles.css`
 49. `internal/cloudcp/portal/frontend/tsconfig.json`
 50. `internal/cloudcp/portal/frontend_sync_test.go`
+51. `internal/api/recovery_handlers.go`
 
 ## Shared Boundaries
 
@@ -196,6 +197,7 @@ Own canonical runtime payload shapes between backend and frontend.
 10. Treat Patrol recency as a singular transport-driven fact: once header metadata, verification copy, or the findings footer already present the governed Patrol timing context, frontend summary consumers must not derive an extra timing pill from the same payloads inside the primary summary card
 11. Treat Patrol findings counts as a singular supporting surface as well: when the summary shell already exposes count cards for active findings, warnings, criticals, and fixes, the primary assessment card must not repeat those same payload-derived counts as secondary badges
 12. Treat Patrol schedule and recency as header-owned metadata on the main Patrol page: findings empty-state consumers should not receive or restate `next_patrol_at`, `last_patrol_at`, or interval timing once those transport fields are already presented by the primary header and verification shell
+13. Keep recovery payload filters canonical across `/api/recovery/rollups`, `/api/recovery/points`, `/api/recovery/series`, and `/api/recovery/facets`: when `internal/api/recovery_handlers.go` adds a governed recovery filter or display field such as provider-neutral `itemType`, the same normalized transport must land across all four endpoints and the contract tests must pin both outbound payload shape and accepted query aliases in the same slice
 
 ## Current State
 
@@ -1341,6 +1343,18 @@ filter contract as `/api/recovery/points`, `/api/recovery/series`, and
 verification, and free-text query filters must remain coherent across all four
 recovery endpoints so the recovery UI cannot render mismatched protected-item
 and history views for the same active filter set.
+That same recovery API contract now also includes canonical provider-neutral
+`itemType` transport. `internal/api/recovery_handlers.go` must normalize
+provider-native aliases such as `proxmox-vm` onto the shared recovery item
+type vocabulary before filters reach rollups, points, series, or facets, and
+those same handlers must preserve that normalized shape back out through
+`display.itemType` and facet option payloads instead of forcing frontend
+surfaces to re-derive cross-platform recovery categories from raw
+`subjectType`.
+`internal/api/contract_test.go` is the canonical proof owner for that
+boundary, so route and query compatibility like `itemType` and accepted alias
+inputs such as `type` must be pinned there whenever the shared recovery
+transport shape changes.
 The same rule now also covers optional nested node cluster endpoint collections
 so `frontend-modern/src/api/nodes.ts` does not own its own
 `Array.isArray(node.clusterEndpoints)` response-shape branch.

@@ -83,6 +83,10 @@ func (s *Store) ListPointsSeries(ctx context.Context, opts recovery.ListPointsOp
 		where = append(where, "namespace_label = ?")
 		args = append(args, strings.TrimSpace(opts.NamespaceLabel))
 	}
+	if strings.TrimSpace(opts.ItemType) != "" {
+		where = append(where, "item_type = ?")
+		args = append(args, strings.TrimSpace(opts.ItemType))
+	}
 	if opts.WorkloadOnly {
 		where = append(where, "is_workload = 1")
 	}
@@ -103,6 +107,7 @@ func (s *Store) ListPointsSeries(ctx context.Context, opts recovery.ListPointsOp
 				LOWER(id) LIKE ? OR
 				LOWER(subject_label) LIKE ? OR
 				LOWER(subject_type) LIKE ? OR
+				LOWER(item_type) LIKE ? OR
 				LOWER(cluster_label) LIKE ? OR
 				LOWER(node_host_label) LIKE ? OR
 				LOWER(namespace_label) LIKE ? OR
@@ -111,7 +116,7 @@ func (s *Store) ListPointsSeries(ctx context.Context, opts recovery.ListPointsOp
 				LOWER(details_summary) LIKE ?
 			)
 		`)
-		for i := 0; i < 9; i++ {
+		for i := 0; i < 10; i++ {
 			args = append(args, needle)
 		}
 	}
@@ -266,6 +271,10 @@ func (s *Store) ListPointsFacets(ctx context.Context, opts recovery.ListPointsOp
 		where = append(where, "namespace_label = ?")
 		args = append(args, strings.TrimSpace(opts.NamespaceLabel))
 	}
+	if strings.TrimSpace(opts.ItemType) != "" {
+		where = append(where, "item_type = ?")
+		args = append(args, strings.TrimSpace(opts.ItemType))
+	}
 	if opts.WorkloadOnly {
 		where = append(where, "is_workload = 1")
 	}
@@ -286,6 +295,7 @@ func (s *Store) ListPointsFacets(ctx context.Context, opts recovery.ListPointsOp
 				LOWER(id) LIKE ? OR
 				LOWER(subject_label) LIKE ? OR
 				LOWER(subject_type) LIKE ? OR
+				LOWER(item_type) LIKE ? OR
 				LOWER(cluster_label) LIKE ? OR
 				LOWER(node_host_label) LIKE ? OR
 				LOWER(namespace_label) LIKE ? OR
@@ -294,7 +304,7 @@ func (s *Store) ListPointsFacets(ctx context.Context, opts recovery.ListPointsOp
 				LOWER(details_summary) LIKE ?
 			)
 		`)
-		for i := 0; i < 9; i++ {
+		for i := 0; i < 10; i++ {
 			args = append(args, needle)
 		}
 	}
@@ -339,6 +349,10 @@ func (s *Store) ListPointsFacets(ctx context.Context, opts recovery.ListPointsOp
 
 	var facets recovery.PointsFacets
 	var err1 error
+	facets.ItemTypes, err1 = distinctStrings("item_type")
+	if err1 != nil {
+		return recovery.PointsFacets{}, err1
+	}
 	facets.Clusters, err1 = distinctStrings("cluster_label")
 	if err1 != nil {
 		return recovery.PointsFacets{}, err1

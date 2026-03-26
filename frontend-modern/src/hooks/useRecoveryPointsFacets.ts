@@ -11,6 +11,7 @@ export type RecoveryFacetsQuery = {
   kind?: string | null;
   mode?: string | null;
   outcome?: string | null;
+  itemType?: string | null;
 
   q?: string | null;
   cluster?: string | null;
@@ -32,6 +33,7 @@ const normalizeQuery = (query: RecoveryFacetsQuery | undefined): RecoveryFacetsQ
     kind: norm(q.kind) || null,
     mode: norm(q.mode) || null,
     outcome: norm(q.outcome) || null,
+    itemType: norm(q.itemType) || null,
 
     q: norm(q.q) || null,
     cluster: norm(q.cluster) || null,
@@ -67,6 +69,7 @@ const buildURL = (query: RecoveryFacetsQuery | undefined): string => {
   if (q.kind) params.set('kind', q.kind);
   if (q.mode) params.set('mode', q.mode);
   if (q.outcome) params.set('outcome', q.outcome);
+  if (q.itemType) params.set('itemType', q.itemType);
 
   if (q.q) params.set('q', q.q);
   if (q.cluster) params.set('cluster', q.cluster);
@@ -98,6 +101,7 @@ const normalizeFacetValues = (values: unknown): string[] => {
 
 const normalizeFacets = (facets: RawRecoveryPointsFacets): RecoveryPointsFacets => ({
   ...facets,
+  itemTypes: normalizeFacetValues(facets.itemTypes),
   nodesAgents: normalizeFacetValues(facets.nodesAgents ?? facets.nodesHosts),
 });
 

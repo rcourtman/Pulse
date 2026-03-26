@@ -18,11 +18,13 @@ describe('RecoveryActivitySection', () => {
       <RecoveryActivitySection
         activitySummary={() => ({ totalPoints: 3, activeDays: 2, averagePerDay: 1.5 })}
         activeClusterLabel={() => ''}
+        activeItemTypeLabel={() => ''}
         activeNamespaceLabel={() => ''}
         activeNodeLabel={() => ''}
         chartRangeDays={() => 30}
         clearClusterFilter={() => undefined}
         clearFocusedRollup={() => undefined}
+        clearItemTypeFilter={() => undefined}
         clearNamespaceFilter={() => undefined}
         clearNodeFilter={() => undefined}
         clearSelectedDate={() => undefined}

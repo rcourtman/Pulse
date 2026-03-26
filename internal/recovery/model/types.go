@@ -93,6 +93,7 @@ type RecoveryPoint struct {
 type RecoveryPointDisplay struct {
 	SubjectLabel    string `json:"subjectLabel,omitempty"`
 	SubjectType     string `json:"subjectType,omitempty"`
+	ItemType        string `json:"itemType,omitempty"`
 	IsWorkload      bool   `json:"isWorkload,omitempty"`
 	ClusterLabel    string `json:"clusterLabel,omitempty"`
 	NodeHostLabel   string `json:"nodeHostLabel,omitempty"`
@@ -143,6 +144,9 @@ type ListPointsOptions struct {
 	// Query is a best-effort free-text filter over normalized fields.
 	Query string
 
+	// ItemType filters points to the canonical recovery item classification.
+	ItemType string
+
 	// Normalized filters derived from the recovery point index.
 	ClusterLabel   string
 	NodeHostLabel  string
@@ -173,6 +177,7 @@ type PointsFacets struct {
 	Clusters   []string `json:"clusters,omitempty"`
 	NodesHosts []string `json:"nodesHosts,omitempty"`
 	Namespaces []string `json:"namespaces,omitempty"`
+	ItemTypes  []string `json:"itemTypes,omitempty"`
 
 	HasSize         bool `json:"hasSize,omitempty"`
 	HasVerification bool `json:"hasVerification,omitempty"`

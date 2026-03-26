@@ -114,4 +114,19 @@ func TestStore_ListSeriesAndFacets(t *testing.T) {
 	if len(facets.NodesHosts) == 0 || facets.NodesHosts[0] != "truenas-1" {
 		t.Fatalf("facets.NodesHosts = %#v, want truenas-1", facets.NodesHosts)
 	}
+	if len(facets.ItemTypes) != 2 || facets.ItemTypes[0] != "dataset" || facets.ItemTypes[1] != "pvc" {
+		t.Fatalf("facets.ItemTypes = %#v, want [dataset pvc]", facets.ItemTypes)
+	}
+
+	pvcOnly, err := store.ListPointsSeries(context.Background(), recovery.ListPointsOptions{
+		From:     &from,
+		To:       &to,
+		ItemType: "pvc",
+	}, 0)
+	if err != nil {
+		t.Fatalf("ListPointsSeries(itemType) error = %v", err)
+	}
+	if len(pvcOnly) != 2 || pvcOnly[0].Total != 1 || pvcOnly[1].Total != 0 {
+		t.Fatalf("ListPointsSeries(itemType) = %#v, want only pvc activity on first day", pvcOnly)
+	}
 }

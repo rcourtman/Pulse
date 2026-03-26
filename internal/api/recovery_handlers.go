@@ -108,6 +108,7 @@ func (h *RecoveryHandlers) HandleListPoints(w http.ResponseWriter, r *http.Reque
 		Kind:              recovery.Kind(strings.TrimSpace(qs.Get("kind"))),
 		Mode:              recovery.Mode(strings.TrimSpace(qs.Get("mode"))),
 		Outcome:           recovery.Outcome(strings.TrimSpace(qs.Get("outcome"))),
+		ItemType:          recovery.NormalizeRecoveryItemType(firstNonEmpty(qs.Get("itemType"), qs.Get("type"))),
 		SubjectResourceID: strings.TrimSpace(qs.Get("subjectResourceId")),
 		RollupID:          strings.TrimSpace(qs.Get("rollupId")),
 		From:              from,
@@ -221,6 +222,7 @@ func (h *RecoveryHandlers) HandleListSeries(w http.ResponseWriter, r *http.Reque
 		Kind:              recovery.Kind(strings.TrimSpace(qs.Get("kind"))),
 		Mode:              recovery.Mode(strings.TrimSpace(qs.Get("mode"))),
 		Outcome:           recovery.Outcome(strings.TrimSpace(qs.Get("outcome"))),
+		ItemType:          recovery.NormalizeRecoveryItemType(firstNonEmpty(qs.Get("itemType"), qs.Get("type"))),
 		SubjectResourceID: strings.TrimSpace(qs.Get("subjectResourceId")),
 		RollupID:          strings.TrimSpace(qs.Get("rollupId")),
 		From:              from,
@@ -286,6 +288,7 @@ func (h *RecoveryHandlers) HandleListFacets(w http.ResponseWriter, r *http.Reque
 		Kind:              recovery.Kind(strings.TrimSpace(qs.Get("kind"))),
 		Mode:              recovery.Mode(strings.TrimSpace(qs.Get("mode"))),
 		Outcome:           recovery.Outcome(strings.TrimSpace(qs.Get("outcome"))),
+		ItemType:          recovery.NormalizeRecoveryItemType(firstNonEmpty(qs.Get("itemType"), qs.Get("type"))),
 		SubjectResourceID: strings.TrimSpace(qs.Get("subjectResourceId")),
 		RollupID:          strings.TrimSpace(qs.Get("rollupId")),
 		From:              from,
@@ -337,6 +340,7 @@ func filterRecoveryPoints(all []recovery.RecoveryPoint, opts recovery.ListPoints
 	cluster := strings.TrimSpace(opts.ClusterLabel)
 	node := strings.TrimSpace(opts.NodeHostLabel)
 	namespace := strings.TrimSpace(opts.NamespaceLabel)
+	itemType := recovery.NormalizeRecoveryItemType(opts.ItemType)
 	q := strings.ToLower(strings.TrimSpace(opts.Query))
 	workloadOnly := opts.WorkloadOnly
 	verification := strings.ToLower(strings.TrimSpace(opts.Verification))
@@ -394,6 +398,9 @@ func filterRecoveryPoints(all []recovery.RecoveryPoint, opts recovery.ListPoints
 		if namespace != "" && strings.TrimSpace(getDisplayNamespaceLabel(p.Display)) != namespace {
 			continue
 		}
+		if itemType != "" && strings.TrimSpace(getDisplayItemType(p.Display)) != itemType {
+			continue
+		}
 		if workloadOnly && !(disp != nil && disp.IsWorkload) {
 			continue
 		}
@@ -416,10 +423,11 @@ func filterRecoveryPoints(all []recovery.RecoveryPoint, opts recovery.ListPoints
 		}
 		if q != "" {
 			// Best-effort match across normalized display fields.
-			var subjectLabel, subjectType, clusterLabel, nodeLabel, nsLabel, entityID, repoLabel, detailSummary string
+			var subjectLabel, subjectType, itemTypeLabel, clusterLabel, nodeLabel, nsLabel, entityID, repoLabel, detailSummary string
 			if disp != nil {
 				subjectLabel = disp.SubjectLabel
 				subjectType = disp.SubjectType
+				itemTypeLabel = disp.ItemType
 				clusterLabel = disp.ClusterLabel
 				nodeLabel = disp.NodeHostLabel
 				nsLabel = disp.NamespaceLabel
@@ -436,6 +444,7 @@ func filterRecoveryPoints(all []recovery.RecoveryPoint, opts recovery.ListPoints
 				strings.TrimSpace(string(p.Outcome)),
 				strings.TrimSpace(subjectLabel),
 				strings.TrimSpace(subjectType),
+				strings.TrimSpace(itemTypeLabel),
 				strings.TrimSpace(clusterLabel),
 				strings.TrimSpace(nodeLabel),
 				strings.TrimSpace(nsLabel),
@@ -472,6 +481,16 @@ func getDisplayNamespaceLabel(d *recovery.RecoveryPointDisplay) string {
 		return ""
 	}
 	return d.NamespaceLabel
+}
+
+func getDisplayItemType(d *recovery.RecoveryPointDisplay) string {
+	if d == nil {
+		return ""
+	}
+	if v := recovery.NormalizeRecoveryItemType(d.ItemType); v != "" {
+		return v
+	}
+	return recovery.NormalizeRecoveryItemType(d.SubjectType)
 }
 
 func paginateRecoveryPoints(filtered []recovery.RecoveryPoint, page int, limit int) []recovery.RecoveryPoint {
@@ -531,6 +550,7 @@ func (h *RecoveryHandlers) HandleListRollups(w http.ResponseWriter, r *http.Requ
 		Kind:              recovery.Kind(strings.TrimSpace(qs.Get("kind"))),
 		Mode:              recovery.Mode(strings.TrimSpace(qs.Get("mode"))),
 		Outcome:           recovery.Outcome(strings.TrimSpace(qs.Get("outcome"))),
+		ItemType:          recovery.NormalizeRecoveryItemType(firstNonEmpty(qs.Get("itemType"), qs.Get("type"))),
 		SubjectResourceID: strings.TrimSpace(qs.Get("subjectResourceId")),
 		RollupID:          strings.TrimSpace(qs.Get("rollupId")),
 		From:              from,
@@ -607,6 +627,7 @@ func filterRecoveryPointsForRollups(all []recovery.RecoveryPoint, opts recovery.
 	cluster := strings.TrimSpace(opts.ClusterLabel)
 	node := strings.TrimSpace(opts.NodeHostLabel)
 	namespace := strings.TrimSpace(opts.NamespaceLabel)
+	itemType := recovery.NormalizeRecoveryItemType(opts.ItemType)
 	q := strings.ToLower(strings.TrimSpace(opts.Query))
 	workloadOnly := opts.WorkloadOnly
 	verification := strings.ToLower(strings.TrimSpace(opts.Verification))
@@ -658,6 +679,9 @@ func filterRecoveryPointsForRollups(all []recovery.RecoveryPoint, opts recovery.
 		if namespace != "" && strings.TrimSpace(getDisplayNamespaceLabel(disp)) != namespace {
 			continue
 		}
+		if itemType != "" && strings.TrimSpace(getDisplayItemType(disp)) != itemType {
+			continue
+		}
 		if workloadOnly && !(disp != nil && disp.IsWorkload) {
 			continue
 		}
@@ -679,10 +703,11 @@ func filterRecoveryPointsForRollups(all []recovery.RecoveryPoint, opts recovery.
 			}
 		}
 		if q != "" {
-			var subjectLabel, subjectType, clusterLabel, nodeLabel, nsLabel, entityID, repoLabel, detailSummary string
+			var subjectLabel, subjectType, itemTypeLabel, clusterLabel, nodeLabel, nsLabel, entityID, repoLabel, detailSummary string
 			if disp != nil {
 				subjectLabel = disp.SubjectLabel
 				subjectType = disp.SubjectType
+				itemTypeLabel = disp.ItemType
 				clusterLabel = disp.ClusterLabel
 				nodeLabel = disp.NodeHostLabel
 				nsLabel = disp.NamespaceLabel
@@ -697,6 +722,7 @@ func filterRecoveryPointsForRollups(all []recovery.RecoveryPoint, opts recovery.
 				strings.TrimSpace(string(p.Outcome)),
 				strings.TrimSpace(subjectLabel),
 				strings.TrimSpace(subjectType),
+				strings.TrimSpace(itemTypeLabel),
 				strings.TrimSpace(clusterLabel),
 				strings.TrimSpace(nodeLabel),
 				strings.TrimSpace(nsLabel),
@@ -830,6 +856,7 @@ func buildFacetsFromPoints(points []recovery.RecoveryPoint) recovery.PointsFacet
 	clusters := map[string]struct{}{}
 	nodes := map[string]struct{}{}
 	namespaces := map[string]struct{}{}
+	itemTypes := map[string]struct{}{}
 
 	var hasSize bool
 	var hasVerification bool
@@ -849,6 +876,9 @@ func buildFacetsFromPoints(points []recovery.RecoveryPoint) recovery.PointsFacet
 			}
 			if v := strings.TrimSpace(p.Display.NamespaceLabel); v != "" {
 				namespaces[v] = struct{}{}
+			}
+			if v := getDisplayItemType(p.Display); v != "" {
+				itemTypes[v] = struct{}{}
 			}
 			if v := strings.TrimSpace(p.Display.EntityIDLabel); v != "" {
 				hasEntityID = true
@@ -872,6 +902,7 @@ func buildFacetsFromPoints(points []recovery.RecoveryPoint) recovery.PointsFacet
 	}
 
 	return recovery.PointsFacets{
+		ItemTypes:       toSorted(itemTypes),
 		Clusters:        toSorted(clusters),
 		NodesHosts:      toSorted(nodes),
 		Namespaces:      toSorted(namespaces),

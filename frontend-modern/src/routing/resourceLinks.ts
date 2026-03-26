@@ -1,5 +1,6 @@
 import { normalizeSourcePlatformQueryValue } from '@/utils/sourcePlatforms';
 import { normalizeStorageSourceKey } from '@/utils/storageSources';
+import { normalizeRecoveryItemTypeQueryValue } from '@/utils/recoveryItemTypePresentation';
 import {
   canonicalizeWorkloadFilterType,
   resolveWorkloadType,
@@ -54,6 +55,7 @@ export const RECOVERY_QUERY_PARAMS = {
   day: 'day',
   namespace: 'namespace',
   mode: 'mode',
+  itemType: 'itemType',
   scope: 'scope',
   status: 'status',
   verification: 'verification',
@@ -118,6 +120,7 @@ type RecoveryLinkOptions = {
   day?: string | null;
   namespace?: string | null;
   mode?: string | null;
+  itemType?: string | null;
   scope?: string | null;
   status?: string | null;
   verification?: string | null;
@@ -262,6 +265,7 @@ export const parseRecoveryLinkSearch = (search: string) => {
     day: normalizeQueryValue(params.get(RECOVERY_QUERY_PARAMS.day)),
     namespace: normalizeQueryValue(params.get(RECOVERY_QUERY_PARAMS.namespace)),
     mode: normalizeQueryValue(params.get(RECOVERY_QUERY_PARAMS.mode)),
+    itemType: normalizeRecoveryItemTypeQueryValue(params.get(RECOVERY_QUERY_PARAMS.itemType)),
     scope: normalizeQueryValue(params.get(RECOVERY_QUERY_PARAMS.scope)),
     status: normalizeQueryValue(params.get(RECOVERY_QUERY_PARAMS.status)),
     verification: normalizeQueryValue(params.get(RECOVERY_QUERY_PARAMS.verification)),
@@ -281,6 +285,7 @@ export const buildRecoveryPath = (options: RecoveryLinkOptions = {}): string => 
   const day = normalizeQueryValue(options.day);
   const namespace = normalizeQueryValue(options.namespace);
   const mode = normalizeQueryValue(options.mode);
+  const itemType = normalizeRecoveryItemTypeQueryValue(options.itemType);
   const scope = normalizeQueryValue(options.scope);
   const status = normalizeQueryValue(options.status);
   const verification = normalizeQueryValue(options.verification);
@@ -296,6 +301,7 @@ export const buildRecoveryPath = (options: RecoveryLinkOptions = {}): string => 
   if (day) params.set(RECOVERY_QUERY_PARAMS.day, day);
   if (namespace) params.set(RECOVERY_QUERY_PARAMS.namespace, namespace);
   if (mode) params.set(RECOVERY_QUERY_PARAMS.mode, mode);
+  if (itemType) params.set(RECOVERY_QUERY_PARAMS.itemType, itemType);
   if (scope) params.set(RECOVERY_QUERY_PARAMS.scope, scope);
   if (status) params.set(RECOVERY_QUERY_PARAMS.status, status);
   if (verification) params.set(RECOVERY_QUERY_PARAMS.verification, verification);

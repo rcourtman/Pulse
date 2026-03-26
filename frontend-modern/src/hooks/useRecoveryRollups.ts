@@ -13,6 +13,7 @@ export type RecoveryRollupsQuery = {
   kind?: string | null;
   mode?: string | null;
   outcome?: string | null;
+  itemType?: string | null;
   subjectResourceId?: string | null;
   q?: string | null;
   cluster?: string | null;
@@ -33,6 +34,7 @@ const normalizeQuery = (query: RecoveryRollupsQuery | undefined): RecoveryRollup
     kind: norm(q.kind) || null,
     mode: norm(q.mode) || null,
     outcome: norm(q.outcome) || null,
+    itemType: norm(q.itemType) || null,
     subjectResourceId: norm(q.subjectResourceId) || null,
     q: norm(q.q) || null,
     cluster: norm(q.cluster) || null,
@@ -68,6 +70,7 @@ const buildURL = (page: number, limit: number, query: RecoveryRollupsQuery | und
   if (q.kind) params.set('kind', q.kind);
   if (q.mode) params.set('mode', q.mode);
   if (q.outcome) params.set('outcome', q.outcome);
+  if (q.itemType) params.set('itemType', q.itemType);
   if (q.subjectResourceId) params.set('subjectResourceId', q.subjectResourceId);
   if (q.q) params.set('q', q.q);
   if (q.cluster) params.set('cluster', q.cluster);

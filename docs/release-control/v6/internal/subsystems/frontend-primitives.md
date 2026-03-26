@@ -660,6 +660,13 @@ protected-items versus recovery-events workspace switch. The recovery lane may
 own the active view and route-state semantics, but the top-level tab framing
 must stay on the canonical shared subtabs control instead of reviving a
 recovery-local switcher pattern.
+That same recovery shell boundary now also owns one canonical top-level filter
+controller in
+`frontend-modern/src/features/recovery/useRecoverySurfaceState.ts`. Route-backed
+recovery filters such as the provider-neutral `itemType` selector must be
+derived, normalized, and fanned out to inventory, history, activity, facets,
+and series consumers from that shared state owner rather than being recreated
+as page-local toolbar state inside individual recovery sections.
 `frontend-modern/src/utils/problemResourcePresentation.ts` now also belongs to
 that same dashboard overview boundary so the problem-resource severity contract
 stays shared with `ProblemResourcesTable.tsx` instead of floating as an

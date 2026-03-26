@@ -18,6 +18,7 @@ func TestDeriveIndex(t *testing.T) {
 			expected: PointIndex{
 				SubjectLabel:  "",
 				SubjectType:   "",
+				ItemType:      "",
 				IsWorkload:    false,
 				ClusterLabel:  "",
 				NodeHostLabel: "",
@@ -43,6 +44,7 @@ func TestDeriveIndex(t *testing.T) {
 			expected: PointIndex{
 				SubjectLabel:    "web-server",
 				SubjectType:     "proxmox-vm",
+				ItemType:        "vm",
 				IsWorkload:      true,
 				ClusterLabel:    "pve-cluster",
 				NodeHostLabel:   "pve1",
@@ -69,6 +71,7 @@ func TestDeriveIndex(t *testing.T) {
 			expected: PointIndex{
 				SubjectLabel:    "database",
 				SubjectType:     "proxmox-lxc",
+				ItemType:        "system-container",
 				IsWorkload:      true,
 				ClusterLabel:    "prod-cluster",
 				NodeHostLabel:   "pve2",
@@ -96,6 +99,7 @@ func TestDeriveIndex(t *testing.T) {
 			expected: PointIndex{
 				SubjectLabel:    "production/data-volume",
 				SubjectType:     "k8s-pvc",
+				ItemType:        "pvc",
 				IsWorkload:      true,
 				ClusterLabel:    "prod-eks",
 				NodeHostLabel:   "",
@@ -126,6 +130,7 @@ func TestDeriveIndex(t *testing.T) {
 			expected: PointIndex{
 				SubjectLabel:    "vm-100",
 				SubjectType:     "proxmox-vm-backup",
+				ItemType:        "vm",
 				IsWorkload:      true,
 				ClusterLabel:    "",
 				NodeHostLabel:   "",
@@ -153,6 +158,7 @@ func TestDeriveIndex(t *testing.T) {
 			expected: PointIndex{
 				SubjectLabel:    "pool/data",
 				SubjectType:     "truenas-dataset",
+				ItemType:        "dataset",
 				IsWorkload:      false,
 				ClusterLabel:    "truenas-01",
 				NodeHostLabel:   "truenas-01",
@@ -178,6 +184,7 @@ func TestDeriveIndex(t *testing.T) {
 			expected: PointIndex{
 				SubjectLabel:    "nginx",
 				SubjectType:     "docker-container",
+				ItemType:        "app-container",
 				IsWorkload:      true,
 				ClusterLabel:    "",
 				NodeHostLabel:   "docker-host-1",
@@ -203,6 +210,7 @@ func TestDeriveIndex(t *testing.T) {
 			expected: PointIndex{
 				SubjectLabel:    "web-pod-0",
 				SubjectType:     "k8s-pod",
+				ItemType:        "pod",
 				IsWorkload:      true,
 				ClusterLabel:    "",
 				NodeHostLabel:   "",
@@ -228,6 +236,7 @@ func TestDeriveIndex(t *testing.T) {
 			expected: PointIndex{
 				SubjectLabel:    "velero-backup-1",
 				SubjectType:     "velero-backup",
+				ItemType:        "velero-backup",
 				IsWorkload:      false,
 				ClusterLabel:    "",
 				NodeHostLabel:   "",
@@ -247,6 +256,7 @@ func TestDeriveIndex(t *testing.T) {
 			expected: PointIndex{
 				SubjectLabel:    "unified-resource-abc",
 				SubjectType:     "",
+				ItemType:        "",
 				IsWorkload:      true,
 				ClusterLabel:    "",
 				NodeHostLabel:   "",
@@ -266,6 +276,9 @@ func TestDeriveIndex(t *testing.T) {
 			}
 			if result.SubjectType != tc.expected.SubjectType {
 				t.Errorf("SubjectType = %q, want %q", result.SubjectType, tc.expected.SubjectType)
+			}
+			if result.ItemType != tc.expected.ItemType {
+				t.Errorf("ItemType = %q, want %q", result.ItemType, tc.expected.ItemType)
 			}
 			if result.IsWorkload != tc.expected.IsWorkload {
 				t.Errorf("IsWorkload = %v, want %v", result.IsWorkload, tc.expected.IsWorkload)
@@ -317,6 +330,7 @@ func TestPointIndex_ToDisplay(t *testing.T) {
 			index: PointIndex{
 				SubjectLabel:    "web-server",
 				SubjectType:     "proxmox-vm",
+				ItemType:        "vm",
 				IsWorkload:      true,
 				ClusterLabel:    "pve-cluster",
 				NodeHostLabel:   "pve1",
@@ -328,6 +342,7 @@ func TestPointIndex_ToDisplay(t *testing.T) {
 			expected: &RecoveryPointDisplay{
 				SubjectLabel:    "web-server",
 				SubjectType:     "proxmox-vm",
+				ItemType:        "vm",
 				IsWorkload:      true,
 				ClusterLabel:    "pve-cluster",
 				NodeHostLabel:   "pve1",
@@ -368,6 +383,9 @@ func TestPointIndex_ToDisplay(t *testing.T) {
 			}
 			if result.SubjectType != tc.expected.SubjectType {
 				t.Errorf("SubjectType = %q, want %q", result.SubjectType, tc.expected.SubjectType)
+			}
+			if result.ItemType != tc.expected.ItemType {
+				t.Errorf("ItemType = %q, want %q", result.ItemType, tc.expected.ItemType)
 			}
 			if result.IsWorkload != tc.expected.IsWorkload {
 				t.Errorf("IsWorkload = %v, want %v", result.IsWorkload, tc.expected.IsWorkload)
@@ -854,6 +872,7 @@ func TestBuildRollupsFromPoints_PreservesLatestDisplayLabels(t *testing.T) {
 			Display: &RecoveryPointDisplay{
 				SubjectLabel: "Old Label",
 				SubjectType:  "proxmox-vm",
+				ItemType:     "vm",
 			},
 		},
 		{
@@ -866,6 +885,7 @@ func TestBuildRollupsFromPoints_PreservesLatestDisplayLabels(t *testing.T) {
 			Display: &RecoveryPointDisplay{
 				SubjectLabel: "Current Label",
 				SubjectType:  "proxmox-vm",
+				ItemType:     "vm",
 				IsWorkload:   true,
 			},
 		},
@@ -883,6 +903,9 @@ func TestBuildRollupsFromPoints_PreservesLatestDisplayLabels(t *testing.T) {
 	}
 	if got := rollups[0].Display.SubjectType; got != "proxmox-vm" {
 		t.Fatalf("Display.SubjectType = %q, want %q", got, "proxmox-vm")
+	}
+	if got := rollups[0].Display.ItemType; got != "vm" {
+		t.Fatalf("Display.ItemType = %q, want %q", got, "vm")
 	}
 	if !rollups[0].Display.IsWorkload {
 		t.Fatal("expected rollup display workload marker to be preserved")
