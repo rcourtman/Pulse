@@ -213,6 +213,79 @@ func TestRecoveryRollupsEndpointToleratesMalformedPersistedMetadata(t *testing.T
 	}
 }
 
+func TestRecoveryPointsEndpointToleratesMalformedPersistedMetadata(t *testing.T) {
+	srv := newIntegrationServerWithoutMock(t, nil)
+
+	dbPath := seedRecoveryPointForIntegration(t, srv.config, recovery.RecoveryPoint{
+		ID:          "router-point-bad-json",
+		Provider:    recovery.ProviderKubernetes,
+		Kind:        recovery.KindSnapshot,
+		Mode:        recovery.ModeSnapshot,
+		Outcome:     recovery.OutcomeSuccess,
+		StartedAt:   timePtrIntegration(time.Date(2026, 2, 23, 12, 0, 0, 0, time.UTC)),
+		CompletedAt: timePtrIntegration(time.Date(2026, 2, 23, 12, 0, 0, 0, time.UTC)),
+		SubjectRef: &recovery.ExternalRef{
+			Type:      "k8s-pvc",
+			Namespace: "default",
+			Name:      "data",
+		},
+		RepositoryRef: &recovery.ExternalRef{
+			Type: "velero-backup-storage-location",
+			Name: "repo-a",
+		},
+		Details: map[string]any{"foo": "bar"},
+	})
+	corruptRecoveryIntegrationRowJSON(t, dbPath, "router-point-bad-json", true, true, true)
+
+	res, err := http.Get(srv.server.URL + "/api/recovery/points?limit=500")
+	if err != nil {
+		t.Fatalf("points request failed: %v", err)
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(res.Body)
+		t.Fatalf("unexpected status: got %d want %d, body=%s", res.StatusCode, http.StatusOK, string(body))
+	}
+
+	var payload struct {
+		Data []struct {
+			ID            string         `json:"id"`
+			ItemRef       map[string]any `json:"itemRef"`
+			SubjectRef    map[string]any `json:"subjectRef"`
+			RepositoryRef map[string]any `json:"repositoryRef"`
+			Details       map[string]any `json:"details"`
+			Display       struct {
+				SubjectLabel string `json:"subjectLabel"`
+				ItemType     string `json:"itemType"`
+			} `json:"display"`
+		} `json:"data"`
+	}
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		t.Fatalf("read points response: %v", err)
+	}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		t.Fatalf("unmarshal points response: %v", err)
+	}
+	if len(payload.Data) != 1 {
+		t.Fatalf("expected exactly 1 point, got %d body=%s", len(payload.Data), string(body))
+	}
+	point := payload.Data[0]
+	if point.ID != "router-point-bad-json" {
+		t.Fatalf("id = %q, want %q", point.ID, "router-point-bad-json")
+	}
+	if point.ItemRef != nil || point.SubjectRef != nil || point.RepositoryRef != nil || point.Details != nil {
+		t.Fatalf("expected malformed metadata fields to be omitted, got itemRef=%#v subjectRef=%#v repositoryRef=%#v details=%#v", point.ItemRef, point.SubjectRef, point.RepositoryRef, point.Details)
+	}
+	if point.Display.SubjectLabel != "default/data" {
+		t.Fatalf("display.subjectLabel = %q, want %q", point.Display.SubjectLabel, "default/data")
+	}
+	if point.Display.ItemType != "pvc" {
+		t.Fatalf("display.itemType = %q, want %q", point.Display.ItemType, "pvc")
+	}
+}
+
 func seedRecoveryPointForIntegration(t *testing.T, cfg *config.Config, point recovery.RecoveryPoint) string {
 	t.Helper()
 
