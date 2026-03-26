@@ -508,3 +508,9 @@ identifiers and metric names passed back into `Query`, `QueryAll`, and
 case-polluted callers cannot manufacture false "missing metrics" results,
 split one governed metric stream into mixed-case query buckets, or trigger
 redundant batch work against otherwise valid stored samples.
+The downsampled `QueryAllBatch` path is a protected metrics-store hot path.
+When callers request grouped batch data, the contract is ordered timestamps
+within each `resource_id + metric_type` series, not a globally SQL-sorted row
+stream. The store must preserve that per-series ordering without paying for an
+extra SQLite global sort on the grouped query path, and regressions on that
+tail-latency boundary must be caught by `pkg/metrics/store_slo_test.go`.

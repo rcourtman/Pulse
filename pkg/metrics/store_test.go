@@ -565,6 +565,39 @@ func TestQueryAllBatch(t *testing.T) {
 		}
 	})
 
+	t.Run("downsampled results stay ordered per metric series", func(t *testing.T) {
+		downsampledStoreDir := t.TempDir()
+		downsampledCfg := DefaultConfig(downsampledStoreDir)
+		downsampledCfg.DBPath = filepath.Join(downsampledStoreDir, "metrics-batch-downsampled.db")
+		downsampledCfg.FlushInterval = time.Hour
+
+		downsampledStore, err := NewStore(downsampledCfg)
+		if err != nil {
+			t.Fatalf("NewStore(downsampled): %v", err)
+		}
+		defer downsampledStore.Close()
+
+		base := time.Unix(10_000, 0)
+		downsampledStore.writeBatch([]bufferedMetric{
+			{resourceType: "disk", resourceID: "disk-ordered", metricType: "smart_temp", value: 33, timestamp: base.Add(130 * time.Second), tier: TierRaw},
+			{resourceType: "disk", resourceID: "disk-ordered", metricType: "smart_temp", value: 31, timestamp: base.Add(10 * time.Second), tier: TierRaw},
+			{resourceType: "disk", resourceID: "disk-ordered", metricType: "smart_temp", value: 32, timestamp: base.Add(70 * time.Second), tier: TierRaw},
+		})
+
+		batch, err := downsampledStore.QueryAllBatch("disk", []string{"disk-ordered"}, base, base.Add(3*time.Minute), 60)
+		if err != nil {
+			t.Fatalf("QueryAllBatch(downsampled): %v", err)
+		}
+
+		points := batch["disk-ordered"]["smart_temp"]
+		if len(points) != 3 {
+			t.Fatalf("expected 3 bucketed points, got %d", len(points))
+		}
+		if !points[0].Timestamp.Before(points[1].Timestamp) || !points[1].Timestamp.Before(points[2].Timestamp) {
+			t.Fatalf("expected ascending timestamps, got %+v", points)
+		}
+	})
+
 	t.Run("chunked resource lists return complete results beyond sqlite parameter threshold", func(t *testing.T) {
 		chunkedStoreDir := t.TempDir()
 		chunkedCfg := DefaultConfig(chunkedStoreDir)
