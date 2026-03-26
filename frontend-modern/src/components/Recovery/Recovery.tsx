@@ -39,7 +39,7 @@ import {
   STALE_ISSUE_THRESHOLD_MS,
 } from '@/utils/recoveryTablePresentation';
 import { getRecoveryTimelineLabelEvery } from '@/utils/recoveryTimelineChartPresentation';
-import { createHiddenCanonicalTypeColumn } from '@/utils/typeColumnDefinition';
+import { createVisibleCanonicalTypeColumn } from '@/utils/typeColumnDefinition';
 
 const MOBILE_RECOVERY_COLUMNS = new Set(['time', 'subject', 'outcome']);
 type RecoveryWorkspaceView = 'inventory' | 'events';
@@ -291,7 +291,7 @@ const Recovery: Component = () => {
 
   const artifactColumns: ColumnDef[] = [
     { id: 'time', label: 'Time' },
-    createHiddenCanonicalTypeColumn(),
+    { ...createVisibleCanonicalTypeColumn(), label: getRecoveryArtifactColumnLabel('type', 'Type') },
     { id: 'subject', label: getRecoveryArtifactColumnLabel('subject', 'Subject') },
     { id: 'entityId', label: 'ID', toggleable: true },
     { id: 'cluster', label: 'Cluster', toggleable: true },

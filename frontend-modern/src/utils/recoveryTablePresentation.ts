@@ -20,13 +20,14 @@ export const RECOVERY_PROTECTED_SEARCH_PLACEHOLDER = 'Search protected items...'
 export const RECOVERY_HISTORY_SEARCH_PLACEHOLDER = 'Search recovery history...';
 export const RECOVERY_SEARCH_HISTORY_EMPTY_MESSAGE = 'Recent searches appear here.';
 export const RECOVERY_ARTIFACT_COLUMN_LABELS: Record<string, string> = {
+  type: 'Item Type',
   subject: 'Item',
   source: 'Platform',
 };
 
 const RECOVERY_ARTIFACT_COLUMN_SPECS: Record<string, { headerClass: string; minWidthPx: number }> = {
   time: { headerClass: 'w-[76px] text-right', minWidthPx: 76 },
-  type: { headerClass: 'w-[72px] text-center', minWidthPx: 72 },
+  type: { headerClass: 'w-[96px] text-center', minWidthPx: 96 },
   subject: { headerClass: 'w-[248px]', minWidthPx: 248 },
   entityId: { headerClass: 'w-[84px]', minWidthPx: 84 },
   cluster: { headerClass: 'w-[120px]', minWidthPx: 120 },

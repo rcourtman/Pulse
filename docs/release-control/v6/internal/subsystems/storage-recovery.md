@@ -350,6 +350,11 @@ first-class column in the main inventory grid rather than leaving platform as
 the only structural classifier beside the item label. Platform badges remain
 important supporting operator context, especially for Proxmox-heavy fleets,
 but the table frame itself must make protected item class explicit.
+The same owned vocabulary applies to recovery events as well:
+`frontend-modern/src/utils/recoveryTablePresentation.ts` must keep the
+history-table `type` column labeled as `Item Type` within recovery surfaces so
+event history does not fall back to a generic shared `Type` header once the
+recovery lane has already established item-first operator vocabulary.
 The recovery table presentation helper now owns the canonical subject-type
 label fallback for recovery rows and delegates its title-casing to the shared
 `frontend-modern/src/utils/textPresentation.ts` helper rather than keeping a

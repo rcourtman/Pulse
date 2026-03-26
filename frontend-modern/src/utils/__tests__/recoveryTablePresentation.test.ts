@@ -40,8 +40,10 @@ describe('recoveryTablePresentation', () => {
     expect(getRecoveryProtectedSearchPlaceholder()).toBe('Search protected items...');
     expect(getRecoveryHistorySearchPlaceholder()).toBe('Search recovery history...');
     expect(getRecoverySearchHistoryEmptyMessage()).toBe('Recent searches appear here.');
+    expect(RECOVERY_ARTIFACT_COLUMN_LABELS.type).toBe('Item Type');
     expect(RECOVERY_ARTIFACT_COLUMN_LABELS.subject).toBe('Item');
     expect(RECOVERY_ARTIFACT_COLUMN_LABELS.source).toBe('Platform');
+    expect(getRecoveryArtifactColumnLabel('type', 'Type')).toBe('Item Type');
     expect(getRecoveryArtifactColumnLabel('subject', 'Subject')).toBe('Item');
     expect(getRecoveryArtifactColumnLabel('source', 'Source')).toBe('Platform');
     expect(getRecoveryArtifactColumnLabel('outcome', 'Outcome')).toBe('Outcome');
@@ -97,7 +99,7 @@ describe('recoveryTablePresentation', () => {
 
   it('derives artifact header and row classes', () => {
     expect(getRecoveryArtifactColumnHeaderClass('time')).toContain('text-right');
-    expect(getRecoveryArtifactColumnHeaderClass('type')).toContain('w-[72px]');
+    expect(getRecoveryArtifactColumnHeaderClass('type')).toContain('w-[96px]');
     expect(getRecoveryArtifactColumnHeaderClass('subject')).toContain('w-[248px]');
     expect(getRecoveryArtifactTableMinWidth(['time', 'subject', 'outcome'])).toBe('980px');
     expect(
@@ -113,7 +115,7 @@ describe('recoveryTablePresentation', () => {
         'details',
         'outcome',
       ]),
-    ).toBe('1174px');
+    ).toBe('1198px');
     expect(getRecoveryArtifactRowClass(true)).toContain('outline-blue-200/80');
     expect(getRecoveryArtifactRowClass(false)).toBe('hover:bg-surface-hover');
   });

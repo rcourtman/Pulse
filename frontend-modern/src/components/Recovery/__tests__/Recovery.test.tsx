@@ -210,6 +210,7 @@ describe('Recovery', () => {
       expect(screen.getAllByRole('table')).toHaveLength(1);
     });
     const historyTable = screen.getAllByRole('table')[0];
+    expect(within(historyTable).getByText('Item Type')).toBeInTheDocument();
     expect(within(historyTable).getByText('Item')).toBeInTheDocument();
     expect(within(historyTable).getByText('Platform')).toBeInTheDocument();
   });
@@ -306,7 +307,7 @@ describe('Recovery', () => {
     const tables = await screen.findAllByRole('table');
     const historyTable = tables.find((table) => within(table).queryByText('Local Copy'));
     expect(historyTable).toBeDefined();
-    expect(historyTable).toHaveStyle({ 'min-width': '1046px', 'table-layout': 'fixed' });
+    expect(historyTable).toHaveStyle({ 'min-width': '1142px', 'table-layout': 'fixed' });
   });
 
   it('focuses history when a rollup is clicked', async () => {
