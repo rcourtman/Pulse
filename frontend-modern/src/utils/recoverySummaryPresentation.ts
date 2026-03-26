@@ -6,6 +6,11 @@ import {
   normalizeRecoveryOutcome,
 } from '@/utils/recoveryOutcomePresentation';
 import { isRecoveryRollupStale } from '@/utils/recoveryTablePresentation';
+import {
+  getSourcePlatformLabel,
+  getSourcePlatformPresentation,
+  normalizeSourcePlatformQueryValue,
+} from '@/utils/sourcePlatforms';
 
 export const RECOVERY_SUMMARY_TIME_RANGES = ['7d', '30d', '90d', '365d'] as const;
 
@@ -97,6 +102,21 @@ export interface RecoveryAttentionItem {
   count: number;
   tone: 'rose' | 'amber' | 'blue';
   detail: string;
+}
+
+export interface RecoveryPlatformCoverageItem {
+  key: string;
+  label: string;
+  count: number;
+  percent: number;
+  toneClass: string;
+}
+
+export interface RecoveryPlatformCoverageSummary {
+  platformCount: number;
+  mixedCount: number;
+  primaryLabel: string | null;
+  items: RecoveryPlatformCoverageItem[];
 }
 
 export function getRecoveryAttentionChipClass(
@@ -325,6 +345,53 @@ export function buildRecoveryFreshnessBuckets(
     count: counts[bucket.key],
     percent: toPercent(counts[bucket.key], rollups.length),
   }));
+}
+
+export function buildRecoveryPlatformCoverage(
+  rollups: ProtectionRollup[],
+): RecoveryPlatformCoverageSummary {
+  const counts = new Map<string, number>();
+  let mixedCount = 0;
+
+  for (const rollup of rollups) {
+    const providers = Array.from(
+      new Set(
+        (rollup.providers || [])
+          .map((provider) => normalizeSourcePlatformQueryValue(String(provider || '').trim()))
+          .filter(Boolean),
+      ),
+    );
+    const resolvedProviders = providers.length > 0 ? providers : ['generic'];
+    if (resolvedProviders.length > 1) mixedCount += 1;
+
+    for (const provider of resolvedProviders) {
+      counts.set(provider, (counts.get(provider) || 0) + 1);
+    }
+  }
+
+  const items = Array.from(counts.entries())
+    .map(([key, count]) => ({
+      key,
+      label: getSourcePlatformLabel(key),
+      count,
+      percent: toPercent(count, rollups.length),
+      toneClass:
+        getSourcePlatformPresentation(key)?.tone ||
+        'bg-surface-alt text-base-content dark:bg-surface-alt dark:text-base-content',
+    }))
+    .sort((left, right) => {
+      if (left.count !== right.count) return right.count - left.count;
+      if (left.key === 'generic' && right.key !== 'generic') return 1;
+      if (right.key === 'generic' && left.key !== 'generic') return -1;
+      return left.label.localeCompare(right.label);
+    });
+
+  return {
+    platformCount: items.length,
+    mixedCount,
+    primaryLabel: items[0]?.label || null,
+    items,
+  };
 }
 
 export function buildRecoveryActivitySummary(

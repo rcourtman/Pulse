@@ -314,6 +314,12 @@ The summary remains additive to the inventory-first workflow rather than a
 replacement for it: Proxmox-heavy operators still land on protected items by
 default, but the first visible framing now reflects the whole multi-platform
 recovery system instead of a single backup table metaphor.
+That same summary contract now also includes platform-coverage framing through
+`frontend-modern/src/utils/recoverySummaryPresentation.ts`, so the first
+visible recovery overview explicitly shows how many provider platforms are in
+scope, which provider families dominate the current protected set, and how
+many protected subjects already span multiple providers instead of leaving the
+multi-platform model implicit in row-level badges alone.
 The recovery table presentation helper now owns the canonical subject-type
 label fallback for recovery rows and delegates its title-casing to the shared
 `frontend-modern/src/utils/textPresentation.ts` helper rather than keeping a

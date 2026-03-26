@@ -4,6 +4,7 @@ import {
   buildRecoveryAttentionItems,
   buildRecoveryFreshnessBuckets,
   buildRecoveryOutcomeSegments,
+  buildRecoveryPlatformCoverage,
   buildRecoveryPostureSegments,
   buildRecoveryPostureSummary,
   getRecoveryAttentionChipClass,
@@ -15,10 +16,11 @@ import {
 
 describe('recoverySummaryPresentation', () => {
   it('exposes canonical recovery summary time ranges and labels', () => {
-    expect(RECOVERY_SUMMARY_TIME_RANGES).toEqual(['7d', '30d', '90d']);
+    expect(RECOVERY_SUMMARY_TIME_RANGES).toEqual(['7d', '30d', '90d', '365d']);
     expect(RECOVERY_SUMMARY_TIME_RANGE_LABELS['7d']).toBe('7d');
     expect(RECOVERY_SUMMARY_TIME_RANGE_LABELS['30d']).toBe('30d');
     expect(RECOVERY_SUMMARY_TIME_RANGE_LABELS['90d']).toBe('90d');
+    expect(RECOVERY_SUMMARY_TIME_RANGE_LABELS['365d']).toBe('365d');
   });
 
   it('exposes canonical freshness bucket presentation', () => {
@@ -93,6 +95,24 @@ describe('recoverySummaryPresentation', () => {
       { key: 'warning', count: 1, percent: 17 },
       { key: 'running', count: 1, percent: 17 },
       { key: 'never-succeeded', count: 1, percent: 17 },
+    ]);
+  });
+
+  it('builds provider coverage from rollups and mixed-provider subjects', () => {
+    const coverage = buildRecoveryPlatformCoverage([
+      { rollupId: 'a', providers: ['proxmox-pbs'] },
+      { rollupId: 'b', providers: ['proxmox-pve', 'kubernetes'] },
+      { rollupId: 'c', providers: [] },
+    ]);
+
+    expect(coverage.platformCount).toBe(4);
+    expect(coverage.mixedCount).toBe(1);
+    expect(coverage.primaryLabel).toBe('K8s');
+    expect(coverage.items).toMatchObject([
+      { key: 'kubernetes', label: 'K8s', count: 1, percent: 33 },
+      { key: 'proxmox-pbs', label: 'PBS', count: 1, percent: 33 },
+      { key: 'proxmox-pve', label: 'PVE', count: 1, percent: 33 },
+      { key: 'generic', label: 'Generic', count: 1, percent: 33 },
     ]);
   });
 

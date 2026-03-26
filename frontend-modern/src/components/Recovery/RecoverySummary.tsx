@@ -5,6 +5,7 @@ import {
   buildRecoveryActivitySummary,
   buildRecoveryAttentionItems,
   buildRecoveryFreshnessBuckets,
+  buildRecoveryPlatformCoverage,
   buildRecoveryPostureSegments,
   buildRecoveryPostureSummary,
   getRecoveryAttentionChipClass,
@@ -37,6 +38,7 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
   const postureSummary = createMemo(() => buildRecoveryPostureSummary(props.rollups()));
   const postureSegments = createMemo(() => buildRecoveryPostureSegments(props.rollups()));
   const freshnessBuckets = createMemo(() => buildRecoveryFreshnessBuckets(props.rollups()));
+  const platformCoverage = createMemo(() => buildRecoveryPlatformCoverage(props.rollups()));
   const activity = createMemo(() => buildRecoveryActivitySummary(props.series()));
   const attentionItems = createMemo(() => buildRecoveryAttentionItems(summary()));
 
@@ -50,6 +52,10 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
           <div class="flex flex-wrap items-center justify-between gap-2 border-b border-border-subtle px-1 pb-2 text-[11px]">
             <div class="flex flex-wrap items-center gap-3">
               <span class="font-medium text-base-content">{summary().total} protected</span>
+              <span class="text-sky-300">
+                {platformCoverage().platformCount} platform
+                {platformCoverage().platformCount === 1 ? '' : 's'}
+              </span>
               <span class="text-emerald-400">{healthyCount()} healthy</span>
               <Show when={attentionCount() > 0}>
                 <span class="text-amber-300">{attentionCount()} attention</span>
@@ -75,7 +81,7 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
             </Show>
           </div>
 
-          <div class="grid gap-3 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,0.9fr)_minmax(0,1fr)]">
+          <div class="grid gap-3 xl:grid-cols-2 2xl:grid-cols-4">
             <section class="rounded-md border border-border bg-surface-hover/40 p-3">
               <div class="text-[11px] font-semibold uppercase tracking-wide text-muted">
                 Recovery Posture
@@ -118,6 +124,46 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
                         <span class="text-base-content">{segment.label}</span>
                       </div>
                       <span class={segment.textColor}>{segment.count}</span>
+                    </div>
+                  )}
+                </For>
+              </div>
+            </section>
+
+            <section class="rounded-md border border-border bg-surface-hover/40 p-3">
+              <div class="text-[11px] font-semibold uppercase tracking-wide text-muted">
+                Platform Coverage
+              </div>
+              <div class="mt-3 grid gap-3 sm:grid-cols-3">
+                <div>
+                  <div class="text-[10px] uppercase tracking-wide text-muted">Platforms</div>
+                  <div class="mt-1 text-2xl font-semibold text-base-content">
+                    {platformCoverage().platformCount}
+                  </div>
+                </div>
+                <div>
+                  <div class="text-[10px] uppercase tracking-wide text-muted">Multi-source</div>
+                  <div class="mt-1 text-2xl font-semibold text-base-content">
+                    {platformCoverage().mixedCount}
+                  </div>
+                </div>
+                <div>
+                  <div class="text-[10px] uppercase tracking-wide text-muted">Primary</div>
+                  <div class="mt-1 text-xl font-semibold text-base-content">
+                    {platformCoverage().primaryLabel ?? 'n/a'}
+                  </div>
+                </div>
+              </div>
+
+              <div class="mt-4 flex flex-wrap gap-2">
+                <For each={platformCoverage().items.slice(0, 6)}>
+                  {(item) => (
+                    <div class="inline-flex items-center gap-2 rounded-md border border-border-subtle bg-surface/60 px-2.5 py-1.5 text-xs">
+                      <span class={`rounded px-1.5 py-0.5 text-[10px] font-medium ${item.toneClass}`}>
+                        {item.label}
+                      </span>
+                      <span class="tabular-nums text-base-content">{item.count}</span>
+                      <span class="text-muted">{item.percent}%</span>
                     </div>
                   )}
                 </For>
