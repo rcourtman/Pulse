@@ -799,19 +799,23 @@ func TestPortalPageTemplate_AccountServicesRendered(t *testing.T) {
 		`id="open-retrieve-service"`,
 		`id="open-refund-service"`,
 		`id="open-data-service"`,
+		`data-account-service-action="open-manage-service"`,
+		`data-account-service-action="manage-inline-request"`,
+		`data-account-service-action="data-delete-confirm"`,
 		`id="manage-service-panel"`,
 		`id="retrieve-service-panel"`,
 		`id="refund-service-panel"`,
 		`id="data-service-panel"`,
-		`fetch(LICENSE_API_BASE + '/v1/manage/request'`,
-		`fetch(LICENSE_API_BASE + '/v1/retrieve-license/request'`,
-		`fetch(LICENSE_API_BASE + '/v1/self-refund'`,
-		`fetch(LICENSE_API_BASE + '/v1/gdpr/request-export'`,
-		`fetch(LICENSE_API_BASE + '/v1/gdpr/export'`,
-		`fetch(LICENSE_API_BASE + '/v1/gdpr/request-delete'`,
-		`fetch(LICENSE_API_BASE + '/v1/gdpr/confirm-delete'`,
+		`serviceFetch('/v1/manage/request'`,
+		`serviceFetch('/v1/retrieve-license/request'`,
+		`serviceFetch('/v1/self-refund'`,
+		`serviceFetch('/v1/gdpr/request-export'`,
+		`serviceFetch('/v1/gdpr/export'`,
+		`serviceFetch('/v1/gdpr/request-delete'`,
+		`serviceFetch('/v1/gdpr/confirm-delete'`,
 		`if (!await refreshBootstrap())`,
 		`refreshAccountTeamSection(accountID)`,
+		`window.PulseAccountPortal = {`,
 		`document.addEventListener('click'`,
 		`document.addEventListener('change'`,
 		`data-action="open-billing"`,
@@ -836,6 +840,9 @@ func TestPortalPageTemplate_AccountServicesRendered(t *testing.T) {
 	}
 	if strings.Contains(html, `onclick="`) {
 		t.Errorf("expected portal shell interactions to be delegated through data-action attributes instead of inline onclick handlers")
+	}
+	if strings.Contains(html, `assets/portal.js`) {
+		t.Errorf("expected portal runtime to be split into explicit embedded shell/services assets instead of the old monolithic asset")
 	}
 	if strings.Contains(html, `await fetch('/auth/logout'`) {
 		t.Errorf("expected portal paths to be renderer-owned, not hardcoded in the asset")
@@ -1078,7 +1085,8 @@ func TestPortalBootstrapHTMLAndHandlerStayInSync(t *testing.T) {
 		PortalAPIBasePath:    defaultPortalAPIBasePath,
 		Accounts:             accounts,
 		Styles:               portalStyles,
-		Script:               portalScript,
+		ShellScript:          portalShellScript,
+		ServicesScript:       portalServicesScript,
 		BootstrapJSON:        mustBootstrapJSON(t, validClaims.Email, accounts),
 	})
 

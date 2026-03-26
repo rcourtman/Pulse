@@ -7,6 +7,7 @@ if (bootstrapEl) {
     portalBootstrap = {};
   }
 }
+
 var LICENSE_API_BASE = portalBootstrap.commercial_api_base_url || '';
 var PORTAL_PATH = portalBootstrap.portal_path || '/portal';
 var BOOTSTRAP_PATH = portalBootstrap.bootstrap_path || '/api/portal/bootstrap';
@@ -175,7 +176,7 @@ function applyBootstrap(data) {
 }
 
 async function refreshBootstrap() {
-  if (!BOOTSTRAP_PATH) return;
+  if (!BOOTSTRAP_PATH) return false;
   try {
     var response = await fetch(BOOTSTRAP_PATH, {
       headers: { 'Accept': 'application/json' }
@@ -195,6 +196,26 @@ function showToast(msg, isError) {
   clearTimeout(t._timer);
   t._timer = setTimeout(function() { t.className = 'toast'; }, 4000);
 }
+
+window.PulseAccountPortal = {
+  getBootstrap: function() {
+    return portalBootstrap;
+  },
+  getCommercialAPIBaseURL: function() {
+    return LICENSE_API_BASE;
+  },
+  getPortalPath: function() {
+    return PORTAL_PATH;
+  },
+  getAccountAPIBasePath: function() {
+    return ACCOUNT_API_BASE_PATH;
+  },
+  getPortalAPIBasePath: function() {
+    return PORTAL_API_BASE_PATH;
+  },
+  refreshBootstrap: refreshBootstrap,
+  showToast: showToast,
+};
 
 document.getElementById('logout-btn').onclick = async function() {
   this.disabled = true;
@@ -267,343 +288,6 @@ document.addEventListener('change', function(event) {
     target.value
   );
 });
-
-function toggleServicePanel(panelID) {
-  var panels = ['manage-service-panel', 'retrieve-service-panel', 'refund-service-panel', 'data-service-panel'];
-  for (var i = 0; i < panels.length; i++) {
-    var panel = document.getElementById(panels[i]);
-    panel.classList.toggle('visible', panels[i] === panelID ? !panel.classList.contains('visible') : false);
-  }
-}
-
-function setServiceStatus(id, message, isError) {
-  var el = document.getElementById(id);
-  el.textContent = message;
-  el.className = 'service-status visible' + (isError ? ' error' : ' success');
-}
-
-document.getElementById('open-manage-service').onclick = function() {
-  toggleServicePanel('manage-service-panel');
-  document.getElementById('manage-inline-email').focus();
-};
-
-document.getElementById('open-retrieve-service').onclick = function() {
-  toggleServicePanel('retrieve-service-panel');
-  document.getElementById('retrieve-inline-email').focus();
-};
-
-document.getElementById('open-refund-service').onclick = function() {
-  toggleServicePanel('refund-service-panel');
-  document.getElementById('refund-inline-email').focus();
-};
-
-document.getElementById('open-data-service').onclick = function() {
-  toggleServicePanel('data-service-panel');
-  document.getElementById('data-export-email').focus();
-};
-
-var pendingManageEmail = '';
-var pendingRetrieveEmail = '';
-var pendingExportEmail = '';
-var pendingDeleteEmail = '';
-
-document.getElementById('manage-inline-request').onclick = async function() {
-  var email = document.getElementById('manage-inline-email').value.trim();
-  if (!email) { document.getElementById('manage-inline-email').focus(); return; }
-  this.disabled = true;
-  this.textContent = 'Sending...';
-  try {
-    var res = await fetch(LICENSE_API_BASE + '/v1/manage/request', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: email })
-    });
-    var data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Failed to send verification code');
-    pendingManageEmail = email;
-    document.getElementById('manage-inline-step2').style.display = 'block';
-    setServiceStatus('manage-inline-status', 'Verification code sent. Check your email.', false);
-  } catch (err) {
-    setServiceStatus('manage-inline-status', err.message, true);
-  } finally {
-    this.disabled = false;
-    this.textContent = 'Send Verification Code';
-  }
-};
-
-document.getElementById('manage-inline-resend').onclick = async function(e) {
-  e.preventDefault();
-  if (!pendingManageEmail) return;
-  try {
-    var res = await fetch(LICENSE_API_BASE + '/v1/manage/request', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: pendingManageEmail })
-    });
-    var data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Failed to send verification code');
-    setServiceStatus('manage-inline-status', 'New verification code sent.', false);
-  } catch (err) {
-    setServiceStatus('manage-inline-status', err.message, true);
-  }
-};
-
-document.getElementById('manage-inline-confirm').onclick = async function() {
-  var code = document.getElementById('manage-inline-code').value.trim();
-  if (!pendingManageEmail || !code) return;
-  this.disabled = true;
-  this.textContent = 'Redirecting...';
-  try {
-    var res = await fetch(LICENSE_API_BASE + '/v1/manage', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: pendingManageEmail, code: code })
-    });
-    var data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Failed to open customer portal');
-    window.location.href = data.url;
-  } catch (err) {
-    setServiceStatus('manage-inline-status', err.message, true);
-    this.disabled = false;
-    this.textContent = 'Open Customer Portal';
-  }
-};
-
-document.getElementById('retrieve-inline-request').onclick = async function() {
-  var email = document.getElementById('retrieve-inline-email').value.trim();
-  if (!email) { document.getElementById('retrieve-inline-email').focus(); return; }
-  this.disabled = true;
-  this.textContent = 'Sending...';
-  document.getElementById('retrieve-inline-result').style.display = 'none';
-  try {
-    var res = await fetch(LICENSE_API_BASE + '/v1/retrieve-license/request', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: email })
-    });
-    var data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Failed to send verification code');
-    pendingRetrieveEmail = email;
-    document.getElementById('retrieve-inline-step2').style.display = 'block';
-    setServiceStatus('retrieve-inline-status', 'Verification code sent. Check your email.', false);
-  } catch (err) {
-    setServiceStatus('retrieve-inline-status', err.message, true);
-  } finally {
-    this.disabled = false;
-    this.textContent = 'Send Verification Code';
-  }
-};
-
-document.getElementById('retrieve-inline-confirm').onclick = async function() {
-  var code = document.getElementById('retrieve-inline-code').value.trim();
-  if (!pendingRetrieveEmail || !code) return;
-  this.disabled = true;
-  this.textContent = 'Loading...';
-  try {
-    var res = await fetch(LICENSE_API_BASE + '/v1/retrieve-license', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: pendingRetrieveEmail, code: code })
-    });
-    var data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Failed to retrieve license');
-    var license = data.license;
-    document.getElementById('retrieve-inline-token').value = license.token;
-    document.getElementById('retrieve-inline-tier').textContent = license.tier;
-    document.getElementById('retrieve-inline-issued').textContent = new Date(license.issued_at).toLocaleString();
-    document.getElementById('retrieve-inline-expires').textContent = license.expires_at ? new Date(license.expires_at).toLocaleString() : 'Does not expire';
-    document.getElementById('retrieve-inline-email-value').textContent = license.email;
-    document.getElementById('retrieve-inline-result').style.display = 'block';
-    document.getElementById('retrieve-inline-copy').style.display = 'inline-block';
-    if (license.invoice_url) {
-      var invoice = document.getElementById('retrieve-inline-invoice');
-      invoice.href = license.invoice_url;
-      invoice.style.display = 'inline-block';
-    }
-    setServiceStatus('retrieve-inline-status', 'License retrieved successfully.', false);
-  } catch (err) {
-    setServiceStatus('retrieve-inline-status', err.message, true);
-  } finally {
-    this.disabled = false;
-    this.textContent = 'Show License';
-  }
-};
-
-document.getElementById('retrieve-inline-copy').onclick = async function() {
-  var token = document.getElementById('retrieve-inline-token').value;
-  if (!token) return;
-  try {
-    await navigator.clipboard.writeText(token);
-    setServiceStatus('retrieve-inline-status', 'License key copied to clipboard.', false);
-  } catch (_) {
-    setServiceStatus('retrieve-inline-status', 'Failed to copy automatically. Please copy the key manually.', true);
-  }
-};
-
-document.getElementById('refund-inline-submit').onclick = async function() {
-  var email = document.getElementById('refund-inline-email').value.trim();
-  var token = document.getElementById('refund-inline-token').value.trim();
-  if (!email || !token) return;
-  if (!confirm('Are you sure? This will immediately revoke the license and request the refund.')) return;
-  this.disabled = true;
-  this.textContent = 'Processing...';
-  try {
-    var res = await fetch(LICENSE_API_BASE + '/v1/self-refund', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: email, token: token })
-    });
-    var data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Refund failed');
-    document.getElementById('refund-inline-token').value = '';
-    setServiceStatus('refund-inline-status', 'Success! Your refund has been processed. Stripe will follow up by email.', false);
-  } catch (err) {
-    setServiceStatus('refund-inline-status', err.message, true);
-  } finally {
-    this.disabled = false;
-    this.textContent = 'Process Refund';
-  }
-};
-
-document.getElementById('data-export-request').onclick = async function() {
-  var email = document.getElementById('data-export-email').value.trim();
-  if (!email) return;
-  this.disabled = true;
-  this.textContent = 'Sending...';
-  document.getElementById('data-export-result').style.display = 'none';
-  try {
-    var res = await fetch(LICENSE_API_BASE + '/v1/gdpr/request-export', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: email })
-    });
-    var data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Request failed');
-    pendingExportEmail = email;
-    document.getElementById('data-export-step2').style.display = 'block';
-    setServiceStatus('data-export-status', 'Verification code sent. Check your email.', false);
-  } catch (err) {
-    setServiceStatus('data-export-status', err.message, true);
-  } finally {
-    this.disabled = false;
-    this.textContent = 'Send Verification Code';
-  }
-};
-
-document.getElementById('data-export-resend').onclick = async function(e) {
-  e.preventDefault();
-  if (!pendingExportEmail) return;
-  try {
-    var res = await fetch(LICENSE_API_BASE + '/v1/gdpr/request-export', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: pendingExportEmail })
-    });
-    var data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Request failed');
-    setServiceStatus('data-export-status', 'New verification code sent.', false);
-  } catch (err) {
-    setServiceStatus('data-export-status', err.message, true);
-  }
-};
-
-document.getElementById('data-export-confirm').onclick = async function() {
-  var code = document.getElementById('data-export-code').value.trim();
-  if (!pendingExportEmail || !code) return;
-  this.disabled = true;
-  this.textContent = 'Exporting...';
-  try {
-    var res = await fetch(LICENSE_API_BASE + '/v1/gdpr/export', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: pendingExportEmail, code: code })
-    });
-    var data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Export failed');
-    document.getElementById('data-export-payload').value = JSON.stringify(data, null, 2);
-    document.getElementById('data-export-result').style.display = 'block';
-    setServiceStatus('data-export-status', 'Data export retrieved successfully.', false);
-    document.getElementById('data-export-code').value = '';
-    pendingExportEmail = '';
-    document.getElementById('data-export-step2').style.display = 'none';
-  } catch (err) {
-    setServiceStatus('data-export-status', err.message, true);
-  } finally {
-    this.disabled = false;
-    this.textContent = 'Export My Data';
-  }
-};
-
-document.getElementById('data-delete-request').onclick = async function() {
-  var email = document.getElementById('data-delete-email').value.trim();
-  if (!email) return;
-  this.disabled = true;
-  this.textContent = 'Sending...';
-  try {
-    var res = await fetch(LICENSE_API_BASE + '/v1/gdpr/request-delete', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: email })
-    });
-    var data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Request failed');
-    pendingDeleteEmail = email;
-    document.getElementById('data-delete-step2').style.display = 'block';
-    setServiceStatus('data-delete-status', 'Verification code sent. Check your email.', false);
-  } catch (err) {
-    setServiceStatus('data-delete-status', err.message, true);
-  } finally {
-    this.disabled = false;
-    this.textContent = 'Send Verification Code';
-  }
-};
-
-document.getElementById('data-delete-resend').onclick = async function(e) {
-  e.preventDefault();
-  if (!pendingDeleteEmail) return;
-  try {
-    var res = await fetch(LICENSE_API_BASE + '/v1/gdpr/request-delete', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: pendingDeleteEmail })
-    });
-    var data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Request failed');
-    setServiceStatus('data-delete-status', 'New verification code sent.', false);
-  } catch (err) {
-    setServiceStatus('data-delete-status', err.message, true);
-  }
-};
-
-document.getElementById('data-delete-confirm').onclick = async function() {
-  var code = document.getElementById('data-delete-code').value.trim();
-  if (!pendingDeleteEmail || !code) return;
-  if (!document.getElementById('data-delete-confirm-check').checked) {
-    setServiceStatus('data-delete-status', 'You must confirm that you understand this action is permanent.', true);
-    return;
-  }
-  this.disabled = true;
-  this.textContent = 'Deleting...';
-  try {
-    var res = await fetch(LICENSE_API_BASE + '/v1/gdpr/confirm-delete', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: pendingDeleteEmail, code: code })
-    });
-    var data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Deletion failed');
-    setServiceStatus('data-delete-status', data.deleted_count > 0 && data.stripe_reminder ? data.message + ' ' + data.stripe_reminder : data.message, false);
-    document.getElementById('data-delete-step2').style.display = 'none';
-    document.getElementById('data-delete-code').value = '';
-    document.getElementById('data-delete-confirm-check').checked = false;
-    pendingDeleteEmail = '';
-  } catch (err) {
-    setServiceStatus('data-delete-status', err.message, true);
-  } finally {
-    this.disabled = false;
-    this.textContent = 'Delete My Data';
-  }
-};
 
 function toggleAddWorkspace(accountID) {
   var form = document.getElementById('add-ws-form-' + accountID);
@@ -713,7 +397,7 @@ async function loadTeam(accountID) {
   if (!tbody || !section) return;
   var actorRole = section.getAttribute('data-actor-role') || '';
   var isOwner = actorRole === 'owner';
-  setTbodyMessage(tbody, 'Loading\u2026', false);
+  setTbodyMessage(tbody, 'Loading…', false);
   try {
     var r = await fetch(ACCOUNT_API_BASE_PATH + '/' + encodeURIComponent(accountID) + '/members');
     if (!r.ok) { setTbodyMessage(tbody, 'Failed to load team.', true); return; }

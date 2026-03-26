@@ -46,7 +46,8 @@ type portalPageData struct {
 	PortalAPIBasePath    string
 	Accounts             []portalPageAccount
 	Styles               template.CSS
-	Script               template.JS
+	ShellScript          template.JS
+	ServicesScript       template.JS
 	BootstrapJSON        template.JS
 }
 
@@ -218,7 +219,8 @@ func renderPortalPage(w http.ResponseWriter, nonce, email string, accounts []por
 		PortalAPIBasePath:    defaultPortalAPIBasePath,
 		Accounts:             accounts,
 		Styles:               portalStyles,
-		Script:               portalScript,
+		ShellScript:          portalShellScript,
+		ServicesScript:       portalServicesScript,
 		BootstrapJSON:        bootstrapJSON,
 	}); err != nil {
 		log.Error().Err(err).Msg("cloudcp.portal.page: render portal page")
