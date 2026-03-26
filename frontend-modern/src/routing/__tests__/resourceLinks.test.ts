@@ -279,10 +279,12 @@ describe('resource link routing contract', () => {
     expect(buildRecoveryPath({ platform: 'pbs', mode: 'remote' })).toBe(
       '/recovery?platform=proxmox-pbs&mode=remote',
     );
-    expect(parseRecoveryLinkSearch('?provider=proxmox&mode=local')).toMatchObject({
+    const parsed = parseRecoveryLinkSearch('?provider=proxmox&mode=local');
+    expect(parsed).toMatchObject({
       platform: 'proxmox-pve',
       mode: 'local',
     });
+    expect(buildRecoveryPath(parsed)).toBe('/recovery?platform=proxmox-pve&mode=local');
     expect(parseRecoveryLinkSearch('?itemType=proxmox-vm')).toMatchObject({
       itemType: 'vm',
     });

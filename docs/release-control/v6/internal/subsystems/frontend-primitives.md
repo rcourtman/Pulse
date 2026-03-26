@@ -689,6 +689,10 @@ as page-local toolbar state inside individual recovery sections.
 That same shared recovery state owner now also keeps `platform` as the
 canonical route and transport filter name for operator-facing recovery links,
 while any accepted legacy `provider` aliases remain parser compatibility only.
+Caller-facing shared recovery route builders must therefore stay
+platform-first as well: compatibility `provider` aliases may be accepted while
+parsing legacy links, but they should not remain a first-class input on new
+recovery link construction helpers.
 Recovery frontend decode and derived option builders must treat payload
 `platform` / `platforms` as the canonical response fields and only fall back
 to legacy `provider` / `providers` aliases for compatibility, so route,

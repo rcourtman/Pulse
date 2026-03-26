@@ -114,7 +114,6 @@ type RecoveryLinkOptions = {
   rollupId?: string | null;
   view?: string | null;
   platform?: string | null;
-  provider?: string | null;
   stale?: string | null;
   range?: string | null;
   cluster?: string | null;
@@ -128,6 +127,8 @@ type RecoveryLinkOptions = {
   node?: string | null;
   query?: string | null;
 };
+
+const RECOVERY_LEGACY_PLATFORM_QUERY_PARAM = 'provider';
 
 export const parseWorkloadsLinkSearch = (search: string) => {
   const params = new URLSearchParams(search);
@@ -262,7 +263,7 @@ export const parseRecoveryLinkSearch = (search: string) => {
     platform: normalizeSourcePlatformQueryValue(
       firstNonEmpty([
         params.get(RECOVERY_QUERY_PARAMS.platform),
-        params.get('provider'),
+        params.get(RECOVERY_LEGACY_PLATFORM_QUERY_PARAM),
       ]),
     ),
     stale: normalizeQueryBooleanFlag(params.get(RECOVERY_QUERY_PARAMS.stale)),
@@ -284,9 +285,7 @@ export const buildRecoveryPath = (options: RecoveryLinkOptions = {}): string => 
   const params = new URLSearchParams();
   const rollupId = normalizeQueryValue(options.rollupId);
   const view = normalizeQueryValue(options.view);
-  const platform = normalizeSourcePlatformQueryValue(
-    firstNonEmpty([options.platform, options.provider]),
-  );
+  const platform = normalizeSourcePlatformQueryValue(options.platform);
   const stale = normalizeQueryBooleanFlag(options.stale);
   const range = normalizeQueryValue(options.range);
   const cluster = normalizeQueryValue(options.cluster);

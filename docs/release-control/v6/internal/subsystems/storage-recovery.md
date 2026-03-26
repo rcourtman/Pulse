@@ -162,6 +162,9 @@ platform model from summary through drill-in. Shared recovery URLs and
 transport filters should likewise treat `platform` as the canonical
 operator-facing query field, with legacy `provider` aliases accepted only as
 compatibility input that rewrites back to canonical `platform` route state.
+Shared recovery link builders should therefore accept canonical `platform`
+inputs only; legacy `provider` belongs at parse-time compatibility boundaries,
+not in new caller-facing recovery route helpers.
 That same recovery contract should keep response payloads canonical as well:
 recovery points and protected rollups should expose `platform` and
 `platforms` as the primary transport fields, while any legacy
@@ -298,6 +301,11 @@ and recovery-adjacent flows may omit `start`/`end` to use the canonical default
 window, but when they provide either bound it must be RFC3339 and `end` must
 not be earlier than `start`; invalid values fail as `400 invalid_time_range`
 instead of silently shifting the exported reporting window.
+That same adjacent API/reporting transport also owns the optional reporting
+field limits and multi-report request parsing. Storage and recovery consumers
+must treat `metricType`, `title`, request-body size, unknown JSON fields, and
+trailing payload rejection as API-owned validation semantics rather than
+counting on permissive backend coercion.
 That adjacent export contract now also includes canonical Proxmox pool
 membership for each VM row. Storage and recovery flows may use those current-
 state facts when they need fleet context, but they must consume the API-owned

@@ -962,7 +962,9 @@ That same route contract also owns the canonical recovery `platform` query.
 `/recovery` links must emit `platform=<owned-source-key>` as the shared
 operator-facing route shape, while accepted legacy `provider` aliases may be
 parsed only as compatibility input that rewrites back to canonical platform
-route state.
+route state. `frontend-modern/src/routing/resourceLinks.ts` must not keep
+legacy `provider` as a first-class build option once parse-time compatibility
+has converted it back to canonical recovery route state.
 Recovery-linked consumers that decode `/api/recovery/*` payloads must likewise
 prefer canonical `platform` / `platforms` response fields over legacy
 `provider` aliases, so unified resource drill-downs and shared recovery links
