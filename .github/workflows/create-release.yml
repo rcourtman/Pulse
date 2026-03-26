@@ -18,7 +18,7 @@ on:
         type: string
       rollback_version:
         description: 'Required: prior stable version to pin for rollback (for example 5.1.14 or v5.1.14)'
-        required: false
+        required: true
         type: string
       ga_date:
         description: 'First stable v6.0.0 GA only: exact GA publish date (YYYY-MM-DD)'

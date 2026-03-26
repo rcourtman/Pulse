@@ -12,8 +12,8 @@ on:
         required: false
         type: string
       rollback_version:
-        description: 'Optional rollback stable version to rehearse (for example 5.1.14 or v5.1.14)'
-        required: false
+        description: 'Required rollback stable version to rehearse (for example 5.1.14 or v5.1.14)'
+        required: true
         type: string
       ga_date:
         description: 'Stable v6.0.0 rehearsal only: planned GA publish date (YYYY-MM-DD)'
