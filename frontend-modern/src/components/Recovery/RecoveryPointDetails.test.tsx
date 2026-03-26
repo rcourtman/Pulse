@@ -59,6 +59,10 @@ describe('RecoveryPointDetails', () => {
           completedAt: '2026-03-10T10:00:00Z',
           verified: true,
           immutable: true,
+          subjectRef: {
+            type: 'proxmox-vm',
+            name: '100',
+          },
           repositoryRef: {
             type: 'pbs-datastore',
             namespace: 'pbs-main',
@@ -79,9 +83,11 @@ describe('RecoveryPointDetails', () => {
     expect(screen.getByText('Platform-specific recovery metadata, verification state, and repository health.')).toBeInTheDocument();
     expect(screen.getByText('Repository Health')).toBeInTheDocument();
     expect(screen.getByText('Verification')).toBeInTheDocument();
+    expect(screen.getByText('Item Type')).toBeInTheDocument();
     expect(screen.getByText('Point Type')).toBeInTheDocument();
     expect(screen.getByText('Method')).toBeInTheDocument();
     expect(screen.getByText('Outcome')).toBeInTheDocument();
+    expect(screen.getByText('VM')).toBeInTheDocument();
     expect(screen.getByText('Backup')).toBeInTheDocument();
     expect(screen.getByText('Remote Copy')).toBeInTheDocument();
     expect(screen.getAllByText('Success').length).toBeGreaterThan(0);
@@ -98,6 +104,10 @@ describe('RecoveryPointDetails', () => {
         point={{
           id: 'point-2',
           provider: 'truenas',
+          subjectRef: {
+            type: 'truenas-dataset',
+            name: 'tank/apps',
+          },
           kind: 'snapshot',
           mode: 'snapshot',
           outcome: 'failed',
@@ -108,6 +118,8 @@ describe('RecoveryPointDetails', () => {
 
     expect(screen.queryByText('Platform Details')).not.toBeInTheDocument();
     expect(screen.queryByText('PBS Details')).not.toBeInTheDocument();
+    expect(screen.getByText('Item Type')).toBeInTheDocument();
+    expect(screen.getByText('Dataset')).toBeInTheDocument();
     expect(screen.getAllByText('Snapshot').length).toBeGreaterThan(0);
 
     const platformCard = screen.getByText('Platform').parentElement?.parentElement;

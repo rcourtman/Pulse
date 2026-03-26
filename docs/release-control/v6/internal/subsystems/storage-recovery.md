@@ -355,6 +355,11 @@ The same owned vocabulary applies to recovery events as well:
 history-table `type` column labeled as `Item Type` within recovery surfaces so
 event history does not fall back to a generic shared `Type` header once the
 recovery lane has already established item-first operator vocabulary.
+That same item-first vocabulary must carry through the point-details drawer:
+when a recovery point includes canonical item-class metadata,
+`RecoveryPointDetails.tsx` must surface it as `Item Type` in the summary grid
+instead of jumping directly from item identity to platform and point-method
+metadata.
 The recovery table presentation helper now owns the canonical subject-type
 label fallback for recovery rows and delegates its title-casing to the shared
 `frontend-modern/src/utils/textPresentation.ts` helper rather than keeping a

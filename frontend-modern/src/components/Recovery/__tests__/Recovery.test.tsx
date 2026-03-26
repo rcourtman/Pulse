@@ -329,6 +329,14 @@ describe('Recovery', () => {
     const table = tables[tables.length - 1];
     expect(within(table).getAllByText('Local Copy').length).toBeGreaterThan(0);
     expect(within(table).getAllByText('Success').length).toBeGreaterThan(0);
+
+    fireEvent.click(within(table).getByText('10:00'));
+
+    expect(await screen.findByText('Recovery Point Details')).toBeInTheDocument();
+    const detailsPanel = screen.getByText('Recovery Point Details').closest('td');
+    expect(detailsPanel).not.toBeNull();
+    expect(within(detailsPanel as HTMLTableCellElement).getByText('Item Type')).toBeInTheDocument();
+    expect(within(detailsPanel as HTMLTableCellElement).getByText('VM')).toBeInTheDocument();
   });
 
   it('filters protected rollups by provider', async () => {
