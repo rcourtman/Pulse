@@ -13,12 +13,13 @@ import {
   setBootstrap,
 } from './runtime';
 import { installAccountController } from './account_controller';
+import { installAuthController } from './auth_controller';
 import {
   renderAuthenticatedPortalHTML,
   renderHeaderHTML,
   renderSignedOutPortalHTML,
 } from './shell_view';
-import type { PortalBootstrapData, PortalLoginState } from './types';
+import type { PortalBootstrapData } from './types';
 
 var portalBootstrap: PortalBootstrapData = getBootstrap();
 var LICENSE_API_BASE = getCommercialAPIBaseURL();
@@ -30,30 +31,14 @@ var LOGOUT_PATH = getLogoutPath();
 var ACCOUNT_API_BASE_PATH = getAccountAPIBasePath();
 var PORTAL_API_BASE_PATH = getPortalAPIBasePath();
 
-var loginState: PortalLoginState = {
-  emailValue: '',
-  sending: false,
-  success: false,
-  error: '',
-};
-
-type FormValueElement = HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
 type ToastElement = HTMLElement & { _timer?: ReturnType<typeof setTimeout> };
-
-function getElement<T extends HTMLElement = HTMLElement>(id): T | null {
-  return document.getElementById(id) as T | null;
-}
-
-function asHTMLElement(target: EventTarget | null): HTMLElement | null {
-  return target instanceof HTMLElement ? target : null;
-}
 
 function renderHeader() {
   var userInfo = document.getElementById('portal-user-info');
   if (!userInfo) return;
   userInfo.innerHTML = renderHeaderHTML({
     bootstrap: portalBootstrap,
-    loginState: loginState,
+    loginState: authController.getLoginState(),
     signupPath: SIGNUP_PATH,
     accountAPIBasePath: ACCOUNT_API_BASE_PATH,
   });
@@ -65,7 +50,7 @@ function renderPortalApp() {
   if (!root) return;
   var context = {
     bootstrap: portalBootstrap,
-    loginState: loginState,
+    loginState: authController.getLoginState(),
     signupPath: SIGNUP_PATH,
     accountAPIBasePath: ACCOUNT_API_BASE_PATH,
   };
@@ -85,8 +70,8 @@ function applyBootstrap(data) {
   LOGOUT_PATH = getLogoutPath();
   ACCOUNT_API_BASE_PATH = getAccountAPIBasePath();
   PORTAL_API_BASE_PATH = getPortalAPIBasePath();
-  if (!portalBootstrap.authenticated && !loginState.emailValue) {
-    loginState.emailValue = portalBootstrap.email || '';
+  if (!portalBootstrap.authenticated) {
+    authController.syncBootstrapEmail(portalBootstrap.email || '');
   }
   renderPortalApp();
 }
@@ -110,7 +95,7 @@ async function refreshBootstrap() {
 }
 
 function showToast(msg, isError = false) {
-  var t = getElement<ToastElement>('toast');
+  var t = document.getElementById('toast') as ToastElement | null;
   if (!t) return;
   t.textContent = msg;
   t.className = 'toast visible' + (isError ? ' error' : '');
@@ -118,92 +103,17 @@ function showToast(msg, isError = false) {
   t._timer = setTimeout(function() { t.className = 'toast'; }, 4000);
 }
 
-function resetLoginState(options) {
-  loginState.sending = false;
-  loginState.error = '';
-  loginState.success = false;
-  if (options && options.keepEmail) return;
-  loginState.emailValue = '';
-}
-
-async function sendMagicLink() {
-  var email = String(loginState.emailValue || '').trim();
-  if (!email) {
-    var input = getElement<FormValueElement>('portal-login-email');
-    if (input) input.focus();
-    return;
-  }
-  loginState.sending = true;
-  loginState.error = '';
-  loginState.success = false;
-  renderPortalApp();
-  try {
-    var response = await fetch(MAGIC_LINK_REQUEST_PATH, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: email })
-    });
-    if (response.ok || response.status === 404) {
-      loginState.sending = false;
-      loginState.success = true;
-      renderPortalApp();
-      return;
-    }
-    if (response.status === 429) {
-      loginState.error = 'Too many requests. Please wait a moment and try again.';
-    } else {
-      loginState.error = 'Something went wrong. Please try again.';
-    }
-  } catch (_) {
-    loginState.error = 'Network error. Please check your connection and try again.';
-  }
-  loginState.sending = false;
-  renderPortalApp();
-}
-
-document.addEventListener('click', function(event) {
-  var portalActionEl = asHTMLElement(event.target)?.closest('[data-portal-action]');
-  if (portalActionEl) {
-    var portalAction = portalActionEl.getAttribute('data-portal-action') || '';
-    switch (portalAction) {
-      case 'send-magic-link':
-        event.preventDefault();
-        sendMagicLink();
-        return;
-      case 'resend-magic-link':
-        event.preventDefault();
-        loginState.success = false;
-        loginState.error = '';
-        renderPortalApp();
-        sendMagicLink();
-        return;
-      default:
-        break;
-    }
-  }
-
-  var logoutBtn = asHTMLElement(event.target)?.closest('#logout-btn') as HTMLButtonElement | null;
-  if (logoutBtn) {
-    event.preventDefault();
-    logoutBtn.disabled = true;
-    logoutBtn.textContent = 'Signing out…';
-    (async function() {
-      try {
-        await fetch(LOGOUT_PATH, { method: 'POST' });
-      } catch (_) {}
-      window.location.href = PORTAL_PATH;
-    })();
-    return;
-  }
-
-});
-
-document.addEventListener('input', function(event) {
-  var target = asHTMLElement(event.target) as FormValueElement | null;
-  if (!target) return;
-  if (target.getAttribute('data-portal-input') === 'login-email') {
-    loginState.emailValue = target.value;
-  }
+var authController = installAuthController({
+  getMagicLinkRequestPath: function() {
+    return MAGIC_LINK_REQUEST_PATH;
+  },
+  getLogoutPath: function() {
+    return LOGOUT_PATH;
+  },
+  getPortalPath: function() {
+    return PORTAL_PATH;
+  },
+  renderPortal: renderPortalApp,
 });
 
 installAccountController({
@@ -220,7 +130,6 @@ installAccountController({
   showToast: showToast
 });
 
-loginState.emailValue = portalBootstrap.email || '';
 applyBootstrap(portalBootstrap);
 if (portalBootstrap.authenticated) {
   refreshBootstrap();
