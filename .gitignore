@@ -252,10 +252,6 @@ scripts/release_control/*
 !scripts/release_control/subsystem_contracts_test.py
 !scripts/release_control/subsystem_lookup.py
 !scripts/release_control/subsystem_lookup_test.py
-!scripts/release_control/internal/
-scripts/release_control/internal/*
-!scripts/release_control/internal/record_rc_to_ga_rehearsal.py
-!scripts/release_control/internal/record_rc_to_ga_rehearsal_test.py
 !scripts/release_control/work_claim.py
 !scripts/release_control/work_claim_test.py
 .agent/

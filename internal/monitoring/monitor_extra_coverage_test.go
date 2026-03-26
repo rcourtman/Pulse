@@ -842,8 +842,8 @@ func (m *mockResourceStoreExtra) UnifiedResourceFreshness() time.Time {
 
 func TestMonitor_ResourcesForBroadcast_Extra(t *testing.T) {
 	m := &Monitor{}
-	if m.getResourcesForBroadcast() != nil {
-		t.Error("Expected nil when store is nil")
+	if res := m.getResourcesForBroadcast(); res == nil || len(res) != 0 {
+		t.Fatalf("expected empty resources when store is nil, got %#v", res)
 	}
 
 	now := time.Now().UTC()

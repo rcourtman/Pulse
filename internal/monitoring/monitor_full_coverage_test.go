@@ -439,8 +439,8 @@ func TestMonitor_ResourceUpdate(t *testing.T) {
 
 	// getResourcesForBroadcast
 	res := m.getResourcesForBroadcast()
-	if res != nil {
-		t.Error("Expected nil resources from mock")
+	if res == nil || len(res) != 0 {
+		t.Fatalf("expected empty resources from mock, got %#v", res)
 	}
 }
 

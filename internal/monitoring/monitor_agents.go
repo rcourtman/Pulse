@@ -267,6 +267,28 @@ func (m *Monitor) AllowHostAgentReenroll(hostID string) error {
 	return nil
 }
 
+func (m *Monitor) lookupRemovedHostAgent(identifier, hostname string) (time.Time, bool) {
+	identifier = strings.TrimSpace(identifier)
+
+	m.mu.RLock()
+	removedAt, wasRemoved := m.removedHostAgents[identifier]
+	m.mu.RUnlock()
+	if wasRemoved {
+		return removedAt, true
+	}
+
+	for _, entry := range m.state.GetRemovedHostAgents() {
+		if strings.TrimSpace(entry.ID) == identifier {
+			return entry.RemovedAt, true
+		}
+		if strings.TrimSpace(entry.Hostname) == hostname {
+			return entry.RemovedAt, true
+		}
+	}
+
+	return time.Time{}, false
+}
+
 // LinkHostAgent manually links a host agent to a specific PVE node.
 // This is used when auto-linking can't disambiguate (e.g., multiple nodes with hostname "pve").
 // After linking, the host agent's temperature/sensor data will appear on the correct node.
@@ -1388,28 +1410,6 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		baseIdentifier = fmt.Sprintf("agent-%s", hex.EncodeToString(sum[:6]))
 	}
 
-	m.mu.RLock()
-	removedAt, wasRemoved := m.removedHostAgents[baseIdentifier]
-	m.mu.RUnlock()
-	if !wasRemoved {
-		for _, entry := range m.state.GetRemovedHostAgents() {
-			if strings.TrimSpace(entry.Hostname) != hostname {
-				continue
-			}
-			removedAt = entry.RemovedAt
-			wasRemoved = true
-			baseIdentifier = strings.TrimSpace(entry.ID)
-			break
-		}
-	}
-	if wasRemoved {
-		log.Info().
-			Str("hostID", baseIdentifier).
-			Time("removedAt", removedAt).
-			Msg("Rejecting report from deliberately removed host agent")
-		return models.Host{}, fmt.Errorf("host agent %q had monitoring stopped at %v and cannot report again. Use Allow reconnect in Settings -> Infrastructure before reconnecting this host", baseIdentifier, removedAt.Format(time.RFC3339))
-	}
-
 	readState := m.snapshotBackedUnifiedReadState()
 	var existingHosts []*unifiedresources.HostView
 	if readState != nil {
@@ -1474,6 +1474,15 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 			}
 			m.mu.Unlock()
 		}
+	}
+
+	removedAt, wasRemoved := m.lookupRemovedHostAgent(identifier, hostname)
+	if wasRemoved {
+		log.Info().
+			Str("hostID", identifier).
+			Time("removedAt", removedAt).
+			Msg("Rejecting report from deliberately removed host agent")
+		return models.Host{}, fmt.Errorf("host agent %q had monitoring stopped at %v and cannot report again. Use Allow reconnect in Settings -> Infrastructure before reconnecting this host", identifier, removedAt.Format(time.RFC3339))
 	}
 
 	var previous *unifiedresources.HostView
