@@ -41,6 +41,8 @@ type CPConfig struct {
 	RequireEmailProvider              bool
 	ResendAPIKey                      string // Resend API key (optional — if empty, emails are logged)
 	EmailFrom                         string // Sender email address (e.g. "noreply@pulserelay.pro")
+	LicenseServerURL                  string
+	LicenseAdminToken                 string
 }
 
 // TenantsDir returns the directory where per-tenant data is stored.
@@ -125,6 +127,8 @@ func LoadConfig() (*CPConfig, error) {
 		RequireEmailProvider:              envOrDefaultBool("CP_REQUIRE_EMAIL_PROVIDER", true),
 		ResendAPIKey:                      strings.TrimSpace(os.Getenv("RESEND_API_KEY")),
 		EmailFrom:                         envOrDefault("PULSE_EMAIL_FROM", "noreply@pulserelay.pro"),
+		LicenseServerURL:                  strings.TrimSpace(envOrDefault("PULSE_LICENSE_SERVER_URL", defaultLicenseServerURL)),
+		LicenseAdminToken:                 strings.TrimSpace(os.Getenv("PULSE_LICENSE_ADMIN_TOKEN")),
 	}
 
 	if err := cfg.validate(); err != nil {
@@ -218,6 +222,18 @@ func (c *CPConfig) validate() error {
 	}
 	if parsedBaseURL.Host == "" {
 		return fmt.Errorf("CP_BASE_URL must include a host")
+	}
+	if c.LicenseServerURL != "" {
+		parsedLicenseURL, err := url.Parse(c.LicenseServerURL)
+		if err != nil {
+			return fmt.Errorf("PULSE_LICENSE_SERVER_URL must be a valid URL: %w", err)
+		}
+		if parsedLicenseURL.Scheme != "http" && parsedLicenseURL.Scheme != "https" {
+			return fmt.Errorf("PULSE_LICENSE_SERVER_URL must use http or https scheme")
+		}
+		if parsedLicenseURL.Host == "" {
+			return fmt.Errorf("PULSE_LICENSE_SERVER_URL must include a host")
+		}
 	}
 	return nil
 }

@@ -284,7 +284,7 @@
         return request(bootstrap().magic_link_request_path, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email })
+          body: JSON.stringify({ email, target: "portal" })
         }, "Failed to send magic link.");
       },
       logout: function() {

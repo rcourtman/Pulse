@@ -21,12 +21,16 @@ const (
 	magicLinkPrefix = "ml1_"
 	hmacKeyFile     = ".cp_magic_link_key"
 	hmacKeySize     = 32
+
+	MagicLinkTargetTenantHandoff = "tenant_handoff"
+	MagicLinkTargetPortal        = "portal"
 )
 
 // Token holds the validated data from a consumed magic link token.
 type Token struct {
 	Email     string
 	TenantID  string
+	Target    string
 	ExpiresAt time.Time
 }
 
@@ -67,13 +71,33 @@ func NewService(cpDataDir string) (*Service, error) {
 // GenerateToken creates a new magic link token for the given email and tenant.
 // Returns a string in the format "ml1_<random>" that can be included in a URL.
 func (s *Service) GenerateToken(email, tenantID string) (string, error) {
+	return s.generateToken(email, tenantID, MagicLinkTargetTenantHandoff)
+}
+
+// GeneratePortalToken creates a new magic link token that signs the user into
+// the Pulse Account portal without requiring a tenant handoff target.
+func (s *Service) GeneratePortalToken(email string) (string, error) {
+	return s.generateToken(email, "", MagicLinkTargetPortal)
+}
+
+func (s *Service) generateToken(email, tenantID, target string) (string, error) {
 	if s == nil {
 		return "", fmt.Errorf("magic link service not configured")
 	}
 	email = strings.ToLower(strings.TrimSpace(email))
 	tenantID = strings.TrimSpace(tenantID)
-	if email == "" || tenantID == "" {
-		return "", fmt.Errorf("email and tenantID are required")
+	target = strings.TrimSpace(target)
+	if email == "" {
+		return "", fmt.Errorf("email is required")
+	}
+	if target == "" {
+		target = MagicLinkTargetTenantHandoff
+	}
+	if target == MagicLinkTargetTenantHandoff && tenantID == "" {
+		return "", fmt.Errorf("tenantID is required")
+	}
+	if target != MagicLinkTargetTenantHandoff && target != MagicLinkTargetPortal {
+		return "", fmt.Errorf("target is invalid")
 	}
 
 	expiresAt := s.now().UTC().Add(s.ttl)
@@ -88,6 +112,7 @@ func (s *Service) GenerateToken(email, tenantID string) (string, error) {
 	if err := s.store.Put(tokenHash, &TokenRecord{
 		Email:     email,
 		TenantID:  tenantID,
+		Target:    target,
 		ExpiresAt: expiresAt,
 	}); err != nil {
 		return "", err
@@ -115,6 +140,7 @@ func (s *Service) ValidateToken(token string) (*Token, error) {
 	return &Token{
 		Email:     rec.Email,
 		TenantID:  rec.TenantID,
+		Target:    rec.Target,
 		ExpiresAt: rec.ExpiresAt,
 	}, nil
 }

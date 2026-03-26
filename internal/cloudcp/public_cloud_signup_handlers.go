@@ -154,7 +154,9 @@ type PublicCloudSignupHandlers struct {
 	registry   *registry.TenantRegistry
 	magicLinks interface {
 		GenerateToken(email, tenantID string) (string, error)
+		GeneratePortalToken(email string) (string, error)
 	}
+	commercialIdentities  commercialIdentityLookup
 	emailSender           cpemail.Sender
 	createCheckoutSession func(params *stripe.CheckoutSessionParams) (*stripe.CheckoutSession, error)
 }
@@ -182,16 +184,26 @@ type publicCloudSignupRequest struct {
 }
 
 type publicMagicLinkRequest struct {
-	Email string `json:"email"`
+	Email  string `json:"email"`
+	Target string `json:"target,omitempty"`
 }
+
+type publicMagicLinkTarget string
+
+const (
+	publicMagicLinkTargetDefault publicMagicLinkTarget = ""
+	publicMagicLinkTargetPortal  publicMagicLinkTarget = "portal"
+)
 
 func NewPublicCloudSignupHandlers(cfg *CPConfig, reg *registry.TenantRegistry, magicLinks interface {
 	GenerateToken(email, tenantID string) (string, error)
+	GeneratePortalToken(email string) (string, error)
 }, emailSender cpemail.Sender) *PublicCloudSignupHandlers {
 	return &PublicCloudSignupHandlers{
 		cfg:                   cfg,
 		registry:              reg,
 		magicLinks:            magicLinks,
+		commercialIdentities:  newCommercialIdentityClient(cfg),
 		emailSender:           emailSender,
 		createCheckoutSession: stripesession.New,
 	}
@@ -389,9 +401,10 @@ func (h *PublicCloudSignupHandlers) HandlePublicMagicLinkRequest(w http.Response
 		writePublicSignupError(w, http.StatusBadRequest, "invalid_email", "Invalid email format")
 		return
 	}
+	target := parsePublicMagicLinkTarget(req.Target)
 
 	const msg = "If that email is registered, you'll receive a magic link shortly."
-	if h.registry == nil || h.magicLinks == nil {
+	if h.magicLinks == nil {
 		writePublicSignupJSON(w, http.StatusOK, map[string]any{
 			"success": true,
 			"message": msg,
@@ -399,26 +412,16 @@ func (h *PublicCloudSignupHandlers) HandlePublicMagicLinkRequest(w http.Response
 		return
 	}
 
-	tenantID, ok, err := h.findTenantForEmail(email)
+	token, issued, tenantID, err := h.issueMagicLinkToken(r.Context(), email, target)
 	if err != nil {
-		log.Warn().Err(err).Str("email", email).Msg("public magic link request: tenant lookup failed")
+		log.Warn().Err(err).Str("email", email).Str("target", string(target)).Msg("public magic link request: token generation failed")
 		writePublicSignupJSON(w, http.StatusOK, map[string]any{
 			"success": true,
 			"message": msg,
 		})
 		return
 	}
-	if !ok {
-		writePublicSignupJSON(w, http.StatusOK, map[string]any{
-			"success": true,
-			"message": msg,
-		})
-		return
-	}
-
-	token, err := h.magicLinks.GenerateToken(email, tenantID)
-	if err != nil {
-		log.Warn().Err(err).Str("email", email).Str("tenant_id", tenantID).Msg("public magic link request: token generation failed")
+	if !issued {
 		writePublicSignupJSON(w, http.StatusOK, map[string]any{
 			"success": true,
 			"message": msg,
@@ -440,6 +443,48 @@ func (h *PublicCloudSignupHandlers) HandlePublicMagicLinkRequest(w http.Response
 		"success": true,
 		"message": msg,
 	})
+}
+
+func parsePublicMagicLinkTarget(raw string) publicMagicLinkTarget {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case string(publicMagicLinkTargetPortal):
+		return publicMagicLinkTargetPortal
+	default:
+		return publicMagicLinkTargetDefault
+	}
+}
+
+func (h *PublicCloudSignupHandlers) issueMagicLinkToken(ctx context.Context, email string, target publicMagicLinkTarget) (token string, issued bool, tenantID string, err error) {
+	tenantID, hasTenant, err := h.findTenantForEmail(email)
+	if err != nil {
+		return "", false, "", err
+	}
+
+	switch target {
+	case publicMagicLinkTargetPortal:
+		if hasTenant {
+			token, err := h.magicLinks.GeneratePortalToken(email)
+			return token, err == nil, tenantID, err
+		}
+		if h.commercialIdentities == nil {
+			return "", false, "", nil
+		}
+		identity, err := h.commercialIdentities.LookupCommercialIdentity(ctx, email)
+		if err != nil {
+			return "", false, "", err
+		}
+		if identity == nil || !identity.HasCommercialIdentity {
+			return "", false, "", nil
+		}
+		token, err := h.magicLinks.GeneratePortalToken(email)
+		return token, err == nil, "", err
+	default:
+		if !hasTenant {
+			return "", false, "", nil
+		}
+		token, err := h.magicLinks.GenerateToken(email, tenantID)
+		return token, err == nil, tenantID, err
+	}
 }
 
 func (h *PublicCloudSignupHandlers) createCheckout(email, orgName string, tier cloudTier) (string, error) {
@@ -515,6 +560,9 @@ func (h *PublicCloudSignupHandlers) renderSignupPage(w http.ResponseWriter, r *h
 }
 
 func (h *PublicCloudSignupHandlers) findTenantForEmail(email string) (string, bool, error) {
+	if h.registry == nil {
+		return "", false, nil
+	}
 	tenants, err := h.registry.List()
 	if err != nil {
 		return "", false, err

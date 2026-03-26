@@ -133,7 +133,7 @@ export function createPortalAPI(context: PortalAPIContext): PortalAPI {
       return request<PortalMagicLinkResponse>(bootstrap().magic_link_request_path, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email }),
+        body: JSON.stringify({ email: email, target: 'portal' }),
       }, 'Failed to send magic link.');
     },
     logout: function() {

@@ -15,21 +15,48 @@ import (
 )
 
 type captureMagicLinkGenerator struct {
-	calls    int
-	email    string
-	tenantID string
-	token    string
-	err      error
+	tenantCalls int
+	portalCalls int
+	email       string
+	tenantID    string
+	token       string
+	err         error
 }
 
 func (c *captureMagicLinkGenerator) GenerateToken(email, tenantID string) (string, error) {
-	c.calls++
+	c.tenantCalls++
 	c.email = email
 	c.tenantID = tenantID
 	if c.err != nil {
 		return "", c.err
 	}
 	return c.token, nil
+}
+
+func (c *captureMagicLinkGenerator) GeneratePortalToken(email string) (string, error) {
+	c.portalCalls++
+	c.email = email
+	c.tenantID = ""
+	if c.err != nil {
+		return "", c.err
+	}
+	return c.token, nil
+}
+
+type captureCommercialIdentityLookup struct {
+	calls  int
+	email  string
+	result *CommercialIdentityLookupResult
+	err    error
+}
+
+func (c *captureCommercialIdentityLookup) LookupCommercialIdentity(_ context.Context, email string) (*CommercialIdentityLookupResult, error) {
+	c.calls++
+	c.email = email
+	if c.err != nil {
+		return nil, c.err
+	}
+	return c.result, nil
 }
 
 type captureEmailSender struct {
@@ -217,8 +244,11 @@ func TestPublicCloudSignupHandlePublicMagicLinkRequestKnownTenantSendsEmail(t *t
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d, want %d body=%q", rec.Code, http.StatusOK, rec.Body.String())
 	}
-	if magic.calls != 1 {
-		t.Fatalf("magic GenerateToken calls=%d, want 1", magic.calls)
+	if magic.tenantCalls != 1 {
+		t.Fatalf("magic GenerateToken calls=%d, want 1", magic.tenantCalls)
+	}
+	if magic.portalCalls != 0 {
+		t.Fatalf("magic GeneratePortalToken calls=%d, want 0", magic.portalCalls)
 	}
 	if magic.tenantID != "t-test-1" {
 		t.Fatalf("magic tenantID=%q, want %q", magic.tenantID, "t-test-1")
@@ -231,6 +261,91 @@ func TestPublicCloudSignupHandlePublicMagicLinkRequestKnownTenantSendsEmail(t *t
 	}
 	if !strings.Contains(emailSender.msg.Text, "/auth/magic-link/verify?token=") {
 		t.Fatalf("email body missing verify URL")
+	}
+}
+
+func TestPublicCloudSignupHandlePublicMagicLinkRequestPortalTargetKnownTenantUsesPortalToken(t *testing.T) {
+	dir := t.TempDir()
+	reg, err := registry.NewTenantRegistry(dir)
+	if err != nil {
+		t.Fatalf("NewTenantRegistry: %v", err)
+	}
+	t.Cleanup(func() { _ = reg.Close() })
+
+	if err := reg.Create(&registry.Tenant{
+		ID:          "t-portal-1",
+		AccountID:   "a-portal-1",
+		Email:       "owner@example.com",
+		DisplayName: "Pulse Labs",
+		State:       registry.TenantStateActive,
+	}); err != nil {
+		t.Fatalf("Create tenant: %v", err)
+	}
+
+	magic := &captureMagicLinkGenerator{token: "ml_portal_123"}
+	emailSender := &captureEmailSender{}
+	h := NewPublicCloudSignupHandlers(&CPConfig{
+		BaseURL:   "https://cloud.example.com",
+		EmailFrom: "noreply@pulserelay.pro",
+	}, reg, magic, emailSender)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/public/magic-link/request", strings.NewReader(`{"email":"owner@example.com","target":"portal"}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	h.HandlePublicMagicLinkRequest(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d, want %d body=%q", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	if magic.portalCalls != 1 {
+		t.Fatalf("magic GeneratePortalToken calls=%d, want 1", magic.portalCalls)
+	}
+	if magic.tenantCalls != 0 {
+		t.Fatalf("magic GenerateToken calls=%d, want 0", magic.tenantCalls)
+	}
+	if emailSender.calls != 1 {
+		t.Fatalf("email sender calls=%d, want 1", emailSender.calls)
+	}
+}
+
+func TestPublicCloudSignupHandlePublicMagicLinkRequestPortalTargetCommercialOnlyUsesPortalToken(t *testing.T) {
+	magic := &captureMagicLinkGenerator{token: "ml_portal_456"}
+	emailSender := &captureEmailSender{}
+	lookup := &captureCommercialIdentityLookup{
+		result: &CommercialIdentityLookupResult{
+			Email:                 "owner@example.com",
+			HasCommercialIdentity: true,
+			Sources:               []string{"v5_license"},
+			V5LicenseCount:        1,
+		},
+	}
+	h := NewPublicCloudSignupHandlers(&CPConfig{
+		BaseURL:   "https://cloud.example.com",
+		EmailFrom: "noreply@pulserelay.pro",
+	}, nil, magic, emailSender)
+	h.commercialIdentities = lookup
+
+	req := httptest.NewRequest(http.MethodPost, "/api/public/magic-link/request", strings.NewReader(`{"email":"owner@example.com","target":"portal"}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	h.HandlePublicMagicLinkRequest(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d, want %d body=%q", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	if lookup.calls != 1 {
+		t.Fatalf("commercial lookup calls=%d, want 1", lookup.calls)
+	}
+	if magic.portalCalls != 1 {
+		t.Fatalf("magic GeneratePortalToken calls=%d, want 1", magic.portalCalls)
+	}
+	if magic.tenantCalls != 0 {
+		t.Fatalf("magic GenerateToken calls=%d, want 0", magic.tenantCalls)
+	}
+	if emailSender.calls != 1 {
+		t.Fatalf("email sender calls=%d, want 1", emailSender.calls)
 	}
 }
 

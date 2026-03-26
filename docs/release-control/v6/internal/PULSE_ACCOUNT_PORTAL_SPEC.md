@@ -82,6 +82,19 @@ One user may belong to multiple accounts. One account may own multiple hosted
 workspaces and multiple self-hosted licenses. MSP is therefore an account kind
 with stronger workspace-management needs, not a completely separate portal.
 
+Portal authentication must follow that same commercial identity model. `Pulse
+Account` sign-in cannot be limited to hosted-tenant members only; the portal
+magic-link path must accept both:
+
+1. hosted Cloud/MSP identities that already resolve through the control-plane
+   tenant/account registry
+2. self-hosted commercial identities that resolve through the shared
+   license/commercial account surface even when they have no hosted tenant
+
+When the portal explicitly requests a portal-target magic link, the resulting
+verification flow must create a control-plane session and return the user to
+`/portal` rather than forcing a tenant handoff redirect.
+
 ## Canonical Information Architecture
 
 The future Pulse account surface should be one shell with product-aware areas,

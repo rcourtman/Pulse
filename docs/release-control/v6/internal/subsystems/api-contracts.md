@@ -227,6 +227,15 @@ portal source tree now also owns explicit runtime/bootstrap type definitions
 plus a package-local `tsc --noEmit` gate, so future account-shell work should
 extend the typed source boundary instead of reviving opaque global runtime
 objects, document-wide render events, or untyped embedded asset edits.
+The public magic-link request and verification contract that feeds that shell
+is now explicit as well. Portal-target requests from
+`internal/cloudcp/portal/frontend/src/api.ts` must keep the opaque success
+posture for unknown emails, but they must resolve real login capability
+through both hosted account membership and the shared commercial identity
+lookup against the license/account surface. When the request target is
+`portal`, `internal/cloudcp/auth/handlers.go` must create a control-plane
+session and redirect back to `/portal` instead of forcing hosted tenant
+handoff semantics.
 Hosted Pulse Cloud tenant-org AI reads now also follow that same canonical
 rule: `internal/api/ai_hosted_runtime.go`, `internal/api/ai_handlers.go`,
 `internal/api/ai_handler.go`, and `internal/api/hosted_billing_state.go`

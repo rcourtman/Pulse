@@ -209,7 +209,7 @@ describe('portal app', function() {
       '/api/public/magic-link/request',
       expect.objectContaining({
         method: 'POST',
-        body: JSON.stringify({ email: 'buyer@example.com' }),
+        body: JSON.stringify({ email: 'buyer@example.com', target: 'portal' }),
       })
     );
     expect(document.getElementById('portal-app-root')?.textContent).toContain("If that email is registered, you'll receive a magic link shortly.");

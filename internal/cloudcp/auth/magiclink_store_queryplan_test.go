@@ -22,7 +22,7 @@ func TestMagicLinkStoreQueryPlansUseIndexes(t *testing.T) {
 	}{
 		{
 			name:      "consume lookup uses token primary key",
-			query:     `SELECT email, tenant_id, expires_at, used FROM magic_link_tokens WHERE token_hash = ?`,
+			query:     `SELECT email, tenant_id, target, expires_at, used FROM magic_link_tokens WHERE token_hash = ?`,
 			args:      []any{hex.EncodeToString(tokenHash)},
 			wantIndex: "sqlite_autoindex_magic_link_tokens_1",
 		},
@@ -70,6 +70,7 @@ func newMagicLinkPlanTestStore(t *testing.T) (*Store, []byte, time.Time) {
 		rec := &TokenRecord{
 			Email:     fmt.Sprintf("user%02d@example.com", i),
 			TenantID:  fmt.Sprintf("tenant-%02d", i%12),
+			Target:    MagicLinkTargetTenantHandoff,
 			ExpiresAt: base.Add(time.Duration(i-64) * time.Minute),
 		}
 		if err := store.Put(tokenHash, rec); err != nil {

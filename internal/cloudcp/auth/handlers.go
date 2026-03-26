@@ -18,6 +18,7 @@ import (
 )
 
 const handoffTTL = 60 * time.Second
+const portalRedirectPath = "/portal"
 
 type adminGenerateMagicLinkRequest struct {
 	Email     string `json:"email"`
@@ -71,6 +72,38 @@ func HandleMagicLinkVerify(svc *Service, reg *registry.TenantRegistry, tenantsDi
 			return
 		}
 
+		if token.Target == MagicLinkTargetPortal {
+			userID, err := ensureAccountUser(reg, token.Email)
+			if err != nil {
+				auditEvent(r, "cp_magic_link_verify", "failure").
+					Err(err).
+					Str("email", token.Email).
+					Str("target", token.Target).
+					Str("reason", "user_resolution_failed").
+					Msg("Magic link verification failed")
+				writeError(w, http.StatusInternalServerError, "session_error", "Unable to establish portal session")
+				return
+			}
+			if err := setSessionCookie(w, svc, reg, userID, token.Email); err != nil {
+				auditEvent(r, "cp_magic_link_verify", "failure").
+					Err(err).
+					Str("email", token.Email).
+					Str("target", token.Target).
+					Str("reason", "session_issue_failed").
+					Msg("Magic link verification failed")
+				writeError(w, http.StatusInternalServerError, "session_error", "Unable to establish portal session")
+				return
+			}
+
+			auditEvent(r, "cp_magic_link_verify", "success").
+				Str("email", token.Email).
+				Str("target", token.Target).
+				Msg("Magic link verified, redirecting to Pulse Account")
+
+			http.Redirect(w, r, portalRedirectPath, http.StatusTemporaryRedirect)
+			return
+		}
+
 		// Look up tenant to confirm it exists and is active.
 		tenant, err := reg.Get(token.TenantID)
 		if err != nil || tenant == nil {
@@ -119,34 +152,18 @@ func HandleMagicLinkVerify(svc *Service, reg *registry.TenantRegistry, tenantsDi
 				Str("tenant_id", tenant.ID).
 				Str("email", token.Email).
 				Msg("Failed to establish control-plane session identity")
-		} else if sessionVersion, err := reg.GetUserSessionVersion(userID); err != nil {
-			log.Warn().
-				Err(err).
-				Str("tenant_id", tenant.ID).
-				Str("email", token.Email).
-				Str("user_id", userID).
-				Msg("Failed to read user session version")
-		} else if sessionToken, err := svc.GenerateSessionTokenWithVersion(userID, token.Email, sessionVersion, SessionTTL); err != nil {
+		} else if err := setSessionCookie(w, svc, reg, userID, token.Email); err != nil {
 			log.Warn().
 				Err(err).
 				Str("tenant_id", tenant.ID).
 				Str("email", token.Email).
 				Msg("Failed to issue control-plane session")
-		} else {
-			http.SetCookie(w, &http.Cookie{
-				Name:     SessionCookieName,
-				Value:    sessionToken,
-				Path:     "/",
-				HttpOnly: true,
-				Secure:   true,
-				SameSite: http.SameSiteLaxMode,
-				MaxAge:   int(SessionTTL.Seconds()),
-			})
 		}
 
 		auditEvent(r, "cp_magic_link_verify", "success").
 			Str("tenant_id", tenant.ID).
 			Str("email", token.Email).
+			Str("target", token.Target).
 			Msg("Magic link verified, redirecting to tenant handoff")
 
 		http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
@@ -328,16 +345,30 @@ func clearSessionCookie(w http.ResponseWriter) {
 	})
 }
 
-func ensureAccountUserAndMembership(reg *registry.TenantRegistry, tenant *registry.Tenant, email string) (string, error) {
+func setSessionCookie(w http.ResponseWriter, svc *Service, reg *registry.TenantRegistry, userID, email string) error {
+	sessionVersion, err := reg.GetUserSessionVersion(userID)
+	if err != nil {
+		return fmt.Errorf("read user session version: %w", err)
+	}
+	sessionToken, err := svc.GenerateSessionTokenWithVersion(userID, email, sessionVersion, SessionTTL)
+	if err != nil {
+		return fmt.Errorf("issue session token: %w", err)
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name:     SessionCookieName,
+		Value:    sessionToken,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   int(SessionTTL.Seconds()),
+	})
+	return nil
+}
+
+func ensureAccountUser(reg *registry.TenantRegistry, email string) (string, error) {
 	if reg == nil {
 		return "", fmt.Errorf("registry unavailable")
-	}
-	if tenant == nil {
-		return "", fmt.Errorf("tenant is required")
-	}
-	accountID := strings.TrimSpace(tenant.AccountID)
-	if accountID == "" {
-		return "", fmt.Errorf("tenant has no account id")
 	}
 	email = strings.ToLower(strings.TrimSpace(email))
 	if email == "" {
@@ -371,24 +402,48 @@ func ensureAccountUserAndMembership(reg *registry.TenantRegistry, tenant *regist
 		return "", fmt.Errorf("user resolution failed")
 	}
 
-	m, err := reg.GetMembership(accountID, user.ID)
+	_ = reg.UpdateUserLastLogin(user.ID)
+	return user.ID, nil
+}
+
+func ensureAccountUserAndMembership(reg *registry.TenantRegistry, tenant *registry.Tenant, email string) (string, error) {
+	if reg == nil {
+		return "", fmt.Errorf("registry unavailable")
+	}
+	if tenant == nil {
+		return "", fmt.Errorf("tenant is required")
+	}
+	accountID := strings.TrimSpace(tenant.AccountID)
+	if accountID == "" {
+		return "", fmt.Errorf("tenant has no account id")
+	}
+	email = strings.ToLower(strings.TrimSpace(email))
+	if email == "" {
+		return "", fmt.Errorf("email is required")
+	}
+
+	userID, err := ensureAccountUser(reg, email)
+	if err != nil {
+		return "", err
+	}
+
+	m, err := reg.GetMembership(accountID, userID)
 	if err != nil {
 		return "", fmt.Errorf("lookup membership: %w", err)
 	}
 	if m == nil {
 		newMembership := &registry.AccountMembership{
 			AccountID: accountID,
-			UserID:    user.ID,
+			UserID:    userID,
 			Role:      registry.MemberRoleOwner,
 		}
 		if createErr := reg.CreateMembership(newMembership); createErr != nil {
-			reloaded, reloadErr := reg.GetMembership(accountID, user.ID)
+			reloaded, reloadErr := reg.GetMembership(accountID, userID)
 			if reloadErr != nil || reloaded == nil {
 				return "", fmt.Errorf("create membership: %w", createErr)
 			}
 		}
 	}
 
-	_ = reg.UpdateUserLastLogin(user.ID)
-	return user.ID, nil
+	return userID, nil
 }
