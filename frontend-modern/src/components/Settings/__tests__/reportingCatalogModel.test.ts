@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildReportingCatalogRequest,
+  buildLegacyReportingCatalogFallback,
   parseReportingCatalog,
 } from '../reportingCatalogModel';
 
@@ -67,6 +68,14 @@ describe('reporting catalog model', () => {
     expect(buildReportingCatalogRequest()).toEqual({
       url: '/api/admin/reports/catalog',
     });
+  });
+
+  it('builds the legacy reporting compatibility fallback', () => {
+    const catalog = buildLegacyReportingCatalogFallback();
+
+    expect(catalog.performanceReport.singleResourceEndpoint).toBe('/api/reporting');
+    expect(catalog.performanceReport.multiResourceEndpoint).toBe('/api/reporting/generate-multi');
+    expect(catalog.vmInventoryExport).toBeNull();
   });
 
   it('parses the canonical reporting catalog payload', () => {

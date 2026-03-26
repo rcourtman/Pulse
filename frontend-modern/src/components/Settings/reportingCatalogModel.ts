@@ -55,12 +55,69 @@ export interface ReportingCatalog {
   lockedState: ReportingLockedStateDefinition;
   guidance: ReportingGuidanceDefinition;
   performanceReport: ReportingPerformanceReportDefinition;
-  vmInventoryExport: ReportingInventoryExportDefinition;
+  vmInventoryExport: ReportingInventoryExportDefinition | null;
 }
 
 export function buildReportingCatalogRequest(): { url: string } {
   return {
     url: '/api/admin/reports/catalog',
+  };
+}
+
+export function buildLegacyReportingCatalogFallback(): ReportingCatalog {
+  return {
+    id: 'advanced_reporting',
+    title: 'Detailed Reporting',
+    description: 'Generate performance reports across infrastructure and workloads.',
+    lockedState: {
+      title: 'Advanced Reporting (Pro)',
+      description: 'Generate PDF and CSV performance reports across infrastructure and workload resources.',
+    },
+    guidance: {
+      title: 'Advanced Insights',
+      description: 'Older Pulse servers expose the legacy reporting transport directly. Performance reports remain available here, but newer catalog-driven reporting surfaces require a newer backend.',
+    },
+    performanceReport: {
+      id: 'performance_reports',
+      title: 'Performance Reports',
+      description: 'Generate PDF summaries or CSV metric exports from historical monitoring data for one or more selected resources.',
+      singleResourceEndpoint: '/api/reporting',
+      multiResourceEndpoint: '/api/reporting/generate-multi',
+      singleFilenamePrefix: 'report',
+      singleFilenameSubject: 'resource_id',
+      multiFilenamePrefix: 'fleet-report',
+      filenameDateStyle: 'utc_yyyymmdd',
+      formats: [
+        { value: 'pdf', label: 'PDF Report' },
+        { value: 'csv', label: 'CSV Data' },
+      ],
+      defaultFormat: 'pdf',
+      ranges: [
+        {
+          key: '24h',
+          label: 'Last 24 Hours',
+          description: 'Current-day operational summary for short-term regressions.',
+          windowHours: 24,
+        },
+        {
+          key: '7d',
+          label: 'Last 7 Days',
+          description: 'Weekly trend window for recent performance changes.',
+          windowHours: 168,
+        },
+        {
+          key: '30d',
+          label: 'Last 30 Days',
+          description: 'Monthly review window for sustained capacity or reliability shifts.',
+          windowHours: 720,
+        },
+      ],
+      defaultRange: '24h',
+      multiResourceMax: 50,
+      supportsMetricFilter: true,
+      supportsCustomTitle: true,
+    },
+    vmInventoryExport: null,
   };
 }
 

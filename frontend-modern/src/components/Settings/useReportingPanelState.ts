@@ -29,6 +29,7 @@ import {
   buildVMInventoryExportRequest,
 } from '@/components/Settings/reportingInventoryExportModel';
 import {
+  buildLegacyReportingCatalogFallback,
   buildReportingCatalogRequest,
   parseReportingCatalog,
   type ReportingCatalog,
@@ -86,7 +87,12 @@ export const useReportingPanelState = () => {
       const request = buildReportingCatalogRequest();
       const response = await apiFetch(request.url);
       if (!response.ok) {
-        throw await apiErrorFromResponse(response, getReportingCatalogErrorMessage());
+        const error = await apiErrorFromResponse(response, getReportingCatalogErrorMessage());
+        if ((error as { status?: number }).status === 404) {
+          setReportingCatalog(buildLegacyReportingCatalogFallback());
+          return;
+        }
+        throw error;
       }
 
       setReportingCatalog(parseReportingCatalog(await response.json()));

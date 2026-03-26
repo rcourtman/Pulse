@@ -227,6 +227,13 @@ loaded.
 The same metadata route is readable without the reporting feature gate, so the
 settings shell must not delay the catalog fetch on `licenseLoaded()` before it
 can render its canonical loading, locked, or entitled states.
+That same shell must also stay usable against older Pulse backends that do not
+yet expose `/api/admin/reports/catalog`. When that specific metadata route
+returns `404`, `useReportingPanelState.ts` may fall back to the governed legacy
+performance-report transport (`/api/reporting` and `/api/reporting/generate-multi`)
+so the reporting panel does not go dead on mixed-version installs, but that
+compatibility path is intentionally report-only and must not invent the newer
+catalog-owned VM inventory export surface.
 That same catalog load must also remain retryable after transient failure.
 `useReportingPanelState.ts` may memoize or dedupe in-flight work, but it must
 not permanently latch a failed first fetch and force operators to reload the

@@ -327,4 +327,51 @@ describe('useReportingPanelState', () => {
 
     dispose();
   });
+
+  it('falls back to the legacy reporting transport when the catalog route is missing', async () => {
+    vi.resetModules();
+
+    apiFetchMock = vi.fn().mockResolvedValueOnce(new Response('404 page not found', { status: 404 }));
+
+    vi.doMock('@/utils/apiClient', async () => {
+      const actual = await vi.importActual<typeof import('@/utils/apiClient')>('@/utils/apiClient');
+      return {
+        ...actual,
+        apiFetch: apiFetchMock,
+      };
+    });
+
+    vi.doMock('@/utils/toast', () => ({
+      showSuccess: vi.fn(),
+      showWarning: vi.fn(),
+    }));
+
+    vi.doMock('@/utils/trialStartAction', () => ({
+      runStartProTrialAction: vi.fn(),
+    }));
+
+    vi.doMock('@/utils/upgradeMetrics', () => ({
+      trackPaywallViewed: vi.fn(),
+    }));
+
+    vi.doMock('@/stores/license', () => ({
+      entitlements: vi.fn(() => ({ trial_eligible: true })),
+      getUpgradeActionUrlOrFallback: vi.fn(() => '/pricing'),
+      hasFeature: vi.fn((feature: string) => feature === 'advanced_reporting' && hasReportingFeature),
+      licenseLoaded: vi.fn(() => true),
+      loadLicenseStatus: loadLicenseStatusMock,
+    }));
+
+    ({ useReportingPanelState } = await import('../useReportingPanelState'));
+    const { hookState, dispose } = mountHook();
+
+    await flushAsync();
+    await flushAsync();
+
+    expect(hookState.reportingCatalogError()).toBe('');
+    expect(hookState.reportingCatalog()?.performanceReport.singleResourceEndpoint).toBe('/api/reporting');
+    expect(hookState.reportingCatalog()?.vmInventoryExport).toBeNull();
+
+    dispose();
+  });
 });

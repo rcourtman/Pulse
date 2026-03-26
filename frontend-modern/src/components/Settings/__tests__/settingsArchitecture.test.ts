@@ -1097,6 +1097,7 @@ describe('Settings architecture guardrails', () => {
     expect(reportingPanelStateSource).not.toContain('startProTrial()');
     expect(reportingPanelStateSource).toContain('buildReportingRequest');
     expect(reportingPanelStateSource).toContain('buildReportingCatalogRequest');
+    expect(reportingPanelStateSource).toContain('buildLegacyReportingCatalogFallback');
     expect(reportingPanelStateSource).toContain('parseReportingCatalog');
     expect(reportingPanelStateSource).toContain('reportingFeatureId');
     expect(reportingPanelStateSource).toContain('loadReportingCatalog = async');
@@ -1110,6 +1111,7 @@ describe('Settings architecture guardrails', () => {
     expect(reportingPanelStateSource).not.toContain("'advanced_reporting'");
     expect(reportingPanelStateSource).not.toContain('getTrialAlreadyUsedMessage()');
     expect(reportingCatalogModelSource).toContain('export function buildReportingCatalogRequest');
+    expect(reportingCatalogModelSource).toContain('export function buildLegacyReportingCatalogFallback');
     expect(reportingCatalogModelSource).toContain('export function parseReportingCatalog');
     expect(reportingCatalogModelSource).toContain('interface ReportingLockedStateDefinition');
     expect(reportingCatalogModelSource).toContain('interface ReportingGuidanceDefinition');
