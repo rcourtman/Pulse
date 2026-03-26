@@ -630,6 +630,7 @@ async function openBilling(accountID) {
 
 function toggleTeam(accountID) {
   var section = document.getElementById('team-section-' + accountID);
+  if (!section) return;
   var visible = section.classList.contains('visible');
   section.classList.toggle('visible', !visible);
   if (!visible) loadTeam(accountID);
@@ -649,6 +650,7 @@ function setTbodyMessage(tbody, msg, isError) {
 async function loadTeam(accountID) {
   var tbody = document.getElementById('team-list-' + accountID);
   var section = document.getElementById('team-section-' + accountID);
+  if (!tbody || !section) return;
   var actorRole = section.getAttribute('data-actor-role') || '';
   var isOwner = actorRole === 'owner';
   setTbodyMessage(tbody, 'Loading\u2026', false);
@@ -703,6 +705,20 @@ async function loadTeam(accountID) {
   }
 }
 
+async function refreshAccountTeamSection(accountID) {
+  if (!await refreshBootstrap()) {
+    window.location.href = PORTAL_PATH;
+    return false;
+  }
+  var section = document.getElementById('team-section-' + accountID);
+  if (!section) {
+    return true;
+  }
+  section.classList.add('visible');
+  await loadTeam(accountID);
+  return true;
+}
+
 async function inviteMember(accountID) {
   var emailEl = document.getElementById('invite-email-' + accountID);
   var roleEl = document.getElementById('invite-role-' + accountID);
@@ -721,8 +737,10 @@ async function inviteMember(accountID) {
       return;
     }
     emailEl.value = '';
+    if (!await refreshAccountTeamSection(accountID)) {
+      return;
+    }
     showToast('Member invited!');
-    loadTeam(accountID);
   } catch(e) {
     showToast('Network error.', true);
   }
@@ -737,6 +755,9 @@ async function changeRole(accountID, userID, newRole) {
     });
     if (r.status === 409) { showToast('Cannot demote last owner.', true); loadTeam(accountID); return; }
     if (!r.ok) { showToast('Failed to update role.', true); loadTeam(accountID); return; }
+    if (!await refreshAccountTeamSection(accountID)) {
+      return;
+    }
     showToast('Role updated.');
   } catch(e) {
     showToast('Network error.', true);
@@ -752,8 +773,10 @@ async function removeMember(accountID, userID, email) {
     });
     if (r.status === 409) { showToast('Cannot remove last owner.', true); return; }
     if (!r.ok) { showToast('Failed to remove member.', true); return; }
+    if (!await refreshAccountTeamSection(accountID)) {
+      return;
+    }
     showToast('Member removed.');
-    loadTeam(accountID);
   } catch(e) {
     showToast('Network error.', true);
   }

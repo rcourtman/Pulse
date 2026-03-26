@@ -810,6 +810,7 @@ func TestPortalPageTemplate_AccountServicesRendered(t *testing.T) {
 		`fetch(LICENSE_API_BASE + '/v1/gdpr/request-delete'`,
 		`fetch(LICENSE_API_BASE + '/v1/gdpr/confirm-delete'`,
 		`if (!await refreshBootstrap())`,
+		`refreshAccountTeamSection(accountID)`,
 		`href="https://pulserelay.pro/refund.html?email=owner%40example.com"`,
 		"commercial account actions now live here",
 	}
@@ -823,6 +824,9 @@ func TestPortalPageTemplate_AccountServicesRendered(t *testing.T) {
 	}
 	if strings.Contains(html, `window.location.reload()`) {
 		t.Errorf("expected workspace lifecycle to refresh the bootstrap contract instead of forcing a page reload")
+	}
+	if strings.Contains(html, `showToast('Member invited!');`+"\n"+`    loadTeam(accountID);`) {
+		t.Errorf("expected membership mutations to refresh the account bootstrap instead of only repainting the team table")
 	}
 	if strings.Contains(html, `await fetch('/auth/logout'`) {
 		t.Errorf("expected portal paths to be renderer-owned, not hardcoded in the asset")
