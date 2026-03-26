@@ -180,10 +180,12 @@ async function refreshBootstrap() {
     var response = await fetch(BOOTSTRAP_PATH, {
       headers: { 'Accept': 'application/json' }
     });
-    if (!response.ok) return;
+    if (!response.ok) return false;
     var data = await response.json();
     applyBootstrap(data);
+    return true;
   } catch (_) {}
+  return false;
 }
 
 function showToast(msg, isError) {
@@ -569,8 +571,11 @@ async function createWorkspace(accountID) {
       showToast((err && err.error) || 'Failed to create workspace', true);
       return;
     }
+    if (!await refreshBootstrap()) {
+      window.location.href = PORTAL_PATH;
+      return;
+    }
     showToast('Workspace created!');
-    setTimeout(function() { window.location.reload(); }, 800);
   } catch(e) {
     showToast('Network error. Please try again.', true);
   } finally {
@@ -578,26 +583,30 @@ async function createWorkspace(accountID) {
   }
 }
 
-function suspendOrDelete(evt, accountID, tenantID, state, name) {
+async function suspendOrDelete(evt, accountID, tenantID, state, name) {
   evt.stopPropagation();
   var action = state === 'active' ? 'Suspend' : 'Delete';
   if (!confirm(action + ' workspace "' + name + '"?')) return;
   var method = state === 'active' ? 'PATCH' : 'DELETE';
   var body = state === 'active' ? JSON.stringify({ state: 'suspended' }) : undefined;
-  fetch(ACCOUNT_API_BASE_PATH + '/' + accountID + '/tenants/' + tenantID, {
-    method: method,
-    headers: body ? { 'Content-Type': 'application/json' } : {},
-    body: body
-  }).then(function(r) {
-    if (r.ok) {
-      showToast(action + 'd workspace.');
-      setTimeout(function() { window.location.reload(); }, 800);
-    } else {
+  try {
+    var response = await fetch(ACCOUNT_API_BASE_PATH + '/' + accountID + '/tenants/' + tenantID, {
+      method: method,
+      headers: body ? { 'Content-Type': 'application/json' } : {},
+      body: body
+    });
+    if (!response.ok) {
       showToast('Failed to ' + action.toLowerCase() + ' workspace.', true);
+      return;
     }
-  }).catch(function() {
+    if (!await refreshBootstrap()) {
+      window.location.href = PORTAL_PATH;
+      return;
+    }
+    showToast(action + 'd workspace.');
+  } catch(_) {
     showToast('Network error.', true);
-  });
+  }
 }
 
 async function openBilling(accountID) {
