@@ -504,6 +504,17 @@ describe('Recovery', () => {
     });
   });
 
+  it('keeps recovery filter surfaces on canonical platform vocabulary', async () => {
+    render(() => <Recovery />);
+
+    expect(await screen.findByLabelText('Platform')).toBeInTheDocument();
+    expect(screen.queryByText('All Providers')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('tab', { name: /Recovery events/i }));
+    expect(await screen.findByLabelText('History platform')).toBeInTheDocument();
+    expect(screen.queryByText('All Providers')).not.toBeInTheDocument();
+  });
+
   it('filters recovery transport by canonical item type', async () => {
     render(() => <Recovery />);
 

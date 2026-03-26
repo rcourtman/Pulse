@@ -382,9 +382,9 @@ export const RecoveryHistorySection: Component<RecoveryHistorySectionProps> = (p
               selectClass="min-w-[10rem] max-w-[14rem]"
             >
               <For each={props.platformOptions()}>
-                {(provider) => (
-                  <option value={provider}>
-                    {provider === 'all' ? 'All Platforms' : getSourcePlatformLabel(provider)}
+                {(platform) => (
+                  <option value={platform}>
+                    {platform === 'all' ? 'All Platforms' : getSourcePlatformLabel(platform)}
                   </option>
                 )}
               </For>

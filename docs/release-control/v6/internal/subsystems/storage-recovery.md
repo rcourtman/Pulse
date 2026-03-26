@@ -187,6 +187,11 @@ That same runtime-helper contract should prefer `item` terminology in shared
 recovery presenters too. Helper exports that resolve labels or item-type badges
 should expose canonical item-facing names, while any retained `subject` aliases
 remain compatibility wrappers instead of the primary runtime boundary.
+The same rule applies inside recovery-owned helpers and selectors. Shared
+summary helpers and platform filter renderers should use canonical `item` and
+`platform` naming internally once compatibility boundaries already exist,
+rather than keeping fresh `subject` or `provider` terminology alive in the
+live recovery runtime path.
 That same presenter boundary should also own canonical item-type derivation.
 Recovery surfaces must resolve rollup and point item types through one shared
 item-type helper instead of repeating `display.itemType` / `subjectType` /

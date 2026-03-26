@@ -177,7 +177,7 @@ const formatShortDate = (value: string): string => {
   return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
 };
 
-const getRecoverySummarySubjectTypePresentation = (
+const getRecoverySummaryItemTypePresentation = (
   value: string | null | undefined,
 ): { key: string; label: string; toneClass: string } | null => {
   const presentation = getRecoveryItemTypePresentation(value);
@@ -432,7 +432,7 @@ export function buildRecoveryItemCoverage(
 
   for (const rollup of rollups) {
     const presentation =
-      getRecoverySummarySubjectTypePresentation(getRecoveryRollupItemTypeKey(rollup)) || {
+      getRecoverySummaryItemTypePresentation(getRecoveryRollupItemTypeKey(rollup)) || {
         key: 'unknown',
         label: 'Unknown',
         toneClass: 'bg-surface-alt text-base-content',
