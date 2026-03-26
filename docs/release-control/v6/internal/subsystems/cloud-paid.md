@@ -508,6 +508,10 @@ headline price, founding-rate override, compare-at strike-through copy,
 campaign badge copy, and annual summary text must come from the shared
 plan-definition owners rather than page-local string parsing or hardcoded
 retail amounts inside hosted pricing/signup screens.
+The same owner also holds shared hosted commercial copy such as page title,
+introductory description, common Cloud inclusions, and setup-step guidance
+when those facts describe the canonical offer rather than one page's local
+layout.
 That same counted-unit boundary also owns the disclosure rule for retail copy:
 default billing and pricing surfaces should use concise monitored-system copy,
 while the full counted-unit definition appears only behind explicit disclosure

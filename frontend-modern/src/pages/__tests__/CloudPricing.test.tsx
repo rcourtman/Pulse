@@ -37,6 +37,10 @@ describe('CloudPricing', () => {
     );
     expect(screen.queryByText('Starter founding rate')).not.toBeInTheDocument();
     expect(screen.getAllByText('All Pro features')).toHaveLength(1);
+    expect(screen.getByText('Managed hosting')).toBeInTheDocument();
+    expect(
+      screen.getByText('Create your workspace. No credit card is required for the trial.'),
+    ).toBeInTheDocument();
     expect(screen.getByText('Setup')).toBeInTheDocument();
     expect(
       screen.queryByText(/provisioned in under 60 seconds/i),

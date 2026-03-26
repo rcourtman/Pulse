@@ -5,19 +5,11 @@ import { PageHeader } from '@/components/shared/PageHeader';
 import { trackPaywallViewed } from '@/utils/upgradeMetrics';
 import { onMount } from 'solid-js';
 import {
+  CLOUD_COMMERCIAL_PRESENTATION,
   CLOUD_PLAN_DEFINITIONS,
   getCloudPlanPricePresentation,
   type CloudPlanDefinition,
 } from '@/utils/cloudPlans';
-
-const INCLUDED_IN_ALL = [
-  'All Pro features',
-  'Managed hosting',
-  'Daily backups',
-  'Secure agent connectivity via Relay',
-  'Mobile app access and push notifications',
-  'Dedicated workspace URL',
-];
 
 function CloudTierCard(props: { tier: CloudPlanDefinition }) {
   const t = props.tier;
@@ -95,8 +87,8 @@ export default function CloudPricing() {
   return (
     <div class="space-y-8">
       <PageHeader
-        title="Pulse Cloud"
-        description="Managed Pulse hosting with Pro features included."
+        title={CLOUD_COMMERCIAL_PRESENTATION.pageTitle}
+        description={CLOUD_COMMERCIAL_PRESENTATION.pageDescription}
       />
 
       {/* Tier cards */}
@@ -106,9 +98,11 @@ export default function CloudPricing() {
 
       {/* What's included in all Cloud plans */}
       <Card padding="lg">
-        <h2 class="text-base font-semibold text-base-content">Included in every Cloud plan</h2>
+        <h2 class="text-base font-semibold text-base-content">
+          {CLOUD_COMMERCIAL_PRESENTATION.includedInAllHeading}
+        </h2>
         <ul class="mt-3 grid grid-cols-1 gap-x-8 gap-y-2 sm:grid-cols-2 text-sm text-base-content">
-          <For each={INCLUDED_IN_ALL}>
+          <For each={CLOUD_COMMERCIAL_PRESENTATION.includedInAllItems}>
             {(item) => (
               <li class="flex gap-2">
                 <span class="text-emerald-600 dark:text-emerald-400 shrink-0 font-bold">✓</span>
@@ -121,11 +115,11 @@ export default function CloudPricing() {
 
       {/* How it works */}
       <Card padding="lg">
-        <h2 class="text-base font-semibold text-base-content">Setup</h2>
+        <h2 class="text-base font-semibold text-base-content">
+          {CLOUD_COMMERCIAL_PRESENTATION.setupHeading}
+        </h2>
         <ol class="mt-3 list-decimal space-y-2 pl-5 text-sm text-base-content">
-          <li>Create your workspace. No credit card is required for the trial.</li>
-          <li>Install the Pulse agent on any Linux machine.</li>
-          <li>Connect systems, review findings, and configure alerts.</li>
+          <For each={CLOUD_COMMERCIAL_PRESENTATION.setupSteps}>{(step) => <li>{step}</li>}</For>
         </ol>
       </Card>
 

@@ -21,6 +21,15 @@ export interface CloudPlanPricePresentation {
   campaignBadge?: string;
 }
 
+export interface CloudCommercialPresentation {
+  pageTitle: string;
+  pageDescription: string;
+  includedInAllHeading: string;
+  includedInAllItems: readonly string[];
+  setupHeading: string;
+  setupSteps: readonly string[];
+}
+
 export const DEFAULT_CLOUD_TIER: CloudTierKey = 'starter';
 
 export const CLOUD_PLAN_DEFINITIONS: readonly CloudPlanDefinition[] = [
@@ -71,6 +80,26 @@ export const CLOUD_PLAN_LABELS: Record<string, string> = {
   msp_growth: 'MSP Growth',
   msp_scale: 'MSP Scale',
 };
+
+export const CLOUD_COMMERCIAL_PRESENTATION: CloudCommercialPresentation = {
+  pageTitle: 'Pulse Cloud',
+  pageDescription: 'Managed Pulse hosting with Pro features included.',
+  includedInAllHeading: 'Included in every Cloud plan',
+  includedInAllItems: [
+    'All Pro features',
+    'Managed hosting',
+    'Daily backups',
+    'Secure agent connectivity via Relay',
+    'Mobile app access and push notifications',
+    'Dedicated workspace URL',
+  ],
+  setupHeading: 'Setup',
+  setupSteps: [
+    'Create your workspace. No credit card is required for the trial.',
+    'Install the Pulse agent on any Linux machine.',
+    'Connect systems, review findings, and configure alerts.',
+  ],
+} as const;
 
 export function parseCloudTier(value?: string | null): CloudTierKey {
   switch ((value || '').trim().toLowerCase()) {
