@@ -570,6 +570,7 @@ func (rr *ResourceRegistry) ingestPMGInstance(instance models.PMGInstance) {
 
 func (rr *ResourceRegistry) ingestVM(vm models.VM, clusterByInstance map[string]string) {
 	resource, identity := resourceFromVM(vm)
+	sourceID := proxmoxVMSourceID(vm)
 	parentSourceID := proxmoxNodeSourceID(vm.Instance, vm.Node)
 	if parentID, ok := rr.bySource[SourceProxmox][parentSourceID]; ok {
 		resource.ParentID = &parentID
@@ -577,11 +578,12 @@ func (rr *ResourceRegistry) ingestVM(vm models.VM, clusterByInstance map[string]
 	if clusterName := clusterByInstance[vm.Instance]; clusterName != "" && resource.Proxmox != nil {
 		resource.Proxmox.ClusterName = clusterName
 	}
-	rr.ingest(SourceProxmox, vm.ID, resource, identity)
+	rr.ingest(SourceProxmox, sourceID, resource, identity)
 }
 
 func (rr *ResourceRegistry) ingestContainer(ct models.Container, clusterByInstance map[string]string) {
 	resource, identity := resourceFromContainer(ct)
+	sourceID := proxmoxContainerSourceID(ct)
 	parentSourceID := proxmoxNodeSourceID(ct.Instance, ct.Node)
 	if parentID, ok := rr.bySource[SourceProxmox][parentSourceID]; ok {
 		resource.ParentID = &parentID
@@ -589,7 +591,7 @@ func (rr *ResourceRegistry) ingestContainer(ct models.Container, clusterByInstan
 	if clusterName := clusterByInstance[ct.Instance]; clusterName != "" && resource.Proxmox != nil {
 		resource.Proxmox.ClusterName = clusterName
 	}
-	rr.ingest(SourceProxmox, ct.ID, resource, identity)
+	rr.ingest(SourceProxmox, sourceID, resource, identity)
 }
 
 func (rr *ResourceRegistry) ingestStorage(storage models.Storage) {
@@ -1336,6 +1338,41 @@ func proxmoxNodeSourceID(instance, nodeName string) string {
 		return nodeName
 	}
 	return fmt.Sprintf("%s-%s", instance, nodeName)
+}
+
+func proxmoxVMSourceID(vm models.VM) string {
+	if sourceID := strings.TrimSpace(vm.ID); sourceID != "" {
+		return sourceID
+	}
+	if vm.VMID > 0 {
+		return proxmoxGuestFallbackSourceID("vm", vm.Instance, vm.Node, vm.VMID)
+	}
+	return strings.TrimSpace(vm.Name)
+}
+
+func proxmoxContainerSourceID(ct models.Container) string {
+	if sourceID := strings.TrimSpace(ct.ID); sourceID != "" {
+		return sourceID
+	}
+	if ct.VMID > 0 {
+		return proxmoxGuestFallbackSourceID("ct", ct.Instance, ct.Node, ct.VMID)
+	}
+	return strings.TrimSpace(ct.Name)
+}
+
+func proxmoxGuestFallbackSourceID(kind, instance, node string, vmid int) string {
+	parts := make([]string, 0, 4)
+	if normalizedKind := strings.TrimSpace(kind); normalizedKind != "" {
+		parts = append(parts, normalizedKind)
+	}
+	if normalizedInstance := strings.TrimSpace(instance); normalizedInstance != "" {
+		parts = append(parts, normalizedInstance)
+	}
+	if normalizedNode := strings.TrimSpace(node); normalizedNode != "" {
+		parts = append(parts, normalizedNode)
+	}
+	parts = append(parts, fmt.Sprintf("%d", vmid))
+	return strings.Join(parts, ":")
 }
 
 func kubernetesClusterSourceID(cluster models.KubernetesCluster) string {

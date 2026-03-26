@@ -54,7 +54,7 @@ func TestHandleGetRecentChanges_NoChangeDetector(t *testing.T) {
 	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if payload["message"] != "Change detector not initialized" {
+	if payload["message"] != "Recent changes not initialized" {
 		t.Fatalf("unexpected message: %#v", payload["message"])
 	}
 }

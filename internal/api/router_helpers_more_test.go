@@ -358,6 +358,8 @@ func TestStartPatrolForContext_DoesNotOverwriteOtherTenantPatrolComponents(t *te
 	defaultMonitor, _, _ := newTestMonitor(t)
 	tenantOneMonitor, _, _ := newTestMonitor(t)
 	tenantTwoMonitor, _, _ := newTestMonitor(t)
+	tenantOneMonitor.SetResourceStore(unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil)))
+	tenantTwoMonitor.SetResourceStore(unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil)))
 
 	mtm := &monitoring.MultiTenantMonitor{}
 	setUnexportedField(t, mtm, "monitors", map[string]*monitoring.Monitor{

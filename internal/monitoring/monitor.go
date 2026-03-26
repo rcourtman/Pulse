@@ -2648,15 +2648,22 @@ func isTransientError(err error) bool {
 }
 
 func (m *Monitor) GetState() models.StateSnapshot {
+	if m == nil {
+		return models.StateSnapshot{}
+	}
+
 	// Check if mock mode is enabled
 	if mock.IsMockEnabled() {
 		state := mock.GetMockState()
-		if state.ActiveAlerts == nil {
+		if state.ActiveAlerts == nil && m.alertManager != nil {
 			// Populate snapshot lazily if the cache hasn't been filled yet.
 			mock.UpdateAlertSnapshots(m.alertManager.GetActiveAlerts(), m.alertManager.GetRecentlyResolved())
 			state = mock.GetMockState()
 		}
 		return state
+	}
+	if m.state == nil {
+		return models.StateSnapshot{}
 	}
 	return m.state.GetSnapshot()
 }

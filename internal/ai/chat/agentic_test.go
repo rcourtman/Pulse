@@ -240,7 +240,8 @@ func TestAgenticLoop(t *testing.T) {
 		require.NoError(t, err)
 		require.NotEmpty(t, secondSystem)
 		assert.Contains(t, secondSystem, "## Known Facts")
-		assert.Contains(t, secondSystem, "vm-one")
+		assert.Contains(t, secondSystem, "vm:node1:100:status")
+		assert.Contains(t, secondSystem, "virtual machine resource")
 	})
 }
 

@@ -2198,15 +2198,10 @@ func (r *governedQueryMetadataResolver) Resolve(candidates ...string) GovernedRe
 }
 
 func governedQueryMetadataFromResolvedResource(resource *unifiedresources.Resource) GovernedResourceMetadata {
-	if resource == nil {
-		return GovernedResourceMetadata{}
-	}
-
-	resourceCopy := *resource
-	unifiedresources.RefreshPolicyMetadata(&resourceCopy)
+	policy, aiSafeSummary := unifiedresources.CanonicalGovernanceMetadata(resource)
 	return GovernedResourceMetadata{
-		Policy:        unifiedresources.CloneResourcePolicy(resourceCopy.Policy),
-		AISafeSummary: strings.TrimSpace(resourceCopy.AISafeSummary),
+		Policy:        policy,
+		AISafeSummary: aiSafeSummary,
 	}
 }
 

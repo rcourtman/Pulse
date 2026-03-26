@@ -58,6 +58,19 @@ func CloneResourcePolicy(policy *ResourcePolicy) *ResourcePolicy {
 	return &copyPolicy
 }
 
+// CanonicalGovernanceMetadata returns cloned policy metadata and AI-safe
+// summary for a resolved resource, tolerating callers that only have routing
+// location data when a full Resource record is not available.
+func CanonicalGovernanceMetadata(resource *Resource) (*ResourcePolicy, string) {
+	if resource == nil {
+		return nil, ""
+	}
+
+	resourceCopy := *resource
+	RefreshPolicyMetadata(&resourceCopy)
+	return CloneResourcePolicy(resourceCopy.Policy), strings.TrimSpace(resourceCopy.AISafeSummary)
+}
+
 // RefreshPolicyMetadata derives canonical sensitivity, routing, and AI-safe summary data.
 func RefreshPolicyMetadata(resource *Resource) {
 	if resource == nil {

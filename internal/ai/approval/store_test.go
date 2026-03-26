@@ -2,6 +2,7 @@ package approval
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -651,7 +652,12 @@ func TestExecutionStatePersistence_NormalizesLoadedCollections(t *testing.T) {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	raw := `[{"id":"exec-1","createdAt":"2026-03-15T10:00:00Z","expiresAt":"2026-03-15T11:00:00Z"}]`
+	now := time.Now().UTC()
+	raw := fmt.Sprintf(
+		`[{"id":"exec-1","createdAt":"%s","expiresAt":"%s"}]`,
+		now.Add(-1*time.Minute).Format(time.RFC3339),
+		now.Add(1*time.Hour).Format(time.RFC3339),
+	)
 	if err := os.WriteFile(filepath.Join(tmpDir, "ai_executions.json"), []byte(raw), 0o600); err != nil {
 		t.Fatalf("write executions file: %v", err)
 	}

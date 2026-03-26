@@ -1165,6 +1165,13 @@ func TestGetService_MultiTenantAppliesServiceInitializerOnCreate(t *testing.T) {
 	mtp := config.NewMultiTenantPersistence(tempDir)
 	mtm := monitoring.NewMultiTenantMonitor(&config.Config{}, mtp, nil)
 	t.Cleanup(mtm.Stop)
+	tenantPersistence, err := mtp.GetPersistence("acme")
+	if err != nil {
+		t.Fatalf("tenant persistence: %v", err)
+	}
+	if err := tenantPersistence.SaveAIConfig(config.AIConfig{Enabled: true}); err != nil {
+		t.Fatalf("save tenant AI config: %v", err)
+	}
 
 	tenantMonitor := &monitoring.Monitor{}
 	setUnexportedField(t, mtm, "monitors", map[string]*monitoring.Monitor{"acme": tenantMonitor})
@@ -1188,7 +1195,7 @@ func TestGetService_MultiTenantAppliesServiceInitializerOnCreate(t *testing.T) {
 
 	ctx := context.WithValue(context.Background(), OrgIDContextKey, "acme")
 	svc := h.GetService(ctx)
-	assert.Same(t, mockSvc, svc)
+	assert.True(t, svc == mockSvc, "expected tenant initializer to receive the created tenant service")
 	if calls != 1 {
 		t.Fatalf("expected initializer called once for tenant service, got %d", calls)
 	}

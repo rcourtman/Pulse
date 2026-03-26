@@ -401,12 +401,26 @@ func TestGetIPThatReachesPulse_IPv6Target(t *testing.T) {
 
 func TestProxmoxSetup_RunForType(t *testing.T) {
 	mc := &mockCollector{}
+	var expectedTokenID string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
+		switch r.URL.Path {
+		case "/api/setup-script-url":
+			publicURL := "http://" + r.Host
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(canonicalSetupScriptURLResponseJSON(publicURL, "pve", "https://10.0.0.1:8006", "setup-token-run-for-type")))
+		case "/api/auto-register":
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(fmt.Sprintf(`{"status":"success","message":"Node node-1 registered successfully at https://10.0.0.1:8006","action":"use_token","type":"pve","source":"agent","host":"https://10.0.0.1:8006","nodeId":"node-1","nodeName":"node-1","tokenId":"%s","tokenValue":"my-token"}`, expectedTokenID)))
+		default:
+			t.Fatalf("unexpected path %s", r.URL.Path)
+		}
 	}))
 	defer server.Close()
 
 	p := NewProxmoxSetup(zerolog.Nop(), server.Client(), mc, server.URL, "token", "pve", "host", "", "", false)
+	p.retryBackoffs = []time.Duration{}
+	expectedTokenID = fmt.Sprintf("%s!%s", proxmoxUserPVE, p.monitorTokenName())
 
 	t.Run("skips if already registered", func(t *testing.T) {
 		mc.statFn = func(name string) (os.FileInfo, error) { return nil, nil } // exists
@@ -570,7 +584,44 @@ func TestProxmoxSetup_RunAll(t *testing.T) {
 	mc := &mockCollector{}
 
 	t.Run("detects both and runs both", func(t *testing.T) {
-		p := NewProxmoxSetup(zerolog.Nop(), http.DefaultClient, mc, "https://pulse", "token", "", "host", "", "", false)
+		var expectedPVETokenID string
+		var expectedPBSTokenID string
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch r.URL.Path {
+			case "/api/setup-script-url":
+				var payload map[string]any
+				if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+					t.Fatalf("decode setup token payload: %v", err)
+				}
+				publicURL := "http://" + r.Host
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(canonicalSetupScriptURLResponseJSON(publicURL, payload["type"].(string), payload["host"].(string), "setup-token-"+payload["type"].(string))))
+			case "/api/auto-register":
+				var payload map[string]any
+				if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+					t.Fatalf("decode auto-register payload: %v", err)
+				}
+				regType := payload["type"].(string)
+				tokenID := expectedPVETokenID
+				tokenValue := "v1"
+				if regType == "pbs" {
+					tokenID = expectedPBSTokenID
+					tokenValue = "v2"
+				}
+				host := payload["host"].(string)
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte(fmt.Sprintf(`{"status":"success","message":"Node node-1 registered successfully at %s","action":"use_token","type":"%s","source":"agent","host":"%s","nodeId":"node-1","nodeName":"node-1","tokenId":"%s","tokenValue":"%s"}`, host, regType, host, tokenID, tokenValue)))
+			default:
+				t.Fatalf("unexpected path %s", r.URL.Path)
+			}
+		}))
+		defer server.Close()
+
+		p := NewProxmoxSetup(zerolog.Nop(), server.Client(), mc, server.URL, "token", "", "host", "", "", false)
+		p.retryBackoffs = []time.Duration{}
+		expectedPVETokenID = fmt.Sprintf("%s!%s", proxmoxUserPVE, p.monitorTokenName())
+		expectedPBSTokenID = fmt.Sprintf("%s!%s", proxmoxUserPBS, p.monitorTokenName())
 		mc.lookPathFn = func(file string) (string, error) { return "/bin/" + file, nil }
 		mc.statFn = func(name string) (os.FileInfo, error) { return nil, os.ErrNotExist }
 		mc.commandCombinedOutputFn = func(ctx context.Context, name string, arg ...string) (string, error) {
@@ -589,9 +640,6 @@ func TestProxmoxSetup_RunAll(t *testing.T) {
 		mc.dialTimeoutFn = func(n, a string, d time.Duration) (net.Conn, error) {
 			return &mockConn{localAddr: &net.UDPAddr{IP: net.ParseIP("10.0.0.1")}}, nil
 		}
-
-		hc := &http.Client{Transport: &mockTransport{statusCode: 200}}
-		p.httpClient = hc
 
 		results, err := p.RunAll(context.Background())
 		if err != nil || len(results) != 2 {
@@ -796,14 +844,41 @@ func TestProxmoxSetup_MarkTypeAsRegistered_EnforcesPrivatePermissions(t *testing
 }
 
 func TestProxmoxSetup_Run_TopLevel(t *testing.T) {
-	mc := &mockCollector{}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer server.Close()
+	newTopLevelCollector := func() *mockCollector {
+		mc := &mockCollector{}
+		mc.statFn = func(name string) (os.FileInfo, error) { return nil, os.ErrNotExist }
+		mc.mkdirAllFn = func(path string, perm os.FileMode) error { return nil }
+		mc.writeFileFn = func(filename string, data []byte, perm os.FileMode) error { return nil }
+		mc.dialTimeoutFn = func(network, address string, timeout time.Duration) (net.Conn, error) {
+			return &mockConn{localAddr: &net.UDPAddr{IP: net.ParseIP("10.0.0.1")}}, nil
+		}
+		return mc
+	}
 
 	t.Run("auto-detects and runs", func(t *testing.T) {
+		mc := newTopLevelCollector()
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch r.URL.Path {
+			case "/api/setup-script-url":
+				publicURL := "http://" + r.Host
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(canonicalSetupScriptURLResponseJSON(publicURL, "pve", "https://10.0.0.1:8006", "setup-token-top-level")))
+			case "/api/auto-register":
+				var payload autoRegisterRequest
+				if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+					t.Fatalf("decode payload: %v", err)
+				}
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte(fmt.Sprintf(`{"status":"success","message":"Node node-1 registered successfully at %s","action":"use_token","type":"%s","source":"agent","host":"%s","nodeId":"node-1","nodeName":"node-1","tokenId":"%s","tokenValue":"%s"}`, payload.Host, payload.Type, payload.Host, payload.TokenID, payload.TokenValue)))
+			default:
+				t.Fatalf("unexpected path %s", r.URL.Path)
+			}
+		}))
+		defer server.Close()
+
 		p := NewProxmoxSetup(zerolog.Nop(), server.Client(), mc, server.URL, "token", "", "host", "", "", false)
+		p.retryBackoffs = []time.Duration{}
 		mc.lookPathFn = func(file string) (string, error) {
 			if file == "pvesh" {
 				return "/bin/pvesh", nil
@@ -817,11 +892,6 @@ func TestProxmoxSetup_Run_TopLevel(t *testing.T) {
 			}
 			return "", nil
 		}
-		mc.mkdirAllFn = func(p string, m os.FileMode) error { return nil }
-		mc.writeFileFn = func(f string, d []byte, m os.FileMode) error { return nil }
-		mc.dialTimeoutFn = func(n, a string, d time.Duration) (net.Conn, error) {
-			return &mockConn{localAddr: &net.UDPAddr{IP: net.ParseIP("10.0.0.1")}}, nil
-		}
 
 		res, err := p.Run(context.Background())
 		if err != nil || res == nil || !res.Registered || res.ProxmoxType != "pve" {
@@ -830,6 +900,12 @@ func TestProxmoxSetup_Run_TopLevel(t *testing.T) {
 	})
 
 	t.Run("invalid pulse URL fails fast", func(t *testing.T) {
+		mc := newTopLevelCollector()
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer server.Close()
+
 		p := NewProxmoxSetup(zerolog.Nop(), server.Client(), mc, "not-a-url", "token", "", "host", "", "", false)
 		if _, err := p.Run(context.Background()); err == nil || !strings.Contains(err.Error(), "invalid pulse URL") {
 			t.Fatalf("expected pulse URL validation error, got %v", err)
@@ -837,6 +913,7 @@ func TestProxmoxSetup_Run_TopLevel(t *testing.T) {
 	})
 
 	t.Run("missing token still registers when auth is optional", func(t *testing.T) {
+		mc := newTopLevelCollector()
 		var gotPayload autoRegisterRequest
 		requestCount := 0
 		noTokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -848,12 +925,14 @@ func TestProxmoxSetup_Run_TopLevel(t *testing.T) {
 				}
 				publicURL := "http://" + r.Host
 				w.Header().Set("Content-Type", "application/json")
-				_, _ = w.Write([]byte(canonicalSetupScriptURLResponseJSON(publicURL, "pve", "https://10.0.0.4:8006", "setup-token-optional")))
+				_, _ = w.Write([]byte(canonicalSetupScriptURLResponseJSON(publicURL, "pve", "https://10.0.0.1:8006", "setup-token-optional")))
 			case "/api/auto-register":
 				if err := json.NewDecoder(r.Body).Decode(&gotPayload); err != nil {
 					t.Fatalf("decode payload: %v", err)
 				}
+				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte(fmt.Sprintf(`{"status":"success","message":"Node node-1 registered successfully at %s","action":"use_token","type":"%s","source":"agent","host":"%s","nodeId":"node-1","nodeName":"node-1","tokenId":"%s","tokenValue":"%s"}`, gotPayload.Host, gotPayload.Type, gotPayload.Host, gotPayload.TokenID, gotPayload.TokenValue)))
 			default:
 				t.Fatalf("unexpected path %s", r.URL.Path)
 			}
@@ -861,6 +940,19 @@ func TestProxmoxSetup_Run_TopLevel(t *testing.T) {
 		defer noTokenServer.Close()
 
 		p := NewProxmoxSetup(zerolog.Nop(), noTokenServer.Client(), mc, noTokenServer.URL, " ", "", "host", "", "", false)
+		p.retryBackoffs = []time.Duration{}
+		mc.lookPathFn = func(file string) (string, error) {
+			if file == "pvesh" {
+				return "/bin/pvesh", nil
+			}
+			return "", os.ErrNotExist
+		}
+		mc.commandCombinedOutputFn = func(ctx context.Context, name string, arg ...string) (string, error) {
+			if name == "pveum" && len(arg) > 2 && arg[1] == "token" {
+				return "│ value │ optional-token │", nil
+			}
+			return "", nil
+		}
 		res, err := p.Run(context.Background())
 		if err != nil {
 			t.Fatalf("Run: %v", err)
@@ -877,6 +969,12 @@ func TestProxmoxSetup_Run_TopLevel(t *testing.T) {
 	})
 
 	t.Run("invalid proxmox type fails fast", func(t *testing.T) {
+		mc := newTopLevelCollector()
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer server.Close()
+
 		p := NewProxmoxSetup(zerolog.Nop(), server.Client(), mc, server.URL, "token", "bad", "host", "", "", false)
 		if _, err := p.Run(context.Background()); err == nil || !strings.Contains(err.Error(), "invalid proxmox type") {
 			t.Fatalf("expected proxmox type validation error, got %v", err)
