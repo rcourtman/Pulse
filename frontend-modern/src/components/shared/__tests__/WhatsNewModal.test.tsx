@@ -23,6 +23,8 @@ describe('WhatsNewModal', () => {
     expect(whatsNewModalSource).not.toContain('WHATS_NEW_NAV_V2_SHOWN');
     expect(whatsNewModalSource).not.toContain('Infrastructure');
     expect(whatsNewModalSource).not.toContain('Documentation');
+    expect(whatsNewModalSource).toContain('buildRecoveryPath');
+    expect(whatsNewModalSource).not.toContain('href="/recovery?view=events&mode=remote"');
     expect(whatsNewModalSource).not.toContain('https://github.com/rcourtman/Pulse/blob/main/docs/PRIVACY.md');
 
     expect(whatsNewModalStateSource).toContain('export function useWhatsNewModalState');
@@ -83,5 +85,12 @@ describe('WhatsNewModal', () => {
     await waitFor(() => {
       expect(screen.getByRole('dialog')).toBeInTheDocument();
     });
+  });
+
+  it('routes the recovery CTA through the canonical recovery link helper', async () => {
+    render(() => <WhatsNewModal />);
+
+    const recoveryLink = await screen.findByRole('link', { name: 'Recovery events' });
+    expect(recoveryLink).toHaveAttribute('href', '/recovery?view=events&mode=remote');
   });
 });

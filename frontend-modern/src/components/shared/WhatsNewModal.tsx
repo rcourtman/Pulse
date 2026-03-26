@@ -7,6 +7,7 @@ import ShieldCheckIcon from 'lucide-solid/icons/shield-check';
 import ChartBarIcon from 'lucide-solid/icons/chart-bar';
 import ExternalLinkIcon from 'lucide-solid/icons/external-link';
 import XIcon from 'lucide-solid/icons/x';
+import { buildRecoveryPath } from '@/routing/resourceLinks';
 import {
   WHATS_NEW_CLOSE_LABEL,
   WHATS_NEW_DOCS_LABEL,
@@ -42,6 +43,7 @@ function WhatsNewFeatureIcon(props: { card: WhatsNewFeatureCard }) {
 
 export function WhatsNewModal() {
   const state = useWhatsNewModalState();
+  const recoveryEventsHref = buildRecoveryPath({ view: 'events', mode: 'remote' });
 
   return (
     <Dialog
@@ -128,7 +130,7 @@ export function WhatsNewModal() {
               <ExternalLinkIcon class="h-4 w-4" />
             </a>
             <a
-              href="/recovery?view=events&mode=remote"
+              href={recoveryEventsHref}
               class="inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
             >
               {WHATS_NEW_RECOVERY_LINK_LABEL}
