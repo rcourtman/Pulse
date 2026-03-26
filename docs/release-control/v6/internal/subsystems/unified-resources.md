@@ -969,6 +969,12 @@ Recovery-linked consumers that decode `/api/recovery/*` payloads must likewise
 prefer canonical `platform` / `platforms` response fields over legacy
 `provider` aliases, so unified resource drill-downs and shared recovery links
 carry the same platform vocabulary on both route and payload boundaries.
+That same shared drill-down contract also owns which primary recovery workspace
+an upstream surface is targeting. Infrastructure service links that open
+platform-level recovery activity must emit canonical `/recovery` route state
+with `view=events` instead of inheriting the inventory default, and those
+entry links should describe the destination as recovery events rather than
+platform-specific backup wording.
 Shared API consumers now also depend on a single registry-list snapshot per
 request when deriving canonical type aggregations for resource list and stats
 responses. Re-reading `registry.List()` for the same `/api/resources` request

@@ -1222,6 +1222,12 @@ customer-facing action copy, while
 provider labels, empty states, and action/status messaging. Future settings
 copy changes in those areas should extend these helpers instead of inlining
 panel-local strings inside the shell or reactive state owners.
+Shared infrastructure action-link framing now also owns recovery entry wording
+for service resources. `frontend-modern/src/components/Infrastructure/serviceDetailLinks.ts`
+must keep platform-service recovery links on canonical recovery-events
+framing and route state, so upstream service surfaces do not drift back to
+PBS-backup wording or inherit the page-default inventory workspace when they
+are actually deep-linking into recovery activity.
 That same shared primitive boundary now also owns environment-lock
 presentation. `frontend-modern/src/components/shared/EnvironmentLockBadge.tsx`
 stays the reusable badge shell,

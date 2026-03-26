@@ -15,10 +15,10 @@ export const buildServiceDetailLinks = (resource: Resource): ServiceDetailLink[]
   if (resource.type === 'pbs') {
     return [
       {
-        href: buildRecoveryPath({ platform: 'proxmox-pbs', mode: 'remote' }),
-        label: 'Open in Recovery',
+        href: buildRecoveryPath({ view: 'events', platform: 'proxmox-pbs', mode: 'remote' }),
+        label: 'Open Recovery Events',
         compactLabel: 'Recovery',
-        ariaLabel: `Open PBS backups in Recovery for ${label}`,
+        ariaLabel: `Open recovery events for ${label}`,
       },
     ];
   }

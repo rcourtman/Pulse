@@ -110,9 +110,9 @@ describe('ResourceDetailDrawer service cards', () => {
     expect(getByText('Datastores')).toBeInTheDocument();
     expect(getByText('Jobs')).toBeInTheDocument();
     expect(getByText('Types')).toBeInTheDocument();
-    expect(getByRole('link', { name: /open pbs backups/i })).toHaveAttribute(
+    expect(getByRole('link', { name: /open recovery events/i })).toHaveAttribute(
       'href',
-      '/recovery?platform=proxmox-pbs&mode=remote',
+      '/recovery?view=events&platform=proxmox-pbs&mode=remote',
     );
   });
 

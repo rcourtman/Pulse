@@ -248,9 +248,12 @@ describe('UnifiedResourceTable workloads links', () => {
       expect(row.queryByText('Relationships 1')).toBeNull();
     }
 
-    const pbsLink = getByRole('link', { name: /open pbs backups/i });
+    const pbsLink = getByRole('link', { name: /open recovery events/i });
     expect(pbsLink).toHaveTextContent('Recovery');
-    expect(pbsLink).toHaveAttribute('href', '/recovery?platform=proxmox-pbs&mode=remote');
+    expect(pbsLink).toHaveAttribute(
+      'href',
+      '/recovery?view=events&platform=proxmox-pbs&mode=remote',
+    );
     const pmgLink = getByRole('link', { name: /open pmg thresholds/i });
     expect(pmgLink).toHaveTextContent('Thresholds');
     expect(pmgLink).toHaveAttribute('href', '/alerts/thresholds/mail-gateway');

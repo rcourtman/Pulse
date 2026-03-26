@@ -18,7 +18,7 @@ const baseResource = (overrides: Partial<Resource>): Resource => ({
 });
 
 describe('buildServiceDetailLinks', () => {
-  it('returns PBS drill-down link to backups filtered for remote PBS backups', () => {
+  it('returns PBS drill-down link to recovery events filtered for remote PBS activity', () => {
     const links = buildServiceDetailLinks(
       baseResource({
         id: 'pbs-main',
@@ -31,10 +31,10 @@ describe('buildServiceDetailLinks', () => {
 
     expect(links).toEqual([
       {
-        href: '/recovery?platform=proxmox-pbs&mode=remote',
-        label: 'Open in Recovery',
+        href: '/recovery?view=events&platform=proxmox-pbs&mode=remote',
+        label: 'Open Recovery Events',
         compactLabel: 'Recovery',
-        ariaLabel: 'Open PBS backups in Recovery for PBS Main',
+        ariaLabel: 'Open recovery events for PBS Main',
       },
     ]);
   });
