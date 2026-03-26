@@ -229,8 +229,17 @@ func TestPVESetupScript_UsesFailFastRetryGuidance(t *testing.T) {
 	}
 
 	script := rr.Body.String()
-	if !containsString(script, `echo "  curl -fsSL \"$SETUP_SCRIPT_URL\" | { if [ \"$(id -u)\" -eq 0 ]; then PULSE_SETUP_TOKEN=\"$PULSE_SETUP_TOKEN\" bash; elif command -v sudo >/dev/null 2>&1; then sudo env PULSE_SETUP_TOKEN=\"$PULSE_SETUP_TOKEN\" bash; else echo \"Root privileges required. Run as root (su -) and retry.\" >&2; exit 1; fi; }"`) {
-		t.Fatalf("expected fail-fast retry guidance in setup script, got: %s", truncate(script, 700))
+	if !containsString(script, `PULSE_BOOTSTRAP_COMMAND_WITH_ENV='curl -fsSL '"'"'http://sentinel-url:7656/api/setup-script?host=http%3A%2F%2Fsentinel-host%3A8006&pulse_url=http%3A%2F%2Fsentinel-url%3A7656&type=pve'"'"' | `) {
+		t.Fatalf("expected canonical bootstrap command owner in setup script, got: %s", truncate(script, 700))
+	}
+	if !containsString(script, `echo "  $PULSE_BOOTSTRAP_COMMAND_WITH_ENV"`) {
+		t.Fatalf("expected canonical bootstrap-command retry guidance in setup script, got: %s", truncate(script, 700))
+	}
+	if !containsString(script, `SETUP_SCRIPT_URL="http://sentinel-url:7656/api/setup-script?host=http%3A%2F%2Fsentinel-host%3A8006&pulse_url=http%3A%2F%2Fsentinel-url%3A7656&type=pve"`) {
+		t.Fatalf("expected canonical encoded retry URL in setup script, got: %s", truncate(script, 700))
+	}
+	if !containsString(script, `PULSE_SETUP_TOKEN="${PULSE_SETUP_TOKEN:-`) {
+		t.Fatalf("expected canonical embedded setup token initialization before retry guidance, got: %s", truncate(script, 700))
 	}
 	if !containsString(script, `echo "Root privileges required. Run as root (su -) and retry."`) {
 		t.Fatalf("expected canonical root requirement guidance in setup script, got: %s", truncate(script, 700))
@@ -243,9 +252,6 @@ func TestPVESetupScript_UsesFailFastRetryGuidance(t *testing.T) {
 	}
 	if containsString(script, `echo "Manual setup steps:"`) || containsString(script, `echo "  2. In Pulse: Settings → Nodes → Add Node (enter token from above)"`) {
 		t.Fatalf("expected stale off-host manual token flow to be removed from setup script, got: %s", truncate(script, 900))
-	}
-	if containsString(script, `echo "Please run this script as root"`) {
-		t.Fatalf("expected stale root-only setup script guidance to be removed, got: %s", truncate(script, 900))
 	}
 }
 

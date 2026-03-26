@@ -337,9 +337,9 @@ func TestResourcePolicyCloneHelperUsedByAIConsumers(t *testing.T) {
 		filepath.Join(".", "policy_metadata.go"),
 	}
 	requiredSnippets := map[string]string{
-		filepath.Join("..", "ai", "chat", "context_prefetch.go"): "unifiedresources.CloneResourcePolicy(resolved.Resource.Policy)",
-		filepath.Join("..", "ai", "tools", "tools_query.go"):     "unifiedresources.CloneResourcePolicy(resourceCopy.Policy)",
-		filepath.Join(".", "policy_metadata.go"):                 "func CloneResourcePolicy(policy *ResourcePolicy) *ResourcePolicy",
+		filepath.Join("..", "ai", "chat", "context_prefetch.go"): "unifiedresources.CanonicalGovernanceMetadata(resource)",
+		filepath.Join("..", "ai", "tools", "tools_query.go"):     "unifiedresources.CanonicalGovernanceMetadata(resource)",
+		filepath.Join(".", "policy_metadata.go"):                 "func CanonicalGovernanceMetadata(resource *Resource) (*ResourcePolicy, string)",
 	}
 	for _, name := range requiredFiles {
 		data, err := os.ReadFile(name)

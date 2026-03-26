@@ -1967,7 +1967,7 @@ func TestAutoRegisterRequiresAuth(t *testing.T) {
 	}
 }
 
-func TestAutoRegisterRejectsTokenMissingRequiredScope(t *testing.T) {
+func TestAutoRegisterRejectsAPITokenWithoutSetupToken(t *testing.T) {
 	rawToken := "auto-register-token-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
 	cfg := newTestConfigWithTokens(t, record)
@@ -1978,12 +1978,15 @@ func TestAutoRegisterRejectsTokenMissingRequiredScope(t *testing.T) {
 	req.Header.Set("X-API-Token", rawToken)
 	rec := httptest.NewRecorder()
 	router.Handler().ServeHTTP(rec, req)
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected 403 for missing required scope, got %d", rec.Code)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 when API token is provided without a Pulse setup token, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "Pulse setup token required") {
+		t.Fatalf("expected setup-token requirement guidance, got %q", rec.Body.String())
 	}
 }
 
-func TestAutoRegisterAcceptsAgentToken(t *testing.T) {
+func TestAutoRegisterRejectsAgentTokenWithoutSetupToken(t *testing.T) {
 	stubAutoRegisterNetworkDeps(t)
 
 	rawToken := "agent-register-token-123.12345678"
@@ -1997,9 +2000,11 @@ func TestAutoRegisterAcceptsAgentToken(t *testing.T) {
 	req.Header.Set("X-API-Token", rawToken)
 	rec := httptest.NewRecorder()
 	router.Handler().ServeHTTP(rec, req)
-	// Should not be 401 — the agent token has agent:report which is accepted
-	if rec.Code == http.StatusUnauthorized {
-		t.Fatalf("expected agent token with agent:report to be accepted, got 401")
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 when agent API token is provided without a Pulse setup token, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "Pulse setup token required") {
+		t.Fatalf("expected setup-token requirement guidance, got %q", rec.Body.String())
 	}
 }
 
@@ -3951,18 +3956,18 @@ func TestSSHKeyGenerationBlockedInContainer(t *testing.T) {
 	}
 }
 
-func TestSetupScriptRejectsInvalidAuthToken(t *testing.T) {
+func TestSetupScriptRejectsInvalidSetupToken(t *testing.T) {
 	cfg := newTestConfigWithTokens(t)
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
 
-	req := httptest.NewRequest(http.MethodGet, "/api/setup-script?type=pve&host=https://example.com&pulse_url=https://pulse.example.com&auth_token=not-hex", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/setup-script?type=pve&host=https://example.com&pulse_url=https://pulse.example.com&setup_token=not-hex", nil)
 	rec := httptest.NewRecorder()
 	router.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 for invalid auth_token, got %d", rec.Code)
+		t.Fatalf("expected 400 for invalid setup_token, got %d", rec.Code)
 	}
-	if !strings.Contains(rec.Body.String(), "Invalid auth_token parameter") {
-		t.Fatalf("expected invalid auth_token error, got %q", rec.Body.String())
+	if !strings.Contains(rec.Body.String(), "Invalid setup_token parameter") {
+		t.Fatalf("expected invalid setup_token error, got %q", rec.Body.String())
 	}
 }
 

@@ -742,6 +742,14 @@ func TestMonitor_GetState(t *testing.T) {
 	}
 }
 
+func TestMonitor_GetState_NilStateReturnsEmptySnapshot(t *testing.T) {
+	m := &Monitor{}
+	s := m.GetState()
+	if s.Nodes != nil {
+		t.Errorf("expected nil nodes for empty snapshot, got %#v", s.Nodes)
+	}
+}
+
 func TestPollPVEInstance(t *testing.T) {
 	// Setup Monitor
 	m := &Monitor{

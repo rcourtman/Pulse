@@ -205,6 +205,15 @@ func TestPaidDomainBoundaryAudit(t *testing.T) {
 		"enterprise_extension_sso_admin.go":         true,
 	}
 
+	// These reporting files are intentionally public shared surfaces rather than
+	// paid-domain implementations: the catalog route is public product metadata,
+	// and the VM inventory export handler is the default shared implementation
+	// behind the reporting admin extension boundary.
+	knownPublicReportingFiles := map[string]bool{
+		"reporting_catalog_handlers.go":   true,
+		"reporting_inventory_handlers.go": true,
+	}
+
 	for name := range goFiles {
 		// Skip already-tracked files.
 		if _, tracked := paidDomainFiles[name]; tracked {
@@ -213,6 +222,9 @@ func TestPaidDomainBoundaryAudit(t *testing.T) {
 
 		// Skip known binder files (exact allowlist, not prefix).
 		if knownBinderFiles[name] {
+			continue
+		}
+		if knownPublicReportingFiles[name] {
 			continue
 		}
 

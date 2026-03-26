@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
-	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 )
 
 func loadHostedAwareAIConfig(hostedMode bool, billingBaseDir, orgID string, persistence *config.ConfigPersistence) (*config.AIConfig, error) {
@@ -77,7 +76,7 @@ func hostedAIAutoBootstrapEligible(state *billingState) bool {
 		return false
 	}
 	switch state.SubscriptionState {
-	case subscriptionStateActiveValue, subscriptionStateGraceValue, pkglicensing.SubStateTrial:
+	case subscriptionStateActiveValue, subscriptionStateGraceValue, subscriptionStateTrialValue:
 	default:
 		return false
 	}

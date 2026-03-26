@@ -82,7 +82,7 @@ func TestCSRFSkippedForSetupScriptURL(t *testing.T) {
 	sessionToken := generateSessionToken()
 	GetSessionStore().CreateSession(sessionToken, time.Hour, "agent", "127.0.0.1", "admin")
 
-	body := `{"type":"pve"}`
+	body := `{"type":"pve","host":"https://pve.local:8006"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/setup-script-url", strings.NewReader(body))
 	req.AddCookie(&http.Cookie{Name: "pulse_session", Value: sessionToken})
 	req.Header.Set("Content-Type", "application/json")

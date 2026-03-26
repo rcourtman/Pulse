@@ -1015,9 +1015,10 @@ func resourceFromPMGInstance(instance models.PMGInstance) (Resource, ResourceIde
 }
 
 func resourceFromVM(vm models.VM) (Resource, ResourceIdentity) {
+	sourceID := proxmoxVMSourceID(vm)
 	metrics := metricsFromVM(vm)
 	proxmox := &ProxmoxData{
-		SourceID:          vm.ID,
+		SourceID:          sourceID,
 		NodeName:          vm.Node,
 		Pool:              vm.Pool,
 		Instance:          vm.Instance,
@@ -1056,9 +1057,10 @@ func resourceFromVM(vm models.VM) (Resource, ResourceIdentity) {
 }
 
 func resourceFromContainer(ct models.Container) (Resource, ResourceIdentity) {
+	sourceID := proxmoxContainerSourceID(ct)
 	metrics := metricsFromContainer(ct)
 	proxmox := &ProxmoxData{
-		SourceID:          ct.ID,
+		SourceID:          sourceID,
 		NodeName:          ct.Node,
 		Pool:              ct.Pool,
 		Instance:          ct.Instance,
