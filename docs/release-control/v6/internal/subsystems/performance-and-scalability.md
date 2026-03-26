@@ -192,6 +192,14 @@ The dashboard workload selector path and the dashboard runtime that consumes it
 are now part of the protected performance surface rather than proof-only
 context. Future hot-path filter/group/sort/windowing changes must route through
 the explicit dashboard performance proof policy in the subsystem registry.
+The downsampled `pkg/metrics/store.go` `QueryAllBatch` hot path is also a
+protected surface. Its contract is ordered timestamps and correct avg/min/max
+bucket aggregates within each `resource_id + metric_type` series, but the
+runtime must meet its SLO through one ordered index scan plus Go-side bucket
+aggregation rather than forcing SQLite to `GROUP BY` computed buckets through a
+temp B-tree on the fleet-scale dashboard path. `pkg/metrics/store_test.go` and
+`pkg/metrics/store_slo_test.go` now guard both the aggregate contract and the
+tail-latency budget for that ownership boundary.
 That workload route now also treats readiness as a route-owned contract instead
 of a raw websocket proxy signal: `frontend-modern/src/components/Dashboard/Dashboard.tsx`
 and `frontend-modern/src/components/Dashboard/useDashboardState.ts` must keep
