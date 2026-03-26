@@ -81,4 +81,19 @@ describe('HostedSignup', () => {
       });
     });
   });
+
+  it('renders signup plan pricing from the shared cloud pricing contract', async () => {
+    window.history.replaceState({}, '', '/cloud/signup?tier=starter');
+
+    render(() => (
+      <Router>
+        <Route path="/cloud/signup" component={HostedSignup} />
+      </Router>
+    ));
+
+    expect(await screen.findByText('Plan')).toBeInTheDocument();
+    expect(screen.getByText('$19/month')).toBeInTheDocument();
+    expect(screen.getByText('$29/month')).toBeInTheDocument();
+    expect(screen.getByText('or $249/year (save 29%)')).toBeInTheDocument();
+  });
 });

@@ -5,7 +5,7 @@ import { PageHeader } from '@/components/shared/PageHeader';
 import { HostedSignupAPI, type HostedAPIError } from '@/api/hostedSignup';
 import { getUpgradeActionUrlOrFallback } from '@/stores/license';
 import { logger } from '@/utils/logger';
-import { getCloudPlanForTier } from '@/utils/cloudPlans';
+import { getCloudPlanForTier, getCloudPlanPricePresentation } from '@/utils/cloudPlans';
 
 type SignupStatus = 'idle' | 'submitting' | 'success' | 'unavailable' | 'error';
 
@@ -50,6 +50,7 @@ export default function HostedSignup() {
     const params = new URLSearchParams(location.search);
     return getCloudPlanForTier(params.get('tier'));
   });
+  const selectedPlanPrice = createMemo(() => getCloudPlanPricePresentation(selectedPlan()));
   const cloudPortalURL = createMemo(() => getUpgradeActionUrlOrFallback('cloud'));
 
   const canSubmit = createMemo(() => {
@@ -212,9 +213,20 @@ export default function HostedSignup() {
             <div class="flex items-baseline justify-between gap-3">
               <div>
                 <p class="text-sm font-semibold text-base-content">{selectedPlan().name}</p>
-                <p class="text-xs text-muted">{selectedPlan().subline}</p>
+                <p class="text-xs text-muted">{selectedPlanPrice().annualSummary}</p>
               </div>
-              <p class="text-sm font-semibold text-base-content">{selectedPlan().price}</p>
+              <div class="text-right">
+                <p class="text-sm font-semibold text-base-content">
+                  {selectedPlanPrice().monthlyPrice}
+                  {selectedPlanPrice().cadence}
+                </p>
+                <Show when={selectedPlanPrice().compareAtMonthlyPrice}>
+                  <p class="text-xs text-muted line-through">
+                    {selectedPlanPrice().compareAtMonthlyPrice}
+                    {selectedPlanPrice().cadence}
+                  </p>
+                </Show>
+              </div>
             </div>
             <dl class="mt-3 grid grid-cols-2 gap-3 text-sm text-base-content">
               <div>

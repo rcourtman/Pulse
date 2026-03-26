@@ -4,12 +4,19 @@ export interface CloudPlanDefinition {
   tier: CloudTierKey;
   planVersion: string;
   name: string;
-  price: string;
-  subline: string;
+  monthlyPrice: string;
+  annualSummary: string;
   monitoredSystems: number;
   support: 'Community' | 'Priority';
-  foundingPrice?: string;
+  foundingMonthlyPrice?: string;
   highlighted?: boolean;
+}
+
+export interface CloudPlanPricePresentation {
+  monthlyPrice: string;
+  cadence: '/month';
+  annualSummary: string;
+  compareAtMonthlyPrice?: string;
 }
 
 export const DEFAULT_CLOUD_TIER: CloudTierKey = 'starter';
@@ -19,19 +26,19 @@ export const CLOUD_PLAN_DEFINITIONS: readonly CloudPlanDefinition[] = [
     tier: 'starter',
     planVersion: 'cloud_starter',
     name: 'Starter',
-    price: '$29/month',
-    subline: 'or $249/year (save 29%)',
+    monthlyPrice: '$29',
+    annualSummary: 'or $249/year (save 29%)',
     monitoredSystems: 10,
     support: 'Community',
-    foundingPrice: '$19/month',
+    foundingMonthlyPrice: '$19',
     highlighted: true,
   },
   {
     tier: 'power',
     planVersion: 'cloud_power',
     name: 'Power',
-    price: '$49/month',
-    subline: 'or $449/year (save 24%)',
+    monthlyPrice: '$49',
+    annualSummary: 'or $449/year (save 24%)',
     monitoredSystems: 30,
     support: 'Priority',
   },
@@ -39,8 +46,8 @@ export const CLOUD_PLAN_DEFINITIONS: readonly CloudPlanDefinition[] = [
     tier: 'max',
     planVersion: 'cloud_max',
     name: 'Max',
-    price: '$79/month',
-    subline: 'or $699/year (save 26%)',
+    monthlyPrice: '$79',
+    annualSummary: 'or $699/year (save 26%)',
     monitoredSystems: 75,
     support: 'Priority',
   },
@@ -76,4 +83,15 @@ export function parseCloudTier(value?: string | null): CloudTierKey {
 
 export function getCloudPlanForTier(value?: string | null): CloudPlanDefinition {
   return CLOUD_PLAN_BY_TIER[parseCloudTier(value)];
+}
+
+export function getCloudPlanPricePresentation(
+  plan: CloudPlanDefinition,
+): CloudPlanPricePresentation {
+  return {
+    monthlyPrice: plan.foundingMonthlyPrice || plan.monthlyPrice,
+    cadence: '/month',
+    annualSummary: plan.annualSummary,
+    compareAtMonthlyPrice: plan.foundingMonthlyPrice ? plan.monthlyPrice : undefined,
+  };
 }

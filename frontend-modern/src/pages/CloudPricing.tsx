@@ -4,7 +4,11 @@ import { Card } from '@/components/shared/Card';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { trackPaywallViewed } from '@/utils/upgradeMetrics';
 import { onMount } from 'solid-js';
-import { CLOUD_PLAN_DEFINITIONS, type CloudPlanDefinition } from '@/utils/cloudPlans';
+import {
+  CLOUD_PLAN_DEFINITIONS,
+  getCloudPlanPricePresentation,
+  type CloudPlanDefinition,
+} from '@/utils/cloudPlans';
 
 const INCLUDED_IN_ALL = [
   'All Pro features',
@@ -17,6 +21,7 @@ const INCLUDED_IN_ALL = [
 
 function CloudTierCard(props: { tier: CloudPlanDefinition }) {
   const t = props.tier;
+  const price = getCloudPlanPricePresentation(t);
 
   return (
     <Card
@@ -37,19 +42,23 @@ function CloudTierCard(props: { tier: CloudPlanDefinition }) {
 
       <h2 class="text-lg font-semibold text-base-content">{t.name}</h2>
 
-      <Show when={t.foundingPrice}>
+      <Show when={price.compareAtMonthlyPrice}>
         <div class="mt-2 text-2xl font-semibold tracking-tight text-amber-600 dark:text-amber-400">
-          $19<span class="text-base font-normal text-muted">/month</span>
+          {price.monthlyPrice}
+          <span class="text-base font-normal text-muted">{price.cadence}</span>
         </div>
-        <div class="text-sm text-muted line-through">{t.price}</div>
+        <div class="text-sm text-muted line-through">
+          {price.compareAtMonthlyPrice}
+          {price.cadence}
+        </div>
       </Show>
-      <Show when={!t.foundingPrice}>
+      <Show when={!price.compareAtMonthlyPrice}>
         <div class="mt-2 text-3xl font-semibold tracking-tight text-base-content">
-          {t.price.replace('/month', '')}
-          <span class="text-base font-normal text-muted">/month</span>
+          {price.monthlyPrice}
+          <span class="text-base font-normal text-muted">{price.cadence}</span>
         </div>
       </Show>
-      <div class="mt-1 text-sm text-muted">{t.subline}</div>
+      <div class="mt-1 text-sm text-muted">{price.annualSummary}</div>
 
       <dl class="mt-4 space-y-3 text-sm text-base-content">
         <div class="flex items-center justify-between gap-3">
