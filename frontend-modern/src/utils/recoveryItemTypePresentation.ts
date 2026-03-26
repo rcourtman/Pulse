@@ -1,3 +1,4 @@
+import type { ProtectionRollup, RecoveryPoint } from '@/types/recovery';
 import { getResourceTypePresentation } from '@/utils/resourceTypePresentation';
 import { getWorkloadTypePresentation } from '@/utils/workloadTypePresentation';
 import { titleCaseDelimitedLabel } from '@/utils/textPresentation';
@@ -9,6 +10,15 @@ export interface RecoveryItemTypePresentation {
 }
 
 const DEFAULT_BADGE_CLASSES = 'bg-surface-alt text-base-content';
+
+const getRecoveryItemTypeValue = (
+  value:
+    | Pick<RecoveryPoint, 'display' | 'subjectRef'>
+    | Pick<ProtectionRollup, 'display' | 'subjectRef'>
+    | null
+    | undefined,
+): string =>
+  String(value?.display?.itemType || value?.display?.subjectType || value?.subjectRef?.type || '');
 
 export const normalizeRecoveryItemTypeQueryValue = (
   value: string | null | undefined,
@@ -128,3 +138,11 @@ export const getRecoveryItemTypeLabel = (value: string | null | undefined): stri
 
 export const getRecoveryItemTypeBadgeClass = (value: string | null | undefined): string =>
   getRecoveryItemTypePresentation(value)?.badgeClasses || DEFAULT_BADGE_CLASSES;
+
+export const getRecoveryRollupItemTypeKey = (
+  rollup: Pick<ProtectionRollup, 'display' | 'subjectRef'> | null | undefined,
+): string => normalizeRecoveryItemTypeQueryValue(getRecoveryItemTypeValue(rollup));
+
+export const getRecoveryPointItemTypeKey = (
+  point: Pick<RecoveryPoint, 'display' | 'subjectRef'> | null | undefined,
+): string => normalizeRecoveryItemTypeQueryValue(getRecoveryItemTypeValue(point));

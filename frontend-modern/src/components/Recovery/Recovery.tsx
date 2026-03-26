@@ -29,6 +29,7 @@ import {
   getRecoveryRollupItemLabel,
 } from '@/utils/recoveryRecordPresentation';
 import {
+  getRecoveryRollupItemTypeKey,
   getRecoveryItemTypePresentation,
   normalizeRecoveryItemTypeQueryValue,
 } from '@/utils/recoveryItemTypePresentation';
@@ -118,9 +119,7 @@ const Recovery: Component = () => {
         .map((entry) => String(entry || '').trim())
         .filter(Boolean);
       if (platform && !platforms.includes(platform)) return false;
-      const rollupItemType = normalizeRecoveryItemTypeQueryValue(
-        rollup.display?.itemType || rollup.display?.subjectType || rollup.subjectRef?.type,
-      );
+      const rollupItemType = getRecoveryRollupItemTypeKey(rollup);
       if (itemType && rollupItemType !== itemType) return false;
 
       if (!query) return true;
@@ -129,7 +128,7 @@ const Recovery: Component = () => {
         rollup.rollupId,
         rollup.subjectResourceId || '',
         label,
-        rollup.subjectRef?.type || '',
+        rollupItemType,
         rollup.subjectRef?.namespace || '',
         rollup.subjectRef?.name || '',
         platforms.join(' '),

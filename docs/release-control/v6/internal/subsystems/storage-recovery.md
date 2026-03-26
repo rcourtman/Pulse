@@ -185,6 +185,11 @@ That same runtime-helper contract should prefer `item` terminology in shared
 recovery presenters too. Helper exports that resolve labels or item-type badges
 should expose canonical item-facing names, while any retained `subject` aliases
 remain compatibility wrappers instead of the primary runtime boundary.
+That same presenter boundary should also own canonical item-type derivation.
+Recovery surfaces must resolve rollup and point item types through one shared
+item-type helper instead of repeating `display.itemType` / `subjectType` /
+`subjectRef.type` fallback chains across state, summary, details, and table
+renderers.
 That same shared presentation layer also owns the distinction between
 aggregate recovery-method language and single-record recovery-method language.
 Timeline legends and daily breakdowns must use aggregate labels such as

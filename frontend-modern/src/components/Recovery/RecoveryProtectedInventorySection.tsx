@@ -25,6 +25,7 @@ import {
 } from '@/utils/recoveryEmptyStatePresentation';
 import {
   getRecoveryItemTypePresentation,
+  getRecoveryRollupItemTypeKey,
   normalizeRecoveryItemTypeQueryValue,
 } from '@/utils/recoveryItemTypePresentation';
 import {
@@ -124,12 +125,8 @@ export const RecoveryProtectedInventorySection: Component<
           return multiplier * leftLabel.localeCompare(rightLabel);
         }
         case 'type': {
-          const leftType = getRecoveryItemTypePresentation(
-            left.display?.itemType || left.display?.subjectType || left.subjectRef?.type,
-          )?.label.toLowerCase();
-          const rightType = getRecoveryItemTypePresentation(
-            right.display?.itemType || right.display?.subjectType || right.subjectRef?.type,
-          )?.label.toLowerCase();
+          const leftType = getRecoveryItemTypePresentation(getRecoveryRollupItemTypeKey(left))?.label.toLowerCase();
+          const rightType = getRecoveryItemTypePresentation(getRecoveryRollupItemTypeKey(right))?.label.toLowerCase();
           return multiplier * (leftType || '').localeCompare(rightType || '');
         }
         case 'platform': {
@@ -376,11 +373,7 @@ export const RecoveryProtectedInventorySection: Component<
                       getSourcePlatformLabel(left).localeCompare(getSourcePlatformLabel(right)),
                     );
                   const itemTypePresentation =
-                    getRecoveryItemTypePresentation(
-                      rollup.display?.itemType ||
-                        rollup.display?.subjectType ||
-                        rollup.subjectRef?.type,
-                    ) || null;
+                    getRecoveryItemTypePresentation(getRecoveryRollupItemTypeKey(rollup)) || null;
                   const nowMs = Date.now();
                   const issueTone: RecoveryIssueTone = getRecoveryRollupIssueTone(rollup, nowMs);
                   const issueRailClass =

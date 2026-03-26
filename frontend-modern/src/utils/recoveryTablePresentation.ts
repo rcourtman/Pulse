@@ -2,6 +2,7 @@ import type { ProtectionRollup, RecoveryOutcome, RecoveryPoint } from '@/types/r
 import {
   getRecoveryItemTypeBadgeClass,
   getRecoveryItemTypeLabel,
+  getRecoveryPointItemTypeKey,
 } from '@/utils/recoveryItemTypePresentation';
 import { getRecoveryLocationFacetLabel } from '@/utils/recoveryLocationPresentation';
 import { normalizeRecoveryOutcome } from '@/utils/recoveryOutcomePresentation';
@@ -83,13 +84,11 @@ export function getRecoveryArtifactColumnLabel(id: string, fallback?: string): s
 }
 
 export function getRecoveryPointItemTypeBadgeClass(point: RecoveryPoint): string {
-  return getRecoveryItemTypeBadgeClass(point.display?.itemType || point.display?.subjectType || point.subjectRef?.type);
+  return getRecoveryItemTypeBadgeClass(getRecoveryPointItemTypeKey(point));
 }
 
 export function getRecoveryPointItemTypeLabel(point: RecoveryPoint): string {
-  return getRecoveryItemTypeLabel(
-    point.display?.itemType || point.display?.subjectType || point.subjectRef?.type,
-  );
+  return getRecoveryItemTypeLabel(getRecoveryPointItemTypeKey(point));
 }
 
 export function getRecoverySubjectTypeBadgeClass(point: RecoveryPoint): string {

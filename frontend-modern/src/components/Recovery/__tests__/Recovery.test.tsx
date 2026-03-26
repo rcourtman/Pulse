@@ -348,6 +348,31 @@ describe('Recovery', () => {
     }
   });
 
+  it('derives canonical item types from shared fallback fields when itemType is absent', async () => {
+    const originalRollupDisplay = rollupsPayload[0].display;
+    const originalPointDisplay = pointsByRollupId['res:vm-123'][0].display;
+    rollupsPayload[0].display = { subjectType: 'proxmox-vm' };
+    pointsByRollupId['res:vm-123'][0].display = { subjectType: 'proxmox-vm' };
+
+    try {
+      render(() => <Recovery />);
+
+      expect(await screen.findByText('VM 123')).toBeInTheDocument();
+      const inventoryTable = (await screen.findAllByRole('table'))[0];
+      expect(within(inventoryTable).getAllByText('VM').length).toBeGreaterThan(0);
+
+      fireEvent.click(screen.getByText('VM 123'));
+      await screen.findByText('Recovery Events');
+
+      const tables = await screen.findAllByRole('table');
+      const historyTable = tables[tables.length - 1];
+      expect(within(historyTable).getByText('VM')).toBeInTheDocument();
+    } finally {
+      rollupsPayload[0].display = originalRollupDisplay;
+      pointsByRollupId['res:vm-123'][0].display = originalPointDisplay;
+    }
+  });
+
   it('keeps recovery history width aligned with canonical column specs', async () => {
     render(() => <Recovery />);
 

@@ -5,7 +5,7 @@ import { getSourcePlatformBadge } from '@/components/shared/sourcePlatformBadges
 import type { PBSDatastore } from '@/types/api';
 import type { RecoveryExternalRef, RecoveryPoint } from '@/types/recovery';
 import { formatAbsoluteTime, formatBytes, formatUptime } from '@/utils/format';
-import { getRecoveryItemTypeLabel } from '@/utils/recoveryItemTypePresentation';
+import { getRecoveryItemTypeLabel, getRecoveryPointItemTypeKey } from '@/utils/recoveryItemTypePresentation';
 import { getRecoveryPointLocationEntries } from '@/utils/recoveryLocationPresentation';
 import {
   getRecoveryPointKindLabel,
@@ -156,9 +156,7 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
   const summaryPairs = createMemo(() => {
     const p = point();
     const pairs: { k: string; v: string }[] = [];
-    const itemType = getRecoveryItemTypeLabel(
-      p.display?.itemType || p.display?.subjectType || p.subjectRef?.type,
-    );
+    const itemType = getRecoveryItemTypeLabel(getRecoveryPointItemTypeKey(p));
 
     pairs.push({ k: 'ID', v: p.id });
     if (itemType && itemType !== 'Unknown') pairs.push({ k: 'Item Type', v: itemType });

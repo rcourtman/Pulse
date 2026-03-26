@@ -689,6 +689,13 @@ recovery filters such as the provider-neutral `itemType` selector must be
 derived, normalized, and fanned out to inventory, history, activity, facets,
 and series consumers from that shared state owner rather than being recreated
 as page-local toolbar state inside individual recovery sections.
+That same shared recovery filter boundary also owns canonical recovery
+item-type derivation through
+`frontend-modern/src/utils/recoveryItemTypePresentation.ts`. Recovery shell
+state, tables, summaries, and point-detail surfaces must resolve rollup and
+point item types through the shared presenter helpers instead of repeating
+`display.itemType` / `subjectType` / `subjectRef.type` fallback chains in
+page-local consumers.
 That same shared recovery state owner now also keeps `platform` as the
 canonical route and transport filter name for operator-facing recovery links,
 while any accepted legacy `provider` aliases remain parser compatibility only.

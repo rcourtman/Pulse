@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  getRecoveryPointItemTypeKey,
   getRecoveryItemTypeBadgeClass,
   getRecoveryItemTypeLabel,
   getRecoveryItemTypePresentation,
+  getRecoveryRollupItemTypeKey,
   normalizeRecoveryItemTypeQueryValue,
 } from '@/utils/recoveryItemTypePresentation';
 
@@ -40,5 +42,23 @@ describe('recoveryItemTypePresentation', () => {
   it('falls back cleanly for unknown item types', () => {
     expect(getRecoveryItemTypeLabel('custom-thing')).toBe('Custom Thing');
     expect(getRecoveryItemTypeBadgeClass('custom-thing')).toBe('bg-surface-alt text-base-content');
+  });
+
+  it('derives canonical item type keys from recovery rollups and points', () => {
+    expect(
+      getRecoveryRollupItemTypeKey({
+        display: { subjectType: 'proxmox-vm' },
+        subjectRef: { type: 'proxmox-vm' },
+      }),
+    ).toBe('vm');
+    expect(
+      getRecoveryPointItemTypeKey({
+        display: { itemType: 'dataset' },
+        subjectRef: { type: 'truenas-dataset' },
+      }),
+    ).toBe('dataset');
+    expect(getRecoveryPointItemTypeKey({ display: {}, subjectRef: { type: 'custom-thing' } })).toBe(
+      'custom-thing',
+    );
   });
 });

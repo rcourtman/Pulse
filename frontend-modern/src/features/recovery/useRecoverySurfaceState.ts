@@ -19,6 +19,8 @@ import {
   normalizeRecoveryModeQueryValue,
 } from '@/utils/recoveryRecordPresentation';
 import {
+  getRecoveryPointItemTypeKey,
+  getRecoveryRollupItemTypeKey,
   getRecoveryItemTypePresentation,
   normalizeRecoveryItemTypeQueryValue,
 } from '@/utils/recoveryItemTypePresentation';
@@ -352,16 +354,12 @@ export function useRecoverySurfaceState() {
     }
 
     for (const rollup of rollups()) {
-      const normalized = normalizeRecoveryItemTypeQueryValue(
-        rollup.display?.itemType || rollup.display?.subjectType || rollup.subjectRef?.type,
-      );
+      const normalized = getRecoveryRollupItemTypeKey(rollup);
       if (normalized) values.add(normalized);
     }
 
     for (const point of recoveryPoints.points() || []) {
-      const normalized = normalizeRecoveryItemTypeQueryValue(
-        point.display?.itemType || point.display?.subjectType || point.subjectRef?.type,
-      );
+      const normalized = getRecoveryPointItemTypeKey(point);
       if (normalized) values.add(normalized);
     }
 

@@ -13,6 +13,7 @@ import {
 } from '@/utils/sourcePlatforms';
 import {
   getRecoveryItemTypePresentation,
+  getRecoveryRollupItemTypeKey,
 } from '@/utils/recoveryItemTypePresentation';
 import { getRecoveryRollupPlatforms } from '@/utils/recoveryPlatformModel';
 
@@ -431,11 +432,7 @@ export function buildRecoveryItemCoverage(
 
   for (const rollup of rollups) {
     const presentation =
-      getRecoverySummarySubjectTypePresentation(
-        String(
-          rollup.display?.itemType || rollup.display?.subjectType || rollup.subjectRef?.type || '',
-        ).trim(),
-      ) || {
+      getRecoverySummarySubjectTypePresentation(getRecoveryRollupItemTypeKey(rollup)) || {
         key: 'unknown',
         label: 'Unknown',
         toneClass: 'bg-surface-alt text-base-content',
