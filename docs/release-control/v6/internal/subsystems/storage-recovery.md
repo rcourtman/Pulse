@@ -337,11 +337,13 @@ default, but the first visible framing now reflects the whole multi-platform
 recovery system instead of a single backup table metaphor.
 That same summary contract now also includes platform- and item-coverage
 framing through `frontend-modern/src/utils/recoverySummaryPresentation.ts`, so
-the first visible recovery overview explicitly shows how many recovery
-platforms are in scope, which protected item types Pulse is covering, which
-platform families dominate the current protected set, and how many protected
-items already span multiple platforms instead of leaving the multi-platform
-model implicit in row-level badges alone.
+the first visible recovery overview explicitly shows which protected item
+types Pulse is covering before it shows supporting platform mix, with
+primary-item and primary-platform readouts kept as distinct governed summary
+fields instead of one ambiguous "primary" label. The summary may still surface
+platform breadth and cross-platform protected items, but the recovery page
+must read item-first so the unified recovery model is not visually anchored to
+one platform family.
 The recovery table presentation helper now owns the canonical subject-type
 label fallback for recovery rows and delegates its title-casing to the shared
 `frontend-modern/src/utils/textPresentation.ts` helper rather than keeping a

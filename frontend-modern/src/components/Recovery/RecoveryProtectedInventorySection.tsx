@@ -160,7 +160,7 @@ export const RecoveryProtectedInventorySection: Component<
               Protected Items
             </div>
             <div class="text-xs text-muted">
-              Unified protection inventory across workloads, datasets, and other protected items from every connected platform.
+              Unified protection inventory across workloads, datasets, and other protected items, with platform mix carried as supporting context.
             </div>
           </div>
           <div class="flex flex-wrap items-center gap-2 text-xs text-muted">

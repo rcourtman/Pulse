@@ -118,7 +118,7 @@ export interface RecoveryPlatformCoverageItem {
 export interface RecoveryPlatformCoverageSummary {
   platformCount: number;
   multiPlatformCount: number;
-  primaryLabel: string | null;
+  primaryPlatformLabel: string | null;
   items: RecoveryPlatformCoverageItem[];
 }
 
@@ -132,7 +132,7 @@ export interface RecoveryItemCoverageItem {
 
 export interface RecoveryItemCoverageSummary {
   itemTypeCount: number;
-  primaryLabel: string | null;
+  primaryItemLabel: string | null;
   items: RecoveryItemCoverageItem[];
 }
 
@@ -418,7 +418,7 @@ export function buildRecoveryPlatformCoverage(
   return {
     platformCount: items.length,
     multiPlatformCount,
-    primaryLabel: items[0]?.label || null,
+    primaryPlatformLabel: items[0]?.label || null,
     items,
   };
 }
@@ -463,7 +463,7 @@ export function buildRecoveryItemCoverage(
 
   return {
     itemTypeCount: items.length,
-    primaryLabel: items[0]?.label || null,
+    primaryItemLabel: items[0]?.label || null,
     items,
   };
 }

@@ -284,12 +284,14 @@ describe('Recovery', () => {
     }
   });
 
-  it('surfaces platform coverage in the unified recovery summary', async () => {
+  it('surfaces item-first recovery coverage in the unified summary', async () => {
     render(() => <Recovery />);
 
+    expect(await screen.findByText('2 item types')).toBeInTheDocument();
     expect(await screen.findByText('2 platforms')).toBeInTheDocument();
-    expect(screen.getByText('2 item types')).toBeInTheDocument();
-    expect(screen.getByText('Multi-platform')).toBeInTheDocument();
+    expect(screen.getByText('Primary Item')).toBeInTheDocument();
+    expect(screen.getByText('Primary Platform')).toBeInTheDocument();
+    expect(screen.getByText('Platform Mix')).toBeInTheDocument();
   });
 
   it('keeps recovery history width aligned with canonical column specs', async () => {

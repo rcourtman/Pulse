@@ -108,7 +108,7 @@ describe('recoverySummaryPresentation', () => {
 
     expect(coverage.platformCount).toBe(4);
     expect(coverage.multiPlatformCount).toBe(1);
-    expect(coverage.primaryLabel).toBe('K8s');
+    expect(coverage.primaryPlatformLabel).toBe('K8s');
     expect(coverage.items).toMatchObject([
       { key: 'kubernetes', label: 'K8s', count: 1, percent: 33 },
       { key: 'proxmox-pbs', label: 'PBS', count: 1, percent: 33 },
@@ -126,7 +126,7 @@ describe('recoverySummaryPresentation', () => {
     ]);
 
     expect(coverage.itemTypeCount).toBe(3);
-    expect(coverage.primaryLabel).toBe('VM');
+    expect(coverage.primaryItemLabel).toBe('VM');
     expect(coverage.items).toMatchObject([
       { key: 'vm', label: 'VM', count: 2, percent: 50 },
       { label: 'Dataset', count: 1, percent: 25 },

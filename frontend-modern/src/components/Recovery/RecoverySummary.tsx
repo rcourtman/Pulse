@@ -54,13 +54,13 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
           <div class="flex flex-wrap items-center justify-between gap-2 border-b border-border-subtle px-1 pb-2 text-[11px]">
             <div class="flex flex-wrap items-center gap-3">
               <span class="font-medium text-base-content">{summary().total} protected</span>
-              <span class="text-sky-300">
-                {platformCoverage().platformCount} platform
-                {platformCoverage().platformCount === 1 ? '' : 's'}
-              </span>
               <span class="text-violet-300">
                 {itemCoverage().itemTypeCount} item type
                 {itemCoverage().itemTypeCount === 1 ? '' : 's'}
+              </span>
+              <span class="text-sky-300">
+                {platformCoverage().platformCount} platform
+                {platformCoverage().platformCount === 1 ? '' : 's'}
               </span>
               <span class="text-emerald-400">{healthyCount()} healthy</span>
               <Show when={attentionCount() > 0}>
@@ -142,27 +142,27 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
               </div>
               <div class="mt-3 grid gap-3 sm:grid-cols-2">
                 <div>
-                  <div class="text-[10px] uppercase tracking-wide text-muted">Platforms</div>
-                  <div class="mt-1 text-2xl font-semibold text-base-content">
-                    {platformCoverage().platformCount}
-                  </div>
-                </div>
-                <div>
                   <div class="text-[10px] uppercase tracking-wide text-muted">Item Types</div>
                   <div class="mt-1 text-2xl font-semibold text-base-content">
                     {itemCoverage().itemTypeCount}
                   </div>
                 </div>
                 <div>
-                  <div class="text-[10px] uppercase tracking-wide text-muted">Multi-platform</div>
-                  <div class="mt-1 text-2xl font-semibold text-base-content">
-                    {platformCoverage().multiPlatformCount}
+                  <div class="text-[10px] uppercase tracking-wide text-muted">Primary Item</div>
+                  <div class="mt-1 text-xl font-semibold text-base-content">
+                    {itemCoverage().primaryItemLabel ?? 'n/a'}
                   </div>
                 </div>
                 <div>
-                  <div class="text-[10px] uppercase tracking-wide text-muted">Primary Item</div>
+                  <div class="text-[10px] uppercase tracking-wide text-muted">Platforms</div>
+                  <div class="mt-1 text-2xl font-semibold text-base-content">
+                    {platformCoverage().platformCount}
+                  </div>
+                </div>
+                <div>
+                  <div class="text-[10px] uppercase tracking-wide text-muted">Primary Platform</div>
                   <div class="mt-1 text-xl font-semibold text-base-content">
-                    {itemCoverage().primaryLabel ?? 'n/a'}
+                    {platformCoverage().primaryPlatformLabel ?? 'n/a'}
                   </div>
                 </div>
               </div>
@@ -190,8 +190,15 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
                 </Show>
                 <div>
                   <div class="mb-2 text-[10px] font-semibold uppercase tracking-wide text-muted">
-                    Platforms
+                    Platform Mix
                   </div>
+                  <Show when={platformCoverage().multiPlatformCount > 0}>
+                    <div class="mb-2 text-xs text-muted">
+                      {platformCoverage().multiPlatformCount} protected item
+                      {platformCoverage().multiPlatformCount === 1 ? '' : 's'} span multiple
+                      platforms.
+                    </div>
+                  </Show>
                   <div class="flex flex-wrap gap-2">
                     <For each={platformCoverage().items.slice(0, 6)}>
                       {(item) => (

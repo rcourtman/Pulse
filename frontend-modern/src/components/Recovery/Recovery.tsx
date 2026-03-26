@@ -559,9 +559,9 @@ const Recovery: Component = () => {
           <div class="border-b border-border px-3 pb-3 pt-2 text-xs text-muted">
             <Show
               when={workspaceView() === 'inventory'}
-              fallback="Cross-platform recovery artifacts grouped by day and filtered through one shared recovery model."
+              fallback="Recovery events grouped by day and filtered through one shared item-first recovery model."
             >
-              Platform-neutral protection inventory across every connected recovery platform in the selected window.
+              Unified protection inventory across protected item types, with platform mix carried as supporting recovery context.
             </Show>
           </div>
         </Card>
