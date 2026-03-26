@@ -1,9 +1,12 @@
+import { PortalAPIError } from './api';
+import type { PortalAPI } from './api';
 import { focusElement, getElement, renderAccountUI as renderAccountUIState } from './account_view';
 import { ensurePortalAccountUIEntry } from './state';
 import type { PortalStore } from './store';
 import type { PortalTeamMember } from './types';
 
 export interface AccountRuntimeDeps {
+  api: PortalAPI;
   store: PortalStore;
   refreshBootstrap(): Promise<boolean>;
   showToast(message: string, isError?: boolean): void;
@@ -21,14 +24,6 @@ export interface AccountRuntime {
 }
 
 export function installAccountRuntime(deps: AccountRuntimeDeps): AccountRuntime {
-  var getAccountAPIBasePath = function(): string {
-    return deps.store.getBootstrap().account_api_base_path;
-  };
-
-  var getPortalAPIBasePath = function(): string {
-    return deps.store.getBootstrap().portal_api_base_path;
-  };
-
   var getPortalPath = function(): string {
     return deps.store.getBootstrap().portal_path;
   };
@@ -56,27 +51,18 @@ export function installAccountRuntime(deps: AccountRuntimeDeps): AccountRuntime 
       entry.teamMembers = [];
     });
     try {
-      var r = await fetch(getAccountAPIBasePath() + '/' + encodeURIComponent(accountID) + '/members');
-      if (!r.ok) {
-        deps.store.updateAccountState(function(accountState) {
-          var entry = ensurePortalAccountUIEntry(accountState, accountID);
-          entry.teamLoading = false;
-          entry.teamError = 'Failed to load team.';
-        });
-        return;
-      }
-      var members = await r.json() as PortalTeamMember[];
+      var members = await deps.api.listMembers(accountID) as PortalTeamMember[];
       deps.store.updateAccountState(function(accountState) {
         var entry = ensurePortalAccountUIEntry(accountState, accountID);
         entry.teamLoading = false;
         entry.teamError = '';
         entry.teamMembers = Array.isArray(members) ? members : [];
       });
-    } catch {
+    } catch (error) {
       deps.store.updateAccountState(function(accountState) {
         var entry = ensurePortalAccountUIEntry(accountState, accountID);
         entry.teamLoading = false;
-        entry.teamError = 'Network error.';
+        entry.teamError = error instanceof Error ? error.message : 'Network error.';
       });
     }
   };
@@ -120,16 +106,7 @@ export function installAccountRuntime(deps: AccountRuntimeDeps): AccountRuntime 
     var spinner = getElement<HTMLElement>('ws-spinner-' + accountID);
     if (spinner) spinner.style.display = 'block';
     try {
-      var resp = await fetch(getAccountAPIBasePath() + '/' + accountID + '/tenants', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ display_name: name }),
-      });
-      if (!resp.ok) {
-        var err = await resp.json().catch(function() { return {}; });
-        deps.showToast((err && err.error) || 'Failed to create workspace', true);
-        return;
-      }
+      await deps.api.createWorkspace(accountID, { display_name: name });
       if (!await refreshOrRedirect()) {
         return;
       }
@@ -138,8 +115,8 @@ export function installAccountRuntime(deps: AccountRuntimeDeps): AccountRuntime 
         entry.addWorkspaceOpen = false;
       });
       deps.showToast('Workspace created!');
-    } catch {
-      deps.showToast('Network error. Please try again.', true);
+    } catch (error) {
+      deps.showToast(error instanceof Error ? error.message : 'Failed to create workspace.', true);
     } finally {
       if (spinner) spinner.style.display = 'none';
     }
@@ -149,43 +126,31 @@ export function installAccountRuntime(deps: AccountRuntimeDeps): AccountRuntime 
     evt.stopPropagation();
     var action = state === 'active' ? 'Suspend' : 'Delete';
     if (!window.confirm(action + ' workspace "' + name + '"?')) return;
-    var method = state === 'active' ? 'PATCH' : 'DELETE';
-    var body = state === 'active' ? JSON.stringify({ state: 'suspended' }) : undefined;
     try {
-      var response = await fetch(getAccountAPIBasePath() + '/' + accountID + '/tenants/' + tenantID, {
-        method: method,
-        headers: body ? { 'Content-Type': 'application/json' } : {},
-        body: body,
-      });
-      if (!response.ok) {
-        deps.showToast('Failed to ' + action.toLowerCase() + ' workspace.', true);
-        return;
+      if (state === 'active') {
+        await deps.api.suspendWorkspace(accountID, tenantID);
+      } else {
+        await deps.api.deleteWorkspace(accountID, tenantID);
       }
       if (!await refreshOrRedirect()) {
         return;
       }
       deps.showToast(action + 'd workspace.');
-    } catch {
-      deps.showToast('Network error.', true);
+    } catch (error) {
+      deps.showToast(error instanceof Error ? error.message : 'Failed to ' + action.toLowerCase() + ' workspace.', true);
     }
   };
 
   var openBilling = async function(accountID: string): Promise<void> {
     try {
-      var r = await fetch(getPortalAPIBasePath() + '/billing?account_id=' + encodeURIComponent(accountID), { method: 'POST' });
-      if (!r.ok) {
-        var err = await r.json().catch(function() { return {}; });
-        deps.showToast((err && err.error) || 'Failed to open billing portal.', true);
-        return;
-      }
-      var data = await r.json();
+      var data = await deps.api.openBilling(accountID);
       if (data && data.url) {
         window.location.href = data.url;
       } else {
         deps.showToast('Failed to open billing portal.', true);
       }
-    } catch {
-      deps.showToast('Network error.', true);
+    } catch (error) {
+      deps.showToast(error instanceof Error ? error.message : 'Failed to open billing portal.', true);
     }
   };
 
@@ -211,53 +176,35 @@ export function installAccountRuntime(deps: AccountRuntimeDeps): AccountRuntime 
       return;
     }
     try {
-      var r = await fetch(getAccountAPIBasePath() + '/' + encodeURIComponent(accountID) + '/members', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email, role: roleEl.value }),
-      });
-      if (r.status === 409) {
-        deps.showToast('Member already exists.', true);
-        return;
-      }
-      if (!r.ok) {
-        var err = await r.text();
-        deps.showToast(err || 'Failed to invite member.', true);
-        return;
-      }
+      await deps.api.inviteMember(accountID, { email: email, role: roleEl.value });
       emailEl.value = '';
       if (!await refreshAccountTeamSection(accountID)) {
         return;
       }
       deps.showToast('Member invited!');
-    } catch {
-      deps.showToast('Network error.', true);
+    } catch (error) {
+      if (error instanceof PortalAPIError && error.status === 409) {
+        deps.showToast('Member already exists.', true);
+        return;
+      }
+      deps.showToast(error instanceof Error ? error.message : 'Failed to invite member.', true);
     }
   };
 
   var changeRole = async function(accountID: string, userID: string, newRole: string): Promise<void> {
     try {
-      var r = await fetch(getAccountAPIBasePath() + '/' + encodeURIComponent(accountID) + '/members/' + encodeURIComponent(userID), {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role: newRole }),
-      });
-      if (r.status === 409) {
-        deps.showToast('Cannot demote last owner.', true);
-        await loadTeam(accountID);
-        return;
-      }
-      if (!r.ok) {
-        deps.showToast('Failed to update role.', true);
-        await loadTeam(accountID);
-        return;
-      }
+      await deps.api.updateMemberRole(accountID, userID, { role: newRole });
       if (!await refreshAccountTeamSection(accountID)) {
         return;
       }
       deps.showToast('Role updated.');
-    } catch {
-      deps.showToast('Network error.', true);
+    } catch (error) {
+      if (error instanceof PortalAPIError && error.status === 409) {
+        deps.showToast('Cannot demote last owner.', true);
+        await loadTeam(accountID);
+        return;
+      }
+      deps.showToast(error instanceof Error ? error.message : 'Failed to update role.', true);
       await loadTeam(accountID);
     }
   };
@@ -265,23 +212,17 @@ export function installAccountRuntime(deps: AccountRuntimeDeps): AccountRuntime 
   var removeMember = async function(accountID: string, userID: string, email: string): Promise<void> {
     if (!window.confirm('Remove ' + email + ' from this account?')) return;
     try {
-      var r = await fetch(getAccountAPIBasePath() + '/' + encodeURIComponent(accountID) + '/members/' + encodeURIComponent(userID), {
-        method: 'DELETE',
-      });
-      if (r.status === 409) {
-        deps.showToast('Cannot remove last owner.', true);
-        return;
-      }
-      if (!r.ok) {
-        deps.showToast('Failed to remove member.', true);
-        return;
-      }
+      await deps.api.removeMember(accountID, userID);
       if (!await refreshAccountTeamSection(accountID)) {
         return;
       }
       deps.showToast('Member removed.');
-    } catch {
-      deps.showToast('Network error.', true);
+    } catch (error) {
+      if (error instanceof PortalAPIError && error.status === 409) {
+        deps.showToast('Cannot remove last owner.', true);
+        return;
+      }
+      deps.showToast(error instanceof Error ? error.message : 'Failed to remove member.', true);
     }
   };
 

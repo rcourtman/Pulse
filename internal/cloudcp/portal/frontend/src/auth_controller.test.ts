@@ -1,8 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createPortalAPI } from './api';
 import { installAuthController } from './auth_controller';
 import { createPortalStore } from './store';
 import type { PortalBootstrapData } from './types';
+
+async function flushAsync() {
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+  await new Promise(function(resolve) {
+    setTimeout(resolve, 0);
+  });
+}
 
 const bootstrapDefaults: Omit<PortalBootstrapData, 'authenticated' | 'email' | 'accounts'> = {
   public_site_url: 'https://pulserelay.pro',
@@ -28,6 +38,7 @@ describe('auth controller', function() {
       email: 'buyer@example.com',
     });
     var controller = installAuthController({
+      api: createPortalAPI({ getBootstrap: function() { return store.getBootstrap(); } }),
       store,
     });
 
@@ -51,6 +62,7 @@ describe('auth controller', function() {
     );
 
     var controller = installAuthController({
+      api: createPortalAPI({ getBootstrap: function() { return store.getBootstrap(); } }),
       store,
     });
 
@@ -65,8 +77,7 @@ describe('auth controller', function() {
 
     document.getElementById('send')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 
-    await Promise.resolve();
-    await Promise.resolve();
+    await flushAsync();
     expect(controller.getLoginState().sending).toBe(false);
     expect(controller.getLoginState().success).toBe(true);
     expect(fetch).toHaveBeenCalledWith(

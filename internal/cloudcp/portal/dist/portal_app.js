@@ -167,6 +167,151 @@
     });
   }
 
+  // src/api.ts
+  var PortalAPIError = class extends Error {
+    constructor(message, status = 0, payload = null) {
+      super(message);
+      this.name = "PortalAPIError";
+      this.status = status;
+      this.payload = payload;
+    }
+  };
+  function createPortalAPI(context) {
+    function bootstrap() {
+      return context.getBootstrap();
+    }
+    async function readPayload(response) {
+      var contentType = response.headers && typeof response.headers.get === "function" ? response.headers.get("content-type") || "" : "";
+      if (typeof response.json === "function") {
+        try {
+          return await response.json();
+        } catch {
+        }
+      }
+      if (contentType.includes("application/json")) {
+        try {
+          return await response.json();
+        } catch {
+          return null;
+        }
+      }
+      try {
+        var text = await response.text();
+        return text || null;
+      } catch {
+        return null;
+      }
+    }
+    function messageFromPayload(payload, fallback) {
+      if (payload && typeof payload === "object") {
+        var errorMessage = payload.error;
+        if (typeof errorMessage === "string" && errorMessage.trim()) {
+          return errorMessage;
+        }
+        var message = payload.message;
+        if (typeof message === "string" && message.trim()) {
+          return message;
+        }
+      }
+      if (typeof payload === "string" && payload.trim()) {
+        return payload;
+      }
+      return fallback;
+    }
+    async function request(input, init, fallbackMessage) {
+      var response;
+      try {
+        if (Object.keys(init).length > 0) {
+          response = await fetch(input, init);
+        } else {
+          response = await fetch(input);
+        }
+      } catch {
+        throw new PortalAPIError("Network error.", 0, null);
+      }
+      var payload = await readPayload(response);
+      if (!response.ok) {
+        throw new PortalAPIError(messageFromPayload(payload, fallbackMessage), response.status, payload);
+      }
+      return payload;
+    }
+    function accountURL(accountID, suffix = "") {
+      return bootstrap().account_api_base_path + "/" + encodeURIComponent(accountID) + suffix;
+    }
+    return {
+      fetchBootstrap: function() {
+        return request(bootstrap().bootstrap_path, {
+          headers: { Accept: "application/json" }
+        }, "Failed to refresh account state.");
+      },
+      requestMagicLink: function(email) {
+        return request(bootstrap().magic_link_request_path, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email })
+        }, "Failed to send magic link.");
+      },
+      logout: function() {
+        return request(bootstrap().logout_path, {
+          method: "POST"
+        }, "Failed to sign out.");
+      },
+      postCommercialJSON: function(path, body) {
+        return request(bootstrap().commercial_api_base_url + path, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body)
+        }, "Commercial request failed.");
+      },
+      createWorkspace: function(accountID, body) {
+        return request(accountURL(accountID, "/tenants"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body)
+        }, "Failed to create workspace.");
+      },
+      suspendWorkspace: function(accountID, tenantID) {
+        return request(accountURL(accountID, "/tenants/" + encodeURIComponent(tenantID)), {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ state: "suspended" })
+        }, "Failed to suspend workspace.");
+      },
+      deleteWorkspace: function(accountID, tenantID) {
+        return request(accountURL(accountID, "/tenants/" + encodeURIComponent(tenantID)), {
+          method: "DELETE"
+        }, "Failed to delete workspace.");
+      },
+      openBilling: function(accountID) {
+        return request(bootstrap().portal_api_base_path + "/billing?account_id=" + encodeURIComponent(accountID), {
+          method: "POST"
+        }, "Failed to open billing portal.");
+      },
+      listMembers: function(accountID) {
+        return request(accountURL(accountID, "/members"), {}, "Failed to load team.");
+      },
+      inviteMember: function(accountID, body) {
+        return request(accountURL(accountID, "/members"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body)
+        }, "Failed to invite member.");
+      },
+      updateMemberRole: function(accountID, userID, body) {
+        return request(accountURL(accountID, "/members/" + encodeURIComponent(userID)), {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body)
+        }, "Failed to update role.");
+      },
+      removeMember: function(accountID, userID) {
+        return request(accountURL(accountID, "/members/" + encodeURIComponent(userID)), {
+          method: "DELETE"
+        }, "Failed to remove member.");
+      }
+    };
+  }
+
   // src/state.ts
   function emptyStatus() {
     return {
@@ -309,12 +454,6 @@
 
   // src/account_runtime.ts
   function installAccountRuntime(deps) {
-    var getAccountAPIBasePath = function() {
-      return deps.store.getBootstrap().account_api_base_path;
-    };
-    var getPortalAPIBasePath = function() {
-      return deps.store.getBootstrap().portal_api_base_path;
-    };
     var getPortalPath = function() {
       return deps.store.getBootstrap().portal_path;
     };
@@ -339,27 +478,18 @@
         entry.teamMembers = [];
       });
       try {
-        var r = await fetch(getAccountAPIBasePath() + "/" + encodeURIComponent(accountID) + "/members");
-        if (!r.ok) {
-          deps.store.updateAccountState(function(accountState) {
-            var entry = ensurePortalAccountUIEntry(accountState, accountID);
-            entry.teamLoading = false;
-            entry.teamError = "Failed to load team.";
-          });
-          return;
-        }
-        var members = await r.json();
+        var members = await deps.api.listMembers(accountID);
         deps.store.updateAccountState(function(accountState) {
           var entry = ensurePortalAccountUIEntry(accountState, accountID);
           entry.teamLoading = false;
           entry.teamError = "";
           entry.teamMembers = Array.isArray(members) ? members : [];
         });
-      } catch {
+      } catch (error) {
         deps.store.updateAccountState(function(accountState) {
           var entry = ensurePortalAccountUIEntry(accountState, accountID);
           entry.teamLoading = false;
-          entry.teamError = "Network error.";
+          entry.teamError = error instanceof Error ? error.message : "Network error.";
         });
       }
     };
@@ -400,18 +530,7 @@
       var spinner = getElement("ws-spinner-" + accountID);
       if (spinner) spinner.style.display = "block";
       try {
-        var resp = await fetch(getAccountAPIBasePath() + "/" + accountID + "/tenants", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ display_name: name })
-        });
-        if (!resp.ok) {
-          var err = await resp.json().catch(function() {
-            return {};
-          });
-          deps.showToast(err && err.error || "Failed to create workspace", true);
-          return;
-        }
+        await deps.api.createWorkspace(accountID, { display_name: name });
         if (!await refreshOrRedirect()) {
           return;
         }
@@ -420,8 +539,8 @@
           entry.addWorkspaceOpen = false;
         });
         deps.showToast("Workspace created!");
-      } catch {
-        deps.showToast("Network error. Please try again.", true);
+      } catch (error) {
+        deps.showToast(error instanceof Error ? error.message : "Failed to create workspace.", true);
       } finally {
         if (spinner) spinner.style.display = "none";
       }
@@ -430,44 +549,30 @@
       evt.stopPropagation();
       var action = state === "active" ? "Suspend" : "Delete";
       if (!window.confirm(action + ' workspace "' + name + '"?')) return;
-      var method = state === "active" ? "PATCH" : "DELETE";
-      var body = state === "active" ? JSON.stringify({ state: "suspended" }) : void 0;
       try {
-        var response = await fetch(getAccountAPIBasePath() + "/" + accountID + "/tenants/" + tenantID, {
-          method,
-          headers: body ? { "Content-Type": "application/json" } : {},
-          body
-        });
-        if (!response.ok) {
-          deps.showToast("Failed to " + action.toLowerCase() + " workspace.", true);
-          return;
+        if (state === "active") {
+          await deps.api.suspendWorkspace(accountID, tenantID);
+        } else {
+          await deps.api.deleteWorkspace(accountID, tenantID);
         }
         if (!await refreshOrRedirect()) {
           return;
         }
         deps.showToast(action + "d workspace.");
-      } catch {
-        deps.showToast("Network error.", true);
+      } catch (error) {
+        deps.showToast(error instanceof Error ? error.message : "Failed to " + action.toLowerCase() + " workspace.", true);
       }
     };
     var openBilling = async function(accountID) {
       try {
-        var r = await fetch(getPortalAPIBasePath() + "/billing?account_id=" + encodeURIComponent(accountID), { method: "POST" });
-        if (!r.ok) {
-          var err = await r.json().catch(function() {
-            return {};
-          });
-          deps.showToast(err && err.error || "Failed to open billing portal.", true);
-          return;
-        }
-        var data = await r.json();
+        var data = await deps.api.openBilling(accountID);
         if (data && data.url) {
           window.location.href = data.url;
         } else {
           deps.showToast("Failed to open billing portal.", true);
         }
-      } catch {
-        deps.showToast("Network error.", true);
+      } catch (error) {
+        deps.showToast(error instanceof Error ? error.message : "Failed to open billing portal.", true);
       }
     };
     var toggleTeam = function(accountID) {
@@ -491,75 +596,51 @@
         return;
       }
       try {
-        var r = await fetch(getAccountAPIBasePath() + "/" + encodeURIComponent(accountID) + "/members", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, role: roleEl.value })
-        });
-        if (r.status === 409) {
-          deps.showToast("Member already exists.", true);
-          return;
-        }
-        if (!r.ok) {
-          var err = await r.text();
-          deps.showToast(err || "Failed to invite member.", true);
-          return;
-        }
+        await deps.api.inviteMember(accountID, { email, role: roleEl.value });
         emailEl.value = "";
         if (!await refreshAccountTeamSection(accountID)) {
           return;
         }
         deps.showToast("Member invited!");
-      } catch {
-        deps.showToast("Network error.", true);
+      } catch (error) {
+        if (error instanceof PortalAPIError && error.status === 409) {
+          deps.showToast("Member already exists.", true);
+          return;
+        }
+        deps.showToast(error instanceof Error ? error.message : "Failed to invite member.", true);
       }
     };
     var changeRole = async function(accountID, userID, newRole) {
       try {
-        var r = await fetch(getAccountAPIBasePath() + "/" + encodeURIComponent(accountID) + "/members/" + encodeURIComponent(userID), {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ role: newRole })
-        });
-        if (r.status === 409) {
-          deps.showToast("Cannot demote last owner.", true);
-          await loadTeam(accountID);
-          return;
-        }
-        if (!r.ok) {
-          deps.showToast("Failed to update role.", true);
-          await loadTeam(accountID);
-          return;
-        }
+        await deps.api.updateMemberRole(accountID, userID, { role: newRole });
         if (!await refreshAccountTeamSection(accountID)) {
           return;
         }
         deps.showToast("Role updated.");
-      } catch {
-        deps.showToast("Network error.", true);
+      } catch (error) {
+        if (error instanceof PortalAPIError && error.status === 409) {
+          deps.showToast("Cannot demote last owner.", true);
+          await loadTeam(accountID);
+          return;
+        }
+        deps.showToast(error instanceof Error ? error.message : "Failed to update role.", true);
         await loadTeam(accountID);
       }
     };
     var removeMember = async function(accountID, userID, email) {
       if (!window.confirm("Remove " + email + " from this account?")) return;
       try {
-        var r = await fetch(getAccountAPIBasePath() + "/" + encodeURIComponent(accountID) + "/members/" + encodeURIComponent(userID), {
-          method: "DELETE"
-        });
-        if (r.status === 409) {
-          deps.showToast("Cannot remove last owner.", true);
-          return;
-        }
-        if (!r.ok) {
-          deps.showToast("Failed to remove member.", true);
-          return;
-        }
+        await deps.api.removeMember(accountID, userID);
         if (!await refreshAccountTeamSection(accountID)) {
           return;
         }
         deps.showToast("Member removed.");
-      } catch {
-        deps.showToast("Network error.", true);
+      } catch (error) {
+        if (error instanceof PortalAPIError && error.status === 409) {
+          deps.showToast("Cannot remove last owner.", true);
+          return;
+        }
+        deps.showToast(error instanceof Error ? error.message : "Failed to remove member.", true);
       }
     };
     deps.store.subscribeAccount(renderAccountRuntime);
@@ -602,12 +683,14 @@
         nextState.success = false;
       });
       try {
-        var response = await fetch(deps.store.getBootstrap().magic_link_request_path, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email })
+        await deps.api.requestMagicLink(email);
+        deps.store.updateLoginState(function(nextState) {
+          nextState.sending = false;
+          nextState.success = true;
         });
-        if (response.ok || response.status === 404) {
+        return;
+      } catch (error) {
+        if (error instanceof PortalAPIError && error.status === 404) {
           deps.store.updateLoginState(function(nextState) {
             nextState.sending = false;
             nextState.success = true;
@@ -615,12 +698,8 @@
           return;
         }
         deps.store.updateLoginState(function(nextState) {
-          nextState.error = response.status === 429 ? "Too many requests. Please wait a moment and try again." : "Something went wrong. Please try again.";
+          nextState.error = error instanceof PortalAPIError && error.status === 429 ? "Too many requests. Please wait a moment and try again." : "Network error. Please check your connection and try again.";
         });
-      } catch (_) {
-        deps.store.updateLoginState(function(nextState) {
-          nextState.error = "Network error. Please check your connection and try again.";
-        }, { notify: false });
       }
       deps.store.updateLoginState(function(nextState) {
         nextState.sending = false;
@@ -656,7 +735,7 @@
       logoutBtn.textContent = "Signing out\u2026";
       (async function() {
         try {
-          await fetch(deps.store.getBootstrap().logout_path, { method: "POST" });
+          await deps.api.logout();
         } catch (_) {
         }
         window.location.href = deps.store.getBootstrap().portal_path;
@@ -857,6 +936,7 @@
 
   // src/services.ts
   function installServicesRuntime(deps) {
+    var api = deps.api;
     var store = deps.store;
     store.updateServiceState(function(serviceState) {
       if (!serviceState.flows) {
@@ -871,13 +951,6 @@
     }
     function updateServiceState(mutator, notify = true) {
       return store.updateServiceState(mutator, { notify });
-    }
-    function serviceFetch(path, body) {
-      return fetch(store.getBootstrap().commercial_api_base_url + path, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body)
-      });
     }
     function toggleServicePanel(panelID) {
       updateServiceState(function(serviceState) {
@@ -1104,9 +1177,7 @@
         clearFlowStatus(serviceState, flowID);
       });
       try {
-        var res = await serviceFetch(flow.requestPath, { email });
-        var data = await res.json();
-        if (!res.ok) throw new Error(data.error || flow.requestErrorMessage);
+        await api.postCommercialJSON(flow.requestPath, { email });
         updateServiceState(function(serviceState) {
           serviceState.flows[flowID].pendingEmail = email;
           serviceState.flows[flowID].step2Visible = !!flow.step2ID;
@@ -1114,7 +1185,7 @@
         });
       } catch (err) {
         updateServiceState(function(serviceState) {
-          setFlowStatus(serviceState, flowID, err.message, true);
+          setFlowStatus(serviceState, flowID, err instanceof Error ? err.message : flow.requestErrorMessage, true);
         });
       } finally {
         updateServiceState(function(serviceState) {
@@ -1129,15 +1200,13 @@
       var email = getServiceState().flows[flowID].pendingEmail;
       if (!email) return;
       try {
-        var res = await serviceFetch(flow.requestPath, { email });
-        var data = await res.json();
-        if (!res.ok) throw new Error(data.error || flow.requestErrorMessage);
+        await api.postCommercialJSON(flow.requestPath, { email });
         updateServiceState(function(serviceState) {
           setFlowStatus(serviceState, flowID, flow.resendSuccessMessage, false);
         });
       } catch (err) {
         updateServiceState(function(serviceState) {
-          setFlowStatus(serviceState, flowID, err.message, true);
+          setFlowStatus(serviceState, flowID, err instanceof Error ? err.message : flow.requestErrorMessage, true);
         });
       }
     }
@@ -1154,13 +1223,11 @@
         serviceState.flows[flowID].confirming = true;
       });
       try {
-        var res = await serviceFetch(flow.confirmPath, { email, code });
-        var data = await res.json();
-        if (!res.ok) throw new Error(data.error || flow.confirmErrorMessage);
+        var data = await api.postCommercialJSON(flow.confirmPath, { email, code });
         flow.onConfirmSuccess(data, email);
       } catch (err) {
         updateServiceState(function(serviceState) {
-          setFlowStatus(serviceState, flowID, err.message, true);
+          setFlowStatus(serviceState, flowID, err instanceof Error ? err.message : flow.confirmErrorMessage, true);
         });
       } finally {
         updateServiceState(function(serviceState) {
@@ -1193,16 +1260,14 @@
         serviceState.refund.status = emptyStatus();
       });
       try {
-        var res = await serviceFetch("/v1/self-refund", { email, token });
-        var data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Refund failed");
+        await api.postCommercialJSON("/v1/self-refund", { email, token });
         updateServiceState(function(serviceState) {
           serviceState.refund.tokenValue = "";
           setRefundStatus(serviceState, "Success! Your refund has been processed. Stripe will follow up by email.", false);
         });
       } catch (err) {
         updateServiceState(function(serviceState) {
-          setRefundStatus(serviceState, err.message, true);
+          setRefundStatus(serviceState, err instanceof Error ? err.message : "Refund failed", true);
         });
       } finally {
         updateServiceState(function(serviceState) {
@@ -1506,6 +1571,11 @@
 
   // src/app.ts
   function installPortalApp(deps) {
+    var api = createPortalAPI({
+      getBootstrap: function() {
+        return deps.store.getBootstrap();
+      }
+    });
     function applyBootstrap(data) {
       return deps.store.setBootstrap(data || createAnonymousBootstrap(deps.bootstrapDefaults));
     }
@@ -1513,18 +1583,14 @@
       var bootstrap = deps.store.getBootstrap();
       if (!bootstrap.bootstrap_path) return false;
       try {
-        var response = await fetch(bootstrap.bootstrap_path, {
-          headers: { Accept: "application/json" }
-        });
-        if (response.status === 401) {
+        var data = await api.fetchBootstrap();
+        applyBootstrap(data);
+        return true;
+      } catch (error) {
+        if (error instanceof PortalAPIError && error.status === 401) {
           applyBootstrap(createAnonymousBootstrap(deps.bootstrapDefaults));
           return true;
         }
-        if (!response.ok) return false;
-        var data = await response.json();
-        applyBootstrap(data);
-        return true;
-      } catch (_) {
       }
       return false;
     }
@@ -1542,12 +1608,15 @@
       store: deps.store
     });
     installServicesRuntime({
+      api,
       store: deps.store
     });
     installAuthController({
+      api,
       store: deps.store
     });
     var accountRuntime = installAccountRuntime({
+      api,
       store: deps.store,
       refreshBootstrap,
       showToast

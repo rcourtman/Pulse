@@ -1,5 +1,6 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createPortalAPI } from './api';
 import { installAccountRuntime } from './account_runtime';
 import { createPortalStore } from './store';
 import type { PortalBootstrapData } from './types';
@@ -8,6 +9,7 @@ function jsonResponse(payload: unknown, ok = true, status = ok ? 200 : 500) {
   return {
     ok,
     status,
+    headers: new Headers({ 'content-type': 'application/json' }),
     json: vi.fn().mockResolvedValue(payload),
     text: vi.fn().mockResolvedValue(typeof payload === 'string' ? payload : JSON.stringify(payload)),
   };
@@ -37,6 +39,7 @@ const bootstrapDefaults: Omit<PortalBootstrapData, 'authenticated' | 'email' | '
 };
 
 const deps = {
+  api: null as any,
   store: createPortalStore(bootstrapDefaults, {
     authenticated: true,
     email: 'owner@example.com',
@@ -49,6 +52,11 @@ describe('account runtime', function() {
   var runtime: ReturnType<typeof installAccountRuntime>;
 
   beforeAll(function() {
+    deps.api = createPortalAPI({
+      getBootstrap: function() {
+        return deps.store.getBootstrap();
+      },
+    });
     runtime = installAccountRuntime(deps);
   });
 

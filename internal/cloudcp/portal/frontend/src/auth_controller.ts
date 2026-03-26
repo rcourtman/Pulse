@@ -1,3 +1,5 @@
+import { PortalAPIError } from './api';
+import type { PortalAPI } from './api';
 import { createPortalLoginState, syncLoginStateBootstrapEmail } from './state';
 import type { PortalLoginState } from './types';
 import type { PortalStore } from './store';
@@ -5,6 +7,7 @@ import type { PortalStore } from './store';
 type FormValueElement = HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
 
 export interface AuthControllerDeps {
+  api: PortalAPI;
   store: PortalStore;
 }
 
@@ -40,12 +43,14 @@ export function installAuthController(deps: AuthControllerDeps): AuthController 
       nextState.success = false;
     });
     try {
-      var response = await fetch(deps.store.getBootstrap().magic_link_request_path, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email })
+      await deps.api.requestMagicLink(email);
+      deps.store.updateLoginState(function(nextState) {
+        nextState.sending = false;
+        nextState.success = true;
       });
-      if (response.ok || response.status === 404) {
+      return;
+    } catch (error) {
+      if (error instanceof PortalAPIError && error.status === 404) {
         deps.store.updateLoginState(function(nextState) {
           nextState.sending = false;
           nextState.success = true;
@@ -53,14 +58,10 @@ export function installAuthController(deps: AuthControllerDeps): AuthController 
         return;
       }
       deps.store.updateLoginState(function(nextState) {
-        nextState.error = response.status === 429
+        nextState.error = error instanceof PortalAPIError && error.status === 429
           ? 'Too many requests. Please wait a moment and try again.'
-          : 'Something went wrong. Please try again.';
+          : 'Network error. Please check your connection and try again.';
       });
-    } catch (_) {
-      deps.store.updateLoginState(function(nextState) {
-        nextState.error = 'Network error. Please check your connection and try again.';
-      }, { notify: false });
     }
     deps.store.updateLoginState(function(nextState) {
       nextState.sending = false;
@@ -98,7 +99,7 @@ export function installAuthController(deps: AuthControllerDeps): AuthController 
     logoutBtn.textContent = 'Signing out…';
     (async function() {
       try {
-        await fetch(deps.store.getBootstrap().logout_path, { method: 'POST' });
+        await deps.api.logout();
       } catch (_) {}
       window.location.href = deps.store.getBootstrap().portal_path;
     })();

@@ -1,5 +1,6 @@
 import { installAccountController } from './account_controller';
 import { installAccountRuntime } from './account_runtime';
+import { createPortalAPI, PortalAPIError } from './api';
 import { installAuthController } from './auth_controller';
 import { installServicesRuntime } from './services';
 import { installShell } from './shell';
@@ -23,6 +24,12 @@ export interface PortalApp {
 }
 
 export function installPortalApp(deps: PortalAppDeps): PortalApp {
+  var api = createPortalAPI({
+    getBootstrap: function() {
+      return deps.store.getBootstrap();
+    },
+  });
+
   function applyBootstrap(data: Partial<PortalBootstrapData> | PortalBootstrapData | null | undefined): PortalBootstrapData {
     return deps.store.setBootstrap(data || createAnonymousBootstrap(deps.bootstrapDefaults));
   }
@@ -31,18 +38,15 @@ export function installPortalApp(deps: PortalAppDeps): PortalApp {
     var bootstrap = deps.store.getBootstrap();
     if (!bootstrap.bootstrap_path) return false;
     try {
-      var response = await fetch(bootstrap.bootstrap_path, {
-        headers: { Accept: 'application/json' },
-      });
-      if (response.status === 401) {
+      var data = await api.fetchBootstrap();
+      applyBootstrap(data);
+      return true;
+    } catch (error) {
+      if (error instanceof PortalAPIError && error.status === 401) {
         applyBootstrap(createAnonymousBootstrap(deps.bootstrapDefaults));
         return true;
       }
-      if (!response.ok) return false;
-      var data = await response.json();
-      applyBootstrap(data);
-      return true;
-    } catch (_) {}
+    }
     return false;
   }
 
@@ -62,14 +66,17 @@ export function installPortalApp(deps: PortalAppDeps): PortalApp {
   });
 
   installServicesRuntime({
+    api: api,
     store: deps.store,
   });
 
   installAuthController({
+    api: api,
     store: deps.store,
   });
 
   var accountRuntime = installAccountRuntime({
+    api: api,
     store: deps.store,
     refreshBootstrap: refreshBootstrap,
     showToast: showToast,

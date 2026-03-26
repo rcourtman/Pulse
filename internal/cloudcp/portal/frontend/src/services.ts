@@ -1,3 +1,4 @@
+import type { PortalAPI } from './api';
 import { installServicesController } from './services_controller';
 import {
   clearFlowStatus,
@@ -57,10 +58,12 @@ interface VerificationFlowDefinition {
 }
 
 export interface ServicesRuntimeDeps {
+  api: PortalAPI;
   store: PortalStore;
 }
 
 export function installServicesRuntime(deps: ServicesRuntimeDeps): void {
+  var api = deps.api;
   var store = deps.store;
 
   store.updateServiceState(function(serviceState) {
@@ -78,14 +81,6 @@ export function installServicesRuntime(deps: ServicesRuntimeDeps): void {
 
   function updateServiceState(mutator, notify = true) {
     return store.updateServiceState(mutator, { notify: notify });
-  }
-
-  function serviceFetch(path, body) {
-    return fetch(store.getBootstrap().commercial_api_base_url + path, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
   }
 
   function toggleServicePanel(panelID) {
@@ -318,9 +313,7 @@ export function installServicesRuntime(deps: ServicesRuntimeDeps): void {
       clearFlowStatus(serviceState, flowID);
     });
     try {
-      var res = await serviceFetch(flow.requestPath, { email: email });
-      var data = await res.json();
-      if (!res.ok) throw new Error(data.error || flow.requestErrorMessage);
+      await api.postCommercialJSON(flow.requestPath, { email: email });
       updateServiceState(function(serviceState) {
         serviceState.flows[flowID].pendingEmail = email;
         serviceState.flows[flowID].step2Visible = !!flow.step2ID;
@@ -328,7 +321,7 @@ export function installServicesRuntime(deps: ServicesRuntimeDeps): void {
       });
     } catch (err) {
       updateServiceState(function(serviceState) {
-        setFlowStatus(serviceState, flowID, err.message, true);
+        setFlowStatus(serviceState, flowID, err instanceof Error ? err.message : flow.requestErrorMessage, true);
       });
     } finally {
       updateServiceState(function(serviceState) {
@@ -344,15 +337,13 @@ export function installServicesRuntime(deps: ServicesRuntimeDeps): void {
     var email = getServiceState().flows[flowID].pendingEmail;
     if (!email) return;
     try {
-      var res = await serviceFetch(flow.requestPath, { email: email });
-      var data = await res.json();
-      if (!res.ok) throw new Error(data.error || flow.requestErrorMessage);
+      await api.postCommercialJSON(flow.requestPath, { email: email });
       updateServiceState(function(serviceState) {
         setFlowStatus(serviceState, flowID, flow.resendSuccessMessage, false);
       });
     } catch (err) {
       updateServiceState(function(serviceState) {
-        setFlowStatus(serviceState, flowID, err.message, true);
+        setFlowStatus(serviceState, flowID, err instanceof Error ? err.message : flow.requestErrorMessage, true);
       });
     }
   }
@@ -370,13 +361,11 @@ export function installServicesRuntime(deps: ServicesRuntimeDeps): void {
       serviceState.flows[flowID].confirming = true;
     });
     try {
-      var res = await serviceFetch(flow.confirmPath, { email: email, code: code });
-      var data = await res.json();
-      if (!res.ok) throw new Error(data.error || flow.confirmErrorMessage);
+      var data = await api.postCommercialJSON(flow.confirmPath, { email: email, code: code });
       flow.onConfirmSuccess(data, email);
     } catch (err) {
       updateServiceState(function(serviceState) {
-        setFlowStatus(serviceState, flowID, err.message, true);
+        setFlowStatus(serviceState, flowID, err instanceof Error ? err.message : flow.confirmErrorMessage, true);
       });
     } finally {
       updateServiceState(function(serviceState) {
@@ -411,16 +400,14 @@ export function installServicesRuntime(deps: ServicesRuntimeDeps): void {
       serviceState.refund.status = emptyStatus();
     });
     try {
-      var res = await serviceFetch('/v1/self-refund', { email: email, token: token });
-      var data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Refund failed');
+      await api.postCommercialJSON('/v1/self-refund', { email: email, token: token });
       updateServiceState(function(serviceState) {
         serviceState.refund.tokenValue = '';
         setRefundStatus(serviceState, 'Success! Your refund has been processed. Stripe will follow up by email.', false);
       });
     } catch (err) {
       updateServiceState(function(serviceState) {
-        setRefundStatus(serviceState, err.message, true);
+        setRefundStatus(serviceState, err instanceof Error ? err.message : 'Refund failed', true);
       });
     } finally {
       updateServiceState(function(serviceState) {
