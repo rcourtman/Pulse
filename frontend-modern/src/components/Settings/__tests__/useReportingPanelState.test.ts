@@ -89,9 +89,13 @@ describe('useReportingPanelState', () => {
     hasReportingFeature = true;
     loadLicenseStatusMock = vi.fn();
 
-    vi.doMock('@/utils/apiClient', () => ({
-      apiFetch: apiFetchMock,
-    }));
+    vi.doMock('@/utils/apiClient', async () => {
+      const actual = await vi.importActual<typeof import('@/utils/apiClient')>('@/utils/apiClient');
+      return {
+        ...actual,
+        apiFetch: apiFetchMock,
+      };
+    });
 
     vi.doMock('@/utils/toast', () => ({
       showSuccess: vi.fn(),
@@ -173,9 +177,13 @@ describe('useReportingPanelState', () => {
     hasReportingFeature = false;
     loadLicenseStatusMock = vi.fn();
 
-    vi.doMock('@/utils/apiClient', () => ({
-      apiFetch: apiFetchMock,
-    }));
+    vi.doMock('@/utils/apiClient', async () => {
+      const actual = await vi.importActual<typeof import('@/utils/apiClient')>('@/utils/apiClient');
+      return {
+        ...actual,
+        apiFetch: apiFetchMock,
+      };
+    });
 
     vi.doMock('@/utils/toast', () => ({
       showSuccess: vi.fn(),
@@ -222,9 +230,13 @@ describe('useReportingPanelState', () => {
       .mockResolvedValueOnce(new Response('temporary failure', { status: 500 }))
       .mockResolvedValueOnce(new Response(JSON.stringify(catalogPayload), { status: 200 }));
 
-    vi.doMock('@/utils/apiClient', () => ({
-      apiFetch: apiFetchMock,
-    }));
+    vi.doMock('@/utils/apiClient', async () => {
+      const actual = await vi.importActual<typeof import('@/utils/apiClient')>('@/utils/apiClient');
+      return {
+        ...actual,
+        apiFetch: apiFetchMock,
+      };
+    });
 
     vi.doMock('@/utils/toast', () => ({
       showSuccess: vi.fn(),
@@ -262,6 +274,56 @@ describe('useReportingPanelState', () => {
 
     expect(apiFetchMock).toHaveBeenCalledTimes(2);
     expect(hookState.reportingCatalog()?.title).toBe('Detailed Reporting');
+
+    dispose();
+  });
+
+  it('extracts structured API error messages for reporting catalog failures', async () => {
+    vi.resetModules();
+
+    apiFetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: 'Catalog is unavailable right now' }), { status: 503 }),
+      );
+
+    vi.doMock('@/utils/apiClient', async () => {
+      const actual = await vi.importActual<typeof import('@/utils/apiClient')>('@/utils/apiClient');
+      return {
+        ...actual,
+        apiFetch: apiFetchMock,
+      };
+    });
+
+    vi.doMock('@/utils/toast', () => ({
+      showSuccess: vi.fn(),
+      showWarning: vi.fn(),
+    }));
+
+    vi.doMock('@/utils/trialStartAction', () => ({
+      runStartProTrialAction: vi.fn(),
+    }));
+
+    vi.doMock('@/utils/upgradeMetrics', () => ({
+      trackPaywallViewed: vi.fn(),
+    }));
+
+    vi.doMock('@/stores/license', () => ({
+      entitlements: vi.fn(() => ({ trial_eligible: true })),
+      getUpgradeActionUrlOrFallback: vi.fn(() => '/pricing'),
+      hasFeature: vi.fn((feature: string) => feature === 'advanced_reporting' && hasReportingFeature),
+      licenseLoaded: vi.fn(() => true),
+      loadLicenseStatus: loadLicenseStatusMock,
+    }));
+
+    ({ useReportingPanelState } = await import('../useReportingPanelState'));
+    const { hookState, dispose } = mountHook();
+
+    await flushAsync();
+    await flushAsync();
+
+    expect(hookState.reportingCatalog()).toBeNull();
+    expect(hookState.reportingCatalogError()).toBe('Catalog is unavailable right now');
 
     dispose();
   });

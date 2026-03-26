@@ -164,4 +164,23 @@ describe('apiClient org context', () => {
       requiredScope: 'settings:write',
     });
   });
+
+  it('preserves org context while extracting structured JSON errors', async () => {
+    mockFetch.mockResolvedValue(
+      new Response(JSON.stringify({ error: 'Catalog is unavailable right now' }), {
+        status: 503,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    setOrgID('tenant-reporting');
+    await expect(apiFetchJSON('/api/admin/reports/catalog')).rejects.toMatchObject({
+      message: 'Catalog is unavailable right now',
+      status: 503,
+    });
+
+    const [, options] = mockFetch.mock.calls[0] as [string, RequestInit];
+    const headers = options.headers as Record<string, string>;
+    expect(headers['X-Pulse-Org-ID']).toBe('tenant-reporting');
+  });
 });

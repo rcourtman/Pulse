@@ -1104,6 +1104,7 @@ describe('Settings architecture guardrails', () => {
     expect(reportingPanelStateSource).not.toContain('!licenseLoaded()');
     expect(reportingPanelStateSource).not.toContain('!isReportingEnabled()');
     expect(reportingPanelStateSource).toContain('buildVMInventoryExportRequest');
+    expect(reportingPanelStateSource).toContain('apiErrorFromResponse');
     expect(reportingPanelStateSource).toContain('getReportingGenerateSuccessMessage');
     expect(reportingPanelStateSource).toContain('resolveReportingDownloadFilename');
     expect(reportingPanelStateSource).not.toContain("'advanced_reporting'");

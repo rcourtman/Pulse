@@ -1,5 +1,5 @@
 import { createEffect, createSignal, onMount } from 'solid-js';
-import { apiFetch } from '@/utils/apiClient';
+import { apiErrorFromResponse, apiFetch } from '@/utils/apiClient';
 import { showSuccess, showWarning } from '@/utils/toast';
 import type { SelectedResource } from '@/components/Settings/ResourcePicker';
 import {
@@ -86,8 +86,7 @@ export const useReportingPanelState = () => {
       const request = buildReportingCatalogRequest();
       const response = await apiFetch(request.url);
       if (!response.ok) {
-        const text = await response.text();
-        throw new Error(text || getReportingCatalogErrorMessage());
+        throw await apiErrorFromResponse(response, getReportingCatalogErrorMessage());
       }
 
       setReportingCatalog(parseReportingCatalog(await response.json()));
@@ -185,8 +184,7 @@ export const useReportingPanelState = () => {
 
       const response = await apiFetch(request.request.url, request.request.init);
       if (!response.ok) {
-        const text = await response.text();
-        throw new Error(text || getReportingGenerateErrorMessage());
+        throw await apiErrorFromResponse(response, getReportingGenerateErrorMessage());
       }
 
       await downloadResponseBlob(request.filename, response);
@@ -212,8 +210,7 @@ export const useReportingPanelState = () => {
       const request = buildVMInventoryExportRequest(new Date(), inventoryDefinition);
       const response = await apiFetch(request.request.url);
       if (!response.ok) {
-        const text = await response.text();
-        throw new Error(text || getReportingInventoryExportErrorMessage());
+        throw await apiErrorFromResponse(response, getReportingInventoryExportErrorMessage());
       }
 
       await downloadResponseBlob(request.filename, response);

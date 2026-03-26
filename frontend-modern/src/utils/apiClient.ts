@@ -81,6 +81,60 @@ type APIErrorShape = Error & {
   status?: number;
 };
 
+async function createAPIErrorFromResponse(
+  response: Response,
+  fallbackMessage?: string,
+): Promise<APIErrorShape> {
+  const text = await response.text();
+  let errorMessage = fallbackMessage || text;
+
+  let errorDetail: string | undefined;
+  let errorFeature: string | undefined;
+  let errorRequiredScope: string | undefined;
+  let errorUpgradeUrl: string | undefined;
+  try {
+    const jsonError = JSON.parse(text);
+    if (jsonError.message) {
+      errorMessage = jsonError.message;
+    } else if (jsonError.error && typeof jsonError.error === 'string') {
+      errorMessage = jsonError.error;
+    }
+    if (typeof jsonError.detail === 'string') {
+      errorDetail = jsonError.detail;
+    }
+    errorRequiredScope = sanitizeBoundedText(jsonError.requiredScope, 128) ?? undefined;
+    errorFeature = sanitizeBoundedText(jsonError.feature, 128) ?? undefined;
+    errorUpgradeUrl = sanitizeBoundedText(jsonError.upgrade_url, 2048) ?? undefined;
+  } catch {
+    if (text.includes('<pre>') && text.includes('</pre>')) {
+      const match = text.match(/<pre>(.*?)<\/pre>/s);
+      if (match) errorMessage = match[1];
+    }
+
+    if (!text.includes('<') && text.length < 200) {
+      errorMessage = text;
+    } else if (!errorMessage && text.length > 200) {
+      errorMessage = `Request failed with status ${response.status}`;
+    }
+  }
+
+  const err = new Error(errorMessage || `Request failed with status ${response.status}`) as APIErrorShape;
+  err.status = response.status;
+  if (errorDetail) {
+    err.detail = errorDetail;
+  }
+  if (errorRequiredScope) {
+    err.requiredScope = errorRequiredScope;
+  }
+  if (errorFeature) {
+    err.feature = errorFeature;
+  }
+  if (errorUpgradeUrl) {
+    err.upgrade_url = errorUpgradeUrl;
+  }
+  return err;
+}
+
 function createAbortError(): Error {
   if (typeof DOMException !== 'undefined') {
     return new DOMException('The operation was aborted.', 'AbortError');
@@ -672,62 +726,7 @@ class ApiClient {
     });
 
     if (!response.ok) {
-      const text = await response.text();
-      // Try to extract just the error message without HTTP status codes
-      let errorMessage = text;
-
-      // First try to parse as JSON (our API returns structured errors like {error, message, feature, upgrade_url})
-      let errorDetail: string | undefined;
-      let errorFeature: string | undefined;
-      let errorRequiredScope: string | undefined;
-      let errorUpgradeUrl: string | undefined;
-      try {
-        const jsonError = JSON.parse(text);
-        if (jsonError.message) {
-          errorMessage = jsonError.message;
-        } else if (jsonError.error && typeof jsonError.error === 'string') {
-          // Some APIs return {error: "message"} format
-          errorMessage = jsonError.error;
-        }
-        if (typeof jsonError.detail === 'string') {
-          errorDetail = jsonError.detail;
-        }
-        errorRequiredScope = sanitizeBoundedText(jsonError.requiredScope, 128) ?? undefined;
-        errorFeature = sanitizeBoundedText(jsonError.feature, 128) ?? undefined;
-        errorUpgradeUrl = sanitizeBoundedText(jsonError.upgrade_url, 2048) ?? undefined;
-      } catch {
-        // Not JSON, try other formats
-
-        // If it looks like an HTML error page, try to extract the message
-        if (text.includes('<pre>') && text.includes('</pre>')) {
-          const match = text.match(/<pre>(.*?)<\/pre>/s);
-          if (match) errorMessage = match[1];
-        }
-
-        // If the backend sent a plain text error, use it directly
-        if (!text.includes('<') && text.length < 200) {
-          errorMessage = text;
-        } else if (text.length > 200) {
-          // For long responses, just use a generic message
-          errorMessage = `Request failed with status ${response.status}`;
-        }
-      }
-
-      const err = new Error(errorMessage || `Request failed with status ${response.status}`) as APIErrorShape;
-      err.status = response.status;
-      if (errorDetail) {
-        err.detail = errorDetail;
-      }
-      if (errorRequiredScope) {
-        err.requiredScope = errorRequiredScope;
-      }
-      if (errorFeature) {
-        err.feature = errorFeature;
-      }
-      if (errorUpgradeUrl) {
-        err.upgrade_url = errorUpgradeUrl;
-      }
-      throw err;
+      throw await createAPIErrorFromResponse(response);
     }
 
     const text = await response.text();
@@ -749,6 +748,8 @@ export const apiClient = new ApiClient();
 export const apiFetch = (url: string, options?: FetchOptions) => apiClient.fetch(url, options);
 export const apiFetchJSON = <T = unknown>(url: string, options?: FetchOptions) =>
   apiClient.fetchJSON<T>(url, options);
+export const apiErrorFromResponse = (response: Response, fallbackMessage?: string) =>
+  createAPIErrorFromResponse(response, fallbackMessage);
 export const setApiToken = (token: string) => apiClient.setApiToken(token);
 export const getApiToken = () => apiClient.getApiToken();
 export const clearAuth = () => apiClient.clearAuth();

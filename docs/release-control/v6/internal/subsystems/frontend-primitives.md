@@ -208,6 +208,10 @@ helpers.
 That same fallback contract also includes the single-report filename subject,
 so frontend download builders may not substitute resource display names when
 the catalog says fallback attachment names are keyed off canonical resource IDs.
+That same reporting shell must also route failed catalog/report/export
+responses through the shared API error extractor in `frontend-modern/src/utils/apiClient.ts`
+rather than surfacing raw JSON payload text from `response.text()` directly in
+warning UI.
 That same reporting transport contract also means the frontend download path
 must prefer the backend `Content-Disposition` filename over any locally built
 fallback name when a report or inventory export response arrives.

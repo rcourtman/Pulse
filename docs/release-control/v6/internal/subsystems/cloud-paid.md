@@ -270,7 +270,21 @@ instance, not as a generic purchase funnel. Recovery-contact fields such as
 work email and optional company name must remain clearly secondary to the
 instance-bound entitlement handoff. Hosted form-stage issuance conflicts must
 also preserve the canonical reason shape: duplicate recovery-email usage must
-not be flattened into an organization-level message.
+not be flattened into an organization-level message, and terminal conflicts
+must render as owned hosted outcome UX rather than editable inline form state.
+Expired or invalid hosted backup-link states must follow that same rule rather
+than falling back to a form with missing Pulse initiation context.
+Hosted service/configuration failures during verification, hosted checkout
+preparation, or checkout-session creation must also render as owned
+"temporarily unavailable" outcome UX rather than inline form errors.
+The self-hosted activation return notice on `/settings/system-pro` is part of
+that same boundary: the `trial` query result is a one-shot handoff outcome and
+must be consumed into owned UI state, then removed from the URL rather than
+becoming sticky page state across refresh and sharing.
+That same shared notice owner must also keep activation-result framing
+customer-facing: replayed handoffs should confirm the current entitlement state
+rather than reading like a fresh failure, while invalid and unavailable states
+should direct the operator back to the secure trial handoff on this instance.
 That same hosted owner also applies after Stripe returns to
 `/trial-signup/complete`: customer-facing completion failures must stay inside
 owned trial UX rather than dropping raw control-plane error strings, and they
@@ -630,6 +644,11 @@ MSP tenant provisioning must seed a canonical tenant-scoped `org.json` under
 hosted runtime user; otherwise hosted magic-link handoff can preserve the
 correct tenant org cookie while the tenant API still fails closed with
 `invalid_org` because no tenant organization metadata exists on disk.
+That same shared browser client boundary also owns structured error extraction
+for hosted tenant requests. Cloud and MSP surfaces may show failures from
+`frontend-modern/src/utils/apiClient.ts`, but they must resolve canonical JSON
+`error` / `message` fields before showing UI feedback instead of leaking raw
+response payloads while tenant-scoped org headers are still in flight.
 Hosted tenant runtime env is part of the same contract too: provisioned
 containers must carry hosted-safe tenant context such as
 `PULSE_TENANT_ID=<tenant-id>`, `PULSE_MULTI_TENANT_ENABLED=true`, and an explicit
