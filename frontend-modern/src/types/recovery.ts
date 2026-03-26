@@ -25,6 +25,7 @@ export interface RecoveryPointDisplay {
   itemType?: string;
   isWorkload?: boolean;
   clusterLabel?: string;
+  nodeHostLabel?: string;
   nodeAgentLabel?: string;
   namespaceLabel?: string;
   entityIdLabel?: string;

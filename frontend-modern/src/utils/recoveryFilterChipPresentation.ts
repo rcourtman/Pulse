@@ -1,3 +1,5 @@
+import { getRecoveryLocationFacetLabel } from '@/utils/recoveryLocationPresentation';
+
 export type RecoveryFilterChipKind = 'day' | 'cluster' | 'item-type' | 'node' | 'namespace';
 
 type RecoveryFilterChipPresentation = {
@@ -13,7 +15,7 @@ const CHIP_PRESENTATION: Record<RecoveryFilterChipKind, RecoveryFilterChipPresen
   cluster: {
     clearButtonClass: `${CLEAR_BUTTON_BASE_CLASS} hover:bg-cyan-100 dark:hover:bg-cyan-900`,
     className: `${CHIP_BASE_CLASS} border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-700 dark:bg-cyan-900 dark:text-cyan-200`,
-    label: 'Cluster',
+    label: getRecoveryLocationFacetLabel('cluster'),
   },
   day: {
     clearButtonClass: `${CLEAR_BUTTON_BASE_CLASS} hover:bg-blue-100 dark:hover:bg-blue-900`,
@@ -28,12 +30,12 @@ const CHIP_PRESENTATION: Record<RecoveryFilterChipKind, RecoveryFilterChipPresen
   namespace: {
     clearButtonClass: `${CLEAR_BUTTON_BASE_CLASS} hover:bg-violet-100 dark:hover:bg-violet-900`,
     className: `${CHIP_BASE_CLASS} border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-700 dark:bg-violet-900 dark:text-violet-200`,
-    label: 'Namespace',
+    label: getRecoveryLocationFacetLabel('namespace'),
   },
   node: {
     clearButtonClass: `${CLEAR_BUTTON_BASE_CLASS} hover:bg-emerald-100 dark:hover:bg-emerald-900`,
     className: `${CHIP_BASE_CLASS} border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-700 dark:bg-emerald-900 dark:text-emerald-200`,
-    label: 'Node/Agent',
+    label: getRecoveryLocationFacetLabel('node'),
   },
 };
 

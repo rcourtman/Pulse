@@ -43,9 +43,15 @@ describe('recoveryTablePresentation', () => {
     expect(RECOVERY_ARTIFACT_COLUMN_LABELS.type).toBe('Item Type');
     expect(RECOVERY_ARTIFACT_COLUMN_LABELS.subject).toBe('Item');
     expect(RECOVERY_ARTIFACT_COLUMN_LABELS.source).toBe('Platform');
+    expect(RECOVERY_ARTIFACT_COLUMN_LABELS.cluster).toBe('Cluster / Site');
+    expect(RECOVERY_ARTIFACT_COLUMN_LABELS.nodeAgent).toBe('Host / Agent');
+    expect(RECOVERY_ARTIFACT_COLUMN_LABELS.namespace).toBe('Namespace / Group');
     expect(getRecoveryArtifactColumnLabel('type', 'Type')).toBe('Item Type');
     expect(getRecoveryArtifactColumnLabel('subject', 'Subject')).toBe('Item');
     expect(getRecoveryArtifactColumnLabel('source', 'Source')).toBe('Platform');
+    expect(getRecoveryArtifactColumnLabel('cluster', 'Cluster')).toBe('Cluster / Site');
+    expect(getRecoveryArtifactColumnLabel('nodeAgent', 'Node')).toBe('Host / Agent');
+    expect(getRecoveryArtifactColumnLabel('namespace', 'Namespace')).toBe('Namespace / Group');
     expect(getRecoveryArtifactColumnLabel('outcome', 'Outcome')).toBe('Outcome');
   });
 

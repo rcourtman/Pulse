@@ -6,6 +6,7 @@ import type { PBSDatastore } from '@/types/api';
 import type { RecoveryExternalRef, RecoveryPoint } from '@/types/recovery';
 import { formatAbsoluteTime, formatBytes, formatUptime } from '@/utils/format';
 import { getRecoveryItemTypeLabel } from '@/utils/recoveryItemTypePresentation';
+import { getRecoveryPointLocationEntries } from '@/utils/recoveryLocationPresentation';
 import {
   getRecoveryPointKindLabel,
   getRecoveryPointModeLabel,
@@ -159,6 +160,9 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
     pairs.push({ k: 'ID', v: p.id });
     if (itemType && itemType !== 'Unknown') pairs.push({ k: 'Item Type', v: itemType });
     pairs.push({ k: 'Platform', v: providerLabel() || 'n/a' });
+    for (const entry of getRecoveryPointLocationEntries(p)) {
+      pairs.push({ k: entry.label, v: entry.value });
+    }
     pairs.push({ k: 'Point Type', v: getRecoveryPointKindLabel(p.kind) });
     pairs.push({ k: 'Method', v: getRecoveryPointModeLabel(p.mode) });
     pairs.push({ k: 'Outcome', v: getRecoveryPointOutcomeLabel(p.outcome) });

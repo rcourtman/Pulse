@@ -360,6 +360,14 @@ when a recovery point includes canonical item-class metadata,
 `RecoveryPointDetails.tsx` must surface it as `Item Type` in the summary grid
 instead of jumping directly from item identity to platform and point-method
 metadata.
+That same shared presentation layer also owns recovery placement vocabulary.
+Cluster, node, and namespace facets remain valid supporting filters for
+Proxmox-heavy and Kubernetes-heavy operators, but the governed recovery
+surface must present them through platform-neutral labels such as
+`Cluster / Site`, `Host / Agent`, and `Namespace / Group` across advanced
+filters, active chips, table headers, and point details so the page treats
+placement as optional context inside a multi-platform recovery model rather
+than a Proxmox-native spine.
 The recovery table presentation helper now owns the canonical subject-type
 label fallback for recovery rows and delegates its title-casing to the shared
 `frontend-modern/src/utils/textPresentation.ts` helper rather than keeping a

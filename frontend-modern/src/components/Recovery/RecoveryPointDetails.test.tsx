@@ -59,6 +59,11 @@ describe('RecoveryPointDetails', () => {
           completedAt: '2026-03-10T10:00:00Z',
           verified: true,
           immutable: true,
+          display: {
+            clusterLabel: 'Lab Cluster',
+            nodeHostLabel: 'pve-01',
+            namespaceLabel: 'Finance',
+          },
           subjectRef: {
             type: 'proxmox-vm',
             name: '100',
@@ -84,10 +89,16 @@ describe('RecoveryPointDetails', () => {
     expect(screen.getByText('Repository Health')).toBeInTheDocument();
     expect(screen.getByText('Verification')).toBeInTheDocument();
     expect(screen.getByText('Item Type')).toBeInTheDocument();
+    expect(screen.getByText('Cluster / Site')).toBeInTheDocument();
+    expect(screen.getByText('Host / Agent')).toBeInTheDocument();
+    expect(screen.getByText('Namespace / Group')).toBeInTheDocument();
     expect(screen.getByText('Point Type')).toBeInTheDocument();
     expect(screen.getByText('Method')).toBeInTheDocument();
     expect(screen.getByText('Outcome')).toBeInTheDocument();
     expect(screen.getByText('VM')).toBeInTheDocument();
+    expect(screen.getByText('Lab Cluster')).toBeInTheDocument();
+    expect(screen.getByText('pve-01')).toBeInTheDocument();
+    expect(screen.getByText('Finance')).toBeInTheDocument();
     expect(screen.getByText('Backup')).toBeInTheDocument();
     expect(screen.getByText('Remote Copy')).toBeInTheDocument();
     expect(screen.getAllByText('Success').length).toBeGreaterThan(0);
@@ -104,6 +115,9 @@ describe('RecoveryPointDetails', () => {
         point={{
           id: 'point-2',
           provider: 'truenas',
+          display: {
+            nodeHostLabel: 'tn-scale-01',
+          },
           subjectRef: {
             type: 'truenas-dataset',
             name: 'tank/apps',
@@ -119,7 +133,9 @@ describe('RecoveryPointDetails', () => {
     expect(screen.queryByText('Platform Details')).not.toBeInTheDocument();
     expect(screen.queryByText('PBS Details')).not.toBeInTheDocument();
     expect(screen.getByText('Item Type')).toBeInTheDocument();
+    expect(screen.getByText('Host / Agent')).toBeInTheDocument();
     expect(screen.getByText('Dataset')).toBeInTheDocument();
+    expect(screen.getByText('tn-scale-01')).toBeInTheDocument();
     expect(screen.getAllByText('Snapshot').length).toBeGreaterThan(0);
 
     const platformCard = screen.getByText('Platform').parentElement?.parentElement;

@@ -15,7 +15,7 @@ describe('getRecoveryFilterChipPresentation', () => {
     expect(getRecoveryFilterChipPresentation('namespace')).toMatchObject({
       clearButtonClass:
         'rounded px-1 py-0.5 text-[10px] hover:bg-violet-100 dark:hover:bg-violet-900',
-      label: 'Namespace',
+      label: 'Namespace / Group',
     });
     expect(getRecoveryFilterChipPresentation('namespace').className).toContain('border-violet-200');
   });

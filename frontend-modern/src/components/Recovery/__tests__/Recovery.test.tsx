@@ -50,7 +50,16 @@ const pointsByRollupId: Record<string, any[]> = {
       outcome: 'success',
       completedAt: '2026-02-14T10:00:00.000Z',
       sizeBytes: 1234,
-      display: { itemType: 'vm', subjectType: 'proxmox-vm' },
+      cluster: 'lab-cluster',
+      node: 'pve-01',
+      namespace: 'finance',
+      display: {
+        itemType: 'vm',
+        subjectType: 'proxmox-vm',
+        clusterLabel: 'Lab Cluster',
+        nodeHostLabel: 'pve-01',
+        namespaceLabel: 'Finance',
+      },
     },
   ],
   'ext:truenas-1': [
@@ -337,6 +346,18 @@ describe('Recovery', () => {
     expect(detailsPanel).not.toBeNull();
     expect(within(detailsPanel as HTMLTableCellElement).getByText('Item Type')).toBeInTheDocument();
     expect(within(detailsPanel as HTMLTableCellElement).getByText('VM')).toBeInTheDocument();
+    expect(
+      within(detailsPanel as HTMLTableCellElement).getByText('Cluster / Site'),
+    ).toBeInTheDocument();
+    expect(
+      within(detailsPanel as HTMLTableCellElement).getByText('Host / Agent'),
+    ).toBeInTheDocument();
+    expect(
+      within(detailsPanel as HTMLTableCellElement).getByText('Namespace / Group'),
+    ).toBeInTheDocument();
+    expect(within(detailsPanel as HTMLTableCellElement).getByText('Lab Cluster')).toBeInTheDocument();
+    expect(within(detailsPanel as HTMLTableCellElement).getAllByText('pve-01').length).toBeGreaterThan(0);
+    expect(within(detailsPanel as HTMLTableCellElement).getByText('Finance')).toBeInTheDocument();
   });
 
   it('filters protected rollups by provider', async () => {
@@ -523,7 +544,7 @@ describe('Recovery', () => {
     fireEvent.click(await screen.findByRole('tab', { name: /recovery events/i }));
     fireEvent.click(await screen.findByRole('button', { name: /^filter$/i }));
 
-    const clusterSelect = await screen.findByLabelText('Cluster');
+    const clusterSelect = await screen.findByLabelText('Cluster / Site');
     fireEvent.change(clusterSelect, { target: { value: 'dev-cluster' } });
 
     await waitFor(() => {
@@ -602,10 +623,10 @@ describe('Recovery', () => {
     fireEvent.click(await screen.findByRole('tab', { name: /recovery events/i }));
     fireEvent.click(await screen.findByRole('button', { name: /^filter$/i }));
 
-    fireEvent.change(await screen.findByLabelText('Node or agent'), {
+    fireEvent.change(await screen.findByLabelText('Host / Agent'), {
       target: { value: 'node-agent-1' },
     });
-    fireEvent.change(await screen.findByLabelText('Namespace'), {
+    fireEvent.change(await screen.findByLabelText('Namespace / Group'), {
       target: { value: 'tenant-a' },
     });
 
@@ -696,7 +717,7 @@ describe('Recovery', () => {
     await screen.findByText(/Showing 1 - 1 of 1 recovery points/i);
 
     fireEvent.click(screen.getByRole('button', { name: /^filter$/i }));
-    fireEvent.change(await screen.findByLabelText('Cluster'), {
+    fireEvent.change(await screen.findByLabelText('Cluster / Site'), {
       target: { value: 'dev-cluster' },
     });
 

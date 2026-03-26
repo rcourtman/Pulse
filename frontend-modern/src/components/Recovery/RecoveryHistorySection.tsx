@@ -22,6 +22,10 @@ import {
   getRecoveryItemTypePresentation,
   normalizeRecoveryItemTypeQueryValue,
 } from '@/utils/recoveryItemTypePresentation';
+import {
+  getRecoveryLocationFacetAllLabel,
+  getRecoveryLocationFacetLabel,
+} from '@/utils/recoveryLocationPresentation';
 import { normalizeRecoveryModeQueryValue } from '@/utils/recoveryRecordPresentation';
 import {
   getRecoveryHistorySearchPlaceholder,
@@ -178,7 +182,7 @@ export const RecoveryHistorySection: Component<RecoveryHistorySectionProps> = (p
                         <div>
                           <div class={filterPanelTitleClass}>Filter results</div>
                           <div class={filterPanelDescriptionClass}>
-                            Narrow by scope, method, verification, or location.
+                            Narrow by scope, method, verification, or placement.
                           </div>
                         </div>
                         <Show when={props.activeAdvancedFilterCount() > 0}>
@@ -261,7 +265,9 @@ export const RecoveryHistorySection: Component<RecoveryHistorySectionProps> = (p
 
                         <Show when={props.showClusterFilter()}>
                           <label class="flex min-w-0 flex-col gap-1">
-                            <span class={RECOVERY_ADVANCED_FILTER_LABEL_CLASS}>Cluster</span>
+                            <span class={RECOVERY_ADVANCED_FILTER_LABEL_CLASS}>
+                              {getRecoveryLocationFacetLabel('cluster')}
+                            </span>
                             <select
                               value={props.clusterFilter()}
                               onChange={(event) => {
@@ -270,7 +276,9 @@ export const RecoveryHistorySection: Component<RecoveryHistorySectionProps> = (p
                               }}
                               class={RECOVERY_ADVANCED_FILTER_FIELD_CLASS}
                             >
-                              <option value="all">Any cluster</option>
+                              <option value="all">
+                                {getRecoveryLocationFacetAllLabel('cluster')}
+                              </option>
                               <For each={props.clusterOptions().filter((value) => value !== 'all')}>
                                 {(cluster) => <option value={cluster}>{cluster}</option>}
                               </For>
@@ -280,7 +288,9 @@ export const RecoveryHistorySection: Component<RecoveryHistorySectionProps> = (p
 
                         <Show when={props.showNodeFilter()}>
                           <label class="flex min-w-0 flex-col gap-1">
-                            <span class={RECOVERY_ADVANCED_FILTER_LABEL_CLASS}>Node or agent</span>
+                            <span class={RECOVERY_ADVANCED_FILTER_LABEL_CLASS}>
+                              {getRecoveryLocationFacetLabel('node')}
+                            </span>
                             <select
                               value={props.nodeFilter()}
                               onChange={(event) => {
@@ -289,7 +299,9 @@ export const RecoveryHistorySection: Component<RecoveryHistorySectionProps> = (p
                               }}
                               class={RECOVERY_ADVANCED_FILTER_FIELD_CLASS}
                             >
-                              <option value="all">Any node or agent</option>
+                              <option value="all">
+                                {getRecoveryLocationFacetAllLabel('node')}
+                              </option>
                               <For each={props.nodeOptions().filter((value) => value !== 'all')}>
                                 {(node) => <option value={node}>{node}</option>}
                               </For>
@@ -299,7 +311,9 @@ export const RecoveryHistorySection: Component<RecoveryHistorySectionProps> = (p
 
                         <Show when={props.showNamespaceFilter()}>
                           <label class="flex min-w-0 flex-col gap-1">
-                            <span class={RECOVERY_ADVANCED_FILTER_LABEL_CLASS}>Namespace</span>
+                            <span class={RECOVERY_ADVANCED_FILTER_LABEL_CLASS}>
+                              {getRecoveryLocationFacetLabel('namespace')}
+                            </span>
                             <select
                               value={props.namespaceFilter()}
                               onChange={(event) => {
@@ -308,7 +322,9 @@ export const RecoveryHistorySection: Component<RecoveryHistorySectionProps> = (p
                               }}
                               class={RECOVERY_ADVANCED_FILTER_FIELD_CLASS}
                             >
-                              <option value="all">Any namespace</option>
+                              <option value="all">
+                                {getRecoveryLocationFacetAllLabel('namespace')}
+                              </option>
                               <For each={props.namespaceOptions().filter((value) => value !== 'all')}>
                                 {(namespace) => <option value={namespace}>{namespace}</option>}
                               </For>
