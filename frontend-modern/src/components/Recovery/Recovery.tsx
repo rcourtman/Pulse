@@ -4,6 +4,7 @@ import type { Component } from 'solid-js';
 import { RecoveryActivitySection } from '@/components/Recovery/RecoveryActivitySection';
 import { RecoveryHistorySection } from '@/components/Recovery/RecoveryHistorySection';
 import { RecoveryProtectedInventorySection } from '@/components/Recovery/RecoveryProtectedInventorySection';
+import { RecoverySummary } from '@/components/Recovery/RecoverySummary';
 import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { Subtabs } from '@/components/shared/Subtabs';
@@ -37,6 +38,7 @@ import { createHiddenCanonicalTypeColumn } from '@/utils/typeColumnDefinition';
 
 const MOBILE_RECOVERY_COLUMNS = new Set(['time', 'subject', 'outcome']);
 type RecoveryWorkspaceView = 'inventory' | 'events';
+type RecoverySummaryRange = '7d' | '30d' | '90d' | '365d';
 
 const Recovery: Component = () => {
   const kioskMode = useKioskMode();
@@ -387,6 +389,13 @@ const Recovery: Component = () => {
   const activeNamespaceLabel = createMemo(() =>
     namespaceFilter() === 'all' ? '' : namespaceFilter(),
   );
+  const summaryRange = createMemo<RecoverySummaryRange>(() => {
+    const range = chartRangeDays();
+    if (range === 7) return '7d';
+    if (range === 90) return '90d';
+    if (range === 365) return '365d';
+    return '30d';
+  });
 
   const hasActiveArtifactFilters = createMemo(
     () =>
@@ -451,6 +460,15 @@ const Recovery: Component = () => {
 
   return (
     <div data-testid="recovery-page" class="flex flex-col gap-4">
+      <RecoverySummary
+        rollups={rollups}
+        series={() => recoverySeries.series() || []}
+        seriesLoaded={() => !recoverySeries.response.loading}
+        seriesFailed={() => Boolean(recoverySeries.response.error)}
+        summary={overallRollupsSummary}
+        timeRange={summaryRange}
+      />
+
       <RecoveryActivitySection
         activitySummary={activitySummary}
         activeClusterLabel={activeClusterLabel}

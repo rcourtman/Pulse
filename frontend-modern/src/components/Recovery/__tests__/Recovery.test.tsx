@@ -147,6 +147,8 @@ describe('Recovery', () => {
   it('shows one primary recovery table at a time with unified recovery labels', async () => {
     render(() => <Recovery />);
 
+    expect(await screen.findByTestId('recovery-summary')).toBeInTheDocument();
+    expect(screen.getByText('Recovery Posture')).toBeInTheDocument();
     expect(await screen.findByText('Protected Items')).toBeInTheDocument();
     await screen.findByText('VM 123');
     expect(screen.queryByText('Recovery Events')).not.toBeInTheDocument();

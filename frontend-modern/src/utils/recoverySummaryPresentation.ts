@@ -7,7 +7,7 @@ import {
 } from '@/utils/recoveryOutcomePresentation';
 import { isRecoveryRollupStale } from '@/utils/recoveryTablePresentation';
 
-export const RECOVERY_SUMMARY_TIME_RANGES = ['7d', '30d', '90d'] as const;
+export const RECOVERY_SUMMARY_TIME_RANGES = ['7d', '30d', '90d', '365d'] as const;
 
 export type RecoverySummaryTimeRange = (typeof RECOVERY_SUMMARY_TIME_RANGES)[number];
 
@@ -15,6 +15,7 @@ export const RECOVERY_SUMMARY_TIME_RANGE_LABELS: Record<RecoverySummaryTimeRange
   '7d': '7d',
   '30d': '30d',
   '90d': '90d',
+  '365d': '365d',
 };
 
 export type RecoveryFreshnessBucketKey = 'under1h' | 'under24h' | 'under7d' | 'over7d';
