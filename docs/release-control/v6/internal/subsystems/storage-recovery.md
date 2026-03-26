@@ -200,6 +200,10 @@ That same rule applies to recovery detail helpers. Provider-specific helper
 names like `isPbsProvider` should become platform-specific helpers like
 `isPbsPlatform` once the runtime recovery model is already canonically
 platform-first.
+The same canonical boundary applies to linked-resource identifiers. Recovery
+API payloads, query filters, and normalized frontend runtime models should use
+`itemResourceId` as the canonical field while accepting or emitting
+`subjectResourceId` only as a compatibility alias during the transition.
 That same presenter boundary should also own canonical item-type derivation.
 Recovery surfaces must resolve rollup and point item types through one shared
 item-type helper instead of repeating `display.itemType` / `subjectType` /

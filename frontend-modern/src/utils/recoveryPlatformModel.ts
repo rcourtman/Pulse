@@ -25,6 +25,11 @@ interface RecoveryRollupPlatformsLike {
   providers?: string[] | null;
 }
 
+interface RecoveryItemResourceLike {
+  itemResourceId?: string | null;
+  subjectResourceId?: string | null;
+}
+
 const normalizeRecoveryDisplay = (
   display: RecoveryPointDisplay | RecoveryPointDisplayTransport | null | undefined,
 ): RecoveryPointDisplay | null | undefined => {
@@ -47,6 +52,10 @@ const normalizeRecoveryDisplay = (
     ...(normalizedItemType ? { itemType: normalizedItemType } : {}),
   };
 };
+
+const getRecoveryItemResourceId = (
+  value: RecoveryItemResourceLike | null | undefined,
+): string => toTrimmedString(value?.itemResourceId) || toTrimmedString(value?.subjectResourceId);
 
 export const getRecoveryPointPlatform = (
   point: RecoveryPointPlatformLike | null | undefined,
@@ -73,12 +82,19 @@ const normalizeRecoveryMeta = (meta: RecoveryResponseMeta | null | undefined): R
 export const normalizeRecoveryPoint = (
   point: RecoveryPointTransport | RecoveryPoint,
 ): RecoveryPoint => {
-  const { provider: _provider, display, ...rest } = point as RecoveryPointTransport;
+  const {
+    provider: _provider,
+    subjectResourceId: _subjectResourceId,
+    display,
+    ...rest
+  } = point as RecoveryPointTransport;
   const platform = getRecoveryPointPlatform(point);
+  const itemResourceId = getRecoveryItemResourceId(point);
   const normalizedDisplay = normalizeRecoveryDisplay(display);
   return {
     ...(rest as RecoveryPoint),
     ...(platform ? { platform } : {}),
+    ...(itemResourceId ? { itemResourceId } : {}),
     ...(display !== undefined ? { display: normalizedDisplay } : {}),
   };
 };
@@ -86,12 +102,19 @@ export const normalizeRecoveryPoint = (
 export const normalizeRecoveryRollup = (
   rollup: ProtectionRollupTransport | ProtectionRollup,
 ): ProtectionRollup => {
-  const { providers: _providers, display, ...rest } = rollup as ProtectionRollupTransport;
+  const {
+    providers: _providers,
+    subjectResourceId: _subjectResourceId,
+    display,
+    ...rest
+  } = rollup as ProtectionRollupTransport;
   const platforms = getRecoveryRollupPlatforms(rollup);
+  const itemResourceId = getRecoveryItemResourceId(rollup);
   const normalizedDisplay = normalizeRecoveryDisplay(display);
   return {
     ...(rest as ProtectionRollup),
     ...(platforms.length > 0 ? { platforms } : {}),
+    ...(itemResourceId ? { itemResourceId } : {}),
     ...(display !== undefined ? { display: normalizedDisplay } : {}),
   };
 };

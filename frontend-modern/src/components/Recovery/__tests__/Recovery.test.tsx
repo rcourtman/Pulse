@@ -23,7 +23,7 @@ vi.mock('@solidjs/router', async () => {
 const rollupsPayload = [
   {
     rollupId: 'res:vm-123',
-    subjectResourceId: 'vm-123',
+    itemResourceId: 'vm-123',
     display: { subjectType: 'proxmox-vm', itemType: 'vm' },
     lastAttemptAt: '2026-02-14T10:00:00.000Z',
     lastSuccessAt: '2026-02-14T10:00:00.000Z',
@@ -260,7 +260,7 @@ describe('Recovery', () => {
   it('renders canonical rollup and history item labels when linked resources are unavailable', async () => {
     rollupsPayload.push({
       rollupId: 'res:vm-404',
-      subjectResourceId: 'vm-404',
+      itemResourceId: 'vm-404',
       display: { itemLabel: 'Archive VM' },
       lastAttemptAt: '2026-02-12T08:00:00.000Z',
       lastSuccessAt: '2026-02-12T08:00:00.000Z',

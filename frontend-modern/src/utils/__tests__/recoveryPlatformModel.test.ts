@@ -48,6 +48,7 @@ describe('recoveryPlatformModel', () => {
         kind: 'backup',
         mode: 'remote',
         outcome: 'success',
+        subjectResourceId: 'vm-123',
         display: {
           subjectLabel: 'Archive VM',
           subjectType: 'proxmox-vm',
@@ -59,6 +60,7 @@ describe('recoveryPlatformModel', () => {
       kind: 'backup',
       mode: 'remote',
       outcome: 'success',
+      itemResourceId: 'vm-123',
       display: {
         itemLabel: 'Archive VM',
         itemType: 'proxmox-vm',
@@ -69,6 +71,7 @@ describe('recoveryPlatformModel', () => {
       normalizeRecoveryRollup({
         rollupId: 'rollup-1',
         lastOutcome: 'success',
+        subjectResourceId: 'vm-123',
         providers: ['proxmox-pbs', 'kubernetes'],
         display: {
           subjectLabel: 'Legacy Dataset',
@@ -78,6 +81,7 @@ describe('recoveryPlatformModel', () => {
     ).toEqual({
       rollupId: 'rollup-1',
       lastOutcome: 'success',
+      itemResourceId: 'vm-123',
       platforms: ['proxmox-pbs', 'kubernetes'],
       display: {
         itemLabel: 'Legacy Dataset',
@@ -96,19 +100,21 @@ describe('recoveryPlatformModel', () => {
             kind: 'snapshot',
             mode: 'snapshot',
             outcome: 'success',
+            subjectResourceId: 'res-1',
           },
         ],
         meta: { page: 1, limit: 100, total: 1, totalPages: 1 },
       }),
     ).toEqual({
       data: [
-        {
-          id: 'point-1',
-          platform: 'truenas',
-          kind: 'snapshot',
-          mode: 'snapshot',
-          outcome: 'success',
-        },
+          {
+            id: 'point-1',
+            platform: 'truenas',
+            kind: 'snapshot',
+            mode: 'snapshot',
+            outcome: 'success',
+            itemResourceId: 'res-1',
+          },
       ],
       meta: { page: 1, limit: 100, total: 1, totalPages: 1 },
     });
@@ -119,6 +125,7 @@ describe('recoveryPlatformModel', () => {
           {
             rollupId: 'rollup-1',
             lastOutcome: 'warning',
+            subjectResourceId: 'res-1',
             providers: ['truenas'],
           },
         ],
@@ -126,11 +133,12 @@ describe('recoveryPlatformModel', () => {
       }),
     ).toEqual({
       data: [
-        {
-          rollupId: 'rollup-1',
-          lastOutcome: 'warning',
-          platforms: ['truenas'],
-        },
+          {
+            rollupId: 'rollup-1',
+            lastOutcome: 'warning',
+            itemResourceId: 'res-1',
+            platforms: ['truenas'],
+          },
       ],
       meta: { page: 1, limit: 100, total: 1, totalPages: 1 },
     });

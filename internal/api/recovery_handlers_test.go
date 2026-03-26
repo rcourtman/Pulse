@@ -52,6 +52,47 @@ func TestParseRecoveryPlatformQuery(t *testing.T) {
 	}
 }
 
+func TestParseRecoveryItemResourceIDQuery(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		qs   url.Values
+		want string
+	}{
+		{
+			name: "prefers canonical item resource query",
+			qs: url.Values{
+				"itemResourceId":    []string{" vm-123 "},
+				"subjectResourceId": []string{"legacy-vm"},
+			},
+			want: "vm-123",
+		},
+		{
+			name: "falls back to legacy subject resource query",
+			qs: url.Values{
+				"subjectResourceId": []string{" vm-404 "},
+			},
+			want: "vm-404",
+		},
+		{
+			name: "returns empty when neither is present",
+			qs:   url.Values{},
+			want: "",
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := parseRecoveryItemResourceIDQuery(tc.qs); got != tc.want {
+				t.Fatalf("parseRecoveryItemResourceIDQuery() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestHandleListPointsAcceptsCanonicalPlatformQuery(t *testing.T) {
 	prevMock := mock.IsMockEnabled()
 	mock.SetEnabled(true)
@@ -90,6 +131,24 @@ func TestHandleListPointsAcceptsCanonicalPlatformQuery(t *testing.T) {
 	}
 }
 
+func TestBuildRecoveryPointPayloadExposesCanonicalItemResourceIDField(t *testing.T) {
+	payload := buildRecoveryPointPayload(recovery.RecoveryPoint{
+		ID:                "point-1",
+		Provider:          recovery.Provider("truenas"),
+		Kind:              recovery.Kind("snapshot"),
+		Mode:              recovery.Mode("snapshot"),
+		Outcome:           recovery.Outcome("success"),
+		SubjectResourceID: "vm-123",
+	})
+
+	if payload.ItemResourceID != "vm-123" {
+		t.Fatalf("payload.ItemResourceID = %q, want %q", payload.ItemResourceID, "vm-123")
+	}
+	if payload.SubjectResourceID != "vm-123" {
+		t.Fatalf("payload.SubjectResourceID = %q, want %q", payload.SubjectResourceID, "vm-123")
+	}
+}
+
 func TestHandleListRollupsExposeCanonicalPlatformsPayload(t *testing.T) {
 	prevMock := mock.IsMockEnabled()
 	mock.SetEnabled(true)
@@ -125,5 +184,20 @@ func TestHandleListRollupsExposeCanonicalPlatformsPayload(t *testing.T) {
 		if len(rollup.Providers) == 0 || rollup.Providers[0] != "truenas" {
 			t.Fatalf("expected compatibility providers payload to remain aligned, got %#v", rollup.Providers)
 		}
+	}
+}
+
+func TestBuildRecoveryRollupPayloadExposesCanonicalItemResourceIDField(t *testing.T) {
+	payload := buildRecoveryRollupPayload(recovery.ProtectionRollup{
+		RollupID:          "res:vm-123",
+		SubjectResourceID: "vm-123",
+		LastOutcome:       recovery.Outcome("success"),
+	})
+
+	if payload.ItemResourceID != "vm-123" {
+		t.Fatalf("payload.ItemResourceID = %q, want %q", payload.ItemResourceID, "vm-123")
+	}
+	if payload.SubjectResourceID != "vm-123" {
+		t.Fatalf("payload.SubjectResourceID = %q, want %q", payload.SubjectResourceID, "vm-123")
 	}
 }

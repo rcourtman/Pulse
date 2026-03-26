@@ -126,7 +126,7 @@ const Recovery: Component = () => {
       const label = getRecoveryRollupItemLabel(rollup, resourceIndex);
       const haystack = [
         rollup.rollupId,
-        rollup.subjectResourceId || '',
+        rollup.itemResourceId || '',
         label,
         rollupItemType,
         rollup.subjectRef?.namespace || '',

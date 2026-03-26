@@ -21,11 +21,11 @@ describe('recoveryRecordPresentation', () => {
 
     const rollup = {
       rollupId: 'rollup-1',
-      subjectResourceId: 'res-1',
+      itemResourceId: 'res-1',
     } as ProtectionRollup;
     const point = {
       id: 'point-1',
-      subjectResourceId: 'res-1',
+      itemResourceId: 'res-1',
     } as RecoveryPoint;
 
     expect(getRecoveryRollupItemLabel(rollup, resources)).toBe('db-01');
@@ -69,12 +69,12 @@ describe('recoveryRecordPresentation', () => {
 
     const rollup = {
       rollupId: 'res:res-3',
-      subjectResourceId: 'res-3',
+      itemResourceId: 'res-3',
       display: { itemLabel: 'Archive VM' },
     } as ProtectionRollup;
     const linkedPoint = {
       id: 'point-3',
-      subjectResourceId: 'res-2',
+      itemResourceId: 'res-2',
       display: { itemLabel: 'billing-api' },
     } as RecoveryPoint;
 

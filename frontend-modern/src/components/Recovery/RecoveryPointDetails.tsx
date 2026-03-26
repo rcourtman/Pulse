@@ -175,7 +175,7 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
 
     if (p.verified != null) pairs.push({ k: 'Verified', v: p.verified ? 'Verified' : 'Not Verified' });
     if (p.encrypted != null) pairs.push({ k: 'Encrypted', v: p.encrypted ? 'Encrypted' : 'Not Encrypted' });
-    if (p.subjectResourceId) pairs.push({ k: 'Item Resource', v: p.subjectResourceId });
+    if (p.itemResourceId) pairs.push({ k: 'Item Resource', v: p.itemResourceId });
     if (p.repositoryResourceId) pairs.push({ k: 'Target Resource', v: p.repositoryResourceId });
     if (p.subjectRef) pairs.push({ k: 'Item Ref', v: labelForRef(p.subjectRef) });
     if (p.repositoryRef) pairs.push({ k: 'Target Ref', v: labelForRef(p.repositoryRef) });

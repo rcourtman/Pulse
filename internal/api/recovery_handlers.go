@@ -63,6 +63,7 @@ type recoveryPointPayload struct {
 	Encrypted *bool  `json:"encrypted,omitempty"`
 	Immutable *bool  `json:"immutable,omitempty"`
 
+	ItemResourceID       string                         `json:"itemResourceId,omitempty"`
 	SubjectResourceID    string                         `json:"subjectResourceId,omitempty"`
 	RepositoryResourceID string                         `json:"repositoryResourceId,omitempty"`
 	SubjectRef           *recovery.ExternalRef          `json:"subjectRef,omitempty"`
@@ -73,6 +74,7 @@ type recoveryPointPayload struct {
 
 type recoveryRollupPayload struct {
 	RollupID          string                         `json:"rollupId"`
+	ItemResourceID    string                         `json:"itemResourceId,omitempty"`
 	SubjectResourceID string                         `json:"subjectResourceId,omitempty"`
 	SubjectRef        *recovery.ExternalRef          `json:"subjectRef,omitempty"`
 	Display           *recovery.RecoveryPointDisplay `json:"display,omitempty"`
@@ -97,6 +99,7 @@ func buildRecoveryPointPayload(point recovery.RecoveryPoint) recoveryPointPayloa
 		Verified:             point.Verified,
 		Encrypted:            point.Encrypted,
 		Immutable:            point.Immutable,
+		ItemResourceID:       point.SubjectResourceID,
 		SubjectResourceID:    point.SubjectResourceID,
 		RepositoryResourceID: point.RepositoryResourceID,
 		SubjectRef:           point.SubjectRef,
@@ -109,6 +112,7 @@ func buildRecoveryPointPayload(point recovery.RecoveryPoint) recoveryPointPayloa
 func buildRecoveryRollupPayload(rollup recovery.ProtectionRollup) recoveryRollupPayload {
 	return recoveryRollupPayload{
 		RollupID:          rollup.RollupID,
+		ItemResourceID:    rollup.SubjectResourceID,
 		SubjectResourceID: rollup.SubjectResourceID,
 		SubjectRef:        rollup.SubjectRef,
 		Display:           rollup.Display,
@@ -160,6 +164,13 @@ func parseRecoveryPlatformQuery(qs url.Values) recovery.Provider {
 	)))
 }
 
+func parseRecoveryItemResourceIDQuery(qs url.Values) string {
+	return strings.TrimSpace(firstNonEmpty(
+		qs.Get("itemResourceId"),
+		qs.Get("subjectResourceId"),
+	))
+}
+
 func (h *RecoveryHandlers) HandleListPoints(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -190,7 +201,7 @@ func (h *RecoveryHandlers) HandleListPoints(w http.ResponseWriter, r *http.Reque
 		Mode:              recovery.Mode(strings.TrimSpace(qs.Get("mode"))),
 		Outcome:           recovery.Outcome(strings.TrimSpace(qs.Get("outcome"))),
 		ItemType:          recovery.NormalizeRecoveryItemType(firstNonEmpty(qs.Get("itemType"), qs.Get("type"))),
-		SubjectResourceID: strings.TrimSpace(qs.Get("subjectResourceId")),
+		SubjectResourceID: parseRecoveryItemResourceIDQuery(qs),
 		RollupID:          strings.TrimSpace(qs.Get("rollupId")),
 		From:              from,
 		To:                to,
@@ -307,7 +318,7 @@ func (h *RecoveryHandlers) HandleListSeries(w http.ResponseWriter, r *http.Reque
 		Mode:              recovery.Mode(strings.TrimSpace(qs.Get("mode"))),
 		Outcome:           recovery.Outcome(strings.TrimSpace(qs.Get("outcome"))),
 		ItemType:          recovery.NormalizeRecoveryItemType(firstNonEmpty(qs.Get("itemType"), qs.Get("type"))),
-		SubjectResourceID: strings.TrimSpace(qs.Get("subjectResourceId")),
+		SubjectResourceID: parseRecoveryItemResourceIDQuery(qs),
 		RollupID:          strings.TrimSpace(qs.Get("rollupId")),
 		From:              from,
 		To:                to,
@@ -373,7 +384,7 @@ func (h *RecoveryHandlers) HandleListFacets(w http.ResponseWriter, r *http.Reque
 		Mode:              recovery.Mode(strings.TrimSpace(qs.Get("mode"))),
 		Outcome:           recovery.Outcome(strings.TrimSpace(qs.Get("outcome"))),
 		ItemType:          recovery.NormalizeRecoveryItemType(firstNonEmpty(qs.Get("itemType"), qs.Get("type"))),
-		SubjectResourceID: strings.TrimSpace(qs.Get("subjectResourceId")),
+		SubjectResourceID: parseRecoveryItemResourceIDQuery(qs),
 		RollupID:          strings.TrimSpace(qs.Get("rollupId")),
 		From:              from,
 		To:                to,
@@ -635,7 +646,7 @@ func (h *RecoveryHandlers) HandleListRollups(w http.ResponseWriter, r *http.Requ
 		Mode:              recovery.Mode(strings.TrimSpace(qs.Get("mode"))),
 		Outcome:           recovery.Outcome(strings.TrimSpace(qs.Get("outcome"))),
 		ItemType:          recovery.NormalizeRecoveryItemType(firstNonEmpty(qs.Get("itemType"), qs.Get("type"))),
-		SubjectResourceID: strings.TrimSpace(qs.Get("subjectResourceId")),
+		SubjectResourceID: parseRecoveryItemResourceIDQuery(qs),
 		RollupID:          strings.TrimSpace(qs.Get("rollupId")),
 		From:              from,
 		To:                to,

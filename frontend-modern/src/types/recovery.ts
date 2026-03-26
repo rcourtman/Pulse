@@ -58,7 +58,7 @@ export interface RecoveryPoint {
   encrypted?: boolean | null;
   immutable?: boolean | null;
 
-  subjectResourceId?: string;
+  itemResourceId?: string;
   repositoryResourceId?: string;
   subjectRef?: RecoveryExternalRef | null;
   repositoryRef?: RecoveryExternalRef | null;
@@ -70,6 +70,7 @@ export interface RecoveryPoint {
 export interface RecoveryPointTransport extends RecoveryPoint {
   display?: RecoveryPointDisplayTransport | null;
   provider?: RecoveryPlatform;
+  subjectResourceId?: string;
 }
 
 export interface RecoveryResponseMeta {
@@ -91,7 +92,7 @@ export interface RecoveryPointsTransportResponse {
 
 export interface ProtectionRollup {
   rollupId: string;
-  subjectResourceId?: string;
+  itemResourceId?: string;
   subjectRef?: RecoveryExternalRef | null;
   display?: RecoveryPointDisplay | null;
 
@@ -105,6 +106,7 @@ export interface ProtectionRollup {
 export interface ProtectionRollupTransport extends ProtectionRollup {
   display?: RecoveryPointDisplayTransport | null;
   providers?: RecoveryPlatform[];
+  subjectResourceId?: string;
 }
 
 export interface RecoveryRollupsResponse {

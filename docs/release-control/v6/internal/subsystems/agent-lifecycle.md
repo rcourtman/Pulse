@@ -728,6 +728,11 @@ operator-facing filter query for lifecycle-adjacent drill-down links. Any
 legacy `provider` alias support must remain compatibility-only input behind
 the shared API/router layer rather than becoming the route shape lifecycle
 surfaces copy back out to operators.
+That same lifecycle-adjacent recovery drill-down boundary must also stay on
+canonical `itemResourceId` filter and payload vocabulary. When lifecycle
+surfaces deep-link into shared recovery handlers or consume recovery payloads,
+they should treat legacy `subjectResourceId` only as an API-layer compatibility
+alias rather than reviving it as the route or runtime model they expose.
 
 The updater/runtime surfaces must preserve the one-shot `updated_from`
 continuity handoff and the non-TLS continuity path for supported self-hosted
