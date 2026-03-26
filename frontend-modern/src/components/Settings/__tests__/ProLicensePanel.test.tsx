@@ -458,6 +458,7 @@ describe('ProLicensePanel', () => {
     expect(proLicensePanelSource).toContain('./useProLicensePanelState');
     expect(proLicensePanelSource).toContain('./ProLicensePlanSection');
     expect(proLicensePanelSource).toContain('SelfHostedCommercialActivationSection');
+    expect(proLicensePanelSource).toContain('SELF_HOSTED_PRO_BILLING_PRESENTATION');
     expect(proLicensePanelSource).not.toContain('createSignal(');
     expect(proLicensePanelSource).not.toContain('useLocation()');
     expect(proLicensePanelStateSource).toContain('useLocation');

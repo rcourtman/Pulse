@@ -6,6 +6,7 @@ import { CommercialBillingShell, CommercialSection } from './CommercialBillingSe
 import { ProLicensePlanSection } from './ProLicensePlanSection';
 import { SelfHostedCommercialActivationSection } from './SelfHostedCommercialActivationSection';
 import { useProLicensePanelState } from './useProLicensePanelState';
+import { SELF_HOSTED_PRO_BILLING_PRESENTATION } from '@/utils/licensePresentation';
 import { getMonitoredSystemBriefSummary } from '@/utils/monitoredSystemPresentation';
 
 export const ProLicensePanel: Component = () => {
@@ -14,8 +15,8 @@ export const ProLicensePanel: Component = () => {
   return (
     <div class="space-y-6">
       <CommercialBillingShell
-        title="Pulse Pro"
-        description="Manage self-hosted billing, monitored-system limits, and Pulse Pro license status."
+        title={SELF_HOSTED_PRO_BILLING_PRESENTATION.shellTitle}
+        description={SELF_HOSTED_PRO_BILLING_PRESENTATION.shellDescription}
         icon={<ShieldCheck class="w-5 h-5" />}
         action={
           <button
@@ -24,15 +25,15 @@ export const ProLicensePanel: Component = () => {
             onClick={state.loadPanelData}
           >
             <RefreshCw class={`w-3.5 h-3.5 ${state.loading() ? 'animate-spin' : ''}`} />
-            Refresh
+            {SELF_HOSTED_PRO_BILLING_PRESENTATION.refreshLabel}
           </button>
         }
         loading={false}
       >
         <div class="space-y-6">
           <CommercialSection
-            title="Plan"
-            description="Review your active plan, expiry, included limits, and paid capabilities."
+            title={SELF_HOSTED_PRO_BILLING_PRESENTATION.planSectionTitle}
+            description={SELF_HOSTED_PRO_BILLING_PRESENTATION.planSectionDescription}
           >
             <ProLicensePlanSection
               commercialMigrationNotice={state.commercialMigrationNotice()}
@@ -51,7 +52,7 @@ export const ProLicensePanel: Component = () => {
           </CommercialSection>
 
           <CommercialSection
-            title="Usage"
+            title={SELF_HOSTED_PRO_BILLING_PRESENTATION.usageSectionTitle}
             description={getMonitoredSystemBriefSummary()}
           >
             <MonitoredSystemLedgerPanel embedded />

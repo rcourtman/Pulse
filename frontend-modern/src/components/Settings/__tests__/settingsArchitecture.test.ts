@@ -533,10 +533,16 @@ describe('Settings architecture guardrails', () => {
     );
     expect(monitoredSystemDefinitionDisclosureSource).not.toContain('summary?: string');
     expect(monitoredSystemDefinitionDisclosureSource).not.toContain('{props.summary}');
+    expect(proLicensePanelSource).toContain('@/utils/licensePresentation');
+    expect(proLicensePanelSource).toContain('SELF_HOSTED_PRO_BILLING_PRESENTATION');
     expect(proLicensePanelStateSource).toContain('buildSelfHostedCommercialPlanModel');
     expect(proLicensePanelStateSource).toContain('loadLicenseStatus(true)');
     expect(proLicensePanelStateSource).toContain('runStartProTrialAction({');
     expect(proLicensePanelStateSource).not.toContain('startProTrial()');
+    expect(proLicensePanelSource).not.toContain('title="Pulse Pro"');
+    expect(proLicensePanelSource).not.toContain('description="Manage self-hosted billing');
+    expect(proLicensePanelSource).not.toContain('title="Plan"');
+    expect(proLicensePanelSource).not.toContain('title="Usage"');
     expect(proLicensePlanSectionSource).toContain('CommercialStatGrid');
     expect(proLicensePlanSectionSource).toContain('getLicenseStatusLoadingState');
     expect(monitoredSystemPresentationSource).toContain(
@@ -1279,7 +1285,11 @@ describe('Settings architecture guardrails', () => {
         title,
       );
       const allowedTitleExpression =
-        tab === 'system-updates' ? `title={UPDATES_PANEL_COPY.title}` : `title="${title}"`;
+        tab === 'system-updates'
+          ? `title={UPDATES_PANEL_COPY.title}`
+          : tab === 'system-billing'
+            ? 'title={SELF_HOSTED_PRO_BILLING_PRESENTATION.shellTitle}'
+            : `title="${title}"`;
       expect(
         source,
         `${tab} should keep its leading SettingsPanel title aligned with the shell title`,

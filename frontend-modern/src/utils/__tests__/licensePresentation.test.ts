@@ -19,6 +19,7 @@ import {
   getTrialActivationNotice,
   isDisplayableLicenseFeature,
   SELF_HOSTED_ACTIVATION_PRESENTATION,
+  SELF_HOSTED_PRO_BILLING_PRESENTATION,
 } from '@/utils/licensePresentation';
 
 describe('licensePresentation', () => {
@@ -60,6 +61,16 @@ describe('licensePresentation', () => {
         title: 'Try Pro for free',
         idleActionLabel: 'Start 14-day Pro Trial',
       },
+    });
+    expect(SELF_HOSTED_PRO_BILLING_PRESENTATION).toEqual({
+      shellTitle: 'Pulse Pro',
+      shellDescription:
+        'Manage self-hosted billing, monitored-system limits, and Pulse Pro license status.',
+      refreshLabel: 'Refresh',
+      planSectionTitle: 'Plan',
+      planSectionDescription:
+        'Review your active plan, expiry, included limits, and paid capabilities.',
+      usageSectionTitle: 'Usage',
     });
   });
 

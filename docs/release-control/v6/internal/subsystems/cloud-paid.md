@@ -481,6 +481,10 @@ top-level Pulse Pro surface must keep its page-shell title and leading
 SettingsPanel title aligned so commercial activation, trial, and pricing state
 do not present as one surface in navigation and a differently named surface in
 the actual paid settings UI.
+That same boundary also owns the shell and section framing copy for the
+self-hosted Pro billing surface. `ProLicensePanel.tsx` must consume shared
+presentation for its shell title/description, refresh CTA label, and section
+headings rather than carrying those commercial labels inline.
 Paid Pulse Pro v5 grandfathering is now part of that same canonical boundary:
 when a recurring v5 customer migrates into v6, billing persistence,
 entitlement evaluation, renewal handling, and Pro-license presentation must
