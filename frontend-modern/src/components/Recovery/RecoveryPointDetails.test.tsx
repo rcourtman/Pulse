@@ -1,0 +1,109 @@
+import { render, screen, within } from '@solidjs/testing-library';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import type { Resource } from '@/types/resource';
+import { RecoveryPointDetails } from './RecoveryPointDetails';
+
+const wsState = vi.hoisted(() => ({ resources: [] as Resource[] }));
+
+vi.mock('@/App', () => ({
+  useWebSocket: () => ({
+    state: wsState,
+  }),
+}));
+
+describe('RecoveryPointDetails', () => {
+  beforeEach(() => {
+    wsState.resources = [];
+  });
+
+  it('renders provider-neutral details framing while preserving PBS-specific metadata', () => {
+    wsState.resources = [
+      {
+        id: 'pbs-resource-1',
+        type: 'pbs',
+        name: 'pbs-main',
+        displayName: 'pbs-main',
+        platformId: 'pbs-main',
+        platformType: 'proxmox-pbs',
+        sourceType: 'api',
+        status: 'online',
+        lastSeen: Date.parse('2026-03-10T10:00:00Z'),
+        platformData: {
+          pbs: {
+            instanceId: 'pbs-main',
+            datastores: [
+              {
+                name: 'fast-store',
+                used: 500,
+                total: 1000,
+                usage: 50,
+                status: 'ok',
+                deduplicationFactor: 2.25,
+              },
+            ],
+          },
+        },
+      } as Resource,
+    ];
+
+    render(() => (
+      <RecoveryPointDetails
+        point={{
+          id: 'point-1',
+          provider: 'proxmox-pbs',
+          kind: 'backup',
+          mode: 'remote',
+          outcome: 'success',
+          startedAt: '2026-03-10T09:58:00Z',
+          completedAt: '2026-03-10T10:00:00Z',
+          verified: true,
+          immutable: true,
+          repositoryRef: {
+            type: 'pbs-datastore',
+            namespace: 'pbs-main',
+            name: 'fast-store',
+          },
+          details: {
+            comment: 'Nightly retention protected copy',
+            owner: 'root@pam',
+            files: ['vm/100/2026-03-10T10:00:00Z'],
+            verificationState: 'ok',
+          },
+        }}
+      />
+    ));
+
+    expect(screen.getByText('Provider Details')).toBeInTheDocument();
+    expect(screen.queryByText('PBS Details')).not.toBeInTheDocument();
+    expect(screen.getByText('Provider-specific recovery metadata, verification state, and repository health.')).toBeInTheDocument();
+    expect(screen.getByText('Repository Health')).toBeInTheDocument();
+    expect(screen.getByText('Verification')).toBeInTheDocument();
+
+    const providerCard = screen.getByText('Provider').parentElement?.parentElement;
+    expect(providerCard).not.toBeNull();
+    expect(within(providerCard as HTMLDivElement).getByText('PBS')).toBeInTheDocument();
+  });
+
+  it('uses canonical provider labels without forcing provider detail panels for other platforms', () => {
+    render(() => (
+      <RecoveryPointDetails
+        point={{
+          id: 'point-2',
+          provider: 'truenas',
+          kind: 'snapshot',
+          mode: 'snapshot',
+          outcome: 'failed',
+          completedAt: '2026-03-10T10:00:00Z',
+        }}
+      />
+    ));
+
+    expect(screen.queryByText('Provider Details')).not.toBeInTheDocument();
+    expect(screen.queryByText('PBS Details')).not.toBeInTheDocument();
+
+    const providerCard = screen.getByText('Provider').parentElement?.parentElement;
+    expect(providerCard).not.toBeNull();
+    expect(within(providerCard as HTMLDivElement).getByText('TrueNAS')).toBeInTheDocument();
+  });
+});

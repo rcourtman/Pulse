@@ -1,10 +1,15 @@
 import type { Component } from 'solid-js';
 import { For, Show, createMemo, createSignal } from 'solid-js';
 import { useWebSocket } from '@/App';
+import { getSourcePlatformBadge } from '@/components/shared/sourcePlatformBadges';
 import type { PBSDatastore } from '@/types/api';
 import type { RecoveryExternalRef, RecoveryPoint } from '@/types/recovery';
 import { formatAbsoluteTime, formatBytes, formatUptime } from '@/utils/format';
 import { pbsInstanceFromResource } from '@/utils/resourceStateAdapters';
+import {
+  getSourcePlatformLabel,
+  normalizeSourcePlatformQueryValue,
+} from '@/utils/sourcePlatforms';
 
 interface RecoveryPointDetailsProps {
   point: RecoveryPoint;
@@ -59,11 +64,13 @@ const usageBarColorClass = (usagePercent: number): string => {
 export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props) => {
   const { state } = useWebSocket();
   const point = () => props.point;
+  const providerKey = createMemo(() =>
+    normalizeSourcePlatformQueryValue(String(point().provider || '').trim()),
+  );
+  const providerLabel = createMemo(() => getSourcePlatformLabel(providerKey() || point().provider));
+  const providerBadge = createMemo(() => getSourcePlatformBadge(providerKey() || point().provider));
   const isPbsProvider = createMemo(
-    () =>
-      String(point().provider || '')
-        .trim()
-        .toLowerCase() === 'proxmox-pbs',
+    () => providerKey() === 'proxmox-pbs',
   );
 
   const pbsComment = createMemo(() => {
@@ -109,7 +116,7 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
     },
   );
 
-  const hasPbsDetails = createMemo(
+  const hasProviderDetails = createMemo(
     () =>
       isPbsProvider() &&
       (pbsComment().length > 0 ||
@@ -141,7 +148,7 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
     const pairs: { k: string; v: string }[] = [];
 
     pairs.push({ k: 'ID', v: p.id });
-    pairs.push({ k: 'Provider', v: String(p.provider || 'n/a') });
+    pairs.push({ k: 'Provider', v: providerLabel() || 'n/a' });
     pairs.push({ k: 'Kind', v: String(p.kind || 'n/a') });
     pairs.push({ k: 'Mode', v: String(p.mode || 'n/a') });
     pairs.push({ k: 'Outcome', v: String(p.outcome || 'unknown') });
@@ -251,10 +258,24 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
         </div>
       </div>
 
-      <Show when={hasPbsDetails()}>
+      <Show when={hasProviderDetails()}>
         <div class="rounded border border-border bg-surface p-3">
-          <div class="text-[10px] font-semibold uppercase tracking-wide text-muted">
-            PBS Details
+          <div class="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <div class="text-[10px] font-semibold uppercase tracking-wide text-muted">
+                Provider Details
+              </div>
+              <div class="mt-1 text-xs text-muted">
+                Provider-specific recovery metadata, verification state, and repository health.
+              </div>
+            </div>
+            <Show when={providerBadge()}>
+              {(badge) => (
+                <span class={badge().classes} title={badge().title}>
+                  {badge().label}
+                </span>
+              )}
+            </Show>
           </div>
           <div class="mt-2 space-y-2">
             <Show when={pbsComment()}>

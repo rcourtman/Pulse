@@ -8,6 +8,7 @@ let mockLocationPath = '/recovery';
 const navigateSpy = vi.hoisted(() => vi.fn());
 
 const apiFetchMock = vi.hoisted(() => vi.fn());
+const wsState = vi.hoisted(() => ({ resources: [] as any[] }));
 
 vi.mock('@solidjs/router', async () => {
   const actual = await vi.importActual<typeof import('@solidjs/router')>('@solidjs/router');
@@ -73,6 +74,12 @@ vi.mock('@/utils/apiClient', () => ({
   apiFetchJSON: apiFetchMock,
 }));
 
+vi.mock('@/App', () => ({
+  useWebSocket: () => ({
+    state: wsState,
+  }),
+}));
+
 vi.mock('@/hooks/useUnifiedResources', () => ({
   useStorageRecoveryResources: () => ({
     resources: () => [{ id: 'vm-123', name: 'VM 123' }],
@@ -90,6 +97,34 @@ describe('Recovery', () => {
     apiFetchMock.mockClear();
     mockLocationSearch = '';
     mockLocationPath = '/recovery';
+    wsState.resources = [
+      {
+        id: 'pbs-resource-1',
+        type: 'pbs',
+        name: 'pbs-main',
+        displayName: 'pbs-main',
+        platformId: 'pbs-main',
+        platformType: 'proxmox-pbs',
+        sourceType: 'api',
+        status: 'online',
+        lastSeen: Date.parse('2026-03-10T10:00:00Z'),
+        platformData: {
+          pbs: {
+            instanceId: 'pbs-main',
+            datastores: [
+              {
+                name: 'fast-store',
+                used: 500,
+                total: 1000,
+                usage: 50,
+                status: 'ok',
+                deduplicationFactor: 2.25,
+              },
+            ],
+          },
+        },
+      },
+    ];
 
     facetsPayload = {
       clusters: [],
@@ -236,6 +271,12 @@ describe('Recovery', () => {
       rollupsPayload.pop();
       delete pointsByRollupId['res:vm-404'];
     }
+  });
+
+  it('surfaces platform coverage in the unified recovery summary', async () => {
+    render(() => <Recovery />);
+
+    expect(await screen.findByText('2 platforms')).toBeInTheDocument();
   });
 
   it('keeps recovery history width aligned with canonical column specs', async () => {

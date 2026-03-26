@@ -34,22 +34,23 @@ querying, and the operator-facing storage health presentation layer.
 8. `frontend-modern/src/components/Recovery/RecoverySummary.tsx`
 9. `frontend-modern/src/components/Recovery/RecoveryHistorySection.tsx`
 10. `frontend-modern/src/components/Recovery/RecoveryHistoryTable.tsx`
-11. `frontend-modern/src/components/Recovery/useRecoveryHistorySectionState.ts`
-12. `frontend-modern/src/pages/Storage.tsx`
-13. `frontend-modern/src/components/Storage/Storage.tsx`
-14. `frontend-modern/src/features/storageBackups/storageModelCore.ts`
-15. `frontend-modern/src/hooks/useRecoveryPoints.ts`
-16. `frontend-modern/src/hooks/useRecoveryRollups.ts`
-17. `frontend-modern/src/pages/RecoveryRoute.tsx`
-18. `frontend-modern/src/routing/resourceLinks.ts`
-19. `frontend-modern/src/pages/Dashboard.tsx`
-20. `frontend-modern/src/features/dashboardOverview/dashboardWidgets.ts`
-21. `frontend-modern/src/components/Recovery/DashboardRecoveryStatusPanel.tsx`
-22. `frontend-modern/src/components/Storage/DashboardStoragePanel.tsx`
-23. `frontend-modern/src/types/recovery.ts`
-24. `frontend-modern/src/utils/recoverySummaryPresentation.ts`
-25. `frontend-modern/src/utils/recoveryTablePresentation.ts`
-26. `frontend-modern/src/utils/textPresentation.ts`
+11. `frontend-modern/src/components/Recovery/RecoveryPointDetails.tsx`
+12. `frontend-modern/src/components/Recovery/useRecoveryHistorySectionState.ts`
+13. `frontend-modern/src/pages/Storage.tsx`
+14. `frontend-modern/src/components/Storage/Storage.tsx`
+15. `frontend-modern/src/features/storageBackups/storageModelCore.ts`
+16. `frontend-modern/src/hooks/useRecoveryPoints.ts`
+17. `frontend-modern/src/hooks/useRecoveryRollups.ts`
+18. `frontend-modern/src/pages/RecoveryRoute.tsx`
+19. `frontend-modern/src/routing/resourceLinks.ts`
+20. `frontend-modern/src/pages/Dashboard.tsx`
+21. `frontend-modern/src/features/dashboardOverview/dashboardWidgets.ts`
+22. `frontend-modern/src/components/Recovery/DashboardRecoveryStatusPanel.tsx`
+23. `frontend-modern/src/components/Storage/DashboardStoragePanel.tsx`
+24. `frontend-modern/src/types/recovery.ts`
+25. `frontend-modern/src/utils/recoverySummaryPresentation.ts`
+26. `frontend-modern/src/utils/recoveryTablePresentation.ts`
+27. `frontend-modern/src/utils/textPresentation.ts`
 
 ## Shared Boundaries
 
@@ -325,6 +326,11 @@ label fallback for recovery rows and delegates its title-casing to the shared
 `frontend-modern/src/utils/textPresentation.ts` helper rather than keeping a
 local recovery-only formatter, so subject and outcome labels stay aligned with
 the shared frontend label contract.
+That same recovery drill-in surface now also keeps provider-specific metadata
+inside a provider-neutral detail shell through
+`frontend-modern/src/components/Recovery/RecoveryPointDetails.tsx`, so PBS
+repository and verification enrichments remain available without presenting the
+event drawer itself as if PBS were the native recovery model.
 Those transport hooks are direct governed runtime surfaces, not just page
 implementation detail: `frontend-modern/src/hooks/useRecoveryPoints.ts`,
 `frontend-modern/src/hooks/useRecoveryPointsFacets.ts`,
