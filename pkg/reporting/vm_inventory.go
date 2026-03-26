@@ -20,13 +20,14 @@ type InventoryExportColumnDefinition struct {
 // VMInventoryExportDefinition describes the operator-facing contract for the VM
 // inventory export surface.
 type VMInventoryExportDefinition struct {
-	ID             string                            `json:"id"`
-	Title          string                            `json:"title"`
-	Description    string                            `json:"description"`
-	Format         ReportFormat                      `json:"format"`
-	ExportEndpoint string                            `json:"exportEndpoint"`
-	FilenamePrefix string                            `json:"filenamePrefix"`
-	Columns        []InventoryExportColumnDefinition `json:"columns"`
+	ID                string                            `json:"id"`
+	Title             string                            `json:"title"`
+	Description       string                            `json:"description"`
+	Format            ReportFormat                      `json:"format"`
+	ExportEndpoint    string                            `json:"exportEndpoint"`
+	FilenamePrefix    string                            `json:"filenamePrefix"`
+	FilenameDateStyle string                            `json:"filenameDateStyle"`
+	Columns           []InventoryExportColumnDefinition `json:"columns"`
 }
 
 // SupportsFormat reports whether the inventory export allows the given output
@@ -44,7 +45,7 @@ func (d VMInventoryExportDefinition) InvalidFormatError() string {
 // AttachmentFilename returns the canonical attachment filename for a VM
 // inventory export.
 func (d VMInventoryExportDefinition) AttachmentFilename(generatedAt time.Time) string {
-	return fmt.Sprintf("%s-%s.%s", d.FilenamePrefix, reportingDateStamp(generatedAt), d.Format)
+	return fmt.Sprintf("%s-%s.%s", d.FilenamePrefix, reportingDateStamp(generatedAt, d.FilenameDateStyle), d.Format)
 }
 
 // VMInventoryData captures the current-state VM inventory export payload.
@@ -73,12 +74,13 @@ type VMInventoryRow struct {
 // the current-state VM inventory CSV surface.
 func DescribeVMInventoryExport() VMInventoryExportDefinition {
 	return VMInventoryExportDefinition{
-		ID:             "vm_inventory",
-		Title:          "VM Inventory Export",
-		Description:    "Export the current fleet-wide VM inventory as CSV using the canonical runtime model. Includes VM identity, placement, CPU, memory allocation, disk allocation, and disk usage columns.",
-		Format:         FormatCSV,
-		ExportEndpoint: "/api/admin/reports/inventory/vms/export",
-		FilenamePrefix: "vm-inventory",
+		ID:                "vm_inventory",
+		Title:             "VM Inventory Export",
+		Description:       "Export the current fleet-wide VM inventory as CSV using the canonical runtime model. Includes VM identity, placement, CPU, memory allocation, disk allocation, and disk usage columns.",
+		Format:            FormatCSV,
+		ExportEndpoint:    "/api/admin/reports/inventory/vms/export",
+		FilenamePrefix:    "vm-inventory",
+		FilenameDateStyle: FilenameDateStyleUTCYYYYMMDD,
 		Columns: []InventoryExportColumnDefinition{
 			{Key: "resource_id", Label: "Resource ID", Description: "Canonical Pulse resource ID for the VM."},
 			{Key: "instance", Label: "Instance", Description: "Configured Proxmox instance or cluster name."},

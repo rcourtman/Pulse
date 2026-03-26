@@ -39,6 +39,7 @@ const baseCatalog = {
     multiResourceEndpoint: '/api/admin/reports/generate-multi',
     singleFilenamePrefix: 'report',
     multiFilenamePrefix: 'fleet-report',
+    filenameDateStyle: 'utc_yyyymmdd',
     formats: [
       { value: 'pdf', label: 'PDF Report' },
       { value: 'csv', label: 'CSV Data' },
@@ -64,6 +65,7 @@ const baseCatalog = {
     format: 'csv' as const,
     exportEndpoint: '/api/admin/reports/inventory/vms/export',
     filenamePrefix: 'vm-inventory',
+    filenameDateStyle: 'utc_yyyymmdd',
     columns: [],
   },
 };

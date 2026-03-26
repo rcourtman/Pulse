@@ -14,6 +14,7 @@ const performanceDefinition: ReportingPerformanceReportDefinition = {
   multiResourceEndpoint: '/api/admin/reports/generate-multi',
   singleFilenamePrefix: 'report',
   multiFilenamePrefix: 'fleet-report',
+  filenameDateStyle: 'utc_yyyymmdd',
   formats: [
     { value: 'pdf', label: 'PDF Report' },
     { value: 'csv', label: 'CSV Data' },
@@ -66,7 +67,7 @@ describe('reporting panel model', () => {
       title: '',
     }, performanceDefinition);
 
-    expect(request.filename).toBe('report-node-a-2026-03-20.pdf');
+    expect(request.filename).toBe('report-node-a-20260320.pdf');
     expect(request.request.init).toBeUndefined();
     expect(request.request.url).toContain('/api/admin/reports/generate?');
     expect(request.request.url).toContain('resourceType=agent');
@@ -100,7 +101,7 @@ describe('reporting panel model', () => {
       title: '',
     }, performanceDefinition);
 
-    expect(request.filename).toBe('fleet-report-2026-03-20.csv');
+    expect(request.filename).toBe('fleet-report-20260320.csv');
     expect(request.request.url).toBe('/api/admin/reports/generate-multi');
     expect(request.request.init).toMatchObject({
       method: 'POST',
@@ -232,7 +233,7 @@ describe('reporting panel model', () => {
       },
     );
 
-    expect(request.filename).toBe('estate-2026-03-20.csv');
+    expect(request.filename).toBe('estate-20260320.csv');
     expect(request.request.url).toBe('/api/custom/reports/export');
   });
 });

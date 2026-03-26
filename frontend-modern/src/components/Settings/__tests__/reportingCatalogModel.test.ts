@@ -24,6 +24,7 @@ const baseCatalogPayload = {
     multiResourceEndpoint: '/api/admin/reports/generate-multi',
     singleFilenamePrefix: 'report',
     multiFilenamePrefix: 'fleet-report',
+    filenameDateStyle: 'utc_yyyymmdd',
     formats: [
       { value: 'pdf', label: 'PDF Report' },
       { value: 'csv', label: 'CSV Data' },
@@ -49,6 +50,7 @@ const baseCatalogPayload = {
     format: 'csv',
     exportEndpoint: '/api/admin/reports/inventory/vms/export',
     filenamePrefix: 'vm-inventory',
+    filenameDateStyle: 'utc_yyyymmdd',
     columns: [
       {
         key: 'pool',
@@ -106,6 +108,18 @@ describe('reporting catalog model', () => {
               windowHours: 24,
             },
           ],
+        },
+      }),
+    ).toThrow('Invalid reporting catalog payload');
+  });
+
+  it('rejects a catalog whose filename date style is unsupported', () => {
+    expect(() =>
+      parseReportingCatalog({
+        ...baseCatalogPayload,
+        performanceReport: {
+          ...baseCatalogPayload.performanceReport,
+          filenameDateStyle: 'local_yyyy_mm_dd',
         },
       }),
     ).toThrow('Invalid reporting catalog payload');

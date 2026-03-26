@@ -4,6 +4,7 @@ import {
 } from '@/components/Settings/reportingInventoryExportModel';
 
 export type ReportingFormat = 'pdf' | 'csv';
+export type ReportingFilenameDateStyle = 'utc_yyyymmdd';
 
 export interface ReportingFormatDefinition {
   value: ReportingFormat;
@@ -25,6 +26,7 @@ export interface ReportingPerformanceReportDefinition {
   multiResourceEndpoint: string;
   singleFilenamePrefix: string;
   multiFilenamePrefix: string;
+  filenameDateStyle: ReportingFilenameDateStyle;
   formats: ReportingFormatDefinition[];
   defaultFormat: ReportingFormat;
   ranges: ReportingRangeDefinition[];
@@ -115,6 +117,7 @@ function parseReportingPerformanceReportDefinition(
     typeof candidate.multiResourceEndpoint !== 'string' ||
     typeof candidate.singleFilenamePrefix !== 'string' ||
     typeof candidate.multiFilenamePrefix !== 'string' ||
+    candidate.filenameDateStyle !== 'utc_yyyymmdd' ||
     !Array.isArray(candidate.formats) ||
     (candidate.defaultFormat !== 'pdf' && candidate.defaultFormat !== 'csv') ||
     !Array.isArray(candidate.ranges) ||
@@ -148,6 +151,7 @@ function parseReportingPerformanceReportDefinition(
     multiResourceEndpoint: candidate.multiResourceEndpoint,
     singleFilenamePrefix: candidate.singleFilenamePrefix,
     multiFilenamePrefix: candidate.multiFilenamePrefix,
+    filenameDateStyle: candidate.filenameDateStyle,
     formats,
     defaultFormat: candidate.defaultFormat,
     ranges,

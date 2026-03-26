@@ -1,4 +1,5 @@
 import { toReportingResourceType } from '@/utils/reportingResourceTypes';
+import { formatReportingFilenameDate } from '@/utils/reportingPresentation';
 import type { SelectedResource } from '@/components/Settings/ResourcePicker';
 import type {
   ReportingFormat,
@@ -51,10 +52,10 @@ export function buildReportingFilename(
   now: Date,
   definition: Pick<
     ReportingPerformanceReportDefinition,
-    'multiFilenamePrefix' | 'singleFilenamePrefix'
+    'filenameDateStyle' | 'multiFilenamePrefix' | 'singleFilenamePrefix'
   >,
 ): string {
-  const date = now.toISOString().split('T')[0];
+  const date = formatReportingFilenameDate(now, definition.filenameDateStyle);
   if (resourceName) {
     return `${definition.singleFilenamePrefix}-${resourceName}-${date}.${format}`;
   }
@@ -67,6 +68,7 @@ export function buildReportingRequest(
     ReportingPerformanceReportDefinition,
     | 'multiFilenamePrefix'
     | 'multiResourceEndpoint'
+    | 'filenameDateStyle'
     | 'singleFilenamePrefix'
     | 'singleResourceEndpoint'
     | 'supportsCustomTitle'

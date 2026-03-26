@@ -1,3 +1,6 @@
+import { formatReportingFilenameDate } from '@/utils/reportingPresentation';
+import type { ReportingFilenameDateStyle } from '@/components/Settings/reportingCatalogModel';
+
 export interface ReportingInventoryExportRequestDefinition {
   filename: string;
   request: {
@@ -18,21 +21,33 @@ export interface ReportingInventoryExportDefinition {
   format: 'csv';
   exportEndpoint: string;
   filenamePrefix: string;
+  filenameDateStyle: ReportingFilenameDateStyle;
   columns: ReportingInventoryExportColumnDefinition[];
 }
 
-export function buildVMInventoryExportFilename(now: Date, filenamePrefix: string): string {
-  const date = now.toISOString().split('T')[0];
+export function buildVMInventoryExportFilename(
+  now: Date,
+  filenamePrefix: string,
+  filenameDateStyle: ReportingFilenameDateStyle,
+): string {
+  const date = formatReportingFilenameDate(now, filenameDateStyle);
   return `${filenamePrefix}-${date}.csv`;
 }
 
 export function buildVMInventoryExportRequest(
   now: Date,
-  definition: Pick<ReportingInventoryExportDefinition, 'exportEndpoint' | 'filenamePrefix'>,
+  definition: Pick<
+    ReportingInventoryExportDefinition,
+    'exportEndpoint' | 'filenamePrefix' | 'filenameDateStyle'
+  >,
 ): ReportingInventoryExportRequestDefinition {
   const params = new URLSearchParams({ format: 'csv' });
   return {
-    filename: buildVMInventoryExportFilename(now, definition.filenamePrefix),
+    filename: buildVMInventoryExportFilename(
+      now,
+      definition.filenamePrefix,
+      definition.filenameDateStyle,
+    ),
     request: {
       url: `${definition.exportEndpoint}?${params.toString()}`,
     },
@@ -54,6 +69,7 @@ export function parseVMInventoryExportDefinition(
     candidate.format !== 'csv' ||
     typeof candidate.exportEndpoint !== 'string' ||
     typeof candidate.filenamePrefix !== 'string' ||
+    candidate.filenameDateStyle !== 'utc_yyyymmdd' ||
     !Array.isArray(candidate.columns)
   ) {
     throw new Error('Invalid VM inventory export definition payload');
@@ -88,6 +104,7 @@ export function parseVMInventoryExportDefinition(
     format: 'csv',
     exportEndpoint: candidate.exportEndpoint,
     filenamePrefix: candidate.filenamePrefix,
+    filenameDateStyle: candidate.filenameDateStyle,
     columns,
   };
 }

@@ -365,6 +365,7 @@ func TestContract_ReportingCatalogJSONSnapshot(t *testing.T) {
 			"multiResourceEndpoint":"/api/admin/reports/generate-multi",
 			"singleFilenamePrefix":"report",
 			"multiFilenamePrefix":"fleet-report",
+			"filenameDateStyle":"utc_yyyymmdd",
 			"formats":[
 				{
 					"value":"pdf",
@@ -408,6 +409,7 @@ func TestContract_ReportingCatalogJSONSnapshot(t *testing.T) {
 			"format":"csv",
 			"exportEndpoint":"/api/admin/reports/inventory/vms/export",
 			"filenamePrefix":"vm-inventory",
+			"filenameDateStyle":"utc_yyyymmdd",
 			"columns":[
 				{
 					"key":"resource_id",

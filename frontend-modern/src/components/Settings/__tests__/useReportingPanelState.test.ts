@@ -30,6 +30,7 @@ const catalogPayload = {
     multiResourceEndpoint: '/api/admin/reports/generate-multi',
     singleFilenamePrefix: 'report',
     multiFilenamePrefix: 'fleet-report',
+    filenameDateStyle: 'utc_yyyymmdd',
     formats: [
       { value: 'pdf', label: 'PDF Report' },
       { value: 'csv', label: 'CSV Data' },
@@ -61,6 +62,7 @@ const catalogPayload = {
     format: 'csv',
     exportEndpoint: '/api/admin/reports/inventory/vms/export',
     filenamePrefix: 'vm-inventory',
+    filenameDateStyle: 'utc_yyyymmdd',
     columns: [
       {
         key: 'name',

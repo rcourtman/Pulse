@@ -13,6 +13,8 @@ type ReportingFormatDefinition struct {
 	Label string       `json:"label"`
 }
 
+const FilenameDateStyleUTCYYYYMMDD = "utc_yyyymmdd"
+
 // ReportingRangeDefinition describes one supported time window for historical
 // performance reporting.
 type ReportingRangeDefinition struct {
@@ -32,6 +34,7 @@ type PerformanceReportDefinition struct {
 	MultiResourceEndpoint  string                      `json:"multiResourceEndpoint"`
 	SingleFilenamePrefix   string                      `json:"singleFilenamePrefix"`
 	MultiFilenamePrefix    string                      `json:"multiFilenamePrefix"`
+	FilenameDateStyle      string                      `json:"filenameDateStyle"`
 	Formats                []ReportingFormatDefinition `json:"formats"`
 	DefaultFormat          ReportFormat                `json:"defaultFormat"`
 	Ranges                 []ReportingRangeDefinition  `json:"ranges"`
@@ -87,13 +90,13 @@ func (d PerformanceReportDefinition) InvalidFormatError() string {
 // SingleAttachmentFilename returns the canonical attachment filename for a
 // single-resource performance report download.
 func (d PerformanceReportDefinition) SingleAttachmentFilename(resourceID string, generatedAt time.Time, format ReportFormat) string {
-	return fmt.Sprintf("%s-%s-%s.%s", d.SingleFilenamePrefix, resourceID, reportingDateStamp(generatedAt), format)
+	return fmt.Sprintf("%s-%s-%s.%s", d.SingleFilenamePrefix, resourceID, reportingDateStamp(generatedAt, d.FilenameDateStyle), format)
 }
 
 // MultiAttachmentFilename returns the canonical attachment filename for a
 // multi-resource performance report download.
 func (d PerformanceReportDefinition) MultiAttachmentFilename(generatedAt time.Time, format ReportFormat) string {
-	return fmt.Sprintf("%s-%s.%s", d.MultiFilenamePrefix, reportingDateStamp(generatedAt), format)
+	return fmt.Sprintf("%s-%s.%s", d.MultiFilenamePrefix, reportingDateStamp(generatedAt, d.FilenameDateStyle), format)
 }
 
 // DefaultRangeDuration returns the canonical fallback time window for the
@@ -127,8 +130,13 @@ func invalidFormatErrorMessage(allowed []ReportFormat) string {
 	return fmt.Sprintf("Format must be %s, or %s", strings.Join(quoted[:len(quoted)-1], ", "), quoted[len(quoted)-1])
 }
 
-func reportingDateStamp(generatedAt time.Time) string {
-	return generatedAt.UTC().Format("20060102")
+func reportingDateStamp(generatedAt time.Time, style string) string {
+	switch style {
+	case "", FilenameDateStyleUTCYYYYMMDD:
+		return generatedAt.UTC().Format("20060102")
+	default:
+		return generatedAt.UTC().Format("20060102")
+	}
 }
 
 // DescribePerformanceReport returns the canonical definition for Pulse's
@@ -142,6 +150,7 @@ func DescribePerformanceReport() PerformanceReportDefinition {
 		MultiResourceEndpoint:  "/api/admin/reports/generate-multi",
 		SingleFilenamePrefix:   "report",
 		MultiFilenamePrefix:    "fleet-report",
+		FilenameDateStyle:      FilenameDateStyleUTCYYYYMMDD,
 		Formats: []ReportingFormatDefinition{
 			{Value: FormatPDF, Label: "PDF Report"},
 			{Value: FormatCSV, Label: "CSV Data"},

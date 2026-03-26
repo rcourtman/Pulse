@@ -272,7 +272,7 @@ transport validation and download semantics. `internal/api/metrics_reporting_han
 and `internal/api/reporting_inventory_handlers.go` must derive allowed formats,
 default format selection, multi-resource limits, optional metric/title field
 emission, canonical default-title fallback, default fallback range window,
-attachment filename stems, and invalid-format validation copy from the
+attachment filename stems, filename date-stamp style, and invalid-format validation copy from the
 canonical reporting definitions instead of hardcoding a second local contract.
 Frontend consumers may still keep a local fallback filename for defensive
 download behavior, but when the server returns `Content-Disposition` they must

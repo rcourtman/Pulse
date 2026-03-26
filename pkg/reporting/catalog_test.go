@@ -23,11 +23,17 @@ func TestDescribeReportingCatalog_DefinesCanonicalSurfaces(t *testing.T) {
 	if catalog.PerformanceReport.MultiResourceMax != 50 {
 		t.Fatalf("multi-resource max = %d, want 50", catalog.PerformanceReport.MultiResourceMax)
 	}
+	if catalog.PerformanceReport.FilenameDateStyle != FilenameDateStyleUTCYYYYMMDD {
+		t.Fatalf("filename date style = %q", catalog.PerformanceReport.FilenameDateStyle)
+	}
 	if got := len(catalog.PerformanceReport.Ranges); got != 3 {
 		t.Fatalf("range count = %d, want 3", got)
 	}
 	if catalog.VMInventoryExport.ExportEndpoint != "/api/admin/reports/inventory/vms/export" {
 		t.Fatalf("vm inventory export endpoint = %q", catalog.VMInventoryExport.ExportEndpoint)
+	}
+	if catalog.VMInventoryExport.FilenameDateStyle != FilenameDateStyleUTCYYYYMMDD {
+		t.Fatalf("inventory filename date style = %q", catalog.VMInventoryExport.FilenameDateStyle)
 	}
 }
 

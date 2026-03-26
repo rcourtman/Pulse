@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  formatReportingFilenameDate,
   getReportingCatalogErrorMessage,
   getReportingGenerateErrorMessage,
   getReportingGenerateSelectionRequiredMessage,
@@ -33,5 +34,11 @@ describe('reportingPresentation', () => {
     expect(resolveReportingDownloadFilename(null, 'fallback-report.csv')).toBe(
       'fallback-report.csv',
     );
+  });
+
+  it('formats fallback filename dates using the canonical UTC style', () => {
+    expect(
+      formatReportingFilenameDate(new Date('2026-03-20T23:30:00.000-05:00'), 'utc_yyyymmdd'),
+    ).toBe('20260321');
   });
 });
