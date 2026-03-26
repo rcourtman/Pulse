@@ -469,7 +469,7 @@ func (s *Service) IsValid() bool {
 func (s *Service) HasFeature(feature string) bool {
 	// In demo mode or dev mode, grant all Pro features
 	if isDemoMode() || isDevMode() {
-		return true
+		return devModeFeatureEnabled(feature)
 	}
 
 	s.mu.Lock() // Need write lock since we may update grace period
@@ -634,7 +634,7 @@ func (s *Service) Status() *LicenseStatus {
 			}
 		}
 		if isDemoMode() || isDevMode() {
-			status.Features = allKnownFeatures()
+			status.Features = devModeFeatures()
 		}
 		return status
 	}
@@ -692,7 +692,7 @@ func (s *Service) Status() *LicenseStatus {
 	}
 
 	if isDemoMode() || isDevMode() {
-		status.Features = allKnownFeatures()
+		status.Features = devModeFeatures()
 	}
 
 	return status

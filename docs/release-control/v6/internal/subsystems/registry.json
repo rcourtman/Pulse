@@ -1759,6 +1759,7 @@
             "label": "activation service runtime proof",
             "match_prefixes": [],
             "match_files": [
+              "pkg/licensing/dev_mode_features.go",
               "pkg/licensing/grant_refresh.go",
               "pkg/licensing/revocation_poll.go",
               "pkg/licensing/service.go"

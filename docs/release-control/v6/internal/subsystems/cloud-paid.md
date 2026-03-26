@@ -29,53 +29,54 @@ agreement, and cloud-specific enforcement rules.
 7. `pkg/licensing/token_source.go`
 8. `pkg/licensing/entitlement_payload.go`
 9. `pkg/licensing/hosted_subscription.go`
-10. `pkg/licensing/service.go`
-11. `pkg/licensing/grant_refresh.go`
-12. `pkg/licensing/revocation_poll.go`
-13. `pkg/licensing/license_server_client.go`
-14. `pkg/licensing/persistence.go`
-15. `pkg/licensing/activation_store.go`
-16. `pkg/licensing/trial_activation.go`
-17. `pkg/licensing/stripe_subscription.go`
-18. `pkg/licensing/monitored_system_limit.go`
-19. `internal/cloudcp/entitlements/service.go`
-20. `internal/cloudcp/registry/registry.go`
-21. `internal/cloudcp/account/tenant_handlers.go`
-22. `internal/cloudcp/portal/handlers.go`
-23. `internal/cloudcp/portal/page.go`
-24. `internal/cloudcp/routes.go`
-25. `internal/cloudcp/stripe/provisioner.go`
-26. `internal/hosted/provisioner.go`
-27. `frontend-modern/src/App.tsx`
-28. `frontend-modern/src/AppLayout.tsx`
-29. `frontend-modern/src/useAppRuntimeState.ts`
-30. `frontend-modern/src/components/Dashboard/RelayOnboardingCard.tsx`
-31. `frontend-modern/src/components/Dashboard/useRelayOnboardingCardState.ts`
-32. `frontend-modern/src/components/Commercial/MonitoredSystemDefinitionDisclosure.tsx`
-33. `frontend-modern/src/components/Settings/BillingAdminPanel.tsx`
-34. `frontend-modern/src/components/Settings/BillingAdminOrganizationsTable.tsx`
-35. `frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx`
-36. `frontend-modern/src/components/Settings/OrganizationBillingLoadingState.tsx`
-37. `frontend-modern/src/components/Settings/MonitoredSystemLedgerPanel.tsx`
-38. `frontend-modern/src/components/Settings/ProLicensePanel.tsx`
-39. `frontend-modern/src/components/Settings/ProLicensePlanSection.tsx`
-40. `frontend-modern/src/components/Settings/CommercialBillingSections.tsx`
-41. `frontend-modern/src/components/Settings/SelfHostedCommercialActivationSection.tsx`
-42. `frontend-modern/src/components/Settings/RelaySettingsPanel.tsx`
-43. `frontend-modern/src/components/Settings/RelayPairingSection.tsx`
-44. `frontend-modern/src/components/Settings/useBillingAdminPanelState.ts`
-45. `frontend-modern/src/components/Settings/useOrganizationBillingPanelState.ts`
-46. `frontend-modern/src/components/Settings/useProLicensePanelState.ts`
-47. `frontend-modern/src/components/Settings/useRelaySettingsPanelState.ts`
-48. `frontend-modern/src/pages/CloudPricing.tsx`
-49. `frontend-modern/src/pages/PricingV6.tsx`
-50. `frontend-modern/src/utils/apiClient.ts`
-51. `frontend-modern/src/utils/cloudPlans.ts`
-52. `frontend-modern/src/utils/commercialBillingModel.ts`
-53. `frontend-modern/src/utils/monitoredSystemPresentation.ts`
-54. `frontend-modern/src/utils/selfHostedPlans.ts`
-55. `frontend-modern/src/utils/licensePresentation.ts`
-56. `frontend-modern/src/utils/upgradePresentation.ts`
+10. `pkg/licensing/dev_mode_features.go`
+11. `pkg/licensing/service.go`
+12. `pkg/licensing/grant_refresh.go`
+13. `pkg/licensing/revocation_poll.go`
+14. `pkg/licensing/license_server_client.go`
+15. `pkg/licensing/persistence.go`
+16. `pkg/licensing/activation_store.go`
+17. `pkg/licensing/trial_activation.go`
+18. `pkg/licensing/stripe_subscription.go`
+19. `pkg/licensing/monitored_system_limit.go`
+20. `internal/cloudcp/entitlements/service.go`
+21. `internal/cloudcp/registry/registry.go`
+22. `internal/cloudcp/account/tenant_handlers.go`
+23. `internal/cloudcp/portal/handlers.go`
+24. `internal/cloudcp/portal/page.go`
+25. `internal/cloudcp/routes.go`
+26. `internal/cloudcp/stripe/provisioner.go`
+27. `internal/hosted/provisioner.go`
+28. `frontend-modern/src/App.tsx`
+29. `frontend-modern/src/AppLayout.tsx`
+30. `frontend-modern/src/useAppRuntimeState.ts`
+31. `frontend-modern/src/components/Dashboard/RelayOnboardingCard.tsx`
+32. `frontend-modern/src/components/Dashboard/useRelayOnboardingCardState.ts`
+33. `frontend-modern/src/components/Commercial/MonitoredSystemDefinitionDisclosure.tsx`
+34. `frontend-modern/src/components/Settings/BillingAdminPanel.tsx`
+35. `frontend-modern/src/components/Settings/BillingAdminOrganizationsTable.tsx`
+36. `frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx`
+37. `frontend-modern/src/components/Settings/OrganizationBillingLoadingState.tsx`
+38. `frontend-modern/src/components/Settings/MonitoredSystemLedgerPanel.tsx`
+39. `frontend-modern/src/components/Settings/ProLicensePanel.tsx`
+40. `frontend-modern/src/components/Settings/ProLicensePlanSection.tsx`
+41. `frontend-modern/src/components/Settings/CommercialBillingSections.tsx`
+42. `frontend-modern/src/components/Settings/SelfHostedCommercialActivationSection.tsx`
+43. `frontend-modern/src/components/Settings/RelaySettingsPanel.tsx`
+44. `frontend-modern/src/components/Settings/RelayPairingSection.tsx`
+45. `frontend-modern/src/components/Settings/useBillingAdminPanelState.ts`
+46. `frontend-modern/src/components/Settings/useOrganizationBillingPanelState.ts`
+47. `frontend-modern/src/components/Settings/useProLicensePanelState.ts`
+48. `frontend-modern/src/components/Settings/useRelaySettingsPanelState.ts`
+49. `frontend-modern/src/pages/CloudPricing.tsx`
+50. `frontend-modern/src/pages/PricingV6.tsx`
+51. `frontend-modern/src/utils/apiClient.ts`
+52. `frontend-modern/src/utils/cloudPlans.ts`
+53. `frontend-modern/src/utils/commercialBillingModel.ts`
+54. `frontend-modern/src/utils/monitoredSystemPresentation.ts`
+55. `frontend-modern/src/utils/selfHostedPlans.ts`
+56. `frontend-modern/src/utils/licensePresentation.ts`
+57. `frontend-modern/src/utils/upgradePresentation.ts`
 
 ## Shared Boundaries
 
@@ -92,7 +93,7 @@ agreement, and cloud-specific enforcement rules.
 4. Add or change MSP account-scoped workspace provisioning entry handlers through `internal/cloudcp/account/tenant_handlers.go`
 5. Add or change the hosted account portal API, browser shell, or account-scoped billing handoff through `internal/cloudcp/portal/handlers.go`, `internal/cloudcp/portal/page.go`, and `internal/cloudcp/routes.go`
 6. Add or change Stripe provisioning plan resolution through `internal/cloudcp/stripe/provisioner.go`
-7. Add or change activation/grant lifecycle through `pkg/licensing/service.go`, `pkg/licensing/grant_refresh.go`, and `pkg/licensing/revocation_poll.go`
+7. Add or change activation/grant lifecycle or dev-mode capability widening through `pkg/licensing/dev_mode_features.go`, `pkg/licensing/service.go`, `pkg/licensing/grant_refresh.go`, and `pkg/licensing/revocation_poll.go`
 8. Add or change license-server transport through `pkg/licensing/license_server_client.go`
 9. Add or change encrypted activation persistence through `pkg/licensing/persistence.go` and `pkg/licensing/activation_store.go`
 10. Add or change hosted trial token semantics through `pkg/licensing/trial_activation.go`
@@ -687,6 +688,10 @@ That same runtime surface must stay internally coherent in local dev mode. If
 frontend-facing capability contract derived from that service must advertise
 the same capability set instead of leaving paid surfaces artificially locked
 behind stale free-tier capabilities.
+That dev widening is still bounded by runtime readiness rather than marketing
+intent: `multi_tenant` is not a valid advertised dev capability unless the
+process also has `PULSE_MULTI_TENANT_ENABLED=true`, because the org API surface
+is intentionally disabled otherwise.
 Cloud/MSP live price IDs are no longer an open fill-in task either. The audit
 record `docs/release-control/v6/records/cloud-msp-price-audit-2026-03-13.md`
 verified that the 13 canonical Cloud/MSP v6 `price_*` IDs are present in the

@@ -321,6 +321,10 @@ backend feature gates are widened by `PULSE_DEV=true` or demo/mock mode,
 `/api/license/entitlements` must advertise the same capability set in
 `capabilities`; it must not leave frontend shells on stale free-tier gating
 while backend `HasFeature()` already treats those features as available.
+That widening still has to respect runtime feature flags. A capability like
+`multi_tenant` must stay absent from dev/demo entitlement payloads until the
+process also has `PULSE_MULTI_TENANT_ENABLED=true`; otherwise admin shells
+drift into impossible routes that the same backend still rejects as disabled.
 The `/api/resources` serializer now also refreshes canonical identity and
 policy metadata through the shared unified-resource helper before it writes
 the payload, so backend and frontend contract tests stay aligned on one

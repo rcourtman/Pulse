@@ -364,6 +364,7 @@ func TestEntitlementHandler_TrialEligibility_FreshOrgAllowed(t *testing.T) {
 
 func TestEntitlementHandler_DevModeMirrorsFeatureGateCapabilities(t *testing.T) {
 	t.Setenv("PULSE_DEV", "true")
+	t.Setenv("PULSE_MULTI_TENANT_ENABLED", "")
 
 	baseDir := t.TempDir()
 	mtp := config.NewMultiTenantPersistence(baseDir)
@@ -386,6 +387,9 @@ func TestEntitlementHandler_DevModeMirrorsFeatureGateCapabilities(t *testing.T) 
 	if !containsCapability(payload.Capabilities, license.FeatureAdvancedReporting) {
 		t.Fatalf("expected dev entitlements to include %q, got %v", license.FeatureAdvancedReporting, payload.Capabilities)
 	}
+	if containsCapability(payload.Capabilities, license.FeatureMultiTenant) {
+		t.Fatalf("expected dev entitlements to omit %q while runtime flag is disabled, got %v", license.FeatureMultiTenant, payload.Capabilities)
+	}
 	if len(payload.UpgradeReasons) != 0 {
 		t.Fatalf("expected no upgrade reasons in dev mode, got %v", payload.UpgradeReasons)
 	}
@@ -398,6 +402,33 @@ func TestEntitlementHandler_DevModeMirrorsFeatureGateCapabilities(t *testing.T) 
 		if !svc.HasFeature(cap) {
 			t.Fatalf("parity mismatch: HasFeature(%q)=false but capability present in payload", cap)
 		}
+	}
+}
+
+func TestEntitlementHandler_DevModeIncludesMultiTenantWhenRuntimeEnabled(t *testing.T) {
+	t.Setenv("PULSE_DEV", "true")
+	t.Setenv("PULSE_MULTI_TENANT_ENABLED", "true")
+
+	baseDir := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(baseDir)
+	h := NewLicenseHandlers(mtp, false)
+
+	ctx := context.WithValue(context.Background(), OrgIDContextKey, "default")
+	req := httptest.NewRequest(http.MethodGet, "/api/license/entitlements", nil).WithContext(ctx)
+	rec := httptest.NewRecorder()
+	h.HandleEntitlements(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	var payload EntitlementPayload
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("unmarshal payload failed: %v", err)
+	}
+
+	if !containsCapability(payload.Capabilities, license.FeatureMultiTenant) {
+		t.Fatalf("expected dev entitlements to include %q when runtime flag is enabled, got %v", license.FeatureMultiTenant, payload.Capabilities)
 	}
 }
 

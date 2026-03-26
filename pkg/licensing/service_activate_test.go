@@ -169,8 +169,9 @@ func TestServiceStatusMissingJWTCloudPlanFailsClosed(t *testing.T) {
 	}
 }
 
-func TestServiceStatus_DevModeAdvertisesAllKnownFeaturesWithoutLicense(t *testing.T) {
+func TestServiceStatus_DevModeAdvertisesOnlyRuntimeEnabledFeaturesWithoutLicense(t *testing.T) {
 	t.Setenv("PULSE_DEV", "true")
+	t.Setenv("PULSE_MULTI_TENANT_ENABLED", "")
 
 	svc := NewService()
 	status := svc.Status()
@@ -182,10 +183,31 @@ func TestServiceStatus_DevModeAdvertisesAllKnownFeaturesWithoutLicense(t *testin
 		t.Fatalf("status.Tier=%q, want %q", status.Tier, TierFree)
 	}
 
-	for _, feature := range allKnownFeatures() {
+	for _, feature := range devModeFeatures() {
 		if !containsStringValue(status.Features, feature) {
 			t.Fatalf("status.Features missing %q in dev mode: %v", feature, status.Features)
 		}
+	}
+	if svc.HasFeature(FeatureMultiTenant) {
+		t.Fatalf("HasFeature(%q)=true, want false when runtime flag is disabled", FeatureMultiTenant)
+	}
+	if containsStringValue(status.Features, FeatureMultiTenant) {
+		t.Fatalf("status.Features unexpectedly includes %q when runtime flag is disabled: %v", FeatureMultiTenant, status.Features)
+	}
+}
+
+func TestServiceStatus_DevModeIncludesMultiTenantWhenRuntimeEnabled(t *testing.T) {
+	t.Setenv("PULSE_DEV", "true")
+	t.Setenv("PULSE_MULTI_TENANT_ENABLED", "true")
+
+	svc := NewService()
+	status := svc.Status()
+
+	if !containsStringValue(status.Features, FeatureMultiTenant) {
+		t.Fatalf("status.Features missing %q when runtime flag is enabled: %v", FeatureMultiTenant, status.Features)
+	}
+	if !svc.HasFeature(FeatureMultiTenant) {
+		t.Fatalf("HasFeature(%q)=false, want true when runtime flag is enabled", FeatureMultiTenant)
 	}
 }
 
