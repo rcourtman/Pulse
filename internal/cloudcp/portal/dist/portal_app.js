@@ -1597,6 +1597,37 @@
       return {};
     }
   }
+  function normalizeHandoffEmail(value) {
+    return String(value || "").trim();
+  }
+  function normalizeHandoffService(value) {
+    switch (String(value || "").trim()) {
+      case "manage":
+        return "manage-service-panel";
+      case "retrieve":
+        return "retrieve-service-panel";
+      case "refund":
+        return "refund-service-panel";
+      case "data":
+        return "data-service-panel";
+      default:
+        return "";
+    }
+  }
+  function readPortalRuntimeHandoff(locationHref = window.location.href) {
+    try {
+      var params = new URL(locationHref).searchParams;
+      return {
+        email: normalizeHandoffEmail(params.get("email")),
+        openPanelID: normalizeHandoffService(params.get("service"))
+      };
+    } catch {
+      return {
+        email: "",
+        openPanelID: ""
+      };
+    }
+  }
   function createBootstrapDefaults(embeddedBootstrap) {
     return {
       public_site_url: embeddedBootstrap.public_site_url || "https://pulserelay.pro",
@@ -1611,12 +1642,31 @@
       portal_api_base_path: embeddedBootstrap.portal_api_base_path || "/api/portal"
     };
   }
-  function createPortalRuntime(embeddedBootstrap = readEmbeddedBootstrap()) {
+  function createPortalRuntime(embeddedBootstrap = readEmbeddedBootstrap(), handoff = readPortalRuntimeHandoff()) {
     var bootstrapDefaults = createBootstrapDefaults(embeddedBootstrap);
+    var store = createPortalStore(bootstrapDefaults, embeddedBootstrap);
+    if (handoff.email) {
+      store.updateLoginState(function(loginState) {
+        loginState.emailValue = handoff.email;
+      }, { notify: false });
+      store.updateServiceState(function(serviceState) {
+        serviceState.flows.manage.emailValue = handoff.email;
+        serviceState.flows.retrieve.emailValue = handoff.email;
+        serviceState.flows.export.emailValue = handoff.email;
+        serviceState.flows.delete.emailValue = handoff.email;
+        serviceState.refund.emailValue = handoff.email;
+      }, { notify: false });
+    }
+    if (handoff.openPanelID) {
+      store.updateServiceState(function(serviceState) {
+        serviceState.openPanelID = handoff.openPanelID;
+      }, { notify: false });
+    }
     return {
       bootstrapDefaults,
       embeddedBootstrap,
-      store: createPortalStore(bootstrapDefaults, embeddedBootstrap)
+      handoff,
+      store
     };
   }
 

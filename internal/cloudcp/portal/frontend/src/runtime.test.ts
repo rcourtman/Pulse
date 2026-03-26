@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { createBootstrapDefaults, createPortalRuntime } from './runtime';
+import { createBootstrapDefaults, createPortalRuntime, readPortalRuntimeHandoff } from './runtime';
 
 describe('portal runtime', function() {
   it('derives bootstrap defaults from embedded bootstrap data', function() {
@@ -34,5 +34,31 @@ describe('portal runtime', function() {
     expect(runtime.store.getBootstrap().authenticated).toBe(true);
     expect(runtime.store.getBootstrap().email).toBe('owner@example.com');
     expect(runtime.bootstrapDefaults.commercial_api_base_url).toBe('https://license.pulserelay.pro');
+  });
+
+  it('derives canonical email and service handoff from the portal URL', function() {
+    var handoff = readPortalRuntimeHandoff('https://cloud.pulserelay.pro/portal?email=buyer%40example.com&service=retrieve');
+
+    expect(handoff.email).toBe('buyer@example.com');
+    expect(handoff.openPanelID).toBe('retrieve-service-panel');
+  });
+
+  it('applies email and service handoff to the initial portal store', function() {
+    var runtime = createPortalRuntime(
+      {
+        authenticated: false,
+        email: '',
+        accounts: [],
+      },
+      {
+        email: 'buyer@example.com',
+        openPanelID: 'refund-service-panel',
+      }
+    );
+
+    expect(runtime.handoff.email).toBe('buyer@example.com');
+    expect(runtime.store.getLoginState().emailValue).toBe('buyer@example.com');
+    expect(runtime.store.getServiceState().refund.emailValue).toBe('buyer@example.com');
+    expect(runtime.store.getServiceState().openPanelID).toBe('refund-service-panel');
   });
 });
