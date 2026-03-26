@@ -558,6 +558,40 @@ func TestContract_PerformanceReportTransportUsesCatalogDefaultRange(t *testing.T
 	}
 }
 
+func TestContract_PerformanceReportTransportRejectsInvalidTimeRange(t *testing.T) {
+	engine := &stubReportingEngine{data: []byte("report"), contentType: "application/pdf"}
+	original := reporting.GetEngine()
+	reporting.SetEngine(engine)
+	t.Cleanup(func() { reporting.SetEngine(original) })
+
+	handler := NewReportingHandlers(nil, nil)
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/api/reporting?resourceType=node&resourceId=node-1&start=2026-03-25T12:00:00Z&end=2026-03-25T11:00:00Z",
+		nil,
+	)
+	rec := httptest.NewRecorder()
+
+	handler.HandleGenerateReport(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	var payload struct {
+		Code  string `json:"code"`
+		Error string `json:"error"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode invalid-time-range response: %v", err)
+	}
+	if payload.Code != "invalid_time_range" {
+		t.Fatalf("expected invalid_time_range code, got %q", payload.Code)
+	}
+	if payload.Error != "end must be after start" {
+		t.Fatalf("expected canonical invalid_time_range message, got %q", payload.Error)
+	}
+}
+
 func TestContract_ReportingInvalidFormatErrorsUseCatalogDefinitions(t *testing.T) {
 	engine := &stubReportingEngine{data: []byte("report"), contentType: "application/pdf"}
 	original := reporting.GetEngine()

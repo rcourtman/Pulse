@@ -290,6 +290,10 @@ consumers may validate or reject malformed payloads, but they must not invent
 replacement report endpoints, filename prefixes, export routes, or default
 range windows from frontend-local fallback constants once the catalog has been
 accepted.
+Reporting time windows follow the same rule: `start` and `end` stay optional,
+but when present they must parse as RFC3339 and `end` must not be earlier than
+`start`; invalid values are a `400 invalid_time_range` transport failure, not a
+silent fallback to the default reporting window.
 The catalog route itself is intentionally metadata-readable without the
 `advanced_reporting` feature gate so locked admin surfaces can present the same
 canonical reporting definition before upsell, while report generation and

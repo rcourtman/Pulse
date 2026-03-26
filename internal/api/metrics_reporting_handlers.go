@@ -81,22 +81,30 @@ func normalizePerformanceReportTimeRange(
 	startRaw string,
 	endRaw string,
 	now time.Time,
-) (time.Time, time.Time) {
+) (time.Time, time.Time, error) {
 	end := now
 	if strings.TrimSpace(endRaw) != "" {
-		if parsed, err := time.Parse(time.RFC3339, endRaw); err == nil {
-			end = parsed
+		parsed, err := time.Parse(time.RFC3339, endRaw)
+		if err != nil {
+			return time.Time{}, time.Time{}, fmt.Errorf("end must be RFC3339")
 		}
+		end = parsed
 	}
 
 	start := end.Add(-definition.DefaultRangeDuration())
 	if strings.TrimSpace(startRaw) != "" {
-		if parsed, err := time.Parse(time.RFC3339, startRaw); err == nil {
-			start = parsed
+		parsed, err := time.Parse(time.RFC3339, startRaw)
+		if err != nil {
+			return time.Time{}, time.Time{}, fmt.Errorf("start must be RFC3339")
 		}
+		start = parsed
 	}
 
-	return start, end
+	if end.Before(start) {
+		return time.Time{}, time.Time{}, fmt.Errorf("end must be after start")
+	}
+
+	return start, end, nil
 }
 
 type reportingEnrichmentSnapshot struct {
@@ -350,12 +358,16 @@ func (h *ReportingHandlers) HandleGenerateReport(w http.ResponseWriter, r *http.
 		q.Get("title"),
 	)
 
-	start, end := normalizePerformanceReportTimeRange(
+	start, end, err := normalizePerformanceReportTimeRange(
 		definition,
 		q.Get("start"),
 		q.Get("end"),
 		time.Now(),
 	)
+	if err != nil {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_time_range", err.Error(), nil)
+		return
+	}
 
 	req := reporting.MetricReportRequest{
 		ResourceType: resourceType,
@@ -687,7 +699,11 @@ func (h *ReportingHandlers) HandleGenerateMultiReport(w http.ResponseWriter, r *
 	}
 	metricType, title := normalizePerformanceReportOptionalFields(definition, body.MetricType, body.Title)
 
-	start, end := normalizePerformanceReportTimeRange(definition, body.Start, body.End, time.Now())
+	start, end, err := normalizePerformanceReportTimeRange(definition, body.Start, body.End, time.Now())
+	if err != nil {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_time_range", err.Error(), nil)
+		return
+	}
 
 	// Build multi-report request
 	multiReq := reporting.MultiReportRequest{

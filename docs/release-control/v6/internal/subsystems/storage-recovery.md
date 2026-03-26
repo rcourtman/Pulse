@@ -293,6 +293,11 @@ downloads, but they must treat allowed formats, multi-resource caps, optional
 metric/title support, default fallback range windows, attachment filename
 stems, and invalid-format validation copy as API/reporting contract rather than
 rebuilding local reporting constants.
+That same transport contract also owns report time-window validation. Storage-
+and recovery-adjacent flows may omit `start`/`end` to use the canonical default
+window, but when they provide either bound it must be RFC3339 and `end` must
+not be earlier than `start`; invalid values fail as `400 invalid_time_range`
+instead of silently shifting the exported reporting window.
 That adjacent export contract now also includes canonical Proxmox pool
 membership for each VM row. Storage and recovery flows may use those current-
 state facts when they need fleet context, but they must consume the API-owned

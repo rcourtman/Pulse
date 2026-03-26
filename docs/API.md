@@ -417,6 +417,7 @@ Triggers a test alert to all configured channels.
 
 Validation and limits:
 - `start` and `end` must be RFC3339 when provided.
+- Malformed `start`/`end` values, or `end` earlier than `start`, return `400 invalid_time_range`.
 - `start` must be before `end`.
 - Maximum report window is 366 days.
 - `metricType` must match `[a-zA-Z0-9._:-]+` and be <= 64 chars.

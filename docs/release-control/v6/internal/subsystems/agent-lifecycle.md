@@ -284,6 +284,12 @@ deep-link, and validation reads in `internal/api/router_routes_ai_relay.go`
 must accept that `relay:mobile:access` scope directly instead of demanding the
 broader settings-read privilege that the pairing token was never meant to
 carry.
+That same adjacent `internal/api/` reporting surface also keeps lifecycle-
+adjacent automation on the canonical time-window transport contract. Any setup,
+handoff, or scheduled lifecycle flow that triggers performance reports must
+treat reporting `start`/`end` values as optional RFC3339 fields owned by the
+API contract, with malformed or inverted ranges rejected as
+`400 invalid_time_range` rather than silently drifting to a fallback window.
 The direct Proxmox fallback workspace now also lives explicitly inside this
 lifecycle boundary: `InfrastructureWorkspace.tsx`,
 `infrastructureWorkspaceModel.ts`,

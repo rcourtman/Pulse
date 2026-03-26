@@ -416,6 +416,106 @@ func TestReportingHandlers_GenerateReport_UsesCatalogDefaultRangeDuration(t *tes
 	}
 }
 
+func TestReportingHandlers_GenerateReport_RejectsInvalidTimeRange(t *testing.T) {
+	engine := &stubReportingEngine{data: []byte("report"), contentType: "application/pdf"}
+	original := reporting.GetEngine()
+	reporting.SetEngine(engine)
+	t.Cleanup(func() { reporting.SetEngine(original) })
+
+	handler := NewReportingHandlers(nil, nil)
+
+	tests := []struct {
+		name        string
+		url         string
+		wantMessage string
+	}{
+		{
+			name:        "invalid start",
+			url:         "/api/reporting?format=pdf&resourceType=node&resourceId=node-1&start=not-a-time",
+			wantMessage: "start must be RFC3339",
+		},
+		{
+			name:        "invalid end",
+			url:         "/api/reporting?format=pdf&resourceType=node&resourceId=node-1&end=not-a-time",
+			wantMessage: "end must be RFC3339",
+		},
+		{
+			name:        "end before start",
+			url:         "/api/reporting?format=pdf&resourceType=node&resourceId=node-1&start=2026-03-25T12:00:00Z&end=2026-03-25T11:00:00Z",
+			wantMessage: "end must be after start",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, tc.url, nil)
+			rr := httptest.NewRecorder()
+
+			handler.HandleGenerateReport(rr, req)
+
+			if rr.Code != http.StatusBadRequest {
+				t.Fatalf("expected status %d, got %d body=%s", http.StatusBadRequest, rr.Code, rr.Body.String())
+			}
+			if !strings.Contains(rr.Body.String(), tc.wantMessage) {
+				t.Fatalf("expected error %q, got %s", tc.wantMessage, rr.Body.String())
+			}
+			if engine.lastReq.ResourceID != "" {
+				t.Fatalf("expected engine not to be called, got %+v", engine.lastReq)
+			}
+		})
+	}
+}
+
+func TestReportingHandlers_GenerateMultiReport_RejectsInvalidTimeRange(t *testing.T) {
+	engine := &stubReportingEngine{data: []byte("report"), contentType: "application/pdf"}
+	original := reporting.GetEngine()
+	reporting.SetEngine(engine)
+	t.Cleanup(func() { reporting.SetEngine(original) })
+
+	handler := NewReportingHandlers(nil, nil)
+
+	tests := []struct {
+		name        string
+		body        string
+		wantMessage string
+	}{
+		{
+			name:        "invalid start",
+			body:        `{"resources":[{"resourceType":"vm","resourceId":"vm-1"}],"format":"pdf","start":"not-a-time"}`,
+			wantMessage: "start must be RFC3339",
+		},
+		{
+			name:        "invalid end",
+			body:        `{"resources":[{"resourceType":"vm","resourceId":"vm-1"}],"format":"pdf","end":"not-a-time"}`,
+			wantMessage: "end must be RFC3339",
+		},
+		{
+			name:        "end before start",
+			body:        `{"resources":[{"resourceType":"vm","resourceId":"vm-1"}],"format":"pdf","start":"2026-03-25T12:00:00Z","end":"2026-03-25T11:00:00Z"}`,
+			wantMessage: "end must be after start",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, "/api/reporting/generate-multi", strings.NewReader(tc.body))
+			rr := httptest.NewRecorder()
+
+			handler.HandleGenerateMultiReport(rr, req)
+
+			if rr.Code != http.StatusBadRequest {
+				t.Fatalf("expected status %d, got %d body=%s", http.StatusBadRequest, rr.Code, rr.Body.String())
+			}
+			if !strings.Contains(rr.Body.String(), tc.wantMessage) {
+				t.Fatalf("expected error %q, got %s", tc.wantMessage, rr.Body.String())
+			}
+			if len(engine.lastMulti.Resources) != 0 {
+				t.Fatalf("expected engine not to be called, got %+v", engine.lastMulti)
+			}
+		})
+	}
+}
+
 func TestReportingHandlers_ExportVMInventory_EmptySnapshotStillReturnsCSVHeader(t *testing.T) {
 	handler := NewReportingHandlers(nil, nil)
 	req := httptest.NewRequest(http.MethodGet, "/api/admin/reports/inventory/vms/export", nil)
