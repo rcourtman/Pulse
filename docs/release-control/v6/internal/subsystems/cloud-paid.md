@@ -516,6 +516,10 @@ The same rule applies to self-hosted pricing framing: page title/description,
 badge copy, primary CTA labels, and adjacent upsell-link copy on
 `PricingV6.tsx` must come from the shared self-hosted plan-definition owner
 rather than page-local strings.
+The shared license presentation owner also holds self-hosted Pro settings
+upsell and trial-ended notice copy for `ProLicensePlanSection.tsx`; that
+surface must consume canonical helper notices instead of carrying inline
+upgrade copy or local status-tone branches.
 That same counted-unit boundary also owns the disclosure rule for retail copy:
 default billing and pricing surfaces should use concise monitored-system copy,
 while the full counted-unit definition appears only behind explicit disclosure

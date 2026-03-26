@@ -14,6 +14,8 @@ import {
   getLicenseTierLabel,
   getNoActiveProLicenseState,
   getOrganizationBillingLicenseStatusLabel,
+  getInactiveProUpsellNotice,
+  getTrialEndedProLicenseNotice,
   getTrialActivationNotice,
   isDisplayableLicenseFeature,
 } from '@/utils/licensePresentation';
@@ -32,6 +34,18 @@ describe('licensePresentation', () => {
     });
     expect(getNoActiveProLicenseState()).toEqual({
       text: 'No Pro license is active.',
+    });
+    expect(getTrialEndedProLicenseNotice()).toEqual({
+      tone: 'border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-900 text-red-900 dark:text-red-100',
+      title: 'Your Pro trial has ended',
+      body: 'Upgrade to keep Pro features.',
+      actionLabel: 'View Pro plans',
+    });
+    expect(getInactiveProUpsellNotice()).toEqual({
+      tone: 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900 text-amber-800 dark:text-amber-200',
+      title: 'Upgrade to Pro',
+      body: 'Unlock Pulse Patrol, alert analysis, auto-fix, and more.',
+      actionLabel: 'View Pro plans',
     });
   });
 

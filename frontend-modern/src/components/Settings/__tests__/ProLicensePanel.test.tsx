@@ -466,5 +466,9 @@ describe('ProLicensePanel', () => {
     expect(proLicensePanelStateSource).not.toContain('startProTrial()');
     expect(proLicensePlanSectionSource).toContain('getLicenseStatusLoadingState');
     expect(proLicensePlanSectionSource).toContain('getNoActiveProLicenseState');
+    expect(proLicensePlanSectionSource).toContain('getTrialEndedProLicenseNotice');
+    expect(proLicensePlanSectionSource).toContain('getInactiveProUpsellNotice');
+    expect(proLicensePlanSectionSource).not.toContain('Your Pro trial has ended');
+    expect(proLicensePlanSectionSource).not.toContain('Unlock Pulse Patrol, alert analysis, auto-fix, and more.');
   });
 });

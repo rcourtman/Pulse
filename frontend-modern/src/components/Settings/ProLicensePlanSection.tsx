@@ -2,8 +2,10 @@ import { Component, For, Show } from 'solid-js';
 import RefreshCw from 'lucide-solid/icons/refresh-cw';
 import { getUpgradeActionUrlOrFallback, licenseLoadError } from '@/stores/license';
 import {
+  getInactiveProUpsellNotice,
   getLicenseStatusLoadingState,
   getNoActiveProLicenseState,
+  getTrialEndedProLicenseNotice,
 } from '@/utils/licensePresentation';
 import { CommercialStatGrid } from './CommercialBillingSections';
 
@@ -44,6 +46,9 @@ const formatDate = (value?: string | null) => {
   return date.toLocaleDateString();
 };
 
+const trialEndedNotice = getTrialEndedProLicenseNotice();
+const inactiveProUpsellNotice = getInactiveProUpsellNotice();
+
 export const ProLicensePlanSection: Component<ProLicensePlanSectionProps> = (props) => (
   <>
     <Show when={props.trialActivationNotice}>
@@ -71,16 +76,16 @@ export const ProLicensePlanSection: Component<ProLicensePlanSectionProps> = (pro
       )}
     </Show>
     <Show when={props.trialEnded && !licenseLoadError()}>
-      <div class="mb-4 rounded-md border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-900 p-3 text-sm text-red-900 dark:text-red-100">
-        <p class="font-medium">Your Pro trial has ended</p>
-        <p class="text-xs text-red-800 dark:text-red-200 mt-1">Upgrade to keep Pro features.</p>
+      <div class={`mb-4 rounded-md border p-3 text-sm ${trialEndedNotice.tone}`}>
+        <p class="font-medium">{trialEndedNotice.title}</p>
+        <p class="text-xs mt-1 opacity-90">{trialEndedNotice.body}</p>
         <a
-          class="inline-flex items-center gap-1 mt-2 text-xs font-medium text-red-900 dark:text-red-100 hover:underline"
+          class="inline-flex items-center gap-1 mt-2 text-xs font-medium hover:underline"
           href={getUpgradeActionUrlOrFallback('trial_expired')}
           target="_blank"
           rel="noreferrer"
         >
-          View Pro plans
+          {trialEndedNotice.actionLabel}
         </a>
       </div>
     </Show>
@@ -149,18 +154,16 @@ export const ProLicensePlanSection: Component<ProLicensePlanSectionProps> = (pro
         </Show>
 
         <Show when={!props.hasPaidFeatures && !props.trialEnded}>
-          <div class="rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900 p-3 text-sm text-amber-800 dark:text-amber-200">
-            <p class="font-medium">Upgrade to Pro</p>
-            <p class="text-xs text-amber-700 dark:text-amber-300 mt-1">
-              Unlock Pulse Patrol, alert analysis, auto-fix, and more.
-            </p>
+          <div class={`rounded-md border p-3 text-sm ${inactiveProUpsellNotice.tone}`}>
+            <p class="font-medium">{inactiveProUpsellNotice.title}</p>
+            <p class="text-xs mt-1 opacity-90">{inactiveProUpsellNotice.body}</p>
             <a
-              class="inline-flex items-center gap-1 mt-2 text-xs font-medium text-amber-800 dark:text-amber-200 hover:underline"
+              class="inline-flex items-center gap-1 mt-2 text-xs font-medium hover:underline"
               href={getUpgradeActionUrlOrFallback('ai_autofix')}
               target="_blank"
               rel="noreferrer"
             >
-              View Pro plans
+              {inactiveProUpsellNotice.actionLabel}
             </a>
           </div>
         </Show>
