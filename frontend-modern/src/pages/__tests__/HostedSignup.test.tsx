@@ -63,6 +63,8 @@ describe('HostedSignup', () => {
     expect(screen.getByText('Plan')).toBeInTheDocument();
     expect(screen.getByText('Next')).toBeInTheDocument();
     expect(screen.getByText('Continue through checkout if prompted.')).toBeInTheDocument();
+    expect(screen.getByText('Already signed up?')).toBeInTheDocument();
+    expect(screen.getByText('Request a fresh sign-in link.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Email Sign-In Link' })).toBeInTheDocument();
 
     fireEvent.input(screen.getByLabelText('Work Email'), {

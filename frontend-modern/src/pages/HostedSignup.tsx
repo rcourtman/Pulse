@@ -1,11 +1,15 @@
-import { Show, createMemo, createSignal } from 'solid-js';
+import { For, Show, createMemo, createSignal } from 'solid-js';
 import { useLocation } from '@solidjs/router';
 import { Card } from '@/components/shared/Card';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { HostedSignupAPI, type HostedAPIError } from '@/api/hostedSignup';
 import { getUpgradeActionUrlOrFallback } from '@/stores/license';
 import { logger } from '@/utils/logger';
-import { getCloudPlanForTier, getCloudPlanPricePresentation } from '@/utils/cloudPlans';
+import {
+  HOSTED_SIGNUP_PRESENTATION,
+  getCloudPlanForTier,
+  getCloudPlanPricePresentation,
+} from '@/utils/cloudPlans';
 
 type SignupStatus = 'idle' | 'submitting' | 'success' | 'unavailable' | 'error';
 
@@ -131,13 +135,15 @@ export default function HostedSignup() {
   return (
     <div class="space-y-6">
       <PageHeader
-        title={`Pulse Cloud ${selectedPlan().name}`}
-        description="Create your managed Pulse Cloud workspace."
+        title={`${HOSTED_SIGNUP_PRESENTATION.pageTitlePrefix} ${selectedPlan().name}`}
+        description={HOSTED_SIGNUP_PRESENTATION.pageDescription}
       />
 
       <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card padding="lg" class="space-y-4">
-          <h2 class="text-lg font-semibold text-base-content">Workspace</h2>
+          <h2 class="text-lg font-semibold text-base-content">
+            {HOSTED_SIGNUP_PRESENTATION.workspaceHeading}
+          </h2>
 
           <form class="space-y-3" onSubmit={submitSignup}>
             <label class="block text-sm font-medium text-base-content" for="hosted-email">
@@ -173,8 +179,11 @@ export default function HostedSignup() {
               class="w-full inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
               disabled={!canSubmit()}
             >
-              <Show when={status() === 'submitting'} fallback="Create Workspace">
-                Creating...
+              <Show
+                when={status() === 'submitting'}
+                fallback={HOSTED_SIGNUP_PRESENTATION.createWorkspaceLabel}
+              >
+                {HOSTED_SIGNUP_PRESENTATION.creatingWorkspaceLabel}
               </Show>
             </button>
           </form>
@@ -208,7 +217,9 @@ export default function HostedSignup() {
         </Card>
 
         <Card padding="lg" class="space-y-4">
-          <h2 class="text-lg font-semibold text-base-content">Plan</h2>
+          <h2 class="text-lg font-semibold text-base-content">
+            {HOSTED_SIGNUP_PRESENTATION.planHeading}
+          </h2>
           <div class="rounded-md border border-border bg-surface-alt p-4">
             <div class="flex items-baseline justify-between gap-3">
               <div>
@@ -239,16 +250,20 @@ export default function HostedSignup() {
               </div>
             </dl>
           </div>
-          <h3 class="text-sm font-semibold text-base-content">Next</h3>
+          <h3 class="text-sm font-semibold text-base-content">
+            {HOSTED_SIGNUP_PRESENTATION.nextHeading}
+          </h3>
           <ol class="list-decimal space-y-2 pl-5 text-sm text-base-content">
-            <li>Continue through checkout if prompted.</li>
-            <li>Finish sign-in from the email link.</li>
-            <li>Open your workspace and start connecting systems.</li>
+            <For each={HOSTED_SIGNUP_PRESENTATION.nextSteps}>{(step) => <li>{step}</li>}</For>
           </ol>
 
           <div class="border-t border-border pt-4">
-            <h3 class="text-sm font-semibold text-base-content">Already signed up?</h3>
-            <p class="mt-1 text-sm text-muted">Request a fresh sign-in link.</p>
+            <h3 class="text-sm font-semibold text-base-content">
+              {HOSTED_SIGNUP_PRESENTATION.existingAccountHeading}
+            </h3>
+            <p class="mt-1 text-sm text-muted">
+              {HOSTED_SIGNUP_PRESENTATION.existingAccountDescription}
+            </p>
             <form class="mt-3 space-y-3" onSubmit={requestMagicLink}>
               <input
                 id="hosted-magic-link-email"
@@ -265,8 +280,11 @@ export default function HostedSignup() {
                 class="w-full inline-flex items-center justify-center rounded-md border border-border bg-surface px-4 py-2 text-sm font-semibold text-base-content transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
                 disabled={requestingMagicLink()}
               >
-                <Show when={requestingMagicLink()} fallback="Email Sign-In Link">
-                  Sending...
+                <Show
+                  when={requestingMagicLink()}
+                  fallback={HOSTED_SIGNUP_PRESENTATION.emailSignInLinkLabel}
+                >
+                  {HOSTED_SIGNUP_PRESENTATION.sendingSignInLinkLabel}
                 </Show>
               </button>
             </form>

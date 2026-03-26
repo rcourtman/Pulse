@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   CLOUD_COMMERCIAL_PRESENTATION,
   CLOUD_PLAN_BY_TIER,
+  HOSTED_SIGNUP_PRESENTATION,
   getCloudPlanPricePresentation,
 } from '@/utils/cloudPlans';
 
@@ -46,6 +47,27 @@ describe('cloudPlans', () => {
         'Install the Pulse agent on any Linux machine.',
         'Connect systems, review findings, and configure alerts.',
       ],
+    });
+  });
+
+  it('keeps hosted signup commercial copy in the common contract', () => {
+    expect(HOSTED_SIGNUP_PRESENTATION).toEqual({
+      pageTitlePrefix: 'Pulse Cloud',
+      pageDescription: 'Create your managed Pulse Cloud workspace.',
+      workspaceHeading: 'Workspace',
+      planHeading: 'Plan',
+      nextHeading: 'Next',
+      nextSteps: [
+        'Continue through checkout if prompted.',
+        'Finish sign-in from the email link.',
+        'Open your workspace and start connecting systems.',
+      ],
+      existingAccountHeading: 'Already signed up?',
+      existingAccountDescription: 'Request a fresh sign-in link.',
+      createWorkspaceLabel: 'Create Workspace',
+      creatingWorkspaceLabel: 'Creating...',
+      emailSignInLinkLabel: 'Email Sign-In Link',
+      sendingSignInLinkLabel: 'Sending...',
     });
   });
 });

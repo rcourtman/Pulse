@@ -30,6 +30,21 @@ export interface CloudCommercialPresentation {
   setupSteps: readonly string[];
 }
 
+export interface HostedSignupPresentation {
+  pageTitlePrefix: string;
+  pageDescription: string;
+  workspaceHeading: string;
+  planHeading: string;
+  nextHeading: string;
+  nextSteps: readonly string[];
+  existingAccountHeading: string;
+  existingAccountDescription: string;
+  createWorkspaceLabel: string;
+  creatingWorkspaceLabel: string;
+  emailSignInLinkLabel: string;
+  sendingSignInLinkLabel: string;
+}
+
 export const DEFAULT_CLOUD_TIER: CloudTierKey = 'starter';
 
 export const CLOUD_PLAN_DEFINITIONS: readonly CloudPlanDefinition[] = [
@@ -99,6 +114,25 @@ export const CLOUD_COMMERCIAL_PRESENTATION: CloudCommercialPresentation = {
     'Install the Pulse agent on any Linux machine.',
     'Connect systems, review findings, and configure alerts.',
   ],
+} as const;
+
+export const HOSTED_SIGNUP_PRESENTATION: HostedSignupPresentation = {
+  pageTitlePrefix: 'Pulse Cloud',
+  pageDescription: 'Create your managed Pulse Cloud workspace.',
+  workspaceHeading: 'Workspace',
+  planHeading: 'Plan',
+  nextHeading: 'Next',
+  nextSteps: [
+    'Continue through checkout if prompted.',
+    'Finish sign-in from the email link.',
+    'Open your workspace and start connecting systems.',
+  ],
+  existingAccountHeading: 'Already signed up?',
+  existingAccountDescription: 'Request a fresh sign-in link.',
+  createWorkspaceLabel: 'Create Workspace',
+  creatingWorkspaceLabel: 'Creating...',
+  emailSignInLinkLabel: 'Email Sign-In Link',
+  sendingSignInLinkLabel: 'Sending...',
 } as const;
 
 export function parseCloudTier(value?: string | null): CloudTierKey {
