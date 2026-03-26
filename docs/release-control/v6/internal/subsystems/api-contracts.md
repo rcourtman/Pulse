@@ -59,6 +59,15 @@ Own canonical runtime payload shapes between backend and frontend.
 36. `internal/api/ai_hosted_runtime.go`
 37. `internal/api/router_routes_licensing.go`
 38. `internal/api/reporting_inventory_handlers.go`
+39. `internal/cloudcp/portal/bootstrap.go`
+40. `internal/cloudcp/portal/handlers.go`
+41. `internal/cloudcp/portal/page.go`
+42. `internal/cloudcp/portal/page_templates.go`
+43. `internal/cloudcp/portal/frontend/src/index.ts`
+44. `internal/cloudcp/portal/frontend/src/shell.ts`
+45. `internal/cloudcp/portal/frontend/src/services.ts`
+46. `internal/cloudcp/portal/frontend/src/styles.css`
+47. `internal/cloudcp/portal/frontend_sync_test.go`
 
 ## Shared Boundaries
 
@@ -201,7 +210,11 @@ path, signup path, and stable workspace summary fields such as `created_at`.
 authenticated users, so new account frontend work must extend that shared
 contract rather than inventing a second local payload shape, reviving separate
 login/portal templates, or hardcoding production URLs, route prefixes, or
-DOM-scraped account facts in static assets.
+DOM-scraped account facts in static assets. That canonical renderer now lives
+under `internal/cloudcp/portal/frontend/`, is embedded from
+`internal/cloudcp/portal/dist/`, and is guarded by
+`internal/cloudcp/portal/frontend_sync_test.go`, so the maintained frontend
+sources and the committed embedded bundle cannot drift silently.
 Hosted Pulse Cloud tenant-org AI reads now also follow that same canonical
 rule: `internal/api/ai_hosted_runtime.go`, `internal/api/ai_handlers.go`,
 `internal/api/ai_handler.go`, and `internal/api/hosted_billing_state.go`

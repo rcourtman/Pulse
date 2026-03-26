@@ -6,14 +6,13 @@ import (
 	"io/fs"
 )
 
-//go:embed templates/portal.html assets/portal.css assets/portal_shell.js assets/portal_services.js
+//go:embed templates/portal.html dist/portal_app.css dist/portal_app.js
 var portalTemplateFS embed.FS
 
 var (
-	portalPageTmpl       = template.Must(template.ParseFS(portalTemplateFS, "templates/portal.html"))
-	portalStyles         = mustEmbeddedCSS("assets/portal.css")
-	portalShellScript    = mustEmbeddedJS("assets/portal_shell.js")
-	portalServicesScript = mustEmbeddedJS("assets/portal_services.js")
+	portalPageTmpl    = template.Must(template.ParseFS(portalTemplateFS, "templates/portal.html"))
+	portalStyles      = mustEmbeddedCSS("dist/portal_app.css")
+	portalShellScript = mustEmbeddedJS("dist/portal_app.js")
 )
 
 func mustEmbeddedCSS(path string) template.CSS {

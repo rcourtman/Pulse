@@ -35,11 +35,10 @@ type portalPageAccount struct {
 
 // portalPageData is passed to the portal HTML template.
 type portalPageData struct {
-	Nonce          string
-	Styles         template.CSS
-	ShellScript    template.JS
-	ServicesScript template.JS
-	BootstrapJSON  template.JS
+	Nonce         string
+	Styles        template.CSS
+	ShellScript   template.JS
+	BootstrapJSON template.JS
 }
 
 const (
@@ -196,11 +195,10 @@ func renderPortalPage(w http.ResponseWriter, nonce string, bootstrapData Bootstr
 		bootstrapJSON = template.JS(`{}`)
 	}
 	if err := portalPageTmpl.Execute(w, portalPageData{
-		Nonce:          nonce,
-		Styles:         portalStyles,
-		ShellScript:    portalShellScript,
-		ServicesScript: portalServicesScript,
-		BootstrapJSON:  bootstrapJSON,
+		Nonce:         nonce,
+		Styles:        portalStyles,
+		ShellScript:   portalShellScript,
+		BootstrapJSON: bootstrapJSON,
 	}); err != nil {
 		log.Error().Err(err).Msg("cloudcp.portal.page: render portal page")
 	}

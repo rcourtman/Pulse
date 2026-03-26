@@ -224,6 +224,9 @@ The `customer-account-portal` lane should deliver:
 5. a renderer-owned frontend bootstrap contract for the account shell, so a
    maintained frontend can consume canonical account state without scraping
    ad-hoc DOM attributes or hardcoded production URLs
+6. a maintained bundled frontend source tree and sync-proof path inside
+   `internal/cloudcp/portal`, so the account shell does not regress into
+   handwritten embedded asset drift
 
 ### Current frontend seam
 
@@ -248,7 +251,12 @@ same contract, so route wiring can promote the shell toward a maintained
 frontend/API split without inventing a second state model.
 
 New frontend work should extend that contract deliberately instead of adding
-one-off data attributes or baking production hostnames into static assets.
+one-off data attributes or baking production hostnames into static assets. The
+maintained frontend source now lives under `internal/cloudcp/portal/frontend/`,
+is embedded from `internal/cloudcp/portal/dist/`, and is guarded by
+`internal/cloudcp/portal/frontend_sync_test.go`, so Pulse Account frontend work
+should extend that source tree and rebuild the committed bundle instead of
+editing embedded script or CSS blobs directly.
 
 ### Post-lane follow-on
 

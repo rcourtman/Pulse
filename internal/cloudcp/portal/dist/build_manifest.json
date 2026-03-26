@@ -1,0 +1,11 @@
+{
+  "source_hash": "f9e071bc97f6d800cf831621a677dbb409502e721382b74a36bb72586181848f",
+  "build_inputs": [
+    "package.json",
+    "build.mjs",
+    "src/index.ts",
+    "src/shell.ts",
+    "src/services.ts",
+    "src/styles.css"
+  ]
+}

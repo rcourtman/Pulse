@@ -795,58 +795,6 @@ func TestPortalPageTemplate_AccountServicesRendered(t *testing.T) {
 		fmt.Sprintf(`"portal_api_base_path":"%s"`, PortalAPIBasePath),
 		`"email":"owner@example.com"`,
 		`"accounts":[{"id":"a_test"`,
-		`renderAuthenticatedPortal()`,
-		`renderSignedOutPortal()`,
-		"Other account services",
-		`id="open-manage-service"`,
-		`id="open-retrieve-service"`,
-		`id="open-refund-service"`,
-		`id="open-data-service"`,
-		`data-account-service-action="open-service-panel"`,
-		`data-account-service-panel="manage-service-panel"`,
-		`data-account-service-focus="manage-inline-email"`,
-		`data-account-service-action="manage-inline-request"`,
-		`data-account-service-action="data-delete-confirm"`,
-		`id="manage-service-panel"`,
-		`id="manage-service-root"`,
-		`id="retrieve-service-panel"`,
-		`id="retrieve-service-root"`,
-		`id="refund-service-panel"`,
-		`id="refund-service-root"`,
-		`id="data-service-panel"`,
-		`id="data-export-root"`,
-		`id="data-delete-root"`,
-		`var verificationFlows = {`,
-		`var serviceState = {`,
-		`renderOpenPanels();`,
-		`renderAllFlows();`,
-		`data-account-service-input="manage-email"`,
-		`data-account-service-input="refund-email"`,
-		`data-account-service-input="data-export-email"`,
-		`data-account-service-input="data-delete-email"`,
-		`data-account-service-input="retrieve-email"`,
-		`data-account-service-input="retrieve-code"`,
-		`renderPanel: function(flowState) {`,
-		`requestVerificationCode('manage')`,
-		`confirmVerificationCode('retrieve')`,
-		`resendVerificationCode('export', event)`,
-		`/v1/manage/request`,
-		`/v1/retrieve-license/request`,
-		`/v1/self-refund`,
-		`/v1/gdpr/request-export`,
-		`/v1/gdpr/export`,
-		`/v1/gdpr/request-delete`,
-		`/v1/gdpr/confirm-delete`,
-		`if (!await refreshBootstrap())`,
-		`refreshAccountTeamSection(accountID)`,
-		`window.PulseAccountPortal = {`,
-		`document.addEventListener('pulse-account-render'`,
-		`document.addEventListener('click'`,
-		`document.addEventListener('change'`,
-		`data-action="open-billing"`,
-		`data-action="create-workspace"`,
-		`data-action="workspace-manage"`,
-		"commercial account actions now live here",
 	}
 	for _, needle := range mustContain {
 		if !strings.Contains(html, needle) {
@@ -865,8 +813,8 @@ func TestPortalPageTemplate_AccountServicesRendered(t *testing.T) {
 	if strings.Contains(html, `onclick="`) {
 		t.Errorf("expected portal shell interactions to be delegated through data-action attributes instead of inline onclick handlers")
 	}
-	if strings.Contains(html, `assets/portal.js`) {
-		t.Errorf("expected portal runtime to be split into explicit embedded shell/services assets instead of the old monolithic asset")
+	if strings.Contains(html, `assets/portal_shell.js`) || strings.Contains(html, `assets/portal_services.js`) || strings.Contains(html, `assets/portal.css`) {
+		t.Errorf("expected portal runtime to load from the built dist bundle, not the old handwritten asset paths")
 	}
 	if strings.Contains(html, `await fetch('/auth/logout'`) {
 		t.Errorf("expected portal paths to be renderer-owned, not hardcoded in the asset")

@@ -54,6 +54,9 @@ frontend-modern/.vite/
 frontend/
 frontend-modern/public/download/
 data/
+!internal/cloudcp/portal/frontend/
+!internal/cloudcp/portal/frontend/**
+internal/cloudcp/portal/frontend/node_modules/
 
 # Environment
 .env
@@ -67,6 +70,8 @@ build/
 *.tar.gz
 pulse-fixes*.tar.gz
 scripts/macos/dist/
+!internal/cloudcp/portal/dist/
+!internal/cloudcp/portal/dist/**
 
 # Frontend copy for embedding (generated during build)
 # Frontend build artifact for Go embedding
