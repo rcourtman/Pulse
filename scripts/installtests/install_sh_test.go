@@ -776,6 +776,32 @@ func extractRootInstallShellFunction(t *testing.T, name string) string {
 	return string(match)
 }
 
+func extractSetupAutoUpdatesShellFunctions(t *testing.T) string {
+	t.Helper()
+
+	return extractRootInstallShellFunction(t, "selected_update_channel") + "\n" +
+		extractRootInstallShellFunction(t, "repo_web_url") + "\n" +
+		extractRootInstallShellFunction(t, "configure_auto_update_script_repo") + "\n" +
+		extractRootInstallShellFunction(t, "setup_auto_updates")
+}
+
+func prepareAutoUpdatePaths(t *testing.T, tmpDir string) (string, string, string) {
+	t.Helper()
+
+	autoUpdateDest := filepath.Join(tmpDir, "bin", "pulse-auto-update.sh")
+	servicePath := filepath.Join(tmpDir, "systemd", "pulse-update.service")
+	timerPath := filepath.Join(tmpDir, "systemd", "pulse-update.timer")
+
+	if err := os.MkdirAll(filepath.Dir(autoUpdateDest), 0755); err != nil {
+		t.Fatalf("mkdir auto-update dest dir: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(servicePath), 0755); err != nil {
+		t.Fatalf("mkdir systemd dir: %v", err)
+	}
+
+	return autoUpdateDest, servicePath, timerPath
+}
+
 func extractAutoUpdateFunction(t *testing.T, name string) string {
 	t.Helper()
 
@@ -1620,15 +1646,12 @@ func TestSelectedUpdateChannelTreatsPrereleaseVersionAsRC(t *testing.T) {
 func TestSetupAutoUpdatesCreatesSystemJSONWithSelectedChannel(t *testing.T) {
 	tmpDir := t.TempDir()
 	configDir := filepath.Join(tmpDir, "config")
-	systemdDir := filepath.Join(tmpDir, "systemd")
 	installDir := filepath.Join(tmpDir, "install")
 	autoUpdateSrc := filepath.Join(installDir, "scripts", "pulse-auto-update.sh")
+	autoUpdateDest, servicePath, timerPath := prepareAutoUpdatePaths(t, tmpDir)
 
 	if err := os.MkdirAll(configDir, 0755); err != nil {
 		t.Fatalf("mkdir config dir: %v", err)
-	}
-	if err := os.MkdirAll(systemdDir, 0755); err != nil {
-		t.Fatalf("mkdir systemd dir: %v", err)
 	}
 	if err := os.MkdirAll(filepath.Dir(autoUpdateSrc), 0755); err != nil {
 		t.Fatalf("mkdir auto-update src dir: %v", err)
@@ -1640,6 +1663,9 @@ func TestSetupAutoUpdatesCreatesSystemJSONWithSelectedChannel(t *testing.T) {
 	script := `
 		CONFIG_DIR="` + configDir + `"
 		INSTALL_DIR="` + installDir + `"
+		PULSE_AUTO_UPDATE_DEST="` + autoUpdateDest + `"
+		PULSE_UPDATE_SERVICE_PATH="` + servicePath + `"
+		PULSE_UPDATE_TIMER_PATH="` + timerPath + `"
 		FORCE_CHANNEL="rc"
 		UPDATE_CHANNEL=""
 		GITHUB_REPO="rcourtman/Pulse"
@@ -1653,8 +1679,7 @@ func TestSetupAutoUpdatesCreatesSystemJSONWithSelectedChannel(t *testing.T) {
 		chown() { :; }
 		cat() { command cat "$@"; }
 		mkdir() { command mkdir "$@"; }
-` + extractRootInstallShellFunction(t, "selected_update_channel") + `
-` + extractRootInstallShellFunction(t, "setup_auto_updates") + `
+` + extractSetupAutoUpdatesShellFunctions(t) + `
 		setup_auto_updates
 	`
 
@@ -1728,10 +1753,7 @@ func TestSetupAutoUpdatesConfiguresInstalledAutoUpdateRepo(t *testing.T) {
 		rm() { command rm "$@"; }
 		awk() { command awk "$@"; }
 		mktemp() { command mktemp "$@"; }
-` + extractRootInstallShellFunction(t, "selected_update_channel") + `
-` + extractRootInstallShellFunction(t, "repo_web_url") + `
-` + extractRootInstallShellFunction(t, "configure_auto_update_script_repo") + `
-` + extractRootInstallShellFunction(t, "setup_auto_updates") + `
+` + extractSetupAutoUpdatesShellFunctions(t) + `
 		setup_auto_updates
 	`
 
@@ -1779,6 +1801,7 @@ func TestSetupAutoUpdatesTreatsPrereleaseVersionAsRCChannel(t *testing.T) {
 	configDir := filepath.Join(tmpDir, "config")
 	installDir := filepath.Join(tmpDir, "install")
 	autoUpdateSrc := filepath.Join(installDir, "scripts", "pulse-auto-update.sh")
+	autoUpdateDest, servicePath, timerPath := prepareAutoUpdatePaths(t, tmpDir)
 
 	if err := os.MkdirAll(configDir, 0755); err != nil {
 		t.Fatalf("mkdir config dir: %v", err)
@@ -1793,6 +1816,9 @@ func TestSetupAutoUpdatesTreatsPrereleaseVersionAsRCChannel(t *testing.T) {
 	script := `
 		CONFIG_DIR="` + configDir + `"
 		INSTALL_DIR="` + installDir + `"
+		PULSE_AUTO_UPDATE_DEST="` + autoUpdateDest + `"
+		PULSE_UPDATE_SERVICE_PATH="` + servicePath + `"
+		PULSE_UPDATE_TIMER_PATH="` + timerPath + `"
 		FORCE_CHANNEL=""
 		FORCE_VERSION="v1.2.3-rc.4"
 		UPDATE_CHANNEL=""
@@ -1803,8 +1829,7 @@ func TestSetupAutoUpdatesTreatsPrereleaseVersionAsRCChannel(t *testing.T) {
 		safe_systemctl() { :; }
 		systemctl() { return 0; }
 		chown() { :; }
-` + extractRootInstallShellFunction(t, "selected_update_channel") + `
-` + extractRootInstallShellFunction(t, "setup_auto_updates") + `
+` + extractSetupAutoUpdatesShellFunctions(t) + `
 		setup_auto_updates
 	`
 
@@ -1831,6 +1856,7 @@ func TestSetupAutoUpdatesPreservesRCChannelWhenUpdatingExistingConfig(t *testing
 	configDir := filepath.Join(tmpDir, "config")
 	installDir := filepath.Join(tmpDir, "install")
 	autoUpdateSrc := filepath.Join(installDir, "scripts", "pulse-auto-update.sh")
+	autoUpdateDest, servicePath, timerPath := prepareAutoUpdatePaths(t, tmpDir)
 
 	if err := os.MkdirAll(configDir, 0755); err != nil {
 		t.Fatalf("mkdir config dir: %v", err)
@@ -1848,6 +1874,9 @@ func TestSetupAutoUpdatesPreservesRCChannelWhenUpdatingExistingConfig(t *testing
 	script := `
 		CONFIG_DIR="` + configDir + `"
 		INSTALL_DIR="` + installDir + `"
+		PULSE_AUTO_UPDATE_DEST="` + autoUpdateDest + `"
+		PULSE_UPDATE_SERVICE_PATH="` + servicePath + `"
+		PULSE_UPDATE_TIMER_PATH="` + timerPath + `"
 		FORCE_CHANNEL=""
 		UPDATE_CHANNEL=""
 		GITHUB_REPO="rcourtman/Pulse"
@@ -1858,8 +1887,7 @@ func TestSetupAutoUpdatesPreservesRCChannelWhenUpdatingExistingConfig(t *testing
 		systemctl() { return 0; }
 		command -v jq >/dev/null 2>&1 || true
 		chown() { :; }
-` + extractRootInstallShellFunction(t, "selected_update_channel") + `
-` + extractRootInstallShellFunction(t, "setup_auto_updates") + `
+` + extractSetupAutoUpdatesShellFunctions(t) + `
 		setup_auto_updates
 	`
 

@@ -20,6 +20,7 @@ type SessionStore struct {
 	dataPath   string
 	saveTicker *time.Ticker
 	stopChan   chan bool
+	workerDone chan struct{}
 	stopOnce   sync.Once
 	crypto     *crypto.CryptoManager
 }
@@ -150,10 +151,11 @@ func NewSessionStore(dataPath string) *SessionStore {
 	}
 
 	store := &SessionStore{
-		sessions: make(map[string]*SessionData),
-		dataPath: dataPath,
-		stopChan: make(chan bool),
-		crypto:   cm,
+		sessions:   make(map[string]*SessionData),
+		dataPath:   dataPath,
+		stopChan:   make(chan bool),
+		workerDone: make(chan struct{}),
+		crypto:     cm,
 	}
 
 	// Load existing sessions from disk
@@ -179,10 +181,14 @@ func (s *SessionStore) Shutdown() {
 		default:
 		}
 	})
+	if s.workerDone != nil {
+		<-s.workerDone
+	}
 }
 
 // backgroundWorker handles periodic saves and cleanup
 func (s *SessionStore) backgroundWorker() {
+	defer close(s.workerDone)
 	for {
 		select {
 		case <-s.saveTicker.C:

@@ -14,6 +14,8 @@ import (
 )
 
 func TestHandleCloudHandoffRejectsReplay(t *testing.T) {
+	resetPersistentAuthStoresForTests()
+	t.Cleanup(resetPersistentAuthStoresForTests)
 	dataPath := t.TempDir()
 	key := []byte("0123456789abcdef0123456789abcdef")
 	if err := os.WriteFile(filepath.Join(dataPath, cloudauth.HandoffKeyFile), key, 0o600); err != nil {
@@ -54,6 +56,8 @@ func TestHandleCloudHandoffRejectsReplay(t *testing.T) {
 }
 
 func TestHandleCloudHandoffSetsTenantOrgCookie(t *testing.T) {
+	resetPersistentAuthStoresForTests()
+	t.Cleanup(resetPersistentAuthStoresForTests)
 	dataPath := t.TempDir()
 	key := []byte("0123456789abcdef0123456789abcdef")
 	if err := os.WriteFile(filepath.Join(dataPath, cloudauth.HandoffKeyFile), key, 0o600); err != nil {
@@ -91,6 +95,8 @@ func TestHandleCloudHandoffSetsTenantOrgCookie(t *testing.T) {
 }
 
 func TestHandleCloudHandoffRejectsInvalidTenantID(t *testing.T) {
+	resetPersistentAuthStoresForTests()
+	t.Cleanup(resetPersistentAuthStoresForTests)
 	dataPath := t.TempDir()
 	key := []byte("0123456789abcdef0123456789abcdef")
 	if err := os.WriteFile(filepath.Join(dataPath, cloudauth.HandoffKeyFile), key, 0o600); err != nil {
@@ -117,6 +123,8 @@ func TestHandleCloudHandoffRejectsInvalidTenantID(t *testing.T) {
 }
 
 func TestHandleCloudHandoffLowercasesSessionEmailIdentity(t *testing.T) {
+	resetPersistentAuthStoresForTests()
+	t.Cleanup(resetPersistentAuthStoresForTests)
 	dataPath := t.TempDir()
 	key := []byte("0123456789abcdef0123456789abcdef")
 	if err := os.WriteFile(filepath.Join(dataPath, cloudauth.HandoffKeyFile), key, 0o600); err != nil {

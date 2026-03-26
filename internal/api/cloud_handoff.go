@@ -20,6 +20,7 @@ import (
 // Self-guards: returns 404 if the handoff key file does not exist in dataPath,
 // meaning this is not a cloud-managed tenant.
 func HandleCloudHandoff(dataPath string) http.HandlerFunc {
+	InitPersistentAuthStores(dataPath)
 	replay := &jtiReplayStore{configDir: dataPath}
 
 	return func(w http.ResponseWriter, r *http.Request) {

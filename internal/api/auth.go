@@ -206,6 +206,11 @@ func InitSessionStore(dataPath string) {
 	}
 }
 
+func InitPersistentAuthStores(dataPath string) {
+	InitSessionStore(dataPath)
+	InitCSRFStore(dataPath)
+}
+
 // GetSessionStore returns the global session store instance
 func GetSessionStore() *SessionStore {
 	sessionStoreMu.Lock()

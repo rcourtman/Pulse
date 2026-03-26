@@ -30,6 +30,7 @@ type CSRFTokenStore struct {
 	dataPath   string
 	saveTicker *time.Ticker
 	stopChan   chan bool
+	workerDone chan struct{}
 	stopOnce   sync.Once
 }
 
@@ -112,9 +113,10 @@ func InitCSRFStore(dataPath string) {
 
 	oldStore := csrfStore
 	csrfStore = &CSRFTokenStore{
-		tokens:   make(map[string]*CSRFToken),
-		dataPath: newDataPath,
-		stopChan: make(chan bool),
+		tokens:     make(map[string]*CSRFToken),
+		dataPath:   newDataPath,
+		stopChan:   make(chan bool),
+		workerDone: make(chan struct{}),
 	}
 	csrfStoreDataPath = newDataPath
 
@@ -154,6 +156,9 @@ func (c *CSRFTokenStore) Shutdown() {
 		default:
 		}
 	})
+	if c.workerDone != nil {
+		<-c.workerDone
+	}
 }
 
 func resetCSRFStoreForTests() {
@@ -169,6 +174,7 @@ func resetCSRFStoreForTests() {
 
 // backgroundWorker handles periodic saves and cleanup
 func (c *CSRFTokenStore) backgroundWorker() {
+	defer close(c.workerDone)
 	for {
 		select {
 		case <-c.saveTicker.C:

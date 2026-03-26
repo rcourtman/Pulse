@@ -281,6 +281,7 @@ func normalizeHandoffEmail(email string) string {
 // this returns a success payload instead of redirecting.
 func HandleHandoffExchange(configDir string) http.HandlerFunc {
 	configDir = filepath.Clean(configDir)
+	InitPersistentAuthStores(configDir)
 	keyPath := filepath.Join(configDir, "secrets", "handoff.key")
 	replay := &jtiReplayStore{configDir: configDir}
 
