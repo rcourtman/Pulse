@@ -408,8 +408,16 @@ func TestRegisterRoutes_PortalPageSessionModes(t *testing.T) {
 	if unauthRec.Code != http.StatusOK {
 		t.Fatalf("unauth status = %d, want %d (body=%q)", unauthRec.Code, http.StatusOK, unauthRec.Body.String())
 	}
-	if !strings.Contains(unauthRec.Body.String(), "Sign in to manage Cloud workspaces, MSP access, and commercial account services.") {
-		t.Fatalf("expected login shell in unauthenticated portal page, body=%q", unauthRec.Body.String())
+	for _, needle := range []string{
+		`id="portal-app-root"`,
+		`"authenticated":false`,
+		`"magic_link_request_path":"` + portal.PortalMagicLinkRequestPath + `"`,
+		`"signup_path":"` + portal.PortalSignupPath + `"`,
+		"Enter the commercial email address for your Pulse account.",
+	} {
+		if !strings.Contains(unauthRec.Body.String(), needle) {
+			t.Fatalf("expected unauthenticated portal page to contain %q, body=%q", needle, unauthRec.Body.String())
+		}
 	}
 
 	authReq := httptest.NewRequest(http.MethodGet, portal.PortalPagePath, nil)
@@ -423,6 +431,8 @@ func TestRegisterRoutes_PortalPageSessionModes(t *testing.T) {
 		"Pulse Account",
 		"Acme MSP",
 		`id="pulse-account-bootstrap"`,
+		`id="portal-app-root"`,
+		`"authenticated":true`,
 		"Other account services",
 		"self-hosted billing, license recovery, refund, and privacy tools below now share the same Pulse Account shell",
 	} {

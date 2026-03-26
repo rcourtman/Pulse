@@ -1,6 +1,6 @@
 # Pulse Account Portal Spec
 
-Last updated: 2026-03-25
+Last updated: 2026-03-26
 Status: ACTIVE
 
 ## Purpose
@@ -227,14 +227,19 @@ The `customer-account-portal` lane should deliver:
 
 ### Current frontend seam
 
-The current `/portal` shell now emits a machine-owned bootstrap payload in a
-`pulse-account-bootstrap` JSON script tag. That payload is the canonical
-frontend state seam for:
+The current `/portal` surface now renders one machine-owned application shell
+for both signed-out and signed-in users. That shell emits a
+`pulse-account-bootstrap` JSON script tag, and the authenticated runtime can
+refresh from `/api/portal/bootstrap`. Together, those two surfaces are the
+canonical frontend state seam for:
 
 1. account identity context
 2. hosted account and workspace summaries
 3. public/commercial edge URLs needed by the account shell
-4. the canonical bootstrap route path and stable workspace summary fields, so
+4. signed-out versus signed-in shell state, so login, session expiry, and
+   authenticated account runtime all inherit one owned page contract instead of
+   separate server-rendered templates
+5. the canonical bootstrap route path and stable workspace summary fields, so
    the frontend can render and refresh account/workspace state from one owned
    contract instead of depending on server-rendered DOM structure
 

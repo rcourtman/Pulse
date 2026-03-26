@@ -3,7 +3,6 @@ package portal
 import (
 	"encoding/json"
 	"fmt"
-	"html/template"
 	"net/http"
 	"net/http/httptest"
 	"sort"
@@ -43,22 +42,12 @@ func doRequest(t *testing.T, h http.Handler, req *http.Request) *httptest.Respon
 	return rec
 }
 
-func renderPortalHTML(t *testing.T, data portalPageData) string {
+func renderPortalHTML(t *testing.T, bootstrap BootstrapData) string {
 	t.Helper()
 	rec := httptest.NewRecorder()
-	renderPortalPage(rec, data.Nonce, data.Email, data.Accounts)
+	renderPortalPage(rec, "test-nonce", bootstrap)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("renderPortalPage returned %d", rec.Code)
-	}
-	return rec.Body.String()
-}
-
-func renderLoginHTML(t *testing.T, nonce string) string {
-	t.Helper()
-	rec := httptest.NewRecorder()
-	renderLoginPage(rec, nonce)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("renderLoginPage returned %d", rec.Code)
 	}
 	return rec.Body.String()
 }
@@ -663,137 +652,151 @@ func TestBillingPortalRedirect_EmptyURL(t *testing.T) {
 // --- Portal page template rendering tests ---
 
 func TestPortalPageTemplate_TeamManagementRendered(t *testing.T) {
-	// Verify that accounts with CanManage=true render team management UI markup.
-	data := portalPageData{
-		Nonce: "test-nonce",
-		Email: "admin@example.com",
-		Accounts: []portalPageAccount{
-			{
-				ID:         "a_managed",
-				Kind:       "cloud",
-				KindLabel:  "Cloud",
-				Name:       "My Cloud Account",
-				Role:       "owner",
-				CanManage:  true,
-				HasBilling: false,
-				Workspaces: nil,
-			},
+	html := renderPortalHTML(t, BuildBootstrapData(true, "admin@example.com", []portalPageAccount{
+		{
+			ID:         "a_managed",
+			Kind:       "cloud",
+			KindLabel:  "Cloud",
+			Name:       "My Cloud Account",
+			Role:       "owner",
+			CanManage:  true,
+			HasBilling: false,
 		},
-	}
+	}))
 
-	html := renderPortalHTML(t, data)
-
-	// Account-specific markup (only rendered when CanManage=true).
 	mustContain := []string{
-		`id="team-btn-a_managed"`,     // team button with account ID
-		`id="team-section-a_managed"`, // team section div
-		`data-actor-role="owner"`,     // actor role data attribute
-		"Team members",                // section heading
-		`id="team-list-a_managed"`,    // member list tbody
-		`id="invite-email-a_managed"`, // invite email input
-		`id="invite-role-a_managed"`,  // invite role select
+		`id="portal-app-root"`,
+		`if (account.can_manage) {`,
+		`data-actor-role="`,
+		`id="team-list-`,
 		`data-action="toggle-team"`,
 		`data-action="invite-member"`,
-		`data-account-id="a_managed"`,
 	}
 	for _, needle := range mustContain {
 		if !strings.Contains(html, needle) {
 			t.Errorf("expected %q in rendered HTML", needle)
 		}
 	}
+
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(extractPortalBootstrapJSONFromHTML(t, html)), &payload); err != nil {
+		t.Fatalf("unmarshal bootstrap JSON: %v", err)
+	}
+	if got := payload["authenticated"]; got != true {
+		t.Fatalf("authenticated = %#v, want true", got)
+	}
+	accounts, ok := payload["accounts"].([]any)
+	if !ok || len(accounts) != 1 {
+		t.Fatalf("accounts = %#v, want one account", payload["accounts"])
+	}
+	account, ok := accounts[0].(map[string]any)
+	if !ok {
+		t.Fatalf("account = %#v", accounts[0])
+	}
+	if got := account["can_manage"]; got != true {
+		t.Fatalf("can_manage = %#v, want true", got)
+	}
+	if got := account["role"]; got != "owner" {
+		t.Fatalf("role = %#v, want owner", got)
+	}
 }
 
 func TestPortalPageTemplate_TeamManagementHiddenForNonManagers(t *testing.T) {
-	// Accounts with CanManage=false should NOT render team management markup.
-	data := portalPageData{
-		Nonce: "test-nonce",
-		Email: "viewer@example.com",
-		Accounts: []portalPageAccount{
-			{
-				ID:         "a_readonly",
-				Kind:       "cloud",
-				KindLabel:  "Cloud",
-				Name:       "Readonly Account",
-				Role:       "read_only",
-				CanManage:  false,
-				HasBilling: false,
-				Workspaces: nil,
-			},
+	html := renderPortalHTML(t, BuildBootstrapData(true, "viewer@example.com", []portalPageAccount{
+		{
+			ID:         "a_readonly",
+			Kind:       "cloud",
+			KindLabel:  "Cloud",
+			Name:       "Readonly Account",
+			Role:       "read_only",
+			CanManage:  false,
+			HasBilling: false,
 		},
-	}
+	}))
 
-	html := renderPortalHTML(t, data)
-
-	// Account-specific team markup must NOT appear.
-	mustNotContain := []string{
-		`id="team-btn-a_readonly"`,
-		`id="team-section-a_readonly"`,
-		`id="invite-email-a_readonly"`,
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(extractPortalBootstrapJSONFromHTML(t, html)), &payload); err != nil {
+		t.Fatalf("unmarshal bootstrap JSON: %v", err)
 	}
-	for _, needle := range mustNotContain {
-		if strings.Contains(html, needle) {
-			t.Errorf("%q should NOT appear for non-manager accounts", needle)
-		}
+	accounts, ok := payload["accounts"].([]any)
+	if !ok || len(accounts) != 1 {
+		t.Fatalf("accounts = %#v, want one account", payload["accounts"])
+	}
+	account, ok := accounts[0].(map[string]any)
+	if !ok {
+		t.Fatalf("account = %#v", accounts[0])
+	}
+	if got := account["can_manage"]; got != false {
+		t.Fatalf("can_manage = %#v, want false", got)
+	}
+	if got := account["role"]; got != "read_only" {
+		t.Fatalf("role = %#v, want read_only", got)
 	}
 }
 
 func TestPortalPageTemplate_ActorRolePassedToSection(t *testing.T) {
-	// Verify the actor role is passed as a data attribute for JS permission checks.
 	for _, role := range []string{"owner", "admin"} {
 		t.Run(role, func(t *testing.T) {
-			data := portalPageData{
-				Nonce: "n",
-				Email: "test@example.com",
-				Accounts: []portalPageAccount{
-					{
-						ID:        "a_test",
-						Kind:      "cloud",
-						KindLabel: "Cloud",
-						Name:      "Test",
-						Role:      role,
-						CanManage: true,
-					},
+			html := renderPortalHTML(t, BuildBootstrapData(true, "test@example.com", []portalPageAccount{
+				{
+					ID:        "a_test",
+					Kind:      "cloud",
+					KindLabel: "Cloud",
+					Name:      "Test",
+					Role:      role,
+					CanManage: true,
 				},
+			}))
+			if !strings.Contains(html, `data-actor-role="`) {
+				t.Fatalf("expected actor-role render seam in portal shell")
 			}
-			html := renderPortalHTML(t, data)
-			if !strings.Contains(html, `data-actor-role="`+role+`"`) {
-				t.Errorf("expected data-actor-role=%q in rendered HTML", role)
+			var payload map[string]any
+			if err := json.Unmarshal([]byte(extractPortalBootstrapJSONFromHTML(t, html)), &payload); err != nil {
+				t.Fatalf("unmarshal bootstrap JSON: %v", err)
+			}
+			accounts, ok := payload["accounts"].([]any)
+			if !ok || len(accounts) != 1 {
+				t.Fatalf("accounts = %#v, want one account", payload["accounts"])
+			}
+			account, ok := accounts[0].(map[string]any)
+			if !ok {
+				t.Fatalf("account = %#v", accounts[0])
+			}
+			if got := account["role"]; got != role {
+				t.Fatalf("role = %#v, want %q", got, role)
 			}
 		})
 	}
 }
 
 func TestPortalPageTemplate_AccountServicesRendered(t *testing.T) {
-	data := portalPageData{
-		Nonce:         "test-nonce",
-		Email:         "owner@example.com",
-		PublicSiteURL: "https://pulserelay.pro",
-		SupportEmail:  "support@pulserelay.pro",
-		Accounts: []portalPageAccount{
-			{
-				ID:        "a_test",
-				Kind:      "cloud",
-				KindLabel: "Cloud",
-				Name:      "Test Account",
-			},
+	html := renderPortalHTML(t, BuildBootstrapData(true, "owner@example.com", []portalPageAccount{
+		{
+			ID:        "a_test",
+			Kind:      "cloud",
+			KindLabel: "Cloud",
+			Name:      "Test Account",
 		},
-	}
-
-	html := renderPortalHTML(t, data)
+	}))
 
 	mustContain := []string{
 		"<title>Pulse Account</title>",
-		"Pulse Account",
-		`id="accounts-root"`,
+		`id="portal-user-info"`,
+		`id="portal-app-root"`,
 		`id="pulse-account-bootstrap"`,
+		`"authenticated":true`,
 		`"commercial_api_base_url":"https://license.pulserelay.pro"`,
 		fmt.Sprintf(`"portal_path":"%s"`, PortalPagePath),
 		fmt.Sprintf(`"bootstrap_path":"%s"`, PortalBootstrapPath),
+		fmt.Sprintf(`"magic_link_request_path":"%s"`, PortalMagicLinkRequestPath),
+		fmt.Sprintf(`"signup_path":"%s"`, PortalSignupPath),
 		fmt.Sprintf(`"logout_path":"%s"`, PortalLogoutPath),
 		fmt.Sprintf(`"account_api_base_path":"%s"`, PortalAccountAPIBasePath),
 		fmt.Sprintf(`"portal_api_base_path":"%s"`, PortalAPIBasePath),
 		`"email":"owner@example.com"`,
 		`"accounts":[{"id":"a_test"`,
+		`renderAuthenticatedPortal()`,
+		`renderSignedOutPortal()`,
 		"Other account services",
 		`id="open-manage-service"`,
 		`id="open-retrieve-service"`,
@@ -837,12 +840,12 @@ func TestPortalPageTemplate_AccountServicesRendered(t *testing.T) {
 		`if (!await refreshBootstrap())`,
 		`refreshAccountTeamSection(accountID)`,
 		`window.PulseAccountPortal = {`,
+		`document.addEventListener('pulse-account-render'`,
 		`document.addEventListener('click'`,
 		`document.addEventListener('change'`,
 		`data-action="open-billing"`,
 		`data-action="create-workspace"`,
 		`data-action="workspace-manage"`,
-		`href="https://pulserelay.pro/refund.html?email=owner%40example.com"`,
 		"commercial account actions now live here",
 	}
 	for _, needle := range mustContain {
@@ -871,7 +874,7 @@ func TestPortalPageTemplate_AccountServicesRendered(t *testing.T) {
 }
 
 func TestBuildPortalBootstrapJSON_Contract(t *testing.T) {
-	bootstrapJSON, err := MarshalBootstrapJSON("owner@example.com", []portalPageAccount{
+	bootstrapJSON, err := MarshalBootstrapJSON(BuildBootstrapData(true, "owner@example.com", []portalPageAccount{
 		{
 			ID:         "a_test",
 			Kind:       "cloud",
@@ -889,7 +892,7 @@ func TestBuildPortalBootstrapJSON_Contract(t *testing.T) {
 				},
 			},
 		},
-	})
+	}))
 	if err != nil {
 		t.Fatalf("MarshalBootstrapJSON: %v", err)
 	}
@@ -899,6 +902,9 @@ func TestBuildPortalBootstrapJSON_Contract(t *testing.T) {
 		t.Fatalf("unmarshal bootstrap JSON: %v", err)
 	}
 
+	if got := payload["authenticated"]; got != true {
+		t.Fatalf("authenticated = %#v, want true", got)
+	}
 	if got := payload["email"]; got != "owner@example.com" {
 		t.Fatalf("email = %#v, want owner@example.com", got)
 	}
@@ -910,6 +916,12 @@ func TestBuildPortalBootstrapJSON_Contract(t *testing.T) {
 	}
 	if got := payload["bootstrap_path"]; got != PortalBootstrapPath {
 		t.Fatalf("bootstrap_path = %#v", got)
+	}
+	if got := payload["magic_link_request_path"]; got != PortalMagicLinkRequestPath {
+		t.Fatalf("magic_link_request_path = %#v", got)
+	}
+	if got := payload["signup_path"]; got != PortalSignupPath {
+		t.Fatalf("signup_path = %#v", got)
 	}
 	if got := payload["logout_path"]; got != PortalLogoutPath {
 		t.Fatalf("logout_path = %#v", got)
@@ -1094,22 +1106,7 @@ func TestPortalBootstrapHTMLAndHandlerStayInSync(t *testing.T) {
 	if err != nil {
 		t.Fatalf("loadPortalAccountsForUser: %v", err)
 	}
-	html := renderPortalHTML(t, portalPageData{
-		Nonce:                "test-nonce",
-		Email:                validClaims.Email,
-		PublicSiteURL:        defaultPublicSiteURL,
-		SupportEmail:         defaultSupportEmail,
-		CommercialAPIBaseURL: defaultCommercialAPIBaseURL,
-		PortalPath:           defaultPortalPath,
-		LogoutPath:           defaultLogoutPath,
-		AccountAPIBasePath:   defaultAccountAPIBasePath,
-		PortalAPIBasePath:    defaultPortalAPIBasePath,
-		Accounts:             accounts,
-		Styles:               portalStyles,
-		ShellScript:          portalShellScript,
-		ServicesScript:       portalServicesScript,
-		BootstrapJSON:        mustBootstrapJSON(t, validClaims.Email, accounts),
-	})
+	html := renderPortalHTML(t, BuildBootstrapData(true, validClaims.Email, accounts))
 
 	handlerJSON := strings.TrimSpace(rec.Body.String())
 	pageJSON := strings.TrimSpace(extractPortalBootstrapJSONFromHTML(t, html))
@@ -1118,22 +1115,19 @@ func TestPortalBootstrapHTMLAndHandlerStayInSync(t *testing.T) {
 	}
 }
 
-func mustBootstrapJSON(t *testing.T, email string, accounts []portalPageAccount) template.JS {
-	t.Helper()
-	bootstrapJSON, err := MarshalBootstrapJSON(email, accounts)
-	if err != nil {
-		t.Fatalf("MarshalBootstrapJSON: %v", err)
-	}
-	return bootstrapJSON
-}
-
-func TestPortalLoginTemplate_UsesPulseAccountBranding(t *testing.T) {
-	html := renderLoginHTML(t, "test-nonce")
+func TestPortalPageTemplate_UsesPulseAccountBrandingWhenSignedOut(t *testing.T) {
+	html := renderPortalHTML(t, BuildAnonymousBootstrapData())
 
 	mustContain := []string{
-		"<title>Pulse Account — Sign In</title>",
+		"<title>Pulse Account</title>",
 		"Pulse Account",
-		"Sign in to manage Cloud workspaces, MSP access, and commercial account services.",
+		`id="portal-app-root"`,
+		"Enter the commercial email address for your Pulse account.",
+		`"authenticated":false`,
+		fmt.Sprintf(`"magic_link_request_path":"%s"`, PortalMagicLinkRequestPath),
+		fmt.Sprintf(`"signup_path":"%s"`, PortalSignupPath),
+		`data-portal-action="send-magic-link"`,
+		`data-portal-action="resend-magic-link"`,
 	}
 	for _, needle := range mustContain {
 		if !strings.Contains(html, needle) {

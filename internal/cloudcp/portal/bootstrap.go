@@ -26,27 +26,30 @@ type BootstrapAccount struct {
 }
 
 type BootstrapData struct {
+	Authenticated        bool               `json:"authenticated"`
 	Email                string             `json:"email"`
 	PublicSiteURL        string             `json:"public_site_url"`
 	SupportEmail         string             `json:"support_email"`
 	CommercialAPIBaseURL string             `json:"commercial_api_base_url"`
 	PortalPath           string             `json:"portal_path"`
 	BootstrapPath        string             `json:"bootstrap_path"`
+	MagicLinkRequestPath string             `json:"magic_link_request_path"`
+	SignupPath           string             `json:"signup_path"`
 	LogoutPath           string             `json:"logout_path"`
 	AccountAPIBasePath   string             `json:"account_api_base_path"`
 	PortalAPIBasePath    string             `json:"portal_api_base_path"`
 	Accounts             []BootstrapAccount `json:"accounts"`
 }
 
-func MarshalBootstrapJSON(email string, accounts []portalPageAccount) (template.JS, error) {
-	payload, err := json.Marshal(BuildBootstrapData(email, accounts))
+func MarshalBootstrapJSON(data BootstrapData) (template.JS, error) {
+	payload, err := json.Marshal(data)
 	if err != nil {
 		return "", err
 	}
 	return template.JS(payload), nil
 }
 
-func BuildBootstrapData(email string, accounts []portalPageAccount) BootstrapData {
+func BuildBootstrapData(authenticated bool, email string, accounts []portalPageAccount) BootstrapData {
 	bootstrapAccounts := make([]BootstrapAccount, 0, len(accounts))
 	for _, account := range accounts {
 		workspaces := make([]BootstrapWorkspace, 0, len(account.Workspaces))
@@ -72,15 +75,22 @@ func BuildBootstrapData(email string, accounts []portalPageAccount) BootstrapDat
 	}
 
 	return BootstrapData{
+		Authenticated:        authenticated,
 		Email:                email,
 		PublicSiteURL:        defaultPublicSiteURL,
 		SupportEmail:         defaultSupportEmail,
 		CommercialAPIBaseURL: defaultCommercialAPIBaseURL,
 		PortalPath:           defaultPortalPath,
 		BootstrapPath:        PortalBootstrapPath,
+		MagicLinkRequestPath: PortalMagicLinkRequestPath,
+		SignupPath:           PortalSignupPath,
 		LogoutPath:           defaultLogoutPath,
 		AccountAPIBasePath:   defaultAccountAPIBasePath,
 		PortalAPIBasePath:    defaultPortalAPIBasePath,
 		Accounts:             bootstrapAccounts,
 	}
+}
+
+func BuildAnonymousBootstrapData() BootstrapData {
+	return BuildBootstrapData(false, "", nil)
 }

@@ -35,26 +35,11 @@ type portalPageAccount struct {
 
 // portalPageData is passed to the portal HTML template.
 type portalPageData struct {
-	Nonce                string
-	Email                string
-	PublicSiteURL        string
-	SupportEmail         string
-	CommercialAPIBaseURL string
-	PortalPath           string
-	LogoutPath           string
-	AccountAPIBasePath   string
-	PortalAPIBasePath    string
-	Accounts             []portalPageAccount
-	Styles               template.CSS
-	ShellScript          template.JS
-	ServicesScript       template.JS
-	BootstrapJSON        template.JS
-}
-
-type loginPageData struct {
-	Nonce  string
-	Styles template.CSS
-	Script template.JS
+	Nonce          string
+	Styles         template.CSS
+	ShellScript    template.JS
+	ServicesScript template.JS
+	BootstrapJSON  template.JS
 }
 
 const (
@@ -83,18 +68,21 @@ func HandlePortalPage(sessionSvc *cpauth.Service, reg *registry.TenantRegistry) 
 		nonce := cpsec.NonceFromContext(r.Context())
 
 		claims, err := validatePortalSessionClaims(r, sessionSvc, reg)
-		if err != nil {
-			renderLoginPage(w, nonce)
-			return
-		}
-		accounts, err := loadPortalAccountsForUser(reg, claims.UserID)
-		if err != nil {
-			log.Error().Err(err).Str("user_id", claims.UserID).Msg("cloudcp.portal.page: load accounts")
+		switch {
+		case err == nil:
+			accounts, loadErr := loadPortalAccountsForUser(reg, claims.UserID)
+			if loadErr != nil {
+				log.Error().Err(loadErr).Str("user_id", claims.UserID).Msg("cloudcp.portal.page: load accounts")
+				http.Error(w, "internal error", http.StatusInternalServerError)
+				return
+			}
+			renderPortalPage(w, nonce, BuildBootstrapData(true, claims.Email, accounts))
+		case errors.Is(err, errPortalAuthRequired):
+			renderPortalPage(w, nonce, BuildAnonymousBootstrapData())
+		default:
+			log.Error().Err(err).Msg("cloudcp.portal.page: validate session")
 			http.Error(w, "internal error", http.StatusInternalServerError)
-			return
 		}
-
-		renderPortalPage(w, nonce, claims.Email, accounts)
 	}
 }
 
@@ -199,42 +187,21 @@ func loadPortalAccountsForUser(reg *registry.TenantRegistry, userID string) ([]p
 	return accounts, nil
 }
 
-func renderPortalPage(w http.ResponseWriter, nonce, email string, accounts []portalPageAccount) {
+func renderPortalPage(w http.ResponseWriter, nonce string, bootstrapData BootstrapData) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	bootstrapJSON, err := MarshalBootstrapJSON(email, accounts)
+	bootstrapJSON, err := MarshalBootstrapJSON(bootstrapData)
 	if err != nil {
 		log.Error().Err(err).Msg("cloudcp.portal.page: marshal bootstrap data")
 		bootstrapJSON = template.JS(`{}`)
 	}
 	if err := portalPageTmpl.Execute(w, portalPageData{
-		Nonce:                nonce,
-		Email:                email,
-		PublicSiteURL:        defaultPublicSiteURL,
-		SupportEmail:         defaultSupportEmail,
-		CommercialAPIBaseURL: defaultCommercialAPIBaseURL,
-		PortalPath:           defaultPortalPath,
-		LogoutPath:           defaultLogoutPath,
-		AccountAPIBasePath:   defaultAccountAPIBasePath,
-		PortalAPIBasePath:    defaultPortalAPIBasePath,
-		Accounts:             accounts,
-		Styles:               portalStyles,
-		ShellScript:          portalShellScript,
-		ServicesScript:       portalServicesScript,
-		BootstrapJSON:        bootstrapJSON,
+		Nonce:          nonce,
+		Styles:         portalStyles,
+		ShellScript:    portalShellScript,
+		ServicesScript: portalServicesScript,
+		BootstrapJSON:  bootstrapJSON,
 	}); err != nil {
 		log.Error().Err(err).Msg("cloudcp.portal.page: render portal page")
-	}
-}
-
-func renderLoginPage(w http.ResponseWriter, nonce string) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
-	if err := loginPageTmpl.Execute(w, loginPageData{
-		Nonce:  nonce,
-		Styles: loginStyles,
-		Script: loginScript,
-	}); err != nil {
-		log.Error().Err(err).Msg("cloudcp.portal.page: render login page")
 	}
 }

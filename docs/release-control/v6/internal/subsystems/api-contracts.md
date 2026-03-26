@@ -193,12 +193,15 @@ The Pulse Account commercial shell now also owns a dedicated bootstrap
 contract in `internal/cloudcp/portal/page.go`, `internal/cloudcp/portal/handlers.go`,
 and `internal/cloudcp/portal/handlers_test.go`. `/api/portal/bootstrap` and
 the in-page `pulse-account-bootstrap` payload must stay shape-identical for
-account identity context, workspace summaries, and renderer-owned public,
-commercial, and control-plane route configuration, including the canonical
-bootstrap route path and stable workspace summary fields such as `created_at`.
-New account frontend work must extend that shared contract rather than
-inventing a second local payload shape or hardcoding production URLs, route
-prefixes, or DOM-scraped account facts in static assets.
+account identity context, signed-out versus signed-in shell state, workspace
+summaries, and renderer-owned public, commercial, and control-plane route
+configuration, including the canonical bootstrap route path, magic-link request
+path, signup path, and stable workspace summary fields such as `created_at`.
+`/portal` is now one bootstrap-driven shell for both anonymous and
+authenticated users, so new account frontend work must extend that shared
+contract rather than inventing a second local payload shape, reviving separate
+login/portal templates, or hardcoding production URLs, route prefixes, or
+DOM-scraped account facts in static assets.
 Hosted Pulse Cloud tenant-org AI reads now also follow that same canonical
 rule: `internal/api/ai_hosted_runtime.go`, `internal/api/ai_handlers.go`,
 `internal/api/ai_handler.go`, and `internal/api/hosted_billing_state.go`

@@ -11,9 +11,18 @@ if (bootstrapEl) {
 var LICENSE_API_BASE = portalBootstrap.commercial_api_base_url || '';
 var PORTAL_PATH = portalBootstrap.portal_path || '/portal';
 var BOOTSTRAP_PATH = portalBootstrap.bootstrap_path || '/api/portal/bootstrap';
+var MAGIC_LINK_REQUEST_PATH = portalBootstrap.magic_link_request_path || '/api/public/magic-link/request';
+var SIGNUP_PATH = portalBootstrap.signup_path || '/signup';
 var LOGOUT_PATH = portalBootstrap.logout_path || '/auth/logout';
 var ACCOUNT_API_BASE_PATH = portalBootstrap.account_api_base_path || '/api/accounts';
 var PORTAL_API_BASE_PATH = portalBootstrap.portal_api_base_path || '/api/portal';
+
+var loginState = {
+  emailValue: '',
+  sending: false,
+  success: false,
+  error: '',
+};
 
 function escapeHTML(value) {
   return String(value || '')
@@ -42,13 +51,47 @@ function roleBadgeHTML(role) {
   return '';
 }
 
+function anonymousBootstrap() {
+  return {
+    authenticated: false,
+    email: '',
+    public_site_url: portalBootstrap.public_site_url || 'https://pulserelay.pro',
+    support_email: portalBootstrap.support_email || 'support@pulserelay.pro',
+    commercial_api_base_url: LICENSE_API_BASE,
+    portal_path: PORTAL_PATH,
+    bootstrap_path: BOOTSTRAP_PATH,
+    magic_link_request_path: MAGIC_LINK_REQUEST_PATH,
+    signup_path: SIGNUP_PATH,
+    logout_path: LOGOUT_PATH,
+    account_api_base_path: ACCOUNT_API_BASE_PATH,
+    portal_api_base_path: PORTAL_API_BASE_PATH,
+    accounts: [],
+  };
+}
+
+function renderHeader() {
+  var userInfo = document.getElementById('portal-user-info');
+  if (!userInfo) return;
+  if (portalBootstrap.authenticated) {
+    userInfo.innerHTML =
+      '<span>' + escapeHTML(portalBootstrap.email || '') + '</span>' +
+      '<button class="logout-btn" id="logout-btn" type="button">Sign out</button>';
+    return;
+  }
+  userInfo.innerHTML =
+    '<a class="logout-btn" href="' + escapeAttr(SIGNUP_PATH) + '" style="text-decoration:none">Create account</a>';
+}
+
 function renderWorkspaceCard(account, workspace) {
   var state = String(workspace.state || '');
   var safeState = escapeHTML(state);
   var createdLabel = formatWorkspaceDate(workspace.created_at);
   var openAction = '';
   if (state === 'active') {
-    openAction = '<form method="POST" action="' + escapeAttr(ACCOUNT_API_BASE_PATH + '/' + account.id + '/tenants/' + workspace.id + '/handoff') + '">' +
+    openAction =
+      '<form method="POST" action="' +
+      escapeAttr(ACCOUNT_API_BASE_PATH + '/' + account.id + '/tenants/' + workspace.id + '/handoff') +
+      '">' +
       '<button type="submit" class="btn-primary">Open →</button>' +
       '</form>';
   } else {
@@ -57,11 +100,20 @@ function renderWorkspaceCard(account, workspace) {
 
   var manageAction = '';
   if (account.can_manage && (state === 'active' || state === 'suspended' || state === 'failed')) {
-    manageAction = '<button type="button" class="btn-danger" data-action="workspace-manage" data-account-id="' + escapeAttr(account.id) + '" data-workspace-id="' + escapeAttr(workspace.id) + '" data-workspace-state="' + escapeAttr(state) + '" data-workspace-name="' + escapeAttr(workspace.display_name) + '">⋯</button>';
+    manageAction =
+      '<button type="button" class="btn-danger" data-action="workspace-manage" data-account-id="' +
+      escapeAttr(account.id) +
+      '" data-workspace-id="' +
+      escapeAttr(workspace.id) +
+      '" data-workspace-state="' +
+      escapeAttr(state) +
+      '" data-workspace-name="' +
+      escapeAttr(workspace.display_name) +
+      '">⋯</button>';
   }
 
   var createdMeta = createdLabel ? '<span class="ws-created">Created ' + escapeHTML(createdLabel) + '</span>' : '';
-  return '' +
+  return (
     '<div class="workspace-card">' +
       '<div class="ws-info">' +
         '<span class="ws-name">' + escapeHTML(workspace.display_name) + '</span>' +
@@ -77,7 +129,8 @@ function renderWorkspaceCard(account, workspace) {
         openAction +
         manageAction +
       '</div>' +
-    '</div>';
+    '</div>'
+  );
 }
 
 function renderAccountSection(account) {
@@ -86,56 +139,98 @@ function renderAccountSection(account) {
   if (workspaces.length === 0) {
     workspaceHTML = '<div class="empty-state"><p>No workspaces yet. Create one to get started.</p></div>';
   } else {
-    workspaceHTML = '<div class="workspace-list">' + workspaces.map(function(workspace) {
-      return renderWorkspaceCard(account, workspace);
-    }).join('') + '</div>';
+    workspaceHTML =
+      '<div class="workspace-list">' +
+      workspaces.map(function(workspace) {
+        return renderWorkspaceCard(account, workspace);
+      }).join('') +
+      '</div>';
   }
 
   var actions = '';
   var teamSection = '';
   var addWorkspaceForm = '';
   if (account.can_manage) {
-    actions = '<div class="account-actions">' +
+    actions =
+      '<div class="account-actions">' +
       (account.kind === 'msp'
-        ? '<button type="button" class="btn-secondary" id="add-ws-btn-' + escapeAttr(account.id) + '" data-action="toggle-add-workspace" data-account-id="' + escapeAttr(account.id) + '">+ Add workspace</button>'
+        ? '<button type="button" class="btn-secondary" id="add-ws-btn-' +
+          escapeAttr(account.id) +
+          '" data-action="toggle-add-workspace" data-account-id="' +
+          escapeAttr(account.id) +
+          '">+ Add workspace</button>'
         : '') +
       (account.has_billing
-        ? '<button type="button" class="btn-secondary" data-action="open-billing" data-account-id="' + escapeAttr(account.id) + '">Manage billing</button>'
+        ? '<button type="button" class="btn-secondary" data-action="open-billing" data-account-id="' +
+          escapeAttr(account.id) +
+          '">Manage billing</button>'
         : '') +
-      '<button type="button" class="btn-secondary" id="team-btn-' + escapeAttr(account.id) + '" data-action="toggle-team" data-account-id="' + escapeAttr(account.id) + '">Manage team</button>' +
-    '</div>';
+      '<button type="button" class="btn-secondary" id="team-btn-' +
+      escapeAttr(account.id) +
+      '" data-action="toggle-team" data-account-id="' +
+      escapeAttr(account.id) +
+      '">Manage team</button>' +
+      '</div>';
 
-    teamSection = '' +
-      '<div class="team-section" id="team-section-' + escapeAttr(account.id) + '" data-actor-role="' + escapeAttr(account.role) + '">' +
-        '<h3>Team members</h3>' +
-        '<table class="team-table">' +
-          '<thead><tr><th>Email</th><th>Role</th><th></th></tr></thead>' +
-          '<tbody id="team-list-' + escapeAttr(account.id) + '">' +
-            '<tr><td colspan="3" style="color:#94a3b8;text-align:center;padding:16px">Loading…</td></tr>' +
-          '</tbody>' +
-        '</table>' +
-        '<div class="team-invite">' +
-          '<div><label for="invite-email-' + escapeAttr(account.id) + '">Email</label><input type="email" id="invite-email-' + escapeAttr(account.id) + '" placeholder="user@example.com" autocomplete="off"></div>' +
-          '<div><label for="invite-role-' + escapeAttr(account.id) + '">Role</label><select id="invite-role-' + escapeAttr(account.id) + '"><option value="admin">Admin</option><option value="tech">Tech</option><option value="read_only">Read-only</option></select></div>' +
-          '<button type="button" class="btn-primary" style="padding:8px 14px;font-size:13px" data-action="invite-member" data-account-id="' + escapeAttr(account.id) + '">Invite</button>' +
-        '</div>' +
+    teamSection =
+      '<div class="team-section" id="team-section-' +
+      escapeAttr(account.id) +
+      '" data-actor-role="' +
+      escapeAttr(account.role) +
+      '">' +
+      '<h3>Team members</h3>' +
+      '<table class="team-table">' +
+      '<thead><tr><th>Email</th><th>Role</th><th></th></tr></thead>' +
+      '<tbody id="team-list-' +
+      escapeAttr(account.id) +
+      '">' +
+      '<tr><td colspan="3" style="color:#94a3b8;text-align:center;padding:16px">Loading…</td></tr>' +
+      '</tbody>' +
+      '</table>' +
+      '<div class="team-invite">' +
+      '<div><label for="invite-email-' +
+      escapeAttr(account.id) +
+      '">Email</label><input type="email" id="invite-email-' +
+      escapeAttr(account.id) +
+      '" placeholder="user@example.com" autocomplete="off"></div>' +
+      '<div><label for="invite-role-' +
+      escapeAttr(account.id) +
+      '">Role</label><select id="invite-role-' +
+      escapeAttr(account.id) +
+      '"><option value="admin">Admin</option><option value="tech">Tech</option><option value="read_only">Read-only</option></select></div>' +
+      '<button type="button" class="btn-primary" style="padding:8px 14px;font-size:13px" data-action="invite-member" data-account-id="' +
+      escapeAttr(account.id) +
+      '">Invite</button>' +
+      '</div>' +
       '</div>';
 
     if (account.kind === 'msp') {
-      addWorkspaceForm = '' +
-        '<div class="add-workspace-form" id="add-ws-form-' + escapeAttr(account.id) + '">' +
-          '<label for="ws-name-' + escapeAttr(account.id) + '">Workspace name (e.g. client name)</label>' +
-          '<input type="text" id="ws-name-' + escapeAttr(account.id) + '" placeholder="Acme Corp" maxlength="80" autocomplete="off">' +
-          '<div class="form-actions">' +
-            '<button type="button" class="btn-primary" data-action="create-workspace" data-account-id="' + escapeAttr(account.id) + '">Create workspace</button>' +
-            '<button type="button" class="btn-secondary" data-action="toggle-add-workspace" data-account-id="' + escapeAttr(account.id) + '">Cancel</button>' +
-            '<div class="spinner" id="ws-spinner-' + escapeAttr(account.id) + '"></div>' +
-          '</div>' +
+      addWorkspaceForm =
+        '<div class="add-workspace-form" id="add-ws-form-' +
+        escapeAttr(account.id) +
+        '">' +
+        '<label for="ws-name-' +
+        escapeAttr(account.id) +
+        '">Workspace name (e.g. client name)</label>' +
+        '<input type="text" id="ws-name-' +
+        escapeAttr(account.id) +
+        '" placeholder="Acme Corp" maxlength="80" autocomplete="off">' +
+        '<div class="form-actions">' +
+        '<button type="button" class="btn-primary" data-action="create-workspace" data-account-id="' +
+        escapeAttr(account.id) +
+        '">Create workspace</button>' +
+        '<button type="button" class="btn-secondary" data-action="toggle-add-workspace" data-account-id="' +
+        escapeAttr(account.id) +
+        '">Cancel</button>' +
+        '<div class="spinner" id="ws-spinner-' +
+        escapeAttr(account.id) +
+        '"></div>' +
+        '</div>' +
         '</div>';
     }
   }
 
-  return '' +
+  return (
     '<section class="account-section">' +
       '<div class="account-header">' +
         '<h2>' + escapeHTML(account.name) + '</h2>' +
@@ -146,7 +241,8 @@ function renderAccountSection(account) {
       actions +
       teamSection +
       addWorkspaceForm +
-    '</section>';
+    '</section>'
+  );
 }
 
 function renderAccounts(accounts) {
@@ -154,25 +250,135 @@ function renderAccounts(accounts) {
   if (!root) return;
   var safeAccounts = Array.isArray(accounts) ? accounts : [];
   if (safeAccounts.length === 0) {
-    root.innerHTML = '' +
+    root.innerHTML =
       '<div class="empty-state" style="margin-top:48px">' +
         '<p>No workspaces found. If you just signed up, check your email for setup instructions.</p>' +
-        '<p style="margin-top:12px;font-size:13px">Need help? Contact <a href="mailto:' + escapeAttr(portalBootstrap.support_email || '') + '" style="color:#1d4ed8">' + escapeHTML(portalBootstrap.support_email || '') + '</a></p>' +
+        '<p style="margin-top:12px;font-size:13px">Need help? Contact <a href="mailto:' +
+        escapeAttr(portalBootstrap.support_email || '') +
+        '" style="color:#1d4ed8">' +
+        escapeHTML(portalBootstrap.support_email || '') +
+        '</a></p>' +
       '</div>';
     return;
   }
   root.innerHTML = safeAccounts.map(renderAccountSection).join('');
 }
 
+function renderAuthenticatedPortal() {
+  return (
+    '<section class="intro-card">' +
+      '<h1>Pulse Account</h1>' +
+      '<p>Manage Cloud workspaces, MSP access, and self-hosted commercial account services from one account surface. Hosted workspace lifecycle lives here today, and the self-hosted billing, license recovery, refund, and privacy tools below now share the same Pulse Account shell instead of staying fragmented across public utility pages.</p>' +
+    '</section>' +
+    '<div id="accounts-root"></div>' +
+    '<section class="service-section">' +
+      '<div class="service-header">' +
+        '<h2>Other account services</h2>' +
+        '<div class="service-note">Self-hosted commercial account actions now live here. The public utility pages remain as compatibility entry points, not the primary account surface.</div>' +
+      '</div>' +
+      '<div class="service-grid">' +
+        '<button class="service-card service-card-button" type="button" id="open-manage-service" data-account-service-action="open-service-panel" data-account-service-panel="manage-service-panel" data-account-service-focus="manage-inline-email">' +
+          '<h3>Manage subscriptions</h3>' +
+          '<p>Open Stripe billing access for existing self-hosted subscriptions without leaving the Pulse Account shell.</p>' +
+        '</button>' +
+        '<button class="service-card service-card-button" type="button" id="open-retrieve-service" data-account-service-action="open-service-panel" data-account-service-panel="retrieve-service-panel" data-account-service-focus="retrieve-inline-email">' +
+          '<h3>Retrieve licenses</h3>' +
+          '<p>Recover the latest active self-hosted license and invoice link for a commercial email address.</p>' +
+        '</button>' +
+        '<button class="service-card service-card-button" type="button" id="open-refund-service" data-account-service-action="open-service-panel" data-account-service-panel="refund-service-panel" data-account-service-focus="refund-inline-email">' +
+          '<h3>Refund requests</h3>' +
+          '<p>Request an immediate self-serve refund for eligible self-hosted purchases with explicit revocation confirmation.</p>' +
+        '</button>' +
+        '<button class="service-card service-card-button" type="button" id="open-data-service" data-account-service-action="open-service-panel" data-account-service-panel="data-service-panel" data-account-service-focus="data-export-email">' +
+          '<h3>Data and privacy</h3>' +
+          '<p>Request commercial data export or deletion without leaving the account shell.</p>' +
+        '</button>' +
+      '</div>' +
+      '<div class="service-panel" id="manage-service-panel"><div id="manage-service-root"></div></div>' +
+      '<div class="service-panel" id="retrieve-service-panel"><div id="retrieve-service-root"></div></div>' +
+      '<div class="service-panel" id="refund-service-panel"><div id="refund-service-root"></div></div>' +
+      '<div class="service-panel" id="data-service-panel">' +
+        '<h3>Data and privacy</h3>' +
+        '<p>Request export or deletion of the commercial data tied to an email address. Payment data held directly by Stripe still requires support handling.</p>' +
+        '<div class="subsection"><div id="data-export-root"></div></div>' +
+        '<div class="subsection"><div id="data-delete-root"></div></div>' +
+        '<div class="helper-text">Payment-card data stays with Stripe. For Stripe deletion support, contact <a href="mailto:' +
+        escapeAttr(portalBootstrap.support_email || '') +
+        '">' +
+        escapeHTML(portalBootstrap.support_email || '') +
+        '</a>.</div>' +
+      '</div>' +
+    '</section>'
+  );
+}
+
+function renderSignedOutPortal() {
+  var statusHTML = '';
+  if (loginState.error) {
+    statusHTML = '<div class="service-status visible error">' + escapeHTML(loginState.error) + '</div>';
+  } else if (loginState.success) {
+    statusHTML =
+      '<div class="service-status visible success">' +
+        'Magic link sent. Check your inbox and click the link to sign in.' +
+        '<br><br><strong>Don\'t see it?</strong> <a href="#" data-portal-action="resend-magic-link">Send a new link</a>.' +
+      '</div>';
+  }
+  return (
+    '<section class="intro-card">' +
+      '<h1>Pulse Account</h1>' +
+      '<p>Sign in to manage Cloud workspaces, MSP access, and commercial account services from one account surface.</p>' +
+    '</section>' +
+    '<section class="service-section">' +
+      '<div class="service-panel visible">' +
+        '<h3>Sign in</h3>' +
+        '<p>Enter the commercial email address for your Pulse account. I will send a magic link so you can open Pulse Account without managing a password.</p>' +
+        '<div class="form-group">' +
+          '<label for="portal-login-email">Email address</label>' +
+          '<input id="portal-login-email" type="email" autocomplete="email" placeholder="you@example.com" value="' +
+          escapeAttr(loginState.emailValue || '') +
+          '" data-portal-input="login-email">' +
+        '</div>' +
+        '<div class="form-actions">' +
+          '<button class="btn-primary" id="portal-login-send" type="button" data-portal-action="send-magic-link">' +
+          (loginState.sending ? 'Sending…' : 'Send magic link') +
+          '</button>' +
+          '<a class="btn-secondary" href="' + escapeAttr(SIGNUP_PATH) + '" style="text-decoration:none">Create an account</a>' +
+        '</div>' +
+        statusHTML +
+      '</div>' +
+    '</section>'
+  );
+}
+
+function dispatchPortalRender() {
+  document.dispatchEvent(new CustomEvent('pulse-account-render'));
+}
+
+function renderPortalApp() {
+  renderHeader();
+  var root = document.getElementById('portal-app-root');
+  if (!root) return;
+  root.innerHTML = portalBootstrap.authenticated ? renderAuthenticatedPortal() : renderSignedOutPortal();
+  if (portalBootstrap.authenticated) {
+    renderAccounts(portalBootstrap.accounts || []);
+  }
+  dispatchPortalRender();
+}
+
 function applyBootstrap(data) {
-  portalBootstrap = data || {};
+  portalBootstrap = data || anonymousBootstrap();
   LICENSE_API_BASE = portalBootstrap.commercial_api_base_url || LICENSE_API_BASE;
   PORTAL_PATH = portalBootstrap.portal_path || PORTAL_PATH;
   BOOTSTRAP_PATH = portalBootstrap.bootstrap_path || BOOTSTRAP_PATH;
+  MAGIC_LINK_REQUEST_PATH = portalBootstrap.magic_link_request_path || MAGIC_LINK_REQUEST_PATH;
+  SIGNUP_PATH = portalBootstrap.signup_path || SIGNUP_PATH;
   LOGOUT_PATH = portalBootstrap.logout_path || LOGOUT_PATH;
   ACCOUNT_API_BASE_PATH = portalBootstrap.account_api_base_path || ACCOUNT_API_BASE_PATH;
   PORTAL_API_BASE_PATH = portalBootstrap.portal_api_base_path || PORTAL_API_BASE_PATH;
-  renderAccounts(portalBootstrap.accounts || []);
+  if (!portalBootstrap.authenticated && !loginState.emailValue) {
+    loginState.emailValue = portalBootstrap.email || '';
+  }
+  renderPortalApp();
 }
 
 async function refreshBootstrap() {
@@ -181,6 +387,10 @@ async function refreshBootstrap() {
     var response = await fetch(BOOTSTRAP_PATH, {
       headers: { 'Accept': 'application/json' }
     });
+    if (response.status === 401) {
+      applyBootstrap(anonymousBootstrap());
+      return true;
+    }
     if (!response.ok) return false;
     var data = await response.json();
     applyBootstrap(data);
@@ -191,10 +401,54 @@ async function refreshBootstrap() {
 
 function showToast(msg, isError) {
   var t = document.getElementById('toast');
+  if (!t) return;
   t.textContent = msg;
   t.className = 'toast visible' + (isError ? ' error' : '');
   clearTimeout(t._timer);
   t._timer = setTimeout(function() { t.className = 'toast'; }, 4000);
+}
+
+function resetLoginState(options) {
+  loginState.sending = false;
+  loginState.error = '';
+  loginState.success = false;
+  if (options && options.keepEmail) return;
+  loginState.emailValue = '';
+}
+
+async function sendMagicLink() {
+  var email = String(loginState.emailValue || '').trim();
+  if (!email) {
+    var input = document.getElementById('portal-login-email');
+    if (input) input.focus();
+    return;
+  }
+  loginState.sending = true;
+  loginState.error = '';
+  loginState.success = false;
+  renderPortalApp();
+  try {
+    var response = await fetch(MAGIC_LINK_REQUEST_PATH, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email })
+    });
+    if (response.ok || response.status === 404) {
+      loginState.sending = false;
+      loginState.success = true;
+      renderPortalApp();
+      return;
+    }
+    if (response.status === 429) {
+      loginState.error = 'Too many requests. Please wait a moment and try again.';
+    } else {
+      loginState.error = 'Something went wrong. Please try again.';
+    }
+  } catch (_) {
+    loginState.error = 'Network error. Please check your connection and try again.';
+  }
+  loginState.sending = false;
+  renderPortalApp();
 }
 
 window.PulseAccountPortal = {
@@ -217,19 +471,41 @@ window.PulseAccountPortal = {
   showToast: showToast,
 };
 
-document.getElementById('logout-btn').onclick = async function() {
-  this.disabled = true;
-  this.textContent = 'Signing out…';
-  try {
-    await fetch(LOGOUT_PATH, { method: 'POST' });
-  } catch(_) {}
-  window.location.href = PORTAL_PATH;
-};
-
-applyBootstrap(portalBootstrap);
-refreshBootstrap();
-
 document.addEventListener('click', function(event) {
+  var portalActionEl = event.target.closest('[data-portal-action]');
+  if (portalActionEl) {
+    var portalAction = portalActionEl.getAttribute('data-portal-action') || '';
+    switch (portalAction) {
+      case 'send-magic-link':
+        event.preventDefault();
+        sendMagicLink();
+        return;
+      case 'resend-magic-link':
+        event.preventDefault();
+        loginState.success = false;
+        loginState.error = '';
+        renderPortalApp();
+        sendMagicLink();
+        return;
+      default:
+        break;
+    }
+  }
+
+  var logoutBtn = event.target.closest('#logout-btn');
+  if (logoutBtn) {
+    event.preventDefault();
+    logoutBtn.disabled = true;
+    logoutBtn.textContent = 'Signing out…';
+    (async function() {
+      try {
+        await fetch(LOGOUT_PATH, { method: 'POST' });
+      } catch (_) {}
+      window.location.href = PORTAL_PATH;
+    })();
+    return;
+  }
+
   var actionEl = event.target.closest('[data-action]');
   if (!actionEl) return;
   var action = actionEl.getAttribute('data-action') || '';
@@ -289,21 +565,32 @@ document.addEventListener('change', function(event) {
   );
 });
 
+document.addEventListener('input', function(event) {
+  var target = event.target;
+  if (!target) return;
+  if (target.getAttribute('data-portal-input') === 'login-email') {
+    loginState.emailValue = target.value;
+  }
+});
+
 function toggleAddWorkspace(accountID) {
   var form = document.getElementById('add-ws-form-' + accountID);
+  if (!form) return;
   var visible = form.classList.contains('visible');
   form.classList.toggle('visible', !visible);
   if (!visible) {
-    document.getElementById('ws-name-' + accountID).focus();
+    var input = document.getElementById('ws-name-' + accountID);
+    if (input) input.focus();
   }
 }
 
 async function createWorkspace(accountID) {
   var nameEl = document.getElementById('ws-name-' + accountID);
+  if (!nameEl) return;
   var name = nameEl.value.trim();
   if (!name) { nameEl.focus(); return; }
   var spinner = document.getElementById('ws-spinner-' + accountID);
-  spinner.style.display = 'block';
+  if (spinner) spinner.style.display = 'block';
   try {
     var resp = await fetch(ACCOUNT_API_BASE_PATH + '/' + accountID + '/tenants', {
       method: 'POST',
@@ -320,10 +607,10 @@ async function createWorkspace(accountID) {
       return;
     }
     showToast('Workspace created!');
-  } catch(e) {
+  } catch (_) {
     showToast('Network error. Please try again.', true);
   } finally {
-    spinner.style.display = 'none';
+    if (spinner) spinner.style.display = 'none';
   }
 }
 
@@ -348,7 +635,7 @@ async function suspendOrDelete(evt, accountID, tenantID, state, name) {
       return;
     }
     showToast(action + 'd workspace.');
-  } catch(_) {
+  } catch (_) {
     showToast('Network error.', true);
   }
 }
@@ -367,7 +654,7 @@ async function openBilling(accountID) {
     } else {
       showToast('Failed to open billing portal.', true);
     }
-  } catch(e) {
+  } catch (_) {
     showToast('Network error.', true);
   }
 }
@@ -406,8 +693,8 @@ async function loadTeam(accountID) {
       setTbodyMessage(tbody, 'No team members.', false);
       return;
     }
-    var allRoles = ['owner','admin','tech','read_only'];
-    var nonOwnerRoles = ['admin','tech','read_only'];
+    var allRoles = ['owner', 'admin', 'tech', 'read_only'];
+    var nonOwnerRoles = ['admin', 'tech', 'read_only'];
     tbody.textContent = '';
     for (var i = 0; i < members.length; i++) {
       (function(m) {
@@ -450,7 +737,7 @@ async function loadTeam(accountID) {
         tbody.appendChild(tr);
       })(members[i]);
     }
-  } catch(e) {
+  } catch (_) {
     setTbodyMessage(tbody, 'Network error.', true);
   }
 }
@@ -472,6 +759,7 @@ async function refreshAccountTeamSection(accountID) {
 async function inviteMember(accountID) {
   var emailEl = document.getElementById('invite-email-' + accountID);
   var roleEl = document.getElementById('invite-role-' + accountID);
+  if (!emailEl || !roleEl) return;
   var email = emailEl.value.trim();
   if (!email) { emailEl.focus(); return; }
   try {
@@ -491,7 +779,7 @@ async function inviteMember(accountID) {
       return;
     }
     showToast('Member invited!');
-  } catch(e) {
+  } catch (_) {
     showToast('Network error.', true);
   }
 }
@@ -509,7 +797,7 @@ async function changeRole(accountID, userID, newRole) {
       return;
     }
     showToast('Role updated.');
-  } catch(e) {
+  } catch (_) {
     showToast('Network error.', true);
     loadTeam(accountID);
   }
@@ -527,7 +815,13 @@ async function removeMember(accountID, userID, email) {
       return;
     }
     showToast('Member removed.');
-  } catch(e) {
+  } catch (_) {
     showToast('Network error.', true);
   }
+}
+
+loginState.emailValue = portalBootstrap.email || '';
+applyBootstrap(portalBootstrap);
+if (portalBootstrap.authenticated) {
+  refreshBootstrap();
 }

@@ -598,14 +598,26 @@
     }
   }
 
-  renderOpenPanels();
-  var bootstrap = runtime.getBootstrap ? (runtime.getBootstrap() || {}) : {};
-  serviceState.flows.manage.emailValue = bootstrap.email || '';
-  serviceState.flows.retrieve.emailValue = bootstrap.email || '';
-  serviceState.flows.export.emailValue = bootstrap.email || '';
-  serviceState.flows.delete.emailValue = bootstrap.email || '';
-  serviceState.refund.emailValue = bootstrap.email || '';
-  renderAllFlows();
+  function syncServiceStateFromBootstrap() {
+    var bootstrap = runtime.getBootstrap ? (runtime.getBootstrap() || {}) : {};
+    if (!bootstrap.authenticated) {
+      return;
+    }
+    if (!serviceState.flows.manage.emailValue) serviceState.flows.manage.emailValue = bootstrap.email || '';
+    if (!serviceState.flows.retrieve.emailValue) serviceState.flows.retrieve.emailValue = bootstrap.email || '';
+    if (!serviceState.flows.export.emailValue) serviceState.flows.export.emailValue = bootstrap.email || '';
+    if (!serviceState.flows.delete.emailValue) serviceState.flows.delete.emailValue = bootstrap.email || '';
+    if (!serviceState.refund.emailValue) serviceState.refund.emailValue = bootstrap.email || '';
+  }
+
+  function renderServiceRuntime() {
+    syncServiceStateFromBootstrap();
+    renderOpenPanels();
+    renderAllFlows();
+  }
+
+  renderServiceRuntime();
+  document.addEventListener('pulse-account-render', renderServiceRuntime);
 
   document.addEventListener('click', function(event) {
     var target = event.target.closest('[data-account-service-action]');
