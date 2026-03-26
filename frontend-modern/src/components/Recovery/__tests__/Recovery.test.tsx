@@ -53,6 +53,10 @@ const pointsByRollupId: Record<string, any[]> = {
       cluster: 'lab-cluster',
       node: 'pve-01',
       namespace: 'finance',
+      repositoryRef: {
+        type: 'recovery-target',
+        name: 'fast-store',
+      },
       display: {
         itemType: 'vm',
         subjectType: 'proxmox-vm',
@@ -355,6 +359,7 @@ describe('Recovery', () => {
     expect(
       within(detailsPanel as HTMLTableCellElement).getByText('Namespace / Group'),
     ).toBeInTheDocument();
+    expect(within(detailsPanel as HTMLTableCellElement).getByText('Target Ref')).toBeInTheDocument();
     expect(within(detailsPanel as HTMLTableCellElement).getByText('Lab Cluster')).toBeInTheDocument();
     expect(within(detailsPanel as HTMLTableCellElement).getAllByText('pve-01').length).toBeGreaterThan(0);
     expect(within(detailsPanel as HTMLTableCellElement).getByText('Finance')).toBeInTheDocument();

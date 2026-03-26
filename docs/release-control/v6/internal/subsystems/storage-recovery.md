@@ -379,8 +379,10 @@ the shared frontend label contract.
 That same recovery drill-in surface now also keeps provider-specific metadata
 inside a provider-neutral detail shell through
 `frontend-modern/src/components/Recovery/RecoveryPointDetails.tsx`, so PBS
-repository and verification enrichments remain available without presenting the
-event drawer itself as if PBS were the native recovery model.
+datastore and verification enrichments remain available without presenting the
+event drawer itself as if PBS were the native recovery model. Operator-facing
+detail labels in that drawer should prefer neutral target wording such as
+`Target Ref`, `Target Resource`, and `Target Health`.
 Those transport hooks are direct governed runtime surfaces, not just page
 implementation detail: `frontend-modern/src/hooks/useRecoveryPoints.ts`,
 `frontend-modern/src/hooks/useRecoveryPointsFacets.ts`,

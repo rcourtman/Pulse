@@ -175,9 +175,9 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
     if (p.verified != null) pairs.push({ k: 'Verified', v: p.verified ? 'Verified' : 'Not Verified' });
     if (p.encrypted != null) pairs.push({ k: 'Encrypted', v: p.encrypted ? 'Encrypted' : 'Not Encrypted' });
     if (p.subjectResourceId) pairs.push({ k: 'Item Resource', v: p.subjectResourceId });
-    if (p.repositoryResourceId) pairs.push({ k: 'Repository Resource', v: p.repositoryResourceId });
+    if (p.repositoryResourceId) pairs.push({ k: 'Target Resource', v: p.repositoryResourceId });
     if (p.subjectRef) pairs.push({ k: 'Item Ref', v: labelForRef(p.subjectRef) });
-    if (p.repositoryRef) pairs.push({ k: 'Repository Ref', v: labelForRef(p.repositoryRef) });
+    if (p.repositoryRef) pairs.push({ k: 'Target Ref', v: labelForRef(p.repositoryRef) });
 
     const commonDetailKeys = [
       'instance',
@@ -280,7 +280,7 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
                 Platform Details
               </div>
               <div class="mt-1 text-xs text-muted">
-                Platform-specific recovery metadata, verification state, and repository health.
+                Platform-specific recovery metadata, verification state, and target health.
               </div>
             </div>
             <Show when={providerBadge()}>
@@ -386,7 +386,7 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
                   <div class="rounded border border-border px-3 py-2 text-xs">
                     <div class="flex items-center justify-between gap-2">
                       <div class="text-[10px] font-semibold uppercase tracking-wide text-muted">
-                        Repository Health
+                        Target Health
                       </div>
                       <Show when={status.length > 0}>
                         <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium">

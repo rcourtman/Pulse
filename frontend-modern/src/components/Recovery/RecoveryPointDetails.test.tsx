@@ -85,8 +85,8 @@ describe('RecoveryPointDetails', () => {
 
     expect(screen.getByText('Platform Details')).toBeInTheDocument();
     expect(screen.queryByText('PBS Details')).not.toBeInTheDocument();
-    expect(screen.getByText('Platform-specific recovery metadata, verification state, and repository health.')).toBeInTheDocument();
-    expect(screen.getByText('Repository Health')).toBeInTheDocument();
+    expect(screen.getByText('Platform-specific recovery metadata, verification state, and target health.')).toBeInTheDocument();
+    expect(screen.getByText('Target Health')).toBeInTheDocument();
     expect(screen.getByText('Verification')).toBeInTheDocument();
     expect(screen.getByText('Item Type')).toBeInTheDocument();
     expect(screen.getByText('Cluster / Site')).toBeInTheDocument();
@@ -103,6 +103,7 @@ describe('RecoveryPointDetails', () => {
     expect(screen.getByText('Remote Copy')).toBeInTheDocument();
     expect(screen.getAllByText('Success').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Verified').length).toBeGreaterThan(0);
+    expect(screen.getByText('Target Ref')).toBeInTheDocument();
 
     const platformCard = screen.getByText('Platform').parentElement?.parentElement;
     expect(platformCard).not.toBeNull();
@@ -137,6 +138,7 @@ describe('RecoveryPointDetails', () => {
     expect(screen.getByText('Dataset')).toBeInTheDocument();
     expect(screen.getByText('tn-scale-01')).toBeInTheDocument();
     expect(screen.getAllByText('Snapshot').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Repository Ref')).not.toBeInTheDocument();
 
     const platformCard = screen.getByText('Platform').parentElement?.parentElement;
     expect(platformCard).not.toBeNull();
