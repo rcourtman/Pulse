@@ -1,4 +1,3 @@
-import { portalStore } from './runtime';
 import { installServicesController } from './services_controller';
 import {
   clearFlowStatus,
@@ -7,11 +6,11 @@ import {
   resetVerificationFlowState,
   setFlowStatus,
   setRefundStatus,
-  syncServiceStateBootstrapEmail,
   toggleServicePanelState,
   updateDeleteConfirmation,
   updateServiceInputValue,
 } from './state';
+import type { PortalStore } from './store';
 import {
   focusElement,
   getElement,
@@ -57,7 +56,14 @@ interface VerificationFlowDefinition {
   renderResult?: (result: unknown) => void;
 }
 
-  portalStore.updateServiceState(function(serviceState) {
+export interface ServicesRuntimeDeps {
+  store: PortalStore;
+}
+
+export function installServicesRuntime(deps: ServicesRuntimeDeps): void {
+  var store = deps.store;
+
+  store.updateServiceState(function(serviceState) {
     if (!serviceState.flows) {
       var nextState = createPortalServiceState();
       serviceState.openPanelID = nextState.openPanelID;
@@ -67,18 +73,18 @@ interface VerificationFlowDefinition {
   }, { notify: false });
 
   function getServiceState() {
-    return portalStore.getServiceState();
+    return store.getServiceState();
   }
 
   function updateServiceState(mutator, notify = true) {
-    return portalStore.updateServiceState(mutator, { notify: notify });
+    return store.updateServiceState(mutator, { notify: notify });
   }
 
   function serviceFetch(path, body) {
-    return fetch(portalStore.getBootstrap().commercial_api_base_url + path, {
+    return fetch(store.getBootstrap().commercial_api_base_url + path, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
+      body: JSON.stringify(body),
     });
   }
 
@@ -116,7 +122,7 @@ interface VerificationFlowDefinition {
 
   function renderRefund() {
     var refundState = getServiceState().refund;
-    renderRefundPanel(refundState, portalStore.getBootstrap());
+    renderRefundPanel(refundState, store.getBootstrap());
     renderButton('refund-inline-submit', refundState.submitting, refundState.submitting ? 'Processing...' : 'Process Refund');
     renderStatus('refund-inline-status', refundState.status);
   }
@@ -161,7 +167,7 @@ interface VerificationFlowDefinition {
       onConfirmSuccess: function(data) {
         window.location.href = data.url;
       },
-      renderPanel: renderManagePanel
+      renderPanel: renderManagePanel,
     },
     retrieve: {
       requestPath: '/v1/retrieve-license/request',
@@ -199,7 +205,7 @@ interface VerificationFlowDefinition {
           setFlowStatus(serviceState, 'retrieve', 'License retrieved successfully.', false);
         }, false);
       },
-      renderPanel: renderRetrievePanel
+      renderPanel: renderRetrievePanel,
     },
     export: {
       requestPath: '/v1/gdpr/request-export',
@@ -242,7 +248,7 @@ interface VerificationFlowDefinition {
         }, false);
       },
       renderPanel: renderExportPanel,
-      renderResult: renderExportResult
+      renderResult: renderExportResult,
     },
     delete: {
       requestPath: '/v1/gdpr/request-delete',
@@ -284,11 +290,16 @@ interface VerificationFlowDefinition {
         }
         resetVerificationFlow('delete');
         updateServiceState(function(serviceState) {
-          setFlowStatus(serviceState, 'delete', data.deleted_count > 0 && data.stripe_reminder ? data.message + ' ' + data.stripe_reminder : data.message, false);
+          setFlowStatus(
+            serviceState,
+            'delete',
+            data.deleted_count > 0 && data.stripe_reminder ? data.message + ' ' + data.stripe_reminder : data.message,
+            false
+          );
         }, false);
       },
-      renderPanel: renderDeletePanel
-    }
+      renderPanel: renderDeletePanel,
+    },
   };
 
   async function requestVerificationCode(flowID: PortalServiceFlowID) {
@@ -424,8 +435,8 @@ interface VerificationFlowDefinition {
   }
 
   renderServiceRuntime();
-  portalStore.subscribeBootstrap(renderServiceRuntime);
-  portalStore.subscribeServices(renderServiceRuntime);
+  store.subscribeBootstrap(renderServiceRuntime);
+  store.subscribeServices(renderServiceRuntime);
 
   installServicesController({
     toggleServicePanel,
@@ -456,3 +467,4 @@ interface VerificationFlowDefinition {
       }, false);
     },
   });
+}

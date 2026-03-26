@@ -1,3 +1,4 @@
 import './styles.css';
-import './shell';
-import './services';
+import { startPortalApp } from './app';
+
+startPortalApp();

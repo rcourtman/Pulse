@@ -1,271 +1,4 @@
 (() => {
-  // src/state.ts
-  function emptyStatus() {
-    return {
-      visible: false,
-      message: "",
-      error: false
-    };
-  }
-  function newVerificationFlowState() {
-    return {
-      pendingEmail: "",
-      requesting: false,
-      confirming: false,
-      step2Visible: false,
-      status: emptyStatus(),
-      result: null,
-      emailValue: "",
-      codeValue: "",
-      checkboxChecked: false
-    };
-  }
-  function createPortalLoginState() {
-    return {
-      emailValue: "",
-      sending: false,
-      success: false,
-      error: ""
-    };
-  }
-  function createPortalAccountState() {
-    return {
-      byAccountID: {}
-    };
-  }
-  function ensurePortalAccountUIEntry(accountState, accountID) {
-    if (!accountState.byAccountID[accountID]) {
-      accountState.byAccountID[accountID] = {
-        addWorkspaceOpen: false,
-        teamVisible: false,
-        teamLoading: false,
-        teamError: "",
-        teamMembers: []
-      };
-    }
-    return accountState.byAccountID[accountID];
-  }
-  function createPortalServiceState() {
-    return {
-      openPanelID: "",
-      flows: {
-        manage: newVerificationFlowState(),
-        retrieve: newVerificationFlowState(),
-        export: newVerificationFlowState(),
-        delete: newVerificationFlowState()
-      },
-      refund: {
-        emailValue: "",
-        tokenValue: "",
-        submitting: false,
-        status: emptyStatus()
-      }
-    };
-  }
-  function syncLoginStateBootstrapEmail(loginState, email) {
-    if (!loginState.emailValue) {
-      loginState.emailValue = email || "";
-    }
-  }
-  function syncServiceStateBootstrapEmail(serviceState, email) {
-    if (!serviceState.flows.manage.emailValue) serviceState.flows.manage.emailValue = email || "";
-    if (!serviceState.flows.retrieve.emailValue) serviceState.flows.retrieve.emailValue = email || "";
-    if (!serviceState.flows.export.emailValue) serviceState.flows.export.emailValue = email || "";
-    if (!serviceState.flows.delete.emailValue) serviceState.flows.delete.emailValue = email || "";
-    if (!serviceState.refund.emailValue) serviceState.refund.emailValue = email || "";
-  }
-  function setFlowStatus(serviceState, flowID, message, isError) {
-    serviceState.flows[flowID].status = {
-      visible: true,
-      message,
-      error: !!isError
-    };
-  }
-  function clearFlowStatus(serviceState, flowID) {
-    serviceState.flows[flowID].status = emptyStatus();
-  }
-  function setRefundStatus(serviceState, message, isError) {
-    serviceState.refund.status = {
-      visible: true,
-      message,
-      error: !!isError
-    };
-  }
-  function toggleServicePanelState(serviceState, panelID) {
-    serviceState.openPanelID = serviceState.openPanelID === panelID ? "" : panelID;
-  }
-  function resetVerificationFlowState(serviceState, flowID) {
-    var previous = serviceState.flows[flowID];
-    serviceState.flows[flowID] = newVerificationFlowState();
-    serviceState.flows[flowID].emailValue = previous.emailValue;
-  }
-  function updateServiceInputValue(serviceState, inputKind, value) {
-    switch (inputKind) {
-      case "manage-email":
-        serviceState.flows.manage.emailValue = value;
-        return;
-      case "manage-code":
-        serviceState.flows.manage.codeValue = value;
-        return;
-      case "retrieve-email":
-        serviceState.flows.retrieve.emailValue = value;
-        return;
-      case "retrieve-code":
-        serviceState.flows.retrieve.codeValue = value;
-        return;
-      case "refund-email":
-        serviceState.refund.emailValue = value;
-        return;
-      case "refund-token":
-        serviceState.refund.tokenValue = value;
-        return;
-      case "data-export-email":
-        serviceState.flows.export.emailValue = value;
-        return;
-      case "data-export-code":
-        serviceState.flows.export.codeValue = value;
-        return;
-      case "data-delete-email":
-        serviceState.flows.delete.emailValue = value;
-        return;
-      case "data-delete-code":
-        serviceState.flows.delete.codeValue = value;
-        return;
-      default:
-        return;
-    }
-  }
-  function updateDeleteConfirmation(serviceState, checked) {
-    serviceState.flows.delete.checkboxChecked = checked;
-  }
-
-  // src/store.ts
-  function createAnonymousBootstrap(bootstrapDefaults2, overrides = {}) {
-    return {
-      authenticated: false,
-      email: "",
-      ...bootstrapDefaults2,
-      ...overrides,
-      accounts: normalizeAccounts(overrides.accounts)
-    };
-  }
-  function normalizeBootstrap(bootstrapDefaults2, raw) {
-    return createAnonymousBootstrap(bootstrapDefaults2, raw || {});
-  }
-  function createPortalStore(bootstrapDefaults2, initialBootstrap) {
-    var bootstrapState = normalizeBootstrap(bootstrapDefaults2, initialBootstrap);
-    var accountState = createPortalAccountState();
-    var loginState = createPortalLoginState();
-    var serviceState = createPortalServiceState();
-    syncLoginStateBootstrapEmail(loginState, bootstrapState.email || "");
-    syncServiceStateBootstrapEmail(serviceState, bootstrapState.email || "");
-    var accountSubscribers = /* @__PURE__ */ new Set();
-    var bootstrapSubscribers = /* @__PURE__ */ new Set();
-    var loginSubscribers = /* @__PURE__ */ new Set();
-    var serviceSubscribers = /* @__PURE__ */ new Set();
-    function notify(subscribers) {
-      subscribers.forEach(function(listener) {
-        listener();
-      });
-    }
-    return {
-      getBootstrap: function() {
-        return bootstrapState;
-      },
-      getAccountState: function() {
-        return accountState;
-      },
-      getLoginState: function() {
-        return loginState;
-      },
-      getServiceState: function() {
-        return serviceState;
-      },
-      setBootstrap: function(nextBootstrap) {
-        bootstrapState = normalizeBootstrap(bootstrapDefaults2, nextBootstrap);
-        syncLoginStateBootstrapEmail(loginState, bootstrapState.email || "");
-        syncServiceStateBootstrapEmail(serviceState, bootstrapState.email || "");
-        notify(bootstrapSubscribers);
-        return bootstrapState;
-      },
-      updateAccountState: function(mutator, options) {
-        mutator(accountState);
-        if (!options || options.notify !== false) {
-          notify(accountSubscribers);
-        }
-        return accountState;
-      },
-      updateLoginState: function(mutator, options) {
-        mutator(loginState);
-        if (!options || options.notify !== false) {
-          notify(loginSubscribers);
-        }
-        return loginState;
-      },
-      updateServiceState: function(mutator, options) {
-        mutator(serviceState);
-        if (!options || options.notify !== false) {
-          notify(serviceSubscribers);
-        }
-        return serviceState;
-      },
-      subscribeBootstrap: function(listener) {
-        bootstrapSubscribers.add(listener);
-        return function() {
-          bootstrapSubscribers.delete(listener);
-        };
-      },
-      subscribeAccount: function(listener) {
-        accountSubscribers.add(listener);
-        return function() {
-          accountSubscribers.delete(listener);
-        };
-      },
-      subscribeLogin: function(listener) {
-        loginSubscribers.add(listener);
-        return function() {
-          loginSubscribers.delete(listener);
-        };
-      },
-      subscribeServices: function(listener) {
-        serviceSubscribers.add(listener);
-        return function() {
-          serviceSubscribers.delete(listener);
-        };
-      }
-    };
-  }
-  function normalizeAccounts(accounts) {
-    return Array.isArray(accounts) ? accounts : [];
-  }
-
-  // src/runtime.ts
-  function readEmbeddedBootstrap() {
-    const bootstrapEl = document.getElementById("pulse-account-bootstrap");
-    if (!bootstrapEl) {
-      return {};
-    }
-    try {
-      return JSON.parse(bootstrapEl.textContent || "{}");
-    } catch {
-      return {};
-    }
-  }
-  var embeddedBootstrap = readEmbeddedBootstrap();
-  var bootstrapDefaults = {
-    public_site_url: embeddedBootstrap.public_site_url || "https://pulserelay.pro",
-    support_email: embeddedBootstrap.support_email || "support@pulserelay.pro",
-    commercial_api_base_url: embeddedBootstrap.commercial_api_base_url || "",
-    portal_path: embeddedBootstrap.portal_path || "/portal",
-    bootstrap_path: embeddedBootstrap.bootstrap_path || "/api/portal/bootstrap",
-    magic_link_request_path: embeddedBootstrap.magic_link_request_path || "/api/public/magic-link/request",
-    signup_path: embeddedBootstrap.signup_path || "/signup",
-    logout_path: embeddedBootstrap.logout_path || "/auth/logout",
-    account_api_base_path: embeddedBootstrap.account_api_base_path || "/api/accounts",
-    portal_api_base_path: embeddedBootstrap.portal_api_base_path || "/api/portal"
-  };
-  var portalStore = createPortalStore(bootstrapDefaults, embeddedBootstrap);
-
   // src/account_view.ts
   function getElement(id) {
     return document.getElementById(id);
@@ -432,6 +165,146 @@
         target.value
       );
     });
+  }
+
+  // src/state.ts
+  function emptyStatus() {
+    return {
+      visible: false,
+      message: "",
+      error: false
+    };
+  }
+  function newVerificationFlowState() {
+    return {
+      pendingEmail: "",
+      requesting: false,
+      confirming: false,
+      step2Visible: false,
+      status: emptyStatus(),
+      result: null,
+      emailValue: "",
+      codeValue: "",
+      checkboxChecked: false
+    };
+  }
+  function createPortalLoginState() {
+    return {
+      emailValue: "",
+      sending: false,
+      success: false,
+      error: ""
+    };
+  }
+  function createPortalAccountState() {
+    return {
+      byAccountID: {}
+    };
+  }
+  function ensurePortalAccountUIEntry(accountState, accountID) {
+    if (!accountState.byAccountID[accountID]) {
+      accountState.byAccountID[accountID] = {
+        addWorkspaceOpen: false,
+        teamVisible: false,
+        teamLoading: false,
+        teamError: "",
+        teamMembers: []
+      };
+    }
+    return accountState.byAccountID[accountID];
+  }
+  function createPortalServiceState() {
+    return {
+      openPanelID: "",
+      flows: {
+        manage: newVerificationFlowState(),
+        retrieve: newVerificationFlowState(),
+        export: newVerificationFlowState(),
+        delete: newVerificationFlowState()
+      },
+      refund: {
+        emailValue: "",
+        tokenValue: "",
+        submitting: false,
+        status: emptyStatus()
+      }
+    };
+  }
+  function syncLoginStateBootstrapEmail(loginState, email) {
+    if (!loginState.emailValue) {
+      loginState.emailValue = email || "";
+    }
+  }
+  function syncServiceStateBootstrapEmail(serviceState, email) {
+    if (!serviceState.flows.manage.emailValue) serviceState.flows.manage.emailValue = email || "";
+    if (!serviceState.flows.retrieve.emailValue) serviceState.flows.retrieve.emailValue = email || "";
+    if (!serviceState.flows.export.emailValue) serviceState.flows.export.emailValue = email || "";
+    if (!serviceState.flows.delete.emailValue) serviceState.flows.delete.emailValue = email || "";
+    if (!serviceState.refund.emailValue) serviceState.refund.emailValue = email || "";
+  }
+  function setFlowStatus(serviceState, flowID, message, isError) {
+    serviceState.flows[flowID].status = {
+      visible: true,
+      message,
+      error: !!isError
+    };
+  }
+  function clearFlowStatus(serviceState, flowID) {
+    serviceState.flows[flowID].status = emptyStatus();
+  }
+  function setRefundStatus(serviceState, message, isError) {
+    serviceState.refund.status = {
+      visible: true,
+      message,
+      error: !!isError
+    };
+  }
+  function toggleServicePanelState(serviceState, panelID) {
+    serviceState.openPanelID = serviceState.openPanelID === panelID ? "" : panelID;
+  }
+  function resetVerificationFlowState(serviceState, flowID) {
+    var previous = serviceState.flows[flowID];
+    serviceState.flows[flowID] = newVerificationFlowState();
+    serviceState.flows[flowID].emailValue = previous.emailValue;
+  }
+  function updateServiceInputValue(serviceState, inputKind, value) {
+    switch (inputKind) {
+      case "manage-email":
+        serviceState.flows.manage.emailValue = value;
+        return;
+      case "manage-code":
+        serviceState.flows.manage.codeValue = value;
+        return;
+      case "retrieve-email":
+        serviceState.flows.retrieve.emailValue = value;
+        return;
+      case "retrieve-code":
+        serviceState.flows.retrieve.codeValue = value;
+        return;
+      case "refund-email":
+        serviceState.refund.emailValue = value;
+        return;
+      case "refund-token":
+        serviceState.refund.tokenValue = value;
+        return;
+      case "data-export-email":
+        serviceState.flows.export.emailValue = value;
+        return;
+      case "data-export-code":
+        serviceState.flows.export.codeValue = value;
+        return;
+      case "data-delete-email":
+        serviceState.flows.delete.emailValue = value;
+        return;
+      case "data-delete-code":
+        serviceState.flows.delete.codeValue = value;
+        return;
+      default:
+        return;
+    }
+  }
+  function updateDeleteConfirmation(serviceState, checked) {
+    serviceState.flows.delete.checkboxChecked = checked;
   }
 
   // src/account_runtime.ts
@@ -805,170 +678,132 @@
     };
   }
 
-  // src/shell_view.ts
-  function escapeHTML(value) {
-    return String(value || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  // src/store.ts
+  function createAnonymousBootstrap(bootstrapDefaults2, overrides = {}) {
+    return {
+      authenticated: false,
+      email: "",
+      ...bootstrapDefaults2,
+      ...overrides,
+      accounts: normalizeAccounts(overrides.accounts)
+    };
   }
-  function escapeAttr(value) {
-    return escapeHTML(value);
+  function normalizeBootstrap(bootstrapDefaults2, raw) {
+    return createAnonymousBootstrap(bootstrapDefaults2, raw || {});
   }
-  function formatWorkspaceDate(value) {
-    if (!value) return "";
-    var date = new Date(String(value));
-    if (Number.isNaN(date.getTime())) return "";
-    return date.toLocaleDateString(void 0, { month: "short", day: "numeric", year: "numeric" });
-  }
-  function roleBadgeHTML(role) {
-    if (role === "owner") return '<span class="badge" style="background:#f1f5f9;color:#64748b">Owner</span>';
-    if (role === "admin") return '<span class="badge" style="background:#f1f5f9;color:#64748b">Admin</span>';
-    if (role === "tech") return '<span class="badge" style="background:#f1f5f9;color:#64748b">Tech</span>';
-    return "";
-  }
-  function renderWorkspaceCard(account, workspace, accountAPIBasePath) {
-    var state = String(workspace.state || "");
-    var safeState = escapeHTML(state);
-    var createdLabel = formatWorkspaceDate(workspace.created_at);
-    var openAction = "";
-    if (state === "active") {
-      openAction = '<form method="POST" action="' + escapeAttr(accountAPIBasePath + "/" + account.id + "/tenants/" + workspace.id + "/handoff") + '"><button type="submit" class="btn-primary">Open \u2192</button></form>';
-    } else {
-      openAction = '<span style="font-size:13px;color:#94a3b8">' + safeState + "</span>";
+  function createPortalStore(bootstrapDefaults2, initialBootstrap) {
+    var bootstrapState = normalizeBootstrap(bootstrapDefaults2, initialBootstrap);
+    var accountState = createPortalAccountState();
+    var loginState = createPortalLoginState();
+    var serviceState = createPortalServiceState();
+    syncLoginStateBootstrapEmail(loginState, bootstrapState.email || "");
+    syncServiceStateBootstrapEmail(serviceState, bootstrapState.email || "");
+    var accountSubscribers = /* @__PURE__ */ new Set();
+    var bootstrapSubscribers = /* @__PURE__ */ new Set();
+    var loginSubscribers = /* @__PURE__ */ new Set();
+    var serviceSubscribers = /* @__PURE__ */ new Set();
+    function notify(subscribers) {
+      subscribers.forEach(function(listener) {
+        listener();
+      });
     }
-    var manageAction = "";
-    if (account.can_manage && (state === "active" || state === "suspended" || state === "failed")) {
-      manageAction = '<button type="button" class="btn-danger" data-action="workspace-manage" data-account-id="' + escapeAttr(account.id) + '" data-workspace-id="' + escapeAttr(workspace.id) + '" data-workspace-state="' + escapeAttr(state) + '" data-workspace-name="' + escapeAttr(workspace.display_name) + '">\u22EF</button>';
-    }
-    var createdMeta = createdLabel ? '<span class="ws-created">Created ' + escapeHTML(createdLabel) + "</span>" : "";
-    return '<div class="workspace-card"><div class="ws-info"><span class="ws-name">' + escapeHTML(workspace.display_name) + '</span><div class="ws-meta">' + (workspace.healthy ? '<span class="badge badge-healthy">Healthy</span>' : '<span class="badge badge-unhealthy">Checking</span>') + '<span class="badge badge-' + safeState + '">' + safeState + "</span>" + createdMeta + '</div></div><div class="ws-actions">' + openAction + manageAction + "</div></div>";
-  }
-  function renderAccountSection(account, accountAPIBasePath) {
-    var workspaces = Array.isArray(account.workspaces) ? account.workspaces : [];
-    var workspaceHTML = "";
-    if (workspaces.length === 0) {
-      workspaceHTML = '<div class="empty-state"><p>No workspaces yet. Create one to get started.</p></div>';
-    } else {
-      workspaceHTML = '<div class="workspace-list">' + workspaces.map(function(workspace) {
-        return renderWorkspaceCard(account, workspace, accountAPIBasePath);
-      }).join("") + "</div>";
-    }
-    var actions = "";
-    var teamSection = "";
-    var addWorkspaceForm = "";
-    if (account.can_manage) {
-      actions = '<div class="account-actions">' + (account.kind === "msp" ? '<button type="button" class="btn-secondary" id="add-ws-btn-' + escapeAttr(account.id) + '" data-action="toggle-add-workspace" data-account-id="' + escapeAttr(account.id) + '">+ Add workspace</button>' : "") + (account.has_billing ? '<button type="button" class="btn-secondary" data-action="open-billing" data-account-id="' + escapeAttr(account.id) + '">Manage billing</button>' : "") + '<button type="button" class="btn-secondary" id="team-btn-' + escapeAttr(account.id) + '" data-action="toggle-team" data-account-id="' + escapeAttr(account.id) + '">Manage team</button></div>';
-      teamSection = '<div class="team-section" id="team-section-' + escapeAttr(account.id) + '" data-actor-role="' + escapeAttr(account.role) + '"><h3>Team members</h3><table class="team-table"><thead><tr><th>Email</th><th>Role</th><th></th></tr></thead><tbody id="team-list-' + escapeAttr(account.id) + '"><tr><td colspan="3" style="color:#94a3b8;text-align:center;padding:16px">Loading\u2026</td></tr></tbody></table><div class="team-invite"><div><label for="invite-email-' + escapeAttr(account.id) + '">Email</label><input type="email" id="invite-email-' + escapeAttr(account.id) + '" placeholder="user@example.com" autocomplete="off"></div><div><label for="invite-role-' + escapeAttr(account.id) + '">Role</label><select id="invite-role-' + escapeAttr(account.id) + '"><option value="admin">Admin</option><option value="tech">Tech</option><option value="read_only">Read-only</option></select></div><button type="button" class="btn-primary" style="padding:8px 14px;font-size:13px" data-action="invite-member" data-account-id="' + escapeAttr(account.id) + '">Invite</button></div></div>';
-      if (account.kind === "msp") {
-        addWorkspaceForm = '<div class="add-workspace-form" id="add-ws-form-' + escapeAttr(account.id) + '"><label for="ws-name-' + escapeAttr(account.id) + '">Workspace name (e.g. client name)</label><input type="text" id="ws-name-' + escapeAttr(account.id) + '" placeholder="Acme Corp" maxlength="80" autocomplete="off"><div class="form-actions"><button type="button" class="btn-primary" data-action="create-workspace" data-account-id="' + escapeAttr(account.id) + '">Create workspace</button><button type="button" class="btn-secondary" data-action="toggle-add-workspace" data-account-id="' + escapeAttr(account.id) + '">Cancel</button><div class="spinner" id="ws-spinner-' + escapeAttr(account.id) + '"></div></div></div>';
+    return {
+      getBootstrap: function() {
+        return bootstrapState;
+      },
+      getAccountState: function() {
+        return accountState;
+      },
+      getLoginState: function() {
+        return loginState;
+      },
+      getServiceState: function() {
+        return serviceState;
+      },
+      setBootstrap: function(nextBootstrap) {
+        bootstrapState = normalizeBootstrap(bootstrapDefaults2, nextBootstrap);
+        syncLoginStateBootstrapEmail(loginState, bootstrapState.email || "");
+        syncServiceStateBootstrapEmail(serviceState, bootstrapState.email || "");
+        notify(bootstrapSubscribers);
+        return bootstrapState;
+      },
+      updateAccountState: function(mutator, options) {
+        mutator(accountState);
+        if (!options || options.notify !== false) {
+          notify(accountSubscribers);
+        }
+        return accountState;
+      },
+      updateLoginState: function(mutator, options) {
+        mutator(loginState);
+        if (!options || options.notify !== false) {
+          notify(loginSubscribers);
+        }
+        return loginState;
+      },
+      updateServiceState: function(mutator, options) {
+        mutator(serviceState);
+        if (!options || options.notify !== false) {
+          notify(serviceSubscribers);
+        }
+        return serviceState;
+      },
+      subscribeBootstrap: function(listener) {
+        bootstrapSubscribers.add(listener);
+        return function() {
+          bootstrapSubscribers.delete(listener);
+        };
+      },
+      subscribeAccount: function(listener) {
+        accountSubscribers.add(listener);
+        return function() {
+          accountSubscribers.delete(listener);
+        };
+      },
+      subscribeLogin: function(listener) {
+        loginSubscribers.add(listener);
+        return function() {
+          loginSubscribers.delete(listener);
+        };
+      },
+      subscribeServices: function(listener) {
+        serviceSubscribers.add(listener);
+        return function() {
+          serviceSubscribers.delete(listener);
+        };
       }
-    }
-    return '<section class="account-section"><div class="account-header"><h2>' + escapeHTML(account.name) + '</h2><span class="badge badge-' + escapeHTML(account.kind) + '">' + escapeHTML(account.kind_label) + "</span>" + roleBadgeHTML(account.role) + "</div>" + workspaceHTML + actions + teamSection + addWorkspaceForm + "</section>";
+    };
   }
-  function renderHeaderHTML(context) {
-    if (context.bootstrap.authenticated) {
-      return "<span>" + escapeHTML(context.bootstrap.email || "") + '</span><button class="logout-btn" id="logout-btn" type="button">Sign out</button>';
-    }
-    return '<a class="logout-btn" href="' + escapeAttr(context.signupPath) + '" style="text-decoration:none">Create account</a>';
-  }
-  function renderAccountsHTML(context) {
-    var safeAccounts = Array.isArray(context.bootstrap.accounts) ? context.bootstrap.accounts : [];
-    if (safeAccounts.length === 0) {
-      return '<div class="empty-state" style="margin-top:48px"><p>No workspaces found. If you just signed up, check your email for setup instructions.</p><p style="margin-top:12px;font-size:13px">Need help? Contact <a href="mailto:' + escapeAttr(context.bootstrap.support_email || "") + '" style="color:#1d4ed8">' + escapeHTML(context.bootstrap.support_email || "") + "</a></p></div>";
-    }
-    return safeAccounts.map(function(account) {
-      return renderAccountSection(account, context.accountAPIBasePath);
-    }).join("");
-  }
-  function renderAuthenticatedPortalHTML(context) {
-    return '<section class="intro-card"><h1>Pulse Account</h1><p>Manage Cloud workspaces, MSP access, and self-hosted commercial account services from one account surface. Hosted workspace lifecycle lives here today, and the self-hosted billing, license recovery, refund, and privacy tools below now share the same Pulse Account shell instead of staying fragmented across public utility pages.</p></section><div id="accounts-root">' + renderAccountsHTML(context) + '</div><section class="service-section"><div class="service-header"><h2>Other account services</h2><div class="service-note">Self-hosted commercial account actions now live here. The public utility pages remain as compatibility entry points, not the primary account surface.</div></div><div class="service-grid"><button class="service-card service-card-button" type="button" id="open-manage-service" data-account-service-action="open-service-panel" data-account-service-panel="manage-service-panel" data-account-service-focus="manage-inline-email"><h3>Manage subscriptions</h3><p>Open Stripe billing access for existing self-hosted subscriptions without leaving the Pulse Account shell.</p></button><button class="service-card service-card-button" type="button" id="open-retrieve-service" data-account-service-action="open-service-panel" data-account-service-panel="retrieve-service-panel" data-account-service-focus="retrieve-inline-email"><h3>Retrieve licenses</h3><p>Recover the latest active self-hosted license and invoice link for a commercial email address.</p></button><button class="service-card service-card-button" type="button" id="open-refund-service" data-account-service-action="open-service-panel" data-account-service-panel="refund-service-panel" data-account-service-focus="refund-inline-email"><h3>Refund requests</h3><p>Request an immediate self-serve refund for eligible self-hosted purchases with explicit revocation confirmation.</p></button><button class="service-card service-card-button" type="button" id="open-data-service" data-account-service-action="open-service-panel" data-account-service-panel="data-service-panel" data-account-service-focus="data-export-email"><h3>Data and privacy</h3><p>Request commercial data export or deletion without leaving the account shell.</p></button></div><div class="service-panel" id="manage-service-panel"><div id="manage-service-root"></div></div><div class="service-panel" id="retrieve-service-panel"><div id="retrieve-service-root"></div></div><div class="service-panel" id="refund-service-panel"><div id="refund-service-root"></div></div><div class="service-panel" id="data-service-panel"><h3>Data and privacy</h3><p>Request export or deletion of the commercial data tied to an email address. Payment data held directly by Stripe still requires support handling.</p><div class="subsection"><div id="data-export-root"></div></div><div class="subsection"><div id="data-delete-root"></div></div><div class="helper-text">Payment-card data stays with Stripe. For Stripe deletion support, contact <a href="mailto:' + escapeAttr(context.bootstrap.support_email || "") + '">' + escapeHTML(context.bootstrap.support_email || "") + "</a>.</div></div></section>";
-  }
-  function renderSignedOutPortalHTML(context) {
-    var statusHTML = "";
-    if (context.loginState.error) {
-      statusHTML = '<div class="service-status visible error">' + escapeHTML(context.loginState.error) + "</div>";
-    } else if (context.loginState.success) {
-      statusHTML = `<div class="service-status visible success">Magic link sent. Check your inbox and click the link to sign in.<br><br><strong>Don't see it?</strong> <a href="#" data-portal-action="resend-magic-link">Send a new link</a>.</div>`;
-    }
-    return '<section class="intro-card"><h1>Pulse Account</h1><p>Sign in to manage Cloud workspaces, MSP access, and commercial account services from one account surface.</p></section><section class="service-section"><div class="service-panel visible"><h3>Sign in</h3><p>Enter the commercial email address for your Pulse account. I will send a magic link so you can open Pulse Account without managing a password.</p><div class="form-group"><label for="portal-login-email">Email address</label><input id="portal-login-email" type="email" autocomplete="email" placeholder="you@example.com" value="' + escapeAttr(context.loginState.emailValue || "") + '" data-portal-input="login-email"></div><div class="form-actions"><button class="btn-primary" id="portal-login-send" type="button" data-portal-action="send-magic-link">' + (context.loginState.sending ? "Sending\u2026" : "Send magic link") + '</button><a class="btn-secondary" href="' + escapeAttr(context.signupPath) + '" style="text-decoration:none">Create an account</a></div>' + statusHTML + "</div></section>";
+  function normalizeAccounts(accounts) {
+    return Array.isArray(accounts) ? accounts : [];
   }
 
-  // src/shell.ts
-  function renderHeader() {
-    var userInfo = document.getElementById("portal-user-info");
-    if (!userInfo) return;
-    var portalBootstrap = portalStore.getBootstrap();
-    userInfo.innerHTML = renderHeaderHTML({
-      bootstrap: portalBootstrap,
-      loginState: portalStore.getLoginState(),
-      signupPath: portalBootstrap.signup_path,
-      accountAPIBasePath: portalBootstrap.account_api_base_path
-    });
-  }
-  function renderPortalApp() {
-    renderHeader();
-    var root = document.getElementById("portal-app-root");
-    if (!root) return;
-    var portalBootstrap = portalStore.getBootstrap();
-    var context = {
-      bootstrap: portalBootstrap,
-      loginState: portalStore.getLoginState(),
-      signupPath: portalBootstrap.signup_path,
-      accountAPIBasePath: portalBootstrap.account_api_base_path
-    };
-    root.innerHTML = portalBootstrap.authenticated ? renderAuthenticatedPortalHTML(context) : renderSignedOutPortalHTML(context);
-  }
-  function applyBootstrap(data) {
-    portalStore.setBootstrap(data || createAnonymousBootstrap(bootstrapDefaults));
-  }
-  async function refreshBootstrap() {
-    var bootstrap = portalStore.getBootstrap();
-    if (!bootstrap.bootstrap_path) return false;
-    try {
-      var response = await fetch(bootstrap.bootstrap_path, {
-        headers: { "Accept": "application/json" }
-      });
-      if (response.status === 401) {
-        applyBootstrap(createAnonymousBootstrap(bootstrapDefaults));
-        return true;
-      }
-      if (!response.ok) return false;
-      var data = await response.json();
-      applyBootstrap(data);
-      return true;
-    } catch (_) {
+  // src/runtime.ts
+  function readEmbeddedBootstrap() {
+    const bootstrapEl = document.getElementById("pulse-account-bootstrap");
+    if (!bootstrapEl) {
+      return {};
     }
-    return false;
+    try {
+      return JSON.parse(bootstrapEl.textContent || "{}");
+    } catch {
+      return {};
+    }
   }
-  function showToast(msg, isError = false) {
-    var t = document.getElementById("toast");
-    if (!t) return;
-    t.textContent = msg;
-    t.className = "toast visible" + (isError ? " error" : "");
-    clearTimeout(t._timer);
-    t._timer = setTimeout(function() {
-      t.className = "toast";
-    }, 4e3);
-  }
-  installAuthController({
-    store: portalStore
-  });
-  var accountRuntime = installAccountRuntime({
-    store: portalStore,
-    refreshBootstrap,
-    showToast
-  });
-  installAccountController({
-    runtime: accountRuntime
-  });
-  portalStore.subscribeBootstrap(function() {
-    renderPortalApp();
-  });
-  portalStore.subscribeLogin(function() {
-    renderPortalApp();
-  });
-  applyBootstrap(portalStore.getBootstrap());
-  if (portalStore.getBootstrap().authenticated) {
-    refreshBootstrap();
-  }
+  var embeddedBootstrap = readEmbeddedBootstrap();
+  var bootstrapDefaults = {
+    public_site_url: embeddedBootstrap.public_site_url || "https://pulserelay.pro",
+    support_email: embeddedBootstrap.support_email || "support@pulserelay.pro",
+    commercial_api_base_url: embeddedBootstrap.commercial_api_base_url || "",
+    portal_path: embeddedBootstrap.portal_path || "/portal",
+    bootstrap_path: embeddedBootstrap.bootstrap_path || "/api/portal/bootstrap",
+    magic_link_request_path: embeddedBootstrap.magic_link_request_path || "/api/public/magic-link/request",
+    signup_path: embeddedBootstrap.signup_path || "/signup",
+    logout_path: embeddedBootstrap.logout_path || "/auth/logout",
+    account_api_base_path: embeddedBootstrap.account_api_base_path || "/api/accounts",
+    portal_api_base_path: embeddedBootstrap.portal_api_base_path || "/api/portal"
+  };
+  var portalStore = createPortalStore(bootstrapDefaults, embeddedBootstrap);
 
   // src/services_view.ts
   function getElement3(id) {
@@ -1148,387 +983,585 @@
   }
 
   // src/services.ts
-  portalStore.updateServiceState(function(serviceState) {
-    if (!serviceState.flows) {
-      var nextState = createPortalServiceState();
-      serviceState.openPanelID = nextState.openPanelID;
-      serviceState.flows = nextState.flows;
-      serviceState.refund = nextState.refund;
+  function installServicesRuntime(deps) {
+    var store = deps.store;
+    store.updateServiceState(function(serviceState) {
+      if (!serviceState.flows) {
+        var nextState = createPortalServiceState();
+        serviceState.openPanelID = nextState.openPanelID;
+        serviceState.flows = nextState.flows;
+        serviceState.refund = nextState.refund;
+      }
+    }, { notify: false });
+    function getServiceState() {
+      return store.getServiceState();
     }
-  }, { notify: false });
-  function getServiceState() {
-    return portalStore.getServiceState();
-  }
-  function updateServiceState(mutator, notify = true) {
-    return portalStore.updateServiceState(mutator, { notify });
-  }
-  function serviceFetch(path, body) {
-    return fetch(portalStore.getBootstrap().commercial_api_base_url + path, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body)
-    });
-  }
-  function toggleServicePanel(panelID) {
-    updateServiceState(function(serviceState) {
-      toggleServicePanelState(serviceState, panelID);
-    });
-  }
-  function renderFlow(flowID) {
-    var flow = verificationFlows[flowID];
-    if (!flow) return;
-    var flowState = getServiceState().flows[flowID];
-    if (flow.renderPanel) {
-      flow.renderPanel(flowState);
+    function updateServiceState(mutator, notify = true) {
+      return store.updateServiceState(mutator, { notify });
     }
-    renderButton(flow.requestButtonID, flowState.requesting, flowState.requesting ? flow.requestPendingLabel : flow.requestLabel);
-    renderButton(flow.confirmButtonID, flowState.confirming, flowState.confirming ? flow.confirmPendingLabel : flow.confirmLabel);
-    renderStatus(flow.statusID, flowState.status);
-    if (flow.step2ID) {
-      setVisible(flow.step2ID, flowState.step2Visible);
+    function serviceFetch(path, body) {
+      return fetch(store.getBootstrap().commercial_api_base_url + path, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
     }
-    if (flow.renderResult) {
-      flow.renderResult(flowState.result);
+    function toggleServicePanel(panelID) {
+      updateServiceState(function(serviceState) {
+        toggleServicePanelState(serviceState, panelID);
+      });
     }
-  }
-  function renderAllFlows() {
-    renderFlow("manage");
-    renderFlow("retrieve");
-    renderFlow("export");
-    renderFlow("delete");
-    renderRefund();
-  }
-  function renderRefund() {
-    var refundState = getServiceState().refund;
-    renderRefundPanel(refundState, portalStore.getBootstrap());
-    renderButton("refund-inline-submit", refundState.submitting, refundState.submitting ? "Processing..." : "Process Refund");
-    renderStatus("refund-inline-status", refundState.status);
-  }
-  function resetVerificationFlow(flowID) {
-    var flow = verificationFlows[flowID];
-    if (!flow) return;
-    updateServiceState(function(serviceState) {
-      resetVerificationFlowState(serviceState, flowID);
-    }, false);
-    if (flow.codeInputID) {
-      setValue(flow.codeInputID, "");
+    function renderFlow(flowID) {
+      var flow = verificationFlows[flowID];
+      if (!flow) return;
+      var flowState = getServiceState().flows[flowID];
+      if (flow.renderPanel) {
+        flow.renderPanel(flowState);
+      }
+      renderButton(flow.requestButtonID, flowState.requesting, flowState.requesting ? flow.requestPendingLabel : flow.requestLabel);
+      renderButton(flow.confirmButtonID, flowState.confirming, flowState.confirming ? flow.confirmPendingLabel : flow.confirmLabel);
+      renderStatus(flow.statusID, flowState.status);
+      if (flow.step2ID) {
+        setVisible(flow.step2ID, flowState.step2Visible);
+      }
+      if (flow.renderResult) {
+        flow.renderResult(flowState.result);
+      }
     }
-  }
-  var verificationFlows = {
-    manage: {
-      requestPath: "/v1/manage/request",
-      confirmPath: "/v1/manage",
-      panelID: "manage-service-panel",
-      emailInputID: "manage-inline-email",
-      codeInputID: "manage-inline-code",
-      requestButtonID: "manage-inline-request",
-      confirmButtonID: "manage-inline-confirm",
-      step2ID: "manage-inline-step2",
-      statusID: "manage-inline-status",
-      requestLabel: "Send Verification Code",
-      requestPendingLabel: "Sending...",
-      confirmLabel: "Open Customer Portal",
-      confirmPendingLabel: "Redirecting...",
-      requestSuccessMessage: "Verification code sent. Check your email.",
-      resendSuccessMessage: "New verification code sent.",
-      requestErrorMessage: "Failed to send verification code",
-      confirmErrorMessage: "Failed to open customer portal",
-      readEmailValue: function() {
-        return getServiceState().flows.manage.emailValue;
+    function renderAllFlows() {
+      renderFlow("manage");
+      renderFlow("retrieve");
+      renderFlow("export");
+      renderFlow("delete");
+      renderRefund();
+    }
+    function renderRefund() {
+      var refundState = getServiceState().refund;
+      renderRefundPanel(refundState, store.getBootstrap());
+      renderButton("refund-inline-submit", refundState.submitting, refundState.submitting ? "Processing..." : "Process Refund");
+      renderStatus("refund-inline-status", refundState.status);
+    }
+    function resetVerificationFlow(flowID) {
+      var flow = verificationFlows[flowID];
+      if (!flow) return;
+      updateServiceState(function(serviceState) {
+        resetVerificationFlowState(serviceState, flowID);
+      }, false);
+      if (flow.codeInputID) {
+        setValue(flow.codeInputID, "");
+      }
+    }
+    var verificationFlows = {
+      manage: {
+        requestPath: "/v1/manage/request",
+        confirmPath: "/v1/manage",
+        panelID: "manage-service-panel",
+        emailInputID: "manage-inline-email",
+        codeInputID: "manage-inline-code",
+        requestButtonID: "manage-inline-request",
+        confirmButtonID: "manage-inline-confirm",
+        step2ID: "manage-inline-step2",
+        statusID: "manage-inline-status",
+        requestLabel: "Send Verification Code",
+        requestPendingLabel: "Sending...",
+        confirmLabel: "Open Customer Portal",
+        confirmPendingLabel: "Redirecting...",
+        requestSuccessMessage: "Verification code sent. Check your email.",
+        resendSuccessMessage: "New verification code sent.",
+        requestErrorMessage: "Failed to send verification code",
+        confirmErrorMessage: "Failed to open customer portal",
+        readEmailValue: function() {
+          return getServiceState().flows.manage.emailValue;
+        },
+        readCodeValue: function() {
+          return getServiceState().flows.manage.codeValue;
+        },
+        onRequestStart: function() {
+        },
+        onConfirmSuccess: function(data) {
+          window.location.href = data.url;
+        },
+        renderPanel: renderManagePanel
       },
-      readCodeValue: function() {
-        return getServiceState().flows.manage.codeValue;
-      },
-      onRequestStart: function() {
-      },
-      onConfirmSuccess: function(data) {
-        window.location.href = data.url;
-      },
-      renderPanel: renderManagePanel
-    },
-    retrieve: {
-      requestPath: "/v1/retrieve-license/request",
-      confirmPath: "/v1/retrieve-license",
-      panelID: "retrieve-service-panel",
-      emailInputID: "retrieve-inline-email",
-      codeInputID: "retrieve-inline-code",
-      requestButtonID: "retrieve-inline-request",
-      confirmButtonID: "retrieve-inline-confirm",
-      step2ID: "retrieve-inline-step2",
-      statusID: "retrieve-inline-status",
-      requestLabel: "Send Verification Code",
-      requestPendingLabel: "Sending...",
-      confirmLabel: "Show License",
-      confirmPendingLabel: "Loading...",
-      requestSuccessMessage: "Verification code sent. Check your email.",
-      resendSuccessMessage: "New verification code sent.",
-      requestErrorMessage: "Failed to send verification code",
-      confirmErrorMessage: "Failed to retrieve license",
-      readEmailValue: function() {
-        return getServiceState().flows.retrieve.emailValue;
-      },
-      readCodeValue: function() {
-        return getServiceState().flows.retrieve.codeValue;
-      },
-      onRequestStart: function() {
-        updateServiceState(function(serviceState) {
-          serviceState.flows.retrieve.result = null;
-        }, false);
-      },
-      onConfirmSuccess: function(data) {
-        updateServiceState(function(serviceState) {
-          serviceState.flows.retrieve.result = data.license;
-          serviceState.flows.retrieve.codeValue = "";
-          setFlowStatus(serviceState, "retrieve", "License retrieved successfully.", false);
-        }, false);
-      },
-      renderPanel: renderRetrievePanel
-    },
-    export: {
-      requestPath: "/v1/gdpr/request-export",
-      confirmPath: "/v1/gdpr/export",
-      panelID: "data-service-panel",
-      emailInputID: "data-export-email",
-      codeInputID: "data-export-code",
-      requestButtonID: "data-export-request",
-      confirmButtonID: "data-export-confirm",
-      step2ID: "data-export-step2",
-      statusID: "data-export-status",
-      requestLabel: "Send Verification Code",
-      requestPendingLabel: "Sending...",
-      confirmLabel: "Export My Data",
-      confirmPendingLabel: "Exporting...",
-      requestSuccessMessage: "Verification code sent. Check your email.",
-      resendSuccessMessage: "New verification code sent.",
-      requestErrorMessage: "Request failed",
-      confirmErrorMessage: "Export failed",
-      readEmailValue: function() {
-        return getServiceState().flows.export.emailValue;
-      },
-      readCodeValue: function() {
-        return getServiceState().flows.export.codeValue;
-      },
-      onRequestStart: function() {
-        updateServiceState(function(serviceState) {
-          serviceState.flows.export.result = null;
-        }, false);
-      },
-      onConfirmSuccess: function(data) {
-        updateServiceState(function(serviceState) {
-          serviceState.flows.export.result = data;
-          serviceState.flows.export.codeValue = "";
-          setFlowStatus(serviceState, "export", "Data export retrieved successfully.", false);
-        }, false);
-        resetVerificationFlow("export");
-        updateServiceState(function(serviceState) {
-          serviceState.flows.export.result = data;
-        }, false);
-      },
-      renderPanel: renderExportPanel,
-      renderResult: renderExportResult
-    },
-    delete: {
-      requestPath: "/v1/gdpr/request-delete",
-      confirmPath: "/v1/gdpr/confirm-delete",
-      panelID: "data-service-panel",
-      emailInputID: "data-delete-email",
-      codeInputID: "data-delete-code",
-      requestButtonID: "data-delete-request",
-      confirmButtonID: "data-delete-confirm",
-      step2ID: "data-delete-step2",
-      statusID: "data-delete-status",
-      requestLabel: "Send Verification Code",
-      requestPendingLabel: "Sending...",
-      confirmLabel: "Delete My Data",
-      confirmPendingLabel: "Deleting...",
-      requestSuccessMessage: "Verification code sent. Check your email.",
-      resendSuccessMessage: "New verification code sent.",
-      requestErrorMessage: "Request failed",
-      confirmErrorMessage: "Deletion failed",
-      readEmailValue: function() {
-        return getServiceState().flows.delete.emailValue;
-      },
-      readCodeValue: function() {
-        return getServiceState().flows.delete.codeValue;
-      },
-      beforeConfirm: function() {
-        if (!getElement3("data-delete-confirm-check")?.checked) {
+      retrieve: {
+        requestPath: "/v1/retrieve-license/request",
+        confirmPath: "/v1/retrieve-license",
+        panelID: "retrieve-service-panel",
+        emailInputID: "retrieve-inline-email",
+        codeInputID: "retrieve-inline-code",
+        requestButtonID: "retrieve-inline-request",
+        confirmButtonID: "retrieve-inline-confirm",
+        step2ID: "retrieve-inline-step2",
+        statusID: "retrieve-inline-status",
+        requestLabel: "Send Verification Code",
+        requestPendingLabel: "Sending...",
+        confirmLabel: "Show License",
+        confirmPendingLabel: "Loading...",
+        requestSuccessMessage: "Verification code sent. Check your email.",
+        resendSuccessMessage: "New verification code sent.",
+        requestErrorMessage: "Failed to send verification code",
+        confirmErrorMessage: "Failed to retrieve license",
+        readEmailValue: function() {
+          return getServiceState().flows.retrieve.emailValue;
+        },
+        readCodeValue: function() {
+          return getServiceState().flows.retrieve.codeValue;
+        },
+        onRequestStart: function() {
           updateServiceState(function(serviceState) {
-            setFlowStatus(serviceState, "delete", "You must confirm that you understand this action is permanent.", true);
-          });
-          return false;
-        }
-        return true;
+            serviceState.flows.retrieve.result = null;
+          }, false);
+        },
+        onConfirmSuccess: function(data) {
+          updateServiceState(function(serviceState) {
+            serviceState.flows.retrieve.result = data.license;
+            serviceState.flows.retrieve.codeValue = "";
+            setFlowStatus(serviceState, "retrieve", "License retrieved successfully.", false);
+          }, false);
+        },
+        renderPanel: renderRetrievePanel
       },
-      onConfirmSuccess: function(data) {
-        var checkbox = getElement3("data-delete-confirm-check");
-        if (checkbox) {
-          checkbox.checked = false;
-        }
-        resetVerificationFlow("delete");
+      export: {
+        requestPath: "/v1/gdpr/request-export",
+        confirmPath: "/v1/gdpr/export",
+        panelID: "data-service-panel",
+        emailInputID: "data-export-email",
+        codeInputID: "data-export-code",
+        requestButtonID: "data-export-request",
+        confirmButtonID: "data-export-confirm",
+        step2ID: "data-export-step2",
+        statusID: "data-export-status",
+        requestLabel: "Send Verification Code",
+        requestPendingLabel: "Sending...",
+        confirmLabel: "Export My Data",
+        confirmPendingLabel: "Exporting...",
+        requestSuccessMessage: "Verification code sent. Check your email.",
+        resendSuccessMessage: "New verification code sent.",
+        requestErrorMessage: "Request failed",
+        confirmErrorMessage: "Export failed",
+        readEmailValue: function() {
+          return getServiceState().flows.export.emailValue;
+        },
+        readCodeValue: function() {
+          return getServiceState().flows.export.codeValue;
+        },
+        onRequestStart: function() {
+          updateServiceState(function(serviceState) {
+            serviceState.flows.export.result = null;
+          }, false);
+        },
+        onConfirmSuccess: function(data) {
+          updateServiceState(function(serviceState) {
+            serviceState.flows.export.result = data;
+            serviceState.flows.export.codeValue = "";
+            setFlowStatus(serviceState, "export", "Data export retrieved successfully.", false);
+          }, false);
+          resetVerificationFlow("export");
+          updateServiceState(function(serviceState) {
+            serviceState.flows.export.result = data;
+          }, false);
+        },
+        renderPanel: renderExportPanel,
+        renderResult: renderExportResult
+      },
+      delete: {
+        requestPath: "/v1/gdpr/request-delete",
+        confirmPath: "/v1/gdpr/confirm-delete",
+        panelID: "data-service-panel",
+        emailInputID: "data-delete-email",
+        codeInputID: "data-delete-code",
+        requestButtonID: "data-delete-request",
+        confirmButtonID: "data-delete-confirm",
+        step2ID: "data-delete-step2",
+        statusID: "data-delete-status",
+        requestLabel: "Send Verification Code",
+        requestPendingLabel: "Sending...",
+        confirmLabel: "Delete My Data",
+        confirmPendingLabel: "Deleting...",
+        requestSuccessMessage: "Verification code sent. Check your email.",
+        resendSuccessMessage: "New verification code sent.",
+        requestErrorMessage: "Request failed",
+        confirmErrorMessage: "Deletion failed",
+        readEmailValue: function() {
+          return getServiceState().flows.delete.emailValue;
+        },
+        readCodeValue: function() {
+          return getServiceState().flows.delete.codeValue;
+        },
+        beforeConfirm: function() {
+          if (!getElement3("data-delete-confirm-check")?.checked) {
+            updateServiceState(function(serviceState) {
+              setFlowStatus(serviceState, "delete", "You must confirm that you understand this action is permanent.", true);
+            });
+            return false;
+          }
+          return true;
+        },
+        onConfirmSuccess: function(data) {
+          var checkbox = getElement3("data-delete-confirm-check");
+          if (checkbox) {
+            checkbox.checked = false;
+          }
+          resetVerificationFlow("delete");
+          updateServiceState(function(serviceState) {
+            setFlowStatus(
+              serviceState,
+              "delete",
+              data.deleted_count > 0 && data.stripe_reminder ? data.message + " " + data.stripe_reminder : data.message,
+              false
+            );
+          }, false);
+        },
+        renderPanel: renderDeletePanel
+      }
+    };
+    async function requestVerificationCode(flowID) {
+      var flow = verificationFlows[flowID];
+      if (!flow) return;
+      var email = flow.readEmailValue ? flow.readEmailValue() : readValue(flow.emailInputID);
+      if (!email) {
+        focusElement2(flow.emailInputID);
+        return;
+      }
+      if (flow.onRequestStart) {
+        flow.onRequestStart();
+      }
+      updateServiceState(function(serviceState) {
+        serviceState.flows[flowID].requesting = true;
+        clearFlowStatus(serviceState, flowID);
+      });
+      try {
+        var res = await serviceFetch(flow.requestPath, { email });
+        var data = await res.json();
+        if (!res.ok) throw new Error(data.error || flow.requestErrorMessage);
         updateServiceState(function(serviceState) {
-          setFlowStatus(serviceState, "delete", data.deleted_count > 0 && data.stripe_reminder ? data.message + " " + data.stripe_reminder : data.message, false);
+          serviceState.flows[flowID].pendingEmail = email;
+          serviceState.flows[flowID].step2Visible = !!flow.step2ID;
+          setFlowStatus(serviceState, flowID, flow.requestSuccessMessage, false);
+        });
+      } catch (err) {
+        updateServiceState(function(serviceState) {
+          setFlowStatus(serviceState, flowID, err.message, true);
+        });
+      } finally {
+        updateServiceState(function(serviceState) {
+          serviceState.flows[flowID].requesting = false;
+        });
+      }
+    }
+    async function resendVerificationCode(flowID, event) {
+      if (event) event.preventDefault();
+      var flow = verificationFlows[flowID];
+      if (!flow) return;
+      var email = getServiceState().flows[flowID].pendingEmail;
+      if (!email) return;
+      try {
+        var res = await serviceFetch(flow.requestPath, { email });
+        var data = await res.json();
+        if (!res.ok) throw new Error(data.error || flow.requestErrorMessage);
+        updateServiceState(function(serviceState) {
+          setFlowStatus(serviceState, flowID, flow.resendSuccessMessage, false);
+        });
+      } catch (err) {
+        updateServiceState(function(serviceState) {
+          setFlowStatus(serviceState, flowID, err.message, true);
+        });
+      }
+    }
+    async function confirmVerificationCode(flowID) {
+      var flow = verificationFlows[flowID];
+      if (!flow) return;
+      var email = getServiceState().flows[flowID].pendingEmail;
+      var code = flow.readCodeValue ? flow.readCodeValue() : readValue(flow.codeInputID);
+      if (!email || !code) return;
+      if (flow.beforeConfirm && flow.beforeConfirm() === false) {
+        return;
+      }
+      updateServiceState(function(serviceState) {
+        serviceState.flows[flowID].confirming = true;
+      });
+      try {
+        var res = await serviceFetch(flow.confirmPath, { email, code });
+        var data = await res.json();
+        if (!res.ok) throw new Error(data.error || flow.confirmErrorMessage);
+        flow.onConfirmSuccess(data, email);
+      } catch (err) {
+        updateServiceState(function(serviceState) {
+          setFlowStatus(serviceState, flowID, err.message, true);
+        });
+      } finally {
+        updateServiceState(function(serviceState) {
+          serviceState.flows[flowID].confirming = false;
+        });
+      }
+    }
+    async function copyRetrievedLicense() {
+      var result = getServiceState().flows.retrieve.result;
+      var token = result && result.token ? result.token : "";
+      if (!token) return;
+      try {
+        await navigator.clipboard.writeText(token);
+        updateServiceState(function(serviceState) {
+          setFlowStatus(serviceState, "retrieve", "License key copied to clipboard.", false);
+        });
+      } catch (_) {
+        updateServiceState(function(serviceState) {
+          setFlowStatus(serviceState, "retrieve", "Failed to copy automatically. Please copy the key manually.", true);
+        });
+      }
+    }
+    async function submitRefund() {
+      var email = getServiceState().refund.emailValue;
+      var token = getServiceState().refund.tokenValue;
+      if (!email || !token) return;
+      if (!confirm("Are you sure? This will immediately revoke the license and request the refund.")) return;
+      updateServiceState(function(serviceState) {
+        serviceState.refund.submitting = true;
+        serviceState.refund.status = emptyStatus();
+      });
+      try {
+        var res = await serviceFetch("/v1/self-refund", { email, token });
+        var data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Refund failed");
+        updateServiceState(function(serviceState) {
+          serviceState.refund.tokenValue = "";
+          setRefundStatus(serviceState, "Success! Your refund has been processed. Stripe will follow up by email.", false);
+        });
+      } catch (err) {
+        updateServiceState(function(serviceState) {
+          setRefundStatus(serviceState, err.message, true);
+        });
+      } finally {
+        updateServiceState(function(serviceState) {
+          serviceState.refund.submitting = false;
+        });
+      }
+    }
+    function renderServiceRuntime() {
+      renderOpenPanels(getServiceState().openPanelID);
+      renderAllFlows();
+    }
+    renderServiceRuntime();
+    store.subscribeBootstrap(renderServiceRuntime);
+    store.subscribeServices(renderServiceRuntime);
+    installServicesController({
+      toggleServicePanel,
+      focusElement: focusElement2,
+      requestVerificationCode: function(flowID) {
+        void requestVerificationCode(flowID);
+      },
+      resendVerificationCode: function(flowID, event) {
+        void resendVerificationCode(flowID, event);
+      },
+      confirmVerificationCode: function(flowID) {
+        void confirmVerificationCode(flowID);
+      },
+      copyRetrievedLicense: function() {
+        void copyRetrievedLicense();
+      },
+      submitRefund: function() {
+        void submitRefund();
+      },
+      updateInputValue: function(inputKind, value) {
+        updateServiceState(function(serviceState) {
+          updateServiceInputValue(serviceState, inputKind, value);
         }, false);
       },
-      renderPanel: renderDeletePanel
-    }
-  };
-  async function requestVerificationCode(flowID) {
-    var flow = verificationFlows[flowID];
-    if (!flow) return;
-    var email = flow.readEmailValue ? flow.readEmailValue() : readValue(flow.emailInputID);
-    if (!email) {
-      focusElement2(flow.emailInputID);
-      return;
-    }
-    if (flow.onRequestStart) {
-      flow.onRequestStart();
-    }
-    updateServiceState(function(serviceState) {
-      serviceState.flows[flowID].requesting = true;
-      clearFlowStatus(serviceState, flowID);
+      updateDeleteConfirmation: function(checked) {
+        updateServiceState(function(serviceState) {
+          updateDeleteConfirmation(serviceState, checked);
+        }, false);
+      }
     });
-    try {
-      var res = await serviceFetch(flow.requestPath, { email });
-      var data = await res.json();
-      if (!res.ok) throw new Error(data.error || flow.requestErrorMessage);
-      updateServiceState(function(serviceState) {
-        serviceState.flows[flowID].pendingEmail = email;
-        serviceState.flows[flowID].step2Visible = !!flow.step2ID;
-        setFlowStatus(serviceState, flowID, flow.requestSuccessMessage, false);
-      });
-    } catch (err) {
-      updateServiceState(function(serviceState) {
-        setFlowStatus(serviceState, flowID, err.message, true);
-      });
-    } finally {
-      updateServiceState(function(serviceState) {
-        serviceState.flows[flowID].requesting = false;
-      });
-    }
   }
-  async function resendVerificationCode(flowID, event) {
-    if (event) event.preventDefault();
-    var flow = verificationFlows[flowID];
-    if (!flow) return;
-    var email = getServiceState().flows[flowID].pendingEmail;
-    if (!email) return;
-    try {
-      var res = await serviceFetch(flow.requestPath, { email });
-      var data = await res.json();
-      if (!res.ok) throw new Error(data.error || flow.requestErrorMessage);
-      updateServiceState(function(serviceState) {
-        setFlowStatus(serviceState, flowID, flow.resendSuccessMessage, false);
-      });
-    } catch (err) {
-      updateServiceState(function(serviceState) {
-        setFlowStatus(serviceState, flowID, err.message, true);
-      });
-    }
+
+  // src/shell_view.ts
+  function escapeHTML(value) {
+    return String(value || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   }
-  async function confirmVerificationCode(flowID) {
-    var flow = verificationFlows[flowID];
-    if (!flow) return;
-    var email = getServiceState().flows[flowID].pendingEmail;
-    var code = flow.readCodeValue ? flow.readCodeValue() : readValue(flow.codeInputID);
-    if (!email || !code) return;
-    if (flow.beforeConfirm && flow.beforeConfirm() === false) {
-      return;
+  function escapeAttr(value) {
+    return escapeHTML(value);
+  }
+  function formatWorkspaceDate(value) {
+    if (!value) return "";
+    var date = new Date(String(value));
+    if (Number.isNaN(date.getTime())) return "";
+    return date.toLocaleDateString(void 0, { month: "short", day: "numeric", year: "numeric" });
+  }
+  function roleBadgeHTML(role) {
+    if (role === "owner") return '<span class="badge" style="background:#f1f5f9;color:#64748b">Owner</span>';
+    if (role === "admin") return '<span class="badge" style="background:#f1f5f9;color:#64748b">Admin</span>';
+    if (role === "tech") return '<span class="badge" style="background:#f1f5f9;color:#64748b">Tech</span>';
+    return "";
+  }
+  function renderWorkspaceCard(account, workspace, accountAPIBasePath) {
+    var state = String(workspace.state || "");
+    var safeState = escapeHTML(state);
+    var createdLabel = formatWorkspaceDate(workspace.created_at);
+    var openAction = "";
+    if (state === "active") {
+      openAction = '<form method="POST" action="' + escapeAttr(accountAPIBasePath + "/" + account.id + "/tenants/" + workspace.id + "/handoff") + '"><button type="submit" class="btn-primary">Open \u2192</button></form>';
+    } else {
+      openAction = '<span style="font-size:13px;color:#94a3b8">' + safeState + "</span>";
     }
-    updateServiceState(function(serviceState) {
-      serviceState.flows[flowID].confirming = true;
+    var manageAction = "";
+    if (account.can_manage && (state === "active" || state === "suspended" || state === "failed")) {
+      manageAction = '<button type="button" class="btn-danger" data-action="workspace-manage" data-account-id="' + escapeAttr(account.id) + '" data-workspace-id="' + escapeAttr(workspace.id) + '" data-workspace-state="' + escapeAttr(state) + '" data-workspace-name="' + escapeAttr(workspace.display_name) + '">\u22EF</button>';
+    }
+    var createdMeta = createdLabel ? '<span class="ws-created">Created ' + escapeHTML(createdLabel) + "</span>" : "";
+    return '<div class="workspace-card"><div class="ws-info"><span class="ws-name">' + escapeHTML(workspace.display_name) + '</span><div class="ws-meta">' + (workspace.healthy ? '<span class="badge badge-healthy">Healthy</span>' : '<span class="badge badge-unhealthy">Checking</span>') + '<span class="badge badge-' + safeState + '">' + safeState + "</span>" + createdMeta + '</div></div><div class="ws-actions">' + openAction + manageAction + "</div></div>";
+  }
+  function renderAccountSection(account, accountAPIBasePath) {
+    var workspaces = Array.isArray(account.workspaces) ? account.workspaces : [];
+    var workspaceHTML = "";
+    if (workspaces.length === 0) {
+      workspaceHTML = '<div class="empty-state"><p>No workspaces yet. Create one to get started.</p></div>';
+    } else {
+      workspaceHTML = '<div class="workspace-list">' + workspaces.map(function(workspace) {
+        return renderWorkspaceCard(account, workspace, accountAPIBasePath);
+      }).join("") + "</div>";
+    }
+    var actions = "";
+    var teamSection = "";
+    var addWorkspaceForm = "";
+    if (account.can_manage) {
+      actions = '<div class="account-actions">' + (account.kind === "msp" ? '<button type="button" class="btn-secondary" id="add-ws-btn-' + escapeAttr(account.id) + '" data-action="toggle-add-workspace" data-account-id="' + escapeAttr(account.id) + '">+ Add workspace</button>' : "") + (account.has_billing ? '<button type="button" class="btn-secondary" data-action="open-billing" data-account-id="' + escapeAttr(account.id) + '">Manage billing</button>' : "") + '<button type="button" class="btn-secondary" id="team-btn-' + escapeAttr(account.id) + '" data-action="toggle-team" data-account-id="' + escapeAttr(account.id) + '">Manage team</button></div>';
+      teamSection = '<div class="team-section" id="team-section-' + escapeAttr(account.id) + '" data-actor-role="' + escapeAttr(account.role) + '"><h3>Team members</h3><table class="team-table"><thead><tr><th>Email</th><th>Role</th><th></th></tr></thead><tbody id="team-list-' + escapeAttr(account.id) + '"><tr><td colspan="3" style="color:#94a3b8;text-align:center;padding:16px">Loading\u2026</td></tr></tbody></table><div class="team-invite"><div><label for="invite-email-' + escapeAttr(account.id) + '">Email</label><input type="email" id="invite-email-' + escapeAttr(account.id) + '" placeholder="user@example.com" autocomplete="off"></div><div><label for="invite-role-' + escapeAttr(account.id) + '">Role</label><select id="invite-role-' + escapeAttr(account.id) + '"><option value="admin">Admin</option><option value="tech">Tech</option><option value="read_only">Read-only</option></select></div><button type="button" class="btn-primary" style="padding:8px 14px;font-size:13px" data-action="invite-member" data-account-id="' + escapeAttr(account.id) + '">Invite</button></div></div>';
+      if (account.kind === "msp") {
+        addWorkspaceForm = '<div class="add-workspace-form" id="add-ws-form-' + escapeAttr(account.id) + '"><label for="ws-name-' + escapeAttr(account.id) + '">Workspace name (e.g. client name)</label><input type="text" id="ws-name-' + escapeAttr(account.id) + '" placeholder="Acme Corp" maxlength="80" autocomplete="off"><div class="form-actions"><button type="button" class="btn-primary" data-action="create-workspace" data-account-id="' + escapeAttr(account.id) + '">Create workspace</button><button type="button" class="btn-secondary" data-action="toggle-add-workspace" data-account-id="' + escapeAttr(account.id) + '">Cancel</button><div class="spinner" id="ws-spinner-' + escapeAttr(account.id) + '"></div></div></div>';
+      }
+    }
+    return '<section class="account-section"><div class="account-header"><h2>' + escapeHTML(account.name) + '</h2><span class="badge badge-' + escapeHTML(account.kind) + '">' + escapeHTML(account.kind_label) + "</span>" + roleBadgeHTML(account.role) + "</div>" + workspaceHTML + actions + teamSection + addWorkspaceForm + "</section>";
+  }
+  function renderHeaderHTML(context) {
+    if (context.bootstrap.authenticated) {
+      return "<span>" + escapeHTML(context.bootstrap.email || "") + '</span><button class="logout-btn" id="logout-btn" type="button">Sign out</button>';
+    }
+    return '<a class="logout-btn" href="' + escapeAttr(context.signupPath) + '" style="text-decoration:none">Create account</a>';
+  }
+  function renderAccountsHTML(context) {
+    var safeAccounts = Array.isArray(context.bootstrap.accounts) ? context.bootstrap.accounts : [];
+    if (safeAccounts.length === 0) {
+      return '<div class="empty-state" style="margin-top:48px"><p>No workspaces found. If you just signed up, check your email for setup instructions.</p><p style="margin-top:12px;font-size:13px">Need help? Contact <a href="mailto:' + escapeAttr(context.bootstrap.support_email || "") + '" style="color:#1d4ed8">' + escapeHTML(context.bootstrap.support_email || "") + "</a></p></div>";
+    }
+    return safeAccounts.map(function(account) {
+      return renderAccountSection(account, context.accountAPIBasePath);
+    }).join("");
+  }
+  function renderAuthenticatedPortalHTML(context) {
+    return '<section class="intro-card"><h1>Pulse Account</h1><p>Manage Cloud workspaces, MSP access, and self-hosted commercial account services from one account surface. Hosted workspace lifecycle lives here today, and the self-hosted billing, license recovery, refund, and privacy tools below now share the same Pulse Account shell instead of staying fragmented across public utility pages.</p></section><div id="accounts-root">' + renderAccountsHTML(context) + '</div><section class="service-section"><div class="service-header"><h2>Other account services</h2><div class="service-note">Self-hosted commercial account actions now live here. The public utility pages remain as compatibility entry points, not the primary account surface.</div></div><div class="service-grid"><button class="service-card service-card-button" type="button" id="open-manage-service" data-account-service-action="open-service-panel" data-account-service-panel="manage-service-panel" data-account-service-focus="manage-inline-email"><h3>Manage subscriptions</h3><p>Open Stripe billing access for existing self-hosted subscriptions without leaving the Pulse Account shell.</p></button><button class="service-card service-card-button" type="button" id="open-retrieve-service" data-account-service-action="open-service-panel" data-account-service-panel="retrieve-service-panel" data-account-service-focus="retrieve-inline-email"><h3>Retrieve licenses</h3><p>Recover the latest active self-hosted license and invoice link for a commercial email address.</p></button><button class="service-card service-card-button" type="button" id="open-refund-service" data-account-service-action="open-service-panel" data-account-service-panel="refund-service-panel" data-account-service-focus="refund-inline-email"><h3>Refund requests</h3><p>Request an immediate self-serve refund for eligible self-hosted purchases with explicit revocation confirmation.</p></button><button class="service-card service-card-button" type="button" id="open-data-service" data-account-service-action="open-service-panel" data-account-service-panel="data-service-panel" data-account-service-focus="data-export-email"><h3>Data and privacy</h3><p>Request commercial data export or deletion without leaving the account shell.</p></button></div><div class="service-panel" id="manage-service-panel"><div id="manage-service-root"></div></div><div class="service-panel" id="retrieve-service-panel"><div id="retrieve-service-root"></div></div><div class="service-panel" id="refund-service-panel"><div id="refund-service-root"></div></div><div class="service-panel" id="data-service-panel"><h3>Data and privacy</h3><p>Request export or deletion of the commercial data tied to an email address. Payment data held directly by Stripe still requires support handling.</p><div class="subsection"><div id="data-export-root"></div></div><div class="subsection"><div id="data-delete-root"></div></div><div class="helper-text">Payment-card data stays with Stripe. For Stripe deletion support, contact <a href="mailto:' + escapeAttr(context.bootstrap.support_email || "") + '">' + escapeHTML(context.bootstrap.support_email || "") + "</a>.</div></div></section>";
+  }
+  function renderSignedOutPortalHTML(context) {
+    var statusHTML = "";
+    if (context.loginState.error) {
+      statusHTML = '<div class="service-status visible error">' + escapeHTML(context.loginState.error) + "</div>";
+    } else if (context.loginState.success) {
+      statusHTML = `<div class="service-status visible success">Magic link sent. Check your inbox and click the link to sign in.<br><br><strong>Don't see it?</strong> <a href="#" data-portal-action="resend-magic-link">Send a new link</a>.</div>`;
+    }
+    return '<section class="intro-card"><h1>Pulse Account</h1><p>Sign in to manage Cloud workspaces, MSP access, and commercial account services from one account surface.</p></section><section class="service-section"><div class="service-panel visible"><h3>Sign in</h3><p>Enter the commercial email address for your Pulse account. I will send a magic link so you can open Pulse Account without managing a password.</p><div class="form-group"><label for="portal-login-email">Email address</label><input id="portal-login-email" type="email" autocomplete="email" placeholder="you@example.com" value="' + escapeAttr(context.loginState.emailValue || "") + '" data-portal-input="login-email"></div><div class="form-actions"><button class="btn-primary" id="portal-login-send" type="button" data-portal-action="send-magic-link">' + (context.loginState.sending ? "Sending\u2026" : "Send magic link") + '</button><a class="btn-secondary" href="' + escapeAttr(context.signupPath) + '" style="text-decoration:none">Create an account</a></div>' + statusHTML + "</div></section>";
+  }
+
+  // src/shell.ts
+  function installShell(deps) {
+    function renderHeader() {
+      var userInfo = document.getElementById("portal-user-info");
+      if (!userInfo) return;
+      var portalBootstrap = deps.store.getBootstrap();
+      userInfo.innerHTML = renderHeaderHTML({
+        bootstrap: portalBootstrap,
+        loginState: deps.store.getLoginState(),
+        signupPath: portalBootstrap.signup_path,
+        accountAPIBasePath: portalBootstrap.account_api_base_path
+      });
+    }
+    function renderPortalApp() {
+      renderHeader();
+      var root = document.getElementById("portal-app-root");
+      if (!root) return;
+      var portalBootstrap = deps.store.getBootstrap();
+      var context = {
+        bootstrap: portalBootstrap,
+        loginState: deps.store.getLoginState(),
+        signupPath: portalBootstrap.signup_path,
+        accountAPIBasePath: portalBootstrap.account_api_base_path
+      };
+      root.innerHTML = portalBootstrap.authenticated ? renderAuthenticatedPortalHTML(context) : renderSignedOutPortalHTML(context);
+    }
+    deps.store.subscribeBootstrap(function() {
+      renderPortalApp();
     });
-    try {
-      var res = await serviceFetch(flow.confirmPath, { email, code });
-      var data = await res.json();
-      if (!res.ok) throw new Error(data.error || flow.confirmErrorMessage);
-      flow.onConfirmSuccess(data, email);
-    } catch (err) {
-      updateServiceState(function(serviceState) {
-        setFlowStatus(serviceState, flowID, err.message, true);
-      });
-    } finally {
-      updateServiceState(function(serviceState) {
-        serviceState.flows[flowID].confirming = false;
-      });
-    }
-  }
-  async function copyRetrievedLicense() {
-    var result = getServiceState().flows.retrieve.result;
-    var token = result && result.token ? result.token : "";
-    if (!token) return;
-    try {
-      await navigator.clipboard.writeText(token);
-      updateServiceState(function(serviceState) {
-        setFlowStatus(serviceState, "retrieve", "License key copied to clipboard.", false);
-      });
-    } catch (_) {
-      updateServiceState(function(serviceState) {
-        setFlowStatus(serviceState, "retrieve", "Failed to copy automatically. Please copy the key manually.", true);
-      });
-    }
-  }
-  async function submitRefund() {
-    var email = getServiceState().refund.emailValue;
-    var token = getServiceState().refund.tokenValue;
-    if (!email || !token) return;
-    if (!confirm("Are you sure? This will immediately revoke the license and request the refund.")) return;
-    updateServiceState(function(serviceState) {
-      serviceState.refund.submitting = true;
-      serviceState.refund.status = emptyStatus();
+    deps.store.subscribeLogin(function() {
+      renderPortalApp();
     });
-    try {
-      var res = await serviceFetch("/v1/self-refund", { email, token });
-      var data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Refund failed");
-      updateServiceState(function(serviceState) {
-        serviceState.refund.tokenValue = "";
-        setRefundStatus(serviceState, "Success! Your refund has been processed. Stripe will follow up by email.", false);
-      });
-    } catch (err) {
-      updateServiceState(function(serviceState) {
-        setRefundStatus(serviceState, err.message, true);
-      });
-    } finally {
-      updateServiceState(function(serviceState) {
-        serviceState.refund.submitting = false;
-      });
-    }
+    renderPortalApp();
   }
-  function renderServiceRuntime() {
-    renderOpenPanels(getServiceState().openPanelID);
-    renderAllFlows();
-  }
-  renderServiceRuntime();
-  portalStore.subscribeBootstrap(renderServiceRuntime);
-  portalStore.subscribeServices(renderServiceRuntime);
-  installServicesController({
-    toggleServicePanel,
-    focusElement: focusElement2,
-    requestVerificationCode: function(flowID) {
-      void requestVerificationCode(flowID);
-    },
-    resendVerificationCode: function(flowID, event) {
-      void resendVerificationCode(flowID, event);
-    },
-    confirmVerificationCode: function(flowID) {
-      void confirmVerificationCode(flowID);
-    },
-    copyRetrievedLicense: function() {
-      void copyRetrievedLicense();
-    },
-    submitRefund: function() {
-      void submitRefund();
-    },
-    updateInputValue: function(inputKind, value) {
-      updateServiceState(function(serviceState) {
-        updateServiceInputValue(serviceState, inputKind, value);
-      }, false);
-    },
-    updateDeleteConfirmation: function(checked) {
-      updateServiceState(function(serviceState) {
-        updateDeleteConfirmation(serviceState, checked);
-      }, false);
+
+  // src/app.ts
+  function installPortalApp(deps) {
+    function applyBootstrap(data) {
+      return deps.store.setBootstrap(data || createAnonymousBootstrap(deps.bootstrapDefaults));
     }
-  });
+    async function refreshBootstrap() {
+      var bootstrap = deps.store.getBootstrap();
+      if (!bootstrap.bootstrap_path) return false;
+      try {
+        var response = await fetch(bootstrap.bootstrap_path, {
+          headers: { Accept: "application/json" }
+        });
+        if (response.status === 401) {
+          applyBootstrap(createAnonymousBootstrap(deps.bootstrapDefaults));
+          return true;
+        }
+        if (!response.ok) return false;
+        var data = await response.json();
+        applyBootstrap(data);
+        return true;
+      } catch (_) {
+      }
+      return false;
+    }
+    function showToast(message, isError = false) {
+      var toast = document.getElementById("toast");
+      if (!toast) return;
+      toast.textContent = message;
+      toast.className = "toast visible" + (isError ? " error" : "");
+      clearTimeout(toast._timer);
+      toast._timer = setTimeout(function() {
+        toast.className = "toast";
+      }, 4e3);
+    }
+    installShell({
+      store: deps.store
+    });
+    installServicesRuntime({
+      store: deps.store
+    });
+    installAuthController({
+      store: deps.store
+    });
+    var accountRuntime = installAccountRuntime({
+      store: deps.store,
+      refreshBootstrap,
+      showToast
+    });
+    installAccountController({
+      runtime: accountRuntime
+    });
+    var startupRefresh = deps.store.getBootstrap().authenticated ? refreshBootstrap() : null;
+    return {
+      applyBootstrap,
+      refreshBootstrap,
+      showToast,
+      startupRefresh
+    };
+  }
+  function startPortalApp() {
+    return installPortalApp({
+      bootstrapDefaults,
+      store: portalStore
+    });
+  }
+
+  // src/index.ts
+  startPortalApp();
 })();
