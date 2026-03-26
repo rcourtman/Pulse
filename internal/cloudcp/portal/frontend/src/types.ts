@@ -40,6 +40,8 @@ export interface PortalLoginState {
   error: string;
 }
 
+export type PortalServiceFlowID = 'manage' | 'retrieve' | 'export' | 'delete';
+
 export interface ServiceStatus {
   visible: boolean;
   message: string;
@@ -63,4 +65,10 @@ export interface RefundState {
   tokenValue: string;
   submitting: boolean;
   status: ServiceStatus;
+}
+
+export interface PortalServiceState {
+  openPanelID: string;
+  flows: Record<PortalServiceFlowID, VerificationFlowState>;
+  refund: RefundState;
 }

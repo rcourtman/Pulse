@@ -1,3 +1,4 @@
+import { createPortalLoginState, syncLoginStateBootstrapEmail } from './state';
 import type { PortalLoginState } from './types';
 
 type FormValueElement = HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
@@ -23,17 +24,10 @@ function getElement<T extends HTMLElement = HTMLElement>(id: string): T | null {
 }
 
 export function installAuthController(deps: AuthControllerDeps): AuthController {
-  var loginState: PortalLoginState = {
-    emailValue: '',
-    sending: false,
-    success: false,
-    error: '',
-  };
+  var loginState: PortalLoginState = createPortalLoginState();
 
   function syncBootstrapEmail(email: string) {
-    if (!loginState.emailValue) {
-      loginState.emailValue = email || '';
-    }
+    syncLoginStateBootstrapEmail(loginState, email);
   }
 
   async function sendMagicLink() {

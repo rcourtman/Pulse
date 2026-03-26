@@ -20,6 +20,7 @@ const buildInputs = [
   'src/index.ts',
   'src/account_controller.ts',
   'src/auth_controller.ts',
+  'src/state.ts',
   'src/shell.ts',
   'src/shell_view.ts',
   'src/services.ts',

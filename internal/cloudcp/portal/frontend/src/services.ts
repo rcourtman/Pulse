@@ -1,6 +1,18 @@
 import { getBootstrap, getCommercialAPIBaseURL as readCommercialAPIBaseURL, subscribePortalRender } from './runtime';
 import { installServicesController } from './services_controller';
 import {
+  clearFlowStatus,
+  createPortalServiceState,
+  emptyStatus,
+  resetVerificationFlowState,
+  setFlowStatus,
+  setRefundStatus,
+  syncServiceStateBootstrapEmail,
+  toggleServicePanelState,
+  updateDeleteConfirmation,
+  updateServiceInputValue,
+} from './state';
+import {
   focusElement,
   getElement,
   readValue,
@@ -16,9 +28,7 @@ import {
   setValue,
   setVisible,
 } from './services_view';
-import type { RefundState, ServiceStatus, VerificationFlowState } from './types';
-
-type FlowID = 'manage' | 'retrieve' | 'export' | 'delete';
+import type { PortalServiceFlowID, VerificationFlowState } from './types';
 
 interface VerificationFlowDefinition {
   requestPath: string;
@@ -47,43 +57,7 @@ interface VerificationFlowDefinition {
   renderResult?: (result: unknown) => void;
 }
 
-  var serviceState = {
-    openPanelID: '',
-    flows: {
-      manage: newVerificationFlowState(),
-      retrieve: newVerificationFlowState(),
-      export: newVerificationFlowState(),
-      delete: newVerificationFlowState(),
-    },
-    refund: {
-      emailValue: '',
-      tokenValue: '',
-      submitting: false,
-      status: emptyStatus(),
-    },
-  } as { openPanelID: string; flows: Record<FlowID, VerificationFlowState>; refund: RefundState };
-
-  function newVerificationFlowState(): VerificationFlowState {
-    return {
-      pendingEmail: '',
-      requesting: false,
-      confirming: false,
-      step2Visible: false,
-      status: emptyStatus(),
-      result: null,
-      emailValue: '',
-      codeValue: '',
-      checkboxChecked: false,
-    };
-  }
-
-  function emptyStatus(): ServiceStatus {
-    return {
-      visible: false,
-      message: '',
-      error: false,
-    };
-  }
+  var serviceState = createPortalServiceState();
 
   function getCommercialAPIBaseURL() {
     return readCommercialAPIBaseURL();
@@ -97,32 +71,12 @@ interface VerificationFlowDefinition {
     });
   }
 
-  function setFlowStatus(flowID: FlowID, message, isError) {
-    serviceState.flows[flowID].status = {
-      visible: true,
-      message: message,
-      error: !!isError,
-    };
-  }
-
-  function clearFlowStatus(flowID: FlowID) {
-    serviceState.flows[flowID].status = emptyStatus();
-  }
-
-  function setRefundStatus(message, isError) {
-    serviceState.refund.status = {
-      visible: true,
-      message: message,
-      error: !!isError,
-    };
-  }
-
   function toggleServicePanel(panelID) {
-    serviceState.openPanelID = serviceState.openPanelID === panelID ? '' : panelID;
+    toggleServicePanelState(serviceState, panelID);
     renderOpenPanels(serviceState.openPanelID);
   }
 
-  function renderFlow(flowID) {
+  function renderFlow(flowID: PortalServiceFlowID) {
     var flow = verificationFlows[flowID];
     if (!flow) return;
     var flowState = serviceState.flows[flowID];
@@ -154,18 +108,16 @@ interface VerificationFlowDefinition {
     renderStatus('refund-inline-status', serviceState.refund.status);
   }
 
-  function resetVerificationFlow(flowID: FlowID) {
+  function resetVerificationFlow(flowID: PortalServiceFlowID) {
     var flow = verificationFlows[flowID];
     if (!flow) return;
-    var previous = serviceState.flows[flowID];
-    serviceState.flows[flowID] = newVerificationFlowState();
-    serviceState.flows[flowID].emailValue = previous.emailValue;
+    resetVerificationFlowState(serviceState, flowID);
     if (flow.codeInputID) {
       setValue(flow.codeInputID, '');
     }
   }
 
-  var verificationFlows: Record<FlowID, VerificationFlowDefinition> = {
+  var verificationFlows: Record<PortalServiceFlowID, VerificationFlowDefinition> = {
     manage: {
       requestPath: '/v1/manage/request',
       confirmPath: '/v1/manage',
@@ -226,7 +178,7 @@ interface VerificationFlowDefinition {
       onConfirmSuccess: function(data) {
         serviceState.flows.retrieve.result = data.license;
         serviceState.flows.retrieve.codeValue = '';
-        setFlowStatus('retrieve', 'License retrieved successfully.', false);
+        setFlowStatus(serviceState, 'retrieve', 'License retrieved successfully.', false);
       },
       renderPanel: renderRetrievePanel
     },
@@ -260,7 +212,7 @@ interface VerificationFlowDefinition {
       onConfirmSuccess: function(data) {
         serviceState.flows.export.result = data;
         serviceState.flows.export.codeValue = '';
-        setFlowStatus('export', 'Data export retrieved successfully.', false);
+        setFlowStatus(serviceState, 'export', 'Data export retrieved successfully.', false);
         resetVerificationFlow('export');
         serviceState.flows.export.result = data;
       },
@@ -293,7 +245,7 @@ interface VerificationFlowDefinition {
       },
       beforeConfirm: function() {
         if (!getElement<HTMLInputElement>('data-delete-confirm-check')?.checked) {
-          setFlowStatus('delete', 'You must confirm that you understand this action is permanent.', true);
+          setFlowStatus(serviceState, 'delete', 'You must confirm that you understand this action is permanent.', true);
           renderFlow('delete');
           return false;
         }
@@ -305,13 +257,13 @@ interface VerificationFlowDefinition {
           checkbox.checked = false;
         }
         resetVerificationFlow('delete');
-        setFlowStatus('delete', data.deleted_count > 0 && data.stripe_reminder ? data.message + ' ' + data.stripe_reminder : data.message, false);
+        setFlowStatus(serviceState, 'delete', data.deleted_count > 0 && data.stripe_reminder ? data.message + ' ' + data.stripe_reminder : data.message, false);
       },
       renderPanel: renderDeletePanel
     }
   };
 
-  async function requestVerificationCode(flowID: FlowID) {
+  async function requestVerificationCode(flowID: PortalServiceFlowID) {
     var flow = verificationFlows[flowID];
     if (!flow) return;
     var email = flow.readEmailValue ? flow.readEmailValue() : readValue(flow.emailInputID);
@@ -323,7 +275,7 @@ interface VerificationFlowDefinition {
       flow.onRequestStart();
     }
     serviceState.flows[flowID].requesting = true;
-    clearFlowStatus(flowID);
+    clearFlowStatus(serviceState, flowID);
     renderFlow(flowID);
     try {
       var res = await serviceFetch(flow.requestPath, { email: email });
@@ -331,16 +283,16 @@ interface VerificationFlowDefinition {
       if (!res.ok) throw new Error(data.error || flow.requestErrorMessage);
       serviceState.flows[flowID].pendingEmail = email;
       serviceState.flows[flowID].step2Visible = !!flow.step2ID;
-      setFlowStatus(flowID, flow.requestSuccessMessage, false);
+      setFlowStatus(serviceState, flowID, flow.requestSuccessMessage, false);
     } catch (err) {
-      setFlowStatus(flowID, err.message, true);
+      setFlowStatus(serviceState, flowID, err.message, true);
     } finally {
       serviceState.flows[flowID].requesting = false;
       renderFlow(flowID);
     }
   }
 
-  async function resendVerificationCode(flowID: FlowID, event) {
+  async function resendVerificationCode(flowID: PortalServiceFlowID, event?: Event) {
     if (event) event.preventDefault();
     var flow = verificationFlows[flowID];
     if (!flow) return;
@@ -350,14 +302,14 @@ interface VerificationFlowDefinition {
       var res = await serviceFetch(flow.requestPath, { email: email });
       var data = await res.json();
       if (!res.ok) throw new Error(data.error || flow.requestErrorMessage);
-      setFlowStatus(flowID, flow.resendSuccessMessage, false);
+      setFlowStatus(serviceState, flowID, flow.resendSuccessMessage, false);
     } catch (err) {
-      setFlowStatus(flowID, err.message, true);
+      setFlowStatus(serviceState, flowID, err.message, true);
     }
     renderFlow(flowID);
   }
 
-  async function confirmVerificationCode(flowID: FlowID) {
+  async function confirmVerificationCode(flowID: PortalServiceFlowID) {
     var flow = verificationFlows[flowID];
     if (!flow) return;
     var email = serviceState.flows[flowID].pendingEmail;
@@ -374,7 +326,7 @@ interface VerificationFlowDefinition {
       if (!res.ok) throw new Error(data.error || flow.confirmErrorMessage);
       flow.onConfirmSuccess(data, email);
     } catch (err) {
-      setFlowStatus(flowID, err.message, true);
+      setFlowStatus(serviceState, flowID, err.message, true);
     } finally {
       serviceState.flows[flowID].confirming = false;
       renderFlow(flowID);
@@ -387,9 +339,9 @@ interface VerificationFlowDefinition {
     if (!token) return;
     try {
       await navigator.clipboard.writeText(token);
-      setFlowStatus('retrieve', 'License key copied to clipboard.', false);
+      setFlowStatus(serviceState, 'retrieve', 'License key copied to clipboard.', false);
     } catch (_) {
-      setFlowStatus('retrieve', 'Failed to copy automatically. Please copy the key manually.', true);
+      setFlowStatus(serviceState, 'retrieve', 'Failed to copy automatically. Please copy the key manually.', true);
     }
     renderFlow('retrieve');
   }
@@ -407,9 +359,9 @@ interface VerificationFlowDefinition {
       var data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Refund failed');
       serviceState.refund.tokenValue = '';
-      setRefundStatus('Success! Your refund has been processed. Stripe will follow up by email.', false);
+      setRefundStatus(serviceState, 'Success! Your refund has been processed. Stripe will follow up by email.', false);
     } catch (err) {
-      setRefundStatus(err.message, true);
+      setRefundStatus(serviceState, err.message, true);
     } finally {
       serviceState.refund.submitting = false;
       renderRefund();
@@ -421,11 +373,7 @@ interface VerificationFlowDefinition {
     if (!bootstrap.authenticated) {
       return;
     }
-    if (!serviceState.flows.manage.emailValue) serviceState.flows.manage.emailValue = bootstrap.email || '';
-    if (!serviceState.flows.retrieve.emailValue) serviceState.flows.retrieve.emailValue = bootstrap.email || '';
-    if (!serviceState.flows.export.emailValue) serviceState.flows.export.emailValue = bootstrap.email || '';
-    if (!serviceState.flows.delete.emailValue) serviceState.flows.delete.emailValue = bootstrap.email || '';
-    if (!serviceState.refund.emailValue) serviceState.refund.emailValue = bootstrap.email || '';
+    syncServiceStateBootstrapEmail(serviceState, bootstrap.email || '');
   }
 
   function renderServiceRuntime() {
@@ -436,43 +384,6 @@ interface VerificationFlowDefinition {
 
   renderServiceRuntime();
   subscribePortalRender(renderServiceRuntime);
-
-  function updateInputValue(inputKind: string, value: string) {
-    switch (inputKind) {
-      case 'manage-email':
-        serviceState.flows.manage.emailValue = value;
-        return;
-      case 'manage-code':
-        serviceState.flows.manage.codeValue = value;
-        return;
-      case 'retrieve-email':
-        serviceState.flows.retrieve.emailValue = value;
-        return;
-      case 'retrieve-code':
-        serviceState.flows.retrieve.codeValue = value;
-        return;
-      case 'refund-email':
-        serviceState.refund.emailValue = value;
-        return;
-      case 'refund-token':
-        serviceState.refund.tokenValue = value;
-        return;
-      case 'data-export-email':
-        serviceState.flows.export.emailValue = value;
-        return;
-      case 'data-export-code':
-        serviceState.flows.export.codeValue = value;
-        return;
-      case 'data-delete-email':
-        serviceState.flows.delete.emailValue = value;
-        return;
-      case 'data-delete-code':
-        serviceState.flows.delete.codeValue = value;
-        return;
-      default:
-        return;
-    }
-  }
 
   installServicesController({
     toggleServicePanel,
@@ -492,8 +403,10 @@ interface VerificationFlowDefinition {
     submitRefund: function() {
       void submitRefund();
     },
-    updateInputValue,
+    updateInputValue: function(inputKind, value) {
+      updateServiceInputValue(serviceState, inputKind, value);
+    },
     updateDeleteConfirmation: function(checked) {
-      serviceState.flows.delete.checkboxChecked = checked;
+      updateDeleteConfirmation(serviceState, checked);
     },
   });

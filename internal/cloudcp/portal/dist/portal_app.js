@@ -418,6 +418,129 @@
     });
   }
 
+  // src/state.ts
+  function emptyStatus() {
+    return {
+      visible: false,
+      message: "",
+      error: false
+    };
+  }
+  function newVerificationFlowState() {
+    return {
+      pendingEmail: "",
+      requesting: false,
+      confirming: false,
+      step2Visible: false,
+      status: emptyStatus(),
+      result: null,
+      emailValue: "",
+      codeValue: "",
+      checkboxChecked: false
+    };
+  }
+  function createPortalLoginState() {
+    return {
+      emailValue: "",
+      sending: false,
+      success: false,
+      error: ""
+    };
+  }
+  function createPortalServiceState() {
+    return {
+      openPanelID: "",
+      flows: {
+        manage: newVerificationFlowState(),
+        retrieve: newVerificationFlowState(),
+        export: newVerificationFlowState(),
+        delete: newVerificationFlowState()
+      },
+      refund: {
+        emailValue: "",
+        tokenValue: "",
+        submitting: false,
+        status: emptyStatus()
+      }
+    };
+  }
+  function syncLoginStateBootstrapEmail(loginState, email) {
+    if (!loginState.emailValue) {
+      loginState.emailValue = email || "";
+    }
+  }
+  function syncServiceStateBootstrapEmail(serviceState2, email) {
+    if (!serviceState2.flows.manage.emailValue) serviceState2.flows.manage.emailValue = email || "";
+    if (!serviceState2.flows.retrieve.emailValue) serviceState2.flows.retrieve.emailValue = email || "";
+    if (!serviceState2.flows.export.emailValue) serviceState2.flows.export.emailValue = email || "";
+    if (!serviceState2.flows.delete.emailValue) serviceState2.flows.delete.emailValue = email || "";
+    if (!serviceState2.refund.emailValue) serviceState2.refund.emailValue = email || "";
+  }
+  function setFlowStatus(serviceState2, flowID, message, isError) {
+    serviceState2.flows[flowID].status = {
+      visible: true,
+      message,
+      error: !!isError
+    };
+  }
+  function clearFlowStatus(serviceState2, flowID) {
+    serviceState2.flows[flowID].status = emptyStatus();
+  }
+  function setRefundStatus(serviceState2, message, isError) {
+    serviceState2.refund.status = {
+      visible: true,
+      message,
+      error: !!isError
+    };
+  }
+  function toggleServicePanelState(serviceState2, panelID) {
+    serviceState2.openPanelID = serviceState2.openPanelID === panelID ? "" : panelID;
+  }
+  function resetVerificationFlowState(serviceState2, flowID) {
+    var previous = serviceState2.flows[flowID];
+    serviceState2.flows[flowID] = newVerificationFlowState();
+    serviceState2.flows[flowID].emailValue = previous.emailValue;
+  }
+  function updateServiceInputValue(serviceState2, inputKind, value) {
+    switch (inputKind) {
+      case "manage-email":
+        serviceState2.flows.manage.emailValue = value;
+        return;
+      case "manage-code":
+        serviceState2.flows.manage.codeValue = value;
+        return;
+      case "retrieve-email":
+        serviceState2.flows.retrieve.emailValue = value;
+        return;
+      case "retrieve-code":
+        serviceState2.flows.retrieve.codeValue = value;
+        return;
+      case "refund-email":
+        serviceState2.refund.emailValue = value;
+        return;
+      case "refund-token":
+        serviceState2.refund.tokenValue = value;
+        return;
+      case "data-export-email":
+        serviceState2.flows.export.emailValue = value;
+        return;
+      case "data-export-code":
+        serviceState2.flows.export.codeValue = value;
+        return;
+      case "data-delete-email":
+        serviceState2.flows.delete.emailValue = value;
+        return;
+      case "data-delete-code":
+        serviceState2.flows.delete.codeValue = value;
+        return;
+      default:
+        return;
+    }
+  }
+  function updateDeleteConfirmation(serviceState2, checked) {
+    serviceState2.flows.delete.checkboxChecked = checked;
+  }
+
   // src/auth_controller.ts
   function asHTMLElement2(target) {
     return target instanceof HTMLElement ? target : null;
@@ -426,16 +549,9 @@
     return document.getElementById(id);
   }
   function installAuthController(deps) {
-    var loginState = {
-      emailValue: "",
-      sending: false,
-      success: false,
-      error: ""
-    };
+    var loginState = createPortalLoginState();
     function syncBootstrapEmail(email) {
-      if (!loginState.emailValue) {
-        loginState.emailValue = email || "";
-      }
+      syncLoginStateBootstrapEmail(loginState, email);
     }
     async function sendMagicLink() {
       var email = String(loginState.emailValue || "").trim();
@@ -891,41 +1007,7 @@
   }
 
   // src/services.ts
-  var serviceState = {
-    openPanelID: "",
-    flows: {
-      manage: newVerificationFlowState(),
-      retrieve: newVerificationFlowState(),
-      export: newVerificationFlowState(),
-      delete: newVerificationFlowState()
-    },
-    refund: {
-      emailValue: "",
-      tokenValue: "",
-      submitting: false,
-      status: emptyStatus()
-    }
-  };
-  function newVerificationFlowState() {
-    return {
-      pendingEmail: "",
-      requesting: false,
-      confirming: false,
-      step2Visible: false,
-      status: emptyStatus(),
-      result: null,
-      emailValue: "",
-      codeValue: "",
-      checkboxChecked: false
-    };
-  }
-  function emptyStatus() {
-    return {
-      visible: false,
-      message: "",
-      error: false
-    };
-  }
+  var serviceState = createPortalServiceState();
   function getCommercialAPIBaseURL2() {
     return getCommercialAPIBaseURL();
   }
@@ -936,25 +1018,8 @@
       body: JSON.stringify(body)
     });
   }
-  function setFlowStatus(flowID, message, isError) {
-    serviceState.flows[flowID].status = {
-      visible: true,
-      message,
-      error: !!isError
-    };
-  }
-  function clearFlowStatus(flowID) {
-    serviceState.flows[flowID].status = emptyStatus();
-  }
-  function setRefundStatus(message, isError) {
-    serviceState.refund.status = {
-      visible: true,
-      message,
-      error: !!isError
-    };
-  }
   function toggleServicePanel(panelID) {
-    serviceState.openPanelID = serviceState.openPanelID === panelID ? "" : panelID;
+    toggleServicePanelState(serviceState, panelID);
     renderOpenPanels(serviceState.openPanelID);
   }
   function renderFlow(flowID) {
@@ -989,9 +1054,7 @@
   function resetVerificationFlow(flowID) {
     var flow = verificationFlows[flowID];
     if (!flow) return;
-    var previous = serviceState.flows[flowID];
-    serviceState.flows[flowID] = newVerificationFlowState();
-    serviceState.flows[flowID].emailValue = previous.emailValue;
+    resetVerificationFlowState(serviceState, flowID);
     if (flow.codeInputID) {
       setValue(flow.codeInputID, "");
     }
@@ -1058,7 +1121,7 @@
       onConfirmSuccess: function(data) {
         serviceState.flows.retrieve.result = data.license;
         serviceState.flows.retrieve.codeValue = "";
-        setFlowStatus("retrieve", "License retrieved successfully.", false);
+        setFlowStatus(serviceState, "retrieve", "License retrieved successfully.", false);
       },
       renderPanel: renderRetrievePanel
     },
@@ -1092,7 +1155,7 @@
       onConfirmSuccess: function(data) {
         serviceState.flows.export.result = data;
         serviceState.flows.export.codeValue = "";
-        setFlowStatus("export", "Data export retrieved successfully.", false);
+        setFlowStatus(serviceState, "export", "Data export retrieved successfully.", false);
         resetVerificationFlow("export");
         serviceState.flows.export.result = data;
       },
@@ -1125,7 +1188,7 @@
       },
       beforeConfirm: function() {
         if (!getElement3("data-delete-confirm-check")?.checked) {
-          setFlowStatus("delete", "You must confirm that you understand this action is permanent.", true);
+          setFlowStatus(serviceState, "delete", "You must confirm that you understand this action is permanent.", true);
           renderFlow("delete");
           return false;
         }
@@ -1137,7 +1200,7 @@
           checkbox.checked = false;
         }
         resetVerificationFlow("delete");
-        setFlowStatus("delete", data.deleted_count > 0 && data.stripe_reminder ? data.message + " " + data.stripe_reminder : data.message, false);
+        setFlowStatus(serviceState, "delete", data.deleted_count > 0 && data.stripe_reminder ? data.message + " " + data.stripe_reminder : data.message, false);
       },
       renderPanel: renderDeletePanel
     }
@@ -1154,7 +1217,7 @@
       flow.onRequestStart();
     }
     serviceState.flows[flowID].requesting = true;
-    clearFlowStatus(flowID);
+    clearFlowStatus(serviceState, flowID);
     renderFlow(flowID);
     try {
       var res = await serviceFetch(flow.requestPath, { email });
@@ -1162,9 +1225,9 @@
       if (!res.ok) throw new Error(data.error || flow.requestErrorMessage);
       serviceState.flows[flowID].pendingEmail = email;
       serviceState.flows[flowID].step2Visible = !!flow.step2ID;
-      setFlowStatus(flowID, flow.requestSuccessMessage, false);
+      setFlowStatus(serviceState, flowID, flow.requestSuccessMessage, false);
     } catch (err) {
-      setFlowStatus(flowID, err.message, true);
+      setFlowStatus(serviceState, flowID, err.message, true);
     } finally {
       serviceState.flows[flowID].requesting = false;
       renderFlow(flowID);
@@ -1180,9 +1243,9 @@
       var res = await serviceFetch(flow.requestPath, { email });
       var data = await res.json();
       if (!res.ok) throw new Error(data.error || flow.requestErrorMessage);
-      setFlowStatus(flowID, flow.resendSuccessMessage, false);
+      setFlowStatus(serviceState, flowID, flow.resendSuccessMessage, false);
     } catch (err) {
-      setFlowStatus(flowID, err.message, true);
+      setFlowStatus(serviceState, flowID, err.message, true);
     }
     renderFlow(flowID);
   }
@@ -1203,7 +1266,7 @@
       if (!res.ok) throw new Error(data.error || flow.confirmErrorMessage);
       flow.onConfirmSuccess(data, email);
     } catch (err) {
-      setFlowStatus(flowID, err.message, true);
+      setFlowStatus(serviceState, flowID, err.message, true);
     } finally {
       serviceState.flows[flowID].confirming = false;
       renderFlow(flowID);
@@ -1215,9 +1278,9 @@
     if (!token) return;
     try {
       await navigator.clipboard.writeText(token);
-      setFlowStatus("retrieve", "License key copied to clipboard.", false);
+      setFlowStatus(serviceState, "retrieve", "License key copied to clipboard.", false);
     } catch (_) {
-      setFlowStatus("retrieve", "Failed to copy automatically. Please copy the key manually.", true);
+      setFlowStatus(serviceState, "retrieve", "Failed to copy automatically. Please copy the key manually.", true);
     }
     renderFlow("retrieve");
   }
@@ -1234,9 +1297,9 @@
       var data = await res.json();
       if (!res.ok) throw new Error(data.error || "Refund failed");
       serviceState.refund.tokenValue = "";
-      setRefundStatus("Success! Your refund has been processed. Stripe will follow up by email.", false);
+      setRefundStatus(serviceState, "Success! Your refund has been processed. Stripe will follow up by email.", false);
     } catch (err) {
-      setRefundStatus(err.message, true);
+      setRefundStatus(serviceState, err.message, true);
     } finally {
       serviceState.refund.submitting = false;
       renderRefund();
@@ -1247,11 +1310,7 @@
     if (!bootstrap.authenticated) {
       return;
     }
-    if (!serviceState.flows.manage.emailValue) serviceState.flows.manage.emailValue = bootstrap.email || "";
-    if (!serviceState.flows.retrieve.emailValue) serviceState.flows.retrieve.emailValue = bootstrap.email || "";
-    if (!serviceState.flows.export.emailValue) serviceState.flows.export.emailValue = bootstrap.email || "";
-    if (!serviceState.flows.delete.emailValue) serviceState.flows.delete.emailValue = bootstrap.email || "";
-    if (!serviceState.refund.emailValue) serviceState.refund.emailValue = bootstrap.email || "";
+    syncServiceStateBootstrapEmail(serviceState, bootstrap.email || "");
   }
   function renderServiceRuntime() {
     syncServiceStateFromBootstrap();
@@ -1260,42 +1319,6 @@
   }
   renderServiceRuntime();
   subscribePortalRender(renderServiceRuntime);
-  function updateInputValue(inputKind, value) {
-    switch (inputKind) {
-      case "manage-email":
-        serviceState.flows.manage.emailValue = value;
-        return;
-      case "manage-code":
-        serviceState.flows.manage.codeValue = value;
-        return;
-      case "retrieve-email":
-        serviceState.flows.retrieve.emailValue = value;
-        return;
-      case "retrieve-code":
-        serviceState.flows.retrieve.codeValue = value;
-        return;
-      case "refund-email":
-        serviceState.refund.emailValue = value;
-        return;
-      case "refund-token":
-        serviceState.refund.tokenValue = value;
-        return;
-      case "data-export-email":
-        serviceState.flows.export.emailValue = value;
-        return;
-      case "data-export-code":
-        serviceState.flows.export.codeValue = value;
-        return;
-      case "data-delete-email":
-        serviceState.flows.delete.emailValue = value;
-        return;
-      case "data-delete-code":
-        serviceState.flows.delete.codeValue = value;
-        return;
-      default:
-        return;
-    }
-  }
   installServicesController({
     toggleServicePanel,
     focusElement,
@@ -1314,9 +1337,11 @@
     submitRefund: function() {
       void submitRefund();
     },
-    updateInputValue,
+    updateInputValue: function(inputKind, value) {
+      updateServiceInputValue(serviceState, inputKind, value);
+    },
     updateDeleteConfirmation: function(checked) {
-      serviceState.flows.delete.checkboxChecked = checked;
+      updateDeleteConfirmation(serviceState, checked);
     }
   });
 })();
