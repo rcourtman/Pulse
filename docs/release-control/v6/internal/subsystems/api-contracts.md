@@ -221,7 +221,7 @@ sources and the committed embedded bundle cannot drift silently. The maintained
 portal source tree now also owns explicit runtime/bootstrap type definitions
 plus a package-local `tsc --noEmit` gate, so future account-shell work should
 extend the typed source boundary instead of reviving opaque global runtime
-objects or untyped embedded asset edits.
+objects, document-wide render events, or untyped embedded asset edits.
 Hosted Pulse Cloud tenant-org AI reads now also follow that same canonical
 rule: `internal/api/ai_hosted_runtime.go`, `internal/api/ai_handlers.go`,
 `internal/api/ai_handler.go`, and `internal/api/hosted_billing_state.go`

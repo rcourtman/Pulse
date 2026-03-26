@@ -33,16 +33,6 @@ export interface PortalBootstrapData {
   accounts: PortalAccountSummary[];
 }
 
-export interface PortalRuntime {
-  getBootstrap(): PortalBootstrapData;
-  getCommercialAPIBaseURL(): string;
-  getPortalPath(): string;
-  getAccountAPIBasePath(): string;
-  getPortalAPIBasePath(): string;
-  refreshBootstrap(): Promise<boolean>;
-  showToast(message: string, isError?: boolean): void;
-}
-
 export interface PortalLoginState {
   emailValue: string;
   sending: boolean;
@@ -73,10 +63,4 @@ export interface RefundState {
   tokenValue: string;
   submitting: boolean;
   status: ServiceStatus;
-}
-
-declare global {
-  interface Window {
-    PulseAccountPortal?: PortalRuntime;
-  }
 }

@@ -1,4 +1,4 @@
-import { PORTAL_RENDER_EVENT, getBootstrap, getCommercialAPIBaseURL as readCommercialAPIBaseURL } from './runtime';
+import { getBootstrap, getCommercialAPIBaseURL as readCommercialAPIBaseURL, subscribePortalRender } from './runtime';
 import type { RefundState, ServiceStatus, VerificationFlowState } from './types';
 
 type FlowID = 'manage' | 'retrieve' | 'export' | 'delete';
@@ -666,7 +666,7 @@ type FormValueElement = HTMLInputElement | HTMLTextAreaElement | HTMLSelectEleme
   }
 
   renderServiceRuntime();
-  document.addEventListener(PORTAL_RENDER_EVENT, renderServiceRuntime);
+  subscribePortalRender(renderServiceRuntime);
 
   document.addEventListener('click', function(event) {
     var target = asHTMLElement(event.target)?.closest('[data-account-service-action]');

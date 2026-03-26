@@ -1,6 +1,5 @@
 import {
   createAnonymousBootstrap,
-  dispatchPortalRender,
   getAccountAPIBasePath,
   getBootstrap,
   getBootstrapPath,
@@ -10,10 +9,10 @@ import {
   getPortalAPIBasePath,
   getPortalPath,
   getSignupPath,
-  installRuntime,
+  notifyPortalRender,
   setBootstrap,
 } from './runtime';
-import type { PortalBootstrapData, PortalLoginState, PortalRuntime } from './types';
+import type { PortalBootstrapData, PortalLoginState } from './types';
 
 var portalBootstrap: PortalBootstrapData = getBootstrap();
 var LICENSE_API_BASE = getCommercialAPIBaseURL();
@@ -359,7 +358,7 @@ function renderPortalApp() {
   if (portalBootstrap.authenticated) {
     renderAccounts(portalBootstrap.accounts || []);
   }
-  dispatchPortalRender();
+  notifyPortalRender();
 }
 
 function applyBootstrap(data) {
@@ -447,27 +446,6 @@ async function sendMagicLink() {
   loginState.sending = false;
   renderPortalApp();
 }
-
-var portalRuntime: PortalRuntime = {
-  getBootstrap: function() {
-    return portalBootstrap;
-  },
-  getCommercialAPIBaseURL: function() {
-    return LICENSE_API_BASE;
-  },
-  getPortalPath: function() {
-    return PORTAL_PATH;
-  },
-  getAccountAPIBasePath: function() {
-    return ACCOUNT_API_BASE_PATH;
-  },
-  getPortalAPIBasePath: function() {
-    return PORTAL_API_BASE_PATH;
-  },
-  refreshBootstrap: refreshBootstrap,
-  showToast: showToast,
-};
-installRuntime(portalRuntime);
 
 document.addEventListener('click', function(event) {
   var portalActionEl = asHTMLElement(event.target)?.closest('[data-portal-action]');

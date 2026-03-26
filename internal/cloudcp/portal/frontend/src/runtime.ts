@@ -1,6 +1,4 @@
-import type { PortalBootstrapData, PortalRuntime } from './types';
-
-export const PORTAL_RENDER_EVENT = 'pulse-account-render';
+import type { PortalBootstrapData } from './types';
 
 function readEmbeddedBootstrap(): Partial<PortalBootstrapData> {
   const bootstrapEl = document.getElementById('pulse-account-bootstrap');
@@ -48,6 +46,7 @@ export function normalizeBootstrap(raw: Partial<PortalBootstrapData> | null | un
 }
 
 let bootstrapState: PortalBootstrapData = normalizeBootstrap(embeddedBootstrap);
+const renderSubscribers = new Set<() => void>();
 
 export function getBootstrap(): PortalBootstrapData {
   return bootstrapState;
@@ -90,10 +89,15 @@ export function getPortalAPIBasePath(): string {
   return bootstrapState.portal_api_base_path;
 }
 
-export function dispatchPortalRender(): void {
-  document.dispatchEvent(new CustomEvent(PORTAL_RENDER_EVENT));
+export function notifyPortalRender(): void {
+  renderSubscribers.forEach((listener) => {
+    listener();
+  });
 }
 
-export function installRuntime(runtime: PortalRuntime): void {
-  window.PulseAccountPortal = runtime;
+export function subscribePortalRender(listener: () => void): () => void {
+  renderSubscribers.add(listener);
+  return () => {
+    renderSubscribers.delete(listener);
+  };
 }

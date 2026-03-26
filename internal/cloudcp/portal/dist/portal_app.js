@@ -1,6 +1,5 @@
 (() => {
   // src/runtime.ts
-  var PORTAL_RENDER_EVENT = "pulse-account-render";
   function readEmbeddedBootstrap() {
     const bootstrapEl = document.getElementById("pulse-account-bootstrap");
     if (!bootstrapEl) {
@@ -41,6 +40,7 @@
     return createAnonymousBootstrap(raw || {});
   }
   var bootstrapState = normalizeBootstrap(embeddedBootstrap);
+  var renderSubscribers = /* @__PURE__ */ new Set();
   function getBootstrap() {
     return bootstrapState;
   }
@@ -72,11 +72,16 @@
   function getPortalAPIBasePath() {
     return bootstrapState.portal_api_base_path;
   }
-  function dispatchPortalRender() {
-    document.dispatchEvent(new CustomEvent(PORTAL_RENDER_EVENT));
+  function notifyPortalRender() {
+    renderSubscribers.forEach((listener) => {
+      listener();
+    });
   }
-  function installRuntime(runtime) {
-    window.PulseAccountPortal = runtime;
+  function subscribePortalRender(listener) {
+    renderSubscribers.add(listener);
+    return () => {
+      renderSubscribers.delete(listener);
+    };
   }
 
   // src/shell.ts
@@ -197,7 +202,7 @@
     if (portalBootstrap.authenticated) {
       renderAccounts(portalBootstrap.accounts || []);
     }
-    dispatchPortalRender();
+    notifyPortalRender();
   }
   function applyBootstrap(data) {
     portalBootstrap = setBootstrap(data || createAnonymousBootstrap());
@@ -276,26 +281,6 @@
     loginState.sending = false;
     renderPortalApp();
   }
-  var portalRuntime = {
-    getBootstrap: function() {
-      return portalBootstrap;
-    },
-    getCommercialAPIBaseURL: function() {
-      return LICENSE_API_BASE;
-    },
-    getPortalPath: function() {
-      return PORTAL_PATH;
-    },
-    getAccountAPIBasePath: function() {
-      return ACCOUNT_API_BASE_PATH;
-    },
-    getPortalAPIBasePath: function() {
-      return PORTAL_API_BASE_PATH;
-    },
-    refreshBootstrap,
-    showToast
-  };
-  installRuntime(portalRuntime);
   document.addEventListener("click", function(event) {
     var portalActionEl = asHTMLElement(event.target)?.closest("[data-portal-action]");
     if (portalActionEl) {
@@ -1126,7 +1111,7 @@
     renderAllFlows();
   }
   renderServiceRuntime();
-  document.addEventListener(PORTAL_RENDER_EVENT, renderServiceRuntime);
+  subscribePortalRender(renderServiceRuntime);
   document.addEventListener("click", function(event) {
     var target = asHTMLElement2(event.target)?.closest("[data-account-service-action]");
     if (!target) return;

@@ -257,7 +257,9 @@ is embedded from `internal/cloudcp/portal/dist/`, and is guarded by
 `internal/cloudcp/portal/frontend_sync_test.go` plus the package-local
 typecheck/build steps, so Pulse Account frontend work should extend that source
 tree and rebuild the committed bundle instead of editing embedded script or CSS
-blobs directly.
+blobs directly. Coordination between account-shell modules should stay inside
+that owned runtime boundary as well, rather than drifting back to
+document-wide custom events or browser-global runtime objects.
 
 ### Post-lane follow-on
 

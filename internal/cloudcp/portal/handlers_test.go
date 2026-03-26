@@ -816,6 +816,12 @@ func TestPortalPageTemplate_AccountServicesRendered(t *testing.T) {
 	if strings.Contains(html, `assets/portal_shell.js`) || strings.Contains(html, `assets/portal_services.js`) || strings.Contains(html, `assets/portal.css`) {
 		t.Errorf("expected portal runtime to load from the built dist bundle, not the old handwritten asset paths")
 	}
+	if strings.Contains(html, `window.PulseAccountPortal`) {
+		t.Errorf("expected Pulse Account frontend coordination to stay module-owned, not revive a browser-global runtime")
+	}
+	if strings.Contains(html, `pulse-account-render`) {
+		t.Errorf("expected Pulse Account frontend coordination to stay module-owned, not revive a document-wide render event")
+	}
 	if strings.Contains(html, `await fetch('/auth/logout'`) {
 		t.Errorf("expected portal paths to be renderer-owned, not hardcoded in the asset")
 	}
