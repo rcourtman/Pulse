@@ -537,7 +537,7 @@ const Recovery: Component = () => {
               when={workspaceView() === 'inventory'}
               fallback="Cross-platform recovery artifacts grouped by day and filtered through one shared recovery model."
             >
-              Platform-neutral protection rollups across every connected recovery provider in the selected window.
+              Platform-neutral protection rollups across every connected recovery platform in the selected window.
             </Show>
           </div>
         </Card>

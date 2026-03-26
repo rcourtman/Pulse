@@ -17,7 +17,7 @@ describe('RecoveryPointDetails', () => {
     wsState.resources = [];
   });
 
-  it('renders provider-neutral details framing while preserving PBS-specific metadata', () => {
+  it('renders platform-neutral details framing while preserving PBS-specific metadata', () => {
     wsState.resources = [
       {
         id: 'pbs-resource-1',
@@ -74,15 +74,15 @@ describe('RecoveryPointDetails', () => {
       />
     ));
 
-    expect(screen.getByText('Provider Details')).toBeInTheDocument();
+    expect(screen.getByText('Platform Details')).toBeInTheDocument();
     expect(screen.queryByText('PBS Details')).not.toBeInTheDocument();
-    expect(screen.getByText('Provider-specific recovery metadata, verification state, and repository health.')).toBeInTheDocument();
+    expect(screen.getByText('Platform-specific recovery metadata, verification state, and repository health.')).toBeInTheDocument();
     expect(screen.getByText('Repository Health')).toBeInTheDocument();
     expect(screen.getByText('Verification')).toBeInTheDocument();
 
-    const providerCard = screen.getByText('Provider').parentElement?.parentElement;
-    expect(providerCard).not.toBeNull();
-    expect(within(providerCard as HTMLDivElement).getByText('PBS')).toBeInTheDocument();
+    const platformCard = screen.getByText('Platform').parentElement?.parentElement;
+    expect(platformCard).not.toBeNull();
+    expect(within(platformCard as HTMLDivElement).getByText('PBS')).toBeInTheDocument();
   });
 
   it('uses canonical provider labels without forcing provider detail panels for other platforms', () => {
@@ -99,11 +99,11 @@ describe('RecoveryPointDetails', () => {
       />
     ));
 
-    expect(screen.queryByText('Provider Details')).not.toBeInTheDocument();
+    expect(screen.queryByText('Platform Details')).not.toBeInTheDocument();
     expect(screen.queryByText('PBS Details')).not.toBeInTheDocument();
 
-    const providerCard = screen.getByText('Provider').parentElement?.parentElement;
-    expect(providerCard).not.toBeNull();
-    expect(within(providerCard as HTMLDivElement).getByText('TrueNAS')).toBeInTheDocument();
+    const platformCard = screen.getByText('Platform').parentElement?.parentElement;
+    expect(platformCard).not.toBeNull();
+    expect(within(platformCard as HTMLDivElement).getByText('TrueNAS')).toBeInTheDocument();
   });
 });

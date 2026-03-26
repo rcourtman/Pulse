@@ -324,7 +324,7 @@ export const RecoveryHistorySection: Component<RecoveryHistorySectionProps> = (p
           >
             <LabeledFilterSelect
               id="recovery-provider-filter-history"
-              label="History provider"
+              label="History platform"
               value={props.providerFilter()}
               onChange={(event) => {
                 props.setProviderFilter(
@@ -337,7 +337,7 @@ export const RecoveryHistorySection: Component<RecoveryHistorySectionProps> = (p
               <For each={props.providerOptions()}>
                 {(provider) => (
                   <option value={provider}>
-                    {provider === 'all' ? 'All Providers' : getSourcePlatformLabel(provider)}
+                    {provider === 'all' ? 'All Platforms' : getSourcePlatformLabel(provider)}
                   </option>
                 )}
               </For>

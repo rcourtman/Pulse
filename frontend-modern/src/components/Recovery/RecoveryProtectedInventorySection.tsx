@@ -198,7 +198,7 @@ export const RecoveryProtectedInventorySection: Component<
           >
             <LabeledFilterSelect
               id="recovery-provider-filter"
-              label="Provider"
+              label="Platform"
               value={props.providerFilter()}
               onChange={(event) =>
                 props.setProviderFilter(
@@ -210,7 +210,7 @@ export const RecoveryProtectedInventorySection: Component<
               <For each={props.providerOptions()}>
                 {(provider) => (
                   <option value={provider}>
-                    {provider === 'all' ? 'All Providers' : getSourcePlatformLabel(provider)}
+                    {provider === 'all' ? 'All Platforms' : getSourcePlatformLabel(provider)}
                   </option>
                 )}
               </For>

@@ -318,7 +318,7 @@ describe('Recovery', () => {
 
     expect(await screen.findByText('VM 123')).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText('Provider'), { target: { value: 'truenas' } });
+    fireEvent.change(screen.getByLabelText('Platform'), { target: { value: 'truenas' } });
 
     await waitFor(() => {
       expect(navigateSpy).toHaveBeenCalledWith('/recovery?provider=truenas', { replace: true });

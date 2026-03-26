@@ -148,7 +148,7 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
     const pairs: { k: string; v: string }[] = [];
 
     pairs.push({ k: 'ID', v: p.id });
-    pairs.push({ k: 'Provider', v: providerLabel() || 'n/a' });
+    pairs.push({ k: 'Platform', v: providerLabel() || 'n/a' });
     pairs.push({ k: 'Kind', v: String(p.kind || 'n/a') });
     pairs.push({ k: 'Mode', v: String(p.mode || 'n/a') });
     pairs.push({ k: 'Outcome', v: String(p.outcome || 'unknown') });
@@ -263,10 +263,10 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
           <div class="flex flex-wrap items-start justify-between gap-3">
             <div>
               <div class="text-[10px] font-semibold uppercase tracking-wide text-muted">
-                Provider Details
+                Platform Details
               </div>
               <div class="mt-1 text-xs text-muted">
-                Provider-specific recovery metadata, verification state, and repository health.
+                Platform-specific recovery metadata, verification state, and repository health.
               </div>
             </div>
             <Show when={providerBadge()}>

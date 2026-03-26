@@ -149,6 +149,10 @@ items, recovery events, and latest points so PBS backups, TrueNAS snapshots,
 Kubernetes artifacts, and future providers all fit the same first-class UI
 frame without removing the source badges and row-level cues that make Proxmox
 operators productive.
+Operator-facing filter and detail labels should likewise prefer `platform`
+wording over implementation-facing `provider` wording, so the recovery surface
+describes the monitored platform families Pulse covers rather than exposing
+backend transport vocabulary as the primary UI model.
 That primary workspace selection now also lives in canonical recovery route
 state through `frontend-modern/src/routing/resourceLinks.ts` and
 `frontend-modern/src/features/recovery/useRecoverySurfaceState.ts`, so copied
