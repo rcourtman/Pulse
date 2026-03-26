@@ -339,3 +339,95 @@ func TestRegisterRoutes_PortalBootstrapRequiresSession(t *testing.T) {
 		t.Fatalf("revoked status = %d, want %d (body=%q)", revokedRec.Code, http.StatusUnauthorized, revokedRec.Body.String())
 	}
 }
+
+func TestRegisterRoutes_PortalPageSessionModes(t *testing.T) {
+	dir := t.TempDir()
+	reg, err := registry.NewTenantRegistry(dir)
+	if err != nil {
+		t.Fatalf("NewTenantRegistry: %v", err)
+	}
+	t.Cleanup(func() { _ = reg.Close() })
+
+	accountID, err := registry.GenerateAccountID()
+	if err != nil {
+		t.Fatalf("GenerateAccountID: %v", err)
+	}
+	if err := reg.CreateAccount(&registry.Account{
+		ID:          accountID,
+		Kind:        registry.AccountKindMSP,
+		DisplayName: "Acme MSP",
+	}); err != nil {
+		t.Fatalf("CreateAccount: %v", err)
+	}
+
+	userID, err := registry.GenerateUserID()
+	if err != nil {
+		t.Fatalf("GenerateUserID: %v", err)
+	}
+	if err := reg.CreateUser(&registry.User{
+		ID:    userID,
+		Email: "owner@example.com",
+	}); err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+	if err := reg.CreateMembership(&registry.AccountMembership{
+		AccountID: accountID,
+		UserID:    userID,
+		Role:      registry.MemberRoleOwner,
+	}); err != nil {
+		t.Fatalf("CreateMembership: %v", err)
+	}
+
+	magicSvc, err := cpauth.NewService(dir)
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+	t.Cleanup(magicSvc.Close)
+
+	token, err := magicSvc.GenerateSessionToken(userID, "owner@example.com", cpauth.SessionTTL)
+	if err != nil {
+		t.Fatalf("GenerateSessionToken: %v", err)
+	}
+
+	mux := http.NewServeMux()
+	RegisterRoutes(mux, &Deps{
+		Config: &CPConfig{
+			DataDir:             dir,
+			AdminKey:            "test-admin-key",
+			BaseURL:             "https://cloud.example.com",
+			StripeWebhookSecret: "whsec_test",
+		},
+		Registry:   reg,
+		MagicLinks: magicSvc,
+		Version:    "test",
+	})
+
+	unauthReq := httptest.NewRequest(http.MethodGet, portal.PortalPagePath, nil)
+	unauthRec := httptest.NewRecorder()
+	mux.ServeHTTP(unauthRec, unauthReq)
+	if unauthRec.Code != http.StatusOK {
+		t.Fatalf("unauth status = %d, want %d (body=%q)", unauthRec.Code, http.StatusOK, unauthRec.Body.String())
+	}
+	if !strings.Contains(unauthRec.Body.String(), "Sign in to manage Cloud workspaces, MSP access, and commercial account services.") {
+		t.Fatalf("expected login shell in unauthenticated portal page, body=%q", unauthRec.Body.String())
+	}
+
+	authReq := httptest.NewRequest(http.MethodGet, portal.PortalPagePath, nil)
+	authReq.Header.Set("Authorization", "Bearer "+token)
+	authRec := httptest.NewRecorder()
+	mux.ServeHTTP(authRec, authReq)
+	if authRec.Code != http.StatusOK {
+		t.Fatalf("auth status = %d, want %d (body=%q)", authRec.Code, http.StatusOK, authRec.Body.String())
+	}
+	for _, needle := range []string{
+		"Pulse Account",
+		"Acme MSP",
+		`id="pulse-account-bootstrap"`,
+		"Other account services",
+		"self-hosted billing, license recovery, refund, and privacy tools below now share the same Pulse Account shell",
+	} {
+		if !strings.Contains(authRec.Body.String(), needle) {
+			t.Fatalf("expected authenticated portal page to contain %q, body=%q", needle, authRec.Body.String())
+		}
+	}
+}
