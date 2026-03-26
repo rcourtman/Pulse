@@ -213,6 +213,11 @@ Recovery surfaces must resolve rollup and point item types through one shared
 item-type helper instead of repeating `display.itemType` / `subjectType` /
 `subjectRef.type` fallback chains across state, summary, details, and table
 renderers.
+That same recovery-store decode boundary must fail soft on malformed persisted
+metadata. If a stored recovery row contains bad `subject_ref_json`,
+`repository_ref_json`, or `details_json`, the list endpoints should log and
+drop only the malformed derived field for that row rather than returning `500`
+for the entire recovery points or rollups surface.
 That same hook-boundary normalization also owns the runtime recovery display
 model. Canonical recovery points and rollups must expose `display.itemLabel`
 and `display.itemType` to recovery consumers, while legacy transport fields

@@ -227,3 +227,64 @@ func TestStore_ListRollups(t *testing.T) {
 		t.Fatalf("ListRollups(itemType) = %#v total=%d, want only dataset rollup", got4, total4)
 	}
 }
+
+func TestStore_ListRollups_IgnoresMalformedSubjectRefJSON(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "recovery.db")
+
+	store, err := Open(dbPath)
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+
+	now := time.Date(2026, 2, 19, 12, 0, 0, 0, time.UTC)
+
+	point := recovery.RecoveryPoint{
+		ID:          "rollup-bad-json",
+		Provider:    recovery.ProviderTrueNAS,
+		Kind:        recovery.KindSnapshot,
+		Mode:        recovery.ModeSnapshot,
+		Outcome:     recovery.OutcomeSuccess,
+		StartedAt:   &now,
+		CompletedAt: &now,
+		SubjectRef: &recovery.ExternalRef{
+			Type: "truenas-dataset",
+			Name: "tank/apps",
+			ID:   "tank/apps",
+		},
+	}
+
+	if err := store.UpsertPoints(context.Background(), []recovery.RecoveryPoint{point}); err != nil {
+		t.Fatalf("UpsertPoints() error = %v", err)
+	}
+
+	if _, err := store.db.ExecContext(
+		context.Background(),
+		`UPDATE recovery_points
+		 SET subject_ref_json = '{'
+		 WHERE id = ?`,
+		point.ID,
+	); err != nil {
+		t.Fatalf("corrupt recovery rollup json: %v", err)
+	}
+
+	got, total, err := store.ListRollups(context.Background(), recovery.ListPointsOptions{Page: 1, Limit: 50})
+	if err != nil {
+		t.Fatalf("ListRollups() error = %v, want graceful degradation", err)
+	}
+	if total != 1 || len(got) != 1 {
+		t.Fatalf("ListRollups() total=%d len=%d, want 1/1", total, len(got))
+	}
+	if got[0].SubjectRef != nil {
+		t.Fatalf("SubjectRef = %#v, want nil after malformed json fallback", got[0].SubjectRef)
+	}
+	if got[0].Display == nil || got[0].Display.SubjectLabel != "tank/apps" {
+		t.Fatalf("Display = %#v, want preserved normalized subject label", got[0].Display)
+	}
+	if got[0].Display == nil || got[0].Display.ItemType != "dataset" {
+		t.Fatalf("Display = %#v, want preserved normalized item type", got[0].Display)
+	}
+}

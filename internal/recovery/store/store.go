@@ -508,6 +508,23 @@ func unmarshalJSON[T any](raw sql.NullString, target *T) error {
 	return json.Unmarshal([]byte(raw.String), target)
 }
 
+func decodeRecoveryJSONField[T any](rowID string, field string, raw sql.NullString, target *T) bool {
+	if !raw.Valid || strings.TrimSpace(raw.String) == "" {
+		return false
+	}
+	if err := json.Unmarshal([]byte(raw.String), target); err != nil {
+		log.Warn().
+			Err(err).
+			Str("row_id", strings.TrimSpace(rowID)).
+			Str("field", strings.TrimSpace(field)).
+			Msg("Ignoring malformed recovery JSON field")
+		var zero T
+		*target = zero
+		return false
+	}
+	return true
+}
+
 func normalizeLimit(limit int) int {
 	if limit <= 0 {
 		return defaultLimit
@@ -917,24 +934,18 @@ func (s *Store) ListPoints(ctx context.Context, opts recovery.ListPointsOptions)
 		}
 
 		var subjectRef recovery.ExternalRef
-		if err := unmarshalJSON(subjectRefRaw, &subjectRef); err != nil {
-			return nil, 0, err
-		}
+		_ = decodeRecoveryJSONField(p.ID, "subject_ref_json", subjectRefRaw, &subjectRef)
 		if subjectRef.Type != "" {
 			p.SubjectRef = &subjectRef
 		}
 		var repoRef recovery.ExternalRef
-		if err := unmarshalJSON(repoRefRaw, &repoRef); err != nil {
-			return nil, 0, err
-		}
+		_ = decodeRecoveryJSONField(p.ID, "repository_ref_json", repoRefRaw, &repoRef)
 		if repoRef.Type != "" {
 			p.RepositoryRef = &repoRef
 		}
 
 		var details map[string]any
-		if err := unmarshalJSON(detailsRaw, &details); err != nil {
-			return nil, 0, err
-		}
+		_ = decodeRecoveryJSONField(p.ID, "details_json", detailsRaw, &details)
 		if len(details) > 0 {
 			p.Details = details
 		}
@@ -1256,9 +1267,7 @@ func (s *Store) ListRollups(ctx context.Context, opts recovery.ListPointsOptions
 		}
 
 		var subjectRef recovery.ExternalRef
-		if err := unmarshalJSON(subjectRefRaw, &subjectRef); err != nil {
-			return nil, 0, err
-		}
+		_ = decodeRecoveryJSONField(subjectKey, "subject_ref_json", subjectRefRaw, &subjectRef)
 		var subjectRefPtr *recovery.ExternalRef
 		if subjectRef.Type != "" {
 			subjectRefPtr = &subjectRef
