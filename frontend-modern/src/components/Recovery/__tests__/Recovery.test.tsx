@@ -197,7 +197,9 @@ describe('Recovery', () => {
     });
     const inventoryTable = screen.getAllByRole('table')[0];
     expect(within(inventoryTable).getByText('Item')).toBeInTheDocument();
+    expect(within(inventoryTable).getByText('Item Type')).toBeInTheDocument();
     expect(within(inventoryTable).getByText('Platform')).toBeInTheDocument();
+    expect(within(inventoryTable).getByText('VM')).toBeInTheDocument();
     expect(screen.queryByText('Backups By Date')).not.toBeInTheDocument();
 
     fireEvent.click(await screen.findByText('VM 123'));

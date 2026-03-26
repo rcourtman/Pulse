@@ -45,7 +45,7 @@ import { getSourcePlatformLabel, normalizeSourcePlatformQueryValue } from '@/uti
 import { titleCaseDelimitedLabel } from '@/utils/textPresentation';
 
 type VerificationFilter = 'all' | 'verified' | 'unverified' | 'unknown';
-type ProtectedSortCol = 'subject' | 'source' | 'lastBackup' | 'outcome';
+type ProtectedSortCol = 'subject' | 'type' | 'source' | 'lastBackup' | 'outcome';
 type SortDir = 'asc' | 'desc';
 
 interface RecoveryRollupSummary {
@@ -121,6 +121,15 @@ export const RecoveryProtectedInventorySection: Component<
           const leftLabel = getRecoveryRollupSubjectLabel(left, resourceIndex).toLowerCase();
           const rightLabel = getRecoveryRollupSubjectLabel(right, resourceIndex).toLowerCase();
           return multiplier * leftLabel.localeCompare(rightLabel);
+        }
+        case 'type': {
+          const leftType = getRecoveryItemTypePresentation(
+            left.display?.itemType || left.display?.subjectType || left.subjectRef?.type,
+          )?.label.toLowerCase();
+          const rightType = getRecoveryItemTypePresentation(
+            right.display?.itemType || right.display?.subjectType || right.subjectRef?.type,
+          )?.label.toLowerCase();
+          return multiplier * (leftType || '').localeCompare(rightType || '');
         }
         case 'source': {
           const leftSource = (left.providers || [])
@@ -308,13 +317,14 @@ export const RecoveryProtectedInventorySection: Component<
         <div class="overflow-x-auto">
           <Table
             class="w-full border-collapse whitespace-nowrap"
-            style={{ 'table-layout': 'fixed', 'min-width': props.isMobile ? '100%' : '500px' }}
+            style={{ 'table-layout': 'fixed', 'min-width': props.isMobile ? '100%' : '640px' }}
           >
             <TableHeader>
               <TableRow class="bg-surface-alt text-muted border-b border-border">
                 {(
                   [
                     ['subject', getRecoveryArtifactColumnLabel('subject', 'Subject')],
+                    ['type', 'Item Type'],
                     ['source', getRecoveryArtifactColumnLabel('source', 'Source')],
                     ['lastBackup', 'Latest Point'],
                     ['outcome', 'Outcome'],
@@ -322,8 +332,10 @@ export const RecoveryProtectedInventorySection: Component<
                 ).map(([column, label]) => (
                   <TableHead
                     class={`py-0.5 px-3 whitespace-nowrap text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer select-none hover:text-base-content transition-colors${
-                      column === 'source'
-                        ? ' hidden md:table-cell w-[110px]'
+                      column === 'type'
+                        ? ' hidden md:table-cell w-[96px]'
+                        : column === 'source'
+                          ? ' hidden lg:table-cell w-[110px]'
                         : column === 'lastBackup'
                           ? ' w-[120px]'
                           : column === 'outcome'
@@ -363,6 +375,12 @@ export const RecoveryProtectedInventorySection: Component<
                     .sort((left, right) =>
                       getSourcePlatformLabel(left).localeCompare(getSourcePlatformLabel(right)),
                     );
+                  const itemTypePresentation =
+                    getRecoveryItemTypePresentation(
+                      rollup.display?.itemType ||
+                        rollup.display?.subjectType ||
+                        rollup.subjectRef?.type,
+                    ) || null;
                   const nowMs = Date.now();
                   const issueTone: RecoveryIssueTone = getRecoveryRollupIssueTone(rollup, nowMs);
                   const issueRailClass =
@@ -403,6 +421,21 @@ export const RecoveryProtectedInventorySection: Component<
                       </TableCell>
 
                       <TableCell class="hidden md:table-cell whitespace-nowrap px-3 py-0.5">
+                        <Show
+                          when={itemTypePresentation}
+                          fallback={<span class="text-muted">—</span>}
+                        >
+                          <span
+                            class={`inline-flex min-w-[4.5rem] justify-center rounded px-1.5 py-px text-[10px] font-medium ${
+                              itemTypePresentation?.badgeClasses || 'bg-surface-alt text-base-content'
+                            }`}
+                          >
+                            {itemTypePresentation?.label}
+                          </span>
+                        </Show>
+                      </TableCell>
+
+                      <TableCell class="hidden lg:table-cell whitespace-nowrap px-3 py-0.5">
                         <div class="flex flex-wrap gap-1.5">
                           <For each={providers}>
                             {(provider) => {

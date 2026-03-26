@@ -344,6 +344,12 @@ fields instead of one ambiguous "primary" label. The summary may still surface
 platform breadth and cross-platform protected items, but the recovery page
 must read item-first so the unified recovery model is not visually anchored to
 one platform family.
+That same item-first rule also applies to the protected inventory table:
+`RecoveryProtectedInventorySection.tsx` must surface protected item type as a
+first-class column in the main inventory grid rather than leaving platform as
+the only structural classifier beside the item label. Platform badges remain
+important supporting operator context, especially for Proxmox-heavy fleets,
+but the table frame itself must make protected item class explicit.
 The recovery table presentation helper now owns the canonical subject-type
 label fallback for recovery rows and delegates its title-casing to the shared
 `frontend-modern/src/utils/textPresentation.ts` helper rather than keeping a
