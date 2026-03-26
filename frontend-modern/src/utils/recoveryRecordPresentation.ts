@@ -1,6 +1,9 @@
 import type { ProtectionRollup, RecoveryPoint } from '@/types/recovery';
 import type { Resource } from '@/types/resource';
+import { getRecoveryArtifactModePresentation } from '@/utils/recoveryArtifactModePresentation';
+import { normalizeRecoveryOutcome } from '@/utils/recoveryOutcomePresentation';
 import { getPreferredResourceDisplayName } from '@/utils/resourceIdentity';
+import { titleCaseDelimitedLabel } from '@/utils/textPresentation';
 
 export type RecoveryArtifactMode = 'snapshot' | 'local' | 'remote';
 
@@ -78,6 +81,44 @@ export function getRecoveryPointRepositoryLabel(point: RecoveryPoint): string {
 
 export function getRecoveryPointDetailsSummary(point: RecoveryPoint): string {
   return String(point.display?.detailsSummary || '').trim();
+}
+
+export function getRecoveryPointKindLabel(value: string | null | undefined): string {
+  const normalized = (value || '').trim().toLowerCase();
+  if (!normalized) return 'n/a';
+
+  switch (normalized) {
+    case 'backup':
+      return 'Backup';
+    case 'snapshot':
+      return 'Snapshot';
+    case 'other':
+      return 'Other';
+    default:
+      return titleCaseDelimitedLabel(value, {
+        fallback: 'n/a',
+        preserveShortAllCaps: true,
+      });
+  }
+}
+
+export function getRecoveryPointModeLabel(value: string | null | undefined): string {
+  const normalized = normalizeRecoveryModeQueryValue(value);
+  if (normalized !== 'all') {
+    return getRecoveryArtifactModePresentation(normalized).label;
+  }
+
+  return titleCaseDelimitedLabel(value, {
+    fallback: 'n/a',
+    preserveShortAllCaps: true,
+  });
+}
+
+export function getRecoveryPointOutcomeLabel(value: string | null | undefined): string {
+  return titleCaseDelimitedLabel(normalizeRecoveryOutcome(value), {
+    fallback: 'Unknown',
+    preserveShortAllCaps: true,
+  });
 }
 
 export function normalizeRecoveryModeQueryValue(

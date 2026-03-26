@@ -23,6 +23,7 @@ import {
 import { getRecoveryOutcomeBadgeClass } from '@/utils/recoveryOutcomePresentation';
 import {
   getRecoveryPointDetailsSummary,
+  getRecoveryPointModeLabel,
   getRecoveryPointRepositoryLabel,
   getRecoveryPointSubjectLabel,
   getRecoveryPointTimestampMs,
@@ -363,7 +364,7 @@ export const RecoveryHistoryTable: Component<RecoveryHistoryTableProps> = (props
                                           mode as ArtifactMode,
                                         ).badgeClassName}`}
                                       >
-                                        {getRecoveryArtifactModePresentation(mode as ArtifactMode).label}
+                                        {getRecoveryPointModeLabel(point.mode)}
                                       </span>
                                     </TableCell>
                                   );

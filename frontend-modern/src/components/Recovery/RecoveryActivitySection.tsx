@@ -254,15 +254,15 @@ export const RecoveryActivitySection: Component<RecoveryActivitySectionProps> = 
             <div class="mb-2 flex items-center justify-end gap-3 text-[10px] text-muted">
               <div class={RECOVERY_TIMELINE_LEGEND_ITEM_CLASS}>
                 <span class={`h-2.5 w-2.5 rounded ${getRecoveryArtifactModePresentation('snapshot').segmentClassName}`} />
-                {getRecoveryArtifactModePresentation('snapshot').label}
+                {getRecoveryArtifactModePresentation('snapshot').aggregateLabel}
               </div>
               <div class={RECOVERY_TIMELINE_LEGEND_ITEM_CLASS}>
                 <span class={`h-2.5 w-2.5 rounded ${getRecoveryArtifactModePresentation('local').segmentClassName}`} />
-                {getRecoveryArtifactModePresentation('local').label}
+                {getRecoveryArtifactModePresentation('local').aggregateLabel}
               </div>
               <div class={RECOVERY_TIMELINE_LEGEND_ITEM_CLASS}>
                 <span class={`h-2.5 w-2.5 rounded ${getRecoveryArtifactModePresentation('remote').segmentClassName}`} />
-                {getRecoveryArtifactModePresentation('remote').label}
+                {getRecoveryArtifactModePresentation('remote').aggregateLabel}
               </div>
             </div>
 
@@ -304,9 +304,21 @@ export const RecoveryActivitySection: Component<RecoveryActivitySectionProps> = 
                             onMouseEnter={(event) => {
                               const rect = event.currentTarget.getBoundingClientRect();
                               const breakdown: string[] = [];
-                              if (point.snapshot > 0) breakdown.push(`Snapshots: ${point.snapshot}`);
-                              if (point.local > 0) breakdown.push(`Local: ${point.local}`);
-                              if (point.remote > 0) breakdown.push(`Remote: ${point.remote}`);
+                              if (point.snapshot > 0) {
+                                breakdown.push(
+                                  `${getRecoveryArtifactModePresentation('snapshot').aggregateLabel}: ${point.snapshot}`,
+                                );
+                              }
+                              if (point.local > 0) {
+                                breakdown.push(
+                                  `${getRecoveryArtifactModePresentation('local').aggregateLabel}: ${point.local}`,
+                                );
+                              }
+                              if (point.remote > 0) {
+                                breakdown.push(
+                                  `${getRecoveryArtifactModePresentation('remote').aggregateLabel}: ${point.remote}`,
+                                );
+                              }
                               const tooltipText =
                                 point.total > 0
                                   ? `${getRecoveryPrettyDateLabel(point.key)}\nAvailable: ${point.total} recovery point${point.total > 1 ? 's' : ''}\n${breakdown.join(' • ')}`

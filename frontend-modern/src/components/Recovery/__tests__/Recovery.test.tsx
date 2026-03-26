@@ -287,7 +287,7 @@ describe('Recovery', () => {
 
     await screen.findByText(/Showing 1 - 1 of 1 recovery points/i);
     const tables = await screen.findAllByRole('table');
-    const historyTable = tables.find((table) => within(table).queryByText('Local'));
+    const historyTable = tables.find((table) => within(table).queryByText('Local Copy'));
     expect(historyTable).toBeDefined();
     expect(historyTable).toHaveStyle({ 'min-width': '1046px', 'table-layout': 'fixed' });
   });
@@ -309,7 +309,7 @@ describe('Recovery', () => {
     await screen.findByText(/Showing 1 - 1 of 1 recovery points/i);
     const tables = await screen.findAllByRole('table');
     const table = tables[tables.length - 1];
-    expect(within(table).getAllByText('Local').length).toBeGreaterThan(0);
+    expect(within(table).getAllByText('Local Copy').length).toBeGreaterThan(0);
     expect(within(table).getAllByText('Success').length).toBeGreaterThan(0);
   });
 

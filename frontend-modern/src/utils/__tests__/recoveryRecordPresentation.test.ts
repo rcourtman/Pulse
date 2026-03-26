@@ -3,6 +3,9 @@ import type { ProtectionRollup, RecoveryPoint } from '@/types/recovery';
 import type { Resource } from '@/types/resource';
 import {
   getRecoveryPointDetailsSummary,
+  getRecoveryPointKindLabel,
+  getRecoveryPointModeLabel,
+  getRecoveryPointOutcomeLabel,
   getRecoveryPointRepositoryLabel,
   getRecoveryPointSubjectLabel,
   getRecoveryPointTimestampMs,
@@ -88,5 +91,15 @@ describe('recoveryRecordPresentation', () => {
     expect(normalizeRecoveryModeQueryValue('snapshot')).toBe('snapshot');
     expect(normalizeRecoveryModeQueryValue('LOCAL')).toBe('local');
     expect(normalizeRecoveryModeQueryValue('unknown')).toBe('all');
+  });
+
+  it('humanizes point kind, method, and outcome labels for operator-facing recovery details', () => {
+    expect(getRecoveryPointKindLabel('backup')).toBe('Backup');
+    expect(getRecoveryPointKindLabel('replica_sync')).toBe('Replica Sync');
+    expect(getRecoveryPointModeLabel('local')).toBe('Local Copy');
+    expect(getRecoveryPointModeLabel('zfs_send')).toBe('Zfs Send');
+    expect(getRecoveryPointOutcomeLabel('success')).toBe('Success');
+    expect(getRecoveryPointOutcomeLabel('FAILURE')).toBe('Failed');
+    expect(getRecoveryPointOutcomeLabel('')).toBe('Unknown');
   });
 });

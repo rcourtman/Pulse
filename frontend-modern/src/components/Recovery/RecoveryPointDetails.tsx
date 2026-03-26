@@ -5,6 +5,11 @@ import { getSourcePlatformBadge } from '@/components/shared/sourcePlatformBadges
 import type { PBSDatastore } from '@/types/api';
 import type { RecoveryExternalRef, RecoveryPoint } from '@/types/recovery';
 import { formatAbsoluteTime, formatBytes, formatUptime } from '@/utils/format';
+import {
+  getRecoveryPointKindLabel,
+  getRecoveryPointModeLabel,
+  getRecoveryPointOutcomeLabel,
+} from '@/utils/recoveryRecordPresentation';
 import { pbsInstanceFromResource } from '@/utils/resourceStateAdapters';
 import {
   getSourcePlatformLabel,
@@ -149,17 +154,17 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
 
     pairs.push({ k: 'ID', v: p.id });
     pairs.push({ k: 'Platform', v: providerLabel() || 'n/a' });
-    pairs.push({ k: 'Kind', v: String(p.kind || 'n/a') });
-    pairs.push({ k: 'Mode', v: String(p.mode || 'n/a') });
-    pairs.push({ k: 'Outcome', v: String(p.outcome || 'unknown') });
+    pairs.push({ k: 'Point Type', v: getRecoveryPointKindLabel(p.kind) });
+    pairs.push({ k: 'Method', v: getRecoveryPointModeLabel(p.mode) });
+    pairs.push({ k: 'Outcome', v: getRecoveryPointOutcomeLabel(p.outcome) });
     pairs.push({ k: 'Duration', v: formatDurationFromISO(p.startedAt, p.completedAt) });
     pairs.push({
       k: 'Size',
       v: typeof sizeBytes() === 'number' ? formatBytes(sizeBytes()!) : 'n/a',
     });
 
-    if (p.verified != null) pairs.push({ k: 'Verified', v: p.verified ? 'true' : 'false' });
-    if (p.encrypted != null) pairs.push({ k: 'Encrypted', v: p.encrypted ? 'true' : 'false' });
+    if (p.verified != null) pairs.push({ k: 'Verified', v: p.verified ? 'Verified' : 'Not Verified' });
+    if (p.encrypted != null) pairs.push({ k: 'Encrypted', v: p.encrypted ? 'Encrypted' : 'Not Encrypted' });
     if (p.subjectResourceId) pairs.push({ k: 'Subject Resource', v: p.subjectResourceId });
     if (p.repositoryResourceId) pairs.push({ k: 'Repository Resource', v: p.repositoryResourceId });
     if (p.subjectRef) pairs.push({ k: 'Subject Ref', v: labelForRef(p.subjectRef) });

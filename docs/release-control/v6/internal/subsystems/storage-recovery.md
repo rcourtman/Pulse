@@ -153,6 +153,16 @@ Operator-facing filter and detail labels should likewise prefer `platform`
 wording over implementation-facing `provider` wording, so the recovery surface
 describes the monitored platform families Pulse covers rather than exposing
 backend transport vocabulary as the primary UI model.
+That same shared presentation layer also owns the distinction between
+aggregate recovery-method language and single-record recovery-method language.
+Timeline legends and daily breakdowns must use aggregate labels such as
+`Snapshots`, `Local Copies`, and `Remote Copies`, while event rows, filters,
+and point details must use the singular operator-facing forms `Snapshot`,
+`Local Copy`, and `Remote Copy`. Recovery point detail summaries must also
+humanize backend fields like kind, mode, outcome, and boolean state into
+operator-facing labels such as `Point Type`, `Method`, `Outcome`, `Verified`,
+and `Encrypted` instead of leaking raw transport values like `backup`,
+`remote`, or lowercase outcome tokens into the primary drawer surface.
 That primary workspace selection now also lives in canonical recovery route
 state through `frontend-modern/src/routing/resourceLinks.ts` and
 `frontend-modern/src/features/recovery/useRecoverySurfaceState.ts`, so copied
