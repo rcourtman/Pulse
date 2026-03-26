@@ -883,6 +883,11 @@
         },
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/cloud-hosted-tier-runtime-readiness-production-recovered-2026-03-26.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "docs/release-control/v6/internal/subsystems/cloud-paid.md",
           "kind": "file"
         },
@@ -924,11 +929,6 @@
         {
           "repo": "pulse",
           "path": "internal/hosted/provisioner_test.go",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "docs/release-control/v6/internal/records/cloud-hosted-tier-runtime-readiness-production-recovered-2026-03-26.md",
           "kind": "file"
         }
       ]
@@ -3399,21 +3399,7 @@
       ]
     }
   ],
-  "work_claims": [
-    {
-      "id": "codex-candidate-lane-customer-account-portal",
-      "agent_id": "codex",
-      "summary": "Define the canonical Pulse Account portal lane, IA, and subsystem ownership",
-      "target_id": "v6-product-lane-expansion",
-      "claimed_at": "2026-03-25T22:18:45Z",
-      "heartbeat_at": "2026-03-25T22:18:45Z",
-      "expires_at": "2026-03-26T00:18:45Z",
-      "work_item": {
-        "kind": "candidate-lane",
-        "id": "customer-account-portal"
-      }
-    }
-  ],
+  "work_claims": [],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [
