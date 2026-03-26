@@ -551,8 +551,18 @@ describe('Settings architecture guardrails', () => {
     expect(monitoredSystemPresentationSource).toContain(
       'export function getMonitoredSystemDisclosureToggleLabel',
     );
-    expect(selfHostedCommercialActivationSectionSource).toContain('License / Activation Key');
-    expect(selfHostedCommercialActivationSectionSource).toContain('Start 14-day Pro Trial');
+    expect(selfHostedCommercialActivationSectionSource).toContain(
+      '@/utils/licensePresentation',
+    );
+    expect(selfHostedCommercialActivationSectionSource).toContain(
+      'SELF_HOSTED_ACTIVATION_PRESENTATION',
+    );
+    expect(selfHostedCommercialActivationSectionSource).not.toContain(
+      'License / Activation Key',
+    );
+    expect(selfHostedCommercialActivationSectionSource).not.toContain(
+      'Start 14-day Pro Trial',
+    );
     expect(organizationBillingPanelSource).toContain('./CommercialBillingSections');
     expect(organizationBillingPanelSource).toContain('./OrganizationBillingLoadingState');
     expect(organizationBillingPanelSource).toContain('./useOrganizationBillingPanelState');

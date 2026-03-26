@@ -6,6 +6,7 @@ import { ProLicensePanel } from '../ProLicensePanel';
 import proLicensePanelSource from '../ProLicensePanel.tsx?raw';
 import proLicensePanelStateSource from '../useProLicensePanelState.ts?raw';
 import proLicensePlanSectionSource from '../ProLicensePlanSection.tsx?raw';
+import selfHostedCommercialActivationSectionSource from '../SelfHostedCommercialActivationSection.tsx?raw';
 
 let mockEntitlements: LicenseEntitlements | null = null;
 
@@ -470,5 +471,12 @@ describe('ProLicensePanel', () => {
     expect(proLicensePlanSectionSource).toContain('getInactiveProUpsellNotice');
     expect(proLicensePlanSectionSource).not.toContain('Your Pro trial has ended');
     expect(proLicensePlanSectionSource).not.toContain('Unlock Pulse Patrol, alert analysis, auto-fix, and more.');
+    expect(selfHostedCommercialActivationSectionSource).toContain(
+      'SELF_HOSTED_ACTIVATION_PRESENTATION',
+    );
+    expect(selfHostedCommercialActivationSectionSource).not.toContain('Start 14-day Pro Trial');
+    expect(selfHostedCommercialActivationSectionSource).not.toContain(
+      'Legacy v5 license detected',
+    );
   });
 });

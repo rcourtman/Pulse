@@ -18,6 +18,7 @@ import {
   getTrialEndedProLicenseNotice,
   getTrialActivationNotice,
   isDisplayableLicenseFeature,
+  SELF_HOSTED_ACTIVATION_PRESENTATION,
 } from '@/utils/licensePresentation';
 
 describe('licensePresentation', () => {
@@ -46,6 +47,19 @@ describe('licensePresentation', () => {
       title: 'Upgrade to Pro',
       body: 'Unlock Pulse Patrol, alert analysis, auto-fix, and more.',
       actionLabel: 'View Pro plans',
+    });
+    expect(SELF_HOSTED_ACTIVATION_PRESENTATION).toMatchObject({
+      sectionTitle: 'Activation',
+      fieldLabel: 'License / Activation Key',
+      activateIdleLabel: 'Activate License',
+      clearIdleLabel: 'Clear License',
+      legacyNotice: {
+        title: 'Legacy v5 license detected',
+      },
+      trial: {
+        title: 'Try Pro for free',
+        idleActionLabel: 'Start 14-day Pro Trial',
+      },
     });
   });
 

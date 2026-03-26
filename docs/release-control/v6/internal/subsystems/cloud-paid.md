@@ -233,6 +233,11 @@ That same helper boundary also owns generic settings-paywall CTA labels such as
 `AIRuntimeControlsSection.tsx` and `RelaySettingsPanel.tsx` must consume the
 shared upgrade presentation owner instead of embedding those CTA strings
 locally.
+The same shared self-hosted commercial presentation boundary also owns the
+activation-surface copy for `SelfHostedCommercialActivationSection.tsx`,
+including the activation field label/help text, legacy-key exchange notice,
+and self-serve trial panel labels, so that activation wording does not drift
+separately from the rest of the Pro billing surface.
 Hosted self-serve trial leases are also part of that same contract. A redeemed
 hosted trial must carry the canonical Pro capability set and the authoritative
 `limits.max_monitored_systems` cap inside the signed lease rather than relying
