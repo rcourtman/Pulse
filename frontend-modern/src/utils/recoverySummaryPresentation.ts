@@ -11,6 +11,12 @@ import {
   getSourcePlatformPresentation,
   normalizeSourcePlatformQueryValue,
 } from '@/utils/sourcePlatforms';
+import { getResourceTypePresentation } from '@/utils/resourceTypePresentation';
+import {
+  getWorkloadTypePresentation,
+  normalizeWorkloadTypePresentationKey,
+} from '@/utils/workloadTypePresentation';
+import { titleCaseDelimitedLabel } from '@/utils/textPresentation';
 
 export const RECOVERY_SUMMARY_TIME_RANGES = ['7d', '30d', '90d', '365d'] as const;
 
@@ -114,9 +120,23 @@ export interface RecoveryPlatformCoverageItem {
 
 export interface RecoveryPlatformCoverageSummary {
   platformCount: number;
-  mixedCount: number;
+  multiPlatformCount: number;
   primaryLabel: string | null;
   items: RecoveryPlatformCoverageItem[];
+}
+
+export interface RecoveryItemCoverageItem {
+  key: string;
+  label: string;
+  count: number;
+  percent: number;
+  toneClass: string;
+}
+
+export interface RecoveryItemCoverageSummary {
+  itemTypeCount: number;
+  primaryLabel: string | null;
+  items: RecoveryItemCoverageItem[];
 }
 
 export function getRecoveryAttentionChipClass(
@@ -156,6 +176,77 @@ const formatShortDate = (value: string): string => {
   const date = new Date(`${value}T00:00:00`);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+};
+
+const DEFAULT_RECOVERY_ITEM_TONE =
+  'bg-surface-alt text-base-content dark:bg-surface-alt dark:text-base-content';
+
+const normalizeRecoverySummarySubjectTypeKey = (value: string): string =>
+  value
+    .replace(/^k8s-/, '')
+    .replace(/^proxmox-/, '')
+    .replace(/^truenas-/, '');
+
+const normalizeRecoverySummaryWorkloadType = (
+  value: string,
+): Parameters<typeof getWorkloadTypePresentation>[0] => {
+  const normalized = normalizeRecoverySummarySubjectTypeKey(value.trim().toLowerCase());
+  switch (normalized) {
+    case 'lxc':
+    case 'ct':
+    case 'container':
+      return 'system-container';
+    case 'vm-backup':
+      return 'vm';
+    default:
+      return normalized;
+  }
+};
+
+const getRecoverySummarySubjectTypePresentation = (
+  value: string | null | undefined,
+): { key: string; label: string; toneClass: string } | null => {
+  const raw = String(value || '').trim().toLowerCase();
+  if (!raw) return null;
+
+  const workloadType = normalizeRecoverySummaryWorkloadType(raw);
+  if (normalizeWorkloadTypePresentationKey(workloadType)) {
+    const presentation = getWorkloadTypePresentation(workloadType);
+    return {
+      key: String(workloadType),
+      label: presentation.label,
+      toneClass: presentation.className,
+    };
+  }
+
+  const normalized = normalizeRecoverySummarySubjectTypeKey(raw);
+  const normalizedPresentation = normalized ? getResourceTypePresentation(normalized) : null;
+  if (normalizedPresentation && normalizedPresentation.label !== normalized) {
+    return {
+      key: normalized,
+      label: normalizedPresentation.label,
+      toneClass: normalizedPresentation.badgeClasses,
+    };
+  }
+
+  const rawPresentation = getResourceTypePresentation(raw);
+  if (rawPresentation && rawPresentation.label !== raw) {
+    return {
+      key: normalized || raw,
+      label: rawPresentation.label,
+      toneClass: rawPresentation.badgeClasses,
+    };
+  }
+
+  const fallbackKey = normalized || raw;
+  return {
+    key: fallbackKey,
+    label: titleCaseDelimitedLabel(fallbackKey, {
+      fallback: 'Unknown',
+      preserveShortAllCaps: true,
+    }),
+    toneClass: DEFAULT_RECOVERY_ITEM_TONE,
+  };
 };
 
 const toPercent = (count: number, total: number): number =>
@@ -351,7 +442,7 @@ export function buildRecoveryPlatformCoverage(
   rollups: ProtectionRollup[],
 ): RecoveryPlatformCoverageSummary {
   const counts = new Map<string, number>();
-  let mixedCount = 0;
+  let multiPlatformCount = 0;
 
   for (const rollup of rollups) {
     const providers = Array.from(
@@ -362,7 +453,7 @@ export function buildRecoveryPlatformCoverage(
       ),
     );
     const resolvedProviders = providers.length > 0 ? providers : ['generic'];
-    if (resolvedProviders.length > 1) mixedCount += 1;
+    if (resolvedProviders.length > 1) multiPlatformCount += 1;
 
     for (const provider of resolvedProviders) {
       counts.set(provider, (counts.get(provider) || 0) + 1);
@@ -388,7 +479,50 @@ export function buildRecoveryPlatformCoverage(
 
   return {
     platformCount: items.length,
-    mixedCount,
+    multiPlatformCount,
+    primaryLabel: items[0]?.label || null,
+    items,
+  };
+}
+
+export function buildRecoveryItemCoverage(
+  rollups: ProtectionRollup[],
+): RecoveryItemCoverageSummary {
+  const counts = new Map<string, RecoveryItemCoverageItem>();
+
+  for (const rollup of rollups) {
+    const presentation =
+      getRecoverySummarySubjectTypePresentation(
+        String(rollup.display?.subjectType || rollup.subjectRef?.type || '').trim(),
+      ) || {
+        key: 'unknown',
+        label: 'Unknown',
+        toneClass: DEFAULT_RECOVERY_ITEM_TONE,
+      };
+
+    const existing = counts.get(presentation.key);
+    if (existing) {
+      existing.count += 1;
+      existing.percent = toPercent(existing.count, rollups.length);
+      continue;
+    }
+
+    counts.set(presentation.key, {
+      ...presentation,
+      count: 1,
+      percent: toPercent(1, rollups.length),
+    });
+  }
+
+  const items = Array.from(counts.values()).sort((left, right) => {
+    if (left.count !== right.count) return right.count - left.count;
+    if (left.key === 'unknown' && right.key !== 'unknown') return 1;
+    if (right.key === 'unknown' && left.key !== 'unknown') return -1;
+    return left.label.localeCompare(right.label);
+  });
+
+  return {
+    itemTypeCount: items.length,
     primaryLabel: items[0]?.label || null,
     items,
   };

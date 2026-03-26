@@ -19,6 +19,7 @@ describe('RecoverySummary', () => {
             lastOutcome: 'success',
             lastSuccessAt: '2026-03-09T11:30:00Z',
             providers: ['proxmox-pbs'],
+            display: { subjectType: 'proxmox-vm' },
           },
           {
             rollupId: 'beta',
@@ -26,6 +27,7 @@ describe('RecoverySummary', () => {
             lastAttemptAt: '2026-03-08T11:00:00Z',
             lastSuccessAt: null,
             providers: ['proxmox-pve'],
+            subjectRef: { type: 'truenas-dataset' },
           },
         ]}
         series={() => [
@@ -52,15 +54,17 @@ describe('RecoverySummary', () => {
 
     expect(screen.getByTestId('recovery-summary')).toBeInTheDocument();
     expect(screen.getByText('Recovery Posture')).toBeInTheDocument();
-    expect(screen.getByText('Platform Coverage')).toBeInTheDocument();
+    expect(screen.getByText('Protected Footprint')).toBeInTheDocument();
     expect(screen.getByText('Freshness')).toBeInTheDocument();
     expect(screen.getByText('Recent History')).toBeInTheDocument();
     expect(screen.getByText('Attention Queue')).toBeInTheDocument();
     expect(screen.getByText('Recovery Points')).toBeInTheDocument();
     expect(screen.getByText('Multi-platform')).toBeInTheDocument();
-    expect(screen.getByText('Primary Platform')).toBeInTheDocument();
+    expect(screen.getAllByText('Item Types').length).toBeGreaterThan(0);
+    expect(screen.getByText('Primary Item')).toBeInTheDocument();
     expect(screen.getByText('2 protected')).toBeInTheDocument();
     expect(screen.getByText('2 platforms')).toBeInTheDocument();
+    expect(screen.getByText('2 item types')).toBeInTheDocument();
     expect(screen.getByText('1 healthy')).toBeInTheDocument();
     expect(screen.getByText('Never succeeded')).toBeInTheDocument();
   });

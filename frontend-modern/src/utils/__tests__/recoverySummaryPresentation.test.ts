@@ -3,6 +3,7 @@ import {
   buildRecoveryActivitySummary,
   buildRecoveryAttentionItems,
   buildRecoveryFreshnessBuckets,
+  buildRecoveryItemCoverage,
   buildRecoveryOutcomeSegments,
   buildRecoveryPlatformCoverage,
   buildRecoveryPostureSegments,
@@ -98,7 +99,7 @@ describe('recoverySummaryPresentation', () => {
     ]);
   });
 
-  it('builds provider coverage from rollups and mixed-provider subjects', () => {
+  it('builds platform coverage from rollups and multi-platform protected items', () => {
     const coverage = buildRecoveryPlatformCoverage([
       { rollupId: 'a', providers: ['proxmox-pbs'] },
       { rollupId: 'b', providers: ['proxmox-pve', 'kubernetes'] },
@@ -106,13 +107,30 @@ describe('recoverySummaryPresentation', () => {
     ]);
 
     expect(coverage.platformCount).toBe(4);
-    expect(coverage.mixedCount).toBe(1);
+    expect(coverage.multiPlatformCount).toBe(1);
     expect(coverage.primaryLabel).toBe('K8s');
     expect(coverage.items).toMatchObject([
       { key: 'kubernetes', label: 'K8s', count: 1, percent: 33 },
       { key: 'proxmox-pbs', label: 'PBS', count: 1, percent: 33 },
       { key: 'proxmox-pve', label: 'PVE', count: 1, percent: 33 },
       { key: 'generic', label: 'Generic', count: 1, percent: 33 },
+    ]);
+  });
+
+  it('builds protected item coverage from normalized recovery subject types', () => {
+    const coverage = buildRecoveryItemCoverage([
+      { rollupId: 'a', display: { subjectType: 'proxmox-vm' } },
+      { rollupId: 'b', display: { subjectType: 'proxmox-vm-backup' } },
+      { rollupId: 'c', subjectRef: { type: 'truenas-dataset' } },
+      { rollupId: 'd', subjectRef: { type: 'k8s-pvc' } },
+    ]);
+
+    expect(coverage.itemTypeCount).toBe(3);
+    expect(coverage.primaryLabel).toBe('VM');
+    expect(coverage.items).toMatchObject([
+      { key: 'vm', label: 'VM', count: 2, percent: 50 },
+      { label: 'Dataset', count: 1, percent: 25 },
+      { label: 'PVC', count: 1, percent: 25 },
     ]);
   });
 

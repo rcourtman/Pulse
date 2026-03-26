@@ -23,6 +23,7 @@ const rollupsPayload = [
   {
     rollupId: 'res:vm-123',
     subjectResourceId: 'vm-123',
+    display: { subjectType: 'proxmox-vm' },
     lastAttemptAt: '2026-02-14T10:00:00.000Z',
     lastSuccessAt: '2026-02-14T10:00:00.000Z',
     lastOutcome: 'success',
@@ -283,6 +284,7 @@ describe('Recovery', () => {
     render(() => <Recovery />);
 
     expect(await screen.findByText('2 platforms')).toBeInTheDocument();
+    expect(screen.getByText('2 item types')).toBeInTheDocument();
     expect(screen.getByText('Multi-platform')).toBeInTheDocument();
   });
 
