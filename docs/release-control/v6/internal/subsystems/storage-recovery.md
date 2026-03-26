@@ -130,6 +130,12 @@ runtime data-dir authority being replaceable without hangs or leaked state,
 and router teardown must close the exact session, CSRF, and recovery-token
 workers that router initialized instead of assuming a later global auth-store
 binding will clean them up.
+That same hosted handoff dependency also assumes the exchange path repairs
+tenant org access before redirecting the browser into protected routes.
+Recovery- and storage-adjacent hosted pages that open immediately after
+control-plane handoff must see a real tenant member session, not a freshly
+minted browser cookie that still fails tenant authorization because the org
+metadata lagged behind control-plane account membership.
 That shared `internal/api/` dependency now also assumes hosted tenant AI
 bootstrap and chat-runtime reads resolve through one effective hosted billing
 lease before storage- or recovery-adjacent runtime consumers inspect

@@ -14,6 +14,8 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
 func signHandoffToken(t *testing.T, key []byte, claims cloudHandoffClaims) string {
@@ -500,6 +502,73 @@ func TestHandleHandoffExchangeBrowserFlowSetsSessionCookies(t *testing.T) {
 	}
 	if !haveOrg {
 		t.Fatal("expected pulse_org_id cookie for tenant")
+	}
+}
+
+func TestHandleHandoffExchangeEnsuresTenantOrganizationMembership(t *testing.T) {
+	key := []byte("test-handoff-key")
+	configDir := t.TempDir()
+	resetSessionStoreForTests()
+	t.Cleanup(resetSessionStoreForTests)
+	resetCSRFStoreForTests()
+	t.Cleanup(resetCSRFStoreForTests)
+	InitSessionStore(configDir)
+	InitCSRFStore(configDir)
+
+	secretsDir := filepath.Join(configDir, "secrets")
+	if err := os.MkdirAll(secretsDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(secretsDir, "handoff.key"), key, 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	tenantID := "tenant-membership"
+	mtp := config.NewMultiTenantPersistence(configDir)
+	if err := mtp.SaveOrganization(&models.Organization{
+		ID:          tenantID,
+		DisplayName: "Membership Test",
+		Status:      models.OrgStatusActive,
+		CreatedAt:   time.Now().UTC(),
+		OwnerUserID: "legacy-owner@example.com",
+		Members: []models.OrganizationMember{
+			{UserID: "legacy-owner@example.com", Role: models.OrgRoleOwner, AddedAt: time.Now().UTC()},
+		},
+	}); err != nil {
+		t.Fatalf("SaveOrganization() error = %v", err)
+	}
+
+	handler := HandleHandoffExchange(configDir)
+	token := signHandoffToken(t, key, cloudHandoffClaims{
+		AccountID: "acct-membership",
+		Email:     "courtmanr@gmail.com",
+		Role:      "owner",
+		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        "jti-membership",
+			Subject:   "user-membership",
+			Issuer:    cloudHandoffIssuer,
+			Audience:  jwt.ClaimStrings{tenantID},
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
+		},
+	})
+
+	rec := makeExchangeRequest(t, handler, tenantID+".example.com", token)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	org, err := mtp.LoadOrganization(tenantID)
+	if err != nil {
+		t.Fatalf("LoadOrganization() error = %v", err)
+	}
+	if org.OwnerUserID != "legacy-owner@example.com" {
+		t.Fatalf("OwnerUserID = %q, want %q", org.OwnerUserID, "legacy-owner@example.com")
+	}
+	if got := org.GetMemberRole("courtmanr@gmail.com"); got != models.OrgRoleOwner {
+		t.Fatalf("role for courtmanr@gmail.com = %q, want %q", got, models.OrgRoleOwner)
+	}
+	if !org.CanUserAccess("courtmanr@gmail.com") {
+		t.Fatal("expected handed-off user to have tenant organization access")
 	}
 }
 

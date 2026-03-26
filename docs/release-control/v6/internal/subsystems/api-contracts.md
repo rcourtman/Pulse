@@ -242,6 +242,15 @@ lookup against the license/account surface. When the request target is
 `portal`, `internal/cloudcp/auth/handlers.go` must create a control-plane
 session and redirect back to `/portal` instead of forcing hosted tenant
 handoff semantics.
+Hosted tenant handoff now owns tenant-org access continuity too. When
+`internal/api/cloud_handoff_handlers.go` accepts a control-plane-minted handoff
+token, it must normalize the handed-off email, reconcile the tenant
+organization membership for that email from the asserted account role, and only
+then mint the hosted browser session and `pulse_org_id` cookie. A successful
+handoff exchange is therefore not just a session-creation event; it is the
+canonical contract that prevents hosted workspace opens from landing on an
+immediate `403 access_denied` because the tenant org metadata lagged behind the
+control-plane account membership truth.
 Hosted Pulse Cloud tenant-org AI reads now also follow that same canonical
 rule: `internal/api/ai_hosted_runtime.go`, `internal/api/ai_handlers.go`,
 `internal/api/ai_handler.go`, and `internal/api/hosted_billing_state.go`

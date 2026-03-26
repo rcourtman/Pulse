@@ -172,21 +172,6 @@ func (p *Provisioner) ensureHostedDefaultPersistence(tenantDataDir string) error
 	return nil
 }
 
-func mapAccountRoleToOrganizationRole(role registry.MemberRole) models.OrganizationRole {
-	switch role {
-	case registry.MemberRoleOwner:
-		return models.OrgRoleOwner
-	case registry.MemberRoleAdmin:
-		return models.OrgRoleAdmin
-	case registry.MemberRoleTech:
-		return models.OrgRoleEditor
-	case registry.MemberRoleReadOnly:
-		return models.OrgRoleViewer
-	default:
-		return models.OrgRoleViewer
-	}
-}
-
 func (p *Provisioner) buildSeededTenantOrganization(accountID, tenantID, displayName, fallbackOwnerEmail string) (*models.Organization, error) {
 	now := time.Now().UTC()
 	org := &models.Organization{
@@ -232,7 +217,7 @@ func (p *Provisioner) buildSeededTenantOrganization(accountID, tenantID, display
 			if email == "" {
 				return nil, fmt.Errorf("account member %s has empty email", membership.UserID)
 			}
-			role := mapAccountRoleToOrganizationRole(membership.Role)
+			role := models.OrganizationRoleFromAccountRole(string(membership.Role))
 			if existing, ok := memberSeeds[email]; !ok || models.OrganizationRoleAtLeast(role, existing.role) {
 				memberSeeds[email] = memberSeed{email: email, role: role}
 			}

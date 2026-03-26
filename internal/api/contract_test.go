@@ -2686,6 +2686,81 @@ func TestContract_TenantAIServiceAvoidsSnapshotProviderBridge(t *testing.T) {
 	}
 }
 
+func TestContract_HostedCloudHandoffEnsuresTenantOrganizationMembership(t *testing.T) {
+	key := []byte("test-handoff-key")
+	configDir := t.TempDir()
+	resetSessionStoreForTests()
+	t.Cleanup(resetSessionStoreForTests)
+	resetCSRFStoreForTests()
+	t.Cleanup(resetCSRFStoreForTests)
+	InitSessionStore(configDir)
+	InitCSRFStore(configDir)
+
+	secretsDir := filepath.Join(configDir, "secrets")
+	if err := os.MkdirAll(secretsDir, 0o755); err != nil {
+		t.Fatalf("mkdir secrets dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(secretsDir, "handoff.key"), key, 0o600); err != nil {
+		t.Fatalf("write handoff key: %v", err)
+	}
+
+	tenantID := "tenant-contract-membership"
+	mtp := config.NewMultiTenantPersistence(configDir)
+	if err := mtp.SaveOrganization(&models.Organization{
+		ID:          tenantID,
+		DisplayName: "Contract Membership",
+		Status:      models.OrgStatusActive,
+		CreatedAt:   time.Now().UTC(),
+		OwnerUserID: "legacy-owner@example.com",
+		Members: []models.OrganizationMember{
+			{UserID: "legacy-owner@example.com", Role: models.OrgRoleOwner, AddedAt: time.Now().UTC()},
+		},
+	}); err != nil {
+		t.Fatalf("save organization: %v", err)
+	}
+
+	token := signHandoffToken(t, key, cloudHandoffClaims{
+		AccountID: "acct-contract-membership",
+		Email:     "courtmanr@gmail.com",
+		Role:      "owner",
+		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        "jti-contract-membership",
+			Subject:   "user-contract-membership",
+			Issuer:    cloudHandoffIssuer,
+			Audience:  jwt.ClaimStrings{tenantID},
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
+		},
+	})
+
+	form := url.Values{}
+	form.Set("token", token)
+	t.Setenv("PULSE_HOSTED_MODE", "true")
+	t.Setenv("PULSE_TENANT_ID", "")
+	t.Setenv("PULSE_PUBLIC_URL", "")
+	req := httptest.NewRequest(http.MethodPost, "/api/cloud/handoff/exchange?format=json", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Accept", "application/json")
+	req.Host = tenantID + ".cloud.pulserelay.pro"
+	req.RemoteAddr = "198.51.100.20:1234"
+	rec := httptest.NewRecorder()
+
+	HandleHandoffExchange(configDir).ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	org, err := mtp.LoadOrganization(tenantID)
+	if err != nil {
+		t.Fatalf("load organization: %v", err)
+	}
+	if org.OwnerUserID != "legacy-owner@example.com" {
+		t.Fatalf("ownerUserID=%q, want %q", org.OwnerUserID, "legacy-owner@example.com")
+	}
+	if got := org.GetMemberRole("courtmanr@gmail.com"); got != models.OrgRoleOwner {
+		t.Fatalf("member role=%q, want %q", got, models.OrgRoleOwner)
+	}
+}
+
 func TestContract_APITokenDeleteRejectsScopeEscalation(t *testing.T) {
 	router := &Router{
 		config: &config.Config{

@@ -149,6 +149,13 @@ relay bootstrap reads use one effective hosted billing lease before
 lifecycle-adjacent flows inspect runtime readiness, so install and setup
 surfaces do not observe a tenant-org Pulse Assistant state that disagrees
 with the machine-owned hosted entitlement already backing the same instance.
+That same shared dependency now also assumes hosted cloud handoff makes tenant
+org access real before browser lifecycle continues. Lifecycle-adjacent opens
+into hosted workspaces may depend on `internal/api/cloud_handoff_handlers.go`,
+but the canonical contract is that a successful handoff exchange must reconcile
+tenant organization membership for the handed-off account member before the
+browser follows the new session into protected routes, rather than landing on a
+fresh `access_denied` immediately after session minting.
 
 Agent lifecycle owns the install/register/update continuity surfaces, but it
 does not own unified-resource history or control-plane timeline persistence.

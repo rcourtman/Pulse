@@ -17,6 +17,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/portal"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 )
 
@@ -580,6 +581,20 @@ func TestMSPLifecycle_CreateWorkspaceViaAPISeedsCreatorAsOwner(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("CreateMembership: %v", err)
 	}
+	adminID, err := registry.GenerateUserID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateUser(&registry.User{ID: adminID, Email: "admin@acmemsp.com"}); err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+	if err := reg.CreateMembership(&registry.AccountMembership{
+		AccountID: accountID,
+		UserID:    adminID,
+		Role:      registry.MemberRoleAdmin,
+	}); err != nil {
+		t.Fatalf("CreateMembership: %v", err)
+	}
 
 	tenantMux := newTenantMux(reg, provisioner)
 	req := httptest.NewRequest(http.MethodPost, "/api/accounts/"+accountID+"/tenants", bytes.NewBufferString(`{"display_name":"Creator Seeded Workspace"}`))
@@ -610,6 +625,9 @@ func TestMSPLifecycle_CreateWorkspaceViaAPISeedsCreatorAsOwner(t *testing.T) {
 	}
 	if org.GetMemberRole("legacy-owner@acmemsp.com") != "owner" {
 		t.Fatalf("legacy owner role = %q, want owner", org.GetMemberRole("legacy-owner@acmemsp.com"))
+	}
+	if org.GetMemberRole("admin@acmemsp.com") != models.OrganizationRoleFromAccountRole(string(registry.MemberRoleAdmin)) {
+		t.Fatalf("admin role = %q, want %q", org.GetMemberRole("admin@acmemsp.com"), models.OrganizationRoleFromAccountRole(string(registry.MemberRoleAdmin)))
 	}
 }
 
