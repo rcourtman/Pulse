@@ -1098,6 +1098,11 @@ recovery-adjacent hosted flows that reuse settings-bound helpers must allow
 the current org owner/admin membership to continue through privileged tenant
 routes after cloud handoff instead of requiring a separate configured local
 admin identity that hosted tenants do not carry.
+That same hosted continuity assumption also applies when operators arrive via
+the older direct tenant magic-link path. Recovery- and storage-adjacent hosted
+opens that still redirect through `/auth/cloud-handoff` must carry enough
+canonical account/role identity for the tenant runtime to repair membership
+before protected routes load, not just the newer portal exchange path.
 That same adjacent onboarding boundary must also keep the dedicated
 relay-mobile bootstrap credential sufficient for QR, deep-link, and
 connection-validation reads, so hosted recovery/support flows that hand a

@@ -31,6 +31,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 	authpkg "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/cloudauth"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/reporting"
 )
@@ -2747,6 +2748,65 @@ func TestContract_HostedCloudHandoffEnsuresTenantOrganizationMembership(t *testi
 	HandleHandoffExchange(configDir).ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	org, err := mtp.LoadOrganization(tenantID)
+	if err != nil {
+		t.Fatalf("load organization: %v", err)
+	}
+	if org.OwnerUserID != "legacy-owner@example.com" {
+		t.Fatalf("ownerUserID=%q, want %q", org.OwnerUserID, "legacy-owner@example.com")
+	}
+	if got := org.GetMemberRole("courtmanr@gmail.com"); got != models.OrgRoleOwner {
+		t.Fatalf("member role=%q, want %q", got, models.OrgRoleOwner)
+	}
+}
+
+func TestContract_HostedDirectCloudHandoffPreservesMembershipClaims(t *testing.T) {
+	key := []byte("test-direct-handoff-key")
+	configDir := t.TempDir()
+	resetPersistentAuthStoresForTests()
+	t.Cleanup(resetPersistentAuthStoresForTests)
+
+	if err := os.WriteFile(filepath.Join(configDir, cloudauth.HandoffKeyFile), key, 0o600); err != nil {
+		t.Fatalf("write direct handoff key: %v", err)
+	}
+
+	tenantID := "tenant-direct-contract"
+	mtp := config.NewMultiTenantPersistence(configDir)
+	if err := mtp.SaveOrganization(&models.Organization{
+		ID:          tenantID,
+		DisplayName: "Direct Contract Membership",
+		Status:      models.OrgStatusActive,
+		CreatedAt:   time.Now().UTC(),
+		OwnerUserID: "legacy-owner@example.com",
+		Members: []models.OrganizationMember{
+			{UserID: "legacy-owner@example.com", Role: models.OrgRoleOwner, AddedAt: time.Now().UTC()},
+		},
+	}); err != nil {
+		t.Fatalf("save organization: %v", err)
+	}
+
+	token, err := cloudauth.SignWithClaims(key, cloudauth.Claims{
+		Email:     "courtmanr@gmail.com",
+		TenantID:  tenantID,
+		AccountID: "acct-direct-contract",
+		UserID:    "user-direct-contract",
+		Role:      "owner",
+	}, time.Hour)
+	if err != nil {
+		t.Fatalf("sign direct handoff claims: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/auth/cloud-handoff?token="+url.QueryEscape(token), nil)
+	rec := httptest.NewRecorder()
+
+	HandleCloudHandoff(configDir).ServeHTTP(rec, req)
+	if rec.Code != http.StatusTemporaryRedirect {
+		t.Fatalf("status=%d, want %d: %s", rec.Code, http.StatusTemporaryRedirect, rec.Body.String())
+	}
+	if got := rec.Header().Get("Location"); got != "/" {
+		t.Fatalf("redirect=%q, want %q", got, "/")
 	}
 
 	org, err := mtp.LoadOrganization(tenantID)

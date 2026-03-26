@@ -130,8 +130,25 @@ func HandleMagicLinkVerify(svc *Service, reg *registry.TenantRegistry, tenantsDi
 			return
 		}
 
+		handoffClaims := cloudauth.Claims{
+			Email:    token.Email,
+			TenantID: tenant.ID,
+		}
+		userID, membershipRole, membershipErr := ensureAccountUserAndMembership(reg, tenant, token.Email)
+		if membershipErr != nil {
+			log.Warn().
+				Err(membershipErr).
+				Str("tenant_id", tenant.ID).
+				Str("email", token.Email).
+				Msg("Failed to resolve account membership for cloud handoff token")
+		} else {
+			handoffClaims.UserID = userID
+			handoffClaims.AccountID = tenant.AccountID
+			handoffClaims.Role = string(membershipRole)
+		}
+
 		// Sign a short-lived handoff token.
-		handoffToken, err := cloudauth.Sign(handoffKey, token.Email, tenant.ID, handoffTTL)
+		handoffToken, err := cloudauth.SignWithClaims(handoffKey, handoffClaims, handoffTTL)
 		if err != nil {
 			auditEvent(r, "cp_magic_link_verify", "failure").
 				Err(err).
@@ -146,9 +163,9 @@ func HandleMagicLinkVerify(svc *Service, reg *registry.TenantRegistry, tenantsDi
 		redirectURL := fmt.Sprintf("https://%s.%s/auth/cloud-handoff?token=%s",
 			tenant.ID, baseDomain, handoffToken)
 
-		if userID, err := ensureAccountUserAndMembership(reg, tenant, token.Email); err != nil {
+		if membershipErr != nil {
 			log.Warn().
-				Err(err).
+				Err(membershipErr).
 				Str("tenant_id", tenant.ID).
 				Str("email", token.Email).
 				Msg("Failed to establish control-plane session identity")
@@ -406,30 +423,30 @@ func ensureAccountUser(reg *registry.TenantRegistry, email string) (string, erro
 	return user.ID, nil
 }
 
-func ensureAccountUserAndMembership(reg *registry.TenantRegistry, tenant *registry.Tenant, email string) (string, error) {
+func ensureAccountUserAndMembership(reg *registry.TenantRegistry, tenant *registry.Tenant, email string) (string, registry.MemberRole, error) {
 	if reg == nil {
-		return "", fmt.Errorf("registry unavailable")
+		return "", "", fmt.Errorf("registry unavailable")
 	}
 	if tenant == nil {
-		return "", fmt.Errorf("tenant is required")
+		return "", "", fmt.Errorf("tenant is required")
 	}
 	accountID := strings.TrimSpace(tenant.AccountID)
 	if accountID == "" {
-		return "", fmt.Errorf("tenant has no account id")
+		return "", "", fmt.Errorf("tenant has no account id")
 	}
 	email = strings.ToLower(strings.TrimSpace(email))
 	if email == "" {
-		return "", fmt.Errorf("email is required")
+		return "", "", fmt.Errorf("email is required")
 	}
 
 	userID, err := ensureAccountUser(reg, email)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	m, err := reg.GetMembership(accountID, userID)
 	if err != nil {
-		return "", fmt.Errorf("lookup membership: %w", err)
+		return "", "", fmt.Errorf("lookup membership: %w", err)
 	}
 	if m == nil {
 		newMembership := &registry.AccountMembership{
@@ -440,10 +457,13 @@ func ensureAccountUserAndMembership(reg *registry.TenantRegistry, tenant *regist
 		if createErr := reg.CreateMembership(newMembership); createErr != nil {
 			reloaded, reloadErr := reg.GetMembership(accountID, userID)
 			if reloadErr != nil || reloaded == nil {
-				return "", fmt.Errorf("create membership: %w", createErr)
+				return "", "", fmt.Errorf("create membership: %w", createErr)
 			}
+			m = reloaded
+		} else {
+			m = newMembership
 		}
 	}
 
-	return userID, nil
+	return userID, m.Role, nil
 }

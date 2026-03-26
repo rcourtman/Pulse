@@ -43,22 +43,31 @@ func HandleCloudHandoff(dataPath string) http.HandlerFunc {
 			return
 		}
 
-		email, tenantID, expiresAt, err := cloudauth.VerifyWithExpiry(handoffKey, tokenStr)
+		claims, err := cloudauth.VerifyClaimsWithExpiry(handoffKey, tokenStr)
 		if err != nil {
 			log.Warn().Err(err).Msg("Cloud handoff token verification failed")
 			http.Redirect(w, r, "/login?error=handoff_invalid", http.StatusTemporaryRedirect)
 			return
 		}
-		email = normalizeHandoffEmail(email)
-		tenantID = strings.TrimSpace(tenantID)
+		email := normalizeHandoffEmail(claims.Email)
+		tenantID := strings.TrimSpace(claims.TenantID)
 		if email == "" || !isValidOrganizationID(tenantID) {
 			log.Warn().Str("tenant_id", tenantID).Msg("Cloud handoff token rejected due to invalid tenant ID")
 			http.Redirect(w, r, "/login?error=handoff_invalid", http.StatusTemporaryRedirect)
 			return
 		}
+		if err := ensureHandoffOrganizationMembership(dataPath, tenantID, email, claims.Role); err != nil {
+			log.Error().
+				Err(err).
+				Str("tenant_id", tenantID).
+				Str("email", email).
+				Msg("Cloud handoff membership repair failed")
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
 		tokenHash := sha256.Sum256([]byte(tokenStr))
 		replayID := "handoff:" + hex.EncodeToString(tokenHash[:])
-		stored, storeErr := replay.checkAndStore(replayID, expiresAt)
+		stored, storeErr := replay.checkAndStore(replayID, claims.ExpiresAt)
 		if storeErr != nil {
 			log.Error().Err(storeErr).Msg("Cloud handoff replay-store failure")
 			http.Error(w, "Internal server error", http.StatusInternalServerError)

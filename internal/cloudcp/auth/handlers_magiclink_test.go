@@ -3,6 +3,7 @@ package auth
 import (
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -141,5 +142,30 @@ func TestHandleMagicLinkVerifyTenantTargetStillRedirectsToTenantHandoff(t *testi
 	}
 	if membership == nil {
 		t.Fatal("expected tenant owner membership to be created")
+	}
+
+	handoffToken := strings.TrimPrefix(location, "https://t-tenant-1.cloud.example.com/auth/cloud-handoff?token=")
+	handoffToken, err = url.QueryUnescape(handoffToken)
+	if err != nil {
+		t.Fatalf("QueryUnescape handoff token: %v", err)
+	}
+	claims, err := cloudauth.VerifyClaimsWithExpiry(handoffKey, handoffToken)
+	if err != nil {
+		t.Fatalf("VerifyClaimsWithExpiry: %v", err)
+	}
+	if claims.Email != "tenant@example.com" {
+		t.Fatalf("claims.Email = %q, want %q", claims.Email, "tenant@example.com")
+	}
+	if claims.TenantID != "t-tenant-1" {
+		t.Fatalf("claims.TenantID = %q, want %q", claims.TenantID, "t-tenant-1")
+	}
+	if claims.AccountID != accountID {
+		t.Fatalf("claims.AccountID = %q, want %q", claims.AccountID, accountID)
+	}
+	if claims.Role != string(registry.MemberRoleOwner) {
+		t.Fatalf("claims.Role = %q, want %q", claims.Role, registry.MemberRoleOwner)
+	}
+	if strings.TrimSpace(claims.UserID) == "" {
+		t.Fatal("expected claims.UserID to be populated")
 	}
 }

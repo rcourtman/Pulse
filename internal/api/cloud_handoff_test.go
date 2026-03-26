@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/cloudauth"
 )
 
@@ -163,5 +165,65 @@ func TestHandleCloudHandoffLowercasesSessionEmailIdentity(t *testing.T) {
 	}
 	if session.Username != "operator.owner+mixed@pulserelay.pro" {
 		t.Fatalf("session username = %q, want %q", session.Username, "operator.owner+mixed@pulserelay.pro")
+	}
+}
+
+func TestHandleCloudHandoffEnsuresTenantOrganizationMembershipFromClaims(t *testing.T) {
+	resetPersistentAuthStoresForTests()
+	t.Cleanup(resetPersistentAuthStoresForTests)
+	dataPath := t.TempDir()
+	key := []byte("0123456789abcdef0123456789abcdef")
+	if err := os.WriteFile(filepath.Join(dataPath, cloudauth.HandoffKeyFile), key, 0o600); err != nil {
+		t.Fatalf("write handoff key: %v", err)
+	}
+
+	tenantID := "tenant-claims-membership"
+	mtp := config.NewMultiTenantPersistence(dataPath)
+	if err := mtp.SaveOrganization(&models.Organization{
+		ID:          tenantID,
+		DisplayName: "Claims Membership",
+		Status:      models.OrgStatusActive,
+		CreatedAt:   time.Now().UTC(),
+		OwnerUserID: "legacy-owner@example.com",
+		Members: []models.OrganizationMember{
+			{UserID: "legacy-owner@example.com", Role: models.OrgRoleOwner, AddedAt: time.Now().UTC()},
+		},
+	}); err != nil {
+		t.Fatalf("save organization: %v", err)
+	}
+
+	token, err := cloudauth.SignWithClaims(key, cloudauth.Claims{
+		Email:     "courtmanr@gmail.com",
+		TenantID:  tenantID,
+		AccountID: "acct-claims-membership",
+		UserID:    "user-claims-membership",
+		Role:      "owner",
+	}, 5*time.Minute)
+	if err != nil {
+		t.Fatalf("sign handoff token: %v", err)
+	}
+
+	handler := HandleCloudHandoff(dataPath)
+
+	req := httptest.NewRequest(http.MethodGet, "/auth/cloud-handoff?token="+url.QueryEscape(token), nil)
+	rec := httptest.NewRecorder()
+	handler(rec, req)
+
+	if rec.Code != http.StatusTemporaryRedirect {
+		t.Fatalf("status = %d, want %d: %s", rec.Code, http.StatusTemporaryRedirect, rec.Body.String())
+	}
+	if got := rec.Header().Get("Location"); got != "/" {
+		t.Fatalf("redirect = %q, want %q", got, "/")
+	}
+
+	org, err := mtp.LoadOrganization(tenantID)
+	if err != nil {
+		t.Fatalf("load organization: %v", err)
+	}
+	if org.OwnerUserID != "legacy-owner@example.com" {
+		t.Fatalf("ownerUserID = %q, want %q", org.OwnerUserID, "legacy-owner@example.com")
+	}
+	if got := org.GetMemberRole("courtmanr@gmail.com"); got != models.OrgRoleOwner {
+		t.Fatalf("member role = %q, want %q", got, models.OrgRoleOwner)
 	}
 }
