@@ -69,7 +69,10 @@ func TestHandleListPointsAcceptsCanonicalPlatformQuery(t *testing.T) {
 	}
 
 	var resp struct {
-		Data []recovery.RecoveryPoint `json:"data"`
+		Data []struct {
+			Platform string `json:"platform"`
+			Provider string `json:"provider"`
+		} `json:"data"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("json.Unmarshal() error = %v", err)
@@ -78,8 +81,49 @@ func TestHandleListPointsAcceptsCanonicalPlatformQuery(t *testing.T) {
 		t.Fatal("expected recovery points for platform=truenas, got none")
 	}
 	for _, point := range resp.Data {
-		if point.Provider != recovery.Provider("truenas") {
-			t.Fatalf("expected only truenas recovery points, got provider %q", point.Provider)
+		if point.Platform != "truenas" {
+			t.Fatalf("expected only truenas recovery points, got platform %q", point.Platform)
+		}
+		if point.Provider != "truenas" {
+			t.Fatalf("expected compatibility provider field to remain aligned, got %q", point.Provider)
+		}
+	}
+}
+
+func TestHandleListRollupsExposeCanonicalPlatformsPayload(t *testing.T) {
+	prevMock := mock.IsMockEnabled()
+	mock.SetEnabled(true)
+	t.Cleanup(func() {
+		mock.SetEnabled(prevMock)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/recovery/rollups?platform=truenas&limit=500", nil)
+	rec := httptest.NewRecorder()
+
+	NewRecoveryHandlers(nil).HandleListRollups(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("HandleListRollups() status = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	var resp struct {
+		Data []struct {
+			Platforms []string `json:"platforms"`
+			Providers []string `json:"providers"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+	if len(resp.Data) == 0 {
+		t.Fatal("expected recovery rollups for platform=truenas, got none")
+	}
+	for _, rollup := range resp.Data {
+		if len(rollup.Platforms) == 0 || rollup.Platforms[0] != "truenas" {
+			t.Fatalf("expected canonical platforms payload to include truenas, got %#v", rollup.Platforms)
+		}
+		if len(rollup.Providers) == 0 || rollup.Providers[0] != "truenas" {
+			t.Fatalf("expected compatibility providers payload to remain aligned, got %#v", rollup.Providers)
 		}
 	}
 }

@@ -39,6 +39,7 @@ import {
   STALE_ISSUE_THRESHOLD_MS,
 } from '@/utils/recoveryTablePresentation';
 import { getRecoveryTimelineLabelEvery } from '@/utils/recoveryTimelineChartPresentation';
+import { getRecoveryRollupPlatforms } from '@/utils/recoveryPlatformModel';
 import { createVisibleCanonicalTypeColumn } from '@/utils/typeColumnDefinition';
 
 const MOBILE_RECOVERY_COLUMNS = new Set(['time', 'subject', 'outcome']);
@@ -109,7 +110,7 @@ const Recovery: Component = () => {
     const resourceIndex = resourcesById();
 
     const result = rollups().filter((rollup) => {
-      const providers = (rollup.providers || [])
+      const providers = getRecoveryRollupPlatforms(rollup)
         .map((entry) => String(entry || '').trim())
         .filter(Boolean);
       if (platform && !providers.includes(platform)) return false;

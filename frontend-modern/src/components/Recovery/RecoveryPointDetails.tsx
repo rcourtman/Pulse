@@ -17,6 +17,7 @@ import {
   getSourcePlatformLabel,
   normalizeSourcePlatformQueryValue,
 } from '@/utils/sourcePlatforms';
+import { getRecoveryPointPlatform } from '@/utils/recoveryPlatformModel';
 
 interface RecoveryPointDetailsProps {
   point: RecoveryPoint;
@@ -72,10 +73,14 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
   const { state } = useWebSocket();
   const point = () => props.point;
   const providerKey = createMemo(() =>
-    normalizeSourcePlatformQueryValue(String(point().provider || '').trim()),
+    normalizeSourcePlatformQueryValue(getRecoveryPointPlatform(point())),
   );
-  const providerLabel = createMemo(() => getSourcePlatformLabel(providerKey() || point().provider));
-  const providerBadge = createMemo(() => getSourcePlatformBadge(providerKey() || point().provider));
+  const providerLabel = createMemo(() =>
+    getSourcePlatformLabel(providerKey() || getRecoveryPointPlatform(point())),
+  );
+  const providerBadge = createMemo(() =>
+    getSourcePlatformBadge(providerKey() || getRecoveryPointPlatform(point())),
+  );
   const isPbsProvider = createMemo(
     () => providerKey() === 'proxmox-pbs',
   );

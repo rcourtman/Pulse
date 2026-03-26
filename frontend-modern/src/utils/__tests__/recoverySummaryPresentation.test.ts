@@ -101,9 +101,9 @@ describe('recoverySummaryPresentation', () => {
 
   it('builds platform coverage from rollups and multi-platform protected items', () => {
     const coverage = buildRecoveryPlatformCoverage([
-      { rollupId: 'a', providers: ['proxmox-pbs'] },
-      { rollupId: 'b', providers: ['proxmox-pve', 'kubernetes'] },
-      { rollupId: 'c', providers: [] },
+      { rollupId: 'a', platforms: ['proxmox-pbs'] },
+      { rollupId: 'b', platforms: ['proxmox-pve', 'kubernetes'] },
+      { rollupId: 'c', platforms: [] },
     ]);
 
     expect(coverage.platformCount).toBe(4);

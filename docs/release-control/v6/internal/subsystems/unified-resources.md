@@ -963,6 +963,10 @@ That same route contract also owns the canonical recovery `platform` query.
 operator-facing route shape, while accepted legacy `provider` aliases may be
 parsed only as compatibility input that rewrites back to canonical platform
 route state.
+Recovery-linked consumers that decode `/api/recovery/*` payloads must likewise
+prefer canonical `platform` / `platforms` response fields over legacy
+`provider` aliases, so unified resource drill-downs and shared recovery links
+carry the same platform vocabulary on both route and payload boundaries.
 Shared API consumers now also depend on a single registry-list snapshot per
 request when deriving canonical type aggregations for resource list and stats
 responses. Re-reading `registry.List()` for the same `/api/resources` request

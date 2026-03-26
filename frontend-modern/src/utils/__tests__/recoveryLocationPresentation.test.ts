@@ -20,7 +20,7 @@ describe('recoveryLocationPresentation', () => {
     expect(
       getRecoveryPointLocationEntries({
         id: 'p1',
-        provider: 'proxmox-pve',
+        platform: 'proxmox-pve',
         kind: 'backup',
         mode: 'local',
         outcome: 'success',

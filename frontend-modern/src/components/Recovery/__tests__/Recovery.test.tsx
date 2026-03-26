@@ -27,7 +27,7 @@ const rollupsPayload = [
     lastAttemptAt: '2026-02-14T10:00:00.000Z',
     lastSuccessAt: '2026-02-14T10:00:00.000Z',
     lastOutcome: 'success',
-    providers: ['proxmox-pve'],
+    platforms: ['proxmox-pve'],
   },
   {
     rollupId: 'ext:truenas-1',
@@ -36,7 +36,7 @@ const rollupsPayload = [
     lastAttemptAt: '2026-02-13T09:00:00.000Z',
     lastSuccessAt: null,
     lastOutcome: 'failed',
-    providers: ['truenas'],
+    platforms: ['truenas'],
   },
 ];
 
@@ -44,7 +44,7 @@ const pointsByRollupId: Record<string, any[]> = {
   'res:vm-123': [
     {
       id: 'p1',
-      provider: 'proxmox-pve',
+      platform: 'proxmox-pve',
       kind: 'backup',
       mode: 'local',
       outcome: 'success',
@@ -69,7 +69,7 @@ const pointsByRollupId: Record<string, any[]> = {
   'ext:truenas-1': [
     {
       id: 't1',
-      provider: 'truenas',
+      platform: 'truenas',
       kind: 'snapshot',
       mode: 'snapshot',
       outcome: 'failed',
@@ -264,12 +264,12 @@ describe('Recovery', () => {
       lastAttemptAt: '2026-02-12T08:00:00.000Z',
       lastSuccessAt: '2026-02-12T08:00:00.000Z',
       lastOutcome: 'success',
-      providers: ['proxmox-pve'],
+      platforms: ['proxmox-pve'],
     });
     pointsByRollupId['res:vm-404'] = [
       {
         id: 'p404',
-        provider: 'proxmox-pve',
+        platform: 'proxmox-pve',
         kind: 'backup',
         mode: 'local',
         outcome: 'success',

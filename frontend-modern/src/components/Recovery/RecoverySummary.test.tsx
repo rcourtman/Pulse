@@ -18,7 +18,7 @@ describe('RecoverySummary', () => {
             rollupId: 'alpha',
             lastOutcome: 'success',
             lastSuccessAt: '2026-03-09T11:30:00Z',
-            providers: ['proxmox-pbs'],
+            platforms: ['proxmox-pbs'],
             display: { subjectType: 'proxmox-vm' },
           },
           {
@@ -26,7 +26,7 @@ describe('RecoverySummary', () => {
             lastOutcome: 'failed',
             lastAttemptAt: '2026-03-08T11:00:00Z',
             lastSuccessAt: null,
-            providers: ['proxmox-pve'],
+            platforms: ['proxmox-pve'],
             subjectRef: { type: 'truenas-dataset' },
           },
         ]}

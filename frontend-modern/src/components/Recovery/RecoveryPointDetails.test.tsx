@@ -51,7 +51,7 @@ describe('RecoveryPointDetails', () => {
       <RecoveryPointDetails
         point={{
           id: 'point-1',
-          provider: 'proxmox-pbs',
+          platform: 'proxmox-pbs',
           kind: 'backup',
           mode: 'remote',
           outcome: 'success',
@@ -110,12 +110,12 @@ describe('RecoveryPointDetails', () => {
     expect(within(platformCard as HTMLDivElement).getByText('PBS')).toBeInTheDocument();
   });
 
-  it('uses canonical provider labels without forcing provider detail panels for other platforms', () => {
+  it('uses canonical platform labels without forcing provider detail panels for other platforms', () => {
     render(() => (
       <RecoveryPointDetails
         point={{
           id: 'point-2',
-          provider: 'truenas',
+          platform: 'truenas',
           display: {
             nodeHostLabel: 'tn-scale-01',
           },

@@ -14,6 +14,7 @@ import {
 import {
   getRecoveryItemTypePresentation,
 } from '@/utils/recoveryItemTypePresentation';
+import { getRecoveryRollupPlatforms } from '@/utils/recoveryPlatformModel';
 
 export const RECOVERY_SUMMARY_TIME_RANGES = ['7d', '30d', '90d', '365d'] as const;
 
@@ -385,7 +386,7 @@ export function buildRecoveryPlatformCoverage(
   for (const rollup of rollups) {
     const providers = Array.from(
       new Set(
-        (rollup.providers || [])
+        getRecoveryRollupPlatforms(rollup)
           .map((provider) => normalizeSourcePlatformQueryValue(String(provider || '').trim()))
           .filter(Boolean),
       ),

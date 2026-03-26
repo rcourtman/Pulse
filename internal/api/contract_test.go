@@ -2164,6 +2164,57 @@ func TestContract_ParseRecoveryPlatformQueryPrefersCanonicalPlatformAlias(t *tes
 	}
 }
 
+func TestContract_RecoveryPointPayloadUsesCanonicalPlatformField(t *testing.T) {
+	payload := buildRecoveryPointPayload(recovery.RecoveryPoint{
+		ID:       "point-1",
+		Provider: recovery.Provider("truenas"),
+		Kind:     recovery.Kind("snapshot"),
+		Mode:     recovery.Mode("snapshot"),
+		Outcome:  recovery.Outcome("success"),
+	})
+
+	got, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal recovery point payload: %v", err)
+	}
+
+	const want = `{
+		"id":"point-1",
+		"platform":"truenas",
+		"provider":"truenas",
+		"kind":"snapshot",
+		"mode":"snapshot",
+		"outcome":"success"
+	}`
+
+	assertJSONSnapshot(t, got, want)
+}
+
+func TestContract_RecoveryRollupPayloadUsesCanonicalPlatformsField(t *testing.T) {
+	payload := buildRecoveryRollupPayload(recovery.ProtectionRollup{
+		RollupID:    "rollup-1",
+		LastOutcome: recovery.Outcome("success"),
+		Providers: []recovery.Provider{
+			recovery.Provider("proxmox-pbs"),
+			recovery.Provider("truenas"),
+		},
+	})
+
+	got, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal recovery rollup payload: %v", err)
+	}
+
+	const want = `{
+		"rollupId":"rollup-1",
+		"lastOutcome":"success",
+		"platforms":["proxmox-pbs","truenas"],
+		"providers":["proxmox-pbs","truenas"]
+	}`
+
+	assertJSONSnapshot(t, got, want)
+}
+
 func TestContract_BillingStateJSONSnapshot(t *testing.T) {
 	payload := entitlements.BillingState{
 		Capabilities:         []string{"relay", "mobile_app"},

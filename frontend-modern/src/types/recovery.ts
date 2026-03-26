@@ -1,4 +1,5 @@
-export type RecoveryProvider = string;
+export type RecoveryPlatform = string;
+export type RecoveryProvider = RecoveryPlatform;
 export type RecoveryKind = 'snapshot' | 'backup' | 'other' | (string & {});
 export type RecoveryMode = 'snapshot' | 'local' | 'remote' | (string & {});
 export type RecoveryOutcome =
@@ -35,7 +36,8 @@ export interface RecoveryPointDisplay {
 
 export interface RecoveryPoint {
   id: string;
-  provider: RecoveryProvider;
+  platform?: RecoveryPlatform;
+  provider?: RecoveryProvider;
   kind: RecoveryKind;
   mode: RecoveryMode;
   outcome: RecoveryOutcome;
@@ -83,6 +85,7 @@ export interface ProtectionRollup {
   lastSuccessAt?: string | null;
   lastOutcome: RecoveryOutcome;
 
+  platforms?: RecoveryPlatform[];
   providers?: RecoveryProvider[];
 }
 

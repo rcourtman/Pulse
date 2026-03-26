@@ -40,6 +40,7 @@ import {
   normalizeRecoveryOutcome,
 } from '@/utils/recoveryOutcomePresentation';
 import { getRecoveryIssueRailClass, type RecoveryIssueTone } from '@/utils/recoveryIssuePresentation';
+import { getRecoveryRollupPlatforms } from '@/utils/recoveryPlatformModel';
 import { getRecoveryRollupSubjectLabel } from '@/utils/recoveryRecordPresentation';
 import { getSourcePlatformLabel, normalizeSourcePlatformQueryValue } from '@/utils/sourcePlatforms';
 import { titleCaseDelimitedLabel } from '@/utils/textPresentation';
@@ -132,11 +133,11 @@ export const RecoveryProtectedInventorySection: Component<
           return multiplier * (leftType || '').localeCompare(rightType || '');
         }
         case 'source': {
-          const leftSource = (left.providers || [])
+          const leftSource = getRecoveryRollupPlatforms(left)
             .map((provider) => getSourcePlatformLabel(String(provider)))
             .sort()
             .join(',');
-          const rightSource = (right.providers || [])
+          const rightSource = getRecoveryRollupPlatforms(right)
             .map((provider) => getSourcePlatformLabel(String(provider)))
             .sort()
             .join(',');
@@ -368,8 +369,7 @@ export const RecoveryProtectedInventorySection: Component<
                   const attemptMs = rollup.lastAttemptAt ? Date.parse(rollup.lastAttemptAt) : 0;
                   const successMs = rollup.lastSuccessAt ? Date.parse(rollup.lastSuccessAt) : 0;
                   const outcome = normalizeRecoveryOutcome(rollup.lastOutcome);
-                  const providers = (rollup.providers || [])
-                    .slice()
+                  const providers = getRecoveryRollupPlatforms(rollup)
                     .map((provider) => String(provider || '').trim())
                     .filter(Boolean)
                     .sort((left, right) =>

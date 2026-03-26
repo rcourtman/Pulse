@@ -29,6 +29,7 @@ import {
   getRecoveryPointTimestampMs,
   normalizeRecoveryModeQueryValue,
 } from '@/utils/recoveryRecordPresentation';
+import { getRecoveryPointPlatform } from '@/utils/recoveryPlatformModel';
 import {
   getRecoveryArtifactColumnHeaderClass,
   getRecoveryArtifactRowClass,
@@ -168,9 +169,7 @@ export const RecoveryHistoryTable: Component<RecoveryHistoryTableProps> = (props
                         ? formatRecoveryTimeOnly(tsMs)
                         : '—';
                     const subjectType = getRecoverySubjectTypeLabel(point);
-                    const provider = normalizeSourcePlatformQueryValue(
-                      String(point.provider || '').trim(),
-                    );
+                    const provider = normalizeSourcePlatformQueryValue(getRecoveryPointPlatform(point));
                     const mode =
                       normalizeRecoveryModeQueryValue(String(point.mode || '').toLowerCase()) ||
                       'local';

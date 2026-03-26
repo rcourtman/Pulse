@@ -199,6 +199,7 @@ Own canonical runtime payload shapes between backend and frontend.
 12. Treat Patrol schedule and recency as header-owned metadata on the main Patrol page: findings empty-state consumers should not receive or restate `next_patrol_at`, `last_patrol_at`, or interval timing once those transport fields are already presented by the primary header and verification shell
 13. Keep recovery payload filters canonical across `/api/recovery/rollups`, `/api/recovery/points`, `/api/recovery/series`, and `/api/recovery/facets`: when `internal/api/recovery_handlers.go` adds a governed recovery filter or display field such as provider-neutral `itemType`, the same normalized transport must land across all four endpoints and the contract tests must pin both outbound payload shape and accepted query aliases in the same slice
 14. Keep recovery platform-query vocabulary canonical across that same `/api/recovery/*` surface: operator-facing transport must emit `platform` as the canonical query field, accepted legacy `provider` aliases must remain compatibility-only input, and `internal/api/contract_test.go` must pin that fallback behavior in the same slice as any handler change
+15. Keep recovery payload platform vocabulary canonical across that same `/api/recovery/*` surface: point payloads must expose `platform`, rollup payloads must expose `platforms`, and any compatibility `provider` / `providers` aliases must remain secondary fallback fields rather than replacing the shared response model
 
 ## Current State
 
@@ -249,6 +250,11 @@ The same resource contract now also exposes a dedicated
 `/api/resources/{id}/timeline` history endpoint and bundled facet reads under
 `/api/resources/{id}/facets`, so operators can inspect change history without
 depending on a monolithic resource payload.
+The recovery API boundary now also keeps canonical platform vocabulary
+consistent on both sides of the transport. `/api/recovery/*` queries use
+`platform` as the operator-facing filter key, and the point/rollup payloads
+now expose `platform` / `platforms` as the primary response fields while
+legacy `provider` aliases remain compatibility-only for older decoders.
 The reporting API contract now also treats current-state fleet inventory as a
 first-class surface separate from historical metrics reports.
 `internal/api/reporting_inventory_handlers.go`,
@@ -1362,13 +1368,18 @@ operator-facing query field across `/api/recovery/rollups`, `/api/recovery/point
 mapping that boundary onto internal provider fields, but accepted legacy
 `provider` aliases must be compatibility-only input and must not replace the
 canonical transport query shape.
+That same outbound recovery transport now also treats `platform` and
+`platforms` as the canonical response fields for point and rollup payloads.
+Compatibility `provider` and `providers` fields may remain during the v6
+transition, but the shared API contract and frontend decode path must treat
+them as fallback aliases rather than the primary response vocabulary.
 `internal/api/contract_test.go` must pin that alias behavior directly, so the
 canonical `platform` query and the legacy `provider` fallback cannot drift
 between recovery endpoints without tripping the shared API proof surface.
 `internal/api/contract_test.go` is the canonical proof owner for that
-boundary, so route and query compatibility like `itemType` and accepted alias
-inputs such as `type` or legacy `provider` must be pinned there whenever the shared recovery
-transport shape changes.
+boundary, so response payload shape plus route and query compatibility like
+`itemType`, `type`, and legacy `provider` aliases must be pinned there
+whenever the shared recovery transport shape changes.
 The same rule now also covers optional nested node cluster endpoint collections
 so `frontend-modern/src/api/nodes.ts` does not own its own
 `Array.isArray(node.clusterEndpoints)` response-shape branch.

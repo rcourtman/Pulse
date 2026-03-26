@@ -14,6 +14,7 @@ import {
   normalizeSourcePlatformQueryValue,
 } from '@/utils/sourcePlatforms';
 import { buildSourcePlatformOptions } from '@/utils/sourcePlatformOptions';
+import { getRecoveryPointPlatform, getRecoveryRollupPlatforms } from '@/utils/recoveryPlatformModel';
 import {
   normalizeRecoveryModeQueryValue,
 } from '@/utils/recoveryRecordPresentation';
@@ -330,13 +331,13 @@ export function useRecoverySurfaceState() {
   const platformOptions = createMemo(() => {
     const platforms = new Set<string>();
     for (const rollup of rollups()) {
-      for (const provider of rollup.providers || []) {
+      for (const provider of getRecoveryRollupPlatforms(rollup)) {
         const normalized = normalizeSourcePlatformQueryValue(String(provider || '').trim());
         if (normalized) platforms.add(normalized);
       }
     }
     for (const point of recoveryPoints.points() || []) {
-      const normalized = normalizeSourcePlatformQueryValue(String(point?.provider || '').trim());
+      const normalized = normalizeSourcePlatformQueryValue(getRecoveryPointPlatform(point));
       if (normalized) platforms.add(normalized);
     }
     return ['all', ...buildSourcePlatformOptions(platforms).map((option) => option.key)];

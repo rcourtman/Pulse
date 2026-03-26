@@ -162,6 +162,11 @@ platform model from summary through drill-in. Shared recovery URLs and
 transport filters should likewise treat `platform` as the canonical
 operator-facing query field, with legacy `provider` aliases accepted only as
 compatibility input that rewrites back to canonical `platform` route state.
+That same recovery contract should keep response payloads canonical as well:
+recovery points and protected rollups should expose `platform` and
+`platforms` as the primary transport fields, while any legacy
+`provider` / `providers` aliases stay compatibility-only so the page does not
+silently drift back to backend-shaped vocabulary during decode.
 That same shared presentation layer also owns the distinction between
 aggregate recovery-method language and single-record recovery-method language.
 Timeline legends and daily breakdowns must use aggregate labels such as

@@ -285,7 +285,7 @@ func TestRecoveryRollupsEndpointReturnsMockData(t *testing.T) {
 	hasK8s := false
 	hasTrueNAS := false
 	for _, item := range payload.Data {
-		raw, ok := item["providers"]
+		raw, ok := item["platforms"]
 		if !ok {
 			continue
 		}
@@ -304,7 +304,7 @@ func TestRecoveryRollupsEndpointReturnsMockData(t *testing.T) {
 		}
 	}
 	if !hasK8s || !hasTrueNAS {
-		t.Fatalf("expected rollups to include kubernetes and truenas providers, got k8s=%v truenas=%v", hasK8s, hasTrueNAS)
+		t.Fatalf("expected rollups to include kubernetes and truenas platforms, got k8s=%v truenas=%v", hasK8s, hasTrueNAS)
 	}
 }
 
@@ -451,7 +451,7 @@ func TestRecoveryPointsEndpointReturnsMockData(t *testing.T) {
 
 	var payload struct {
 		Data []struct {
-			Provider string `json:"provider"`
+			Platform string `json:"platform"`
 		} `json:"data"`
 		Meta struct {
 			Total int `json:"total"`
@@ -467,7 +467,7 @@ func TestRecoveryPointsEndpointReturnsMockData(t *testing.T) {
 
 	var hasK8s, hasTrueNAS bool
 	for _, p := range payload.Data {
-		switch p.Provider {
+		switch p.Platform {
 		case "kubernetes":
 			hasK8s = true
 		case "truenas":

@@ -38,13 +38,86 @@ func (h *RecoveryHandlers) storeForOrg(orgID string) (*recoverystore.Store, erro
 }
 
 type recoveryPointsResponse struct {
-	Data []recovery.RecoveryPoint `json:"data"`
+	Data []recoveryPointPayload `json:"data"`
 	Meta struct {
 		Page       int `json:"page"`
 		Limit      int `json:"limit"`
 		Total      int `json:"total"`
 		TotalPages int `json:"totalPages"`
 	} `json:"meta"`
+}
+
+type recoveryPointPayload struct {
+	ID       string            `json:"id"`
+	Platform recovery.Provider `json:"platform"`
+	Provider recovery.Provider `json:"provider,omitempty"`
+	Kind     recovery.Kind     `json:"kind"`
+	Mode     recovery.Mode     `json:"mode"`
+	Outcome  recovery.Outcome  `json:"outcome"`
+
+	StartedAt   *time.Time `json:"startedAt,omitempty"`
+	CompletedAt *time.Time `json:"completedAt,omitempty"`
+
+	SizeBytes *int64 `json:"sizeBytes,omitempty"`
+	Verified  *bool  `json:"verified,omitempty"`
+	Encrypted *bool  `json:"encrypted,omitempty"`
+	Immutable *bool  `json:"immutable,omitempty"`
+
+	SubjectResourceID    string                         `json:"subjectResourceId,omitempty"`
+	RepositoryResourceID string                         `json:"repositoryResourceId,omitempty"`
+	SubjectRef           *recovery.ExternalRef          `json:"subjectRef,omitempty"`
+	RepositoryRef        *recovery.ExternalRef          `json:"repositoryRef,omitempty"`
+	Details              map[string]any                 `json:"details,omitempty"`
+	Display              *recovery.RecoveryPointDisplay `json:"display,omitempty"`
+}
+
+type recoveryRollupPayload struct {
+	RollupID          string                         `json:"rollupId"`
+	SubjectResourceID string                         `json:"subjectResourceId,omitempty"`
+	SubjectRef        *recovery.ExternalRef          `json:"subjectRef,omitempty"`
+	Display           *recovery.RecoveryPointDisplay `json:"display,omitempty"`
+	LastAttemptAt     *time.Time                     `json:"lastAttemptAt,omitempty"`
+	LastSuccessAt     *time.Time                     `json:"lastSuccessAt,omitempty"`
+	LastOutcome       recovery.Outcome               `json:"lastOutcome"`
+	Platforms         []recovery.Provider            `json:"platforms,omitempty"`
+	Providers         []recovery.Provider            `json:"providers,omitempty"`
+}
+
+func buildRecoveryPointPayload(point recovery.RecoveryPoint) recoveryPointPayload {
+	return recoveryPointPayload{
+		ID:                   point.ID,
+		Platform:             point.Provider,
+		Provider:             point.Provider,
+		Kind:                 point.Kind,
+		Mode:                 point.Mode,
+		Outcome:              point.Outcome,
+		StartedAt:            point.StartedAt,
+		CompletedAt:          point.CompletedAt,
+		SizeBytes:            point.SizeBytes,
+		Verified:             point.Verified,
+		Encrypted:            point.Encrypted,
+		Immutable:            point.Immutable,
+		SubjectResourceID:    point.SubjectResourceID,
+		RepositoryResourceID: point.RepositoryResourceID,
+		SubjectRef:           point.SubjectRef,
+		RepositoryRef:        point.RepositoryRef,
+		Details:              point.Details,
+		Display:              point.Display,
+	}
+}
+
+func buildRecoveryRollupPayload(rollup recovery.ProtectionRollup) recoveryRollupPayload {
+	return recoveryRollupPayload{
+		RollupID:          rollup.RollupID,
+		SubjectResourceID: rollup.SubjectResourceID,
+		SubjectRef:        rollup.SubjectRef,
+		Display:           rollup.Display,
+		LastAttemptAt:     rollup.LastAttemptAt,
+		LastSuccessAt:     rollup.LastSuccessAt,
+		LastOutcome:       rollup.LastOutcome,
+		Platforms:         rollup.Providers,
+		Providers:         rollup.Providers,
+	}
 }
 
 func parseRFC3339QueryTime(raw string) (*time.Time, error) {
@@ -167,7 +240,10 @@ func (h *RecoveryHandlers) HandleListPoints(w http.ResponseWriter, r *http.Reque
 	}
 
 	var resp recoveryPointsResponse
-	resp.Data = points
+	resp.Data = make([]recoveryPointPayload, 0, len(points))
+	for _, point := range points {
+		resp.Data = append(resp.Data, buildRecoveryPointPayload(point))
+	}
 	resp.Meta.Page = page
 	resp.Meta.Limit = limit
 	resp.Meta.Total = total
@@ -613,8 +689,13 @@ func (h *RecoveryHandlers) HandleListRollups(w http.ResponseWriter, r *http.Requ
 		meta["totalPages"] = (total + limit - 1) / limit
 	}
 
+	payloadRollups := make([]recoveryRollupPayload, 0, len(rollups))
+	for _, rollup := range rollups {
+		payloadRollups = append(payloadRollups, buildRecoveryRollupPayload(rollup))
+	}
+
 	if err := utils.WriteJSONResponse(w, map[string]any{
-		"data": rollups,
+		"data": payloadRollups,
 		"meta": meta,
 	}); err != nil {
 		log.Error().Err(err).Msg("Failed to serialize recovery rollups response")

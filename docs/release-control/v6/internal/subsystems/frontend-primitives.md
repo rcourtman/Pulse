@@ -689,6 +689,11 @@ as page-local toolbar state inside individual recovery sections.
 That same shared recovery state owner now also keeps `platform` as the
 canonical route and transport filter name for operator-facing recovery links,
 while any accepted legacy `provider` aliases remain parser compatibility only.
+Recovery frontend decode and derived option builders must treat payload
+`platform` / `platforms` as the canonical response fields and only fall back
+to legacy `provider` / `providers` aliases for compatibility, so route,
+filter, and table state do not keep backend-era vocabulary alive as the
+default client model.
 Recovery section owners under `frontend-modern/src/components/Recovery/` must
 consume that shared `platform` filter surface directly. They must not keep
 recovery-local `provider` route/query vocabulary alive behind renamed labels,

@@ -215,6 +215,12 @@ That same API boundary now routes the `kind`, `sourceType`, and
 filter parser, so the lifecycle lane keeps the transport contract aligned
 with the canonical resource-history model instead of rebuilding filter
 normalization locally.
+That same shared `internal/api/` boundary now also keeps recovery payload
+platform vocabulary canonical at the transport edge. Lifecycle-adjacent
+surfaces that deep-link into recovery may still depend on those handlers, but
+they must treat response `platform` / `platforms` as API-owned fields and use
+legacy `provider` aliases only as compatibility fallback rather than reviving
+provider-shaped transport assumptions in fleet flows.
 The router now wires the tenant resource state provider during initial setup
 when a multi-tenant monitor is present, so tenant-scoped fleet pages do not
 trip a missing-provider 500 before the monitor has finished initializing.
