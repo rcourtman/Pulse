@@ -23,6 +23,8 @@ const buildInputs = [
   'src/shell.ts',
   'src/shell_view.ts',
   'src/services.ts',
+  'src/services_controller.ts',
+  'src/services_view.ts',
   'src/runtime.ts',
   'src/types.ts',
   'src/styles.css',
