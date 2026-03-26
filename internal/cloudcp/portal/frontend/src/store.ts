@@ -1,9 +1,25 @@
-import type { PortalBootstrapData } from './types';
+import {
+  createPortalLoginState,
+  createPortalServiceState,
+  syncLoginStateBootstrapEmail,
+  syncServiceStateBootstrapEmail,
+} from './state';
+import type { PortalBootstrapData, PortalLoginState, PortalServiceState } from './types';
+
+interface MutationOptions {
+  notify?: boolean;
+}
 
 export interface PortalStore {
   getBootstrap(): PortalBootstrapData;
+  getLoginState(): PortalLoginState;
+  getServiceState(): PortalServiceState;
   setBootstrap(nextBootstrap: Partial<PortalBootstrapData> | PortalBootstrapData): PortalBootstrapData;
-  subscribe(listener: () => void): () => void;
+  updateLoginState(mutator: (state: PortalLoginState) => void, options?: MutationOptions): PortalLoginState;
+  updateServiceState(mutator: (state: PortalServiceState) => void, options?: MutationOptions): PortalServiceState;
+  subscribeBootstrap(listener: () => void): () => void;
+  subscribeLogin(listener: () => void): () => void;
+  subscribeServices(listener: () => void): () => void;
 }
 
 export function createAnonymousBootstrap(
@@ -31,23 +47,67 @@ export function createPortalStore(
   initialBootstrap: Partial<PortalBootstrapData> | null | undefined
 ): PortalStore {
   var bootstrapState = normalizeBootstrap(bootstrapDefaults, initialBootstrap);
-  var subscribers = new Set<() => void>();
+  var loginState = createPortalLoginState();
+  var serviceState = createPortalServiceState();
+  syncLoginStateBootstrapEmail(loginState, bootstrapState.email || '');
+  syncServiceStateBootstrapEmail(serviceState, bootstrapState.email || '');
+  var bootstrapSubscribers = new Set<() => void>();
+  var loginSubscribers = new Set<() => void>();
+  var serviceSubscribers = new Set<() => void>();
+
+  function notify(subscribers: Set<() => void>) {
+    subscribers.forEach(function(listener) {
+      listener();
+    });
+  }
 
   return {
     getBootstrap: function() {
       return bootstrapState;
     },
+    getLoginState: function() {
+      return loginState;
+    },
+    getServiceState: function() {
+      return serviceState;
+    },
     setBootstrap: function(nextBootstrap) {
       bootstrapState = normalizeBootstrap(bootstrapDefaults, nextBootstrap);
-      subscribers.forEach(function(listener) {
-        listener();
-      });
+      syncLoginStateBootstrapEmail(loginState, bootstrapState.email || '');
+      syncServiceStateBootstrapEmail(serviceState, bootstrapState.email || '');
+      notify(bootstrapSubscribers);
       return bootstrapState;
     },
-    subscribe: function(listener) {
-      subscribers.add(listener);
+    updateLoginState: function(mutator, options) {
+      mutator(loginState);
+      if (!options || options.notify !== false) {
+        notify(loginSubscribers);
+      }
+      return loginState;
+    },
+    updateServiceState: function(mutator, options) {
+      mutator(serviceState);
+      if (!options || options.notify !== false) {
+        notify(serviceSubscribers);
+      }
+      return serviceState;
+    },
+    subscribeBootstrap: function(listener) {
+      bootstrapSubscribers.add(listener);
       return function() {
-        subscribers.delete(listener);
+        bootstrapSubscribers.delete(listener);
+      };
+    },
+    subscribeLogin: function(listener) {
+      loginSubscribers.add(listener);
+      return function() {
+        loginSubscribers.delete(listener);
+      };
+    },
+    subscribeServices: function(listener) {
+      serviceSubscribers.add(listener);
+      return function() {
+        serviceSubscribers.delete(listener);
       };
     },
   };

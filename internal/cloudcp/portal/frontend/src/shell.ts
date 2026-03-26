@@ -19,7 +19,7 @@ function renderHeader() {
   var portalBootstrap = portalStore.getBootstrap();
   userInfo.innerHTML = renderHeaderHTML({
     bootstrap: portalBootstrap,
-    loginState: authController.getLoginState(),
+    loginState: portalStore.getLoginState(),
     signupPath: portalBootstrap.signup_path,
     accountAPIBasePath: portalBootstrap.account_api_base_path,
   });
@@ -32,7 +32,7 @@ function renderPortalApp() {
   var portalBootstrap = portalStore.getBootstrap();
   var context = {
     bootstrap: portalBootstrap,
-    loginState: authController.getLoginState(),
+    loginState: portalStore.getLoginState(),
     signupPath: portalBootstrap.signup_path,
     accountAPIBasePath: portalBootstrap.account_api_base_path,
   };
@@ -42,10 +42,7 @@ function renderPortalApp() {
 }
 
 function applyBootstrap(data) {
-  var portalBootstrap = portalStore.setBootstrap(data || createAnonymousBootstrap(bootstrapDefaults));
-  if (!portalBootstrap.authenticated) {
-    authController.syncBootstrapEmail(portalBootstrap.email || '');
-  }
+  portalStore.setBootstrap(data || createAnonymousBootstrap(bootstrapDefaults));
 }
 
 async function refreshBootstrap() {
@@ -76,17 +73,8 @@ function showToast(msg, isError = false) {
   t._timer = setTimeout(function() { t.className = 'toast'; }, 4000);
 }
 
-var authController = installAuthController({
-  getMagicLinkRequestPath: function() {
-    return portalStore.getBootstrap().magic_link_request_path;
-  },
-  getLogoutPath: function() {
-    return portalStore.getBootstrap().logout_path;
-  },
-  getPortalPath: function() {
-    return portalStore.getBootstrap().portal_path;
-  },
-  renderPortal: renderPortalApp,
+installAuthController({
+  store: portalStore,
 });
 
 installAccountController({
@@ -103,7 +91,11 @@ installAccountController({
   showToast: showToast
 });
 
-portalStore.subscribe(function() {
+portalStore.subscribeBootstrap(function() {
+  renderPortalApp();
+});
+
+portalStore.subscribeLogin(function() {
   renderPortalApp();
 });
 

@@ -55,7 +55,7 @@ describe('portal store', function() {
   it('publishes bootstrap changes through a subscription boundary', function() {
     var store = createPortalStore(bootstrapDefaults, null);
     var listener = vi.fn();
-    var unsubscribe = store.subscribe(listener);
+    var unsubscribe = store.subscribeBootstrap(listener);
 
     store.setBootstrap({
       authenticated: true,
@@ -73,5 +73,26 @@ describe('portal store', function() {
     });
 
     expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps login and service state in the same owned store with selective notifications', function() {
+    var store = createPortalStore(bootstrapDefaults, null);
+    var loginListener = vi.fn();
+    var serviceListener = vi.fn();
+
+    store.subscribeLogin(loginListener);
+    store.subscribeServices(serviceListener);
+
+    store.updateLoginState(function(loginState) {
+      loginState.emailValue = 'typed@example.com';
+    }, { notify: false });
+    store.updateServiceState(function(serviceState) {
+      serviceState.openPanelID = 'retrieve-service-panel';
+    });
+
+    expect(store.getLoginState().emailValue).toBe('typed@example.com');
+    expect(store.getServiceState().openPanelID).toBe('retrieve-service-panel');
+    expect(loginListener).not.toHaveBeenCalled();
+    expect(serviceListener).toHaveBeenCalledTimes(1);
   });
 });

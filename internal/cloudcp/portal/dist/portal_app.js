@@ -1,4 +1,127 @@
 (() => {
+  // src/state.ts
+  function emptyStatus() {
+    return {
+      visible: false,
+      message: "",
+      error: false
+    };
+  }
+  function newVerificationFlowState() {
+    return {
+      pendingEmail: "",
+      requesting: false,
+      confirming: false,
+      step2Visible: false,
+      status: emptyStatus(),
+      result: null,
+      emailValue: "",
+      codeValue: "",
+      checkboxChecked: false
+    };
+  }
+  function createPortalLoginState() {
+    return {
+      emailValue: "",
+      sending: false,
+      success: false,
+      error: ""
+    };
+  }
+  function createPortalServiceState() {
+    return {
+      openPanelID: "",
+      flows: {
+        manage: newVerificationFlowState(),
+        retrieve: newVerificationFlowState(),
+        export: newVerificationFlowState(),
+        delete: newVerificationFlowState()
+      },
+      refund: {
+        emailValue: "",
+        tokenValue: "",
+        submitting: false,
+        status: emptyStatus()
+      }
+    };
+  }
+  function syncLoginStateBootstrapEmail(loginState, email) {
+    if (!loginState.emailValue) {
+      loginState.emailValue = email || "";
+    }
+  }
+  function syncServiceStateBootstrapEmail(serviceState, email) {
+    if (!serviceState.flows.manage.emailValue) serviceState.flows.manage.emailValue = email || "";
+    if (!serviceState.flows.retrieve.emailValue) serviceState.flows.retrieve.emailValue = email || "";
+    if (!serviceState.flows.export.emailValue) serviceState.flows.export.emailValue = email || "";
+    if (!serviceState.flows.delete.emailValue) serviceState.flows.delete.emailValue = email || "";
+    if (!serviceState.refund.emailValue) serviceState.refund.emailValue = email || "";
+  }
+  function setFlowStatus(serviceState, flowID, message, isError) {
+    serviceState.flows[flowID].status = {
+      visible: true,
+      message,
+      error: !!isError
+    };
+  }
+  function clearFlowStatus(serviceState, flowID) {
+    serviceState.flows[flowID].status = emptyStatus();
+  }
+  function setRefundStatus(serviceState, message, isError) {
+    serviceState.refund.status = {
+      visible: true,
+      message,
+      error: !!isError
+    };
+  }
+  function toggleServicePanelState(serviceState, panelID) {
+    serviceState.openPanelID = serviceState.openPanelID === panelID ? "" : panelID;
+  }
+  function resetVerificationFlowState(serviceState, flowID) {
+    var previous = serviceState.flows[flowID];
+    serviceState.flows[flowID] = newVerificationFlowState();
+    serviceState.flows[flowID].emailValue = previous.emailValue;
+  }
+  function updateServiceInputValue(serviceState, inputKind, value) {
+    switch (inputKind) {
+      case "manage-email":
+        serviceState.flows.manage.emailValue = value;
+        return;
+      case "manage-code":
+        serviceState.flows.manage.codeValue = value;
+        return;
+      case "retrieve-email":
+        serviceState.flows.retrieve.emailValue = value;
+        return;
+      case "retrieve-code":
+        serviceState.flows.retrieve.codeValue = value;
+        return;
+      case "refund-email":
+        serviceState.refund.emailValue = value;
+        return;
+      case "refund-token":
+        serviceState.refund.tokenValue = value;
+        return;
+      case "data-export-email":
+        serviceState.flows.export.emailValue = value;
+        return;
+      case "data-export-code":
+        serviceState.flows.export.codeValue = value;
+        return;
+      case "data-delete-email":
+        serviceState.flows.delete.emailValue = value;
+        return;
+      case "data-delete-code":
+        serviceState.flows.delete.codeValue = value;
+        return;
+      default:
+        return;
+    }
+  }
+  function updateDeleteConfirmation(serviceState, checked) {
+    serviceState.flows.delete.checkboxChecked = checked;
+  }
+
   // src/store.ts
   function createAnonymousBootstrap(bootstrapDefaults2, overrides = {}) {
     return {
@@ -14,22 +137,65 @@
   }
   function createPortalStore(bootstrapDefaults2, initialBootstrap) {
     var bootstrapState = normalizeBootstrap(bootstrapDefaults2, initialBootstrap);
-    var subscribers = /* @__PURE__ */ new Set();
+    var loginState = createPortalLoginState();
+    var serviceState = createPortalServiceState();
+    syncLoginStateBootstrapEmail(loginState, bootstrapState.email || "");
+    syncServiceStateBootstrapEmail(serviceState, bootstrapState.email || "");
+    var bootstrapSubscribers = /* @__PURE__ */ new Set();
+    var loginSubscribers = /* @__PURE__ */ new Set();
+    var serviceSubscribers = /* @__PURE__ */ new Set();
+    function notify(subscribers) {
+      subscribers.forEach(function(listener) {
+        listener();
+      });
+    }
     return {
       getBootstrap: function() {
         return bootstrapState;
       },
+      getLoginState: function() {
+        return loginState;
+      },
+      getServiceState: function() {
+        return serviceState;
+      },
       setBootstrap: function(nextBootstrap) {
         bootstrapState = normalizeBootstrap(bootstrapDefaults2, nextBootstrap);
-        subscribers.forEach(function(listener) {
-          listener();
-        });
+        syncLoginStateBootstrapEmail(loginState, bootstrapState.email || "");
+        syncServiceStateBootstrapEmail(serviceState, bootstrapState.email || "");
+        notify(bootstrapSubscribers);
         return bootstrapState;
       },
-      subscribe: function(listener) {
-        subscribers.add(listener);
+      updateLoginState: function(mutator, options) {
+        mutator(loginState);
+        if (!options || options.notify !== false) {
+          notify(loginSubscribers);
+        }
+        return loginState;
+      },
+      updateServiceState: function(mutator, options) {
+        mutator(serviceState);
+        if (!options || options.notify !== false) {
+          notify(serviceSubscribers);
+        }
+        return serviceState;
+      },
+      subscribeBootstrap: function(listener) {
+        bootstrapSubscribers.add(listener);
         return function() {
-          subscribers.delete(listener);
+          bootstrapSubscribers.delete(listener);
+        };
+      },
+      subscribeLogin: function(listener) {
+        loginSubscribers.add(listener);
+        return function() {
+          loginSubscribers.delete(listener);
+        };
+      },
+      subscribeServices: function(listener) {
+        serviceSubscribers.add(listener);
+        return function() {
+          serviceSubscribers.delete(listener);
         };
       }
     };
@@ -399,129 +565,6 @@
     });
   }
 
-  // src/state.ts
-  function emptyStatus() {
-    return {
-      visible: false,
-      message: "",
-      error: false
-    };
-  }
-  function newVerificationFlowState() {
-    return {
-      pendingEmail: "",
-      requesting: false,
-      confirming: false,
-      step2Visible: false,
-      status: emptyStatus(),
-      result: null,
-      emailValue: "",
-      codeValue: "",
-      checkboxChecked: false
-    };
-  }
-  function createPortalLoginState() {
-    return {
-      emailValue: "",
-      sending: false,
-      success: false,
-      error: ""
-    };
-  }
-  function createPortalServiceState() {
-    return {
-      openPanelID: "",
-      flows: {
-        manage: newVerificationFlowState(),
-        retrieve: newVerificationFlowState(),
-        export: newVerificationFlowState(),
-        delete: newVerificationFlowState()
-      },
-      refund: {
-        emailValue: "",
-        tokenValue: "",
-        submitting: false,
-        status: emptyStatus()
-      }
-    };
-  }
-  function syncLoginStateBootstrapEmail(loginState, email) {
-    if (!loginState.emailValue) {
-      loginState.emailValue = email || "";
-    }
-  }
-  function syncServiceStateBootstrapEmail(serviceState2, email) {
-    if (!serviceState2.flows.manage.emailValue) serviceState2.flows.manage.emailValue = email || "";
-    if (!serviceState2.flows.retrieve.emailValue) serviceState2.flows.retrieve.emailValue = email || "";
-    if (!serviceState2.flows.export.emailValue) serviceState2.flows.export.emailValue = email || "";
-    if (!serviceState2.flows.delete.emailValue) serviceState2.flows.delete.emailValue = email || "";
-    if (!serviceState2.refund.emailValue) serviceState2.refund.emailValue = email || "";
-  }
-  function setFlowStatus(serviceState2, flowID, message, isError) {
-    serviceState2.flows[flowID].status = {
-      visible: true,
-      message,
-      error: !!isError
-    };
-  }
-  function clearFlowStatus(serviceState2, flowID) {
-    serviceState2.flows[flowID].status = emptyStatus();
-  }
-  function setRefundStatus(serviceState2, message, isError) {
-    serviceState2.refund.status = {
-      visible: true,
-      message,
-      error: !!isError
-    };
-  }
-  function toggleServicePanelState(serviceState2, panelID) {
-    serviceState2.openPanelID = serviceState2.openPanelID === panelID ? "" : panelID;
-  }
-  function resetVerificationFlowState(serviceState2, flowID) {
-    var previous = serviceState2.flows[flowID];
-    serviceState2.flows[flowID] = newVerificationFlowState();
-    serviceState2.flows[flowID].emailValue = previous.emailValue;
-  }
-  function updateServiceInputValue(serviceState2, inputKind, value) {
-    switch (inputKind) {
-      case "manage-email":
-        serviceState2.flows.manage.emailValue = value;
-        return;
-      case "manage-code":
-        serviceState2.flows.manage.codeValue = value;
-        return;
-      case "retrieve-email":
-        serviceState2.flows.retrieve.emailValue = value;
-        return;
-      case "retrieve-code":
-        serviceState2.flows.retrieve.codeValue = value;
-        return;
-      case "refund-email":
-        serviceState2.refund.emailValue = value;
-        return;
-      case "refund-token":
-        serviceState2.refund.tokenValue = value;
-        return;
-      case "data-export-email":
-        serviceState2.flows.export.emailValue = value;
-        return;
-      case "data-export-code":
-        serviceState2.flows.export.codeValue = value;
-        return;
-      case "data-delete-email":
-        serviceState2.flows.delete.emailValue = value;
-        return;
-      case "data-delete-code":
-        serviceState2.flows.delete.codeValue = value;
-        return;
-      default:
-        return;
-    }
-  }
-  function updateDeleteConfirmation(serviceState2, checked) {
-    serviceState2.flows.delete.checkboxChecked = checked;
-  }
-
   // src/auth_controller.ts
   function asHTMLElement2(target) {
     return target instanceof HTMLElement ? target : null;
@@ -530,43 +573,47 @@
     return document.getElementById(id);
   }
   function installAuthController(deps) {
-    var loginState = createPortalLoginState();
-    function syncBootstrapEmail(email) {
-      syncLoginStateBootstrapEmail(loginState, email);
-    }
+    deps.store.updateLoginState(function(loginState) {
+      var bootstrap = deps.store.getBootstrap();
+      syncLoginStateBootstrapEmail(loginState, bootstrap.email || "");
+    }, { notify: false });
     async function sendMagicLink() {
+      var loginState = deps.store.getLoginState();
       var email = String(loginState.emailValue || "").trim();
       if (!email) {
         var input = getElement2("portal-login-email");
         if (input) input.focus();
         return;
       }
-      loginState.sending = true;
-      loginState.error = "";
-      loginState.success = false;
-      deps.renderPortal();
+      deps.store.updateLoginState(function(nextState) {
+        nextState.sending = true;
+        nextState.error = "";
+        nextState.success = false;
+      });
       try {
-        var response = await fetch(deps.getMagicLinkRequestPath(), {
+        var response = await fetch(deps.store.getBootstrap().magic_link_request_path, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email })
         });
         if (response.ok || response.status === 404) {
-          loginState.sending = false;
-          loginState.success = true;
-          deps.renderPortal();
+          deps.store.updateLoginState(function(nextState) {
+            nextState.sending = false;
+            nextState.success = true;
+          });
           return;
         }
-        if (response.status === 429) {
-          loginState.error = "Too many requests. Please wait a moment and try again.";
-        } else {
-          loginState.error = "Something went wrong. Please try again.";
-        }
+        deps.store.updateLoginState(function(nextState) {
+          nextState.error = response.status === 429 ? "Too many requests. Please wait a moment and try again." : "Something went wrong. Please try again.";
+        });
       } catch (_) {
-        loginState.error = "Network error. Please check your connection and try again.";
+        deps.store.updateLoginState(function(nextState) {
+          nextState.error = "Network error. Please check your connection and try again.";
+        }, { notify: false });
       }
-      loginState.sending = false;
-      deps.renderPortal();
+      deps.store.updateLoginState(function(nextState) {
+        nextState.sending = false;
+      });
     }
     document.addEventListener("click", function(event) {
       var portalActionEl = asHTMLElement2(event.target)?.closest("[data-portal-action]");
@@ -579,9 +626,10 @@
             return;
           case "resend-magic-link":
             event.preventDefault();
-            loginState.success = false;
-            loginState.error = "";
-            deps.renderPortal();
+            deps.store.updateLoginState(function(nextState) {
+              nextState.success = false;
+              nextState.error = "";
+            });
             void sendMagicLink();
             return;
           default:
@@ -597,24 +645,25 @@
       logoutBtn.textContent = "Signing out\u2026";
       (async function() {
         try {
-          await fetch(deps.getLogoutPath(), { method: "POST" });
+          await fetch(deps.store.getBootstrap().logout_path, { method: "POST" });
         } catch (_) {
         }
-        window.location.href = deps.getPortalPath();
+        window.location.href = deps.store.getBootstrap().portal_path;
       })();
     });
     document.addEventListener("input", function(event) {
       var target = asHTMLElement2(event.target);
       if (!target) return;
       if (target.getAttribute("data-portal-input") === "login-email") {
-        loginState.emailValue = target.value;
+        deps.store.updateLoginState(function(nextState) {
+          nextState.emailValue = target.value;
+        }, { notify: false });
       }
     });
     return {
       getLoginState: function() {
-        return loginState;
-      },
-      syncBootstrapEmail
+        return deps.store.getLoginState();
+      }
     };
   }
 
@@ -711,7 +760,7 @@
     var portalBootstrap = portalStore.getBootstrap();
     userInfo.innerHTML = renderHeaderHTML({
       bootstrap: portalBootstrap,
-      loginState: authController.getLoginState(),
+      loginState: portalStore.getLoginState(),
       signupPath: portalBootstrap.signup_path,
       accountAPIBasePath: portalBootstrap.account_api_base_path
     });
@@ -723,17 +772,14 @@
     var portalBootstrap = portalStore.getBootstrap();
     var context = {
       bootstrap: portalBootstrap,
-      loginState: authController.getLoginState(),
+      loginState: portalStore.getLoginState(),
       signupPath: portalBootstrap.signup_path,
       accountAPIBasePath: portalBootstrap.account_api_base_path
     };
     root.innerHTML = portalBootstrap.authenticated ? renderAuthenticatedPortalHTML(context) : renderSignedOutPortalHTML(context);
   }
   function applyBootstrap(data) {
-    var portalBootstrap = portalStore.setBootstrap(data || createAnonymousBootstrap(bootstrapDefaults));
-    if (!portalBootstrap.authenticated) {
-      authController.syncBootstrapEmail(portalBootstrap.email || "");
-    }
+    portalStore.setBootstrap(data || createAnonymousBootstrap(bootstrapDefaults));
   }
   async function refreshBootstrap() {
     var bootstrap = portalStore.getBootstrap();
@@ -764,17 +810,8 @@
       t.className = "toast";
     }, 4e3);
   }
-  var authController = installAuthController({
-    getMagicLinkRequestPath: function() {
-      return portalStore.getBootstrap().magic_link_request_path;
-    },
-    getLogoutPath: function() {
-      return portalStore.getBootstrap().logout_path;
-    },
-    getPortalPath: function() {
-      return portalStore.getBootstrap().portal_path;
-    },
-    renderPortal: renderPortalApp
+  installAuthController({
+    store: portalStore
   });
   installAccountController({
     getAccountAPIBasePath: function() {
@@ -789,7 +826,10 @@
     refreshBootstrap,
     showToast
   });
-  portalStore.subscribe(function() {
+  portalStore.subscribeBootstrap(function() {
+    renderPortalApp();
+  });
+  portalStore.subscribeLogin(function() {
     renderPortalApp();
   });
   applyBootstrap(portalStore.getBootstrap());
@@ -975,7 +1015,20 @@
   }
 
   // src/services.ts
-  var serviceState = createPortalServiceState();
+  portalStore.updateServiceState(function(serviceState) {
+    if (!serviceState.flows) {
+      var nextState = createPortalServiceState();
+      serviceState.openPanelID = nextState.openPanelID;
+      serviceState.flows = nextState.flows;
+      serviceState.refund = nextState.refund;
+    }
+  }, { notify: false });
+  function getServiceState() {
+    return portalStore.getServiceState();
+  }
+  function updateServiceState(mutator, notify = true) {
+    return portalStore.updateServiceState(mutator, { notify });
+  }
   function serviceFetch(path, body) {
     return fetch(portalStore.getBootstrap().commercial_api_base_url + path, {
       method: "POST",
@@ -984,13 +1037,14 @@
     });
   }
   function toggleServicePanel(panelID) {
-    toggleServicePanelState(serviceState, panelID);
-    renderOpenPanels(serviceState.openPanelID);
+    updateServiceState(function(serviceState) {
+      toggleServicePanelState(serviceState, panelID);
+    });
   }
   function renderFlow(flowID) {
     var flow = verificationFlows[flowID];
     if (!flow) return;
-    var flowState = serviceState.flows[flowID];
+    var flowState = getServiceState().flows[flowID];
     if (flow.renderPanel) {
       flow.renderPanel(flowState);
     }
@@ -1012,14 +1066,17 @@
     renderRefund();
   }
   function renderRefund() {
-    renderRefundPanel(serviceState.refund, portalStore.getBootstrap());
-    renderButton("refund-inline-submit", serviceState.refund.submitting, serviceState.refund.submitting ? "Processing..." : "Process Refund");
-    renderStatus("refund-inline-status", serviceState.refund.status);
+    var refundState = getServiceState().refund;
+    renderRefundPanel(refundState, portalStore.getBootstrap());
+    renderButton("refund-inline-submit", refundState.submitting, refundState.submitting ? "Processing..." : "Process Refund");
+    renderStatus("refund-inline-status", refundState.status);
   }
   function resetVerificationFlow(flowID) {
     var flow = verificationFlows[flowID];
     if (!flow) return;
-    resetVerificationFlowState(serviceState, flowID);
+    updateServiceState(function(serviceState) {
+      resetVerificationFlowState(serviceState, flowID);
+    }, false);
     if (flow.codeInputID) {
       setValue(flow.codeInputID, "");
     }
@@ -1044,10 +1101,10 @@
       requestErrorMessage: "Failed to send verification code",
       confirmErrorMessage: "Failed to open customer portal",
       readEmailValue: function() {
-        return serviceState.flows.manage.emailValue;
+        return getServiceState().flows.manage.emailValue;
       },
       readCodeValue: function() {
-        return serviceState.flows.manage.codeValue;
+        return getServiceState().flows.manage.codeValue;
       },
       onRequestStart: function() {
       },
@@ -1075,18 +1132,22 @@
       requestErrorMessage: "Failed to send verification code",
       confirmErrorMessage: "Failed to retrieve license",
       readEmailValue: function() {
-        return serviceState.flows.retrieve.emailValue;
+        return getServiceState().flows.retrieve.emailValue;
       },
       readCodeValue: function() {
-        return serviceState.flows.retrieve.codeValue;
+        return getServiceState().flows.retrieve.codeValue;
       },
       onRequestStart: function() {
-        serviceState.flows.retrieve.result = null;
+        updateServiceState(function(serviceState) {
+          serviceState.flows.retrieve.result = null;
+        }, false);
       },
       onConfirmSuccess: function(data) {
-        serviceState.flows.retrieve.result = data.license;
-        serviceState.flows.retrieve.codeValue = "";
-        setFlowStatus(serviceState, "retrieve", "License retrieved successfully.", false);
+        updateServiceState(function(serviceState) {
+          serviceState.flows.retrieve.result = data.license;
+          serviceState.flows.retrieve.codeValue = "";
+          setFlowStatus(serviceState, "retrieve", "License retrieved successfully.", false);
+        }, false);
       },
       renderPanel: renderRetrievePanel
     },
@@ -1109,20 +1170,26 @@
       requestErrorMessage: "Request failed",
       confirmErrorMessage: "Export failed",
       readEmailValue: function() {
-        return serviceState.flows.export.emailValue;
+        return getServiceState().flows.export.emailValue;
       },
       readCodeValue: function() {
-        return serviceState.flows.export.codeValue;
+        return getServiceState().flows.export.codeValue;
       },
       onRequestStart: function() {
-        serviceState.flows.export.result = null;
+        updateServiceState(function(serviceState) {
+          serviceState.flows.export.result = null;
+        }, false);
       },
       onConfirmSuccess: function(data) {
-        serviceState.flows.export.result = data;
-        serviceState.flows.export.codeValue = "";
-        setFlowStatus(serviceState, "export", "Data export retrieved successfully.", false);
+        updateServiceState(function(serviceState) {
+          serviceState.flows.export.result = data;
+          serviceState.flows.export.codeValue = "";
+          setFlowStatus(serviceState, "export", "Data export retrieved successfully.", false);
+        }, false);
         resetVerificationFlow("export");
-        serviceState.flows.export.result = data;
+        updateServiceState(function(serviceState) {
+          serviceState.flows.export.result = data;
+        }, false);
       },
       renderPanel: renderExportPanel,
       renderResult: renderExportResult
@@ -1146,15 +1213,16 @@
       requestErrorMessage: "Request failed",
       confirmErrorMessage: "Deletion failed",
       readEmailValue: function() {
-        return serviceState.flows.delete.emailValue;
+        return getServiceState().flows.delete.emailValue;
       },
       readCodeValue: function() {
-        return serviceState.flows.delete.codeValue;
+        return getServiceState().flows.delete.codeValue;
       },
       beforeConfirm: function() {
         if (!getElement3("data-delete-confirm-check")?.checked) {
-          setFlowStatus(serviceState, "delete", "You must confirm that you understand this action is permanent.", true);
-          renderFlow("delete");
+          updateServiceState(function(serviceState) {
+            setFlowStatus(serviceState, "delete", "You must confirm that you understand this action is permanent.", true);
+          });
           return false;
         }
         return true;
@@ -1165,7 +1233,9 @@
           checkbox.checked = false;
         }
         resetVerificationFlow("delete");
-        setFlowStatus(serviceState, "delete", data.deleted_count > 0 && data.stripe_reminder ? data.message + " " + data.stripe_reminder : data.message, false);
+        updateServiceState(function(serviceState) {
+          setFlowStatus(serviceState, "delete", data.deleted_count > 0 && data.stripe_reminder ? data.message + " " + data.stripe_reminder : data.message, false);
+        }, false);
       },
       renderPanel: renderDeletePanel
     }
@@ -1181,109 +1251,124 @@
     if (flow.onRequestStart) {
       flow.onRequestStart();
     }
-    serviceState.flows[flowID].requesting = true;
-    clearFlowStatus(serviceState, flowID);
-    renderFlow(flowID);
+    updateServiceState(function(serviceState) {
+      serviceState.flows[flowID].requesting = true;
+      clearFlowStatus(serviceState, flowID);
+    });
     try {
       var res = await serviceFetch(flow.requestPath, { email });
       var data = await res.json();
       if (!res.ok) throw new Error(data.error || flow.requestErrorMessage);
-      serviceState.flows[flowID].pendingEmail = email;
-      serviceState.flows[flowID].step2Visible = !!flow.step2ID;
-      setFlowStatus(serviceState, flowID, flow.requestSuccessMessage, false);
+      updateServiceState(function(serviceState) {
+        serviceState.flows[flowID].pendingEmail = email;
+        serviceState.flows[flowID].step2Visible = !!flow.step2ID;
+        setFlowStatus(serviceState, flowID, flow.requestSuccessMessage, false);
+      });
     } catch (err) {
-      setFlowStatus(serviceState, flowID, err.message, true);
+      updateServiceState(function(serviceState) {
+        setFlowStatus(serviceState, flowID, err.message, true);
+      });
     } finally {
-      serviceState.flows[flowID].requesting = false;
-      renderFlow(flowID);
+      updateServiceState(function(serviceState) {
+        serviceState.flows[flowID].requesting = false;
+      });
     }
   }
   async function resendVerificationCode(flowID, event) {
     if (event) event.preventDefault();
     var flow = verificationFlows[flowID];
     if (!flow) return;
-    var email = serviceState.flows[flowID].pendingEmail;
+    var email = getServiceState().flows[flowID].pendingEmail;
     if (!email) return;
     try {
       var res = await serviceFetch(flow.requestPath, { email });
       var data = await res.json();
       if (!res.ok) throw new Error(data.error || flow.requestErrorMessage);
-      setFlowStatus(serviceState, flowID, flow.resendSuccessMessage, false);
+      updateServiceState(function(serviceState) {
+        setFlowStatus(serviceState, flowID, flow.resendSuccessMessage, false);
+      });
     } catch (err) {
-      setFlowStatus(serviceState, flowID, err.message, true);
+      updateServiceState(function(serviceState) {
+        setFlowStatus(serviceState, flowID, err.message, true);
+      });
     }
-    renderFlow(flowID);
   }
   async function confirmVerificationCode(flowID) {
     var flow = verificationFlows[flowID];
     if (!flow) return;
-    var email = serviceState.flows[flowID].pendingEmail;
+    var email = getServiceState().flows[flowID].pendingEmail;
     var code = flow.readCodeValue ? flow.readCodeValue() : readValue(flow.codeInputID);
     if (!email || !code) return;
     if (flow.beforeConfirm && flow.beforeConfirm() === false) {
       return;
     }
-    serviceState.flows[flowID].confirming = true;
-    renderFlow(flowID);
+    updateServiceState(function(serviceState) {
+      serviceState.flows[flowID].confirming = true;
+    });
     try {
       var res = await serviceFetch(flow.confirmPath, { email, code });
       var data = await res.json();
       if (!res.ok) throw new Error(data.error || flow.confirmErrorMessage);
       flow.onConfirmSuccess(data, email);
     } catch (err) {
-      setFlowStatus(serviceState, flowID, err.message, true);
+      updateServiceState(function(serviceState) {
+        setFlowStatus(serviceState, flowID, err.message, true);
+      });
     } finally {
-      serviceState.flows[flowID].confirming = false;
-      renderFlow(flowID);
+      updateServiceState(function(serviceState) {
+        serviceState.flows[flowID].confirming = false;
+      });
     }
   }
   async function copyRetrievedLicense() {
-    var result = serviceState.flows.retrieve.result;
+    var result = getServiceState().flows.retrieve.result;
     var token = result && result.token ? result.token : "";
     if (!token) return;
     try {
       await navigator.clipboard.writeText(token);
-      setFlowStatus(serviceState, "retrieve", "License key copied to clipboard.", false);
+      updateServiceState(function(serviceState) {
+        setFlowStatus(serviceState, "retrieve", "License key copied to clipboard.", false);
+      });
     } catch (_) {
-      setFlowStatus(serviceState, "retrieve", "Failed to copy automatically. Please copy the key manually.", true);
+      updateServiceState(function(serviceState) {
+        setFlowStatus(serviceState, "retrieve", "Failed to copy automatically. Please copy the key manually.", true);
+      });
     }
-    renderFlow("retrieve");
   }
   async function submitRefund() {
-    var email = serviceState.refund.emailValue;
-    var token = serviceState.refund.tokenValue;
+    var email = getServiceState().refund.emailValue;
+    var token = getServiceState().refund.tokenValue;
     if (!email || !token) return;
     if (!confirm("Are you sure? This will immediately revoke the license and request the refund.")) return;
-    serviceState.refund.submitting = true;
-    serviceState.refund.status = emptyStatus();
-    renderRefund();
+    updateServiceState(function(serviceState) {
+      serviceState.refund.submitting = true;
+      serviceState.refund.status = emptyStatus();
+    });
     try {
       var res = await serviceFetch("/v1/self-refund", { email, token });
       var data = await res.json();
       if (!res.ok) throw new Error(data.error || "Refund failed");
-      serviceState.refund.tokenValue = "";
-      setRefundStatus(serviceState, "Success! Your refund has been processed. Stripe will follow up by email.", false);
+      updateServiceState(function(serviceState) {
+        serviceState.refund.tokenValue = "";
+        setRefundStatus(serviceState, "Success! Your refund has been processed. Stripe will follow up by email.", false);
+      });
     } catch (err) {
-      setRefundStatus(serviceState, err.message, true);
+      updateServiceState(function(serviceState) {
+        setRefundStatus(serviceState, err.message, true);
+      });
     } finally {
-      serviceState.refund.submitting = false;
-      renderRefund();
+      updateServiceState(function(serviceState) {
+        serviceState.refund.submitting = false;
+      });
     }
-  }
-  function syncServiceStateFromBootstrap() {
-    var bootstrap = portalStore.getBootstrap();
-    if (!bootstrap.authenticated) {
-      return;
-    }
-    syncServiceStateBootstrapEmail(serviceState, bootstrap.email || "");
   }
   function renderServiceRuntime() {
-    syncServiceStateFromBootstrap();
-    renderOpenPanels(serviceState.openPanelID);
+    renderOpenPanels(getServiceState().openPanelID);
     renderAllFlows();
   }
   renderServiceRuntime();
-  portalStore.subscribe(renderServiceRuntime);
+  portalStore.subscribeBootstrap(renderServiceRuntime);
+  portalStore.subscribeServices(renderServiceRuntime);
   installServicesController({
     toggleServicePanel,
     focusElement,
@@ -1303,10 +1388,14 @@
       void submitRefund();
     },
     updateInputValue: function(inputKind, value) {
-      updateServiceInputValue(serviceState, inputKind, value);
+      updateServiceState(function(serviceState) {
+        updateServiceInputValue(serviceState, inputKind, value);
+      }, false);
     },
     updateDeleteConfirmation: function(checked) {
-      updateDeleteConfirmation(serviceState, checked);
+      updateServiceState(function(serviceState) {
+        updateDeleteConfirmation(serviceState, checked);
+      }, false);
     }
   });
 })();

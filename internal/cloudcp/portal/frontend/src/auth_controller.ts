@@ -1,18 +1,15 @@
 import { createPortalLoginState, syncLoginStateBootstrapEmail } from './state';
 import type { PortalLoginState } from './types';
+import type { PortalStore } from './store';
 
 type FormValueElement = HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
 
 export interface AuthControllerDeps {
-  getMagicLinkRequestPath: () => string;
-  getLogoutPath: () => string;
-  getPortalPath: () => string;
-  renderPortal: () => void;
+  store: PortalStore;
 }
 
 export interface AuthController {
   getLoginState: () => PortalLoginState;
-  syncBootstrapEmail: (email: string) => void;
 }
 
 function asHTMLElement(target: EventTarget | null): HTMLElement | null {
@@ -24,45 +21,50 @@ function getElement<T extends HTMLElement = HTMLElement>(id: string): T | null {
 }
 
 export function installAuthController(deps: AuthControllerDeps): AuthController {
-  var loginState: PortalLoginState = createPortalLoginState();
-
-  function syncBootstrapEmail(email: string) {
-    syncLoginStateBootstrapEmail(loginState, email);
-  }
+  deps.store.updateLoginState(function(loginState) {
+    var bootstrap = deps.store.getBootstrap();
+    syncLoginStateBootstrapEmail(loginState, bootstrap.email || '');
+  }, { notify: false });
 
   async function sendMagicLink() {
+    var loginState = deps.store.getLoginState();
     var email = String(loginState.emailValue || '').trim();
     if (!email) {
       var input = getElement<FormValueElement>('portal-login-email');
       if (input) input.focus();
       return;
     }
-    loginState.sending = true;
-    loginState.error = '';
-    loginState.success = false;
-    deps.renderPortal();
+    deps.store.updateLoginState(function(nextState) {
+      nextState.sending = true;
+      nextState.error = '';
+      nextState.success = false;
+    });
     try {
-      var response = await fetch(deps.getMagicLinkRequestPath(), {
+      var response = await fetch(deps.store.getBootstrap().magic_link_request_path, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email })
       });
       if (response.ok || response.status === 404) {
-        loginState.sending = false;
-        loginState.success = true;
-        deps.renderPortal();
+        deps.store.updateLoginState(function(nextState) {
+          nextState.sending = false;
+          nextState.success = true;
+        });
         return;
       }
-      if (response.status === 429) {
-        loginState.error = 'Too many requests. Please wait a moment and try again.';
-      } else {
-        loginState.error = 'Something went wrong. Please try again.';
-      }
+      deps.store.updateLoginState(function(nextState) {
+        nextState.error = response.status === 429
+          ? 'Too many requests. Please wait a moment and try again.'
+          : 'Something went wrong. Please try again.';
+      });
     } catch (_) {
-      loginState.error = 'Network error. Please check your connection and try again.';
+      deps.store.updateLoginState(function(nextState) {
+        nextState.error = 'Network error. Please check your connection and try again.';
+      }, { notify: false });
     }
-    loginState.sending = false;
-    deps.renderPortal();
+    deps.store.updateLoginState(function(nextState) {
+      nextState.sending = false;
+    });
   }
 
   document.addEventListener('click', function(event) {
@@ -76,9 +78,10 @@ export function installAuthController(deps: AuthControllerDeps): AuthController 
           return;
         case 'resend-magic-link':
           event.preventDefault();
-          loginState.success = false;
-          loginState.error = '';
-          deps.renderPortal();
+          deps.store.updateLoginState(function(nextState) {
+            nextState.success = false;
+            nextState.error = '';
+          });
           void sendMagicLink();
           return;
         default:
@@ -95,9 +98,9 @@ export function installAuthController(deps: AuthControllerDeps): AuthController 
     logoutBtn.textContent = 'Signing out…';
     (async function() {
       try {
-        await fetch(deps.getLogoutPath(), { method: 'POST' });
+        await fetch(deps.store.getBootstrap().logout_path, { method: 'POST' });
       } catch (_) {}
-      window.location.href = deps.getPortalPath();
+      window.location.href = deps.store.getBootstrap().portal_path;
     })();
   });
 
@@ -105,14 +108,15 @@ export function installAuthController(deps: AuthControllerDeps): AuthController 
     var target = asHTMLElement(event.target) as FormValueElement | null;
     if (!target) return;
     if (target.getAttribute('data-portal-input') === 'login-email') {
-      loginState.emailValue = target.value;
+      deps.store.updateLoginState(function(nextState) {
+        nextState.emailValue = target.value;
+      }, { notify: false });
     }
   });
 
   return {
     getLoginState: function() {
-      return loginState;
+      return deps.store.getLoginState();
     },
-    syncBootstrapEmail,
   };
 }

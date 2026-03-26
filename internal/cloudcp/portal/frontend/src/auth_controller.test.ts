@@ -1,6 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { installAuthController } from './auth_controller';
+import { createPortalStore } from './store';
+import type { PortalBootstrapData } from './types';
+
+const bootstrapDefaults: Omit<PortalBootstrapData, 'authenticated' | 'email' | 'accounts'> = {
+  public_site_url: 'https://pulserelay.pro',
+  support_email: 'support@pulserelay.pro',
+  commercial_api_base_url: 'https://license.pulserelay.pro',
+  portal_path: '/portal',
+  bootstrap_path: '/api/portal/bootstrap',
+  magic_link_request_path: '/magic-link',
+  signup_path: '/signup',
+  logout_path: '/logout',
+  account_api_base_path: '/api/accounts',
+  portal_api_base_path: '/api/portal',
+};
 
 describe('auth controller', function() {
   beforeEach(function() {
@@ -9,29 +24,24 @@ describe('auth controller', function() {
   });
 
   it('syncs bootstrap email without overwriting local input state', function() {
+    var store = createPortalStore(bootstrapDefaults, {
+      email: 'buyer@example.com',
+    });
     var controller = installAuthController({
-      getMagicLinkRequestPath: function() {
-        return '/magic-link';
-      },
-      getLogoutPath: function() {
-        return '/logout';
-      },
-      getPortalPath: function() {
-        return '/portal';
-      },
-      renderPortal: function() {},
+      store,
     });
 
-    controller.syncBootstrapEmail('buyer@example.com');
     expect(controller.getLoginState().emailValue).toBe('buyer@example.com');
 
     controller.getLoginState().emailValue = 'typed@example.com';
-    controller.syncBootstrapEmail('other@example.com');
+    store.setBootstrap({
+      email: 'other@example.com',
+    });
     expect(controller.getLoginState().emailValue).toBe('typed@example.com');
   });
 
   it('tracks login email input and completes magic-link request state', async function() {
-    var renderPortal = vi.fn();
+    var store = createPortalStore(bootstrapDefaults, {});
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue({
@@ -41,16 +51,7 @@ describe('auth controller', function() {
     );
 
     var controller = installAuthController({
-      getMagicLinkRequestPath: function() {
-        return '/magic-link';
-      },
-      getLogoutPath: function() {
-        return '/logout';
-      },
-      getPortalPath: function() {
-        return '/portal';
-      },
-      renderPortal,
+      store,
     });
 
     document.body.innerHTML =
@@ -68,7 +69,6 @@ describe('auth controller', function() {
     await Promise.resolve();
     expect(controller.getLoginState().sending).toBe(false);
     expect(controller.getLoginState().success).toBe(true);
-    expect(renderPortal).toHaveBeenCalled();
     expect(fetch).toHaveBeenCalledWith(
       '/magic-link',
       expect.objectContaining({
