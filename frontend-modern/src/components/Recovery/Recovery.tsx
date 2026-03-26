@@ -42,7 +42,11 @@ import { getRecoveryTimelineLabelEvery } from '@/utils/recoveryTimelineChartPres
 import { getRecoveryRollupPlatforms } from '@/utils/recoveryPlatformModel';
 import { createVisibleCanonicalTypeColumn } from '@/utils/typeColumnDefinition';
 
-const MOBILE_RECOVERY_COLUMNS = new Set(['time', 'subject', 'outcome']);
+const MOBILE_RECOVERY_COLUMNS = new Set(['time', 'item', 'outcome']);
+const LEGACY_RECOVERY_COLUMN_ID_ALIASES = {
+  subject: 'item',
+  source: 'platform',
+} as const;
 type RecoveryWorkspaceView = 'inventory' | 'events';
 type RecoverySummaryRange = '7d' | '30d' | '90d' | '365d';
 
@@ -293,12 +297,12 @@ const Recovery: Component = () => {
   const artifactColumns: ColumnDef[] = [
     { id: 'time', label: 'Time' },
     { ...createVisibleCanonicalTypeColumn(), label: getRecoveryArtifactColumnLabel('type', 'Type') },
-    { id: 'subject', label: getRecoveryArtifactColumnLabel('subject', 'Subject') },
+    { id: 'item', label: getRecoveryArtifactColumnLabel('item', 'Item') },
     { id: 'entityId', label: 'ID', toggleable: true },
     { id: 'cluster', label: getRecoveryArtifactColumnLabel('cluster', 'Cluster'), toggleable: true },
     { id: 'nodeAgent', label: getRecoveryArtifactColumnLabel('nodeAgent', 'Node/Agent'), toggleable: true },
     { id: 'namespace', label: getRecoveryArtifactColumnLabel('namespace', 'Namespace'), toggleable: true },
-    { id: 'source', label: getRecoveryArtifactColumnLabel('source', 'Source') },
+    { id: 'platform', label: getRecoveryArtifactColumnLabel('platform', 'Platform') },
     { id: 'verified', label: 'Verified', toggleable: true },
     { id: 'size', label: 'Size', toggleable: true },
     { id: 'method', label: 'Method' },
@@ -311,8 +315,8 @@ const Recovery: Component = () => {
     const ids = new Set<string>([
       'time',
       'type',
-      'subject',
-      'source',
+      'item',
+      'platform',
       'method',
       'repository',
       'details',
@@ -332,6 +336,7 @@ const Recovery: Component = () => {
     artifactColumns,
     ['entityId', 'cluster', 'nodeAgent', 'namespace'],
     relevantArtifactColumnIDs,
+    LEGACY_RECOVERY_COLUMN_ID_ALIASES,
   );
 
   const visibleArtifactColumns = createMemo(() => artifactColumnVisibility.visibleColumns());

@@ -86,4 +86,34 @@ describe('useColumnVisibility', () => {
       dispose();
     });
   });
+
+  it('migrates persisted legacy column ids to canonical ids', async () => {
+    window.localStorage.setItem(storageKey, JSON.stringify(['subject', 'source', 'source']));
+
+    let disposeRoot: (() => void) | undefined;
+
+    createRoot((dispose) => {
+      disposeRoot = dispose;
+      const columns: ColumnDef[] = [
+        { id: 'item', label: 'Item', toggleable: true },
+        { id: 'platform', label: 'Platform', toggleable: true },
+        { id: 'outcome', label: 'Outcome' },
+      ];
+
+      const visibility = useColumnVisibility(
+        storageKey,
+        columns,
+        [],
+        undefined,
+        { subject: 'item', source: 'platform' },
+      );
+
+      expect(visibility.hiddenColumns()).toEqual(['item', 'platform']);
+      expect(visibility.visibleColumns().map((col) => col.id)).toEqual(['outcome']);
+    });
+
+    await Promise.resolve();
+    expect(window.localStorage.getItem(storageKey)).toBe(JSON.stringify(['item', 'platform']));
+    disposeRoot?.();
+  });
 });

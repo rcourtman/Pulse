@@ -25,6 +25,8 @@ export const RECOVERY_ARTIFACT_COLUMN_LABELS: Record<string, string> = {
   nodeAgent: getRecoveryLocationFacetLabel('node'),
   namespace: getRecoveryLocationFacetLabel('namespace'),
   type: 'Item Type',
+  item: 'Item',
+  platform: 'Platform',
   subject: 'Item',
   source: 'Platform',
 };
@@ -32,6 +34,8 @@ export const RECOVERY_ARTIFACT_COLUMN_LABELS: Record<string, string> = {
 const RECOVERY_ARTIFACT_COLUMN_SPECS: Record<string, { headerClass: string; minWidthPx: number }> = {
   time: { headerClass: 'w-[76px] text-right', minWidthPx: 76 },
   type: { headerClass: 'w-[96px] text-center', minWidthPx: 96 },
+  item: { headerClass: 'w-[248px]', minWidthPx: 248 },
+  platform: { headerClass: 'w-[78px] text-center', minWidthPx: 78 },
   subject: { headerClass: 'w-[248px]', minWidthPx: 248 },
   entityId: { headerClass: 'w-[84px]', minWidthPx: 84 },
   cluster: { headerClass: 'w-[120px]', minWidthPx: 120 },

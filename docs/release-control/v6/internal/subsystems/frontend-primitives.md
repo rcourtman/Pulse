@@ -1228,6 +1228,12 @@ must keep platform-service recovery links on canonical recovery-events
 framing and route state, so upstream service surfaces do not drift back to
 PBS-backup wording or inherit the page-default inventory workspace when they
 are actually deep-linking into recovery activity.
+That same shared primitive boundary now also owns persisted column-identity
+migration for governed surfaces. When a v6 surface canonicalizes saved column
+IDs, `frontend-modern/src/hooks/useColumnVisibility.ts` must accept explicit
+legacy-to-canonical aliases so existing local preferences migrate forward
+without resetting user choices or forcing the runtime to keep deleted column
+IDs alive indefinitely.
 That same shared primitive boundary now also owns environment-lock
 presentation. `frontend-modern/src/components/shared/EnvironmentLockBadge.tsx`
 stays the reusable badge shell,

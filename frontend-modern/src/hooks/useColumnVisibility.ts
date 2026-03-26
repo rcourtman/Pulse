@@ -1,4 +1,4 @@
-import { createMemo, Accessor } from 'solid-js';
+import { createEffect, createMemo, Accessor } from 'solid-js';
 import type { JSX } from 'solid-js';
 import { usePersistentSignal } from './usePersistentSignal';
 
@@ -14,6 +14,40 @@ export interface ColumnDef {
   flex?: number;
   sortKey?: string;
 }
+
+const normalizePersistedColumnIds = (
+  values: unknown,
+  persistedIdAliases: Record<string, string>,
+): { ids: string[]; migrated: boolean } => {
+  if (!Array.isArray(values)) return { ids: [], migrated: false };
+
+  const ids: string[] = [];
+  let migrated = false;
+
+  for (const value of values) {
+    if (typeof value !== 'string') {
+      migrated = true;
+      continue;
+    }
+
+    const trimmed = value.trim();
+    if (!trimmed) {
+      migrated = true;
+      continue;
+    }
+
+    const canonicalId = persistedIdAliases[trimmed] || trimmed;
+    if (canonicalId !== trimmed) migrated = true;
+    if (ids.includes(canonicalId)) {
+      migrated = true;
+      continue;
+    }
+
+    ids.push(canonicalId);
+  }
+
+  return { ids, migrated };
+};
 
 /**
  * Hook for managing column visibility with persistence.
@@ -33,6 +67,7 @@ export function useColumnVisibility(
   columns: ColumnDef[],
   defaultHidden: string[] = [],
   relevantColumns?: Accessor<Set<string> | null>,
+  persistedIdAliases: Record<string, string> = {},
 ) {
   const defaultHiddenFromColumns = columns
     .filter((c) => c.defaultHidden)
@@ -45,6 +80,7 @@ export function useColumnVisibility(
   // Check if user has any saved preference
   const hasUserPreference =
     typeof window !== 'undefined' && window.localStorage.getItem(storageKey) !== null;
+  let persistedIdsMigrated = false;
 
   // Persist hidden columns to localStorage
   // Use defaultHidden only if no user preference exists yet
@@ -56,13 +92,21 @@ export function useColumnVisibility(
       deserialize: (str) => {
         try {
           const parsed = JSON.parse(str);
-          return Array.isArray(parsed) ? parsed : [];
+          const normalized = normalizePersistedColumnIds(parsed, persistedIdAliases);
+          persistedIdsMigrated = normalized.migrated;
+          return normalized.ids;
         } catch {
           return [];
         }
       },
     },
   );
+
+  createEffect(() => {
+    if (!hasUserPreference || !persistedIdsMigrated) return;
+    persistedIdsMigrated = false;
+    setHiddenColumns([...hiddenColumns()]);
+  });
 
   // Check if a column is hidden by user preference
   const isHiddenByUser = (id: string): boolean => {

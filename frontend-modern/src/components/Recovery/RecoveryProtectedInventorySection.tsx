@@ -46,7 +46,7 @@ import { getSourcePlatformLabel, normalizeSourcePlatformQueryValue } from '@/uti
 import { titleCaseDelimitedLabel } from '@/utils/textPresentation';
 
 type VerificationFilter = 'all' | 'verified' | 'unverified' | 'unknown';
-type ProtectedSortCol = 'subject' | 'type' | 'source' | 'lastBackup' | 'outcome';
+type ProtectedSortCol = 'item' | 'type' | 'platform' | 'lastBackup' | 'outcome';
 type SortDir = 'asc' | 'desc';
 
 interface RecoveryRollupSummary {
@@ -118,7 +118,7 @@ export const RecoveryProtectedInventorySection: Component<
 
     items.sort((left, right) => {
       switch (sortColumn) {
-        case 'subject': {
+        case 'item': {
           const leftLabel = getRecoveryRollupSubjectLabel(left, resourceIndex).toLowerCase();
           const rightLabel = getRecoveryRollupSubjectLabel(right, resourceIndex).toLowerCase();
           return multiplier * leftLabel.localeCompare(rightLabel);
@@ -132,7 +132,7 @@ export const RecoveryProtectedInventorySection: Component<
           )?.label.toLowerCase();
           return multiplier * (leftType || '').localeCompare(rightType || '');
         }
-        case 'source': {
+        case 'platform': {
           const leftSource = getRecoveryRollupPlatforms(left)
             .map((platform) => getSourcePlatformLabel(String(platform)))
             .sort()
@@ -324,9 +324,9 @@ export const RecoveryProtectedInventorySection: Component<
               <TableRow class="bg-surface-alt text-muted border-b border-border">
                 {(
                   [
-                    ['subject', getRecoveryArtifactColumnLabel('subject', 'Subject')],
+                    ['item', getRecoveryArtifactColumnLabel('item', 'Item')],
                     ['type', 'Item Type'],
-                    ['source', getRecoveryArtifactColumnLabel('source', 'Source')],
+                    ['platform', getRecoveryArtifactColumnLabel('platform', 'Platform')],
                     ['lastBackup', 'Latest Point'],
                     ['outcome', 'Outcome'],
                   ] as const
@@ -335,7 +335,7 @@ export const RecoveryProtectedInventorySection: Component<
                     class={`py-0.5 px-3 whitespace-nowrap text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer select-none hover:text-base-content transition-colors${
                       column === 'type'
                         ? ' hidden md:table-cell w-[96px]'
-                        : column === 'source'
+                        : column === 'platform'
                           ? ' hidden lg:table-cell w-[110px]'
                         : column === 'lastBackup'
                           ? ' w-[120px]'

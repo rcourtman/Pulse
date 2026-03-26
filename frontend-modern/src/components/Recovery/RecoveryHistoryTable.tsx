@@ -224,6 +224,7 @@ export const RecoveryHistoryTable: Component<RecoveryHistoryTableProps> = (props
                                       </Show>
                                     </TableCell>
                                   );
+                                case 'item':
                                 case 'subject':
                                   return (
                                     <TableCell
@@ -293,6 +294,7 @@ export const RecoveryHistoryTable: Component<RecoveryHistoryTableProps> = (props
                                       {namespace || '—'}
                                     </TableCell>
                                   );
+                                case 'platform':
                                 case 'source': {
                                   const badge = getSourcePlatformBadge(platform);
                                   return (

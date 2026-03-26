@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/te
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import Recovery from '@/components/Recovery/Recovery';
 import { parseRecoveryDateKey } from '@/utils/recoveryDatePresentation';
+import { STORAGE_KEYS } from '@/utils/localStorage';
 
 let mockLocationSearch = '';
 let mockLocationPath = '/recovery';
@@ -358,6 +359,25 @@ describe('Recovery', () => {
     const historyTable = tables.find((table) => within(table).queryByText('Local Copy'));
     expect(historyTable).toBeDefined();
     expect(historyTable).toHaveStyle({ 'min-width': '1142px', 'table-layout': 'fixed' });
+  });
+
+  it('keeps canonical item and platform columns visible when legacy hidden-column ids exist', async () => {
+    facetsPayload.clusters = ['lab-cluster'];
+    localStorage.setItem(
+      STORAGE_KEYS.RECOVERY_HIDDEN_COLUMNS,
+      JSON.stringify(['subject', 'source', 'cluster']),
+    );
+
+    render(() => <Recovery />);
+
+    fireEvent.click(await screen.findByText('VM 123'));
+    await screen.findByText(/Showing 1 - 1 of 1 recovery points/i);
+
+    const tables = await screen.findAllByRole('table');
+    const historyTable = tables[tables.length - 1];
+    expect(within(historyTable).getByText('Item')).toBeInTheDocument();
+    expect(within(historyTable).getByText('Platform')).toBeInTheDocument();
+    expect(within(historyTable).queryByText('Cluster / Site')).not.toBeInTheDocument();
   });
 
   it('focuses history when a rollup is clicked', async () => {

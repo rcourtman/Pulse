@@ -175,6 +175,12 @@ recovery points and protected rollups should expose `platform` and
 `platforms` as the primary transport fields, while any legacy
 `provider` / `providers` aliases stay compatibility-only so the page does not
 silently drift back to backend-shaped vocabulary during decode.
+That same shared recovery table contract should keep its runtime column model
+canonical as well. Recovery inventory and event-history columns should use
+`item` and `platform` identities rather than preserving `subject` and `source`
+as the primary runtime model, and any saved legacy column IDs must migrate at
+the shared column-visibility boundary instead of forcing recovery renderers to
+carry deleted column identities indefinitely.
 That same shared presentation layer also owns the distinction between
 aggregate recovery-method language and single-record recovery-method language.
 Timeline legends and daily breakdowns must use aggregate labels such as
