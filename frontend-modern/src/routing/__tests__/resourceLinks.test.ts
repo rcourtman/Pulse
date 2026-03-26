@@ -208,6 +208,7 @@ describe('resource link routing contract', () => {
 
   it('builds and parses recovery query params', () => {
     const href = buildRecoveryPath({
+      view: 'events',
       provider: 'proxmox-pbs',
       stale: '1',
       range: '7',
@@ -223,6 +224,7 @@ describe('resource link routing contract', () => {
     });
     const url = new URL(href, 'http://localhost');
     expect(url.pathname).toBe('/recovery');
+    expect(url.searchParams.get('view')).toBe('events');
     expect(url.searchParams.get('provider')).toBe('proxmox-pbs');
     expect(url.searchParams.get('stale')).toBe('1');
     expect(url.searchParams.get('range')).toBe('7');
@@ -239,6 +241,7 @@ describe('resource link routing contract', () => {
     const parsed = parseRecoveryLinkSearch(href.slice('/recovery'.length));
     expect(parsed).toEqual({
       rollupId: '',
+      view: 'events',
       provider: 'proxmox-pbs',
       stale: '1',
       range: '7',
@@ -254,6 +257,7 @@ describe('resource link routing contract', () => {
     });
 
     expect(RECOVERY_QUERY_PARAMS.provider).toBe('provider');
+    expect(RECOVERY_QUERY_PARAMS.view).toBe('view');
     expect(RECOVERY_QUERY_PARAMS.stale).toBe('stale');
     expect(RECOVERY_QUERY_PARAMS.range).toBe('range');
     expect(RECOVERY_QUERY_PARAMS.cluster).toBe('cluster');

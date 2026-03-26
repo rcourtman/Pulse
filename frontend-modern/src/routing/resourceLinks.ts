@@ -46,6 +46,7 @@ export const STORAGE_QUERY_PARAMS = {
 
 export const RECOVERY_QUERY_PARAMS = {
   rollupId: 'rollupId',
+  view: 'view',
   provider: 'provider',
   stale: 'stale',
   range: 'range',
@@ -109,6 +110,7 @@ type StorageLinkOptions = {
 
 type RecoveryLinkOptions = {
   rollupId?: string | null;
+  view?: string | null;
   provider?: string | null;
   stale?: string | null;
   range?: string | null;
@@ -252,6 +254,7 @@ export const parseRecoveryLinkSearch = (search: string) => {
 
   return {
     rollupId: normalizeQueryValue(params.get(RECOVERY_QUERY_PARAMS.rollupId)),
+    view: normalizeQueryValue(params.get(RECOVERY_QUERY_PARAMS.view)),
     provider: normalizeSourcePlatformQueryValue(params.get(RECOVERY_QUERY_PARAMS.provider)),
     stale: normalizeQueryBooleanFlag(params.get(RECOVERY_QUERY_PARAMS.stale)),
     range: normalizeQueryValue(params.get(RECOVERY_QUERY_PARAMS.range)),
@@ -270,6 +273,7 @@ export const parseRecoveryLinkSearch = (search: string) => {
 export const buildRecoveryPath = (options: RecoveryLinkOptions = {}): string => {
   const params = new URLSearchParams();
   const rollupId = normalizeQueryValue(options.rollupId);
+  const view = normalizeQueryValue(options.view);
   const provider = normalizeSourcePlatformQueryValue(options.provider);
   const stale = normalizeQueryBooleanFlag(options.stale);
   const range = normalizeQueryValue(options.range);
@@ -284,6 +288,7 @@ export const buildRecoveryPath = (options: RecoveryLinkOptions = {}): string => 
   const query = normalizeQueryValue(options.query);
 
   if (rollupId) params.set(RECOVERY_QUERY_PARAMS.rollupId, rollupId);
+  if (view) params.set(RECOVERY_QUERY_PARAMS.view, view);
   if (provider) params.set(RECOVERY_QUERY_PARAMS.provider, provider);
   if (stale) params.set(RECOVERY_QUERY_PARAMS.stale, stale);
   if (range) params.set(RECOVERY_QUERY_PARAMS.range, range);

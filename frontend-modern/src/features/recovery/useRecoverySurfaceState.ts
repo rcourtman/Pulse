@@ -25,6 +25,7 @@ import { parseRecoveryDateKey } from '@/utils/recoveryDatePresentation';
 
 type ArtifactMode = RecoveryArtifactMode;
 type VerificationFilter = 'all' | 'verified' | 'unverified' | 'unknown';
+type RecoveryWorkspaceView = 'inventory' | 'events';
 
 const isRecoveryDateKey = (value: string): boolean => /^\d{4}-\d{2}-\d{2}$/.test(value);
 const isRecoveryRangeDays = (value: string): value is '7' | '30' | '90' | '365' =>
@@ -32,6 +33,16 @@ const isRecoveryRangeDays = (value: string): value is '7' | '30' | '90' | '365' 
 
 const normalizeRecoveryRouteValue = (value: string | null | undefined): string =>
   String(value || '').trim();
+
+const normalizeRecoveryWorkspaceViewValue = (
+  value: string | null | undefined,
+): RecoveryWorkspaceView | '' => {
+  const normalized = normalizeRecoveryRouteValue(value).toLowerCase();
+  if (normalized === 'inventory' || normalized === 'events') {
+    return normalized;
+  }
+  return '';
+};
 
 const normalizeRecoveryRouteSelection = (value: string | null | undefined): string => {
   const normalized = normalizeRecoveryRouteValue(value);
@@ -56,6 +67,7 @@ export function useRecoverySurfaceState() {
   const storageRecoveryResources = useStorageRecoveryResources();
 
   const [rollupId, setRollupId] = createSignal('');
+  const [workspaceView, setWorkspaceView] = createSignal<RecoveryWorkspaceView>('inventory');
   const [queryFilter, setQueryFilter] = createSignal('');
   const [providerFilter, setProviderFilter] = createSignal('all');
   const [clusterFilter, setClusterFilter] = createSignal('all');
@@ -193,6 +205,7 @@ export function useRecoverySurfaceState() {
     const parsed = parseRecoveryLinkSearch(location.search);
 
     const nextRollup = normalizeRecoveryRouteValue(parsed.rollupId);
+    const nextView = normalizeRecoveryWorkspaceViewValue(parsed.view);
     const nextQuery = normalizeRecoveryRouteValue(parsed.query);
     const nextProvider = normalizeRecoveryProviderSelection(parsed.provider || '');
     const nextStaleOnly = normalizeRecoveryBooleanFlag(parsed.stale);
@@ -201,6 +214,9 @@ export function useRecoverySurfaceState() {
     const nextCluster = normalizeRecoveryRouteSelection(parsed.cluster || 'all') || 'all';
     const normalizedDay = normalizeRecoveryRouteValue(parsed.day);
     const nextDay = isRecoveryDateKey(normalizedDay) ? normalizedDay : '';
+    const derivedDefaultView: RecoveryWorkspaceView =
+      nextRollup || nextDay ? 'events' : 'inventory';
+    const resolvedView = (nextView || derivedDefaultView) as RecoveryWorkspaceView;
     const nextMode = normalizeRecoveryModeQueryValue(parsed.mode);
     const rawScope = normalizeRecoveryRouteValue(parsed.scope).toLowerCase();
     const nextScope: 'all' | 'workload' = rawScope === 'workload' ? 'workload' : 'all';
@@ -210,6 +226,7 @@ export function useRecoverySurfaceState() {
     const statusValue = normalizeRecoveryRouteValue(parsed.status).toLowerCase();
 
     if (nextRollup !== untrack(rollupId)) setRollupId(nextRollup);
+    if (resolvedView !== untrack(workspaceView)) setWorkspaceView(resolvedView);
     if (nextQuery !== untrack(queryFilter)) setQueryFilter(nextQuery);
     if (nextProvider !== untrack(providerFilter)) setProviderFilter(nextProvider);
     if (nextStaleOnly !== untrack(protectedStaleOnly)) setProtectedStaleOnly(nextStaleOnly);
@@ -245,6 +262,7 @@ export function useRecoverySurfaceState() {
 
   createEffect(() => {
     rollupId();
+    workspaceView();
     queryFilter();
     providerFilter();
     clusterFilter();
@@ -261,11 +279,14 @@ export function useRecoverySurfaceState() {
 
   createEffect(() => {
     const rid = rollupId().trim();
+    const defaultView: RecoveryWorkspaceView =
+      rid || selectedDateKey() ? 'events' : 'inventory';
     const status = historyOutcomeFilter() !== 'all' ? historyOutcomeFilter() : null;
     const verification = verificationFilter() !== 'all' ? verificationFilter() : null;
 
     const nextPath = buildRecoveryPath({
       rollupId: rid || null,
+      view: workspaceView() !== defaultView ? workspaceView() : null,
       query: queryFilter().trim() || null,
       provider: providerFilter() !== 'all' ? providerFilter() : null,
       stale: protectedStaleOnly() ? '1' : null,
@@ -387,6 +408,7 @@ export function useRecoverySurfaceState() {
     setScopeFilter,
     setSelectedDateKey,
     setVerificationFilter,
+    setWorkspaceView,
     showClusterFilter,
     showNamespaceFilter,
     showNodeFilter,
@@ -395,5 +417,6 @@ export function useRecoverySurfaceState() {
     tableWindow,
     totalPages,
     verificationFilter,
+    workspaceView,
   };
 }

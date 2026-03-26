@@ -654,6 +654,12 @@ owns the dashboard-specific action, KPI, problem-resource, trend, and
 customization surfaces. Lane-owned widgets like recent alerts, storage,
 and recovery must continue to route through their own subsystem owners instead
 of drifting back into a page-local dashboard panel cluster.
+The recovery feature shell now also depends on the shared
+`frontend-modern/src/components/shared/Subtabs.tsx` primitive for its primary
+protected-items versus recovery-events workspace switch. The recovery lane may
+own the active view and route-state semantics, but the top-level tab framing
+must stay on the canonical shared subtabs control instead of reviving a
+recovery-local switcher pattern.
 `frontend-modern/src/utils/problemResourcePresentation.ts` now also belongs to
 that same dashboard overview boundary so the problem-resource severity contract
 stays shared with `ProblemResourcesTable.tsx` instead of floating as an

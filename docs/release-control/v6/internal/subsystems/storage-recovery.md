@@ -41,14 +41,15 @@ querying, and the operator-facing storage health presentation layer.
 15. `frontend-modern/src/hooks/useRecoveryPoints.ts`
 16. `frontend-modern/src/hooks/useRecoveryRollups.ts`
 17. `frontend-modern/src/pages/RecoveryRoute.tsx`
-18. `frontend-modern/src/pages/Dashboard.tsx`
-19. `frontend-modern/src/features/dashboardOverview/dashboardWidgets.ts`
-20. `frontend-modern/src/components/Recovery/DashboardRecoveryStatusPanel.tsx`
-21. `frontend-modern/src/components/Storage/DashboardStoragePanel.tsx`
-22. `frontend-modern/src/types/recovery.ts`
-23. `frontend-modern/src/utils/recoverySummaryPresentation.ts`
-24. `frontend-modern/src/utils/recoveryTablePresentation.ts`
-25. `frontend-modern/src/utils/textPresentation.ts`
+18. `frontend-modern/src/routing/resourceLinks.ts`
+19. `frontend-modern/src/pages/Dashboard.tsx`
+20. `frontend-modern/src/features/dashboardOverview/dashboardWidgets.ts`
+21. `frontend-modern/src/components/Recovery/DashboardRecoveryStatusPanel.tsx`
+22. `frontend-modern/src/components/Storage/DashboardStoragePanel.tsx`
+23. `frontend-modern/src/types/recovery.ts`
+24. `frontend-modern/src/utils/recoverySummaryPresentation.ts`
+25. `frontend-modern/src/utils/recoveryTablePresentation.ts`
+26. `frontend-modern/src/utils/textPresentation.ts`
 
 ## Shared Boundaries
 
@@ -92,6 +93,7 @@ querying, and the operator-facing storage health presentation layer.
 12. Letting protected-item recovery outcome filtering fork from the canonical history status filter; the protected inventory status control must drive the same route-backed `status` field and the same rollups, points, series, and facets transport filters as the history surface instead of keeping a protected-only local outcome branch
 13. Letting visible protected-item filters fall out of shared recovery links; the protected `Stale only` toggle must restore from the canonical recovery URL and rewrite to one owned `stale=1` route form instead of disappearing on refresh or copy/paste
 14. Reintroducing stacked full-width recovery tables as the primary desktop layout; the governed recovery surface must expose one primary data region at a time with explicit protected-items versus recovery-events view switching so Pulse stays inventory-first for Proxmox operators without collapsing the page back into a single-platform backup screen
+15. Letting the primary recovery workspace tabs drift out of canonical route state; when operators explicitly switch between protected items and recovery events, the shared recovery link builder and page model must preserve that selection in route state unless the active `rollupId` or `day` context already implies the default workspace
 
 ## Completion Obligations
 
@@ -146,6 +148,15 @@ items, recovery events, and latest points so PBS backups, TrueNAS snapshots,
 Kubernetes artifacts, and future providers all fit the same first-class UI
 frame without removing the source badges and row-level cues that make Proxmox
 operators productive.
+That primary workspace selection now also lives in canonical recovery route
+state through `frontend-modern/src/routing/resourceLinks.ts` and
+`frontend-modern/src/features/recovery/useRecoverySurfaceState.ts`, so copied
+links and browser restores reopen the same protected-items versus
+recovery-events workspace an operator explicitly chose instead of silently
+falling back to page-local UI state. Focused recovery routes with an active
+`rollupId` or `day` remain recovery-events-first by default, but the explicit
+workspace selection must still serialize through the owned recovery URL model
+whenever an operator overrides that implied default.
 That history table layout now also derives its minimum width from the same
 canonical column-width spec that owns the header sizing in
 `frontend-modern/src/utils/recoveryTablePresentation.ts`, so longer governed

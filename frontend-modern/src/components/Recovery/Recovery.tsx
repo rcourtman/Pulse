@@ -1,4 +1,4 @@
-import { Show, createEffect, createMemo, createSignal } from 'solid-js';
+import { Show, createEffect, createMemo } from 'solid-js';
 import type { Component } from 'solid-js';
 
 import { RecoveryActivitySection } from '@/components/Recovery/RecoveryActivitySection';
@@ -44,8 +44,6 @@ const Recovery: Component = () => {
   const kioskMode = useKioskMode();
   const { isMobile } = useBreakpoint();
   let historySectionRef: HTMLDivElement | undefined;
-  const [workspaceView, setWorkspaceView] = createSignal<RecoveryWorkspaceView>('inventory');
-  const [workspaceViewInitialized, setWorkspaceViewInitialized] = createSignal(false);
 
   const {
     chartRangeDays,
@@ -85,6 +83,7 @@ const Recovery: Component = () => {
     setScopeFilter,
     setSelectedDateKey,
     setVerificationFilter,
+    setWorkspaceView,
     showClusterFilter,
     showNamespaceFilter,
     showNodeFilter,
@@ -92,6 +91,7 @@ const Recovery: Component = () => {
     tableWindow,
     totalPages,
     verificationFilter,
+    workspaceView,
   } = useRecoverySurfaceState();
 
   const baseRollups = createMemo<ProtectionRollup[]>(() => {
@@ -335,15 +335,6 @@ const Recovery: Component = () => {
 
   createEffect(() => {
     if (currentPage() > totalPages()) setCurrentPage(totalPages());
-  });
-
-  createEffect(() => {
-    const defaultView: RecoveryWorkspaceView =
-      rollupId().trim().length > 0 || selectedDateKey() ? 'events' : 'inventory';
-    if (!workspaceViewInitialized()) {
-      setWorkspaceView(defaultView);
-      setWorkspaceViewInitialized(true);
-    }
   });
 
   const timeline = createMemo(() => {

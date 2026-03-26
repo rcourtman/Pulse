@@ -1,3 +1,4 @@
+import { createSignal } from 'solid-js';
 import { fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -41,6 +42,7 @@ import Recovery from '@/components/Recovery/Recovery';
 
 describe('Recovery layout guards', () => {
   beforeEach(() => {
+    const [workspaceView, setWorkspaceView] = createSignal<'inventory' | 'events'>('inventory');
     mockRecoverySurfaceState = {
       activitySummary: () => ({ totalPoints: 2, activeDays: 2, averagePerDay: 1 }),
       activeAdvancedFilterCount: () => 0,
@@ -122,6 +124,8 @@ describe('Recovery layout guards', () => {
       tableMinWidth: () => 'auto',
       totalPages: () => 1,
       verificationFilter: () => 'all',
+      workspaceView,
+      setWorkspaceView,
     };
   });
 

@@ -166,6 +166,34 @@ describe('Recovery', () => {
     });
   });
 
+  it('persists the selected recovery workspace view in the route when explicitly changed', async () => {
+    render(() => <Recovery />);
+
+    fireEvent.click(await screen.findByRole('tab', { name: /recovery events/i }));
+
+    await waitFor(() => {
+      expect(navigateSpy).toHaveBeenCalledWith('/recovery?view=events', { replace: true });
+    });
+  });
+
+  it('restores the explicit recovery workspace view from the route', async () => {
+    mockLocationSearch = '?view=events';
+
+    render(() => <Recovery />);
+
+    expect(await screen.findByText('Recovery Events')).toBeInTheDocument();
+    expect(screen.queryByText('Protected Items')).not.toBeInTheDocument();
+  });
+
+  it('derives the recovery events workspace from focused route state when no explicit view is set', async () => {
+    mockLocationSearch = '?rollupId=res%3Avm-123';
+
+    render(() => <Recovery />);
+
+    expect(await screen.findByText('Recovery Events')).toBeInTheDocument();
+    expect(screen.queryByText('Protected Items')).not.toBeInTheDocument();
+  });
+
   it('renders canonical rollup and history subject labels when linked resources are unavailable', async () => {
     rollupsPayload.push({
       rollupId: 'res:vm-404',
@@ -401,7 +429,7 @@ describe('Recovery', () => {
     fireEvent.change(clusterSelect, { target: { value: 'dev-cluster' } });
 
     await waitFor(() => {
-      expect(navigateSpy).toHaveBeenCalledWith('/recovery?cluster=dev-cluster', {
+      expect(navigateSpy).toHaveBeenCalledWith('/recovery?view=events&cluster=dev-cluster', {
         replace: true,
       });
     });
@@ -485,7 +513,7 @@ describe('Recovery', () => {
 
     await waitFor(() => {
       expect(navigateSpy).toHaveBeenCalledWith(
-        '/recovery?namespace=tenant-a&node=node-agent-1',
+        '/recovery?view=events&namespace=tenant-a&node=node-agent-1',
         { replace: true },
       );
     });

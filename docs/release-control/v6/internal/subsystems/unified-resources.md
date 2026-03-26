@@ -941,6 +941,11 @@ The same recovery route contract also applies to the selected timeline range:
 canonical `/recovery` links must preserve explicit non-default chart windows
 such as `7d`, `90d`, and `1y` so recovery drill-down transport does not widen
 back to the default `30d` window on reload or shared navigation.
+That same shared recovery route helper contract also owns the primary recovery
+workspace selection. When an operator explicitly switches between protected
+items and recovery events, canonical `/recovery` links must round-trip that
+`view` selection unless the active `rollupId` or selected day already implies
+the default recovery-events workspace.
 That same shared recovery route helper contract now also owns canonical
 boolean filter encoding for protected-inventory drill-down state. Visible
 recovery toggles such as `stale` must round-trip through the owned `stale=1`
