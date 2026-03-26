@@ -504,10 +504,10 @@ while `frontend-modern/src/pages/CloudPricing.tsx`,
 and the self-hosted billing settings surfaces must consume those shared owners
 instead of redefining retail plan facts or counted-unit policy locally.
 That shared ownership also includes display-ready price semantics. Monthly
-headline price, founding-rate override, compare-at strike-through copy, and
-annual summary text must come from the shared plan-definition owners rather
-than page-local string parsing or hardcoded retail amounts inside hosted
-pricing/signup screens.
+headline price, founding-rate override, compare-at strike-through copy,
+campaign badge copy, and annual summary text must come from the shared
+plan-definition owners rather than page-local string parsing or hardcoded
+retail amounts inside hosted pricing/signup screens.
 That same counted-unit boundary also owns the disclosure rule for retail copy:
 default billing and pricing surfaces should use concise monitored-system copy,
 while the full counted-unit definition appears only behind explicit disclosure

@@ -9,6 +9,7 @@ export interface CloudPlanDefinition {
   monitoredSystems: number;
   support: 'Community' | 'Priority';
   foundingMonthlyPrice?: string;
+  campaignBadge?: string;
   highlighted?: boolean;
 }
 
@@ -17,6 +18,7 @@ export interface CloudPlanPricePresentation {
   cadence: '/month';
   annualSummary: string;
   compareAtMonthlyPrice?: string;
+  campaignBadge?: string;
 }
 
 export const DEFAULT_CLOUD_TIER: CloudTierKey = 'starter';
@@ -31,6 +33,7 @@ export const CLOUD_PLAN_DEFINITIONS: readonly CloudPlanDefinition[] = [
     monitoredSystems: 10,
     support: 'Community',
     foundingMonthlyPrice: '$19',
+    campaignBadge: 'Founding rate',
     highlighted: true,
   },
   {
@@ -93,5 +96,6 @@ export function getCloudPlanPricePresentation(
     cadence: '/month',
     annualSummary: plan.annualSummary,
     compareAtMonthlyPrice: plan.foundingMonthlyPrice ? plan.monthlyPrice : undefined,
+    campaignBadge: plan.campaignBadge,
   };
 }

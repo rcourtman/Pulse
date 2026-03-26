@@ -24,6 +24,7 @@ describe('CloudPricing', () => {
       'href',
       '/cloud/signup?tier=starter',
     );
+    expect(screen.getByText('Founding rate')).toBeInTheDocument();
     expect(screen.getByText('$19')).toBeInTheDocument();
     expect(screen.getByText('$29/month')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Choose Power' })).toHaveAttribute(

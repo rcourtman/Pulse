@@ -12,6 +12,7 @@ describe('cloudPlans', () => {
       cadence: '/month',
       annualSummary: 'or $249/year (save 29%)',
       compareAtMonthlyPrice: '$29',
+      campaignBadge: 'Founding rate',
     });
   });
 
@@ -21,6 +22,7 @@ describe('cloudPlans', () => {
       cadence: '/month',
       annualSummary: 'or $449/year (save 24%)',
       compareAtMonthlyPrice: undefined,
+      campaignBadge: undefined,
     });
   });
 });

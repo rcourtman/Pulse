@@ -32,10 +32,10 @@ function CloudTierCard(props: { tier: CloudPlanDefinition }) {
           : 'relative'
       }
     >
-      <Show when={t.highlighted}>
+      <Show when={price.campaignBadge}>
         <div class="absolute right-4 top-4">
           <span class="inline-flex items-center rounded-full bg-amber-500 px-2.5 py-1 text-[11px] font-semibold text-white shadow-sm">
-            Founding rate
+            {price.campaignBadge}
           </span>
         </div>
       </Show>
