@@ -125,7 +125,7 @@ describe('shell view', function() {
       })
     );
 
-    expect(html).toContain('<h1>Pulse Account</h1>');
+    expect(html).toContain('portal-hero-brand">Pulse Account</div>');
     expect(html).toContain('Hosted access is active on this account.');
     expect(html).toContain('portal-shell-nav');
     expect(html).toContain('Overview');
@@ -136,8 +136,9 @@ describe('shell view', function() {
     expect(html).toContain('Self-hosted licenses and billing');
     expect(html).toContain('id="accounts-root"');
     expect(html).toContain('MSP account');
-    expect(html).toContain('MSP account · Owner · 3 workspaces');
     expect(html).toContain('Acme MSP');
+    expect(html).toContain('Operator workspace account');
+    expect(html).toContain('3 workspaces');
     expect(html).toContain('Account operations');
     expect(html).toContain('Manage the client fleet from this account surface.');
     expect(html).toContain('Operator overview');
@@ -186,7 +187,8 @@ describe('shell view', function() {
       })
     );
 
-    expect(html).toContain('<h1>Self-hosted Pulse Account</h1>');
+    expect(html).toContain('Pulse Account');
+    expect(html).toContain('Self-hosted only');
     expect(html).toContain('No hosted workspace access is attached to this account yet.');
     expect(html).toContain('Use these tools for self-hosted billing, license recovery, refunds, and privacy.');
     expect(html).toContain('Account services');

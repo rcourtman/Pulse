@@ -163,8 +163,8 @@ header .logout-btn:hover,
 .portal-hero {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 18px;
-  padding: 12px 16px;
+  gap: 14px;
+  padding: 10px 14px;
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   background: #fff;
@@ -173,21 +173,29 @@ header .logout-btn:hover,
 
 .portal-hero-compact {
   align-items: center;
-  padding: 12px 16px;
+  padding: 10px 14px;
 }
 
 .portal-hero-copy {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 2px;
   max-width: 900px;
 }
 
 .portal-hero-heading-row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   flex-wrap: wrap;
+}
+
+.portal-hero-brand {
+  font-size: 26px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.045em;
+  color: var(--ink);
 }
 
 .portal-hero-kicker,
@@ -210,31 +218,28 @@ header .logout-btn:hover,
   color: var(--ink-muted);
 }
 
-.portal-hero h1,
-.intro-card h1 {
-  margin: 0;
-  font-size: clamp(1.55rem, 2.2vw, 2.15rem);
-  line-height: 1;
-  letter-spacing: -0.045em;
-}
-
 .portal-hero p,
 .intro-card p {
   margin: 0;
-  font-size: 13px;
-  line-height: 1.5;
+  font-size: 12px;
+  line-height: 1.45;
   color: var(--ink-soft);
+}
+
+.portal-hero p strong {
+  color: var(--ink);
+  font-weight: 700;
 }
 
 .portal-hero-chip {
   display: inline-flex;
   align-items: center;
-  min-height: 28px;
-  padding: 0 12px;
+  min-height: 24px;
+  padding: 0 10px;
   border-radius: 999px;
   background: #edf5f7;
   color: var(--accent-strong);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -243,7 +248,7 @@ header .logout-btn:hover,
 .portal-hero-stats {
   display: flex;
   align-items: stretch;
-  gap: 8px;
+  gap: 6px;
   align-self: center;
 }
 
@@ -251,16 +256,16 @@ header .logout-btn:hover,
   display: flex;
   flex-direction: column;
   justify-content: center;
-  min-width: 132px;
+  min-width: 120px;
   min-height: 0;
-  padding: 10px 12px;
+  padding: 8px 10px;
   border: 1px solid var(--line);
   border-radius: 12px;
   background: #fbfcfd;
 }
 
 .portal-hero-stat-label {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   color: var(--ink-muted);
   letter-spacing: 0.06em;
@@ -268,7 +273,7 @@ header .logout-btn:hover,
 }
 
 .portal-hero-stat-value {
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 800;
   line-height: 1.25;
   letter-spacing: -0.04em;
@@ -502,11 +507,11 @@ header .logout-btn:hover,
 }
 
 .account-surface-header {
-  display: flex;
-  align-items: start;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
   gap: 16px;
-  padding: 12px 4px 14px;
+  padding: 6px 4px 12px;
   border: none;
   border-bottom: 1px solid var(--line);
   border-radius: var(--radius-md);
@@ -515,19 +520,20 @@ header .logout-btn:hover,
 }
 
 .account-heading h2 {
-  margin: 4px 0 0;
-  font-size: 27px;
+  margin: 2px 0 0;
+  font-size: 24px;
   line-height: 1.02;
   letter-spacing: -0.05em;
 }
 
 .account-summary {
-  margin-top: 6px;
-  font-size: 13px;
+  margin-top: 5px;
+  font-size: 12px;
   color: var(--ink-soft);
 }
 
 .account-badges,
+.account-context-strip,
 .workspace-badges,
 .workspace-actions,
 .account-actions,
@@ -537,6 +543,25 @@ header .logout-btn:hover,
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+.account-context-strip {
+  justify-content: flex-end;
+}
+
+.account-context-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fbfcfd;
+  color: var(--ink-soft);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .workspace-actions {

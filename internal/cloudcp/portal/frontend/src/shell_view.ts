@@ -205,20 +205,19 @@ function renderAttentionPanel(workspaces: PortalWorkspaceSummary[]): string {
 function renderOverviewBand(accounts: PortalAccountSummary[]): string {
   var hosted = hasHostedAccounts(accounts);
   var workspaceTotal = countWorkspaces(accounts);
-  var title = hosted ? 'Pulse Account' : 'Self-hosted Pulse Account';
+  var statusText = hosted ? 'Hosted access is active on this account.' : 'No hosted workspace access is attached to this account yet.';
   var summary = hosted
-    ? 'Hosted operations, operator access, and commercial account services live in one account console.'
-    : 'Billing, license recovery, refunds, and privacy actions live here until hosted access is attached to this email.';
+    ? 'Hosted operations, operator access, and commercial account services.'
+    : 'Billing, license recovery, refunds, and privacy actions until hosted access is attached.';
 
   return (
     '<section class="portal-hero portal-hero-compact">' +
       '<div class="portal-hero-copy">' +
-        '<div class="portal-hero-kicker">' + (hosted ? 'Hosted access is active on this account.' : 'No hosted workspace access is attached to this account yet.') + '</div>' +
         '<div class="portal-hero-heading-row">' +
-          '<h1>' + title + '</h1>' +
+          '<div class="portal-hero-brand">Pulse Account</div>' +
           '<span class="portal-hero-chip">' + (hosted ? 'Operator ready' : 'Self-hosted only') + '</span>' +
         '</div>' +
-        '<p>' + summary + '</p>' +
+        '<p><strong>' + statusText + '</strong> ' + summary + '</p>' +
       '</div>' +
       '<div class="portal-hero-stats">' +
         '<div class="portal-hero-stat">' +
@@ -678,17 +677,19 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
     ? 'Hosted operations live above. Use these commercial tools for self-hosted licenses, billing, refunds, and privacy actions.'
     : 'Use these account tools for self-hosted licenses, billing, refunds, and privacy actions.';
   var hostedContent = accounts.map(function(account) {
+    var workspaceLabel = workspaceCountLabel((account.workspaces || []).length);
     return (
       '<section class="account-surface">' +
         '<div class="account-surface-header">' +
           '<div class="account-heading">' +
             '<div class="account-eyebrow">' + escapeHTML(accountKindLabel(account)) + '</div>' +
             '<h2>' + escapeHTML(account.name) + '</h2>' +
-            '<div class="account-summary">' + escapeHTML(accountKindLabel(account) + ' · ' + titleCase(account.role) + ' · ' + workspaceCountLabel((account.workspaces || []).length)) + '</div>' +
+            '<div class="account-summary">' + escapeHTML(account.kind === 'msp' ? 'Operator workspace account' : 'Hosted account operations') + '</div>' +
           '</div>' +
-          '<div class="account-badges">' +
-            '<span class="badge badge-' + escapeHTML(account.kind) + '">' + escapeHTML(account.kind_label) + '</span>' +
-            roleBadgeHTML(account.role) +
+          '<div class="account-context-strip">' +
+            '<span class="account-context-chip">' + escapeHTML(account.kind_label) + '</span>' +
+            '<span class="account-context-chip">' + escapeHTML(titleCase(account.role)) + '</span>' +
+            '<span class="account-context-chip">' + escapeHTML(workspaceLabel) + '</span>' +
           '</div>' +
         '</div>' +
         '<div class="account-surface-body">' +
