@@ -53,6 +53,56 @@ header .logout-btn:hover {
   margin: 32px auto;
   padding: 0 16px 48px;
 }
+.portal-section-nav {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.portal-section-link {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-decoration: none;
+  color: inherit;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 14px 16px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, .04);
+}
+.portal-section-link:hover {
+  border-color: #93c5fd;
+  box-shadow: 0 8px 18px rgba(29, 78, 216, .08);
+}
+.portal-section-link-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: #0f172a;
+}
+.portal-section-link-copy {
+  font-size: 13px;
+  color: #64748b;
+  line-height: 1.45;
+}
+.portal-top-section {
+  margin-bottom: 36px;
+}
+.portal-top-section-header {
+  margin-bottom: 16px;
+}
+.portal-top-section-header h2 {
+  margin: 0 0 6px;
+  font-size: 21px;
+  font-weight: 700;
+}
+.portal-top-section-header p {
+  margin: 0;
+  font-size: 14px;
+  color: #64748b;
+  line-height: 1.55;
+  max-width: 760px;
+}
 .account-section {
   margin-bottom: 40px;
 }
@@ -963,6 +1013,9 @@ header .logout-btn:hover {
 }
 @media (max-width: 900px) {
   .overview-band {
+    grid-template-columns: 1fr;
+  }
+  .portal-section-nav {
     grid-template-columns: 1fr;
   }
 }

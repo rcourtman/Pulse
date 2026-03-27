@@ -146,6 +146,9 @@ Core rules:
 11. Team and membership management must be treated as an account-management
     surface with visible roster and invite context, not as a hidden table that
     appears without orientation.
+12. The signed-in shell must expose clear top-level section navigation so
+    hosted operations, commercial account services, and support are legible as
+    deliberate product areas rather than one long scrolling document.
 
 ## Screen Model
 

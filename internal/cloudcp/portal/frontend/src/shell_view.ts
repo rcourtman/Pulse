@@ -129,6 +129,31 @@ function renderOverviewBand(context: ShellViewContext, accounts: PortalAccountSu
   );
 }
 
+function renderShellNavigation(accounts: PortalAccountSummary[], supportEmail: string): string {
+  var hosted = hasHostedAccounts(accounts);
+  var hostedLabel = hosted ? 'Hosted operations' : 'Hosted access';
+  var hostedCopy = hosted
+    ? 'Workspaces, teams, and hosted billing'
+    : 'No hosted workspaces are attached yet';
+
+  return (
+    '<nav class="portal-section-nav" aria-label="Pulse Account sections">' +
+      '<a class="portal-section-link" href="#hosted-operations-section">' +
+        '<span class="portal-section-link-label">' + hostedLabel + '</span>' +
+        '<span class="portal-section-link-copy">' + hostedCopy + '</span>' +
+      '</a>' +
+      '<a class="portal-section-link" href="#account-services-section">' +
+        '<span class="portal-section-link-label">Account services</span>' +
+        '<span class="portal-section-link-copy">Licenses, billing, refunds, and privacy</span>' +
+      '</a>' +
+      '<a class="portal-section-link" href="mailto:' + escapeAttr(supportEmail || '') + '">' +
+        '<span class="portal-section-link-label">Support</span>' +
+        '<span class="portal-section-link-copy">' + escapeHTML(supportEmail || '') + '</span>' +
+      '</a>' +
+    '</nav>'
+  );
+}
+
 function renderWorkspaceCard(account: PortalAccountSummary, workspace: PortalWorkspaceSummary, accountAPIBasePath: string): string {
   var state = String(workspace.state || '');
   var safeState = escapeHTML(state);
@@ -443,8 +468,17 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
     : 'Use these account tools for self-hosted licenses, billing, refunds, and privacy actions.';
   return (
     renderOverviewBand(context, accounts) +
-    '<div id="accounts-root">' + renderAccountsHTML(context) + '</div>' +
-    '<section class="service-section">' +
+    renderShellNavigation(accounts, context.bootstrap.support_email || '') +
+    '<section class="portal-top-section" id="hosted-operations-section">' +
+      '<div class="portal-top-section-header">' +
+        '<h2>' + (hasHostedAccounts(accounts) ? 'Hosted operations' : 'Hosted access') + '</h2>' +
+        '<p>' + (hasHostedAccounts(accounts)
+          ? 'Use this area for workspace access, fleet operations, hosted billing, and team management.'
+          : 'This account does not currently have hosted workspace access. If that is unexpected, contact support while using the commercial tools below.') + '</p>' +
+      '</div>' +
+      '<div id="accounts-root">' + renderAccountsHTML(context) + '</div>' +
+    '</section>' +
+    '<section class="service-section" id="account-services-section">' +
       '<div class="service-header">' +
         '<h2>' + serviceHeading + '</h2>' +
         '<div class="service-note">' + serviceNote + '</div>' +
