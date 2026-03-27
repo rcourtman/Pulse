@@ -30,7 +30,7 @@ vi.mock('../ProxmoxSettingsPanel', () => ({
 describe('InfrastructureWorkspace', () => {
   beforeEach(() => {
     navigateSpy.mockReset();
-    mockPathname = '/settings/infrastructure/operations';
+    mockPathname = '/settings/infrastructure';
   });
 
   afterEach(() => {
@@ -51,23 +51,26 @@ describe('InfrastructureWorkspace', () => {
         ) as any,
     );
 
-  it('renders the canonical subtablist', () => {
+  it('defaults bare infrastructure routing to install on a host', () => {
     renderWorkspace();
 
     const tablist = screen.getByRole('tablist', { name: 'Infrastructure workspace' });
     expect(tablist).toBeInTheDocument();
-    expect(screen.getByText('Infrastructure operations')).toBeInTheDocument();
+    expect(screen.getByText('Connect your first system')).toBeInTheDocument();
     expect(
       screen.getByText(
-        'New to Pulse? Start with Install on a host to add your first monitored system. If you prefer a direct integration instead, use Direct Proxmox.',
+        'Start with Install on a host to connect the first machine you want Pulse to monitor. If you already know you want a direct integration instead, go straight to Direct Proxmox.',
       ),
     ).toBeInTheDocument();
+    expect(screen.getByText('1. Choose path')).toBeInTheDocument();
+    expect(screen.getByText('2. Generate access')).toBeInTheDocument();
+    expect(screen.getByText('3. Confirm reporting')).toBeInTheDocument();
     expect(
       screen.getByText(SELF_HOSTED_PRO_BILLING_PRESENTATION.infrastructureWorkspaceReferral),
     ).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Install on a host' })).toHaveAttribute(
       'aria-selected',
-      'false',
+      'true',
     );
     expect(screen.getByRole('tab', { name: 'Direct Proxmox' })).toHaveAttribute(
       'aria-selected',
@@ -75,8 +78,9 @@ describe('InfrastructureWorkspace', () => {
     );
     expect(screen.getByRole('tab', { name: 'Reporting & control' })).toHaveAttribute(
       'aria-selected',
-      'true',
+      'false',
     );
+    expect(screen.getByTestId('unified-agents')).toBeInTheDocument();
   });
 
   it('uses the shared subtabs to switch to direct proxmox', () => {
@@ -98,12 +102,33 @@ describe('InfrastructureWorkspace', () => {
     expect(screen.getByTestId('proxmox-settings')).toBeInTheDocument();
   });
 
+  it('keeps the reporting route available for established operators', () => {
+    mockPathname = '/settings/infrastructure/operations';
+    renderWorkspace();
+
+    expect(screen.getByRole('tab', { name: 'Reporting & control' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    expect(screen.getByTestId('agent-profiles')).toBeInTheDocument();
+  });
+
+  it('uses the guided workspace actions to open install and direct paths', () => {
+    renderWorkspace();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Install on a host selected' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open Direct Proxmox' }));
+
+    expect(navigateSpy).toHaveBeenNthCalledWith(1, '/settings/infrastructure/install');
+    expect(navigateSpy).toHaveBeenNthCalledWith(2, '/settings/infrastructure/proxmox');
+  });
+
   it('returns to the base settings route when switching away from direct proxmox', () => {
     mockPathname = '/settings/infrastructure/proxmox';
     renderWorkspace();
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Reporting & control' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Install on a host' }));
 
-    expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure/operations');
+    expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure/install');
   });
 });

@@ -147,6 +147,12 @@ management, and fleet control surfaces.
    governed command copy, and install instructions belong to the canonical
    lifecycle path; transport details and adjacent alternatives must remain
    secondary to that first-host onboarding narrative.
+7. Keep `frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx`
+   and `frontend-modern/src/components/Settings/infrastructureWorkspaceModel.ts`
+   aligned with that same lifecycle path. Bare infrastructure settings routes
+   must default to the install workspace, and the workspace shell must make
+   the first-host sequence explicit before operators drift into reporting and
+   control surfaces.
 
 ## Current State
 

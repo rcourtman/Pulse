@@ -7,7 +7,7 @@ import { updateDisableLocalUpgradeMetricsSetting } from '@/stores/systemSettings
 
 const canonicalTabPaths = {
   proxmox: '/settings/infrastructure/proxmox',
-  'infrastructure-operations': '/settings/infrastructure/operations',
+  'infrastructure-operations': '/settings/infrastructure/install',
   'system-general': '/settings/system-general',
   'system-network': '/settings/system-network',
   'system-updates': '/settings/system-updates',

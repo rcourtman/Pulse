@@ -171,6 +171,12 @@ work extends shared components instead of creating new local variants.
    completion CTA language aligned with the governed infrastructure install
    workspace instead of regressing to a route jump that leaves the next action
    implicit.
+8. Keep the settings-shell infrastructure landing path aligned with that same
+   first-session story. `frontend-modern/src/components/Settings/settingsNavigationModel.ts`
+   must treat `/settings` and the infrastructure settings tab as the canonical
+   path to `/settings/infrastructure/install`, not to reporting/control, so
+   the shell does not send first-time operators to the wrong infrastructure
+   subview by default.
 
 ## Current State
 

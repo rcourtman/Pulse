@@ -309,7 +309,7 @@ export function settingsTabPath(tab: SettingsTab): string {
     case 'proxmox':
       return PROXMOX_PREFIX;
     case 'infrastructure-operations':
-      return INFRASTRUCTURE_OPERATIONS_PREFIX;
+      return INFRASTRUCTURE_INSTALL_PREFIX;
     case 'system-recovery':
       return '/settings/system-recovery';
     case 'organization-overview':

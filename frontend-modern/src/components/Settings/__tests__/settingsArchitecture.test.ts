@@ -480,8 +480,12 @@ describe('Settings architecture guardrails', () => {
     expect(settingsInfrastructurePanelPropsSource).toContain('getInfrastructurePanelProps');
     expect(settingsNavigationModelSource).toContain('export type SettingsTab =');
     expect(settingsNavigationModelSource).toContain('export const DEFAULT_SETTINGS_TAB');
+    expect(settingsNavigationModelSource).toContain(
+      "const INFRASTRUCTURE_INSTALL_PREFIX = '/settings/infrastructure/install';",
+    );
     expect(settingsNavigationModelSource).toContain('export function resolveCanonicalSettingsPath');
     expect(settingsNavigationModelSource).toContain('export function settingsTabPath');
+    expect(settingsNavigationModelSource).toContain("return INFRASTRUCTURE_INSTALL_PREFIX;");
     expect(settingsNavigationHookSource).toContain('deriveTabFromPath');
     expect(settingsNavigationHookSource).toContain('resolveCanonicalSettingsPath');
     expect(settingsNavigationHookSource).toContain('settingsTabPath');

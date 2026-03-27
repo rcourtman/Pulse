@@ -30,10 +30,13 @@ export function getInfrastructureWorkspaceViewFromPath(
   if (pathname.startsWith('/settings/infrastructure/proxmox')) {
     return 'direct';
   }
+  if (pathname.startsWith('/settings/infrastructure/operations')) {
+    return 'inventory';
+  }
   if (pathname.startsWith('/settings/infrastructure/install')) {
     return 'install';
   }
-  return 'inventory';
+  return 'install';
 }
 
 export function buildInfrastructureWorkspacePath(
@@ -41,6 +44,6 @@ export function buildInfrastructureWorkspacePath(
 ): string {
   return (
     INFRASTRUCTURE_WORKSPACE_TABS.find((tab) => tab.id === view)?.path ??
-    '/settings/infrastructure/operations'
+    '/settings/infrastructure/install'
   );
 }
