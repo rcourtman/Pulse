@@ -1341,6 +1341,24 @@ header .logout-btn:hover,
   line-height: 1.6;
   color: var(--ink-soft);
 }
+.service-empty-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.92fr);
+  gap: 14px;
+  margin-top: 18px;
+}
+.service-empty-column {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.service-empty-column-title {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
 .service-action-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -1446,9 +1464,8 @@ header .logout-btn:hover,
 }
 .service-empty-points {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
-  margin-top: 20px;
 }
 .service-empty-support {
   margin-top: 16px;
@@ -1476,6 +1493,29 @@ header .logout-btn:hover,
 .service-empty-point span {
   font-size: 12px;
   line-height: 1.45;
+  color: var(--ink-soft);
+}
+.service-empty-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.service-empty-check {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel-muted);
+}
+.service-empty-check strong {
+  font-size: 13px;
+  color: var(--ink);
+}
+.service-empty-check span {
+  font-size: 12px;
+  line-height: 1.5;
   color: var(--ink-soft);
 }
 .service-section-auth {

@@ -774,12 +774,26 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
                 '<div class="service-detail-shell">' +
                   '<div class="service-panel service-panel-empty visible" id="service-panel-empty">' +
                     '<div class="account-panel-kicker">Select a service</div>' +
-                    '<h3>Choose a commercial account action</h3>' +
-                    '<p>Open a billing, license, refund, or privacy flow from the service navigator. The active request stays here so the account-services area behaves like one working surface instead of a list of disconnected tools.</p>' +
-                    '<div class="service-empty-points">' +
-                      '<div class="service-empty-point"><strong>Billing</strong><span>Open Stripe customer portal access after verification.</span></div>' +
-                      '<div class="service-empty-point"><strong>Licenses</strong><span>Recover the latest active self-hosted license and invoice link.</span></div>' +
-                      '<div class="service-empty-point"><strong>Privacy</strong><span>Request export or deletion without leaving Pulse Account.</span></div>' +
+                    '<h3>Choose the next commercial action</h3>' +
+                    '<p>Open a billing, license, refund, or privacy flow from the service navigator. The active request stays here so the account-services area behaves like one operating desk instead of a list of disconnected tools.</p>' +
+                    '<div class="service-empty-columns">' +
+                      '<div class="service-empty-column">' +
+                        '<div class="service-empty-column-title">Start here</div>' +
+                        '<div class="service-empty-points">' +
+                          '<div class="service-empty-point"><strong>Billing</strong><span>Open Stripe customer portal access after verification.</span></div>' +
+                          '<div class="service-empty-point"><strong>Licenses</strong><span>Recover the latest active self-hosted license and invoice link.</span></div>' +
+                          '<div class="service-empty-point"><strong>Refunds</strong><span>Confirm eligibility before revoking active commercial access.</span></div>' +
+                          '<div class="service-empty-point"><strong>Privacy</strong><span>Request export or deletion without leaving Pulse Account.</span></div>' +
+                        '</div>' +
+                      '</div>' +
+                      '<div class="service-empty-column">' +
+                        '<div class="service-empty-column-title">What to expect</div>' +
+                        '<div class="service-empty-checklist">' +
+                          '<div class="service-empty-check"><strong>Verification first</strong><span>Each flow confirms the commercial email before opening sensitive account actions.</span></div>' +
+                          '<div class="service-empty-check"><strong>One task at a time</strong><span>The active commercial request stays in this panel until you finish or switch tools.</span></div>' +
+                          '<div class="service-empty-check"><strong>Support stays close</strong><span>If billing, licenses, refunds, or privacy behave unexpectedly, escalate from this surface.</span></div>' +
+                        '</div>' +
+                      '</div>' +
                     '</div>' +
                     '<div class="service-empty-support">Need help with billing, refund, privacy, or license actions? <a class="portal-support-link" href="mailto:' +
                     escapeAttr(context.bootstrap.support_email || '') +

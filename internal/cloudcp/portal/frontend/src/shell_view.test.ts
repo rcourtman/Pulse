@@ -176,7 +176,8 @@ describe('shell view', function() {
     expect(html).toContain('service-action-row');
     expect(html).toContain('service-action-button');
     expect(html).toContain('id="service-panel-empty"');
-    expect(html).toContain('Choose a commercial account action');
+    expect(html).toContain('Choose the next commercial action');
+    expect(html).toContain('What to expect');
     expect(html).toContain('id="open-retrieve-service"');
     expect(html).toContain('id="data-service-panel"');
   });
