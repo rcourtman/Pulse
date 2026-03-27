@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { SELF_HOSTED_PRO_BILLING_PRESENTATION } from '@/utils/licensePresentation';
 import { InfrastructureWorkspace } from '../InfrastructureWorkspace';
 
 let mockPathname = '/settings';
@@ -57,9 +58,7 @@ describe('InfrastructureWorkspace', () => {
     expect(tablist).toBeInTheDocument();
     expect(screen.getByText('Infrastructure operations')).toBeInTheDocument();
     expect(
-      screen.getByText(
-        'Billing, monitored-system limits, and Pulse Pro license status live in Pulse Pro, not here.',
-      ),
+      screen.getByText(SELF_HOSTED_PRO_BILLING_PRESENTATION.infrastructureWorkspaceReferral),
     ).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Install on a host' })).toHaveAttribute(
       'aria-selected',

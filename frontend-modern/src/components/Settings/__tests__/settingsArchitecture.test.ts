@@ -548,6 +548,13 @@ describe('Settings architecture guardrails', () => {
     expect(proLicensePanelSource).not.toContain('description="Manage self-hosted billing');
     expect(proLicensePanelSource).not.toContain('title="Plan"');
     expect(proLicensePanelSource).not.toContain('title="Usage"');
+    expect(infrastructureWorkspaceSource).toContain('@/utils/licensePresentation');
+    expect(infrastructureWorkspaceSource).toContain(
+      'SELF_HOSTED_PRO_BILLING_PRESENTATION.infrastructureWorkspaceReferral',
+    );
+    expect(infrastructureWorkspaceSource).not.toContain(
+      'Billing, monitored-system limits, and Pulse Pro license status live in Pulse Pro, not here.',
+    );
     expect(proLicensePlanSectionSource).toContain('CommercialStatGrid');
     expect(proLicensePlanSectionSource).toContain('getLicenseStatusLoadingState');
     expect(monitoredSystemPresentationSource).toContain(
@@ -1266,7 +1273,9 @@ describe('Settings architecture guardrails', () => {
     expect(SETTINGS_HEADER_META['infrastructure-operations'].description).toContain(
       'actively reporting',
     );
-    expect(SETTINGS_HEADER_META['infrastructure-operations'].description).toContain('Pulse Pro');
+    expect(SETTINGS_HEADER_META['infrastructure-operations'].description).toBe(
+      `Bring infrastructure into Pulse, manage direct Proxmox connections, and control which systems are actively reporting. ${SELF_HOSTED_PRO_BILLING_PRESENTATION.infrastructureRouteReferral}`,
+    );
   });
 
   it('keeps billing-related shell framing on monitored-system commercial terms', () => {

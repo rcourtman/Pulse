@@ -489,6 +489,12 @@ The same title should also feed the `system-billing` settings navigation item,
 and the same title and description should also feed the `system-billing` route
 header metadata so the nav, shell, and route header do not narrate the same
 commercial surface differently.
+That same shared presentation owner also carries the canonical cross-surface
+referral copy used outside the billing shell itself. When infrastructure or
+other adjacent settings surfaces need to point operators toward Pulse Pro for
+billing, monitored-system limits, or license status, they must consume the
+shared referral strings from `frontend-modern/src/utils/licensePresentation.ts`
+instead of drafting route-local commercial guidance.
 Paid Pulse Pro v5 grandfathering is now part of that same canonical boundary:
 when a recurring v5 customer migrates into v6, billing persistence,
 entitlement evaluation, renewal handling, and Pro-license presentation must

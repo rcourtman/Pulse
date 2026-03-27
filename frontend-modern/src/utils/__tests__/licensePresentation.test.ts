@@ -66,6 +66,9 @@ describe('licensePresentation', () => {
       shellTitle: 'Pulse Pro',
       shellDescription:
         'Manage self-hosted billing, monitored-system limits, and Pulse Pro license status.',
+      infrastructureRouteReferral: 'Billing and monitored-system limits live in Pulse Pro.',
+      infrastructureWorkspaceReferral:
+        'Billing, monitored-system limits, and Pulse Pro license status live in Pulse Pro, not here.',
       refreshLabel: 'Refresh',
       planSectionTitle: 'Plan',
       planSectionDescription:

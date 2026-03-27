@@ -260,12 +260,6 @@ before any API-only token fallback or optional-auth anonymous fallback so
 operators can mint relay-mobile credentials and continue onboarding from the
 hosted runtime itself even after that tenant has already minted managed API
 tokens.
-That same lifecycle-adjacent hosted setup path must also survive legacy tenant
-runtime env drift. When Pulse Account hands an operator into a hosted workspace,
-`internal/api/cloud_handoff_handlers.go` must still recover the canonical
-tenant context from hosted runtime state if `PULSE_TENANT_ID` is missing, so
-lifecycle entry into onboarding, setup, and mobile-pairing surfaces does not
-die before the first authenticated page load.
 That same lifecycle-adjacent hosted setup path also depends on AI bootstrap
 staying canonical before the first settings write. Hosted operators may land
 in Chat, Patrol-backed setup hints, or AI-dependent remediation surfaces
@@ -333,6 +327,11 @@ and `frontend-modern/src/utils/proxmoxSettingsPresentation.ts`, so endpoint
 reachability state, discovery-prefill defaults, and variant copy stay on the
 same governed lifecycle surface instead of drifting into card-local strings or
 prefill assembly.
+When that infrastructure workspace needs to redirect operators to the Pulse Pro
+surface for billing, monitored-system limits, or license status, it must
+consume the shared referral copy from
+`frontend-modern/src/utils/licensePresentation.ts` instead of carrying
+workspace-local commercial guidance.
 That canonical /api/auto-register behavior now also includes hostname/IP continuity:
 reruns that arrive through a different canonical host form must reuse the same
 Pulse-managed node record and token instead of forking duplicate fleet entries.

@@ -157,7 +157,10 @@ work extends shared components instead of creating new local variants.
 5. When a settings route header and a top-level settings shell describe the same
    commercial surface, keep them on the same shared presentation owner instead
    of allowing route metadata in `settingsHeaderMeta.ts` or labels in
-   `settingsNavCatalog.ts` to drift into independent title or description copy.
+   `settingsNavCatalog.ts` to drift into independent title or description copy,
+   and keep adjacent settings-shell referrals such as
+   `InfrastructureWorkspace.tsx` on that same shared owner instead of
+   reintroducing local “go to Pulse Pro” variants.
 
 ## Current State
 
@@ -1255,6 +1258,13 @@ navigation label plus header title and description must reuse
 `SELF_HOSTED_PRO_BILLING_PRESENTATION.shellTitle` and
 `SELF_HOSTED_PRO_BILLING_PRESENTATION.shellDescription` so the route header and
 the billing shell do not narrate the same commercial surface differently.
+That same settings-shell framing boundary also covers adjacent top-level
+settings references to the self-hosted commercial surface. When
+`InfrastructureWorkspace.tsx` or other settings-shell surfaces point operators
+toward Pulse Pro for billing, monitored-system limits, or license status, they
+must reuse the shared referral copy from
+`SELF_HOSTED_PRO_BILLING_PRESENTATION` rather than drafting local “go there
+for billing” variants.
 `frontend-modern/src/components/Settings/NetworkSettingsPanel.tsx` is now a
 shell only. `frontend-modern/src/components/Settings/NetworkDiscoverySection.tsx`
 owns discovery controls and shared subnet presets, while
