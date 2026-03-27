@@ -138,19 +138,12 @@
     actionButton.setAttribute("data-workspace-action", workspace.state === "active" ? "suspend" : "delete");
     closeButton.disabled = entry.manageWorkspace.pending;
   }
-  function setContainerMessage(container, title, msg, isError) {
+  function setContainerMessage(container, msg, isError) {
     container.textContent = "";
-    var card = document.createElement("div");
-    card.className = "team-list-message" + (isError ? " error" : "");
-    var titleNode = document.createElement("strong");
-    titleNode.className = "team-list-message-title";
-    titleNode.textContent = title;
-    card.appendChild(titleNode);
-    var body = document.createElement("span");
-    body.className = "team-list-message-copy";
-    body.textContent = msg;
-    card.appendChild(body);
-    container.appendChild(card);
+    var message = document.createElement("div");
+    message.className = "team-list-message" + (isError ? " error" : "");
+    message.textContent = msg;
+    container.appendChild(message);
   }
   function countMembersByRole(members, role) {
     var count = 0;
@@ -167,11 +160,11 @@
       return;
     }
     if (entry.teamQuery.status === "loading") {
-      stats.innerHTML = '<div class="team-stat-card"><span class="team-stat-label">Roster</span><span class="team-stat-value">Loading\u2026</span></div><div class="team-stat-card"><span class="team-stat-label">Invites</span><span class="team-stat-value">Ready</span></div>';
+      stats.innerHTML = '<div class="team-stat-card"><span class="team-stat-label">Roster</span><span class="team-stat-value">Loading\u2026</span></div>';
       return;
     }
     if (entry.teamQuery.status === "error") {
-      stats.innerHTML = '<div class="team-stat-card"><span class="team-stat-label">Roster</span><span class="team-stat-value team-stat-error">Needs attention</span></div><div class="team-stat-card"><span class="team-stat-label">Fallback</span><span class="team-stat-value">Invite only</span></div>';
+      stats.innerHTML = '<div class="team-stat-card"><span class="team-stat-label">Roster</span><span class="team-stat-value team-stat-error">Needs attention</span></div>';
       return;
     }
     var members = entry.teamQuery.data;
@@ -272,15 +265,15 @@
       return;
     }
     if (entry.teamQuery.status === "loading") {
-      setContainerMessage(roster, "Loading roster", "Checking who currently has access to this account.", false);
+      setContainerMessage(roster, "Loading\u2026", false);
       return;
     }
     if (entry.teamQuery.status === "error") {
-      setContainerMessage(roster, "Roster needs attention", entry.teamQuery.error, true);
+      setContainerMessage(roster, entry.teamQuery.error, true);
       return;
     }
     if (!entry.teamQuery.data.length) {
-      setContainerMessage(roster, "No operators yet", "Invite someone new when this hosted account needs shared access.", false);
+      setContainerMessage(roster, "No team members.", false);
       return;
     }
     roster.textContent = "";
@@ -1865,7 +1858,7 @@
   }
   function renderAccountTeamSection(account) {
     var accessPolicy = '<div class="team-policy-panel"><div class="team-panel-heading"><h4>Access model</h4><p>Assign the smallest role that still lets someone do the work they own on this account.</p></div><div class="team-policy-list"><div class="team-policy-row"><strong>Owner</strong><span>Billing, team access, and full hosted control.</span></div><div class="team-policy-row"><strong>Admin</strong><span>Hosted operations plus billing for the account.</span></div><div class="team-policy-row"><strong>Tech</strong><span>Workspace operations without billing ownership.</span></div><div class="team-policy-row"><strong>Read-only</strong><span>State review and verification without control-plane changes.</span></div></div></div>';
-    return '<section class="account-content-panel account-content-panel-team"><section class="team-management-panel team-section team-section-shell" id="team-section-' + escapeAttr(account.id) + '" data-actor-role="' + escapeAttr(account.role) + '"><div class="team-management-header"><div><div class="account-panel-kicker">Team management</div><h3>Control who can operate this account</h3><p>Owners manage billing and access. Admins and techs keep the hosted fleet running day to day.</p></div><button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="workspaces">Done</button></div><div class="team-management-stats" id="team-stats-' + escapeAttr(account.id) + '"></div><div class="team-management-grid"><div class="team-roster"><div class="team-panel-heading"><h4>People on this account</h4><p>Keep the roster small and role assignment explicit. The people listed here are the ones who can operate the hosted fleet.</p></div><div class="team-roster-list" id="team-list-' + escapeAttr(account.id) + '"><div class="team-list-message">Loading\u2026</div></div></div><div class="team-side-column"><div class="team-invite-panel"><div class="team-panel-heading"><h4>Invite someone new</h4><p>Add another operator with the minimum role they need for this account.</p></div><div class="team-invite"><div><label for="invite-email-' + escapeAttr(account.id) + '">Email</label><input type="email" id="invite-email-' + escapeAttr(account.id) + '" placeholder="user@example.com" autocomplete="off"></div><div><label for="invite-role-' + escapeAttr(account.id) + '">Role</label><select id="invite-role-' + escapeAttr(account.id) + '"><option value="admin">Admin</option><option value="tech">Tech</option><option value="read_only">Read-only</option></select></div><button type="button" class="btn-primary btn-compact" data-action="invite-member" data-account-id="' + escapeAttr(account.id) + '">Invite</button></div></div>' + accessPolicy + "</div></div></section></section>";
+    return '<section class="account-content-panel account-content-panel-team"><section class="team-management-panel team-section team-section-shell" id="team-section-' + escapeAttr(account.id) + '" data-actor-role="' + escapeAttr(account.role) + '"><div class="team-management-header"><div><div class="account-panel-kicker">Team management</div><h3>Control who can operate this account</h3><p>Owners manage billing and access. Admins and techs keep the hosted fleet running day to day.</p></div><button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="workspaces">Done</button></div><div class="team-management-stats" id="team-stats-' + escapeAttr(account.id) + '"></div><div class="team-management-grid"><div class="team-roster"><div class="team-panel-heading"><h4>People on this account</h4><p>Keep the roster small and role assignment explicit. The people listed here are the ones who can operate the hosted fleet.</p></div><div class="team-roster-list" id="team-list-' + escapeAttr(account.id) + '"><div class="team-list-message">Loading\u2026</div></div></div><div class="team-side-column"><div class="team-operations-panel"><div class="team-panel-heading team-panel-heading-tight"><div class="account-panel-kicker">Access desk</div><h4>Invite and role policy</h4><p>Keep the roster deliberate. Invite the smallest role first, then tighten access as responsibilities become clearer.</p></div><div class="team-operations-grid"><div class="team-invite-panel"><div class="team-panel-heading"><h4>Invite someone new</h4><p>Add another operator with the minimum role they need for this account.</p></div><div class="team-invite"><div><label for="invite-email-' + escapeAttr(account.id) + '">Email</label><input type="email" id="invite-email-' + escapeAttr(account.id) + '" placeholder="user@example.com" autocomplete="off"></div><div><label for="invite-role-' + escapeAttr(account.id) + '">Role</label><select id="invite-role-' + escapeAttr(account.id) + '"><option value="admin">Admin</option><option value="tech">Tech</option><option value="read_only">Read-only</option></select></div><button type="button" class="btn-primary btn-compact" data-action="invite-member" data-account-id="' + escapeAttr(account.id) + '">Invite</button></div></div>' + accessPolicy + "</div></div></div></div></section></section>";
   }
   function renderSupportSection(context) {
     return '<section class="portal-support-panel"><div class="account-panel-kicker">Support</div><h2>Support and escalation</h2><p>Use support when hosted access looks wrong, billing does not behave as expected, or you need help with commercial licensing and privacy actions.</p><div class="portal-support-card-grid"><div class="portal-support-card"><h3>Account support</h3><p>For access, tenant handoff, team, and billing issues, contact the hosted operations desk.</p><a class="portal-support-link" href="mailto:' + escapeAttr(context.bootstrap.support_email || "") + '">' + escapeHTML(context.bootstrap.support_email || "") + '</a></div><div class="portal-support-card"><h3>Commercial services</h3><p>Self-hosted subscriptions, license recovery, refunds, and privacy requests all route through the same account surface.</p><button type="button" class="btn-secondary" data-shell-action="activate-section" data-shell-section="services">Open account services</button></div></div></section>';

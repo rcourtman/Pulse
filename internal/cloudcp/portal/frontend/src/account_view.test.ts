@@ -83,13 +83,12 @@ describe('account view', function() {
       teamVisible: true,
       teamQuery: { status: 'loading', error: '', data: [] },
     }));
-    expect(document.getElementById('team-list-acct_1')?.textContent).toContain('Loading roster');
+    expect(document.getElementById('team-list-acct_1')?.textContent).toContain('Loading');
 
     renderTeamSection('acct_1', createEntry({
       teamVisible: true,
       teamQuery: { status: 'error', error: 'Failed to load team.', data: [] },
     }));
-    expect(document.getElementById('team-list-acct_1')?.textContent).toContain('Roster needs attention');
     expect(document.getElementById('team-list-acct_1')?.textContent).toContain('Failed to load team.');
 
     renderTeamSection(

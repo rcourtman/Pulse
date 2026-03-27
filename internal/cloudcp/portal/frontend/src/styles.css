@@ -1311,12 +1311,12 @@ header .logout-btn:hover,
 .team-side-column {
   display: flex;
   flex-direction: column;
-  gap: 14px;
   align-self: start;
 }
 
 .team-roster,
-.team-invite-panel {
+.team-invite-panel,
+.team-operations-panel {
   background: #fff;
   border-color: var(--line);
 }
@@ -1325,15 +1325,34 @@ header .logout-btn:hover,
   align-self: start;
 }
 
-.team-policy-panel {
+.team-operations-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
   padding: 16px;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: #fff;
+}
+
+.team-operations-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.team-policy-panel {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel-muted);
+  padding: 14px;
 }
 
 .team-panel-heading {
   margin-bottom: 12px;
+}
+
+.team-panel-heading-tight {
+  margin-bottom: 0;
 }
 
 .team-panel-heading p {
@@ -1446,42 +1465,18 @@ header .logout-btn:hover,
 
 .team-list-message {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
+  align-items: center;
   justify-content: center;
-  gap: 8px;
-  min-height: 144px;
-  padding: 18px;
+  min-height: 120px;
+  padding: 16px;
   border: 1px dashed var(--line-strong);
   border-radius: 10px;
   color: var(--ink-muted);
   background: var(--panel-muted);
 }
 
-.team-list-message-title {
-  font-size: 15px;
-  line-height: 1.15;
-  letter-spacing: -0.02em;
-  color: var(--ink);
-}
-
-.team-list-message-copy {
-  font-size: 13px;
-  line-height: 1.55;
-  color: var(--ink-soft);
-}
-
 .team-list-message.error {
-  border-color: #efc1c1;
-  background: #fff4f4;
-}
-
-.team-list-message.error .team-list-message-title {
   color: var(--danger);
-}
-
-.team-list-message.error .team-list-message-copy {
-  color: #8a4141;
 }
 
 .btn-remove {
