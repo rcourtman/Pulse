@@ -662,6 +662,10 @@
       deps.store.updateAccountState(function(accountState) {
         var entry = ensurePortalAccountUIEntry(accountState, accountID);
         entry.addWorkspaceOpen = !entry.addWorkspaceOpen;
+        if (entry.addWorkspaceOpen) {
+          entry.teamVisible = false;
+          entry.selectedWorkspaceID = "";
+        }
         shouldFocus = entry.addWorkspaceOpen;
       });
       if (shouldFocus) {
@@ -672,6 +676,10 @@
       deps.store.updateAccountState(function(accountState) {
         var entry = ensurePortalAccountUIEntry(accountState, accountID);
         entry.selectedWorkspaceID = entry.selectedWorkspaceID === workspaceID ? "" : workspaceID;
+        if (entry.selectedWorkspaceID) {
+          entry.teamVisible = false;
+          entry.addWorkspaceOpen = false;
+        }
       });
     };
     var clearWorkspaceSelection = function(accountID) {
@@ -768,6 +776,10 @@
       deps.store.updateAccountState(function(accountState) {
         var entry = ensurePortalAccountUIEntry(accountState, accountID);
         entry.teamVisible = !entry.teamVisible;
+        if (entry.teamVisible) {
+          entry.selectedWorkspaceID = "";
+          entry.addWorkspaceOpen = false;
+        }
         nextVisible = entry.teamVisible;
       });
       if (nextVisible) {

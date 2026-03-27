@@ -143,8 +143,23 @@ describe('account runtime', function() {
       '</div>' +
       '</div>';
 
+    deps.store.updateAccountState(function(accountState) {
+      var entry = accountState.byAccountID.acct_1 || (accountState.byAccountID.acct_1 = {
+        addWorkspaceOpen: true,
+        createWorkspace: { pending: false, error: '' },
+        selectedWorkspaceID: '',
+        manageWorkspace: { pending: false, error: '' },
+        teamVisible: true,
+        teamQuery: { status: 'idle', error: '', data: [] },
+      });
+      entry.addWorkspaceOpen = true;
+      entry.teamVisible = true;
+    }, { notify: false });
+
     runtime.selectWorkspace('acct_1', 'ws_2');
     expect(deps.store.getAccountState().byAccountID.acct_1.selectedWorkspaceID).toBe('ws_2');
+    expect(deps.store.getAccountState().byAccountID.acct_1.teamVisible).toBe(false);
+    expect(deps.store.getAccountState().byAccountID.acct_1.addWorkspaceOpen).toBe(false);
     expect(document.getElementById('workspace-management-title-acct_1')?.textContent).toContain('Alpha Workspace');
     expect(document.getElementById('workspace-management-action-acct_1')?.textContent).toContain('Suspend workspace');
 
@@ -182,10 +197,25 @@ describe('account runtime', function() {
       '<select id="invite-role-acct_1"><option value="admin">Admin</option></select>' +
       '</div>';
 
+    deps.store.updateAccountState(function(accountState) {
+      var entry = accountState.byAccountID.acct_1 || (accountState.byAccountID.acct_1 = {
+        addWorkspaceOpen: true,
+        createWorkspace: { pending: false, error: '' },
+        selectedWorkspaceID: 'ws_1',
+        manageWorkspace: { pending: false, error: '' },
+        teamVisible: false,
+        teamQuery: { status: 'idle', error: '', data: [] },
+      });
+      entry.addWorkspaceOpen = true;
+      entry.selectedWorkspaceID = 'ws_1';
+    }, { notify: false });
+
     runtime.toggleTeam('acct_1');
     await flushAsync();
 
     expect(deps.store.getAccountState().byAccountID.acct_1.teamVisible).toBe(true);
+    expect(deps.store.getAccountState().byAccountID.acct_1.selectedWorkspaceID).toBe('');
+    expect(deps.store.getAccountState().byAccountID.acct_1.addWorkspaceOpen).toBe(false);
     expect(deps.store.getAccountState().byAccountID.acct_1.teamQuery.status).toBe('ready');
     expect(deps.store.getAccountState().byAccountID.acct_1.teamQuery.data).toHaveLength(1);
     expect(document.getElementById('team-stats-acct_1')?.textContent).toContain('Members');

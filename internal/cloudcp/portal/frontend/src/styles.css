@@ -249,7 +249,7 @@ header .logout-btn:hover,
 
 .portal-frame {
   display: grid;
-  grid-template-columns: minmax(250px, 290px) minmax(0, 1fr);
+  grid-template-columns: minmax(220px, 250px) minmax(0, 1fr);
   gap: 22px;
   align-items: start;
 }
@@ -420,15 +420,16 @@ header .logout-btn:hover,
 
 .account-surface-body {
   display: grid;
-  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
-  gap: 24px;
+  grid-template-columns: 1fr;
+  gap: 18px;
   margin-top: 22px;
 }
 
 .account-overview-rail {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: minmax(280px, 0.95fr) minmax(0, 1.15fr);
   gap: 14px;
+  align-items: start;
 }
 
 .account-overview-card,
@@ -494,6 +495,15 @@ header .logout-btn:hover,
   gap: 12px;
 }
 
+.account-overview-card {
+  grid-column: 1;
+}
+
+.account-status-grid {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+}
+
 .account-stat-card {
   min-height: 108px;
 }
@@ -527,6 +537,11 @@ header .logout-btn:hover,
   flex-direction: column;
   gap: 16px;
   background: linear-gradient(180deg, var(--panel), var(--panel-strong));
+  grid-column: 1;
+}
+
+.add-workspace-form {
+  grid-column: 1 / -1;
 }
 
 .account-main-stage {
@@ -614,7 +629,7 @@ header .logout-btn:hover,
 
 .account-management-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: 14px;
 }
 
@@ -626,6 +641,17 @@ header .logout-btn:hover,
 .workspace-management-panel.visible,
 .team-section.visible .team-management-panel {
   box-shadow: var(--shadow-md);
+}
+
+.workspace-management-panel {
+  background: linear-gradient(180deg, rgba(255, 253, 248, 0.98), rgba(245, 238, 226, 0.98));
+}
+
+.workspace-management-content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: end;
 }
 
 .workspace-management-header,
@@ -717,7 +743,7 @@ header .logout-btn:hover,
 
 .team-management-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.45fr) minmax(280px, 1fr);
+  grid-template-columns: minmax(0, 1.6fr) minmax(320px, 0.95fr);
   gap: 14px;
 }
 
@@ -981,7 +1007,6 @@ header .logout-btn:hover,
 
 @media (max-width: 1180px) {
   .portal-frame,
-  .account-surface-body,
   .account-management-grid,
   .team-management-grid {
     grid-template-columns: 1fr;
@@ -994,6 +1019,19 @@ header .logout-btn:hover,
   .portal-section-nav {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .account-overview-rail {
+    grid-template-columns: 1fr;
+  }
+
+  .account-status-grid {
+    grid-column: auto;
+    grid-row: auto;
+  }
+
+  .workspace-management-content {
+    grid-template-columns: 1fr;
   }
 }
 
