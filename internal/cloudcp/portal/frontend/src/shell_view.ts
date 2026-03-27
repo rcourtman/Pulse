@@ -114,8 +114,8 @@ function renderOverviewBand(accounts: PortalAccountSummary[]): string {
   var workspaceTotal = countWorkspaces(accounts);
   var title = hosted ? 'Pulse Account' : 'Self-hosted Pulse Account';
   var summary = hosted
-    ? 'Open hosted workspaces, manage account access, and handle commercial account services from one place.'
-    : 'Use this account for self-hosted billing, license recovery, refunds, and privacy actions. Hosted workspace access will appear here when it is attached to this email.';
+    ? 'Run hosted operations, operator access, and commercial account services from one control surface.'
+    : 'Use this account for billing, license recovery, refunds, and privacy actions. Hosted workspace access will appear here when it is attached to this email.';
 
   return (
     '<section class="portal-hero">' +
@@ -155,6 +155,11 @@ function renderShellNavigation(accounts: PortalAccountSummary[], supportEmail: s
   var hosted = hasHostedAccounts(accounts);
   return (
     '<aside class="portal-shell-nav" aria-label="Pulse Account sections">' +
+      '<div class="portal-shell-nav-header">' +
+        '<div class="portal-shell-nav-eyebrow">Pulse Account</div>' +
+        '<div class="portal-shell-nav-title">' + (hosted ? 'Operator console' : 'Account console') + '</div>' +
+        '<div class="portal-shell-nav-support">' + escapeHTML(supportEmail || 'support@pulserelay.pro') + '</div>' +
+      '</div>' +
       '<div class="portal-shell-nav-group">' +
         shellSectionButton('overview', activeSection, 'Overview', hosted ? 'Posture, accounts, and quick actions' : 'Account summary and access state') +
         shellSectionButton('workspaces', activeSection, hosted ? 'Workspaces' : 'Hosted access', hosted ? 'Hosted fleet and lifecycle actions' : 'No hosted workspaces are attached yet') +
@@ -305,6 +310,10 @@ function renderAccountOverviewSection(account: PortalAccountSummary): string {
           '<div class="account-panel-kicker">Hosted posture</div>' +
           '<h3>' + escapeHTML(account.name) + '</h3>' +
           '<p>' + escapeHTML(summaryText) + '</p>' +
+          '<div class="account-overview-callout">' + escapeHTML(account.kind === 'msp'
+            ? 'This is the control surface for hosted clients, account billing, and operator access.'
+            : 'This is the control surface for hosted workspaces, billing, and account access.'
+          ) + '</div>' +
         '</div>' +
         '<div class="account-metric-strip">' +
           '<div class="account-stat-card account-stat-card-inline">' +
@@ -463,7 +472,7 @@ function renderSupportSection(context: ShellViewContext): string {
   return (
     '<section class="portal-support-panel">' +
       '<div class="account-panel-kicker">Support</div>' +
-      '<h2>Get help without leaving Pulse Account</h2>' +
+      '<h2>Support and escalation</h2>' +
       '<p>Use support when hosted access looks wrong, billing does not behave as expected, or you need help with commercial licensing and privacy actions.</p>' +
       '<div class="portal-support-card-grid">' +
         '<div class="portal-support-card">' +

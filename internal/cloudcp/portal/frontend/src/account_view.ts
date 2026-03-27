@@ -8,6 +8,21 @@ import type {
 
 type FormValueElement = HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
 
+function roleLabel(role: string): string {
+  switch (role) {
+    case 'owner':
+      return 'Owner';
+    case 'admin':
+      return 'Admin';
+    case 'tech':
+      return 'Tech';
+    case 'read_only':
+      return 'Read-only';
+    default:
+      return role || 'Member';
+  }
+}
+
 export function getElement<T extends HTMLElement = HTMLElement>(id: string): T | null {
   return document.getElementById(id) as T | null;
 }
@@ -131,7 +146,7 @@ function renderTeamRoleControl(accountID: string, member: PortalTeamMember, isOw
   if (member.role === 'owner' && !isOwner) {
     var locked = document.createElement('span');
     locked.className = 'team-role-badge';
-    locked.textContent = 'Owner';
+    locked.textContent = roleLabel(member.role);
     return locked;
   }
 
@@ -141,7 +156,7 @@ function renderTeamRoleControl(accountID: string, member: PortalTeamMember, isOw
   for (var j = 0; j < roles.length; j += 1) {
     var opt = document.createElement('option');
     opt.value = roles[j];
-    opt.textContent = roles[j].replace('_', ' ');
+    opt.textContent = roleLabel(roles[j]);
     if (member.role === roles[j]) opt.selected = true;
     sel.appendChild(opt);
   }
@@ -181,8 +196,12 @@ function renderTeamMemberRow(accountID: string, member: PortalTeamMember, isOwne
 
   var caption = document.createElement('div');
   caption.className = 'team-member-caption';
-  caption.textContent = member.role === 'owner' ? 'Full account owner access' : 'Hosted account operator';
+  caption.textContent = member.role === 'owner' ? 'Full account control' : 'Hosted account access';
   identity.appendChild(caption);
+
+  var roleSummary = document.createElement('div');
+  roleSummary.className = 'team-member-role-summary';
+  roleSummary.textContent = roleLabel(member.role);
 
   var controls = document.createElement('div');
   controls.className = 'team-member-controls';
@@ -191,6 +210,7 @@ function renderTeamMemberRow(accountID: string, member: PortalTeamMember, isOwne
   if (action) controls.appendChild(action);
 
   row.appendChild(identity);
+  row.appendChild(roleSummary);
   row.appendChild(controls);
   return row;
 }

@@ -1,5 +1,19 @@
 (() => {
   // src/account_view.ts
+  function roleLabel(role) {
+    switch (role) {
+      case "owner":
+        return "Owner";
+      case "admin":
+        return "Admin";
+      case "tech":
+        return "Tech";
+      case "read_only":
+        return "Read-only";
+      default:
+        return role || "Member";
+    }
+  }
   function getElement(id) {
     return document.getElementById(id);
   }
@@ -104,7 +118,7 @@
     if (member.role === "owner" && !isOwner) {
       var locked = document.createElement("span");
       locked.className = "team-role-badge";
-      locked.textContent = "Owner";
+      locked.textContent = roleLabel(member.role);
       return locked;
     }
     var sel = document.createElement("select");
@@ -113,7 +127,7 @@
     for (var j = 0; j < roles.length; j += 1) {
       var opt = document.createElement("option");
       opt.value = roles[j];
-      opt.textContent = roles[j].replace("_", " ");
+      opt.textContent = roleLabel(roles[j]);
       if (member.role === roles[j]) opt.selected = true;
       sel.appendChild(opt);
     }
@@ -147,14 +161,18 @@
     identity.appendChild(email);
     var caption = document.createElement("div");
     caption.className = "team-member-caption";
-    caption.textContent = member.role === "owner" ? "Full account owner access" : "Hosted account operator";
+    caption.textContent = member.role === "owner" ? "Full account control" : "Hosted account access";
     identity.appendChild(caption);
+    var roleSummary = document.createElement("div");
+    roleSummary.className = "team-member-role-summary";
+    roleSummary.textContent = roleLabel(member.role);
     var controls = document.createElement("div");
     controls.className = "team-member-controls";
     controls.appendChild(renderTeamRoleControl(accountID, member, isOwner));
     var action = renderTeamMemberAction(accountID, member, isOwner);
     if (action) controls.appendChild(action);
     row.appendChild(identity);
+    row.appendChild(roleSummary);
     row.appendChild(controls);
     return row;
   }
@@ -1638,7 +1656,7 @@
     var hosted = hasHostedAccounts(accounts);
     var workspaceTotal = countWorkspaces(accounts);
     var title = hosted ? "Pulse Account" : "Self-hosted Pulse Account";
-    var summary = hosted ? "Open hosted workspaces, manage account access, and handle commercial account services from one place." : "Use this account for self-hosted billing, license recovery, refunds, and privacy actions. Hosted workspace access will appear here when it is attached to this email.";
+    var summary = hosted ? "Run hosted operations, operator access, and commercial account services from one control surface." : "Use this account for billing, license recovery, refunds, and privacy actions. Hosted workspace access will appear here when it is attached to this email.";
     return '<section class="portal-hero"><div class="portal-hero-copy"><div class="portal-hero-kicker">' + (hosted ? "Hosted access is active on this account." : "No hosted workspace access is attached to this account yet.") + "</div><h1>" + title + "</h1><p>" + summary + '</p></div><div class="portal-hero-stats"><div class="portal-hero-stat"><span class="portal-hero-stat-label">Hosted access</span><span class="portal-hero-stat-value">' + (hosted ? "Active" : "Not attached") + '</span></div><div class="portal-hero-stat"><span class="portal-hero-stat-label">Accounts</span><span class="portal-hero-stat-value">' + (accounts.length === 1 ? "1 account" : String(accounts.length) + " accounts") + '</span></div><div class="portal-hero-stat"><span class="portal-hero-stat-label">Workspaces</span><span class="portal-hero-stat-value">' + String(workspaceTotal) + "</span></div></div></section>";
   }
   function shellSectionButton(section, activeSection, title, copy) {
@@ -1646,7 +1664,7 @@
   }
   function renderShellNavigation(accounts, supportEmail, activeSection) {
     var hosted = hasHostedAccounts(accounts);
-    return '<aside class="portal-shell-nav" aria-label="Pulse Account sections"><div class="portal-shell-nav-group">' + shellSectionButton("overview", activeSection, "Overview", hosted ? "Posture, accounts, and quick actions" : "Account summary and access state") + shellSectionButton("workspaces", activeSection, hosted ? "Workspaces" : "Hosted access", hosted ? "Hosted fleet and lifecycle actions" : "No hosted workspaces are attached yet") + shellSectionButton("team", activeSection, "Team", hosted ? "Access and operator roster" : "Account membership") + shellSectionButton("services", activeSection, "Account services", "Licenses, billing, refunds, and privacy") + shellSectionButton("support", activeSection, "Support", supportEmail || "Support contact") + "</div></aside>";
+    return '<aside class="portal-shell-nav" aria-label="Pulse Account sections"><div class="portal-shell-nav-header"><div class="portal-shell-nav-eyebrow">Pulse Account</div><div class="portal-shell-nav-title">' + (hosted ? "Operator console" : "Account console") + '</div><div class="portal-shell-nav-support">' + escapeHTML(supportEmail || "support@pulserelay.pro") + '</div></div><div class="portal-shell-nav-group">' + shellSectionButton("overview", activeSection, "Overview", hosted ? "Posture, accounts, and quick actions" : "Account summary and access state") + shellSectionButton("workspaces", activeSection, hosted ? "Workspaces" : "Hosted access", hosted ? "Hosted fleet and lifecycle actions" : "No hosted workspaces are attached yet") + shellSectionButton("team", activeSection, "Team", hosted ? "Access and operator roster" : "Account membership") + shellSectionButton("services", activeSection, "Account services", "Licenses, billing, refunds, and privacy") + shellSectionButton("support", activeSection, "Support", supportEmail || "Support contact") + "</div></aside>";
   }
   function renderWorkspaceCard(account, workspace, accountAPIBasePath) {
     var status = workspaceHealthState(workspace);
@@ -1689,7 +1707,9 @@
         addWorkspaceForm = '<div class="add-workspace-form" id="add-ws-form-' + escapeAttr(account.id) + '"><label for="ws-name-' + escapeAttr(account.id) + '">Workspace name (for example, a client name)</label><input type="text" id="ws-name-' + escapeAttr(account.id) + '" placeholder="Acme Corp" maxlength="80" autocomplete="off"><div class="form-actions"><button type="button" class="btn-primary" data-action="create-workspace" data-account-id="' + escapeAttr(account.id) + '">Create workspace</button><button type="button" class="btn-secondary" data-action="toggle-add-workspace" data-account-id="' + escapeAttr(account.id) + '">Cancel</button><div class="spinner" id="ws-spinner-' + escapeAttr(account.id) + '" hidden></div></div></div>';
       }
     }
-    return '<section class="account-content-panel account-content-panel-overview"><div class="account-command-deck"><div class="account-overview-card"><div class="account-panel-kicker">Hosted posture</div><h3>' + escapeHTML(account.name) + "</h3><p>" + escapeHTML(summaryText) + '</p></div><div class="account-metric-strip"><div class="account-stat-card account-stat-card-inline"><span class="account-stat-label">Active workspaces</span><span class="account-stat-value">' + String(activeCount) + '</span></div><div class="account-stat-card account-stat-card-inline"><span class="account-stat-label">Healthy</span><span class="account-stat-value account-stat-healthy">' + String(healthyCount) + '</span></div><div class="account-stat-card account-stat-card-inline"><span class="account-stat-label">Checking</span><span class="account-stat-value account-stat-checking">' + String(checkingCount) + '</span></div><div class="account-stat-card account-stat-card-inline"><span class="account-stat-label">Needs attention</span><span class="account-stat-value account-stat-unhealthy">' + String(unhealthyCount) + "</span></div></div>" + actions + addWorkspaceForm + "</div></section>";
+    return '<section class="account-content-panel account-content-panel-overview"><div class="account-command-deck"><div class="account-overview-card"><div class="account-panel-kicker">Hosted posture</div><h3>' + escapeHTML(account.name) + "</h3><p>" + escapeHTML(summaryText) + '</p><div class="account-overview-callout">' + escapeHTML(
+      account.kind === "msp" ? "This is the control surface for hosted clients, account billing, and operator access." : "This is the control surface for hosted workspaces, billing, and account access."
+    ) + '</div></div><div class="account-metric-strip"><div class="account-stat-card account-stat-card-inline"><span class="account-stat-label">Active workspaces</span><span class="account-stat-value">' + String(activeCount) + '</span></div><div class="account-stat-card account-stat-card-inline"><span class="account-stat-label">Healthy</span><span class="account-stat-value account-stat-healthy">' + String(healthyCount) + '</span></div><div class="account-stat-card account-stat-card-inline"><span class="account-stat-label">Checking</span><span class="account-stat-value account-stat-checking">' + String(checkingCount) + '</span></div><div class="account-stat-card account-stat-card-inline"><span class="account-stat-label">Needs attention</span><span class="account-stat-value account-stat-unhealthy">' + String(unhealthyCount) + "</span></div></div>" + actions + addWorkspaceForm + "</div></section>";
   }
   function renderAccountWorkspaceSection(account, accountAPIBasePath) {
     var workspaces = Array.isArray(account.workspaces) ? account.workspaces : [];
@@ -1706,7 +1726,7 @@
     return '<section class="account-content-panel account-content-panel-team"><section class="team-management-panel team-section team-section-shell" id="team-section-' + escapeAttr(account.id) + '" data-actor-role="' + escapeAttr(account.role) + '"><div class="team-management-header"><div><div class="account-panel-kicker">Team management</div><h3>Control who can operate this account</h3><p>Owners manage billing and access. Admins and techs keep the hosted fleet running day to day.</p></div><button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="workspaces">Done</button></div><div class="team-management-stats" id="team-stats-' + escapeAttr(account.id) + '"></div><div class="team-management-grid"><div class="team-roster"><div class="team-panel-heading"><h4>People on this account</h4><p>Keep the roster small and role assignment explicit. The people listed here are the ones who can operate the hosted fleet.</p></div><div class="team-roster-list" id="team-list-' + escapeAttr(account.id) + '"><div class="team-list-message">Loading\u2026</div></div></div><div class="team-invite-panel"><div class="team-panel-heading"><h4>Invite someone new</h4><p>Add another operator with the minimum role they need for this account.</p></div><div class="team-invite"><div><label for="invite-email-' + escapeAttr(account.id) + '">Email</label><input type="email" id="invite-email-' + escapeAttr(account.id) + '" placeholder="user@example.com" autocomplete="off"></div><div><label for="invite-role-' + escapeAttr(account.id) + '">Role</label><select id="invite-role-' + escapeAttr(account.id) + '"><option value="admin">Admin</option><option value="tech">Tech</option><option value="read_only">Read-only</option></select></div><button type="button" class="btn-primary btn-compact" data-action="invite-member" data-account-id="' + escapeAttr(account.id) + '">Invite</button></div></div></div></section></section>';
   }
   function renderSupportSection(context) {
-    return '<section class="portal-support-panel"><div class="account-panel-kicker">Support</div><h2>Get help without leaving Pulse Account</h2><p>Use support when hosted access looks wrong, billing does not behave as expected, or you need help with commercial licensing and privacy actions.</p><div class="portal-support-card-grid"><div class="portal-support-card"><h3>Account support</h3><p>For access, tenant handoff, team, and billing issues, contact the hosted operations desk.</p><a class="portal-support-link" href="mailto:' + escapeAttr(context.bootstrap.support_email || "") + '">' + escapeHTML(context.bootstrap.support_email || "") + '</a></div><div class="portal-support-card"><h3>Commercial services</h3><p>Self-hosted subscriptions, license recovery, refunds, and privacy requests all route through the same account surface.</p><button type="button" class="btn-secondary" data-shell-action="activate-section" data-shell-section="services">Open account services</button></div></div></section>';
+    return '<section class="portal-support-panel"><div class="account-panel-kicker">Support</div><h2>Support and escalation</h2><p>Use support when hosted access looks wrong, billing does not behave as expected, or you need help with commercial licensing and privacy actions.</p><div class="portal-support-card-grid"><div class="portal-support-card"><h3>Account support</h3><p>For access, tenant handoff, team, and billing issues, contact the hosted operations desk.</p><a class="portal-support-link" href="mailto:' + escapeAttr(context.bootstrap.support_email || "") + '">' + escapeHTML(context.bootstrap.support_email || "") + '</a></div><div class="portal-support-card"><h3>Commercial services</h3><p>Self-hosted subscriptions, license recovery, refunds, and privacy requests all route through the same account surface.</p><button type="button" class="btn-secondary" data-shell-action="activate-section" data-shell-section="services">Open account services</button></div></div></section>';
   }
   function renderHeaderHTML(context) {
     if (context.bootstrap.authenticated) {
