@@ -110,6 +110,10 @@ describe('SetupCompletionPanel', () => {
 
     expect(screen.getByText('What happens next')).toBeInTheDocument();
     expect(screen.getAllByText('Open Infrastructure Install').length).toBeGreaterThan(0);
+    expect(screen.getByText('Credentials you must save now')).toBeInTheDocument();
+    expect(screen.getByText('Shown during setup')).toBeInTheDocument();
+    expect(screen.getByText('admin')).toBeInTheDocument();
+    expect(screen.getByText('password')).toBeInTheDocument();
     expect(screen.getByText('What to expect')).toBeInTheDocument();
     expect(screen.getByText('First host first')).toBeInTheDocument();
     expect(
@@ -148,7 +152,6 @@ describe('SetupCompletionPanel', () => {
 
     render(() => <SetupCompletionPanel state={baseState} onComplete={vi.fn()} />);
 
-    fireEvent.click(screen.getByRole('button', { name: /Your Credentials Save these/i }));
     fireEvent.click(screen.getByRole('button', { name: 'Download credentials' }));
 
     await waitFor(() => {
@@ -164,6 +167,20 @@ describe('SetupCompletionPanel', () => {
     expect(content).not.toContain('Example Windows Install Command');
 
     createElementSpy.mockRestore();
+  });
+
+  it('keeps credentials visible first and lets operators collapse them after saving', async () => {
+    render(() => <SetupCompletionPanel state={baseState} onComplete={vi.fn()} />);
+
+    expect(screen.getByText('Credentials you must save now')).toBeInTheDocument();
+    expect(screen.getByText('Shown during setup')).toBeInTheDocument();
+    expect(screen.getByText('admin')).toBeInTheDocument();
+    expect(screen.getByText('password')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Credentials you must save now/i }));
+
+    expect(screen.queryByText('admin')).not.toBeInTheDocument();
+    expect(screen.queryByText('password')).not.toBeInTheDocument();
   });
 
   it('still shows connected systems from polled resources and allows dashboard handoff', async () => {

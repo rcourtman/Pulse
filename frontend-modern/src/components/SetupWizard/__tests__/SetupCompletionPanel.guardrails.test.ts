@@ -8,6 +8,8 @@ describe('SetupCompletionPanel guardrails', () => {
     );
     expect(setupCompletionPanelSource).toContain('Open Infrastructure Install');
     expect(setupCompletionPanelSource).toContain('Infrastructure Install Workspace');
+    expect(setupCompletionPanelSource).toContain('Credentials you must save now');
+    expect(setupCompletionPanelSource).toContain('Shown during setup');
     expect(setupCompletionPanelSource).toContain('props.onComplete(INFRASTRUCTURE_INSTALL_PATH);');
     expect(setupCompletionPanelSource).toContain('Use the Infrastructure Install workspace to:');
     expect(setupCompletionPanelSource).toContain('generate Unified Agent tokens');
@@ -46,5 +48,18 @@ describe('SetupCompletionPanel guardrails', () => {
     expect(setupCompletionPanelSource).not.toContain('Current Install Token');
     expect(setupCompletionPanelSource).not.toContain('Refresh Token');
     expect(setupCompletionPanelSource).not.toContain('Preview copied commands');
+  });
+
+  it('keeps setup completion on one primary next-step surface instead of repeated CTA sections', () => {
+    expect(setupCompletionPanelSource).toContain("const [showCredentials, setShowCredentials] = createSignal(true);");
+    expect(setupCompletionPanelSource).toContain('Save the admin login and API token before leaving this screen');
+    expect(setupCompletionPanelSource).toContain('Recommended next step');
+    expect(setupCompletionPanelSource).toContain('Go to Dashboard');
+    expect(setupCompletionPanelSource).not.toContain(
+      "connectedAgents().length > 0 ? 'Go to Dashboard' : 'Open Infrastructure Install'",
+    );
+    expect(setupCompletionPanelSource).not.toContain(
+      'You can return here later from Infrastructure Operations if you skip install for now.',
+    );
   });
 });

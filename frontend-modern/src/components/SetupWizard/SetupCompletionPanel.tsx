@@ -113,7 +113,7 @@ const toAgentSummaryShape = (resource: Resource) => {
 export const SetupCompletionPanel: Component<CompleteStepProps> = (props) => {
   const navigate = useNavigate();
   const [copied, setCopied] = createSignal<'password' | 'admin-token' | null>(null);
-  const [showCredentials, setShowCredentials] = createSignal(false);
+  const [showCredentials, setShowCredentials] = createSignal(true);
   const [connectedAgents, setConnectedAgents] = createSignal<ConnectedAgent[]>([]);
   const [trialStarting, setTrialStarting] = createSignal(false);
   const [trialStarted, setTrialStarted] = createSignal(false);
@@ -379,130 +379,13 @@ Keep these credentials secure!
           </div>
         </Show>
 
-        <div class="bg-surface rounded-md border border-border p-6 text-left mb-6">
-          <h3 class="text-sm font-semibold text-base-content mb-3 flex items-center gap-2">
-            <svg
-              class="w-4 h-4 text-blue-500"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
-              />
-            </svg>
-            {UNIFIED_RESOURCE_GUIDANCE.title}
-          </h3>
-
-          <p class="text-muted text-xs mb-4">{UNIFIED_RESOURCE_GUIDANCE.description}</p>
-
-          <div class="grid gap-3 sm:grid-cols-3 mb-4">
-            <For each={UNIFIED_RESOURCE_GUIDANCE.steps}>
-              {(step, index) => (
-                <div class="rounded-md border border-border bg-surface-alt p-4">
-                  <div class="mb-3 flex items-center gap-3">
-                    <div class="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-slate-900 text-[11px] font-semibold text-white dark:bg-slate-100 dark:text-slate-900">
-                      {index() + 1}
-                    </div>
-                    <div class="text-sm font-semibold text-base-content">{step.title}</div>
-                  </div>
-                  <p class="text-xs leading-5 text-muted">{step.description}</p>
-                </div>
-              )}
-            </For>
-          </div>
-
-          <div class="rounded-md border border-border bg-surface-alt p-4">
-            <div class="mb-3 flex items-center justify-between gap-3">
-              <div class="text-xs font-semibold uppercase tracking-[0.14em] text-muted">
-                What to expect
-              </div>
-              <div class="rounded-sm bg-emerald-100 px-2 py-1 text-[10px] font-medium text-emerald-800 dark:bg-emerald-900 dark:text-emerald-300">
-                First host first
-              </div>
-            </div>
-            <div class="space-y-2">
-              <For each={UNIFIED_RESOURCE_GUIDANCE.inventoryFacts}>
-                {(fact) => (
-                  <div class="flex items-start gap-3">
-                    <div class="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500"></div>
-                    <p class="text-xs leading-5 text-muted">{fact}</p>
-                  </div>
-                )}
-              </For>
-            </div>
-          </div>
-        </div>
-
-        <div class="bg-surface rounded-md border border-border p-6 text-left mb-6">
-          <div class="flex items-start justify-between gap-4">
-            <div>
-              <h3 class="text-sm font-semibold text-base-content flex items-center gap-2">
-                <svg
-                  class="w-4 h-4 text-blue-500"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-                  />
-                </svg>
-                Install your first host
-              </h3>
-              <p class="mt-2 text-xs text-muted max-w-xl">
-                The canonical install flow now lives in Infrastructure Operations. Open that
-                workspace to generate an install token, set the agent connection URL, configure TLS
-                or custom CA options, and copy the correct command for the first system you want
-                Pulse to monitor.
-              </p>
-            </div>
-            <div class="rounded-sm bg-blue-50 px-2 py-1 text-[10px] font-medium text-blue-700 dark:bg-blue-900 dark:text-blue-300">
-              Recommended next step
-            </div>
-          </div>
-          <div class="mt-4 rounded-md border border-border bg-surface-alt p-4">
-            <div class="text-[11px] font-medium uppercase tracking-wider text-muted">
-              Next step
-            </div>
-            <div class="mt-2 text-sm text-base-content">
-              Open Infrastructure Install to bring your first monitored system into Pulse.
-            </div>
-            <div class="mt-2 text-xs text-muted">
-              Use that workspace any time you want to add more systems later.
-            </div>
-          </div>
-          <div class="mt-4 flex flex-col gap-3 sm:flex-row">
-            <button
-              onClick={handleOpenInstallWorkspace}
-              class="inline-flex items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
-            >
-              Open Infrastructure Install
-            </button>
-            <Show when={connectedAgents().length > 0}>
-              <button
-                onClick={handleGoToDashboard}
-                class="inline-flex items-center justify-center gap-2 rounded-md border border-border px-4 py-3 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover"
-              >
-                Go to Dashboard
-              </button>
-            </Show>
-          </div>
-        </div>
-
-        <div class="bg-surface rounded-md border border-border mb-8 overflow-hidden">
+        <div class="bg-surface rounded-md border border-border mb-6 overflow-hidden">
           <button
             onClick={() => setShowCredentials(!showCredentials())}
-            class="w-full p-4 flex items-center justify-between text-left hover:bg-surface-hover transition-colors group"
+            class="w-full p-4 sm:p-6 flex items-center justify-between gap-4 text-left hover:bg-surface-hover transition-colors group"
           >
-            <div class="flex items-center gap-3">
-              <div class="w-8 h-8 rounded-md bg-amber-50 dark:bg-amber-900 flex items-center justify-center border border-amber-100 dark:border-amber-800">
+            <div class="flex items-start gap-3">
+              <div class="w-8 h-8 rounded-md bg-amber-50 dark:bg-amber-900 flex items-center justify-center border border-amber-100 dark:border-amber-800 shrink-0">
                 <svg
                   class="w-4 h-4 text-amber-500"
                   fill="none"
@@ -518,12 +401,16 @@ Keep these credentials secure!
                 </svg>
               </div>
               <div>
-                <span class="text-base-content font-semibold text-sm flex items-center gap-2">
-                  Your Credentials
+                <span class="text-base-content font-semibold text-sm flex items-center gap-2 flex-wrap">
+                  Credentials you must save now
                   <span class="text-[10px] text-amber-700 dark:text-amber-400 bg-amber-100 dark:bg-amber-900 border border-amber-200 dark:border-amber-800 px-2 py-0.5 rounded-full">
-                    Save these
+                    Shown during setup
                   </span>
                 </span>
+                <p class="mt-1 text-xs text-muted max-w-xl">
+                  Save the admin login and API token before leaving this screen, then continue into
+                  Infrastructure Install for the first host.
+                </p>
               </div>
             </div>
             <svg
@@ -542,8 +429,8 @@ Keep these credentials secure!
           </button>
 
           <Show when={showCredentials()}>
-            <div class="p-4 pt-0 space-y-3 border-t border-border-subtle mt-2">
-              <div class="bg-surface-hover dark:bg-black border rounded-md p-3">
+            <div class="px-4 pb-4 pt-0 sm:px-6 sm:pb-6 space-y-3 border-t border-border-subtle">
+              <div class="bg-surface-hover dark:bg-black border rounded-md p-3 mt-4">
                 <div class="text-[11px] font-medium text-muted mb-1 uppercase tracking-wider">
                   Username
                 </div>
@@ -667,18 +554,121 @@ Keep these credentials secure!
           </Show>
         </div>
 
-        <div class="pt-4 border-t border-border">
-          <button
-            onClick={connectedAgents().length > 0 ? handleGoToDashboard : handleOpenInstallWorkspace}
-            class="w-full py-4 px-6 bg-blue-600 hover:bg-blue-700 text-white text-base font-semibold rounded-md transition-all duration-200"
-          >
-            {connectedAgents().length > 0 ? 'Go to Dashboard' : 'Open Infrastructure Install'}
-          </button>
-          <p class="mt-4 text-xs text-muted">
-            {connectedAgents().length > 0
-              ? 'You can add more systems anytime from Infrastructure Operations.'
-              : 'You can return here later from Infrastructure Operations if you skip install for now.'}
-          </p>
+        <div class="bg-surface rounded-md border border-border p-6 text-left mb-6">
+          <h3 class="text-sm font-semibold text-base-content mb-3 flex items-center gap-2">
+            <svg
+              class="w-4 h-4 text-blue-500"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
+              />
+            </svg>
+            {UNIFIED_RESOURCE_GUIDANCE.title}
+          </h3>
+
+          <p class="text-muted text-xs mb-4">{UNIFIED_RESOURCE_GUIDANCE.description}</p>
+
+          <div class="grid gap-3 sm:grid-cols-3 mb-4">
+            <For each={UNIFIED_RESOURCE_GUIDANCE.steps}>
+              {(step, index) => (
+                <div class="rounded-md border border-border bg-surface-alt p-4">
+                  <div class="mb-3 flex items-center gap-3">
+                    <div class="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-slate-900 text-[11px] font-semibold text-white dark:bg-slate-100 dark:text-slate-900">
+                      {index() + 1}
+                    </div>
+                    <div class="text-sm font-semibold text-base-content">{step.title}</div>
+                  </div>
+                  <p class="text-xs leading-5 text-muted">{step.description}</p>
+                </div>
+              )}
+            </For>
+          </div>
+
+          <div class="rounded-md border border-border bg-surface-alt p-4">
+            <div class="mb-3 flex items-center justify-between gap-3">
+              <div class="text-xs font-semibold uppercase tracking-[0.14em] text-muted">
+                What to expect
+              </div>
+              <div class="rounded-sm bg-emerald-100 px-2 py-1 text-[10px] font-medium text-emerald-800 dark:bg-emerald-900 dark:text-emerald-300">
+                First host first
+              </div>
+            </div>
+            <div class="space-y-2">
+              <For each={UNIFIED_RESOURCE_GUIDANCE.inventoryFacts}>
+                {(fact) => (
+                  <div class="flex items-start gap-3">
+                    <div class="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500"></div>
+                    <p class="text-xs leading-5 text-muted">{fact}</p>
+                  </div>
+                )}
+              </For>
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-surface rounded-md border border-border p-6 text-left mb-6">
+          <div class="flex items-start justify-between gap-4">
+            <div>
+              <h3 class="text-sm font-semibold text-base-content flex items-center gap-2">
+                <svg
+                  class="w-4 h-4 text-blue-500"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                  />
+                </svg>
+                Install your first host
+              </h3>
+              <p class="mt-2 text-xs text-muted max-w-xl">
+                The canonical install flow now lives in Infrastructure Operations. Open that
+                workspace to generate an install token, set the agent connection URL, configure TLS
+                or custom CA options, and copy the correct command for the first system you want
+                Pulse to monitor.
+              </p>
+            </div>
+            <div class="rounded-sm bg-blue-50 px-2 py-1 text-[10px] font-medium text-blue-700 dark:bg-blue-900 dark:text-blue-300">
+              Recommended next step
+            </div>
+          </div>
+          <div class="mt-4 rounded-md border border-border bg-surface-alt p-4">
+            <div class="text-[11px] font-medium uppercase tracking-wider text-muted">
+              Next step
+            </div>
+            <div class="mt-2 text-sm text-base-content">
+              Open Infrastructure Install to bring your first monitored system into Pulse.
+            </div>
+            <div class="mt-2 text-xs text-muted">
+              Use that workspace any time you want to add more systems later.
+            </div>
+          </div>
+          <div class="mt-4 flex flex-col gap-3 sm:flex-row">
+            <button
+              onClick={handleOpenInstallWorkspace}
+              class="inline-flex items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
+            >
+              Open Infrastructure Install
+            </button>
+            <Show when={connectedAgents().length > 0}>
+              <button
+                onClick={handleGoToDashboard}
+                class="inline-flex items-center justify-center gap-2 rounded-md border border-border px-4 py-3 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover"
+              >
+                Go to Dashboard
+              </button>
+            </Show>
+          </div>
         </div>
 
         <Show when={connectedAgents().length > 0}>

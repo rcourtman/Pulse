@@ -160,6 +160,12 @@ management, and fleet control surfaces.
    that as a completion handoff with direct navigation into `/dashboard` and
    `/settings/infrastructure/operations` instead of leaving operators on a
    generic lookup result.
+9. Keep `frontend-modern/src/components/SetupWizard/SetupCompletionPanel.tsx`
+   ordered around the actual first-run operator sequence: credentials that must
+   be saved now should be visible before the operator leaves the screen, and
+   the completion surface should present one canonical primary next-step path
+   into Infrastructure Install instead of repeating competing install or
+   dashboard CTAs across multiple sections.
 
 ## Current State
 
