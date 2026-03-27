@@ -1,5 +1,5 @@
 import type { Component } from 'solid-js';
-import { For, Show } from 'solid-js';
+import { For, Show, createSignal } from 'solid-js';
 import Server from 'lucide-solid/icons/server';
 import { ProxmoxIcon } from '@/components/icons/ProxmoxIcon';
 import SettingsPanel from '@/components/shared/SettingsPanel';
@@ -22,6 +22,7 @@ import { useInfrastructureOperationsContext } from './useInfrastructureOperation
 
 export const InfrastructureInstallerSection: Component = () => {
   const state = useInfrastructureOperationsContext();
+  const [showAdvancedOptions, setShowAdvancedOptions] = createSignal(false);
 
   return (
     <SettingsPanel
@@ -268,134 +269,169 @@ export const InfrastructureInstallerSection: Component = () => {
                     Installation commands
                   </h4>
                   <p class={`mt-0.5 text-xs text-muted ${state.requiresToken() ? 'ml-6' : ''}`}>
-                    The installer auto-detects Docker, Kubernetes, and Proxmox on the target
-                    machine.
+                    Copy the default command for the first host first. Open advanced options only if
+                    this machine needs custom connection or install settings.
                   </p>
                 </div>
               </div>
 
               <div class="rounded-md border border-border bg-surface-hover px-4 py-3">
-                <label class="mb-1.5 block text-xs font-medium text-base-content">
-                  Connection URL (Agent → Pulse)
-                </label>
-                <div class="flex gap-2">
-                  <input
-                    type="text"
-                    value={state.customAgentUrl()}
-                    onInput={(event) => state.setCustomAgentUrl(event.currentTarget.value)}
-                    placeholder={state.agentUrl()}
-                    class="flex-1 rounded-md border bg-surface px-3 py-1.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:border-blue-400 dark:focus:ring-blue-800"
-                  />
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div class="space-y-1">
+                    <p class="text-sm font-semibold text-base-content">
+                      Advanced connection and install options
+                    </p>
+                    <p class="text-xs text-muted">
+                      Default commands use the auto-detected Pulse URL. Open this only if the target
+                      host needs a different URL, custom CA trust, TLS override, command execution,
+                      or a specific install profile.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowAdvancedOptions((current) => !current)}
+                    class="inline-flex items-center justify-center rounded-md border border-border bg-surface px-3 py-2 text-sm font-medium text-base-content transition-colors hover:bg-surface"
+                  >
+                    {showAdvancedOptions()
+                      ? 'Hide advanced connection and install options'
+                      : 'Show advanced connection and install options'}
+                  </button>
                 </div>
-                <p class="mt-1.5 text-xs text-muted">
-                  Override the address agents use to connect to this server (e.g., use IP address{' '}
-                  <code>http://192.0.2.50:7655</code> if DNS fails).
-                  <Show when={!state.customAgentUrl()}>
-                    <span class="ml-1 opacity-75">Currently using auto-detected: {state.agentUrl()}</span>
+              </div>
+
+              <Show when={showAdvancedOptions()}>
+                <div class="space-y-3 rounded-md border border-border bg-surface px-4 py-4">
+                  <div class="rounded-md border border-border bg-surface-hover px-4 py-3">
+                    <label class="mb-1.5 block text-xs font-medium text-base-content">
+                      Connection URL (Agent → Pulse)
+                    </label>
+                    <div class="flex gap-2">
+                      <input
+                        type="text"
+                        value={state.customAgentUrl()}
+                        onInput={(event) => state.setCustomAgentUrl(event.currentTarget.value)}
+                        placeholder={state.agentUrl()}
+                        class="flex-1 rounded-md border bg-surface px-3 py-1.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:border-blue-400 dark:focus:ring-blue-800"
+                      />
+                    </div>
+                    <p class="mt-1.5 text-xs text-muted">
+                      Override the address agents use to connect to this server (e.g., use IP address{' '}
+                      <code>http://192.0.2.50:7655</code> if DNS fails).
+                      <Show when={!state.customAgentUrl()}>
+                        <span class="ml-1 opacity-75">
+                          Currently using auto-detected: {state.agentUrl()}
+                        </span>
+                      </Show>
+                    </p>
+                  </div>
+
+                  <div class="rounded-md border border-border bg-surface-hover px-4 py-3">
+                    <label
+                      for="custom-ca-certificate-path"
+                      class="mb-1.5 block text-xs font-medium text-base-content"
+                    >
+                      Custom CA certificate path (optional)
+                    </label>
+                    <div class="flex gap-2">
+                      <input
+                        id="custom-ca-certificate-path"
+                        type="text"
+                        value={state.customCaPath()}
+                        onInput={(event) => state.setCustomCaPath(event.currentTarget.value)}
+                        placeholder={
+                          state.selectedAgentUrl().startsWith('http://')
+                            ? 'Not needed for plain HTTP'
+                            : 'Examples: /etc/pulse/ca.pem or C:\\Pulse\\ca.cer'
+                        }
+                        class="flex-1 rounded-md border bg-surface px-3 py-1.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:border-blue-400 dark:focus:ring-blue-800"
+                      />
+                    </div>
+                    <p class="mt-1.5 text-xs text-muted">
+                      Preserves custom trust for copied install, upgrade, and uninstall commands.
+                      Shell commands pass <code>--cacert</code> to both the download and the installer.
+                      Windows commands set <code>PULSE_CACERT</code> and use a transport-aware
+                      PowerShell bootstrap for the initial script fetch.
+                    </p>
+                  </div>
+
+                  <Show when={state.insecureMode()}>
+                    <div class="rounded-md border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-200">
+                      <span class="font-medium">TLS verification disabled</span> — skip cert checks for
+                      self-signed setups. Not recommended for production.
+                    </div>
                   </Show>
-                </p>
-              </div>
 
-              <div class="rounded-md border border-border bg-surface-hover px-4 py-3">
-                <label
-                  for="custom-ca-certificate-path"
-                  class="mb-1.5 block text-xs font-medium text-base-content"
-                >
-                  Custom CA certificate path (optional)
-                </label>
-                <div class="flex gap-2">
-                  <input
-                    id="custom-ca-certificate-path"
-                    type="text"
-                    value={state.customCaPath()}
-                    onInput={(event) => state.setCustomCaPath(event.currentTarget.value)}
-                    placeholder={
-                      state.selectedAgentUrl().startsWith('http://')
-                        ? 'Not needed for plain HTTP'
-                        : 'Examples: /etc/pulse/ca.pem or C:\\Pulse\\ca.cer'
-                    }
-                    class="flex-1 rounded-md border bg-surface px-3 py-1.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:border-blue-400 dark:focus:ring-blue-800"
-                  />
-                </div>
-                <p class="mt-1.5 text-xs text-muted">
-                  Preserves custom trust for copied install, upgrade, and uninstall commands.
-                  Shell commands pass <code>--cacert</code> to both the download and the installer.
-                  Windows commands set <code>PULSE_CACERT</code> and use a transport-aware
-                  PowerShell bootstrap for the initial script fetch.
-                </p>
-              </div>
+                  <label
+                    class="inline-flex cursor-pointer items-center gap-2 text-sm text-base-content"
+                    title="Skip TLS certificate verification (for self-signed certificates)"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={state.insecureMode()}
+                      onChange={(event) => state.setInsecureMode(event.currentTarget.checked)}
+                      class="rounded text-blue-600 focus:ring-blue-500"
+                    />
+                    Skip TLS certificate verification (self-signed certs; not recommended)
+                  </label>
 
-              <Show when={state.insecureMode()}>
-                <div class="rounded-md border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-200">
-                  <span class="font-medium">TLS verification disabled</span> — skip cert checks for
-                  self-signed setups. Not recommended for production.
+                  <label
+                    class="inline-flex cursor-pointer items-center gap-2 text-sm text-base-content"
+                    title="Allow Pulse Patrol to execute diagnostic and fix commands on this agent (auto-fix requires Pulse Pro)"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={state.enableCommands()}
+                      onChange={(event) => state.setEnableCommands(event.currentTarget.checked)}
+                      class="rounded text-blue-600 focus:ring-blue-500"
+                    />
+                    Enable Pulse command execution (for Patrol auto-fix)
+                  </label>
+
+                  <Show when={state.enableCommands()}>
+                    <div class="rounded-md border border-blue-200 bg-blue-50 px-4 py-2 text-sm text-blue-800 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-200">
+                      <span class="font-medium">Pulse commands enabled</span> — The agent will accept
+                      diagnostic and fix commands from Pulse Patrol features.
+                    </div>
+                  </Show>
+
+                  <div class="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-900 dark:border-emerald-700 dark:bg-emerald-900 dark:text-emerald-100">
+                    <span class="font-medium">Config signing (optional)</span> — Require signed remote
+                    config payloads with <code>PULSE_AGENT_CONFIG_SIGNATURE_REQUIRED=true</code>.
+                    Provide keys via <code>PULSE_AGENT_CONFIG_SIGNING_KEY</code> (Pulse) and{' '}
+                    <code>PULSE_AGENT_CONFIG_PUBLIC_KEYS</code> (agents).
+                  </div>
+
+                  <div class="rounded-md border border-border bg-surface-hover px-4 py-3">
+                    <label
+                      for="install-profile-select"
+                      class="mb-1.5 block text-xs font-medium text-base-content"
+                    >
+                      Target profile (optional)
+                    </label>
+                    <select
+                      id="install-profile-select"
+                      value={state.installProfile()}
+                      onChange={(event) =>
+                        state.handleInstallProfileChange(event.currentTarget.value as InstallProfile)
+                      }
+                      class="w-full rounded-md border bg-surface px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:border-blue-400 dark:focus:ring-blue-800"
+                    >
+                      <For each={INSTALL_PROFILE_OPTIONS}>
+                        {(option) => <option value={option.value}>{option.label}</option>}
+                      </For>
+                    </select>
+                    <p class="mt-1.5 text-xs text-muted">
+                      {state.getSelectedInstallProfile().description}
+                    </p>
+                    <Show when={state.getInstallProfileFlags().length > 0}>
+                      <p class="mt-1.5 text-xs text-muted">
+                        Adds flags to shell-based install commands:{' '}
+                        <code>{state.getInstallProfileFlags().join(' ')}</code>
+                      </p>
+                    </Show>
+                  </div>
                 </div>
               </Show>
-
-              <label
-                class="inline-flex cursor-pointer items-center gap-2 text-sm text-base-content"
-                title="Skip TLS certificate verification (for self-signed certificates)"
-              >
-                <input
-                  type="checkbox"
-                  checked={state.insecureMode()}
-                  onChange={(event) => state.setInsecureMode(event.currentTarget.checked)}
-                  class="rounded text-blue-600 focus:ring-blue-500"
-                />
-                Skip TLS certificate verification (self-signed certs; not recommended)
-              </label>
-
-              <label
-                class="inline-flex cursor-pointer items-center gap-2 text-sm text-base-content"
-                title="Allow Pulse Patrol to execute diagnostic and fix commands on this agent (auto-fix requires Pulse Pro)"
-              >
-                <input
-                  type="checkbox"
-                  checked={state.enableCommands()}
-                  onChange={(event) => state.setEnableCommands(event.currentTarget.checked)}
-                  class="rounded text-blue-600 focus:ring-blue-500"
-                />
-                Enable Pulse command execution (for Patrol auto-fix)
-              </label>
-
-              <Show when={state.enableCommands()}>
-                <div class="rounded-md border border-blue-200 bg-blue-50 px-4 py-2 text-sm text-blue-800 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-200">
-                  <span class="font-medium">Pulse commands enabled</span> — The agent will accept
-                  diagnostic and fix commands from Pulse Patrol features.
-                </div>
-              </Show>
-
-              <div class="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-900 dark:border-emerald-700 dark:bg-emerald-900 dark:text-emerald-100">
-                <span class="font-medium">Config signing (optional)</span> — Require signed remote
-                config payloads with <code>PULSE_AGENT_CONFIG_SIGNATURE_REQUIRED=true</code>.
-                Provide keys via <code>PULSE_AGENT_CONFIG_SIGNING_KEY</code> (Pulse) and{' '}
-                <code>PULSE_AGENT_CONFIG_PUBLIC_KEYS</code> (agents).
-              </div>
-
-              <div class="rounded-md border border-border bg-surface-hover px-4 py-3">
-                <label for="install-profile-select" class="mb-1.5 block text-xs font-medium text-base-content">
-                  Target profile (optional)
-                </label>
-                <select
-                  id="install-profile-select"
-                  value={state.installProfile()}
-                  onChange={(event) =>
-                    state.handleInstallProfileChange(event.currentTarget.value as InstallProfile)
-                  }
-                  class="w-full rounded-md border bg-surface px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:border-blue-400 dark:focus:ring-blue-800"
-                >
-                  <For each={INSTALL_PROFILE_OPTIONS}>
-                    {(option) => <option value={option.value}>{option.label}</option>}
-                  </For>
-                </select>
-                <p class="mt-1.5 text-xs text-muted">{state.getSelectedInstallProfile().description}</p>
-                <Show when={state.getInstallProfileFlags().length > 0}>
-                  <p class="mt-1.5 text-xs text-muted">
-                    Adds flags to shell-based install commands:{' '}
-                    <code>{state.getInstallProfileFlags().join(' ')}</code>
-                  </p>
-                </Show>
-              </div>
             </div>
 
             <div class="space-y-4">

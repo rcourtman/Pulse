@@ -115,6 +115,10 @@ describe('InfrastructureOperationsController ownership guardrails', () => {
       'SettingsAPI.updateSystemSettings',
     );
     expect(infrastructureInstallerSectionSource).toContain('useInfrastructureOperationsContext');
+    expect(infrastructureInstallerSectionSource).toContain('Advanced connection and install options');
+    expect(infrastructureInstallerSectionSource).toContain(
+      'Show advanced connection and install options',
+    );
     expect(infrastructureInventorySectionSource).toContain('useInfrastructureOperationsContext');
     expect(infrastructureStopMonitoringDialogSource).toContain('useInfrastructureOperationsContext');
     expect(infrastructureOperationsModelSource).toContain('export const getRowReportingSummary');
@@ -564,11 +568,41 @@ const setupWithResources = (resources: any[], connectedInfrastructure: Connected
 };
 
 const getConnectionUrlInput = (): HTMLInputElement => {
+  openAdvancedInstallOptions();
   const urlBlock = screen.getByText(/Connection URL \(Agent → Pulse\)/i).closest('div');
   expect(urlBlock).not.toBeNull();
   const urlInput = urlBlock?.querySelector('input');
   expect(urlInput).not.toBeNull();
   return urlInput as HTMLInputElement;
+};
+
+const openAdvancedInstallOptions = (): void => {
+  const toggle = screen.getByRole('button', {
+    name: /Show advanced connection and install options|Hide advanced connection and install options/i,
+  });
+  if ((toggle.textContent ?? '').includes('Show advanced')) {
+    fireEvent.click(toggle);
+  }
+};
+
+const getCustomCaPathInput = (): HTMLElement => {
+  openAdvancedInstallOptions();
+  return screen.getByLabelText(/Custom CA certificate path \(optional\)/i);
+};
+
+const getSkipTlsCheckbox = (): HTMLElement => {
+  openAdvancedInstallOptions();
+  return screen.getByRole('checkbox', { name: /Skip TLS certificate verification/i });
+};
+
+const getEnableCommandsCheckbox = (): HTMLElement => {
+  openAdvancedInstallOptions();
+  return screen.getByRole('checkbox', { name: /Enable Pulse command execution/i });
+};
+
+const getTargetProfileSelect = (): HTMLElement => {
+  openAdvancedInstallOptions();
+  return screen.getByLabelText('Target profile (optional)');
 };
 
 beforeEach(() => {
@@ -656,6 +690,36 @@ describe('InfrastructureOperationsController token generation', () => {
       'Token generated with Agent config + reporting, Docker, and Kubernetes permissions.',
       4000,
     );
+  });
+
+  it('keeps advanced connection options collapsed until operators ask for them', async () => {
+    createTokenMock.mockResolvedValue({
+      token: 'test-token-123',
+      record: {
+        id: 'token-record',
+        name: 'Test Token',
+        prefix: 'abcdef',
+        suffix: '1234',
+        createdAt: new Date().toISOString(),
+      },
+    });
+
+    setupComponent();
+
+    fireEvent.click(screen.getByRole('button', { name: /Generate token/i }));
+    await waitFor(() => expect(createTokenMock).toHaveBeenCalled(), { interval: 0 });
+
+    expect(
+      screen.getByRole('button', { name: /Show advanced connection and install options/i }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Connection URL \(Agent → Pulse\)/i)).not.toBeInTheDocument();
+
+    openAdvancedInstallOptions();
+
+    expect(screen.getByText(/Connection URL \(Agent → Pulse\)/i)).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /Hide advanced connection and install options/i }),
+    ).toBeInTheDocument();
   });
 });
 
@@ -1713,12 +1777,11 @@ describe('InfrastructureOperationsController managed agents table', () => {
     fireEvent.click(generateButton);
     await waitFor(() => expect(createTokenMock).toHaveBeenCalled(), { interval: 0 });
 
+    openAdvancedInstallOptions();
     await waitFor(() => {
-      expect(
-        screen.getByRole('checkbox', { name: /Skip TLS certificate verification/i }),
-      ).toBeInTheDocument();
+      expect(getSkipTlsCheckbox()).toBeInTheDocument();
     });
-    fireEvent.click(screen.getByRole('checkbox', { name: /Skip TLS certificate verification/i }));
+    fireEvent.click(getSkipTlsCheckbox());
 
     const toggle = screen.getByRole('button', { name: /details for Windows Self-Signed Host/i });
     fireEvent.click(toggle);
@@ -2228,11 +2291,11 @@ describe('InfrastructureOperationsController platform commands', () => {
     await waitFor(() => expect(createTokenMock).toHaveBeenCalled(), { interval: 0 });
 
     await waitFor(() => {
-      expect(screen.getByText(/Skip TLS certificate verification/i)).toBeInTheDocument();
+      expect(getSkipTlsCheckbox()).toBeInTheDocument();
     });
 
     // TLS skip is disabled by default
-    const checkbox = screen.getByRole('checkbox', { name: /Skip TLS certificate verification/i });
+    const checkbox = getSkipTlsCheckbox();
     expect(checkbox).not.toBeChecked();
 
     // Enable it
@@ -2263,10 +2326,10 @@ describe('InfrastructureOperationsController platform commands', () => {
 
     await waitFor(() => expect(createTokenMock).toHaveBeenCalled(), { interval: 0 });
     await waitFor(() => {
-      expect(screen.getByLabelText('Target profile (optional)')).toBeInTheDocument();
+      expect(getTargetProfileSelect()).toBeInTheDocument();
     });
 
-    const profileSelect = screen.getByLabelText('Target profile (optional)');
+    const profileSelect = getTargetProfileSelect();
     fireEvent.change(profileSelect, { target: { value: 'proxmox-pbs' } });
 
     expect(trackAgentInstallProfileSelectedMock).toHaveBeenCalledWith(
@@ -2298,10 +2361,10 @@ describe('InfrastructureOperationsController platform commands', () => {
 
     await waitFor(() => expect(createTokenMock).toHaveBeenCalled(), { interval: 0 });
     await waitFor(() => {
-      expect(screen.getByLabelText('Target profile (optional)')).toBeInTheDocument();
+      expect(getTargetProfileSelect()).toBeInTheDocument();
     });
 
-    const profileSelect = screen.getByLabelText('Target profile (optional)');
+    const profileSelect = getTargetProfileSelect();
     fireEvent.change(profileSelect, { target: { value: 'proxmox-pbs' } });
 
     const windowsHeading = screen.getByText('Install on Windows');
@@ -2340,10 +2403,10 @@ describe('InfrastructureOperationsController platform commands', () => {
 
     await waitFor(() => expect(createTokenMock).toHaveBeenCalled(), { interval: 0 });
     await waitFor(() => {
-      expect(screen.getByLabelText('Target profile (optional)')).toBeInTheDocument();
+      expect(getTargetProfileSelect()).toBeInTheDocument();
     });
 
-    const profileSelect = screen.getByLabelText('Target profile (optional)');
+    const profileSelect = getTargetProfileSelect();
     fireEvent.change(profileSelect, { target: { value: 'docker' } });
 
     expect(trackAgentInstallProfileSelectedMock).toHaveBeenCalledWith(
@@ -2484,15 +2547,13 @@ describe('InfrastructureOperationsController platform commands', () => {
 
     await waitFor(() => expect(createTokenMock).toHaveBeenCalled(), { interval: 0 });
     await waitFor(() => {
-      expect(screen.getByLabelText('Target profile (optional)')).toBeInTheDocument();
+      expect(getTargetProfileSelect()).toBeInTheDocument();
     });
 
-    const profileSelect = screen.getByLabelText('Target profile (optional)');
+    const profileSelect = getTargetProfileSelect();
     fireEvent.change(profileSelect, { target: { value: 'docker' } });
 
-    const enableCommandsCheckbox = screen.getByRole('checkbox', {
-      name: /Enable Pulse command execution/i,
-    });
+    const enableCommandsCheckbox = getEnableCommandsCheckbox();
     fireEvent.click(enableCommandsCheckbox);
 
     const copyButton = screen.getAllByRole('button', { name: /Copy command/i })[0];
@@ -2594,7 +2655,7 @@ describe('InfrastructureOperationsController platform commands', () => {
     fireEvent.click(screen.getByRole('button', { name: /Generate token/i }));
     await waitFor(() => expect(createTokenMock).toHaveBeenCalled(), { interval: 0 });
 
-    fireEvent.input(screen.getByLabelText(/Custom CA certificate path \(optional\)/i), {
+    fireEvent.input(getCustomCaPathInput(), {
       target: { value: '/etc/pulse/custom-ca.pem' },
     });
 
@@ -2627,11 +2688,11 @@ describe('InfrastructureOperationsController platform commands', () => {
     fireEvent.input(urlInput, {
       target: { value: 'http://pulse.example:7655/' },
     });
-    fireEvent.input(screen.getByLabelText(/Custom CA certificate path \(optional\)/i), {
+    fireEvent.input(getCustomCaPathInput(), {
       target: { value: '/etc/pulse/custom-ca.pem' },
     });
-    fireEvent.click(screen.getByRole('checkbox', { name: /Enable Pulse command execution/i }));
-    fireEvent.change(screen.getByLabelText('Target profile (optional)'), {
+    fireEvent.click(getEnableCommandsCheckbox());
+    fireEvent.change(getTargetProfileSelect(), {
       target: { value: 'docker' },
     });
 
@@ -2668,12 +2729,12 @@ describe('InfrastructureOperationsController platform commands', () => {
     fireEvent.click(screen.getByRole('button', { name: /Generate token/i }));
     await waitFor(() => expect(createTokenMock).toHaveBeenCalled(), { interval: 0 });
 
-    fireEvent.input(screen.getByLabelText(/Custom CA certificate path \(optional\)/i), {
+    fireEvent.input(getCustomCaPathInput(), {
       target: { value: 'C:\\Pulse\\custom-ca.cer' },
     });
-    fireEvent.click(screen.getByRole('checkbox', { name: /Skip TLS certificate verification/i }));
-    fireEvent.click(screen.getByRole('checkbox', { name: /Enable Pulse command execution/i }));
-    fireEvent.change(screen.getByLabelText('Target profile (optional)'), {
+    fireEvent.click(getSkipTlsCheckbox());
+    fireEvent.click(getEnableCommandsCheckbox());
+    fireEvent.change(getTargetProfileSelect(), {
       target: { value: 'proxmox-pbs' },
     });
 
@@ -2774,14 +2835,10 @@ describe('InfrastructureOperationsController platform commands', () => {
 
     await waitFor(() => expect(createTokenMock).toHaveBeenCalled(), { interval: 0 });
 
-    const insecureCheckbox = screen.getByRole('checkbox', {
-      name: /Skip TLS certificate verification/i,
-    });
+    const insecureCheckbox = getSkipTlsCheckbox();
     fireEvent.click(insecureCheckbox);
 
-    const enableCommandsCheckbox = screen.getByRole('checkbox', {
-      name: /Enable Pulse command execution/i,
-    });
+    const enableCommandsCheckbox = getEnableCommandsCheckbox();
     fireEvent.click(enableCommandsCheckbox);
 
     const windowsHeading = screen.getByText('Install on Windows');
@@ -3009,7 +3066,7 @@ describe('InfrastructureOperationsController platform commands', () => {
     fireEvent.click(screen.getByRole('button', { name: /Generate token/i }));
     await waitFor(() => expect(createTokenMock).toHaveBeenCalled(), { interval: 0 });
 
-    fireEvent.input(screen.getByLabelText(/Custom CA certificate path \(optional\)/i), {
+    fireEvent.input(getCustomCaPathInput(), {
       target: { value: 'C:\\Pulse\\custom-ca.cer' },
     });
 
@@ -3063,14 +3120,10 @@ describe('InfrastructureOperationsController platform commands', () => {
 
     await waitFor(() => expect(createTokenMock).toHaveBeenCalled(), { interval: 0 });
 
-    const insecureCheckbox = screen.getByRole('checkbox', {
-      name: /Skip TLS certificate verification/i,
-    });
+    const insecureCheckbox = getSkipTlsCheckbox();
     fireEvent.click(insecureCheckbox);
 
-    const enableCommandsCheckbox = screen.getByRole('checkbox', {
-      name: /Enable Pulse command execution/i,
-    });
+    const enableCommandsCheckbox = getEnableCommandsCheckbox();
     fireEvent.click(enableCommandsCheckbox);
 
     fireEvent.click(screen.getByRole('button', { name: /details for Windows Upgrade Env/i }));
@@ -3240,10 +3293,6 @@ describe('InfrastructureOperationsController platform commands', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Confirm without token/i }));
 
-    await waitFor(() => {
-      expect(screen.getByText(/Connection URL \(Agent → Pulse\)/i)).toBeInTheDocument();
-    });
-
     const urlInput = getConnectionUrlInput();
     fireEvent.input(urlInput, {
       target: { value: 'http://pulse.example:7655' },
@@ -3276,7 +3325,7 @@ describe('InfrastructureOperationsController platform commands', () => {
     });
 
     fireEvent.click(screen.getByRole('button', { name: /Confirm without token/i }));
-    fireEvent.input(screen.getByLabelText(/Custom CA certificate path \(optional\)/i), {
+    fireEvent.input(getCustomCaPathInput(), {
       target: { value: '/etc/pulse/upgrade-ca.pem' },
     });
 

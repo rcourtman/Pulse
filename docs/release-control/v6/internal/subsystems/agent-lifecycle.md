@@ -145,8 +145,11 @@ management, and fleet control surfaces.
 6. Keep `frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx`
    oriented around the first monitored host. Install-token generation,
    governed command copy, and install instructions belong to the canonical
-   lifecycle path; transport details and adjacent alternatives must remain
-   secondary to that first-host onboarding narrative.
+   lifecycle path; transport details, trust overrides, profile tuning, and
+   adjacent alternatives must remain secondary to that first-host onboarding
+   narrative, including an explicit advanced-options disclosure so first-time
+   operators see token generation, command copy, and status confirmation
+   before non-default connection controls.
 7. Keep `frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx`
    and `frontend-modern/src/components/Settings/infrastructureWorkspaceModel.ts`
    aligned with that same lifecycle path. Bare infrastructure settings routes
