@@ -216,6 +216,13 @@ Own canonical runtime payload shapes between backend and frontend.
     detecting the first active reporting system during install so brand-new
     operators can receive the first success handoff without typing a hostname
     or agent ID.
+20. Keep the shared first-run install-token transport explicit on
+    `/api/security/tokens` as used by
+    `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx`:
+    once quick setup has produced the setup handoff credentials, the canonical
+    token-creation contract must remain usable immediately from the install
+    workspace so the first-host flow can auto-create the scoped install token
+    without forcing the operator through a second manual token-generation step.
 
 ## Current State
 

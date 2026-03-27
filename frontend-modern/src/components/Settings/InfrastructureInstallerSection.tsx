@@ -43,7 +43,32 @@ export const InfrastructureInstallerSection: Component = () => {
                 <p class="font-semibold">Security configured. Save these first-run credentials now.</p>
                 <p class="text-xs text-emerald-800 dark:text-emerald-200">
                   This is the canonical handoff from first-run setup into Infrastructure Install.
-                  Generate a scoped install token below before copying agent commands.
+                  <Show
+                    when={state.setupHandoffAutoTokenPending()}
+                    fallback={
+                      <Show
+                        when={state.latestTokenSource() === 'setup_handoff'}
+                        fallback={
+                          <Show
+                            when={state.setupHandoffAutoTokenFailed()}
+                            fallback=" Pulse will prepare the first scoped install token here before you copy agent commands."
+                          >
+                            {' '}
+                            Pulse could not prepare the first scoped install token automatically, so
+                            use the token step below and continue from there.
+                          </Show>
+                        }
+                      >
+                        {' '}
+                        Pulse already prepared the first scoped install token for this handoff, so
+                        you can move straight to copying the install command for the first host.
+                      </Show>
+                    }
+                  >
+                    {' '}
+                    Pulse is preparing the first scoped install token now so the install commands
+                    unlock without another setup step.
+                  </Show>
                 </p>
                 <div class="grid gap-3 sm:grid-cols-3">
                   <div class="rounded-md border border-emerald-200 bg-white px-3 py-2 dark:border-emerald-800 dark:bg-emerald-950">
@@ -153,7 +178,13 @@ export const InfrastructureInstallerSection: Component = () => {
             </p>
             <p class="ml-6 text-sm text-muted">
               {state.requiresToken()
-                ? 'Create a fresh token for the generated install commands and host reporting.'
+                ? state.setupHandoffAutoTokenPending()
+                  ? 'Pulse is generating the first scoped install token for this setup handoff now.'
+                  : state.latestTokenSource() === 'setup_handoff'
+                    ? 'Pulse generated the first scoped install token automatically. The install commands below are ready for the first host.'
+                    : state.setupHandoffAutoTokenFailed()
+                      ? 'Pulse could not generate the first scoped install token automatically. Generate one here to unlock the install commands.'
+                      : 'Create a fresh token for the generated install commands and host reporting.'
                 : 'Tokens are optional on this Pulse instance. Generate one if you want copied commands to preserve explicit credentialed transport.'}
             </p>
           </div>
@@ -191,8 +222,17 @@ export const InfrastructureInstallerSection: Component = () => {
                 <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
               </svg>
               <span>
-                Install token <strong>{state.latestRecord()?.name}</strong> created. Commands below
-                now include this credential.
+                {state.latestTokenSource() === 'setup_handoff' ? (
+                  <>
+                    First-host install token <strong>{state.latestRecord()?.name}</strong> prepared
+                    automatically. Commands below already include this credential.
+                  </>
+                ) : (
+                  <>
+                    Install token <strong>{state.latestRecord()?.name}</strong> created. Commands
+                    below now include this credential.
+                  </>
+                )}
               </span>
             </div>
           </Show>

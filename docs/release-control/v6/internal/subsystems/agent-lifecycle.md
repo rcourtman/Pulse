@@ -166,7 +166,11 @@ management, and fleet control surfaces.
    infrastructure and install commands are available, the same lifecycle path
    must auto-watch the canonical `/api/state` projection for the first
    reporting host rather than requiring a brand-new operator to know and type
-   a hostname or agent ID just to see the first success handoff.
+   a hostname or agent ID just to see the first success handoff. When that
+   workspace is entered through first-run setup handoff, the same lifecycle
+   path must also auto-create the scoped first-host install token so the
+   operator lands on ready-to-copy commands instead of being asked to perform a
+   second manual token-generation step immediately after securing the server.
 9. Keep `frontend-modern/src/components/SetupWizard/SetupCompletionPanel.tsx`
    ordered around the actual first-run operator sequence: credentials that must
    be saved now should be visible before the operator leaves the screen, and

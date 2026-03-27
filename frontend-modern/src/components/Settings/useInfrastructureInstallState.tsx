@@ -97,6 +97,12 @@ export const useInfrastructureInstallState = (
   const [customAgentUrl, setCustomAgentUrl] = createSignal('');
   const [customCaPath, setCustomCaPath] = createSignal('');
   const [setupHandoff, setSetupHandoff] = createSignal<SetupHandoffState | null>(null);
+  const [latestTokenSource, setLatestTokenSource] = createSignal<'manual' | 'setup_handoff' | null>(
+    null,
+  );
+  const [setupHandoffAutoTokenPending, setSetupHandoffAutoTokenPending] = createSignal(false);
+  const [setupHandoffAutoTokenFailed, setSetupHandoffAutoTokenFailed] = createSignal(false);
+  const [setupHandoffAutoTokenAttempted, setSetupHandoffAutoTokenAttempted] = createSignal(false);
 
   createEffect(() => {
     if (requiresToken()) {
@@ -225,9 +231,10 @@ Generate a scoped install token below before copying Unified Agent install comma
     notificationStore.success('Confirmed install commands without an API token.', 3500);
   };
 
-  const handleGenerateToken = async () => {
-    if (isGeneratingToken()) return;
-
+  const generateInstallToken = async (
+    source: 'manual' | 'setup_handoff',
+    options: { notifySuccess?: boolean } = {},
+  ) => {
     setIsGeneratingToken(true);
     try {
       const desiredName = tokenName().trim() || buildDefaultTokenName();
@@ -242,22 +249,39 @@ Generate a scoped install token below before copying Unified Agent install comma
 
       setCurrentToken(token);
       setLatestRecord(record);
+      setLatestTokenSource(source);
       setTokenName('');
       setConfirmedNoToken(false);
-      trackAgentInstallTokenGenerated(UNIFIED_AGENT_TELEMETRY_SURFACE, 'manual');
-      notificationStore.success(
-        'Token generated with Agent config + reporting, Docker, and Kubernetes permissions.',
-        4000,
-      );
+      setSetupHandoffAutoTokenFailed(false);
+      trackAgentInstallTokenGenerated(UNIFIED_AGENT_TELEMETRY_SURFACE, source);
+      if (options.notifySuccess) {
+        notificationStore.success(
+          'Token generated with Agent config + reporting, Docker, and Kubernetes permissions.',
+          4000,
+        );
+      }
     } catch (err) {
       logger.error('Failed to generate agent token', err);
-      notificationStore.error(
-        'Failed to generate agent token. Confirm you are signed in as an administrator.',
-        6000,
-      );
+      if (source === 'setup_handoff') {
+        setSetupHandoffAutoTokenFailed(true);
+      } else {
+        notificationStore.error(
+          'Failed to generate agent token. Confirm you are signed in as an administrator.',
+          6000,
+        );
+      }
     } finally {
       setIsGeneratingToken(false);
+      if (source === 'setup_handoff') {
+        setSetupHandoffAutoTokenPending(false);
+      }
     }
+  };
+
+  const handleGenerateToken = async () => {
+    if (isGeneratingToken()) return;
+
+    await generateInstallToken('manual', { notifySuccess: true });
   };
 
   const resolvedCommandToken = () => {
@@ -266,6 +290,25 @@ Generate a scoped install token below before copying Unified Agent install comma
     }
     return currentToken();
   };
+
+  createEffect(() => {
+    const shouldAutoCreateInstallToken =
+      Boolean(setupHandoff()) &&
+      securityStatus() !== null &&
+      requiresToken() &&
+      !currentToken() &&
+      !latestRecord() &&
+      !isGeneratingToken() &&
+      !setupHandoffAutoTokenAttempted();
+
+    if (!shouldAutoCreateInstallToken) {
+      return;
+    }
+
+    setSetupHandoffAutoTokenAttempted(true);
+    setSetupHandoffAutoTokenPending(true);
+    void generateInstallToken('setup_handoff');
+  });
 
   createEffect(() => {
     const shouldAutoDetectFirstHost =
@@ -467,6 +510,7 @@ Generate a scoped install token below before copying Unified Agent install comma
     isEmbedded,
     isGeneratingToken,
     latestRecord,
+    latestTokenSource,
     lookupError,
     lookupLoading,
     lookupResult,
@@ -484,6 +528,8 @@ Generate a scoped install token below before copying Unified Agent install comma
     setLookupValue,
     setTokenName,
     setupHandoff,
+    setupHandoffAutoTokenFailed,
+    setupHandoffAutoTokenPending,
     tokenName,
   };
 };

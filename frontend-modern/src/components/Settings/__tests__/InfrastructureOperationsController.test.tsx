@@ -24,6 +24,7 @@ import type {
   KubernetesCluster,
   State,
 } from '@/types/api';
+import { STORAGE_KEYS } from '@/utils/localStorage';
 
 const { navigateMock } = vi.hoisted(() => ({
   navigateMock: vi.fn(),
@@ -624,6 +625,7 @@ const getTargetProfileSelect = (): HTMLElement => {
 
 beforeEach(() => {
   securityStatusResponse = { requiresAuth: true, apiTokenConfigured: false };
+  sessionStorage.clear();
   navigateMock.mockReset();
   lookupMock.mockReset();
   getStateMock.mockReset();
@@ -663,6 +665,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  sessionStorage.clear();
   vi.useRealTimers();
   vi.unstubAllGlobals();
 });
@@ -675,6 +678,47 @@ describe('InfrastructureOperationsController token generation', () => {
       expect(screen.getByText('Generate install token')).toBeInTheDocument();
     });
     expect(screen.getByRole('button', { name: /Generate token/i })).toBeInTheDocument();
+  });
+
+  it('auto-generates the first-host install token from setup handoff', async () => {
+    createTokenMock.mockResolvedValue({
+      token: 'handoff-install-token',
+      record: {
+        id: 'token-record-handoff',
+        name: 'Agent 2026-03-27 10-56',
+        prefix: 'agent',
+        suffix: '1234',
+        createdAt: new Date().toISOString(),
+      },
+    });
+
+    sessionStorage.setItem(
+      STORAGE_KEYS.SETUP_HANDOFF,
+      JSON.stringify({
+        username: 'admin',
+        password: 'generated-password',
+        apiToken: 'admin-token',
+        createdAt: new Date().toISOString(),
+      }),
+    );
+
+    setupComponent();
+
+    await waitFor(() => expect(createTokenMock).toHaveBeenCalled(), { interval: 0 });
+    await waitFor(() => expect(screen.getByText(/First-host install token/i)).toBeInTheDocument(), {
+      interval: 0,
+    });
+
+    expect(trackAgentInstallTokenGeneratedMock).toHaveBeenCalledWith(
+      'settings_unified_agents',
+      'setup_handoff',
+    );
+    expect(notificationSuccessMock).not.toHaveBeenCalled();
+    expect(screen.getByText(/Security configured\. Save these first-run credentials now\./i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Pulse already prepared the first scoped install token for this handoff/i),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Installation commands')).toBeInTheDocument();
   });
 
   it('generates a token and shows confirmation', async () => {
