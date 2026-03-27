@@ -194,6 +194,12 @@ That governed posture block and its export-routing inputs now also flow through
 the dedicated `internal/ai/resource_context_policy_model.go` owner, so
 `resource_context.go` stays on AI context composition instead of duplicating
 policy redaction sections or recomputing export metadata inline.
+That same ownership now includes the canonical policy-posture summary object
+itself: `resource_context.go` must compute the shared
+`unifiedresources.SummarizePolicyPosture(...)` result exactly once per unified
+context build and pass that summary into
+`buildUnifiedResourcePolicyContext(...)`, instead of letting downstream AI
+context helpers silently rebuild posture counts from the raw resource slice.
 The same shared policy presenter also owns the routing-scope labels used in
 the AI-facing policy surfaces, so the policy wording stays canonical instead
 of being rendered inline by the consumer.

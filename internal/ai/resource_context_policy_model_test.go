@@ -48,7 +48,7 @@ func TestBuildUnifiedResourcePolicyContext(t *testing.T) {
 		},
 	})
 
-	context := buildUnifiedResourcePolicyContext(resources)
+	context := buildUnifiedResourcePolicyContext(unifiedresources.SummarizePolicyPosture(resources))
 
 	if !context.hasGovernedResources() {
 		t.Fatal("expected governed posture")
