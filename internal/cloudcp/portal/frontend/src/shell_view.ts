@@ -143,18 +143,18 @@ function renderOverviewBand(accounts: PortalAccountSummary[]): string {
 function renderShellNavigation(accounts: PortalAccountSummary[], supportEmail: string): string {
   var hosted = hasHostedAccounts(accounts);
   return (
-    '<nav class="portal-section-nav" aria-label="Pulse Account sections">' +
-      '<a class="portal-section-link" href="#hosted-operations-section">' +
-        '<span class="portal-section-link-label">' + (hosted ? 'Hosted operations' : 'Hosted access') + '</span>' +
-        '<span class="portal-section-link-copy">' + (hosted ? 'Workspaces, teams, and hosted billing' : 'No hosted workspaces are attached yet') + '</span>' +
+    '<nav class="portal-command-strip" aria-label="Pulse Account sections">' +
+      '<a class="portal-command-link" href="#hosted-operations-section">' +
+        '<span class="portal-command-label">' + (hosted ? 'Hosted operations' : 'Hosted access') + '</span>' +
+        '<span class="portal-command-copy">' + (hosted ? 'Workspaces, teams, and hosted billing' : 'No hosted workspaces are attached yet') + '</span>' +
       '</a>' +
-      '<a class="portal-section-link" href="#account-services-section">' +
-        '<span class="portal-section-link-label">Account services</span>' +
-        '<span class="portal-section-link-copy">Licenses, billing, refunds, and privacy</span>' +
+      '<a class="portal-command-link" href="#account-services-section">' +
+        '<span class="portal-command-label">Account services</span>' +
+        '<span class="portal-command-copy">Licenses, billing, refunds, and privacy</span>' +
       '</a>' +
-      '<a class="portal-section-link" href="mailto:' + escapeAttr(supportEmail || '') + '">' +
-        '<span class="portal-section-link-label">Support</span>' +
-        '<span class="portal-section-link-copy">' + escapeHTML(supportEmail || '') + '</span>' +
+      '<a class="portal-command-link portal-command-link-support" href="mailto:' + escapeAttr(supportEmail || '') + '">' +
+        '<span class="portal-command-label">Support</span>' +
+        '<span class="portal-command-copy">' + escapeHTML(supportEmail || '') + '</span>' +
       '</a>' +
     '</nav>'
   );
@@ -242,10 +242,9 @@ function renderAccountSection(account: PortalAccountSummary, accountAPIBasePath:
   var workspaceManagement = '';
   if (account.can_manage) {
     actions =
-      '<div class="account-operations-panel">' +
-        '<div class="account-panel-copy">' +
+      '<div class="account-action-strip">' +
+        '<div class="account-action-copy">' +
           '<div class="account-panel-kicker">Account operations</div>' +
-          '<h3>Run the hosted side from here</h3>' +
           '<p>' + escapeHTML(operationsCopy) + '</p>' +
         '</div>' +
         '<div class="account-actions">' +
@@ -414,33 +413,33 @@ function renderAccountSection(account: PortalAccountSummary, accountAPIBasePath:
         '</div>' +
       '</div>' +
       '<div class="account-surface-body">' +
-        '<aside class="account-overview-rail">' +
+        '<div class="account-command-deck">' +
           '<div class="account-overview-card">' +
             '<div class="account-panel-kicker">Hosted posture</div>' +
-            '<h3>' + escapeHTML(accountKindLabel(account)) + '</h3>' +
+            '<h3>' + escapeHTML(account.name) + '</h3>' +
             '<p>' + escapeHTML(summaryText) + '</p>' +
           '</div>' +
-          '<div class="account-status-grid">' +
-            '<div class="account-stat-card">' +
+          '<div class="account-metric-strip">' +
+            '<div class="account-stat-card account-stat-card-inline">' +
               '<span class="account-stat-label">Active workspaces</span>' +
               '<span class="account-stat-value">' + String(activeCount) + '</span>' +
             '</div>' +
-            '<div class="account-stat-card">' +
+            '<div class="account-stat-card account-stat-card-inline">' +
               '<span class="account-stat-label">Healthy</span>' +
               '<span class="account-stat-value account-stat-healthy">' + String(healthyCount) + '</span>' +
             '</div>' +
-            '<div class="account-stat-card">' +
+            '<div class="account-stat-card account-stat-card-inline">' +
               '<span class="account-stat-label">Checking</span>' +
               '<span class="account-stat-value account-stat-checking">' + String(checkingCount) + '</span>' +
             '</div>' +
-            '<div class="account-stat-card">' +
+            '<div class="account-stat-card account-stat-card-inline">' +
               '<span class="account-stat-label">Needs attention</span>' +
               '<span class="account-stat-value account-stat-unhealthy">' + String(unhealthyCount) + '</span>' +
             '</div>' +
           '</div>' +
           actions +
           addWorkspaceForm +
-        '</aside>' +
+        '</div>' +
         '<div class="account-main-stage">' +
           '<div class="account-stage-header">' +
             '<div>' +
@@ -503,16 +502,7 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
   return (
     '<div class="portal-shell">' +
       renderOverviewBand(accounts) +
-      '<div class="portal-shell-bar">' +
-        renderShellNavigation(accounts, context.bootstrap.support_email || '') +
-        '<div class="portal-support-strip">' +
-          '<div class="portal-support-copy">' +
-            '<span class="portal-support-label">Support</span>' +
-            '<span class="portal-support-text">Hosted operations and commercial account tools now share one account surface.</span>' +
-          '</div>' +
-          '<a class="portal-support-link" href="mailto:' + escapeAttr(context.bootstrap.support_email || '') + '">' + escapeHTML(context.bootstrap.support_email || '') + '</a>' +
-        '</div>' +
-      '</div>' +
+      renderShellNavigation(accounts, context.bootstrap.support_email || '') +
       '<section class="portal-top-section" id="hosted-operations-section">' +
         '<div class="portal-top-section-header">' +
           '<div class="account-panel-kicker">' + (hosted ? 'Hosted operations' : 'Hosted access') + '</div>' +

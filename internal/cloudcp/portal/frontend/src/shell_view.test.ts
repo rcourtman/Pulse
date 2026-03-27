@@ -127,7 +127,7 @@ describe('shell view', function() {
 
     expect(html).toContain('<h1>Pulse Account</h1>');
     expect(html).toContain('Hosted access is active on this account.');
-    expect(html).toContain('portal-section-nav');
+    expect(html).toContain('portal-command-strip');
     expect(html).toContain('Hosted operations');
     expect(html).toContain('Account services');
     expect(html).toContain('Support');
