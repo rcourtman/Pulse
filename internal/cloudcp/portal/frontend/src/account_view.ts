@@ -70,6 +70,35 @@ function workspaceSummary(workspace: PortalWorkspaceSummary): string {
   return 'This workspace is still waiting on a completed health check.';
 }
 
+function workspaceHealthLabel(workspace: PortalWorkspaceSummary): string {
+  if (workspace.health_status === 'healthy') return 'Healthy';
+  if (workspace.health_status === 'unhealthy') return 'Needs attention';
+  return 'Checking';
+}
+
+function workspaceCreatedLabel(workspace: PortalWorkspaceSummary): string {
+  if (!workspace.created_at) return 'Unknown';
+  var date = new Date(workspace.created_at);
+  if (Number.isNaN(date.getTime())) return 'Unknown';
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function workspaceGuidance(workspace: PortalWorkspaceSummary): string {
+  if (workspace.state === 'active' && workspace.health_status === 'healthy') {
+    return 'This workspace looks ready for normal operator work. Use the fleet table to open it, or suspend it here if you are intentionally taking it out of service.';
+  }
+  if (workspace.state === 'active' && workspace.health_status === 'checking') {
+    return 'This workspace is active but still waiting on a completed health check. Review it before you treat the hosted posture as settled.';
+  }
+  if (workspace.health_status === 'unhealthy') {
+    return 'This workspace needs review before it is treated as trustworthy. Use the management action only when you intend to suspend or remove it from the hosted fleet.';
+  }
+  if (workspace.state === 'suspended') {
+    return 'This workspace is already suspended. The remaining lifecycle action here is deletion, so treat it as a deliberate irreversible step.';
+  }
+  return 'Review the lifecycle state before taking the next explicit action for this workspace.';
+}
+
 function workspaceMeta(workspace: PortalWorkspaceSummary): string {
   var parts = [workspace.state];
   if (workspace.health_status) parts.push(workspace.health_status);
@@ -97,9 +126,13 @@ export function renderWorkspaceManagement(account: PortalAccountSummary, entry: 
   var title = getElement<HTMLElement>('workspace-management-title-' + account.id);
   var meta = getElement<HTMLElement>('workspace-management-meta-' + account.id);
   var summary = getElement<HTMLElement>('workspace-management-summary-' + account.id);
+  var health = getElement<HTMLElement>('workspace-management-health-' + account.id);
+  var lifecycle = getElement<HTMLElement>('workspace-management-lifecycle-' + account.id);
+  var created = getElement<HTMLElement>('workspace-management-created-' + account.id);
+  var guidance = getElement<HTMLElement>('workspace-management-guidance-' + account.id);
   var actionButton = getElement<HTMLButtonElement>('workspace-management-action-' + account.id);
   var closeButton = getElement<HTMLButtonElement>('workspace-management-close-' + account.id);
-  if (!empty || !content || !title || !meta || !summary || !actionButton || !closeButton) return;
+  if (!empty || !content || !title || !meta || !summary || !health || !lifecycle || !created || !guidance || !actionButton || !closeButton) return;
 
   var workspace = entry.selectedWorkspaceID ? findWorkspace(account, entry.selectedWorkspaceID) : null;
   var hasSelection = !!workspace;
@@ -118,6 +151,10 @@ export function renderWorkspaceManagement(account: PortalAccountSummary, entry: 
   title.textContent = workspace.display_name;
   meta.textContent = workspaceMeta(workspace);
   summary.textContent = workspaceSummary(workspace);
+  health.textContent = workspaceHealthLabel(workspace);
+  lifecycle.textContent = workspace.state ? workspace.state.charAt(0).toUpperCase() + workspace.state.slice(1) : 'Unknown';
+  created.textContent = workspaceCreatedLabel(workspace);
+  guidance.textContent = workspaceGuidance(workspace);
   actionButton.textContent = workspaceActionLabel(workspace);
   actionButton.disabled = entry.manageWorkspace.pending;
   actionButton.setAttribute('data-workspace-id', workspace.id);

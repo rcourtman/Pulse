@@ -518,9 +518,23 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
         '<div class="workspace-management-empty" id="workspace-management-empty-' +
         escapeAttr(account.id) +
         '">' +
-          '<div class="workspace-management-empty-copy">Choose a workspace to manage from the fleet above.</div>' +
-          '<div class="workspace-management-empty-actions">' + workspaceDeskActions + '</div>' +
-          '<div class="workspace-management-empty-note">Use the fleet table for workspace-level work, or run account-wide billing and team actions from here.</div>' +
+          '<div class="workspace-management-empty-copy">Choose a workspace from the fleet to open its management desk.</div>' +
+          '<div class="workspace-management-empty-grid">' +
+            '<div class="workspace-management-empty-card">' +
+              '<div class="account-panel-kicker">Account desk</div>' +
+              '<h4>Keep account-wide actions close</h4>' +
+              '<p>Use the management desk for workspace-level decisions, and keep billing or team changes one click away.</p>' +
+              '<div class="workspace-management-empty-actions">' + workspaceDeskActions + '</div>' +
+            '</div>' +
+            '<div class="workspace-management-empty-card workspace-management-empty-card-muted">' +
+              '<div class="account-panel-kicker">What shows here</div>' +
+              '<ul class="workspace-management-empty-list">' +
+                '<li>Lifecycle and health summary for the selected workspace</li>' +
+                '<li>The next explicit lifecycle action for that workspace</li>' +
+                '<li>Account-level actions when you need billing or team changes instead</li>' +
+              '</ul>' +
+            '</div>' +
+          '</div>' +
         '</div>' +
         '<div class="workspace-management-content" id="workspace-management-content-' +
         escapeAttr(account.id) +
@@ -534,6 +548,23 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
           '<p class="workspace-management-summary" id="workspace-management-summary-' +
           escapeAttr(account.id) +
           '"></p>' +
+          '<div class="workspace-management-facts">' +
+            '<div class="workspace-management-fact">' +
+              '<span>Health</span>' +
+              '<strong id="workspace-management-health-' + escapeAttr(account.id) + '"></strong>' +
+            '</div>' +
+            '<div class="workspace-management-fact">' +
+              '<span>Lifecycle</span>' +
+              '<strong id="workspace-management-lifecycle-' + escapeAttr(account.id) + '"></strong>' +
+            '</div>' +
+            '<div class="workspace-management-fact">' +
+              '<span>Created</span>' +
+              '<strong id="workspace-management-created-' + escapeAttr(account.id) + '"></strong>' +
+            '</div>' +
+          '</div>' +
+          '<div class="workspace-management-guidance" id="workspace-management-guidance-' +
+          escapeAttr(account.id) +
+          '"></div>' +
           '<div class="workspace-management-actions">' +
             '<button type="button" class="btn-danger" id="workspace-management-action-' +
             escapeAttr(account.id) +

@@ -54,6 +54,32 @@
     if (workspace.health_status === "unhealthy") return "This workspace needs attention before it is trustworthy.";
     return "This workspace is still waiting on a completed health check.";
   }
+  function workspaceHealthLabel(workspace) {
+    if (workspace.health_status === "healthy") return "Healthy";
+    if (workspace.health_status === "unhealthy") return "Needs attention";
+    return "Checking";
+  }
+  function workspaceCreatedLabel(workspace) {
+    if (!workspace.created_at) return "Unknown";
+    var date = new Date(workspace.created_at);
+    if (Number.isNaN(date.getTime())) return "Unknown";
+    return date.toLocaleDateString(void 0, { month: "short", day: "numeric", year: "numeric" });
+  }
+  function workspaceGuidance(workspace) {
+    if (workspace.state === "active" && workspace.health_status === "healthy") {
+      return "This workspace looks ready for normal operator work. Use the fleet table to open it, or suspend it here if you are intentionally taking it out of service.";
+    }
+    if (workspace.state === "active" && workspace.health_status === "checking") {
+      return "This workspace is active but still waiting on a completed health check. Review it before you treat the hosted posture as settled.";
+    }
+    if (workspace.health_status === "unhealthy") {
+      return "This workspace needs review before it is treated as trustworthy. Use the management action only when you intend to suspend or remove it from the hosted fleet.";
+    }
+    if (workspace.state === "suspended") {
+      return "This workspace is already suspended. The remaining lifecycle action here is deletion, so treat it as a deliberate irreversible step.";
+    }
+    return "Review the lifecycle state before taking the next explicit action for this workspace.";
+  }
   function workspaceMeta(workspace) {
     var parts = [workspace.state];
     if (workspace.health_status) parts.push(workspace.health_status);
@@ -79,9 +105,13 @@
     var title = getElement("workspace-management-title-" + account.id);
     var meta = getElement("workspace-management-meta-" + account.id);
     var summary = getElement("workspace-management-summary-" + account.id);
+    var health = getElement("workspace-management-health-" + account.id);
+    var lifecycle = getElement("workspace-management-lifecycle-" + account.id);
+    var created = getElement("workspace-management-created-" + account.id);
+    var guidance = getElement("workspace-management-guidance-" + account.id);
     var actionButton = getElement("workspace-management-action-" + account.id);
     var closeButton = getElement("workspace-management-close-" + account.id);
-    if (!empty || !content || !title || !meta || !summary || !actionButton || !closeButton) return;
+    if (!empty || !content || !title || !meta || !summary || !health || !lifecycle || !created || !guidance || !actionButton || !closeButton) return;
     var workspace = entry.selectedWorkspaceID ? findWorkspace(account, entry.selectedWorkspaceID) : null;
     var hasSelection = !!workspace;
     panel.classList.add("visible");
@@ -97,6 +127,10 @@
     title.textContent = workspace.display_name;
     meta.textContent = workspaceMeta(workspace);
     summary.textContent = workspaceSummary(workspace);
+    health.textContent = workspaceHealthLabel(workspace);
+    lifecycle.textContent = workspace.state ? workspace.state.charAt(0).toUpperCase() + workspace.state.slice(1) : "Unknown";
+    created.textContent = workspaceCreatedLabel(workspace);
+    guidance.textContent = workspaceGuidance(workspace);
     actionButton.textContent = workspaceActionLabel(workspace);
     actionButton.disabled = entry.manageWorkspace.pending;
     actionButton.setAttribute("data-workspace-id", workspace.id);
@@ -1816,7 +1850,7 @@
         workspaceDeskActions += '<button type="button" class="btn-secondary btn-compact" data-action="open-billing" data-account-id="' + escapeAttr(account.id) + '">Manage billing</button>';
       }
       workspaceDeskActions += '<button type="button" class="btn-secondary btn-compact" data-action="toggle-team" data-account-id="' + escapeAttr(account.id) + '" data-shell-target="team">Manage team</button>';
-      workspaceManagement = '<section class="workspace-management-panel" id="workspace-management-' + escapeAttr(account.id) + '"><div class="workspace-management-header"><div><div class="account-panel-kicker">Workspace management</div><h3>Review one workspace at a time</h3><p>Select a workspace from the fleet to review its lifecycle state and run explicit management actions.</p></div><button type="button" class="btn-secondary btn-compact" id="workspace-management-close-' + escapeAttr(account.id) + '" data-action="clear-workspace-selection" data-account-id="' + escapeAttr(account.id) + '">Done</button></div><div class="workspace-management-empty" id="workspace-management-empty-' + escapeAttr(account.id) + '"><div class="workspace-management-empty-copy">Choose a workspace to manage from the fleet above.</div><div class="workspace-management-empty-actions">' + workspaceDeskActions + '</div><div class="workspace-management-empty-note">Use the fleet table for workspace-level work, or run account-wide billing and team actions from here.</div></div><div class="workspace-management-content" id="workspace-management-content-' + escapeAttr(account.id) + '" hidden><div class="workspace-management-meta" id="workspace-management-meta-' + escapeAttr(account.id) + '"></div><h4 id="workspace-management-title-' + escapeAttr(account.id) + '"></h4><p class="workspace-management-summary" id="workspace-management-summary-' + escapeAttr(account.id) + '"></p><div class="workspace-management-actions"><button type="button" class="btn-danger" id="workspace-management-action-' + escapeAttr(account.id) + '" data-action="workspace-action" data-account-id="' + escapeAttr(account.id) + '">Manage workspace</button></div></div></section>';
+      workspaceManagement = '<section class="workspace-management-panel" id="workspace-management-' + escapeAttr(account.id) + '"><div class="workspace-management-header"><div><div class="account-panel-kicker">Workspace management</div><h3>Review one workspace at a time</h3><p>Select a workspace from the fleet to review its lifecycle state and run explicit management actions.</p></div><button type="button" class="btn-secondary btn-compact" id="workspace-management-close-' + escapeAttr(account.id) + '" data-action="clear-workspace-selection" data-account-id="' + escapeAttr(account.id) + '">Done</button></div><div class="workspace-management-empty" id="workspace-management-empty-' + escapeAttr(account.id) + '"><div class="workspace-management-empty-copy">Choose a workspace from the fleet to open its management desk.</div><div class="workspace-management-empty-grid"><div class="workspace-management-empty-card"><div class="account-panel-kicker">Account desk</div><h4>Keep account-wide actions close</h4><p>Use the management desk for workspace-level decisions, and keep billing or team changes one click away.</p><div class="workspace-management-empty-actions">' + workspaceDeskActions + '</div></div><div class="workspace-management-empty-card workspace-management-empty-card-muted"><div class="account-panel-kicker">What shows here</div><ul class="workspace-management-empty-list"><li>Lifecycle and health summary for the selected workspace</li><li>The next explicit lifecycle action for that workspace</li><li>Account-level actions when you need billing or team changes instead</li></ul></div></div></div><div class="workspace-management-content" id="workspace-management-content-' + escapeAttr(account.id) + '" hidden><div class="workspace-management-meta" id="workspace-management-meta-' + escapeAttr(account.id) + '"></div><h4 id="workspace-management-title-' + escapeAttr(account.id) + '"></h4><p class="workspace-management-summary" id="workspace-management-summary-' + escapeAttr(account.id) + '"></p><div class="workspace-management-facts"><div class="workspace-management-fact"><span>Health</span><strong id="workspace-management-health-' + escapeAttr(account.id) + '"></strong></div><div class="workspace-management-fact"><span>Lifecycle</span><strong id="workspace-management-lifecycle-' + escapeAttr(account.id) + '"></strong></div><div class="workspace-management-fact"><span>Created</span><strong id="workspace-management-created-' + escapeAttr(account.id) + '"></strong></div></div><div class="workspace-management-guidance" id="workspace-management-guidance-' + escapeAttr(account.id) + '"></div><div class="workspace-management-actions"><button type="button" class="btn-danger" id="workspace-management-action-' + escapeAttr(account.id) + '" data-action="workspace-action" data-account-id="' + escapeAttr(account.id) + '">Manage workspace</button></div></div></section>';
     }
     var workspaceHTML = workspaces.length ? '<div class="workspace-list-wrap"><div class="workspace-list-toolbar"><div class="workspace-list-summary">Review the hosted fleet, open a workspace, and keep lifecycle actions explicit.</div><div class="workspace-list-stats"><span class="workspace-list-stat"><strong>' + String(workspaces.length) + '</strong> total</span><span class="workspace-list-stat"><strong>' + String(healthyCount) + '</strong> healthy</span><span class="workspace-list-stat"><strong>' + String(checkingCount) + '</strong> checking</span><span class="workspace-list-stat workspace-list-stat-attention"><strong>' + String(unhealthyCount) + '</strong> needs attention</span></div></div><div class="workspace-list-head"><span>Workspace</span><span>Health</span><span>Lifecycle</span><span>Actions</span></div><div class="workspace-list">' + workspaces.map(function(workspace) {
       return renderWorkspaceCard(account, workspace, accountAPIBasePath);
