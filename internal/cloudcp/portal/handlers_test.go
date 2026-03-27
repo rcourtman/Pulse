@@ -829,6 +829,7 @@ func TestPortalPageTemplate_AccountServicesRendered(t *testing.T) {
 }
 
 func TestBuildPortalBootstrapJSON_Contract(t *testing.T) {
+	lastHealthCheck := time.Date(2026, 3, 27, 9, 0, 0, 0, time.UTC)
 	bootstrapJSON, err := MarshalBootstrapJSON(BuildBootstrapData(true, "owner@example.com", []portalPageAccount{
 		{
 			ID:         "a_test",
@@ -840,10 +841,12 @@ func TestBuildPortalBootstrapJSON_Contract(t *testing.T) {
 			HasBilling: true,
 			Workspaces: []portalPageWorkspace{
 				{
-					ID:          "t_one",
-					DisplayName: "Tenant One",
-					State:       "active",
-					Healthy:     true,
+					ID:              "t_one",
+					DisplayName:     "Tenant One",
+					State:           "active",
+					Healthy:         true,
+					HealthStatus:    "healthy",
+					LastHealthCheck: &lastHealthCheck,
 				},
 			},
 		},
@@ -916,6 +919,12 @@ func TestBuildPortalBootstrapJSON_Contract(t *testing.T) {
 	}
 	if got := workspace["healthy"]; got != true {
 		t.Fatalf("workspace healthy = %#v", got)
+	}
+	if got := workspace["health_status"]; got != "healthy" {
+		t.Fatalf("workspace health_status = %#v, want healthy", got)
+	}
+	if got := workspace["last_health_check"]; got != "2026-03-27T09:00:00Z" {
+		t.Fatalf("workspace last_health_check = %#v, want 2026-03-27T09:00:00Z", got)
 	}
 	if got := workspace["created_at"]; got != "0001-01-01T00:00:00Z" {
 		t.Fatalf("workspace created_at = %#v", got)

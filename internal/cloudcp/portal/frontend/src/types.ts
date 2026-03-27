@@ -3,6 +3,8 @@ export interface PortalWorkspaceSummary {
   display_name: string;
   state: string;
   healthy: boolean;
+  health_status: 'healthy' | 'checking' | 'unhealthy';
+  last_health_check?: string;
   created_at?: string;
 }
 

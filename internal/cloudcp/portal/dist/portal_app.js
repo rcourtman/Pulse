@@ -1379,6 +1379,15 @@
     if (role === "tech") return '<span class="badge badge-role">Tech</span>';
     return "";
   }
+  function healthBadgeHTML(workspace) {
+    if (workspace.health_status === "healthy") {
+      return '<span class="badge badge-healthy">Healthy</span>';
+    }
+    if (workspace.health_status === "unhealthy") {
+      return '<span class="badge badge-unhealthy">Unhealthy</span>';
+    }
+    return '<span class="badge badge-checking">Checking</span>';
+  }
   function renderWorkspaceCard(account, workspace, accountAPIBasePath) {
     var state = String(workspace.state || "");
     var safeState = escapeHTML(state);
@@ -1394,7 +1403,7 @@
       manageAction = '<button type="button" class="btn-danger" data-action="workspace-manage" data-account-id="' + escapeAttr(account.id) + '" data-workspace-id="' + escapeAttr(workspace.id) + '" data-workspace-state="' + escapeAttr(state) + '" data-workspace-name="' + escapeAttr(workspace.display_name) + '">\u22EF</button>';
     }
     var createdMeta = createdLabel ? '<span class="ws-created">Created ' + escapeHTML(createdLabel) + "</span>" : "";
-    return '<div class="workspace-card"><div class="ws-info"><span class="ws-name">' + escapeHTML(workspace.display_name) + '</span><div class="ws-meta">' + (workspace.healthy ? '<span class="badge badge-healthy">Healthy</span>' : '<span class="badge badge-unhealthy">Checking</span>') + '<span class="badge badge-' + safeState + '">' + safeState + "</span>" + createdMeta + '</div></div><div class="ws-actions">' + openAction + manageAction + "</div></div>";
+    return '<div class="workspace-card"><div class="ws-info"><span class="ws-name">' + escapeHTML(workspace.display_name) + '</span><div class="ws-meta">' + healthBadgeHTML(workspace) + '<span class="badge badge-' + safeState + '">' + safeState + "</span>" + createdMeta + '</div></div><div class="ws-actions">' + openAction + manageAction + "</div></div>";
   }
   function renderAccountSection(account, accountAPIBasePath) {
     var workspaces = Array.isArray(account.workspaces) ? account.workspaces : [];

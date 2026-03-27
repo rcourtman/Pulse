@@ -154,6 +154,14 @@ It adds:
 3. per-workspace health summary
 4. account roles suitable for owner/admin/tech/read-only workflows
 
+Workspace health in Pulse Account must distinguish three states explicitly:
+
+1. `healthy`
+2. `checking` when no completed health check exists yet
+3. `unhealthy` when the latest health check failed
+
+The portal must not label a failed health check as `checking`.
+
 ### Pulse Relay and Pulse Mobile
 
 Pulse Relay does not get a standalone portal. Relay is a capability inside

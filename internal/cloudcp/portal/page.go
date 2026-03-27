@@ -14,11 +14,13 @@ import (
 
 // portalPageWorkspace holds per-workspace display data for the portal template.
 type portalPageWorkspace struct {
-	ID          string
-	DisplayName string
-	State       string
-	Healthy     bool
-	CreatedAt   time.Time
+	ID              string
+	DisplayName     string
+	State           string
+	Healthy         bool
+	HealthStatus    string
+	LastHealthCheck *time.Time
+	CreatedAt       time.Time
 }
 
 // portalPageAccount holds per-account display data including the user's role.
@@ -151,11 +153,13 @@ func loadPortalAccountsForUser(reg *registry.TenantRegistry, userID string) ([]p
 				continue
 			}
 			workspaces = append(workspaces, portalPageWorkspace{
-				ID:          t.ID,
-				DisplayName: t.DisplayName,
-				State:       string(t.State),
-				Healthy:     t.HealthCheckOK,
-				CreatedAt:   t.CreatedAt,
+				ID:              t.ID,
+				DisplayName:     t.DisplayName,
+				State:           string(t.State),
+				Healthy:         t.HealthCheckOK,
+				HealthStatus:    workspaceHealthStatus(t.HealthCheckOK, t.LastHealthCheck),
+				LastHealthCheck: t.LastHealthCheck,
+				CreatedAt:       t.CreatedAt,
 			})
 		}
 
@@ -184,6 +188,16 @@ func loadPortalAccountsForUser(reg *registry.TenantRegistry, userID string) ([]p
 	}
 
 	return accounts, nil
+}
+
+func workspaceHealthStatus(healthy bool, lastHealthCheck *time.Time) string {
+	if healthy {
+		return "healthy"
+	}
+	if lastHealthCheck == nil {
+		return "checking"
+	}
+	return "unhealthy"
 }
 
 func renderPortalPage(w http.ResponseWriter, nonce string, bootstrapData BootstrapData) {

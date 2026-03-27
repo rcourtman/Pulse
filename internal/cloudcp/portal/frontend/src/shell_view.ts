@@ -39,6 +39,16 @@ function roleBadgeHTML(role: string): string {
   return '';
 }
 
+function healthBadgeHTML(workspace: PortalWorkspaceSummary): string {
+  if (workspace.health_status === 'healthy') {
+    return '<span class="badge badge-healthy">Healthy</span>';
+  }
+  if (workspace.health_status === 'unhealthy') {
+    return '<span class="badge badge-unhealthy">Unhealthy</span>';
+  }
+  return '<span class="badge badge-checking">Checking</span>';
+}
+
 function renderWorkspaceCard(account: PortalAccountSummary, workspace: PortalWorkspaceSummary, accountAPIBasePath: string): string {
   var state = String(workspace.state || '');
   var safeState = escapeHTML(state);
@@ -75,9 +85,7 @@ function renderWorkspaceCard(account: PortalAccountSummary, workspace: PortalWor
       '<div class="ws-info">' +
         '<span class="ws-name">' + escapeHTML(workspace.display_name) + '</span>' +
         '<div class="ws-meta">' +
-          (workspace.healthy
-            ? '<span class="badge badge-healthy">Healthy</span>'
-            : '<span class="badge badge-unhealthy">Checking</span>') +
+          healthBadgeHTML(workspace) +
           '<span class="badge badge-' + safeState + '">' + safeState + '</span>' +
           createdMeta +
         '</div>' +

@@ -91,6 +91,10 @@ header .logout-btn:hover {
   background: #dcfce7;
   color: #166534;
 }
+.badge-checking {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
 .badge-unhealthy {
   background: #fee2e2;
   color: #991b1b;

@@ -7,11 +7,13 @@ import (
 )
 
 type BootstrapWorkspace struct {
-	ID          string `json:"id"`
-	DisplayName string `json:"display_name"`
-	State       string `json:"state"`
-	Healthy     bool   `json:"healthy"`
-	CreatedAt   string `json:"created_at"`
+	ID              string `json:"id"`
+	DisplayName     string `json:"display_name"`
+	State           string `json:"state"`
+	Healthy         bool   `json:"healthy"`
+	HealthStatus    string `json:"health_status"`
+	LastHealthCheck string `json:"last_health_check,omitempty"`
+	CreatedAt       string `json:"created_at"`
 }
 
 type BootstrapAccount struct {
@@ -54,12 +56,18 @@ func BuildBootstrapData(authenticated bool, email string, accounts []portalPageA
 	for _, account := range accounts {
 		workspaces := make([]BootstrapWorkspace, 0, len(account.Workspaces))
 		for _, workspace := range account.Workspaces {
+			lastHealthCheck := ""
+			if workspace.LastHealthCheck != nil {
+				lastHealthCheck = workspace.LastHealthCheck.UTC().Format(time.RFC3339)
+			}
 			workspaces = append(workspaces, BootstrapWorkspace{
-				ID:          workspace.ID,
-				DisplayName: workspace.DisplayName,
-				State:       workspace.State,
-				Healthy:     workspace.Healthy,
-				CreatedAt:   workspace.CreatedAt.UTC().Format(time.RFC3339),
+				ID:              workspace.ID,
+				DisplayName:     workspace.DisplayName,
+				State:           workspace.State,
+				Healthy:         workspace.Healthy,
+				HealthStatus:    workspace.HealthStatus,
+				LastHealthCheck: lastHealthCheck,
+				CreatedAt:       workspace.CreatedAt.UTC().Format(time.RFC3339),
 			})
 		}
 		bootstrapAccounts = append(bootstrapAccounts, BootstrapAccount{

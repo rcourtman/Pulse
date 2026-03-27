@@ -15,6 +15,7 @@
     .badge-cloud { background: #dcfce7; color: #166534; }
     .badge-individual { background: #dcfce7; color: #166534; }
     .badge-healthy { background: #dcfce7; color: #166534; }
+    .badge-checking { background: #eff6ff; color: #1d4ed8; }
     .badge-unhealthy { background: #fee2e2; color: #991b1b; }
     .badge-active { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
     .badge-suspended { background: #fef9c3; color: #854d0e; border: 1px solid #fef08a; }

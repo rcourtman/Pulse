@@ -98,6 +98,8 @@ describe('shell view', function() {
                   display_name: 'Alpha Workspace',
                   state: 'active',
                   healthy: true,
+                  health_status: 'healthy',
+                  last_health_check: '2026-03-26T10:10:00Z',
                   created_at: '2026-03-26T10:00:00Z',
                 },
                 {
@@ -105,6 +107,14 @@ describe('shell view', function() {
                   display_name: 'Beta Workspace',
                   state: 'failed',
                   healthy: false,
+                  health_status: 'unhealthy',
+                },
+                {
+                  id: 'ws_pending',
+                  display_name: 'Gamma Workspace',
+                  state: 'provisioning',
+                  healthy: false,
+                  health_status: 'checking',
                 },
               ],
             },
@@ -117,6 +127,11 @@ describe('shell view', function() {
     expect(html).toContain('id="accounts-root"');
     expect(html).toContain('Acme MSP');
     expect(html).toContain('Alpha Workspace');
+    expect(html).toContain('Beta Workspace');
+    expect(html).toContain('Gamma Workspace');
+    expect(html).toContain('Healthy</span>');
+    expect(html).toContain('Unhealthy</span>');
+    expect(html).toContain('Checking</span>');
     expect(html).toContain('/api/accounts/acct_1/tenants/ws_active/handoff');
     expect(html).toContain('data-action="workspace-manage"');
     expect(html).toContain('service-card-button');

@@ -215,6 +215,9 @@ account identity context, signed-out versus signed-in shell state, workspace
 summaries, and renderer-owned public, commercial, and control-plane route
 configuration, including the canonical bootstrap route path, magic-link request
 path, signup path, and stable workspace summary fields such as `created_at`.
+That workspace summary contract must expose explicit health semantics: `healthy`
+for passing health checks, `checking` only when no completed health check
+exists yet, and `unhealthy` for a failed latest health check.
 `/portal` is now one bootstrap-driven shell for both anonymous and
 authenticated users, so new account frontend work must extend that shared
 contract rather than inventing a second local payload shape, reviving separate
