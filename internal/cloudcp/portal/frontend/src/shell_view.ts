@@ -193,36 +193,6 @@ function renderAttentionPanel(workspaces: PortalWorkspaceSummary[]): string {
   );
 }
 
-function renderOverviewBand(accounts: PortalAccountSummary[]): string {
-  var hosted = hasHostedAccounts(accounts);
-  var workspaceTotal = countWorkspaces(accounts);
-  var summary = hosted
-    ? 'Hosted operations, operator access, and commercial account services.'
-    : 'Billing, license recovery, refunds, and privacy actions until hosted access is attached.';
-
-  return (
-    '<section class="portal-shell-head">' +
-      '<div class="portal-shell-head-main">' +
-        '<div class="portal-shell-head-kicker">Pulse Account</div>' +
-        '<div class="portal-shell-head-row">' +
-          '<div class="portal-shell-head-copy">' +
-            '<div class="portal-shell-head-brand-row">' +
-              '<h1 class="portal-shell-head-title">' + (hosted ? 'Operator console' : 'Account console') + '</h1>' +
-              '<span class="portal-shell-head-chip">' + (hosted ? 'Operator ready' : 'Self-hosted only') + '</span>' +
-            '</div>' +
-            '<p>' + summary + '</p>' +
-          '</div>' +
-          '<div class="portal-shell-head-summary">' +
-            '<span class="portal-shell-summary-pill"><strong>Hosted access</strong>' + (hosted ? 'Active' : 'Not attached') + '</span>' +
-            '<span class="portal-shell-summary-pill"><strong>Accounts</strong>' + (accounts.length === 1 ? '1 account' : String(accounts.length) + ' accounts') + '</span>' +
-            '<span class="portal-shell-summary-pill"><strong>Workspace fleet</strong>' + (workspaceTotal ? workspaceCountLabel(workspaceTotal) : '0 workspaces') + '</span>' +
-          '</div>' +
-        '</div>' +
-      '</div>' +
-    '</section>'
-  );
-}
-
 function renderPrimaryAccountBar(account: PortalAccountSummary): string {
   var workspaceLabel = workspaceCountLabel((account.workspaces || []).length);
   var actionHTML = '';
@@ -249,7 +219,11 @@ function renderPrimaryAccountBar(account: PortalAccountSummary): string {
   return (
     '<section class="portal-account-bar">' +
       '<div class="portal-account-bar-copy">' +
-        '<div class="account-eyebrow">' + escapeHTML(accountKindLabel(account)) + '</div>' +
+        '<div class="portal-account-bar-meta">' +
+          '<span class="account-eyebrow">' + escapeHTML(accountKindLabel(account)) + '</span>' +
+          '<span class="portal-account-bar-separator">/</span>' +
+          '<span class="portal-account-bar-access">' + escapeHTML(titleCase(account.role)) + ' access</span>' +
+        '</div>' +
         '<div class="portal-account-bar-row">' +
           '<h2>' + escapeHTML(account.name) + '</h2>' +
           '<div class="portal-account-bar-chips">' +
@@ -657,28 +631,37 @@ function renderAccountTeamSection(account: PortalAccountSummary): string {
             '</div>' +
           '</div>' +
           '<div class="team-side-column">' +
-            '<div class="team-invite-panel">' +
-              '<div class="team-panel-heading">' +
-                '<h4>Invite someone new</h4>' +
-                '<p>Add another operator with the minimum role they need for this account.</p>' +
+            '<div class="team-operations-panel">' +
+              '<div class="team-panel-heading team-panel-heading-tight">' +
+                '<div class="account-panel-kicker">Access desk</div>' +
+                '<h4>Invite and role policy</h4>' +
+                '<p>Keep the roster deliberate. Invite the smallest role first, then tighten access as responsibilities become clearer.</p>' +
               '</div>' +
-              '<div class="team-invite">' +
-                '<div><label for="invite-email-' +
-                escapeAttr(account.id) +
-                '">Email</label><input type="email" id="invite-email-' +
-                escapeAttr(account.id) +
-                '" placeholder="user@example.com" autocomplete="off"></div>' +
-                '<div><label for="invite-role-' +
-                escapeAttr(account.id) +
-                '">Role</label><select id="invite-role-' +
-                escapeAttr(account.id) +
-                '"><option value="admin">Admin</option><option value="tech">Tech</option><option value="read_only">Read-only</option></select></div>' +
-                '<button type="button" class="btn-primary btn-compact" data-action="invite-member" data-account-id="' +
-                escapeAttr(account.id) +
-                '">Invite</button>' +
+              '<div class="team-operations-grid">' +
+                '<div class="team-invite-panel">' +
+                  '<div class="team-panel-heading">' +
+                    '<h4>Invite someone new</h4>' +
+                    '<p>Add another operator with the minimum role they need for this account.</p>' +
+                  '</div>' +
+                  '<div class="team-invite">' +
+                    '<div><label for="invite-email-' +
+                    escapeAttr(account.id) +
+                    '">Email</label><input type="email" id="invite-email-' +
+                    escapeAttr(account.id) +
+                    '" placeholder="user@example.com" autocomplete="off"></div>' +
+                    '<div><label for="invite-role-' +
+                    escapeAttr(account.id) +
+                    '">Role</label><select id="invite-role-' +
+                    escapeAttr(account.id) +
+                    '"><option value="admin">Admin</option><option value="tech">Tech</option><option value="read_only">Read-only</option></select></div>' +
+                    '<button type="button" class="btn-primary btn-compact" data-action="invite-member" data-account-id="' +
+                    escapeAttr(account.id) +
+                    '">Invite</button>' +
+                  '</div>' +
+                '</div>' +
+                accessPolicy +
               '</div>' +
             '</div>' +
-            accessPolicy +
           '</div>' +
         '</div>' +
       '</section>' +
@@ -765,7 +748,6 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
       '<div class="portal-shell-layout">' +
         renderShellNavigation(accounts, context.bootstrap.support_email || '', activeSection) +
         '<div class="portal-shell-main">' +
-          renderOverviewBand(accounts) +
           (accounts.length === 1 ? renderPrimaryAccountBar(accounts[0]) : '') +
           '<section class="portal-content-panel portal-content-panel-overview">' +
             '<div id="accounts-root">' + hostedContent + '</div>' +

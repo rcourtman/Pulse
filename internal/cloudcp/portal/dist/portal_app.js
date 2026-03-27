@@ -138,11 +138,18 @@
     actionButton.setAttribute("data-workspace-action", workspace.state === "active" ? "suspend" : "delete");
     closeButton.disabled = entry.manageWorkspace.pending;
   }
-  function setContainerMessage(container, msg, isError) {
+  function setContainerMessage(container, title, msg, isError) {
     container.textContent = "";
     var message = document.createElement("div");
     message.className = "team-list-message" + (isError ? " error" : "");
-    message.textContent = msg;
+    var heading = document.createElement("strong");
+    heading.className = "team-list-message-title";
+    heading.textContent = title;
+    var copy = document.createElement("span");
+    copy.className = "team-list-message-copy";
+    copy.textContent = msg;
+    message.appendChild(heading);
+    message.appendChild(copy);
     container.appendChild(message);
   }
   function countMembersByRole(members, role) {
@@ -160,11 +167,11 @@
       return;
     }
     if (entry.teamQuery.status === "loading") {
-      stats.innerHTML = '<div class="team-stat-card"><span class="team-stat-label">Roster</span><span class="team-stat-value">Loading\u2026</span></div>';
+      stats.innerHTML = '<div class="team-stat-card"><span class="team-stat-label">Roster</span><span class="team-stat-value">Loading\u2026</span></div><div class="team-stat-card"><span class="team-stat-label">Invites</span><span class="team-stat-value">Ready</span></div>';
       return;
     }
     if (entry.teamQuery.status === "error") {
-      stats.innerHTML = '<div class="team-stat-card"><span class="team-stat-label">Roster</span><span class="team-stat-value team-stat-error">Needs attention</span></div>';
+      stats.innerHTML = '<div class="team-stat-card"><span class="team-stat-label">Roster</span><span class="team-stat-value team-stat-error">Needs attention</span></div><div class="team-stat-card"><span class="team-stat-label">Fallback</span><span class="team-stat-value">Invite only</span></div>';
       return;
     }
     var members = entry.teamQuery.data;
@@ -265,15 +272,15 @@
       return;
     }
     if (entry.teamQuery.status === "loading") {
-      setContainerMessage(roster, "Loading\u2026", false);
+      setContainerMessage(roster, "Loading roster", "Checking who currently has access to this account.", false);
       return;
     }
     if (entry.teamQuery.status === "error") {
-      setContainerMessage(roster, entry.teamQuery.error, true);
+      setContainerMessage(roster, "Roster needs attention", entry.teamQuery.error, true);
       return;
     }
     if (!entry.teamQuery.data.length) {
-      setContainerMessage(roster, "No team members.", false);
+      setContainerMessage(roster, "No operators yet", "Invite someone new when this hosted account needs shared access.", false);
       return;
     }
     roster.textContent = "";
@@ -1692,13 +1699,6 @@
   function hasHostedAccounts(accounts) {
     return accounts.length > 0;
   }
-  function countWorkspaces(accounts) {
-    var total = 0;
-    for (var i = 0; i < accounts.length; i += 1) {
-      total += Array.isArray(accounts[i].workspaces) ? accounts[i].workspaces.length : 0;
-    }
-    return total;
-  }
   function countWorkspacesByState(workspaces, state) {
     var count = 0;
     for (var i = 0; i < workspaces.length; i += 1) {
@@ -1761,12 +1761,6 @@
     }).join("");
     return '<div class="overview-side-card"><div class="account-panel-kicker">Attention</div><h4>Needs review</h4><p>These workspaces should be checked before you treat the hosted fleet as fully healthy.</p><div class="overview-alert-list">' + items + "</div></div>";
   }
-  function renderOverviewBand(accounts) {
-    var hosted = hasHostedAccounts(accounts);
-    var workspaceTotal = countWorkspaces(accounts);
-    var summary = hosted ? "Hosted operations, operator access, and commercial account services." : "Billing, license recovery, refunds, and privacy actions until hosted access is attached.";
-    return '<section class="portal-shell-head"><div class="portal-shell-head-main"><div class="portal-shell-head-kicker">Pulse Account</div><div class="portal-shell-head-row"><div class="portal-shell-head-copy"><div class="portal-shell-head-brand-row"><h1 class="portal-shell-head-title">' + (hosted ? "Operator console" : "Account console") + '</h1><span class="portal-shell-head-chip">' + (hosted ? "Operator ready" : "Self-hosted only") + "</span></div><p>" + summary + '</p></div><div class="portal-shell-head-summary"><span class="portal-shell-summary-pill"><strong>Hosted access</strong>' + (hosted ? "Active" : "Not attached") + '</span><span class="portal-shell-summary-pill"><strong>Accounts</strong>' + (accounts.length === 1 ? "1 account" : String(accounts.length) + " accounts") + '</span><span class="portal-shell-summary-pill"><strong>Workspace fleet</strong>' + (workspaceTotal ? workspaceCountLabel(workspaceTotal) : "0 workspaces") + "</span></div></div></div></section>";
-  }
   function renderPrimaryAccountBar(account) {
     var workspaceLabel = workspaceCountLabel((account.workspaces || []).length);
     var actionHTML = "";
@@ -1779,7 +1773,7 @@
     if (account.can_manage) {
       actionHTML += '<button type="button" class="btn-secondary btn-compact" data-action="toggle-team" data-account-id="' + escapeAttr(account.id) + '" data-shell-target="team">Manage team</button>';
     }
-    return '<section class="portal-account-bar"><div class="portal-account-bar-copy"><div class="account-eyebrow">' + escapeHTML(accountKindLabel(account)) + '</div><div class="portal-account-bar-row"><h2>' + escapeHTML(account.name) + '</h2><div class="portal-account-bar-chips"><span class="account-context-chip">' + escapeHTML(account.kind_label) + '</span><span class="account-context-chip">' + escapeHTML(titleCase(account.role)) + '</span><span class="account-context-chip">' + escapeHTML(workspaceLabel) + "</span></div></div><p>" + escapeHTML(account.kind === "msp" ? "Operator workspace account" : "Hosted account operations") + '</p></div><div class="portal-account-bar-actions">' + actionHTML + "</div></section>";
+    return '<section class="portal-account-bar"><div class="portal-account-bar-copy"><div class="portal-account-bar-meta"><span class="account-eyebrow">' + escapeHTML(accountKindLabel(account)) + '</span><span class="portal-account-bar-separator">/</span><span class="portal-account-bar-access">' + escapeHTML(titleCase(account.role)) + ' access</span></div><div class="portal-account-bar-row"><h2>' + escapeHTML(account.name) + '</h2><div class="portal-account-bar-chips"><span class="account-context-chip">' + escapeHTML(account.kind_label) + '</span><span class="account-context-chip">' + escapeHTML(titleCase(account.role)) + '</span><span class="account-context-chip">' + escapeHTML(workspaceLabel) + "</span></div></div><p>" + escapeHTML(account.kind === "msp" ? "Operator workspace account" : "Hosted account operations") + '</p></div><div class="portal-account-bar-actions">' + actionHTML + "</div></section>";
   }
   function shellSectionButton(section, activeSection, title, copy) {
     return '<button class="portal-shell-nav-link' + (activeSection === section ? " active" : "") + '" type="button" data-shell-action="activate-section" data-shell-section="' + section + '"><span class="portal-shell-nav-label">' + title + '</span><span class="portal-shell-nav-copy">' + copy + "</span></button>";
@@ -1878,7 +1872,7 @@
     var hostedContent = accounts.map(function(account) {
       return '<section class="account-surface"><div class="account-surface-body">' + renderAccountOverviewSection(account) + renderAccountWorkspaceSection(account, context.accountAPIBasePath) + renderAccountTeamSection(account) + "</div></section>";
     }).join("");
-    return '<div class="portal-shell" data-shell-section="' + activeSection + '"><div class="portal-shell-layout">' + renderShellNavigation(accounts, context.bootstrap.support_email || "", activeSection) + '<div class="portal-shell-main">' + renderOverviewBand(accounts) + (accounts.length === 1 ? renderPrimaryAccountBar(accounts[0]) : "") + '<section class="portal-content-panel portal-content-panel-overview"><div id="accounts-root">' + hostedContent + '</div></section><section class="portal-content-panel portal-content-panel-services service-section" id="account-services-section"><div class="service-header"><div><div class="account-panel-kicker">Account services</div><h2>' + serviceHeading + '</h2></div><div class="service-note">' + serviceNote + '</div></div><div class="service-shell"><aside class="service-shell-sidebar"><div class="service-shell-sidebar-head"><div class="account-panel-kicker">Commercial actions</div><h3>Billing, licenses, refunds, and privacy</h3><p>Use these tools for self-hosted commercial actions. Hosted workspace operations stay in Workspaces and Team.</p></div><div class="service-action-list">' + renderServiceActionRow("open-manage-service", "Billing", "Manage subscriptions", "Open Stripe billing access for existing self-hosted subscriptions without leaving the Pulse Account shell.", "manage-service-panel", "manage-inline-email", ["Invoices and plan changes", "Subscription self-service"]) + renderServiceActionRow("open-retrieve-service", "Licenses", "Retrieve licenses", "Recover the latest active self-hosted license and invoice link for a commercial email address.", "retrieve-service-panel", "retrieve-inline-email", ["Latest active license", "Invoice lookup"]) + renderServiceActionRow("open-refund-service", "Refunds", "Refund requests", "Request an immediate self-serve refund for eligible self-hosted purchases with explicit revocation confirmation.", "refund-service-panel", "refund-inline-email", ["Eligibility check", "Explicit revocation"]) + renderServiceActionRow("open-data-service", "Privacy", "Data and privacy", "Request commercial data export or deletion without leaving the account shell.", "data-service-panel", "data-export-email", ["Export or deletion", "Support escalation path"]) + '</div></aside><div class="service-shell-main"><div class="service-detail-shell"><div class="service-panel service-panel-empty visible" id="service-panel-empty"><div class="account-panel-kicker">Select a service</div><h3>Choose the next commercial action</h3><p>Open a billing, license, refund, or privacy flow from the service navigator. The active request stays here so the account-services area behaves like one operating desk instead of a list of disconnected tools.</p><div class="service-empty-columns"><div class="service-empty-column"><div class="service-empty-column-title">Start here</div><div class="service-empty-points"><div class="service-empty-point"><strong>Billing</strong><span>Open Stripe customer portal access after verification.</span></div><div class="service-empty-point"><strong>Licenses</strong><span>Recover the latest active self-hosted license and invoice link.</span></div><div class="service-empty-point"><strong>Refunds</strong><span>Confirm eligibility before revoking active commercial access.</span></div><div class="service-empty-point"><strong>Privacy</strong><span>Request export or deletion without leaving Pulse Account.</span></div></div></div><div class="service-empty-column"><div class="service-empty-column-title">What to expect</div><div class="service-empty-checklist"><div class="service-empty-check"><strong>Verification first</strong><span>Each flow confirms the commercial email before opening sensitive account actions.</span></div><div class="service-empty-check"><strong>One task at a time</strong><span>The active commercial request stays in this panel until you finish or switch tools.</span></div><div class="service-empty-check"><strong>Support stays close</strong><span>If billing, licenses, refunds, or privacy behave unexpectedly, escalate from this surface.</span></div></div></div></div><div class="service-empty-support">Need help with billing, refund, privacy, or license actions? <a class="portal-support-link" href="mailto:' + escapeAttr(context.bootstrap.support_email || "") + '">' + escapeHTML(context.bootstrap.support_email || "") + '</a></div></div><div class="service-panel" id="manage-service-panel"><div id="manage-service-root"></div></div><div class="service-panel" id="retrieve-service-panel"><div id="retrieve-service-root"></div></div><div class="service-panel" id="refund-service-panel"><div id="refund-service-root"></div></div><div class="service-panel" id="data-service-panel"><h3>Data and privacy</h3><p>Request export or deletion of the commercial data tied to an email address. Payment data held directly by Stripe still requires support handling.</p><div class="subsection"><div id="data-export-root"></div></div><div class="subsection"><div id="data-delete-root"></div></div><div class="helper-text">Payment-card data stays with Stripe. For Stripe deletion support, contact <a href="mailto:' + escapeAttr(context.bootstrap.support_email || "") + '">' + escapeHTML(context.bootstrap.support_email || "") + '</a>.</div></div></div><div class="service-inline-support"><div class="account-panel-kicker">Support</div><p>Use support if a billing, refund, privacy, or license flow does not behave as expected for this account.</p><a class="portal-support-link" href="mailto:' + escapeAttr(context.bootstrap.support_email || "") + '">' + escapeHTML(context.bootstrap.support_email || "") + '</a></div></div></div></section><section class="portal-content-panel portal-content-panel-support">' + renderSupportSection(context) + "</section></div></div></div>";
+    return '<div class="portal-shell" data-shell-section="' + activeSection + '"><div class="portal-shell-layout">' + renderShellNavigation(accounts, context.bootstrap.support_email || "", activeSection) + '<div class="portal-shell-main">' + (accounts.length === 1 ? renderPrimaryAccountBar(accounts[0]) : "") + '<section class="portal-content-panel portal-content-panel-overview"><div id="accounts-root">' + hostedContent + '</div></section><section class="portal-content-panel portal-content-panel-services service-section" id="account-services-section"><div class="service-header"><div><div class="account-panel-kicker">Account services</div><h2>' + serviceHeading + '</h2></div><div class="service-note">' + serviceNote + '</div></div><div class="service-shell"><aside class="service-shell-sidebar"><div class="service-shell-sidebar-head"><div class="account-panel-kicker">Commercial actions</div><h3>Billing, licenses, refunds, and privacy</h3><p>Use these tools for self-hosted commercial actions. Hosted workspace operations stay in Workspaces and Team.</p></div><div class="service-action-list">' + renderServiceActionRow("open-manage-service", "Billing", "Manage subscriptions", "Open Stripe billing access for existing self-hosted subscriptions without leaving the Pulse Account shell.", "manage-service-panel", "manage-inline-email", ["Invoices and plan changes", "Subscription self-service"]) + renderServiceActionRow("open-retrieve-service", "Licenses", "Retrieve licenses", "Recover the latest active self-hosted license and invoice link for a commercial email address.", "retrieve-service-panel", "retrieve-inline-email", ["Latest active license", "Invoice lookup"]) + renderServiceActionRow("open-refund-service", "Refunds", "Refund requests", "Request an immediate self-serve refund for eligible self-hosted purchases with explicit revocation confirmation.", "refund-service-panel", "refund-inline-email", ["Eligibility check", "Explicit revocation"]) + renderServiceActionRow("open-data-service", "Privacy", "Data and privacy", "Request commercial data export or deletion without leaving the account shell.", "data-service-panel", "data-export-email", ["Export or deletion", "Support escalation path"]) + '</div></aside><div class="service-shell-main"><div class="service-detail-shell"><div class="service-panel service-panel-empty visible" id="service-panel-empty"><div class="account-panel-kicker">Select a service</div><h3>Choose the next commercial action</h3><p>Open a billing, license, refund, or privacy flow from the service navigator. The active request stays here so the account-services area behaves like one operating desk instead of a list of disconnected tools.</p><div class="service-empty-columns"><div class="service-empty-column"><div class="service-empty-column-title">Start here</div><div class="service-empty-points"><div class="service-empty-point"><strong>Billing</strong><span>Open Stripe customer portal access after verification.</span></div><div class="service-empty-point"><strong>Licenses</strong><span>Recover the latest active self-hosted license and invoice link.</span></div><div class="service-empty-point"><strong>Refunds</strong><span>Confirm eligibility before revoking active commercial access.</span></div><div class="service-empty-point"><strong>Privacy</strong><span>Request export or deletion without leaving Pulse Account.</span></div></div></div><div class="service-empty-column"><div class="service-empty-column-title">What to expect</div><div class="service-empty-checklist"><div class="service-empty-check"><strong>Verification first</strong><span>Each flow confirms the commercial email before opening sensitive account actions.</span></div><div class="service-empty-check"><strong>One task at a time</strong><span>The active commercial request stays in this panel until you finish or switch tools.</span></div><div class="service-empty-check"><strong>Support stays close</strong><span>If billing, licenses, refunds, or privacy behave unexpectedly, escalate from this surface.</span></div></div></div></div><div class="service-empty-support">Need help with billing, refund, privacy, or license actions? <a class="portal-support-link" href="mailto:' + escapeAttr(context.bootstrap.support_email || "") + '">' + escapeHTML(context.bootstrap.support_email || "") + '</a></div></div><div class="service-panel" id="manage-service-panel"><div id="manage-service-root"></div></div><div class="service-panel" id="retrieve-service-panel"><div id="retrieve-service-root"></div></div><div class="service-panel" id="refund-service-panel"><div id="refund-service-root"></div></div><div class="service-panel" id="data-service-panel"><h3>Data and privacy</h3><p>Request export or deletion of the commercial data tied to an email address. Payment data held directly by Stripe still requires support handling.</p><div class="subsection"><div id="data-export-root"></div></div><div class="subsection"><div id="data-delete-root"></div></div><div class="helper-text">Payment-card data stays with Stripe. For Stripe deletion support, contact <a href="mailto:' + escapeAttr(context.bootstrap.support_email || "") + '">' + escapeHTML(context.bootstrap.support_email || "") + '</a>.</div></div></div><div class="service-inline-support"><div class="account-panel-kicker">Support</div><p>Use support if a billing, refund, privacy, or license flow does not behave as expected for this account.</p><a class="portal-support-link" href="mailto:' + escapeAttr(context.bootstrap.support_email || "") + '">' + escapeHTML(context.bootstrap.support_email || "") + '</a></div></div></div></section><section class="portal-content-panel portal-content-panel-support">' + renderSupportSection(context) + "</section></div></div></div>";
   }
   function renderSignedOutPortalHTML(context) {
     var statusHTML = "";

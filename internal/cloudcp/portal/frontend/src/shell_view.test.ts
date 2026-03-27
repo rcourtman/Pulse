@@ -125,9 +125,6 @@ describe('shell view', function() {
       })
     );
 
-    expect(html).toContain('portal-shell-head-kicker">Pulse Account</div>');
-    expect(html).toContain('portal-shell-head-title">Operator console</h1>');
-    expect(html).toContain('Hosted operations, operator access, and commercial account services.');
     expect(html).toContain('portal-shell-nav');
     expect(html).toContain('Overview');
     expect(html).toContain('Workspaces');
@@ -136,6 +133,7 @@ describe('shell view', function() {
     expect(html).toContain('id="account-services-section"');
     expect(html).toContain('Self-hosted licenses and billing');
     expect(html).toContain('portal-account-bar');
+    expect(html).toContain('Owner access');
     expect(html).toContain('id="accounts-root"');
     expect(html).toContain('MSP account');
     expect(html).toContain('Acme MSP');
@@ -196,9 +194,7 @@ describe('shell view', function() {
     );
 
     expect(html).toContain('Pulse Account');
-    expect(html).toContain('Self-hosted only');
-    expect(html).toContain('portal-shell-head-title">Account console</h1>');
-    expect(html).toContain('Billing, license recovery, refunds, and privacy actions until hosted access is attached.');
+    expect(html).toContain('Account console');
     expect(html).toContain('Use these tools for self-hosted commercial actions.');
     expect(html).toContain('Account services');
     expect(html).not.toContain('Self-hosted licenses and billing');
