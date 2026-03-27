@@ -653,6 +653,11 @@ scan pattern in its first column. Protected-item rows should lead with a clear
 status cue, the primary item name, and compact badge-backed item/platform
 context instead of relying on recovery-only rails or plain-text metadata lines
 that make the table read like a report instead of an operational grid.
+That same inventory surface should use structural grouping to surface posture,
+not just local row styling. When the protected-item page mixes healthy and
+problematic coverage, the table body should section attention items ahead of
+healthy coverage so operators can scan the recovery estate the way they scan
+other grouped monitoring tables in Pulse.
 That shared unified-resource dependency now also includes policy-governed
 resource metadata on the frontend decode path: storage and recovery surfaces
 that route through `frontend-modern/src/hooks/useUnifiedResources.ts` must

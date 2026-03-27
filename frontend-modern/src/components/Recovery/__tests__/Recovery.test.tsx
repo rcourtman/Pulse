@@ -205,6 +205,7 @@ describe('Recovery', () => {
     expect(screen.getByText('Recovery Posture')).toBeInTheDocument();
     expect(await screen.findByRole('tab', { name: /protected items/i })).toBeInTheDocument();
     await screen.findByText('VM 123');
+    expect(screen.getByText('Needs Attention')).toBeInTheDocument();
     expect(screen.queryByText('Recovery Events')).not.toBeInTheDocument();
     await waitFor(() => {
       expect(screen.getAllByRole('table')).toHaveLength(1);

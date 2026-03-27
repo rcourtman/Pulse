@@ -138,12 +138,19 @@
     actionButton.setAttribute("data-workspace-action", workspace.state === "active" ? "suspend" : "delete");
     closeButton.disabled = entry.manageWorkspace.pending;
   }
-  function setContainerMessage(container, msg, isError) {
+  function setContainerMessage(container, title, msg, isError) {
     container.textContent = "";
-    var message = document.createElement("div");
-    message.className = "team-list-message" + (isError ? " error" : "");
-    message.textContent = msg;
-    container.appendChild(message);
+    var card = document.createElement("div");
+    card.className = "team-list-message" + (isError ? " error" : "");
+    var titleNode = document.createElement("strong");
+    titleNode.className = "team-list-message-title";
+    titleNode.textContent = title;
+    card.appendChild(titleNode);
+    var body = document.createElement("span");
+    body.className = "team-list-message-copy";
+    body.textContent = msg;
+    card.appendChild(body);
+    container.appendChild(card);
   }
   function countMembersByRole(members, role) {
     var count = 0;
@@ -160,11 +167,11 @@
       return;
     }
     if (entry.teamQuery.status === "loading") {
-      stats.innerHTML = '<div class="team-stat-card"><span class="team-stat-label">Roster</span><span class="team-stat-value">Loading\u2026</span></div>';
+      stats.innerHTML = '<div class="team-stat-card"><span class="team-stat-label">Roster</span><span class="team-stat-value">Loading\u2026</span></div><div class="team-stat-card"><span class="team-stat-label">Invites</span><span class="team-stat-value">Ready</span></div>';
       return;
     }
     if (entry.teamQuery.status === "error") {
-      stats.innerHTML = '<div class="team-stat-card"><span class="team-stat-label">Roster</span><span class="team-stat-value team-stat-error">Needs attention</span></div>';
+      stats.innerHTML = '<div class="team-stat-card"><span class="team-stat-label">Roster</span><span class="team-stat-value team-stat-error">Needs attention</span></div><div class="team-stat-card"><span class="team-stat-label">Fallback</span><span class="team-stat-value">Invite only</span></div>';
       return;
     }
     var members = entry.teamQuery.data;
@@ -265,15 +272,15 @@
       return;
     }
     if (entry.teamQuery.status === "loading") {
-      setContainerMessage(roster, "Loading\u2026", false);
+      setContainerMessage(roster, "Loading roster", "Checking who currently has access to this account.", false);
       return;
     }
     if (entry.teamQuery.status === "error") {
-      setContainerMessage(roster, entry.teamQuery.error, true);
+      setContainerMessage(roster, "Roster needs attention", entry.teamQuery.error, true);
       return;
     }
     if (!entry.teamQuery.data.length) {
-      setContainerMessage(roster, "No team members.", false);
+      setContainerMessage(roster, "No operators yet", "Invite someone new when this hosted account needs shared access.", false);
       return;
     }
     roster.textContent = "";
