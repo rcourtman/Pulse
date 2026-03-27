@@ -157,7 +157,7 @@ work extends shared components instead of creating new local variants.
 5. When a settings route header and a top-level settings shell describe the same
    commercial surface, keep them on the same shared presentation owner instead
    of allowing route metadata in `settingsHeaderMeta.ts` to drift into
-   independent copy.
+   independent title or description copy.
 
 ## Current State
 
@@ -1250,7 +1250,8 @@ same shell boundary as
 `frontend-modern/src/components/Settings/ProLicensePanel.tsx` and the shared
 commercial presentation owner in
 `frontend-modern/src/utils/licensePresentation.ts`; the `system-billing`
-header description must reuse
+header title and description must reuse
+`SELF_HOSTED_PRO_BILLING_PRESENTATION.shellTitle` and
 `SELF_HOSTED_PRO_BILLING_PRESENTATION.shellDescription` so the route header and
 the billing shell do not narrate the same commercial surface differently.
 `frontend-modern/src/components/Settings/NetworkSettingsPanel.tsx` is now a

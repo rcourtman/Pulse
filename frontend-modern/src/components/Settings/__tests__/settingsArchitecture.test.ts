@@ -337,7 +337,7 @@ const canonicalShellTitleExpectations = [
   },
   {
     tab: 'system-billing',
-    title: 'Pulse Pro',
+    title: SELF_HOSTED_PRO_BILLING_PRESENTATION.shellTitle,
     source: proLicensePanelSource,
   },
   {
@@ -1271,6 +1271,9 @@ describe('Settings architecture guardrails', () => {
     );
     expect(SETTINGS_HEADER_META['infrastructure-operations'].description).not.toContain(
       'installed-agent',
+    );
+    expect(SETTINGS_HEADER_META['system-billing'].title).toBe(
+      SELF_HOSTED_PRO_BILLING_PRESENTATION.shellTitle,
     );
     expect(SETTINGS_HEADER_META['system-billing'].description).toBe(
       SELF_HOSTED_PRO_BILLING_PRESENTATION.shellDescription,

@@ -38,7 +38,7 @@ export const SETTINGS_HEADER_META: SettingsHeaderMetaMap = {
       'Configure Pulse relay connectivity for secure remote access (mobile rollout coming soon).',
   },
   'system-billing': {
-    title: 'Pulse Pro',
+    title: SELF_HOSTED_PRO_BILLING_PRESENTATION.shellTitle,
     description: SELF_HOSTED_PRO_BILLING_PRESENTATION.shellDescription,
   },
   'organization-overview': {
