@@ -223,9 +223,6 @@ func (s *Store) initSchema() error {
 		CREATE INDEX IF NOT EXISTS idx_recovery_points_provider_completed
 		ON recovery_points(provider, completed_at_ms);
 
-		CREATE INDEX IF NOT EXISTS idx_recovery_points_item_type_completed
-		ON recovery_points(item_type, completed_at_ms);
-
 		CREATE INDEX IF NOT EXISTS idx_recovery_points_subject_completed
 		ON recovery_points(subject_resource_id, completed_at_ms);
 
@@ -268,6 +265,9 @@ func (s *Store) initSchema() error {
 	// Indexes on migrated columns — must run AFTER ensureColumn so pre-existing
 	// databases that lack these columns don't crash with "no such column".
 	postMigrationIndexes := `
+		CREATE INDEX IF NOT EXISTS idx_recovery_points_item_type_completed
+		ON recovery_points(item_type, completed_at_ms);
+
 		CREATE INDEX IF NOT EXISTS idx_recovery_points_cluster_completed
 		ON recovery_points(cluster_label, completed_at_ms);
 

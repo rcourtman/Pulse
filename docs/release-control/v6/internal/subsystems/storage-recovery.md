@@ -223,6 +223,12 @@ those shared store reads, including recovery-backed reporting, alert rollups,
 and tenant-scoped AI recovery-point adapters. A malformed metadata blob may
 degrade row-local enrichment, but it must not take down adjacent readers that
 consume the same canonical recovery store.
+That same recovery-store migration boundary must keep legacy schema upgrades in
+dependency order. When a persisted `recovery.db` predates columns such as
+`item_type`, the store must add the migrated columns before creating indexes or
+running query paths that reference them, so opening a legacy store backfills
+cleanly instead of returning `500` from `/api/recovery/points` or
+`/api/recovery/rollups` during schema initialization.
 That same hook-boundary normalization also owns the runtime recovery display
 model. Canonical recovery points and rollups must expose `display.itemLabel`
 and `display.itemType` to recovery consumers, while legacy transport fields
