@@ -171,6 +171,9 @@ management, and fleet control surfaces.
    path must also auto-create the scoped first-host install token so the
    operator lands on ready-to-copy commands instead of being asked to perform a
    second manual token-generation step immediately after securing the server.
+   Any first-run credentials download generated from that same handoff must
+   describe the prepared first-host token path consistently instead of telling
+   the operator to generate another install token manually.
 9. Keep `frontend-modern/src/components/SetupWizard/SetupCompletionPanel.tsx`
    ordered around the actual first-run operator sequence: credentials that must
    be saved now should be visible before the operator leaves the screen, and

@@ -26,6 +26,23 @@ import type {
 } from '@/types/api';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 
+const createObjectURLMock = vi.fn(() => 'blob:mock-url');
+const revokeObjectURLMock = vi.fn();
+
+class MockBlob {
+  readonly parts: string[];
+  readonly type: string;
+
+  constructor(parts: unknown[], options?: { type?: string }) {
+    this.parts = parts.map((part) => String(part));
+    this.type = options?.type || '';
+  }
+
+  async text() {
+    return this.parts.join('');
+  }
+}
+
 const { navigateMock } = vi.hoisted(() => ({
   navigateMock: vi.fn(),
 }));
@@ -656,8 +673,15 @@ beforeEach(() => {
       headers: { 'Content-Type': 'application/json' },
     }),
   );
+  createObjectURLMock.mockReset().mockReturnValue('blob:mock-url');
+  revokeObjectURLMock.mockReset();
   vi.stubGlobal('fetch', fetchMock);
   vi.stubGlobal('navigator', { clipboard: { writeText: clipboardSpy } } as unknown as Navigator);
+  vi.stubGlobal('Blob', MockBlob as unknown as typeof Blob);
+  vi.stubGlobal('URL', Object.assign(URL, {
+    createObjectURL: createObjectURLMock,
+    revokeObjectURL: revokeObjectURLMock,
+  }));
 
   listProfilesMock.mockResolvedValue([]);
   listAssignmentsMock.mockResolvedValue([]);
@@ -719,6 +743,59 @@ describe('InfrastructureOperationsController token generation', () => {
       screen.getByText(/Pulse already prepared the first scoped install token for this handoff/i),
     ).toBeInTheDocument();
     expect(screen.getByText('Installation commands')).toBeInTheDocument();
+  });
+
+  it('downloads first-run credentials that describe the prepared install token handoff', async () => {
+    createTokenMock.mockResolvedValue({
+      token: 'handoff-install-token',
+      record: {
+        id: 'token-record-handoff',
+        name: 'Agent 2026-03-27 11-02',
+        prefix: 'agent',
+        suffix: '1234',
+        createdAt: new Date().toISOString(),
+      },
+    });
+
+    const anchorClickMock = vi.fn();
+    const createElementSpy = vi.spyOn(document, 'createElement').mockImplementation((tagName) => {
+      const element = document.createElementNS('http://www.w3.org/1999/xhtml', tagName);
+      if (tagName.toLowerCase() === 'a') {
+        Object.defineProperty(element, 'click', {
+          value: anchorClickMock,
+          configurable: true,
+        });
+      }
+      return element as HTMLElement;
+    });
+
+    sessionStorage.setItem(
+      STORAGE_KEYS.SETUP_HANDOFF,
+      JSON.stringify({
+        username: 'admin',
+        password: 'generated-password',
+        apiToken: 'admin-token',
+        createdAt: new Date().toISOString(),
+      }),
+    );
+
+    setupComponent();
+
+    await waitFor(() => expect(createTokenMock).toHaveBeenCalled(), { interval: 0 });
+    fireEvent.click(screen.getByRole('button', { name: 'Download credentials' }));
+
+    await waitFor(() => expect(createObjectURLMock).toHaveBeenCalled(), { interval: 0 });
+
+    const downloadedBlob = createObjectURLMock.mock.calls.at(-1)?.[0] as MockBlob | undefined;
+    expect(downloadedBlob).toBeDefined();
+    const content = await downloadedBlob!.text();
+    expect(content).toContain('Canonical install workspace:');
+    expect(content).toContain('/settings/infrastructure/install');
+    expect(content).toContain(
+      'Pulse prepares the first-host install token from setup so you can move straight to the generated Unified Agent install commands.',
+    );
+
+    createElementSpy.mockRestore();
   });
 
   it('generates a token and shows confirmation', async () => {

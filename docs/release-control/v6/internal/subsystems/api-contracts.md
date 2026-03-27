@@ -223,6 +223,10 @@ Own canonical runtime payload shapes between backend and frontend.
     token-creation contract must remain usable immediately from the install
     workspace so the first-host flow can auto-create the scoped install token
     without forcing the operator through a second manual token-generation step.
+    Any downloaded first-run handoff instructions emitted by that same shared
+    install-state surface must describe that prepared token path consistently
+    with the live runtime behavior rather than directing the operator to create
+    another install token manually.
 
 ## Current State
 

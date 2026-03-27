@@ -195,7 +195,7 @@ Canonical install workspace:
 ----------------------------
 ${baseUrl.replace(/\/$/, '')}/settings/infrastructure/install
 
-Generate a scoped install token below before copying Unified Agent install commands.
+Pulse prepares the first-host install token from setup so you can move straight to the generated Unified Agent install commands.
 `;
 
     const blob = new Blob([content], { type: 'text/plain' });
