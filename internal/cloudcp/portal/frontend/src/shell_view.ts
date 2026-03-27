@@ -77,6 +77,22 @@ function hasHostedAccounts(accounts: PortalAccountSummary[]): boolean {
   return accounts.length > 0;
 }
 
+function countWorkspacesByHealth(workspaces: PortalWorkspaceSummary[], status: string): number {
+  var count = 0;
+  for (var i = 0; i < workspaces.length; i += 1) {
+    if (String(workspaces[i].health_status || '') === status) count += 1;
+  }
+  return count;
+}
+
+function countWorkspacesByState(workspaces: PortalWorkspaceSummary[], state: string): number {
+  var count = 0;
+  for (var i = 0; i < workspaces.length; i += 1) {
+    if (String(workspaces[i].state || '') === state) count += 1;
+  }
+  return count;
+}
+
 function renderOverviewBand(context: ShellViewContext, accounts: PortalAccountSummary[]): string {
   var hosted = hasHostedAccounts(accounts);
   var workspaceTotal = countWorkspaces(accounts);
@@ -117,6 +133,11 @@ function renderWorkspaceCard(account: PortalAccountSummary, workspace: PortalWor
   var state = String(workspace.state || '');
   var safeState = escapeHTML(state);
   var createdLabel = formatWorkspaceDate(workspace.created_at);
+  var healthSummary = workspace.health_status === 'healthy'
+    ? 'Live updates and health checks are currently good.'
+    : workspace.health_status === 'unhealthy'
+      ? 'This workspace needs attention before it is trustworthy.'
+      : 'This workspace is still waiting on a completed health check.';
   var openAction = '';
   if (state === 'active') {
     openAction =
@@ -172,12 +193,15 @@ function renderWorkspaceCard(account: PortalAccountSummary, workspace: PortalWor
   return (
     '<div class="workspace-card">' +
       '<div class="ws-info">' +
-        '<span class="ws-name">' + escapeHTML(workspace.display_name) + '</span>' +
+        '<div class="ws-title-row">' +
+          '<span class="ws-name">' + escapeHTML(workspace.display_name) + '</span>' +
+        '</div>' +
         '<div class="ws-meta">' +
           healthBadgeHTML(workspace) +
           '<span class="badge badge-' + safeState + '">' + safeState + '</span>' +
           createdMeta +
         '</div>' +
+        '<div class="ws-summary">' + escapeHTML(healthSummary) + '</div>' +
       '</div>' +
       '<div class="ws-actions">' +
         openAction +
@@ -190,6 +214,13 @@ function renderWorkspaceCard(account: PortalAccountSummary, workspace: PortalWor
 function renderAccountSection(account: PortalAccountSummary, accountAPIBasePath: string): string {
   var workspaces = Array.isArray(account.workspaces) ? account.workspaces : [];
   var summaryText = accountKindLabel(account) + ' · ' + titleCase(account.role) + ' · ' + workspaceCountLabel(workspaces.length);
+  var healthyCount = countWorkspacesByHealth(workspaces, 'healthy');
+  var checkingCount = countWorkspacesByHealth(workspaces, 'checking');
+  var unhealthyCount = countWorkspacesByHealth(workspaces, 'unhealthy');
+  var activeCount = countWorkspacesByState(workspaces, 'active');
+  var operationsCopy = account.kind === 'msp'
+    ? 'Manage the client fleet from this account surface. Workspace creation, billing, and team actions belong here.'
+    : 'Use this account surface to open hosted workspaces, manage billing, and control access for this hosted account.';
   var workspaceHTML = '';
   if (workspaces.length === 0) {
     workspaceHTML = '<div class="empty-state"><p>No hosted workspaces yet. Create one to get started.</p></div>';
@@ -207,13 +238,18 @@ function renderAccountSection(account: PortalAccountSummary, accountAPIBasePath:
   var addWorkspaceForm = '';
   if (account.can_manage) {
     actions =
+      '<div class="account-operations-panel">' +
+      '<div class="account-operations-copy">' +
+      '<h3>Account operations</h3>' +
+      '<p>' + escapeHTML(operationsCopy) + '</p>' +
+      '</div>' +
       '<div class="account-actions">' +
       (account.kind === 'msp'
         ? '<button type="button" class="btn-secondary" id="add-ws-btn-' +
           escapeAttr(account.id) +
           '" data-action="toggle-add-workspace" data-account-id="' +
           escapeAttr(account.id) +
-          '">+ Add workspace</button>'
+          '">Add workspace</button>'
         : '') +
       (account.has_billing
         ? '<button type="button" class="btn-secondary" data-action="open-billing" data-account-id="' +
@@ -225,6 +261,7 @@ function renderAccountSection(account: PortalAccountSummary, accountAPIBasePath:
       '" data-action="toggle-team" data-account-id="' +
       escapeAttr(account.id) +
       '">Manage team</button>' +
+      '</div>' +
       '</div>';
 
     teamSection =
@@ -298,12 +335,30 @@ function renderAccountSection(account: PortalAccountSummary, accountAPIBasePath:
           roleBadgeHTML(account.role) +
         '</div>' +
       '</div>' +
+      '<div class="account-status-grid">' +
+        '<div class="account-stat-card">' +
+          '<span class="account-stat-label">Active workspaces</span>' +
+          '<span class="account-stat-value">' + String(activeCount) + '</span>' +
+        '</div>' +
+        '<div class="account-stat-card">' +
+          '<span class="account-stat-label">Healthy</span>' +
+          '<span class="account-stat-value account-stat-healthy">' + String(healthyCount) + '</span>' +
+        '</div>' +
+        '<div class="account-stat-card">' +
+          '<span class="account-stat-label">Checking</span>' +
+          '<span class="account-stat-value account-stat-checking">' + String(checkingCount) + '</span>' +
+        '</div>' +
+        '<div class="account-stat-card">' +
+          '<span class="account-stat-label">Needs attention</span>' +
+          '<span class="account-stat-value account-stat-unhealthy">' + String(unhealthyCount) + '</span>' +
+        '</div>' +
+      '</div>' +
+      actions +
       '<div class="account-subsection-header">' +
-        '<h3>Workspaces</h3>' +
-        '<p>Open hosted Pulse workspaces and manage lifecycle actions for this account.</p>' +
+        '<h3>Workspace fleet</h3>' +
+        '<p>Open hosted Pulse workspaces, review fleet health, and manage lifecycle actions for this account.</p>' +
       '</div>' +
       workspaceHTML +
-      actions +
       teamSection +
       addWorkspaceForm +
     '</section>'

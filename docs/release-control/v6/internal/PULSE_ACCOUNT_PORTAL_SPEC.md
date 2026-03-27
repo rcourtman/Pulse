@@ -1,6 +1,6 @@
 # Pulse Account Portal Spec
 
-Last updated: 2026-03-26
+Last updated: 2026-03-27
 Status: ACTIVE
 
 ## Purpose
@@ -135,6 +135,11 @@ Core rules:
 7. Self-hosted billing/license tools belong in the same account shell, but
    they must present as a secondary account-services area when hosted access
    is active.
+8. Hosted and MSP accounts must expose account-level operations separately from
+   individual workspace cards so operator actions are visible before a user
+   starts drilling into one workspace at a time.
+9. Workspace fleets must summarize health and attention state at the account
+   level, not force the user to scan badges one card at a time.
 
 ## Screen Model
 
@@ -158,9 +163,14 @@ The signed-in shell should be treated as four first-class states:
 Each signed-in state should render:
 
 1. a concise overview band that summarizes the account posture
-2. account cards with role, account kind, and workspace totals
-3. explicit action groups, not anonymous menu affordances
-4. a clearly separated `Self-hosted licenses and billing` section when those
+2. account cards with role, account kind, workspace totals, and account-level
+   fleet status
+3. an explicit `Account operations` area for billing, team, and workspace
+   management entry points
+4. a `Workspace fleet` area that makes health and lifecycle state legible
+   before the user opens a workspace
+5. explicit action groups, not anonymous menu affordances
+6. a clearly separated `Self-hosted licenses and billing` section when those
    tools are present below hosted content
 
 ## Product-Specific Boundaries

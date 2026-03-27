@@ -17,6 +17,13 @@
     .account-subsection-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin: 0 0 14px; }
     .account-subsection-header h3 { margin: 0; font-size: 15px; font-weight: 700; }
     .account-subsection-header p { margin: 0; font-size: 13px; color: #64748b; max-width: 520px; }
+    .account-status-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 0 0 16px; }
+    .account-stat-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; box-shadow: 0 1px 3px rgba(15,23,42,.04); }
+    .account-stat-label { font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: #64748b; }
+    .account-stat-value { font-size: 24px; font-weight: 700; color: #0f172a; }
+    .account-stat-healthy { color: #166534; }
+    .account-stat-checking { color: #1d4ed8; }
+    .account-stat-unhealthy { color: #b91c1c; }
     .badge { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; text-transform: uppercase; letter-spacing: 0.5px; }
     .badge-msp { background: #dbeafe; color: #1e40af; }
     .badge-cloud { background: #dcfce7; color: #166534; }
@@ -33,9 +40,11 @@
     .workspace-list { display: flex; flex-direction: column; gap: 10px; }
     .workspace-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px 18px; display: flex; align-items: center; justify-content: space-between; gap: 12px; box-shadow: 0 1px 3px rgba(15,23,42,.04); }
     .workspace-card:hover { border-color: #cbd5e1; }
-    .ws-info { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .ws-info { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+    .ws-title-row { display: flex; align-items: center; gap: 10px; width: 100%; }
     .ws-name { font-weight: 600; font-size: 15px; }
     .ws-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .ws-summary { font-size: 13px; color: #475569; line-height: 1.45; }
     .ws-created { font-size: 11px; color: #94a3b8; }
     .ws-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
     .workspace-menu-wrap { position: relative; }
@@ -53,7 +62,11 @@
     .btn-danger:hover { background: #fef2f2; }
     .btn-compact { padding: 8px 14px; font-size: 13px; }
     .link-button { text-decoration: none; }
-    .account-actions { margin-top: 14px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .account-operations-panel { margin: 0 0 18px; display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 16px 18px; background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 3px rgba(15,23,42,.04); }
+    .account-operations-copy { display: flex; flex-direction: column; gap: 4px; max-width: 540px; }
+    .account-operations-copy h3 { margin: 0; font-size: 15px; font-weight: 700; }
+    .account-operations-copy p { margin: 0; font-size: 13px; color: #64748b; line-height: 1.5; }
+    .account-actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; flex-wrap: wrap; }
     .add-workspace-form { margin-top: 12px; display: none; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px; }
     .add-workspace-form.visible { display: block; }
     .add-workspace-form label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
@@ -141,10 +154,14 @@
     @media (max-width: 720px) {
       .account-header { flex-direction: column; }
       .account-badges { justify-content: flex-start; }
+      .account-status-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .account-operations-panel { flex-direction: column; }
+      .account-actions { justify-content: flex-start; }
       .account-subsection-header { flex-direction: column; align-items: flex-start; }
       .overview-stats { grid-template-columns: 1fr; }
     }
     @media (max-width: 560px) {
+      .account-status-grid { grid-template-columns: 1fr; }
       .workspace-card { flex-direction: column; align-items: flex-start; }
       .ws-actions { align-self: stretch; }
       .ws-actions form, .ws-actions .btn-primary { width: 100%; text-align: center; }

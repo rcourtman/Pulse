@@ -1464,6 +1464,20 @@
   function hasHostedAccounts(accounts) {
     return accounts.length > 0;
   }
+  function countWorkspacesByHealth(workspaces, status) {
+    var count = 0;
+    for (var i = 0; i < workspaces.length; i += 1) {
+      if (String(workspaces[i].health_status || "") === status) count += 1;
+    }
+    return count;
+  }
+  function countWorkspacesByState(workspaces, state) {
+    var count = 0;
+    for (var i = 0; i < workspaces.length; i += 1) {
+      if (String(workspaces[i].state || "") === state) count += 1;
+    }
+    return count;
+  }
   function renderOverviewBand(context, accounts) {
     var hosted = hasHostedAccounts(accounts);
     var workspaceTotal = countWorkspaces(accounts);
@@ -1478,6 +1492,7 @@
     var state = String(workspace.state || "");
     var safeState = escapeHTML(state);
     var createdLabel = formatWorkspaceDate(workspace.created_at);
+    var healthSummary = workspace.health_status === "healthy" ? "Live updates and health checks are currently good." : workspace.health_status === "unhealthy" ? "This workspace needs attention before it is trustworthy." : "This workspace is still waiting on a completed health check.";
     var openAction = "";
     if (state === "active") {
       openAction = '<form method="POST" action="' + escapeAttr(accountAPIBasePath + "/" + account.id + "/tenants/" + workspace.id + "/handoff") + '"><button type="submit" class="btn-primary">Open workspace</button></form>';
@@ -1491,11 +1506,16 @@
       manageAction = '<div class="workspace-menu-wrap"><button type="button" class="btn-secondary btn-workspace-menu" id="workspace-menu-button-' + escapeAttr(account.id) + "-" + escapeAttr(workspace.id) + '" data-action="toggle-workspace-menu" data-account-id="' + escapeAttr(account.id) + '" data-workspace-id="' + escapeAttr(workspace.id) + '" aria-haspopup="menu" aria-expanded="false">Manage</button><div class="workspace-menu" id="workspace-menu-' + escapeAttr(account.id) + "-" + escapeAttr(workspace.id) + '" data-workspace-menu-account-id="' + escapeAttr(account.id) + '" data-workspace-id="' + escapeAttr(workspace.id) + '" role="menu" hidden><button type="button" class="workspace-menu-item workspace-menu-item-danger" data-action="workspace-action" data-account-id="' + escapeAttr(account.id) + '" data-workspace-id="' + escapeAttr(workspace.id) + '" data-workspace-action="' + escapeAttr(menuAction) + '" data-workspace-name="' + escapeAttr(workspace.display_name) + '">' + escapeHTML(menuLabel) + "</button></div></div>";
     }
     var createdMeta = createdLabel ? '<span class="ws-created">Created ' + escapeHTML(createdLabel) + "</span>" : "";
-    return '<div class="workspace-card"><div class="ws-info"><span class="ws-name">' + escapeHTML(workspace.display_name) + '</span><div class="ws-meta">' + healthBadgeHTML(workspace) + '<span class="badge badge-' + safeState + '">' + safeState + "</span>" + createdMeta + '</div></div><div class="ws-actions">' + openAction + manageAction + "</div></div>";
+    return '<div class="workspace-card"><div class="ws-info"><div class="ws-title-row"><span class="ws-name">' + escapeHTML(workspace.display_name) + '</span></div><div class="ws-meta">' + healthBadgeHTML(workspace) + '<span class="badge badge-' + safeState + '">' + safeState + "</span>" + createdMeta + '</div><div class="ws-summary">' + escapeHTML(healthSummary) + '</div></div><div class="ws-actions">' + openAction + manageAction + "</div></div>";
   }
   function renderAccountSection(account, accountAPIBasePath) {
     var workspaces = Array.isArray(account.workspaces) ? account.workspaces : [];
     var summaryText = accountKindLabel(account) + " \xB7 " + titleCase(account.role) + " \xB7 " + workspaceCountLabel(workspaces.length);
+    var healthyCount = countWorkspacesByHealth(workspaces, "healthy");
+    var checkingCount = countWorkspacesByHealth(workspaces, "checking");
+    var unhealthyCount = countWorkspacesByHealth(workspaces, "unhealthy");
+    var activeCount = countWorkspacesByState(workspaces, "active");
+    var operationsCopy = account.kind === "msp" ? "Manage the client fleet from this account surface. Workspace creation, billing, and team actions belong here." : "Use this account surface to open hosted workspaces, manage billing, and control access for this hosted account.";
     var workspaceHTML = "";
     if (workspaces.length === 0) {
       workspaceHTML = '<div class="empty-state"><p>No hosted workspaces yet. Create one to get started.</p></div>';
@@ -1508,13 +1528,13 @@
     var teamSection = "";
     var addWorkspaceForm = "";
     if (account.can_manage) {
-      actions = '<div class="account-actions">' + (account.kind === "msp" ? '<button type="button" class="btn-secondary" id="add-ws-btn-' + escapeAttr(account.id) + '" data-action="toggle-add-workspace" data-account-id="' + escapeAttr(account.id) + '">+ Add workspace</button>' : "") + (account.has_billing ? '<button type="button" class="btn-secondary" data-action="open-billing" data-account-id="' + escapeAttr(account.id) + '">Manage billing</button>' : "") + '<button type="button" class="btn-secondary" id="team-btn-' + escapeAttr(account.id) + '" data-action="toggle-team" data-account-id="' + escapeAttr(account.id) + '">Manage team</button></div>';
+      actions = '<div class="account-operations-panel"><div class="account-operations-copy"><h3>Account operations</h3><p>' + escapeHTML(operationsCopy) + '</p></div><div class="account-actions">' + (account.kind === "msp" ? '<button type="button" class="btn-secondary" id="add-ws-btn-' + escapeAttr(account.id) + '" data-action="toggle-add-workspace" data-account-id="' + escapeAttr(account.id) + '">Add workspace</button>' : "") + (account.has_billing ? '<button type="button" class="btn-secondary" data-action="open-billing" data-account-id="' + escapeAttr(account.id) + '">Manage billing</button>' : "") + '<button type="button" class="btn-secondary" id="team-btn-' + escapeAttr(account.id) + '" data-action="toggle-team" data-account-id="' + escapeAttr(account.id) + '">Manage team</button></div></div>';
       teamSection = '<div class="team-section" id="team-section-' + escapeAttr(account.id) + '" data-actor-role="' + escapeAttr(account.role) + '"><h3>Team members</h3><table class="team-table"><thead><tr><th>Email</th><th>Role</th><th></th></tr></thead><tbody id="team-list-' + escapeAttr(account.id) + '"><tr><td colspan="3" class="team-message-cell">Loading\u2026</td></tr></tbody></table><div class="team-invite"><div><label for="invite-email-' + escapeAttr(account.id) + '">Email</label><input type="email" id="invite-email-' + escapeAttr(account.id) + '" placeholder="user@example.com" autocomplete="off"></div><div><label for="invite-role-' + escapeAttr(account.id) + '">Role</label><select id="invite-role-' + escapeAttr(account.id) + '"><option value="admin">Admin</option><option value="tech">Tech</option><option value="read_only">Read-only</option></select></div><button type="button" class="btn-primary btn-compact" data-action="invite-member" data-account-id="' + escapeAttr(account.id) + '">Invite</button></div></div>';
       if (account.kind === "msp") {
         addWorkspaceForm = '<div class="add-workspace-form" id="add-ws-form-' + escapeAttr(account.id) + '"><label for="ws-name-' + escapeAttr(account.id) + '">Workspace name (e.g. client name)</label><input type="text" id="ws-name-' + escapeAttr(account.id) + '" placeholder="Acme Corp" maxlength="80" autocomplete="off"><div class="form-actions"><button type="button" class="btn-primary" data-action="create-workspace" data-account-id="' + escapeAttr(account.id) + '">Create workspace</button><button type="button" class="btn-secondary" data-action="toggle-add-workspace" data-account-id="' + escapeAttr(account.id) + '">Cancel</button><div class="spinner" id="ws-spinner-' + escapeAttr(account.id) + '" hidden></div></div></div>';
       }
     }
-    return '<section class="account-section"><div class="account-header"><div class="account-heading"><div class="account-eyebrow">' + escapeHTML(accountKindLabel(account)) + "</div><h2>" + escapeHTML(account.name) + '</h2><div class="account-summary">' + escapeHTML(summaryText) + '</div></div><div class="account-badges"><span class="badge badge-' + escapeHTML(account.kind) + '">' + escapeHTML(account.kind_label) + "</span>" + roleBadgeHTML(account.role) + '</div></div><div class="account-subsection-header"><h3>Workspaces</h3><p>Open hosted Pulse workspaces and manage lifecycle actions for this account.</p></div>' + workspaceHTML + actions + teamSection + addWorkspaceForm + "</section>";
+    return '<section class="account-section"><div class="account-header"><div class="account-heading"><div class="account-eyebrow">' + escapeHTML(accountKindLabel(account)) + "</div><h2>" + escapeHTML(account.name) + '</h2><div class="account-summary">' + escapeHTML(summaryText) + '</div></div><div class="account-badges"><span class="badge badge-' + escapeHTML(account.kind) + '">' + escapeHTML(account.kind_label) + "</span>" + roleBadgeHTML(account.role) + '</div></div><div class="account-status-grid"><div class="account-stat-card"><span class="account-stat-label">Active workspaces</span><span class="account-stat-value">' + String(activeCount) + '</span></div><div class="account-stat-card"><span class="account-stat-label">Healthy</span><span class="account-stat-value account-stat-healthy">' + String(healthyCount) + '</span></div><div class="account-stat-card"><span class="account-stat-label">Checking</span><span class="account-stat-value account-stat-checking">' + String(checkingCount) + '</span></div><div class="account-stat-card"><span class="account-stat-label">Needs attention</span><span class="account-stat-value account-stat-unhealthy">' + String(unhealthyCount) + "</span></div></div>" + actions + '<div class="account-subsection-header"><h3>Workspace fleet</h3><p>Open hosted Pulse workspaces, review fleet health, and manage lifecycle actions for this account.</p></div>' + workspaceHTML + teamSection + addWorkspaceForm + "</section>";
   }
   function renderHeaderHTML(context) {
     if (context.bootstrap.authenticated) {
