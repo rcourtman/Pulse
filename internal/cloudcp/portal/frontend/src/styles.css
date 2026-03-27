@@ -430,6 +430,52 @@ header .logout-btn:hover,
   display: none !important;
 }
 
+.portal-account-bar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px;
+  align-items: end;
+  padding: 16px 22px 18px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(244, 247, 250, 0.92);
+}
+
+.portal-account-bar-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.portal-account-bar-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.portal-account-bar-row h2 {
+  margin: 0;
+  font-size: 28px;
+  line-height: 0.98;
+  letter-spacing: -0.05em;
+}
+
+.portal-account-bar-copy p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+
+.portal-account-bar-chips,
+.portal-account-bar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 .portal-shell[data-shell-section="overview"] .portal-content-panel-overview,
 .portal-shell[data-shell-section="services"] .portal-content-panel-services,
 .portal-shell[data-shell-section="support"] .portal-content-panel-support,
@@ -513,32 +559,6 @@ header .logout-btn:hover,
   margin-top: 22px;
 }
 
-.account-surface-header {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: end;
-  gap: 16px;
-  padding: 0 4px 12px;
-  border: none;
-  border-bottom: 1px solid var(--line);
-  border-radius: var(--radius-md);
-  background: transparent;
-  box-shadow: none;
-}
-
-.account-heading h2 {
-  margin: 2px 0 0;
-  font-size: 24px;
-  line-height: 1.02;
-  letter-spacing: -0.05em;
-}
-
-.account-summary {
-  margin-top: 5px;
-  font-size: 12px;
-  color: var(--ink-soft);
-}
-
 .account-badges,
 .account-context-strip,
 .workspace-badges,
@@ -588,7 +608,6 @@ header .logout-btn:hover,
   display: grid;
   grid-template-columns: 1fr;
   gap: 14px;
-  margin-top: 10px;
 }
 
 .account-content-panel {
@@ -773,40 +792,11 @@ header .logout-btn:hover,
   background: var(--panel-strong);
 }
 
-.overview-quick-actions {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-  margin-top: 16px;
-}
-
-.overview-quick-action {
+.overview-next-actions {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 14px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: #fff;
-  text-align: left;
-  cursor: pointer;
-}
-
-.overview-quick-action:hover {
-  border-color: var(--accent);
-  box-shadow: var(--shadow-sm);
-}
-
-.overview-quick-action-title {
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--ink);
-}
-
-.overview-quick-action-copy {
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--ink-soft);
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 16px;
 }
 
 .overview-alert-list {
@@ -1233,18 +1223,24 @@ header .logout-btn:hover,
   display: grid;
   grid-template-columns: minmax(0, 1.65fr) minmax(320px, 0.92fr);
   gap: 14px;
+  align-items: start;
 }
 
 .team-side-column {
   display: flex;
   flex-direction: column;
   gap: 14px;
+  align-self: start;
 }
 
 .team-roster,
 .team-invite-panel {
   background: #fff;
   border-color: var(--line);
+}
+
+.team-roster {
+  align-self: start;
 }
 
 .team-policy-panel {
@@ -1917,10 +1913,6 @@ header .logout-btn:hover,
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .overview-quick-actions {
-    grid-template-columns: 1fr;
-  }
-
   .portal-shell-nav {
     position: static;
   }
@@ -1937,6 +1929,15 @@ header .logout-btn:hover,
 @media (max-width: 920px) {
   .portal-shell-head-row {
     grid-template-columns: 1fr;
+  }
+
+  .portal-account-bar {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+
+  .portal-account-bar-row {
+    align-items: start;
   }
 
   .portal-shell-head-stats {
@@ -1976,12 +1977,13 @@ header .logout-btn:hover,
   }
 
   .portal-shell-head,
+  .portal-account-bar,
   .portal-content-panel {
     padding-left: 16px;
     padding-right: 16px;
   }
 
-  .account-surface-header,
+  .portal-account-bar-row,
   .workspace-management-header,
   .team-management-header,
   .service-header,

@@ -134,15 +134,6 @@ function renderServiceActionRow(
   );
 }
 
-function renderOverviewQuickAction(section: PortalShellSection, title: string, copy: string): string {
-  return (
-    '<button class="overview-quick-action" type="button" data-shell-action="activate-section" data-shell-section="' + section + '">' +
-      '<span class="overview-quick-action-title">' + title + '</span>' +
-      '<span class="overview-quick-action-copy">' + copy + '</span>' +
-    '</button>'
-  );
-}
-
 function workspaceStatusCopy(workspace: PortalWorkspaceSummary): string {
   var status = workspaceHealthState(workspace);
   if (status === 'healthy') return 'Live updates and health checks are currently good.';
@@ -238,6 +229,48 @@ function renderOverviewBand(accounts: PortalAccountSummary[]): string {
           '</div>' +
         '</div>' +
       '</div>' +
+    '</section>'
+  );
+}
+
+function renderPrimaryAccountBar(account: PortalAccountSummary): string {
+  var workspaceLabel = workspaceCountLabel((account.workspaces || []).length);
+  var actionHTML = '';
+
+  if (account.kind === 'msp' && account.can_manage) {
+    actionHTML +=
+      '<button type="button" class="btn-secondary btn-compact" data-action="toggle-add-workspace" data-account-id="' +
+      escapeAttr(account.id) +
+      '" data-shell-target="workspaces">Add workspace</button>';
+  }
+  if (account.has_billing && account.can_manage) {
+    actionHTML +=
+      '<button type="button" class="btn-secondary btn-compact" data-action="open-billing" data-account-id="' +
+      escapeAttr(account.id) +
+      '">Manage billing</button>';
+  }
+  if (account.can_manage) {
+    actionHTML +=
+      '<button type="button" class="btn-secondary btn-compact" data-action="toggle-team" data-account-id="' +
+      escapeAttr(account.id) +
+      '" data-shell-target="team">Manage team</button>';
+  }
+
+  return (
+    '<section class="portal-account-bar">' +
+      '<div class="portal-account-bar-copy">' +
+        '<div class="account-eyebrow">' + escapeHTML(accountKindLabel(account)) + '</div>' +
+        '<div class="portal-account-bar-row">' +
+          '<h2>' + escapeHTML(account.name) + '</h2>' +
+          '<div class="portal-account-bar-chips">' +
+            '<span class="account-context-chip">' + escapeHTML(account.kind_label) + '</span>' +
+            '<span class="account-context-chip">' + escapeHTML(titleCase(account.role)) + '</span>' +
+            '<span class="account-context-chip">' + escapeHTML(workspaceLabel) + '</span>' +
+          '</div>' +
+        '</div>' +
+        '<p>' + escapeHTML(account.kind === 'msp' ? 'Operator workspace account' : 'Hosted account operations') + '</p>' +
+      '</div>' +
+      '<div class="portal-account-bar-actions">' + actionHTML + '</div>' +
     '</section>'
   );
 }
@@ -350,40 +383,24 @@ function renderAccountOverviewSection(account: PortalAccountSummary): string {
     : checkingCount > 0
       ? 'The hosted fleet is mostly healthy, but some workspaces are still waiting on a completed health check.'
       : 'The hosted fleet is healthy and ready for routine operator work.';
-  var operationsCopy = account.kind === 'msp'
-    ? 'Manage the client fleet from this account surface. Workspace creation, billing, and team actions belong here.'
-    : 'Use this account surface to open hosted workspaces, manage billing, and control access for this hosted account.';
-
-  var actions = '';
   var addWorkspaceForm = '';
-  if (account.can_manage) {
-    actions =
-      '<div class="account-action-strip">' +
-        '<div class="account-action-copy">' +
-          '<div class="account-panel-kicker">Account operations</div>' +
-          '<p>' + escapeHTML(operationsCopy) + '</p>' +
-        '</div>' +
-        '<div class="account-actions">' +
-          (account.kind === 'msp'
-            ? '<button type="button" class="btn-secondary" id="add-ws-btn-' +
-              escapeAttr(account.id) +
-              '" data-action="toggle-add-workspace" data-account-id="' +
-              escapeAttr(account.id) +
-              '" data-shell-target="workspaces">Add workspace</button>'
-            : '') +
-          (account.has_billing
-            ? '<button type="button" class="btn-secondary" data-action="open-billing" data-account-id="' +
-              escapeAttr(account.id) +
-              '">Manage billing</button>'
-            : '') +
-          '<button type="button" class="btn-secondary" id="team-btn-' +
-          escapeAttr(account.id) +
-          '" data-action="toggle-team" data-account-id="' +
-          escapeAttr(account.id) +
-          '" data-shell-target="team">Manage team</button>' +
-        '</div>' +
-      '</div>';
+  var nextStepTitle = unhealthyCount > 0
+    ? 'Start in Workspaces'
+    : checkingCount > 0
+      ? 'Review pending checks'
+      : 'Fleet is clear';
+  var nextStepCopy = unhealthyCount > 0
+    ? 'One or more workspaces need review before you treat the hosted fleet as trustworthy.'
+    : checkingCount > 0
+      ? 'The fleet is mostly healthy, but there are still workspaces waiting on a completed health check.'
+      : 'Hosted posture looks stable. Move into team or account services only if you need to change access or billing.';
+  var nextStepActions =
+    '<div class="overview-next-actions">' +
+      '<button class="btn-primary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="workspaces">Open workspaces</button>' +
+      '<button class="btn-secondary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="' + (account.can_manage ? 'team' : 'services') + '">' + (account.can_manage ? 'Review team access' : 'Open account services') + '</button>' +
+    '</div>';
 
+  if (account.can_manage) {
     if (account.kind === 'msp') {
       addWorkspaceForm =
         '<div class="add-workspace-form" id="add-ws-form-' +
@@ -442,18 +459,13 @@ function renderAccountOverviewSection(account: PortalAccountSummary): string {
             '</div>' +
           '</div>' +
         '</div>' +
-        actions +
         addWorkspaceForm +
         '<div class="account-overview-secondary">' +
           '<div class="overview-side-card overview-side-card-primary">' +
-            '<div class="account-panel-kicker">Operator overview</div>' +
-            '<h4>Start from the next action, not the whole account</h4>' +
-            '<p>Use the overview for posture, then move into workspaces, team, or account services depending on what needs attention.</p>' +
-            '<div class="overview-quick-actions">' +
-              renderOverviewQuickAction('workspaces', 'Open workspaces', 'Review the hosted fleet and move into a workspace') +
-              renderOverviewQuickAction('team', 'Review team access', 'Check who can operate billing and hosted workspaces') +
-              renderOverviewQuickAction('services', 'Open account services', 'Handle billing, licenses, refunds, and privacy actions') +
-            '</div>' +
+            '<div class="account-panel-kicker">Next move</div>' +
+            '<h4>' + escapeHTML(nextStepTitle) + '</h4>' +
+            '<p>' + escapeHTML(nextStepCopy) + '</p>' +
+            nextStepActions +
           '</div>' +
           renderAttentionPanel(workspaces) +
         '</div>' +
@@ -716,21 +728,8 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
     ? 'Hosted operations live above. Use these commercial tools for self-hosted licenses, billing, refunds, and privacy actions.'
     : 'Use these account tools for self-hosted licenses, billing, refunds, and privacy actions.';
   var hostedContent = accounts.map(function(account) {
-    var workspaceLabel = workspaceCountLabel((account.workspaces || []).length);
     return (
       '<section class="account-surface">' +
-        '<div class="account-surface-header">' +
-          '<div class="account-heading">' +
-            '<div class="account-eyebrow">' + escapeHTML(accountKindLabel(account)) + '</div>' +
-            '<h2>' + escapeHTML(account.name) + '</h2>' +
-            '<div class="account-summary">' + escapeHTML(account.kind === 'msp' ? 'Operator workspace account' : 'Hosted account operations') + '</div>' +
-          '</div>' +
-          '<div class="account-context-strip">' +
-            '<span class="account-context-chip">' + escapeHTML(account.kind_label) + '</span>' +
-            '<span class="account-context-chip">' + escapeHTML(titleCase(account.role)) + '</span>' +
-            '<span class="account-context-chip">' + escapeHTML(workspaceLabel) + '</span>' +
-          '</div>' +
-        '</div>' +
         '<div class="account-surface-body">' +
           renderAccountOverviewSection(account) +
           renderAccountWorkspaceSection(account, context.accountAPIBasePath) +
@@ -746,6 +745,7 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
         renderShellNavigation(accounts, context.bootstrap.support_email || '', activeSection) +
         '<div class="portal-shell-main">' +
           renderOverviewBand(accounts) +
+          (accounts.length === 1 ? renderPrimaryAccountBar(accounts[0]) : '') +
           '<section class="portal-content-panel portal-content-panel-overview">' +
             '<div id="accounts-root">' + hostedContent + '</div>' +
           '</section>' +
