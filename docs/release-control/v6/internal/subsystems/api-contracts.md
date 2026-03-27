@@ -202,6 +202,13 @@ Own canonical runtime payload shapes between backend and frontend.
 15. Keep recovery payload platform vocabulary canonical across that same `/api/recovery/*` surface: point payloads must expose `platform`, rollup payloads must expose `platforms`, and any compatibility `provider` / `providers` aliases must remain secondary fallback fields rather than replacing the shared response model
 16. Keep recovery linked-resource vocabulary canonical across that same `/api/recovery/*` surface: points and rollups must expose `itemResourceId` as the canonical linked-resource field, accepted legacy `subjectResourceId` aliases must remain compatibility-only input or secondary payload fields, and the shared proof surface must pin that normalization in the same slice as any handler change
 17. Keep recovery external item-reference vocabulary canonical across that same `/api/recovery/*` surface: point and rollup payloads must expose `itemRef` as the canonical external item-reference field, accepted legacy `subjectRef` aliases must remain compatibility-only secondary payload fields, and the shared proof surface must pin that normalization in the same slice as any handler change
+18. Keep first-host lookup completion explicit on the shared install-state API
+    boundary: when
+    `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx`
+    receives a successful connected-agent lookup result, the canonical install
+    flow must expose direct navigation into `/dashboard` and
+    `/settings/infrastructure/operations` rather than leaving the operator on a
+    transport-only status readout.
 
 ## Current State
 

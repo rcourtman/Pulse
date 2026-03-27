@@ -513,11 +513,33 @@ export const InfrastructureInstallerSection: Component = () => {
                   const agent = () => result().agent!;
                   const lookupStatusPresentation = () =>
                     getUnifiedAgentLookupStatusPresentation(agent().connected);
+                  const isConnected = () => agent().connected;
 
                   return (
-                    <div class="space-y-1 rounded-md border border-blue-200 bg-surface px-3 py-2 text-xs text-blue-900 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-100">
-                      <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                        <div class="text-sm font-semibold">{agent().displayName || agent().hostname}</div>
+                    <div
+                      class={`space-y-3 rounded-md border px-3 py-3 text-xs ${
+                        isConnected()
+                          ? 'border-emerald-200 bg-emerald-50 text-emerald-950 dark:border-emerald-700 dark:bg-emerald-900 dark:text-emerald-50'
+                          : 'border-blue-200 bg-surface text-blue-900 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-100'
+                      }`}
+                    >
+                      <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                        <div class="space-y-1">
+                          <div class="text-sm font-semibold">
+                            {isConnected() ? 'First host connected' : agent().displayName || agent().hostname}
+                          </div>
+                          <p
+                            class={`text-xs ${
+                              isConnected()
+                                ? 'text-emerald-800 dark:text-emerald-200'
+                                : 'text-blue-800 dark:text-blue-200'
+                            }`}
+                          >
+                            {isConnected()
+                              ? `${agent().displayName || agent().hostname} is reporting live telemetry to Pulse. Open the dashboard to verify your first overview, or continue in Reporting & control to inspect this host and add more infrastructure.`
+                              : `${agent().displayName || agent().hostname} has been found, but Pulse is not receiving a live check-in yet. Keep the installer running on that machine and check again.`}
+                          </p>
+                        </div>
                         <div class="flex items-center gap-2">
                           <span
                             class={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${lookupStatusPresentation().badgeClass}`}
@@ -529,13 +551,39 @@ export const InfrastructureInstallerSection: Component = () => {
                           </span>
                         </div>
                       </div>
-                      <div>
-                        Last seen {formatRelativeTime(agent().lastSeen)} (
-                        {formatAbsoluteTime(agent().lastSeen)})
+                      <div class="space-y-1">
+                        <div>
+                          Last seen {formatRelativeTime(agent().lastSeen)} (
+                          {formatAbsoluteTime(agent().lastSeen)})
+                        </div>
+                        <Show when={agent().agentVersion}>
+                          <div
+                            class={`text-xs ${
+                              isConnected()
+                                ? 'text-emerald-800 dark:text-emerald-200'
+                                : 'text-blue-700 dark:text-blue-200'
+                            }`}
+                          >
+                            Agent version {agent().agentVersion}
+                          </div>
+                        </Show>
                       </div>
-                      <Show when={agent().agentVersion}>
-                        <div class="text-xs text-blue-700 dark:text-blue-200">
-                          Agent version {agent().agentVersion}
+                      <Show when={isConnected()}>
+                        <div class="flex flex-col gap-2 sm:flex-row">
+                          <button
+                            type="button"
+                            onClick={state.openDashboard}
+                            class="inline-flex items-center justify-center rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-700"
+                          >
+                            Open dashboard
+                          </button>
+                          <button
+                            type="button"
+                            onClick={state.openInfrastructureInventory}
+                            class="inline-flex items-center justify-center rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-900 transition-colors hover:bg-emerald-100 dark:border-emerald-700 dark:bg-emerald-950 dark:text-emerald-100 dark:hover:bg-emerald-800"
+                          >
+                            Open reporting &amp; control
+                          </button>
                         </div>
                       </Show>
                     </div>

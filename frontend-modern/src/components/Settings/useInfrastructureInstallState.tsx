@@ -16,6 +16,7 @@ import { copyToClipboard } from '@/utils/clipboard';
 import { getPulseBaseUrl } from '@/utils/url';
 import { logger } from '@/utils/logger';
 import { STORAGE_KEYS } from '@/utils/localStorage';
+import { buildInfrastructureWorkspacePath } from './infrastructureWorkspaceModel';
 import {
   buildUnixAgentInstallCommand,
   buildWindowsAgentInstallCommand,
@@ -330,6 +331,14 @@ Generate a scoped install token below before copying Unified Agent install comma
     navigate('/settings/infrastructure/proxmox');
   };
 
+  const openDashboard = () => {
+    navigate('/dashboard');
+  };
+
+  const openInfrastructureInventory = () => {
+    navigate(buildInfrastructureWorkspacePath('inventory'));
+  };
+
   const isEmbedded = () => options.embedded ?? false;
 
   return {
@@ -361,7 +370,9 @@ Generate a scoped install token below before copying Unified Agent install comma
     lookupLoading,
     lookupResult,
     lookupValue,
+    openDashboard,
     openDirectProxmoxSetup,
+    openInfrastructureInventory,
     requiresToken,
     selectedAgentUrl,
     setCustomAgentUrl,

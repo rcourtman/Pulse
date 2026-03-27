@@ -25,6 +25,18 @@ import type {
   State,
 } from '@/types/api';
 
+const { navigateMock } = vi.hoisted(() => ({
+  navigateMock: vi.fn(),
+}));
+
+vi.mock('@solidjs/router', async () => {
+  const actual = await vi.importActual<typeof import('@solidjs/router')>('@solidjs/router');
+  return {
+    ...actual,
+    useNavigate: () => navigateMock,
+  };
+});
+
 let mockWsStore: {
   state: Pick<State, 'connectedInfrastructure'>;
   connected: () => boolean;
@@ -561,6 +573,7 @@ const getConnectionUrlInput = (): HTMLInputElement => {
 
 beforeEach(() => {
   securityStatusResponse = { requiresAuth: true, apiTokenConfigured: false };
+  navigateMock.mockReset();
   lookupMock.mockReset();
   createTokenMock.mockReset();
   deleteAgentMock.mockReset();
@@ -698,6 +711,18 @@ describe('InfrastructureOperationsController agent lookup', () => {
 
     await waitFor(() => expect(lookupMock).toHaveBeenCalled(), { interval: 0 });
     await waitFor(() => expect(screen.getByText('Connected')).toBeInTheDocument(), { interval: 0 });
+    expect(screen.getByText('First host connected')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Host One is reporting live telemetry to Pulse. Open the dashboard to verify your first overview, or continue in Reporting & control to inspect this host and add more infrastructure.',
+      ),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open dashboard' }));
+    expect(navigateMock).toHaveBeenCalledWith('/dashboard');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open reporting & control' }));
+    expect(navigateMock).toHaveBeenCalledWith('/settings/infrastructure/operations');
   });
 
   it('shows error message when agent is not found', async () => {

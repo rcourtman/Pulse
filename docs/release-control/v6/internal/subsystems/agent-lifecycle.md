@@ -153,6 +153,13 @@ management, and fleet control surfaces.
    must default to the install workspace, and the workspace shell must make
    the first-host sequence explicit before operators drift into reporting and
    control surfaces.
+8. Keep post-install lifecycle completion explicit inside
+   `frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx`
+   and `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx`.
+   When the first host reports successfully, the install workflow must treat
+   that as a completion handoff with direct navigation into `/dashboard` and
+   `/settings/infrastructure/operations` instead of leaving operators on a
+   generic lookup result.
 
 ## Current State
 
