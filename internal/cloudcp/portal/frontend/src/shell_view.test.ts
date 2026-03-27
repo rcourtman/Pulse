@@ -125,7 +125,8 @@ describe('shell view', function() {
       })
     );
 
-    expect(html).toContain('portal-hero-brand">Pulse Account</div>');
+    expect(html).toContain('portal-shell-head-kicker">Pulse Account</div>');
+    expect(html).toContain('portal-shell-head-title">Operator console</h1>');
     expect(html).toContain('Hosted access is active on this account.');
     expect(html).toContain('portal-shell-nav');
     expect(html).toContain('Overview');
@@ -189,6 +190,7 @@ describe('shell view', function() {
 
     expect(html).toContain('Pulse Account');
     expect(html).toContain('Self-hosted only');
+    expect(html).toContain('portal-shell-head-title">Account console</h1>');
     expect(html).toContain('No hosted workspace access is attached to this account yet.');
     expect(html).toContain('Use these tools for self-hosted billing, license recovery, refunds, and privacy.');
     expect(html).toContain('Account services');

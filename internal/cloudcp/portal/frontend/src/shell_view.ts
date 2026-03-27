@@ -211,26 +211,31 @@ function renderOverviewBand(accounts: PortalAccountSummary[]): string {
     : 'Billing, license recovery, refunds, and privacy actions until hosted access is attached.';
 
   return (
-    '<section class="portal-hero portal-hero-compact">' +
-      '<div class="portal-hero-copy">' +
-        '<div class="portal-hero-heading-row">' +
-          '<div class="portal-hero-brand">Pulse Account</div>' +
-          '<span class="portal-hero-chip">' + (hosted ? 'Operator ready' : 'Self-hosted only') + '</span>' +
-        '</div>' +
-        '<p><strong>' + statusText + '</strong> ' + summary + '</p>' +
-      '</div>' +
-      '<div class="portal-hero-stats">' +
-        '<div class="portal-hero-stat">' +
-          '<span class="portal-hero-stat-label">Hosted access</span>' +
-          '<span class="portal-hero-stat-value">' + (hosted ? 'Active' : 'Not attached') + '</span>' +
-        '</div>' +
-        '<div class="portal-hero-stat">' +
-          '<span class="portal-hero-stat-label">Accounts</span>' +
-          '<span class="portal-hero-stat-value">' + (accounts.length === 1 ? '1 account' : String(accounts.length) + ' accounts') + '</span>' +
-        '</div>' +
-        '<div class="portal-hero-stat">' +
-          '<span class="portal-hero-stat-label">Workspace fleet</span>' +
-          '<span class="portal-hero-stat-value">' + (workspaceTotal ? workspaceCountLabel(workspaceTotal) : '0 workspaces') + '</span>' +
+    '<section class="portal-shell-head">' +
+      '<div class="portal-shell-head-main">' +
+        '<div class="portal-shell-head-kicker">Pulse Account</div>' +
+        '<div class="portal-shell-head-row">' +
+          '<div class="portal-shell-head-copy">' +
+            '<div class="portal-shell-head-brand-row">' +
+              '<h1 class="portal-shell-head-title">' + (hosted ? 'Operator console' : 'Account console') + '</h1>' +
+              '<span class="portal-shell-head-chip">' + (hosted ? 'Operator ready' : 'Self-hosted only') + '</span>' +
+            '</div>' +
+            '<p><strong>' + statusText + '</strong> ' + summary + '</p>' +
+          '</div>' +
+          '<div class="portal-shell-head-stats">' +
+            '<div class="portal-shell-head-stat">' +
+              '<span class="portal-shell-head-stat-label">Hosted access</span>' +
+              '<span class="portal-shell-head-stat-value">' + (hosted ? 'Active' : 'Not attached') + '</span>' +
+            '</div>' +
+            '<div class="portal-shell-head-stat">' +
+              '<span class="portal-shell-head-stat-label">Accounts</span>' +
+              '<span class="portal-shell-head-stat-value">' + (accounts.length === 1 ? '1 account' : String(accounts.length) + ' accounts') + '</span>' +
+            '</div>' +
+            '<div class="portal-shell-head-stat">' +
+              '<span class="portal-shell-head-stat-label">Workspace fleet</span>' +
+              '<span class="portal-shell-head-stat-value">' + (workspaceTotal ? workspaceCountLabel(workspaceTotal) : '0 workspaces') + '</span>' +
+            '</div>' +
+          '</div>' +
         '</div>' +
       '</div>' +
     '</section>'
@@ -703,10 +708,10 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
 
   return (
     '<div class="portal-shell" data-shell-section="' + activeSection + '">' +
-      renderOverviewBand(accounts) +
       '<div class="portal-shell-layout">' +
         renderShellNavigation(accounts, context.bootstrap.support_email || '', activeSection) +
         '<div class="portal-shell-main">' +
+          renderOverviewBand(accounts) +
           '<section class="portal-content-panel portal-content-panel-overview">' +
             '<div id="accounts-root">' + hostedContent + '</div>' +
           '</section>' +
