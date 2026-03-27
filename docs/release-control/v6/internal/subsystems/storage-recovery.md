@@ -440,6 +440,9 @@ The summary remains additive to the inventory-first workflow rather than a
 replacement for it: Proxmox-heavy operators still land on protected items by
 default, but the first visible framing now reflects the whole multi-platform
 recovery system instead of a single backup table metaphor.
+That top recovery frame must rely on solid elevated operator panels and border
+hierarchy rather than decorative gradients so the page reads like a monitoring
+workspace instead of a marketing-style dashboard shell.
 That same summary contract now also includes platform- and item-coverage
 framing through `frontend-modern/src/utils/recoverySummaryPresentation.ts`, so
 the first visible recovery overview explicitly shows which protected item
@@ -595,11 +598,14 @@ same active recovery view. That same recovery filter contract now depends on
 the canonical recovery index carrying a normalized `itemType` instead of
 forcing each UI surface to re-derive protected item classes from raw
 provider-native `subjectType` values.
-That same recovery product surface keeps the activity timeline available even
-when point-history loading fails: `frontend-modern/src/components/Recovery/Recovery.tsx`
-must continue to render `RecoveryActivitySection` and the point-history error
-card side by side so operators can still inspect backup cadence and active
-filter context while recovery-point transport is degraded.
+That same recovery product surface keeps the primary workspace visually ahead
+of secondary analytics: once the summary frame ends,
+`frontend-modern/src/components/Recovery/Recovery.tsx` must lead into the
+route-backed recovery workspace and its protected-item or recovery-event table
+surface before it drops into `RecoveryActivitySection`, so operators reach the
+main control surface ahead of trend telemetry. The activity timeline remains
+required even when point-history loading fails, but it is secondary to the
+workspace rather than a competing top-of-page peer.
 That shared unified-resource dependency now also includes policy-governed
 resource metadata on the frontend decode path: storage and recovery surfaces
 that route through `frontend-modern/src/hooks/useUnifiedResources.ts` must

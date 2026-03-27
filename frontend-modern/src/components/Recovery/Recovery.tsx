@@ -484,57 +484,37 @@ const Recovery: Component = () => {
         timeRange={summaryRange}
       />
 
-      <RecoveryActivitySection
-        activitySummary={activitySummary}
-        activeClusterLabel={activeClusterLabel}
-        activeItemTypeLabel={activeItemTypeLabel}
-        activeNamespaceLabel={activeNamespaceLabel}
-        activeNodeLabel={activeNodeLabel}
-        chartRangeDays={chartRangeDays}
-        clearClusterFilter={() => {
-          setClusterFilter('all');
-          setCurrentPage(1);
-        }}
-        clearFocusedRollup={() => setRollupId('')}
-        clearItemTypeFilter={() => {
-          setItemTypeFilter('all');
-          setCurrentPage(1);
-        }}
-        clearNamespaceFilter={() => {
-          setNamespaceFilter('all');
-          setCurrentPage(1);
-        }}
-        clearNodeFilter={() => {
-          setNodeFilter('all');
-          setCurrentPage(1);
-        }}
-        clearSelectedDate={() => {
-          setSelectedDateKey(null);
-          setCurrentPage(1);
-        }}
-        hasFocusedRollup={() => rollupId().trim().length > 0}
-        isMobile={isMobile()}
-        loading={() => recoverySeries.response.loading}
-        overallRollupsSummary={overallRollupsSummary}
-        selectedDateKey={selectedDateKey}
-        selectedDateLabel={selectedDateLabel}
-        selectedHistoryItemLabel={selectedHistoryItemLabel}
-        setChartRangeDays={(range) => {
-          setChartRangeDays(range);
-          setSelectedDateKey(null);
-          setCurrentPage(1);
-        }}
-        timeline={timeline}
-        toggleSelectedDate={(key) => {
-          setWorkspaceView('events');
-          setSelectedDateKey((previous) => (previous === key ? null : key));
-          setCurrentPage(1);
-        }}
-      />
-
-      <div ref={historySectionRef} class="order-1 flex flex-col gap-4">
-        <Card padding="none" tone="card" class="overflow-hidden">
-          <div class="px-3 pt-1">
+      <div ref={historySectionRef} class="flex flex-col gap-4">
+        <Card
+          padding="none"
+          tone="card"
+          class="overflow-hidden border-border bg-surface-hover shadow-[0_12px_28px_rgba(2,6,23,0.12)]"
+        >
+          <div class="border-b border-border-subtle/80 bg-surface px-4 pb-4 pt-4">
+            <div class="mb-4 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <div class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+                  Recovery Workspace
+                </div>
+                <div class="mt-1 max-w-2xl text-sm text-slate-200">
+                  Run recovery operations from one shared surface: protected inventory first,
+                  event drill-in second, with the same item-first filters and route state.
+                </div>
+              </div>
+              <div class="flex flex-wrap items-center gap-2 text-xs">
+                <span class="rounded-full border border-border-subtle bg-surface-hover/70 px-2.5 py-1 text-base-content">
+                  {filteredRollups().length} protected items
+                </span>
+                <span class="rounded-full border border-border-subtle bg-surface-hover/70 px-2.5 py-1 text-base-content">
+                  {recoveryPoints.meta().total} recovery events
+                </span>
+                <Show when={rollupId().trim().length > 0}>
+                  <span class="rounded-full border border-amber-500/25 bg-amber-500/10 px-2.5 py-1 text-amber-200">
+                    Focused drill-in
+                  </span>
+                </Show>
+              </div>
+            </div>
             <Subtabs
               value={workspaceView()}
               onChange={(value) => setWorkspaceView(value as RecoveryWorkspaceView)}
@@ -561,7 +541,7 @@ const Recovery: Component = () => {
               ]}
             />
           </div>
-          <div class="border-b border-border px-3 pb-3 pt-2 text-xs text-muted">
+          <div class="bg-surface-hover px-4 py-3 text-xs text-muted">
             <Show
               when={workspaceView() === 'inventory'}
               fallback="Recovery events grouped by day and filtered through one shared item-first recovery model."
@@ -659,6 +639,54 @@ const Recovery: Component = () => {
             verificationFilter={verificationFilter}
           />
         </Show>
+
+        <RecoveryActivitySection
+          activitySummary={activitySummary}
+          activeClusterLabel={activeClusterLabel}
+          activeItemTypeLabel={activeItemTypeLabel}
+          activeNamespaceLabel={activeNamespaceLabel}
+          activeNodeLabel={activeNodeLabel}
+          chartRangeDays={chartRangeDays}
+          clearClusterFilter={() => {
+            setClusterFilter('all');
+            setCurrentPage(1);
+          }}
+          clearFocusedRollup={() => setRollupId('')}
+          clearItemTypeFilter={() => {
+            setItemTypeFilter('all');
+            setCurrentPage(1);
+          }}
+          clearNamespaceFilter={() => {
+            setNamespaceFilter('all');
+            setCurrentPage(1);
+          }}
+          clearNodeFilter={() => {
+            setNodeFilter('all');
+            setCurrentPage(1);
+          }}
+          clearSelectedDate={() => {
+            setSelectedDateKey(null);
+            setCurrentPage(1);
+          }}
+          hasFocusedRollup={() => rollupId().trim().length > 0}
+          isMobile={isMobile()}
+          loading={() => recoverySeries.response.loading}
+          overallRollupsSummary={overallRollupsSummary}
+          selectedDateKey={selectedDateKey}
+          selectedDateLabel={selectedDateLabel}
+          selectedHistoryItemLabel={selectedHistoryItemLabel}
+          setChartRangeDays={(range) => {
+            setChartRangeDays(range);
+            setSelectedDateKey(null);
+            setCurrentPage(1);
+          }}
+          timeline={timeline}
+          toggleSelectedDate={(key) => {
+            setWorkspaceView('events');
+            setSelectedDateKey((previous) => (previous === key ? null : key));
+            setCurrentPage(1);
+          }}
+        />
       </div>
     </div>
   );

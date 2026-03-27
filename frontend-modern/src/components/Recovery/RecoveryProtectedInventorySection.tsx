@@ -159,28 +159,32 @@ export const RecoveryProtectedInventorySection: Component<
   });
 
   return (
-    <Card padding="none" tone="card" class="order-3 overflow-hidden">
-      <div class="border-b border-border bg-surface-hover px-3 py-2">
+    <Card
+      padding="none"
+      tone="card"
+      class="overflow-hidden border-border bg-surface-hover shadow-[0_12px_28px_rgba(2,6,23,0.12)]"
+    >
+      <div class="border-b border-border-subtle/80 bg-surface px-4 py-4">
         <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div class="flex flex-col gap-1">
-            <div class="text-[11px] font-semibold uppercase tracking-wide text-muted">
+            <div class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
               Protected Items
             </div>
-            <div class="text-xs text-muted">
+            <div class="max-w-3xl text-sm text-slate-300">
               Unified protection inventory across workloads, datasets, and other protected items, with platform mix carried as supporting context.
             </div>
           </div>
-          <div class="flex flex-wrap items-center gap-2 text-xs text-muted">
-            <span>
+          <div class="flex flex-wrap items-center gap-2 text-xs">
+            <span class="rounded-full border border-border-subtle bg-surface-hover/70 px-2.5 py-1 text-base-content">
               {props.filteredRollups().length} of {props.rollups().length} items shown
             </span>
             <Show when={props.rollupsSummary().stale > 0}>
-              <span class={getRecoveryRollupStatusPillClass('stale')}>
+              <span class={`${getRecoveryRollupStatusPillClass('stale')} px-2.5 py-1`}>
                 {props.rollupsSummary().stale} stale
               </span>
             </Show>
             <Show when={props.rollupsSummary().neverSucceeded > 0}>
-              <span class={getRecoveryRollupStatusPillClass('never-succeeded')}>
+              <span class={`${getRecoveryRollupStatusPillClass('never-succeeded')} px-2.5 py-1`}>
                 {props.rollupsSummary().neverSucceeded} never succeeded
               </span>
             </Show>
@@ -189,7 +193,7 @@ export const RecoveryProtectedInventorySection: Component<
       </div>
 
       <Show when={!props.kioskMode}>
-        <div class="border-b border-border px-3 py-3">
+        <div class="border-b border-border-subtle/80 bg-surface-hover px-4 py-4">
           <PageControls
             search={
               <SearchInput
@@ -312,13 +316,13 @@ export const RecoveryProtectedInventorySection: Component<
       </Show>
 
       <Show when={props.filteredRollups().length > 0}>
-        <div class="overflow-x-auto">
+        <div class="overflow-x-auto bg-surface">
           <Table
             class="w-full border-collapse whitespace-nowrap"
             style={{ 'table-layout': 'fixed', 'min-width': props.isMobile ? '100%' : '640px' }}
           >
             <TableHeader>
-              <TableRow class="bg-surface-alt text-muted border-b border-border">
+              <TableRow class="border-b border-border bg-surface-alt/95 text-muted">
                 {(
                   [
                     ['item', getRecoveryArtifactColumnLabel('item', 'Item')],
@@ -386,7 +390,7 @@ export const RecoveryProtectedInventorySection: Component<
 
                   return (
                     <TableRow
-                      class="cursor-pointer border-b border-border hover:bg-surface-hover"
+                      class="cursor-pointer border-b border-border/80 hover:bg-surface-hover/95"
                       onClick={() => props.onSelectRollup(rollup.rollupId)}
                     >
                       <TableCell

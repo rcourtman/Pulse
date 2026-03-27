@@ -81,41 +81,46 @@ interface RecoveryActivitySectionProps {
 const rangeOptions: Array<7 | 30 | 90 | 365> = [7, 30, 90, 365];
 
 export const RecoveryActivitySection: Component<RecoveryActivitySectionProps> = (props) => (
-  <Card padding="sm" class="h-full">
+  <Card
+    padding="sm"
+    class="h-full border-border bg-surface-hover shadow-[0_10px_24px_rgba(2,6,23,0.1)]"
+  >
     <div class="mb-3 flex flex-col gap-3">
       <div class="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
         <div class="flex flex-col gap-2">
-          <div class="flex flex-wrap items-center gap-3 text-sm">
-            <span class="font-medium text-base-content">
+          <div class="flex flex-wrap items-center gap-2 text-xs">
+            <span class="rounded-full border border-border-subtle bg-surface/70 px-2.5 py-1 font-medium text-base-content">
               {props.overallRollupsSummary().total} protected
             </span>
             <Show when={props.overallRollupsSummary().total - props.overallRollupsSummary().stale > 0}>
-              <span class="text-emerald-600 dark:text-emerald-400">
+              <span class="rounded-full border border-emerald-500/25 bg-emerald-500/8 px-2.5 py-1 text-emerald-300">
                 {props.overallRollupsSummary().total - props.overallRollupsSummary().stale} healthy
               </span>
             </Show>
             <Show when={props.overallRollupsSummary().stale > 0}>
-              <span class="text-amber-500">{props.overallRollupsSummary().stale} stale</span>
+              <span class="rounded-full border border-amber-500/25 bg-amber-500/8 px-2.5 py-1 text-amber-200">
+                {props.overallRollupsSummary().stale} stale
+              </span>
             </Show>
             <Show when={props.overallRollupsSummary().neverSucceeded > 0}>
-              <span class="text-rose-500">
+              <span class="rounded-full border border-rose-500/25 bg-rose-500/8 px-2.5 py-1 text-rose-200">
                 {props.overallRollupsSummary().neverSucceeded} never succeeded
               </span>
             </Show>
           </div>
           <div class="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-            <div class="text-[11px] font-semibold uppercase tracking-wide text-muted">
+            <div class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
               Recovery Activity
             </div>
-            <div class="text-xs text-muted">
+            <div class="text-sm text-slate-300">
               Daily recovery points across the selected history window.
             </div>
           </div>
         </div>
         <div class="flex flex-wrap items-center gap-2">
           <Show when={props.selectedHistoryItemLabel()}>
-            <div class="inline-flex items-center gap-2 rounded-md border border-border bg-surface-alt px-2.5 py-1.5 text-xs">
-              <span class="font-semibold uppercase tracking-wide text-muted">Focused Item</span>
+            <div class="inline-flex items-center gap-2 rounded-md border border-border-subtle bg-surface/70 px-2.5 py-1.5 text-xs">
+              <span class="font-semibold uppercase tracking-[0.14em] text-muted">Focused Item</span>
               <span class="max-w-[18rem] truncate font-medium text-base-content">
                 {props.selectedHistoryItemLabel()}
               </span>
@@ -242,8 +247,8 @@ export const RecoveryActivitySection: Component<RecoveryActivitySectionProps> = 
       </div>
     </Show>
 
-    <div class="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
-      <div class="rounded-md border border-border bg-surface p-3">
+      <div class="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
+      <div class="rounded-xl border border-border-subtle bg-surface p-3">
         <div class={`mb-3 flex flex-wrap items-center justify-between gap-3 ${RECOVERY_TIMELINE_RANGE_GROUP_CLASS}`}>
           <div class="text-xs font-semibold uppercase tracking-wide text-muted">
             Selected range
@@ -290,7 +295,7 @@ export const RecoveryActivitySection: Component<RecoveryActivitySectionProps> = 
             </div>
 
             <div class="grid grid-cols-[auto_minmax(0,1fr)] gap-3">
-              <div class="flex h-40 flex-col justify-between text-[10px] text-muted">
+              <div class="flex h-28 flex-col justify-between text-[10px] text-muted">
                 <For each={[0, 1, 2, 3, 4]}>
                   {(step) => {
                     const value = Math.round((props.timeline().axisMax * (4 - step)) / 4);
@@ -299,7 +304,7 @@ export const RecoveryActivitySection: Component<RecoveryActivitySectionProps> = 
                 </For>
               </div>
 
-              <div class="relative h-44">
+              <div class="relative h-32">
                 <div
                   data-testid="recovery-activity-bars"
                   class="absolute inset-x-0 bottom-4 top-0 flex items-stretch gap-[3px]"
