@@ -112,7 +112,7 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 
 	// Magic link verification (public, token-authenticated)
 	baseDomain := baseDomainFromURL(deps.Config.BaseURL)
-	mux.Handle("/auth/magic-link/verify", magicLinkVerifyLimiter.Middleware(http.HandlerFunc(cpauth.HandleMagicLinkVerify(deps.MagicLinks, deps.Registry, deps.Config.TenantsDir(), baseDomain))))
+	mux.Handle("/auth/magic-link/verify", magicLinkVerifyLimiter.Middleware(http.HandlerFunc(cpauth.HandleMagicLinkVerify(deps.MagicLinks, deps.Registry, deps.Config.TenantsDir(), baseDomain, portal.PortalPagePath))))
 	if deps.MagicLinks != nil {
 		mux.Handle(portal.PortalLogoutPath, sessionAuthLimiter.Middleware(sessionAuth(cpauth.HandleLogout(deps.Registry))))
 	}

@@ -11,6 +11,7 @@ import (
 	"strings"
 	"unicode"
 
+	cpauth "github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/auth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/cpsec"
 	cpemail "github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/email"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
@@ -154,7 +155,9 @@ type PublicCloudSignupHandlers struct {
 	registry   *registry.TenantRegistry
 	magicLinks interface {
 		GenerateToken(email, tenantID string) (string, error)
+		GeneratePortalToken(email, tenantID string) (string, error)
 	}
+	commercialLookup      commercialIdentityLookupFunc
 	emailSender           cpemail.Sender
 	createCheckoutSession func(params *stripe.CheckoutSessionParams) (*stripe.CheckoutSession, error)
 }
@@ -182,16 +185,19 @@ type publicCloudSignupRequest struct {
 }
 
 type publicMagicLinkRequest struct {
-	Email string `json:"email"`
+	Email  string `json:"email"`
+	Target string `json:"target,omitempty"`
 }
 
 func NewPublicCloudSignupHandlers(cfg *CPConfig, reg *registry.TenantRegistry, magicLinks interface {
 	GenerateToken(email, tenantID string) (string, error)
+	GeneratePortalToken(email, tenantID string) (string, error)
 }, emailSender cpemail.Sender) *PublicCloudSignupHandlers {
 	return &PublicCloudSignupHandlers{
 		cfg:                   cfg,
 		registry:              reg,
 		magicLinks:            magicLinks,
+		commercialLookup:      newCommercialIdentityLookup(cfg),
 		emailSender:           emailSender,
 		createCheckoutSession: stripesession.New,
 	}
@@ -389,6 +395,7 @@ func (h *PublicCloudSignupHandlers) HandlePublicMagicLinkRequest(w http.Response
 		writePublicSignupError(w, http.StatusBadRequest, "invalid_email", "Invalid email format")
 		return
 	}
+	target := parsePublicMagicLinkTarget(req.Target)
 
 	const msg = "If that email is registered, you'll receive a magic link shortly."
 	if h.registry == nil || h.magicLinks == nil {
@@ -399,9 +406,9 @@ func (h *PublicCloudSignupHandlers) HandlePublicMagicLinkRequest(w http.Response
 		return
 	}
 
-	tenantID, ok, err := h.findTenantForEmail(email)
+	tenantID, ok, err := h.resolveMagicLinkTenantID(r.Context(), email, target)
 	if err != nil {
-		log.Warn().Err(err).Str("email", email).Msg("public magic link request: tenant lookup failed")
+		log.Warn().Err(err).Str("email", email).Str("target", string(target)).Msg("public magic link request: identity lookup failed")
 		writePublicSignupJSON(w, http.StatusOK, map[string]any{
 			"success": true,
 			"message": msg,
@@ -416,9 +423,9 @@ func (h *PublicCloudSignupHandlers) HandlePublicMagicLinkRequest(w http.Response
 		return
 	}
 
-	token, err := h.magicLinks.GenerateToken(email, tenantID)
+	token, err := h.generateMagicLink(email, tenantID, target)
 	if err != nil {
-		log.Warn().Err(err).Str("email", email).Str("tenant_id", tenantID).Msg("public magic link request: token generation failed")
+		log.Warn().Err(err).Str("email", email).Str("tenant_id", tenantID).Str("target", string(target)).Msg("public magic link request: token generation failed")
 		writePublicSignupJSON(w, http.StatusOK, map[string]any{
 			"success": true,
 			"message": msg,
@@ -534,6 +541,52 @@ func (h *PublicCloudSignupHandlers) findTenantForEmail(email string) (string, bo
 			continue
 		}
 		return strings.TrimSpace(tenant.ID), true, nil
+	}
+	return "", false, nil
+}
+
+func parsePublicMagicLinkTarget(raw string) cpauth.MagicLinkTarget {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case string(cpauth.MagicLinkTargetPortal):
+		return cpauth.MagicLinkTargetPortal
+	default:
+		return cpauth.MagicLinkTargetTenant
+	}
+}
+
+func (h *PublicCloudSignupHandlers) generateMagicLink(email, tenantID string, target cpauth.MagicLinkTarget) (string, error) {
+	switch target {
+	case cpauth.MagicLinkTargetPortal:
+		return h.magicLinks.GeneratePortalToken(email, tenantID)
+	default:
+		return h.magicLinks.GenerateToken(email, tenantID)
+	}
+}
+
+func (h *PublicCloudSignupHandlers) resolveMagicLinkTenantID(ctx context.Context, email string, target cpauth.MagicLinkTarget) (string, bool, error) {
+	if target == cpauth.MagicLinkTargetPortal {
+		if user, err := h.registry.GetUserByEmail(strings.ToLower(strings.TrimSpace(email))); err != nil {
+			return "", false, err
+		} else if user != nil {
+			return "", true, nil
+		}
+	}
+
+	tenantID, ok, err := h.findTenantForEmail(email)
+	if err != nil || ok {
+		return tenantID, ok, err
+	}
+
+	if target != cpauth.MagicLinkTargetPortal || h.commercialLookup == nil {
+		return "", false, nil
+	}
+
+	identity, err := h.commercialLookup(ctx, email)
+	if err != nil {
+		return "", false, err
+	}
+	if identity != nil && identity.HasCommercialIdentity {
+		return "", true, nil
 	}
 	return "", false, nil
 }

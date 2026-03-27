@@ -23,10 +23,18 @@ const (
 	hmacKeySize     = 32
 )
 
+type MagicLinkTarget string
+
+const (
+	MagicLinkTargetTenant MagicLinkTarget = "tenant"
+	MagicLinkTargetPortal MagicLinkTarget = "portal"
+)
+
 // Token holds the validated data from a consumed magic link token.
 type Token struct {
 	Email     string
 	TenantID  string
+	Target    MagicLinkTarget
 	ExpiresAt time.Time
 }
 
@@ -67,13 +75,34 @@ func NewService(cpDataDir string) (*Service, error) {
 // GenerateToken creates a new magic link token for the given email and tenant.
 // Returns a string in the format "ml1_<random>" that can be included in a URL.
 func (s *Service) GenerateToken(email, tenantID string) (string, error) {
+	return s.generateTokenForTarget(email, tenantID, MagicLinkTargetTenant)
+}
+
+// GeneratePortalToken creates a new portal-targeted magic link token. tenantID
+// is optional and, when present, is used during verification to ensure the
+// control-plane membership exists before the session is established.
+func (s *Service) GeneratePortalToken(email, tenantID string) (string, error) {
+	return s.generateTokenForTarget(email, tenantID, MagicLinkTargetPortal)
+}
+
+func (s *Service) generateTokenForTarget(email, tenantID string, target MagicLinkTarget) (string, error) {
 	if s == nil {
 		return "", fmt.Errorf("magic link service not configured")
 	}
 	email = strings.ToLower(strings.TrimSpace(email))
 	tenantID = strings.TrimSpace(tenantID)
-	if email == "" || tenantID == "" {
-		return "", fmt.Errorf("email and tenantID are required")
+	if email == "" {
+		return "", fmt.Errorf("email is required")
+	}
+	switch target {
+	case MagicLinkTargetTenant:
+		if tenantID == "" {
+			return "", fmt.Errorf("tenantID is required")
+		}
+	case MagicLinkTargetPortal:
+		// tenantID is optional for portal-targeted sign-in.
+	default:
+		return "", fmt.Errorf("unsupported magic link target %q", target)
 	}
 
 	expiresAt := s.now().UTC().Add(s.ttl)
@@ -88,6 +117,7 @@ func (s *Service) GenerateToken(email, tenantID string) (string, error) {
 	if err := s.store.Put(tokenHash, &TokenRecord{
 		Email:     email,
 		TenantID:  tenantID,
+		Target:    string(target),
 		ExpiresAt: expiresAt,
 	}); err != nil {
 		return "", err
@@ -115,6 +145,7 @@ func (s *Service) ValidateToken(token string) (*Token, error) {
 	return &Token{
 		Email:     rec.Email,
 		TenantID:  rec.TenantID,
+		Target:    MagicLinkTarget(rec.Target),
 		ExpiresAt: rec.ExpiresAt,
 	}, nil
 }

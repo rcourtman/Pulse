@@ -58,6 +58,13 @@ describe('auth controller', function() {
       vi.fn().mockResolvedValue({
         ok: true,
         status: 200,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async function() {
+          return { message: 'If that email is registered, you will receive a magic link shortly.' };
+        },
+        text: async function() {
+          return '';
+        },
       })
     );
 
@@ -81,10 +88,12 @@ describe('auth controller', function() {
     expect(controller.getLoginState().request.pending).toBe(false);
     expect(controller.getLoginState().request.error).toBe('');
     expect(controller.getLoginState().success).toBe(true);
+    expect(controller.getLoginState().successMessage).toContain('If that email is registered');
     expect(fetch).toHaveBeenCalledWith(
       '/magic-link',
       expect.objectContaining({
         method: 'POST',
+        body: JSON.stringify({ email: 'buyer@example.com', target: 'portal' }),
       })
     );
   });

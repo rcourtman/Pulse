@@ -36,6 +36,7 @@ function createLoginState(overrides: Partial<PortalLoginState> = {}): PortalLogi
       error: '',
     },
     success: false,
+    successMessage: '',
     ...overrides,
   };
 }
@@ -211,7 +212,7 @@ describe('shell view', function() {
 
     expect(errorHTML).toContain('value="buyer@example.com"');
     expect(errorHTML).toContain('Invalid email');
-    expect(successHTML).toContain('Magic link sent.');
+    expect(successHTML).toContain('If that email is registered, a magic link is on the way.');
     expect(successHTML).toContain('data-portal-action="resend-magic-link"');
   });
 });

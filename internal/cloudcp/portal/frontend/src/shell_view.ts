@@ -524,9 +524,10 @@ export function renderSignedOutPortalHTML(context: ShellViewContext): string {
   if (context.loginState.request.error) {
     statusHTML = '<div class="service-status visible error">' + escapeHTML(context.loginState.request.error) + '</div>';
   } else if (context.loginState.success) {
+    var successMessage = context.loginState.successMessage || 'If that email is registered, a magic link is on the way.';
     statusHTML =
       '<div class="service-status visible success">' +
-        'Magic link sent. Check your inbox and click the link to sign in.' +
+        escapeHTML(successMessage) +
         '<br><br><strong>Don\'t see it?</strong> <a href="#" data-portal-action="resend-magic-link">Send a new link</a>.' +
       '</div>';
   }

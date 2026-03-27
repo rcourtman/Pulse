@@ -41,6 +41,8 @@ type CPConfig struct {
 	TrialSignupPriceID                string // Cloud Starter (default tier) price ID
 	CloudPowerPriceID                 string // Cloud Power tier price ID (optional)
 	CloudMaxPriceID                   string // Cloud Max tier price ID (optional)
+	LicenseServerURL                  string
+	LicenseAdminToken                 string
 	TrialActivationPrivateKey         string
 	TrialActivationPublicKey          string
 	RequireEmailProvider              bool
@@ -127,6 +129,8 @@ func LoadConfig() (*CPConfig, error) {
 		TrialSignupPriceID:                strings.TrimSpace(os.Getenv("CP_TRIAL_SIGNUP_PRICE_ID")),
 		CloudPowerPriceID:                 strings.TrimSpace(os.Getenv("CP_CLOUD_POWER_PRICE_ID")),
 		CloudMaxPriceID:                   strings.TrimSpace(os.Getenv("CP_CLOUD_MAX_PRICE_ID")),
+		LicenseServerURL:                  envOrDefault("PULSE_LICENSE_SERVER_URL", "https://license.pulserelay.pro"),
+		LicenseAdminToken:                 strings.TrimSpace(os.Getenv("PULSE_LICENSE_ADMIN_TOKEN")),
 		TrialActivationPrivateKey:         strings.TrimSpace(os.Getenv("CP_TRIAL_ACTIVATION_PRIVATE_KEY")),
 		RequireEmailProvider:              envOrDefaultBool("CP_REQUIRE_EMAIL_PROVIDER", true),
 		ResendAPIKey:                      strings.TrimSpace(os.Getenv("RESEND_API_KEY")),
@@ -219,6 +223,9 @@ func (c *CPConfig) validate() error {
 	}
 	if strings.TrimSpace(c.StripeAPIKey) != "" && strings.TrimSpace(c.TrialActivationPrivateKey) == "" {
 		return fmt.Errorf("CP_TRIAL_ACTIVATION_PRIVATE_KEY is required when STRIPE_API_KEY is configured")
+	}
+	if strings.TrimSpace(c.LicenseServerURL) == "" && strings.TrimSpace(c.LicenseAdminToken) != "" {
+		return fmt.Errorf("PULSE_LICENSE_SERVER_URL is required when PULSE_LICENSE_ADMIN_TOKEN is configured")
 	}
 	if strings.TrimSpace(c.StripeAPIKey) != "" {
 		stripeMode := stripeSecretKeyMode(c.StripeAPIKey)

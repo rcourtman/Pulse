@@ -206,10 +206,10 @@ describe('portal app', function() {
       '/api/public/magic-link/request',
       expect.objectContaining({
         method: 'POST',
-        body: JSON.stringify({ email: 'buyer@example.com' }),
+        body: JSON.stringify({ email: 'buyer@example.com', target: 'portal' }),
       })
     );
-    expect(document.getElementById('portal-app-root')?.textContent).toContain('Magic link sent. Check your inbox and click the link to sign in.');
+    expect(document.getElementById('portal-app-root')?.textContent).toContain('If that email is registered, a magic link is on the way.');
   });
 
   it('completes the retrieve-license flow through the real authenticated app shell', async function() {
