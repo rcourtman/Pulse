@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/netip"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -19,12 +21,13 @@ import (
 
 // ManagerConfig holds Docker manager settings.
 type ManagerConfig struct {
-	Image         string
-	Network       string
-	BaseDomain    string
-	MemoryLimit   int64 // bytes
-	CPUShares     int64
-	ContainerPort int // port inside the container (default 7655)
+	Image             string
+	Network           string
+	BaseDomain        string
+	TrustedProxyCIDRs []string
+	MemoryLimit       int64 // bytes
+	CPUShares         int64
+	ContainerPort     int // port inside the container (default 7655)
 }
 
 // Manager orchestrates Docker containers for tenant lifecycle.
@@ -89,7 +92,7 @@ func (m *Manager) CreateAndStart(ctx context.Context, tenantID, tenantDataDir st
 		&container.Config{
 			Image:  m.cfg.Image,
 			Labels: labels,
-			Env:    tenantEnv(tenantID, m.cfg.BaseDomain),
+			Env:    tenantEnv(tenantID, m.cfg.BaseDomain, m.tenantTrustedProxyCIDRs(ctx)),
 		},
 		&container.HostConfig{
 			RestartPolicy: container.RestartPolicy{Name: "unless-stopped"},
@@ -139,7 +142,7 @@ func tenantRuntimeOwnershipPaths() []string {
 	}
 }
 
-func tenantEnv(tenantID, baseDomain string) []string {
+func tenantEnv(tenantID, baseDomain string, trustedProxyCIDRs []string) []string {
 	publicURL := ""
 	tenantID = strings.TrimSpace(tenantID)
 	baseDomain = strings.TrimSpace(baseDomain)
@@ -159,7 +162,63 @@ func tenantEnv(tenantID, baseDomain string) []string {
 	if publicURL != "" {
 		env = append(env, "PULSE_PUBLIC_URL="+publicURL)
 	}
+	if len(trustedProxyCIDRs) > 0 {
+		env = append(env, "PULSE_TRUSTED_PROXY_CIDRS="+strings.Join(trustedProxyCIDRs, ","))
+	}
 	return env
+}
+
+func (m *Manager) tenantTrustedProxyCIDRs(ctx context.Context) []string {
+	values := make([]string, 0, len(m.cfg.TrustedProxyCIDRs)+1)
+	seen := make(map[string]struct{})
+	appendCIDR := func(raw string) {
+		canonical := canonicalTrustedProxyCIDR(raw)
+		if canonical == "" {
+			return
+		}
+		if _, ok := seen[canonical]; ok {
+			return
+		}
+		seen[canonical] = struct{}{}
+		values = append(values, canonical)
+	}
+
+	for _, cidr := range m.cfg.TrustedProxyCIDRs {
+		appendCIDR(cidr)
+	}
+
+	if m != nil && m.cli != nil && strings.TrimSpace(m.cfg.Network) != "" {
+		networkName := strings.TrimSpace(m.cfg.Network)
+		inspect, err := m.cli.NetworkInspect(ctx, networkName, network.InspectOptions{})
+		if err != nil {
+			log.Warn().Err(err).Str("network", networkName).Msg("Failed to inspect tenant network for trusted proxy CIDRs")
+		} else {
+			for _, cfg := range inspect.IPAM.Config {
+				appendCIDR(cfg.Subnet)
+			}
+		}
+	}
+
+	sort.Strings(values)
+	return values
+}
+
+func canonicalTrustedProxyCIDR(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	if prefix, err := netip.ParsePrefix(raw); err == nil {
+		return prefix.Masked().String()
+	}
+	if addr, err := netip.ParseAddr(raw); err == nil {
+		bits := 32
+		if addr.Is6() {
+			bits = 128
+		}
+		return netip.PrefixFrom(addr, bits).Masked().String()
+	}
+	return ""
 }
 
 func tenantMounts(tenantDataDir string) []mount.Mount {

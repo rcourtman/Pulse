@@ -53,11 +53,12 @@ func Run(ctx context.Context, version string) error {
 	// Initialize Docker manager (best-effort — control plane can run without Docker for dev/testing)
 	var dockerMgr *cpDocker.Manager
 	dockerMgr, err = cpDocker.NewManager(cpDocker.ManagerConfig{
-		Image:       cfg.PulseImage,
-		Network:     cfg.DockerNetwork,
-		BaseDomain:  baseDomainFromURL(cfg.BaseURL),
-		MemoryLimit: cfg.TenantMemoryLimit,
-		CPUShares:   cfg.TenantCPUShares,
+		Image:             cfg.PulseImage,
+		Network:           cfg.DockerNetwork,
+		BaseDomain:        baseDomainFromURL(cfg.BaseURL),
+		TrustedProxyCIDRs: cfg.TrustedProxyCIDRs,
+		MemoryLimit:       cfg.TenantMemoryLimit,
+		CPUShares:         cfg.TenantCPUShares,
 	})
 	if err != nil {
 		log.Warn().Err(err).Msg("Docker unavailable — container management disabled")

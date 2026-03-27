@@ -4,12 +4,18 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/gorilla/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	pulsews "github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 )
+
+func resetTrustedProxyCIDRsForTests() {
+	trustedProxyCIDRs = nil
+	trustedProxyOnce = sync.Once{}
+}
 
 func newWebSocketRouter(t *testing.T, allowedOrigins []string, tokenRecord config.APITokenRecord) (*httptest.Server, func()) {
 	t.Helper()
@@ -120,6 +126,34 @@ func TestWebSocketOriginAllowsPrivateWhenNoAllowedOrigins(t *testing.T) {
 		t.Fatalf("expected websocket connection, got %v", err)
 	}
 	if resp == nil || resp.StatusCode != http.StatusSwitchingProtocols {
+		t.Fatalf("expected 101 switching protocols, got %v", resp)
+	}
+	conn.Close()
+}
+
+func TestWebSocketOriginAllowsTrustedForwardedHostedOrigin(t *testing.T) {
+	t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "127.0.0.1/32")
+	resetTrustedProxyCIDRsForTests()
+
+	rawToken := "ws-origin-forwarded-allow-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
+
+	server, cleanup := newWebSocketRouter(t, []string{}, record)
+	defer cleanup()
+
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws?org_id=default"
+	headers := http.Header{}
+	headers.Set("X-API-Token", rawToken)
+	headers.Set("Origin", "https://tenant.example.com")
+	headers.Set("X-Forwarded-Proto", "https")
+	headers.Set("X-Forwarded-Host", "tenant.example.com")
+
+	conn, resp, err := websocket.DefaultDialer.Dial(wsURL, headers)
+	if err != nil {
+		t.Fatalf("expected websocket connection behind trusted proxy, got %v", err)
+	}
+	if resp == nil || resp.StatusCode != http.StatusSwitchingProtocols {
+		conn.Close()
 		t.Fatalf("expected 101 switching protocols, got %v", resp)
 	}
 	conn.Close()

@@ -218,6 +218,12 @@ path, signup path, and stable workspace summary fields such as `created_at`.
 That workspace summary contract must expose explicit health semantics: `healthy`
 for passing health checks, `checking` only when no completed health check
 exists yet, and `unhealthy` for a failed latest health check.
+That same shared `internal/api/` boundary also owns trusted-proxy websocket
+origin continuity for hosted runtimes. When a hosted tenant is opened through
+the cloud proxy, the runtime must derive the effective same-origin
+`https://<tenant-host>` boundary from trusted forwarded host/proto headers
+only after the hosted container contract has injected explicit proxy CIDRs, so
+live updates stay connected without weakening cross-site websocket checks.
 `/portal` is now one bootstrap-driven shell for both anonymous and
 authenticated users, so new account frontend work must extend that shared
 contract rather than inventing a second local payload shape, reviving separate

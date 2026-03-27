@@ -70,7 +70,7 @@ func TestTenantMountsKeepImmutableFilesReadOnly(t *testing.T) {
 func TestTenantEnvIncludesImmutableOwnershipContract(t *testing.T) {
 	t.Parallel()
 
-	env := tenantEnv("t-example", "cloud.pulserelay.pro")
+	env := tenantEnv("t-example", "cloud.pulserelay.pro", []string{"172.18.0.0/16", "127.0.0.1/32"})
 	want := map[string]bool{
 		"PULSE_DATA_DIR=/etc/pulse":       true,
 		"PULSE_HOSTED_MODE=true":          true,
@@ -79,6 +79,7 @@ func TestTenantEnvIncludesImmutableOwnershipContract(t *testing.T) {
 		"PUID=1000":                       true,
 		"PGID=1000":                       true,
 		"PULSE_PUBLIC_URL=https://t-example.cloud.pulserelay.pro":                                    true,
+		"PULSE_TRUSTED_PROXY_CIDRS=172.18.0.0/16,127.0.0.1/32":                                       true,
 		immutableOwnershipPathsEnv + "=/etc/pulse/secrets/handoff.key:/etc/pulse/.cloud_handoff_key": true,
 	}
 	if len(env) != len(want) {
@@ -94,7 +95,7 @@ func TestTenantEnvIncludesImmutableOwnershipContract(t *testing.T) {
 func TestTenantEnvOmitsPublicURLWithoutTenantContext(t *testing.T) {
 	t.Parallel()
 
-	env := tenantEnv("", "")
+	env := tenantEnv("", "", nil)
 	sawTenantID := false
 	for _, item := range env {
 		if strings.HasPrefix(item, "PULSE_PUBLIC_URL=") {
@@ -106,6 +107,29 @@ func TestTenantEnvOmitsPublicURLWithoutTenantContext(t *testing.T) {
 	}
 	if !sawTenantID {
 		t.Fatalf("expected explicit empty tenant id env item, got %v", env)
+	}
+}
+
+func TestCanonicalTrustedProxyCIDR(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{input: "172.18.0.0/16", want: "172.18.0.0/16"},
+		{input: "172.18.12.34/16", want: "172.18.0.0/16"},
+		{input: "127.0.0.1", want: "127.0.0.1/32"},
+		{input: "2001:db8::1", want: "2001:db8::1/128"},
+		{input: "not-a-cidr", want: ""},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.input, func(t *testing.T) {
+			if got := canonicalTrustedProxyCIDR(tc.input); got != tc.want {
+				t.Fatalf("canonicalTrustedProxyCIDR(%q) = %q, want %q", tc.input, got, tc.want)
+			}
+		})
 	}
 }
 

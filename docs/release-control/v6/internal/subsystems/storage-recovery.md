@@ -127,6 +127,11 @@ lease before storage- or recovery-adjacent runtime consumers inspect
 assistant availability, so recovery points, restore guidance, and related
 operator surfaces do not read a tenant-org AI readiness state that diverges
 from the machine-owned hosted entitlement already governing the instance.
+That same shared `internal/api/` dependency also now assumes hosted runtime
+websocket upgrades trust the cloud proxy only through explicit tenant
+`PULSE_TRUSTED_PROXY_CIDRS` wiring, so storage- and recovery-adjacent live
+status surfaces do not fall into reconnect loops after a hosted workspace
+handoff.
 The recovery frontend now also separates that ownership more explicitly:
 `frontend-modern/src/features/recovery/useRecoverySurfaceState.ts` owns
 canonical route parsing, filter/query state, transport hook inputs, and URL

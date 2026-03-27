@@ -94,6 +94,27 @@ func TestLoadConfig_CustomValues(t *testing.T) {
 	}
 }
 
+func TestLoadConfig_TrustedProxyCIDRs(t *testing.T) {
+	setRequiredCPEnv(t)
+	t.Setenv("CP_TRUSTED_PROXY_CIDRS", "172.18.0.0/16, 127.0.0.1/32")
+	t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "192.168.0.0/16")
+
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+
+	want := []string{"172.18.0.0/16", "127.0.0.1/32", "192.168.0.0/16"}
+	if len(cfg.TrustedProxyCIDRs) != len(want) {
+		t.Fatalf("len(TrustedProxyCIDRs) = %d, want %d (%v)", len(cfg.TrustedProxyCIDRs), len(want), cfg.TrustedProxyCIDRs)
+	}
+	for i, expected := range want {
+		if cfg.TrustedProxyCIDRs[i] != expected {
+			t.Fatalf("TrustedProxyCIDRs[%d] = %q, want %q", i, cfg.TrustedProxyCIDRs[i], expected)
+		}
+	}
+}
+
 func TestLoadConfig_InvalidPortParse(t *testing.T) {
 	setRequiredCPEnv(t)
 	t.Setenv("CP_PORT", "not-a-number")

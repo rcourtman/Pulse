@@ -29,6 +29,7 @@ type CPConfig struct {
 	PortalAPIRateLimitPerMinute       int
 	PulseImage                        string
 	DockerNetwork                     string
+	TrustedProxyCIDRs                 []string
 	TenantMemoryLimit                 int64 // bytes
 	TenantCPUShares                   int64
 	AllowDockerlessProvisioning       bool
@@ -113,6 +114,7 @@ func LoadConfig() (*CPConfig, error) {
 		PortalAPIRateLimitPerMinute:       portalRPS,
 		PulseImage:                        envOrDefault("CP_PULSE_IMAGE", "ghcr.io/rcourtman/pulse:latest"),
 		DockerNetwork:                     envOrDefault("CP_DOCKER_NETWORK", "pulse-cloud"),
+		TrustedProxyCIDRs:                 parseTrustedProxyCIDRValues("CP_TRUSTED_PROXY_CIDRS", "PULSE_TRUSTED_PROXY_CIDRS"),
 		TenantMemoryLimit:                 tenantMemoryLimit,
 		TenantCPUShares:                   tenantCPUShares,
 		AllowDockerlessProvisioning:       envOrDefaultBool("CP_ALLOW_DOCKERLESS_PROVISIONING", false),
@@ -284,4 +286,27 @@ func envOrDefaultBool(key string, fallback bool) bool {
 	default:
 		return fallback
 	}
+}
+
+func parseTrustedProxyCIDRValues(keys ...string) []string {
+	values := make([]string, 0)
+	seen := make(map[string]struct{})
+	for _, key := range keys {
+		raw := strings.TrimSpace(os.Getenv(key))
+		if raw == "" {
+			continue
+		}
+		for _, entry := range strings.Split(raw, ",") {
+			entry = strings.TrimSpace(entry)
+			if entry == "" {
+				continue
+			}
+			if _, ok := seen[entry]; ok {
+				continue
+			}
+			seen[entry] = struct{}{}
+			values = append(values, entry)
+		}
+	}
+	return values
 }

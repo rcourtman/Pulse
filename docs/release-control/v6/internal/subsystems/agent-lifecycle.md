@@ -179,6 +179,11 @@ instead of adopting execution-history persistence as a side effect.
 Those unified audit list endpoints also clamp oversized `limit` requests to
 the governed maximum, so audit history stays bounded even when callers ask
 for arbitrarily large pages.
+That same shared `internal/api/` dependency also now assumes hosted runtime
+websocket upgrades trust the cloud proxy only through explicit tenant
+`PULSE_TRUSTED_PROXY_CIDRS` wiring, so first-session handoff and agent-facing
+live activity surfaces do not degrade into reconnect loops when a hosted
+workspace is opened through the control plane.
 The same shared API runtime now also exposes dedicated unified-resource
 timeline reads through `internal/api/resources.go` plus the bundled facet
 history read used by the drawer, but those query surfaces remain owned by the

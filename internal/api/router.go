@@ -218,6 +218,9 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, mtMonitor *monit
 		monitorSupplementalRecords: make(map[unifiedresources.DataSource]monitoring.MonitorSupplementalRecordsProvider),
 		startedPatrolOrgs:          make(map[string]bool),
 	}
+	if r.wsHub != nil {
+		r.wsHub.SetTrustedProxyChecker(isTrustedProxyIP)
+	}
 	if r.hostedMode {
 		// Use defaults: 2000 req/min per org.
 		r.tenantRateLimiter = NewTenantRateLimiter(0, 0)

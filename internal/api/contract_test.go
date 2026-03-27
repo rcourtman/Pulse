@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/gorilla/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/chat"
@@ -34,6 +35,34 @@ import (
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/reporting"
 )
+
+func TestContract_WebSocketTrustedProxyHostedOrigin(t *testing.T) {
+	t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "127.0.0.1/32")
+	resetTrustedProxyCIDRsForTests()
+
+	rawToken := "contract-ws-origin-forwarded-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
+
+	server, cleanup := newWebSocketRouter(t, []string{}, record)
+	defer cleanup()
+
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws?org_id=default"
+	headers := http.Header{}
+	headers.Set("X-API-Token", rawToken)
+	headers.Set("Origin", "https://tenant.example.com")
+	headers.Set("X-Forwarded-Proto", "https")
+	headers.Set("X-Forwarded-Host", "tenant.example.com")
+
+	conn, resp, err := websocket.DefaultDialer.Dial(wsURL, headers)
+	if err != nil {
+		t.Fatalf("expected websocket connection behind trusted proxy, got %v", err)
+	}
+	if resp == nil || resp.StatusCode != http.StatusSwitchingProtocols {
+		conn.Close()
+		t.Fatalf("expected 101 switching protocols, got %v", resp)
+	}
+	conn.Close()
+}
 
 func TestContract_FindingJSONSnapshot(t *testing.T) {
 	now := time.Date(2026, 2, 8, 13, 14, 15, 0, time.UTC)
@@ -2484,12 +2513,6 @@ func TestContract_HostedBillingStateFallbackJSONSnapshot(t *testing.T) {
 func TestContract_HandoffExchangeJSONSnapshot(t *testing.T) {
 	key := []byte("test-handoff-key")
 	configDir := t.TempDir()
-	resetSessionStoreForTests()
-	t.Cleanup(resetSessionStoreForTests)
-	resetCSRFStoreForTests()
-	t.Cleanup(resetCSRFStoreForTests)
-	InitSessionStore(configDir)
-	InitCSRFStore(configDir)
 	secretsDir := filepath.Join(configDir, "secrets")
 	if err := os.MkdirAll(secretsDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll() error = %v", err)
@@ -2500,9 +2523,7 @@ func TestContract_HandoffExchangeJSONSnapshot(t *testing.T) {
 
 	handler := HandleHandoffExchange(configDir)
 	tenantID := "tenant-contract"
-	t.Setenv("PULSE_HOSTED_MODE", "true")
 	t.Setenv("PULSE_TENANT_ID", "")
-	t.Setenv("PULSE_PUBLIC_URL", "")
 	token := signHandoffToken(t, key, cloudHandoffClaims{
 		AccountID: "acct-contract",
 		Email:     "Operator.Owner+Mixed@PulseRelay.Pro",
@@ -2519,7 +2540,9 @@ func TestContract_HandoffExchangeJSONSnapshot(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/cloud/handoff/exchange?token="+token+"&format=json", nil)
 	req.Host = tenantID + ".cloud.pulserelay.pro"
 	req.Header.Set("Accept", "application/json")
-	req.RemoteAddr = "198.51.100.20:1234"
+	req.Header.Set("X-Forwarded-Host", req.Host)
+	req.Header.Set("X-Forwarded-For", "127.0.0.1")
+	req.RemoteAddr = "127.0.0.1:1234"
 	rec := httptest.NewRecorder()
 
 	handler(rec, req)
