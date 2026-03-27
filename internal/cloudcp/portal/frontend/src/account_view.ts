@@ -136,6 +136,10 @@ export function renderWorkspaceManagement(account: PortalAccountSummary, entry: 
 
   var workspace = entry.selectedWorkspaceID ? findWorkspace(account, entry.selectedWorkspaceID) : null;
   var hasSelection = !!workspace;
+  var rows = document.querySelectorAll<HTMLElement>('[data-workspace-row]');
+  for (var i = 0; i < rows.length; i += 1) {
+    rows[i].classList.toggle('selected', !!workspace && rows[i].getAttribute('data-workspace-row') === workspace.id);
+  }
   panel.classList.add('visible');
   empty.hidden = hasSelection;
   content.hidden = !hasSelection;

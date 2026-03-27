@@ -912,9 +912,28 @@ header .logout-btn:hover,
   padding: 14px 16px;
   background: #fff;
   border-top: 1px solid var(--line);
+  transition:
+    border-color 140ms ease,
+    background 140ms ease,
+    box-shadow 140ms ease;
 }
 .workspace-row:first-child {
   border-top: none;
+}
+.workspace-row:hover {
+  background: #fbfcfe;
+}
+.workspace-row.selected {
+  position: relative;
+  border-color: rgba(11, 106, 114, 0.34);
+  background: #eef8fa;
+  box-shadow: inset 4px 0 0 var(--accent), 0 0 0 1px rgba(11, 106, 114, 0.12);
+}
+.workspace-row.selected .workspace-name {
+  color: var(--accent-strong);
+}
+.workspace-row.selected .workspace-row-note {
+  color: var(--ink);
 }
 .workspace-row-primary {
   display: flex;
@@ -1065,6 +1084,30 @@ header .logout-btn:hover,
   color: var(--ink-soft);
   font-size: 12px;
   line-height: 1.5;
+}
+.workspace-management-empty-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.workspace-management-empty-check {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.78);
+}
+.workspace-management-empty-check strong {
+  font-size: 13px;
+  line-height: 1.3;
+  color: var(--ink);
+}
+.workspace-management-empty-check span {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink-soft);
 }
 .workspace-management-empty-actions {
   display: flex;

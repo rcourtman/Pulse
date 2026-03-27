@@ -309,7 +309,7 @@ function renderWorkspaceCard(account: PortalAccountSummary, workspace: PortalWor
   }
 
   return (
-    '<article class="workspace-row">' +
+    '<article class="workspace-row workspace-row-health-' + escapeAttr(status) + ' workspace-row-state-' + escapeAttr(state || 'unknown') + '" data-workspace-row="' + escapeAttr(workspace.id) + '">' +
       '<div class="workspace-row-primary">' +
         '<div class="workspace-row-heading">' +
           '<h4 class="workspace-name">' + escapeHTML(workspace.display_name) + '</h4>' +
@@ -511,16 +511,16 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
             '<div class="workspace-management-empty-card">' +
               '<div class="account-panel-kicker">Account desk</div>' +
               '<h4>Keep account-wide actions close</h4>' +
-              '<p>Use the management desk for workspace-level decisions, and keep billing or team changes one click away.</p>' +
+              '<p>Use the desk for one workspace at a time while keeping billing, team, and create-workspace actions within reach.</p>' +
               '<div class="workspace-management-empty-actions">' + workspaceDeskActions + '</div>' +
             '</div>' +
             '<div class="workspace-management-empty-card workspace-management-empty-card-muted">' +
-              '<div class="account-panel-kicker">What shows here</div>' +
-              '<ul class="workspace-management-empty-list">' +
-                '<li>Lifecycle and health summary for the selected workspace</li>' +
-                '<li>The next explicit lifecycle action for that workspace</li>' +
-                '<li>Account-level actions when you need billing or team changes instead</li>' +
-              '</ul>' +
+              '<div class="account-panel-kicker">Review flow</div>' +
+              '<div class="workspace-management-empty-checklist">' +
+                '<div class="workspace-management-empty-check"><strong>1. Pick the workspace</strong><span>Select a fleet row to bring its health, lifecycle, and next action into this desk.</span></div>' +
+                '<div class="workspace-management-empty-check"><strong>2. Check posture first</strong><span>Treat checking or needs-attention workspaces as review work, not routine operations.</span></div>' +
+                '<div class="workspace-management-empty-check"><strong>3. Escalate account changes separately</strong><span>Billing and team changes stay account-wide even when you are focused on one workspace.</span></div>' +
+              '</div>' +
             '</div>' +
           '</div>' +
         '</div>' +
