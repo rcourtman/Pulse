@@ -2,12 +2,15 @@ package chat
 
 import (
 	"context"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 )
 
 type mockKnowledgeStore struct{}
@@ -143,6 +146,277 @@ func TestService_ExecutePatrolStream_Success(t *testing.T) {
 	}
 	if len(msgs) < 2 {
 		t.Fatalf("expected at least 2 messages saved, got %d", len(msgs))
+	}
+}
+
+func TestService_ExecutePatrolStream_PulseStorageSnapshotsToleratesMalformedRecoveryMetadata(t *testing.T) {
+	store, err := NewSessionStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("failed to create session store: %v", err)
+	}
+
+	completedAt := time.Date(2026, 2, 24, 10, 30, 0, 0, time.UTC)
+	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{
+		StateProvider: fakeStateProvider{},
+		ReadState:     &fakeCanonicalReadState{},
+		RecoveryPointsProvider: &fakeRecoveryPointsProvider{points: []recovery.RecoveryPoint{{
+			ID:       "pve-snapshot:snap-100-before-upgrade",
+			Provider: recovery.ProviderProxmoxPVE,
+			Kind:     recovery.KindSnapshot,
+			Mode:     recovery.ModeLocal,
+			Outcome:  recovery.OutcomeSuccess,
+			SubjectRef: &recovery.ExternalRef{
+				Type:      "vm",
+				Name:      "100",
+				ID:        "100",
+				Namespace: "pve1",
+				Class:     "node1",
+			},
+			Display: &recovery.RecoveryPointDisplay{
+				SubjectLabel:   "100",
+				ItemType:       "vm",
+				ClusterLabel:   "pve1",
+				NodeHostLabel:  "node1",
+				EntityIDLabel:  "100",
+				DetailsSummary: "before-upgrade",
+			},
+			CompletedAt: &completedAt,
+		}}},
+	})
+
+	turn := 0
+	provider := &mockStreamingProvider{
+		chatStreamFunc: func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
+			turn++
+			switch turn {
+			case 1:
+				if !hasProviderTool(req.Tools, "pulse_storage") {
+					t.Fatalf("expected pulse_storage tool to be available, got %#v", req.Tools)
+				}
+				callback(providers.StreamEvent{
+					Type: "done",
+					Data: providers.DoneEvent{
+						StopReason: "tool_use",
+						ToolCalls: []providers.ToolCall{{
+							ID:   "patrol-call-snapshots",
+							Name: "pulse_storage",
+							Input: map[string]interface{}{
+								"type":     "snapshots",
+								"guest_id": "100",
+								"instance": "pve1",
+							},
+						}},
+					},
+				})
+				return nil
+			case 2:
+				var toolResult string
+				for _, msg := range req.Messages {
+					if msg.ToolResult != nil && msg.ToolResult.ToolUseID == "patrol-call-snapshots" {
+						toolResult = msg.ToolResult.Content
+						break
+					}
+				}
+				if toolResult == "" {
+					t.Fatalf("expected pulse_storage tool result in second turn, got %#v", req.Messages)
+				}
+				if !strings.Contains(toolResult, "\"snapshot_name\":\"before-upgrade\"") {
+					t.Fatalf("expected canonical snapshot name in tool result, got %s", toolResult)
+				}
+				if !strings.Contains(toolResult, "\"instance\":\"pve1\"") || !strings.Contains(toolResult, "\"node\":\"node1\"") {
+					t.Fatalf("expected canonical placement labels in tool result, got %s", toolResult)
+				}
+				callback(providers.StreamEvent{
+					Type: "content",
+					Data: providers.ContentEvent{Text: "Patrol recovered snapshot inventory"},
+				})
+				callback(providers.StreamEvent{
+					Type: "done",
+					Data: providers.DoneEvent{InputTokens: 10, OutputTokens: 12},
+				})
+				return nil
+			default:
+				t.Fatalf("unexpected extra provider turn %d", turn)
+				return nil
+			}
+		},
+	}
+
+	service := &Service{
+		started:  true,
+		sessions: store,
+		executor: executor,
+		cfg: &config.AIConfig{
+			PatrolModel:          "mock:model",
+			PatrolAnalyzeStorage: true,
+		},
+	}
+	service.providerFactory = func(modelStr string) (providers.StreamingProvider, error) {
+		return provider, nil
+	}
+
+	resp, err := service.ExecutePatrolStream(context.Background(), PatrolRequest{
+		Prompt:    "Inspect recovery snapshots for guest 100 on pve1.",
+		MaxTurns:  2,
+		SessionID: "patrol-storage-snapshots",
+	}, func(StreamEvent) {})
+	if err != nil {
+		t.Fatalf("ExecutePatrolStream failed: %v", err)
+	}
+	if resp == nil || !strings.Contains(resp.Content, "snapshot inventory") {
+		t.Fatalf("expected patrol response content, got %#v", resp)
+	}
+
+	messages, err := store.GetMessages("patrol-storage-snapshots")
+	if err != nil {
+		t.Fatalf("failed to fetch messages: %v", err)
+	}
+	foundToolResult := false
+	for _, msg := range messages {
+		if msg.ToolResult != nil && strings.Contains(msg.ToolResult.Content, "\"snapshot_name\":\"before-upgrade\"") {
+			foundToolResult = true
+			break
+		}
+	}
+	if !foundToolResult {
+		t.Fatalf("expected stored patrol tool result with canonical snapshot fallback, got %#v", messages)
+	}
+}
+
+func TestService_ExecutePatrolStream_PulseStorageBackupTasksToleratesMalformedRecoveryMetadata(t *testing.T) {
+	store, err := NewSessionStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("failed to create session store: %v", err)
+	}
+
+	startedAt := time.Date(2026, 2, 24, 11, 0, 0, 0, time.UTC)
+	completedAt := time.Date(2026, 2, 24, 11, 15, 0, 0, time.UTC)
+	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{
+		StateProvider: fakeStateProvider{},
+		ReadState:     &fakeCanonicalReadState{},
+		RecoveryPointsProvider: &fakeRecoveryPointsProvider{points: []recovery.RecoveryPoint{{
+			ID:       "pve-task:task-101-backup",
+			Provider: recovery.ProviderProxmoxPVE,
+			Kind:     recovery.KindBackup,
+			Mode:     recovery.ModeLocal,
+			Outcome:  recovery.OutcomeSuccess,
+			SubjectRef: &recovery.ExternalRef{
+				Type:      "vm",
+				Name:      "101",
+				ID:        "101",
+				Namespace: "pve1",
+				Class:     "node1",
+			},
+			Display: &recovery.RecoveryPointDisplay{
+				SubjectLabel:   "101",
+				ItemType:       "vm",
+				ClusterLabel:   "pve1",
+				NodeHostLabel:  "node1",
+				EntityIDLabel:  "101",
+				DetailsSummary: "completed successfully",
+			},
+			StartedAt:   &startedAt,
+			CompletedAt: &completedAt,
+		}}},
+	})
+
+	turn := 0
+	provider := &mockStreamingProvider{
+		chatStreamFunc: func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
+			turn++
+			switch turn {
+			case 1:
+				if !hasProviderTool(req.Tools, "pulse_storage") {
+					t.Fatalf("expected pulse_storage tool to be available, got %#v", req.Tools)
+				}
+				callback(providers.StreamEvent{
+					Type: "done",
+					Data: providers.DoneEvent{
+						StopReason: "tool_use",
+						ToolCalls: []providers.ToolCall{{
+							ID:   "patrol-call-backup-tasks",
+							Name: "pulse_storage",
+							Input: map[string]interface{}{
+								"type":     "backup_tasks",
+								"guest_id": "101",
+								"instance": "pve1",
+								"status":   "OK",
+							},
+						}},
+					},
+				})
+				return nil
+			case 2:
+				var toolResult string
+				for _, msg := range req.Messages {
+					if msg.ToolResult != nil && msg.ToolResult.ToolUseID == "patrol-call-backup-tasks" {
+						toolResult = msg.ToolResult.Content
+						break
+					}
+				}
+				if toolResult == "" {
+					t.Fatalf("expected pulse_storage tool result in second turn, got %#v", req.Messages)
+				}
+				if !strings.Contains(toolResult, "\"status\":\"OK\"") || !strings.Contains(toolResult, "\"type\":\"vm\"") {
+					t.Fatalf("expected canonical backup task fields in tool result, got %s", toolResult)
+				}
+				if !strings.Contains(toolResult, "\"instance\":\"pve1\"") || !strings.Contains(toolResult, "\"node\":\"node1\"") {
+					t.Fatalf("expected canonical placement labels in tool result, got %s", toolResult)
+				}
+				callback(providers.StreamEvent{
+					Type: "content",
+					Data: providers.ContentEvent{Text: "Patrol recovered backup task inventory"},
+				})
+				callback(providers.StreamEvent{
+					Type: "done",
+					Data: providers.DoneEvent{InputTokens: 10, OutputTokens: 12},
+				})
+				return nil
+			default:
+				t.Fatalf("unexpected extra provider turn %d", turn)
+				return nil
+			}
+		},
+	}
+
+	service := &Service{
+		started:  true,
+		sessions: store,
+		executor: executor,
+		cfg: &config.AIConfig{
+			PatrolModel:          "mock:model",
+			PatrolAnalyzeStorage: true,
+		},
+	}
+	service.providerFactory = func(modelStr string) (providers.StreamingProvider, error) {
+		return provider, nil
+	}
+
+	resp, err := service.ExecutePatrolStream(context.Background(), PatrolRequest{
+		Prompt:    "Inspect recovery backup tasks for guest 101 on pve1.",
+		MaxTurns:  2,
+		SessionID: "patrol-storage-backup-tasks",
+	}, func(StreamEvent) {})
+	if err != nil {
+		t.Fatalf("ExecutePatrolStream failed: %v", err)
+	}
+	if resp == nil || !strings.Contains(resp.Content, "backup task inventory") {
+		t.Fatalf("expected patrol response content, got %#v", resp)
+	}
+
+	messages, err := store.GetMessages("patrol-storage-backup-tasks")
+	if err != nil {
+		t.Fatalf("failed to fetch messages: %v", err)
+	}
+	foundToolResult := false
+	for _, msg := range messages {
+		if msg.ToolResult != nil && strings.Contains(msg.ToolResult.Content, "\"status\":\"OK\"") {
+			foundToolResult = true
+			break
+		}
+	}
+	if !foundToolResult {
+		t.Fatalf("expected stored patrol tool result with canonical backup-task fallback, got %#v", messages)
 	}
 }
 
