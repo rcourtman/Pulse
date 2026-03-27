@@ -47,12 +47,18 @@ describe('SetupWizard', () => {
 
     render(() => <SetupWizard onComplete={onComplete} />);
 
-    expect(screen.getByText('Step indicator 0:Unlock > Security > Install')).toBeInTheDocument();
+    expect(
+      screen.getByText('Step indicator 0:Unlock server > Security > Install host'),
+    ).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Welcome next' }));
-    expect(screen.getByText('Step indicator 1:Unlock > Security > Install')).toBeInTheDocument();
+    expect(
+      screen.getByText('Step indicator 1:Unlock server > Security > Install host'),
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Security complete' }));
-    expect(screen.getByText('Step indicator 2:Unlock > Security > Install')).toBeInTheDocument();
+    expect(
+      screen.getByText('Step indicator 2:Unlock server > Security > Install host'),
+    ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Completion finish' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Completion finish' }));

@@ -78,50 +78,52 @@ work extends shared components instead of creating new local variants.
 48. `frontend-modern/src/features/`
 49. `frontend-modern/src/components/SetupWizard/SetupWizard.tsx`
 50. `frontend-modern/src/components/SetupWizard/SetupCompletionPreview.tsx`
-51. `frontend-modern/src/components/SetupWizard/__tests__/SetupWizard.test.tsx`
-52. `frontend-modern/src/components/SetupWizard/__tests__/SetupCompletionPreview.test.tsx`
-53. `frontend-modern/src/components/shared/MonitoredSystemLimitWarningBanner.tsx`
-54. `frontend-modern/src/components/Settings/SystemLogsPanel.tsx`
-55. `frontend-modern/src/components/Settings/useSystemLogsPanelState.ts`
-56. `frontend-modern/src/utils/systemLogsPresentation.ts`
-57. `frontend-modern/src/components/Settings/__tests__/SystemLogsPanel.test.tsx`
-58. `frontend-modern/src/features/operations/OperationsPageSurface.tsx`
-59. `frontend-modern/src/features/operations/operationsPageModel.ts`
-60. `frontend-modern/src/pages/Operations.tsx`
-61. `frontend-modern/src/components/Settings/ResourcePicker.tsx`
-62. `frontend-modern/src/components/Settings/reportingResourceTypes.ts`
-63. `frontend-modern/src/utils/reportableResourceTypes.ts`
-64. `frontend-modern/src/utils/reportingResourceTypes.ts`
-65. `frontend-modern/src/utils/problemResourcePresentation.ts`
-66. `frontend-modern/src/utils/dashboardEmptyStatePresentation.ts`
-67. `frontend-modern/src/utils/dashboardGuestPresentation.ts`
-68. `frontend-modern/src/utils/dashboardKpiPresentation.ts`
-69. `frontend-modern/src/utils/dashboardTrendPresentation.ts`
-70. `frontend-modern/src/components/Toast/Toast.tsx`
-71. `frontend-modern/src/utils/toast.ts`
-72. `frontend-modern/src/utils/semanticTonePresentation.ts`
-73. `frontend-modern/src/utils/emptyStatePresentation.ts`
-74. `frontend-modern/src/utils/typeColumnPresentation.ts`
-61. `frontend-modern/src/pages/__tests__/Operations.helpers.test.ts`
-59. `frontend-modern/src/components/Settings/NetworkDiscoverySection.tsx`
-60. `frontend-modern/src/components/Settings/NetworkBoundarySettingsSection.tsx`
-61. `frontend-modern/src/components/Settings/networkSettingsModel.ts`
-62. `frontend-modern/src/components/Settings/useDiscoverySettingsState.ts`
-63. `frontend-modern/src/components/Settings/useSettingsInfrastructurePanelProps.ts`
-64. `frontend-modern/src/components/Settings/settingsPanelRegistryContext.tsx`
-65. `frontend-modern/src/components/Settings/settingsPanelRegistryLoaders.ts`
-66. `frontend-modern/src/components/Settings/settingsNavigationModel.ts`
-67. `frontend-modern/src/components/Settings/settingsNavCatalog.ts`
-68. `frontend-modern/src/components/Settings/settingsNavVisibility.ts`
-69. `frontend-modern/src/components/Settings/settingsRouting.ts`
-70. `frontend-modern/src/components/Settings/settingsTabSaveBehavior.ts`
-71. `frontend-modern/src/components/Settings/settingsTypes.ts`
-72. `frontend-modern/src/components/Settings/useSettingsNavigation.ts`
-73. `frontend-modern/src/components/Settings/useSettingsPanelRegistry.tsx`
-74. `frontend-modern/src/components/Settings/useSettingsSystemPanels.tsx`
-75. `frontend-modern/src/components/Settings/DockerRuntimeSettingsCard.tsx`
-76. `frontend-modern/src/components/shared/EnvironmentLockBadge.tsx`
-77. `frontend-modern/src/utils/environmentLockPresentation.ts`
+51. `frontend-modern/src/components/SetupWizard/steps/WelcomeStep.tsx`
+52. `frontend-modern/src/components/SetupWizard/__tests__/SetupWizard.test.tsx`
+53. `frontend-modern/src/components/SetupWizard/__tests__/SetupCompletionPreview.test.tsx`
+54. `frontend-modern/src/components/SetupWizard/__tests__/WelcomeStep.test.tsx`
+55. `frontend-modern/src/components/shared/MonitoredSystemLimitWarningBanner.tsx`
+56. `frontend-modern/src/components/Settings/SystemLogsPanel.tsx`
+57. `frontend-modern/src/components/Settings/useSystemLogsPanelState.ts`
+58. `frontend-modern/src/utils/systemLogsPresentation.ts`
+59. `frontend-modern/src/components/Settings/__tests__/SystemLogsPanel.test.tsx`
+60. `frontend-modern/src/features/operations/OperationsPageSurface.tsx`
+61. `frontend-modern/src/features/operations/operationsPageModel.ts`
+62. `frontend-modern/src/pages/Operations.tsx`
+63. `frontend-modern/src/components/Settings/ResourcePicker.tsx`
+64. `frontend-modern/src/components/Settings/reportingResourceTypes.ts`
+65. `frontend-modern/src/utils/reportableResourceTypes.ts`
+66. `frontend-modern/src/utils/reportingResourceTypes.ts`
+67. `frontend-modern/src/utils/problemResourcePresentation.ts`
+68. `frontend-modern/src/utils/dashboardEmptyStatePresentation.ts`
+69. `frontend-modern/src/utils/dashboardGuestPresentation.ts`
+70. `frontend-modern/src/utils/dashboardKpiPresentation.ts`
+71. `frontend-modern/src/utils/dashboardTrendPresentation.ts`
+72. `frontend-modern/src/components/Toast/Toast.tsx`
+73. `frontend-modern/src/utils/toast.ts`
+74. `frontend-modern/src/utils/semanticTonePresentation.ts`
+75. `frontend-modern/src/utils/emptyStatePresentation.ts`
+76. `frontend-modern/src/utils/typeColumnPresentation.ts`
+77. `frontend-modern/src/pages/__tests__/Operations.helpers.test.ts`
+78. `frontend-modern/src/components/Settings/NetworkDiscoverySection.tsx`
+79. `frontend-modern/src/components/Settings/NetworkBoundarySettingsSection.tsx`
+80. `frontend-modern/src/components/Settings/networkSettingsModel.ts`
+81. `frontend-modern/src/components/Settings/useDiscoverySettingsState.ts`
+82. `frontend-modern/src/components/Settings/useSettingsInfrastructurePanelProps.ts`
+83. `frontend-modern/src/components/Settings/settingsPanelRegistryContext.tsx`
+84. `frontend-modern/src/components/Settings/settingsPanelRegistryLoaders.ts`
+85. `frontend-modern/src/components/Settings/settingsNavigationModel.ts`
+86. `frontend-modern/src/components/Settings/settingsNavCatalog.ts`
+87. `frontend-modern/src/components/Settings/settingsNavVisibility.ts`
+88. `frontend-modern/src/components/Settings/settingsRouting.ts`
+89. `frontend-modern/src/components/Settings/settingsTabSaveBehavior.ts`
+90. `frontend-modern/src/components/Settings/settingsTypes.ts`
+91. `frontend-modern/src/components/Settings/useSettingsNavigation.ts`
+92. `frontend-modern/src/components/Settings/useSettingsPanelRegistry.tsx`
+93. `frontend-modern/src/components/Settings/useSettingsSystemPanels.tsx`
+94. `frontend-modern/src/components/Settings/DockerRuntimeSettingsCard.tsx`
+95. `frontend-modern/src/components/shared/EnvironmentLockBadge.tsx`
+96. `frontend-modern/src/utils/environmentLockPresentation.ts`
 
 ## Shared Boundaries
 
@@ -171,13 +173,20 @@ work extends shared components instead of creating new local variants.
    completion CTA language aligned with the governed infrastructure install
    workspace instead of regressing to a route jump that leaves the next action
    implicit.
-8. Keep the settings-shell infrastructure landing path aligned with that same
+8. Keep the first welcome screen in
+   `frontend-modern/src/components/SetupWizard/steps/WelcomeStep.tsx`
+   explicit about operator context. The shell must explain that the bootstrap
+   token only unlocks first-run setup, state where the command should run, and
+   adapt command/help text to detected Docker or containerized deployments
+   instead of assuming the operator already knows which host or container owns
+   the Pulse install.
+9. Keep the settings-shell infrastructure landing path aligned with that same
    first-session story. `frontend-modern/src/components/Settings/settingsNavigationModel.ts`
    must treat `/settings` and the infrastructure settings tab as the canonical
    path to `/settings/infrastructure/install`, not to reporting/control, so
    the shell does not send first-time operators to the wrong infrastructure
    subview by default.
-9. Keep dashboard onboarding copy on the shared presentation owner in
+10. Keep dashboard onboarding copy on the shared presentation owner in
    `frontend-modern/src/utils/dashboardEmptyStatePresentation.ts`. Both the
    infrastructure empty state and the dashboard route's no-resources state
    must name the canonical install workspace explicitly and expose the same
