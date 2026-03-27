@@ -1,4 +1,5 @@
 import type { SettingsHeaderMetaMap } from './settingsNavigationModel';
+import { SELF_HOSTED_PRO_BILLING_PRESENTATION } from '@/utils/licensePresentation';
 
 export const SETTINGS_HEADER_META: SettingsHeaderMetaMap = {
   proxmox: {
@@ -38,8 +39,7 @@ export const SETTINGS_HEADER_META: SettingsHeaderMetaMap = {
   },
   'system-billing': {
     title: 'Pulse Pro',
-    description:
-      'Manage self-hosted Pulse Pro billing, monitored-system limits, and license status for paid features.',
+    description: SELF_HOSTED_PRO_BILLING_PRESENTATION.shellDescription,
   },
   'organization-overview': {
     title: 'Organization Overview',

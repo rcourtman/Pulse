@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { SELF_HOSTED_PRO_BILLING_PRESENTATION } from '@/utils/licensePresentation';
 import settingsSource from '../Settings.tsx?raw';
 import settingsDialogsSource from '../SettingsDialogs.tsx?raw';
 import settingsShellSource from '../SettingsPageShell.tsx?raw';
@@ -1271,8 +1272,9 @@ describe('Settings architecture guardrails', () => {
     expect(SETTINGS_HEADER_META['infrastructure-operations'].description).not.toContain(
       'installed-agent',
     );
-    expect(SETTINGS_HEADER_META['system-billing'].description).toContain('license status');
-    expect(SETTINGS_HEADER_META['system-billing'].description).not.toContain('allocation');
+    expect(SETTINGS_HEADER_META['system-billing'].description).toBe(
+      SELF_HOSTED_PRO_BILLING_PRESENTATION.shellDescription,
+    );
     expect(SETTINGS_HEADER_META['organization-billing'].description).toContain(
       'subscription status',
     );
