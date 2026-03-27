@@ -156,7 +156,7 @@ describe('shell view', function() {
     expect(html).toContain('Healthy</span>');
     expect(html).toContain('Needs attention</span>');
     expect(html).toContain('Checking</span>');
-    expect(html).toContain('Live updates and health checks are currently good.');
+    expect(html).toContain('Ready for operator work');
     expect(html).toContain('This workspace needs attention before it is trustworthy.');
     expect(html).toContain('This workspace is still waiting on a completed health check.');
     expect(html).toContain('/api/accounts/acct_1/tenants/ws_active/handoff');
@@ -188,7 +188,7 @@ describe('shell view', function() {
 
     expect(html).toContain('<h1>Self-hosted Pulse Account</h1>');
     expect(html).toContain('No hosted workspace access is attached to this account yet.');
-    expect(html).toContain('Use this area for self-hosted billing, license recovery, refunds, and privacy requests.');
+    expect(html).toContain('Use these tools for self-hosted billing, license recovery, refunds, and privacy.');
     expect(html).toContain('Account services');
     expect(html).not.toContain('Self-hosted licenses and billing');
   });

@@ -116,20 +116,19 @@ function renderServiceActionRow(
   }).join('');
   return (
     '<article class="service-action-row">' +
-      '<div class="service-action-tags">' +
-        '<span class="service-card-kicker">' + kicker + '</span>' +
-        '<span class="service-action-tag">Self-hosted</span>' +
-      '</div>' +
-      '<div class="service-action-copy">' +
-        '<h3>' + title + '</h3>' +
-        '<p>' + description + '</p>' +
-      '</div>' +
-      '<div class="service-action-highlights">' + highlightHTML + '</div>' +
-      '<div class="service-action-footer">' +
-        '<div class="service-action-caption">Open the dedicated account flow for this request.</div>' +
-        '<div class="service-action-cta">' +
-          '<button class="btn-secondary service-action-button" type="button" id="' + id + '" data-account-service-action="open-service-panel" data-account-service-panel="' + panelID + '" data-account-service-focus="' + focusID + '" data-shell-target="services">Open</button>' +
+      '<div class="service-action-main">' +
+        '<div class="service-action-tags">' +
+          '<span class="service-card-kicker">' + kicker + '</span>' +
+          '<span class="service-action-tag">Self-hosted</span>' +
         '</div>' +
+        '<div class="service-action-copy">' +
+          '<h3>' + title + '</h3>' +
+          '<p>' + description + '</p>' +
+        '</div>' +
+        '<div class="service-action-highlights">' + highlightHTML + '</div>' +
+      '</div>' +
+      '<div class="service-action-cta">' +
+        '<button class="btn-secondary service-action-button" type="button" id="' + id + '" data-account-service-action="open-service-panel" data-account-service-panel="' + panelID + '" data-account-service-focus="' + focusID + '" data-shell-target="services">Open</button>' +
       '</div>' +
     '</article>'
   );
@@ -149,6 +148,13 @@ function workspaceStatusCopy(workspace: PortalWorkspaceSummary): string {
   if (status === 'healthy') return 'Live updates and health checks are currently good.';
   if (status === 'unhealthy') return 'This workspace needs attention before it is trustworthy.';
   return 'This workspace is still waiting on a completed health check.';
+}
+
+function workspaceRowNote(workspace: PortalWorkspaceSummary): string {
+  var status = workspaceHealthState(workspace);
+  if (status === 'healthy') return 'Ready for operator work';
+  if (status === 'unhealthy') return 'Review this workspace before treating it as stable';
+  return 'Awaiting a completed health check';
 }
 
 function attentionWorkspaces(workspaces: PortalWorkspaceSummary[]): PortalWorkspaceSummary[] {
@@ -248,7 +254,7 @@ function renderShellNavigation(accounts: PortalAccountSummary[], supportEmail: s
       '<div class="portal-shell-nav-header">' +
         '<div class="portal-shell-nav-eyebrow">Pulse Account</div>' +
         '<div class="portal-shell-nav-title">' + (hosted ? 'Operator console' : 'Account console') + '</div>' +
-        '<div class="portal-shell-nav-support">' + escapeHTML(supportEmail || 'support@pulserelay.pro') + '</div>' +
+        '<div class="portal-shell-nav-support">' + (hosted ? 'Hosted operations and account services' : 'Commercial account services and support') + '</div>' +
       '</div>' +
       '<div class="portal-shell-nav-group">' +
         shellSectionButton('overview', activeSection, 'Overview', hosted ? 'Posture, accounts, and quick actions' : 'Account summary and access state') +
@@ -256,6 +262,10 @@ function renderShellNavigation(accounts: PortalAccountSummary[], supportEmail: s
         shellSectionButton('team', activeSection, 'Team', hosted ? 'Access and operator roster' : 'Account membership') +
         shellSectionButton('services', activeSection, 'Account services', 'Licenses, billing, refunds, and privacy') +
         shellSectionButton('support', activeSection, 'Support', supportEmail || 'Support contact') +
+      '</div>' +
+      '<div class="portal-shell-nav-footer">' +
+        '<div class="portal-shell-nav-footer-label">Need help?</div>' +
+        '<a class="portal-shell-nav-footer-link" href="mailto:' + escapeAttr(supportEmail || 'support@pulserelay.pro') + '">' + escapeHTML(supportEmail || 'support@pulserelay.pro') + '</a>' +
       '</div>' +
     '</aside>'
   );
@@ -299,24 +309,18 @@ function renderWorkspaceCard(account: PortalAccountSummary, workspace: PortalWor
 
   return (
     '<article class="workspace-row">' +
-      '<div class="workspace-row-main">' +
-        '<div class="workspace-row-title">' +
-          '<div class="workspace-row-heading">' +
-            '<h4 class="workspace-name">' + escapeHTML(workspace.display_name) + '</h4>' +
-            '<div class="workspace-meta">' + metaParts.join('') + '</div>' +
-          '</div>' +
-          '<p class="workspace-summary">' + escapeHTML(workspaceStatusCopy(workspace)) + '</p>' +
+      '<div class="workspace-row-primary">' +
+        '<div class="workspace-row-heading">' +
+          '<h4 class="workspace-name">' + escapeHTML(workspace.display_name) + '</h4>' +
+          '<div class="workspace-meta">' + metaParts.join('') + '</div>' +
         '</div>' +
-        '<div class="workspace-row-status-grid">' +
-          '<div class="workspace-row-status-cell">' +
-            '<span class="workspace-row-status-label">Health</span>' +
-            healthBadgeHTML(workspace) +
-          '</div>' +
-          '<div class="workspace-row-status-cell">' +
-            '<span class="workspace-row-status-label">Lifecycle</span>' +
-            '<span class="badge badge-' + escapeHTML(state || 'unknown') + '">' + escapeHTML(titleCase(state || 'Unknown')) + '</span>' +
-          '</div>' +
-        '</div>' +
+        '<div class="workspace-row-note">' + escapeHTML(workspaceRowNote(workspace)) + '</div>' +
+      '</div>' +
+      '<div class="workspace-row-status-cell workspace-row-status-cell-badge">' +
+        healthBadgeHTML(workspace) +
+      '</div>' +
+      '<div class="workspace-row-status-cell workspace-row-status-cell-badge">' +
+        '<span class="badge badge-' + escapeHTML(state || 'unknown') + '">' + escapeHTML(titleCase(state || 'Unknown')) + '</span>' +
       '</div>' +
       '<div class="workspace-actions">' +
         openAction +
@@ -406,30 +410,32 @@ function renderAccountOverviewSection(account: PortalAccountSummary): string {
     '<section class="account-content-panel account-content-panel-overview">' +
       '<div class="account-command-deck">' +
         '<div class="account-overview-card">' +
-          '<div class="account-panel-kicker">Hosted posture</div>' +
-          '<h3>' + escapeHTML(postureTitle) + '</h3>' +
-          '<p>' + escapeHTML(postureCopy) + '</p>' +
-          '<div class="account-overview-callout">' + escapeHTML(account.kind === 'msp'
-            ? 'Use this console to run client workspaces, account billing, and operator access from one place.'
-            : 'Use this console to run hosted workspaces, account billing, and operator access from one place.'
-          ) + '</div>' +
-        '</div>' +
-        '<div class="account-metric-strip">' +
-          '<div class="account-stat-card account-stat-card-inline">' +
-            '<span class="account-stat-label">Active workspaces</span>' +
-            '<span class="account-stat-value">' + String(activeCount) + '</span>' +
+          '<div class="account-overview-lead">' +
+            '<div class="account-panel-kicker">Hosted posture</div>' +
+            '<h3>' + escapeHTML(postureTitle) + '</h3>' +
+            '<p>' + escapeHTML(postureCopy) + '</p>' +
+            '<div class="account-overview-callout">' + escapeHTML(account.kind === 'msp'
+              ? 'Use this console to run client workspaces, account billing, and operator access from one place.'
+              : 'Use this console to run hosted workspaces, account billing, and operator access from one place.'
+            ) + '</div>' +
           '</div>' +
-          '<div class="account-stat-card account-stat-card-inline">' +
-            '<span class="account-stat-label">Healthy</span>' +
-            '<span class="account-stat-value account-stat-healthy">' + String(healthyCount) + '</span>' +
-          '</div>' +
-          '<div class="account-stat-card account-stat-card-inline">' +
-            '<span class="account-stat-label">Checking</span>' +
-            '<span class="account-stat-value account-stat-checking">' + String(checkingCount) + '</span>' +
-          '</div>' +
-          '<div class="account-stat-card account-stat-card-inline">' +
-            '<span class="account-stat-label">Needs attention</span>' +
-            '<span class="account-stat-value account-stat-unhealthy">' + String(unhealthyCount) + '</span>' +
+          '<div class="account-metric-strip">' +
+            '<div class="account-stat-card account-stat-card-inline">' +
+              '<span class="account-stat-label">Active workspaces</span>' +
+              '<span class="account-stat-value">' + String(activeCount) + '</span>' +
+            '</div>' +
+            '<div class="account-stat-card account-stat-card-inline">' +
+              '<span class="account-stat-label">Healthy</span>' +
+              '<span class="account-stat-value account-stat-healthy">' + String(healthyCount) + '</span>' +
+            '</div>' +
+            '<div class="account-stat-card account-stat-card-inline">' +
+              '<span class="account-stat-label">Checking</span>' +
+              '<span class="account-stat-value account-stat-checking">' + String(checkingCount) + '</span>' +
+            '</div>' +
+            '<div class="account-stat-card account-stat-card-inline">' +
+              '<span class="account-stat-label">Needs attention</span>' +
+              '<span class="account-stat-value account-stat-unhealthy">' + String(unhealthyCount) + '</span>' +
+            '</div>' +
           '</div>' +
         '</div>' +
         actions +
@@ -713,26 +719,15 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
             '</div>' +
             '<div class="service-shell">' +
               '<aside class="service-shell-sidebar">' +
-                '<div class="service-brief-card service-brief-card-primary">' +
-                  '<div class="account-panel-kicker">Scope</div>' +
-                  '<h3>Commercial account actions</h3>' +
-                  '<p>Use this area for self-hosted billing, license recovery, refunds, and privacy requests. Hosted workspace operations stay in the Workspaces and Team sections.</p>' +
+                '<div class="service-list-intro">' +
+                  '<div class="account-panel-kicker">Commercial actions</div>' +
+                  '<p>Use these tools for self-hosted billing, license recovery, refunds, and privacy. Hosted workspace operations stay in Workspaces and Team.</p>' +
                 '</div>' +
                 '<div class="service-action-list">' +
                   renderServiceActionRow('open-manage-service', 'Billing', 'Manage subscriptions', 'Open Stripe billing access for existing self-hosted subscriptions without leaving the Pulse Account shell.', 'manage-service-panel', 'manage-inline-email', ['Invoices and plan changes', 'Subscription self-service']) +
                   renderServiceActionRow('open-retrieve-service', 'Licenses', 'Retrieve licenses', 'Recover the latest active self-hosted license and invoice link for a commercial email address.', 'retrieve-service-panel', 'retrieve-inline-email', ['Latest active license', 'Invoice lookup']) +
                   renderServiceActionRow('open-refund-service', 'Refunds', 'Refund requests', 'Request an immediate self-serve refund for eligible self-hosted purchases with explicit revocation confirmation.', 'refund-service-panel', 'refund-inline-email', ['Eligibility check', 'Explicit revocation']) +
                   renderServiceActionRow('open-data-service', 'Privacy', 'Data and privacy', 'Request commercial data export or deletion without leaving the account shell.', 'data-service-panel', 'data-export-email', ['Export or deletion', 'Support escalation path']) +
-                '</div>' +
-                '<div class="service-brief-card">' +
-                  '<div class="account-panel-kicker">Support</div>' +
-                  '<h3>Need help with a commercial request?</h3>' +
-                  '<p>Use support if billing, refund, privacy, or license actions do not behave as expected for this account.</p>' +
-                  '<a class="portal-support-link" href="mailto:' +
-                  escapeAttr(context.bootstrap.support_email || '') +
-                  '">' +
-                  escapeHTML(context.bootstrap.support_email || '') +
-                  '</a>' +
                 '</div>' +
               '</aside>' +
               '<div class="service-shell-main">' +
@@ -746,6 +741,11 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
                       '<div class="service-empty-point"><strong>Licenses</strong><span>Recover the latest active self-hosted license and invoice link.</span></div>' +
                       '<div class="service-empty-point"><strong>Privacy</strong><span>Request export or deletion without leaving Pulse Account.</span></div>' +
                     '</div>' +
+                    '<div class="service-empty-support">Need help with billing, refund, privacy, or license actions? <a class="portal-support-link" href="mailto:' +
+                    escapeAttr(context.bootstrap.support_email || '') +
+                    '">' +
+                    escapeHTML(context.bootstrap.support_email || '') +
+                    '</a></div>' +
                   '</div>' +
                   '<div class="service-panel" id="manage-service-panel"><div id="manage-service-root"></div></div>' +
                   '<div class="service-panel" id="retrieve-service-panel"><div id="retrieve-service-root"></div></div>' +
@@ -761,6 +761,15 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
                     escapeHTML(context.bootstrap.support_email || '') +
                     '</a>.</div>' +
                   '</div>' +
+                '</div>' +
+                '<div class="service-inline-support">' +
+                  '<div class="account-panel-kicker">Support</div>' +
+                  '<p>Use support if a billing, refund, privacy, or license flow does not behave as expected for this account.</p>' +
+                  '<a class="portal-support-link" href="mailto:' +
+                  escapeAttr(context.bootstrap.support_email || '') +
+                  '">' +
+                  escapeHTML(context.bootstrap.support_email || '') +
+                  '</a>' +
                 '</div>' +
               '</div>' +
             '</div>' +
