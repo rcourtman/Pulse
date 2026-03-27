@@ -485,13 +485,13 @@ const Recovery: Component = () => {
       />
 
       <div ref={historySectionRef} class="flex flex-col gap-4">
-        <div class="flex flex-col gap-2 rounded-md border border-border bg-surface px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+        <div class="flex flex-col gap-2 rounded-md border border-border bg-surface px-3 py-1.5 sm:flex-row sm:items-center sm:justify-between">
           <Subtabs
             value={workspaceView()}
             onChange={(value) => setWorkspaceView(value as RecoveryWorkspaceView)}
             ariaLabel="Recovery data view"
             listClass="flex flex-wrap items-center gap-2"
-            tabClass="min-h-8 px-2.5 py-1.5 text-sm"
+            tabClass="min-h-7 px-2.5 py-1 text-sm"
             tabs={[
               {
                 value: 'inventory',
@@ -514,7 +514,7 @@ const Recovery: Component = () => {
             ]}
           />
           <Show when={rollupId().trim().length > 0}>
-            <span class="inline-flex w-fit items-center rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-300">
+            <span class="inline-flex w-fit items-center rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-300">
               Focused drill-in
             </span>
           </Show>

@@ -241,7 +241,7 @@ export const RecoveryProtectedInventorySection: Component<
       tone="card"
       class="overflow-hidden border-border-subtle bg-surface"
     >
-      <div class="border-b border-border-subtle/80 bg-surface px-4 py-2.5">
+      <div class="border-b border-border-subtle/80 bg-surface px-4 py-2">
         <div class="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
           <div class="flex flex-wrap items-center gap-3 text-[11px] text-muted">
             <span class="font-medium text-base-content">
@@ -282,7 +282,7 @@ export const RecoveryProtectedInventorySection: Component<
       </div>
 
       <Show when={!props.kioskMode}>
-        <div class="border-b border-border-subtle/80 bg-surface px-4 py-3">
+        <div class="border-b border-border-subtle/80 bg-surface px-4 py-2.5">
           <PageControls
             search={
               <SearchInput

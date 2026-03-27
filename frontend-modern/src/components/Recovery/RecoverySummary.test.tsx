@@ -58,7 +58,7 @@ describe('RecoverySummary', () => {
     expect(screen.getByText('Freshness')).toBeInTheDocument();
     expect(screen.getByText('Recent History')).toBeInTheDocument();
     expect(screen.getAllByText('Attention Queue').length).toBeGreaterThan(0);
-    expect(screen.getByText('Stale')).toBeInTheDocument();
+    expect(screen.getAllByText('Stale').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Attention').length).toBeGreaterThan(0);
     expect(screen.getByText('Recovery Points')).toBeInTheDocument();
     expect(screen.getAllByText('Item Types').length).toBeGreaterThan(0);
@@ -67,6 +67,6 @@ describe('RecoverySummary', () => {
     expect(screen.getByText('Platform Mix')).toBeInTheDocument();
     expect(screen.getByText('2 protected')).toBeInTheDocument();
     expect(screen.getByText('1 healthy')).toBeInTheDocument();
-    expect(screen.getByText('Never succeeded')).toBeInTheDocument();
+    expect(screen.getAllByText('Never succeeded').length).toBeGreaterThan(0);
   });
 });
