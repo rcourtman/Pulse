@@ -597,7 +597,7 @@ describe('Recovery', () => {
     expect(screen.queryByText('All Providers')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('tab', { name: /Recovery events/i }));
-    expect(await screen.findByLabelText('History platform')).toBeInTheDocument();
+    expect(await screen.findByLabelText('Platform')).toBeInTheDocument();
     expect(screen.queryByText('All Providers')).not.toBeInTheDocument();
   });
 

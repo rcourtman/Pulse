@@ -667,6 +667,12 @@ already establish the active workspace. `RecoveryProtectedInventorySection.tsx`
 should keep page/count/sort orientation inside a slim table-shell status row
 and let the filter strip lead directly into the grid instead of reintroducing a
 second large inventory header card above the same table.
+That same shell rule applies to the recovery-events workspace.
+`RecoveryHistorySection.tsx` should use the same slim status-row-plus-filter-row
+pattern as the protected inventory surface, not a separate large titled header
+bar plus another full toolbar slab. Event filter labels should also stay on the
+canonical short Pulse vocabulary like `Platform` and `Status` instead of
+recovery-only variants such as `History platform` or `History status`.
 That shared unified-resource dependency now also includes policy-governed
 resource metadata on the frontend decode path: storage and recovery surfaces
 that route through `frontend-modern/src/hooks/useUnifiedResources.ts` must

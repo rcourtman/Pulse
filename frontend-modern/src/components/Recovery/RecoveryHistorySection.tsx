@@ -128,12 +128,29 @@ export const RecoveryHistorySection: Component<RecoveryHistorySectionProps> = (p
   });
 
   return (
-    <Card padding="none" tone="card" class="mb-4 overflow-hidden">
-      <div class="border-b border-border bg-surface-hover px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted">
-        Recovery Events
+    <Card padding="none" tone="card" class="overflow-hidden border-border-subtle bg-surface">
+      <div class="border-b border-border-subtle/80 bg-surface px-4 py-2.5">
+        <div class="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+          <div class="flex flex-wrap items-center gap-3 text-[11px] text-muted">
+            <span class="font-medium text-base-content">Recovery Events</span>
+            <span>
+              {props.recoveryPoints.meta().total} event
+              {props.recoveryPoints.meta().total === 1 ? '' : 's'}
+            </span>
+            <span>
+              Page {props.currentPage()} / {props.totalPages()}
+            </span>
+            <Show when={props.groupedByDay().length > 0}>
+              <span>
+                {props.groupedByDay().length} day group
+                {props.groupedByDay().length === 1 ? '' : 's'}
+              </span>
+            </Show>
+          </div>
+        </div>
       </div>
       <Show when={!props.kioskMode}>
-        <div class="border-b border-border px-3 py-3">
+        <div class="border-b border-border-subtle/80 bg-surface px-4 py-3">
           <PageControls
             search={
               <SearchInput
@@ -144,6 +161,7 @@ export const RecoveryHistorySection: Component<RecoveryHistorySectionProps> = (p
                 }}
                 placeholder={getRecoveryHistorySearchPlaceholder()}
                 class="w-full"
+                inputClass="py-2 text-sm"
                 clearOnEscape
                 history={{
                   storageKey: STORAGE_KEYS.RECOVERY_SEARCH_HISTORY,
@@ -371,7 +389,7 @@ export const RecoveryHistorySection: Component<RecoveryHistorySectionProps> = (p
 
             <LabeledFilterSelect
               id="recovery-platform-filter-history"
-              label="History platform"
+              label="Platform"
               value={props.platformFilter()}
               onChange={(event) => {
                 props.setPlatformFilter(
@@ -392,7 +410,7 @@ export const RecoveryHistorySection: Component<RecoveryHistorySectionProps> = (p
 
             <LabeledFilterSelect
               id="recovery-status-filter"
-              label="History status"
+              label="Status"
               value={props.historyOutcomeFilter()}
               onChange={(event) => {
                 const value = event.currentTarget.value as 'all' | RecoveryOutcome;
