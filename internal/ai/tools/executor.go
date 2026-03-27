@@ -761,7 +761,7 @@ func (e *PulseToolExecutor) isToolAvailable(name string) bool {
 	case "pulse_metrics":
 		return e.hasReadState() || e.metricsHistory != nil || e.baselineProvider != nil || e.patternProvider != nil
 	case "pulse_storage":
-		return e.hasReadState() || e.unifiedResourceProvider != nil || e.backupProvider != nil || e.diskHealthProvider != nil
+		return e.hasReadState() || e.unifiedResourceProvider != nil || e.backupProvider != nil || e.diskHealthProvider != nil || e.recoveryPointsProvider != nil
 	case "pulse_docker":
 		return e.hasReadState() || e.updatesProvider != nil
 	case "pulse_kubernetes":

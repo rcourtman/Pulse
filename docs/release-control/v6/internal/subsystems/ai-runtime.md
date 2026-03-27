@@ -156,6 +156,10 @@ tool runtime in `internal/ai/tools/tools_storage.go` must still keep snapshot
 and backup-task results visible by preferring canonical point fields such as
 `display.clusterLabel`, `display.nodeHostLabel`, `display.entityIdLabel`,
 `display.itemType`, and point outcome before falling back to raw `details`.
+That availability contract also applies when recovery points are the only storage data source.
+`internal/ai/tools/executor.go` must keep `pulse_storage` exposed whenever a
+`RecoveryPointsProvider` is configured, so tenant and self-hosted Chat surfaces do not lose
+recovery-backed snapshot and backup-task reads just because backup/read-state adapters are absent.
 Tenant-scoped AI services must now also follow canonical runtime ownership:
 Patrol may initialize and operate from tenant `ReadState` and unified-resource
 providers without requiring a tenant snapshot-provider bridge, and
