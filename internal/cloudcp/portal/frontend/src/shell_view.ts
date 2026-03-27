@@ -196,7 +196,6 @@ function renderAttentionPanel(workspaces: PortalWorkspaceSummary[]): string {
 function renderOverviewBand(accounts: PortalAccountSummary[]): string {
   var hosted = hasHostedAccounts(accounts);
   var workspaceTotal = countWorkspaces(accounts);
-  var statusText = hosted ? 'Hosted access is active on this account.' : 'No hosted workspace access is attached to this account yet.';
   var summary = hosted
     ? 'Hosted operations, operator access, and commercial account services.'
     : 'Billing, license recovery, refunds, and privacy actions until hosted access is attached.';
@@ -211,21 +210,12 @@ function renderOverviewBand(accounts: PortalAccountSummary[]): string {
               '<h1 class="portal-shell-head-title">' + (hosted ? 'Operator console' : 'Account console') + '</h1>' +
               '<span class="portal-shell-head-chip">' + (hosted ? 'Operator ready' : 'Self-hosted only') + '</span>' +
             '</div>' +
-            '<p><strong>' + statusText + '</strong> ' + summary + '</p>' +
+            '<p>' + summary + '</p>' +
           '</div>' +
-          '<div class="portal-shell-head-stats">' +
-            '<div class="portal-shell-head-stat">' +
-              '<span class="portal-shell-head-stat-label">Hosted access</span>' +
-              '<span class="portal-shell-head-stat-value">' + (hosted ? 'Active' : 'Not attached') + '</span>' +
-            '</div>' +
-            '<div class="portal-shell-head-stat">' +
-              '<span class="portal-shell-head-stat-label">Accounts</span>' +
-              '<span class="portal-shell-head-stat-value">' + (accounts.length === 1 ? '1 account' : String(accounts.length) + ' accounts') + '</span>' +
-            '</div>' +
-            '<div class="portal-shell-head-stat">' +
-              '<span class="portal-shell-head-stat-label">Workspace fleet</span>' +
-              '<span class="portal-shell-head-stat-value">' + (workspaceTotal ? workspaceCountLabel(workspaceTotal) : '0 workspaces') + '</span>' +
-            '</div>' +
+          '<div class="portal-shell-head-summary">' +
+            '<span class="portal-shell-summary-pill"><strong>Hosted access</strong>' + (hosted ? 'Active' : 'Not attached') + '</span>' +
+            '<span class="portal-shell-summary-pill"><strong>Accounts</strong>' + (accounts.length === 1 ? '1 account' : String(accounts.length) + ' accounts') + '</span>' +
+            '<span class="portal-shell-summary-pill"><strong>Workspace fleet</strong>' + (workspaceTotal ? workspaceCountLabel(workspaceTotal) : '0 workspaces') + '</span>' +
           '</div>' +
         '</div>' +
       '</div>' +
