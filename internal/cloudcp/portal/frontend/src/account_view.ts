@@ -25,6 +25,23 @@ function roleLabel(role: string): string {
   }
 }
 
+function roleCapabilityCopy(role: string): string {
+  switch (role) {
+    case 'owner':
+      return 'Full account control, including billing, team access, and hosted operations.';
+    case 'admin':
+      return 'Can manage hosted operations and billing for this account.';
+    case 'tech':
+      return 'Can operate hosted workspaces without billing ownership.';
+    case 'read_only':
+      return 'Can review hosted state without making control-plane changes.';
+    case 'member':
+      return 'Has access through the account roster.';
+    default:
+      return 'Has access through the account roster.';
+  }
+}
+
 export function getElement<T extends HTMLElement = HTMLElement>(id: string): T | null {
   return document.getElementById(id) as T | null;
 }
@@ -191,19 +208,25 @@ function renderTeamMemberRow(accountID: string, member: PortalTeamMember, isOwne
   var identity = document.createElement('div');
   identity.className = 'team-member-identity';
 
+  var topline = document.createElement('div');
+  topline.className = 'team-member-topline';
+
   var email = document.createElement('div');
   email.className = 'team-member-email';
   email.textContent = member.email;
-  identity.appendChild(email);
+  topline.appendChild(email);
+
+  var roleBadge = document.createElement('span');
+  roleBadge.className = 'team-inline-role-badge';
+  roleBadge.textContent = roleLabel(member.role);
+  topline.appendChild(roleBadge);
+
+  identity.appendChild(topline);
 
   var caption = document.createElement('div');
   caption.className = 'team-member-caption';
-  caption.textContent = member.role === 'owner' ? 'Full account control' : 'Hosted account access';
+  caption.textContent = roleCapabilityCopy(member.role);
   identity.appendChild(caption);
-
-  var roleSummary = document.createElement('div');
-  roleSummary.className = 'team-member-role-summary';
-  roleSummary.textContent = roleLabel(member.role);
 
   var controls = document.createElement('div');
   controls.className = 'team-member-controls';
@@ -212,7 +235,6 @@ function renderTeamMemberRow(accountID: string, member: PortalTeamMember, isOwne
   if (action) controls.appendChild(action);
 
   row.appendChild(identity);
-  row.appendChild(roleSummary);
   row.appendChild(controls);
   return row;
 }
@@ -224,7 +246,6 @@ function ensureRosterHead(container: HTMLElement): void {
   head.className = 'team-roster-head';
   head.innerHTML =
     '<span>Operator</span>' +
-    '<span>Access</span>' +
     '<span>Controls</span>';
   container.appendChild(head);
 }

@@ -566,6 +566,11 @@ function renderAccountTeamSection(account: PortalAccountSummary): string {
               '">Role</label><select id="invite-role-' +
               escapeAttr(account.id) +
               '"><option value="admin">Admin</option><option value="tech">Tech</option><option value="read_only">Read-only</option></select></div>' +
+              '<div class="team-invite-guide">' +
+                '<div class="team-invite-guide-row"><strong>Admin</strong><span>Billing and hosted operations.</span></div>' +
+                '<div class="team-invite-guide-row"><strong>Tech</strong><span>Operational access without billing control.</span></div>' +
+                '<div class="team-invite-guide-row"><strong>Read-only</strong><span>Review hosted state without making changes.</span></div>' +
+              '</div>' +
               '<button type="button" class="btn-primary btn-compact" data-action="invite-member" data-account-id="' +
               escapeAttr(account.id) +
               '">Invite</button>' +
