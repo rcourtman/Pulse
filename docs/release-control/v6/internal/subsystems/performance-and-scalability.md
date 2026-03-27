@@ -204,6 +204,12 @@ and `frontend-modern/src/components/Dashboard/useDashboardState.ts` must keep
 filters, stats, and table visibility driven by the workload route's own
 REST-backed health so websocket churn does not hide already-fetched workloads
 or swap the protected hot path into a false disconnected shell.
+The same performance ownership now applies to the downsampled
+`pkg/metrics/store.go` batched query path. `QueryAllBatch` may drop the global
+SQLite `ORDER BY resource_id, metric_type, bucket_ts` sort from the grouped
+query only if the runtime preserves ascending timestamps within every returned
+resource/metric series and the hot-path proof keeps both latency and ordering
+guarded together in the explicit metrics SLO surface.
 That runtime is now intentionally split by concern:
 `frontend-modern/src/components/Dashboard/useDashboardState.ts` owns
 top-level dashboard orchestration, workload loading, and composition across

@@ -385,6 +385,13 @@ func TestSLO_QueryAllBatch(t *testing.T) {
 		if len(result[id]) != len(metricTypes) {
 			t.Fatalf("sanity: expected %d metric types for %s, got %d", len(metricTypes), id, len(result[id]))
 		}
+		for metricType, points := range result[id] {
+			for i := 1; i < len(points); i++ {
+				if points[i].Timestamp.Before(points[i-1].Timestamp) {
+					t.Fatalf("sanity: expected ascending timestamps for %s/%s, got %v before %v", id, metricType, points[i], points[i-1])
+				}
+			}
+		}
 	}
 
 	latencies := measureLatencies(t, func() {
