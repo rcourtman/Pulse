@@ -16,7 +16,7 @@ func setRequiredCPEnv(t *testing.T) {
 
 func setTrialSigningEnv(t *testing.T) {
 	t.Helper()
-	t.Setenv("CP_TRIAL_ACTIVATION_PRIVATE_KEY", "test-activation-key")
+	t.Setenv("CP_TRIAL_ACTIVATION_PRIVATE_KEY", "A8medgdNdm12GXfTXWo6+TMZ2BeHPCLg2kd0znn6ZUk=")
 }
 
 func TestLoadConfig_MissingRequired(t *testing.T) {
@@ -91,6 +91,19 @@ func TestLoadConfig_CustomValues(t *testing.T) {
 	}
 	if cfg.BindAddress != "127.0.0.1" {
 		t.Errorf("BindAddress = %q", cfg.BindAddress)
+	}
+}
+
+func TestLoadConfig_DerivesTrialActivationPublicKey(t *testing.T) {
+	setRequiredCPEnv(t)
+	setTrialSigningEnv(t)
+
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if strings.TrimSpace(cfg.TrialActivationPublicKey) == "" {
+		t.Fatal("TrialActivationPublicKey = empty, want derived public key")
 	}
 }
 

@@ -21,13 +21,14 @@ import (
 
 // ManagerConfig holds Docker manager settings.
 type ManagerConfig struct {
-	Image             string
-	Network           string
-	BaseDomain        string
-	TrustedProxyCIDRs []string
-	MemoryLimit       int64 // bytes
-	CPUShares         int64
-	ContainerPort     int // port inside the container (default 7655)
+	Image                    string
+	Network                  string
+	BaseDomain               string
+	TrialActivationPublicKey string
+	TrustedProxyCIDRs        []string
+	MemoryLimit              int64 // bytes
+	CPUShares                int64
+	ContainerPort            int // port inside the container (default 7655)
 }
 
 // Manager orchestrates Docker containers for tenant lifecycle.
@@ -92,7 +93,7 @@ func (m *Manager) CreateAndStart(ctx context.Context, tenantID, tenantDataDir st
 		&container.Config{
 			Image:  m.cfg.Image,
 			Labels: labels,
-			Env:    tenantEnv(tenantID, m.cfg.BaseDomain, m.tenantTrustedProxyCIDRs(ctx)),
+			Env:    tenantEnv(tenantID, m.cfg.BaseDomain, m.cfg.TrialActivationPublicKey, m.tenantTrustedProxyCIDRs(ctx)),
 		},
 		&container.HostConfig{
 			RestartPolicy: container.RestartPolicy{Name: "unless-stopped"},
@@ -142,7 +143,7 @@ func tenantRuntimeOwnershipPaths() []string {
 	}
 }
 
-func tenantEnv(tenantID, baseDomain string, trustedProxyCIDRs []string) []string {
+func tenantEnv(tenantID, baseDomain, trialActivationPublicKey string, trustedProxyCIDRs []string) []string {
 	publicURL := ""
 	tenantID = strings.TrimSpace(tenantID)
 	baseDomain = strings.TrimSpace(baseDomain)
@@ -161,6 +162,9 @@ func tenantEnv(tenantID, baseDomain string, trustedProxyCIDRs []string) []string
 	}
 	if publicURL != "" {
 		env = append(env, "PULSE_PUBLIC_URL="+publicURL)
+	}
+	if strings.TrimSpace(trialActivationPublicKey) != "" {
+		env = append(env, "PULSE_TRIAL_ACTIVATION_PUBLIC_KEY="+strings.TrimSpace(trialActivationPublicKey))
 	}
 	if len(trustedProxyCIDRs) > 0 {
 		env = append(env, "PULSE_TRUSTED_PROXY_CIDRS="+strings.Join(trustedProxyCIDRs, ","))

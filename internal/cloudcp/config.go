@@ -1,6 +1,8 @@
 package cloudcp
 
 import (
+	"crypto/ed25519"
+	"encoding/base64"
 	"fmt"
 	"net/url"
 	"os"
@@ -9,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/joho/godotenv"
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 )
 
 // CPConfig holds all configuration for the control plane.
@@ -39,6 +42,7 @@ type CPConfig struct {
 	CloudPowerPriceID                 string // Cloud Power tier price ID (optional)
 	CloudMaxPriceID                   string // Cloud Max tier price ID (optional)
 	TrialActivationPrivateKey         string
+	TrialActivationPublicKey          string
 	RequireEmailProvider              bool
 	ResendAPIKey                      string // Resend API key (optional — if empty, emails are logged)
 	EmailFrom                         string // Sender email address (e.g. "noreply@pulserelay.pro")
@@ -128,11 +132,30 @@ func LoadConfig() (*CPConfig, error) {
 		ResendAPIKey:                      strings.TrimSpace(os.Getenv("RESEND_API_KEY")),
 		EmailFrom:                         envOrDefault("PULSE_EMAIL_FROM", "noreply@pulserelay.pro"),
 	}
+	if strings.TrimSpace(cfg.TrialActivationPrivateKey) != "" {
+		publicKey, err := deriveTrialActivationPublicKey(cfg.TrialActivationPrivateKey)
+		if err != nil {
+			return nil, fmt.Errorf("derive trial activation public key: %w", err)
+		}
+		cfg.TrialActivationPublicKey = publicKey
+	}
 
 	if err := cfg.validate(); err != nil {
 		return nil, fmt.Errorf("validate control plane config: %w", err)
 	}
 	return cfg, nil
+}
+
+func deriveTrialActivationPublicKey(encodedPrivateKey string) (string, error) {
+	privateKey, err := pkglicensing.DecodeEd25519PrivateKey(strings.TrimSpace(encodedPrivateKey))
+	if err != nil {
+		return "", err
+	}
+	publicKey, ok := privateKey.Public().(ed25519.PublicKey)
+	if !ok || len(publicKey) != ed25519.PublicKeySize {
+		return "", fmt.Errorf("invalid derived trial activation public key")
+	}
+	return base64.StdEncoding.EncodeToString(publicKey), nil
 }
 
 func (c *CPConfig) validate() error {

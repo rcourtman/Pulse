@@ -70,7 +70,7 @@ func TestTenantMountsKeepImmutableFilesReadOnly(t *testing.T) {
 func TestTenantEnvIncludesImmutableOwnershipContract(t *testing.T) {
 	t.Parallel()
 
-	env := tenantEnv("t-example", "cloud.pulserelay.pro", []string{"172.18.0.0/16", "127.0.0.1/32"})
+	env := tenantEnv("t-example", "cloud.pulserelay.pro", "pubkey-123", []string{"172.18.0.0/16", "127.0.0.1/32"})
 	want := map[string]bool{
 		"PULSE_DATA_DIR=/etc/pulse":       true,
 		"PULSE_HOSTED_MODE=true":          true,
@@ -79,6 +79,7 @@ func TestTenantEnvIncludesImmutableOwnershipContract(t *testing.T) {
 		"PUID=1000":                       true,
 		"PGID=1000":                       true,
 		"PULSE_PUBLIC_URL=https://t-example.cloud.pulserelay.pro":                                    true,
+		"PULSE_TRIAL_ACTIVATION_PUBLIC_KEY=pubkey-123":                                               true,
 		"PULSE_TRUSTED_PROXY_CIDRS=172.18.0.0/16,127.0.0.1/32":                                       true,
 		immutableOwnershipPathsEnv + "=/etc/pulse/secrets/handoff.key:/etc/pulse/.cloud_handoff_key": true,
 	}
@@ -95,7 +96,7 @@ func TestTenantEnvIncludesImmutableOwnershipContract(t *testing.T) {
 func TestTenantEnvOmitsPublicURLWithoutTenantContext(t *testing.T) {
 	t.Parallel()
 
-	env := tenantEnv("", "", nil)
+	env := tenantEnv("", "", "", nil)
 	sawTenantID := false
 	for _, item := range env {
 		if strings.HasPrefix(item, "PULSE_PUBLIC_URL=") {
