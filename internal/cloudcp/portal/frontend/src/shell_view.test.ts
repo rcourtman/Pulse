@@ -140,6 +140,11 @@ describe('shell view', function() {
     expect(html).toContain('Acme MSP');
     expect(html).toContain('Account operations');
     expect(html).toContain('Manage the client fleet from this account surface.');
+    expect(html).toContain('Operator overview');
+    expect(html).toContain('Start from the next action, not the whole account');
+    expect(html).toContain('Open workspaces');
+    expect(html).toContain('Review team access');
+    expect(html).toContain('Needs review');
     expect(html).toContain('Workspace fleet');
     expect(html).toContain('Alpha Workspace');
     expect(html).toContain('Beta Workspace');

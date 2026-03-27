@@ -124,11 +124,65 @@ function renderServiceActionRow(
   );
 }
 
+function renderOverviewQuickAction(section: PortalShellSection, title: string, copy: string): string {
+  return (
+    '<button class="overview-quick-action" type="button" data-shell-action="activate-section" data-shell-section="' + section + '">' +
+      '<span class="overview-quick-action-title">' + title + '</span>' +
+      '<span class="overview-quick-action-copy">' + copy + '</span>' +
+    '</button>'
+  );
+}
+
 function workspaceStatusCopy(workspace: PortalWorkspaceSummary): string {
   var status = workspaceHealthState(workspace);
   if (status === 'healthy') return 'Live updates and health checks are currently good.';
   if (status === 'unhealthy') return 'This workspace needs attention before it is trustworthy.';
   return 'This workspace is still waiting on a completed health check.';
+}
+
+function attentionWorkspaces(workspaces: PortalWorkspaceSummary[]): PortalWorkspaceSummary[] {
+  var results: PortalWorkspaceSummary[] = [];
+  for (var i = 0; i < workspaces.length; i += 1) {
+    var status = workspaceHealthState(workspaces[i]);
+    if (status === 'unhealthy' || status === 'checking') {
+      results.push(workspaces[i]);
+    }
+  }
+  return results;
+}
+
+function renderAttentionPanel(workspaces: PortalWorkspaceSummary[]): string {
+  var attention = attentionWorkspaces(workspaces);
+  if (!attention.length) {
+    return (
+      '<div class="overview-side-card">' +
+        '<div class="account-panel-kicker">Attention</div>' +
+        '<h4>Fleet is stable</h4>' +
+        '<p>Every visible hosted workspace currently reports a healthy posture.</p>' +
+      '</div>'
+    );
+  }
+
+  var items = attention.slice(0, 3).map(function(workspace) {
+    return (
+      '<div class="overview-alert-row">' +
+        '<div class="overview-alert-main">' +
+          '<strong>' + escapeHTML(workspace.display_name) + '</strong>' +
+          '<span>' + escapeHTML(workspaceStatusCopy(workspace)) + '</span>' +
+        '</div>' +
+        healthBadgeHTML(workspace) +
+      '</div>'
+    );
+  }).join('');
+
+  return (
+    '<div class="overview-side-card">' +
+      '<div class="account-panel-kicker">Attention</div>' +
+      '<h4>Needs review</h4>' +
+      '<p>These workspaces should be checked before you treat the hosted fleet as fully healthy.</p>' +
+      '<div class="overview-alert-list">' + items + '</div>' +
+    '</div>'
+  );
 }
 
 function renderOverviewBand(accounts: PortalAccountSummary[]): string {
@@ -357,6 +411,19 @@ function renderAccountOverviewSection(account: PortalAccountSummary): string {
         '</div>' +
         actions +
         addWorkspaceForm +
+        '<div class="account-overview-secondary">' +
+          '<div class="overview-side-card overview-side-card-primary">' +
+            '<div class="account-panel-kicker">Operator overview</div>' +
+            '<h4>Start from the next action, not the whole account</h4>' +
+            '<p>Use the overview for posture, then move into workspaces, team, or account services depending on what needs attention.</p>' +
+            '<div class="overview-quick-actions">' +
+              renderOverviewQuickAction('workspaces', 'Open workspaces', 'Review the hosted fleet and move into a workspace') +
+              renderOverviewQuickAction('team', 'Review team access', 'Check who can operate billing and hosted workspaces') +
+              renderOverviewQuickAction('services', 'Open account services', 'Handle billing, licenses, refunds, and privacy actions') +
+            '</div>' +
+          '</div>' +
+          renderAttentionPanel(workspaces) +
+        '</div>' +
       '</div>' +
     '</section>'
   );
@@ -619,25 +686,46 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
               '</div>' +
               '<div class="service-note">' + serviceNote + '</div>' +
             '</div>' +
-            '<div class="service-action-list">' +
-              renderServiceActionRow('open-manage-service', 'Billing', 'Manage subscriptions', 'Open Stripe billing access for existing self-hosted subscriptions without leaving the Pulse Account shell.', 'manage-service-panel', 'manage-inline-email') +
-              renderServiceActionRow('open-retrieve-service', 'Licenses', 'Retrieve licenses', 'Recover the latest active self-hosted license and invoice link for a commercial email address.', 'retrieve-service-panel', 'retrieve-inline-email') +
-              renderServiceActionRow('open-refund-service', 'Refunds', 'Refund requests', 'Request an immediate self-serve refund for eligible self-hosted purchases with explicit revocation confirmation.', 'refund-service-panel', 'refund-inline-email') +
-              renderServiceActionRow('open-data-service', 'Privacy', 'Data and privacy', 'Request commercial data export or deletion without leaving the account shell.', 'data-service-panel', 'data-export-email') +
-            '</div>' +
-            '<div class="service-panel" id="manage-service-panel"><div id="manage-service-root"></div></div>' +
-            '<div class="service-panel" id="retrieve-service-panel"><div id="retrieve-service-root"></div></div>' +
-            '<div class="service-panel" id="refund-service-panel"><div id="refund-service-root"></div></div>' +
-            '<div class="service-panel" id="data-service-panel">' +
-              '<h3>Data and privacy</h3>' +
-              '<p>Request export or deletion of the commercial data tied to an email address. Payment data held directly by Stripe still requires support handling.</p>' +
-              '<div class="subsection"><div id="data-export-root"></div></div>' +
-              '<div class="subsection"><div id="data-delete-root"></div></div>' +
-              '<div class="helper-text">Payment-card data stays with Stripe. For Stripe deletion support, contact <a href="mailto:' +
-              escapeAttr(context.bootstrap.support_email || '') +
-              '">' +
-              escapeHTML(context.bootstrap.support_email || '') +
-              '</a>.</div>' +
+            '<div class="service-shell">' +
+              '<div class="service-shell-main">' +
+                '<div class="service-action-list">' +
+                  renderServiceActionRow('open-manage-service', 'Billing', 'Manage subscriptions', 'Open Stripe billing access for existing self-hosted subscriptions without leaving the Pulse Account shell.', 'manage-service-panel', 'manage-inline-email') +
+                  renderServiceActionRow('open-retrieve-service', 'Licenses', 'Retrieve licenses', 'Recover the latest active self-hosted license and invoice link for a commercial email address.', 'retrieve-service-panel', 'retrieve-inline-email') +
+                  renderServiceActionRow('open-refund-service', 'Refunds', 'Refund requests', 'Request an immediate self-serve refund for eligible self-hosted purchases with explicit revocation confirmation.', 'refund-service-panel', 'refund-inline-email') +
+                  renderServiceActionRow('open-data-service', 'Privacy', 'Data and privacy', 'Request commercial data export or deletion without leaving the account shell.', 'data-service-panel', 'data-export-email') +
+                '</div>' +
+                '<div class="service-panel" id="manage-service-panel"><div id="manage-service-root"></div></div>' +
+                '<div class="service-panel" id="retrieve-service-panel"><div id="retrieve-service-root"></div></div>' +
+                '<div class="service-panel" id="refund-service-panel"><div id="refund-service-root"></div></div>' +
+                '<div class="service-panel" id="data-service-panel">' +
+                  '<h3>Data and privacy</h3>' +
+                  '<p>Request export or deletion of the commercial data tied to an email address. Payment data held directly by Stripe still requires support handling.</p>' +
+                  '<div class="subsection"><div id="data-export-root"></div></div>' +
+                  '<div class="subsection"><div id="data-delete-root"></div></div>' +
+                  '<div class="helper-text">Payment-card data stays with Stripe. For Stripe deletion support, contact <a href="mailto:' +
+                  escapeAttr(context.bootstrap.support_email || '') +
+                  '">' +
+                  escapeHTML(context.bootstrap.support_email || '') +
+                  '</a>.</div>' +
+                '</div>' +
+              '</div>' +
+              '<aside class="service-shell-sidebar">' +
+                '<div class="service-brief-card">' +
+                  '<div class="account-panel-kicker">Scope</div>' +
+                  '<h3>Commercial account actions</h3>' +
+                  '<p>Use this area for self-hosted billing, license recovery, refunds, and privacy requests. Hosted workspace operations stay in the Workspaces and Team sections.</p>' +
+                '</div>' +
+                '<div class="service-brief-card">' +
+                  '<div class="account-panel-kicker">Support</div>' +
+                  '<h3>Need help with a commercial request?</h3>' +
+                  '<p>Use support if billing, refund, privacy, or license actions do not behave as expected for this account.</p>' +
+                  '<a class="portal-support-link" href="mailto:' +
+                  escapeAttr(context.bootstrap.support_email || '') +
+                  '">' +
+                  escapeHTML(context.bootstrap.support_email || '') +
+                  '</a>' +
+                '</div>' +
+              '</aside>' +
             '</div>' +
           '</section>' +
           '<section class="portal-content-panel portal-content-panel-support">' +
