@@ -55,6 +55,13 @@ describe('SetupCompletionPanel guardrails', () => {
     expect(setupCompletionPanelSource).toContain('Save the admin login and API token before leaving this screen');
     expect(setupCompletionPanelSource).toContain('Recommended next step');
     expect(setupCompletionPanelSource).toContain('Go to Dashboard');
+    expect(setupCompletionPanelSource).toContain('First monitored host connected');
+    expect(setupCompletionPanelSource).toContain(
+      'hasConnectedAgents() ? handleGoToDashboard() : handleOpenInstallWorkspace()',
+    );
+    expect(setupCompletionPanelSource).toContain(
+      "{hasConnectedAgents() ? 'Go to Dashboard' : 'Open Infrastructure Install'}",
+    );
     expect(setupCompletionPanelSource).not.toContain(
       "connectedAgents().length > 0 ? 'Go to Dashboard' : 'Open Infrastructure Install'",
     );

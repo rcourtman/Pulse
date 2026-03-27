@@ -165,7 +165,10 @@ management, and fleet control surfaces.
    be saved now should be visible before the operator leaves the screen, and
    the completion surface should present one canonical primary next-step path
    into Infrastructure Install instead of repeating competing install or
-   dashboard CTAs across multiple sections.
+   dashboard CTAs across multiple sections. Once the first monitored host is
+   already connected, that same surface must pivot its primary CTA and headline
+   to `/` so the operator is sent to the dashboard rather than being told to
+   install the first host again.
 
 ## Current State
 

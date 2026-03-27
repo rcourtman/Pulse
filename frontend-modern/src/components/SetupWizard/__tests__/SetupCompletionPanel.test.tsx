@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { SetupCompletionPanel } from '../SetupCompletionPanel';
 import type { WizardState } from '../SetupWizard';
 
@@ -203,9 +203,25 @@ describe('SetupCompletionPanel', () => {
     });
 
     expect(screen.getByText('Tower')).toBeInTheDocument();
+    expect(screen.getByText('First monitored host connected')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Your admin account is ready and Pulse is already receiving telemetry. Open the dashboard to verify your first overview, or return to Infrastructure Install when you want to add more systems.',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('Open the dashboard to review your first connected system.'),
+    ).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: 'Go to Dashboard' }).length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByRole('button', { name: 'Open Infrastructure Install' }).length,
+    ).toBeGreaterThan(0);
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'Go to Dashboard' })[0]);
+    const nextStepHeading = screen.getByRole('heading', { name: 'Open your first dashboard view' });
+    const nextStepCard = nextStepHeading.closest('div.bg-surface.rounded-md.border.border-border.p-6.text-left.mb-6');
+    expect(nextStepCard).not.toBeNull();
+
+    fireEvent.click(within(nextStepCard as HTMLElement).getByRole('button', { name: 'Go to Dashboard' }));
     expect(onComplete).toHaveBeenCalledWith('/');
   });
 

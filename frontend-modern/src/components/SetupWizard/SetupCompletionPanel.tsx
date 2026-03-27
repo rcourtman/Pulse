@@ -1,4 +1,12 @@
-import { Component, createSignal, createEffect, onCleanup, Show, For } from 'solid-js';
+import {
+  Component,
+  createSignal,
+  createEffect,
+  createMemo,
+  onCleanup,
+  Show,
+  For,
+} from 'solid-js';
 import { useNavigate } from '@solidjs/router';
 import { unwrap } from 'solid-js/store';
 import { copyToClipboard } from '@/utils/clipboard';
@@ -318,6 +326,8 @@ Keep these credentials secure!
     navigate(RELAY_SETTINGS_PATH);
   };
 
+  const hasConnectedAgents = createMemo(() => connectedAgents().length > 0);
+
   return (
     <div class="max-w-2xl mx-auto bg-surface border border-border overflow-hidden animate-fade-in relative rounded-md p-6 sm:p-8 text-center text-base-content">
       <div class="relative z-10">
@@ -334,11 +344,12 @@ Keep these credentials secure!
             </svg>
           </div>
           <h1 class="text-2xl sm:text-3xl font-bold tracking-tight text-base-content mb-2">
-            Install your first monitored host
+            {hasConnectedAgents() ? 'First monitored host connected' : 'Install your first monitored host'}
           </h1>
           <p class="text-slate-500 dark:text-emerald-300 font-light text-sm sm:text-base">
-            Your admin account is ready. Next, open Infrastructure Install and run the generated
-            command on the first system you want Pulse to monitor.
+            {hasConnectedAgents()
+              ? 'Your admin account is ready and Pulse is already receiving telemetry. Open the dashboard to verify your first overview, or return to Infrastructure Install when you want to add more systems.'
+              : 'Your admin account is ready. Next, open Infrastructure Install and run the generated command on the first system you want Pulse to monitor.'}
           </p>
         </div>
 
@@ -408,8 +419,8 @@ Keep these credentials secure!
                   </span>
                 </span>
                 <p class="mt-1 text-xs text-muted max-w-xl">
-                  Save the admin login and API token before leaving this screen, then continue into
-                  Infrastructure Install for the first host.
+                  Save the admin login and API token before leaving this screen, then continue into{' '}
+                  {hasConnectedAgents() ? 'the dashboard or Infrastructure Install.' : 'Infrastructure Install for the first host.'}
                 </p>
               </div>
             </div>
@@ -629,13 +640,12 @@ Keep these credentials secure!
                     d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
                   />
                 </svg>
-                Install your first host
+                {hasConnectedAgents() ? 'Open your first dashboard view' : 'Install your first host'}
               </h3>
               <p class="mt-2 text-xs text-muted max-w-xl">
-                The canonical install flow now lives in Infrastructure Operations. Open that
-                workspace to generate an install token, set the agent connection URL, configure TLS
-                or custom CA options, and copy the correct command for the first system you want
-                Pulse to monitor.
+                {hasConnectedAgents()
+                  ? 'Pulse already has a live monitored system. Open the dashboard to confirm the first overview, then return to Infrastructure Install any time you want to add more hosts or regenerate commands.'
+                  : 'The canonical install flow now lives in Infrastructure Operations. Open that workspace to generate an install token, set the agent connection URL, configure TLS or custom CA options, and copy the correct command for the first system you want Pulse to monitor.'}
               </p>
             </div>
             <div class="rounded-sm bg-blue-50 px-2 py-1 text-[10px] font-medium text-blue-700 dark:bg-blue-900 dark:text-blue-300">
@@ -647,31 +657,37 @@ Keep these credentials secure!
               Next step
             </div>
             <div class="mt-2 text-sm text-base-content">
-              Open Infrastructure Install to bring your first monitored system into Pulse.
+              {hasConnectedAgents()
+                ? 'Open the dashboard to review your first connected system.'
+                : 'Open Infrastructure Install to bring your first monitored system into Pulse.'}
             </div>
             <div class="mt-2 text-xs text-muted">
-              Use that workspace any time you want to add more systems later.
+              {hasConnectedAgents()
+                ? 'Infrastructure Install stays available any time you want to add more systems later.'
+                : 'Use that workspace any time you want to add more systems later.'}
             </div>
           </div>
           <div class="mt-4 flex flex-col gap-3 sm:flex-row">
             <button
-              onClick={handleOpenInstallWorkspace}
+              onClick={() =>
+                hasConnectedAgents() ? handleGoToDashboard() : handleOpenInstallWorkspace()
+              }
               class="inline-flex items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
             >
-              Open Infrastructure Install
+              {hasConnectedAgents() ? 'Go to Dashboard' : 'Open Infrastructure Install'}
             </button>
-            <Show when={connectedAgents().length > 0}>
+            <Show when={hasConnectedAgents()}>
               <button
-                onClick={handleGoToDashboard}
+                onClick={handleOpenInstallWorkspace}
                 class="inline-flex items-center justify-center gap-2 rounded-md border border-border px-4 py-3 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover"
               >
-                Go to Dashboard
+                Open Infrastructure Install
               </button>
             </Show>
           </div>
         </div>
 
-        <Show when={connectedAgents().length > 0}>
+        <Show when={hasConnectedAgents()}>
           <div class="bg-indigo-50 dark:bg-indigo-900 rounded-md border border-indigo-100 dark:border-indigo-800 p-5 text-left mt-8 overflow-hidden relative">
             <div class="flex items-start gap-4 relative z-10">
               <div class="flex h-12 w-12 items-center justify-center rounded-md bg-indigo-600 text-white shrink-0 border border-indigo-500">
