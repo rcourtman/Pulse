@@ -169,6 +169,7 @@ export function renderWorkspaceManagement(account: PortalAccountSummary, entry: 
 
 function setContainerMessage(container: HTMLElement, title: string, msg: string, isError: boolean): void {
   container.textContent = '';
+  container.classList.add('state-only');
   var message = document.createElement('div');
   message.className = 'team-list-message' + (isError ? ' error' : '');
   var heading = document.createElement('strong');
@@ -322,6 +323,7 @@ export function renderTeamSection(accountID: string, entry: PortalAccountUIEntry
   var section = getElement<HTMLElement>('team-section-' + accountID);
   var roster = getElement<HTMLElement>('team-list-' + accountID);
   if (!section || !roster) return;
+  var rosterPanel = roster.closest('.team-roster') as HTMLElement | null;
 
   var actorRole = section.getAttribute('data-actor-role') || '';
   var isOwner = actorRole === 'owner';
@@ -332,19 +334,24 @@ export function renderTeamSection(accountID: string, entry: PortalAccountUIEntry
     return;
   }
   if (entry.teamQuery.status === 'loading') {
+    if (rosterPanel) rosterPanel.classList.add('state-only');
     setContainerMessage(roster, 'Loading roster', 'Checking who currently has access to this account.', false);
     return;
   }
   if (entry.teamQuery.status === 'error') {
+    if (rosterPanel) rosterPanel.classList.add('state-only');
     setContainerMessage(roster, 'Roster needs attention', entry.teamQuery.error, true);
     return;
   }
   if (!entry.teamQuery.data.length) {
+    if (rosterPanel) rosterPanel.classList.add('state-only');
     setContainerMessage(roster, 'No operators yet', 'Invite someone new when this hosted account needs shared access.', false);
     return;
   }
 
   roster.textContent = '';
+  roster.classList.remove('state-only');
+  if (rosterPanel) rosterPanel.classList.remove('state-only');
   ensureRosterHead(roster);
   for (var i = 0; i < entry.teamQuery.data.length; i += 1) {
     var member = entry.teamQuery.data[i];
