@@ -720,6 +720,31 @@ header .logout-btn:hover,
 .overview-side-card-primary {
   background: var(--panel-strong);
 }
+.overview-next-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 16px;
+}
+.overview-next-check {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.86);
+}
+.overview-next-check strong {
+  font-size: 13px;
+  line-height: 1.3;
+  color: var(--ink);
+}
+.overview-next-check span {
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--ink-soft);
+}
 .overview-next-actions {
   display: flex;
   gap: 10px;
@@ -1405,7 +1430,7 @@ header .logout-btn:hover,
 .service-shell-sidebar {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 .service-shell-sidebar-head,
 .service-inline-support {
@@ -1456,16 +1481,20 @@ header .logout-btn:hover,
   line-height: 1.6;
   color: var(--ink-soft);
 }
-.service-empty-columns {
+.service-empty-command-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.92fr);
+  grid-template-columns: minmax(220px, 0.82fr) minmax(0, 1.18fr);
   gap: 14px;
   margin-top: 18px;
 }
-.service-empty-column {
+.service-empty-command-card {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel-muted);
 }
 .service-empty-column-title {
   font-size: 12px;
@@ -1582,10 +1611,18 @@ header .logout-btn:hover,
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
+.service-empty-points-stack {
+  grid-template-columns: 1fr;
+}
+.service-empty-command-card-wide {
+  grid-column: 2;
+  background: #fff;
+}
+.service-empty-command-card-support {
+  grid-column: 1 / -1;
+}
 .service-empty-support {
-  margin-top: 16px;
-  padding-top: 14px;
-  border-top: 1px solid var(--line);
+  margin-top: 2px;
   font-size: 13px;
   line-height: 1.55;
   color: var(--ink-soft);
@@ -1631,6 +1668,31 @@ header .logout-btn:hover,
 .service-empty-check span {
   font-size: 12px;
   line-height: 1.5;
+  color: var(--ink-soft);
+}
+.service-empty-flow-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.service-empty-flow {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel-muted);
+}
+.service-empty-flow strong {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+.service-empty-flow span {
+  font-size: 12px;
+  line-height: 1.45;
   color: var(--ink-soft);
 }
 .service-section-auth {

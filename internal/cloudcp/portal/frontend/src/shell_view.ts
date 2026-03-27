@@ -358,6 +358,29 @@ function renderAccountOverviewSection(account: PortalAccountSummary): string {
     : checkingCount > 0
       ? 'The fleet is mostly healthy, but there are still workspaces waiting on a completed health check.'
       : 'Hosted posture looks stable. Move into team or account services only if you need to change access or billing.';
+  var nextStepChecklist = unhealthyCount > 0
+    ? (
+      '<div class="overview-next-checklist">' +
+        '<div class="overview-next-check"><strong>1. Review attention items</strong><span>Open the fleet and inspect any workspace marked as checking or needs attention.</span></div>' +
+        '<div class="overview-next-check"><strong>2. Resolve operator blockers</strong><span>Use Team if the right people are not already attached to the hosted account.</span></div>' +
+        '<div class="overview-next-check"><strong>3. Escalate billing separately</strong><span>Keep account billing or self-hosted license work out of the workspace review flow.</span></div>' +
+      '</div>'
+    )
+    : checkingCount > 0
+      ? (
+        '<div class="overview-next-checklist">' +
+          '<div class="overview-next-check"><strong>1. Verify pending health checks</strong><span>Open the workspaces still settling and confirm they are safe to operate.</span></div>' +
+          '<div class="overview-next-check"><strong>2. Keep the roster lean</strong><span>Review Team only if a pending workspace needs a different operator mix.</span></div>' +
+          '<div class="overview-next-check"><strong>3. Leave billing as a separate action</strong><span>Use account services or billing only when the hosted fleet is already understood.</span></div>' +
+        '</div>'
+      )
+      : (
+        '<div class="overview-next-checklist">' +
+          '<div class="overview-next-check"><strong>1. Use Workspaces for the next operational task</strong><span>Open a client workspace directly when you are ready to do hosted work.</span></div>' +
+          '<div class="overview-next-check"><strong>2. Use Team for access changes only</strong><span>Keep roster changes explicit instead of mixing them into routine workspace work.</span></div>' +
+          '<div class="overview-next-check"><strong>3. Use account services when the task is commercial</strong><span>Licenses, refunds, privacy, and self-hosted billing stay in their own section.</span></div>' +
+        '</div>'
+      );
   var nextStepActions =
     '<div class="overview-next-actions">' +
       '<button class="btn-primary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="workspaces">Open workspaces</button>' +
@@ -429,6 +452,7 @@ function renderAccountOverviewSection(account: PortalAccountSummary): string {
             '<div class="account-panel-kicker">Next move</div>' +
             '<h4>' + escapeHTML(nextStepTitle) + '</h4>' +
             '<p>' + escapeHTML(nextStepCopy) + '</p>' +
+            nextStepChecklist +
             nextStepActions +
           '</div>' +
           renderAttentionPanel(workspaces) +
@@ -765,7 +789,7 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
                 '<div class="service-shell-sidebar-head">' +
                   '<div class="account-panel-kicker">Commercial actions</div>' +
                   '<h3>Billing, licenses, refunds, and privacy</h3>' +
-                  '<p>Use these tools for self-hosted commercial actions. Hosted workspace operations stay in Workspaces and Team.</p>' +
+                  '<p>Keep self-hosted commercial work here. Hosted workspace operations stay in Workspaces and Team.</p>' +
                 '</div>' +
                 '<div class="service-action-list">' +
                   renderServiceActionRow('open-manage-service', 'Billing', 'Manage subscriptions', 'Open Stripe billing access for existing self-hosted subscriptions without leaving the Pulse Account shell.', 'manage-service-panel', 'manage-inline-email', ['Invoices and plan changes', 'Subscription self-service']) +
@@ -777,33 +801,38 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
               '<div class="service-shell-main">' +
                 '<div class="service-detail-shell">' +
                   '<div class="service-panel service-panel-empty visible" id="service-panel-empty">' +
-                    '<div class="account-panel-kicker">Select a service</div>' +
+                    '<div class="account-panel-kicker">Task desk</div>' +
                     '<h3>Choose the next commercial action</h3>' +
-                    '<p>Open a billing, license, refund, or privacy flow from the service navigator. The active request stays here so the account-services area behaves like one operating desk instead of a list of disconnected tools.</p>' +
-                    '<div class="service-empty-columns">' +
-                      '<div class="service-empty-column">' +
+                    '<p>Open a billing, license, refund, or privacy flow from the service navigator. The active request stays here so this area behaves like one commercial operating desk.</p>' +
+                    '<div class="service-empty-command-grid">' +
+                      '<div class="service-empty-command-card">' +
                         '<div class="service-empty-column-title">Start here</div>' +
-                        '<div class="service-empty-points">' +
-                          '<div class="service-empty-point"><strong>Billing</strong><span>Open Stripe customer portal access after verification.</span></div>' +
-                          '<div class="service-empty-point"><strong>Licenses</strong><span>Recover the latest active self-hosted license and invoice link.</span></div>' +
-                          '<div class="service-empty-point"><strong>Refunds</strong><span>Confirm eligibility before revoking active commercial access.</span></div>' +
-                          '<div class="service-empty-point"><strong>Privacy</strong><span>Request export or deletion without leaving Pulse Account.</span></div>' +
+                        '<div class="service-empty-points service-empty-points-stack">' +
+                          '<div class="service-empty-point"><strong>Verify first</strong><span>Each flow confirms the commercial email before opening sensitive actions.</span></div>' +
+                          '<div class="service-empty-point"><strong>One task at a time</strong><span>Keep the active request in this desk until you finish or switch tools.</span></div>' +
                         '</div>' +
                       '</div>' +
-                      '<div class="service-empty-column">' +
-                        '<div class="service-empty-column-title">What to expect</div>' +
-                        '<div class="service-empty-checklist">' +
-                          '<div class="service-empty-check"><strong>Verification first</strong><span>Each flow confirms the commercial email before opening sensitive account actions.</span></div>' +
-                          '<div class="service-empty-check"><strong>One task at a time</strong><span>The active commercial request stays in this panel until you finish or switch tools.</span></div>' +
-                          '<div class="service-empty-check"><strong>Support stays close</strong><span>If billing, licenses, refunds, or privacy behave unexpectedly, escalate from this surface.</span></div>' +
+                      '<div class="service-empty-command-card service-empty-command-card-wide">' +
+                        '<div class="service-empty-column-title">Available flows</div>' +
+                        '<div class="service-empty-flow-list">' +
+                          '<div class="service-empty-flow"><strong>Billing</strong><span>Stripe customer portal access after verification.</span></div>' +
+                          '<div class="service-empty-flow"><strong>Licenses</strong><span>Recover the latest active self-hosted license and invoice link.</span></div>' +
+                          '<div class="service-empty-flow"><strong>Refunds</strong><span>Confirm eligibility before revoking active commercial access.</span></div>' +
+                          '<div class="service-empty-flow"><strong>Privacy</strong><span>Request export or deletion without leaving Pulse Account.</span></div>' +
                         '</div>' +
+                      '</div>' +
+                      '<div class="service-empty-command-card service-empty-command-card-support">' +
+                        '<div class="service-empty-column-title">Support</div>' +
+                        '<div class="service-empty-checklist">' +
+                          '<div class="service-empty-check"><strong>Escalate quickly</strong><span>If billing, licenses, refunds, or privacy behave unexpectedly, escalate from this surface.</span></div>' +
+                        '</div>' +
+                        '<div class="service-empty-support">Need help with billing, refund, privacy, or license actions? <a class="portal-support-link" href="mailto:' +
+                        escapeAttr(context.bootstrap.support_email || '') +
+                        '">' +
+                        escapeHTML(context.bootstrap.support_email || '') +
+                        '</a></div>' +
                       '</div>' +
                     '</div>' +
-                    '<div class="service-empty-support">Need help with billing, refund, privacy, or license actions? <a class="portal-support-link" href="mailto:' +
-                    escapeAttr(context.bootstrap.support_email || '') +
-                    '">' +
-                    escapeHTML(context.bootstrap.support_email || '') +
-                    '</a></div>' +
                   '</div>' +
                   '<div class="service-panel" id="manage-service-panel"><div id="manage-service-root"></div></div>' +
                   '<div class="service-panel" id="retrieve-service-panel"><div id="retrieve-service-root"></div></div>' +
@@ -819,15 +848,6 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
                     escapeHTML(context.bootstrap.support_email || '') +
                     '</a>.</div>' +
                   '</div>' +
-                '</div>' +
-                '<div class="service-inline-support">' +
-                  '<div class="account-panel-kicker">Support</div>' +
-                  '<p>Use support if a billing, refund, privacy, or license flow does not behave as expected for this account.</p>' +
-                  '<a class="portal-support-link" href="mailto:' +
-                  escapeAttr(context.bootstrap.support_email || '') +
-                  '">' +
-                  escapeHTML(context.bootstrap.support_email || '') +
-                  '</a>' +
                 '</div>' +
               '</div>' +
             '</div>' +

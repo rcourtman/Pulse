@@ -179,7 +179,9 @@ describe('shell view', function() {
     expect(html).toContain('service-action-button');
     expect(html).toContain('id="service-panel-empty"');
     expect(html).toContain('Choose the next commercial action');
-    expect(html).toContain('What to expect');
+    expect(html).toContain('Task desk');
+    expect(html).toContain('Available flows');
+    expect(html).toContain('Escalate quickly');
     expect(html).toContain('id="open-retrieve-service"');
     expect(html).toContain('id="data-service-panel"');
   });
@@ -195,7 +197,8 @@ describe('shell view', function() {
 
     expect(html).toContain('Pulse Account');
     expect(html).toContain('Account console');
-    expect(html).toContain('Use these tools for self-hosted commercial actions.');
+    expect(html).toContain('Use these account tools for self-hosted licenses, billing, refunds, and privacy actions.');
+    expect(html).toContain('Keep self-hosted commercial work here.');
     expect(html).toContain('Account services');
     expect(html).not.toContain('Self-hosted licenses and billing');
   });
