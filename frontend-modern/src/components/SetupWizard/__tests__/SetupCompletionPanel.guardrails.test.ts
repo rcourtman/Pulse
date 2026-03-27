@@ -12,7 +12,9 @@ describe('SetupCompletionPanel guardrails', () => {
     expect(setupCompletionPanelSource).toContain('Shown during setup');
     expect(setupCompletionPanelSource).toContain('props.onComplete(INFRASTRUCTURE_INSTALL_PATH);');
     expect(setupCompletionPanelSource).toContain('Use the Infrastructure Install workspace to:');
-    expect(setupCompletionPanelSource).toContain('generate Unified Agent tokens');
+    expect(setupCompletionPanelSource).toContain(
+      'continue with the first-host install token Pulse prepares from setup',
+    );
     expect(setupCompletionPanelSource).toContain('configure TLS and custom CA options');
     expect(setupCompletionPanelSource).toContain('runStartProTrialAction({');
     expect(setupCompletionPanelSource).not.toContain('getUpgradeActionUrlOrFallback');
@@ -22,6 +24,9 @@ describe('SetupCompletionPanel guardrails', () => {
     expect(setupCompletionPanelSource).toContain("title: 'What happens next'");
     expect(setupCompletionPanelSource).toContain('Pulse is now secured.');
     expect(setupCompletionPanelSource).toContain("title: 'Open Infrastructure Install'");
+    expect(setupCompletionPanelSource).toContain(
+      'Pulse prepares the first-host install token from setup',
+    );
     expect(setupCompletionPanelSource).toContain("title: 'Run it on the first host you want to monitor'");
     expect(setupCompletionPanelSource).toContain('What to expect');
     expect(setupCompletionPanelSource).toContain('First host first');

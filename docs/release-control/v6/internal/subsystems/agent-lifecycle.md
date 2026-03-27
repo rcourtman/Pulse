@@ -179,7 +179,11 @@ management, and fleet control surfaces.
    dashboard CTAs across multiple sections. Once the first monitored host is
    already connected, that same surface must pivot its primary CTA and headline
    to `/` so the operator is sent to the dashboard rather than being told to
-   install the first host again.
+   install the first host again. While the first host is still pending, that
+   same completion narrative must describe Infrastructure Install as the place
+   where the first-host scoped install token is prepared from setup handoff,
+   not as a second manual token-generation task the operator still needs to
+   figure out.
 
 ## Current State
 

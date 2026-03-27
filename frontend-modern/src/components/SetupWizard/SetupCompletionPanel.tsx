@@ -55,7 +55,7 @@ const UNIFIED_RESOURCE_GUIDANCE = {
     {
       title: 'Open Infrastructure Install',
       description:
-        'Use the canonical install workspace to generate the right install token and connection settings.',
+        'Use the canonical install workspace where Pulse prepares the first-host install token from setup and keeps the connection settings together.',
     },
     {
       title: 'Copy the command for your target system',
@@ -273,7 +273,7 @@ Infrastructure Install Workspace:
 ${installWorkspaceUrl}
 
 Use the Infrastructure Install workspace to:
-- generate Unified Agent tokens
+- continue with the first-host install token Pulse prepares from setup
 - choose the agent connection URL
 - configure TLS and custom CA options
 - copy Linux, macOS, Windows, and related install commands
@@ -645,7 +645,7 @@ Keep these credentials secure!
               <p class="mt-2 text-xs text-muted max-w-xl">
                 {hasConnectedAgents()
                   ? 'Pulse already has a live monitored system. Open the dashboard to confirm the first overview, then return to Infrastructure Install any time you want to add more hosts or regenerate commands.'
-                  : 'The canonical install flow now lives in Infrastructure Operations. Open that workspace to generate an install token, set the agent connection URL, configure TLS or custom CA options, and copy the correct command for the first system you want Pulse to monitor.'}
+                  : 'The canonical install flow now lives in Infrastructure Operations. Open that workspace to continue with the first-host install token Pulse prepares from setup, adjust the agent connection URL only if needed, configure TLS or custom CA options, and copy the correct command for the first system you want Pulse to monitor.'}
               </p>
             </div>
             <div class="rounded-sm bg-blue-50 px-2 py-1 text-[10px] font-medium text-blue-700 dark:bg-blue-900 dark:text-blue-300">

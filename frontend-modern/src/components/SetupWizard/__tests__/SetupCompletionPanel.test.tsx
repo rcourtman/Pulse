@@ -121,6 +121,11 @@ describe('SetupCompletionPanel', () => {
         'Infrastructure Install owns the token, connection URL, TLS/CA settings, and platform-specific commands.',
       ),
     ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Use the canonical install workspace where Pulse prepares the first-host install token from setup and keeps the connection settings together.',
+      ),
+    ).toBeInTheDocument();
 
     expect(screen.queryByText('Connection URL (Agent → Pulse)')).not.toBeInTheDocument();
     expect(screen.queryByText('Custom CA certificate path (optional)')).not.toBeInTheDocument();
@@ -163,6 +168,9 @@ describe('SetupCompletionPanel', () => {
     expect(content).toContain('Admin API Token:');
     expect(content).toContain('Infrastructure Install Workspace:');
     expect(content).toContain('https://pulse.example.com/settings/infrastructure/install');
+    expect(content).toContain(
+      'continue with the first-host install token Pulse prepares from setup',
+    );
     expect(content).not.toContain('Example Install Command');
     expect(content).not.toContain('Example Windows Install Command');
 
