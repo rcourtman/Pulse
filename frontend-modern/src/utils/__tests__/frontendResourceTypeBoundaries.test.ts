@@ -1128,7 +1128,9 @@ describe('frontend resource type boundaries', () => {
     expect(recoverySurfaceStateSource).toContain('useRecoveryPointsSeries');
     expect(recoveryComponentSource.indexOf('<RecoveryActivitySection')).toBeGreaterThan(-1);
     expect(recoveryComponentSource.indexOf('<RecoveryActivitySection')).toBeLessThan(
-      recoveryComponentSource.indexOf('<Show when={!recoveryPoints.response.error}>'),
+      recoveryComponentSource.indexOf(
+        "<Show when={workspaceView() === 'events' && !recoveryPoints.response.error}>",
+      ),
     );
     expect(recoverySource).toContain('getRecoveryFilterChipPresentation');
     expect(recoverySource).not.toContain('const titleize =');
@@ -1168,8 +1170,8 @@ describe('frontend resource type boundaries', () => {
     expect(recoverySource).toContain('getRecoveryProtectedItemsEmptyState');
     expect(recoverySource).toContain('getRecoveryHistoryEmptyState');
     expect(recoverySource).toContain('getRecoveryDrawerCloseButtonClass');
-    expect(recoverySource).toContain('getRecoveryRollupSubjectLabel');
-    expect(recoverySource).toContain('getRecoveryPointSubjectLabel');
+    expect(recoverySource).toContain('getRecoveryRollupItemLabel');
+    expect(recoverySource).toContain('getRecoveryPointItemLabel');
     expect(recoverySource).toContain('getRecoveryPointRepositoryLabel');
     expect(recoverySource).toContain('getRecoveryPointDetailsSummary');
     expect(recoverySource).toContain('getRecoveryPointTimestampMs');
@@ -1187,8 +1189,8 @@ describe('frontend resource type boundaries', () => {
     expect(recoverySource).toContain('RECOVERY_TIMELINE_LEGEND_ITEM_CLASS');
     expect(recoverySource).toContain('RECOVERY_TIMELINE_RANGE_GROUP_CLASS');
     expect(recoverySource).toContain('getRecoveryEventTimeTextClass');
-    expect(recoverySource).toContain('getRecoverySubjectTypeBadgeClass');
-    expect(recoverySource).toContain('getRecoverySubjectTypeLabel');
+    expect(recoverySource).not.toContain('getRecoverySubjectTypeBadgeClass');
+    expect(recoverySource).not.toContain('getRecoverySubjectTypeLabel');
     expect(recoverySource).toContain('getRecoveryRollupIssueTone');
     expect(recoverySource).toContain('getRecoveryRollupAgeTextClass');
     expect(recoverySource).toContain('RECOVERY_ADVANCED_FILTER_LABEL_CLASS');
@@ -1246,7 +1248,7 @@ describe('frontend resource type boundaries', () => {
     );
     expect(recoverySource).not.toContain('No recovery history matches your filters');
     expect(recoverySource).not.toContain(
-      'Adjust your search, provider, method, status, or verification filters.',
+      'Adjust your search, platform, method, status, or verification filters.',
     );
     expect(recoverySource).not.toContain('const eventTimeTextClass =');
     expect(recoverySource).not.toContain('const subjectTypeBadgeClass =');
@@ -1262,7 +1264,8 @@ describe('frontend resource type boundaries', () => {
     expect(recoveryTablePresentationSource).toContain(
       'export function getRecoveryArtifactColumnHeaderClass',
     );
-    expect(recoveryTablePresentationSource).toContain('titleCaseDelimitedLabel');
+    expect(recoveryTablePresentationSource).toContain('getRecoveryItemTypeLabel');
+    expect(recoveryTablePresentationSource).toContain('getRecoveryLocationFacetLabel');
     expect(recoveryTablePresentationSource).not.toContain('const titleize =');
     expect(recoveryDatePresentationSource).toContain(
       'export function recoveryDateKeyFromTimestamp',
@@ -2524,6 +2527,8 @@ describe('frontend resource type boundaries', () => {
     expect(proLicensePanelStateSource).toContain('getCommercialMigrationNotice');
     expect(proLicensePlanSectionSource).toContain('getLicenseStatusLoadingState');
     expect(proLicensePlanSectionSource).toContain('getNoActiveProLicenseState');
+    expect(proLicensePlanSectionSource).toContain('getTrialEndedProLicenseNotice');
+    expect(proLicensePlanSectionSource).toContain('getInactiveProUpsellNotice');
     expect(proLicensePanelSource).not.toContain('Loading license status...');
     expect(proLicensePanelSource).not.toContain('No Pro license is active.');
     expect(proLicensePanelSource).not.toContain('const statusLabel =');
@@ -2536,6 +2541,8 @@ describe('frontend resource type boundaries', () => {
     );
     expect(licensePresentationSource).toContain('export const getLicenseStatusLoadingState');
     expect(licensePresentationSource).toContain('export const getNoActiveProLicenseState');
+    expect(licensePresentationSource).toContain('export const getTrialEndedProLicenseNotice');
+    expect(licensePresentationSource).toContain('export const getInactiveProUpsellNotice');
     expect(licensePresentationSource).toContain(
       'export const getOrganizationBillingLicenseStatusLabel',
     );
@@ -2576,7 +2583,7 @@ describe('frontend resource type boundaries', () => {
     expect(findingsPanelSource).toContain('hasFindingInvestigationDetails');
     expect(findingsPanelSource).toContain('getFindingResolutionReason');
     expect(findingsPanelSource).toContain('buildFindingFilterOptions');
-    expect(findingsPanelSource).toContain('getFindingEmptyStateCopy');
+    expect(findingsPanelSource).toContain('getPatrolFindingsEmptyState');
     expect(findingsPanelSource).not.toContain('finding.investigationSessionId');
     expect(findingsPanelSource).not.toContain("finding.status === 'resolved' ? 'Resolved'");
     expect(findingsPanelSource).not.toContain('const severityOrder');
@@ -2837,7 +2844,7 @@ describe('frontend resource type boundaries', () => {
     expect(activeUseTrialNudgeStateSource).toContain('createMemo');
     expect(activeUseTrialNudgeStateSource).toContain('window.localStorage');
     expect(activeUseTrialNudgeStateSource).toContain('setInterval');
-    expect(activeUseTrialNudgeStateSource).toContain('startProTrial');
+    expect(activeUseTrialNudgeStateSource).toContain('runStartProTrialAction');
     expect(activeUseTrialNudgeStateSource).toContain('snoozeUpsell');
     expect(activeUseTrialNudgeModelSource).toContain('ACTIVE_USE_TRIAL_NUDGE_SNOOZE_KEY');
     expect(activeUseTrialNudgeModelSource).toContain('ACTIVE_USE_TRIAL_NUDGE_FIRST_SEEN_KEY');
@@ -4425,7 +4432,7 @@ describe('frontend resource type boundaries', () => {
     expect(patrolIntelligenceHeaderSource).toContain('buildPatrolScheduleOptions');
     expect(patrolIntelligenceHeaderSource).toContain('getAIQuickstartCreditsPresentation');
     expect(patrolIntelligenceSummarySource).toContain('getPatrolSummaryPresentation');
-    expect(patrolIntelligenceSummarySource).toContain('PATROL_NO_ISSUES_LABEL');
+    expect(patrolIntelligenceSummarySource).toContain('getPatrolAssessmentPresentation');
     expect(patrolIntelligenceWorkspaceSource).toContain('ApprovalBanner');
     expect(patrolIntelligenceWorkspaceSource).toContain('FindingsPanel');
     expect(patrolIntelligenceBannersSource).toContain('trackUpgradeClicked');
