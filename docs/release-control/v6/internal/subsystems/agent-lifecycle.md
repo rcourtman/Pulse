@@ -681,6 +681,11 @@ continuity, but `session_store.go` and `csrf_store.go` must immediately
 rewrite hashed canonical persistence during load instead of leaving raw-token
 files on the primary runtime path until a later save side effect happens to
 run.
+That same shared `internal/api/` dependency also assumes local commercial-trial
+handoff remains human-usable: lifecycle-adjacent trial CTAs may allow a short
+burst of retries, but the backend contract must return the real remaining
+backoff through `Retry-After` plus `details.retry_after_seconds` so setup and
+install-adjacent surfaces do not drift into generic “try again later” behavior.
 That same shared `internal/api/` dependency also assumes session-carried OIDC
 refresh tokens stay fail-closed at rest: `session_store.go` may only persist
 or recover those tokens through encrypted-at-rest session payloads, and any

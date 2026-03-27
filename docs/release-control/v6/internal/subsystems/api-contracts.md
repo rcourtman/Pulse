@@ -227,6 +227,14 @@ Own canonical runtime payload shapes between backend and frontend.
     install-state surface must describe that prepared token path consistently
     with the live runtime behavior rather than directing the operator to create
     another install token manually.
+21. Keep local trial-start transport explicit on the shared commercial API
+    boundary: `/api/license/trial/start` must preserve the hosted-signup
+    redirect contract during the allowed retry burst, then return the actual
+    remaining backoff in both `Retry-After` and
+    `details.retry_after_seconds` once the burst is exceeded. Hosted
+    self-serve verification failures may render owned HTML, but they must
+    preserve originating Pulse context instead of collapsing into generic
+    control-plane failures.
 
 ## Current State
 
@@ -1700,6 +1708,19 @@ both sides instead of relying only on broad settings-surface coverage on the
 security side: token settings changes must continue to carry the direct
 `api-token-management-surface` API-contract proof together with the
 security-side surface proof.
+That same shared commercial API boundary now also owns the local trial-start
+transport contract. `/api/license/trial/start` may allow a short human-scale
+burst of retries while the hosted redirect handoff remains canonical, but once
+that burst is exceeded it must return the actual remaining backoff in both the
+`Retry-After` header and the JSON `details.retry_after_seconds` payload instead
+of a fixed window guess or a text-only error. `internal/api/contract_test.go`
+must pin both the hosted-signup redirect response and the rate-limited response
+in the same slice as any handler change.
+That same shared commercial API boundary also owns hosted self-serve failure
+transport semantics. Hosted trial request and verification failures may render
+owned HTML pages, but they must preserve the originating Pulse instance and
+customer form context instead of collapsing into generic control-plane failures
+or dead-end text with no route back to the originating runtime.
 That same boundary must also keep token scope presets lazily derived from the
 canonical scope constants: `apiTokenManagerModel.ts` may expose
 `getAPITokenScopePresets()`, but it must not publish an eagerly evaluated

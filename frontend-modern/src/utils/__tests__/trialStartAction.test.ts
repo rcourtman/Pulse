@@ -98,4 +98,24 @@ describe('runStartProTrialAction', () => {
     expect(onError).toHaveBeenCalledWith(error);
     expect(showError).toHaveBeenCalledWith('Trial already used');
   });
+
+  it('surfaces retry-after guidance from the shared presentation helper', async () => {
+    startProTrialMock.mockRejectedValue({
+      status: 429,
+      code: 'trial_rate_limited',
+      message: 'Trial start rate limit exceeded',
+      retryAfterSeconds: 120,
+    });
+
+    await expect(
+      runStartProTrialAction({
+        showSuccess,
+        showError,
+        navigate,
+      }),
+    ).resolves.toBe('error');
+
+    expect(showError).toHaveBeenCalledWith('Try again in about 2 minutes');
+    expect(showSuccess).not.toHaveBeenCalled();
+  });
 });

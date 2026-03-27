@@ -642,6 +642,11 @@ raw-token `sessions.json` and `csrf_tokens.json` files may load for upgrade
 continuity, but `session_store.go` and `csrf_store.go` must immediately
 rewrite hashed canonical persistence on load so adjacent storage and recovery
 transport does not keep running against primary-path raw-token files.
+That same shared `internal/api/` dependency also assumes customer-visible
+commercial retry guidance stays canonical when storage- or recovery-adjacent
+surfaces invoke trial or billing handoffs: the backend must return the real
+remaining backoff through `Retry-After` and `details.retry_after_seconds`
+instead of leaving neighboring surfaces to guess or hardcode retry windows.
 That same shared `internal/api/` dependency now also assumes adjacent
 commercial helper surfaces speak in monitored-system terms: recovery- or
 storage-adjacent API wiring may consume the canonical monitored-system ledger

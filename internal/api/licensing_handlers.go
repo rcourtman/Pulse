@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -17,6 +18,11 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rs/zerolog/log"
+)
+
+const (
+	trialStartRateLimitBurst  = 6
+	trialStartRateLimitWindow = 15 * time.Minute
 )
 
 // revocationFeedToken returns the relay feed token for revocation polling.
@@ -61,7 +67,7 @@ func NewLicenseHandlers(mtp *config.MultiTenantPersistence, hostedMode bool, cfg
 		mtPersistence:    mtp,
 		hostedMode:       hostedMode,
 		cfg:              cfg,
-		trialLimiter:     NewRateLimiter(1, 24*time.Hour), // 1 trial start attempt per org per 24h
+		trialLimiter:     NewRateLimiter(trialStartRateLimitBurst, trialStartRateLimitWindow),
 		trialReplay:      trialReplay,
 		trialInitiations: trialInitiations,
 	}
@@ -494,12 +500,20 @@ func (h *LicenseHandlers) HandleStartTrial(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	if h.trialLimiter != nil && !h.trialLimiter.Allow(orgID) {
-		w.Header().Set("Retry-After", "86400")
-		writeErrorResponse(w, http.StatusTooManyRequests, "trial_rate_limited", "Trial start rate limit exceeded", map[string]string{
-			"org_id": orgID,
-		})
-		return
+	if h.trialLimiter != nil {
+		allowed, retryDelay := h.trialLimiter.allowAt(orgID, time.Now().UTC())
+		if !allowed {
+			retryAfterSeconds := int(retryDelay.Round(time.Second).Seconds())
+			if retryAfterSeconds < 1 {
+				retryAfterSeconds = 1
+			}
+			w.Header().Set("Retry-After", strconv.Itoa(retryAfterSeconds))
+			writeErrorResponse(w, http.StatusTooManyRequests, "trial_rate_limited", "Trial start rate limit exceeded", map[string]string{
+				"org_id":              orgID,
+				"retry_after_seconds": strconv.Itoa(retryAfterSeconds),
+			})
+			return
+		}
 	}
 
 	if h.trialInitiations == nil {

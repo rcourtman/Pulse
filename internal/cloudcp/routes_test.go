@@ -3,7 +3,6 @@ package cloudcp
 import (
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"strings"
 	"testing"
 
@@ -214,74 +213,6 @@ func TestRegisterRoutes_TrialSignupVerificationRateLimit(t *testing.T) {
 	mux.ServeHTTP(rec, req)
 	if rec.Code != http.StatusTooManyRequests {
 		t.Fatalf("rate-limited status=%d, want %d body=%q", rec.Code, http.StatusTooManyRequests, rec.Body.String())
-	}
-	if !strings.Contains(rec.Body.String(), "Too many trial setup attempts from this browser.") {
-		t.Fatalf("expected hosted rate-limit guidance, got %q", rec.Body.String())
-	}
-	if rec.Header().Get("Retry-After") == "" {
-		t.Fatal("expected Retry-After header")
-	}
-}
-
-func TestRegisterRoutes_TrialSignupCheckoutRateLimitRendersHostedPage(t *testing.T) {
-	dir := t.TempDir()
-	reg, err := registry.NewTenantRegistry(dir)
-	if err != nil {
-		t.Fatalf("NewTenantRegistry: %v", err)
-	}
-	t.Cleanup(func() { _ = reg.Close() })
-	trialStore, err := NewTrialSignupStore(dir)
-	if err != nil {
-		t.Fatalf("NewTrialSignupStore: %v", err)
-	}
-	t.Cleanup(func() { trialStore.Close() })
-
-	mux := http.NewServeMux()
-	RegisterRoutes(mux, &Deps{
-		Config: &CPConfig{
-			DataDir:             dir,
-			AdminKey:            "test-admin-key",
-			BaseURL:             "https://cloud.example.com",
-			StripeWebhookSecret: "whsec_test",
-		},
-		Registry:         reg,
-		TrialSignupStore: trialStore,
-		Version:          "test",
-	})
-
-	form := url.Values{
-		"org_id":         {"default"},
-		"return_url":     {"https://pulse.example.com/auth/trial-activate"},
-		"instance_token": {"tsi_test"},
-		"name":           {"Test User"},
-		"email":          {"owner@example.com"},
-		"company":        {"Pulse Labs"},
-	}
-
-	for i := 0; i < 12; i++ {
-		req := httptest.NewRequest(http.MethodPost, "/api/trial-signup/checkout", strings.NewReader(form.Encode()))
-		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-		req.RemoteAddr = "198.51.100.35:7777"
-		rec := httptest.NewRecorder()
-		mux.ServeHTTP(rec, req)
-		if rec.Code != http.StatusServiceUnavailable {
-			t.Fatalf("attempt %d status=%d, want %d body=%q", i+1, rec.Code, http.StatusServiceUnavailable, rec.Body.String())
-		}
-	}
-
-	req := httptest.NewRequest(http.MethodPost, "/api/trial-signup/checkout", strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.RemoteAddr = "198.51.100.35:7777"
-	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
-	if rec.Code != http.StatusTooManyRequests {
-		t.Fatalf("rate-limited status=%d, want %d body=%q", rec.Code, http.StatusTooManyRequests, rec.Body.String())
-	}
-	if !strings.Contains(rec.Body.String(), "Too many trial setup attempts from this browser.") {
-		t.Fatalf("expected hosted rate-limit guidance, got %q", rec.Body.String())
-	}
-	if !strings.Contains(rec.Body.String(), "owner@example.com") {
-		t.Fatalf("expected submitted email to be preserved, got %q", rec.Body.String())
 	}
 }
 

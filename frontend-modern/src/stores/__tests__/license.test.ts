@@ -123,6 +123,7 @@ describe('license store', () => {
     vi.mocked(LicenseAPI.startTrial).mockResolvedValue({
       ok: false,
       status: 400,
+      headers: new Headers(),
       json: vi.fn().mockResolvedValue({ code: 'trial_failed' }),
     } as unknown as Response);
 
@@ -133,6 +134,7 @@ describe('license store', () => {
     vi.mocked(LicenseAPI.startTrial).mockResolvedValue({
       ok: false,
       status: 409,
+      headers: new Headers(),
       json: vi.fn().mockResolvedValue({
         code: 'trial_not_available',
         error: 'Trial cannot be started while a paid v5 license migration is pending',

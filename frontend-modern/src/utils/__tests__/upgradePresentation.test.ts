@@ -23,6 +23,9 @@ describe('upgradePresentation', () => {
     expect(getProTrialStartedMessage()).toBe('Pro trial started');
     expect(getTrialAlreadyUsedMessage()).toBe('Trial already used');
     expect(getTrialTryAgainLaterMessage()).toBe('Try again later');
+    expect(getTrialTryAgainLaterMessage(30)).toBe('Try again in about a minute');
+    expect(getTrialTryAgainLaterMessage(90)).toBe('Try again in about 2 minutes');
+    expect(getTrialTryAgainLaterMessage(3600)).toBe('Try again in about 1 hour');
     expect(getTrialStartErrorMessage()).toBe('Failed to start trial');
     expect(getTrialStartErrorMessage(undefined, { branded: true })).toBe(
       'Failed to start Pro trial',
@@ -30,6 +33,9 @@ describe('upgradePresentation', () => {
     expect(getTrialStartErrorMessage('temporary failure')).toBe('temporary failure');
     expect(getTrialStartErrorMessage({ code: 'trial_already_used' })).toBe('Trial already used');
     expect(getTrialStartErrorMessage({ status: 429 })).toBe('Try again later');
+    expect(getTrialStartErrorMessage({ status: 429, retryAfterSeconds: 120 })).toBe(
+      'Try again in about 2 minutes',
+    );
     expect(getTrialStartErrorKind({ code: 'trial_already_used' })).toBe('already_used');
     expect(getTrialStartErrorKind({ status: 429 })).toBe('retry_later');
     expect(getTrialStartErrorKind({ message: 'temporary failure' })).toBe('other');
@@ -37,6 +43,7 @@ describe('upgradePresentation', () => {
       status: 409,
       code: 'trial_not_available',
       message: undefined,
+      retryAfterSeconds: undefined,
     });
     expect(
       getTrialStartErrorMessage({

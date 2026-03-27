@@ -18,6 +18,7 @@ export interface TrialStartErrorLike {
   status?: number;
   code?: string;
   message?: string;
+  retryAfterSeconds?: number;
 }
 
 export type TrialStartErrorKind = 'already_used' | 'retry_later' | 'other';
@@ -30,8 +31,27 @@ export function getTrialAlreadyUsedMessage(): string {
   return 'Trial already used';
 }
 
-export function getTrialTryAgainLaterMessage(): string {
-  return 'Try again later';
+export function getTrialTryAgainLaterMessage(retryAfterSeconds?: number): string {
+  if (!retryAfterSeconds || retryAfterSeconds < 1) {
+    return 'Try again later';
+  }
+
+  if (retryAfterSeconds < 90) {
+    return 'Try again in about a minute';
+  }
+
+  if (retryAfterSeconds < 3600) {
+    const minutes = Math.ceil(retryAfterSeconds / 60);
+    return `Try again in about ${minutes} minutes`;
+  }
+
+  if (retryAfterSeconds < 172800) {
+    const hours = Math.ceil(retryAfterSeconds / 3600);
+    return `Try again in about ${hours} hour${hours === 1 ? '' : 's'}`;
+  }
+
+  const days = Math.ceil(retryAfterSeconds / 86400);
+  return `Try again in about ${days} day${days === 1 ? '' : 's'}`;
 }
 
 export function normalizeTrialStartError(error?: unknown): TrialStartErrorLike | null {
@@ -44,6 +64,7 @@ export function normalizeTrialStartError(error?: unknown): TrialStartErrorLike |
     status: value.status,
     code: value.code,
     message: value.message,
+    retryAfterSeconds: value.retryAfterSeconds,
   };
 }
 
@@ -68,7 +89,7 @@ export function getTrialStartErrorMessage(
     return getTrialAlreadyUsedMessage();
   }
   if (kind === 'retry_later') {
-    return getTrialTryAgainLaterMessage();
+    return getTrialTryAgainLaterMessage(normalized?.retryAfterSeconds);
   }
   if (normalized?.message?.trim()) {
     return normalized.message.trim();

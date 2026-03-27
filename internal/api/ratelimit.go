@@ -77,10 +77,16 @@ func (rl *RateLimiter) Stop() {
 // Allow checks if a request from the given IP address is within the rate limit.
 // Returns true if the request is allowed, false if the rate limit is exceeded.
 func (rl *RateLimiter) Allow(ip string) bool {
+	allowed, _ := rl.allowAt(ip, time.Now())
+	return allowed
+}
+
+// allowAt checks whether a request is allowed at the provided time and reports
+// how long the caller should wait before retrying when the limit is exceeded.
+func (rl *RateLimiter) allowAt(ip string, now time.Time) (bool, time.Duration) {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
 
-	now := time.Now()
 	cutoff := now.Add(-rl.window)
 
 	// Get attempts for this IP
@@ -97,14 +103,21 @@ func (rl *RateLimiter) Allow(ip string) bool {
 	// Check if under limit
 	if len(validAttempts) >= rl.limit {
 		rl.attempts[ip] = validAttempts
-		return false
+		retryAfter := rl.window
+		if len(validAttempts) > 0 {
+			retryAfter = validAttempts[0].Add(rl.window).Sub(now)
+		}
+		if retryAfter < time.Second {
+			retryAfter = time.Second
+		}
+		return false, retryAfter
 	}
 
 	// Add new attempt
 	validAttempts = append(validAttempts, now)
 	rl.attempts[ip] = validAttempts
 
-	return true
+	return true, 0
 }
 
 func (rl *RateLimiter) cleanup() {

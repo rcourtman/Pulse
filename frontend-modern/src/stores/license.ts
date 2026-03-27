@@ -23,11 +23,29 @@ type TrialStartRequestError = Error & {
   status: number;
   code?: string;
   details?: Record<string, string>;
+  retryAfterSeconds?: number;
 };
 
 export type StartProTrialResult =
   | { outcome: 'activated' }
   | { outcome: 'redirect'; actionUrl: string };
+
+function parseRetryAfterSeconds(value: string | null | undefined): number | undefined {
+  const normalized = value?.trim();
+  if (!normalized) return undefined;
+
+  const parsed = Number(normalized);
+  if (Number.isFinite(parsed) && parsed > 0) {
+    return Math.ceil(parsed);
+  }
+
+  const retryAt = Date.parse(normalized);
+  if (Number.isNaN(retryAt)) return undefined;
+
+  const waitMs = retryAt - Date.now();
+  if (waitMs <= 0) return 1;
+  return Math.ceil(waitMs / 1000);
+}
 
 /**
  * Load the entitlements payload from the server.
@@ -98,9 +116,13 @@ export async function startProTrial(): Promise<StartProTrialResult> {
     const err = new Error(
       payload?.error?.trim() || `Failed to start trial (status ${res.status})`,
     ) as TrialStartRequestError;
+    const retryAfterSeconds =
+      parseRetryAfterSeconds(res.headers.get('Retry-After')) ??
+      parseRetryAfterSeconds(payload?.details?.retry_after_seconds);
     err.status = res.status;
     err.code = payload?.code;
     err.details = payload?.details;
+    err.retryAfterSeconds = retryAfterSeconds;
     throw err;
   }
   await loadLicenseStatus(true);

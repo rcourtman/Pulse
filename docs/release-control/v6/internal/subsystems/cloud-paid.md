@@ -267,13 +267,18 @@ The trial-start rate-limit contract is part of that same boundary. Local
 `/api/license/trial/start` retries are allowed as a short human-scale burst so
 operators can revisit the hosted handoff without getting locked out for a day,
 and both the local app server and hosted trial signup limiters must return the
-actual remaining backoff through `Retry-After` rather than a coarse full-window
-guess. Shared trial-start presentation must treat that backoff as canonical and
-surface it consistently instead of flattening every `429` into generic copy.
+actual remaining backoff through `Retry-After` and
+`details.retry_after_seconds` rather than a coarse full-window guess. Shared
+trial-start presentation must treat that backoff as canonical and surface it
+consistently instead of flattening every `429` into generic copy.
 For the hosted self-serve flow, that also means the public trial pages and form
 posts must render the owned Pulse trial experience with preserved instance/form
 state when rate limited, rather than dropping users onto a generic control-plane
 `Too Many Requests` response.
+The same owned hosted-trial failure experience applies to invalid or expired
+verification links. The customer must stay inside the Pulse-owned retry path
+with the originating-instance context preserved, rather than landing on a
+generic hosted error page that reads like a detached SaaS funnel.
 The hosted trial handoff page is part of that same boundary as well. It may
 still use a secure hosted Stripe-backed session internally, but the customer
 copy must present the flow as starting a trial for the originating Pulse

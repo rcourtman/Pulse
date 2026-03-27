@@ -29,8 +29,6 @@ type CPRateLimiter struct {
 	window   time.Duration
 }
 
-type CPRateLimitRejectedHandler func(w http.ResponseWriter, r *http.Request, retryAfter int)
-
 // NewCPRateLimiter creates a rate limiter with the given limit per window.
 func NewCPRateLimiter(limit int, window time.Duration) *CPRateLimiter {
 	if limit <= 0 {
@@ -48,17 +46,10 @@ func NewCPRateLimiter(limit int, window time.Duration) *CPRateLimiter {
 
 // Allow checks whether the given IP is within the rate limit.
 func (rl *CPRateLimiter) Allow(ip string) bool {
-	allowed, _ := rl.allowAt(ip, time.Now())
-	return allowed
-}
-
-// allowAt checks whether the given IP is within the rate limit at the provided
-// time and reports how long the caller should wait before retrying when
-// blocked.
-func (rl *CPRateLimiter) allowAt(ip string, now time.Time) (bool, time.Duration) {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
 
+	now := time.Now()
 	cutoff := now.Add(-rl.window)
 
 	// Filter expired entries
@@ -71,53 +62,31 @@ func (rl *CPRateLimiter) allowAt(ip string, now time.Time) (bool, time.Duration)
 
 	if len(valid) >= rl.limit {
 		rl.attempts[ip] = valid
-		retryAfter := rl.window
-		if len(valid) > 0 {
-			retryAfter = valid[0].Add(rl.window).Sub(now)
-		}
-		if retryAfter < time.Second {
-			retryAfter = time.Second
-		}
-		return false, retryAfter
+		return false
 	}
 
 	rl.attempts[ip] = append(valid, now)
-	return true, 0
+	return true
 }
 
 // Middleware wraps an http.Handler with rate limiting.
 func (rl *CPRateLimiter) Middleware(next http.Handler) http.Handler {
-	return rl.MiddlewareWithRejected(next, nil)
-}
-
-// MiddlewareWithRejected wraps an http.Handler with rate limiting and allows
-// callers to provide a custom blocked-response handler for customer-facing
-// flows such as hosted trial signup.
-func (rl *CPRateLimiter) MiddlewareWithRejected(next http.Handler, rejected CPRateLimitRejectedHandler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ip := clientIP(r)
-		if allowed, retryDelay := rl.allowAt(ip, time.Now()); !allowed {
-			retryAfter := int(math.Ceil(retryDelay.Seconds()))
+		if !rl.Allow(ip) {
+			retryAfter := int(math.Ceil(rl.window.Seconds()))
 			if retryAfter < 1 {
 				retryAfter = 1
 			}
 
-			rl.writeRateLimitHeaders(w, retryAfter)
-			if rejected != nil {
-				rejected(w, r, retryAfter)
-				return
-			}
+			w.Header().Set("Retry-After", strconv.Itoa(retryAfter))
+			w.Header().Set("X-RateLimit-Limit", strconv.Itoa(rl.limit))
+			w.Header().Set("X-RateLimit-Remaining", "0")
 			http.Error(w, "Too Many Requests", http.StatusTooManyRequests)
 			return
 		}
 		next.ServeHTTP(w, r)
 	})
-}
-
-func (rl *CPRateLimiter) writeRateLimitHeaders(w http.ResponseWriter, retryAfter int) {
-	w.Header().Set("Retry-After", strconv.Itoa(retryAfter))
-	w.Header().Set("X-RateLimit-Limit", strconv.Itoa(rl.limit))
-	w.Header().Set("X-RateLimit-Remaining", "0")
 }
 
 func clientIP(r *http.Request) string {

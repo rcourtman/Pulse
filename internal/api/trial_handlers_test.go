@@ -129,6 +129,37 @@ func TestTrialStart_DefaultOrgReturnsHostedSignupRedirect(t *testing.T) {
 	}
 }
 
+func TestTrialStart_AllowsRepeatHostedSignupRedirectsWithinBurstWindow(t *testing.T) {
+	baseDir := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(baseDir)
+	h := NewLicenseHandlers(mtp, false, &config.Config{
+		PublicURL:         "https://pulse.example.com",
+		ProTrialSignupURL: "https://billing.example.com/start-pro-trial?source=test",
+	})
+
+	ctx := context.WithValue(context.Background(), OrgIDContextKey, "default")
+
+	for i := 0; i < 2; i++ {
+		req := httptest.NewRequest(http.MethodPost, "/api/license/trial/start", nil).WithContext(ctx)
+		rec := httptest.NewRecorder()
+		h.HandleStartTrial(rec, req)
+		if rec.Code != http.StatusConflict {
+			t.Fatalf("attempt %d status=%d, want %d: %s", i+1, rec.Code, http.StatusConflict, rec.Body.String())
+		}
+
+		var resp APIError
+		if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+			t.Fatalf("decode response: %v", err)
+		}
+		if resp.Code != "trial_signup_required" {
+			t.Fatalf("attempt %d code=%q, want %q", i+1, resp.Code, "trial_signup_required")
+		}
+		if strings.TrimSpace(resp.Details["action_url"]) == "" {
+			t.Fatalf("attempt %d missing action_url", i+1)
+		}
+	}
+}
+
 func TestTrialStart_FailsClosedWithoutCallbackURL(t *testing.T) {
 	baseDir := t.TempDir()
 	mtp := config.NewMultiTenantPersistence(baseDir)
@@ -190,6 +221,51 @@ func TestTrialStart_RejectsAlreadyUsedTrial(t *testing.T) {
 	}
 	if resp.Code != "trial_already_used" {
 		t.Fatalf("code=%q, want %q", resp.Code, "trial_already_used")
+	}
+}
+
+func TestTrialStart_ReturnsRetryAfterWhenRateLimited(t *testing.T) {
+	baseDir := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(baseDir)
+	h := NewLicenseHandlers(mtp, false, &config.Config{
+		PublicURL:         "https://pulse.example.com",
+		ProTrialSignupURL: "https://billing.example.com/start-pro-trial?source=test",
+	})
+	h.trialLimiter = NewRateLimiter(1, time.Minute)
+
+	ctx := context.WithValue(context.Background(), OrgIDContextKey, "default")
+
+	firstReq := httptest.NewRequest(http.MethodPost, "/api/license/trial/start", nil).WithContext(ctx)
+	firstRec := httptest.NewRecorder()
+	h.HandleStartTrial(firstRec, firstReq)
+	if firstRec.Code != http.StatusConflict {
+		t.Fatalf("first status=%d, want %d: %s", firstRec.Code, http.StatusConflict, firstRec.Body.String())
+	}
+
+	secondReq := httptest.NewRequest(http.MethodPost, "/api/license/trial/start", nil).WithContext(ctx)
+	secondRec := httptest.NewRecorder()
+	h.HandleStartTrial(secondRec, secondReq)
+	if secondRec.Code != http.StatusTooManyRequests {
+		t.Fatalf("second status=%d, want %d: %s", secondRec.Code, http.StatusTooManyRequests, secondRec.Body.String())
+	}
+
+	retryAfter := secondRec.Header().Get("Retry-After")
+	if retryAfter == "" {
+		t.Fatal("expected Retry-After header")
+	}
+	if got := secondRec.Header().Get("Content-Type"); !strings.Contains(got, "application/json") {
+		t.Fatalf("content-type=%q, want JSON response", got)
+	}
+
+	var resp APIError
+	if err := json.NewDecoder(secondRec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp.Code != "trial_rate_limited" {
+		t.Fatalf("code=%q, want %q", resp.Code, "trial_rate_limited")
+	}
+	if resp.Details["retry_after_seconds"] != retryAfter {
+		t.Fatalf("retry_after_seconds=%q, want %q", resp.Details["retry_after_seconds"], retryAfter)
 	}
 }
 
