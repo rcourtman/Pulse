@@ -61,8 +61,23 @@ export function installPortalApp(deps: PortalAppDeps): PortalApp {
     }, 4000);
   }
 
+  var accountRuntime = installAccountRuntime({
+    api: api,
+    store: deps.store,
+    refreshBootstrap: refreshBootstrap,
+    showToast: showToast,
+  });
+
   installShell({
     store: deps.store,
+    onSectionChange: function(section) {
+      if (section === 'team') {
+        var accounts = deps.store.getBootstrap().accounts || [];
+        if (accounts[0]) {
+          accountRuntime.ensureTeamVisible(accounts[0].id);
+        }
+      }
+    },
   });
 
   installServicesRuntime({
@@ -75,15 +90,11 @@ export function installPortalApp(deps: PortalAppDeps): PortalApp {
     store: deps.store,
   });
 
-  var accountRuntime = installAccountRuntime({
-    api: api,
-    store: deps.store,
-    refreshBootstrap: refreshBootstrap,
-    showToast: showToast,
-  });
-
   installAccountController({
     runtime: accountRuntime,
+    setShellSection: function(section) {
+      deps.store.setActiveShellSection(section);
+    },
   });
 
   var startupRefresh = deps.store.getBootstrap().authenticated ? refreshBootstrap() : null;

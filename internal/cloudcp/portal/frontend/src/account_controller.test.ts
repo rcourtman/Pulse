@@ -15,6 +15,7 @@ describe('account controller', function() {
       clearWorkspaceSelection: vi.fn(),
       openBilling: vi.fn(),
       toggleTeam: vi.fn(),
+      ensureTeamVisible: vi.fn(),
       inviteMember: vi.fn(),
       createWorkspace: vi.fn(),
       manageWorkspaceAction: vi.fn(),
@@ -22,7 +23,9 @@ describe('account controller', function() {
       changeRole: vi.fn(),
     };
 
-    installAccountController({ runtime: runtime });
+    var setShellSection = vi.fn();
+
+    installAccountController({ runtime: runtime, setShellSection: setShellSection });
 
     document.body.innerHTML =
       '<button id="toggle" data-action="toggle-add-workspace" data-account-id="acct_1">Toggle</button>' +
@@ -37,13 +40,15 @@ describe('account controller', function() {
       '<select id="role" data-action="change-role" data-account-id="acct_1" data-user-id="u1"><option value="admin">Admin</option></select>';
 
     document.getElementById('toggle')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(setShellSection).toHaveBeenCalledWith('workspaces');
     expect(runtime.toggleAddWorkspace).toHaveBeenCalledWith('acct_1');
 
     document.getElementById('billing')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     expect(runtime.openBilling).toHaveBeenCalledWith('acct_1');
 
     document.getElementById('team')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    expect(runtime.toggleTeam).toHaveBeenCalledWith('acct_1');
+    expect(setShellSection).toHaveBeenCalledWith('team');
+    expect(runtime.ensureTeamVisible).toHaveBeenCalledWith('acct_1');
 
     document.getElementById('invite')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     expect(runtime.inviteMember).toHaveBeenCalledWith('acct_1');

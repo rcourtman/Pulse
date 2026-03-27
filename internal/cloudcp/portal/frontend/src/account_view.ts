@@ -87,15 +87,12 @@ export function renderWorkspaceManagement(account: PortalAccountSummary, entry: 
   closeButton.disabled = entry.manageWorkspace.pending;
 }
 
-function setTbodyMessage(tbody: HTMLElement, msg: string, isError: boolean): void {
-  tbody.textContent = '';
-  var tr = document.createElement('tr');
-  var td = document.createElement('td');
-  td.setAttribute('colspan', '3');
-  td.className = 'team-message-cell' + (isError ? ' error' : '');
-  td.textContent = msg;
-  tr.appendChild(td);
-  tbody.appendChild(tr);
+function setContainerMessage(container: HTMLElement, msg: string, isError: boolean): void {
+  container.textContent = '';
+  var message = document.createElement('div');
+  message.className = 'team-list-message' + (isError ? ' error' : '');
+  message.textContent = msg;
+  container.appendChild(message);
 }
 
 function countMembersByRole(members: PortalTeamMember[], role: string): number {
@@ -130,14 +127,16 @@ function renderTeamStats(accountID: string, entry: PortalAccountUIEntry): void {
     '<div class="team-stat-card"><span class="team-stat-label">Operators</span><span class="team-stat-value">' + String(countMembersByRole(members, 'tech') + countMembersByRole(members, 'read_only')) + '</span></div>';
 }
 
-function renderTeamMemberRoleCell(accountID: string, member: PortalTeamMember, isOwner: boolean): HTMLTableCellElement {
-  var tdRole = document.createElement('td');
+function renderTeamRoleControl(accountID: string, member: PortalTeamMember, isOwner: boolean): HTMLElement {
   if (member.role === 'owner' && !isOwner) {
-    tdRole.textContent = 'owner';
-    return tdRole;
+    var locked = document.createElement('span');
+    locked.className = 'team-role-badge';
+    locked.textContent = 'Owner';
+    return locked;
   }
 
   var sel = document.createElement('select');
+  sel.className = 'team-role-select';
   var roles = isOwner ? ['owner', 'admin', 'tech', 'read_only'] : ['admin', 'tech', 'read_only'];
   for (var j = 0; j < roles.length; j += 1) {
     var opt = document.createElement('option');
@@ -149,14 +148,12 @@ function renderTeamMemberRoleCell(accountID: string, member: PortalTeamMember, i
   sel.setAttribute('data-action', 'change-role');
   sel.setAttribute('data-account-id', accountID);
   sel.setAttribute('data-user-id', member.user_id);
-  tdRole.appendChild(sel);
-  return tdRole;
+  return sel;
 }
 
-function renderTeamMemberActionCell(accountID: string, member: PortalTeamMember, isOwner: boolean): HTMLTableCellElement {
-  var tdAction = document.createElement('td');
+function renderTeamMemberAction(accountID: string, member: PortalTeamMember, isOwner: boolean): HTMLElement | null {
   if (member.role === 'owner' && !isOwner) {
-    return tdAction;
+    return null;
   }
 
   var btn = document.createElement('button');
@@ -167,8 +164,35 @@ function renderTeamMemberActionCell(accountID: string, member: PortalTeamMember,
   btn.setAttribute('data-account-id', accountID);
   btn.setAttribute('data-user-id', member.user_id);
   btn.setAttribute('data-member-email', member.email);
-  tdAction.appendChild(btn);
-  return tdAction;
+  return btn;
+}
+
+function renderTeamMemberRow(accountID: string, member: PortalTeamMember, isOwner: boolean): HTMLElement {
+  var row = document.createElement('div');
+  row.className = 'team-member-row';
+
+  var identity = document.createElement('div');
+  identity.className = 'team-member-identity';
+
+  var email = document.createElement('div');
+  email.className = 'team-member-email';
+  email.textContent = member.email;
+  identity.appendChild(email);
+
+  var caption = document.createElement('div');
+  caption.className = 'team-member-caption';
+  caption.textContent = member.role === 'owner' ? 'Full account owner access' : 'Hosted account operator';
+  identity.appendChild(caption);
+
+  var controls = document.createElement('div');
+  controls.className = 'team-member-controls';
+  controls.appendChild(renderTeamRoleControl(accountID, member, isOwner));
+  var action = renderTeamMemberAction(accountID, member, isOwner);
+  if (action) controls.appendChild(action);
+
+  row.appendChild(identity);
+  row.appendChild(controls);
+  return row;
 }
 
 export function renderAddWorkspaceSection(accountID: string, entry: PortalAccountUIEntry): void {
@@ -183,8 +207,8 @@ export function renderAddWorkspaceSection(accountID: string, entry: PortalAccoun
 
 export function renderTeamSection(accountID: string, entry: PortalAccountUIEntry): void {
   var section = getElement<HTMLElement>('team-section-' + accountID);
-  var tbody = getElement<HTMLElement>('team-list-' + accountID);
-  if (!section || !tbody) return;
+  var roster = getElement<HTMLElement>('team-list-' + accountID);
+  if (!section || !roster) return;
 
   var actorRole = section.getAttribute('data-actor-role') || '';
   var isOwner = actorRole === 'owner';
@@ -195,28 +219,22 @@ export function renderTeamSection(accountID: string, entry: PortalAccountUIEntry
     return;
   }
   if (entry.teamQuery.status === 'loading') {
-    setTbodyMessage(tbody, 'Loading…', false);
+    setContainerMessage(roster, 'Loading…', false);
     return;
   }
   if (entry.teamQuery.status === 'error') {
-    setTbodyMessage(tbody, entry.teamQuery.error, true);
+    setContainerMessage(roster, entry.teamQuery.error, true);
     return;
   }
   if (!entry.teamQuery.data.length) {
-    setTbodyMessage(tbody, 'No team members.', false);
+    setContainerMessage(roster, 'No team members.', false);
     return;
   }
 
-  tbody.textContent = '';
+  roster.textContent = '';
   for (var i = 0; i < entry.teamQuery.data.length; i += 1) {
     var member = entry.teamQuery.data[i];
-    var tr = document.createElement('tr');
-    var tdEmail = document.createElement('td');
-    tdEmail.textContent = member.email;
-    tr.appendChild(tdEmail);
-    tr.appendChild(renderTeamMemberRoleCell(accountID, member, isOwner));
-    tr.appendChild(renderTeamMemberActionCell(accountID, member, isOwner));
-    tbody.appendChild(tr);
+    roster.appendChild(renderTeamMemberRow(accountID, member, isOwner));
   }
 }
 

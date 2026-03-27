@@ -2,6 +2,7 @@ import type {
   PortalAccountSummary,
   PortalBootstrapData,
   PortalLoginState,
+  PortalShellSection,
   PortalWorkspaceSummary,
 } from './types';
 
@@ -10,6 +11,7 @@ export interface ShellViewContext {
   loginState: PortalLoginState;
   signupPath: string;
   accountAPIBasePath: string;
+  activeSection?: PortalShellSection;
 }
 
 function escapeHTML(value: unknown): string {
@@ -140,23 +142,27 @@ function renderOverviewBand(accounts: PortalAccountSummary[]): string {
   );
 }
 
-function renderShellNavigation(accounts: PortalAccountSummary[], supportEmail: string): string {
+function shellSectionButton(section: PortalShellSection, activeSection: PortalShellSection, title: string, copy: string): string {
+  return (
+    '<button class="portal-shell-nav-link' + (activeSection === section ? ' active' : '') + '" type="button" data-shell-action="activate-section" data-shell-section="' + section + '">' +
+      '<span class="portal-shell-nav-label">' + title + '</span>' +
+      '<span class="portal-shell-nav-copy">' + copy + '</span>' +
+    '</button>'
+  );
+}
+
+function renderShellNavigation(accounts: PortalAccountSummary[], supportEmail: string, activeSection: PortalShellSection): string {
   var hosted = hasHostedAccounts(accounts);
   return (
-    '<nav class="portal-command-strip" aria-label="Pulse Account sections">' +
-      '<a class="portal-command-link" href="#hosted-operations-section">' +
-        '<span class="portal-command-label">' + (hosted ? 'Hosted operations' : 'Hosted access') + '</span>' +
-        '<span class="portal-command-copy">' + (hosted ? 'Workspaces, teams, and hosted billing' : 'No hosted workspaces are attached yet') + '</span>' +
-      '</a>' +
-      '<a class="portal-command-link" href="#account-services-section">' +
-        '<span class="portal-command-label">Account services</span>' +
-        '<span class="portal-command-copy">Licenses, billing, refunds, and privacy</span>' +
-      '</a>' +
-      '<a class="portal-command-link portal-command-link-support" href="mailto:' + escapeAttr(supportEmail || '') + '">' +
-        '<span class="portal-command-label">Support</span>' +
-        '<span class="portal-command-copy">' + escapeHTML(supportEmail || '') + '</span>' +
-      '</a>' +
-    '</nav>'
+    '<aside class="portal-shell-nav" aria-label="Pulse Account sections">' +
+      '<div class="portal-shell-nav-group">' +
+        shellSectionButton('overview', activeSection, 'Overview', hosted ? 'Posture, accounts, and quick actions' : 'Account summary and access state') +
+        shellSectionButton('workspaces', activeSection, hosted ? 'Workspaces' : 'Hosted access', hosted ? 'Hosted fleet and lifecycle actions' : 'No hosted workspaces are attached yet') +
+        shellSectionButton('team', activeSection, 'Team', hosted ? 'Access and operator roster' : 'Account membership') +
+        shellSectionButton('services', activeSection, 'Account services', 'Licenses, billing, refunds, and privacy') +
+        shellSectionButton('support', activeSection, 'Support', supportEmail || 'Support contact') +
+      '</div>' +
+    '</aside>'
   );
 }
 
@@ -225,7 +231,7 @@ function renderWorkspaceCard(account: PortalAccountSummary, workspace: PortalWor
   );
 }
 
-function renderAccountSection(account: PortalAccountSummary, accountAPIBasePath: string): string {
+function renderAccountOverviewSection(account: PortalAccountSummary): string {
   var workspaces = Array.isArray(account.workspaces) ? account.workspaces : [];
   var summaryText = accountKindLabel(account) + ' · ' + titleCase(account.role) + ' · ' + workspaceCountLabel(workspaces.length);
   var healthyCount = countWorkspacesByHealth(workspaces, 'healthy');
@@ -237,9 +243,7 @@ function renderAccountSection(account: PortalAccountSummary, accountAPIBasePath:
     : 'Use this account surface to open hosted workspaces, manage billing, and control access for this hosted account.';
 
   var actions = '';
-  var teamSection = '';
   var addWorkspaceForm = '';
-  var workspaceManagement = '';
   if (account.can_manage) {
     actions =
       '<div class="account-action-strip">' +
@@ -253,7 +257,7 @@ function renderAccountSection(account: PortalAccountSummary, accountAPIBasePath:
               escapeAttr(account.id) +
               '" data-action="toggle-add-workspace" data-account-id="' +
               escapeAttr(account.id) +
-              '">Add workspace</button>'
+              '" data-shell-target="workspaces">Add workspace</button>'
             : '') +
           (account.has_billing
             ? '<button type="button" class="btn-secondary" data-action="open-billing" data-account-id="' +
@@ -264,68 +268,73 @@ function renderAccountSection(account: PortalAccountSummary, accountAPIBasePath:
           escapeAttr(account.id) +
           '" data-action="toggle-team" data-account-id="' +
           escapeAttr(account.id) +
-          '">Manage team</button>' +
+          '" data-shell-target="team">Manage team</button>' +
         '</div>' +
       '</div>';
 
-    teamSection =
-      '<section class="team-management-panel team-section" id="team-section-' +
-      escapeAttr(account.id) +
-      '" data-actor-role="' +
-      escapeAttr(account.role) +
-      '">' +
-        '<div class="team-management-header">' +
-          '<div>' +
-            '<div class="account-panel-kicker">Team management</div>' +
-            '<h3>Control who can operate this account</h3>' +
-            '<p>Owners manage billing and access. Admins and techs keep the hosted fleet running day to day.</p>' +
-          '</div>' +
-          '<button type="button" class="btn-secondary btn-compact" data-action="toggle-team" data-account-id="' +
-          escapeAttr(account.id) +
-          '">Done</button>' +
-        '</div>' +
-        '<div class="team-management-stats" id="team-stats-' +
+    if (account.kind === 'msp') {
+      addWorkspaceForm =
+        '<div class="add-workspace-form" id="add-ws-form-' +
         escapeAttr(account.id) +
-        '"></div>' +
-        '<div class="team-management-grid">' +
-          '<div class="team-roster">' +
-            '<div class="team-panel-heading">' +
-              '<h4>People on this account</h4>' +
-              '<p>Keep the roster small and role assignment explicit. The people listed here are the ones who can operate the hosted fleet.</p>' +
-            '</div>' +
-            '<table class="team-table">' +
-              '<thead><tr><th>Email</th><th>Role</th><th></th></tr></thead>' +
-              '<tbody id="team-list-' +
-              escapeAttr(account.id) +
-              '">' +
-                '<tr><td colspan="3" class="team-message-cell">Loading…</td></tr>' +
-              '</tbody>' +
-            '</table>' +
+        '">' +
+          '<label for="ws-name-' +
+          escapeAttr(account.id) +
+          '">Workspace name (for example, a client name)</label>' +
+          '<input type="text" id="ws-name-' +
+          escapeAttr(account.id) +
+          '" placeholder="Acme Corp" maxlength="80" autocomplete="off">' +
+          '<div class="form-actions">' +
+            '<button type="button" class="btn-primary" data-action="create-workspace" data-account-id="' +
+            escapeAttr(account.id) +
+            '">Create workspace</button>' +
+            '<button type="button" class="btn-secondary" data-action="toggle-add-workspace" data-account-id="' +
+            escapeAttr(account.id) +
+            '">Cancel</button>' +
+            '<div class="spinner" id="ws-spinner-' +
+            escapeAttr(account.id) +
+            '" hidden></div>' +
           '</div>' +
-          '<div class="team-invite-panel">' +
-            '<div class="team-panel-heading">' +
-              '<h4>Invite someone new</h4>' +
-              '<p>Add another operator with the minimum role they need for this account.</p>' +
-            '</div>' +
-            '<div class="team-invite">' +
-              '<div><label for="invite-email-' +
-              escapeAttr(account.id) +
-              '">Email</label><input type="email" id="invite-email-' +
-              escapeAttr(account.id) +
-              '" placeholder="user@example.com" autocomplete="off"></div>' +
-              '<div><label for="invite-role-' +
-              escapeAttr(account.id) +
-              '">Role</label><select id="invite-role-' +
-              escapeAttr(account.id) +
-              '"><option value="admin">Admin</option><option value="tech">Tech</option><option value="read_only">Read-only</option></select></div>' +
-              '<button type="button" class="btn-primary btn-compact" data-action="invite-member" data-account-id="' +
-              escapeAttr(account.id) +
-              '">Invite</button>' +
-            '</div>' +
+        '</div>';
+    }
+  }
+
+  return (
+    '<section class="account-content-panel account-content-panel-overview">' +
+      '<div class="account-command-deck">' +
+        '<div class="account-overview-card">' +
+          '<div class="account-panel-kicker">Hosted posture</div>' +
+          '<h3>' + escapeHTML(account.name) + '</h3>' +
+          '<p>' + escapeHTML(summaryText) + '</p>' +
+        '</div>' +
+        '<div class="account-metric-strip">' +
+          '<div class="account-stat-card account-stat-card-inline">' +
+            '<span class="account-stat-label">Active workspaces</span>' +
+            '<span class="account-stat-value">' + String(activeCount) + '</span>' +
+          '</div>' +
+          '<div class="account-stat-card account-stat-card-inline">' +
+            '<span class="account-stat-label">Healthy</span>' +
+            '<span class="account-stat-value account-stat-healthy">' + String(healthyCount) + '</span>' +
+          '</div>' +
+          '<div class="account-stat-card account-stat-card-inline">' +
+            '<span class="account-stat-label">Checking</span>' +
+            '<span class="account-stat-value account-stat-checking">' + String(checkingCount) + '</span>' +
+          '</div>' +
+          '<div class="account-stat-card account-stat-card-inline">' +
+            '<span class="account-stat-label">Needs attention</span>' +
+            '<span class="account-stat-value account-stat-unhealthy">' + String(unhealthyCount) + '</span>' +
           '</div>' +
         '</div>' +
-      '</section>';
+        actions +
+        addWorkspaceForm +
+      '</div>' +
+    '</section>'
+  );
+}
 
+function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPIBasePath: string): string {
+  var workspaces = Array.isArray(account.workspaces) ? account.workspaces : [];
+  var workspaceManagement = '';
+  if (account.can_manage) {
     workspaceManagement =
       '<section class="workspace-management-panel" id="workspace-management-' +
       escapeAttr(account.id) +
@@ -367,30 +376,6 @@ function renderAccountSection(account: PortalAccountSummary, accountAPIBasePath:
         '</div>' +
       '</section>';
 
-    if (account.kind === 'msp') {
-      addWorkspaceForm =
-        '<div class="add-workspace-form" id="add-ws-form-' +
-        escapeAttr(account.id) +
-        '">' +
-          '<label for="ws-name-' +
-          escapeAttr(account.id) +
-          '">Workspace name (for example, a client name)</label>' +
-          '<input type="text" id="ws-name-' +
-          escapeAttr(account.id) +
-          '" placeholder="Acme Corp" maxlength="80" autocomplete="off">' +
-          '<div class="form-actions">' +
-            '<button type="button" class="btn-primary" data-action="create-workspace" data-account-id="' +
-            escapeAttr(account.id) +
-            '">Create workspace</button>' +
-            '<button type="button" class="btn-secondary" data-action="toggle-add-workspace" data-account-id="' +
-            escapeAttr(account.id) +
-            '">Cancel</button>' +
-            '<div class="spinner" id="ws-spinner-' +
-            escapeAttr(account.id) +
-            '" hidden></div>' +
-          '</div>' +
-        '</div>';
-    }
   }
 
   var workspaceHTML = workspaces.length
@@ -400,59 +385,96 @@ function renderAccountSection(account: PortalAccountSummary, accountAPIBasePath:
     : '<div class="empty-state"><p>No hosted workspaces yet. Create one to get started.</p></div>';
 
   return (
-    '<section class="account-surface">' +
-      '<div class="account-surface-header">' +
-        '<div class="account-heading">' +
-          '<div class="account-eyebrow">' + escapeHTML(accountKindLabel(account)) + '</div>' +
-          '<h2>' + escapeHTML(account.name) + '</h2>' +
-          '<div class="account-summary">' + escapeHTML(summaryText) + '</div>' +
-        '</div>' +
-        '<div class="account-badges">' +
-          '<span class="badge badge-' + escapeHTML(account.kind) + '">' + escapeHTML(account.kind_label) + '</span>' +
-          roleBadgeHTML(account.role) +
+    '<section class="account-content-panel account-content-panel-workspaces">' +
+      '<div class="account-stage-header">' +
+        '<div>' +
+          '<div class="account-panel-kicker">Workspace fleet</div>' +
+          '<h3>Open hosted Pulse workspaces</h3>' +
+          '<p>Review fleet health, move into a workspace, and keep lifecycle actions explicit.</p>' +
         '</div>' +
       '</div>' +
-      '<div class="account-surface-body">' +
-        '<div class="account-command-deck">' +
-          '<div class="account-overview-card">' +
-            '<div class="account-panel-kicker">Hosted posture</div>' +
-            '<h3>' + escapeHTML(account.name) + '</h3>' +
-            '<p>' + escapeHTML(summaryText) + '</p>' +
+      workspaceHTML +
+      '<div class="account-management-grid">' +
+        workspaceManagement +
+      '</div>' +
+    '</section>'
+  );
+}
+
+function renderAccountTeamSection(account: PortalAccountSummary): string {
+  return (
+    '<section class="account-content-panel account-content-panel-team">' +
+      '<section class="team-management-panel team-section team-section-shell" id="team-section-' +
+      escapeAttr(account.id) +
+      '" data-actor-role="' +
+      escapeAttr(account.role) +
+      '">' +
+        '<div class="team-management-header">' +
+          '<div>' +
+            '<div class="account-panel-kicker">Team management</div>' +
+            '<h3>Control who can operate this account</h3>' +
+            '<p>Owners manage billing and access. Admins and techs keep the hosted fleet running day to day.</p>' +
           '</div>' +
-          '<div class="account-metric-strip">' +
-            '<div class="account-stat-card account-stat-card-inline">' +
-              '<span class="account-stat-label">Active workspaces</span>' +
-              '<span class="account-stat-value">' + String(activeCount) + '</span>' +
-            '</div>' +
-            '<div class="account-stat-card account-stat-card-inline">' +
-              '<span class="account-stat-label">Healthy</span>' +
-              '<span class="account-stat-value account-stat-healthy">' + String(healthyCount) + '</span>' +
-            '</div>' +
-            '<div class="account-stat-card account-stat-card-inline">' +
-              '<span class="account-stat-label">Checking</span>' +
-              '<span class="account-stat-value account-stat-checking">' + String(checkingCount) + '</span>' +
-            '</div>' +
-            '<div class="account-stat-card account-stat-card-inline">' +
-              '<span class="account-stat-label">Needs attention</span>' +
-              '<span class="account-stat-value account-stat-unhealthy">' + String(unhealthyCount) + '</span>' +
-            '</div>' +
-          '</div>' +
-          actions +
-          addWorkspaceForm +
+          '<button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="workspaces">Done</button>' +
         '</div>' +
-        '<div class="account-main-stage">' +
-          '<div class="account-stage-header">' +
-            '<div>' +
-              '<div class="account-panel-kicker">Workspace fleet</div>' +
-              '<h3>Open hosted Pulse workspaces</h3>' +
-              '<p>Review fleet health, move into a workspace, and keep lifecycle actions explicit.</p>' +
+        '<div class="team-management-stats" id="team-stats-' +
+        escapeAttr(account.id) +
+        '"></div>' +
+        '<div class="team-management-grid">' +
+          '<div class="team-roster">' +
+            '<div class="team-panel-heading">' +
+              '<h4>People on this account</h4>' +
+              '<p>Keep the roster small and role assignment explicit. The people listed here are the ones who can operate the hosted fleet.</p>' +
+            '</div>' +
+            '<div class="team-roster-list" id="team-list-' +
+            escapeAttr(account.id) +
+            '">' +
+              '<div class="team-list-message">Loading…</div>' +
             '</div>' +
           '</div>' +
-          workspaceHTML +
-          '<div class="account-management-grid">' +
-            workspaceManagement +
-            teamSection +
+          '<div class="team-invite-panel">' +
+            '<div class="team-panel-heading">' +
+              '<h4>Invite someone new</h4>' +
+              '<p>Add another operator with the minimum role they need for this account.</p>' +
+            '</div>' +
+            '<div class="team-invite">' +
+              '<div><label for="invite-email-' +
+              escapeAttr(account.id) +
+              '">Email</label><input type="email" id="invite-email-' +
+              escapeAttr(account.id) +
+              '" placeholder="user@example.com" autocomplete="off"></div>' +
+              '<div><label for="invite-role-' +
+              escapeAttr(account.id) +
+              '">Role</label><select id="invite-role-' +
+              escapeAttr(account.id) +
+              '"><option value="admin">Admin</option><option value="tech">Tech</option><option value="read_only">Read-only</option></select></div>' +
+              '<button type="button" class="btn-primary btn-compact" data-action="invite-member" data-account-id="' +
+              escapeAttr(account.id) +
+              '">Invite</button>' +
+            '</div>' +
           '</div>' +
+        '</div>' +
+      '</section>' +
+    '</section>'
+  );
+}
+
+function renderSupportSection(context: ShellViewContext): string {
+  return (
+    '<section class="portal-support-panel">' +
+      '<div class="account-panel-kicker">Support</div>' +
+      '<h2>Get help without leaving Pulse Account</h2>' +
+      '<p>Use support when hosted access looks wrong, billing does not behave as expected, or you need help with commercial licensing and privacy actions.</p>' +
+      '<div class="portal-support-card-grid">' +
+        '<div class="portal-support-card">' +
+          '<h3>Account support</h3>' +
+          '<p>For access, tenant handoff, team, and billing issues, contact the hosted operations desk.</p>' +
+          '<a class="portal-support-link" href="mailto:' + escapeAttr(context.bootstrap.support_email || '') + '">' + escapeHTML(context.bootstrap.support_email || '') + '</a>' +
+        '</div>' +
+        '<div class="portal-support-card">' +
+          '<h3>Commercial services</h3>' +
+          '<p>Self-hosted subscriptions, license recovery, refunds, and privacy requests all route through the same account surface.</p>' +
+          '<button type="button" class="btn-secondary" data-shell-action="activate-section" data-shell-section="services">Open account services</button>' +
         '</div>' +
       '</div>' +
     '</section>'
@@ -487,77 +509,107 @@ export function renderAccountsHTML(context: ShellViewContext): string {
     );
   }
   return safeAccounts.map(function(account) {
-    return renderAccountSection(account, context.accountAPIBasePath);
+    return renderAccountOverviewSection(account);
   }).join('');
 }
 
 export function renderAuthenticatedPortalHTML(context: ShellViewContext): string {
   var accounts = Array.isArray(context.bootstrap.accounts) ? context.bootstrap.accounts : [];
   var hosted = hasHostedAccounts(accounts);
+  var activeSection = context.activeSection || 'overview';
   var serviceHeading = hosted ? 'Self-hosted licenses and billing' : 'Account services';
   var serviceNote = hosted
     ? 'Hosted operations live above. Use these commercial tools for self-hosted licenses, billing, refunds, and privacy actions.'
     : 'Use these account tools for self-hosted licenses, billing, refunds, and privacy actions.';
+  var hostedContent = accounts.map(function(account) {
+    return (
+      '<section class="account-surface">' +
+        '<div class="account-surface-header">' +
+          '<div class="account-heading">' +
+            '<div class="account-eyebrow">' + escapeHTML(accountKindLabel(account)) + '</div>' +
+            '<h2>' + escapeHTML(account.name) + '</h2>' +
+            '<div class="account-summary">' + escapeHTML(accountKindLabel(account) + ' · ' + titleCase(account.role) + ' · ' + workspaceCountLabel((account.workspaces || []).length)) + '</div>' +
+          '</div>' +
+          '<div class="account-badges">' +
+            '<span class="badge badge-' + escapeHTML(account.kind) + '">' + escapeHTML(account.kind_label) + '</span>' +
+            roleBadgeHTML(account.role) +
+          '</div>' +
+        '</div>' +
+        '<div class="account-surface-body">' +
+          renderAccountOverviewSection(account) +
+          renderAccountWorkspaceSection(account, context.accountAPIBasePath) +
+          renderAccountTeamSection(account) +
+        '</div>' +
+      '</section>'
+    );
+  }).join('');
 
   return (
-    '<div class="portal-shell">' +
+    '<div class="portal-shell" data-shell-section="' + activeSection + '">' +
       renderOverviewBand(accounts) +
-      renderShellNavigation(accounts, context.bootstrap.support_email || '') +
-      '<section class="portal-top-section" id="hosted-operations-section">' +
-        '<div class="portal-top-section-header">' +
-          '<div class="account-panel-kicker">' + (hosted ? 'Hosted operations' : 'Hosted access') + '</div>' +
-          '<h2>' + (hosted ? 'Run hosted accounts from one place' : 'No hosted workspaces are attached yet') + '</h2>' +
-          '<p>' + (hosted
-            ? 'Use this area for workspace access, fleet operations, hosted billing, and team management.'
-            : 'This account does not currently have hosted workspace access. If that is unexpected, contact support while using the commercial tools below.') + '</p>' +
+      '<div class="portal-shell-layout">' +
+        renderShellNavigation(accounts, context.bootstrap.support_email || '', activeSection) +
+        '<div class="portal-shell-main">' +
+          '<section class="portal-content-panel portal-content-panel-overview">' +
+            '<div class="portal-top-section-header">' +
+              '<div class="account-panel-kicker">' + (hosted ? 'Hosted operations' : 'Hosted access') + '</div>' +
+              '<h2>' + (hosted ? 'Run hosted accounts from one place' : 'No hosted workspaces are attached yet') + '</h2>' +
+              '<p>' + (hosted
+                ? 'Use this area for workspace access, fleet operations, hosted billing, and team management.'
+                : 'This account does not currently have hosted workspace access. If that is unexpected, contact support while using the commercial tools below.') + '</p>' +
+            '</div>' +
+            '<div id="accounts-root">' + hostedContent + '</div>' +
+          '</section>' +
+          '<section class="portal-content-panel portal-content-panel-services service-section" id="account-services-section">' +
+            '<div class="service-header">' +
+              '<div>' +
+                '<div class="account-panel-kicker">Account services</div>' +
+                '<h2>' + serviceHeading + '</h2>' +
+              '</div>' +
+              '<div class="service-note">' + serviceNote + '</div>' +
+            '</div>' +
+            '<div class="service-grid">' +
+              '<button class="service-card service-card-button" type="button" id="open-manage-service" data-account-service-action="open-service-panel" data-account-service-panel="manage-service-panel" data-account-service-focus="manage-inline-email" data-shell-target="services">' +
+                '<span class="service-card-kicker">Billing</span>' +
+                '<h3>Manage subscriptions</h3>' +
+                '<p>Open Stripe billing access for existing self-hosted subscriptions without leaving the Pulse Account shell.</p>' +
+              '</button>' +
+              '<button class="service-card service-card-button" type="button" id="open-retrieve-service" data-account-service-action="open-service-panel" data-account-service-panel="retrieve-service-panel" data-account-service-focus="retrieve-inline-email" data-shell-target="services">' +
+                '<span class="service-card-kicker">Licenses</span>' +
+                '<h3>Retrieve licenses</h3>' +
+                '<p>Recover the latest active self-hosted license and invoice link for a commercial email address.</p>' +
+              '</button>' +
+              '<button class="service-card service-card-button" type="button" id="open-refund-service" data-account-service-action="open-service-panel" data-account-service-panel="refund-service-panel" data-account-service-focus="refund-inline-email" data-shell-target="services">' +
+                '<span class="service-card-kicker">Refunds</span>' +
+                '<h3>Refund requests</h3>' +
+                '<p>Request an immediate self-serve refund for eligible self-hosted purchases with explicit revocation confirmation.</p>' +
+              '</button>' +
+              '<button class="service-card service-card-button" type="button" id="open-data-service" data-account-service-action="open-service-panel" data-account-service-panel="data-service-panel" data-account-service-focus="data-export-email" data-shell-target="services">' +
+                '<span class="service-card-kicker">Privacy</span>' +
+                '<h3>Data and privacy</h3>' +
+                '<p>Request commercial data export or deletion without leaving the account shell.</p>' +
+              '</button>' +
+            '</div>' +
+            '<div class="service-panel" id="manage-service-panel"><div id="manage-service-root"></div></div>' +
+            '<div class="service-panel" id="retrieve-service-panel"><div id="retrieve-service-root"></div></div>' +
+            '<div class="service-panel" id="refund-service-panel"><div id="refund-service-root"></div></div>' +
+            '<div class="service-panel" id="data-service-panel">' +
+              '<h3>Data and privacy</h3>' +
+              '<p>Request export or deletion of the commercial data tied to an email address. Payment data held directly by Stripe still requires support handling.</p>' +
+              '<div class="subsection"><div id="data-export-root"></div></div>' +
+              '<div class="subsection"><div id="data-delete-root"></div></div>' +
+              '<div class="helper-text">Payment-card data stays with Stripe. For Stripe deletion support, contact <a href="mailto:' +
+              escapeAttr(context.bootstrap.support_email || '') +
+              '">' +
+              escapeHTML(context.bootstrap.support_email || '') +
+              '</a>.</div>' +
+            '</div>' +
+          '</section>' +
+          '<section class="portal-content-panel portal-content-panel-support">' +
+            renderSupportSection(context) +
+          '</section>' +
         '</div>' +
-        '<div id="accounts-root">' + renderAccountsHTML(context) + '</div>' +
-      '</section>' +
-      '<section class="service-section" id="account-services-section">' +
-        '<div class="service-header">' +
-          '<div>' +
-            '<div class="account-panel-kicker">Account services</div>' +
-            '<h2>' + serviceHeading + '</h2>' +
-          '</div>' +
-          '<div class="service-note">' + serviceNote + '</div>' +
-        '</div>' +
-        '<div class="service-grid">' +
-          '<button class="service-card service-card-button" type="button" id="open-manage-service" data-account-service-action="open-service-panel" data-account-service-panel="manage-service-panel" data-account-service-focus="manage-inline-email">' +
-            '<span class="service-card-kicker">Billing</span>' +
-            '<h3>Manage subscriptions</h3>' +
-            '<p>Open Stripe billing access for existing self-hosted subscriptions without leaving the Pulse Account shell.</p>' +
-          '</button>' +
-          '<button class="service-card service-card-button" type="button" id="open-retrieve-service" data-account-service-action="open-service-panel" data-account-service-panel="retrieve-service-panel" data-account-service-focus="retrieve-inline-email">' +
-            '<span class="service-card-kicker">Licenses</span>' +
-            '<h3>Retrieve licenses</h3>' +
-            '<p>Recover the latest active self-hosted license and invoice link for a commercial email address.</p>' +
-          '</button>' +
-          '<button class="service-card service-card-button" type="button" id="open-refund-service" data-account-service-action="open-service-panel" data-account-service-panel="refund-service-panel" data-account-service-focus="refund-inline-email">' +
-            '<span class="service-card-kicker">Refunds</span>' +
-            '<h3>Refund requests</h3>' +
-            '<p>Request an immediate self-serve refund for eligible self-hosted purchases with explicit revocation confirmation.</p>' +
-          '</button>' +
-          '<button class="service-card service-card-button" type="button" id="open-data-service" data-account-service-action="open-service-panel" data-account-service-panel="data-service-panel" data-account-service-focus="data-export-email">' +
-            '<span class="service-card-kicker">Privacy</span>' +
-            '<h3>Data and privacy</h3>' +
-            '<p>Request commercial data export or deletion without leaving the account shell.</p>' +
-          '</button>' +
-        '</div>' +
-        '<div class="service-panel" id="manage-service-panel"><div id="manage-service-root"></div></div>' +
-        '<div class="service-panel" id="retrieve-service-panel"><div id="retrieve-service-root"></div></div>' +
-        '<div class="service-panel" id="refund-service-panel"><div id="refund-service-root"></div></div>' +
-        '<div class="service-panel" id="data-service-panel">' +
-          '<h3>Data and privacy</h3>' +
-          '<p>Request export or deletion of the commercial data tied to an email address. Payment data held directly by Stripe still requires support handling.</p>' +
-          '<div class="subsection"><div id="data-export-root"></div></div>' +
-          '<div class="subsection"><div id="data-delete-root"></div></div>' +
-          '<div class="helper-text">Payment-card data stays with Stripe. For Stripe deletion support, contact <a href="mailto:' +
-          escapeAttr(context.bootstrap.support_email || '') +
-          '">' +
-          escapeHTML(context.bootstrap.support_email || '') +
-          '</a>.</div>' +
-        '</div>' +
-      '</section>' +
+      '</div>' +
     '</div>'
   );
 }

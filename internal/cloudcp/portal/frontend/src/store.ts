@@ -1,11 +1,12 @@
 import {
   createPortalAccountState,
   createPortalLoginState,
+  createPortalShellState,
   createPortalServiceState,
   syncLoginStateBootstrapEmail,
   syncServiceStateBootstrapEmail,
 } from './state';
-import type { PortalAccountState, PortalBootstrapData, PortalLoginState, PortalServiceState } from './types';
+import type { PortalAccountState, PortalBootstrapData, PortalLoginState, PortalServiceState, PortalShellSection, PortalShellState } from './types';
 
 interface MutationOptions {
   notify?: boolean;
@@ -15,14 +16,17 @@ export interface PortalStore {
   getBootstrap(): PortalBootstrapData;
   getAccountState(): PortalAccountState;
   getLoginState(): PortalLoginState;
+  getShellState(): PortalShellState;
   getServiceState(): PortalServiceState;
   setBootstrap(nextBootstrap: Partial<PortalBootstrapData> | PortalBootstrapData): PortalBootstrapData;
   updateAccountState(mutator: (state: PortalAccountState) => void, options?: MutationOptions): PortalAccountState;
   updateLoginState(mutator: (state: PortalLoginState) => void, options?: MutationOptions): PortalLoginState;
+  setActiveShellSection(section: PortalShellSection): PortalShellState;
   updateServiceState(mutator: (state: PortalServiceState) => void, options?: MutationOptions): PortalServiceState;
   subscribeAccount(listener: () => void): () => void;
   subscribeBootstrap(listener: () => void): () => void;
   subscribeLogin(listener: () => void): () => void;
+  subscribeShell(listener: () => void): () => void;
   subscribeServices(listener: () => void): () => void;
 }
 
@@ -53,12 +57,14 @@ export function createPortalStore(
   var bootstrapState = normalizeBootstrap(bootstrapDefaults, initialBootstrap);
   var accountState = createPortalAccountState();
   var loginState = createPortalLoginState();
+  var shellState = createPortalShellState();
   var serviceState = createPortalServiceState();
   syncLoginStateBootstrapEmail(loginState, bootstrapState.email || '');
   syncServiceStateBootstrapEmail(serviceState, bootstrapState.email || '');
   var accountSubscribers = new Set<() => void>();
   var bootstrapSubscribers = new Set<() => void>();
   var loginSubscribers = new Set<() => void>();
+  var shellSubscribers = new Set<() => void>();
   var serviceSubscribers = new Set<() => void>();
 
   function notify(subscribers: Set<() => void>) {
@@ -76,6 +82,9 @@ export function createPortalStore(
     },
     getLoginState: function() {
       return loginState;
+    },
+    getShellState: function() {
+      return shellState;
     },
     getServiceState: function() {
       return serviceState;
@@ -101,6 +110,11 @@ export function createPortalStore(
       }
       return loginState;
     },
+    setActiveShellSection: function(section) {
+      shellState.activeSection = section;
+      notify(shellSubscribers);
+      return shellState;
+    },
     updateServiceState: function(mutator, options) {
       mutator(serviceState);
       if (!options || options.notify !== false) {
@@ -124,6 +138,12 @@ export function createPortalStore(
       loginSubscribers.add(listener);
       return function() {
         loginSubscribers.delete(listener);
+      };
+    },
+    subscribeShell: function(listener) {
+      shellSubscribers.add(listener);
+      return function() {
+        shellSubscribers.delete(listener);
       };
     },
     subscribeServices: function(listener) {

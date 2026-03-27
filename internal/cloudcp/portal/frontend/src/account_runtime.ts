@@ -19,6 +19,7 @@ export interface AccountRuntime {
   clearWorkspaceSelection(accountID: string): void;
   openBilling(accountID: string): Promise<void>;
   toggleTeam(accountID: string): void;
+  ensureTeamVisible(accountID: string): void;
   inviteMember(accountID: string): Promise<void>;
   createWorkspace(accountID: string): Promise<void>;
   manageWorkspaceAction(accountID: string, tenantID: string, action: string, name: string): Promise<void>;
@@ -217,6 +218,22 @@ export function installAccountRuntime(deps: AccountRuntimeDeps): AccountRuntime 
     }
   };
 
+  var ensureTeamVisible = function(accountID: string): void {
+    var shouldLoad = false;
+    deps.store.updateAccountState(function(accountState) {
+      var entry = ensurePortalAccountUIEntry(accountState, accountID);
+      if (!entry.teamVisible) {
+        entry.teamVisible = true;
+        entry.selectedWorkspaceID = '';
+        entry.addWorkspaceOpen = false;
+      }
+      shouldLoad = entry.teamQuery.status === 'idle' || entry.teamQuery.status === 'error';
+    });
+    if (shouldLoad) {
+      void loadTeam(accountID);
+    }
+  };
+
   var inviteMember = async function(accountID: string): Promise<void> {
     var emailEl = getElement<HTMLInputElement>('invite-email-' + accountID);
     var roleEl = getElement<HTMLSelectElement>('invite-role-' + accountID);
@@ -286,6 +303,7 @@ export function installAccountRuntime(deps: AccountRuntimeDeps): AccountRuntime 
     clearWorkspaceSelection: clearWorkspaceSelection,
     openBilling: openBilling,
     toggleTeam: toggleTeam,
+    ensureTeamVisible: ensureTeamVisible,
     inviteMember: inviteMember,
     createWorkspace: createWorkspace,
     manageWorkspaceAction: manageWorkspaceAction,

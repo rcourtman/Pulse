@@ -74,6 +74,12 @@ export interface PortalAccountState {
   byAccountID: Record<string, PortalAccountUIEntry>;
 }
 
+export type PortalShellSection = 'overview' | 'workspaces' | 'team' | 'services' | 'support';
+
+export interface PortalShellState {
+  activeSection: PortalShellSection;
+}
+
 export type PortalServiceFlowID = 'manage' | 'retrieve' | 'export' | 'delete';
 
 export interface ServiceStatus {

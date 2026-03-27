@@ -1,6 +1,7 @@
 import { asHTMLElement } from './services_view';
 
 export interface ServicesControllerDeps {
+  setShellSection: (section: 'overview' | 'workspaces' | 'team' | 'services' | 'support') => void;
   toggleServicePanel: (panelID: string) => void;
   focusElement: (id: string) => void;
   requestVerificationCode: (flowID: 'manage' | 'retrieve' | 'export' | 'delete') => void;
@@ -23,6 +24,7 @@ export function installServicesController(deps: ServicesControllerDeps): void {
     switch (action) {
       case 'open-service-panel':
         event.preventDefault();
+        deps.setShellSection('services');
         deps.toggleServicePanel(panelID);
         deps.focusElement(focusID);
         return;

@@ -428,6 +428,9 @@ export function installServicesRuntime(deps: ServicesRuntimeDeps): void {
   store.subscribeServices(renderServiceRuntime);
 
   installServicesController({
+    setShellSection: function(section) {
+      store.setActiveShellSection(section);
+    },
     toggleServicePanel,
     focusElement,
     requestVerificationCode: function(flowID) {

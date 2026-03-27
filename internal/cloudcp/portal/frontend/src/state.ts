@@ -3,6 +3,7 @@ import type {
   PortalAccountState,
   PortalAccountUIEntry,
   PortalLoginState,
+  PortalShellState,
   PortalServiceFlowID,
   PortalServiceState,
   PortalQueryState,
@@ -46,6 +47,12 @@ export function createPortalLoginState(): PortalLoginState {
 export function createPortalAccountState(): PortalAccountState {
   return {
     byAccountID: {},
+  };
+}
+
+export function createPortalShellState(): PortalShellState {
+  return {
+    activeSection: 'overview',
   };
 }
 

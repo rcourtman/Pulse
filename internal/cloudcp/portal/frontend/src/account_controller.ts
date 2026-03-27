@@ -3,6 +3,7 @@ import type { AccountRuntime } from './account_runtime';
 
 export interface AccountControllerDeps {
   runtime: AccountRuntime;
+  setShellSection: (section: 'overview' | 'workspaces' | 'team' | 'services' | 'support') => void;
 }
 
 export function installAccountController(deps: AccountControllerDeps): void {
@@ -17,6 +18,7 @@ export function installAccountController(deps: AccountControllerDeps): void {
     switch (action) {
       case 'toggle-add-workspace':
         event.preventDefault();
+        deps.setShellSection('workspaces');
         deps.runtime.toggleAddWorkspace(accountID);
         return;
       case 'open-billing':
@@ -25,7 +27,8 @@ export function installAccountController(deps: AccountControllerDeps): void {
         return;
       case 'toggle-team':
         event.preventDefault();
-        deps.runtime.toggleTeam(accountID);
+        deps.setShellSection('team');
+        deps.runtime.ensureTeamVisible(accountID);
         return;
       case 'invite-member':
         event.preventDefault();
@@ -33,10 +36,12 @@ export function installAccountController(deps: AccountControllerDeps): void {
         return;
       case 'create-workspace':
         event.preventDefault();
+        deps.setShellSection('workspaces');
         void deps.runtime.createWorkspace(accountID);
         return;
       case 'select-workspace':
         event.preventDefault();
+        deps.setShellSection('workspaces');
         deps.runtime.selectWorkspace(
           accountID,
           actionEl.getAttribute('data-workspace-id') || '',
@@ -44,10 +49,12 @@ export function installAccountController(deps: AccountControllerDeps): void {
         return;
       case 'clear-workspace-selection':
         event.preventDefault();
+        deps.setShellSection('workspaces');
         deps.runtime.clearWorkspaceSelection(accountID);
         return;
       case 'workspace-action':
         event.preventDefault();
+        deps.setShellSection('workspaces');
         void deps.runtime.manageWorkspaceAction(
           accountID,
           actionEl.getAttribute('data-workspace-id') || '',
