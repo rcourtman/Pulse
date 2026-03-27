@@ -172,11 +172,21 @@ header .logout-btn:hover,
   background: #fbfcfd;
   box-shadow: var(--shadow-sm);
 }
+.portal-hero-compact {
+  align-items: center;
+  padding: 14px 18px;
+}
 .portal-hero-copy {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   max-width: 900px;
+}
+.portal-hero-heading-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 .portal-hero-kicker,
 .account-panel-kicker,
@@ -198,16 +208,29 @@ header .logout-btn:hover,
 .portal-hero h1,
 .intro-card h1 {
   margin: 0;
-  font-size: clamp(1.75rem, 2.6vw, 2.6rem);
-  line-height: 0.98;
+  font-size: clamp(1.55rem, 2.2vw, 2.15rem);
+  line-height: 1;
   letter-spacing: -0.045em;
 }
 .portal-hero p,
 .intro-card p {
   margin: 0;
-  font-size: 14px;
-  line-height: 1.55;
+  font-size: 13px;
+  line-height: 1.5;
   color: var(--ink-soft);
+}
+.portal-hero-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: #edf5f7;
+  color: var(--accent-strong);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 .portal-hero-stats {
   display: grid;
@@ -219,8 +242,8 @@ header .logout-btn:hover,
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  min-height: 80px;
-  padding: 12px 14px;
+  min-height: 72px;
+  padding: 11px 13px;
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
   background: #fcfdff;
@@ -233,9 +256,9 @@ header .logout-btn:hover,
   text-transform: uppercase;
 }
 .portal-hero-stat-value {
-  font-size: 22px;
+  font-size: 18px;
   font-weight: 800;
-  line-height: 1.05;
+  line-height: 1.2;
   letter-spacing: -0.04em;
 }
 .portal-command-strip,
@@ -1112,13 +1135,13 @@ header .logout-btn:hover,
   color: var(--ink-soft);
 }
 .service-action-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
 }
 .service-shell {
   display: grid;
-  grid-template-columns: minmax(0, 1.45fr) minmax(280px, 0.7fr);
+  grid-template-columns: minmax(320px, 0.72fr) minmax(0, 1.28fr);
   gap: 16px;
   align-items: start;
 }
@@ -1134,6 +1157,9 @@ header .logout-btn:hover,
   border-radius: var(--radius-md);
   background: var(--panel-muted);
 }
+.service-brief-card-primary {
+  background: #fff;
+}
 .service-brief-card h3 {
   margin: 8px 0 0;
   font-size: 19px;
@@ -1147,14 +1173,32 @@ header .logout-btn:hover,
   color: var(--ink-soft);
 }
 .service-action-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 16px;
-  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   padding: 16px 18px;
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
-  background: var(--panel-muted);
+  background: #fff;
+}
+.service-action-tags {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.service-action-tag {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--ink-muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 .service-action-copy {
   display: flex;
@@ -1163,8 +1207,8 @@ header .logout-btn:hover,
 }
 .service-action-copy h3 {
   margin: 0;
-  font-size: 19px;
-  line-height: 1.08;
+  font-size: 17px;
+  line-height: 1.16;
   letter-spacing: -0.03em;
 }
 .service-action-copy p {
@@ -1173,6 +1217,37 @@ header .logout-btn:hover,
   line-height: 1.6;
   color: var(--ink-soft);
   max-width: 760px;
+}
+.service-action-highlights {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.service-action-highlight {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 600;
+}
+.service-action-footer {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: auto;
+  padding-top: 4px;
+  border-top: 1px solid var(--line);
+}
+.service-action-caption {
+  max-width: 320px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink-muted);
 }
 .service-action-cta {
   display: flex;
@@ -1184,6 +1259,7 @@ header .logout-btn:hover,
 .service-panel {
   padding: 22px;
   border-radius: var(--radius-md);
+  background: #fff;
 }
 .service-panel.visible.auth-panel {
   display: block;
@@ -1351,7 +1427,8 @@ header .logout-btn:hover,
   .account-management-grid,
   .team-management-grid,
   .account-overview-secondary,
-  .service-shell {
+  .service-shell,
+  .service-action-list {
     grid-template-columns: 1fr;
   }
   .portal-shell-layout,
@@ -1386,8 +1463,7 @@ header .logout-btn:hover,
   .workspace-row-main {
     grid-template-columns: 1fr;
   }
-  .workspace-list-toolbar,
-  .service-action-row {
+  .workspace-list-toolbar {
     grid-template-columns: 1fr;
   }
 }
@@ -1414,7 +1490,9 @@ header .logout-btn:hover,
   .account-surface-header,
   .workspace-management-header,
   .team-management-header,
-  .service-header {
+  .service-header,
+  .service-action-footer,
+  .service-action-tags {
     flex-direction: column;
     align-items: flex-start;
   }

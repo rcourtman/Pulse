@@ -108,19 +108,30 @@ function renderServiceActionRow(
   title: string,
   description: string,
   panelID: string,
-  focusID: string
+  focusID: string,
+  highlights: string[]
 ): string {
+  var highlightHTML = highlights.map(function(item) {
+    return '<span class="service-action-highlight">' + escapeHTML(item) + '</span>';
+  }).join('');
   return (
-    '<div class="service-action-row">' +
-      '<div class="service-action-copy">' +
+    '<article class="service-action-row">' +
+      '<div class="service-action-tags">' +
         '<span class="service-card-kicker">' + kicker + '</span>' +
+        '<span class="service-action-tag">Self-hosted</span>' +
+      '</div>' +
+      '<div class="service-action-copy">' +
         '<h3>' + title + '</h3>' +
         '<p>' + description + '</p>' +
       '</div>' +
-      '<div class="service-action-cta">' +
-        '<button class="btn-secondary service-action-button" type="button" id="' + id + '" data-account-service-action="open-service-panel" data-account-service-panel="' + panelID + '" data-account-service-focus="' + focusID + '" data-shell-target="services">Open</button>' +
+      '<div class="service-action-highlights">' + highlightHTML + '</div>' +
+      '<div class="service-action-footer">' +
+        '<div class="service-action-caption">Open the dedicated account flow for this request.</div>' +
+        '<div class="service-action-cta">' +
+          '<button class="btn-secondary service-action-button" type="button" id="' + id + '" data-account-service-action="open-service-panel" data-account-service-panel="' + panelID + '" data-account-service-focus="' + focusID + '" data-shell-target="services">Open</button>' +
+        '</div>' +
       '</div>' +
-    '</div>'
+    '</article>'
   );
 }
 
@@ -190,14 +201,17 @@ function renderOverviewBand(accounts: PortalAccountSummary[]): string {
   var workspaceTotal = countWorkspaces(accounts);
   var title = hosted ? 'Pulse Account' : 'Self-hosted Pulse Account';
   var summary = hosted
-    ? 'Run hosted operations, operator access, and commercial account services from one control surface.'
-    : 'Use this account for billing, license recovery, refunds, and privacy actions. Hosted workspace access will appear here when it is attached to this email.';
+    ? 'Hosted operations, operator access, and commercial account services live in one account console.'
+    : 'Billing, license recovery, refunds, and privacy actions live here until hosted access is attached to this email.';
 
   return (
-    '<section class="portal-hero">' +
+    '<section class="portal-hero portal-hero-compact">' +
       '<div class="portal-hero-copy">' +
         '<div class="portal-hero-kicker">' + (hosted ? 'Hosted access is active on this account.' : 'No hosted workspace access is attached to this account yet.') + '</div>' +
-        '<h1>' + title + '</h1>' +
+        '<div class="portal-hero-heading-row">' +
+          '<h1>' + title + '</h1>' +
+          '<span class="portal-hero-chip">' + (hosted ? 'Operator ready' : 'Self-hosted only') + '</span>' +
+        '</div>' +
         '<p>' + summary + '</p>' +
       '</div>' +
       '<div class="portal-hero-stats">' +
@@ -210,8 +224,8 @@ function renderOverviewBand(accounts: PortalAccountSummary[]): string {
           '<span class="portal-hero-stat-value">' + (accounts.length === 1 ? '1 account' : String(accounts.length) + ' accounts') + '</span>' +
         '</div>' +
         '<div class="portal-hero-stat">' +
-          '<span class="portal-hero-stat-label">Workspaces</span>' +
-          '<span class="portal-hero-stat-value">' + String(workspaceTotal) + '</span>' +
+          '<span class="portal-hero-stat-label">Workspace fleet</span>' +
+          '<span class="portal-hero-stat-value">' + (workspaceTotal ? workspaceCountLabel(workspaceTotal) : '0 workspaces') + '</span>' +
         '</div>' +
       '</div>' +
     '</section>'
@@ -685,13 +699,30 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
               '<div class="service-note">' + serviceNote + '</div>' +
             '</div>' +
             '<div class="service-shell">' +
-              '<div class="service-shell-main">' +
-                '<div class="service-action-list">' +
-                  renderServiceActionRow('open-manage-service', 'Billing', 'Manage subscriptions', 'Open Stripe billing access for existing self-hosted subscriptions without leaving the Pulse Account shell.', 'manage-service-panel', 'manage-inline-email') +
-                  renderServiceActionRow('open-retrieve-service', 'Licenses', 'Retrieve licenses', 'Recover the latest active self-hosted license and invoice link for a commercial email address.', 'retrieve-service-panel', 'retrieve-inline-email') +
-                  renderServiceActionRow('open-refund-service', 'Refunds', 'Refund requests', 'Request an immediate self-serve refund for eligible self-hosted purchases with explicit revocation confirmation.', 'refund-service-panel', 'refund-inline-email') +
-                  renderServiceActionRow('open-data-service', 'Privacy', 'Data and privacy', 'Request commercial data export or deletion without leaving the account shell.', 'data-service-panel', 'data-export-email') +
+              '<aside class="service-shell-sidebar">' +
+                '<div class="service-brief-card service-brief-card-primary">' +
+                  '<div class="account-panel-kicker">Scope</div>' +
+                  '<h3>Commercial account actions</h3>' +
+                  '<p>Use this area for self-hosted billing, license recovery, refunds, and privacy requests. Hosted workspace operations stay in the Workspaces and Team sections.</p>' +
                 '</div>' +
+                '<div class="service-action-list">' +
+                  renderServiceActionRow('open-manage-service', 'Billing', 'Manage subscriptions', 'Open Stripe billing access for existing self-hosted subscriptions without leaving the Pulse Account shell.', 'manage-service-panel', 'manage-inline-email', ['Invoices and plan changes', 'Subscription self-service']) +
+                  renderServiceActionRow('open-retrieve-service', 'Licenses', 'Retrieve licenses', 'Recover the latest active self-hosted license and invoice link for a commercial email address.', 'retrieve-service-panel', 'retrieve-inline-email', ['Latest active license', 'Invoice lookup']) +
+                  renderServiceActionRow('open-refund-service', 'Refunds', 'Refund requests', 'Request an immediate self-serve refund for eligible self-hosted purchases with explicit revocation confirmation.', 'refund-service-panel', 'refund-inline-email', ['Eligibility check', 'Explicit revocation']) +
+                  renderServiceActionRow('open-data-service', 'Privacy', 'Data and privacy', 'Request commercial data export or deletion without leaving the account shell.', 'data-service-panel', 'data-export-email', ['Export or deletion', 'Support escalation path']) +
+                '</div>' +
+                '<div class="service-brief-card">' +
+                  '<div class="account-panel-kicker">Support</div>' +
+                  '<h3>Need help with a commercial request?</h3>' +
+                  '<p>Use support if billing, refund, privacy, or license actions do not behave as expected for this account.</p>' +
+                  '<a class="portal-support-link" href="mailto:' +
+                  escapeAttr(context.bootstrap.support_email || '') +
+                  '">' +
+                  escapeHTML(context.bootstrap.support_email || '') +
+                  '</a>' +
+                '</div>' +
+              '</aside>' +
+              '<div class="service-shell-main">' +
                 '<div class="service-panel" id="manage-service-panel"><div id="manage-service-root"></div></div>' +
                 '<div class="service-panel" id="retrieve-service-panel"><div id="retrieve-service-root"></div></div>' +
                 '<div class="service-panel" id="refund-service-panel"><div id="refund-service-root"></div></div>' +
@@ -707,23 +738,6 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
                   '</a>.</div>' +
                 '</div>' +
               '</div>' +
-              '<aside class="service-shell-sidebar">' +
-                '<div class="service-brief-card">' +
-                  '<div class="account-panel-kicker">Scope</div>' +
-                  '<h3>Commercial account actions</h3>' +
-                  '<p>Use this area for self-hosted billing, license recovery, refunds, and privacy requests. Hosted workspace operations stay in the Workspaces and Team sections.</p>' +
-                '</div>' +
-                '<div class="service-brief-card">' +
-                  '<div class="account-panel-kicker">Support</div>' +
-                  '<h3>Need help with a commercial request?</h3>' +
-                  '<p>Use support if billing, refund, privacy, or license actions do not behave as expected for this account.</p>' +
-                  '<a class="portal-support-link" href="mailto:' +
-                  escapeAttr(context.bootstrap.support_email || '') +
-                  '">' +
-                  escapeHTML(context.bootstrap.support_email || '') +
-                  '</a>' +
-                '</div>' +
-              '</aside>' +
             '</div>' +
           '</section>' +
           '<section class="portal-content-panel portal-content-panel-support">' +
