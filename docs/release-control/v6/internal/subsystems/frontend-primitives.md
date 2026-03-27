@@ -192,6 +192,11 @@ work extends shared components instead of creating new local variants.
    must name the canonical install workspace explicitly and expose the same
    first-host next step instead of falling back to passive “nothing here yet”
    wording.
+11. Keep the authenticated app root aligned with that same first-session path.
+    `frontend-modern/src/App.tsx` must land `/` on the dashboard shell and let
+    the governed dashboard empty state route first-time operators into
+    Infrastructure Install, instead of preserving a separate root-only jump to
+    `/infrastructure` that drifts from the rest of the onboarding contract.
 
 ## Current State
 

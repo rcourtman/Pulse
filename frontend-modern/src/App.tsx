@@ -34,6 +34,7 @@ import { aiChatStore } from './stores/aiChat';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useKioskMode } from '@/hooks/useKioskMode';
 import {
+  DASHBOARD_PATH,
   buildRecoveryPath,
   buildInfrastructurePath,
   buildStoragePath,
@@ -78,7 +79,8 @@ const SetupCompletionPreviewPage = lazy(() =>
     default: module.SetupCompletionPreview,
   })),
 );
-const ROOT_INFRASTRUCTURE_PATH = buildInfrastructurePath();
+const ROOT_DASHBOARD_PATH = DASHBOARD_PATH;
+const INFRASTRUCTURE_ROUTE_PATH = buildInfrastructurePath();
 const ROOT_WORKLOADS_PATH = buildWorkloadsPath();
 const STORAGE_PATH = buildStoragePath();
 const RECOVERY_ROUTE_PATH = buildRecoveryPath();
@@ -378,13 +380,13 @@ function App() {
       <Route path="/cloud" component={CloudPricingPage} />
       <Route path="/cloud/signup" component={HostedSignupPage} />
       <Route path="/preview/setup-complete" component={SetupCompletionPreviewPage} />
-      <Route path="/dashboard" component={DashboardPage} />
-      <Route path="/" component={() => <Navigate href={ROOT_INFRASTRUCTURE_PATH} />} />
+      <Route path={ROOT_DASHBOARD_PATH} component={DashboardPage} />
+      <Route path="/" component={() => <Navigate href={ROOT_DASHBOARD_PATH} />} />
       <Route path={ROOT_WORKLOADS_PATH} component={WorkloadsView} />
       <Route path={STORAGE_PATH} component={StoragePage} />
       <Route path={RECOVERY_ROUTE_PATH} component={RecoveryRoute} />
       <Route path="/ceph" component={CephPage} />
-      <Route path={ROOT_INFRASTRUCTURE_PATH} component={InfrastructurePage} />
+      <Route path={INFRASTRUCTURE_ROUTE_PATH} component={InfrastructurePage} />
 
       <Route path="/alerts/*" component={AlertsPage} />
       <Route path="/ai/*" component={AIIntelligencePage} />

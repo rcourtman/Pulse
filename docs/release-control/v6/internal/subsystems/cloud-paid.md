@@ -463,6 +463,12 @@ instead of wiring product-surface components such as
 `frontend-modern/src/components/Storage/Storage.tsx` directly into the router,
 so hosted bootstrap ownership stays at the app boundary rather than leaking
 route concerns back into feature components.
+That same authenticated route shell also owns the canonical post-auth landing
+path. `frontend-modern/src/App.tsx` must send `/` through the dashboard page
+shell first, so existing operators land on the overview route and first-time
+operators hit the governed dashboard empty state that forwards them into
+Infrastructure Install, instead of carrying a root-only redirect to the
+infrastructure route that bypasses the shared landing contract.
 The Pro license settings surface now follows the same rule as well. Changes to
 `frontend-modern/src/components/Settings/ProLicensePanel.tsx` must carry this
 contract and the dedicated Pro-license proof file instead of remaining an

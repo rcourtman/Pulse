@@ -5,9 +5,13 @@ import appRuntimeStateSource from '@/useAppRuntimeState.ts?raw';
 
 describe('App architecture', () => {
   it('keeps App as the entry shell that delegates runtime and chrome ownership', () => {
+    expect(appSource).toContain('DASHBOARD_PATH,');
     expect(appSource).toContain("import { AppLayout } from '@/AppLayout';");
     expect(appSource).toContain("import { useAppRuntimeState } from '@/useAppRuntimeState';");
     expect(appSource).toContain('const runtime = useAppRuntimeState();');
+    expect(appSource).toContain('const ROOT_DASHBOARD_PATH = DASHBOARD_PATH;');
+    expect(appSource).toContain('<Route path={ROOT_DASHBOARD_PATH} component={DashboardPage} />');
+    expect(appSource).toContain('<Route path="/" component={() => <Navigate href={ROOT_DASHBOARD_PATH} />} />');
     expect(appSource).toContain("const StoragePage = lazy(() => import('./pages/Storage'));");
     expect(appSource).toContain("const OperationsPage = lazy(() => import('./pages/Operations'));");
     expect(appSource).not.toContain(
