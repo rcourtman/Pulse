@@ -8,8 +8,11 @@
     header .logout-btn:hover { border-color: #94a3b8; color: #f8fafc; }
     .main { max-width: 860px; margin: 32px auto; padding: 0 16px 48px; }
     .account-section { margin-bottom: 40px; }
-    .account-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+    .account-header { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 16px; }
     .account-header h2 { margin: 0; font-size: 20px; font-weight: 700; }
+    .account-heading { min-width: 0; }
+    .account-heading-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .account-summary { margin: 6px 0 0; font-size: 13px; color: #64748b; }
     .badge { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; text-transform: uppercase; letter-spacing: 0.5px; }
     .badge-msp { background: #dbeafe; color: #1e40af; }
     .badge-cloud { background: #dcfce7; color: #166534; }
@@ -34,6 +37,7 @@
     .btn-primary:hover { background: #1e40af; }
     .btn-secondary { background: #fff; color: #334155; border: 1px solid #cbd5e1; border-radius: 8px; padding: 7px 14px; font-size: 13px; font-weight: 500; cursor: pointer; }
     .btn-secondary:hover { background: #f8fafc; border-color: #94a3b8; }
+    .btn-secondary-quiet { color: #475569; }
     .btn-danger { background: #fff; color: #dc2626; border: 1px solid #fca5a5; border-radius: 8px; padding: 7px 14px; font-size: 13px; cursor: pointer; }
     .btn-danger:hover { background: #fef2f2; }
     .btn-compact { padding: 8px 14px; font-size: 13px; }
@@ -67,6 +71,7 @@
     .overview-stat { background: rgba(255,255,255,.9); border: 1px solid #dbe4f0; border-radius: 12px; padding: 14px 16px; }
     .overview-label { display: block; font-size: 12px; color: #64748b; text-transform: uppercase; letter-spacing: .4px; margin-bottom: 6px; }
     .overview-stat strong { display: block; font-size: 15px; color: #0f172a; }
+    .intro-guidance { margin-top: 16px; padding: 12px 14px; background: rgba(255,255,255,.9); border: 1px solid #dbe4f0; border-radius: 12px; font-size: 13px; color: #475569; }
     .service-section { margin-top: 40px; }
     .service-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
     .service-header h2 { margin: 0; font-size: 20px; font-weight: 700; }
@@ -107,6 +112,7 @@
     .empty-state { background: #fff; border: 1px dashed #cbd5e1; border-radius: 10px; padding: 32px; text-align: center; color: #64748b; }
     .empty-state p { margin: 0; font-size: 15px; }
     .empty-state-spaced { margin-top: 48px; }
+    .empty-state-account { text-align: left; padding: 20px 22px; }
     .empty-state-self-hosted p + p { margin-top: 12px; }
     .empty-state-title { font-weight: 700; color: #0f172a; }
     .support-copy { margin-top: 12px; font-size: 13px; }

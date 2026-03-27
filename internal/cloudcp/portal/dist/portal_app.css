@@ -58,7 +58,7 @@ header .logout-btn:hover {
 }
 .account-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 12px;
   margin-bottom: 16px;
 }
@@ -66,6 +66,20 @@ header .logout-btn:hover {
   margin: 0;
   font-size: 20px;
   font-weight: 700;
+}
+.account-heading {
+  min-width: 0;
+}
+.account-heading-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.account-summary {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: #64748b;
 }
 .badge {
   font-size: 11px;
@@ -200,6 +214,9 @@ header .logout-btn:hover {
 .btn-secondary:hover {
   background: #f8fafc;
   border-color: #94a3b8;
+}
+.btn-secondary-quiet {
+  color: #475569;
 }
 .btn-danger {
   background: #fff;
@@ -401,6 +418,15 @@ header .logout-btn:hover {
   display: block;
   font-size: 15px;
   color: #0f172a;
+}
+.intro-guidance {
+  margin-top: 16px;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, .9);
+  border: 1px solid #dbe4f0;
+  border-radius: 12px;
+  font-size: 13px;
+  color: #475569;
 }
 .service-section {
   margin-top: 40px;
@@ -625,6 +651,10 @@ header .logout-btn:hover {
 }
 .empty-state-spaced {
   margin-top: 48px;
+}
+.empty-state-account {
+  text-align: left;
+  padding: 20px 22px;
 }
 .empty-state-self-hosted p + p {
   margin-top: 12px;

@@ -115,12 +115,19 @@ describe('shell view', function() {
     );
 
     expect(html).toContain('<h1>Pulse Account</h1>');
+    expect(html).toContain('Hosted access is active on this account.');
+    expect(html).toContain('MSP operator');
+    expect(html).toContain('Hosted workspaces');
     expect(html).toContain('id="accounts-root"');
     expect(html).toContain('Acme MSP');
+    expect(html).toContain('MSP account · Owner · 2 workspaces');
     expect(html).toContain('Alpha Workspace');
     expect(html).toContain('/api/accounts/acct_1/tenants/ws_active/handoff');
+    expect(html).toContain('Open workspace');
+    expect(html).toContain('Manage</button>');
     expect(html).toContain('data-action="workspace-manage"');
     expect(html).toContain('service-card-button');
+    expect(html).toContain('Self-hosted licenses and billing');
     expect(html).toContain('id="open-retrieve-service"');
     expect(html).toContain('id="data-service-panel"');
   });

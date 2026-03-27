@@ -16,6 +16,10 @@ function hasHostedAccounts(bootstrap: PortalBootstrapData): boolean {
   return Array.isArray(bootstrap.accounts) && bootstrap.accounts.length > 0;
 }
 
+function listAccounts(bootstrap: PortalBootstrapData): PortalAccountSummary[] {
+  return Array.isArray(bootstrap.accounts) ? bootstrap.accounts : [];
+}
+
 function escapeHTML(value: unknown): string {
   return String(value || '')
     .replace(/&/g, '&amp;')
@@ -43,6 +47,42 @@ function roleBadgeHTML(role: string): string {
   return '';
 }
 
+function formatRoleLabel(role: string): string {
+  if (role === 'owner') return 'Owner';
+  if (role === 'admin') return 'Admin';
+  if (role === 'tech') return 'Tech';
+  if (role === 'read_only') return 'Read-only';
+  return 'Member';
+}
+
+function formatAccountAccessLabel(accounts: PortalAccountSummary[]): string {
+  if (accounts.length === 1) {
+    if (accounts[0].kind === 'msp') return 'MSP operator';
+    if (accounts[0].kind === 'cloud' || accounts[0].kind === 'individual') return 'Pulse Cloud';
+  }
+  return 'Hosted access';
+}
+
+function totalWorkspaceCount(accounts: PortalAccountSummary[]): number {
+  return accounts.reduce(function(total, account) {
+    return total + (Array.isArray(account.workspaces) ? account.workspaces.length : 0);
+  }, 0);
+}
+
+function totalActiveWorkspaceCount(accounts: PortalAccountSummary[]): number {
+  return accounts.reduce(function(total, account) {
+    return total + (Array.isArray(account.workspaces)
+      ? account.workspaces.filter(function(workspace) { return workspace.state === 'active'; }).length
+      : 0);
+  }, 0);
+}
+
+function formatAccountSummary(account: PortalAccountSummary): string {
+  var workspaceCount = Array.isArray(account.workspaces) ? account.workspaces.length : 0;
+  var workspaceLabel = workspaceCount === 1 ? '1 workspace' : String(workspaceCount) + ' workspaces';
+  return account.kind_label + ' account · ' + formatRoleLabel(account.role) + ' · ' + workspaceLabel;
+}
+
 function renderWorkspaceCard(account: PortalAccountSummary, workspace: PortalWorkspaceSummary, accountAPIBasePath: string): string {
   var state = String(workspace.state || '');
   var safeState = escapeHTML(state);
@@ -53,7 +93,7 @@ function renderWorkspaceCard(account: PortalAccountSummary, workspace: PortalWor
       '<form method="POST" action="' +
       escapeAttr(accountAPIBasePath + '/' + account.id + '/tenants/' + workspace.id + '/handoff') +
       '">' +
-      '<button type="submit" class="btn-primary">Open →</button>' +
+      '<button type="submit" class="btn-primary">Open workspace</button>' +
       '</form>';
   } else {
     openAction = '<span class="workspace-state-label">' + safeState + '</span>';
@@ -62,7 +102,7 @@ function renderWorkspaceCard(account: PortalAccountSummary, workspace: PortalWor
   var manageAction = '';
   if (account.can_manage && (state === 'active' || state === 'suspended' || state === 'failed')) {
     manageAction =
-      '<button type="button" class="btn-danger" data-action="workspace-manage" data-account-id="' +
+      '<button type="button" class="btn-secondary btn-secondary-quiet" data-action="workspace-manage" data-account-id="' +
       escapeAttr(account.id) +
       '" data-workspace-id="' +
       escapeAttr(workspace.id) +
@@ -70,7 +110,7 @@ function renderWorkspaceCard(account: PortalAccountSummary, workspace: PortalWor
       escapeAttr(state) +
       '" data-workspace-name="' +
       escapeAttr(workspace.display_name) +
-      '">⋯</button>';
+      '">Manage</button>';
   }
 
   var createdMeta = createdLabel ? '<span class="ws-created">Created ' + escapeHTML(createdLabel) + '</span>' : '';
@@ -98,7 +138,17 @@ function renderAccountSection(account: PortalAccountSummary, accountAPIBasePath:
   var workspaces = Array.isArray(account.workspaces) ? account.workspaces : [];
   var workspaceHTML = '';
   if (workspaces.length === 0) {
-    workspaceHTML = '<div class="empty-state"><p>No workspaces yet. Create one to get started.</p></div>';
+    workspaceHTML =
+      '<div class="empty-state empty-state-account">' +
+        '<p class="empty-state-title">' +
+        (account.kind === 'msp' ? 'No client workspaces yet' : 'No hosted workspaces yet') +
+        '</p>' +
+        '<p>' +
+        (account.kind === 'msp'
+          ? 'Create a workspace when you are ready to onboard a customer environment.'
+          : 'This account is ready for hosted access, but no workspace has been provisioned yet.') +
+        '</p>' +
+      '</div>';
   } else {
     workspaceHTML =
       '<div class="workspace-list">' +
@@ -194,9 +244,14 @@ function renderAccountSection(account: PortalAccountSummary, accountAPIBasePath:
   return (
     '<section class="account-section">' +
       '<div class="account-header">' +
-        '<h2>' + escapeHTML(account.name) + '</h2>' +
-        '<span class="badge badge-' + escapeHTML(account.kind) + '">' + escapeHTML(account.kind_label) + '</span>' +
-        roleBadgeHTML(account.role) +
+        '<div class="account-heading">' +
+          '<div class="account-heading-row">' +
+            '<h2>' + escapeHTML(account.name) + '</h2>' +
+            '<span class="badge badge-' + escapeHTML(account.kind) + '">' + escapeHTML(account.kind_label) + '</span>' +
+            roleBadgeHTML(account.role) +
+          '</div>' +
+          '<p class="account-summary">' + escapeHTML(formatAccountSummary(account)) + '</p>' +
+        '</div>' +
       '</div>' +
       workspaceHTML +
       actions +
@@ -237,6 +292,7 @@ export function renderAccountsHTML(context: ShellViewContext): string {
 }
 
 function renderAuthenticatedIntroHTML(context: ShellViewContext): string {
+  var accounts = listAccounts(context.bootstrap);
   if (!hasHostedAccounts(context.bootstrap)) {
     return (
       '<section class="intro-card intro-card-self-hosted">' +
@@ -260,10 +316,32 @@ function renderAuthenticatedIntroHTML(context: ShellViewContext): string {
     );
   }
 
+  var totalWorkspaces = totalWorkspaceCount(accounts);
+  var activeWorkspaces = totalActiveWorkspaceCount(accounts);
+  var accessLabel = formatAccountAccessLabel(accounts);
   return (
     '<section class="intro-card">' +
       '<h1>Pulse Account</h1>' +
-      '<p>Manage Cloud workspaces, MSP access, and self-hosted commercial account services from one account surface. Hosted workspace lifecycle lives here today, and the self-hosted billing, license recovery, refund, and privacy tools below now share the same Pulse Account shell instead of staying fragmented across public utility pages.</p>' +
+      '<p>Hosted access is active on this account. Open workspaces here, manage team and billing at the account level, and keep self-hosted commercial tools in the same account surface instead of splitting them across public utility pages.</p>' +
+      '<div class="overview-grid">' +
+        '<div class="overview-stat">' +
+          '<span class="overview-label">Signed in as</span>' +
+          '<strong>' + escapeHTML(context.bootstrap.email || '') + '</strong>' +
+        '</div>' +
+        '<div class="overview-stat">' +
+          '<span class="overview-label">Account access</span>' +
+          '<strong>' + escapeHTML(accessLabel) + '</strong>' +
+        '</div>' +
+        '<div class="overview-stat">' +
+          '<span class="overview-label">Hosted workspaces</span>' +
+          '<strong>' + escapeHTML(String(totalWorkspaces)) + '</strong>' +
+        '</div>' +
+        '<div class="overview-stat">' +
+          '<span class="overview-label">Active now</span>' +
+          '<strong>' + escapeHTML(String(activeWorkspaces)) + '</strong>' +
+        '</div>' +
+      '</div>' +
+      '<div class="intro-guidance">Use <strong>Open workspace</strong> to enter a hosted Pulse runtime. Team, workspace lifecycle, and billing controls stay with each account card below.</div>' +
     '</section>'
   );
 }
@@ -275,10 +353,10 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
     '<div id="accounts-root">' + renderAccountsHTML(context) + '</div>' +
     '<section class="service-section">' +
       '<div class="service-header">' +
-        '<h2>' + (hostedAccounts ? 'Other account services' : 'Self-hosted account services') + '</h2>' +
+        '<h2>' + (hostedAccounts ? 'Self-hosted licenses and billing' : 'Self-hosted account services') + '</h2>' +
         '<div class="service-note">' +
           (hostedAccounts
-            ? 'Self-hosted commercial account actions now live here. The public utility pages remain as compatibility entry points, not the primary account surface.'
+            ? 'These tools stay available on the same account for self-hosted subscriptions, license recovery, refunds, and privacy actions. Hosted workspace administration stays above.'
             : 'Use these tools for subscription, license, refund, and privacy actions on self-hosted commercial accounts. The public utility pages remain as compatibility entry points only.') +
         '</div>' +
       '</div>' +
