@@ -448,6 +448,10 @@ first scroll window. `RecoverySummary.tsx` and the workspace shell in
 `Recovery.tsx` should compress posture, coverage, and mode framing into concise
 operator panels instead of stacking multiple dashboard-like slabs that push the
 main inventory or event table too far down the page.
+That same workspace shell should stay a compact control strip rather than a
+second summary card: the protected-items versus recovery-events switcher belongs
+close to the active table surface, and it should not restate table counts that
+are already carried by the selected tab labels or the summary frame above.
 That same summary contract now also includes platform- and item-coverage
 framing through `frontend-modern/src/utils/recoverySummaryPresentation.ts`, so
 the first visible recovery overview explicitly shows which protected item
@@ -469,6 +473,11 @@ protected estate into one endless slab; it should page or otherwise bound the
 primary inventory table so the workspace, filters, and adjacent activity panel
 remain readable as one monitoring surface instead of dissolving into a raw list
 dump.
+That same hierarchy rule also applies to the activity panel below the primary
+workspace. `RecoveryActivitySection.tsx` should read as timeline analysis for
+the selected history window, not as a second copy of the page-level posture
+summary, so its framing should emphasize recovery-point cadence and focused
+history context rather than re-announcing the full protected-estate health mix.
 The same owned vocabulary applies to recovery events as well:
 `frontend-modern/src/utils/recoveryTablePresentation.ts` must keep the
 history-table `type` column labeled as `Item Type` within recovery surfaces so

@@ -191,7 +191,7 @@ export const RecoveryProtectedInventorySection: Component<
     <Card
       padding="none"
       tone="card"
-      class="overflow-hidden border-border bg-surface shadow-[0_10px_24px_rgba(2,6,23,0.1)]"
+      class="overflow-hidden border-border-subtle bg-surface shadow-[0_10px_24px_rgba(2,6,23,0.1)]"
     >
       <div class="border-b border-border-subtle/80 bg-surface px-4 py-4">
         <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -366,7 +366,7 @@ export const RecoveryProtectedInventorySection: Component<
                   ] as const
                 ).map(([column, label]) => (
                   <TableHead
-                    class={`px-3 py-2.5 whitespace-nowrap text-left text-[11px] sm:text-xs font-semibold uppercase tracking-wider cursor-pointer select-none hover:text-base-content transition-colors${
+                    class={`sticky top-0 z-[1] bg-surface-alt/95 px-3 py-3 whitespace-nowrap text-left text-[11px] sm:text-xs font-semibold uppercase tracking-[0.18em] cursor-pointer select-none hover:text-base-content transition-colors${
                       column === 'type'
                         ? ' hidden md:table-cell w-[96px]'
                         : column === 'platform'
@@ -423,11 +423,11 @@ export const RecoveryProtectedInventorySection: Component<
 
                   return (
                     <TableRow
-                      class="cursor-pointer border-b border-border/80 odd:bg-surface even:bg-surface-alt/20 hover:bg-surface-hover/95"
+                      class="cursor-pointer border-b border-border/80 odd:bg-surface even:bg-surface-alt/35 transition-colors hover:bg-surface-hover/95"
                       onClick={() => props.onSelectRollup(rollup.rollupId)}
                     >
                       <TableCell
-                        class={`relative max-w-[420px] truncate whitespace-nowrap px-3 py-2.5 text-base-content ${
+                        class={`relative max-w-[420px] truncate whitespace-nowrap px-3 py-3 text-base-content ${
                           issueTone === 'rose' || issueTone === 'blue' ? 'font-medium' : ''
                         }`}
                         title={label}
@@ -450,7 +450,7 @@ export const RecoveryProtectedInventorySection: Component<
                         </div>
                       </TableCell>
 
-                      <TableCell class="hidden md:table-cell whitespace-nowrap px-3 py-2.5">
+                      <TableCell class="hidden md:table-cell whitespace-nowrap px-3 py-3">
                         <Show
                           when={itemTypePresentation}
                           fallback={<span class="text-muted">—</span>}
@@ -465,7 +465,7 @@ export const RecoveryProtectedInventorySection: Component<
                         </Show>
                       </TableCell>
 
-                      <TableCell class="hidden lg:table-cell whitespace-nowrap px-3 py-2.5">
+                      <TableCell class="hidden lg:table-cell whitespace-nowrap px-3 py-3">
                         <div class="flex flex-wrap gap-1.5">
                           <For each={platforms}>
                             {(platform) => {
@@ -481,7 +481,7 @@ export const RecoveryProtectedInventorySection: Component<
                       </TableCell>
 
                       <TableCell
-                        class={`whitespace-nowrap px-3 py-2.5 ${getRecoveryRollupAgeTextClass(
+                        class={`whitespace-nowrap px-3 py-3 ${getRecoveryRollupAgeTextClass(
                           rollup,
                           nowMs,
                         )}`}
@@ -502,7 +502,7 @@ export const RecoveryProtectedInventorySection: Component<
                         )}
                       </TableCell>
 
-                      <TableCell class="whitespace-nowrap px-3 py-2.5">
+                      <TableCell class="whitespace-nowrap px-3 py-3">
                         <span
                           class={`inline-flex rounded px-1.5 py-0.5 text-[10px] font-medium ${getRecoveryOutcomeBadgeClass(
                             outcome,

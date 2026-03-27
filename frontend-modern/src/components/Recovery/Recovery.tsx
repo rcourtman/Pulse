@@ -488,41 +488,33 @@ const Recovery: Component = () => {
         <Card
           padding="none"
           tone="card"
-          class="overflow-hidden border-border bg-surface shadow-[0_10px_24px_rgba(2,6,23,0.1)]"
+          class="overflow-hidden border-border-subtle bg-surface"
         >
-          <div class="border-b border-border-subtle/80 bg-surface px-4 py-4">
-            <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div class="border-b border-border-subtle/80 bg-surface px-4 py-3">
+            <div class="flex flex-col gap-2.5 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <div class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
                   Recovery Workspace
                 </div>
-                <div class="mt-1.5 max-w-2xl text-sm leading-6 text-muted">
+                <div class="mt-1 max-w-2xl text-sm leading-6 text-muted">
                   Protected inventory first, event drill-in second, with the same item-first
                   filters and route state.
                 </div>
               </div>
-              <div class="flex flex-wrap items-center gap-2 text-xs">
-                <span class="rounded-full border border-border-subtle bg-surface-hover/70 px-2.5 py-1 text-base-content">
-                  {filteredRollups().length} protected items
+              <Show when={rollupId().trim().length > 0}>
+                <span class="inline-flex w-fit items-center rounded-full border border-amber-500/25 bg-amber-500/10 px-2.5 py-1 text-xs text-amber-200">
+                  Focused drill-in
                 </span>
-                <span class="rounded-full border border-border-subtle bg-surface-hover/70 px-2.5 py-1 text-base-content">
-                  {recoveryPoints.meta().total} recovery events
-                </span>
-                <Show when={rollupId().trim().length > 0}>
-                  <span class="rounded-full border border-amber-500/25 bg-amber-500/10 px-2.5 py-1 text-amber-200">
-                    Focused drill-in
-                  </span>
-                </Show>
-              </div>
+              </Show>
             </div>
           </div>
-          <div class="bg-surface-alt/35 px-4 py-2.5">
+          <div class="bg-surface-alt/25 px-4 py-2">
             <Subtabs
               value={workspaceView()}
               onChange={(value) => setWorkspaceView(value as RecoveryWorkspaceView)}
               ariaLabel="Recovery data view"
               listClass="flex flex-wrap items-center gap-3"
-              tabClass="min-h-10 px-2 py-2.5 text-sm"
+              tabClass="min-h-9 px-2 py-2 text-sm"
               tabs={[
                 {
                   value: 'inventory',

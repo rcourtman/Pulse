@@ -687,6 +687,71 @@ describe('Recovery', () => {
     });
   });
 
+  it('bounds the protected inventory surface with pagination for larger estates', async () => {
+    const largeRollups = Array.from({ length: 26 }, (_, index) => ({
+      rollupId: `estate:item-${index + 1}`,
+      itemResourceId: `estate-item-${index + 1}`,
+      display: {
+        itemLabel: `estate-item-${index + 1}`,
+        itemType: index % 2 === 0 ? 'container' : 'vm',
+      },
+      lastAttemptAt: '2026-02-14T10:00:00.000Z',
+      lastSuccessAt: '2026-02-14T10:00:00.000Z',
+      lastOutcome: 'success',
+      platforms: ['proxmox-pbs'],
+    }));
+
+    apiFetchMock.mockImplementation(async (url: string) => {
+      const u = new URL(url, 'http://localhost');
+      if (u.pathname === '/api/recovery/rollups') {
+        return {
+          data: largeRollups,
+          meta: { page: 1, limit: 500, total: largeRollups.length, totalPages: 1 },
+        };
+      }
+      if (u.pathname === '/api/recovery/points') {
+        return {
+          data: [],
+          meta: { page: 1, limit: 500, total: 0, totalPages: 1 },
+        };
+      }
+      if (u.pathname === '/api/recovery/facets') {
+        return {
+          data: {
+            clusters: [],
+            nodesAgents: [],
+            namespaces: [],
+            itemTypes: ['container', 'vm'],
+            hasSize: true,
+            hasVerification: false,
+            hasEntityId: false,
+          },
+        };
+      }
+      if (u.pathname === '/api/recovery/series') {
+        return {
+          data: [
+            { day: '2026-02-13', total: 1, snapshot: 1, local: 0, remote: 0 },
+            { day: '2026-02-14', total: 1, snapshot: 0, local: 1, remote: 0 },
+          ],
+        };
+      }
+      throw new Error(`Unhandled apiFetch URL: ${url}`);
+    });
+
+    render(() => <Recovery />);
+
+    expect(await screen.findByText('Showing 1 - 24 of 26 protected items')).toBeInTheDocument();
+    expect(screen.getByText('Page 1 / 2')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Showing 25 - 26 of 26 protected items')).toBeInTheDocument();
+      expect(screen.getByText('Page 2 / 2')).toBeInTheDocument();
+    });
+  });
+
   it('persists and restores the protected stale-only filter through the canonical recovery URL', async () => {
     mockLocationSearch = '?stale=%20TRUE%20';
 

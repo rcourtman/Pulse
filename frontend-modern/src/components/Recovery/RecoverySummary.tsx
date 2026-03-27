@@ -225,46 +225,73 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
               </div>
             </section>
 
-            <div class="grid gap-3">
-              <section class="rounded-xl border border-border-subtle bg-surface-alt/35 p-4">
-                <div class="text-xs font-semibold uppercase tracking-[0.18em] text-muted">
-                  Protected Footprint
-                </div>
-                <div class="mt-3 grid gap-3 sm:grid-cols-2">
-                  <div class="rounded-lg border border-border-subtle bg-surface p-3">
-                    <div class="text-[11px] uppercase tracking-wide text-muted">Item Types</div>
-                    <div class="mt-1 text-3xl font-semibold tracking-tight text-base-content">
-                      {itemCoverage().itemTypeCount}
+            <section class="rounded-xl border border-border-subtle bg-surface-alt/35 p-4">
+              <div class="space-y-4">
+                <div>
+                  <div class="text-xs font-semibold uppercase tracking-[0.18em] text-muted">
+                    Protected Footprint
+                  </div>
+                  <div class="mt-3 grid gap-3 sm:grid-cols-2">
+                    <div class="rounded-lg border border-border-subtle bg-surface p-3">
+                      <div class="text-[11px] uppercase tracking-wide text-muted">Item Types</div>
+                      <div class="mt-1 text-3xl font-semibold tracking-tight text-base-content">
+                        {itemCoverage().itemTypeCount}
+                      </div>
+                    </div>
+                    <div class="rounded-lg border border-border-subtle bg-surface p-3">
+                      <div class="text-[11px] uppercase tracking-wide text-muted">Primary Item</div>
+                      <div class="mt-1 text-xl font-semibold leading-7 text-base-content">
+                        {itemCoverage().primaryItemLabel ?? 'n/a'}
+                      </div>
+                    </div>
+                    <div class="rounded-lg border border-border-subtle bg-surface p-3">
+                      <div class="text-[11px] uppercase tracking-wide text-muted">Platforms</div>
+                      <div class="mt-1 text-3xl font-semibold tracking-tight text-base-content">
+                        {platformCoverage().platformCount}
+                      </div>
+                    </div>
+                    <div class="rounded-lg border border-border-subtle bg-surface p-3">
+                      <div class="text-[11px] uppercase tracking-wide text-muted">Primary Platform</div>
+                      <div class="mt-1 text-xl font-semibold leading-7 text-base-content">
+                        {platformCoverage().primaryPlatformLabel ?? 'n/a'}
+                      </div>
                     </div>
                   </div>
-                  <div class="rounded-lg border border-border-subtle bg-surface p-3">
-                    <div class="text-[11px] uppercase tracking-wide text-muted">Primary Item</div>
-                    <div class="mt-1 text-xl font-semibold leading-7 text-base-content">
-                      {itemCoverage().primaryItemLabel ?? 'n/a'}
-                    </div>
-                  </div>
-                  <div class="rounded-lg border border-border-subtle bg-surface p-3">
-                    <div class="text-[11px] uppercase tracking-wide text-muted">Platforms</div>
-                    <div class="mt-1 text-3xl font-semibold tracking-tight text-base-content">
-                      {platformCoverage().platformCount}
-                    </div>
-                  </div>
-                  <div class="rounded-lg border border-border-subtle bg-surface p-3">
-                    <div class="text-[11px] uppercase tracking-wide text-muted">Primary Platform</div>
-                    <div class="mt-1 text-xl font-semibold leading-7 text-base-content">
-                      {platformCoverage().primaryPlatformLabel ?? 'n/a'}
-                    </div>
-                  </div>
-                </div>
 
-                <div class="mt-3 space-y-3">
-                  <Show when={itemCoverage().items.length > 0}>
+                  <div class="mt-3 space-y-3">
+                    <Show when={itemCoverage().items.length > 0}>
+                      <div>
+                        <div class="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted">
+                          Item Types
+                        </div>
+                        <div class="flex flex-wrap gap-2">
+                          <For each={itemCoverage().items.slice(0, 6)}>
+                            {(item) => (
+                              <div class="inline-flex items-center gap-2 rounded-md border border-border-subtle bg-surface px-2.5 py-1.5 text-sm">
+                                <span class={`rounded px-1.5 py-0.5 text-[10px] font-medium ${item.toneClass}`}>
+                                  {item.label}
+                                </span>
+                                <span class="tabular-nums text-base-content">{item.count}</span>
+                                <span class="text-muted">{item.percent}%</span>
+                              </div>
+                            )}
+                          </For>
+                        </div>
+                      </div>
+                    </Show>
                     <div>
                       <div class="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted">
-                        Item Types
+                        Platform Mix
                       </div>
+                      <Show when={platformCoverage().multiPlatformCount > 0}>
+                        <div class="mb-2 text-sm text-muted">
+                          {platformCoverage().multiPlatformCount} protected item
+                          {platformCoverage().multiPlatformCount === 1 ? '' : 's'} span multiple
+                          platforms.
+                        </div>
+                      </Show>
                       <div class="flex flex-wrap gap-2">
-                        <For each={itemCoverage().items.slice(0, 6)}>
+                        <For each={platformCoverage().items.slice(0, 6)}>
                           {(item) => (
                             <div class="inline-flex items-center gap-2 rounded-md border border-border-subtle bg-surface px-2.5 py-1.5 text-sm">
                               <span class={`rounded px-1.5 py-0.5 text-[10px] font-medium ${item.toneClass}`}>
@@ -277,100 +304,75 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
                         </For>
                       </div>
                     </div>
-                  </Show>
-                  <div>
-                    <div class="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted">
-                      Platform Mix
+                  </div>
+                </div>
+
+                <div class="border-t border-border-subtle/80 pt-4">
+                  <div class="text-xs font-semibold uppercase tracking-[0.18em] text-muted">
+                    Recent History
+                  </div>
+                  <div class="mt-3 grid gap-3">
+                    <div class="rounded-lg border border-border-subtle bg-surface p-3">
+                      <div class="grid gap-3 sm:grid-cols-3">
+                        <div>
+                          <div class="text-[11px] uppercase tracking-wide text-muted">
+                            Recovery Points
+                          </div>
+                          <div class="mt-1 text-2xl font-semibold text-base-content">
+                            {activity().totalEvents}
+                          </div>
+                        </div>
+                        <div>
+                          <div class="text-[11px] uppercase tracking-wide text-muted">Avg / Day</div>
+                          <div class="mt-1 text-2xl font-semibold text-base-content">
+                            {activity().averagePerDay.toFixed(1)}
+                          </div>
+                        </div>
+                        <div>
+                          <div class="text-[11px] uppercase tracking-wide text-muted">Days Active</div>
+                          <div class="mt-1 text-2xl font-semibold text-base-content">
+                            {activity().activeDays}
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                    <Show when={platformCoverage().multiPlatformCount > 0}>
-                      <div class="mb-2 text-sm text-muted">
-                        {platformCoverage().multiPlatformCount} protected item
-                        {platformCoverage().multiPlatformCount === 1 ? '' : 's'} span multiple
-                        platforms.
+                    <Show
+                      when={activity().hasData}
+                      fallback={
+                        <div class="rounded-lg border border-dashed border-border-subtle bg-surface p-3 text-sm text-muted">
+                          {props.seriesFailed?.() ? 'Trend data unavailable' : 'No recovery activity yet'}
+                        </div>
+                      }
+                    >
+                      <div class="rounded-lg border border-border-subtle bg-surface p-3">
+                        <div class="grid gap-3 sm:grid-cols-2">
+                          <div>
+                            <div class="text-[11px] uppercase tracking-wide text-muted">Peak Day</div>
+                            <div class="mt-1 text-base font-semibold text-base-content">
+                              {activity().busiestLabel ?? 'n/a'}
+                            </div>
+                            <div class="mt-1 text-sm text-muted">
+                              {activity().busiestCount} recovery point
+                              {activity().busiestCount === 1 ? '' : 's'}
+                            </div>
+                          </div>
+                          <div>
+                            <div class="text-[11px] uppercase tracking-wide text-muted">Latest Activity</div>
+                            <div class="mt-1 text-base font-semibold text-base-content">
+                              {activity().latestLabel ?? 'n/a'}
+                            </div>
+                            <div class="mt-1 text-sm text-muted">
+                              {activity().latestCount} recovery point
+                              {activity().latestCount === 1 ? '' : 's'}
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     </Show>
-                    <div class="flex flex-wrap gap-2">
-                      <For each={platformCoverage().items.slice(0, 6)}>
-                        {(item) => (
-                          <div class="inline-flex items-center gap-2 rounded-md border border-border-subtle bg-surface px-2.5 py-1.5 text-sm">
-                            <span class={`rounded px-1.5 py-0.5 text-[10px] font-medium ${item.toneClass}`}>
-                              {item.label}
-                            </span>
-                            <span class="tabular-nums text-base-content">{item.count}</span>
-                            <span class="text-muted">{item.percent}%</span>
-                          </div>
-                        )}
-                      </For>
-                    </div>
                   </div>
                 </div>
-              </section>
-
-              <section class="rounded-xl border border-border-subtle bg-surface-alt/35 p-4">
-                <div class="text-xs font-semibold uppercase tracking-[0.18em] text-muted">
-                  Recent History
-                </div>
-                <div class="mt-3 grid gap-3">
-                  <div class="rounded-lg border border-border-subtle bg-surface p-3">
-                    <div class="grid gap-3 sm:grid-cols-3">
-                      <div>
-                        <div class="text-[11px] uppercase tracking-wide text-muted">
-                          Recovery Points
-                        </div>
-                        <div class="mt-1 text-2xl font-semibold text-base-content">
-                          {activity().totalEvents}
-                        </div>
-                      </div>
-                      <div>
-                        <div class="text-[11px] uppercase tracking-wide text-muted">Avg / Day</div>
-                        <div class="mt-1 text-2xl font-semibold text-base-content">
-                          {activity().averagePerDay.toFixed(1)}
-                        </div>
-                      </div>
-                      <div>
-                        <div class="text-[11px] uppercase tracking-wide text-muted">Days Active</div>
-                        <div class="mt-1 text-2xl font-semibold text-base-content">
-                          {activity().activeDays}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <Show
-                    when={activity().hasData}
-                    fallback={
-                      <div class="rounded-lg border border-dashed border-border-subtle bg-surface p-3 text-sm text-muted">
-                        {props.seriesFailed?.() ? 'Trend data unavailable' : 'No recovery activity yet'}
-                      </div>
-                    }
-                  >
-                    <div class="rounded-lg border border-border-subtle bg-surface p-3">
-                      <div class="grid gap-3 sm:grid-cols-2">
-                        <div>
-                          <div class="text-[11px] uppercase tracking-wide text-muted">Peak Day</div>
-                          <div class="mt-1 text-base font-semibold text-base-content">
-                            {activity().busiestLabel ?? 'n/a'}
-                          </div>
-                          <div class="mt-1 text-sm text-muted">
-                            {activity().busiestCount} recovery point
-                            {activity().busiestCount === 1 ? '' : 's'}
-                          </div>
-                        </div>
-                        <div>
-                          <div class="text-[11px] uppercase tracking-wide text-muted">Latest Activity</div>
-                          <div class="mt-1 text-base font-semibold text-base-content">
-                            {activity().latestLabel ?? 'n/a'}
-                          </div>
-                          <div class="mt-1 text-sm text-muted">
-                            {activity().latestCount} recovery point
-                            {activity().latestCount === 1 ? '' : 's'}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </Show>
-                </div>
-              </section>
-            </div>
+              </div>
+            </section>
           </div>
         </div>
       </Card>

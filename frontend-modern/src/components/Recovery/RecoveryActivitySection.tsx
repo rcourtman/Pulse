@@ -83,38 +83,34 @@ const rangeOptions: Array<7 | 30 | 90 | 365> = [7, 30, 90, 365];
 export const RecoveryActivitySection: Component<RecoveryActivitySectionProps> = (props) => (
   <Card
     padding="sm"
-    class="h-full border-border bg-surface-hover shadow-[0_10px_24px_rgba(2,6,23,0.1)]"
+    class="h-full border-border bg-surface shadow-[0_10px_24px_rgba(2,6,23,0.1)]"
   >
     <div class="mb-3 flex flex-col gap-3">
       <div class="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
         <div class="flex flex-col gap-2">
+          <div class="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+            <div class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+              Recovery Activity
+            </div>
+            <div class="text-sm text-muted">
+              Daily recovery points across the selected history window.
+            </div>
+          </div>
           <div class="flex flex-wrap items-center gap-2 text-xs">
-            <span class="rounded-full border border-border-subtle bg-surface/70 px-2.5 py-1 font-medium text-base-content">
-              {props.overallRollupsSummary().total} protected
+            <span class="rounded-full border border-border-subtle bg-surface-alt/40 px-2.5 py-1 text-base-content">
+              {props.activitySummary().totalPoints} recovery points
             </span>
-            <Show when={props.overallRollupsSummary().total - props.overallRollupsSummary().stale > 0}>
-              <span class="rounded-full border border-emerald-500/25 bg-emerald-500/8 px-2.5 py-1 text-emerald-300">
-                {props.overallRollupsSummary().total - props.overallRollupsSummary().stale} healthy
-              </span>
-            </Show>
+            <span class="rounded-full border border-border-subtle bg-surface-alt/40 px-2.5 py-1 text-base-content">
+              {props.activitySummary().averagePerDay.toFixed(1)} per day
+            </span>
+            <span class="rounded-full border border-border-subtle bg-surface-alt/40 px-2.5 py-1 text-base-content">
+              {props.activitySummary().activeDays} active days
+            </span>
             <Show when={props.overallRollupsSummary().stale > 0}>
               <span class="rounded-full border border-amber-500/25 bg-amber-500/8 px-2.5 py-1 text-amber-200">
                 {props.overallRollupsSummary().stale} stale
               </span>
             </Show>
-            <Show when={props.overallRollupsSummary().neverSucceeded > 0}>
-              <span class="rounded-full border border-rose-500/25 bg-rose-500/8 px-2.5 py-1 text-rose-200">
-                {props.overallRollupsSummary().neverSucceeded} never succeeded
-              </span>
-            </Show>
-          </div>
-          <div class="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-            <div class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-              Recovery Activity
-            </div>
-            <div class="text-sm text-slate-300">
-              Daily recovery points across the selected history window.
-            </div>
           </div>
         </div>
         <div class="flex flex-wrap items-center gap-2">
@@ -136,14 +132,6 @@ export const RecoveryActivitySection: Component<RecoveryActivitySectionProps> = 
           </Show>
         </div>
       </div>
-      <div class="flex flex-wrap items-center gap-3 text-xs text-muted">
-        <span>{props.activitySummary().totalPoints} recovery points</span>
-        <span>{props.activitySummary().averagePerDay.toFixed(1)} per day</span>
-        <span>{props.activitySummary().activeDays} active days</span>
-        <Show when={props.selectedDateKey()}>
-          <span>{props.selectedDateLabel()}</span>
-        </Show>
-      </div>
     </div>
 
     <Show
@@ -155,7 +143,7 @@ export const RecoveryActivitySection: Component<RecoveryActivitySectionProps> = 
         props.activeNamespaceLabel()
       }
     >
-      <div class="mb-1 flex flex-wrap items-center gap-1.5">
+      <div class="mb-2 flex flex-wrap items-center gap-1.5">
         <Show when={props.selectedDateKey()}>
           {(() => {
             const chip = getRecoveryFilterChipPresentation('day');
@@ -247,12 +235,9 @@ export const RecoveryActivitySection: Component<RecoveryActivitySectionProps> = 
       </div>
     </Show>
 
-      <div class="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
-      <div class="rounded-xl border border-border-subtle bg-surface p-3">
+      <div class="rounded-xl border border-border-subtle bg-surface-alt/35 p-3">
         <div class={`mb-3 flex flex-wrap items-center justify-between gap-3 ${RECOVERY_TIMELINE_RANGE_GROUP_CLASS}`}>
-          <div class="text-xs font-semibold uppercase tracking-wide text-muted">
-            Selected range
-          </div>
+          <div class="text-xs font-semibold uppercase tracking-wide text-muted">Selected range</div>
           <div class={RECOVERY_TIMELINE_RANGE_GROUP_CLASS}>
             <For each={rangeOptions}>
               {(range) => (
@@ -279,18 +264,25 @@ export const RecoveryActivitySection: Component<RecoveryActivitySectionProps> = 
           }
         >
           <div class="relative">
-            <div class="mb-2 flex items-center justify-end gap-3 text-[10px] text-muted">
+            <div class="mb-2 flex flex-wrap items-center justify-between gap-2 text-[10px] text-muted">
+              <Show when={props.selectedDateKey()}>
+                <span class="rounded-full border border-border-subtle bg-surface px-2 py-1">
+                  {props.selectedDateLabel()}
+                </span>
+              </Show>
               <div class={RECOVERY_TIMELINE_LEGEND_ITEM_CLASS}>
                 <span class={`h-2.5 w-2.5 rounded ${getRecoveryArtifactModePresentation('snapshot').segmentClassName}`} />
                 {getRecoveryArtifactModePresentation('snapshot').aggregateLabel}
               </div>
-              <div class={RECOVERY_TIMELINE_LEGEND_ITEM_CLASS}>
-                <span class={`h-2.5 w-2.5 rounded ${getRecoveryArtifactModePresentation('local').segmentClassName}`} />
-                {getRecoveryArtifactModePresentation('local').aggregateLabel}
-              </div>
-              <div class={RECOVERY_TIMELINE_LEGEND_ITEM_CLASS}>
-                <span class={`h-2.5 w-2.5 rounded ${getRecoveryArtifactModePresentation('remote').segmentClassName}`} />
-                {getRecoveryArtifactModePresentation('remote').aggregateLabel}
+              <div class="flex flex-wrap items-center gap-3">
+                <div class={RECOVERY_TIMELINE_LEGEND_ITEM_CLASS}>
+                  <span class={`h-2.5 w-2.5 rounded ${getRecoveryArtifactModePresentation('local').segmentClassName}`} />
+                  {getRecoveryArtifactModePresentation('local').aggregateLabel}
+                </div>
+                <div class={RECOVERY_TIMELINE_LEGEND_ITEM_CLASS}>
+                  <span class={`h-2.5 w-2.5 rounded ${getRecoveryArtifactModePresentation('remote').segmentClassName}`} />
+                  {getRecoveryArtifactModePresentation('remote').aggregateLabel}
+                </div>
               </div>
             </div>
 
@@ -436,7 +428,6 @@ export const RecoveryActivitySection: Component<RecoveryActivitySectionProps> = 
             </div>
           </div>
         </Show>
-      </div>
     </div>
   </Card>
 );
