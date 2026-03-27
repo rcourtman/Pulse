@@ -146,6 +146,27 @@ func TestProxmoxGuestPollersCarryPoolIntoCanonicalModels(t *testing.T) {
 	}
 }
 
+func TestHostAgentRemovalGuardUsesResolvedIdentifier(t *testing.T) {
+	data, err := os.ReadFile("monitor_agents.go")
+	if err != nil {
+		t.Fatalf("failed to read monitor_agents.go: %v", err)
+	}
+	source := string(data)
+	requiredSnippets := []string{
+		"removedAt, wasRemoved := m.lookupRemovedHostAgent(identifier, hostname)",
+		`Str("hostID", identifier)`,
+		`fmt.Errorf("host agent %q had monitoring stopped at %v and cannot report again.`,
+	}
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(source, snippet) {
+			t.Fatalf("monitor_agents.go must contain %q", snippet)
+		}
+	}
+	if strings.Contains(source, "m.lookupRemovedHostAgent(baseIdentifier, hostname)") {
+		t.Fatal("monitor_agents.go must not check removed host-agent state against pre-resolution baseIdentifier")
+	}
+}
+
 func TestAlertLifecycleCanonicalChangesRemainWritable(t *testing.T) {
 	store := unifiedresources.NewMemoryStore()
 	incidentStore := memory.NewIncidentStore(memory.IncidentStoreConfig{})

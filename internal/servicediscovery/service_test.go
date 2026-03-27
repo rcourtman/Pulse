@@ -3,6 +3,7 @@ package servicediscovery
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -217,6 +218,7 @@ func readStateFromSnapshot(snap StateSnapshot) unifiedresources.ReadState {
 	ms := models.StateSnapshot{}
 	for _, vm := range snap.VMs {
 		ms.VMs = append(ms.VMs, models.VM{
+			ID:          fmt.Sprintf("vm-%d", vm.VMID),
 			VMID:        vm.VMID,
 			Name:        vm.Name,
 			Node:        vm.Node,
@@ -227,6 +229,7 @@ func readStateFromSnapshot(snap StateSnapshot) unifiedresources.ReadState {
 	}
 	for _, ct := range snap.Containers {
 		ms.Containers = append(ms.Containers, models.Container{
+			ID:          fmt.Sprintf("ct-%d", ct.VMID),
 			VMID:        ct.VMID,
 			Name:        ct.Name,
 			Node:        ct.Node,
@@ -242,8 +245,15 @@ func readStateFromSnapshot(snap StateSnapshot) unifiedresources.ReadState {
 			Hostname: dh.Hostname,
 		}
 		for _, dc := range dh.Containers {
+			containerID := strings.TrimSpace(dc.ID)
+			if containerID == "" {
+				containerID = fmt.Sprintf("%s:%s", strings.TrimSpace(dh.AgentID), strings.TrimSpace(dc.Name))
+				if strings.TrimSpace(dh.AgentID) == "" {
+					containerID = fmt.Sprintf("docker:%s", strings.TrimSpace(dc.Name))
+				}
+			}
 			mc := models.DockerContainer{
-				ID:     dc.ID,
+				ID:     containerID,
 				Name:   dc.Name,
 				Image:  dc.Image,
 				State:  dc.Status, // servicediscovery.DockerContainer.Status maps to Docker engine state

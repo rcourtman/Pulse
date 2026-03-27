@@ -196,6 +196,12 @@ legacy aliases such as `rrd-available`, `rrd-data`, `node-status-available`,
 `calculated`, and `listing` must normalize onto the governed canonical labels
 before snapshots are returned to diagnostics consumers, not only when new
 snapshots are first recorded.
+The same canonical identity rule now applies when removed host agents are
+blocked from re-reporting. `ApplyHostReport` must resolve the final canonical
+host identifier for the `(token, machine-id, hostname)` tuple before it checks
+`removedHostAgents` or emits the reconnect-blocking error, so removing one
+token-bound host cannot poison a different host that shared the same raw
+machine identifier.
 Node disk-source selection now also routes through one canonical resolver
 under `internal/monitoring/`. When a Proxmox node has a linked Pulse host
 agent, the node summary must prefer the linked host's canonical disk view over
