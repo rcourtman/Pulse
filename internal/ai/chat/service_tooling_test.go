@@ -147,6 +147,26 @@ func TestFilterToolsForPrompt_BroadInfraKeepsStorage(t *testing.T) {
 	}
 }
 
+func TestFilterToolsForPrompt_RecoveryOnlyKeepsStorage(t *testing.T) {
+	exec := tools.NewPulseToolExecutor(tools.ExecutorConfig{
+		RecoveryPointsProvider: &fakeRecoveryPointsProvider{points: []recovery.RecoveryPoint{{
+			ID:       "pve-snapshot:before-upgrade",
+			Provider: recovery.ProviderProxmoxPVE,
+			Kind:     recovery.KindSnapshot,
+			Mode:     recovery.ModeLocal,
+			Outcome:  recovery.OutcomeSuccess,
+		}}},
+		ControlLevel: tools.ControlLevelControlled,
+	})
+
+	svc := &Service{executor: exec}
+	toolsList := svc.filterToolsForPrompt(context.Background(), "list recovery snapshots for guest 100", false, false)
+	set := toolNameSet(toolsList)
+	if !set["pulse_storage"] {
+		t.Fatalf("expected storage tool to be kept when recovery points are the only storage source")
+	}
+}
+
 func TestFilterToolsForPrompt_AutonomousNonPatrol(t *testing.T) {
 	exec := tools.NewPulseToolExecutor(tools.ExecutorConfig{
 		StateProvider: fakeStateProvider{},
