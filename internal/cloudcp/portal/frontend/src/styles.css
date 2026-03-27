@@ -477,23 +477,24 @@ header .logout-btn:hover,
   align-items: start;
   justify-content: space-between;
   gap: 16px;
-  padding: 18px 20px;
-  border: 1px solid var(--line);
+  padding: 12px 4px 14px;
+  border: none;
+  border-bottom: 1px solid var(--line);
   border-radius: var(--radius-md);
-  background: var(--panel);
-  box-shadow: var(--shadow-sm);
+  background: transparent;
+  box-shadow: none;
 }
 
 .account-heading h2 {
   margin: 4px 0 0;
-  font-size: 30px;
-  line-height: 1;
+  font-size: 27px;
+  line-height: 1.02;
   letter-spacing: -0.05em;
 }
 
 .account-summary {
-  margin-top: 8px;
-  font-size: 15px;
+  margin-top: 6px;
+  font-size: 13px;
   color: var(--ink-soft);
 }
 
@@ -513,7 +514,7 @@ header .logout-btn:hover,
   display: grid;
   grid-template-columns: 1fr;
   gap: 14px;
-  margin-top: 14px;
+  margin-top: 10px;
 }
 
 .account-content-panel {
@@ -522,7 +523,7 @@ header .logout-btn:hover,
 
 .account-content-panel-workspaces,
 .account-content-panel-team {
-  padding: 18px;
+  padding: 16px;
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
   background: var(--panel);
@@ -553,7 +554,7 @@ header .logout-btn:hover,
 .service-panel,
 .team-roster,
 .team-invite-panel {
-  padding: 16px;
+  padding: 14px;
 }
 
 .account-overview-card h3,
