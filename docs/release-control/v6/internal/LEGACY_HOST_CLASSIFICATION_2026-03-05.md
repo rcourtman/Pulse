@@ -1,0 +1,299 @@
+# Legacy Host Classification Audit
+
+Date: 2026-03-05
+Scope: `pulse` repo only, focused on v6-facing paths and release verification artifacts.
+
+## Verdict
+
+No additional active v6 runtime leaks were found after fixing the agent-registration journey.
+
+The remaining `host` references in v6-adjacent code fall into three intentional buckets:
+
+1. Compatibility boundaries that explicitly reject or normalize legacy input.
+2. Internal state or wire-format shims that still bridge older model names to v6-facing output.
+3. Non-resource semantics where `host` means hostname, SSH host key, backup type, or endpoint host.
+
+## Release Decision
+
+Release can proceed on the host-type migration question.
+
+Reasoning:
+
+- canonical v6 request/resource surfaces now reject removed `host` aliases
+- the known release-facing registration leak has been fixed
+- remaining `host` naming is contained inside compatibility, ingest, topology, or DTO layers
+- added ratchets now pin the most important release-facing regression points
+
+This audit does not claim that all host-era naming is gone.
+It claims that the remaining naming debt is not evidence of canonical v6 behavior drifting back to the removed `host` resource type.
+
+## Must Remove
+
+None found in active v6 runtime/read surfaces during this pass.
+
+The previously-found leak is now fixed:
+
+- `tests/integration/tests/journeys/04-agent-install-registration.spec.ts`
+- `tests/integration/evals/tasks/agent-registration.md`
+
+Those artifacts now require unified `resources[]` and `agent.type = "unified"`.
+
+## Intentional Compatibility Boundaries
+
+These are correct to keep because they harden v6 against old clients or old persisted inputs:
+
+- `internal/api/resources_test.go`
+  Confirms `/api/resources?type=host` is rejected.
+- `internal/api/org_handlers_test.go`
+  Confirms organization sharing rejects `resourceType: "host"`.
+- `internal/api/ai_handler_test.go`
+  Confirms legacy chat mention aliases like `host`, `container`, and `k8s` are dropped.
+- `internal/api/ai_handlers_test.go`
+  Confirms `target_type: "host"` is rejected for run-command normalization.
+- `internal/monitoring/monitor_helpers.go`
+  Keeps explicit legacy-agent detection: only `agent.type = "unified"` is canonical.
+
+## Intentional Internal Shims
+
+These are still legacy-shaped internally, but they are not evidence of v6 model leakage:
+
+- `internal/monitoring/monitor.go`
+  `monitorLegacyResourceType()` is the frontend wire-shape mapper for `/api/state` broadcast payloads.
+  It emits canonical v6-facing types like `agent`, `node`, and `docker-host`.
+- `internal/models/state_snapshot.go`
+  `StateSnapshot` and `ResolveResource()` still model host-agent state for producer/wire compatibility.
+  This is not the canonical read model; `ReadState` and unified resources are.
+
+## Internal Models Follow-Up
+
+The remaining `internal/models` host-era surface is still serving live compatibility and routing work.
+It should not be treated as dead migration residue.
+
+### Must Remain For Release
+
+- `internal/models/models.go`
+  `Host`, `HostSensorSummary`, `HostDiskSMART`, `ClearAllHosts()`, `LinkHostAgentToNode()`,
+  and `UnlinkHostAgent()` still back the host-agent ingest and linking flow.
+- `internal/models/models_frontend.go`
+  `HostFrontend` and the `StateFrontend.Hosts` field remain part of the internal/frontend wire DTO layer.
+  `/api/state` strips that array for the canonical v6 contract, but the model still exists for compatibility,
+  websocket shaping, mock data, and legacy-facing internal consumers.
+- `internal/models/converters.go`
+  `Host -> HostFrontend` conversion is still the compatibility bridge from host-agent state into the
+  older frontend DTO family.
+- `internal/models/state_snapshot.go`
+  `StateSnapshot.Hosts` and `ResolveResource()` still support host-agent lookup/routing for compatibility flows.
+
+### Active Runtime Boundaries Still Using That Surface
+
+- `internal/api/router.go`
+  Metrics/history and live metric fallback still read `snap.Hosts` when the canonical resource type is `agent`.
+- `internal/api/agent_ingest.go`
+  Host agent lookup and registration validation still scan the live `snap.Hosts` snapshot.
+- `internal/monitoring/monitor_agents.go`
+  `ApplyHostReport()` still writes into `models.Host` state before unified-resource ingestion layers consume it.
+- `internal/ai/chat/context_prefetch.go`
+  Chat mention prefetch already uses `ReadState.Hosts()` and maps those records to canonical `agent` mentions.
+  This is canonical at the read boundary even though the underlying source model is still named `Host`.
+
+## API Runtime Follow-Up
+
+The remaining host-era naming inside `internal/api` is concentrated in compatibility handlers and helper locals.
+It is still part of the supported release path for agent install, lookup, and live metric fallback.
+
+### Must Remain For Release
+
+- `internal/api/agent_ingest.go`
+  `HostAgentHandlers` is still the compatibility boundary for the Pulse Unified Agent runtime.
+  It reads `GetLiveStateSnapshot().Hosts` to:
+  - validate installer lookup requests
+  - resolve config fetch scope
+  - enforce token-to-agent ownership
+- `internal/api/router.go`
+  live metric fallback still resolves canonical `agent` resources through `snap.Hosts`
+  when building instant metric points for runtime reads.
+- `internal/api/host_agents_test.go`
+  keeps the lookup/install compatibility behavior pinned while those handlers still exist.
+
+### Why This Is Not A V6 Leak
+
+- The external resource type at the API boundary is still `agent`, not `host`.
+- The remaining host-era code is operating on compatibility storage names (`models.Host`, `snap.Hosts`)
+  after canonical request normalization has already happened.
+- Existing API tests already pin explicit rejection of removed `host` aliases in:
+  - AI/chat
+  - org shares
+  - reporting
+  - metrics history
+  - resources/discovery
+
+### Post-Release Refactor Targets
+
+These are the next cleanup candidates once the host-agent compatibility/state layer is intentionally renamed or retired:
+
+- `internal/api/router.go`
+  local helpers like `findHost` and comments that still describe the `agent` path in host-era terms
+- `internal/api/agent_ingest.go`
+  `HostAgentHandlers` naming, local `host` variables, and `snap.Hosts` comments
+- `internal/api/host_agents_test.go`
+  test names and fixtures that still describe the canonical agent flow as `host` lookup/config management
+
+These are naming/structure refactors, not release blockers.
+
+### Post-Release Rename Candidates
+
+These look like rename-only cleanup once the host-agent compatibility/state layer is intentionally retired or renamed:
+
+- `internal/models/models.go`
+  `Host`, `HostSensorSummary`, `HostDiskSMART`, `HostCephCluster`
+- `internal/models/models_frontend.go`
+  `HostFrontend`, `HostSensorSummaryFrontend`, `HostDiskSMARTFrontend`
+- `internal/models/converters.go`
+  `ToFrontend converts a Host to HostFrontend`
+- `internal/models/state_snapshot.go`
+  comments like `Check generic Hosts` and the `hosts` local variable naming
+
+These are naming debt, not current v6 correctness bugs.
+
+## Monitoring Runtime Follow-Up
+
+The remaining host-era surface in `internal/monitoring` is the active ingest and correlation bridge for
+Pulse Unified Agent reports. It is still required for release.
+
+### Must Remain For Release
+
+- `internal/monitoring/monitor_agents.go`
+  `ApplyHostReport()` still ingests unified-agent reports into `models.Host` compatibility state before
+  unified-resource ingestion and correlation layers consume them.
+- `internal/monitoring/monitor.go`
+  helper paths like `mergeHostAgentSMARTIntoDisks()` and the live host snapshot readers still merge
+  host-agent data into node/disk/runtime views.
+- `internal/monitoring/monitor_helpers.go`
+  `isLegacyAgent()` and the host sensor/Ceph/SMART conversion helpers still bridge agent payloads into the
+  compatibility state model.
+- `internal/monitoring/host_agent_temps.go`
+  still uses host-agent sensor data as the authoritative temperature source for linked nodes.
+- `internal/monitoring/monitor_host_agents_test.go`
+  pins host-agent offline/recovery behavior while this compatibility layer remains live.
+
+### Why This Is Not A V6 Leak
+
+- At the canonical read boundary, those ingested records become unified `agent` resources.
+- The remaining `Host` naming is inside the producer/correlation layer, which is exempt from the
+  `ReadState` consumer-only bans.
+- Monitoring is still the write/ingest side of the architecture, not the canonical v6 read model.
+
+### Post-Release Refactor Targets
+
+These are valid rename/structure candidates after the host-agent compatibility state is intentionally retired:
+
+- `internal/monitoring/monitor_agents.go`
+  function names like `ApplyHostReport`, `RemoveHostAgent`, `LinkHostAgent`, `UnlinkHostAgent`
+- `internal/monitoring/monitor.go`
+  comments and helper locals that still describe canonical `agent` data as `host`
+- `internal/monitoring/host_agent_temps.go`
+  helper names that still encode `host agent` terminology even though the canonical resource type is `agent`
+
+These remain naming debt, not release blockers.
+
+## AI And Service Discovery Follow-Up
+
+The remaining host-era naming in `internal/ai` and `internal/servicediscovery` is mostly internal execution
+and topology language, not canonical API/resource typing drift.
+
+### Must Remain For Release
+
+- `internal/ai/chat/context_prefetch.go`
+  `ReadState.Hosts()` is still used to discover unified-agent backed resources for chat mentions, but the
+  emitted mention type is canonical `agent`.
+- `internal/ai/tools/adapters.go` and `internal/ai/tools/tools_storage.go`
+  AI tools still consume `unifiedresources.HostView` for RAID/SMART/Ceph data exposed by unified agents.
+  This is already on the canonical read model even though the view name still says `Host`.
+- `internal/servicediscovery/service.go`
+  the discovery service still materializes an internal `StateSnapshot.Hosts []Host` representation for
+  topology analysis, hostname resolution, and redirecting scans to linked agents.
+- `internal/servicediscovery/deep_scanner.go`
+  command routing still talks about the agent running “on this host”, but the actual target type for
+  canonical execution remains `agent`.
+
+### Why This Is Not A V6 Leak
+
+- `internal/ai` already rejects removed `host` aliases at the API boundary and works with canonical
+  `agent` execution targets internally.
+- `internal/ai/tools` reads host-agent data through unified-resource views (`HostView`) rather than through
+  legacy `state.hosts` API payload assumptions.
+- `internal/servicediscovery` uses `host` as an internal topology concept for machines discovered via the
+  unified agent, not as an exposed removed resource type token.
+
+### Post-Release Refactor Targets
+
+These are rename/structure candidates once the compatibility naming debt is worth paying down:
+
+- `internal/servicediscovery/service.go`
+  internal `Host` and `StateSnapshot.Hosts` naming
+- `internal/servicediscovery/deep_scanner.go`
+  comments and helper names that still talk about “host” instead of agent-backed machine resources
+- `internal/ai/tools`
+  user-facing text strings like “host agents” and helper names keyed on `HostView` / `toolHost*`
+
+These are naming debt, not release blockers.
+
+## Non-Resource Host Terminology
+
+These are unrelated to the removed v5 resource type and should not be treated as migration debt:
+
+- `internal/mock/generator.go`
+  Backup payloads use `Type: "host"` to mean PMG host config backups, not unified resources.
+- `internal/monitoring/knownhosts.go`
+  SSH known-hosts management.
+- Node configuration and endpoint code using `host` as a network address or URL host field.
+
+## Ratchets Added
+
+- `internal/unifiedresources/code_standards_test.go`
+  Added `TestV6AgentRegistrationArtifactsStayCanonical` to:
+  - scan all `tests/integration/tests/**/*.{ts,tsx}` and `tests/integration/evals/**/*.md`
+    for legacy host-resource usage patterns
+  - prevent regressions in:
+  - `tests/integration/tests/journeys/04-agent-install-registration.spec.ts`
+  - `tests/integration/evals/tasks/agent-registration.md`
+
+The ratchet bans:
+
+- `state.hosts`
+- `hosts array`
+- `type: 'host'`
+- `agent.type = "host"`
+- `resourceType: "host"` / `resourceType: 'host'`
+- `/api/resources?type=host`
+
+And requires:
+
+- unified `resources[]`
+- unified agent marker `type: 'unified'` / `agent.type = "unified"`
+
+- `internal/unifiedresources/code_standards_test.go`
+  Added `TestV6ReleaseFacingAPITestsCoverLegacyHostRejection` to pin release-facing API tests that
+  explicitly reject removed `host` aliases in chat, AI actions, org shares, reporting, and metrics history.
+
+## Post-Release Queue
+
+Priority 1: unblock and finish executable guardrails
+
+- restore a green compile/test surface around `internal/api`, `internal/ai/tools`, and `internal/unifiedresources`
+- land the blocked API-level normalizer ratchets for reporting and metrics history
+
+Priority 2: rename compatibility-layer terminology
+
+- `internal/api/agent_ingest.go`
+- `internal/monitoring/monitor_agents.go`
+- `internal/models/models.go`
+- `internal/models/models_frontend.go`
+- `internal/models/converters.go`
+- `internal/servicediscovery/service.go`
+
+Priority 3: collapse remaining compat storage when feasible
+
+- retire `StateSnapshot.Hosts` / `models.Host*` only after agent-ingest, monitoring, routing, and discovery
+  no longer require the compatibility bridge
+- only do this alongside a deliberate compatibility-removal plan, not as opportunistic cleanup

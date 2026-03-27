@@ -187,6 +187,11 @@ docs/development/
 # Temporary scripts
 tmp_*.py
 tmp_*.sh
+.tmp_*.mjs
+
+# Local auth/session runtime artifacts
+internal/api/sessions.json
+internal/api/csrf_tokens.json
 
 # Local agent directories and internal governance (not for public release)
 scripts/agent/
@@ -203,6 +208,10 @@ docs/release-control/v6/*
 !docs/release-control/v6/status.schema.json
 !docs/release-control/v6/internal/
 docs/release-control/v6/internal/*
+!docs/release-control/v6/internal/*.md
+!docs/release-control/v6/internal/subsystems/
+!docs/release-control/v6/internal/subsystems/*.json
+!docs/release-control/v6/internal/subsystems/*.schema.json
 !docs/release-control/v6/internal/records/
 !docs/release-control/v6/internal/records/*.md
 !docs/release-control/v6/internal/PRE_RELEASE_CHECKLIST.md
@@ -238,6 +247,8 @@ scripts/release_control/*
 !scripts/release_control/record_rc_to_ga_rehearsal.py
 !scripts/release_control/staged_commit_shape_guard.py
 !scripts/release_control/staged_commit_shape_guard_test.py
+!scripts/release_control/internal/
+!scripts/release_control/internal/*.py
 !scripts/release_control/status_audit.py
 !scripts/release_control/status_audit_test.py
 !scripts/release_control/status_lookup.py
@@ -246,10 +257,6 @@ scripts/release_control/*
 !scripts/release_control/subsystem_contracts_test.py
 !scripts/release_control/subsystem_lookup.py
 !scripts/release_control/subsystem_lookup_test.py
-!scripts/release_control/internal/
-scripts/release_control/internal/*
-!scripts/release_control/internal/record_rc_to_ga_rehearsal.py
-!scripts/release_control/internal/record_rc_to_ga_rehearsal_test.py
 !scripts/release_control/work_claim.py
 !scripts/release_control/work_claim_test.py
 .agent/
