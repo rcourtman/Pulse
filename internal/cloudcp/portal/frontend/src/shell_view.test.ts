@@ -184,7 +184,7 @@ describe('shell view', function() {
 
     expect(html).toContain('<h1>Self-hosted Pulse Account</h1>');
     expect(html).toContain('No hosted workspace access is attached to this account yet.');
-    expect(html).toContain('This account does not currently have hosted workspace access.');
+    expect(html).toContain('Use this area for self-hosted billing, license recovery, refunds, and privacy requests.');
     expect(html).toContain('Account services');
     expect(html).not.toContain('Self-hosted licenses and billing');
   });

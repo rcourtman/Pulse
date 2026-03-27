@@ -669,13 +669,6 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
         renderShellNavigation(accounts, context.bootstrap.support_email || '', activeSection) +
         '<div class="portal-shell-main">' +
           '<section class="portal-content-panel portal-content-panel-overview">' +
-            '<div class="portal-top-section-header">' +
-              '<div class="account-panel-kicker">' + (hosted ? 'Hosted operations' : 'Hosted access') + '</div>' +
-              '<h2>' + (hosted ? 'Hosted operations' : 'No hosted workspaces are attached yet') + '</h2>' +
-              '<p>' + (hosted
-                ? 'Use this area for workspace access, fleet operations, hosted billing, and team management.'
-                : 'This account does not currently have hosted workspace access. If that is unexpected, contact support while using the commercial tools below.') + '</p>' +
-            '</div>' +
             '<div id="accounts-root">' + hostedContent + '</div>' +
           '</section>' +
           '<section class="portal-content-panel portal-content-panel-services service-section" id="account-services-section">' +
