@@ -206,6 +206,13 @@ describe('Recovery', () => {
     expect(await screen.findByRole('tab', { name: /protected items/i })).toBeInTheDocument();
     await screen.findByText('VM 123');
     expect(screen.getByText('Needs Attention')).toBeInTheDocument();
+    expect(screen.queryByText('Protected inventory')).not.toBeInTheDocument();
+    expect(screen.getAllByText(/Page 1 \/ 1/i).length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText((_, element) =>
+        (element?.textContent || '').replace(/\s+/g, ' ').includes('Sort: Latest point'),
+      ).length,
+    ).toBeGreaterThan(0);
     expect(screen.queryByText('Recovery Events')).not.toBeInTheDocument();
     await waitFor(() => {
       expect(screen.getAllByRole('table')).toHaveLength(1);

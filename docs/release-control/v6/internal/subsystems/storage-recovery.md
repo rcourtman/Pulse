@@ -648,6 +648,10 @@ recovery-specific mini report. Recovery summary cards should prefer concise
 counts, bars, and badge-backed coverage cues over tall explanatory copy blocks
 so the protected-item table takes over the page at roughly the same visual
 density as the infrastructure and workloads monitoring surfaces.
+That same summary rule also applies within individual cards: recovery posture,
+freshness, attention, footprint, and history cards should favor compact rows
+and metric lists over stacked prose callouts so the summary strip reads like
+Pulse monitoring telemetry rather than a page-local narrative panel.
 That same inventory surface should also follow the established monitoring-table
 scan pattern in its first column. Protected-item rows should lead with a clear
 status cue, the primary item name, and compact badge-backed item/platform
@@ -658,6 +662,11 @@ not just local row styling. When the protected-item page mixes healthy and
 problematic coverage, the table body should section attention items ahead of
 healthy coverage so operators can scan the recovery estate the way they scan
 other grouped monitoring tables in Pulse.
+That same table-shell contract must avoid duplicate framing once the view tabs
+already establish the active workspace. `RecoveryProtectedInventorySection.tsx`
+should keep page/count/sort orientation inside a slim table-shell status row
+and let the filter strip lead directly into the grid instead of reintroducing a
+second large inventory header card above the same table.
 That shared unified-resource dependency now also includes policy-governed
 resource metadata on the frontend decode path: storage and recovery surfaces
 that route through `frontend-modern/src/hooks/useUnifiedResources.ts` must

@@ -58,6 +58,8 @@ describe('RecoverySummary', () => {
     expect(screen.getByText('Freshness')).toBeInTheDocument();
     expect(screen.getByText('Recent History')).toBeInTheDocument();
     expect(screen.getAllByText('Attention Queue').length).toBeGreaterThan(0);
+    expect(screen.getByText('Stale')).toBeInTheDocument();
+    expect(screen.getAllByText('Attention').length).toBeGreaterThan(0);
     expect(screen.getByText('Recovery Points')).toBeInTheDocument();
     expect(screen.getAllByText('Item Types').length).toBeGreaterThan(0);
     expect(screen.getByText('Primary Item')).toBeInTheDocument();

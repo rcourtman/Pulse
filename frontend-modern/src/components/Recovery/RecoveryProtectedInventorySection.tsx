@@ -239,15 +239,34 @@ export const RecoveryProtectedInventorySection: Component<
     <Card
       padding="none"
       tone="card"
-      class="overflow-hidden border-border-subtle bg-surface shadow-[0_10px_24px_rgba(2,6,23,0.1)]"
+      class="overflow-hidden border-border-subtle bg-surface"
     >
-      <div class="border-b border-border-subtle/80 bg-surface px-4 py-3">
-        <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div class="text-sm font-semibold text-base-content">Protected inventory</div>
-          <div class="flex flex-wrap items-center gap-2 text-xs">
-            <span class="rounded-full border border-border-subtle bg-surface-hover/70 px-2.5 py-1 text-base-content">
+      <div class="border-b border-border-subtle/80 bg-surface px-4 py-2.5">
+        <div class="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+          <div class="flex flex-wrap items-center gap-3 text-[11px] text-muted">
+            <span class="font-medium text-base-content">
               {sortedRollups().length} of {props.rollups().length} items shown
             </span>
+            <span>
+              Page {protectedPage()} / {protectedTotalPages()}
+            </span>
+            <span>
+              Sort:{' '}
+              <span class="font-medium text-base-content">
+                {protectedSortCol() === 'lastBackup'
+                  ? 'Latest point'
+                  : protectedSortCol() === 'item'
+                    ? 'Item'
+                    : protectedSortCol() === 'type'
+                      ? 'Item type'
+                      : protectedSortCol() === 'platform'
+                        ? 'Platform'
+                        : 'Outcome'}
+              </span>{' '}
+              <span class="uppercase tracking-wide">{protectedSortDir()}</span>
+            </span>
+          </div>
+          <div class="flex flex-wrap items-center gap-2 text-xs">
             <Show when={props.rollupsSummary().stale > 0}>
               <span class={`${getRecoveryRollupStatusPillClass('stale')} px-2.5 py-1`}>
                 {props.rollupsSummary().stale} stale
@@ -263,7 +282,7 @@ export const RecoveryProtectedInventorySection: Component<
       </div>
 
       <Show when={!props.kioskMode}>
-        <div class="border-b border-border-subtle/80 bg-surface-alt/35 px-4 py-4">
+        <div class="border-b border-border-subtle/80 bg-surface px-4 py-3">
           <PageControls
             search={
               <SearchInput
@@ -271,7 +290,7 @@ export const RecoveryProtectedInventorySection: Component<
                 onChange={(value) => props.setQueryFilter(value)}
                 placeholder={getRecoveryProtectedSearchPlaceholder()}
                 class="w-full"
-                inputClass="py-2.5 text-sm"
+                inputClass="py-2 text-sm"
                 clearOnEscape
                 history={{
                   storageKey: STORAGE_KEYS.RECOVERY_SEARCH_HISTORY,
@@ -284,9 +303,9 @@ export const RecoveryProtectedInventorySection: Component<
               onToggle: () => setProtectedFiltersOpen((open) => !open),
               count: protectedActiveFilterCount(),
             }}
-            showFilters={!props.isMobile || protectedFiltersOpen()}
-            searchRowClass="flex w-full items-center gap-3"
-            toolbarClass="gap-3 lg:flex-nowrap"
+              showFilters={!props.isMobile || protectedFiltersOpen()}
+              searchRowClass="flex w-full items-center gap-3"
+              toolbarClass="gap-3 lg:flex-nowrap"
           >
             <LabeledFilterSelect
               id="recovery-item-type-filter"
@@ -408,7 +427,7 @@ export const RecoveryProtectedInventorySection: Component<
                   ] as const
                 ).map(([column, label]) => (
                   <TableHead
-                    class={`sticky top-0 z-[1] bg-surface-alt/95 px-3 py-3 whitespace-nowrap text-left text-[11px] sm:text-xs font-semibold uppercase tracking-[0.18em] cursor-pointer select-none hover:text-base-content transition-colors${
+                    class={`sticky top-0 z-[1] bg-surface-alt/95 px-3 py-2.5 whitespace-nowrap text-left text-[11px] sm:text-xs font-semibold uppercase tracking-[0.14em] cursor-pointer select-none hover:text-base-content transition-colors${
                       column === 'type'
                         ? ' hidden md:table-cell w-[96px]'
                         : column === 'platform'
@@ -441,7 +460,7 @@ export const RecoveryProtectedInventorySection: Component<
               <For each={visibleGroupedRollups()}>
                 {(group) => (
                   <>
-                    <TableRow class="bg-surface-alt">
+                    <TableRow class="bg-surface-alt/75">
                       <TableCell
                         colspan={5}
                         class="py-1 pr-3 pl-3 text-[12px] sm:text-sm font-semibold text-base-content"
@@ -494,7 +513,7 @@ export const RecoveryProtectedInventorySection: Component<
                       onClick={() => props.onSelectRollup(rollup.rollupId)}
                     >
                       <TableCell
-                        class="max-w-[420px] px-3 py-2.5 text-base-content"
+                        class="max-w-[420px] px-3 py-2 text-base-content"
                         title={label}
                       >
                         <div class="flex min-w-0 flex-col gap-1.5">
@@ -540,7 +559,7 @@ export const RecoveryProtectedInventorySection: Component<
                         </div>
                       </TableCell>
 
-                      <TableCell class="hidden md:table-cell whitespace-nowrap px-3 py-2.5">
+                      <TableCell class="hidden md:table-cell whitespace-nowrap px-3 py-2">
                         <Show
                           when={itemTypePresentation}
                           fallback={<span class="text-muted">—</span>}
@@ -551,7 +570,7 @@ export const RecoveryProtectedInventorySection: Component<
                         </Show>
                       </TableCell>
 
-                      <TableCell class="hidden lg:table-cell whitespace-nowrap px-3 py-2.5">
+                      <TableCell class="hidden lg:table-cell whitespace-nowrap px-3 py-2">
                         <div class="flex flex-wrap gap-1.5">
                           <For each={platforms}>
                             {(platform) => {
@@ -567,7 +586,7 @@ export const RecoveryProtectedInventorySection: Component<
                       </TableCell>
 
                       <TableCell
-                        class={`whitespace-nowrap px-3 py-2.5 ${getRecoveryRollupAgeTextClass(
+                        class={`whitespace-nowrap px-3 py-2 ${getRecoveryRollupAgeTextClass(
                           rollup,
                           nowMs,
                         )}`}
@@ -588,7 +607,7 @@ export const RecoveryProtectedInventorySection: Component<
                         )}
                       </TableCell>
 
-                      <TableCell class="whitespace-nowrap px-3 py-2.5">
+                      <TableCell class="whitespace-nowrap px-3 py-2">
                         <span
                           class={`inline-flex rounded px-1.5 py-0.5 text-[10px] font-medium ${getRecoveryOutcomeBadgeClass(
                             outcome,

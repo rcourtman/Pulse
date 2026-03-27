@@ -4,7 +4,6 @@ import { SummaryPanel } from '@/components/shared/SummaryPanel';
 import { SummaryMetricCard } from '@/components/shared/SummaryMetricCard';
 import type { ProtectionRollup, RecoveryOutcome, RecoveryPointsSeriesBucket } from '@/types/recovery';
 import {
-  buildRecoveryAttentionItems,
   buildRecoveryActivitySummary,
   buildRecoveryFreshnessBuckets,
   buildRecoveryItemCoverage,
@@ -42,8 +41,6 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
   const itemCoverage = createMemo(() => buildRecoveryItemCoverage(props.rollups()));
   const platformCoverage = createMemo(() => buildRecoveryPlatformCoverage(props.rollups()));
   const activity = createMemo(() => buildRecoveryActivitySummary(props.series()));
-  const attentionItems = createMemo(() => buildRecoveryAttentionItems(summary()));
-
   const healthyCount = createMemo(() => postureSummary().healthy);
   const attentionCount = createMemo(() => postureSummary().attention);
   const recentWindowLabel = createMemo(() => {
@@ -83,115 +80,147 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
         timeRangeLabels={RECOVERY_SUMMARY_TIME_RANGE_LABELS}
         testId="recovery-summary"
       >
-        <SummaryMetricCard label="Recovery Posture" loaded={true} hasData={hasRollups()}>
-          <div class="flex h-full flex-col gap-3">
-            <div class="grid grid-cols-3 gap-3 border-b border-border-subtle pb-3 text-sm">
-              <div>
-                <div class="text-[11px] uppercase tracking-wide text-muted">Healthy</div>
-                <div class="mt-1 text-2xl font-semibold text-emerald-600 dark:text-emerald-400">
-                  {healthyCount()}
+        <div class="lg:col-span-2">
+          <SummaryMetricCard label="Recovery Posture" loaded={true} hasData={hasRollups()}>
+            <div class="grid h-full gap-3 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+              <div class="flex h-full flex-col gap-2.5">
+                <div class="grid grid-cols-3 gap-2 border-b border-border-subtle pb-2.5 text-sm">
+                  <div>
+                    <div class="text-[11px] uppercase tracking-wide text-muted">Healthy</div>
+                    <div class="mt-1 text-xl font-semibold text-emerald-600 dark:text-emerald-400">
+                      {healthyCount()}
+                    </div>
+                  </div>
+                  <div>
+                    <div class="text-[11px] uppercase tracking-wide text-muted">Attention</div>
+                    <div class="mt-1 text-xl font-semibold text-amber-600 dark:text-amber-400">
+                      {attentionCount()}
+                    </div>
+                  </div>
+                  <div>
+                    <div class="text-[11px] uppercase tracking-wide text-muted">Protected</div>
+                    <div class="mt-1 text-xl font-semibold text-base-content">{summary().total}</div>
+                  </div>
+                </div>
+                <div class="space-y-2">
+                  <div class="h-2 overflow-hidden rounded-full bg-surface-alt">
+                    <div class="flex h-full">
+                      <For each={postureSegments()}>
+                        {(segment) => (
+                          <div
+                            class={segment.color}
+                            style={{ width: `${Math.max(segment.percent, segment.count > 0 ? 4 : 0)}%` }}
+                            title={`${segment.label}: ${segment.count}`}
+                          />
+                        )}
+                      </For>
+                    </div>
+                  </div>
+                  <div class="grid grid-cols-2 gap-x-3 gap-y-2">
+                    <For each={postureSegments()}>
+                      {(segment) => (
+                        <div class="flex items-center justify-between gap-3 text-sm">
+                          <div class="flex items-center gap-2 text-base-content">
+                            <span class={`h-2 w-2 rounded-full ${segment.color}`} />
+                            <span>{segment.label}</span>
+                          </div>
+                          <span class={`font-semibold tabular-nums ${segment.textColor}`}>
+                            {segment.count}
+                          </span>
+                        </div>
+                      )}
+                    </For>
+                  </div>
+                </div>
+                <div class="border-t border-border-subtle pt-2.5">
+                  <div class="mb-2 flex items-center justify-between gap-3 text-[11px] font-medium uppercase tracking-wide text-muted">
+                    <span>Freshness</span>
+                    <Show when={summary().neverSucceeded > 0}>
+                      <span class="text-amber-600 dark:text-amber-400">
+                        {summary().neverSucceeded} never succeeded
+                      </span>
+                    </Show>
+                  </div>
+                  <div class="flex flex-wrap gap-1.5">
+                    <For each={freshnessBuckets()}>
+                      {(bucket) => (
+                        <div class="inline-flex items-center gap-2 rounded-md border border-border-subtle bg-surface-alt/35 px-2 py-1 text-xs">
+                          <span class={`h-2 w-2 rounded-full ${bucket.color}`} />
+                          <span class="text-base-content">{bucket.label}</span>
+                          <span class="tabular-nums text-base-content">{bucket.count}</span>
+                        </div>
+                      )}
+                    </For>
+                  </div>
                 </div>
               </div>
-              <div>
-                <div class="text-[11px] uppercase tracking-wide text-muted">Attention</div>
-                <div class="mt-1 text-2xl font-semibold text-amber-600 dark:text-amber-400">
-                  {attentionCount()}
+
+              <div class="border-t border-border-subtle pt-2.5 lg:border-t-0 lg:border-l lg:pl-3 lg:pt-0">
+                <div class="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted">
+                  Attention Queue
                 </div>
-              </div>
-              <div>
-                <div class="text-[11px] uppercase tracking-wide text-muted">Protected</div>
-                <div class="mt-1 text-2xl font-semibold text-base-content">{summary().total}</div>
-              </div>
-            </div>
-            <div class="space-y-2">
-              <div class="h-2.5 overflow-hidden rounded-full bg-surface-alt">
-                <div class="flex h-full">
-                  <For each={postureSegments()}>
-                    {(segment) => (
-                      <div
-                        class={segment.color}
-                        style={{ width: `${Math.max(segment.percent, segment.count > 0 ? 4 : 0)}%` }}
-                        title={`${segment.label}: ${segment.count}`}
-                      />
+                <div class="flex h-full flex-col gap-2">
+                  <For
+                    each={[
+                      {
+                        label: 'Stale',
+                        count: summary().stale,
+                        detail: 'No successful point inside the active freshness threshold.',
+                        tone: 'amber',
+                      },
+                      {
+                        label: 'Never succeeded',
+                        count: summary().neverSucceeded,
+                        detail: 'Attempts exist but no successful recovery point has landed.',
+                        tone: 'rose',
+                      },
+                      {
+                        label: 'Attention',
+                        count: attentionCount(),
+                        detail: 'Protected items currently outside healthy recovery posture.',
+                        tone: 'amber',
+                      },
+                      {
+                        label: 'Running',
+                        count: postureSummary().running,
+                        detail: 'Recovery jobs are still in progress and not yet final.',
+                        tone: 'blue',
+                      },
+                    ].filter((item) => item.count > 0)}
+                  >
+                    {(item) => (
+                      <div class="border-b border-border-subtle pb-2 last:border-b-0 last:pb-0">
+                        <div class="flex items-center justify-between gap-3">
+                          <div class="flex items-center gap-2 text-sm font-medium text-base-content">
+                            <span
+                              class={`h-2.5 w-2.5 rounded-full ${getRecoveryAttentionDotClass(item.tone)}`}
+                            />
+                            <span>{item.label}</span>
+                          </div>
+                          <span
+                            class={`text-sm font-semibold tabular-nums ${
+                              item.tone === 'rose'
+                                ? 'text-rose-600 dark:text-rose-400'
+                                : item.tone === 'blue'
+                                  ? 'text-blue-600 dark:text-blue-400'
+                                  : 'text-amber-600 dark:text-amber-400'
+                            }`}
+                          >
+                            {item.count}
+                          </span>
+                        </div>
+                        <div class="mt-1 text-xs leading-5 text-muted">{item.detail}</div>
+                      </div>
                     )}
                   </For>
                 </div>
               </div>
-              <div class="grid grid-cols-2 gap-x-3 gap-y-2">
-                <For each={postureSegments()}>
-                  {(segment) => (
-                    <div class="flex items-center justify-between gap-3 text-sm">
-                      <div class="flex items-center gap-2 text-base-content">
-                        <span class={`h-2 w-2 rounded-full ${segment.color}`} />
-                        <span>{segment.label}</span>
-                      </div>
-                      <span class={`font-semibold tabular-nums ${segment.textColor}`}>
-                        {segment.count}
-                      </span>
-                    </div>
-                  )}
-                </For>
-              </div>
             </div>
-            <div class="border-t border-border-subtle pt-3">
-              <div class="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted">
-                Freshness
-              </div>
-              <div class="flex flex-wrap gap-2">
-                <For each={freshnessBuckets()}>
-                  {(bucket) => (
-                    <div class="inline-flex items-center gap-2 rounded-md border border-border-subtle bg-surface-alt/35 px-2.5 py-1 text-xs">
-                      <span class={`h-2 w-2 rounded-full ${bucket.color}`} />
-                      <span class="text-base-content">{bucket.label}</span>
-                      <span class="tabular-nums text-base-content">{bucket.count}</span>
-                    </div>
-                  )}
-                </For>
-              </div>
-            </div>
-          </div>
-        </SummaryMetricCard>
-
-        <SummaryMetricCard
-          label="Attention Queue"
-          loaded={true}
-          hasData={attentionItems().length > 0}
-          emptyMessage="No active recovery risks."
-        >
-          <div class="grid gap-2">
-            <For each={attentionItems().slice(0, 4)}>
-              {(item) => (
-                <div class="rounded-md border border-border-subtle bg-surface-alt/35 px-3 py-2">
-                  <div class="flex items-center justify-between gap-2">
-                    <div class="flex items-center gap-2">
-                      <span
-                        class={`h-2.5 w-2.5 rounded-full ${getRecoveryAttentionDotClass(item.tone)}`}
-                      />
-                      <span class="text-[11px] font-semibold uppercase tracking-[0.14em]">
-                        {item.label}
-                      </span>
-                    </div>
-                    <span
-                      class={`text-sm font-semibold tabular-nums ${
-                        item.tone === 'rose'
-                          ? 'text-rose-600 dark:text-rose-400'
-                          : item.tone === 'blue'
-                            ? 'text-blue-600 dark:text-blue-400'
-                            : 'text-amber-600 dark:text-amber-400'
-                      }`}
-                    >
-                      {item.count}
-                    </span>
-                  </div>
-                  <div class="mt-1.5 text-sm leading-6 text-muted">{item.detail}</div>
-                </div>
-              )}
-            </For>
-          </div>
-        </SummaryMetricCard>
+          </SummaryMetricCard>
+        </div>
 
         <SummaryMetricCard label="Protected Footprint" loaded={true} hasData={hasRollups()}>
-          <div class="flex h-full flex-col gap-3">
+          <div class="flex h-full flex-col gap-2.5">
             <dl class="space-y-2 text-sm">
               <div class="flex items-center justify-between gap-3 border-b border-border-subtle pb-2">
                 <dt class="text-[11px] uppercase tracking-wide text-muted">Item Types</dt>
@@ -220,7 +249,7 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
                 <div class="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted">
                   Item Types
                 </div>
-                <div class="flex flex-wrap gap-2">
+                <div class="flex flex-wrap gap-1.5">
                   <For each={itemCoverage().items.slice(0, 6)}>
                     {(item) => (
                       <div class="inline-flex items-center gap-2 text-[10px]">
@@ -244,7 +273,7 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
                   {platformCoverage().multiPlatformCount === 1 ? '' : 's'}
                 </div>
               </Show>
-              <div class="flex flex-wrap gap-2">
+              <div class="flex flex-wrap gap-1.5">
                 <For each={platformCoverage().items.slice(0, 6)}>
                   {(item) => {
                     const badge = getSourcePlatformBadge(item.key);
@@ -270,7 +299,7 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
           hasData={activity().hasData}
           emptyMessage={props.seriesFailed?.() ? 'Trend data unavailable' : 'No recovery activity yet'}
         >
-          <div class="flex h-full flex-col gap-3">
+          <div class="flex h-full flex-col gap-2.5">
             <Show when={recentWindowLabel()}>
               <div class="text-xs text-muted">{recentWindowLabel()}</div>
             </Show>

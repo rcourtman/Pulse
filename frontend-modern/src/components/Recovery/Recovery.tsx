@@ -485,13 +485,13 @@ const Recovery: Component = () => {
       />
 
       <div ref={historySectionRef} class="flex flex-col gap-4">
-        <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div class="flex flex-col gap-2 rounded-md border border-border bg-surface px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
           <Subtabs
             value={workspaceView()}
             onChange={(value) => setWorkspaceView(value as RecoveryWorkspaceView)}
             ariaLabel="Recovery data view"
-            listClass="flex flex-wrap items-center gap-3"
-            tabClass="min-h-9 px-2 py-2 text-sm"
+            listClass="flex flex-wrap items-center gap-2"
+            tabClass="min-h-8 px-2.5 py-1.5 text-sm"
             tabs={[
               {
                 value: 'inventory',
