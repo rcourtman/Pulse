@@ -142,6 +142,8 @@ describe('shell view', function() {
     expect(html).toContain('Manage the client fleet from this account surface.');
     expect(html).toContain('Operator overview');
     expect(html).toContain('Start from the next action, not the whole account');
+    expect(html).toContain('Hosted posture needs review');
+    expect(html).toContain('Use this console to run client workspaces, account billing, and operator access from one place.');
     expect(html).toContain('Open workspaces');
     expect(html).toContain('Review team access');
     expect(html).toContain('Needs review');

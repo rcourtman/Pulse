@@ -111,6 +111,34 @@ describe('account view', function() {
     expect(document.getElementById('team-stats-acct_1')?.textContent).toContain('2');
   });
 
+  it('normalizes legacy member roles into the current read-only operator model', function() {
+    document.body.innerHTML =
+      '<div id="team-section-acct_1" class="team-section" data-actor-role="owner">' +
+      '<div id="team-stats-acct_1"></div>' +
+      '<div id="team-list-acct_1"></div>' +
+      '</div>';
+
+    renderTeamSection(
+      'acct_1',
+      createEntry({
+        teamVisible: true,
+        teamQuery: {
+          status: 'ready',
+          error: '',
+          data: [
+            { email: 'legacy@example.com', role: 'member', user_id: 'u_legacy' },
+          ],
+        },
+      })
+    );
+
+    var roleSelect = document.querySelector('.team-role-select') as HTMLSelectElement;
+    expect(document.getElementById('team-list-acct_1')?.textContent).toContain('Read-only');
+    expect(roleSelect.value).toBe('read_only');
+    expect(document.getElementById('team-stats-acct_1')?.textContent).toContain('Operators');
+    expect(document.getElementById('team-stats-acct_1')?.textContent).toContain('1');
+  });
+
   it('renders workspace management selection from account UI state', function() {
     document.body.innerHTML =
       '<div id="workspace-management-acct_1" class="workspace-management-panel">' +

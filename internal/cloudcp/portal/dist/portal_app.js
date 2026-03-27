@@ -1,7 +1,11 @@
 (() => {
   // src/account_view.ts
+  function normalizedTeamRole(role) {
+    if (role === "member") return "read_only";
+    return role || "read_only";
+  }
   function roleLabel(role) {
-    switch (role) {
+    switch (normalizedTeamRole(role)) {
       case "owner":
         return "Owner";
       case "admin":
@@ -17,7 +21,7 @@
     }
   }
   function roleCapabilityCopy(role) {
-    switch (role) {
+    switch (normalizedTeamRole(role)) {
       case "owner":
         return "Full account control, including billing, team access, and hosted operations.";
       case "admin":
@@ -110,7 +114,7 @@
   function countMembersByRole(members, role) {
     var count = 0;
     for (var i = 0; i < members.length; i += 1) {
-      if (members[i].role === role) count += 1;
+      if (normalizedTeamRole(members[i].role) === role) count += 1;
     }
     return count;
   }
@@ -133,10 +137,11 @@
     stats.innerHTML = '<div class="team-stat-card"><span class="team-stat-label">Members</span><span class="team-stat-value">' + String(members.length) + '</span></div><div class="team-stat-card"><span class="team-stat-label">Owners</span><span class="team-stat-value">' + String(countMembersByRole(members, "owner")) + '</span></div><div class="team-stat-card"><span class="team-stat-label">Admins</span><span class="team-stat-value">' + String(countMembersByRole(members, "admin")) + '</span></div><div class="team-stat-card"><span class="team-stat-label">Operators</span><span class="team-stat-value">' + String(countMembersByRole(members, "tech") + countMembersByRole(members, "read_only")) + "</span></div>";
   }
   function renderTeamRoleControl(accountID, member, isOwner) {
-    if (member.role === "owner" && !isOwner) {
+    var currentRole = normalizedTeamRole(member.role);
+    if (currentRole === "owner" && !isOwner) {
       var locked = document.createElement("span");
       locked.className = "team-role-badge";
-      locked.textContent = roleLabel(member.role);
+      locked.textContent = roleLabel(currentRole);
       return locked;
     }
     var sel = document.createElement("select");
@@ -146,7 +151,7 @@
       var opt = document.createElement("option");
       opt.value = roles[j];
       opt.textContent = roleLabel(roles[j]);
-      if (member.role === roles[j]) opt.selected = true;
+      if (currentRole === roles[j]) opt.selected = true;
       sel.appendChild(opt);
     }
     sel.setAttribute("data-action", "change-role");
@@ -155,7 +160,7 @@
     return sel;
   }
   function renderTeamMemberAction(accountID, member, isOwner) {
-    if (member.role === "owner" && !isOwner) {
+    if (normalizedTeamRole(member.role) === "owner" && !isOwner) {
       return null;
     }
     var btn = document.createElement("button");
@@ -1763,11 +1768,12 @@
   }
   function renderAccountOverviewSection(account) {
     var workspaces = Array.isArray(account.workspaces) ? account.workspaces : [];
-    var summaryText = accountKindLabel(account) + " \xB7 " + titleCase(account.role) + " \xB7 " + workspaceCountLabel(workspaces.length);
     var healthyCount = countWorkspacesByHealth(workspaces, "healthy");
     var checkingCount = countWorkspacesByHealth(workspaces, "checking");
     var unhealthyCount = countWorkspacesByHealth(workspaces, "unhealthy");
     var activeCount = countWorkspacesByState(workspaces, "active");
+    var postureTitle = unhealthyCount > 0 ? "Hosted posture needs review" : checkingCount > 0 ? "Hosted posture is still settling" : "Hosted posture is stable";
+    var postureCopy = unhealthyCount > 0 ? "One or more workspaces still need attention before the hosted fleet is trustworthy." : checkingCount > 0 ? "The hosted fleet is mostly healthy, but some workspaces are still waiting on a completed health check." : "The hosted fleet is healthy and ready for routine operator work.";
     var operationsCopy = account.kind === "msp" ? "Manage the client fleet from this account surface. Workspace creation, billing, and team actions belong here." : "Use this account surface to open hosted workspaces, manage billing, and control access for this hosted account.";
     var actions = "";
     var addWorkspaceForm = "";
@@ -1777,8 +1783,8 @@
         addWorkspaceForm = '<div class="add-workspace-form" id="add-ws-form-' + escapeAttr(account.id) + '"><label for="ws-name-' + escapeAttr(account.id) + '">Workspace name (for example, a client name)</label><input type="text" id="ws-name-' + escapeAttr(account.id) + '" placeholder="Acme Corp" maxlength="80" autocomplete="off"><div class="form-actions"><button type="button" class="btn-primary" data-action="create-workspace" data-account-id="' + escapeAttr(account.id) + '">Create workspace</button><button type="button" class="btn-secondary" data-action="toggle-add-workspace" data-account-id="' + escapeAttr(account.id) + '">Cancel</button><div class="spinner" id="ws-spinner-' + escapeAttr(account.id) + '" hidden></div></div></div>';
       }
     }
-    return '<section class="account-content-panel account-content-panel-overview"><div class="account-command-deck"><div class="account-overview-card"><div class="account-panel-kicker">Hosted posture</div><h3>' + escapeHTML(account.name) + "</h3><p>" + escapeHTML(summaryText) + '</p><div class="account-overview-callout">' + escapeHTML(
-      account.kind === "msp" ? "This is the control surface for hosted clients, account billing, and operator access." : "This is the control surface for hosted workspaces, billing, and account access."
+    return '<section class="account-content-panel account-content-panel-overview"><div class="account-command-deck"><div class="account-overview-card"><div class="account-panel-kicker">Hosted posture</div><h3>' + escapeHTML(postureTitle) + "</h3><p>" + escapeHTML(postureCopy) + '</p><div class="account-overview-callout">' + escapeHTML(
+      account.kind === "msp" ? "Use this console to run client workspaces, account billing, and operator access from one place." : "Use this console to run hosted workspaces, account billing, and operator access from one place."
     ) + '</div></div><div class="account-metric-strip"><div class="account-stat-card account-stat-card-inline"><span class="account-stat-label">Active workspaces</span><span class="account-stat-value">' + String(activeCount) + '</span></div><div class="account-stat-card account-stat-card-inline"><span class="account-stat-label">Healthy</span><span class="account-stat-value account-stat-healthy">' + String(healthyCount) + '</span></div><div class="account-stat-card account-stat-card-inline"><span class="account-stat-label">Checking</span><span class="account-stat-value account-stat-checking">' + String(checkingCount) + '</span></div><div class="account-stat-card account-stat-card-inline"><span class="account-stat-label">Needs attention</span><span class="account-stat-value account-stat-unhealthy">' + String(unhealthyCount) + "</span></div></div>" + actions + addWorkspaceForm + '<div class="account-overview-secondary"><div class="overview-side-card overview-side-card-primary"><div class="account-panel-kicker">Operator overview</div><h4>Start from the next action, not the whole account</h4><p>Use the overview for posture, then move into workspaces, team, or account services depending on what needs attention.</p><div class="overview-quick-actions">' + renderOverviewQuickAction("workspaces", "Open workspaces", "Review the hosted fleet and move into a workspace") + renderOverviewQuickAction("team", "Review team access", "Check who can operate billing and hosted workspaces") + renderOverviewQuickAction("services", "Open account services", "Handle billing, licenses, refunds, and privacy actions") + "</div></div>" + renderAttentionPanel(workspaces) + "</div></div></section>";
   }
   function renderAccountWorkspaceSection(account, accountAPIBasePath) {

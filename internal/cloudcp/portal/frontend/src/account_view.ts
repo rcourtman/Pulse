@@ -8,8 +8,13 @@ import type {
 
 type FormValueElement = HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
 
+function normalizedTeamRole(role: string): string {
+  if (role === 'member') return 'read_only';
+  return role || 'read_only';
+}
+
 function roleLabel(role: string): string {
-  switch (role) {
+  switch (normalizedTeamRole(role)) {
     case 'owner':
       return 'Owner';
     case 'admin':
@@ -26,7 +31,7 @@ function roleLabel(role: string): string {
 }
 
 function roleCapabilityCopy(role: string): string {
-  switch (role) {
+  switch (normalizedTeamRole(role)) {
     case 'owner':
       return 'Full account control, including billing, team access, and hosted operations.';
     case 'admin':
@@ -132,7 +137,7 @@ function setContainerMessage(container: HTMLElement, msg: string, isError: boole
 function countMembersByRole(members: PortalTeamMember[], role: string): number {
   var count = 0;
   for (var i = 0; i < members.length; i += 1) {
-    if (members[i].role === role) count += 1;
+    if (normalizedTeamRole(members[i].role) === role) count += 1;
   }
   return count;
 }
@@ -162,10 +167,11 @@ function renderTeamStats(accountID: string, entry: PortalAccountUIEntry): void {
 }
 
 function renderTeamRoleControl(accountID: string, member: PortalTeamMember, isOwner: boolean): HTMLElement {
-  if (member.role === 'owner' && !isOwner) {
+  var currentRole = normalizedTeamRole(member.role);
+  if (currentRole === 'owner' && !isOwner) {
     var locked = document.createElement('span');
     locked.className = 'team-role-badge';
-    locked.textContent = roleLabel(member.role);
+    locked.textContent = roleLabel(currentRole);
     return locked;
   }
 
@@ -176,7 +182,7 @@ function renderTeamRoleControl(accountID: string, member: PortalTeamMember, isOw
     var opt = document.createElement('option');
     opt.value = roles[j];
     opt.textContent = roleLabel(roles[j]);
-    if (member.role === roles[j]) opt.selected = true;
+    if (currentRole === roles[j]) opt.selected = true;
     sel.appendChild(opt);
   }
   sel.setAttribute('data-action', 'change-role');
@@ -186,7 +192,7 @@ function renderTeamRoleControl(accountID: string, member: PortalTeamMember, isOw
 }
 
 function renderTeamMemberAction(accountID: string, member: PortalTeamMember, isOwner: boolean): HTMLElement | null {
-  if (member.role === 'owner' && !isOwner) {
+  if (normalizedTeamRole(member.role) === 'owner' && !isOwner) {
     return null;
   }
 

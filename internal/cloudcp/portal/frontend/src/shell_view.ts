@@ -328,11 +328,20 @@ function renderWorkspaceCard(account: PortalAccountSummary, workspace: PortalWor
 
 function renderAccountOverviewSection(account: PortalAccountSummary): string {
   var workspaces = Array.isArray(account.workspaces) ? account.workspaces : [];
-  var summaryText = accountKindLabel(account) + ' · ' + titleCase(account.role) + ' · ' + workspaceCountLabel(workspaces.length);
   var healthyCount = countWorkspacesByHealth(workspaces, 'healthy');
   var checkingCount = countWorkspacesByHealth(workspaces, 'checking');
   var unhealthyCount = countWorkspacesByHealth(workspaces, 'unhealthy');
   var activeCount = countWorkspacesByState(workspaces, 'active');
+  var postureTitle = unhealthyCount > 0
+    ? 'Hosted posture needs review'
+    : checkingCount > 0
+      ? 'Hosted posture is still settling'
+      : 'Hosted posture is stable';
+  var postureCopy = unhealthyCount > 0
+    ? 'One or more workspaces still need attention before the hosted fleet is trustworthy.'
+    : checkingCount > 0
+      ? 'The hosted fleet is mostly healthy, but some workspaces are still waiting on a completed health check.'
+      : 'The hosted fleet is healthy and ready for routine operator work.';
   var operationsCopy = account.kind === 'msp'
     ? 'Manage the client fleet from this account surface. Workspace creation, billing, and team actions belong here.'
     : 'Use this account surface to open hosted workspaces, manage billing, and control access for this hosted account.';
@@ -398,11 +407,11 @@ function renderAccountOverviewSection(account: PortalAccountSummary): string {
       '<div class="account-command-deck">' +
         '<div class="account-overview-card">' +
           '<div class="account-panel-kicker">Hosted posture</div>' +
-          '<h3>' + escapeHTML(account.name) + '</h3>' +
-          '<p>' + escapeHTML(summaryText) + '</p>' +
+          '<h3>' + escapeHTML(postureTitle) + '</h3>' +
+          '<p>' + escapeHTML(postureCopy) + '</p>' +
           '<div class="account-overview-callout">' + escapeHTML(account.kind === 'msp'
-            ? 'This is the control surface for hosted clients, account billing, and operator access.'
-            : 'This is the control surface for hosted workspaces, billing, and account access.'
+            ? 'Use this console to run client workspaces, account billing, and operator access from one place.'
+            : 'Use this console to run hosted workspaces, account billing, and operator access from one place.'
           ) + '</div>' +
         '</div>' +
         '<div class="account-metric-strip">' +
