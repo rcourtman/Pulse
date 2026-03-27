@@ -113,6 +113,56 @@ Conditional areas:
 2. `Organization / Tenant Admin`
    Only for hosted accounts that need browser-side workspace lifecycle actions.
 
+## Experience Principles
+
+The portal must feel like one deliberate product, not a stitched-together set
+of utilities.
+
+Core rules:
+
+1. The first screen must explain what this account can do right now.
+2. Hosted and self-hosted users must not land on the same undifferentiated
+   wall of copy.
+3. A self-hosted-only user should immediately see that hosted workspaces are
+   absent by entitlement, not broken or missing.
+4. A hosted Cloud or MSP user should immediately see their workspace access,
+   role, and account-management surface before lower-priority self-hosted
+   utility actions.
+5. Generic overflow icons are forbidden when the only behavior behind them is
+   a destructive action.
+6. Primary actions must be labeled with the real outcome, for example
+   `Open workspace`, `Manage team`, or `Suspend workspace`.
+7. Self-hosted billing/license tools belong in the same account shell, but
+   they must present as a secondary account-services area when hosted access
+   is active.
+
+## Screen Model
+
+The signed-in shell should be treated as four first-class states:
+
+1. `Self-hosted account`
+   No hosted workspaces. The page should lead with account services,
+   subscription/license state, and clear messaging that no hosted workspace
+   access is attached to this account.
+2. `Hosted customer account`
+   One or more hosted workspaces. The page should lead with workspace access,
+   hosted billing, and team/admin actions.
+3. `MSP operator account`
+   Multi-workspace hosted account. The page should lead with the workspace
+   fleet, management actions, and operator/team controls.
+4. `Mixed account`
+   Hosted access plus self-hosted commercial history. The page should still
+   lead with hosted access, while the self-hosted commercial tools remain
+   available in a secondary area.
+
+Each signed-in state should render:
+
+1. a concise overview band that summarizes the account posture
+2. account cards with role, account kind, and workspace totals
+3. explicit action groups, not anonymous menu affordances
+4. a clearly separated `Self-hosted licenses and billing` section when those
+   tools are present below hosted content
+
 ## Product-Specific Boundaries
 
 ### Self-hosted Pulse

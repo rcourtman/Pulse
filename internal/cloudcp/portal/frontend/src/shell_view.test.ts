@@ -74,7 +74,8 @@ describe('shell view', function() {
   it('renders empty accounts state with support contact', function() {
     var html = renderAccountsHTML(createContext());
 
-    expect(html).toContain('No workspaces found.');
+    expect(html).toContain('No hosted workspaces are attached to this account.');
+    expect(html).toContain('self-hosted licensing and billing tools below');
     expect(html).toContain('mailto:support@pulserelay.pro');
     expect(html).toContain('support@pulserelay.pro');
   });
@@ -124,7 +125,11 @@ describe('shell view', function() {
     );
 
     expect(html).toContain('<h1>Pulse Account</h1>');
+    expect(html).toContain('Hosted access is active on this account.');
+    expect(html).toContain('Self-hosted licenses and billing');
     expect(html).toContain('id="accounts-root"');
+    expect(html).toContain('MSP account');
+    expect(html).toContain('MSP account · Owner · 3 workspaces');
     expect(html).toContain('Acme MSP');
     expect(html).toContain('Alpha Workspace');
     expect(html).toContain('Beta Workspace');
@@ -139,6 +144,21 @@ describe('shell view', function() {
     expect(html).toContain('service-card-button');
     expect(html).toContain('id="open-retrieve-service"');
     expect(html).toContain('id="data-service-panel"');
+  });
+
+  it('renders self-hosted overview copy when no hosted accounts are attached', function() {
+    var html = renderAuthenticatedPortalHTML(
+      createContext({
+        bootstrap: createBootstrap({
+          accounts: [],
+        }),
+      })
+    );
+
+    expect(html).toContain('<h1>Self-hosted Pulse Account</h1>');
+    expect(html).toContain('No hosted workspace access is attached to this account yet.');
+    expect(html).toContain('Account services');
+    expect(html).not.toContain('Self-hosted licenses and billing');
   });
 
   it('renders signed-out portal with error and success login states', function() {

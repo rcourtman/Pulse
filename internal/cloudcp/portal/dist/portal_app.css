@@ -49,7 +49,7 @@ header .logout-btn:hover {
   color: #f8fafc;
 }
 .main {
-  max-width: 860px;
+  max-width: 980px;
   margin: 32px auto;
   padding: 0 16px 48px;
 }
@@ -58,14 +58,57 @@ header .logout-btn:hover {
 }
 .account-header {
   display: flex;
-  align-items: center;
-  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
   margin-bottom: 16px;
 }
 .account-header h2 {
   margin: 0;
-  font-size: 20px;
+  font-size: 22px;
   font-weight: 700;
+}
+.account-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.account-eyebrow {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+.account-summary {
+  font-size: 14px;
+  color: #475569;
+}
+.account-badges {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.account-subsection-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 0 0 14px;
+}
+.account-subsection-header h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+.account-subsection-header p {
+  margin: 0;
+  font-size: 13px;
+  color: #64748b;
+  max-width: 520px;
 }
 .badge {
   font-size: 11px;
@@ -387,29 +430,76 @@ header .logout-btn:hover {
   font-size: 14px;
   background: #fff;
 }
-.intro-card {
+.overview-band {
   background:
     linear-gradient(
       145deg,
       #fff,
       #f8fafc);
   border: 1px solid #dbe4f0;
-  border-radius: 16px;
-  padding: 22px 24px;
+  border-radius: 18px;
+  padding: 24px;
   margin-bottom: 24px;
   box-shadow: 0 10px 24px rgba(15, 23, 42, .05);
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(280px, 1fr);
+  gap: 20px;
 }
-.intro-card h1 {
-  margin: 0 0 8px;
-  font-size: 26px;
-  line-height: 1.1;
+.overview-copy h1 {
+  margin: 4px 0 8px;
+  font-size: 30px;
+  line-height: 1.05;
+  letter-spacing: -0.03em;
 }
-.intro-card p {
+.overview-copy p {
   margin: 0;
   color: #475569;
   font-size: 15px;
   line-height: 1.6;
-  max-width: 760px;
+  max-width: 680px;
+}
+.overview-kicker {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #1d4ed8;
+}
+.overview-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  align-self: stretch;
+}
+.overview-stat-card {
+  background: rgba(248, 250, 252, 0.9);
+  border: 1px solid #dbe4f0;
+  border-radius: 14px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  justify-content: space-between;
+  min-height: 110px;
+}
+.overview-stat-label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+.overview-stat-value {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: #0f172a;
+}
+.overview-stat-positive {
+  color: #166534;
+}
+.overview-stat-muted {
+  color: #475569;
 }
 .service-section {
   margin-top: 40px;
@@ -691,6 +781,26 @@ header .logout-btn:hover {
 }
 .toast.error {
   background: #991b1b;
+}
+@media (max-width: 900px) {
+  .overview-band {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 720px) {
+  .account-header {
+    flex-direction: column;
+  }
+  .account-badges {
+    justify-content: flex-start;
+  }
+  .account-subsection-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .overview-stats {
+    grid-template-columns: 1fr;
+  }
 }
 @media (max-width: 560px) {
   .workspace-card {

@@ -1441,6 +1441,39 @@
     }
     return '<span class="badge badge-checking">Checking</span>';
   }
+  function workspaceCountLabel(count) {
+    return count === 1 ? "1 workspace" : String(count) + " workspaces";
+  }
+  function accountKindLabel(account) {
+    if (account.kind === "msp") return "MSP account";
+    if (account.kind === "cloud") return "Cloud account";
+    if (account.kind === "individual") return "Hosted account";
+    return account.kind_label ? account.kind_label + " account" : "Account";
+  }
+  function titleCase(value) {
+    if (!value) return "";
+    return value.charAt(0).toUpperCase() + value.slice(1);
+  }
+  function countWorkspaces(accounts) {
+    var total = 0;
+    for (var i = 0; i < accounts.length; i += 1) {
+      total += Array.isArray(accounts[i].workspaces) ? accounts[i].workspaces.length : 0;
+    }
+    return total;
+  }
+  function hasHostedAccounts(accounts) {
+    return accounts.length > 0;
+  }
+  function renderOverviewBand(context, accounts) {
+    var hosted = hasHostedAccounts(accounts);
+    var workspaceTotal = countWorkspaces(accounts);
+    var title = hosted ? "Pulse Account" : "Self-hosted Pulse Account";
+    var summary = hosted ? "Open hosted workspaces, manage account access, and handle commercial account services from one place." : "This account currently has no hosted workspaces. Self-hosted licenses, billing, refunds, and data requests stay available below.";
+    var hostedStateLabel = hosted ? "Active" : "Not attached";
+    var hostedStateClass = hosted ? "overview-stat-positive" : "overview-stat-muted";
+    var accountsLabel = accounts.length === 1 ? "1 account" : String(accounts.length) + " accounts";
+    return '<section class="overview-band"><div class="overview-copy"><div class="overview-kicker">' + (hosted ? "Hosted access is active on this account." : "No hosted workspace access is attached to this account yet.") + "</div><h1>" + title + "</h1><p>" + summary + '</p></div><div class="overview-stats"><div class="overview-stat-card"><span class="overview-stat-label">Hosted access</span><span class="overview-stat-value ' + hostedStateClass + '">' + hostedStateLabel + '</span></div><div class="overview-stat-card"><span class="overview-stat-label">Accounts</span><span class="overview-stat-value">' + accountsLabel + '</span></div><div class="overview-stat-card"><span class="overview-stat-label">Workspaces</span><span class="overview-stat-value">' + String(workspaceTotal) + "</span></div></div></section>";
+  }
   function renderWorkspaceCard(account, workspace, accountAPIBasePath) {
     var state = String(workspace.state || "");
     var safeState = escapeHTML(state);
@@ -1462,9 +1495,10 @@
   }
   function renderAccountSection(account, accountAPIBasePath) {
     var workspaces = Array.isArray(account.workspaces) ? account.workspaces : [];
+    var summaryText = accountKindLabel(account) + " \xB7 " + titleCase(account.role) + " \xB7 " + workspaceCountLabel(workspaces.length);
     var workspaceHTML = "";
     if (workspaces.length === 0) {
-      workspaceHTML = '<div class="empty-state"><p>No workspaces yet. Create one to get started.</p></div>';
+      workspaceHTML = '<div class="empty-state"><p>No hosted workspaces yet. Create one to get started.</p></div>';
     } else {
       workspaceHTML = '<div class="workspace-list">' + workspaces.map(function(workspace) {
         return renderWorkspaceCard(account, workspace, accountAPIBasePath);
@@ -1480,7 +1514,7 @@
         addWorkspaceForm = '<div class="add-workspace-form" id="add-ws-form-' + escapeAttr(account.id) + '"><label for="ws-name-' + escapeAttr(account.id) + '">Workspace name (e.g. client name)</label><input type="text" id="ws-name-' + escapeAttr(account.id) + '" placeholder="Acme Corp" maxlength="80" autocomplete="off"><div class="form-actions"><button type="button" class="btn-primary" data-action="create-workspace" data-account-id="' + escapeAttr(account.id) + '">Create workspace</button><button type="button" class="btn-secondary" data-action="toggle-add-workspace" data-account-id="' + escapeAttr(account.id) + '">Cancel</button><div class="spinner" id="ws-spinner-' + escapeAttr(account.id) + '" hidden></div></div></div>';
       }
     }
-    return '<section class="account-section"><div class="account-header"><h2>' + escapeHTML(account.name) + '</h2><span class="badge badge-' + escapeHTML(account.kind) + '">' + escapeHTML(account.kind_label) + "</span>" + roleBadgeHTML(account.role) + "</div>" + workspaceHTML + actions + teamSection + addWorkspaceForm + "</section>";
+    return '<section class="account-section"><div class="account-header"><div class="account-heading"><div class="account-eyebrow">' + escapeHTML(accountKindLabel(account)) + "</div><h2>" + escapeHTML(account.name) + '</h2><div class="account-summary">' + escapeHTML(summaryText) + '</div></div><div class="account-badges"><span class="badge badge-' + escapeHTML(account.kind) + '">' + escapeHTML(account.kind_label) + "</span>" + roleBadgeHTML(account.role) + '</div></div><div class="account-subsection-header"><h3>Workspaces</h3><p>Open hosted Pulse workspaces and manage lifecycle actions for this account.</p></div>' + workspaceHTML + actions + teamSection + addWorkspaceForm + "</section>";
   }
   function renderHeaderHTML(context) {
     if (context.bootstrap.authenticated) {
@@ -1491,14 +1525,17 @@
   function renderAccountsHTML(context) {
     var safeAccounts = Array.isArray(context.bootstrap.accounts) ? context.bootstrap.accounts : [];
     if (safeAccounts.length === 0) {
-      return '<div class="empty-state empty-state-spaced"><p>No workspaces found. If you just signed up, check your email for setup instructions.</p><p class="support-copy">Need help? Contact <a href="mailto:' + escapeAttr(context.bootstrap.support_email || "") + '" class="support-link">' + escapeHTML(context.bootstrap.support_email || "") + "</a></p></div>";
+      return '<div class="empty-state empty-state-spaced"><p>No hosted workspaces are attached to this account.</p><p class="support-copy">You can still use the self-hosted licensing and billing tools below.</p><p class="support-copy">Need help? Contact <a href="mailto:' + escapeAttr(context.bootstrap.support_email || "") + '" class="support-link">' + escapeHTML(context.bootstrap.support_email || "") + "</a></p></div>";
     }
     return safeAccounts.map(function(account) {
       return renderAccountSection(account, context.accountAPIBasePath);
     }).join("");
   }
   function renderAuthenticatedPortalHTML(context) {
-    return '<section class="intro-card"><h1>Pulse Account</h1><p>Manage Cloud workspaces, MSP access, and self-hosted commercial account services from one account surface. Hosted workspace lifecycle lives here today, and the self-hosted billing, license recovery, refund, and privacy tools below now share the same Pulse Account shell instead of staying fragmented across public utility pages.</p></section><div id="accounts-root">' + renderAccountsHTML(context) + '</div><section class="service-section"><div class="service-header"><h2>Other account services</h2><div class="service-note">Self-hosted commercial account actions now live here. The public utility pages remain as compatibility entry points, not the primary account surface.</div></div><div class="service-grid"><button class="service-card service-card-button" type="button" id="open-manage-service" data-account-service-action="open-service-panel" data-account-service-panel="manage-service-panel" data-account-service-focus="manage-inline-email"><h3>Manage subscriptions</h3><p>Open Stripe billing access for existing self-hosted subscriptions without leaving the Pulse Account shell.</p></button><button class="service-card service-card-button" type="button" id="open-retrieve-service" data-account-service-action="open-service-panel" data-account-service-panel="retrieve-service-panel" data-account-service-focus="retrieve-inline-email"><h3>Retrieve licenses</h3><p>Recover the latest active self-hosted license and invoice link for a commercial email address.</p></button><button class="service-card service-card-button" type="button" id="open-refund-service" data-account-service-action="open-service-panel" data-account-service-panel="refund-service-panel" data-account-service-focus="refund-inline-email"><h3>Refund requests</h3><p>Request an immediate self-serve refund for eligible self-hosted purchases with explicit revocation confirmation.</p></button><button class="service-card service-card-button" type="button" id="open-data-service" data-account-service-action="open-service-panel" data-account-service-panel="data-service-panel" data-account-service-focus="data-export-email"><h3>Data and privacy</h3><p>Request commercial data export or deletion without leaving the account shell.</p></button></div><div class="service-panel" id="manage-service-panel"><div id="manage-service-root"></div></div><div class="service-panel" id="retrieve-service-panel"><div id="retrieve-service-root"></div></div><div class="service-panel" id="refund-service-panel"><div id="refund-service-root"></div></div><div class="service-panel" id="data-service-panel"><h3>Data and privacy</h3><p>Request export or deletion of the commercial data tied to an email address. Payment data held directly by Stripe still requires support handling.</p><div class="subsection"><div id="data-export-root"></div></div><div class="subsection"><div id="data-delete-root"></div></div><div class="helper-text">Payment-card data stays with Stripe. For Stripe deletion support, contact <a href="mailto:' + escapeAttr(context.bootstrap.support_email || "") + '">' + escapeHTML(context.bootstrap.support_email || "") + "</a>.</div></div></section>";
+    var accounts = Array.isArray(context.bootstrap.accounts) ? context.bootstrap.accounts : [];
+    var serviceHeading = hasHostedAccounts(accounts) ? "Self-hosted licenses and billing" : "Account services";
+    var serviceNote = hasHostedAccounts(accounts) ? "Hosted access lives above. The self-hosted commercial tools remain available here for licenses, billing, refunds, and privacy actions." : "Use these account tools for self-hosted licenses, billing, refunds, and privacy actions.";
+    return renderOverviewBand(context, accounts) + '<div id="accounts-root">' + renderAccountsHTML(context) + '</div><section class="service-section"><div class="service-header"><h2>' + serviceHeading + '</h2><div class="service-note">' + serviceNote + '</div></div><div class="service-grid"><button class="service-card service-card-button" type="button" id="open-manage-service" data-account-service-action="open-service-panel" data-account-service-panel="manage-service-panel" data-account-service-focus="manage-inline-email"><h3>Manage subscriptions</h3><p>Open Stripe billing access for existing self-hosted subscriptions without leaving the Pulse Account shell.</p></button><button class="service-card service-card-button" type="button" id="open-retrieve-service" data-account-service-action="open-service-panel" data-account-service-panel="retrieve-service-panel" data-account-service-focus="retrieve-inline-email"><h3>Retrieve licenses</h3><p>Recover the latest active self-hosted license and invoice link for a commercial email address.</p></button><button class="service-card service-card-button" type="button" id="open-refund-service" data-account-service-action="open-service-panel" data-account-service-panel="refund-service-panel" data-account-service-focus="refund-inline-email"><h3>Refund requests</h3><p>Request an immediate self-serve refund for eligible self-hosted purchases with explicit revocation confirmation.</p></button><button class="service-card service-card-button" type="button" id="open-data-service" data-account-service-action="open-service-panel" data-account-service-panel="data-service-panel" data-account-service-focus="data-export-email"><h3>Data and privacy</h3><p>Request commercial data export or deletion without leaving the account shell.</p></button></div><div class="service-panel" id="manage-service-panel"><div id="manage-service-root"></div></div><div class="service-panel" id="retrieve-service-panel"><div id="retrieve-service-root"></div></div><div class="service-panel" id="refund-service-panel"><div id="refund-service-root"></div></div><div class="service-panel" id="data-service-panel"><h3>Data and privacy</h3><p>Request export or deletion of the commercial data tied to an email address. Payment data held directly by Stripe still requires support handling.</p><div class="subsection"><div id="data-export-root"></div></div><div class="subsection"><div id="data-delete-root"></div></div><div class="helper-text">Payment-card data stays with Stripe. For Stripe deletion support, contact <a href="mailto:' + escapeAttr(context.bootstrap.support_email || "") + '">' + escapeHTML(context.bootstrap.support_email || "") + "</a>.</div></div></section>";
   }
   function renderSignedOutPortalHTML(context) {
     var statusHTML = "";
