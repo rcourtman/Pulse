@@ -3,6 +3,7 @@ import { SELF_HOSTED_PRO_BILLING_PRESENTATION } from '@/utils/licensePresentatio
 import settingsSource from '../Settings.tsx?raw';
 import settingsDialogsSource from '../SettingsDialogs.tsx?raw';
 import settingsShellSource from '../SettingsPageShell.tsx?raw';
+import settingsHeaderMetaSource from '../settingsHeaderMeta.ts?raw';
 import infrastructureWorkspaceSource from '../InfrastructureWorkspace.tsx?raw';
 import infrastructureWorkspaceModelSource from '../infrastructureWorkspaceModel.ts?raw';
 import infrastructureInstallPanelSource from '../InfrastructureInstallPanel.tsx?raw';
@@ -1267,6 +1268,13 @@ describe('Settings architecture guardrails', () => {
   });
 
   it('keeps infrastructure shell framing focused on operations, not billing', () => {
+    expect(settingsHeaderMetaSource).toContain('@/utils/licensePresentation');
+    expect(settingsHeaderMetaSource).toContain(
+      'SELF_HOSTED_PRO_BILLING_PRESENTATION.infrastructureRouteReferral',
+    );
+    expect(settingsHeaderMetaSource).not.toContain(
+      'Billing and monitored-system limits live in Pulse Pro.',
+    );
     expect(SETTINGS_HEADER_META['infrastructure-operations'].title).toBe(
       'Infrastructure Operations',
     );
