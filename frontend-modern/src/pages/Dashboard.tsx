@@ -8,7 +8,9 @@ import {
   createSignal,
   onCleanup,
 } from 'solid-js';
+import { useNavigate } from '@solidjs/router';
 import { useWebSocket } from '@/App';
+import { buildInfrastructureWorkspacePath } from '@/components/Settings/infrastructureWorkspaceModel';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import { useDashboardOverview } from '@/hooks/useDashboardOverview';
 import { useDashboardTrends } from '@/hooks/useDashboardTrends';
@@ -34,6 +36,7 @@ import { DashboardRecoveryStatusPanel } from '@/components/Recovery/DashboardRec
 import { DashboardStoragePanel } from '@/components/Storage/DashboardStoragePanel';
 import type { DashboardWidgetDef, DashboardWidgetId } from '@/features/dashboardOverview/dashboardWidgets';
 export default function Dashboard() {
+  const navigate = useNavigate();
   const { connected, reconnecting, reconnect, activeAlerts } = useWebSocket();
 
   // REST-backed resources: instant first paint, no WebSocket wait.
@@ -260,6 +263,13 @@ export default function Dashboard() {
               {dashboardNoResourcesState().title}
             </h2>
             <p class="mt-2 text-sm text-muted">{dashboardNoResourcesState().description}</p>
+            <button
+              type="button"
+              onClick={() => navigate(buildInfrastructureWorkspacePath('install'))}
+              class="mt-4 inline-flex items-center rounded-md border border-transparent bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
+            >
+              {dashboardNoResourcesState().actionLabel}
+            </button>
           </section>
         </Match>
 

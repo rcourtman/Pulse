@@ -1,4 +1,4 @@
-import { render, screen } from '@solidjs/testing-library';
+import { fireEvent, render, screen } from '@solidjs/testing-library';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DashboardOverview } from '@/hooks/useDashboardOverview';
 import type { DashboardRecoverySummary } from '@/hooks/useDashboardRecovery';
@@ -11,6 +11,7 @@ let unifiedError: unknown = undefined;
 let wsConnected = true;
 let wsReconnecting = false;
 const reconnectSpy = vi.fn();
+const navigateSpy = vi.hoisted(() => vi.fn());
 const recoverySummaryMock: DashboardRecoverySummary = {
   totalProtected: 3,
   byOutcome: { success: 2, failed: 1 },
@@ -64,6 +65,14 @@ vi.mock('@/App', () => ({
   }),
 }));
 
+vi.mock('@solidjs/router', async () => {
+  const actual = await vi.importActual<typeof import('@solidjs/router')>('@solidjs/router');
+  return {
+    ...actual,
+    useNavigate: () => navigateSpy,
+  };
+});
+
 vi.mock('@/hooks/useUnifiedResources', () => ({
   useUnifiedResources: () => ({
     resources: () => unifiedResources,
@@ -115,6 +124,7 @@ describe('Dashboard page module contract', () => {
     wsConnected = true;
     wsReconnecting = false;
     reconnectSpy.mockReset();
+    navigateSpy.mockReset();
     overviewMock.storage.total = 0;
     overviewMock.storage.totalCapacity = 0;
     overviewMock.storage.totalUsed = 0;
@@ -154,6 +164,21 @@ describe('Dashboard page module contract', () => {
 
     expect(screen.getByTestId('dashboard-loading')).toBeInTheDocument();
     expect(screen.getAllByTestId('dashboard-skeleton-block').length).toBeGreaterThan(0);
+  });
+
+  it('routes the empty dashboard state to infrastructure install', () => {
+    render(() => <DashboardPage />);
+
+    expect(screen.getByRole('heading', { name: 'No resources yet' })).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Start by opening Settings → Infrastructure → Install on a host and connecting the first system you want Pulse to monitor. Your dashboard overview will appear here once that system starts reporting.',
+      ),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open infrastructure install' }));
+
+    expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure/install');
   });
 
   it('renders the governed storage and recovery dashboard panels', () => {

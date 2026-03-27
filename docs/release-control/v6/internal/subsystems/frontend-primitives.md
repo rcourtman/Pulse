@@ -177,6 +177,12 @@ work extends shared components instead of creating new local variants.
    path to `/settings/infrastructure/install`, not to reporting/control, so
    the shell does not send first-time operators to the wrong infrastructure
    subview by default.
+9. Keep dashboard onboarding copy on the shared presentation owner in
+   `frontend-modern/src/utils/dashboardEmptyStatePresentation.ts`. Both the
+   infrastructure empty state and the dashboard route's no-resources state
+   must name the canonical install workspace explicitly and expose the same
+   first-host next step instead of falling back to passive “nothing here yet”
+   wording.
 
 ## Current State
 

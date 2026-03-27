@@ -58,6 +58,8 @@ export function getDashboardUnavailableState() {
 export function getDashboardNoResourcesState() {
   return {
     title: 'No resources yet',
-    description: 'Once connected platforms report resources, your dashboard overview will appear here.',
+    description:
+      'Start by opening Settings → Infrastructure → Install on a host and connecting the first system you want Pulse to monitor. Your dashboard overview will appear here once that system starts reporting.',
+    actionLabel: 'Open infrastructure install',
   } as const;
 }

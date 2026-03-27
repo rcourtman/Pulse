@@ -104,6 +104,11 @@ querying, and the operator-facing storage health presentation layer.
 4. Preserve the dependency split: API payload ownership stays in `api-contracts`, settings shell ownership stays in `frontend-primitives`, and canonical resource truth stays in `unified-resources`
 5. Keep recovery history table width budgeting derived from the canonical column specs in `frontend-modern/src/utils/recoveryTablePresentation.ts`, not from raw visible-column counts, so normalized subject labels and optional column sets cannot drift the right-edge badges and controls off-screen
 6. Keep at least one browser-level desktop recovery proof in the governed `recovery-product-surface` policy so right-edge column visibility and wrapper-fit regressions are caught at rendered layout time instead of only through unit-level width math
+7. Keep the dashboard route's no-resources state on an explicit first-session
+   handoff. `frontend-modern/src/pages/Dashboard.tsx` may stay storage/recovery-
+   owned for dashboard composition, but when no resources have reported yet it
+   must route operators to `/settings/infrastructure/install` instead of
+   leaving the dashboard as a passive dead end.
 
 ## Current State
 
