@@ -168,9 +168,9 @@ describe('shell view', function() {
     expect(html).toContain('Open workspace');
     expect(html).toContain('data-action="select-workspace"');
     expect(html).toContain('Workspace management');
-    expect(html).toContain('Choose a workspace from the fleet to open its management desk.');
-    expect(html).toContain('Review flow');
-    expect(html).toContain('Pick the workspace');
+    expect(html).toContain('Pick a workspace to open its operator desk.');
+    expect(html).toContain('Desk flow');
+    expect(html).toContain('Read posture first');
     expect(html).toContain('Escalate account changes separately');
     expect(html).toContain('data-action="clear-workspace-selection"');
     expect(html).toContain('Team management');

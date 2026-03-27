@@ -163,10 +163,15 @@ function renderAttentionPanel(workspaces: PortalWorkspaceSummary[]): string {
   var attention = attentionWorkspaces(workspaces);
   if (!attention.length) {
     return (
-      '<div class="overview-side-card">' +
+      '<div class="overview-side-card overview-side-card-stable">' +
         '<div class="account-panel-kicker">Attention</div>' +
         '<h4>Fleet is stable</h4>' +
         '<p>Every visible hosted workspace currently reports a healthy posture.</p>' +
+        '<div class="overview-stable-list">' +
+          '<div class="overview-stable-item"><strong>Healthy now</strong><span>All visible hosted workspaces are clear for routine operator work.</span></div>' +
+          '<div class="overview-stable-item"><strong>Use Team only for change</strong><span>Keep roster edits explicit instead of mixing them into normal workspace work.</span></div>' +
+          '<div class="overview-stable-item"><strong>Keep billing separate</strong><span>Use account services only when the task is commercial, not operational.</span></div>' +
+        '</div>' +
       '</div>'
     );
   }
@@ -513,20 +518,20 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
         '<div class="workspace-management-empty" id="workspace-management-empty-' +
         escapeAttr(account.id) +
         '">' +
-          '<div class="workspace-management-empty-copy">Choose a workspace from the fleet to open its management desk.</div>' +
+          '<div class="workspace-management-empty-copy">Pick a workspace to open its operator desk.</div>' +
           '<div class="workspace-management-empty-grid">' +
             '<div class="workspace-management-empty-card">' +
               '<div class="account-panel-kicker">Account desk</div>' +
-              '<h4>Keep account-wide actions close</h4>' +
-              '<p>Use the desk for one workspace at a time while keeping billing, team, and create-workspace actions within reach.</p>' +
+              '<h4>Keep account actions close</h4>' +
+              '<p>Workspace review happens here while billing, team, and create-workspace actions stay within reach.</p>' +
               '<div class="workspace-management-empty-actions">' + workspaceDeskActions + '</div>' +
             '</div>' +
             '<div class="workspace-management-empty-card workspace-management-empty-card-muted">' +
-              '<div class="account-panel-kicker">Review flow</div>' +
+              '<div class="account-panel-kicker">Desk flow</div>' +
               '<div class="workspace-management-empty-checklist">' +
-                '<div class="workspace-management-empty-check"><strong>1. Pick the workspace</strong><span>Select a fleet row to bring its health, lifecycle, and next action into this desk.</span></div>' +
-                '<div class="workspace-management-empty-check"><strong>2. Check posture first</strong><span>Treat checking or needs-attention workspaces as review work, not routine operations.</span></div>' +
-                '<div class="workspace-management-empty-check"><strong>3. Escalate account changes separately</strong><span>Billing and team changes stay account-wide even when you are focused on one workspace.</span></div>' +
+                '<div class="workspace-management-empty-check"><strong>Pick the workspace</strong><span>Select a fleet row to load its health, lifecycle, and next management action.</span></div>' +
+                '<div class="workspace-management-empty-check"><strong>Read posture first</strong><span>Treat checking or needs-attention workspaces as review work, not routine operations.</span></div>' +
+                '<div class="workspace-management-empty-check"><strong>Escalate account changes separately</strong><span>Billing and team changes stay account-wide even when you are focused on one workspace.</span></div>' +
               '</div>' +
             '</div>' +
           '</div>' +
