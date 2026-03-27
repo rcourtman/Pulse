@@ -117,7 +117,7 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
                   </For>
                 </div>
               </div>
-              <div class="space-y-2">
+              <div class="grid grid-cols-2 gap-x-3 gap-y-2">
                 <For each={postureSegments()}>
                   {(segment) => (
                     <div class="flex items-center justify-between gap-3 text-sm">
@@ -137,20 +137,13 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
               <div class="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted">
                 Freshness
               </div>
-              <div class="space-y-2">
+              <div class="flex flex-wrap gap-2">
                 <For each={freshnessBuckets()}>
                   {(bucket) => (
-                    <div class="flex items-center gap-3 text-sm">
-                      <span class="w-10 shrink-0 text-base-content">{bucket.label}</span>
-                      <div class="h-2 flex-1 overflow-hidden rounded-full bg-surface-alt">
-                        <div
-                          class={`h-full rounded-full ${bucket.color}`}
-                          style={{ width: `${Math.max(bucket.percent, bucket.count > 0 ? 8 : 0)}%` }}
-                        />
-                      </div>
-                      <span class="w-7 text-right tabular-nums text-base-content">
-                        {bucket.count}
-                      </span>
+                    <div class="inline-flex items-center gap-2 rounded-md border border-border-subtle bg-surface-alt/35 px-2.5 py-1 text-xs">
+                      <span class={`h-2 w-2 rounded-full ${bucket.color}`} />
+                      <span class="text-base-content">{bucket.label}</span>
+                      <span class="tabular-nums text-base-content">{bucket.count}</span>
                     </div>
                   )}
                 </For>
@@ -222,12 +215,6 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
               </div>
             </dl>
 
-            <div class="text-sm text-muted">
-              {itemCoverage().itemTypeCount} item type
-              {itemCoverage().itemTypeCount === 1 ? '' : 's'} across {platformCoverage().platformCount}{' '}
-              platform{platformCoverage().platformCount === 1 ? '' : 's'}.
-            </div>
-
             <Show when={itemCoverage().items.length > 0}>
               <div>
                 <div class="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted">
@@ -252,9 +239,9 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
                 Platform Mix
               </div>
               <Show when={platformCoverage().multiPlatformCount > 0}>
-                <div class="mb-2 text-sm text-muted">
-                  {platformCoverage().multiPlatformCount} protected item
-                  {platformCoverage().multiPlatformCount === 1 ? '' : 's'} span multiple platforms.
+                <div class="mb-2 text-xs text-muted">
+                  {platformCoverage().multiPlatformCount} multi-platform item
+                  {platformCoverage().multiPlatformCount === 1 ? '' : 's'}
                 </div>
               </Show>
               <div class="flex flex-wrap gap-2">
@@ -285,7 +272,7 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
         >
           <div class="flex h-full flex-col gap-3">
             <Show when={recentWindowLabel()}>
-              <div class="text-sm text-muted">{recentWindowLabel()}</div>
+              <div class="text-xs text-muted">{recentWindowLabel()}</div>
             </Show>
             <dl class="space-y-2 text-sm">
               <div class="flex items-center justify-between gap-3 border-b border-border-subtle pb-2">
@@ -309,17 +296,14 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
                 <dd class="font-semibold text-base-content">{activity().latestLabel ?? 'n/a'}</dd>
               </div>
             </dl>
-
-            <div class="grid grid-cols-2 gap-3 border-t border-border-subtle pt-3">
-              <div>
-                <div class="text-[11px] uppercase tracking-wide text-muted">Peak Throughput</div>
-                <div class="mt-1 text-2xl font-semibold text-base-content">{activity().busiestCount}</div>
-                <div class="mt-1 text-sm text-muted">{activity().busiestLabel ?? 'n/a'}</div>
+            <div class="flex flex-wrap gap-2 border-t border-border-subtle pt-3 text-xs">
+              <div class="rounded-md border border-border-subtle bg-surface-alt/35 px-2.5 py-1">
+                <span class="text-muted">Peak Throughput</span>
+                <span class="ml-2 font-semibold text-base-content">{activity().busiestCount}</span>
               </div>
-              <div>
-                <div class="text-[11px] uppercase tracking-wide text-muted">Latest Throughput</div>
-                <div class="mt-1 text-2xl font-semibold text-base-content">{activity().latestCount}</div>
-                <div class="mt-1 text-sm text-muted">{activity().latestLabel ?? 'n/a'}</div>
+              <div class="rounded-md border border-border-subtle bg-surface-alt/35 px-2.5 py-1">
+                <span class="text-muted">Latest Throughput</span>
+                <span class="ml-2 font-semibold text-base-content">{activity().latestCount}</span>
               </div>
             </div>
           </div>

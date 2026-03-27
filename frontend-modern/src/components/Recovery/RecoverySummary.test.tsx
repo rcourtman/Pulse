@@ -65,9 +65,6 @@ describe('RecoverySummary', () => {
     expect(screen.getByText('Platform Mix')).toBeInTheDocument();
     expect(screen.getByText('2 protected')).toBeInTheDocument();
     expect(screen.getByText('1 healthy')).toBeInTheDocument();
-    expect(
-      screen.getByText((_, element) => element?.textContent === '2 item types across 2 platforms.'),
-    ).toBeInTheDocument();
     expect(screen.getByText('Never succeeded')).toBeInTheDocument();
   });
 });

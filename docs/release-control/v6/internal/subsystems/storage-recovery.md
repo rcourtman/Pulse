@@ -643,6 +643,11 @@ the shared `SummaryPanel` and `SummaryMetricCard` primitives the way
 infrastructure and workloads do, and recovery item-type labels should render
 through canonical workload/resource badge classes instead of adding
 recovery-only wrapper chrome around VM, container, or other resource badges.
+That same summary frame should stay compact and scan-first, not turn into a
+recovery-specific mini report. Recovery summary cards should prefer concise
+counts, bars, and badge-backed coverage cues over tall explanatory copy blocks
+so the protected-item table takes over the page at roughly the same visual
+density as the infrastructure and workloads monitoring surfaces.
 That shared unified-resource dependency now also includes policy-governed
 resource metadata on the frontend decode path: storage and recovery surfaces
 that route through `frontend-modern/src/hooks/useUnifiedResources.ts` must
