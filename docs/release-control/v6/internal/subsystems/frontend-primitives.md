@@ -161,6 +161,10 @@ work extends shared components instead of creating new local variants.
    and keep adjacent settings-shell referrals such as
    `InfrastructureWorkspace.tsx` on that same shared owner instead of
    reintroducing local “go to Pulse Pro” variants.
+6. Keep first-session dashboard empty-state copy on
+   `frontend-modern/src/utils/dashboardEmptyStatePresentation.ts`, and make
+   infrastructure setup guidance name the canonical destination explicitly
+   instead of falling back to generic settings CTA labels.
 
 ## Current State
 

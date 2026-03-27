@@ -870,8 +870,10 @@ describe('Dashboard performance contract', () => {
       expect(workloadPanelSource).toContain('GuestDrawer');
       expect(workloadPanelSource).toContain('createMemo(() => getCanonicalWorkloadId(guest()))');
       expect(workloadPanelSource).not.toContain('TableHead');
+      expect(dashboardStateCardsSource).toContain('buildInfrastructureWorkspacePath');
       expect(dashboardStateCardsSource).toContain('dashboardInfrastructureEmptyState().title');
       expect(dashboardStateCardsSource).toContain('dashboardDisconnectedState().actionLabel');
+      expect(dashboardStateCardsSource).toContain("buildInfrastructureWorkspacePath('install')");
       expect(dashboardStatsStripSource).toContain('totalStats().running');
       expect(dashboardStatsStripSource).toContain('totalStats().stopped');
     });

@@ -30,8 +30,8 @@ export const InfrastructureWorkspace: Component<InfrastructureWorkspaceProps> = 
         <div class="space-y-2">
           <h3 class="text-base font-semibold text-base-content">Infrastructure operations</h3>
           <p class="text-sm text-muted">
-            Use this workspace to install Pulse on hosts, manage fallback direct Proxmox
-            connections, and control which infrastructure surfaces are actively reporting.
+            New to Pulse? Start with Install on a host to add your first monitored system.
+            If you prefer a direct integration instead, use Direct Proxmox.
           </p>
           <p class="text-sm text-muted">
             {SELF_HOSTED_PRO_BILLING_PRESENTATION.infrastructureWorkspaceReferral}

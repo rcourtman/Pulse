@@ -327,6 +327,12 @@ and `frontend-modern/src/utils/proxmoxSettingsPresentation.ts`, so endpoint
 reachability state, discovery-prefill defaults, and variant copy stay on the
 same governed lifecycle surface instead of drifting into card-local strings or
 prefill assembly.
+That same infrastructure workspace boundary now also owns the first-run
+handoff copy for new operators. `InfrastructureWorkspace.tsx` must tell a new
+Pulse user to start with `Install on a host` to add the first monitored
+system, while still presenting `Direct Proxmox` as the explicit alternative
+path instead of leaving first-session install guidance implicit in generic
+settings-shell prose.
 When that infrastructure workspace needs to redirect operators to the Pulse Pro
 surface for billing, monitored-system limits, or license status, it must
 consume the shared referral copy from

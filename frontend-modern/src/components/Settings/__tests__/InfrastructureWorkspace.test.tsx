@@ -58,6 +58,11 @@ describe('InfrastructureWorkspace', () => {
     expect(tablist).toBeInTheDocument();
     expect(screen.getByText('Infrastructure operations')).toBeInTheDocument();
     expect(
+      screen.getByText(
+        'New to Pulse? Start with Install on a host to add your first monitored system. If you prefer a direct integration instead, use Direct Proxmox.',
+      ),
+    ).toBeInTheDocument();
+    expect(
       screen.getByText(SELF_HOSTED_PRO_BILLING_PRESENTATION.infrastructureWorkspaceReferral),
     ).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Install on a host' })).toHaveAttribute(

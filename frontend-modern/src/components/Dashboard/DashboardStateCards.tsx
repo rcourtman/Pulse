@@ -1,5 +1,6 @@
 import { Show } from 'solid-js';
 
+import { buildInfrastructureWorkspacePath } from '@/components/Settings/infrastructureWorkspaceModel';
 import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
 
@@ -88,7 +89,7 @@ export function DashboardStateCards(props: DashboardStateCardsProps) {
               !props.kioskMode() ? (
                 <button
                   type="button"
-                  onClick={() => props.navigate('/settings')}
+                  onClick={() => props.navigate(buildInfrastructureWorkspacePath('install'))}
                   class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                 >
                   {props.dashboardInfrastructureEmptyState().actionLabel}

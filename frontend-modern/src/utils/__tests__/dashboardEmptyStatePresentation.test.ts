@@ -14,8 +14,8 @@ describe('dashboardEmptyStatePresentation', () => {
     expect(getDashboardInfrastructureEmptyState()).toEqual({
       title: 'No infrastructure hosts connected',
       description:
-        'Install the Pulse agent to connect a host and unlock v6 infrastructure data, or add a Proxmox connection in Settings → Infrastructure → Proxmox.',
-      actionLabel: 'Go to Settings',
+        'To start using Pulse, first add your infrastructure in Settings → Infrastructure → Install on a host. If you want to connect Proxmox directly instead, use Settings → Infrastructure → Direct Proxmox.',
+      actionLabel: 'Open infrastructure setup',
     });
   });
 
