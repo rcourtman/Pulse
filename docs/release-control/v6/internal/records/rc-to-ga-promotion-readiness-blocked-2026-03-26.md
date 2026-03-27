@@ -9,23 +9,26 @@
 1. No Pulse v6 prerelease has shipped yet.
 2. The repository contains accidental prerelease git tag history (`v6.0.0-rc.1`),
    but those tags were never published and do not count as shipped prerelease lineage.
-3. The governed release profile in `docs/release-control/control_plane.json`
+3. The selected remote ref `origin/pulse/v6-release` is still behind the current
+   local governed branch state, so `Release Dry Run` would exercise stale remote
+   control-plane metadata instead of the intended candidate.
+4. The governed release profile in `docs/release-control/control_plane.json`
    currently declares both `prerelease_branch` and `stable_branch` as
    `pulse/v6-release`.
-4. The active control-plane target is still `v6-rc-stabilization`, not
+5. The active control-plane target is still `v6-rc-stabilization`, not
    `v6-ga-promotion`.
-5. The active local `pulse/v6-release` branch currently reports `VERSION=6.0.0-rc.1`, so the
+6. The active local `pulse/v6-release` branch currently reports `VERSION=6.0.0-rc.1`, so the
    working line is still prerelease and there is not yet a governed local stable
    `6.0.0` candidate.
-6. There is still no governed `Prerelease-to-GA Rehearsal Record` proving a successful
+7. There is still no governed `Prerelease-to-GA Rehearsal Record` proving a successful
    non-publish `Release Dry Run` for the eventual stable `6.0.0` candidate.
-7. `docs/releases/RELEASE_NOTES_v6.md` and
+8. `docs/releases/RELEASE_NOTES_v6.md` and
    `docs/release-control/v6/internal/V5_MAINTENANCE_SUPPORT_POLICY.md` still leave the
    GA announcement dates as placeholders because no real prerelease lineage or GA-ready
    rehearsal has locked them yet:
    - `v6` GA date placeholder: `[v6-ga-date]`
    - `v5` end-of-support placeholder: `[v5-eos-date]`
-8. There is still no governed `Release Dry Run` artifact or rehearsal record
+9. There is still no governed `Release Dry Run` artifact or rehearsal record
    exercising stable inputs for:
    - `version=6.0.0`
    - no governed `promoted_from_tag` exists yet because no prerelease has shipped

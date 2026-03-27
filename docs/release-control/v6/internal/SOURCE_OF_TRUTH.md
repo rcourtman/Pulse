@@ -1,6 +1,6 @@
 # Pulse v6 Source Of Truth
 
-Last updated: 2026-03-20
+Last updated: 2026-03-27
 Status: ACTIVE
 
 This file is the stable human governance layer for the active v6 release
@@ -316,7 +316,12 @@ Assertion design rules:
     check landed. If obvious same-lane gaps still keep the outcome from being
     coherent, trustworthy, or realistically shippable, that lane is not done
     yet.
-17. Lanes that are at target but intentionally not closed must record a
+17. Do not ship a customer-facing surface that is still prototype-grade.
+    If a portal, hosted workflow, first-session flow, or other customer-facing
+    surface still feels confusing, second-rate, or untrustworthy in real
+    browser use, it is not acceptable to keep treating that surface as a good
+    baseline for narrow refinement.
+18. Lanes that are at target but intentionally not closed must record a
     bounded residual in `status.json` with a short rationale and explicit
     tracking references to the governing follow-up surface.
     Pair lane `status` and `completion.state` coherently: `complete` goes with
@@ -340,17 +345,17 @@ Assertion design rules:
     `completion.tracking`.
     Once a lane followup is no longer active residual work, remove it from
     `lane_followups` instead of leaving it behind with a completed status.
-18. Do not treat a lane as healthy just because it has local fixes on a legacy path.
+19. Do not treat a lane as healthy just because it has local fixes on a legacy path.
     If the canonical v6 route for that surface now runs through unified
     resources, canonical shared types, explicit subsystem ownership, or a
     modernized proof path, the lane is still below floor until that migration
     is made or the remaining gap is governed explicitly.
-19. Do not treat missing evidence count or a score delta as the task itself.
+20. Do not treat missing evidence count or a score delta as the task itself.
     If the real remaining gap is runtime, product, ownership, or behavior
     coherence, fix that gap and let the score/evidence catch up as proof.
     Only treat evidence-count closure itself as the task when the remaining
     gap is explicitly governance-only.
-20. Do not run parallel mutating agents out of one dirty checkout and call
+21. Do not run parallel mutating agents out of one dirty checkout and call
     that acceptable coordination.
     Claims reduce overlap, but they do not isolate hooks, formatters, staged
     reads, or unrelated dirt. Parallel mutation should use separate worktrees

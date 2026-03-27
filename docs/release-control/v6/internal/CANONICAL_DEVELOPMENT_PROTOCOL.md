@@ -247,6 +247,11 @@ Every substantial task must finish by checking these questions:
    If the result still has obvious same-lane gaps that make it feel partial,
    fragile, or not realistically shippable, continue the slice or record the
    remaining blocker/open decision before stopping.
+10b. Am I iterating on a baseline that is not good enough?
+    If a customer-facing surface is still prototype-grade, confusing, or
+    obviously below the intended product bar, do not keep refining the same
+    shape. Step back to the owning product model, IA, trust boundary, or
+    architecture first.
 10a. Am I treating support work like product progress?
     Guardrail-only proof routing, contract wording, registry cleanup, and
     audit/test ratchets can support a lane, but they do not count as
@@ -258,6 +263,11 @@ Every substantial task must finish by checking these questions:
     diagnostics?
     Missing evidence items, current-vs-target score, and proof counts are
     signals that help locate the real same-lane gap.
+10ab. Have I checked real browser truth for a customer-facing surface?
+    For important customer-facing UI, code-level proof is not enough by
+    itself. If the surface is meant to be trusted or used normally, exercise
+    it in-browser and judge whether it actually deserves more iteration in its
+    current shape.
     They are not the work item by themselves unless the remaining gap is
     explicitly governance-only.
     For ordinary lane work, identify the runtime, product, ownership, or

@@ -141,6 +141,11 @@ model that active and future release profiles reuse.
    path as prose-only guidance.
    Support-only slices still need that claim boundary, and any same-lane
    residual must be normalized before the claim is replaced or released.
+20. Customer-surface quality is a stop gate, not a polish note.
+   If a customer-facing surface is still prototype-grade, confusing, or
+   untrustworthy in real browser use, the control plane should steer the
+   agent toward redesigning the owning model or boundary instead of
+   continuing narrow same-shape iteration on that weak baseline.
 
 ## Canonical Files
 
@@ -250,3 +255,9 @@ user language should update the control plane.
     It should not require agents to ingest raw `status.json` or `registry.json`
     in full at startup unless the current task genuinely needs to drill into
     those surfaces.
+11. The control plane now treats prototype-grade customer surfaces as a real
+    routing concern.
+    Agents should not let lane continuity or queue selection trap them into
+    repeated improvement of a baseline that is still obviously below the
+    product bar; they should step back to the owning redesign or canonical
+    boundary first.

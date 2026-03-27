@@ -86,6 +86,9 @@ that already belong to the canonical system.
    Cleanup, presentation polish, and guardrail-only residue should normally
    support a selected candidate lane or an active blocker rather than
    displacing the queue.
+   That default queue does not override the product-quality stop gate: if a
+   customer-facing baseline is still not good enough to deserve iteration,
+   step back to the owning redesign or canonical model first.
 16. Make every governed slice explicit.
    A mutating slice should carry exactly one active `work_claim` naming the
    lane, candidate lane, coverage gap, or narrower governed item it advances.
@@ -94,6 +97,15 @@ that already belong to the canonical system.
    Before replacing or releasing the claim, record any same-lane residual in
    the owning lane completion or follow-up surface instead of letting the task
    disappear as informal context.
+17. Do not iterate on a bad customer baseline.
+   If a customer-facing surface is still prototype-grade, confusing, or
+   obviously below the product bar, do not treat it as a stable base for more
+   same-shape iteration. Step back to the owning product model, UX flow,
+   trust boundary, or architecture first.
+18. Treat browser truth as product truth for customer surfaces.
+   Code-level proof matters, but customer-facing surfaces are not acceptable
+   until real in-browser behavior and interaction quality are good enough to
+   deserve normal use.
 
 ## Delegation Rule
 
