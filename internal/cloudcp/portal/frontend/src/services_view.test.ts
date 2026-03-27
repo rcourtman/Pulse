@@ -80,6 +80,9 @@ describe('services view', function() {
 
   it('toggles the visible service panel by id', function() {
     document.body.innerHTML =
+      '<div id="service-panel-empty" class="service-panel visible"></div>' +
+      '<article class="service-action-row"><button data-account-service-action="open-service-panel" data-account-service-panel="manage-service-panel"></button></article>' +
+      '<article class="service-action-row"><button data-account-service-action="open-service-panel" data-account-service-panel="retrieve-service-panel"></button></article>' +
       '<div id="manage-service-panel" class="service-panel"></div>' +
       '<div id="retrieve-service-panel" class="service-panel"></div>' +
       '<div id="refund-service-panel" class="service-panel"></div>' +
@@ -90,6 +93,8 @@ describe('services view', function() {
     expect(document.getElementById('retrieve-service-panel')?.classList.contains('visible')).toBe(true);
     expect(document.getElementById('manage-service-panel')?.classList.contains('visible')).toBe(false);
     expect(document.getElementById('refund-service-panel')?.classList.contains('visible')).toBe(false);
+    expect(document.getElementById('service-panel-empty')?.classList.contains('visible')).toBe(false);
+    expect(document.querySelectorAll('.service-action-row.active')).toHaveLength(1);
   });
 
   it('renders retrieve panel result state with invoice and token metadata', function() {

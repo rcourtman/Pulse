@@ -69,10 +69,21 @@ export function renderButton(id: string | undefined, disabled: boolean, label: s
 
 export function renderOpenPanels(openPanelID: string): void {
   var panels = ['manage-service-panel', 'retrieve-service-panel', 'refund-service-panel', 'data-service-panel'];
+  var emptyPanel = getElement('service-panel-empty');
+  if (emptyPanel) {
+    emptyPanel.classList.toggle('visible', !openPanelID);
+  }
   for (var i = 0; i < panels.length; i++) {
     var panel = getElement(panels[i]);
     if (!panel) continue;
     panel.classList.toggle('visible', panels[i] === openPanelID);
+  }
+  var serviceButtons = document.querySelectorAll<HTMLElement>('[data-account-service-action="open-service-panel"]');
+  for (var j = 0; j < serviceButtons.length; j += 1) {
+    var button = serviceButtons[j];
+    var row = button.closest('.service-action-row');
+    if (!row) continue;
+    row.classList.toggle('active', button.getAttribute('data-account-service-panel') === openPanelID);
   }
 }
 

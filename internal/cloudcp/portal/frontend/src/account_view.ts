@@ -98,7 +98,7 @@ export function renderWorkspaceManagement(account: PortalAccountSummary, entry: 
 
   var workspace = entry.selectedWorkspaceID ? findWorkspace(account, entry.selectedWorkspaceID) : null;
   var hasSelection = !!workspace;
-  panel.classList.toggle('visible', hasSelection);
+  panel.classList.add('visible');
   empty.hidden = hasSelection;
   content.hidden = !hasSelection;
 

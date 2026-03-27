@@ -525,9 +525,13 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
           '<p>Use the fleet view to open workspaces, watch health posture, and keep management actions explicit.</p>' +
         '</div>' +
       '</div>' +
-      workspaceHTML +
-      '<div class="account-management-grid">' +
-        workspaceManagement +
+      '<div class="workspace-operations-shell">' +
+        '<div class="workspace-operations-main">' +
+          workspaceHTML +
+        '</div>' +
+        '<div class="workspace-operations-detail">' +
+          workspaceManagement +
+        '</div>' +
       '</div>' +
     '</section>'
   );
@@ -723,19 +727,31 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
                 '</div>' +
               '</aside>' +
               '<div class="service-shell-main">' +
-                '<div class="service-panel" id="manage-service-panel"><div id="manage-service-root"></div></div>' +
-                '<div class="service-panel" id="retrieve-service-panel"><div id="retrieve-service-root"></div></div>' +
-                '<div class="service-panel" id="refund-service-panel"><div id="refund-service-root"></div></div>' +
-                '<div class="service-panel" id="data-service-panel">' +
-                  '<h3>Data and privacy</h3>' +
-                  '<p>Request export or deletion of the commercial data tied to an email address. Payment data held directly by Stripe still requires support handling.</p>' +
-                  '<div class="subsection"><div id="data-export-root"></div></div>' +
-                  '<div class="subsection"><div id="data-delete-root"></div></div>' +
-                  '<div class="helper-text">Payment-card data stays with Stripe. For Stripe deletion support, contact <a href="mailto:' +
-                  escapeAttr(context.bootstrap.support_email || '') +
-                  '">' +
-                  escapeHTML(context.bootstrap.support_email || '') +
-                  '</a>.</div>' +
+                '<div class="service-detail-shell">' +
+                  '<div class="service-panel service-panel-empty visible" id="service-panel-empty">' +
+                    '<div class="account-panel-kicker">Select a service</div>' +
+                    '<h3>Choose a commercial account action</h3>' +
+                    '<p>Open a billing, license, refund, or privacy flow from the service navigator. The active request stays here so the account-services area behaves like one working surface instead of a list of disconnected tools.</p>' +
+                    '<div class="service-empty-points">' +
+                      '<div class="service-empty-point"><strong>Billing</strong><span>Open Stripe customer portal access after verification.</span></div>' +
+                      '<div class="service-empty-point"><strong>Licenses</strong><span>Recover the latest active self-hosted license and invoice link.</span></div>' +
+                      '<div class="service-empty-point"><strong>Privacy</strong><span>Request export or deletion without leaving Pulse Account.</span></div>' +
+                    '</div>' +
+                  '</div>' +
+                  '<div class="service-panel" id="manage-service-panel"><div id="manage-service-root"></div></div>' +
+                  '<div class="service-panel" id="retrieve-service-panel"><div id="retrieve-service-root"></div></div>' +
+                  '<div class="service-panel" id="refund-service-panel"><div id="refund-service-root"></div></div>' +
+                  '<div class="service-panel" id="data-service-panel">' +
+                    '<h3>Data and privacy</h3>' +
+                    '<p>Request export or deletion of the commercial data tied to an email address. Payment data held directly by Stripe still requires support handling.</p>' +
+                    '<div class="subsection"><div id="data-export-root"></div></div>' +
+                    '<div class="subsection"><div id="data-delete-root"></div></div>' +
+                    '<div class="helper-text">Payment-card data stays with Stripe. For Stripe deletion support, contact <a href="mailto:' +
+                    escapeAttr(context.bootstrap.support_email || '') +
+                    '">' +
+                    escapeHTML(context.bootstrap.support_email || '') +
+                    '</a>.</div>' +
+                  '</div>' +
                 '</div>' +
               '</div>' +
             '</div>' +

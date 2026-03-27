@@ -885,6 +885,16 @@ header .logout-btn:hover,
   grid-template-columns: 1fr;
   gap: 14px;
 }
+.workspace-operations-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(320px, 0.9fr);
+  gap: 14px;
+  align-items: start;
+}
+.workspace-operations-main,
+.workspace-operations-detail {
+  min-width: 0;
+}
 .workspace-management-panel,
 .team-management-panel {
   min-height: 100%;
@@ -894,7 +904,7 @@ header .logout-btn:hover,
   box-shadow: var(--shadow-md);
 }
 .workspace-management-panel {
-  background: var(--panel-muted);
+  background: #fff;
 }
 .workspace-management-content {
   display: grid;
@@ -1151,6 +1161,14 @@ header .logout-btn:hover,
   flex-direction: column;
   gap: 12px;
 }
+.service-detail-shell {
+  min-height: 100%;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: #fff;
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
 .service-brief-card {
   padding: 18px;
   border: 1px solid var(--line);
@@ -1180,6 +1198,15 @@ header .logout-btn:hover,
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
   background: #fff;
+  transition:
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    transform 140ms ease;
+}
+.service-action-row:hover,
+.service-action-row.active {
+  border-color: rgba(15, 109, 115, 0.28);
+  box-shadow: 0 10px 24px rgba(10, 25, 41, 0.08);
 }
 .service-action-tags {
   display: flex;
@@ -1260,9 +1287,42 @@ header .logout-btn:hover,
   padding: 22px;
   border-radius: var(--radius-md);
   background: #fff;
+  min-height: 100%;
 }
 .service-panel.visible.auth-panel {
   display: block;
+}
+.service-panel-empty {
+  display: none;
+}
+.service-panel-empty.visible {
+  display: block;
+}
+.service-empty-points {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 20px;
+}
+.service-empty-point {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel-muted);
+}
+.service-empty-point strong {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+.service-empty-point span {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ink-soft);
 }
 .service-section-auth {
   max-width: 760px;
@@ -1428,7 +1488,9 @@ header .logout-btn:hover,
   .team-management-grid,
   .account-overview-secondary,
   .service-shell,
-  .service-action-list {
+  .service-action-list,
+  .service-empty-points,
+  .workspace-operations-shell {
     grid-template-columns: 1fr;
   }
   .portal-shell-layout,
