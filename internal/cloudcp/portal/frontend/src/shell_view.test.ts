@@ -147,7 +147,10 @@ describe('shell view', function() {
     expect(html).toContain('This workspace is still waiting on a completed health check.');
     expect(html).toContain('/api/accounts/acct_1/tenants/ws_active/handoff');
     expect(html).toContain('Open workspace');
-    expect(html).toContain('data-action="toggle-workspace-menu"');
+    expect(html).toContain('data-action="select-workspace"');
+    expect(html).toContain('Workspace management');
+    expect(html).toContain('Choose a workspace to manage from the fleet above.');
+    expect(html).toContain('data-action="clear-workspace-selection"');
     expect(html).toContain('data-action="workspace-action"');
     expect(html).toContain('service-card-button');
     expect(html).toContain('id="open-retrieve-service"');

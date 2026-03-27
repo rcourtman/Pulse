@@ -1,4 +1,10 @@
-import type { PortalAccountState, PortalAccountUIEntry, PortalTeamMember } from './types';
+import type {
+  PortalAccountState,
+  PortalAccountSummary,
+  PortalAccountUIEntry,
+  PortalTeamMember,
+  PortalWorkspaceSummary,
+} from './types';
 
 type FormValueElement = HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
 
@@ -15,18 +21,70 @@ export function focusElement(id: string): void {
   if (input) input.focus();
 }
 
-export function renderWorkspaceMenus(accountID: string, entry: PortalAccountUIEntry): void {
-  var menus = document.querySelectorAll<HTMLElement>('[data-workspace-menu-account-id="' + accountID + '"]');
-  for (var i = 0; i < menus.length; i += 1) {
-    var menu = menus[i];
-    var workspaceID = menu.getAttribute('data-workspace-id') || '';
-    var open = entry.openWorkspaceMenuID === workspaceID;
-    menu.hidden = !open;
-    var button = getElement<HTMLElement>('workspace-menu-button-' + accountID + '-' + workspaceID);
-    if (button) {
-      button.setAttribute('aria-expanded', open ? 'true' : 'false');
+function workspaceActionLabel(workspace: PortalWorkspaceSummary): string {
+  return workspace.state === 'active' ? 'Suspend workspace' : 'Delete workspace';
+}
+
+function workspaceSummary(workspace: PortalWorkspaceSummary): string {
+  if (workspace.health_status === 'healthy') return 'Live updates and health checks are currently good.';
+  if (workspace.health_status === 'unhealthy') return 'This workspace needs attention before it is trustworthy.';
+  return 'This workspace is still waiting on a completed health check.';
+}
+
+function workspaceMeta(workspace: PortalWorkspaceSummary): string {
+  var parts = [workspace.state];
+  if (workspace.health_status) parts.push(workspace.health_status);
+  if (workspace.created_at) {
+    var date = new Date(workspace.created_at);
+    if (!Number.isNaN(date.getTime())) {
+      parts.push('Created ' + date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }));
     }
   }
+  return parts.join(' · ');
+}
+
+function findWorkspace(account: PortalAccountSummary, workspaceID: string): PortalWorkspaceSummary | null {
+  for (var i = 0; i < account.workspaces.length; i += 1) {
+    if (account.workspaces[i].id === workspaceID) return account.workspaces[i];
+  }
+  return null;
+}
+
+export function renderWorkspaceManagement(account: PortalAccountSummary, entry: PortalAccountUIEntry): void {
+  var panel = getElement<HTMLElement>('workspace-management-' + account.id);
+  if (!panel) return;
+  var empty = getElement<HTMLElement>('workspace-management-empty-' + account.id);
+  var content = getElement<HTMLElement>('workspace-management-content-' + account.id);
+  var title = getElement<HTMLElement>('workspace-management-title-' + account.id);
+  var meta = getElement<HTMLElement>('workspace-management-meta-' + account.id);
+  var summary = getElement<HTMLElement>('workspace-management-summary-' + account.id);
+  var actionButton = getElement<HTMLButtonElement>('workspace-management-action-' + account.id);
+  var closeButton = getElement<HTMLButtonElement>('workspace-management-close-' + account.id);
+  if (!empty || !content || !title || !meta || !summary || !actionButton || !closeButton) return;
+
+  var workspace = entry.selectedWorkspaceID ? findWorkspace(account, entry.selectedWorkspaceID) : null;
+  var hasSelection = !!workspace;
+  panel.classList.toggle('visible', hasSelection);
+  empty.hidden = hasSelection;
+  content.hidden = !hasSelection;
+
+  if (!workspace) {
+    actionButton.disabled = false;
+    actionButton.removeAttribute('data-workspace-id');
+    actionButton.removeAttribute('data-workspace-name');
+    actionButton.removeAttribute('data-workspace-action');
+    return;
+  }
+
+  title.textContent = workspace.display_name;
+  meta.textContent = workspaceMeta(workspace);
+  summary.textContent = workspaceSummary(workspace);
+  actionButton.textContent = workspaceActionLabel(workspace);
+  actionButton.disabled = entry.manageWorkspace.pending;
+  actionButton.setAttribute('data-workspace-id', workspace.id);
+  actionButton.setAttribute('data-workspace-name', workspace.display_name);
+  actionButton.setAttribute('data-workspace-action', workspace.state === 'active' ? 'suspend' : 'delete');
+  closeButton.disabled = entry.manageWorkspace.pending;
 }
 
 function setTbodyMessage(tbody: HTMLElement, msg: string, isError: boolean): void {
@@ -129,13 +187,20 @@ export function renderTeamSection(accountID: string, entry: PortalAccountUIEntry
   }
 }
 
-export function renderAccountUI(accountState: PortalAccountState): void {
+export function renderAccountUI(accountState: PortalAccountState, accounts: PortalAccountSummary[]): void {
   var accountIDs = Object.keys(accountState.byAccountID);
   for (var i = 0; i < accountIDs.length; i += 1) {
     var accountID = accountIDs[i];
     var entry = accountState.byAccountID[accountID];
+    var account = null as PortalAccountSummary | null;
+    for (var j = 0; j < accounts.length; j += 1) {
+      if (accounts[j].id === accountID) {
+        account = accounts[j];
+        break;
+      }
+    }
     renderAddWorkspaceSection(accountID, entry);
-    renderWorkspaceMenus(accountID, entry);
+    if (account) renderWorkspaceManagement(account, entry);
     renderTeamSection(accountID, entry);
   }
 }

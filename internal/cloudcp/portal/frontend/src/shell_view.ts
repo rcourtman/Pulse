@@ -152,41 +152,14 @@ function renderWorkspaceCard(account: PortalAccountSummary, workspace: PortalWor
 
   var manageAction = '';
   if (account.can_manage && (state === 'active' || state === 'suspended' || state === 'failed')) {
-    var menuAction = state === 'active' ? 'suspend' : 'delete';
-    var menuLabel = state === 'active' ? 'Suspend workspace' : 'Delete workspace';
     manageAction =
-      '<div class="workspace-menu-wrap">' +
-        '<button type="button" class="btn-secondary btn-workspace-menu" id="workspace-menu-button-' +
-        escapeAttr(account.id) +
-        '-' +
-        escapeAttr(workspace.id) +
-        '" data-action="toggle-workspace-menu" data-account-id="' +
+      '<button type="button" class="btn-secondary btn-workspace-manage" data-action="select-workspace" data-account-id="' +
         escapeAttr(account.id) +
         '" data-workspace-id="' +
         escapeAttr(workspace.id) +
-        '" aria-haspopup="menu" aria-expanded="false">Manage</button>' +
-        '<div class="workspace-menu" id="workspace-menu-' +
-        escapeAttr(account.id) +
-        '-' +
-        escapeAttr(workspace.id) +
-        '" data-workspace-menu-account-id="' +
-        escapeAttr(account.id) +
-        '" data-workspace-id="' +
-        escapeAttr(workspace.id) +
-        '" role="menu" hidden>' +
-          '<button type="button" class="workspace-menu-item workspace-menu-item-danger" data-action="workspace-action" data-account-id="' +
-          escapeAttr(account.id) +
-          '" data-workspace-id="' +
-          escapeAttr(workspace.id) +
-          '" data-workspace-action="' +
-          escapeAttr(menuAction) +
-          '" data-workspace-name="' +
-          escapeAttr(workspace.display_name) +
-          '">' +
-          escapeHTML(menuLabel) +
-          '</button>' +
-        '</div>' +
-      '</div>';
+        '">' +
+        'Manage' +
+      '</button>';
   }
 
   var createdMeta = createdLabel ? '<span class="ws-created">Created ' + escapeHTML(createdLabel) + '</span>' : '';
@@ -236,6 +209,7 @@ function renderAccountSection(account: PortalAccountSummary, accountAPIBasePath:
   var actions = '';
   var teamSection = '';
   var addWorkspaceForm = '';
+  var workspaceManagement = '';
   if (account.can_manage) {
     actions =
       '<div class="account-operations-panel">' +
@@ -293,6 +267,46 @@ function renderAccountSection(account: PortalAccountSummary, accountAPIBasePath:
       '<button type="button" class="btn-primary btn-compact" data-action="invite-member" data-account-id="' +
       escapeAttr(account.id) +
       '">Invite</button>' +
+      '</div>' +
+      '</div>';
+
+    workspaceManagement =
+      '<div class="workspace-management-panel" id="workspace-management-' +
+      escapeAttr(account.id) +
+      '">' +
+      '<div class="workspace-management-header">' +
+      '<div>' +
+      '<h3>Workspace management</h3>' +
+      '<p>Select a workspace from the fleet to review its lifecycle state and run explicit management actions.</p>' +
+      '</div>' +
+      '<button type="button" class="btn-secondary btn-compact" id="workspace-management-close-' +
+      escapeAttr(account.id) +
+      '" data-action="clear-workspace-selection" data-account-id="' +
+      escapeAttr(account.id) +
+      '">Done</button>' +
+      '</div>' +
+      '<div class="workspace-management-empty" id="workspace-management-empty-' +
+      escapeAttr(account.id) +
+      '">Choose a workspace to manage from the fleet above.</div>' +
+      '<div class="workspace-management-content" id="workspace-management-content-' +
+      escapeAttr(account.id) +
+      '" hidden>' +
+      '<div class="workspace-management-meta" id="workspace-management-meta-' +
+      escapeAttr(account.id) +
+      '"></div>' +
+      '<h4 id="workspace-management-title-' +
+      escapeAttr(account.id) +
+      '"></h4>' +
+      '<p class="workspace-management-summary" id="workspace-management-summary-' +
+      escapeAttr(account.id) +
+      '"></p>' +
+      '<div class="workspace-management-actions">' +
+      '<button type="button" class="btn-danger" id="workspace-management-action-' +
+      escapeAttr(account.id) +
+      '" data-action="workspace-action" data-account-id="' +
+      escapeAttr(account.id) +
+      '">Manage workspace</button>' +
+      '</div>' +
       '</div>' +
       '</div>';
 
@@ -359,6 +373,7 @@ function renderAccountSection(account: PortalAccountSummary, accountAPIBasePath:
         '<p>Open hosted Pulse workspaces, review fleet health, and manage lifecycle actions for this account.</p>' +
       '</div>' +
       workspaceHTML +
+      workspaceManagement +
       teamSection +
       addWorkspaceForm +
     '</section>'

@@ -81,6 +81,7 @@ describe('account runtime', function() {
       '<div id="add-ws-form-acct_1" class="add-workspace-form">' +
       '<input id="ws-name-acct_1" value="Acme Corp">' +
       '<div id="ws-spinner-acct_1" hidden></div>' +
+      '<div id="workspace-management-acct_1" class="workspace-management-panel"><button id="workspace-management-close-acct_1"></button><div id="workspace-management-empty-acct_1"></div><div id="workspace-management-content-acct_1" hidden><div id="workspace-management-meta-acct_1"></div><h4 id="workspace-management-title-acct_1"></h4><p id="workspace-management-summary-acct_1"></p><button id="workspace-management-action-acct_1"></button></div></div>' +
       '</div>';
 
     runtime.toggleAddWorkspace('acct_1');
@@ -106,25 +107,47 @@ describe('account runtime', function() {
     expect((document.getElementById('ws-spinner-acct_1') as HTMLElement).hidden).toBe(true);
   });
 
-  it('toggles workspace menus and routes explicit workspace actions', async function() {
+  it('selects a workspace and routes explicit workspace actions through the management panel', async function() {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({})));
     var confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    deps.store.setBootstrap({
+      authenticated: true,
+      email: 'owner@example.com',
+      accounts: [{
+        id: 'acct_1',
+        name: 'Acme MSP',
+        kind: 'msp',
+        kind_label: 'MSP',
+        role: 'owner',
+        can_manage: true,
+        has_billing: true,
+        workspaces: [{
+          id: 'ws_2',
+          display_name: 'Alpha Workspace',
+          state: 'active',
+          healthy: true,
+          health_status: 'healthy',
+        }],
+      }],
+    });
 
     document.body.innerHTML =
-      '<button id="workspace-menu-button-acct_1-ws_1" aria-expanded="false"></button>' +
-      '<div id="workspace-menu-acct_1-ws_1" data-workspace-menu-account-id="acct_1" data-workspace-id="ws_1" hidden></div>' +
-      '<button id="workspace-menu-button-acct_1-ws_2" aria-expanded="false"></button>' +
-      '<div id="workspace-menu-acct_1-ws_2" data-workspace-menu-account-id="acct_1" data-workspace-id="ws_2" hidden></div>';
+      '<div id="workspace-management-acct_1" class="workspace-management-panel">' +
+      '<button id="workspace-management-close-acct_1"></button>' +
+      '<div id="workspace-management-empty-acct_1"></div>' +
+      '<div id="workspace-management-content-acct_1" hidden>' +
+      '<div id="workspace-management-meta-acct_1"></div>' +
+      '<h4 id="workspace-management-title-acct_1"></h4>' +
+      '<p id="workspace-management-summary-acct_1"></p>' +
+      '<button id="workspace-management-action-acct_1"></button>' +
+      '</div>' +
+      '</div>';
 
-    runtime.toggleWorkspaceMenu('acct_1', 'ws_1');
-    expect(deps.store.getAccountState().byAccountID.acct_1.openWorkspaceMenuID).toBe('ws_1');
-    expect((document.getElementById('workspace-menu-acct_1-ws_1') as HTMLElement).hidden).toBe(false);
+    runtime.selectWorkspace('acct_1', 'ws_2');
+    expect(deps.store.getAccountState().byAccountID.acct_1.selectedWorkspaceID).toBe('ws_2');
+    expect(document.getElementById('workspace-management-title-acct_1')?.textContent).toContain('Alpha Workspace');
+    expect(document.getElementById('workspace-management-action-acct_1')?.textContent).toContain('Suspend workspace');
 
-    runtime.toggleWorkspaceMenu('acct_1', 'ws_1');
-    expect(deps.store.getAccountState().byAccountID.acct_1.openWorkspaceMenuID).toBe('');
-    expect((document.getElementById('workspace-menu-acct_1-ws_1') as HTMLElement).hidden).toBe(true);
-
-    runtime.toggleWorkspaceMenu('acct_1', 'ws_2');
     await runtime.manageWorkspaceAction('acct_1', 'ws_2', 'suspend', 'Alpha Workspace');
     await flushAsync();
 
@@ -138,7 +161,7 @@ describe('account runtime', function() {
       })
     );
     expect(deps.showToast).toHaveBeenCalledWith('Suspended workspace.');
-    expect(deps.store.getAccountState().byAccountID.acct_1.openWorkspaceMenuID).toBe('');
+    expect(deps.store.getAccountState().byAccountID.acct_1.selectedWorkspaceID).toBe('');
   });
 
   it('loads and updates team membership from runtime actions', async function() {
@@ -151,6 +174,7 @@ describe('account runtime', function() {
     );
 
     document.body.innerHTML =
+      '<div id="workspace-management-acct_1" class="workspace-management-panel"><button id="workspace-management-close-acct_1"></button><div id="workspace-management-empty-acct_1"></div><div id="workspace-management-content-acct_1" hidden><div id="workspace-management-meta-acct_1"></div><h4 id="workspace-management-title-acct_1"></h4><p id="workspace-management-summary-acct_1"></p><button id="workspace-management-action-acct_1"></button></div></div>' +
       '<div id="team-section-acct_1" class="team-section" data-actor-role="owner">' +
       '<table><tbody id="team-list-acct_1"></tbody></table>' +
       '<input id="invite-email-acct_1">' +

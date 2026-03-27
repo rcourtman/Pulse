@@ -267,43 +267,73 @@ header .logout-btn:hover {
   gap: 8px;
   flex-shrink: 0;
 }
-.workspace-menu-wrap {
-  position: relative;
+.btn-workspace-manage {
+  min-width: 112px;
 }
-.btn-workspace-menu {
-  min-width: 96px;
-}
-.workspace-menu {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
-  z-index: 10;
-  min-width: 190px;
+.workspace-management-panel {
+  margin-top: 14px;
   background: #fff;
   border: 1px solid #dbe4f0;
-  border-radius: 10px;
-  padding: 6px;
-  box-shadow: 0 12px 28px rgba(15, 23, 42, .12);
+  border-radius: 12px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
 }
-.workspace-menu-item {
-  width: 100%;
-  background: transparent;
-  border: 0;
-  border-radius: 8px;
-  padding: 9px 12px;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-  color: #0f172a;
+.workspace-management-panel.visible {
+  border-color: #bfdbfe;
+  box-shadow: 0 10px 24px rgba(29, 78, 216, .08);
 }
-.workspace-menu-item:hover {
+.workspace-management-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.workspace-management-header h3 {
+  margin: 0 0 4px;
+  font-size: 16px;
+  font-weight: 700;
+}
+.workspace-management-header p {
+  margin: 0;
+  font-size: 13px;
+  color: #64748b;
+  line-height: 1.5;
+  max-width: 560px;
+}
+.workspace-management-empty {
+  font-size: 14px;
+  color: #64748b;
   background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: 10px;
+  padding: 16px;
 }
-.workspace-menu-item-danger {
-  color: #b91c1c;
+.workspace-management-content h4 {
+  margin: 0 0 8px;
+  font-size: 18px;
+  font-weight: 700;
 }
-.workspace-menu-item-danger:hover {
-  background: #fef2f2;
+.workspace-management-meta {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #64748b;
+  margin-bottom: 8px;
+}
+.workspace-management-summary {
+  margin: 0;
+  font-size: 14px;
+  color: #475569;
+  line-height: 1.55;
+}
+.workspace-management-actions {
+  margin-top: 14px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 .btn-primary {
   background: #1d4ed8;
@@ -883,6 +913,9 @@ header .logout-btn:hover {
   .account-subsection-header {
     flex-direction: column;
     align-items: flex-start;
+  }
+  .workspace-management-header {
+    flex-direction: column;
   }
   .overview-stats {
     grid-template-columns: 1fr;

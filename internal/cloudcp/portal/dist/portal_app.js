@@ -10,18 +10,63 @@
     var input = getElement(id);
     if (input) input.focus();
   }
-  function renderWorkspaceMenus(accountID, entry) {
-    var menus = document.querySelectorAll('[data-workspace-menu-account-id="' + accountID + '"]');
-    for (var i = 0; i < menus.length; i += 1) {
-      var menu = menus[i];
-      var workspaceID = menu.getAttribute("data-workspace-id") || "";
-      var open = entry.openWorkspaceMenuID === workspaceID;
-      menu.hidden = !open;
-      var button = getElement("workspace-menu-button-" + accountID + "-" + workspaceID);
-      if (button) {
-        button.setAttribute("aria-expanded", open ? "true" : "false");
+  function workspaceActionLabel(workspace) {
+    return workspace.state === "active" ? "Suspend workspace" : "Delete workspace";
+  }
+  function workspaceSummary(workspace) {
+    if (workspace.health_status === "healthy") return "Live updates and health checks are currently good.";
+    if (workspace.health_status === "unhealthy") return "This workspace needs attention before it is trustworthy.";
+    return "This workspace is still waiting on a completed health check.";
+  }
+  function workspaceMeta(workspace) {
+    var parts = [workspace.state];
+    if (workspace.health_status) parts.push(workspace.health_status);
+    if (workspace.created_at) {
+      var date = new Date(workspace.created_at);
+      if (!Number.isNaN(date.getTime())) {
+        parts.push("Created " + date.toLocaleDateString(void 0, { month: "short", day: "numeric", year: "numeric" }));
       }
     }
+    return parts.join(" \xB7 ");
+  }
+  function findWorkspace(account, workspaceID) {
+    for (var i = 0; i < account.workspaces.length; i += 1) {
+      if (account.workspaces[i].id === workspaceID) return account.workspaces[i];
+    }
+    return null;
+  }
+  function renderWorkspaceManagement(account, entry) {
+    var panel = getElement("workspace-management-" + account.id);
+    if (!panel) return;
+    var empty = getElement("workspace-management-empty-" + account.id);
+    var content = getElement("workspace-management-content-" + account.id);
+    var title = getElement("workspace-management-title-" + account.id);
+    var meta = getElement("workspace-management-meta-" + account.id);
+    var summary = getElement("workspace-management-summary-" + account.id);
+    var actionButton = getElement("workspace-management-action-" + account.id);
+    var closeButton = getElement("workspace-management-close-" + account.id);
+    if (!empty || !content || !title || !meta || !summary || !actionButton || !closeButton) return;
+    var workspace = entry.selectedWorkspaceID ? findWorkspace(account, entry.selectedWorkspaceID) : null;
+    var hasSelection = !!workspace;
+    panel.classList.toggle("visible", hasSelection);
+    empty.hidden = hasSelection;
+    content.hidden = !hasSelection;
+    if (!workspace) {
+      actionButton.disabled = false;
+      actionButton.removeAttribute("data-workspace-id");
+      actionButton.removeAttribute("data-workspace-name");
+      actionButton.removeAttribute("data-workspace-action");
+      return;
+    }
+    title.textContent = workspace.display_name;
+    meta.textContent = workspaceMeta(workspace);
+    summary.textContent = workspaceSummary(workspace);
+    actionButton.textContent = workspaceActionLabel(workspace);
+    actionButton.disabled = entry.manageWorkspace.pending;
+    actionButton.setAttribute("data-workspace-id", workspace.id);
+    actionButton.setAttribute("data-workspace-name", workspace.display_name);
+    actionButton.setAttribute("data-workspace-action", workspace.state === "active" ? "suspend" : "delete");
+    closeButton.disabled = entry.manageWorkspace.pending;
   }
   function setTbodyMessage(tbody, msg, isError) {
     tbody.textContent = "";
@@ -113,13 +158,20 @@
       tbody.appendChild(tr);
     }
   }
-  function renderAccountUI(accountState) {
+  function renderAccountUI(accountState, accounts) {
     var accountIDs = Object.keys(accountState.byAccountID);
     for (var i = 0; i < accountIDs.length; i += 1) {
       var accountID = accountIDs[i];
       var entry = accountState.byAccountID[accountID];
+      var account = null;
+      for (var j = 0; j < accounts.length; j += 1) {
+        if (accounts[j].id === accountID) {
+          account = accounts[j];
+          break;
+        }
+      }
       renderAddWorkspaceSection(accountID, entry);
-      renderWorkspaceMenus(accountID, entry);
+      if (account) renderWorkspaceManagement(account, entry);
       renderTeamSection(accountID, entry);
     }
   }
@@ -130,9 +182,6 @@
       var target = asHTMLElement(event.target);
       if (!target) return;
       var actionEl = target.closest("[data-action]");
-      if (!target.closest(".workspace-menu-wrap")) {
-        deps.runtime.closeWorkspaceMenus();
-      }
       if (!actionEl) return;
       var action = actionEl.getAttribute("data-action") || "";
       var accountID = actionEl.getAttribute("data-account-id") || "";
@@ -157,12 +206,16 @@
           event.preventDefault();
           void deps.runtime.createWorkspace(accountID);
           return;
-        case "toggle-workspace-menu":
+        case "select-workspace":
           event.preventDefault();
-          deps.runtime.toggleWorkspaceMenu(
+          deps.runtime.selectWorkspace(
             accountID,
             actionEl.getAttribute("data-workspace-id") || ""
           );
+          return;
+        case "clear-workspace-selection":
+          event.preventDefault();
+          deps.runtime.clearWorkspaceSelection(accountID);
           return;
         case "workspace-action":
           event.preventDefault();
@@ -424,7 +477,8 @@
       accountState.byAccountID[accountID] = {
         addWorkspaceOpen: false,
         createWorkspace: createMutationState(),
-        openWorkspaceMenuID: "",
+        selectedWorkspaceID: "",
+        manageWorkspace: createMutationState(),
         teamVisible: false,
         teamQuery: createQueryState([])
       };
@@ -538,15 +592,7 @@
       return true;
     };
     var renderAccountRuntime = function() {
-      renderAccountUI(deps.store.getAccountState());
-    };
-    var closeWorkspaceMenus = function() {
-      deps.store.updateAccountState(function(accountState) {
-        var accountIDs = Object.keys(accountState.byAccountID);
-        for (var i = 0; i < accountIDs.length; i += 1) {
-          accountState.byAccountID[accountIDs[i]].openWorkspaceMenuID = "";
-        }
-      });
+      renderAccountUI(deps.store.getAccountState(), deps.store.getBootstrap().accounts || []);
     };
     var loadTeam = async function(accountID) {
       var section = getElement("team-section-" + accountID);
@@ -588,7 +634,6 @@
       var shouldFocus = false;
       deps.store.updateAccountState(function(accountState) {
         var entry = ensurePortalAccountUIEntry(accountState, accountID);
-        entry.openWorkspaceMenuID = "";
         entry.addWorkspaceOpen = !entry.addWorkspaceOpen;
         shouldFocus = entry.addWorkspaceOpen;
       });
@@ -596,17 +641,16 @@
         focusElement("ws-name-" + accountID);
       }
     };
-    var toggleWorkspaceMenu = function(accountID, workspaceID) {
+    var selectWorkspace = function(accountID, workspaceID) {
       deps.store.updateAccountState(function(accountState) {
-        var accountIDs = Object.keys(accountState.byAccountID);
-        for (var i = 0; i < accountIDs.length; i += 1) {
-          var entry = ensurePortalAccountUIEntry(accountState, accountIDs[i]);
-          if (accountIDs[i] !== accountID) {
-            entry.openWorkspaceMenuID = "";
-          }
-        }
         var entry = ensurePortalAccountUIEntry(accountState, accountID);
-        entry.openWorkspaceMenuID = entry.openWorkspaceMenuID === workspaceID ? "" : workspaceID;
+        entry.selectedWorkspaceID = entry.selectedWorkspaceID === workspaceID ? "" : workspaceID;
+      });
+    };
+    var clearWorkspaceSelection = function(accountID) {
+      deps.store.updateAccountState(function(accountState) {
+        var entry = ensurePortalAccountUIEntry(accountState, accountID);
+        entry.selectedWorkspaceID = "";
       });
     };
     var createWorkspace = async function(accountID) {
@@ -633,7 +677,6 @@
         deps.store.updateAccountState(function(accountState) {
           var entry = ensurePortalAccountUIEntry(accountState, accountID);
           entry.addWorkspaceOpen = false;
-          entry.openWorkspaceMenuID = "";
           succeedMutationState(entry.createWorkspace);
         });
         deps.showToast("Workspace created!");
@@ -647,10 +690,13 @@
       }
     };
     var manageWorkspaceAction = async function(accountID, tenantID, action, name) {
-      closeWorkspaceMenus();
       var verb = action === "suspend" ? "Suspend" : action === "delete" ? "Delete" : "";
       if (!verb) return;
       if (!window.confirm(verb + ' workspace "' + name + '"?')) return;
+      deps.store.updateAccountState(function(accountState) {
+        var entry = ensurePortalAccountUIEntry(accountState, accountID);
+        beginMutationState(entry.manageWorkspace);
+      });
       try {
         if (action === "suspend") {
           await deps.api.suspendWorkspace(accountID, tenantID);
@@ -658,10 +704,23 @@
           await deps.api.deleteWorkspace(accountID, tenantID);
         }
         if (!await refreshOrRedirect()) {
+          deps.store.updateAccountState(function(accountState) {
+            var entry = ensurePortalAccountUIEntry(accountState, accountID);
+            resetMutationState(entry.manageWorkspace);
+          }, { notify: false });
           return;
         }
+        deps.store.updateAccountState(function(accountState) {
+          var entry = ensurePortalAccountUIEntry(accountState, accountID);
+          entry.selectedWorkspaceID = "";
+          succeedMutationState(entry.manageWorkspace);
+        });
         deps.showToast(verb + "ed workspace.");
       } catch (error) {
+        deps.store.updateAccountState(function(accountState) {
+          var entry = ensurePortalAccountUIEntry(accountState, accountID);
+          failMutationState(entry.manageWorkspace, error instanceof Error ? error.message : "Failed to " + verb.toLowerCase() + " workspace.");
+        }, { notify: false });
         deps.showToast(error instanceof Error ? error.message : "Failed to " + verb.toLowerCase() + " workspace.", true);
       }
     };
@@ -681,7 +740,6 @@
       var nextVisible = false;
       deps.store.updateAccountState(function(accountState) {
         var entry = ensurePortalAccountUIEntry(accountState, accountID);
-        entry.openWorkspaceMenuID = "";
         entry.teamVisible = !entry.teamVisible;
         nextVisible = entry.teamVisible;
       });
@@ -750,8 +808,8 @@
     deps.store.subscribeBootstrap(renderAccountRuntime);
     return {
       toggleAddWorkspace,
-      toggleWorkspaceMenu,
-      closeWorkspaceMenus,
+      selectWorkspace,
+      clearWorkspaceSelection,
       openBilling,
       toggleTeam,
       inviteMember,
@@ -1501,9 +1559,7 @@
     }
     var manageAction = "";
     if (account.can_manage && (state === "active" || state === "suspended" || state === "failed")) {
-      var menuAction = state === "active" ? "suspend" : "delete";
-      var menuLabel = state === "active" ? "Suspend workspace" : "Delete workspace";
-      manageAction = '<div class="workspace-menu-wrap"><button type="button" class="btn-secondary btn-workspace-menu" id="workspace-menu-button-' + escapeAttr(account.id) + "-" + escapeAttr(workspace.id) + '" data-action="toggle-workspace-menu" data-account-id="' + escapeAttr(account.id) + '" data-workspace-id="' + escapeAttr(workspace.id) + '" aria-haspopup="menu" aria-expanded="false">Manage</button><div class="workspace-menu" id="workspace-menu-' + escapeAttr(account.id) + "-" + escapeAttr(workspace.id) + '" data-workspace-menu-account-id="' + escapeAttr(account.id) + '" data-workspace-id="' + escapeAttr(workspace.id) + '" role="menu" hidden><button type="button" class="workspace-menu-item workspace-menu-item-danger" data-action="workspace-action" data-account-id="' + escapeAttr(account.id) + '" data-workspace-id="' + escapeAttr(workspace.id) + '" data-workspace-action="' + escapeAttr(menuAction) + '" data-workspace-name="' + escapeAttr(workspace.display_name) + '">' + escapeHTML(menuLabel) + "</button></div></div>";
+      manageAction = '<button type="button" class="btn-secondary btn-workspace-manage" data-action="select-workspace" data-account-id="' + escapeAttr(account.id) + '" data-workspace-id="' + escapeAttr(workspace.id) + '">Manage</button>';
     }
     var createdMeta = createdLabel ? '<span class="ws-created">Created ' + escapeHTML(createdLabel) + "</span>" : "";
     return '<div class="workspace-card"><div class="ws-info"><div class="ws-title-row"><span class="ws-name">' + escapeHTML(workspace.display_name) + '</span></div><div class="ws-meta">' + healthBadgeHTML(workspace) + '<span class="badge badge-' + safeState + '">' + safeState + "</span>" + createdMeta + '</div><div class="ws-summary">' + escapeHTML(healthSummary) + '</div></div><div class="ws-actions">' + openAction + manageAction + "</div></div>";
@@ -1527,14 +1583,16 @@
     var actions = "";
     var teamSection = "";
     var addWorkspaceForm = "";
+    var workspaceManagement = "";
     if (account.can_manage) {
       actions = '<div class="account-operations-panel"><div class="account-operations-copy"><h3>Account operations</h3><p>' + escapeHTML(operationsCopy) + '</p></div><div class="account-actions">' + (account.kind === "msp" ? '<button type="button" class="btn-secondary" id="add-ws-btn-' + escapeAttr(account.id) + '" data-action="toggle-add-workspace" data-account-id="' + escapeAttr(account.id) + '">Add workspace</button>' : "") + (account.has_billing ? '<button type="button" class="btn-secondary" data-action="open-billing" data-account-id="' + escapeAttr(account.id) + '">Manage billing</button>' : "") + '<button type="button" class="btn-secondary" id="team-btn-' + escapeAttr(account.id) + '" data-action="toggle-team" data-account-id="' + escapeAttr(account.id) + '">Manage team</button></div></div>';
       teamSection = '<div class="team-section" id="team-section-' + escapeAttr(account.id) + '" data-actor-role="' + escapeAttr(account.role) + '"><h3>Team members</h3><table class="team-table"><thead><tr><th>Email</th><th>Role</th><th></th></tr></thead><tbody id="team-list-' + escapeAttr(account.id) + '"><tr><td colspan="3" class="team-message-cell">Loading\u2026</td></tr></tbody></table><div class="team-invite"><div><label for="invite-email-' + escapeAttr(account.id) + '">Email</label><input type="email" id="invite-email-' + escapeAttr(account.id) + '" placeholder="user@example.com" autocomplete="off"></div><div><label for="invite-role-' + escapeAttr(account.id) + '">Role</label><select id="invite-role-' + escapeAttr(account.id) + '"><option value="admin">Admin</option><option value="tech">Tech</option><option value="read_only">Read-only</option></select></div><button type="button" class="btn-primary btn-compact" data-action="invite-member" data-account-id="' + escapeAttr(account.id) + '">Invite</button></div></div>';
+      workspaceManagement = '<div class="workspace-management-panel" id="workspace-management-' + escapeAttr(account.id) + '"><div class="workspace-management-header"><div><h3>Workspace management</h3><p>Select a workspace from the fleet to review its lifecycle state and run explicit management actions.</p></div><button type="button" class="btn-secondary btn-compact" id="workspace-management-close-' + escapeAttr(account.id) + '" data-action="clear-workspace-selection" data-account-id="' + escapeAttr(account.id) + '">Done</button></div><div class="workspace-management-empty" id="workspace-management-empty-' + escapeAttr(account.id) + '">Choose a workspace to manage from the fleet above.</div><div class="workspace-management-content" id="workspace-management-content-' + escapeAttr(account.id) + '" hidden><div class="workspace-management-meta" id="workspace-management-meta-' + escapeAttr(account.id) + '"></div><h4 id="workspace-management-title-' + escapeAttr(account.id) + '"></h4><p class="workspace-management-summary" id="workspace-management-summary-' + escapeAttr(account.id) + '"></p><div class="workspace-management-actions"><button type="button" class="btn-danger" id="workspace-management-action-' + escapeAttr(account.id) + '" data-action="workspace-action" data-account-id="' + escapeAttr(account.id) + '">Manage workspace</button></div></div></div>';
       if (account.kind === "msp") {
         addWorkspaceForm = '<div class="add-workspace-form" id="add-ws-form-' + escapeAttr(account.id) + '"><label for="ws-name-' + escapeAttr(account.id) + '">Workspace name (e.g. client name)</label><input type="text" id="ws-name-' + escapeAttr(account.id) + '" placeholder="Acme Corp" maxlength="80" autocomplete="off"><div class="form-actions"><button type="button" class="btn-primary" data-action="create-workspace" data-account-id="' + escapeAttr(account.id) + '">Create workspace</button><button type="button" class="btn-secondary" data-action="toggle-add-workspace" data-account-id="' + escapeAttr(account.id) + '">Cancel</button><div class="spinner" id="ws-spinner-' + escapeAttr(account.id) + '" hidden></div></div></div>';
       }
     }
-    return '<section class="account-section"><div class="account-header"><div class="account-heading"><div class="account-eyebrow">' + escapeHTML(accountKindLabel(account)) + "</div><h2>" + escapeHTML(account.name) + '</h2><div class="account-summary">' + escapeHTML(summaryText) + '</div></div><div class="account-badges"><span class="badge badge-' + escapeHTML(account.kind) + '">' + escapeHTML(account.kind_label) + "</span>" + roleBadgeHTML(account.role) + '</div></div><div class="account-status-grid"><div class="account-stat-card"><span class="account-stat-label">Active workspaces</span><span class="account-stat-value">' + String(activeCount) + '</span></div><div class="account-stat-card"><span class="account-stat-label">Healthy</span><span class="account-stat-value account-stat-healthy">' + String(healthyCount) + '</span></div><div class="account-stat-card"><span class="account-stat-label">Checking</span><span class="account-stat-value account-stat-checking">' + String(checkingCount) + '</span></div><div class="account-stat-card"><span class="account-stat-label">Needs attention</span><span class="account-stat-value account-stat-unhealthy">' + String(unhealthyCount) + "</span></div></div>" + actions + '<div class="account-subsection-header"><h3>Workspace fleet</h3><p>Open hosted Pulse workspaces, review fleet health, and manage lifecycle actions for this account.</p></div>' + workspaceHTML + teamSection + addWorkspaceForm + "</section>";
+    return '<section class="account-section"><div class="account-header"><div class="account-heading"><div class="account-eyebrow">' + escapeHTML(accountKindLabel(account)) + "</div><h2>" + escapeHTML(account.name) + '</h2><div class="account-summary">' + escapeHTML(summaryText) + '</div></div><div class="account-badges"><span class="badge badge-' + escapeHTML(account.kind) + '">' + escapeHTML(account.kind_label) + "</span>" + roleBadgeHTML(account.role) + '</div></div><div class="account-status-grid"><div class="account-stat-card"><span class="account-stat-label">Active workspaces</span><span class="account-stat-value">' + String(activeCount) + '</span></div><div class="account-stat-card"><span class="account-stat-label">Healthy</span><span class="account-stat-value account-stat-healthy">' + String(healthyCount) + '</span></div><div class="account-stat-card"><span class="account-stat-label">Checking</span><span class="account-stat-value account-stat-checking">' + String(checkingCount) + '</span></div><div class="account-stat-card"><span class="account-stat-label">Needs attention</span><span class="account-stat-value account-stat-unhealthy">' + String(unhealthyCount) + "</span></div></div>" + actions + '<div class="account-subsection-header"><h3>Workspace fleet</h3><p>Open hosted Pulse workspaces, review fleet health, and manage lifecycle actions for this account.</p></div>' + workspaceHTML + workspaceManagement + teamSection + addWorkspaceForm + "</section>";
   }
   function renderHeaderHTML(context) {
     if (context.bootstrap.authenticated) {

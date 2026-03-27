@@ -10,9 +10,6 @@ export function installAccountController(deps: AccountControllerDeps): void {
     var target = asHTMLElement(event.target);
     if (!target) return;
     var actionEl = target.closest('[data-action]');
-    if (!target.closest('.workspace-menu-wrap')) {
-      deps.runtime.closeWorkspaceMenus();
-    }
     if (!actionEl) return;
     var action = actionEl.getAttribute('data-action') || '';
     var accountID = actionEl.getAttribute('data-account-id') || '';
@@ -38,12 +35,16 @@ export function installAccountController(deps: AccountControllerDeps): void {
         event.preventDefault();
         void deps.runtime.createWorkspace(accountID);
         return;
-      case 'toggle-workspace-menu':
+      case 'select-workspace':
         event.preventDefault();
-        deps.runtime.toggleWorkspaceMenu(
+        deps.runtime.selectWorkspace(
           accountID,
           actionEl.getAttribute('data-workspace-id') || '',
         );
+        return;
+      case 'clear-workspace-selection':
+        event.preventDefault();
+        deps.runtime.clearWorkspaceSelection(accountID);
         return;
       case 'workspace-action':
         event.preventDefault();

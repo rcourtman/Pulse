@@ -15,8 +15,8 @@ export interface AccountRuntimeDeps {
 
 export interface AccountRuntime {
   toggleAddWorkspace(accountID: string): void;
-  toggleWorkspaceMenu(accountID: string, workspaceID: string): void;
-  closeWorkspaceMenus(): void;
+  selectWorkspace(accountID: string, workspaceID: string): void;
+  clearWorkspaceSelection(accountID: string): void;
   openBilling(accountID: string): Promise<void>;
   toggleTeam(accountID: string): void;
   inviteMember(accountID: string): Promise<void>;
@@ -40,16 +40,7 @@ export function installAccountRuntime(deps: AccountRuntimeDeps): AccountRuntime 
   };
 
   var renderAccountRuntime = function(): void {
-    renderAccountUIState(deps.store.getAccountState());
-  };
-
-  var closeWorkspaceMenus = function(): void {
-    deps.store.updateAccountState(function(accountState) {
-      var accountIDs = Object.keys(accountState.byAccountID);
-      for (var i = 0; i < accountIDs.length; i += 1) {
-        accountState.byAccountID[accountIDs[i]].openWorkspaceMenuID = '';
-      }
-    });
+    renderAccountUIState(deps.store.getAccountState(), deps.store.getBootstrap().accounts || []);
   };
 
   var loadTeam = async function(accountID: string): Promise<void> {
@@ -94,7 +85,6 @@ export function installAccountRuntime(deps: AccountRuntimeDeps): AccountRuntime 
     var shouldFocus = false;
     deps.store.updateAccountState(function(accountState) {
       var entry = ensurePortalAccountUIEntry(accountState, accountID);
-      entry.openWorkspaceMenuID = '';
       entry.addWorkspaceOpen = !entry.addWorkspaceOpen;
       shouldFocus = entry.addWorkspaceOpen;
     });
@@ -103,17 +93,17 @@ export function installAccountRuntime(deps: AccountRuntimeDeps): AccountRuntime 
     }
   };
 
-  var toggleWorkspaceMenu = function(accountID: string, workspaceID: string): void {
+  var selectWorkspace = function(accountID: string, workspaceID: string): void {
     deps.store.updateAccountState(function(accountState) {
-      var accountIDs = Object.keys(accountState.byAccountID);
-      for (var i = 0; i < accountIDs.length; i += 1) {
-        var entry = ensurePortalAccountUIEntry(accountState, accountIDs[i]);
-        if (accountIDs[i] !== accountID) {
-          entry.openWorkspaceMenuID = '';
-        }
-      }
       var entry = ensurePortalAccountUIEntry(accountState, accountID);
-      entry.openWorkspaceMenuID = entry.openWorkspaceMenuID === workspaceID ? '' : workspaceID;
+      entry.selectedWorkspaceID = entry.selectedWorkspaceID === workspaceID ? '' : workspaceID;
+    });
+  };
+
+  var clearWorkspaceSelection = function(accountID: string): void {
+    deps.store.updateAccountState(function(accountState) {
+      var entry = ensurePortalAccountUIEntry(accountState, accountID);
+      entry.selectedWorkspaceID = '';
     });
   };
 
@@ -141,7 +131,6 @@ export function installAccountRuntime(deps: AccountRuntimeDeps): AccountRuntime 
       deps.store.updateAccountState(function(accountState) {
         var entry = ensurePortalAccountUIEntry(accountState, accountID);
         entry.addWorkspaceOpen = false;
-        entry.openWorkspaceMenuID = '';
         succeedMutationState(entry.createWorkspace);
       });
       deps.showToast('Workspace created!');
@@ -156,10 +145,13 @@ export function installAccountRuntime(deps: AccountRuntimeDeps): AccountRuntime 
   };
 
   var manageWorkspaceAction = async function(accountID: string, tenantID: string, action: string, name: string): Promise<void> {
-    closeWorkspaceMenus();
     var verb = action === 'suspend' ? 'Suspend' : action === 'delete' ? 'Delete' : '';
     if (!verb) return;
     if (!window.confirm(verb + ' workspace "' + name + '"?')) return;
+    deps.store.updateAccountState(function(accountState) {
+      var entry = ensurePortalAccountUIEntry(accountState, accountID);
+      beginMutationState(entry.manageWorkspace);
+    });
     try {
       if (action === 'suspend') {
         await deps.api.suspendWorkspace(accountID, tenantID);
@@ -167,10 +159,23 @@ export function installAccountRuntime(deps: AccountRuntimeDeps): AccountRuntime 
         await deps.api.deleteWorkspace(accountID, tenantID);
       }
       if (!await refreshOrRedirect()) {
+        deps.store.updateAccountState(function(accountState) {
+          var entry = ensurePortalAccountUIEntry(accountState, accountID);
+          resetMutationState(entry.manageWorkspace);
+        }, { notify: false });
         return;
       }
+      deps.store.updateAccountState(function(accountState) {
+        var entry = ensurePortalAccountUIEntry(accountState, accountID);
+        entry.selectedWorkspaceID = '';
+        succeedMutationState(entry.manageWorkspace);
+      });
       deps.showToast(verb + 'ed workspace.');
     } catch (error) {
+      deps.store.updateAccountState(function(accountState) {
+        var entry = ensurePortalAccountUIEntry(accountState, accountID);
+        failMutationState(entry.manageWorkspace, error instanceof Error ? error.message : 'Failed to ' + verb.toLowerCase() + ' workspace.');
+      }, { notify: false });
       deps.showToast(error instanceof Error ? error.message : 'Failed to ' + verb.toLowerCase() + ' workspace.', true);
     }
   };
@@ -192,7 +197,6 @@ export function installAccountRuntime(deps: AccountRuntimeDeps): AccountRuntime 
     var nextVisible = false;
     deps.store.updateAccountState(function(accountState) {
       var entry = ensurePortalAccountUIEntry(accountState, accountID);
-      entry.openWorkspaceMenuID = '';
       entry.teamVisible = !entry.teamVisible;
       nextVisible = entry.teamVisible;
     });
@@ -266,8 +270,8 @@ export function installAccountRuntime(deps: AccountRuntimeDeps): AccountRuntime 
 
   return {
     toggleAddWorkspace: toggleAddWorkspace,
-    toggleWorkspaceMenu: toggleWorkspaceMenu,
-    closeWorkspaceMenus: closeWorkspaceMenus,
+    selectWorkspace: selectWorkspace,
+    clearWorkspaceSelection: clearWorkspaceSelection,
     openBilling: openBilling,
     toggleTeam: toggleTeam,
     inviteMember: inviteMember,

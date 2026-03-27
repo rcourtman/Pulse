@@ -140,6 +140,9 @@ Core rules:
    starts drilling into one workspace at a time.
 9. Workspace fleets must summarize health and attention state at the account
    level, not force the user to scan badges one card at a time.
+10. Workspace lifecycle actions must open in an explicit management surface
+    with the selected workspace context visible, not inside a hidden overflow
+    menu or a blind confirm-first interaction.
 
 ## Screen Model
 
