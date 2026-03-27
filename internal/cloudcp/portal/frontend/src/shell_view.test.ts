@@ -199,7 +199,7 @@ describe('shell view', function() {
     expect(html).toContain('Self-hosted only');
     expect(html).toContain('portal-shell-head-title">Account console</h1>');
     expect(html).toContain('Billing, license recovery, refunds, and privacy actions until hosted access is attached.');
-    expect(html).toContain('Use these tools for self-hosted billing, license recovery, refunds, and privacy.');
+    expect(html).toContain('Use these tools for self-hosted commercial actions.');
     expect(html).toContain('Account services');
     expect(html).not.toContain('Self-hosted licenses and billing');
   });

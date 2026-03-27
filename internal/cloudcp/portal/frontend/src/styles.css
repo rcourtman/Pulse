@@ -1540,7 +1540,7 @@ header .logout-btn:hover,
   gap: 12px;
 }
 
-.service-list-intro,
+.service-shell-sidebar-head,
 .service-inline-support {
   padding: 14px 16px;
   border: 1px solid var(--line);
@@ -1548,7 +1548,14 @@ header .logout-btn:hover,
   background: #fff;
 }
 
-.service-list-intro p,
+.service-shell-sidebar-head h3 {
+  margin: 8px 0 0;
+  font-size: 18px;
+  line-height: 1.08;
+  letter-spacing: -0.03em;
+}
+
+.service-shell-sidebar-head p,
 .service-inline-support p {
   margin: 8px 0 0;
   font-size: 13px;
@@ -1616,7 +1623,7 @@ header .logout-btn:hover,
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
-  padding: 14px 16px;
+  padding: 12px 14px;
   border: none;
   border-top: 1px solid var(--line);
   background: #fff;
@@ -1669,15 +1676,15 @@ header .logout-btn:hover,
 
 .service-action-copy h3 {
   margin: 0;
-  font-size: 16px;
+  font-size: 15px;
   line-height: 1.16;
   letter-spacing: -0.03em;
 }
 
 .service-action-copy p {
   margin: 0;
-  font-size: 13px;
-  line-height: 1.5;
+  font-size: 12px;
+  line-height: 1.45;
   color: var(--ink-soft);
   max-width: 760px;
 }
@@ -1691,12 +1698,12 @@ header .logout-btn:hover,
 .service-action-highlight {
   display: inline-flex;
   align-items: center;
-  min-height: 24px;
-  padding: 0 9px;
+  min-height: 22px;
+  padding: 0 8px;
   border-radius: 999px;
   background: #fff;
   color: var(--ink-soft);
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 600;
 }
 

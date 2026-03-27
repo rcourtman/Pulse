@@ -780,9 +780,10 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
             '</div>' +
             '<div class="service-shell">' +
               '<aside class="service-shell-sidebar">' +
-                '<div class="service-list-intro">' +
+                '<div class="service-shell-sidebar-head">' +
                   '<div class="account-panel-kicker">Commercial actions</div>' +
-                  '<p>Use these tools for self-hosted billing, license recovery, refunds, and privacy. Hosted workspace operations stay in Workspaces and Team.</p>' +
+                  '<h3>Billing, licenses, refunds, and privacy</h3>' +
+                  '<p>Use these tools for self-hosted commercial actions. Hosted workspace operations stay in Workspaces and Team.</p>' +
                 '</div>' +
                 '<div class="service-action-list">' +
                   renderServiceActionRow('open-manage-service', 'Billing', 'Manage subscriptions', 'Open Stripe billing access for existing self-hosted subscriptions without leaving the Pulse Account shell.', 'manage-service-panel', 'manage-inline-email', ['Invoices and plan changes', 'Subscription self-service']) +
