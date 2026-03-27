@@ -678,6 +678,12 @@ pattern as the protected inventory surface, not a separate large titled header
 bar plus another full toolbar slab. Event filter labels should also stay on the
 canonical short Pulse vocabulary like `Platform` and `Status` instead of
 recovery-only variants such as `History platform` or `History status`.
+That same events-table contract should also keep the default column set on a
+monitoring-style scan path rather than a report-export path. Recovery events
+should default to the concise columns operators need to triage quickly, while
+secondary fields such as verification, size, target, and details remain
+available through the shared column picker instead of crowding the baseline
+grid.
 That shared unified-resource dependency now also includes policy-governed
 resource metadata on the frontend decode path: storage and recovery surfaces
 that route through `frontend-modern/src/hooks/useUnifiedResources.ts` must

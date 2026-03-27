@@ -305,7 +305,7 @@ const Recovery: Component = () => {
     { id: 'verified', label: 'Verified', toggleable: true },
     { id: 'size', label: 'Size', toggleable: true },
     { id: 'method', label: 'Method' },
-    { id: 'repository', label: 'Target' },
+    { id: 'repository', label: 'Target', toggleable: true },
     { id: 'details', label: 'Details', toggleable: true },
     { id: 'outcome', label: 'Outcome' },
   ];
@@ -333,7 +333,7 @@ const Recovery: Component = () => {
   const artifactColumnVisibility = useColumnVisibility(
     STORAGE_KEYS.RECOVERY_HIDDEN_COLUMNS,
     artifactColumns,
-    ['entityId', 'cluster', 'nodeAgent', 'namespace'],
+    ['entityId', 'cluster', 'nodeAgent', 'namespace', 'verified', 'size', 'repository', 'details'],
     relevantArtifactColumnIDs,
     LEGACY_RECOVERY_COLUMN_ID_ALIASES,
   );

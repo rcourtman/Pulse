@@ -117,7 +117,7 @@ export const RecoveryHistoryTable: Component<RecoveryHistoryTableProps> = (props
   >
     <div class="overflow-x-auto">
       <Table
-        class="w-full border-collapse text-xs whitespace-nowrap"
+        class="w-full border-collapse whitespace-nowrap"
         style={{ 'min-width': props.tableMinWidth(), 'table-layout': 'fixed' }}
       >
         <TableHeader>
@@ -125,7 +125,7 @@ export const RecoveryHistoryTable: Component<RecoveryHistoryTableProps> = (props
             <For each={props.mobileVisibleArtifactColumns()}>
               {(column) => (
                 <TableHead
-                  class={`py-0.5 px-3 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap ${getRecoveryArtifactColumnHeaderClass(
+                  class={`px-3 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap ${getRecoveryArtifactColumnHeaderClass(
                     column.id,
                   )}`}
                 >
@@ -203,7 +203,7 @@ export const RecoveryHistoryTable: Component<RecoveryHistoryTableProps> = (props
                                 case 'time':
                                   return (
                                     <TableCell
-                                      class={`whitespace-nowrap px-3 py-0.5 text-right font-mono text-[11px] tabular-nums ${getRecoveryEventTimeTextClass(
+                                      class={`whitespace-nowrap px-3 py-1 text-right font-mono text-[11px] tabular-nums ${getRecoveryEventTimeTextClass(
                                         tsMs,
                                       )}`}
                                     >
@@ -212,10 +212,10 @@ export const RecoveryHistoryTable: Component<RecoveryHistoryTableProps> = (props
                                   );
                                 case 'type':
                                   return (
-                                    <TableCell class="whitespace-nowrap px-3 py-0.5 text-center">
+                                    <TableCell class="whitespace-nowrap px-3 py-1 text-center">
                                       <Show when={itemType} fallback={<span class="text-muted">—</span>}>
                                         <span
-                                          class={`inline-flex min-w-[2.75rem] justify-center rounded px-1.5 py-px text-[9px] font-medium leading-none ${getRecoveryPointItemTypeBadgeClass(
+                                          class={`inline-flex min-w-[2.9rem] justify-center rounded px-1.5 py-px text-[10px] font-medium leading-none ${getRecoveryPointItemTypeBadgeClass(
                                             point,
                                           )}`}
                                         >
@@ -227,11 +227,11 @@ export const RecoveryHistoryTable: Component<RecoveryHistoryTableProps> = (props
                                 case 'item':
                                   return (
                                     <TableCell
-                                      class="max-w-[420px] whitespace-nowrap px-3 py-0.5 text-base-content"
+                                      class="max-w-[420px] whitespace-nowrap px-3 py-1 text-base-content"
                                       title={item}
                                     >
                                       <div class="flex min-w-0 max-w-full items-center gap-2">
-                                        <span class="min-w-0 flex-1 truncate font-medium">
+                                        <span class="min-w-0 flex-1 truncate text-[12px] font-medium">
                                           {item}
                                         </span>
                                         <span class="inline-flex shrink-0 items-center gap-1">
@@ -271,34 +271,34 @@ export const RecoveryHistoryTable: Component<RecoveryHistoryTableProps> = (props
                                   );
                                 case 'entityId':
                                   return (
-                                    <TableCell class="whitespace-nowrap px-3 py-0.5 text-[11px] text-muted font-mono tabular-nums">
+                                    <TableCell class="whitespace-nowrap px-3 py-1 text-[11px] text-muted font-mono tabular-nums">
                                       {entityId || '—'}
                                     </TableCell>
                                   );
                                 case 'cluster':
                                   return (
-                                    <TableCell class="whitespace-nowrap px-3 py-0.5 text-[11px] text-muted font-mono">
+                                    <TableCell class="whitespace-nowrap px-3 py-1 text-[11px] text-muted font-mono">
                                       {cluster || '—'}
                                     </TableCell>
                                   );
                                 case 'nodeAgent':
                                   return (
-                                    <TableCell class="whitespace-nowrap px-3 py-0.5 text-[11px] text-muted font-mono">
+                                    <TableCell class="whitespace-nowrap px-3 py-1 text-[11px] text-muted font-mono">
                                       {nodeAgent || '—'}
                                     </TableCell>
                                   );
                                 case 'namespace':
                                   return (
-                                    <TableCell class="whitespace-nowrap px-3 py-0.5 text-[11px] text-muted font-mono">
+                                    <TableCell class="whitespace-nowrap px-3 py-1 text-[11px] text-muted font-mono">
                                       {namespace || '—'}
                                     </TableCell>
                                   );
                                 case 'platform': {
                                   const badge = getSourcePlatformBadge(platform);
                                   return (
-                                    <TableCell class="whitespace-nowrap px-3 py-0.5 text-center">
+                                    <TableCell class="whitespace-nowrap px-3 py-1 text-center">
                                       <span
-                                        class={`${badge?.classes || ''} inline-flex min-w-[3.25rem] justify-center px-1.5 py-px text-[9px] font-medium`}
+                                        class={`${badge?.classes || ''} inline-flex min-w-[3.25rem] justify-center px-1.5 py-px text-[10px] font-medium`}
                                       >
                                         {badge?.label || getSourcePlatformLabel(platform)}
                                       </span>
@@ -307,7 +307,7 @@ export const RecoveryHistoryTable: Component<RecoveryHistoryTableProps> = (props
                                 }
                                 case 'verified':
                                   return (
-                                    <TableCell class="whitespace-nowrap px-3 py-0.5 text-center">
+                                    <TableCell class="whitespace-nowrap px-3 py-1 text-center">
                                       {typeof point.verified === 'boolean' ? (
                                         point.verified ? (
                                           <span
@@ -355,7 +355,7 @@ export const RecoveryHistoryTable: Component<RecoveryHistoryTableProps> = (props
                                   );
                                 case 'size':
                                   return (
-                                    <TableCell class="whitespace-nowrap px-3 py-0.5 text-right font-mono text-[11px] tabular-nums text-muted">
+                                    <TableCell class="whitespace-nowrap px-3 py-1 text-right font-mono text-[11px] tabular-nums text-muted">
                                       {point.sizeBytes && point.sizeBytes > 0
                                         ? formatBytes(point.sizeBytes)
                                         : '—'}
@@ -363,9 +363,9 @@ export const RecoveryHistoryTable: Component<RecoveryHistoryTableProps> = (props
                                   );
                                 case 'method':
                                   return (
-                                    <TableCell class="whitespace-nowrap px-3 py-0.5 text-center">
+                                    <TableCell class="whitespace-nowrap px-3 py-1 text-center">
                                       <span
-                                        class={`inline-flex min-w-[3.5rem] justify-center rounded px-1.5 py-px text-[9px] font-medium ${getRecoveryArtifactModePresentation(
+                                        class={`inline-flex min-w-[3.5rem] justify-center rounded px-1.5 py-px text-[10px] font-medium ${getRecoveryArtifactModePresentation(
                                           mode as ArtifactMode,
                                         ).badgeClassName}`}
                                       >
@@ -376,7 +376,7 @@ export const RecoveryHistoryTable: Component<RecoveryHistoryTableProps> = (props
                                 case 'repository':
                                   return (
                                     <TableCell
-                                      class="max-w-[220px] truncate whitespace-nowrap px-3 py-0.5 text-[11px] leading-4 text-base-content"
+                                      class="max-w-[220px] truncate whitespace-nowrap px-3 py-1 text-[11px] leading-4 text-base-content"
                                       title={repoLabel}
                                     >
                                       {repoLabel || '—'}
@@ -385,7 +385,7 @@ export const RecoveryHistoryTable: Component<RecoveryHistoryTableProps> = (props
                                 case 'details':
                                   return (
                                     <TableCell
-                                      class="max-w-[280px] truncate whitespace-nowrap px-3 py-0.5 text-[10px] leading-4 text-muted"
+                                      class="max-w-[280px] truncate whitespace-nowrap px-3 py-1 text-[10px] leading-4 text-muted"
                                       title={detailsSummary}
                                     >
                                       {detailsSummary || '—'}
@@ -393,9 +393,9 @@ export const RecoveryHistoryTable: Component<RecoveryHistoryTableProps> = (props
                                   );
                                 case 'outcome':
                                   return (
-                                    <TableCell class="whitespace-nowrap px-3 py-0.5 text-center">
+                                    <TableCell class="whitespace-nowrap px-3 py-1 text-center">
                                       <span
-                                        class={`inline-flex min-w-[4.5rem] justify-center rounded px-1.5 py-px text-[9px] font-medium ${getRecoveryOutcomeBadgeClass(
+                                        class={`inline-flex min-w-[4.75rem] justify-center rounded px-1.5 py-px text-[10px] font-medium ${getRecoveryOutcomeBadgeClass(
                                           outcome,
                                         )}`}
                                       >
@@ -405,7 +405,7 @@ export const RecoveryHistoryTable: Component<RecoveryHistoryTableProps> = (props
                                   );
                                 default:
                                   return (
-                                    <TableCell class="whitespace-nowrap px-3 py-0.5 text-muted">
+                                    <TableCell class="whitespace-nowrap px-3 py-1 text-muted">
                                       -
                                     </TableCell>
                                   );

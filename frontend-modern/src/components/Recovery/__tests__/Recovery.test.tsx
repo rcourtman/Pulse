@@ -243,6 +243,8 @@ describe('Recovery', () => {
     expect(within(historyTable).getByText('Item Type')).toBeInTheDocument();
     expect(within(historyTable).getByText('Item')).toBeInTheDocument();
     expect(within(historyTable).getByText('Platform')).toBeInTheDocument();
+    expect(within(historyTable).queryByText('Target')).not.toBeInTheDocument();
+    expect(within(historyTable).queryByText('Details')).not.toBeInTheDocument();
   });
 
   it('persists the selected recovery workspace view in the route when explicitly changed', async () => {
@@ -438,7 +440,7 @@ describe('Recovery', () => {
       expect(within(historyTable).getByText('default/data')).toBeInTheDocument();
       expect(within(historyTable).getByText('PVC')).toBeInTheDocument();
       expect(within(historyTable).getByText('K8s')).toBeInTheDocument();
-      expect(within(historyTable).getByText('Immutable copy')).toBeInTheDocument();
+      expect(within(historyTable).queryByText('Immutable copy')).not.toBeInTheDocument();
 
       fireEvent.click(within(historyTable).getByText('11:00'));
 
@@ -469,7 +471,7 @@ describe('Recovery', () => {
     const tables = await screen.findAllByRole('table');
     const historyTable = tables.find((table) => within(table).queryByText('Local Copy'));
     expect(historyTable).toBeDefined();
-    expect(historyTable).toHaveStyle({ 'min-width': '1142px', 'table-layout': 'fixed' });
+    expect(historyTable).toHaveStyle({ 'min-width': '980px', 'table-layout': 'fixed' });
   });
 
   it('keeps canonical item and platform columns visible when legacy hidden-column ids exist', async () => {
