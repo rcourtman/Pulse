@@ -46,11 +46,13 @@ const formatDate = (value?: string | null) => {
   return date.toLocaleDateString();
 };
 
-const trialEndedNotice = getTrialEndedProLicenseNotice();
-const inactiveProUpsellNotice = getInactiveProUpsellNotice();
+export const ProLicensePlanSection: Component<ProLicensePlanSectionProps> = (props) => {
+  const trialEndedNotice = props.trialEnded ? getTrialEndedProLicenseNotice() : null;
+  const inactiveProUpsellNotice =
+    !props.hasPaidFeatures && !props.trialEnded ? getInactiveProUpsellNotice() : null;
 
-export const ProLicensePlanSection: Component<ProLicensePlanSectionProps> = (props) => (
-  <>
+  return (
+    <>
     <Show when={props.trialActivationNotice}>
       {(notice) => (
         <div class={`mb-4 rounded-md border p-3 text-sm ${notice().tone}`}>
@@ -75,17 +77,17 @@ export const ProLicensePlanSection: Component<ProLicensePlanSectionProps> = (pro
         </div>
       )}
     </Show>
-    <Show when={props.trialEnded && !licenseLoadError()}>
-      <div class={`mb-4 rounded-md border p-3 text-sm ${trialEndedNotice.tone}`}>
-        <p class="font-medium">{trialEndedNotice.title}</p>
-        <p class="text-xs mt-1 opacity-90">{trialEndedNotice.body}</p>
+    <Show when={props.trialEnded && !licenseLoadError() && trialEndedNotice}>
+      <div class={`mb-4 rounded-md border p-3 text-sm ${trialEndedNotice?.tone ?? ''}`}>
+        <p class="font-medium">{trialEndedNotice?.title}</p>
+        <p class="text-xs mt-1 opacity-90">{trialEndedNotice?.body}</p>
         <a
           class="inline-flex items-center gap-1 mt-2 text-xs font-medium hover:underline"
           href={getUpgradeActionUrlOrFallback('trial_expired')}
           target="_blank"
           rel="noreferrer"
         >
-          {trialEndedNotice.actionLabel}
+          {trialEndedNotice?.actionLabel}
         </a>
       </div>
     </Show>
@@ -153,21 +155,22 @@ export const ProLicensePlanSection: Component<ProLicensePlanSectionProps> = (pro
           </Show>
         </Show>
 
-        <Show when={!props.hasPaidFeatures && !props.trialEnded}>
-          <div class={`rounded-md border p-3 text-sm ${inactiveProUpsellNotice.tone}`}>
-            <p class="font-medium">{inactiveProUpsellNotice.title}</p>
-            <p class="text-xs mt-1 opacity-90">{inactiveProUpsellNotice.body}</p>
+        <Show when={!props.hasPaidFeatures && !props.trialEnded && inactiveProUpsellNotice}>
+          <div class={`rounded-md border p-3 text-sm ${inactiveProUpsellNotice?.tone ?? ''}`}>
+            <p class="font-medium">{inactiveProUpsellNotice?.title}</p>
+            <p class="text-xs mt-1 opacity-90">{inactiveProUpsellNotice?.body}</p>
             <a
               class="inline-flex items-center gap-1 mt-2 text-xs font-medium hover:underline"
               href={getUpgradeActionUrlOrFallback('ai_autofix')}
               target="_blank"
               rel="noreferrer"
             >
-              {inactiveProUpsellNotice.actionLabel}
+              {inactiveProUpsellNotice?.actionLabel}
             </a>
           </div>
         </Show>
       </Show>
     </Show>
-  </>
-);
+    </>
+  );
+};

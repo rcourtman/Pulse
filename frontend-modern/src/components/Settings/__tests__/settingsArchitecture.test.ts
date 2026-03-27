@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SELF_HOSTED_PRO_BILLING_PRESENTATION } from '@/utils/licensePresentation';
+import { SELF_HOSTED_PRO_BILLING_PRESENTATION } from '../selfHostedBillingPresentation';
 import settingsSource from '../Settings.tsx?raw';
 import settingsDialogsSource from '../SettingsDialogs.tsx?raw';
 import settingsShellSource from '../SettingsPageShell.tsx?raw';
@@ -34,6 +34,7 @@ import settingsNavigationModelSource from '../settingsNavigationModel.ts?raw';
 import settingsRoutingSource from '../settingsRouting.ts?raw';
 import settingsTypesSource from '../settingsTypes.ts?raw';
 import settingsNavCatalogSource from '../settingsNavCatalog.ts?raw';
+import selfHostedBillingPresentationSource from '../selfHostedBillingPresentation.ts?raw';
 import settingsNavVisibilitySource from '../settingsNavVisibility.ts?raw';
 import settingsInfrastructurePanelPropsSource from '../useSettingsInfrastructurePanelProps.ts?raw';
 import settingsNavigationHookSource from '../useSettingsNavigation.ts?raw';
@@ -499,7 +500,7 @@ describe('Settings architecture guardrails', () => {
     expect(settingsShellStateSource).toContain('showPasswordModal');
     expect(settingsNavCatalogSource).toContain('export const SETTINGS_NAV_GROUPS');
     expect(settingsNavCatalogSource).toContain('export function getSettingsNavItem');
-    expect(settingsNavCatalogSource).toContain('@/utils/licensePresentation');
+    expect(settingsNavCatalogSource).toContain("./selfHostedBillingPresentation");
     expect(settingsNavCatalogSource).toContain('SELF_HOSTED_PRO_BILLING_PRESENTATION.shellTitle');
     expect(settingsNavCatalogSource).not.toContain("label: 'Pulse Pro'");
     expect(settingsNavVisibilitySource).toContain('export function shouldHideSettingsNavItem');
@@ -543,7 +544,7 @@ describe('Settings architecture guardrails', () => {
     );
     expect(monitoredSystemDefinitionDisclosureSource).not.toContain('summary?: string');
     expect(monitoredSystemDefinitionDisclosureSource).not.toContain('{props.summary}');
-    expect(proLicensePanelSource).toContain('@/utils/licensePresentation');
+    expect(proLicensePanelSource).toContain('./selfHostedBillingPresentation');
     expect(proLicensePanelSource).toContain('SELF_HOSTED_PRO_BILLING_PRESENTATION');
     expect(proLicensePanelStateSource).toContain('buildSelfHostedCommercialPlanModel');
     expect(proLicensePanelStateSource).toContain('loadLicenseStatus(true)');
@@ -553,7 +554,7 @@ describe('Settings architecture guardrails', () => {
     expect(proLicensePanelSource).not.toContain('description="Manage self-hosted billing');
     expect(proLicensePanelSource).not.toContain('title="Plan"');
     expect(proLicensePanelSource).not.toContain('title="Usage"');
-    expect(infrastructureWorkspaceSource).toContain('@/utils/licensePresentation');
+    expect(infrastructureWorkspaceSource).toContain('./selfHostedBillingPresentation');
     expect(infrastructureWorkspaceSource).toContain(
       'SELF_HOSTED_PRO_BILLING_PRESENTATION.infrastructureWorkspaceReferral',
     );
@@ -1272,7 +1273,7 @@ describe('Settings architecture guardrails', () => {
   });
 
   it('keeps infrastructure shell framing focused on operations, not billing', () => {
-    expect(settingsHeaderMetaSource).toContain('@/utils/licensePresentation');
+    expect(settingsHeaderMetaSource).toContain('./selfHostedBillingPresentation');
     expect(settingsHeaderMetaSource).toContain(
       'SELF_HOSTED_PRO_BILLING_PRESENTATION.infrastructureRouteReferral',
     );
@@ -1310,6 +1311,13 @@ describe('Settings architecture guardrails', () => {
       'subscription status',
     );
     expect(SETTINGS_HEADER_META['organization-billing'].description).toContain('plan limits');
+  });
+
+  it('keeps self-hosted billing shell copy in a settings-owned presentation module', () => {
+    expect(selfHostedBillingPresentationSource).toContain(
+      'export const SELF_HOSTED_PRO_BILLING_PRESENTATION',
+    );
+    expect(selfHostedBillingPresentationSource).not.toContain('@/utils/licensePresentation');
   });
 
   it('keeps shell titles aligned with the leading settings panel on key top-level surfaces', () => {

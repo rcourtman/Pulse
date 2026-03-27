@@ -1,5 +1,5 @@
 import type { SettingsHeaderMetaMap } from './settingsNavigationModel';
-import { SELF_HOSTED_PRO_BILLING_PRESENTATION } from '@/utils/licensePresentation';
+import { SELF_HOSTED_PRO_BILLING_PRESENTATION } from './selfHostedBillingPresentation';
 
 export const SETTINGS_HEADER_META: SettingsHeaderMetaMap = {
   proxmox: {

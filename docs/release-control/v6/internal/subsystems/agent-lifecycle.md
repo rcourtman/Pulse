@@ -390,9 +390,10 @@ path instead of leaving first-session install guidance implicit in generic
 settings-shell prose.
 When that infrastructure workspace needs to redirect operators to the Pulse Pro
 surface for billing, monitored-system limits, or license status, it must
-consume the shared referral copy from
-`frontend-modern/src/utils/licensePresentation.ts` instead of carrying
-workspace-local commercial guidance.
+consume the settings-owned referral copy from
+`frontend-modern/src/components/Settings/selfHostedBillingPresentation.ts`
+instead of carrying workspace-local commercial guidance or reaching back into
+generic commercial presentation helpers from the hosted infrastructure route.
 That canonical /api/auto-register behavior now also includes hostname/IP continuity:
 reruns that arrive through a different canonical host form must reuse the same
 Pulse-managed node record and token instead of forking duplicate fleet entries.

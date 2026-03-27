@@ -470,6 +470,18 @@ describe('ProLicensePanel', () => {
     expect(proLicensePlanSectionSource).toContain('getNoActiveProLicenseState');
     expect(proLicensePlanSectionSource).toContain('getTrialEndedProLicenseNotice');
     expect(proLicensePlanSectionSource).toContain('getInactiveProUpsellNotice');
+    expect(proLicensePlanSectionSource).not.toContain(
+      'const trialEndedNotice = getTrialEndedProLicenseNotice();',
+    );
+    expect(proLicensePlanSectionSource).not.toContain(
+      'const inactiveProUpsellNotice = getInactiveProUpsellNotice();',
+    );
+    expect(proLicensePlanSectionSource).toContain(
+      'const trialEndedNotice = props.trialEnded ? getTrialEndedProLicenseNotice() : null;',
+    );
+    expect(proLicensePlanSectionSource).toContain(
+      '!props.hasPaidFeatures && !props.trialEnded ? getInactiveProUpsellNotice() : null;',
+    );
     expect(proLicensePlanSectionSource).not.toContain('Your Pro trial has ended');
     expect(proLicensePlanSectionSource).not.toContain('Unlock Pulse Patrol, alert analysis, auto-fix, and more.');
     expect(selfHostedCommercialActivationSectionSource).toContain(

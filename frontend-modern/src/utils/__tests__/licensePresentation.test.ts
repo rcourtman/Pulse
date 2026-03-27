@@ -19,8 +19,8 @@ import {
   getTrialActivationNotice,
   isDisplayableLicenseFeature,
   SELF_HOSTED_ACTIVATION_PRESENTATION,
-  SELF_HOSTED_PRO_BILLING_PRESENTATION,
 } from '@/utils/licensePresentation';
+import { SELF_HOSTED_PRO_BILLING_PRESENTATION } from '@/components/Settings/selfHostedBillingPresentation';
 
 describe('licensePresentation', () => {
   it('returns canonical tier labels', () => {

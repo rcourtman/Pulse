@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { SELF_HOSTED_PRO_BILLING_PRESENTATION } from '@/utils/licensePresentation';
+import { SELF_HOSTED_PRO_BILLING_PRESENTATION } from '../selfHostedBillingPresentation';
 import { InfrastructureWorkspace } from '../InfrastructureWorkspace';
 
 let mockPathname = '/settings';

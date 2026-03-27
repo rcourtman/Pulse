@@ -499,8 +499,18 @@ That same shared presentation owner also carries the canonical cross-surface
 referral copy used outside the billing shell itself. When infrastructure or
 other adjacent settings surfaces need to point operators toward Pulse Pro for
 billing, monitored-system limits, or license status, they must consume the
-shared referral strings from `frontend-modern/src/utils/licensePresentation.ts`
-instead of drafting route-local commercial guidance.
+settings-owned referral strings from
+`frontend-modern/src/components/Settings/selfHostedBillingPresentation.ts`
+instead of drafting route-local commercial guidance or reaching directly into
+generic commercial helpers from hosted settings routes.
+That same hosted-settings presentation boundary is explicit about bundle
+ownership. `frontend-modern/src/components/Settings/selfHostedBillingPresentation.ts`
+is the canonical settings-shell adapter for self-hosted Pro shell framing and
+referral copy, while `frontend-modern/src/utils/licensePresentation.ts`
+remains the shared commercial notice/label owner. Hosted settings surfaces
+must not import self-hosted billing framing straight from the generic helper
+module when doing so would reintroduce top-level bundle-init cycles into
+hosted tenant settings routes.
 Paid Pulse Pro v5 grandfathering is now part of that same canonical boundary:
 when a recurring v5 customer migrates into v6, billing persistence,
 entitlement evaluation, renewal handling, and Pro-license presentation must
@@ -550,6 +560,12 @@ The shared license presentation owner also holds self-hosted Pro settings
 upsell and trial-ended notice copy for `ProLicensePlanSection.tsx`; that
 surface must consume canonical helper notices instead of carrying inline
 upgrade copy or local status-tone branches.
+That same plan-section boundary must also defer notice resolution to component
+runtime. `frontend-modern/src/components/Settings/ProLicensePlanSection.tsx`
+may not compute trial-ended or inactive-upsell notices at module scope,
+because hosted settings bundles must survive top-level import ordering without
+throwing initialization-time `ReferenceError` crashes before the workspace UI
+mounts.
 That same counted-unit boundary also owns the disclosure rule for retail copy:
 default billing and pricing surfaces should use concise monitored-system copy,
 while the full counted-unit definition appears only behind explicit disclosure

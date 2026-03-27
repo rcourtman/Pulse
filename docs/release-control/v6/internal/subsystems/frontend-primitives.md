@@ -51,6 +51,7 @@ work extends shared components instead of creating new local variants.
 27. `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx`
 28. `frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx`
 29. `frontend-modern/src/components/Settings/settingsHeaderMeta.ts`
+30. `frontend-modern/src/components/Settings/selfHostedBillingPresentation.ts`
 30. `frontend-modern/src/components/Settings/SSOProvidersPanel.tsx`
 31. `frontend-modern/src/components/Settings/useAISettingsState.ts`
 32. `frontend-modern/src/components/Settings/useDiagnosticsPanelState.ts`
@@ -163,11 +164,18 @@ work extends shared components instead of creating new local variants.
    and keep adjacent settings-shell referrals such as
    `InfrastructureWorkspace.tsx` on that same shared owner instead of
    reintroducing local “go to Pulse Pro” variants.
-6. Keep first-session dashboard empty-state copy on
+6. Keep hosted settings-shell framing imports safe for bundle initialization.
+   Self-hosted billing titles, descriptions, and referral copy used by
+   `settingsHeaderMeta.ts`, `settingsNavCatalog.ts`, and adjacent settings
+   shells must flow through
+   `frontend-modern/src/components/Settings/selfHostedBillingPresentation.ts`
+   instead of importing generic commercial presentation helpers directly into
+   hosted settings route shells.
+7. Keep first-session dashboard empty-state copy on
    `frontend-modern/src/utils/dashboardEmptyStatePresentation.ts`, and make
    infrastructure setup guidance name the canonical destination explicitly
    instead of falling back to generic settings CTA labels.
-7. Keep the live first-session wizard on the canonical three-step runtime
+8. Keep the live first-session wizard on the canonical three-step runtime
    shape in `frontend-modern/src/components/SetupWizard/SetupWizard.tsx`
    (`Welcome`, `Security`, then `Install`), and keep the step indicator plus
    completion CTA language aligned with the governed infrastructure install
@@ -1288,9 +1296,9 @@ for `frontend-modern/src/components/Settings/settingsNavCatalog.ts` and
 `frontend-modern/src/components/Settings/settingsHeaderMeta.ts` are part of
 that same shell boundary as
 `frontend-modern/src/components/Settings/ProLicensePanel.tsx` and the shared
-commercial presentation owner in
-`frontend-modern/src/utils/licensePresentation.ts`; the `system-billing`
-navigation label plus header title and description must reuse
+settings billing presentation owner in
+`frontend-modern/src/components/Settings/selfHostedBillingPresentation.ts`;
+the `system-billing` navigation label plus header title and description must reuse
 `SELF_HOSTED_PRO_BILLING_PRESENTATION.shellTitle` and
 `SELF_HOSTED_PRO_BILLING_PRESENTATION.shellDescription` so the route header and
 the billing shell do not narrate the same commercial surface differently.
@@ -1301,6 +1309,12 @@ toward Pulse Pro for billing, monitored-system limits, or license status, they
 must reuse the shared referral copy from
 `SELF_HOSTED_PRO_BILLING_PRESENTATION` rather than drafting local “go there
 for billing” variants.
+That same shell boundary also has to stay safe for hosted tenant bundles.
+Settings-shell framing copy for self-hosted billing must route through
+`selfHostedBillingPresentation.ts`, with `settingsNavCatalog.ts`,
+`settingsHeaderMeta.ts`, and adjacent hosted settings shells consuming that
+settings-owned adapter instead of importing generic commercial presentation
+helpers in ways that can reintroduce top-level bundle-init cycles.
 `frontend-modern/src/components/Settings/NetworkSettingsPanel.tsx` is now a
 shell only. `frontend-modern/src/components/Settings/NetworkDiscoverySection.tsx`
 owns discovery controls and shared subnet presets, while

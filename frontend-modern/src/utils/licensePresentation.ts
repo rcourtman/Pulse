@@ -102,17 +102,6 @@ export interface SelfHostedActivationPresentation {
   trial: SelfHostedActivationTrialCopy;
 }
 
-export interface SelfHostedProBillingPresentation {
-  shellTitle: string;
-  shellDescription: string;
-  infrastructureRouteReferral: string;
-  infrastructureWorkspaceReferral: string;
-  refreshLabel: string;
-  planSectionTitle: string;
-  planSectionDescription: string;
-  usageSectionTitle: string;
-}
-
 const GRANDFATHERED_V5_PLAN_LABELS: Record<string, string> = {
   v5_lifetime_grandfathered: 'V5 Lifetime Grandfathered',
   v5_pro_monthly_grandfathered: 'V5 Pro Monthly (Grandfathered)',
@@ -371,20 +360,6 @@ export const SELF_HOSTED_ACTIVATION_PRESENTATION: SelfHostedActivationPresentati
     idleActionLabel: 'Start 14-day Pro Trial',
     pendingActionLabel: 'Starting...',
   },
-};
-
-export const SELF_HOSTED_PRO_BILLING_PRESENTATION: SelfHostedProBillingPresentation = {
-  shellTitle: 'Pulse Pro',
-  shellDescription:
-    'Manage self-hosted billing, monitored-system limits, and Pulse Pro license status.',
-  infrastructureRouteReferral: 'Billing and monitored-system limits live in Pulse Pro.',
-  infrastructureWorkspaceReferral:
-    'Billing, monitored-system limits, and Pulse Pro license status live in Pulse Pro, not here.',
-  refreshLabel: 'Refresh',
-  planSectionTitle: 'Plan',
-  planSectionDescription:
-    'Review your active plan, expiry, included limits, and paid capabilities.',
-  usageSectionTitle: 'Usage',
 };
 
 export const getOrganizationBillingLicenseStatusLabel = (

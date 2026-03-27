@@ -2,7 +2,7 @@ import { Component, Match, Switch, createMemo } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
 import { Card } from '@/components/shared/Card';
 import { Subtabs } from '@/components/shared/Subtabs';
-import { SELF_HOSTED_PRO_BILLING_PRESENTATION } from '@/utils/licensePresentation';
+import { SELF_HOSTED_PRO_BILLING_PRESENTATION } from './selfHostedBillingPresentation';
 import { InfrastructureInstallPanel } from './InfrastructureInstallPanel';
 import { InfrastructureReportingPanel } from './InfrastructureReportingPanel';
 import { ProxmoxSettingsPanel } from './ProxmoxSettingsPanel';

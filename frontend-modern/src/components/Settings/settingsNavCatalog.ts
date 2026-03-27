@@ -17,7 +17,7 @@ import Building2 from 'lucide-solid/icons/building-2';
 import Share2 from 'lucide-solid/icons/share-2';
 import CreditCard from 'lucide-solid/icons/credit-card';
 import { PulseLogoIcon } from '@/components/icons/PulseLogoIcon';
-import { SELF_HOSTED_PRO_BILLING_PRESENTATION } from '@/utils/licensePresentation';
+import { SELF_HOSTED_PRO_BILLING_PRESENTATION } from './selfHostedBillingPresentation';
 import type {
   SettingsNavGroup,
   SettingsNavItem,
