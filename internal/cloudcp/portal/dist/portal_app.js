@@ -1607,7 +1607,7 @@
     var state = String(workspace.state || "");
     var createdLabel = formatWorkspaceDate(workspace.created_at);
     var metaParts = [
-      '<span class="workspace-meta-item">' + escapeHTML(titleCase(state || "unknown")) + "</span>"
+      '<span class="workspace-meta-item">' + escapeHTML(workspace.id) + "</span>"
     ];
     if (createdLabel) {
       metaParts.push('<span class="workspace-meta-item">Created ' + escapeHTML(createdLabel) + "</span>");
@@ -1625,7 +1625,7 @@
     if (account.can_manage && (state === "active" || state === "suspended" || state === "failed")) {
       manageAction = '<button type="button" class="btn-secondary btn-workspace-manage" data-action="select-workspace" data-account-id="' + escapeAttr(account.id) + '" data-workspace-id="' + escapeAttr(workspace.id) + '">Manage</button>';
     }
-    return '<article class="workspace-card"><div class="workspace-card-main"><div class="workspace-card-topline"><div class="workspace-title-group"><h4 class="workspace-name">' + escapeHTML(workspace.display_name) + '</h4><div class="workspace-meta">' + metaParts.join("") + '</div></div><div class="workspace-badges">' + healthBadgeHTML(workspace) + '<span class="badge badge-' + escapeHTML(state || "unknown") + '">' + escapeHTML(titleCase(state || "Unknown")) + '</span></div></div><p class="workspace-summary">' + escapeHTML(workspaceStatusCopy(workspace)) + '</p></div><div class="workspace-actions">' + openAction + manageAction + "</div></article>";
+    return '<article class="workspace-row"><div class="workspace-row-main"><div class="workspace-row-title"><div class="workspace-row-heading"><h4 class="workspace-name">' + escapeHTML(workspace.display_name) + '</h4><div class="workspace-meta">' + metaParts.join("") + '</div></div><p class="workspace-summary">' + escapeHTML(workspaceStatusCopy(workspace)) + '</p></div><div class="workspace-row-status-grid"><div class="workspace-row-status-cell"><span class="workspace-row-status-label">Health</span>' + healthBadgeHTML(workspace) + '</div><div class="workspace-row-status-cell"><span class="workspace-row-status-label">Lifecycle</span><span class="badge badge-' + escapeHTML(state || "unknown") + '">' + escapeHTML(titleCase(state || "Unknown")) + '</span></div></div></div><div class="workspace-actions">' + openAction + manageAction + "</div></article>";
   }
   function renderAccountSection(account, accountAPIBasePath) {
     var workspaces = Array.isArray(account.workspaces) ? account.workspaces : [];

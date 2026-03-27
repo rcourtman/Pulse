@@ -433,7 +433,7 @@ header .logout-btn:hover,
 .account-overview-card,
 .account-stat-card,
 .account-operations-panel,
-.workspace-card,
+.workspace-row,
 .workspace-management-panel,
 .team-management-panel,
 .add-workspace-form,
@@ -553,33 +553,33 @@ header .logout-btn:hover,
 }
 
 .workspace-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.workspace-row {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 14px;
-}
-
-.workspace-card {
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  gap: 18px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: center;
   padding: 18px;
-  min-height: 250px;
 }
 
-.workspace-card-main {
+.workspace-row-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(220px, 0.85fr);
+  gap: 18px;
+  align-items: center;
+}
+
+.workspace-row-title {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 
-.workspace-card-topline {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.workspace-title-group {
+.workspace-row-heading {
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -617,6 +617,31 @@ header .logout-btn:hover,
   font-size: 14px;
   line-height: 1.65;
   color: var(--ink-soft);
+}
+
+.workspace-row-status-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.workspace-row-status-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 84px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--panel-muted);
+}
+
+.workspace-row-status-label {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
 }
 
 .workspace-state-label {
@@ -1045,6 +1070,11 @@ header .logout-btn:hover,
   .service-grid {
     grid-template-columns: 1fr;
   }
+
+  .workspace-row,
+  .workspace-row-main {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 720px) {
@@ -1079,9 +1109,14 @@ header .logout-btn:hover,
     align-items: flex-start;
   }
 
+  .workspace-actions,
   .workspace-actions form,
   .workspace-actions .btn-primary,
   .workspace-actions .btn-secondary {
     width: 100%;
+  }
+
+  .workspace-row-status-grid {
+    grid-template-columns: 1fr;
   }
 }
