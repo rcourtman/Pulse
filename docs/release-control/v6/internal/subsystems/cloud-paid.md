@@ -485,9 +485,10 @@ That same boundary also owns the shell and section framing copy for the
 self-hosted Pro billing surface. `ProLicensePanel.tsx` must consume shared
 presentation for its shell title/description, refresh CTA label, and section
 headings rather than carrying those commercial labels inline.
-The same title and description should also feed the `system-billing` route
-header metadata so the settings shell and the route header do not narrate the
-same commercial surface differently.
+The same title should also feed the `system-billing` settings navigation item,
+and the same title and description should also feed the `system-billing` route
+header metadata so the nav, shell, and route header do not narrate the same
+commercial surface differently.
 Paid Pulse Pro v5 grandfathering is now part of that same canonical boundary:
 when a recurring v5 customer migrates into v6, billing persistence,
 entitlement evaluation, renewal handling, and Pro-license presentation must

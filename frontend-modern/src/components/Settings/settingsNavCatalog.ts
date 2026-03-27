@@ -17,6 +17,7 @@ import Building2 from 'lucide-solid/icons/building-2';
 import Share2 from 'lucide-solid/icons/share-2';
 import CreditCard from 'lucide-solid/icons/credit-card';
 import { PulseLogoIcon } from '@/components/icons/PulseLogoIcon';
+import { SELF_HOSTED_PRO_BILLING_PRESENTATION } from '@/utils/licensePresentation';
 import type {
   SettingsNavGroup,
   SettingsNavItem,
@@ -124,7 +125,7 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
       },
       {
         id: 'system-billing',
-        label: 'Pulse Pro',
+        label: SELF_HOSTED_PRO_BILLING_PRESENTATION.shellTitle,
         icon: PulseLogoIcon,
       },
     ],

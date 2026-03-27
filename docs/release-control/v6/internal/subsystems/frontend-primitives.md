@@ -156,8 +156,8 @@ work extends shared components instead of creating new local variants.
 4. Remove local forks after the shared primitive is introduced
 5. When a settings route header and a top-level settings shell describe the same
    commercial surface, keep them on the same shared presentation owner instead
-   of allowing route metadata in `settingsHeaderMeta.ts` to drift into
-   independent title or description copy.
+   of allowing route metadata in `settingsHeaderMeta.ts` or labels in
+   `settingsNavCatalog.ts` to drift into independent title or description copy.
 
 ## Current State
 
@@ -1244,13 +1244,14 @@ is the shell, `useSSOProvidersState.ts` owns the reactive/API lifecycle, and
 `frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx` must keep
 page-shell titles, descriptions, and lead panel framing aligned instead of
 letting navigation/header labels drift away from the actual settings surface.
-The self-hosted Pulse Pro route header metadata for
-`frontend-modern/src/components/Settings/settingsHeaderMeta.ts` is part of that
-same shell boundary as
+The self-hosted Pulse Pro settings navigation item and route header metadata
+for `frontend-modern/src/components/Settings/settingsNavCatalog.ts` and
+`frontend-modern/src/components/Settings/settingsHeaderMeta.ts` are part of
+that same shell boundary as
 `frontend-modern/src/components/Settings/ProLicensePanel.tsx` and the shared
 commercial presentation owner in
 `frontend-modern/src/utils/licensePresentation.ts`; the `system-billing`
-header title and description must reuse
+navigation label plus header title and description must reuse
 `SELF_HOSTED_PRO_BILLING_PRESENTATION.shellTitle` and
 `SELF_HOSTED_PRO_BILLING_PRESENTATION.shellDescription` so the route header and
 the billing shell do not narrate the same commercial surface differently.

@@ -43,6 +43,7 @@ import settingsPanelRegistryLoadersSource from '../settingsPanelRegistryLoaders.
 import settingsTabSaveBehaviorSource from '../settingsTabSaveBehavior.ts?raw';
 import settingsPanelRegistryHookSource from '../useSettingsPanelRegistry.tsx?raw';
 import settingsSystemPanelsSource from '../useSettingsSystemPanels.tsx?raw';
+import { getSettingsNavItem } from '../settingsNavCatalog';
 import apiAccessPanelSource from '../APIAccessPanel.tsx?raw';
 import apiTokenManagerSource from '../APITokenManager.tsx?raw';
 import apiTokenManagerModelSource from '../apiTokenManagerModel.ts?raw';
@@ -493,6 +494,9 @@ describe('Settings architecture guardrails', () => {
     expect(settingsShellStateSource).toContain('showPasswordModal');
     expect(settingsNavCatalogSource).toContain('export const SETTINGS_NAV_GROUPS');
     expect(settingsNavCatalogSource).toContain('export function getSettingsNavItem');
+    expect(settingsNavCatalogSource).toContain('@/utils/licensePresentation');
+    expect(settingsNavCatalogSource).toContain('SELF_HOSTED_PRO_BILLING_PRESENTATION.shellTitle');
+    expect(settingsNavCatalogSource).not.toContain("label: 'Pulse Pro'");
     expect(settingsNavVisibilitySource).toContain('export function shouldHideSettingsNavItem');
     expect(settingsNavVisibilitySource).toContain('export function isSettingsNavItemLocked');
     expect(settingsTabSaveBehaviorSource).toContain('getSettingsNavItem(tab)?.saveBehavior');
@@ -1277,6 +1281,9 @@ describe('Settings architecture guardrails', () => {
     );
     expect(SETTINGS_HEADER_META['system-billing'].description).toBe(
       SELF_HOSTED_PRO_BILLING_PRESENTATION.shellDescription,
+    );
+    expect(getSettingsNavItem('system-billing')?.label).toBe(
+      SELF_HOSTED_PRO_BILLING_PRESENTATION.shellTitle,
     );
     expect(SETTINGS_HEADER_META['organization-billing'].description).toContain(
       'subscription status',
