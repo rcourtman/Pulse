@@ -106,6 +106,41 @@ describe('account runtime', function() {
     expect((document.getElementById('ws-spinner-acct_1') as HTMLElement).hidden).toBe(true);
   });
 
+  it('toggles workspace menus and routes explicit workspace actions', async function() {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({})));
+    var confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+    document.body.innerHTML =
+      '<button id="workspace-menu-button-acct_1-ws_1" aria-expanded="false"></button>' +
+      '<div id="workspace-menu-acct_1-ws_1" data-workspace-menu-account-id="acct_1" data-workspace-id="ws_1" hidden></div>' +
+      '<button id="workspace-menu-button-acct_1-ws_2" aria-expanded="false"></button>' +
+      '<div id="workspace-menu-acct_1-ws_2" data-workspace-menu-account-id="acct_1" data-workspace-id="ws_2" hidden></div>';
+
+    runtime.toggleWorkspaceMenu('acct_1', 'ws_1');
+    expect(deps.store.getAccountState().byAccountID.acct_1.openWorkspaceMenuID).toBe('ws_1');
+    expect((document.getElementById('workspace-menu-acct_1-ws_1') as HTMLElement).hidden).toBe(false);
+
+    runtime.toggleWorkspaceMenu('acct_1', 'ws_1');
+    expect(deps.store.getAccountState().byAccountID.acct_1.openWorkspaceMenuID).toBe('');
+    expect((document.getElementById('workspace-menu-acct_1-ws_1') as HTMLElement).hidden).toBe(true);
+
+    runtime.toggleWorkspaceMenu('acct_1', 'ws_2');
+    await runtime.manageWorkspaceAction('acct_1', 'ws_2', 'suspend', 'Alpha Workspace');
+    await flushAsync();
+
+    expect(confirmSpy).toHaveBeenCalledWith('Suspend workspace "Alpha Workspace"?');
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/accounts/acct_1/tenants/ws_2',
+      expect.objectContaining({
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ state: 'suspended' }),
+      })
+    );
+    expect(deps.showToast).toHaveBeenCalledWith('Suspended workspace.');
+    expect(deps.store.getAccountState().byAccountID.acct_1.openWorkspaceMenuID).toBe('');
+  });
+
   it('loads and updates team membership from runtime actions', async function() {
     vi.stubGlobal(
       'fetch',

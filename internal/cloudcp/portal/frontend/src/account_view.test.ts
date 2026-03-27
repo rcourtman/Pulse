@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { renderAccountUI, renderAddWorkspaceSection, renderTeamSection } from './account_view';
+import { renderAccountUI, renderAddWorkspaceSection, renderTeamSection, renderWorkspaceMenus } from './account_view';
 import type { PortalAccountState, PortalAccountUIEntry } from './types';
 
 function createEntry(overrides: Partial<PortalAccountUIEntry> = {}): PortalAccountUIEntry {
@@ -10,6 +10,7 @@ function createEntry(overrides: Partial<PortalAccountUIEntry> = {}): PortalAccou
       pending: false,
       error: '',
     },
+    openWorkspaceMenuID: '',
     teamVisible: false,
     teamQuery: {
       status: 'idle',
@@ -75,6 +76,20 @@ describe('account view', function() {
     );
     expect(document.querySelector('[data-action="change-role"]')).not.toBeNull();
     expect(document.querySelector('[data-action="remove-member"]')).not.toBeNull();
+  });
+
+  it('renders workspace menu visibility from account UI state', function() {
+    document.body.innerHTML =
+      '<button id="workspace-menu-button-acct_1-ws_1" aria-expanded="false"></button>' +
+      '<div id="workspace-menu-acct_1-ws_1" data-workspace-menu-account-id="acct_1" data-workspace-id="ws_1" hidden></div>' +
+      '<button id="workspace-menu-button-acct_1-ws_2" aria-expanded="false"></button>' +
+      '<div id="workspace-menu-acct_1-ws_2" data-workspace-menu-account-id="acct_1" data-workspace-id="ws_2" hidden></div>';
+
+    renderWorkspaceMenus('acct_1', createEntry({ openWorkspaceMenuID: 'ws_2' }));
+    expect((document.getElementById('workspace-menu-acct_1-ws_1') as HTMLElement).hidden).toBe(true);
+    expect((document.getElementById('workspace-menu-acct_1-ws_2') as HTMLElement).hidden).toBe(false);
+    expect(document.getElementById('workspace-menu-button-acct_1-ws_1')?.getAttribute('aria-expanded')).toBe('false');
+    expect(document.getElementById('workspace-menu-button-acct_1-ws_2')?.getAttribute('aria-expanded')).toBe('true');
   });
 
   it('renders account UI for every tracked account entry', function() {

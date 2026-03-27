@@ -63,6 +63,7 @@ export interface PortalMutationState {
 export interface PortalAccountUIEntry {
   addWorkspaceOpen: boolean;
   createWorkspace: PortalMutationState;
+  openWorkspaceMenuID: string;
   teamVisible: boolean;
   teamQuery: PortalQueryState<PortalTeamMember[]>;
 }

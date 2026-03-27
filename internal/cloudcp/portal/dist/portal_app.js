@@ -10,6 +10,19 @@
     var input = getElement(id);
     if (input) input.focus();
   }
+  function renderWorkspaceMenus(accountID, entry) {
+    var menus = document.querySelectorAll('[data-workspace-menu-account-id="' + accountID + '"]');
+    for (var i = 0; i < menus.length; i += 1) {
+      var menu = menus[i];
+      var workspaceID = menu.getAttribute("data-workspace-id") || "";
+      var open = entry.openWorkspaceMenuID === workspaceID;
+      menu.hidden = !open;
+      var button = getElement("workspace-menu-button-" + accountID + "-" + workspaceID);
+      if (button) {
+        button.setAttribute("aria-expanded", open ? "true" : "false");
+      }
+    }
+  }
   function setTbodyMessage(tbody, msg, isError) {
     tbody.textContent = "";
     var tr = document.createElement("tr");
@@ -106,6 +119,7 @@
       var accountID = accountIDs[i];
       var entry = accountState.byAccountID[accountID];
       renderAddWorkspaceSection(accountID, entry);
+      renderWorkspaceMenus(accountID, entry);
       renderTeamSection(accountID, entry);
     }
   }
@@ -113,7 +127,12 @@
   // src/account_controller.ts
   function installAccountController(deps) {
     document.addEventListener("click", function(event) {
-      var actionEl = asHTMLElement(event.target)?.closest("[data-action]");
+      var target = asHTMLElement(event.target);
+      if (!target) return;
+      var actionEl = target.closest("[data-action]");
+      if (!target.closest(".workspace-menu-wrap")) {
+        deps.runtime.closeWorkspaceMenus();
+      }
       if (!actionEl) return;
       var action = actionEl.getAttribute("data-action") || "";
       var accountID = actionEl.getAttribute("data-account-id") || "";
@@ -138,13 +157,19 @@
           event.preventDefault();
           void deps.runtime.createWorkspace(accountID);
           return;
-        case "workspace-manage":
+        case "toggle-workspace-menu":
           event.preventDefault();
-          void deps.runtime.manageWorkspace(
-            event,
+          deps.runtime.toggleWorkspaceMenu(
+            accountID,
+            actionEl.getAttribute("data-workspace-id") || ""
+          );
+          return;
+        case "workspace-action":
+          event.preventDefault();
+          void deps.runtime.manageWorkspaceAction(
             accountID,
             actionEl.getAttribute("data-workspace-id") || "",
-            actionEl.getAttribute("data-workspace-state") || "",
+            actionEl.getAttribute("data-workspace-action") || "",
             actionEl.getAttribute("data-workspace-name") || ""
           );
           return;
@@ -399,6 +424,7 @@
       accountState.byAccountID[accountID] = {
         addWorkspaceOpen: false,
         createWorkspace: createMutationState(),
+        openWorkspaceMenuID: "",
         teamVisible: false,
         teamQuery: createQueryState([])
       };
@@ -514,6 +540,14 @@
     var renderAccountRuntime = function() {
       renderAccountUI(deps.store.getAccountState());
     };
+    var closeWorkspaceMenus = function() {
+      deps.store.updateAccountState(function(accountState) {
+        var accountIDs = Object.keys(accountState.byAccountID);
+        for (var i = 0; i < accountIDs.length; i += 1) {
+          accountState.byAccountID[accountIDs[i]].openWorkspaceMenuID = "";
+        }
+      });
+    };
     var loadTeam = async function(accountID) {
       var section = getElement("team-section-" + accountID);
       if (!section) return;
@@ -554,12 +588,26 @@
       var shouldFocus = false;
       deps.store.updateAccountState(function(accountState) {
         var entry = ensurePortalAccountUIEntry(accountState, accountID);
+        entry.openWorkspaceMenuID = "";
         entry.addWorkspaceOpen = !entry.addWorkspaceOpen;
         shouldFocus = entry.addWorkspaceOpen;
       });
       if (shouldFocus) {
         focusElement("ws-name-" + accountID);
       }
+    };
+    var toggleWorkspaceMenu = function(accountID, workspaceID) {
+      deps.store.updateAccountState(function(accountState) {
+        var accountIDs = Object.keys(accountState.byAccountID);
+        for (var i = 0; i < accountIDs.length; i += 1) {
+          var entry = ensurePortalAccountUIEntry(accountState, accountIDs[i]);
+          if (accountIDs[i] !== accountID) {
+            entry.openWorkspaceMenuID = "";
+          }
+        }
+        var entry = ensurePortalAccountUIEntry(accountState, accountID);
+        entry.openWorkspaceMenuID = entry.openWorkspaceMenuID === workspaceID ? "" : workspaceID;
+      });
     };
     var createWorkspace = async function(accountID) {
       var nameEl = getElement("ws-name-" + accountID);
@@ -585,6 +633,7 @@
         deps.store.updateAccountState(function(accountState) {
           var entry = ensurePortalAccountUIEntry(accountState, accountID);
           entry.addWorkspaceOpen = false;
+          entry.openWorkspaceMenuID = "";
           succeedMutationState(entry.createWorkspace);
         });
         deps.showToast("Workspace created!");
@@ -597,12 +646,13 @@
         deps.showToast(message, true);
       }
     };
-    var manageWorkspace = async function(evt, accountID, tenantID, state, name) {
-      evt.stopPropagation();
-      var action = state === "active" ? "Suspend" : "Delete";
-      if (!window.confirm(action + ' workspace "' + name + '"?')) return;
+    var manageWorkspaceAction = async function(accountID, tenantID, action, name) {
+      closeWorkspaceMenus();
+      var verb = action === "suspend" ? "Suspend" : action === "delete" ? "Delete" : "";
+      if (!verb) return;
+      if (!window.confirm(verb + ' workspace "' + name + '"?')) return;
       try {
-        if (state === "active") {
+        if (action === "suspend") {
           await deps.api.suspendWorkspace(accountID, tenantID);
         } else {
           await deps.api.deleteWorkspace(accountID, tenantID);
@@ -610,9 +660,9 @@
         if (!await refreshOrRedirect()) {
           return;
         }
-        deps.showToast(action + "d workspace.");
+        deps.showToast(verb + "ed workspace.");
       } catch (error) {
-        deps.showToast(error instanceof Error ? error.message : "Failed to " + action.toLowerCase() + " workspace.", true);
+        deps.showToast(error instanceof Error ? error.message : "Failed to " + verb.toLowerCase() + " workspace.", true);
       }
     };
     var openBilling = async function(accountID) {
@@ -631,6 +681,7 @@
       var nextVisible = false;
       deps.store.updateAccountState(function(accountState) {
         var entry = ensurePortalAccountUIEntry(accountState, accountID);
+        entry.openWorkspaceMenuID = "";
         entry.teamVisible = !entry.teamVisible;
         nextVisible = entry.teamVisible;
       });
@@ -699,11 +750,13 @@
     deps.store.subscribeBootstrap(renderAccountRuntime);
     return {
       toggleAddWorkspace,
+      toggleWorkspaceMenu,
+      closeWorkspaceMenus,
       openBilling,
       toggleTeam,
       inviteMember,
       createWorkspace,
-      manageWorkspace,
+      manageWorkspaceAction,
       removeMember,
       changeRole
     };
@@ -1394,13 +1447,15 @@
     var createdLabel = formatWorkspaceDate(workspace.created_at);
     var openAction = "";
     if (state === "active") {
-      openAction = '<form method="POST" action="' + escapeAttr(accountAPIBasePath + "/" + account.id + "/tenants/" + workspace.id + "/handoff") + '"><button type="submit" class="btn-primary">Open \u2192</button></form>';
+      openAction = '<form method="POST" action="' + escapeAttr(accountAPIBasePath + "/" + account.id + "/tenants/" + workspace.id + "/handoff") + '"><button type="submit" class="btn-primary">Open workspace</button></form>';
     } else {
       openAction = '<span class="workspace-state-label">' + safeState + "</span>";
     }
     var manageAction = "";
     if (account.can_manage && (state === "active" || state === "suspended" || state === "failed")) {
-      manageAction = '<button type="button" class="btn-danger" data-action="workspace-manage" data-account-id="' + escapeAttr(account.id) + '" data-workspace-id="' + escapeAttr(workspace.id) + '" data-workspace-state="' + escapeAttr(state) + '" data-workspace-name="' + escapeAttr(workspace.display_name) + '">\u22EF</button>';
+      var menuAction = state === "active" ? "suspend" : "delete";
+      var menuLabel = state === "active" ? "Suspend workspace" : "Delete workspace";
+      manageAction = '<div class="workspace-menu-wrap"><button type="button" class="btn-secondary btn-workspace-menu" id="workspace-menu-button-' + escapeAttr(account.id) + "-" + escapeAttr(workspace.id) + '" data-action="toggle-workspace-menu" data-account-id="' + escapeAttr(account.id) + '" data-workspace-id="' + escapeAttr(workspace.id) + '" aria-haspopup="menu" aria-expanded="false">Manage</button><div class="workspace-menu" id="workspace-menu-' + escapeAttr(account.id) + "-" + escapeAttr(workspace.id) + '" data-workspace-menu-account-id="' + escapeAttr(account.id) + '" data-workspace-id="' + escapeAttr(workspace.id) + '" role="menu" hidden><button type="button" class="workspace-menu-item workspace-menu-item-danger" data-action="workspace-action" data-account-id="' + escapeAttr(account.id) + '" data-workspace-id="' + escapeAttr(workspace.id) + '" data-workspace-action="' + escapeAttr(menuAction) + '" data-workspace-name="' + escapeAttr(workspace.display_name) + '">' + escapeHTML(menuLabel) + "</button></div></div>";
     }
     var createdMeta = createdLabel ? '<span class="ws-created">Created ' + escapeHTML(createdLabel) + "</span>" : "";
     return '<div class="workspace-card"><div class="ws-info"><span class="ws-name">' + escapeHTML(workspace.display_name) + '</span><div class="ws-meta">' + healthBadgeHTML(workspace) + '<span class="badge badge-' + safeState + '">' + safeState + "</span>" + createdMeta + '</div></div><div class="ws-actions">' + openAction + manageAction + "</div></div>";

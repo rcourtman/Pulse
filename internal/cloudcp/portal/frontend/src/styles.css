@@ -31,6 +31,13 @@
     .ws-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
     .ws-created { font-size: 11px; color: #94a3b8; }
     .ws-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+    .workspace-menu-wrap { position: relative; }
+    .btn-workspace-menu { min-width: 96px; }
+    .workspace-menu { position: absolute; top: calc(100% + 6px); right: 0; z-index: 10; min-width: 190px; background: #fff; border: 1px solid #dbe4f0; border-radius: 10px; padding: 6px; box-shadow: 0 12px 28px rgba(15,23,42,.12); }
+    .workspace-menu-item { width: 100%; background: transparent; border: 0; border-radius: 8px; padding: 9px 12px; font: inherit; text-align: left; cursor: pointer; color: #0f172a; }
+    .workspace-menu-item:hover { background: #f8fafc; }
+    .workspace-menu-item-danger { color: #b91c1c; }
+    .workspace-menu-item-danger:hover { background: #fef2f2; }
     .btn-primary { background: #1d4ed8; color: #fff; border: 0; border-radius: 8px; padding: 8px 18px; font-size: 14px; font-weight: 600; cursor: pointer; text-decoration: none; display: inline-block; }
     .btn-primary:hover { background: #1e40af; }
     .btn-secondary { background: #fff; color: #334155; border: 1px solid #cbd5e1; border-radius: 8px; padding: 7px 14px; font-size: 13px; font-weight: 500; cursor: pointer; }

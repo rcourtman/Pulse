@@ -15,6 +15,20 @@ export function focusElement(id: string): void {
   if (input) input.focus();
 }
 
+export function renderWorkspaceMenus(accountID: string, entry: PortalAccountUIEntry): void {
+  var menus = document.querySelectorAll<HTMLElement>('[data-workspace-menu-account-id="' + accountID + '"]');
+  for (var i = 0; i < menus.length; i += 1) {
+    var menu = menus[i];
+    var workspaceID = menu.getAttribute('data-workspace-id') || '';
+    var open = entry.openWorkspaceMenuID === workspaceID;
+    menu.hidden = !open;
+    var button = getElement<HTMLElement>('workspace-menu-button-' + accountID + '-' + workspaceID);
+    if (button) {
+      button.setAttribute('aria-expanded', open ? 'true' : 'false');
+    }
+  }
+}
+
 function setTbodyMessage(tbody: HTMLElement, msg: string, isError: boolean): void {
   tbody.textContent = '';
   var tr = document.createElement('tr');
@@ -121,6 +135,7 @@ export function renderAccountUI(accountState: PortalAccountState): void {
     var accountID = accountIDs[i];
     var entry = accountState.byAccountID[accountID];
     renderAddWorkspaceSection(accountID, entry);
+    renderWorkspaceMenus(accountID, entry);
     renderTeamSection(accountID, entry);
   }
 }

@@ -133,7 +133,9 @@ describe('shell view', function() {
     expect(html).toContain('Unhealthy</span>');
     expect(html).toContain('Checking</span>');
     expect(html).toContain('/api/accounts/acct_1/tenants/ws_active/handoff');
-    expect(html).toContain('data-action="workspace-manage"');
+    expect(html).toContain('Open workspace');
+    expect(html).toContain('data-action="toggle-workspace-menu"');
+    expect(html).toContain('data-action="workspace-action"');
     expect(html).toContain('service-card-button');
     expect(html).toContain('id="open-retrieve-service"');
     expect(html).toContain('id="data-service-panel"');

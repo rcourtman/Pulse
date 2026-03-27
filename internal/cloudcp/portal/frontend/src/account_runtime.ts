@@ -15,11 +15,13 @@ export interface AccountRuntimeDeps {
 
 export interface AccountRuntime {
   toggleAddWorkspace(accountID: string): void;
+  toggleWorkspaceMenu(accountID: string, workspaceID: string): void;
+  closeWorkspaceMenus(): void;
   openBilling(accountID: string): Promise<void>;
   toggleTeam(accountID: string): void;
   inviteMember(accountID: string): Promise<void>;
   createWorkspace(accountID: string): Promise<void>;
-  manageWorkspace(event: Event, accountID: string, tenantID: string, state: string, name: string): Promise<void>;
+  manageWorkspaceAction(accountID: string, tenantID: string, action: string, name: string): Promise<void>;
   removeMember(accountID: string, userID: string, email: string): Promise<void>;
   changeRole(accountID: string, userID: string, newRole: string): Promise<void>;
 }
@@ -39,6 +41,15 @@ export function installAccountRuntime(deps: AccountRuntimeDeps): AccountRuntime 
 
   var renderAccountRuntime = function(): void {
     renderAccountUIState(deps.store.getAccountState());
+  };
+
+  var closeWorkspaceMenus = function(): void {
+    deps.store.updateAccountState(function(accountState) {
+      var accountIDs = Object.keys(accountState.byAccountID);
+      for (var i = 0; i < accountIDs.length; i += 1) {
+        accountState.byAccountID[accountIDs[i]].openWorkspaceMenuID = '';
+      }
+    });
   };
 
   var loadTeam = async function(accountID: string): Promise<void> {
@@ -83,12 +94,27 @@ export function installAccountRuntime(deps: AccountRuntimeDeps): AccountRuntime 
     var shouldFocus = false;
     deps.store.updateAccountState(function(accountState) {
       var entry = ensurePortalAccountUIEntry(accountState, accountID);
+      entry.openWorkspaceMenuID = '';
       entry.addWorkspaceOpen = !entry.addWorkspaceOpen;
       shouldFocus = entry.addWorkspaceOpen;
     });
     if (shouldFocus) {
       focusElement('ws-name-' + accountID);
     }
+  };
+
+  var toggleWorkspaceMenu = function(accountID: string, workspaceID: string): void {
+    deps.store.updateAccountState(function(accountState) {
+      var accountIDs = Object.keys(accountState.byAccountID);
+      for (var i = 0; i < accountIDs.length; i += 1) {
+        var entry = ensurePortalAccountUIEntry(accountState, accountIDs[i]);
+        if (accountIDs[i] !== accountID) {
+          entry.openWorkspaceMenuID = '';
+        }
+      }
+      var entry = ensurePortalAccountUIEntry(accountState, accountID);
+      entry.openWorkspaceMenuID = entry.openWorkspaceMenuID === workspaceID ? '' : workspaceID;
+    });
   };
 
   var createWorkspace = async function(accountID: string): Promise<void> {
@@ -115,6 +141,7 @@ export function installAccountRuntime(deps: AccountRuntimeDeps): AccountRuntime 
       deps.store.updateAccountState(function(accountState) {
         var entry = ensurePortalAccountUIEntry(accountState, accountID);
         entry.addWorkspaceOpen = false;
+        entry.openWorkspaceMenuID = '';
         succeedMutationState(entry.createWorkspace);
       });
       deps.showToast('Workspace created!');
@@ -128,12 +155,13 @@ export function installAccountRuntime(deps: AccountRuntimeDeps): AccountRuntime 
     }
   };
 
-  var manageWorkspace = async function(evt: Event, accountID: string, tenantID: string, state: string, name: string): Promise<void> {
-    evt.stopPropagation();
-    var action = state === 'active' ? 'Suspend' : 'Delete';
-    if (!window.confirm(action + ' workspace "' + name + '"?')) return;
+  var manageWorkspaceAction = async function(accountID: string, tenantID: string, action: string, name: string): Promise<void> {
+    closeWorkspaceMenus();
+    var verb = action === 'suspend' ? 'Suspend' : action === 'delete' ? 'Delete' : '';
+    if (!verb) return;
+    if (!window.confirm(verb + ' workspace "' + name + '"?')) return;
     try {
-      if (state === 'active') {
+      if (action === 'suspend') {
         await deps.api.suspendWorkspace(accountID, tenantID);
       } else {
         await deps.api.deleteWorkspace(accountID, tenantID);
@@ -141,9 +169,9 @@ export function installAccountRuntime(deps: AccountRuntimeDeps): AccountRuntime 
       if (!await refreshOrRedirect()) {
         return;
       }
-      deps.showToast(action + 'd workspace.');
+      deps.showToast(verb + 'ed workspace.');
     } catch (error) {
-      deps.showToast(error instanceof Error ? error.message : 'Failed to ' + action.toLowerCase() + ' workspace.', true);
+      deps.showToast(error instanceof Error ? error.message : 'Failed to ' + verb.toLowerCase() + ' workspace.', true);
     }
   };
 
@@ -164,6 +192,7 @@ export function installAccountRuntime(deps: AccountRuntimeDeps): AccountRuntime 
     var nextVisible = false;
     deps.store.updateAccountState(function(accountState) {
       var entry = ensurePortalAccountUIEntry(accountState, accountID);
+      entry.openWorkspaceMenuID = '';
       entry.teamVisible = !entry.teamVisible;
       nextVisible = entry.teamVisible;
     });
@@ -237,11 +266,13 @@ export function installAccountRuntime(deps: AccountRuntimeDeps): AccountRuntime 
 
   return {
     toggleAddWorkspace: toggleAddWorkspace,
+    toggleWorkspaceMenu: toggleWorkspaceMenu,
+    closeWorkspaceMenus: closeWorkspaceMenus,
     openBilling: openBilling,
     toggleTeam: toggleTeam,
     inviteMember: inviteMember,
     createWorkspace: createWorkspace,
-    manageWorkspace: manageWorkspace,
+    manageWorkspaceAction: manageWorkspaceAction,
     removeMember: removeMember,
     changeRole: changeRole,
   };

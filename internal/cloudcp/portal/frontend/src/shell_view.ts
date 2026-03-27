@@ -59,7 +59,7 @@ function renderWorkspaceCard(account: PortalAccountSummary, workspace: PortalWor
       '<form method="POST" action="' +
       escapeAttr(accountAPIBasePath + '/' + account.id + '/tenants/' + workspace.id + '/handoff') +
       '">' +
-      '<button type="submit" class="btn-primary">Open →</button>' +
+      '<button type="submit" class="btn-primary">Open workspace</button>' +
       '</form>';
   } else {
     openAction = '<span class="workspace-state-label">' + safeState + '</span>';
@@ -67,16 +67,41 @@ function renderWorkspaceCard(account: PortalAccountSummary, workspace: PortalWor
 
   var manageAction = '';
   if (account.can_manage && (state === 'active' || state === 'suspended' || state === 'failed')) {
+    var menuAction = state === 'active' ? 'suspend' : 'delete';
+    var menuLabel = state === 'active' ? 'Suspend workspace' : 'Delete workspace';
     manageAction =
-      '<button type="button" class="btn-danger" data-action="workspace-manage" data-account-id="' +
-      escapeAttr(account.id) +
-      '" data-workspace-id="' +
-      escapeAttr(workspace.id) +
-      '" data-workspace-state="' +
-      escapeAttr(state) +
-      '" data-workspace-name="' +
-      escapeAttr(workspace.display_name) +
-      '">⋯</button>';
+      '<div class="workspace-menu-wrap">' +
+        '<button type="button" class="btn-secondary btn-workspace-menu" id="workspace-menu-button-' +
+        escapeAttr(account.id) +
+        '-' +
+        escapeAttr(workspace.id) +
+        '" data-action="toggle-workspace-menu" data-account-id="' +
+        escapeAttr(account.id) +
+        '" data-workspace-id="' +
+        escapeAttr(workspace.id) +
+        '" aria-haspopup="menu" aria-expanded="false">Manage</button>' +
+        '<div class="workspace-menu" id="workspace-menu-' +
+        escapeAttr(account.id) +
+        '-' +
+        escapeAttr(workspace.id) +
+        '" data-workspace-menu-account-id="' +
+        escapeAttr(account.id) +
+        '" data-workspace-id="' +
+        escapeAttr(workspace.id) +
+        '" role="menu" hidden>' +
+          '<button type="button" class="workspace-menu-item workspace-menu-item-danger" data-action="workspace-action" data-account-id="' +
+          escapeAttr(account.id) +
+          '" data-workspace-id="' +
+          escapeAttr(workspace.id) +
+          '" data-workspace-action="' +
+          escapeAttr(menuAction) +
+          '" data-workspace-name="' +
+          escapeAttr(workspace.display_name) +
+          '">' +
+          escapeHTML(menuLabel) +
+          '</button>' +
+        '</div>' +
+      '</div>';
   }
 
   var createdMeta = createdLabel ? '<span class="ws-created">Created ' + escapeHTML(createdLabel) + '</span>' : '';
