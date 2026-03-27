@@ -151,6 +151,9 @@ describe('shell view', function() {
     expect(html).toContain('Workspace management');
     expect(html).toContain('Choose a workspace to manage from the fleet above.');
     expect(html).toContain('data-action="clear-workspace-selection"');
+    expect(html).toContain('Team management');
+    expect(html).toContain('Invite someone new');
+    expect(html).toContain('People on this account');
     expect(html).toContain('data-action="workspace-action"');
     expect(html).toContain('service-card-button');
     expect(html).toContain('id="open-retrieve-service"');

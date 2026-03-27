@@ -76,9 +76,22 @@
     .add-workspace-form label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
     .add-workspace-form input { width: 100%; border: 1px solid #cbd5e1; border-radius: 8px; padding: 8px 12px; font-size: 14px; margin-bottom: 10px; }
     .add-workspace-form .form-actions { display: flex; gap: 8px; }
-    .team-section { margin-top: 12px; display: none; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px; }
+    .team-section { margin-top: 12px; display: none; }
     .team-section.visible { display: block; }
-    .team-section h3 { margin: 0 0 12px; font-size: 15px; font-weight: 700; }
+    .team-management-panel { background: #fff; border: 1px solid #dbe4f0; border-radius: 12px; padding: 18px; box-shadow: 0 1px 3px rgba(15,23,42,.04); }
+    .team-management-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
+    .team-management-header h3 { margin: 0 0 4px; font-size: 16px; font-weight: 700; }
+    .team-management-header p { margin: 0; font-size: 13px; color: #64748b; line-height: 1.5; max-width: 560px; }
+    .team-management-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
+    .team-stat-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; }
+    .team-stat-label { font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: #64748b; }
+    .team-stat-value { font-size: 20px; font-weight: 700; color: #0f172a; }
+    .team-stat-error { color: #b91c1c; }
+    .team-management-grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(280px, 1fr); gap: 16px; }
+    .team-roster, .team-invite-panel { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px; }
+    .team-panel-heading { margin-bottom: 12px; }
+    .team-panel-heading h4 { margin: 0 0 4px; font-size: 15px; font-weight: 700; }
+    .team-panel-heading p { margin: 0; font-size: 13px; color: #64748b; line-height: 1.5; }
     .team-table { width: 100%; border-collapse: collapse; font-size: 14px; }
     .team-table th { text-align: left; font-size: 12px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; padding: 6px 8px; border-bottom: 1px solid #e2e8f0; }
     .team-table td { padding: 8px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
@@ -87,7 +100,7 @@
     .team-table select { border: 1px solid #cbd5e1; border-radius: 6px; padding: 4px 8px; font-size: 13px; background: #fff; }
     .team-table .btn-remove { background: none; border: none; color: #dc2626; cursor: pointer; font-size: 13px; padding: 4px 8px; }
     .team-table .btn-remove:hover { text-decoration: underline; }
-    .team-invite { margin-top: 12px; display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; }
+    .team-invite { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; }
     .team-invite label { font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px; }
     .team-invite input { border: 1px solid #cbd5e1; border-radius: 8px; padding: 8px 12px; font-size: 14px; min-width: 200px; }
     .team-invite select { border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px 10px; font-size: 14px; background: #fff; }
@@ -163,10 +176,14 @@
       .account-actions { justify-content: flex-start; }
       .account-subsection-header { flex-direction: column; align-items: flex-start; }
       .workspace-management-header { flex-direction: column; }
+      .team-management-header { flex-direction: column; }
+      .team-management-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .team-management-grid { grid-template-columns: 1fr; }
       .overview-stats { grid-template-columns: 1fr; }
     }
     @media (max-width: 560px) {
       .account-status-grid { grid-template-columns: 1fr; }
+      .team-management-stats { grid-template-columns: 1fr; }
       .workspace-card { flex-direction: column; align-items: flex-start; }
       .ws-actions { align-self: stretch; }
       .ws-actions form, .ws-actions .btn-primary { width: 100%; text-align: center; }

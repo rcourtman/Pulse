@@ -176,6 +176,7 @@ describe('account runtime', function() {
     document.body.innerHTML =
       '<div id="workspace-management-acct_1" class="workspace-management-panel"><button id="workspace-management-close-acct_1"></button><div id="workspace-management-empty-acct_1"></div><div id="workspace-management-content-acct_1" hidden><div id="workspace-management-meta-acct_1"></div><h4 id="workspace-management-title-acct_1"></h4><p id="workspace-management-summary-acct_1"></p><button id="workspace-management-action-acct_1"></button></div></div>' +
       '<div id="team-section-acct_1" class="team-section" data-actor-role="owner">' +
+      '<div id="team-stats-acct_1"></div>' +
       '<table><tbody id="team-list-acct_1"></tbody></table>' +
       '<input id="invite-email-acct_1">' +
       '<select id="invite-role-acct_1"><option value="admin">Admin</option></select>' +
@@ -187,6 +188,7 @@ describe('account runtime', function() {
     expect(deps.store.getAccountState().byAccountID.acct_1.teamVisible).toBe(true);
     expect(deps.store.getAccountState().byAccountID.acct_1.teamQuery.status).toBe('ready');
     expect(deps.store.getAccountState().byAccountID.acct_1.teamQuery.data).toHaveLength(1);
+    expect(document.getElementById('team-stats-acct_1')?.textContent).toContain('Members');
     var roleSelect = document.querySelector('[data-action="change-role"]') as HTMLSelectElement | null;
     expect(roleSelect).not.toBeNull();
     expect(roleSelect?.value).toBe('owner');

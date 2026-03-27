@@ -143,6 +143,9 @@ Core rules:
 10. Workspace lifecycle actions must open in an explicit management surface
     with the selected workspace context visible, not inside a hidden overflow
     menu or a blind confirm-first interaction.
+11. Team and membership management must be treated as an account-management
+    surface with visible roster and invite context, not as a hidden table that
+    appears without orientation.
 
 ## Screen Model
 

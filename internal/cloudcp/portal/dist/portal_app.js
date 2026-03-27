@@ -78,6 +78,31 @@
     tr.appendChild(td);
     tbody.appendChild(tr);
   }
+  function countMembersByRole(members, role) {
+    var count = 0;
+    for (var i = 0; i < members.length; i += 1) {
+      if (members[i].role === role) count += 1;
+    }
+    return count;
+  }
+  function renderTeamStats(accountID, entry) {
+    var stats = getElement("team-stats-" + accountID);
+    if (!stats) return;
+    if (!entry.teamVisible) {
+      stats.innerHTML = "";
+      return;
+    }
+    if (entry.teamQuery.status === "loading") {
+      stats.innerHTML = '<div class="team-stat-card"><span class="team-stat-label">Roster</span><span class="team-stat-value">Loading\u2026</span></div>';
+      return;
+    }
+    if (entry.teamQuery.status === "error") {
+      stats.innerHTML = '<div class="team-stat-card"><span class="team-stat-label">Roster</span><span class="team-stat-value team-stat-error">Needs attention</span></div>';
+      return;
+    }
+    var members = entry.teamQuery.data;
+    stats.innerHTML = '<div class="team-stat-card"><span class="team-stat-label">Members</span><span class="team-stat-value">' + String(members.length) + '</span></div><div class="team-stat-card"><span class="team-stat-label">Owners</span><span class="team-stat-value">' + String(countMembersByRole(members, "owner")) + '</span></div><div class="team-stat-card"><span class="team-stat-label">Admins</span><span class="team-stat-value">' + String(countMembersByRole(members, "admin")) + '</span></div><div class="team-stat-card"><span class="team-stat-label">Operators</span><span class="team-stat-value">' + String(countMembersByRole(members, "tech") + countMembersByRole(members, "read_only")) + "</span></div>";
+  }
   function renderTeamMemberRoleCell(accountID, member, isOwner) {
     var tdRole = document.createElement("td");
     if (member.role === "owner" && !isOwner) {
@@ -131,6 +156,7 @@
     var actorRole = section.getAttribute("data-actor-role") || "";
     var isOwner = actorRole === "owner";
     section.classList.toggle("visible", entry.teamVisible);
+    renderTeamStats(accountID, entry);
     if (!entry.teamVisible) {
       return;
     }
@@ -1586,7 +1612,7 @@
     var workspaceManagement = "";
     if (account.can_manage) {
       actions = '<div class="account-operations-panel"><div class="account-operations-copy"><h3>Account operations</h3><p>' + escapeHTML(operationsCopy) + '</p></div><div class="account-actions">' + (account.kind === "msp" ? '<button type="button" class="btn-secondary" id="add-ws-btn-' + escapeAttr(account.id) + '" data-action="toggle-add-workspace" data-account-id="' + escapeAttr(account.id) + '">Add workspace</button>' : "") + (account.has_billing ? '<button type="button" class="btn-secondary" data-action="open-billing" data-account-id="' + escapeAttr(account.id) + '">Manage billing</button>' : "") + '<button type="button" class="btn-secondary" id="team-btn-' + escapeAttr(account.id) + '" data-action="toggle-team" data-account-id="' + escapeAttr(account.id) + '">Manage team</button></div></div>';
-      teamSection = '<div class="team-section" id="team-section-' + escapeAttr(account.id) + '" data-actor-role="' + escapeAttr(account.role) + '"><h3>Team members</h3><table class="team-table"><thead><tr><th>Email</th><th>Role</th><th></th></tr></thead><tbody id="team-list-' + escapeAttr(account.id) + '"><tr><td colspan="3" class="team-message-cell">Loading\u2026</td></tr></tbody></table><div class="team-invite"><div><label for="invite-email-' + escapeAttr(account.id) + '">Email</label><input type="email" id="invite-email-' + escapeAttr(account.id) + '" placeholder="user@example.com" autocomplete="off"></div><div><label for="invite-role-' + escapeAttr(account.id) + '">Role</label><select id="invite-role-' + escapeAttr(account.id) + '"><option value="admin">Admin</option><option value="tech">Tech</option><option value="read_only">Read-only</option></select></div><button type="button" class="btn-primary btn-compact" data-action="invite-member" data-account-id="' + escapeAttr(account.id) + '">Invite</button></div></div>';
+      teamSection = '<div class="team-management-panel team-section" id="team-section-' + escapeAttr(account.id) + '" data-actor-role="' + escapeAttr(account.role) + '"><div class="team-management-header"><div><h3>Team management</h3><p>Control who can operate this account, what role they hold, and who should be invited next.</p></div><button type="button" class="btn-secondary btn-compact" data-action="toggle-team" data-account-id="' + escapeAttr(account.id) + '">Done</button></div><div class="team-management-stats" id="team-stats-' + escapeAttr(account.id) + '"></div><div class="team-management-grid"><div class="team-roster"><div class="team-panel-heading"><h4>People on this account</h4><p>Owners can manage billing and account access. Admins and techs keep the hosted fleet running day to day.</p></div><table class="team-table"><thead><tr><th>Email</th><th>Role</th><th></th></tr></thead><tbody id="team-list-' + escapeAttr(account.id) + '"><tr><td colspan="3" class="team-message-cell">Loading\u2026</td></tr></tbody></table></div><div class="team-invite-panel"><div class="team-panel-heading"><h4>Invite someone new</h4><p>Add another operator with the minimum role they need for this account.</p></div><div class="team-invite"><div><label for="invite-email-' + escapeAttr(account.id) + '">Email</label><input type="email" id="invite-email-' + escapeAttr(account.id) + '" placeholder="user@example.com" autocomplete="off"></div><div><label for="invite-role-' + escapeAttr(account.id) + '">Role</label><select id="invite-role-' + escapeAttr(account.id) + '"><option value="admin">Admin</option><option value="tech">Tech</option><option value="read_only">Read-only</option></select></div><button type="button" class="btn-primary btn-compact" data-action="invite-member" data-account-id="' + escapeAttr(account.id) + '">Invite</button></div></div></div></div>';
       workspaceManagement = '<div class="workspace-management-panel" id="workspace-management-' + escapeAttr(account.id) + '"><div class="workspace-management-header"><div><h3>Workspace management</h3><p>Select a workspace from the fleet to review its lifecycle state and run explicit management actions.</p></div><button type="button" class="btn-secondary btn-compact" id="workspace-management-close-' + escapeAttr(account.id) + '" data-action="clear-workspace-selection" data-account-id="' + escapeAttr(account.id) + '">Done</button></div><div class="workspace-management-empty" id="workspace-management-empty-' + escapeAttr(account.id) + '">Choose a workspace to manage from the fleet above.</div><div class="workspace-management-content" id="workspace-management-content-' + escapeAttr(account.id) + '" hidden><div class="workspace-management-meta" id="workspace-management-meta-' + escapeAttr(account.id) + '"></div><h4 id="workspace-management-title-' + escapeAttr(account.id) + '"></h4><p class="workspace-management-summary" id="workspace-management-summary-' + escapeAttr(account.id) + '"></p><div class="workspace-management-actions"><button type="button" class="btn-danger" id="workspace-management-action-' + escapeAttr(account.id) + '" data-action="workspace-action" data-account-id="' + escapeAttr(account.id) + '">Manage workspace</button></div></div></div>';
       if (account.kind === "msp") {
         addWorkspaceForm = '<div class="add-workspace-form" id="add-ws-form-' + escapeAttr(account.id) + '"><label for="ws-name-' + escapeAttr(account.id) + '">Workspace name (e.g. client name)</label><input type="text" id="ws-name-' + escapeAttr(account.id) + '" placeholder="Acme Corp" maxlength="80" autocomplete="off"><div class="form-actions"><button type="button" class="btn-primary" data-action="create-workspace" data-account-id="' + escapeAttr(account.id) + '">Create workspace</button><button type="button" class="btn-secondary" data-action="toggle-add-workspace" data-account-id="' + escapeAttr(account.id) + '">Cancel</button><div class="spinner" id="ws-spinner-' + escapeAttr(account.id) + '" hidden></div></div></div>';

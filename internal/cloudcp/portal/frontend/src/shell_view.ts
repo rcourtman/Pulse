@@ -239,12 +239,29 @@ function renderAccountSection(account: PortalAccountSummary, accountAPIBasePath:
       '</div>';
 
     teamSection =
-      '<div class="team-section" id="team-section-' +
+      '<div class="team-management-panel team-section" id="team-section-' +
       escapeAttr(account.id) +
       '" data-actor-role="' +
       escapeAttr(account.role) +
       '">' +
-      '<h3>Team members</h3>' +
+      '<div class="team-management-header">' +
+      '<div>' +
+      '<h3>Team management</h3>' +
+      '<p>Control who can operate this account, what role they hold, and who should be invited next.</p>' +
+      '</div>' +
+      '<button type="button" class="btn-secondary btn-compact" data-action="toggle-team" data-account-id="' +
+      escapeAttr(account.id) +
+      '">Done</button>' +
+      '</div>' +
+      '<div class="team-management-stats" id="team-stats-' +
+      escapeAttr(account.id) +
+      '"></div>' +
+      '<div class="team-management-grid">' +
+      '<div class="team-roster">' +
+      '<div class="team-panel-heading">' +
+      '<h4>People on this account</h4>' +
+      '<p>Owners can manage billing and account access. Admins and techs keep the hosted fleet running day to day.</p>' +
+      '</div>' +
       '<table class="team-table">' +
       '<thead><tr><th>Email</th><th>Role</th><th></th></tr></thead>' +
       '<tbody id="team-list-' +
@@ -253,6 +270,12 @@ function renderAccountSection(account: PortalAccountSummary, accountAPIBasePath:
       '<tr><td colspan="3" class="team-message-cell">Loading…</td></tr>' +
       '</tbody>' +
       '</table>' +
+      '</div>' +
+      '<div class="team-invite-panel">' +
+      '<div class="team-panel-heading">' +
+      '<h4>Invite someone new</h4>' +
+      '<p>Add another operator with the minimum role they need for this account.</p>' +
+      '</div>' +
       '<div class="team-invite">' +
       '<div><label for="invite-email-' +
       escapeAttr(account.id) +
@@ -267,6 +290,8 @@ function renderAccountSection(account: PortalAccountSummary, accountAPIBasePath:
       '<button type="button" class="btn-primary btn-compact" data-action="invite-member" data-account-id="' +
       escapeAttr(account.id) +
       '">Invite</button>' +
+      '</div>' +
+      '</div>' +
       '</div>' +
       '</div>';
 

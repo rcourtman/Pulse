@@ -98,6 +98,38 @@ function setTbodyMessage(tbody: HTMLElement, msg: string, isError: boolean): voi
   tbody.appendChild(tr);
 }
 
+function countMembersByRole(members: PortalTeamMember[], role: string): number {
+  var count = 0;
+  for (var i = 0; i < members.length; i += 1) {
+    if (members[i].role === role) count += 1;
+  }
+  return count;
+}
+
+function renderTeamStats(accountID: string, entry: PortalAccountUIEntry): void {
+  var stats = getElement<HTMLElement>('team-stats-' + accountID);
+  if (!stats) return;
+  if (!entry.teamVisible) {
+    stats.innerHTML = '';
+    return;
+  }
+  if (entry.teamQuery.status === 'loading') {
+    stats.innerHTML = '<div class="team-stat-card"><span class="team-stat-label">Roster</span><span class="team-stat-value">Loading…</span></div>';
+    return;
+  }
+  if (entry.teamQuery.status === 'error') {
+    stats.innerHTML = '<div class="team-stat-card"><span class="team-stat-label">Roster</span><span class="team-stat-value team-stat-error">Needs attention</span></div>';
+    return;
+  }
+
+  var members = entry.teamQuery.data;
+  stats.innerHTML =
+    '<div class="team-stat-card"><span class="team-stat-label">Members</span><span class="team-stat-value">' + String(members.length) + '</span></div>' +
+    '<div class="team-stat-card"><span class="team-stat-label">Owners</span><span class="team-stat-value">' + String(countMembersByRole(members, 'owner')) + '</span></div>' +
+    '<div class="team-stat-card"><span class="team-stat-label">Admins</span><span class="team-stat-value">' + String(countMembersByRole(members, 'admin')) + '</span></div>' +
+    '<div class="team-stat-card"><span class="team-stat-label">Operators</span><span class="team-stat-value">' + String(countMembersByRole(members, 'tech') + countMembersByRole(members, 'read_only')) + '</span></div>';
+}
+
 function renderTeamMemberRoleCell(accountID: string, member: PortalTeamMember, isOwner: boolean): HTMLTableCellElement {
   var tdRole = document.createElement('td');
   if (member.role === 'owner' && !isOwner) {
@@ -157,6 +189,7 @@ export function renderTeamSection(accountID: string, entry: PortalAccountUIEntry
   var actorRole = section.getAttribute('data-actor-role') || '';
   var isOwner = actorRole === 'owner';
   section.classList.toggle('visible', entry.teamVisible);
+  renderTeamStats(accountID, entry);
 
   if (!entry.teamVisible) {
     return;
