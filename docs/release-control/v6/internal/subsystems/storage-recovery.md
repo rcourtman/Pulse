@@ -448,6 +448,11 @@ first scroll window. `RecoverySummary.tsx` and the workspace shell in
 `Recovery.tsx` should compress posture, coverage, and mode framing into concise
 operator panels instead of stacking multiple dashboard-like slabs that push the
 main inventory or event table too far down the page.
+That same summary shell should read as one dominant posture surface with a
+supporting rail, not as several equal-weight dashboard cards. The governed
+recovery summary should keep the left side focused on posture, attention, and
+freshness, while the right side carries compact coverage and recent-history
+reference detail instead of competing headline widgets.
 That same workspace shell should stay a compact control strip rather than a
 second summary card: the protected-items versus recovery-events switcher belongs
 close to the active table surface, and it should not restate table counts that

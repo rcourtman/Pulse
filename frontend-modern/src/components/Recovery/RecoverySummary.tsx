@@ -46,42 +46,57 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
 
   const healthyCount = createMemo(() => postureSummary().healthy);
   const attentionCount = createMemo(() => postureSummary().attention);
+  const attentionSummary = createMemo(() => {
+    const parts: string[] = [];
+    if (postureSummary().failed > 0) {
+      parts.push(`${postureSummary().failed} failed`);
+    }
+    if (postureSummary().neverSucceeded > 0) {
+      parts.push(`${postureSummary().neverSucceeded} never succeeded`);
+    }
+    if (postureSummary().stale > 0) {
+      parts.push(`${postureSummary().stale} stale`);
+    }
+    if (postureSummary().warning > 0) {
+      parts.push(`${postureSummary().warning} warning`);
+    }
+    if (parts.length === 0 && postureSummary().running > 0) {
+      parts.push(`${postureSummary().running} running`);
+    }
+    return parts.slice(0, 3).join(' • ');
+  });
+  const recentWindowLabel = createMemo(() => {
+    const activitySummary = activity();
+    if (!activitySummary.startLabel || !activitySummary.endLabel) return null;
+    return `${activitySummary.startLabel} to ${activitySummary.endLabel}`;
+  });
 
   return (
     <Show when={hasRollups()}>
       <Card
         padding="none"
-        class="overflow-hidden border-border bg-surface shadow-[0_10px_24px_rgba(2,6,23,0.1)]"
+        class="overflow-hidden border-border bg-surface shadow-[0_8px_20px_rgba(15,23,42,0.08)]"
         data-testid="recovery-summary"
       >
         <div class="flex flex-col gap-4 p-4 sm:p-5">
           <div class="flex flex-wrap items-center justify-between gap-3 border-b border-border-subtle/80 bg-surface pb-4 text-xs">
             <div class="flex flex-wrap items-center gap-2.5">
-              <span class="inline-flex items-center gap-2 rounded-full border border-border-subtle bg-surface/70 px-2.5 py-1 font-medium text-base-content">
+              <span class="inline-flex items-center gap-2 rounded-full border border-border-subtle bg-surface px-2.5 py-1 font-medium text-base-content">
                 <span>{summary().total} protected</span>
               </span>
-              <span class="inline-flex items-center gap-2 rounded-full border border-violet-500/25 bg-violet-500/8 px-2.5 py-1 text-violet-200">
-                <span>
-                  {itemCoverage().itemTypeCount} item type
-                  {itemCoverage().itemTypeCount === 1 ? '' : 's'}
-                </span>
-              </span>
-              <span class="inline-flex items-center gap-2 rounded-full border border-sky-500/25 bg-sky-500/8 px-2.5 py-1 text-sky-200">
-                <span>
-                  {platformCoverage().platformCount} platform
-                  {platformCoverage().platformCount === 1 ? '' : 's'}
-                </span>
-              </span>
-              <span class="inline-flex items-center gap-2 rounded-full border border-emerald-500/25 bg-emerald-500/8 px-2.5 py-1 text-emerald-300">
+              <span class="inline-flex items-center gap-2 rounded-full border border-border-subtle bg-surface px-2.5 py-1 text-base-content">
+                <span class="h-2 w-2 rounded-full bg-emerald-400" />
                 <span>{healthyCount()} healthy</span>
               </span>
               <Show when={attentionCount() > 0}>
-                <span class="inline-flex items-center gap-2 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-amber-200">
+                <span class="inline-flex items-center gap-2 rounded-full border border-border-subtle bg-surface px-2.5 py-1 text-base-content">
+                  <span class="h-2 w-2 rounded-full bg-amber-400" />
                   <span>{attentionCount()} attention</span>
                 </span>
               </Show>
               <Show when={postureSummary().running > 0}>
-                <span class="inline-flex items-center gap-2 rounded-full border border-blue-500/30 bg-blue-500/10 px-2.5 py-1 text-blue-200">
+                <span class="inline-flex items-center gap-2 rounded-full border border-border-subtle bg-surface px-2.5 py-1 text-base-content">
+                  <span class="h-2 w-2 rounded-full bg-blue-400" />
                   <span>{postureSummary().running} running</span>
                 </span>
               </Show>
@@ -104,39 +119,54 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
           </div>
 
           <div class="grid items-start gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(22rem,0.85fr)]">
-            <section class="rounded-xl border border-border-subtle bg-surface-alt/35 p-4 shadow-[inset_0_1px_0_rgba(148,163,184,0.04)]">
-              <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <section class="rounded-xl border border-border-subtle bg-surface p-4">
+              <div class="flex flex-col gap-3 border-b border-border-subtle/80 pb-4 lg:flex-row lg:items-start lg:justify-between">
                 <div>
                   <div class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
                     Recovery Posture
                   </div>
                   <div class="mt-1.5 max-w-xl text-sm leading-6 text-muted">
-                    Recovery readiness across the current protected estate, with unhealthy
-                    coverage surfaced before activity detail.
+                    Recovery readiness across the current protected estate, with the attention
+                    queue surfaced before timeline detail.
                   </div>
                 </div>
                 <Show when={attentionItems().length > 0}>
-                  <div class="inline-flex w-fit items-center gap-2 rounded-full border border-amber-500/25 bg-amber-500/8 px-3 py-1.5 text-xs text-amber-200">
+                  <div class="inline-flex w-fit items-center gap-2 rounded-full border border-border-subtle bg-surface-alt px-3 py-1.5 text-xs text-base-content">
                     <span class="font-semibold uppercase tracking-[0.16em]">Attention Queue</span>
-                    <span class="rounded-full bg-amber-500/15 px-2 py-0.5 tabular-nums">
+                    <span class="rounded-full bg-amber-500/12 px-2 py-0.5 tabular-nums text-amber-300">
                       {attentionCount()}
                     </span>
                   </div>
                 </Show>
               </div>
 
-              <div class="mt-4 grid gap-3 sm:grid-cols-3">
-                <div class="rounded-lg border border-border-subtle bg-surface px-3 py-3">
-                  <div class="text-[11px] uppercase tracking-wide text-muted">Protected</div>
-                  <div class="mt-1 text-3xl font-semibold tracking-tight text-base-content">{summary().total}</div>
-                </div>
-                <div class="rounded-lg border border-border-subtle bg-surface px-3 py-3">
+              <div class="mt-4 grid gap-3 md:grid-cols-3">
+                <div class="rounded-lg border border-border-subtle bg-surface-alt/30 px-3 py-3">
                   <div class="text-[11px] uppercase tracking-wide text-muted">Healthy</div>
-                  <div class="mt-1 text-3xl font-semibold tracking-tight text-emerald-400">{healthyCount()}</div>
+                  <div class="mt-1 text-3xl font-semibold tracking-tight text-emerald-400">
+                    {healthyCount()}
+                  </div>
+                  <div class="mt-1 text-sm text-muted">Recent successful protection within the current window.</div>
                 </div>
-                <div class="rounded-lg border border-border-subtle bg-surface px-3 py-3">
+                <div class="rounded-lg border border-border-subtle bg-surface-alt/30 px-3 py-3">
                   <div class="text-[11px] uppercase tracking-wide text-muted">Attention</div>
-                  <div class="mt-1 text-3xl font-semibold tracking-tight text-amber-300">{attentionCount()}</div>
+                  <div class="mt-1 text-3xl font-semibold tracking-tight text-amber-300">
+                    {attentionCount()}
+                  </div>
+                  <div class="mt-1 text-sm text-muted">
+                    {attentionSummary() || 'No active recovery risks.'}
+                  </div>
+                </div>
+                <div class="rounded-lg border border-border-subtle bg-surface-alt/30 px-3 py-3">
+                  <div class="text-[11px] uppercase tracking-wide text-muted">Protected</div>
+                  <div class="mt-1 text-3xl font-semibold tracking-tight text-base-content">
+                    {summary().total}
+                  </div>
+                  <div class="mt-1 text-sm text-muted">
+                    {itemCoverage().itemTypeCount} item type
+                    {itemCoverage().itemTypeCount === 1 ? '' : 's'} across {platformCoverage().platformCount}{' '}
+                    platform{platformCoverage().platformCount === 1 ? '' : 's'}.
+                  </div>
                 </div>
               </div>
 
@@ -167,8 +197,9 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
                   )}
                 </For>
               </div>
-              <div class="mt-4 grid gap-3 lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
-                <div class="rounded-lg border border-border-subtle bg-surface p-3">
+
+              <div class="mt-4 grid gap-3 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+                <div class="rounded-lg border border-border-subtle bg-surface-alt/25 p-3">
                   <div class="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
                     Freshness
                   </div>
@@ -190,7 +221,7 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
                   </div>
                 </div>
 
-                <div class="rounded-lg border border-border-subtle bg-surface p-3">
+                <div class="rounded-lg border border-border-subtle bg-surface-alt/25 p-3">
                   <div class="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
                     Attention Queue
                   </div>
@@ -199,7 +230,7 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
                     fallback={<div class="mt-3 text-sm text-emerald-300">No active recovery risks.</div>}
                   >
                     <div class="mt-3 grid gap-2">
-                      <For each={attentionItems().slice(0, 2)}>
+                      <For each={attentionItems().slice(0, 3)}>
                         {(item) => (
                           <div
                             class={`rounded-lg border px-3 py-3 ${getRecoveryAttentionChipClass(item.tone)}`}
@@ -225,37 +256,41 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
               </div>
             </section>
 
-            <section class="rounded-xl border border-border-subtle bg-surface-alt/35 p-4">
+            <section class="rounded-xl border border-border-subtle bg-surface-alt/20 p-4">
               <div class="space-y-4">
                 <div>
                   <div class="text-xs font-semibold uppercase tracking-[0.18em] text-muted">
                     Protected Footprint
                   </div>
-                  <div class="mt-3 grid gap-3 sm:grid-cols-2">
-                    <div class="rounded-lg border border-border-subtle bg-surface p-3">
-                      <div class="text-[11px] uppercase tracking-wide text-muted">Item Types</div>
-                      <div class="mt-1 text-3xl font-semibold tracking-tight text-base-content">
-                        {itemCoverage().itemTypeCount}
+                  <div class="mt-3 overflow-hidden rounded-lg border border-border-subtle bg-surface">
+                    <dl class="divide-y divide-border-subtle/80">
+                      <div class="grid grid-cols-[minmax(0,0.95fr)_auto] items-center gap-3 px-3 py-3">
+                        <dt class="text-[11px] uppercase tracking-wide text-muted">Item Types</dt>
+                        <dd class="text-lg font-semibold text-base-content">
+                          {itemCoverage().itemTypeCount}
+                        </dd>
                       </div>
-                    </div>
-                    <div class="rounded-lg border border-border-subtle bg-surface p-3">
-                      <div class="text-[11px] uppercase tracking-wide text-muted">Primary Item</div>
-                      <div class="mt-1 text-xl font-semibold leading-7 text-base-content">
-                        {itemCoverage().primaryItemLabel ?? 'n/a'}
+                      <div class="grid grid-cols-[minmax(0,0.95fr)_auto] items-center gap-3 px-3 py-3">
+                        <dt class="text-[11px] uppercase tracking-wide text-muted">Primary Item</dt>
+                        <dd class="text-right text-base font-semibold text-base-content">
+                          {itemCoverage().primaryItemLabel ?? 'n/a'}
+                        </dd>
                       </div>
-                    </div>
-                    <div class="rounded-lg border border-border-subtle bg-surface p-3">
-                      <div class="text-[11px] uppercase tracking-wide text-muted">Platforms</div>
-                      <div class="mt-1 text-3xl font-semibold tracking-tight text-base-content">
-                        {platformCoverage().platformCount}
+                      <div class="grid grid-cols-[minmax(0,0.95fr)_auto] items-center gap-3 px-3 py-3">
+                        <dt class="text-[11px] uppercase tracking-wide text-muted">Platforms</dt>
+                        <dd class="text-lg font-semibold text-base-content">
+                          {platformCoverage().platformCount}
+                        </dd>
                       </div>
-                    </div>
-                    <div class="rounded-lg border border-border-subtle bg-surface p-3">
-                      <div class="text-[11px] uppercase tracking-wide text-muted">Primary Platform</div>
-                      <div class="mt-1 text-xl font-semibold leading-7 text-base-content">
-                        {platformCoverage().primaryPlatformLabel ?? 'n/a'}
+                      <div class="grid grid-cols-[minmax(0,0.95fr)_auto] items-center gap-3 px-3 py-3">
+                        <dt class="text-[11px] uppercase tracking-wide text-muted">
+                          Primary Platform
+                        </dt>
+                        <dd class="text-right text-base font-semibold text-base-content">
+                          {platformCoverage().primaryPlatformLabel ?? 'n/a'}
+                        </dd>
                       </div>
-                    </div>
+                    </dl>
                   </div>
 
                   <div class="mt-3 space-y-3">
@@ -267,8 +302,10 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
                         <div class="flex flex-wrap gap-2">
                           <For each={itemCoverage().items.slice(0, 6)}>
                             {(item) => (
-                              <div class="inline-flex items-center gap-2 rounded-md border border-border-subtle bg-surface px-2.5 py-1.5 text-sm">
-                                <span class={`rounded px-1.5 py-0.5 text-[10px] font-medium ${item.toneClass}`}>
+                              <div class="inline-flex items-center gap-2 rounded-full border border-border-subtle bg-surface px-2.5 py-1.5 text-sm">
+                                <span
+                                  class={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${item.toneClass}`}
+                                >
                                   {item.label}
                                 </span>
                                 <span class="tabular-nums text-base-content">{item.count}</span>
@@ -293,8 +330,10 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
                       <div class="flex flex-wrap gap-2">
                         <For each={platformCoverage().items.slice(0, 6)}>
                           {(item) => (
-                            <div class="inline-flex items-center gap-2 rounded-md border border-border-subtle bg-surface px-2.5 py-1.5 text-sm">
-                              <span class={`rounded px-1.5 py-0.5 text-[10px] font-medium ${item.toneClass}`}>
+                            <div class="inline-flex items-center gap-2 rounded-full border border-border-subtle bg-surface px-2.5 py-1.5 text-sm">
+                              <span
+                                class={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${item.toneClass}`}
+                              >
                                 {item.label}
                               </span>
                               <span class="tabular-nums text-base-content">{item.count}</span>
@@ -311,31 +350,49 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
                   <div class="text-xs font-semibold uppercase tracking-[0.18em] text-muted">
                     Recent History
                   </div>
-                  <div class="mt-3 grid gap-3">
-                    <div class="rounded-lg border border-border-subtle bg-surface p-3">
-                      <div class="grid gap-3 sm:grid-cols-3">
-                        <div>
-                          <div class="text-[11px] uppercase tracking-wide text-muted">
-                            Recovery Points
-                          </div>
-                          <div class="mt-1 text-2xl font-semibold text-base-content">
-                            {activity().totalEvents}
-                          </div>
-                        </div>
-                        <div>
-                          <div class="text-[11px] uppercase tracking-wide text-muted">Avg / Day</div>
-                          <div class="mt-1 text-2xl font-semibold text-base-content">
-                            {activity().averagePerDay.toFixed(1)}
-                          </div>
-                        </div>
-                        <div>
-                          <div class="text-[11px] uppercase tracking-wide text-muted">Days Active</div>
-                          <div class="mt-1 text-2xl font-semibold text-base-content">
-                            {activity().activeDays}
-                          </div>
-                        </div>
+                  <div class="mt-2 text-sm text-muted">
+                    <Show when={recentWindowLabel()} fallback={'No recent activity window available.'}>
+                      {recentWindowLabel()}
+                    </Show>
+                  </div>
+                  <div class="mt-3 overflow-hidden rounded-lg border border-border-subtle bg-surface">
+                    <dl class="divide-y divide-border-subtle/80">
+                      <div class="grid grid-cols-[minmax(0,0.95fr)_auto] items-center gap-3 px-3 py-3">
+                        <dt class="text-[11px] uppercase tracking-wide text-muted">Recovery Points</dt>
+                        <dd class="text-lg font-semibold text-base-content">
+                          {activity().totalEvents}
+                        </dd>
                       </div>
-                    </div>
+                      <div class="grid grid-cols-[minmax(0,0.95fr)_auto] items-center gap-3 px-3 py-3">
+                        <dt class="text-[11px] uppercase tracking-wide text-muted">Avg / Day</dt>
+                        <dd class="text-base font-semibold text-base-content">
+                          {activity().averagePerDay.toFixed(1)}
+                        </dd>
+                      </div>
+                      <div class="grid grid-cols-[minmax(0,0.95fr)_auto] items-center gap-3 px-3 py-3">
+                        <dt class="text-[11px] uppercase tracking-wide text-muted">Days Active</dt>
+                        <dd class="text-base font-semibold text-base-content">
+                          {activity().activeDays}
+                        </dd>
+                      </div>
+                      <div class="grid grid-cols-[minmax(0,0.95fr)_auto] items-center gap-3 px-3 py-3">
+                        <dt class="text-[11px] uppercase tracking-wide text-muted">Peak Day</dt>
+                        <dd class="text-right text-base font-semibold text-base-content">
+                          {activity().busiestLabel ?? 'n/a'}
+                        </dd>
+                      </div>
+                      <div class="grid grid-cols-[minmax(0,0.95fr)_auto] items-center gap-3 px-3 py-3">
+                        <dt class="text-[11px] uppercase tracking-wide text-muted">
+                          Latest Activity
+                        </dt>
+                        <dd class="text-right text-base font-semibold text-base-content">
+                          {activity().latestLabel ?? 'n/a'}
+                        </dd>
+                      </div>
+                    </dl>
+                  </div>
+
+                  <div class="mt-3 grid gap-3">
                     <Show
                       when={activity().hasData}
                       fallback={
@@ -347,23 +404,25 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
                       <div class="rounded-lg border border-border-subtle bg-surface p-3">
                         <div class="grid gap-3 sm:grid-cols-2">
                           <div>
-                            <div class="text-[11px] uppercase tracking-wide text-muted">Peak Day</div>
-                            <div class="mt-1 text-base font-semibold text-base-content">
-                              {activity().busiestLabel ?? 'n/a'}
+                            <div class="text-[11px] uppercase tracking-wide text-muted">
+                              Peak Throughput
+                            </div>
+                            <div class="mt-1 text-2xl font-semibold text-base-content">
+                              {activity().busiestCount}
                             </div>
                             <div class="mt-1 text-sm text-muted">
-                              {activity().busiestCount} recovery point
-                              {activity().busiestCount === 1 ? '' : 's'}
+                              {activity().busiestLabel ?? 'n/a'}
                             </div>
                           </div>
                           <div>
-                            <div class="text-[11px] uppercase tracking-wide text-muted">Latest Activity</div>
-                            <div class="mt-1 text-base font-semibold text-base-content">
-                              {activity().latestLabel ?? 'n/a'}
+                            <div class="text-[11px] uppercase tracking-wide text-muted">
+                              Latest Throughput
+                            </div>
+                            <div class="mt-1 text-2xl font-semibold text-base-content">
+                              {activity().latestCount}
                             </div>
                             <div class="mt-1 text-sm text-muted">
-                              {activity().latestCount} recovery point
-                              {activity().latestCount === 1 ? '' : 's'}
+                              {activity().latestLabel ?? 'n/a'}
                             </div>
                           </div>
                         </div>

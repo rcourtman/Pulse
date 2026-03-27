@@ -316,8 +316,11 @@ describe('Recovery', () => {
   it('surfaces item-first recovery coverage in the unified summary', async () => {
     render(() => <Recovery />);
 
-    expect(await screen.findByText('2 item types')).toBeInTheDocument();
-    expect(await screen.findByText('2 platforms')).toBeInTheDocument();
+    expect(
+      await screen.findByText(
+        (_, element) => element?.textContent === '2 item types across 2 platforms.',
+      ),
+    ).toBeInTheDocument();
     expect(screen.getByText('Primary Item')).toBeInTheDocument();
     expect(screen.getByText('Primary Platform')).toBeInTheDocument();
     expect(screen.getByText('Platform Mix')).toBeInTheDocument();

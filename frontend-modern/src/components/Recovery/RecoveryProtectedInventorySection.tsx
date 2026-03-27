@@ -218,13 +218,12 @@ export const RecoveryProtectedInventorySection: Component<
       tone="card"
       class="overflow-hidden border-border-subtle bg-surface shadow-[0_10px_24px_rgba(2,6,23,0.1)]"
     >
-      <div class="border-b border-border-subtle/80 bg-surface px-4 py-4">
+      <div class="border-b border-border-subtle/80 bg-surface px-4 py-3">
         <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div class="flex flex-col gap-1">
+          <div class="flex flex-wrap items-center gap-2">
             <div class="text-sm font-semibold text-base-content">Protected inventory</div>
-            <div class="max-w-3xl text-sm text-muted">
-              Item-first recovery inventory, with item class and latest-point posture kept visible
-              in the main grid instead of buried in drill-in.
+            <div class="text-xs text-muted">
+              Item class and latest-point posture stay visible in the primary grid.
             </div>
           </div>
           <div class="flex flex-wrap items-center gap-2 text-xs">
