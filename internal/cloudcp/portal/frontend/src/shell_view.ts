@@ -469,6 +469,24 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
   var unhealthyCount = countWorkspacesByHealth(workspaces, 'unhealthy');
   var workspaceManagement = '';
   if (account.can_manage) {
+    var workspaceDeskActions = '';
+    if (account.kind === 'msp') {
+      workspaceDeskActions +=
+        '<button type="button" class="btn-secondary btn-compact" data-action="toggle-add-workspace" data-account-id="' +
+        escapeAttr(account.id) +
+        '">Add workspace</button>';
+    }
+    if (account.has_billing) {
+      workspaceDeskActions +=
+        '<button type="button" class="btn-secondary btn-compact" data-action="open-billing" data-account-id="' +
+        escapeAttr(account.id) +
+        '">Manage billing</button>';
+    }
+    workspaceDeskActions +=
+      '<button type="button" class="btn-secondary btn-compact" data-action="toggle-team" data-account-id="' +
+      escapeAttr(account.id) +
+      '" data-shell-target="team">Manage team</button>';
+
     workspaceManagement =
       '<section class="workspace-management-panel" id="workspace-management-' +
       escapeAttr(account.id) +
@@ -487,7 +505,11 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
         '</div>' +
         '<div class="workspace-management-empty" id="workspace-management-empty-' +
         escapeAttr(account.id) +
-        '">Choose a workspace to manage from the fleet above.</div>' +
+        '">' +
+          '<div class="workspace-management-empty-copy">Choose a workspace to manage from the fleet above.</div>' +
+          '<div class="workspace-management-empty-actions">' + workspaceDeskActions + '</div>' +
+          '<div class="workspace-management-empty-note">Use the fleet table for workspace-level work, or run account-wide billing and team actions from here.</div>' +
+        '</div>' +
         '<div class="workspace-management-content" id="workspace-management-content-' +
         escapeAttr(account.id) +
         '" hidden>' +
