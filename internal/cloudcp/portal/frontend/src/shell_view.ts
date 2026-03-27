@@ -497,74 +497,71 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
   return (
     '<div class="portal-shell">' +
       renderOverviewBand(accounts) +
-      '<div class="portal-frame">' +
-        '<aside class="portal-rail">' +
-          renderShellNavigation(accounts, context.bootstrap.support_email || '') +
-          '<div class="portal-rail-panel">' +
-            '<div class="account-panel-kicker">Support</div>' +
-            '<h3>One account surface</h3>' +
-            '<p>This portal should be the place where hosted access and commercial account actions meet. Hosted workspaces sit above. Self-hosted services remain available below.</p>' +
-            '<a class="portal-support-link" href="mailto:' + escapeAttr(context.bootstrap.support_email || '') + '">' + escapeHTML(context.bootstrap.support_email || '') + '</a>' +
+      '<div class="portal-shell-bar">' +
+        renderShellNavigation(accounts, context.bootstrap.support_email || '') +
+        '<div class="portal-support-strip">' +
+          '<div class="portal-support-copy">' +
+            '<span class="portal-support-label">Support</span>' +
+            '<span class="portal-support-text">Hosted operations and commercial account tools now share one account surface.</span>' +
           '</div>' +
-        '</aside>' +
-        '<div class="portal-stage">' +
-          '<section class="portal-top-section" id="hosted-operations-section">' +
-            '<div class="portal-top-section-header">' +
-              '<div class="account-panel-kicker">' + (hosted ? 'Hosted operations' : 'Hosted access') + '</div>' +
-              '<h2>' + (hosted ? 'Run hosted accounts from one place' : 'No hosted workspaces are attached yet') + '</h2>' +
-              '<p>' + (hosted
-                ? 'Use this area for workspace access, fleet operations, hosted billing, and team management.'
-                : 'This account does not currently have hosted workspace access. If that is unexpected, contact support while using the commercial tools below.') + '</p>' +
-            '</div>' +
-            '<div id="accounts-root">' + renderAccountsHTML(context) + '</div>' +
-          '</section>' +
-          '<section class="service-section" id="account-services-section">' +
-            '<div class="service-header">' +
-              '<div>' +
-                '<div class="account-panel-kicker">Account services</div>' +
-                '<h2>' + serviceHeading + '</h2>' +
-              '</div>' +
-              '<div class="service-note">' + serviceNote + '</div>' +
-            '</div>' +
-            '<div class="service-grid">' +
-              '<button class="service-card service-card-button" type="button" id="open-manage-service" data-account-service-action="open-service-panel" data-account-service-panel="manage-service-panel" data-account-service-focus="manage-inline-email">' +
-                '<span class="service-card-kicker">Billing</span>' +
-                '<h3>Manage subscriptions</h3>' +
-                '<p>Open Stripe billing access for existing self-hosted subscriptions without leaving the Pulse Account shell.</p>' +
-              '</button>' +
-              '<button class="service-card service-card-button" type="button" id="open-retrieve-service" data-account-service-action="open-service-panel" data-account-service-panel="retrieve-service-panel" data-account-service-focus="retrieve-inline-email">' +
-                '<span class="service-card-kicker">Licenses</span>' +
-                '<h3>Retrieve licenses</h3>' +
-                '<p>Recover the latest active self-hosted license and invoice link for a commercial email address.</p>' +
-              '</button>' +
-              '<button class="service-card service-card-button" type="button" id="open-refund-service" data-account-service-action="open-service-panel" data-account-service-panel="refund-service-panel" data-account-service-focus="refund-inline-email">' +
-                '<span class="service-card-kicker">Refunds</span>' +
-                '<h3>Refund requests</h3>' +
-                '<p>Request an immediate self-serve refund for eligible self-hosted purchases with explicit revocation confirmation.</p>' +
-              '</button>' +
-              '<button class="service-card service-card-button" type="button" id="open-data-service" data-account-service-action="open-service-panel" data-account-service-panel="data-service-panel" data-account-service-focus="data-export-email">' +
-                '<span class="service-card-kicker">Privacy</span>' +
-                '<h3>Data and privacy</h3>' +
-                '<p>Request commercial data export or deletion without leaving the account shell.</p>' +
-              '</button>' +
-            '</div>' +
-            '<div class="service-panel" id="manage-service-panel"><div id="manage-service-root"></div></div>' +
-            '<div class="service-panel" id="retrieve-service-panel"><div id="retrieve-service-root"></div></div>' +
-            '<div class="service-panel" id="refund-service-panel"><div id="refund-service-root"></div></div>' +
-            '<div class="service-panel" id="data-service-panel">' +
-              '<h3>Data and privacy</h3>' +
-              '<p>Request export or deletion of the commercial data tied to an email address. Payment data held directly by Stripe still requires support handling.</p>' +
-              '<div class="subsection"><div id="data-export-root"></div></div>' +
-              '<div class="subsection"><div id="data-delete-root"></div></div>' +
-              '<div class="helper-text">Payment-card data stays with Stripe. For Stripe deletion support, contact <a href="mailto:' +
-              escapeAttr(context.bootstrap.support_email || '') +
-              '">' +
-              escapeHTML(context.bootstrap.support_email || '') +
-              '</a>.</div>' +
-            '</div>' +
-          '</section>' +
+          '<a class="portal-support-link" href="mailto:' + escapeAttr(context.bootstrap.support_email || '') + '">' + escapeHTML(context.bootstrap.support_email || '') + '</a>' +
         '</div>' +
       '</div>' +
+      '<section class="portal-top-section" id="hosted-operations-section">' +
+        '<div class="portal-top-section-header">' +
+          '<div class="account-panel-kicker">' + (hosted ? 'Hosted operations' : 'Hosted access') + '</div>' +
+          '<h2>' + (hosted ? 'Run hosted accounts from one place' : 'No hosted workspaces are attached yet') + '</h2>' +
+          '<p>' + (hosted
+            ? 'Use this area for workspace access, fleet operations, hosted billing, and team management.'
+            : 'This account does not currently have hosted workspace access. If that is unexpected, contact support while using the commercial tools below.') + '</p>' +
+        '</div>' +
+        '<div id="accounts-root">' + renderAccountsHTML(context) + '</div>' +
+      '</section>' +
+      '<section class="service-section" id="account-services-section">' +
+        '<div class="service-header">' +
+          '<div>' +
+            '<div class="account-panel-kicker">Account services</div>' +
+            '<h2>' + serviceHeading + '</h2>' +
+          '</div>' +
+          '<div class="service-note">' + serviceNote + '</div>' +
+        '</div>' +
+        '<div class="service-grid">' +
+          '<button class="service-card service-card-button" type="button" id="open-manage-service" data-account-service-action="open-service-panel" data-account-service-panel="manage-service-panel" data-account-service-focus="manage-inline-email">' +
+            '<span class="service-card-kicker">Billing</span>' +
+            '<h3>Manage subscriptions</h3>' +
+            '<p>Open Stripe billing access for existing self-hosted subscriptions without leaving the Pulse Account shell.</p>' +
+          '</button>' +
+          '<button class="service-card service-card-button" type="button" id="open-retrieve-service" data-account-service-action="open-service-panel" data-account-service-panel="retrieve-service-panel" data-account-service-focus="retrieve-inline-email">' +
+            '<span class="service-card-kicker">Licenses</span>' +
+            '<h3>Retrieve licenses</h3>' +
+            '<p>Recover the latest active self-hosted license and invoice link for a commercial email address.</p>' +
+          '</button>' +
+          '<button class="service-card service-card-button" type="button" id="open-refund-service" data-account-service-action="open-service-panel" data-account-service-panel="refund-service-panel" data-account-service-focus="refund-inline-email">' +
+            '<span class="service-card-kicker">Refunds</span>' +
+            '<h3>Refund requests</h3>' +
+            '<p>Request an immediate self-serve refund for eligible self-hosted purchases with explicit revocation confirmation.</p>' +
+          '</button>' +
+          '<button class="service-card service-card-button" type="button" id="open-data-service" data-account-service-action="open-service-panel" data-account-service-panel="data-service-panel" data-account-service-focus="data-export-email">' +
+            '<span class="service-card-kicker">Privacy</span>' +
+            '<h3>Data and privacy</h3>' +
+            '<p>Request commercial data export or deletion without leaving the account shell.</p>' +
+          '</button>' +
+        '</div>' +
+        '<div class="service-panel" id="manage-service-panel"><div id="manage-service-root"></div></div>' +
+        '<div class="service-panel" id="retrieve-service-panel"><div id="retrieve-service-root"></div></div>' +
+        '<div class="service-panel" id="refund-service-panel"><div id="refund-service-root"></div></div>' +
+        '<div class="service-panel" id="data-service-panel">' +
+          '<h3>Data and privacy</h3>' +
+          '<p>Request export or deletion of the commercial data tied to an email address. Payment data held directly by Stripe still requires support handling.</p>' +
+          '<div class="subsection"><div id="data-export-root"></div></div>' +
+          '<div class="subsection"><div id="data-delete-root"></div></div>' +
+          '<div class="helper-text">Payment-card data stays with Stripe. For Stripe deletion support, contact <a href="mailto:' +
+          escapeAttr(context.bootstrap.support_email || '') +
+          '">' +
+          escapeHTML(context.bootstrap.support_email || '') +
+          '</a>.</div>' +
+        '</div>' +
+      '</section>' +
     '</div>'
   );
 }

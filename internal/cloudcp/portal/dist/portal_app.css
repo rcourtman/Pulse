@@ -232,26 +232,18 @@ header .logout-btn:hover,
   line-height: 1.05;
   letter-spacing: -0.04em;
 }
-.portal-frame {
+.portal-shell-bar {
   display: grid;
-  grid-template-columns: minmax(220px, 250px) minmax(0, 1fr);
-  gap: 22px;
-  align-items: start;
-}
-.portal-rail {
-  position: sticky;
-  top: 88px;
-  display: flex;
-  flex-direction: column;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 16px;
+  align-items: stretch;
 }
 .portal-section-nav {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
 }
 .portal-section-link,
-.portal-rail-panel,
 .intro-card,
 .service-panel,
 .account-surface,
@@ -287,30 +279,41 @@ header .logout-btn:hover,
   line-height: 1.5;
   color: var(--ink-soft);
 }
-.portal-rail-panel {
-  border-radius: var(--radius-md);
-  padding: 20px;
-}
-.portal-rail-panel h3 {
-  margin: 8px 0 10px;
-  font-size: 23px;
-  line-height: 1.05;
-  letter-spacing: -0.04em;
-}
-.portal-rail-panel p {
-  margin: 0;
-  color: var(--ink-soft);
-  line-height: 1.6;
-}
 .portal-support-link,
 .support-link,
 .service-panel .helper-text a {
   color: var(--accent-strong);
   font-weight: 600;
 }
-.portal-support-link {
-  display: inline-block;
-  margin-top: 14px;
+.portal-support-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-width: 340px;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: var(--shadow-sm);
+}
+.portal-support-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.portal-support-label {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+.portal-support-text {
+  max-width: 280px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-soft);
 }
 .portal-stage {
   display: flex;
@@ -896,17 +899,15 @@ header .logout-btn:hover,
   background: #6e1414;
 }
 @media (max-width: 1180px) {
-  .portal-frame,
   .account-management-grid,
   .team-management-grid {
     grid-template-columns: 1fr;
   }
-  .portal-rail {
-    position: static;
+  .portal-shell-bar {
+    grid-template-columns: 1fr;
   }
-  .portal-section-nav {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+  .portal-support-strip {
+    min-width: 0;
   }
   .account-overview-rail {
     grid-template-columns: 1fr;
