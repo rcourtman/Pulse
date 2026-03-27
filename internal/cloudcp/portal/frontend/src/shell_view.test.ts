@@ -147,7 +147,7 @@ describe('shell view', function() {
     expect(html).toContain('Active workspaces');
     expect(html).toContain('Needs attention');
     expect(html).toContain('Healthy</span>');
-    expect(html).toContain('Unhealthy</span>');
+    expect(html).toContain('Needs attention</span>');
     expect(html).toContain('Checking</span>');
     expect(html).toContain('Live updates and health checks are currently good.');
     expect(html).toContain('This workspace needs attention before it is trustworthy.');
