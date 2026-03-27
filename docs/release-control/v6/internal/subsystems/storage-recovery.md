@@ -473,6 +473,11 @@ protected estate into one endless slab; it should page or otherwise bound the
 primary inventory table so the workspace, filters, and adjacent activity panel
 remain readable as one monitoring surface instead of dissolving into a raw list
 dump.
+That same protected-inventory surface should carry compact operator orientation
+inside the table shell itself. `RecoveryProtectedInventorySection.tsx` should
+expose the current bounded range, page, and sort state near the primary grid,
+and the first column should carry enough secondary item metadata to read as a
+monitored inventory row rather than a bare export line.
 That same hierarchy rule also applies to the activity panel below the primary
 workspace. `RecoveryActivitySection.tsx` should read as timeline analysis for
 the selected history window, not as a second copy of the page-level posture

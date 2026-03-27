@@ -169,6 +169,31 @@ export const RecoveryProtectedInventorySection: Component<
     return sortedRollups().slice(start, start + PROTECTED_ITEMS_PAGE_SIZE);
   });
 
+  const pageStart = createMemo(() =>
+    sortedRollups().length === 0 ? 0 : (protectedPage() - 1) * PROTECTED_ITEMS_PAGE_SIZE + 1,
+  );
+
+  const pageEnd = createMemo(() =>
+    Math.min(protectedPage() * PROTECTED_ITEMS_PAGE_SIZE, sortedRollups().length),
+  );
+
+  const protectedSortLabel = createMemo(() => {
+    switch (protectedSortCol()) {
+      case 'item':
+        return 'Item';
+      case 'type':
+        return 'Item Type';
+      case 'platform':
+        return 'Platform';
+      case 'lastBackup':
+        return 'Latest Point';
+      case 'outcome':
+        return 'Outcome';
+      default:
+        return 'Latest Point';
+    }
+  });
+
   createEffect(() => {
     props.queryFilter();
     props.platformFilter();
@@ -325,6 +350,27 @@ export const RecoveryProtectedInventorySection: Component<
         </div>
       </Show>
 
+      <Show when={sortedRollups().length > 0}>
+        <div class="border-b border-border-subtle/80 bg-surface-alt/20 px-4 py-3">
+          <div class="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+            <div class="flex flex-wrap items-center gap-2 text-xs">
+              <span class="rounded-full border border-border-subtle bg-surface px-2.5 py-1 text-base-content">
+                Showing {pageStart()} - {pageEnd()}
+              </span>
+              <span class="rounded-full border border-border-subtle bg-surface px-2.5 py-1 text-base-content">
+                Page {protectedPage()} / {protectedTotalPages()}
+              </span>
+              <span class="rounded-full border border-border-subtle bg-surface px-2.5 py-1 text-base-content">
+                Sorted by {protectedSortLabel()}
+              </span>
+            </div>
+            <div class="text-xs text-muted">
+              Open any item to drill directly into its recovery events.
+            </div>
+          </div>
+        </div>
+      </Show>
+
       <Show when={props.loading() && props.filteredRollups().length === 0}>
         <div class="px-6 py-6 text-sm text-muted">
           {getRecoveryProtectedItemsLoadingState().text}
@@ -427,7 +473,7 @@ export const RecoveryProtectedInventorySection: Component<
                       onClick={() => props.onSelectRollup(rollup.rollupId)}
                     >
                       <TableCell
-                        class={`relative max-w-[420px] truncate whitespace-nowrap px-3 py-3 text-base-content ${
+                        class={`relative max-w-[420px] px-3 py-3 text-base-content ${
                           issueTone === 'rose' || issueTone === 'blue' ? 'font-medium' : ''
                         }`}
                         title={label}
@@ -435,18 +481,32 @@ export const RecoveryProtectedInventorySection: Component<
                         <Show when={issueTone !== 'none'}>
                           <span class={`absolute inset-y-0 left-0 w-0.5 ${issueRailClass}`} />
                         </Show>
-                        <div class="flex items-center gap-2">
-                          <span class="truncate">{label}</span>
-                          <Show when={neverSucceeded}>
-                            <span class={getRecoveryRollupStatusPillClass('never-succeeded')}>
-                              {getRecoveryRollupStatusPillLabel('never-succeeded')}
-                            </span>
-                          </Show>
-                          <Show when={!neverSucceeded && stale}>
-                            <span class={getRecoveryRollupStatusPillClass('stale')}>
-                              {getRecoveryRollupStatusPillLabel('stale')}
-                            </span>
-                          </Show>
+                        <div class="flex min-w-0 flex-col gap-1.5 pl-0.5">
+                          <div class="flex min-w-0 items-center gap-2">
+                            <span class="truncate text-sm font-medium">{label}</span>
+                            <Show when={neverSucceeded}>
+                              <span class={getRecoveryRollupStatusPillClass('never-succeeded')}>
+                                {getRecoveryRollupStatusPillLabel('never-succeeded')}
+                              </span>
+                            </Show>
+                            <Show when={!neverSucceeded && stale}>
+                              <span class={getRecoveryRollupStatusPillClass('stale')}>
+                                {getRecoveryRollupStatusPillLabel('stale')}
+                              </span>
+                            </Show>
+                          </div>
+                          <div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted">
+                            <Show when={itemTypePresentation?.label}>
+                              <span>{itemTypePresentation?.label}</span>
+                            </Show>
+                            <Show when={platforms.length > 0}>
+                              <span>
+                                {platforms
+                                  .map((platform) => getSourcePlatformLabel(platform))
+                                  .join(' • ')}
+                              </span>
+                            </Show>
+                          </div>
                         </div>
                       </TableCell>
 
@@ -456,7 +516,7 @@ export const RecoveryProtectedInventorySection: Component<
                           fallback={<span class="text-muted">—</span>}
                         >
                           <span
-                            class={`inline-flex min-w-[4.5rem] justify-center rounded px-1.5 py-px text-[10px] font-medium ${
+                            class={`inline-flex min-w-[4.75rem] justify-center rounded-full border px-2 py-1 text-[10px] font-medium ${
                               itemTypePresentation?.badgeClasses || 'bg-surface-alt text-base-content'
                             }`}
                           >
@@ -525,9 +585,7 @@ export const RecoveryProtectedInventorySection: Component<
               fallback={<span>Showing 0 of 0 protected items</span>}
             >
               <span>
-                Showing {(protectedPage() - 1) * PROTECTED_ITEMS_PAGE_SIZE + 1} -{' '}
-                {Math.min(protectedPage() * PROTECTED_ITEMS_PAGE_SIZE, sortedRollups().length)} of{' '}
-                {sortedRollups().length} protected items
+                Showing {pageStart()} - {pageEnd()} of {sortedRollups().length} protected items
               </span>
             </Show>
           </div>

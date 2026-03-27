@@ -213,7 +213,7 @@ describe('Recovery', () => {
     expect(within(inventoryTable).getByText('Item')).toBeInTheDocument();
     expect(within(inventoryTable).getByText('Item Type')).toBeInTheDocument();
     expect(within(inventoryTable).getByText('Platform')).toBeInTheDocument();
-    expect(within(inventoryTable).getByText('VM')).toBeInTheDocument();
+    expect(within(inventoryTable).getAllByText('VM').length).toBeGreaterThan(0);
     expect(screen.queryByText('Backups By Date')).not.toBeInTheDocument();
 
     fireEvent.click(await screen.findByText('VM 123'));
@@ -742,13 +742,17 @@ describe('Recovery', () => {
     render(() => <Recovery />);
 
     expect(await screen.findByText('Showing 1 - 24 of 26 protected items')).toBeInTheDocument();
-    expect(screen.getByText('Page 1 / 2')).toBeInTheDocument();
+    expect(screen.getAllByText('Page 1 / 2').length).toBeGreaterThan(0);
+    expect(screen.getByText('Sorted by Latest Point')).toBeInTheDocument();
+    expect(
+      screen.getByText('Open any item to drill directly into its recovery events.'),
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Next' }));
 
     await waitFor(() => {
       expect(screen.getByText('Showing 25 - 26 of 26 protected items')).toBeInTheDocument();
-      expect(screen.getByText('Page 2 / 2')).toBeInTheDocument();
+      expect(screen.getAllByText('Page 2 / 2').length).toBeGreaterThan(0);
     });
   });
 
