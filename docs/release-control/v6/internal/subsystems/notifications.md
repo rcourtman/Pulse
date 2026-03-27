@@ -105,6 +105,11 @@ Enhanced webhook test/live delivery must follow that same ownership model:
 into the canonical webhook render and transport path instead of maintaining a
 parallel URL-rendering, enrichment, Telegram URL sanitization, or single-send
 HTTP stack.
+That same ownership includes webhook retry classification. The canonical
+retry gate in `webhook_enhanced.go` must parse provider failures from both
+`status 429`-style and `HTTP 429`-style error strings before it decides
+whether to retry, so a non-retryable `HTTP 400` result cannot be retried just
+because the transport changed its error wording.
 
 `internal/api/notifications.go` and
 `frontend-modern/src/api/notifications.ts` are shared boundaries with

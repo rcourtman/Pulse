@@ -50,6 +50,11 @@ func TestIsRetryableWebhookError(t *testing.T) {
 			expected: true,
 		},
 		{
+			name:     "http 500 internal server error",
+			err:      errors.New("webhook returned HTTP 500: Internal Server Error"),
+			expected: true,
+		},
+		{
 			name:     "status 502 bad gateway",
 			err:      errors.New("webhook returned status 502: Bad Gateway"),
 			expected: true,
@@ -105,10 +110,20 @@ func TestIsRetryableWebhookError(t *testing.T) {
 			err:      errors.New("webhook returned status 429: Too Many Requests"),
 			expected: true,
 		},
+		{
+			name:     "http 429 too many requests",
+			err:      errors.New("webhook returned HTTP 429: Too Many Requests"),
+			expected: true,
+		},
 		// HTTP 4xx client errors - should NOT be retryable
 		{
 			name:     "status 400 bad request",
 			err:      errors.New("webhook returned status 400: Bad Request"),
+			expected: false,
+		},
+		{
+			name:     "http 400 bad request",
+			err:      errors.New("webhook returned HTTP 400: Bad Request"),
 			expected: false,
 		},
 		{
@@ -216,8 +231,18 @@ func TestIsRetryableWebhookError(t *testing.T) {
 			expected: true,
 		},
 		{
+			name:     "http code in message format",
+			err:      errors.New("webhook returned HTTP 503"),
+			expected: true,
+		},
+		{
 			name:     "status code only",
 			err:      errors.New("status 401"),
+			expected: false,
+		},
+		{
+			name:     "http code only",
+			err:      errors.New("HTTP 401"),
 			expected: false,
 		},
 		// Boundary tests for status code ranges
