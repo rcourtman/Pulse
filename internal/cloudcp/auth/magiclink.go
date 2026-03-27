@@ -21,16 +21,20 @@ const (
 	magicLinkPrefix = "ml1_"
 	hmacKeyFile     = ".cp_magic_link_key"
 	hmacKeySize     = 32
+)
 
-	MagicLinkTargetTenantHandoff = "tenant_handoff"
-	MagicLinkTargetPortal        = "portal"
+type MagicLinkTarget string
+
+const (
+	MagicLinkTargetTenant MagicLinkTarget = "tenant"
+	MagicLinkTargetPortal MagicLinkTarget = "portal"
 )
 
 // Token holds the validated data from a consumed magic link token.
 type Token struct {
 	Email     string
 	TenantID  string
-	Target    string
+	Target    MagicLinkTarget
 	ExpiresAt time.Time
 }
 
@@ -71,33 +75,34 @@ func NewService(cpDataDir string) (*Service, error) {
 // GenerateToken creates a new magic link token for the given email and tenant.
 // Returns a string in the format "ml1_<random>" that can be included in a URL.
 func (s *Service) GenerateToken(email, tenantID string) (string, error) {
-	return s.generateToken(email, tenantID, MagicLinkTargetTenantHandoff)
+	return s.generateTokenForTarget(email, tenantID, MagicLinkTargetTenant)
 }
 
-// GeneratePortalToken creates a new magic link token that signs the user into
-// the Pulse Account portal without requiring a tenant handoff target.
-func (s *Service) GeneratePortalToken(email string) (string, error) {
-	return s.generateToken(email, "", MagicLinkTargetPortal)
+// GeneratePortalToken creates a new portal-targeted magic link token. tenantID
+// is optional and, when present, is used during verification to ensure the
+// control-plane membership exists before the session is established.
+func (s *Service) GeneratePortalToken(email, tenantID string) (string, error) {
+	return s.generateTokenForTarget(email, tenantID, MagicLinkTargetPortal)
 }
 
-func (s *Service) generateToken(email, tenantID, target string) (string, error) {
+func (s *Service) generateTokenForTarget(email, tenantID string, target MagicLinkTarget) (string, error) {
 	if s == nil {
 		return "", fmt.Errorf("magic link service not configured")
 	}
 	email = strings.ToLower(strings.TrimSpace(email))
 	tenantID = strings.TrimSpace(tenantID)
-	target = strings.TrimSpace(target)
 	if email == "" {
 		return "", fmt.Errorf("email is required")
 	}
-	if target == "" {
-		target = MagicLinkTargetTenantHandoff
-	}
-	if target == MagicLinkTargetTenantHandoff && tenantID == "" {
-		return "", fmt.Errorf("tenantID is required")
-	}
-	if target != MagicLinkTargetTenantHandoff && target != MagicLinkTargetPortal {
-		return "", fmt.Errorf("target is invalid")
+	switch target {
+	case MagicLinkTargetTenant:
+		if tenantID == "" {
+			return "", fmt.Errorf("tenantID is required")
+		}
+	case MagicLinkTargetPortal:
+		// tenantID is optional for portal-targeted sign-in.
+	default:
+		return "", fmt.Errorf("unsupported magic link target %q", target)
 	}
 
 	expiresAt := s.now().UTC().Add(s.ttl)
@@ -112,7 +117,7 @@ func (s *Service) generateToken(email, tenantID, target string) (string, error) 
 	if err := s.store.Put(tokenHash, &TokenRecord{
 		Email:     email,
 		TenantID:  tenantID,
-		Target:    target,
+		Target:    string(target),
 		ExpiresAt: expiresAt,
 	}); err != nil {
 		return "", err
@@ -140,7 +145,7 @@ func (s *Service) ValidateToken(token string) (*Token, error) {
 	return &Token{
 		Email:     rec.Email,
 		TenantID:  rec.TenantID,
-		Target:    rec.Target,
+		Target:    MagicLinkTarget(rec.Target),
 		ExpiresAt: rec.ExpiresAt,
 	}, nil
 }

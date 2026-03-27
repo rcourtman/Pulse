@@ -67,12 +67,12 @@ func TestValidateToken_Valid(t *testing.T) {
 	if result.TenantID != "t-xyz" {
 		t.Errorf("tenantID = %q, want t-xyz", result.TenantID)
 	}
-	if result.Target != MagicLinkTargetTenantHandoff {
-		t.Errorf("target = %q, want %q", result.Target, MagicLinkTargetTenantHandoff)
+	if result.Target != MagicLinkTargetTenant {
+		t.Errorf("target = %q, want %q", result.Target, MagicLinkTargetTenant)
 	}
 }
 
-func TestGeneratePortalToken_Valid(t *testing.T) {
+func TestValidateToken_PortalTargetAllowsEmptyTenant(t *testing.T) {
 	dir := t.TempDir()
 	svc, err := NewService(dir)
 	if err != nil {
@@ -80,7 +80,7 @@ func TestGeneratePortalToken_Valid(t *testing.T) {
 	}
 	defer svc.Close()
 
-	token, err := svc.GeneratePortalToken("portal@example.com")
+	token, err := svc.GeneratePortalToken("buyer@example.com", "")
 	if err != nil {
 		t.Fatalf("GeneratePortalToken: %v", err)
 	}
@@ -89,8 +89,8 @@ func TestGeneratePortalToken_Valid(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ValidateToken: %v", err)
 	}
-	if result.Email != "portal@example.com" {
-		t.Errorf("email = %q, want portal@example.com", result.Email)
+	if result.Email != "buyer@example.com" {
+		t.Errorf("email = %q, want buyer@example.com", result.Email)
 	}
 	if result.TenantID != "" {
 		t.Errorf("tenantID = %q, want empty", result.TenantID)

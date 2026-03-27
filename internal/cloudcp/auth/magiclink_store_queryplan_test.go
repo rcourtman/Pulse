@@ -70,7 +70,6 @@ func newMagicLinkPlanTestStore(t *testing.T) (*Store, []byte, time.Time) {
 		rec := &TokenRecord{
 			Email:     fmt.Sprintf("user%02d@example.com", i),
 			TenantID:  fmt.Sprintf("tenant-%02d", i%12),
-			Target:    MagicLinkTargetTenantHandoff,
 			ExpiresAt: base.Add(time.Duration(i-64) * time.Minute),
 		}
 		if err := store.Put(tokenHash, rec); err != nil {

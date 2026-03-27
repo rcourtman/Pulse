@@ -16,8 +16,6 @@ export interface AuthController {
   getLoginState: () => PortalLoginState;
 }
 
-const GENERIC_MAGIC_LINK_MESSAGE = "If that email is registered, you'll receive a magic link shortly.";
-
 function asHTMLElement(target: EventTarget | null): HTMLElement | null {
   return target instanceof HTMLElement ? target : null;
 }
@@ -50,7 +48,7 @@ export function installAuthController(deps: AuthControllerDeps): AuthController 
       deps.store.updateLoginState(function(nextState) {
         succeedMutationState(nextState.request);
         nextState.success = true;
-        nextState.successMessage = String(response && response.message || '').trim() || GENERIC_MAGIC_LINK_MESSAGE;
+        nextState.successMessage = String(response?.message || '').trim();
       });
       return;
     } catch (error) {
@@ -58,7 +56,7 @@ export function installAuthController(deps: AuthControllerDeps): AuthController 
         deps.store.updateLoginState(function(nextState) {
           succeedMutationState(nextState.request);
           nextState.success = true;
-          nextState.successMessage = GENERIC_MAGIC_LINK_MESSAGE;
+          nextState.successMessage = '';
         });
         return;
       }

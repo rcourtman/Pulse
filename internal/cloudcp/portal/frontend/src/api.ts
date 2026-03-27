@@ -21,7 +21,6 @@ export interface PortalBillingResponse {
 }
 
 export interface PortalMagicLinkResponse {
-  success?: boolean;
   message?: string;
 }
 
@@ -142,7 +141,7 @@ export function createPortalAPI(context: PortalAPIContext): PortalAPI {
       }, 'Failed to sign out.');
     },
     postCommercialJSON: function<T>(path: string, body: Record<string, unknown>) {
-      return request<T>(bootstrap().commercial_api_base_path + path, {
+      return request<T>(bootstrap().commercial_api_base_url + path, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),

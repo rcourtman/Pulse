@@ -69,6 +69,8 @@ export function ensurePortalAccountUIEntry(accountState: PortalAccountState, acc
     accountState.byAccountID[accountID] = {
       addWorkspaceOpen: false,
       createWorkspace: createMutationState(),
+      selectedWorkspaceID: '',
+      manageWorkspace: createMutationState(),
       teamVisible: false,
       teamQuery: createQueryState<PortalTeamMember[]>([]),
     };

@@ -27,7 +27,7 @@ func TestHandleMagicLinkVerifyPortalTargetCreatesPortalSession(t *testing.T) {
 	}
 	t.Cleanup(svc.Close)
 
-	token, err := svc.GeneratePortalToken("portal@example.com")
+	token, err := svc.GeneratePortalToken("portal@example.com", "")
 	if err != nil {
 		t.Fatalf("GeneratePortalToken: %v", err)
 	}
@@ -35,7 +35,7 @@ func TestHandleMagicLinkVerifyPortalTargetCreatesPortalSession(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/auth/magic-link/verify?token="+token, nil)
 	rec := httptest.NewRecorder()
 
-	HandleMagicLinkVerify(svc, reg, filepath.Join(dir, "tenants"), "cloud.example.com")(rec, req)
+	HandleMagicLinkVerify(svc, reg, filepath.Join(dir, "tenants"), "cloud.example.com", "/portal")(rec, req)
 
 	if rec.Code != http.StatusTemporaryRedirect {
 		t.Fatalf("status=%d body=%q", rec.Code, rec.Body.String())
@@ -120,7 +120,7 @@ func TestHandleMagicLinkVerifyTenantTargetStillRedirectsToTenantHandoff(t *testi
 	req := httptest.NewRequest(http.MethodGet, "/auth/magic-link/verify?token="+token, nil)
 	rec := httptest.NewRecorder()
 
-	HandleMagicLinkVerify(svc, reg, tenantsDir, "cloud.example.com")(rec, req)
+	HandleMagicLinkVerify(svc, reg, tenantsDir, "cloud.example.com", "/portal")(rec, req)
 
 	if rec.Code != http.StatusTemporaryRedirect {
 		t.Fatalf("status=%d body=%q", rec.Code, rec.Body.String())

@@ -8,7 +8,7 @@ const bootstrap: PortalBootstrapData = {
   email: 'owner@example.com',
   public_site_url: 'https://pulserelay.pro',
   support_email: 'support@pulserelay.pro',
-  commercial_api_base_path: '/api/portal/commercial',
+  commercial_api_base_url: 'https://license.pulserelay.pro',
   portal_path: '/portal',
   bootstrap_path: '/api/portal/bootstrap',
   magic_link_request_path: '/api/public/magic-link/request',
@@ -68,5 +68,33 @@ describe('portal api', function() {
       status: 409,
       message: 'Member already exists.',
     });
+  });
+
+  it('sends portal-targeted magic-link requests and returns the server message', async function() {
+    var fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: async function() {
+        return { message: 'If that email is registered, you will receive a magic link shortly.' };
+      },
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    var api = createPortalAPI({
+      getBootstrap: function() {
+        return bootstrap;
+      },
+    });
+
+    var result = await api.requestMagicLink('buyer@example.com');
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/public/magic-link/request',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ email: 'buyer@example.com', target: 'portal' }),
+      })
+    );
+    expect(result.message).toContain('If that email is registered');
   });
 });

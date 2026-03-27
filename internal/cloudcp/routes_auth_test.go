@@ -338,13 +338,6 @@ func TestRegisterRoutes_PortalBootstrapRequiresSession(t *testing.T) {
 	if revokedRec.Code != http.StatusUnauthorized {
 		t.Fatalf("revoked status = %d, want %d (body=%q)", revokedRec.Code, http.StatusUnauthorized, revokedRec.Body.String())
 	}
-
-	commercialReq := httptest.NewRequest(http.MethodPost, portal.PortalCommercialAPIBasePath+"/v1/retrieve-license/request", strings.NewReader(`{"email":"owner@example.com"}`))
-	commercialRec := httptest.NewRecorder()
-	mux.ServeHTTP(commercialRec, commercialReq)
-	if commercialRec.Code != http.StatusUnauthorized {
-		t.Fatalf("portal commercial unauth status = %d, want %d (body=%q)", commercialRec.Code, http.StatusUnauthorized, commercialRec.Body.String())
-	}
 }
 
 func TestRegisterRoutes_PortalPageSessionModes(t *testing.T) {
@@ -440,9 +433,9 @@ func TestRegisterRoutes_PortalPageSessionModes(t *testing.T) {
 		`id="pulse-account-bootstrap"`,
 		`id="portal-app-root"`,
 		`"authenticated":true`,
-		"Hosted access is active on this account.",
+		"Hosted operations",
+		"Account services",
 		"Self-hosted licenses and billing",
-		"Hosted workspace administration stays above.",
 	} {
 		if !strings.Contains(authRec.Body.String(), needle) {
 			t.Fatalf("expected authenticated portal page to contain %q, body=%q", needle, authRec.Body.String())

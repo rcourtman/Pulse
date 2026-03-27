@@ -17,7 +17,7 @@ async function flushAsync() {
 const bootstrapDefaults: Omit<PortalBootstrapData, 'authenticated' | 'email' | 'accounts'> = {
   public_site_url: 'https://pulserelay.pro',
   support_email: 'support@pulserelay.pro',
-  commercial_api_base_path: '/api/portal/commercial',
+  commercial_api_base_url: 'https://license.pulserelay.pro',
   portal_path: '/portal',
   bootstrap_path: '/api/portal/bootstrap',
   magic_link_request_path: '/magic-link',
@@ -60,10 +60,10 @@ describe('auth controller', function() {
         status: 200,
         headers: new Headers({ 'content-type': 'application/json' }),
         json: async function() {
-          return {
-            success: true,
-            message: "If that email is registered, you'll receive a magic link shortly.",
-          };
+          return { message: 'If that email is registered, you will receive a magic link shortly.' };
+        },
+        text: async function() {
+          return '';
         },
       })
     );
@@ -88,11 +88,12 @@ describe('auth controller', function() {
     expect(controller.getLoginState().request.pending).toBe(false);
     expect(controller.getLoginState().request.error).toBe('');
     expect(controller.getLoginState().success).toBe(true);
-    expect(controller.getLoginState().successMessage).toBe("If that email is registered, you'll receive a magic link shortly.");
+    expect(controller.getLoginState().successMessage).toContain('If that email is registered');
     expect(fetch).toHaveBeenCalledWith(
       '/magic-link',
       expect.objectContaining({
         method: 'POST',
+        body: JSON.stringify({ email: 'buyer@example.com', target: 'portal' }),
       })
     );
   });

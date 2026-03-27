@@ -96,8 +96,8 @@ func (s *Store) initSchema() error {
 	CREATE TABLE IF NOT EXISTS magic_link_tokens (
 		token_hash TEXT PRIMARY KEY,
 		email TEXT NOT NULL,
-		tenant_id TEXT NOT NULL,
-		target TEXT NOT NULL DEFAULT '` + MagicLinkTargetTenantHandoff + `',
+		tenant_id TEXT NOT NULL DEFAULT '',
+		target TEXT NOT NULL DEFAULT 'tenant',
 		expires_at INTEGER NOT NULL,
 		used INTEGER NOT NULL DEFAULT 0,
 		created_at INTEGER NOT NULL,
@@ -109,41 +109,42 @@ func (s *Store) initSchema() error {
 	if _, err := s.db.Exec(schema); err != nil {
 		return fmt.Errorf("init magic link schema: %w", err)
 	}
-	if err := ensureMagicLinkTargetColumn(s.db); err != nil {
-		return fmt.Errorf("ensure magic link target column: %w", err)
+	if err := ensureMagicLinkColumn(s.db, "target", "ALTER TABLE magic_link_tokens ADD COLUMN target TEXT NOT NULL DEFAULT 'tenant'"); err != nil {
+		return err
+	}
+	if err := ensureMagicLinkColumn(s.db, "tenant_id", "ALTER TABLE magic_link_tokens ADD COLUMN tenant_id TEXT NOT NULL DEFAULT ''"); err != nil {
+		return err
 	}
 	return nil
 }
 
-func ensureMagicLinkTargetColumn(db *sql.DB) error {
+func ensureMagicLinkColumn(db *sql.DB, columnName, alterStmt string) error {
 	rows, err := db.Query(`PRAGMA table_info(magic_link_tokens)`)
 	if err != nil {
-		return err
+		return fmt.Errorf("inspect magic link schema: %w", err)
 	}
 	defer rows.Close()
 
 	for rows.Next() {
-		var (
-			cid        int
-			name       string
-			columnType string
-			notNull    int
-			defaultVal sql.NullString
-			primaryKey int
-		)
-		if err := rows.Scan(&cid, &name, &columnType, &notNull, &defaultVal, &primaryKey); err != nil {
-			return err
+		var cid int
+		var name, columnType string
+		var notNull int
+		var defaultValue sql.NullString
+		var pk int
+		if err := rows.Scan(&cid, &name, &columnType, &notNull, &defaultValue, &pk); err != nil {
+			return fmt.Errorf("scan magic link schema: %w", err)
 		}
-		if name == "target" {
+		if strings.EqualFold(name, columnName) {
 			return nil
 		}
 	}
 	if err := rows.Err(); err != nil {
-		return err
+		return fmt.Errorf("iterate magic link schema: %w", err)
 	}
-
-	_, err = db.Exec(`ALTER TABLE magic_link_tokens ADD COLUMN target TEXT NOT NULL DEFAULT '` + MagicLinkTargetTenantHandoff + `'`)
-	return err
+	if _, err := db.Exec(alterStmt); err != nil {
+		return fmt.Errorf("add magic link column %s: %w", columnName, err)
+	}
+	return nil
 }
 
 func (s *Store) cleanupLoop() {
@@ -172,15 +173,8 @@ func (s *Store) Put(tokenHash []byte, rec *TokenRecord) error {
 	if rec == nil || rec.Email == "" || rec.ExpiresAt.IsZero() {
 		return fmt.Errorf("token record is required")
 	}
-	target := strings.TrimSpace(rec.Target)
-	if target == "" {
-		target = MagicLinkTargetTenantHandoff
-	}
-	if target == MagicLinkTargetTenantHandoff && strings.TrimSpace(rec.TenantID) == "" {
-		return fmt.Errorf("tenant-target tokens require tenantID")
-	}
-	if target != MagicLinkTargetTenantHandoff && target != MagicLinkTargetPortal {
-		return fmt.Errorf("target is invalid")
+	if strings.TrimSpace(rec.Target) == "" {
+		rec.Target = string(MagicLinkTargetTenant)
 	}
 
 	key := hex.EncodeToString(tokenHash)
@@ -196,7 +190,7 @@ func (s *Store) Put(tokenHash []byte, rec *TokenRecord) error {
 	_, err := db.Exec(
 		`INSERT OR REPLACE INTO magic_link_tokens (token_hash, email, tenant_id, target, expires_at, used, created_at, used_at)
 		 VALUES (?, ?, ?, ?, ?, 0, ?, NULL)`,
-		key, rec.Email, rec.TenantID, target, rec.ExpiresAt.UTC().Unix(), now,
+		key, rec.Email, rec.TenantID, rec.Target, rec.ExpiresAt.UTC().Unix(), now,
 	)
 	if err != nil {
 		return fmt.Errorf("put magic link token: %w", err)

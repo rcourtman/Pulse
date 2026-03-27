@@ -28,7 +28,7 @@ async function flushAsync() {
 const bootstrapDefaults: Omit<PortalBootstrapData, 'authenticated' | 'email' | 'accounts'> = {
   public_site_url: 'https://pulserelay.pro',
   support_email: 'support@pulserelay.pro',
-  commercial_api_base_path: '/api/portal/commercial',
+  commercial_api_base_url: 'https://license.pulserelay.pro',
   portal_path: '/portal',
   bootstrap_path: '/api/portal/bootstrap',
   magic_link_request_path: '/api/public/magic-link/request',
@@ -81,6 +81,7 @@ describe('account runtime', function() {
       '<div id="add-ws-form-acct_1" class="add-workspace-form">' +
       '<input id="ws-name-acct_1" value="Acme Corp">' +
       '<div id="ws-spinner-acct_1" hidden></div>' +
+      '<div id="workspace-management-acct_1" class="workspace-management-panel"><button id="workspace-management-close-acct_1"></button><div id="workspace-management-empty-acct_1"></div><div id="workspace-management-content-acct_1" hidden><div id="workspace-management-meta-acct_1"></div><h4 id="workspace-management-title-acct_1"></h4><p id="workspace-management-summary-acct_1"></p><button id="workspace-management-action-acct_1"></button></div></div>' +
       '</div>';
 
     runtime.toggleAddWorkspace('acct_1');
@@ -106,6 +107,63 @@ describe('account runtime', function() {
     expect((document.getElementById('ws-spinner-acct_1') as HTMLElement).hidden).toBe(true);
   });
 
+  it('selects a workspace and routes explicit workspace actions through the management panel', async function() {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({})));
+    var confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    deps.store.setBootstrap({
+      authenticated: true,
+      email: 'owner@example.com',
+      accounts: [{
+        id: 'acct_1',
+        name: 'Acme MSP',
+        kind: 'msp',
+        kind_label: 'MSP',
+        role: 'owner',
+        can_manage: true,
+        has_billing: true,
+        workspaces: [{
+          id: 'ws_2',
+          display_name: 'Alpha Workspace',
+          state: 'active',
+          healthy: true,
+          health_status: 'healthy',
+        }],
+      }],
+    });
+
+    document.body.innerHTML =
+      '<div id="workspace-management-acct_1" class="workspace-management-panel">' +
+      '<button id="workspace-management-close-acct_1"></button>' +
+      '<div id="workspace-management-empty-acct_1"></div>' +
+      '<div id="workspace-management-content-acct_1" hidden>' +
+      '<div id="workspace-management-meta-acct_1"></div>' +
+      '<h4 id="workspace-management-title-acct_1"></h4>' +
+      '<p id="workspace-management-summary-acct_1"></p>' +
+      '<button id="workspace-management-action-acct_1"></button>' +
+      '</div>' +
+      '</div>';
+
+    runtime.selectWorkspace('acct_1', 'ws_2');
+    expect(deps.store.getAccountState().byAccountID.acct_1.selectedWorkspaceID).toBe('ws_2');
+    expect(document.getElementById('workspace-management-title-acct_1')?.textContent).toContain('Alpha Workspace');
+    expect(document.getElementById('workspace-management-action-acct_1')?.textContent).toContain('Suspend workspace');
+
+    await runtime.manageWorkspaceAction('acct_1', 'ws_2', 'suspend', 'Alpha Workspace');
+    await flushAsync();
+
+    expect(confirmSpy).toHaveBeenCalledWith('Suspend workspace "Alpha Workspace"?');
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/accounts/acct_1/tenants/ws_2',
+      expect.objectContaining({
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ state: 'suspended' }),
+      })
+    );
+    expect(deps.showToast).toHaveBeenCalledWith('Suspended workspace.');
+    expect(deps.store.getAccountState().byAccountID.acct_1.selectedWorkspaceID).toBe('');
+  });
+
   it('loads and updates team membership from runtime actions', async function() {
     vi.stubGlobal(
       'fetch',
@@ -116,7 +174,9 @@ describe('account runtime', function() {
     );
 
     document.body.innerHTML =
+      '<div id="workspace-management-acct_1" class="workspace-management-panel"><button id="workspace-management-close-acct_1"></button><div id="workspace-management-empty-acct_1"></div><div id="workspace-management-content-acct_1" hidden><div id="workspace-management-meta-acct_1"></div><h4 id="workspace-management-title-acct_1"></h4><p id="workspace-management-summary-acct_1"></p><button id="workspace-management-action-acct_1"></button></div></div>' +
       '<div id="team-section-acct_1" class="team-section" data-actor-role="owner">' +
+      '<div id="team-stats-acct_1"></div>' +
       '<table><tbody id="team-list-acct_1"></tbody></table>' +
       '<input id="invite-email-acct_1">' +
       '<select id="invite-role-acct_1"><option value="admin">Admin</option></select>' +
@@ -128,6 +188,7 @@ describe('account runtime', function() {
     expect(deps.store.getAccountState().byAccountID.acct_1.teamVisible).toBe(true);
     expect(deps.store.getAccountState().byAccountID.acct_1.teamQuery.status).toBe('ready');
     expect(deps.store.getAccountState().byAccountID.acct_1.teamQuery.data).toHaveLength(1);
+    expect(document.getElementById('team-stats-acct_1')?.textContent).toContain('Members');
     var roleSelect = document.querySelector('[data-action="change-role"]') as HTMLSelectElement | null;
     expect(roleSelect).not.toBeNull();
     expect(roleSelect?.value).toBe('owner');

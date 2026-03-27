@@ -4,16 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
 )
 
-const defaultLicenseServerURL = "https://license.pulserelay.pro"
+const commercialIdentityLookupTimeout = 10 * time.Second
 
-type CommercialIdentityLookupResult struct {
+type commercialIdentity struct {
 	Email                 string   `json:"email"`
 	HasCommercialIdentity bool     `json:"has_commercial_identity"`
 	Sources               []string `json:"sources,omitempty"`
@@ -22,66 +21,55 @@ type CommercialIdentityLookupResult struct {
 	StripeCustomerID      string   `json:"stripe_customer_id,omitempty"`
 }
 
-type commercialIdentityLookup interface {
-	LookupCommercialIdentity(ctx context.Context, email string) (*CommercialIdentityLookupResult, error)
-}
+type commercialIdentityLookupFunc func(ctx context.Context, email string) (*commercialIdentity, error)
 
-type commercialIdentityClient struct {
-	baseURL    string
-	adminToken string
-	httpClient *http.Client
-}
-
-func newCommercialIdentityClient(cfg *CPConfig) commercialIdentityLookup {
+func newCommercialIdentityLookup(cfg *CPConfig) commercialIdentityLookupFunc {
 	if cfg == nil {
 		return nil
 	}
+	baseURL := strings.TrimSpace(cfg.LicenseServerURL)
 	adminToken := strings.TrimSpace(cfg.LicenseAdminToken)
-	if adminToken == "" {
+	if baseURL == "" || adminToken == "" {
 		return nil
 	}
-	baseURL := strings.TrimRight(strings.TrimSpace(cfg.LicenseServerURL), "/")
-	if baseURL == "" {
-		baseURL = defaultLicenseServerURL
-	}
-	return &commercialIdentityClient{
-		baseURL:    baseURL,
-		adminToken: adminToken,
-		httpClient: &http.Client{Timeout: 10 * time.Second},
-	}
-}
 
-func (c *commercialIdentityClient) LookupCommercialIdentity(ctx context.Context, email string) (*CommercialIdentityLookupResult, error) {
-	if c == nil {
-		return nil, nil
-	}
-	email = strings.TrimSpace(email)
-	if email == "" {
-		return nil, fmt.Errorf("email is required")
-	}
+	client := &http.Client{Timeout: commercialIdentityLookupTimeout}
+	return func(ctx context.Context, email string) (*commercialIdentity, error) {
+		email = strings.TrimSpace(email)
+		if email == "" {
+			return nil, fmt.Errorf("email is required")
+		}
 
-	endpoint := c.baseURL + "/v1/admin/commercial/lookup?email=" + url.QueryEscape(email)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, fmt.Errorf("create commercial identity request: %w", err)
-	}
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("X-API-Token", c.adminToken)
+		endpoint, err := url.Parse(baseURL)
+		if err != nil {
+			return nil, fmt.Errorf("parse license server url: %w", err)
+		}
+		endpoint.Path = strings.TrimRight(endpoint.Path, "/") + "/v1/admin/commercial/lookup"
+		query := endpoint.Query()
+		query.Set("email", email)
+		endpoint.RawQuery = query.Encode()
 
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("commercial identity request failed: %w", err)
-	}
-	defer resp.Body.Close()
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint.String(), nil)
+		if err != nil {
+			return nil, fmt.Errorf("build commercial lookup request: %w", err)
+		}
+		req.Header.Set("X-Admin-Key", adminToken)
+		req.Header.Set("Accept", "application/json")
 
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<16))
-		return nil, fmt.Errorf("commercial identity lookup returned HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
-	}
+		resp, err := client.Do(req)
+		if err != nil {
+			return nil, fmt.Errorf("perform commercial lookup request: %w", err)
+		}
+		defer resp.Body.Close()
 
-	var result CommercialIdentityLookupResult
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&result); err != nil {
-		return nil, fmt.Errorf("decode commercial identity response: %w", err)
+		if resp.StatusCode != http.StatusOK {
+			return nil, fmt.Errorf("commercial lookup returned status %d", resp.StatusCode)
+		}
+
+		var result commercialIdentity
+		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+			return nil, fmt.Errorf("decode commercial lookup response: %w", err)
+		}
+		return &result, nil
 	}
-	return &result, nil
 }

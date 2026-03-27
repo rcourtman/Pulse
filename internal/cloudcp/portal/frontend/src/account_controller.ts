@@ -7,7 +7,9 @@ export interface AccountControllerDeps {
 
 export function installAccountController(deps: AccountControllerDeps): void {
   document.addEventListener('click', function(event) {
-    var actionEl = asHTMLElement(event.target)?.closest('[data-action]');
+    var target = asHTMLElement(event.target);
+    if (!target) return;
+    var actionEl = target.closest('[data-action]');
     if (!actionEl) return;
     var action = actionEl.getAttribute('data-action') || '';
     var accountID = actionEl.getAttribute('data-account-id') || '';
@@ -33,13 +35,23 @@ export function installAccountController(deps: AccountControllerDeps): void {
         event.preventDefault();
         void deps.runtime.createWorkspace(accountID);
         return;
-      case 'workspace-manage':
+      case 'select-workspace':
         event.preventDefault();
-        void deps.runtime.manageWorkspace(
-          event,
+        deps.runtime.selectWorkspace(
           accountID,
           actionEl.getAttribute('data-workspace-id') || '',
-          actionEl.getAttribute('data-workspace-state') || '',
+        );
+        return;
+      case 'clear-workspace-selection':
+        event.preventDefault();
+        deps.runtime.clearWorkspaceSelection(accountID);
+        return;
+      case 'workspace-action':
+        event.preventDefault();
+        void deps.runtime.manageWorkspaceAction(
+          accountID,
+          actionEl.getAttribute('data-workspace-id') || '',
+          actionEl.getAttribute('data-workspace-action') || '',
           actionEl.getAttribute('data-workspace-name') || '',
         );
         return;

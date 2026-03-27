@@ -112,7 +112,7 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 
 	// Magic link verification (public, token-authenticated)
 	baseDomain := baseDomainFromURL(deps.Config.BaseURL)
-	mux.Handle("/auth/magic-link/verify", magicLinkVerifyLimiter.Middleware(http.HandlerFunc(cpauth.HandleMagicLinkVerify(deps.MagicLinks, deps.Registry, deps.Config.TenantsDir(), baseDomain))))
+	mux.Handle("/auth/magic-link/verify", magicLinkVerifyLimiter.Middleware(http.HandlerFunc(cpauth.HandleMagicLinkVerify(deps.MagicLinks, deps.Registry, deps.Config.TenantsDir(), baseDomain, portal.PortalPagePath))))
 	if deps.MagicLinks != nil {
 		mux.Handle(portal.PortalLogoutPath, sessionAuthLimiter.Middleware(sessionAuth(cpauth.HandleLogout(deps.Registry))))
 	}
@@ -120,13 +120,10 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 	// Hosted Pulse Pro trial signup: public form + checkout + return completion.
 	trialSignupHandlers := NewTrialSignupHandlers(deps.Config, deps.EmailSender, deps.TrialSignupStore, hostedEntitlements)
 	hostedEntitlementHandlers := NewHostedEntitlementHandlers(hostedEntitlements)
-	trialSignupRejected := func(w http.ResponseWriter, r *http.Request, retryAfter int) {
-		trialSignupHandlers.HandleRateLimitedTrialSignup(w, r, retryAfter)
-	}
 	mux.Handle("/start-pro-trial", trialSignupPageLimiter.Middleware(http.HandlerFunc(trialSignupHandlers.HandleStartProTrial)))
-	mux.Handle("/api/trial-signup/request-verification", trialSignupVerificationLimiter.MiddlewareWithRejected(http.HandlerFunc(trialSignupHandlers.HandleRequestVerification), trialSignupRejected))
+	mux.Handle("/api/trial-signup/request-verification", trialSignupVerificationLimiter.Middleware(http.HandlerFunc(trialSignupHandlers.HandleRequestVerification)))
 	mux.Handle("/trial-signup/verify", trialSignupVerifyLimiter.Middleware(http.HandlerFunc(trialSignupHandlers.HandleVerifyEmail)))
-	mux.Handle("/api/trial-signup/checkout", trialSignupCheckoutLimiter.MiddlewareWithRejected(http.HandlerFunc(trialSignupHandlers.HandleCheckout), trialSignupRejected))
+	mux.Handle("/api/trial-signup/checkout", trialSignupCheckoutLimiter.Middleware(http.HandlerFunc(trialSignupHandlers.HandleCheckout)))
 	mux.Handle("/trial-signup/complete", trialSignupCompleteLimiter.Middleware(http.HandlerFunc(trialSignupHandlers.HandleTrialSignupComplete)))
 	mux.Handle("/api/trial-signup/redeem", trialSignupRedeemLimiter.Middleware(http.HandlerFunc(trialSignupHandlers.HandleTrialSignupRedeem)))
 	mux.Handle("/api/entitlements/refresh", hostedEntitlementRefreshLimiter.Middleware(http.HandlerFunc(hostedEntitlementHandlers.HandleRefresh)))
@@ -230,9 +227,6 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 	mux.Handle(portal.PortalBootstrapPath, portalAPILimiter.Middleware(sessionAuth(portal.HandlePortalBootstrap(deps.MagicLinks, deps.Registry))))
 	mux.Handle(portal.PortalDashboardPath, portalAPILimiter.Middleware(accountSessionAuth(accountIDFromPortalRequest, portal.HandlePortalDashboard(deps.Registry))))
 	mux.Handle(portal.PortalWorkspacePath, portalAPILimiter.Middleware(accountSessionAuth(accountIDFromPortalRequest, portal.HandlePortalWorkspaceDetail(deps.Registry))))
-	mux.Handle(portal.PortalCommercialAPIPath, portalAPILimiter.Middleware(sessionAuth(portal.HandleCommercialProxy(portal.CommercialProxyConfig{
-		BaseURL: deps.Config.LicenseServerURL,
-	}))))
 
 	// Stripe Customer Portal redirect (session + account-membership authenticated)
 	billingCfg := portal.BillingPortalConfig{

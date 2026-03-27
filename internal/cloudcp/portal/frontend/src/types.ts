@@ -3,6 +3,8 @@ export interface PortalWorkspaceSummary {
   display_name: string;
   state: string;
   healthy: boolean;
+  health_status: 'healthy' | 'checking' | 'unhealthy';
+  last_health_check?: string;
   created_at?: string;
 }
 
@@ -22,7 +24,7 @@ export interface PortalBootstrapData {
   email: string;
   public_site_url: string;
   support_email: string;
-  commercial_api_base_path: string;
+  commercial_api_base_url: string;
   portal_path: string;
   bootstrap_path: string;
   magic_link_request_path: string;
@@ -62,6 +64,8 @@ export interface PortalMutationState {
 export interface PortalAccountUIEntry {
   addWorkspaceOpen: boolean;
   createWorkspace: PortalMutationState;
+  selectedWorkspaceID: string;
+  manageWorkspace: PortalMutationState;
   teamVisible: boolean;
   teamQuery: PortalQueryState<PortalTeamMember[]>;
 }

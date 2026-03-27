@@ -15,7 +15,7 @@ function createBootstrap(overrides: Partial<PortalBootstrapData> = {}): PortalBo
     email: 'owner@example.com',
     public_site_url: 'https://pulserelay.pro',
     support_email: 'support@pulserelay.pro',
-    commercial_api_base_path: '/api/portal/commercial',
+    commercial_api_base_url: 'https://license.pulserelay.pro',
     portal_path: '/portal',
     bootstrap_path: '/api/portal/bootstrap',
     magic_link_request_path: '/auth/magic-link',
@@ -75,7 +75,8 @@ describe('shell view', function() {
   it('renders empty accounts state with support contact', function() {
     var html = renderAccountsHTML(createContext());
 
-    expect(html).toContain('No hosted workspaces on this account');
+    expect(html).toContain('No hosted workspaces are attached to this account.');
+    expect(html).toContain('self-hosted licensing and billing tools below');
     expect(html).toContain('mailto:support@pulserelay.pro');
     expect(html).toContain('support@pulserelay.pro');
   });
@@ -99,6 +100,8 @@ describe('shell view', function() {
                   display_name: 'Alpha Workspace',
                   state: 'active',
                   healthy: true,
+                  health_status: 'healthy',
+                  last_health_check: '2026-03-26T10:10:00Z',
                   created_at: '2026-03-26T10:00:00Z',
                 },
                 {
@@ -106,6 +109,14 @@ describe('shell view', function() {
                   display_name: 'Beta Workspace',
                   state: 'failed',
                   healthy: false,
+                  health_status: 'unhealthy',
+                },
+                {
+                  id: 'ws_pending',
+                  display_name: 'Gamma Workspace',
+                  state: 'provisioning',
+                  healthy: false,
+                  health_status: 'checking',
                 },
               ],
             },
@@ -116,32 +127,60 @@ describe('shell view', function() {
 
     expect(html).toContain('<h1>Pulse Account</h1>');
     expect(html).toContain('Hosted access is active on this account.');
-    expect(html).toContain('MSP operator');
-    expect(html).toContain('Hosted workspaces');
+    expect(html).toContain('portal-section-nav');
+    expect(html).toContain('Hosted operations');
+    expect(html).toContain('Account services');
+    expect(html).toContain('Support');
+    expect(html).toContain('id="hosted-operations-section"');
+    expect(html).toContain('id="account-services-section"');
+    expect(html).toContain('Self-hosted licenses and billing');
     expect(html).toContain('id="accounts-root"');
+    expect(html).toContain('MSP account');
+    expect(html).toContain('MSP account · Owner · 3 workspaces');
     expect(html).toContain('Acme MSP');
-    expect(html).toContain('MSP account · Owner · 2 workspaces');
+    expect(html).toContain('Account operations');
+    expect(html).toContain('Manage the client fleet from this account surface.');
+    expect(html).toContain('Workspace fleet');
     expect(html).toContain('Alpha Workspace');
+    expect(html).toContain('Beta Workspace');
+    expect(html).toContain('Gamma Workspace');
+    expect(html).toContain('Active workspaces');
+    expect(html).toContain('Needs attention');
+    expect(html).toContain('Healthy</span>');
+    expect(html).toContain('Unhealthy</span>');
+    expect(html).toContain('Checking</span>');
+    expect(html).toContain('Live updates and health checks are currently good.');
+    expect(html).toContain('This workspace needs attention before it is trustworthy.');
+    expect(html).toContain('This workspace is still waiting on a completed health check.');
     expect(html).toContain('/api/accounts/acct_1/tenants/ws_active/handoff');
     expect(html).toContain('Open workspace');
-    expect(html).toContain('Manage</button>');
-    expect(html).toContain('data-action="workspace-manage"');
+    expect(html).toContain('data-action="select-workspace"');
+    expect(html).toContain('Workspace management');
+    expect(html).toContain('Choose a workspace to manage from the fleet above.');
+    expect(html).toContain('data-action="clear-workspace-selection"');
+    expect(html).toContain('Team management');
+    expect(html).toContain('Invite someone new');
+    expect(html).toContain('People on this account');
+    expect(html).toContain('data-action="workspace-action"');
     expect(html).toContain('service-card-button');
-    expect(html).toContain('Self-hosted licenses and billing');
     expect(html).toContain('id="open-retrieve-service"');
     expect(html).toContain('id="data-service-panel"');
   });
 
-  it('renders a self-hosted overview when the signed-in account has no hosted workspaces', function() {
-    var html = renderAuthenticatedPortalHTML(createContext());
+  it('renders self-hosted overview copy when no hosted accounts are attached', function() {
+    var html = renderAuthenticatedPortalHTML(
+      createContext({
+        bootstrap: createBootstrap({
+          accounts: [],
+        }),
+      })
+    );
 
-    expect(html).toContain('This account currently uses Pulse Account for self-hosted commercial services.');
-    expect(html).toContain('Signed in as');
-    expect(html).toContain('owner@example.com');
-    expect(html).toContain('Hosted access');
-    expect(html).toContain('None on this account');
-    expect(html).toContain('Self-hosted account services');
-    expect(html).not.toContain('Other account services');
+    expect(html).toContain('<h1>Self-hosted Pulse Account</h1>');
+    expect(html).toContain('No hosted workspace access is attached to this account yet.');
+    expect(html).toContain('This account does not currently have hosted workspace access.');
+    expect(html).toContain('Account services');
+    expect(html).not.toContain('Self-hosted licenses and billing');
   });
 
   it('renders signed-out portal with error and success login states', function() {
@@ -163,7 +202,6 @@ describe('shell view', function() {
         loginState: createLoginState({
           emailValue: 'buyer@example.com',
           success: true,
-          successMessage: "If that email is registered, you'll receive a magic link shortly.",
           request: {
             pending: false,
             error: '',
@@ -174,7 +212,7 @@ describe('shell view', function() {
 
     expect(errorHTML).toContain('value="buyer@example.com"');
     expect(errorHTML).toContain('Invalid email');
-    expect(successHTML).toContain("If that email is registered, you&#39;ll receive a magic link shortly.");
+    expect(successHTML).toContain('If that email is registered, a magic link is on the way.');
     expect(successHTML).toContain('data-portal-action="resend-magic-link"');
   });
 });

@@ -1,6 +1,8 @@
 package cloudcp
 
 import (
+	"crypto/ed25519"
+	"encoding/base64"
 	"fmt"
 	"net/url"
 	"os"
@@ -9,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/joho/godotenv"
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 )
 
 // CPConfig holds all configuration for the control plane.
@@ -29,6 +32,7 @@ type CPConfig struct {
 	PortalAPIRateLimitPerMinute       int
 	PulseImage                        string
 	DockerNetwork                     string
+	TrustedProxyCIDRs                 []string
 	TenantMemoryLimit                 int64 // bytes
 	TenantCPUShares                   int64
 	AllowDockerlessProvisioning       bool
@@ -37,12 +41,13 @@ type CPConfig struct {
 	TrialSignupPriceID                string // Cloud Starter (default tier) price ID
 	CloudPowerPriceID                 string // Cloud Power tier price ID (optional)
 	CloudMaxPriceID                   string // Cloud Max tier price ID (optional)
+	LicenseServerURL                  string
+	LicenseAdminToken                 string
 	TrialActivationPrivateKey         string
+	TrialActivationPublicKey          string
 	RequireEmailProvider              bool
 	ResendAPIKey                      string // Resend API key (optional — if empty, emails are logged)
 	EmailFrom                         string // Sender email address (e.g. "noreply@pulserelay.pro")
-	LicenseServerURL                  string
-	LicenseAdminToken                 string
 }
 
 // TenantsDir returns the directory where per-tenant data is stored.
@@ -115,6 +120,7 @@ func LoadConfig() (*CPConfig, error) {
 		PortalAPIRateLimitPerMinute:       portalRPS,
 		PulseImage:                        envOrDefault("CP_PULSE_IMAGE", "ghcr.io/rcourtman/pulse:latest"),
 		DockerNetwork:                     envOrDefault("CP_DOCKER_NETWORK", "pulse-cloud"),
+		TrustedProxyCIDRs:                 parseTrustedProxyCIDRValues("CP_TRUSTED_PROXY_CIDRS", "PULSE_TRUSTED_PROXY_CIDRS"),
 		TenantMemoryLimit:                 tenantMemoryLimit,
 		TenantCPUShares:                   tenantCPUShares,
 		AllowDockerlessProvisioning:       envOrDefaultBool("CP_ALLOW_DOCKERLESS_PROVISIONING", false),
@@ -123,18 +129,37 @@ func LoadConfig() (*CPConfig, error) {
 		TrialSignupPriceID:                strings.TrimSpace(os.Getenv("CP_TRIAL_SIGNUP_PRICE_ID")),
 		CloudPowerPriceID:                 strings.TrimSpace(os.Getenv("CP_CLOUD_POWER_PRICE_ID")),
 		CloudMaxPriceID:                   strings.TrimSpace(os.Getenv("CP_CLOUD_MAX_PRICE_ID")),
+		LicenseServerURL:                  envOrDefault("PULSE_LICENSE_SERVER_URL", "https://license.pulserelay.pro"),
+		LicenseAdminToken:                 strings.TrimSpace(os.Getenv("PULSE_LICENSE_ADMIN_TOKEN")),
 		TrialActivationPrivateKey:         strings.TrimSpace(os.Getenv("CP_TRIAL_ACTIVATION_PRIVATE_KEY")),
 		RequireEmailProvider:              envOrDefaultBool("CP_REQUIRE_EMAIL_PROVIDER", true),
 		ResendAPIKey:                      strings.TrimSpace(os.Getenv("RESEND_API_KEY")),
 		EmailFrom:                         envOrDefault("PULSE_EMAIL_FROM", "noreply@pulserelay.pro"),
-		LicenseServerURL:                  strings.TrimSpace(envOrDefault("PULSE_LICENSE_SERVER_URL", defaultLicenseServerURL)),
-		LicenseAdminToken:                 strings.TrimSpace(os.Getenv("PULSE_LICENSE_ADMIN_TOKEN")),
+	}
+	if strings.TrimSpace(cfg.TrialActivationPrivateKey) != "" {
+		publicKey, err := deriveTrialActivationPublicKey(cfg.TrialActivationPrivateKey)
+		if err != nil {
+			return nil, fmt.Errorf("derive trial activation public key: %w", err)
+		}
+		cfg.TrialActivationPublicKey = publicKey
 	}
 
 	if err := cfg.validate(); err != nil {
 		return nil, fmt.Errorf("validate control plane config: %w", err)
 	}
 	return cfg, nil
+}
+
+func deriveTrialActivationPublicKey(encodedPrivateKey string) (string, error) {
+	privateKey, err := pkglicensing.DecodeEd25519PrivateKey(strings.TrimSpace(encodedPrivateKey))
+	if err != nil {
+		return "", err
+	}
+	publicKey, ok := privateKey.Public().(ed25519.PublicKey)
+	if !ok || len(publicKey) != ed25519.PublicKeySize {
+		return "", fmt.Errorf("invalid derived trial activation public key")
+	}
+	return base64.StdEncoding.EncodeToString(publicKey), nil
 }
 
 func (c *CPConfig) validate() error {
@@ -199,6 +224,9 @@ func (c *CPConfig) validate() error {
 	if strings.TrimSpace(c.StripeAPIKey) != "" && strings.TrimSpace(c.TrialActivationPrivateKey) == "" {
 		return fmt.Errorf("CP_TRIAL_ACTIVATION_PRIVATE_KEY is required when STRIPE_API_KEY is configured")
 	}
+	if strings.TrimSpace(c.LicenseServerURL) == "" && strings.TrimSpace(c.LicenseAdminToken) != "" {
+		return fmt.Errorf("PULSE_LICENSE_SERVER_URL is required when PULSE_LICENSE_ADMIN_TOKEN is configured")
+	}
 	if strings.TrimSpace(c.StripeAPIKey) != "" {
 		stripeMode := stripeSecretKeyMode(c.StripeAPIKey)
 		switch c.Environment {
@@ -222,18 +250,6 @@ func (c *CPConfig) validate() error {
 	}
 	if parsedBaseURL.Host == "" {
 		return fmt.Errorf("CP_BASE_URL must include a host")
-	}
-	if c.LicenseServerURL != "" {
-		parsedLicenseURL, err := url.Parse(c.LicenseServerURL)
-		if err != nil {
-			return fmt.Errorf("PULSE_LICENSE_SERVER_URL must be a valid URL: %w", err)
-		}
-		if parsedLicenseURL.Scheme != "http" && parsedLicenseURL.Scheme != "https" {
-			return fmt.Errorf("PULSE_LICENSE_SERVER_URL must use http or https scheme")
-		}
-		if parsedLicenseURL.Host == "" {
-			return fmt.Errorf("PULSE_LICENSE_SERVER_URL must include a host")
-		}
 	}
 	return nil
 }
@@ -300,4 +316,27 @@ func envOrDefaultBool(key string, fallback bool) bool {
 	default:
 		return fallback
 	}
+}
+
+func parseTrustedProxyCIDRValues(keys ...string) []string {
+	values := make([]string, 0)
+	seen := make(map[string]struct{})
+	for _, key := range keys {
+		raw := strings.TrimSpace(os.Getenv(key))
+		if raw == "" {
+			continue
+		}
+		for _, entry := range strings.Split(raw, ",") {
+			entry = strings.TrimSpace(entry)
+			if entry == "" {
+				continue
+			}
+			if _, ok := seen[entry]; ok {
+				continue
+			}
+			seen[entry] = struct{}{}
+			values = append(values, entry)
+		}
+	}
+	return values
 }
