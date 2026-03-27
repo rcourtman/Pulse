@@ -1,9 +1,10 @@
 import { Component, createSignal, Show } from 'solid-js';
 import { WelcomeStep } from './steps/WelcomeStep';
 import { SecurityStep } from './steps/SecurityStep';
+import { SetupCompletionPanel } from './SetupCompletionPanel';
 import { StepIndicator } from './StepIndicator';
 
-export type WizardStep = 'welcome' | 'security';
+export type WizardStep = 'welcome' | 'security' | 'completion';
 
 export interface WizardState {
   username: string;
@@ -28,7 +29,7 @@ export const SetupWizard: Component<SetupWizardProps> = (props) => {
   const [bootstrapToken, setBootstrapToken] = createSignal(props.bootstrapToken || '');
   const [isUnlocked, setIsUnlocked] = createSignal(props.isUnlocked || false);
 
-  const steps: WizardStep[] = ['welcome', 'security'];
+  const steps: WizardStep[] = ['welcome', 'security', 'completion'];
 
   const currentStepIndex = () => steps.indexOf(currentStep());
 
@@ -54,17 +55,20 @@ export const SetupWizard: Component<SetupWizardProps> = (props) => {
     props.onComplete(nextPath);
   };
 
+  const finishSecurityStep = () => {
+    setCurrentStep('completion');
+  };
+
+  const stepLabels = ['Unlock', 'Security', 'Install'];
+
   return (
     <div class="min-h-screen bg-base flex flex-col" role="main" aria-label="Pulse Setup Wizard">
       {/* Background decoration */}
       <div class="fixed inset-0 overflow-hidden pointer-events-none" aria-hidden="true"></div>
 
-      {/* Step indicator - only show during security step */}
-      <Show when={currentStep() === 'security'}>
-        <div class="relative z-10 pt-8 px-4" role="navigation" aria-label="Setup progress">
-          <StepIndicator steps={['Welcome', 'Security']} currentStep={1} />
-        </div>
-      </Show>
+      <div class="relative z-10 pt-8 px-4" role="navigation" aria-label="Setup progress">
+        <StepIndicator steps={stepLabels} currentStep={currentStepIndex()} />
+      </div>
 
       {/* Main content */}
       <div class="flex-1 flex items-center justify-center p-4 relative z-10">
@@ -84,9 +88,13 @@ export const SetupWizard: Component<SetupWizardProps> = (props) => {
               state={wizardState()}
               updateState={updateState}
               bootstrapToken={bootstrapToken()}
-              onComplete={() => handleComplete('/settings/infrastructure/install')}
+              onComplete={finishSecurityStep}
               onBack={prevStep}
             />
+          </Show>
+
+          <Show when={currentStep() === 'completion'}>
+            <SetupCompletionPanel state={wizardState()} onComplete={handleComplete} />
           </Show>
         </div>
       </div>

@@ -165,6 +165,12 @@ work extends shared components instead of creating new local variants.
    `frontend-modern/src/utils/dashboardEmptyStatePresentation.ts`, and make
    infrastructure setup guidance name the canonical destination explicitly
    instead of falling back to generic settings CTA labels.
+7. Keep the live first-session wizard on the canonical three-step runtime
+   shape in `frontend-modern/src/components/SetupWizard/SetupWizard.tsx`
+   (`Welcome`, `Security`, then `Install`), and keep the step indicator plus
+   completion CTA language aligned with the governed infrastructure install
+   workspace instead of regressing to a route jump that leaves the next action
+   implicit.
 
 ## Current State
 
@@ -1311,16 +1317,6 @@ badge label, title, and lock-button copy, and
 the settings-shell consumer for environment-variable-locked container-update
 controls. Future environment-lock UX should extend those owners instead of
 reintroducing panel-local lock labels, badge styling, or title copy.
-First-session runtime framing is now part of that same owned primitive story.
-`frontend-modern/src/components/SetupWizard/SetupWizard.tsx` must stay on the
-real two-step runtime shape (`Welcome`, then `Security`) and hand successful
-setup directly into the canonical Infrastructure Operations install route
-instead of regrowing a second setup-only completion step. The standalone
-preview surface in
-`frontend-modern/src/components/SetupWizard/SetupCompletionPreview.tsx` may
-still exist for guarded preview coverage, but it must remain explicitly
-separate from the runtime wizard so first-session UX does not split into two
-competing product flows again.
 The release-ready shell proof now also includes a representative desktop
 Playwright rehearsal in
 `tests/integration/tests/15-settings-shell-consistency.spec.ts` so general,

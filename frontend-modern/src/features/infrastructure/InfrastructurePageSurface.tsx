@@ -1,5 +1,6 @@
 import { For, Show } from 'solid-js';
 import { useNavigate } from '@solidjs/router';
+import { buildInfrastructureWorkspacePath } from '@/components/Settings/infrastructureWorkspaceModel';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { Card } from '@/components/shared/Card';
 import { FilterSegmentedControl, LabeledFilterSelect } from '@/components/shared/FilterToolbar';
@@ -119,7 +120,7 @@ export function InfrastructurePageSurface() {
                   actions={
                     <button
                       type="button"
-                      onClick={() => navigate('/settings')}
+                      onClick={() => navigate(buildInfrastructureWorkspacePath('install'))}
                       class="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-base-content shadow-sm hover:bg-slate-50"
                     >
                       <SettingsIcon class="h-3.5 w-3.5" />

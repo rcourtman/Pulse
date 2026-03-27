@@ -137,6 +137,16 @@ management, and fleet control surfaces.
 2. Keep shared API proof routing aligned whenever install, register, or profile payloads change.
 3. Update runtime and settings tests in the same slice when lifecycle behavior changes.
 4. Preserve canonical /api/auto-register node identity continuity when canonical hosts shift between hostname and IP forms for the same node.
+5. Keep first-session lifecycle handoff explicit: the live setup completion
+   surface in `frontend-modern/src/components/SetupWizard/SetupCompletionPanel.tsx`
+   must route the primary CTA into `/settings/infrastructure/install`, frame
+   that route as the first-host install step, and present Direct Proxmox as
+   the named alternative rather than leaving post-setup next actions implicit.
+6. Keep `frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx`
+   oriented around the first monitored host. Install-token generation,
+   governed command copy, and install instructions belong to the canonical
+   lifecycle path; transport details and adjacent alternatives must remain
+   secondary to that first-host onboarding narrative.
 
 ## Current State
 

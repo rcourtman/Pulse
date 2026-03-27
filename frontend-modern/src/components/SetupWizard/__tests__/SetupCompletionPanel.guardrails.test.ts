@@ -17,13 +17,13 @@ describe('SetupCompletionPanel guardrails', () => {
   });
 
   it('describes setup completion through the unified resource model instead of legacy install-command copy', () => {
-    expect(setupCompletionPanelSource).toContain("title: 'Unified Resource Inventory'");
-    expect(setupCompletionPanelSource).toContain('Pulse v6 starts with the Unified Agent.');
+    expect(setupCompletionPanelSource).toContain("title: 'What happens next'");
+    expect(setupCompletionPanelSource).toContain('Pulse is now secured.');
     expect(setupCompletionPanelSource).toContain("title: 'Open Infrastructure Install'");
-    expect(setupCompletionPanelSource).toContain("title: 'Bring Systems Into Pulse'");
-    expect(setupCompletionPanelSource).toContain('What Pulse Builds');
-    expect(setupCompletionPanelSource).toContain('Unified by default');
-    expect(setupCompletionPanelSource).toContain('One install becomes one monitored system in Pulse.');
+    expect(setupCompletionPanelSource).toContain("title: 'Run it on the first host you want to monitor'");
+    expect(setupCompletionPanelSource).toContain('What to expect');
+    expect(setupCompletionPanelSource).toContain('First host first');
+    expect(setupCompletionPanelSource).toContain('Start with one host, then add more systems later from the same install workspace.');
     expect(setupCompletionPanelSource).not.toContain('Smart Auto-Detection');
     expect(setupCompletionPanelSource).not.toContain('Agent Metrics');
     expect(setupCompletionPanelSource).not.toContain('ProxmoxIcon');

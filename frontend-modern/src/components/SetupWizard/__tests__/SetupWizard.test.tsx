@@ -17,8 +17,20 @@ vi.mock('../steps/SecurityStep', () => ({
   ),
 }));
 
+vi.mock('../SetupCompletionPanel', () => ({
+  SetupCompletionPanel: (props: { onComplete: (nextPath?: string) => void }) => (
+    <button onClick={() => props.onComplete('/settings/infrastructure/install')}>
+      Completion finish
+    </button>
+  ),
+}));
+
 vi.mock('../StepIndicator', () => ({
-  StepIndicator: () => <div>Step indicator</div>,
+  StepIndicator: (props: { steps: string[]; currentStep: number }) => (
+    <div>
+      Step indicator {props.currentStep}:{props.steps.join(' > ')}
+    </div>
+  ),
 }));
 
 describe('SetupWizard', () => {
@@ -30,15 +42,20 @@ describe('SetupWizard', () => {
     cleanup();
   });
 
-  it('sends the normal runtime path directly into infrastructure install after security setup', () => {
+  it('routes first-run setup through the completion handoff before infrastructure install', () => {
     const onComplete = vi.fn();
 
     render(() => <SetupWizard onComplete={onComplete} />);
 
+    expect(screen.getByText('Step indicator 0:Unlock > Security > Install')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Welcome next' }));
-    expect(screen.getByText('Step indicator')).toBeInTheDocument();
+    expect(screen.getByText('Step indicator 1:Unlock > Security > Install')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Security complete' }));
+    expect(screen.getByText('Step indicator 2:Unlock > Security > Install')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Completion finish' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Completion finish' }));
 
     expect(onComplete).toHaveBeenCalledWith('/settings/infrastructure/install');
   });

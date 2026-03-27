@@ -605,7 +605,7 @@ describe('InfrastructureOperationsController token generation', () => {
     setupComponent();
 
     await waitFor(() => {
-      expect(screen.getByText('Generate API token')).toBeInTheDocument();
+      expect(screen.getByText('Generate install token')).toBeInTheDocument();
     });
     expect(screen.getByRole('button', { name: /Generate token/i })).toBeInTheDocument();
   });

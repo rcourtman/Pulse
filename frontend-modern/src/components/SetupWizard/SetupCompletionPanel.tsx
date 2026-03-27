@@ -40,30 +40,30 @@ interface CompleteStepProps {
 }
 
 const UNIFIED_RESOURCE_GUIDANCE = {
-  title: 'Unified Resource Inventory',
+  title: 'What happens next',
   description:
-    'Pulse v6 starts with the Unified Agent. Install it on a system, let Pulse create one monitored system in inventory, then enrich that same inventory with workloads and linked platforms.',
+    'Pulse is now secured. Your next step is to install the Pulse agent on the first system you want to monitor, then let Pulse discover and enrich that system over time.',
   steps: [
-    {
-      title: 'Secure Pulse',
-      description:
-        'Finish first-run setup so your admin account and API access are ready for real monitoring.',
-    },
     {
       title: 'Open Infrastructure Install',
       description:
-        'Use the canonical install workspace to generate the right Unified Agent commands for Linux, macOS, Windows, and related platforms.',
+        'Use the canonical install workspace to generate the right install token and connection settings.',
     },
     {
-      title: 'Bring Systems Into Pulse',
+      title: 'Copy the command for your target system',
       description:
-        'Each install creates one monitored system in Pulse, then Docker, Kubernetes, Proxmox, and other context can attach to that same system.',
+        'Choose Linux, macOS, Windows, or another supported target and copy the matching command.',
+    },
+    {
+      title: 'Run it on the first host you want to monitor',
+      description:
+        'When the agent connects, Pulse creates your first monitored system and you can add more infrastructure from there.',
     },
   ],
   inventoryFacts: [
-    'One install becomes one monitored system in Pulse.',
-    'Infrastructure Operations owns token generation, connection URL, TLS/CA, and platform-specific install commands.',
-    'Settings no longer splits install across a separate setup-only command surface.',
+    'Start with one host, then add more systems later from the same install workspace.',
+    'Infrastructure Install owns the token, connection URL, TLS/CA settings, and platform-specific commands.',
+    'Direct Proxmox stays available as an alternative path when you need it.',
   ],
 } as const;
 
@@ -334,10 +334,11 @@ Keep these credentials secure!
             </svg>
           </div>
           <h1 class="text-2xl sm:text-3xl font-bold tracking-tight text-base-content mb-2">
-            Security Configured
+            Install your first monitored host
           </h1>
           <p class="text-slate-500 dark:text-emerald-300 font-light text-sm sm:text-base">
-            Open Infrastructure Install to bring your first monitored system into Pulse.
+            Your admin account is ready. Next, open Infrastructure Install and run the generated
+            command on the first system you want Pulse to monitor.
           </p>
         </div>
 
@@ -417,10 +418,10 @@ Keep these credentials secure!
           <div class="rounded-md border border-border bg-surface-alt p-4">
             <div class="mb-3 flex items-center justify-between gap-3">
               <div class="text-xs font-semibold uppercase tracking-[0.14em] text-muted">
-                What Pulse Builds
+                What to expect
               </div>
               <div class="rounded-sm bg-emerald-100 px-2 py-1 text-[10px] font-medium text-emerald-800 dark:bg-emerald-900 dark:text-emerald-300">
-                Unified by default
+                First host first
               </div>
             </div>
             <div class="space-y-2">
@@ -453,17 +454,17 @@ Keep these credentials secure!
                     d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
                   />
                 </svg>
-                Install Unified Agent
+                Install your first host
               </h3>
               <p class="mt-2 text-xs text-muted max-w-xl">
                 The canonical install flow now lives in Infrastructure Operations. Open that
-                workspace to generate tokens, set the agent connection URL, configure TLS or custom
-                CA options, and copy the correct install commands for Linux, macOS, Windows, and
-                related platforms.
+                workspace to generate an install token, set the agent connection URL, configure TLS
+                or custom CA options, and copy the correct command for the first system you want
+                Pulse to monitor.
               </p>
             </div>
             <div class="rounded-sm bg-blue-50 px-2 py-1 text-[10px] font-medium text-blue-700 dark:bg-blue-900 dark:text-blue-300">
-              Single source of truth
+              Recommended next step
             </div>
           </div>
           <div class="mt-4 rounded-md border border-border bg-surface-alt p-4">

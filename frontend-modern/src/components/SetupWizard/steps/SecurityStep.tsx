@@ -108,7 +108,8 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
       <div class="p-8 border-b border-border relative z-10 text-center">
         <h2 class="text-3xl font-bold tracking-tight text-base-content">Secure Your Dashboard</h2>
         <p class="text-slate-500 dark:text-blue-200 mt-2 font-light">
-          Create your root administrator account
+          Create your root administrator account, then continue to install your first monitored
+          host.
         </p>
       </div>
       <div class="p-8 space-y-6 relative z-10">
@@ -225,7 +226,7 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
               Setting up...
             </>
           ) : (
-            'Create Account →'
+            'Create Account & Continue →'
           )}
         </button>
       </div>

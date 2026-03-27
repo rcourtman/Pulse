@@ -28,8 +28,8 @@ export const InfrastructureInstallerSection: Component = () => {
       title={state.isEmbedded() ? 'Install on a host' : 'Infrastructure'}
       description={
         state.isEmbedded()
-          ? 'Use the unified agent as the default path for hosts, Docker, Kubernetes, and agent-managed Proxmox.'
-          : 'Primary setup hub for unified agents across systems, Docker, Kubernetes, Proxmox, and related infrastructure.'
+          ? 'Start here to add the first system you want Pulse to monitor, then expand into Docker, Kubernetes, Proxmox, and related infrastructure.'
+          : 'Primary setup hub for installing Pulse on the first host you want to monitor, then expanding into Docker, Kubernetes, Proxmox, and related infrastructure.'
       }
       icon={<Server class="h-5 w-5" strokeWidth={2} />}
       bodyClass="space-y-5"
@@ -112,10 +112,10 @@ export const InfrastructureInstallerSection: Component = () => {
       </Show>
 
       <div class="rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-100">
-        <p class="font-semibold">Unified Agent is the default monitoring gateway.</p>
+        <p class="font-semibold">Start with the first host you want Pulse to monitor.</p>
         <p class="mt-1 text-xs text-blue-800 dark:text-blue-200">
-          Install it on each system you want Pulse to monitor. The installer auto-detects
-          available platforms on that machine and enables the right integrations.
+          Install the Pulse agent on that system first. Once it connects, Pulse can keep using this
+          workspace to add more hosts and layered platform integrations.
         </p>
       </div>
 
@@ -148,11 +148,11 @@ export const InfrastructureInstallerSection: Component = () => {
               <span class="mr-1.5 inline-flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white">
                 1
               </span>
-              Generate API token
+              Generate install token
             </p>
             <p class="ml-6 text-sm text-muted">
               {state.requiresToken()
-                ? 'Create a fresh token scoped for Agent, Docker, and Kubernetes monitoring.'
+                ? 'Create a fresh token for the generated install commands and host reporting.'
                 : 'Tokens are optional on this Pulse instance. Generate one if you want copied commands to preserve explicit credentialed transport.'}
             </p>
           </div>
@@ -190,8 +190,8 @@ export const InfrastructureInstallerSection: Component = () => {
                 <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
               </svg>
               <span>
-                Token <strong>{state.latestRecord()?.name}</strong> created. Commands below now
-                include this credential.
+                Install token <strong>{state.latestRecord()?.name}</strong> created. Commands below
+                now include this credential.
               </span>
             </div>
           </Show>
@@ -229,7 +229,7 @@ export const InfrastructureInstallerSection: Component = () => {
                   Installation commands
                 </h4>
                 <p class="ml-6 mt-0.5 text-xs text-muted">
-                  Generate a token above to unlock installation commands.
+                  Generate an install token above to unlock the commands for your first host.
                 </p>
               </div>
             </div>
@@ -247,7 +247,9 @@ export const InfrastructureInstallerSection: Component = () => {
                   d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"
                 />
               </svg>
-              <p class="text-sm text-muted">Click "Generate token" above to see installation commands</p>
+              <p class="text-sm text-muted">
+                Click "Generate token" above to see the install commands for your first host.
+              </p>
             </div>
           </div>
         </Show>

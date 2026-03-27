@@ -108,13 +108,13 @@ describe('SetupCompletionPanel', () => {
   it('frames setup completion around the canonical infrastructure install workspace', async () => {
     render(() => <SetupCompletionPanel state={baseState} onComplete={vi.fn()} />);
 
-    expect(screen.getByText('Unified Resource Inventory')).toBeInTheDocument();
+    expect(screen.getByText('What happens next')).toBeInTheDocument();
     expect(screen.getAllByText('Open Infrastructure Install').length).toBeGreaterThan(0);
-    expect(screen.getByText('What Pulse Builds')).toBeInTheDocument();
-    expect(screen.getByText('Unified by default')).toBeInTheDocument();
+    expect(screen.getByText('What to expect')).toBeInTheDocument();
+    expect(screen.getByText('First host first')).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Infrastructure Operations owns token generation, connection URL, TLS/CA, and platform-specific install commands.',
+        'Infrastructure Install owns the token, connection URL, TLS/CA settings, and platform-specific commands.',
       ),
     ).toBeInTheDocument();
 

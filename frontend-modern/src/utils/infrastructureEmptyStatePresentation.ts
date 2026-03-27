@@ -2,8 +2,8 @@ export function getInfrastructureEmptyState() {
   return {
     title: 'No infrastructure resources yet',
     description:
-      'Add Proxmox VE nodes or install the Pulse agent on your infrastructure to start monitoring.',
-    actionLabel: 'Add Infrastructure',
+      'Start by opening Settings → Infrastructure → Install on a host and adding the first system you want Pulse to monitor. If you prefer a direct Proxmox connection instead, use Direct Proxmox.',
+    actionLabel: 'Open Infrastructure Install',
   } as const;
 }
 

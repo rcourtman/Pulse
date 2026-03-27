@@ -145,6 +145,12 @@ assembly branch.
 2. Update contract and guardrail tests when a new resource type is added
 3. Route runtime changes through the explicit unified-resource proof policies in `registry.json`; default fallback proof routing is not allowed
 4. Tighten banned-path tests when a compatibility bridge is removed
+5. Keep the infrastructure landing empty state on canonical first-run routing:
+   when inventory is empty, `frontend-modern/src/features/infrastructure/InfrastructurePageSurface.tsx`
+   and `frontend-modern/src/utils/infrastructureEmptyStatePresentation.ts`
+   must send operators directly to `/settings/infrastructure/install`, name
+   first-host install as the default next step, and keep Direct Proxmox as the
+   explicit alternative instead of regressing to generic settings-root CTAs.
 
 ## Current State
 

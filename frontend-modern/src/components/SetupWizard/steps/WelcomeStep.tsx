@@ -111,6 +111,10 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
         <p class="text-xl dark:text-blue-200 font-light animate-fade-in delay-200 max-w-md mx-auto">
           Unified infrastructure intelligence
         </p>
+        <p class="mt-4 text-sm text-muted max-w-xl mx-auto animate-fade-in delay-300">
+          You are about to do three things: unlock setup on this Pulse server, create your admin
+          account, and install the first system you want Pulse to monitor.
+        </p>
       </div>
 
       {/* Bootstrap token unlock */}
@@ -121,7 +125,8 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
               Unlock Setup
             </h3>
             <p class="text-sm text-muted mb-6">
-              Run the following command on your machine to retrieve the secure bootstrap token:
+              Run the following command on the machine where Pulse is installed to retrieve the
+              secure bootstrap token:
             </p>
 
             <div class="mb-8">
