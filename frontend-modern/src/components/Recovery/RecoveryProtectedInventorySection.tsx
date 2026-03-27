@@ -1,4 +1,4 @@
-import { For, Show, createMemo, createSignal } from 'solid-js';
+import { For, Show, createEffect, createMemo, createSignal } from 'solid-js';
 import type { Accessor, Component } from 'solid-js';
 
 import { Card } from '@/components/shared/Card';
@@ -83,11 +83,13 @@ interface RecoveryProtectedInventorySectionProps {
 }
 
 const availableOutcomes = ['all', 'success', 'warning', 'failed', 'running'] as const;
+const PROTECTED_ITEMS_PAGE_SIZE = 24;
 
 export const RecoveryProtectedInventorySection: Component<
   RecoveryProtectedInventorySectionProps
 > = (props) => {
   const [protectedFiltersOpen, setProtectedFiltersOpen] = createSignal(false);
+  const [protectedPage, setProtectedPage] = createSignal(1);
   const [protectedSortCol, setProtectedSortCol] = createSignal<ProtectedSortCol>('lastBackup');
   const [protectedSortDir, setProtectedSortDir] = createSignal<SortDir>('desc');
 
@@ -158,25 +160,51 @@ export const RecoveryProtectedInventorySection: Component<
     return items;
   });
 
+  const protectedTotalPages = createMemo(() =>
+    Math.max(1, Math.ceil(sortedRollups().length / PROTECTED_ITEMS_PAGE_SIZE)),
+  );
+
+  const visibleRollups = createMemo<ProtectionRollup[]>(() => {
+    const start = (protectedPage() - 1) * PROTECTED_ITEMS_PAGE_SIZE;
+    return sortedRollups().slice(start, start + PROTECTED_ITEMS_PAGE_SIZE);
+  });
+
+  createEffect(() => {
+    props.queryFilter();
+    props.platformFilter();
+    props.itemTypeFilter();
+    props.historyOutcomeFilter();
+    props.protectedStaleOnly();
+    protectedSortCol();
+    protectedSortDir();
+    setProtectedPage(1);
+  });
+
+  createEffect(() => {
+    const totalPages = protectedTotalPages();
+    if (protectedPage() > totalPages) {
+      setProtectedPage(totalPages);
+    }
+  });
+
   return (
     <Card
       padding="none"
       tone="card"
-      class="overflow-hidden border-border bg-surface-hover shadow-[0_12px_28px_rgba(2,6,23,0.12)]"
+      class="overflow-hidden border-border bg-surface shadow-[0_10px_24px_rgba(2,6,23,0.1)]"
     >
       <div class="border-b border-border-subtle/80 bg-surface px-4 py-4">
         <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div class="flex flex-col gap-1">
-            <div class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-              Protected Items
-            </div>
-            <div class="max-w-3xl text-sm text-slate-300">
-              Unified protection inventory across workloads, datasets, and other protected items, with platform mix carried as supporting context.
+            <div class="text-sm font-semibold text-base-content">Protected inventory</div>
+            <div class="max-w-3xl text-sm text-muted">
+              Item-first recovery inventory, with item class and latest-point posture kept visible
+              in the main grid instead of buried in drill-in.
             </div>
           </div>
           <div class="flex flex-wrap items-center gap-2 text-xs">
             <span class="rounded-full border border-border-subtle bg-surface-hover/70 px-2.5 py-1 text-base-content">
-              {props.filteredRollups().length} of {props.rollups().length} items shown
+              {sortedRollups().length} of {props.rollups().length} items shown
             </span>
             <Show when={props.rollupsSummary().stale > 0}>
               <span class={`${getRecoveryRollupStatusPillClass('stale')} px-2.5 py-1`}>
@@ -193,7 +221,7 @@ export const RecoveryProtectedInventorySection: Component<
       </div>
 
       <Show when={!props.kioskMode}>
-        <div class="border-b border-border-subtle/80 bg-surface-hover px-4 py-4">
+        <div class="border-b border-border-subtle/80 bg-surface-alt/35 px-4 py-4">
           <PageControls
             search={
               <SearchInput
@@ -201,6 +229,7 @@ export const RecoveryProtectedInventorySection: Component<
                 onChange={(value) => props.setQueryFilter(value)}
                 placeholder={getRecoveryProtectedSearchPlaceholder()}
                 class="w-full"
+                inputClass="py-2.5 text-sm"
                 clearOnEscape
                 history={{
                   storageKey: STORAGE_KEYS.RECOVERY_SEARCH_HISTORY,
@@ -214,7 +243,8 @@ export const RecoveryProtectedInventorySection: Component<
               count: protectedActiveFilterCount(),
             }}
             showFilters={!props.isMobile || protectedFiltersOpen()}
-            toolbarClass="lg:flex-nowrap"
+            searchRowClass="flex w-full items-center gap-3"
+            toolbarClass="gap-3 lg:flex-nowrap"
           >
             <LabeledFilterSelect
               id="recovery-item-type-filter"
@@ -225,7 +255,8 @@ export const RecoveryProtectedInventorySection: Component<
                   normalizeRecoveryItemTypeQueryValue(event.currentTarget.value) || 'all',
                 )
               }
-              selectClass="min-w-[10rem] max-w-[14rem]"
+              groupClass="gap-2 px-1.5 py-1"
+              selectClass="min-w-[10rem] max-w-[14rem] py-2 text-sm"
             >
               <For each={props.itemTypeOptions()}>
                 {(itemType) => (
@@ -247,7 +278,8 @@ export const RecoveryProtectedInventorySection: Component<
                   normalizeSourcePlatformQueryValue(event.currentTarget.value),
                 )
               }
-              selectClass="min-w-[10rem] max-w-[14rem]"
+              groupClass="gap-2 px-1.5 py-1"
+              selectClass="min-w-[10rem] max-w-[14rem] py-2 text-sm"
             >
               <For each={props.platformOptions()}>
                 {(platform) => (
@@ -267,7 +299,8 @@ export const RecoveryProtectedInventorySection: Component<
                 props.setHistoryOutcomeFilter(value);
                 if (value !== 'all') props.setVerificationFilter('all');
               }}
-              selectClass="min-w-[9rem]"
+              groupClass="gap-2 px-1.5 py-1"
+              selectClass="min-w-[9rem] py-2 text-sm"
             >
               <For each={availableOutcomes}>
                 {(outcome) => (
@@ -282,7 +315,7 @@ export const RecoveryProtectedInventorySection: Component<
               type="button"
               aria-pressed={props.protectedStaleOnly()}
               onClick={() => props.setProtectedStaleOnly((value) => !value)}
-              class={`rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${getRecoveryProtectedToggleClass(
+              class={`rounded-md border px-3 py-2 text-sm font-medium transition-colors ${getRecoveryProtectedToggleClass(
                 props.protectedStaleOnly(),
               )}`}
             >
@@ -333,7 +366,7 @@ export const RecoveryProtectedInventorySection: Component<
                   ] as const
                 ).map(([column, label]) => (
                   <TableHead
-                    class={`py-0.5 px-3 whitespace-nowrap text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer select-none hover:text-base-content transition-colors${
+                    class={`px-3 py-2.5 whitespace-nowrap text-left text-[11px] sm:text-xs font-semibold uppercase tracking-wider cursor-pointer select-none hover:text-base-content transition-colors${
                       column === 'type'
                         ? ' hidden md:table-cell w-[96px]'
                         : column === 'platform'
@@ -363,7 +396,7 @@ export const RecoveryProtectedInventorySection: Component<
               </TableRow>
             </TableHeader>
             <TableBody class="divide-y divide-border">
-              <For each={sortedRollups()}>
+              <For each={visibleRollups()}>
                 {(rollup) => {
                   const resourceIndex = props.resourcesById();
                   const label = getRecoveryRollupItemLabel(rollup, resourceIndex);
@@ -390,11 +423,11 @@ export const RecoveryProtectedInventorySection: Component<
 
                   return (
                     <TableRow
-                      class="cursor-pointer border-b border-border/80 hover:bg-surface-hover/95"
+                      class="cursor-pointer border-b border-border/80 odd:bg-surface even:bg-surface-alt/20 hover:bg-surface-hover/95"
                       onClick={() => props.onSelectRollup(rollup.rollupId)}
                     >
                       <TableCell
-                        class={`relative max-w-[420px] truncate whitespace-nowrap px-3 py-0.5 text-base-content ${
+                        class={`relative max-w-[420px] truncate whitespace-nowrap px-3 py-2.5 text-base-content ${
                           issueTone === 'rose' || issueTone === 'blue' ? 'font-medium' : ''
                         }`}
                         title={label}
@@ -417,7 +450,7 @@ export const RecoveryProtectedInventorySection: Component<
                         </div>
                       </TableCell>
 
-                      <TableCell class="hidden md:table-cell whitespace-nowrap px-3 py-0.5">
+                      <TableCell class="hidden md:table-cell whitespace-nowrap px-3 py-2.5">
                         <Show
                           when={itemTypePresentation}
                           fallback={<span class="text-muted">—</span>}
@@ -432,7 +465,7 @@ export const RecoveryProtectedInventorySection: Component<
                         </Show>
                       </TableCell>
 
-                      <TableCell class="hidden lg:table-cell whitespace-nowrap px-3 py-0.5">
+                      <TableCell class="hidden lg:table-cell whitespace-nowrap px-3 py-2.5">
                         <div class="flex flex-wrap gap-1.5">
                           <For each={platforms}>
                             {(platform) => {
@@ -448,7 +481,7 @@ export const RecoveryProtectedInventorySection: Component<
                       </TableCell>
 
                       <TableCell
-                        class={`whitespace-nowrap px-3 py-0.5 ${getRecoveryRollupAgeTextClass(
+                        class={`whitespace-nowrap px-3 py-2.5 ${getRecoveryRollupAgeTextClass(
                           rollup,
                           nowMs,
                         )}`}
@@ -469,7 +502,7 @@ export const RecoveryProtectedInventorySection: Component<
                         )}
                       </TableCell>
 
-                      <TableCell class="whitespace-nowrap px-3 py-0.5">
+                      <TableCell class="whitespace-nowrap px-3 py-2.5">
                         <span
                           class={`inline-flex rounded px-1.5 py-0.5 text-[10px] font-medium ${getRecoveryOutcomeBadgeClass(
                             outcome,
@@ -484,6 +517,41 @@ export const RecoveryProtectedInventorySection: Component<
               </For>
             </TableBody>
           </Table>
+        </div>
+        <div class="flex items-center justify-between gap-2 border-t border-border bg-surface px-4 py-3 text-xs text-muted">
+          <div>
+            <Show
+              when={sortedRollups().length > 0}
+              fallback={<span>Showing 0 of 0 protected items</span>}
+            >
+              <span>
+                Showing {(protectedPage() - 1) * PROTECTED_ITEMS_PAGE_SIZE + 1} -{' '}
+                {Math.min(protectedPage() * PROTECTED_ITEMS_PAGE_SIZE, sortedRollups().length)} of{' '}
+                {sortedRollups().length} protected items
+              </span>
+            </Show>
+          </div>
+          <div class="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={protectedPage() <= 1}
+              onClick={() => setProtectedPage(Math.max(1, protectedPage() - 1))}
+              class="rounded-md border border-border bg-surface px-2 py-1 text-xs font-medium text-base-content disabled:opacity-50"
+            >
+              Prev
+            </button>
+            <span>
+              Page {protectedPage()} / {protectedTotalPages()}
+            </span>
+            <button
+              type="button"
+              disabled={protectedPage() >= protectedTotalPages()}
+              onClick={() => setProtectedPage(Math.min(protectedTotalPages(), protectedPage() + 1))}
+              class="rounded-md border border-border bg-surface px-2 py-1 text-xs font-medium text-base-content disabled:opacity-50"
+            >
+              Next
+            </button>
+          </div>
         </div>
       </Show>
     </Card>

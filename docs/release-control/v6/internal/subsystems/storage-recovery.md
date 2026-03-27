@@ -443,6 +443,11 @@ recovery system instead of a single backup table metaphor.
 That top recovery frame must rely on solid elevated operator panels and border
 hierarchy rather than decorative gradients so the page reads like a monitoring
 workspace instead of a marketing-style dashboard shell.
+That same framing must stay compact enough to keep the primary workspace in the
+first scroll window. `RecoverySummary.tsx` and the workspace shell in
+`Recovery.tsx` should compress posture, coverage, and mode framing into concise
+operator panels instead of stacking multiple dashboard-like slabs that push the
+main inventory or event table too far down the page.
 That same summary contract now also includes platform- and item-coverage
 framing through `frontend-modern/src/utils/recoverySummaryPresentation.ts`, so
 the first visible recovery overview explicitly shows which protected item
@@ -458,6 +463,12 @@ first-class column in the main inventory grid rather than leaving platform as
 the only structural classifier beside the item label. Platform badges remain
 important supporting operator context, especially for Proxmox-heavy fleets,
 but the table frame itself must make protected item class explicit.
+That same inventory contract must keep the protected-items grid operationally
+bounded. The governed desktop recovery surface should not dump the entire
+protected estate into one endless slab; it should page or otherwise bound the
+primary inventory table so the workspace, filters, and adjacent activity panel
+remain readable as one monitoring surface instead of dissolving into a raw list
+dump.
 The same owned vocabulary applies to recovery events as well:
 `frontend-modern/src/utils/recoveryTablePresentation.ts` must keep the
 history-table `type` column labeled as `Item Type` within recovery surfaces so

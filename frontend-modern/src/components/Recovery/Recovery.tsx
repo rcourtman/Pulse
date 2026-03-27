@@ -488,17 +488,17 @@ const Recovery: Component = () => {
         <Card
           padding="none"
           tone="card"
-          class="overflow-hidden border-border bg-surface-hover shadow-[0_12px_28px_rgba(2,6,23,0.12)]"
+          class="overflow-hidden border-border bg-surface shadow-[0_10px_24px_rgba(2,6,23,0.1)]"
         >
-          <div class="border-b border-border-subtle/80 bg-surface px-4 pb-4 pt-4">
-            <div class="mb-4 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div class="border-b border-border-subtle/80 bg-surface px-4 py-4">
+            <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
               <div>
-                <div class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+                <div class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
                   Recovery Workspace
                 </div>
-                <div class="mt-1 max-w-2xl text-sm text-slate-200">
-                  Run recovery operations from one shared surface: protected inventory first,
-                  event drill-in second, with the same item-first filters and route state.
+                <div class="mt-1.5 max-w-2xl text-sm leading-6 text-muted">
+                  Protected inventory first, event drill-in second, with the same item-first
+                  filters and route state.
                 </div>
               </div>
               <div class="flex flex-wrap items-center gap-2 text-xs">
@@ -515,10 +515,14 @@ const Recovery: Component = () => {
                 </Show>
               </div>
             </div>
+          </div>
+          <div class="bg-surface-alt/35 px-4 py-2.5">
             <Subtabs
               value={workspaceView()}
               onChange={(value) => setWorkspaceView(value as RecoveryWorkspaceView)}
               ariaLabel="Recovery data view"
+              listClass="flex flex-wrap items-center gap-3"
+              tabClass="min-h-10 px-2 py-2.5 text-sm"
               tabs={[
                 {
                   value: 'inventory',
@@ -540,14 +544,6 @@ const Recovery: Component = () => {
                 },
               ]}
             />
-          </div>
-          <div class="bg-surface-hover px-4 py-3 text-xs text-muted">
-            <Show
-              when={workspaceView() === 'inventory'}
-              fallback="Recovery events grouped by day and filtered through one shared item-first recovery model."
-            >
-              Unified protection inventory across protected item types, with platform mix carried as supporting recovery context.
-            </Show>
           </div>
         </Card>
 

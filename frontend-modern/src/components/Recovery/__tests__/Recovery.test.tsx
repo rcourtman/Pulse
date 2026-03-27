@@ -203,7 +203,7 @@ describe('Recovery', () => {
 
     expect(await screen.findByTestId('recovery-summary')).toBeInTheDocument();
     expect(screen.getByText('Recovery Posture')).toBeInTheDocument();
-    expect(await screen.findByText('Protected Items')).toBeInTheDocument();
+    expect(await screen.findByRole('tab', { name: /protected items/i })).toBeInTheDocument();
     await screen.findByText('VM 123');
     expect(screen.queryByText('Recovery Events')).not.toBeInTheDocument();
     await waitFor(() => {
@@ -219,7 +219,11 @@ describe('Recovery', () => {
     fireEvent.click(await screen.findByText('VM 123'));
 
     expect(await screen.findByText('Recovery Events')).toBeInTheDocument();
-    expect(screen.queryByText('Protected Items')).not.toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /protected items/i })).toHaveAttribute(
+      'aria-selected',
+      'false',
+    );
+    expect(screen.queryByText('Protected inventory')).not.toBeInTheDocument();
     await waitFor(() => {
       expect(screen.getAllByRole('table')).toHaveLength(1);
     });
@@ -245,7 +249,11 @@ describe('Recovery', () => {
     render(() => <Recovery />);
 
     expect(await screen.findByText('Recovery Events')).toBeInTheDocument();
-    expect(screen.queryByText('Protected Items')).not.toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /protected items/i })).toHaveAttribute(
+      'aria-selected',
+      'false',
+    );
+    expect(screen.queryByText('Protected inventory')).not.toBeInTheDocument();
   });
 
   it('derives the recovery events workspace from focused route state when no explicit view is set', async () => {
@@ -254,7 +262,11 @@ describe('Recovery', () => {
     render(() => <Recovery />);
 
     expect(await screen.findByText('Recovery Events')).toBeInTheDocument();
-    expect(screen.queryByText('Protected Items')).not.toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /protected items/i })).toHaveAttribute(
+      'aria-selected',
+      'false',
+    );
+    expect(screen.queryByText('Protected inventory')).not.toBeInTheDocument();
   });
 
   it('renders canonical rollup and history item labels when linked resources are unavailable', async () => {
@@ -1053,7 +1065,7 @@ describe('Recovery', () => {
   it('persists the selected timeline range in the recovery URL', async () => {
     render(() => <Recovery />);
 
-    await screen.findByText('Protected Items');
+    await screen.findByRole('tab', { name: /protected items/i });
 
     fireEvent.click(await screen.findByRole('button', { name: '7d' }));
 
@@ -1067,7 +1079,7 @@ describe('Recovery', () => {
 
     render(() => <Recovery />);
 
-    await screen.findByText('Protected Items');
+    await screen.findByRole('tab', { name: /protected items/i });
 
     const end = new Date();
     end.setHours(23, 59, 59, 999);
