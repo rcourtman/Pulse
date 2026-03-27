@@ -6,6 +6,7 @@ import { EmptyState } from '@/components/shared/EmptyState';
 import { LabeledFilterSelect } from '@/components/shared/FilterToolbar';
 import { PageControls } from '@/components/shared/PageControls';
 import { SearchInput } from '@/components/shared/SearchInput';
+import { StatusDot } from '@/components/shared/StatusDot';
 import { getSourcePlatformBadge } from '@/components/shared/sourcePlatformBadges';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/shared/Table';
 import { STORAGE_KEYS } from '@/utils/localStorage';
@@ -38,9 +39,9 @@ import {
 } from '@/utils/recoveryTablePresentation';
 import {
   getRecoveryOutcomeBadgeClass,
+  getRecoveryOutcomeLabel,
   normalizeRecoveryOutcome,
 } from '@/utils/recoveryOutcomePresentation';
-import { getRecoveryIssueRailClass, type RecoveryIssueTone } from '@/utils/recoveryIssuePresentation';
 import { getRecoveryRollupPlatforms } from '@/utils/recoveryPlatformModel';
 import { getRecoveryRollupItemLabel } from '@/utils/recoveryRecordPresentation';
 import { getSourcePlatformLabel, normalizeSourcePlatformQueryValue } from '@/utils/sourcePlatforms';
@@ -414,14 +415,23 @@ export const RecoveryProtectedInventorySection: Component<
                   const itemTypePresentation =
                     getRecoveryItemTypePresentation(getRecoveryRollupItemTypeKey(rollup)) || null;
                   const nowMs = Date.now();
-                  const issueTone: RecoveryIssueTone = getRecoveryRollupIssueTone(rollup, nowMs);
-                  const issueRailClass =
-                    issueTone === 'none' ? '' : getRecoveryIssueRailClass(issueTone);
                   const stale = isRecoveryRollupStale(rollup, nowMs);
                   const neverSucceeded =
                     (!Number.isFinite(successMs) || successMs <= 0) &&
                     Number.isFinite(attemptMs) &&
                     attemptMs > 0;
+                  const outcomeVariant = (() => {
+                    switch (outcome) {
+                      case 'success':
+                        return 'success' as const;
+                      case 'warning':
+                        return 'warning' as const;
+                      case 'failed':
+                        return 'danger' as const;
+                      default:
+                        return 'muted' as const;
+                    }
+                  })();
 
                   return (
                     <TableRow
@@ -429,16 +439,18 @@ export const RecoveryProtectedInventorySection: Component<
                       onClick={() => props.onSelectRollup(rollup.rollupId)}
                     >
                       <TableCell
-                        class={`relative max-w-[420px] px-3 py-3 text-base-content ${
-                          issueTone === 'rose' || issueTone === 'blue' ? 'font-medium' : ''
-                        }`}
+                        class="max-w-[420px] px-3 py-2.5 text-base-content"
                         title={label}
                       >
-                        <Show when={issueTone !== 'none'}>
-                          <span class={`absolute inset-y-0 left-0 w-0.5 ${issueRailClass}`} />
-                        </Show>
-                        <div class="flex min-w-0 flex-col gap-1.5 pl-0.5">
+                        <div class="flex min-w-0 flex-col gap-1.5">
                           <div class="flex min-w-0 items-center gap-2">
+                            <StatusDot
+                              variant={outcomeVariant}
+                              size="xs"
+                              pulse={outcome === 'running'}
+                              title={getRecoveryOutcomeLabel(outcome)}
+                              ariaLabel={getRecoveryOutcomeLabel(outcome)}
+                            />
                             <span class="truncate text-sm font-medium">{label}</span>
                             <Show when={neverSucceeded}>
                               <span class={getRecoveryRollupStatusPillClass('never-succeeded')}>
@@ -451,22 +463,29 @@ export const RecoveryProtectedInventorySection: Component<
                               </span>
                             </Show>
                           </div>
-                          <div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted">
+                          <div class="flex flex-wrap items-center gap-1.5 text-[10px]">
                             <Show when={itemTypePresentation?.label}>
-                              <span>{itemTypePresentation?.label}</span>
+                              <span class={itemTypePresentation?.badgeClasses || 'inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-surface-alt text-base-content'}>
+                                {itemTypePresentation?.label}
+                              </span>
                             </Show>
                             <Show when={platforms.length > 0}>
-                              <span>
-                                {platforms
-                                  .map((platform) => getSourcePlatformLabel(platform))
-                                  .join(' • ')}
-                              </span>
+                              <For each={platforms.slice(0, 2)}>
+                                {(platform) => {
+                                  const badge = getSourcePlatformBadge(platform);
+                                  return (
+                                    <span class={badge?.classes || ''}>
+                                      {badge?.label || getSourcePlatformLabel(platform)}
+                                    </span>
+                                  );
+                                }}
+                              </For>
                             </Show>
                           </div>
                         </div>
                       </TableCell>
 
-                      <TableCell class="hidden md:table-cell whitespace-nowrap px-3 py-3">
+                      <TableCell class="hidden md:table-cell whitespace-nowrap px-3 py-2.5">
                         <Show
                           when={itemTypePresentation}
                           fallback={<span class="text-muted">—</span>}
@@ -477,7 +496,7 @@ export const RecoveryProtectedInventorySection: Component<
                         </Show>
                       </TableCell>
 
-                      <TableCell class="hidden lg:table-cell whitespace-nowrap px-3 py-3">
+                      <TableCell class="hidden lg:table-cell whitespace-nowrap px-3 py-2.5">
                         <div class="flex flex-wrap gap-1.5">
                           <For each={platforms}>
                             {(platform) => {
@@ -493,7 +512,7 @@ export const RecoveryProtectedInventorySection: Component<
                       </TableCell>
 
                       <TableCell
-                        class={`whitespace-nowrap px-3 py-3 ${getRecoveryRollupAgeTextClass(
+                        class={`whitespace-nowrap px-3 py-2.5 ${getRecoveryRollupAgeTextClass(
                           rollup,
                           nowMs,
                         )}`}
@@ -514,7 +533,7 @@ export const RecoveryProtectedInventorySection: Component<
                         )}
                       </TableCell>
 
-                      <TableCell class="whitespace-nowrap px-3 py-3">
+                      <TableCell class="whitespace-nowrap px-3 py-2.5">
                         <span
                           class={`inline-flex rounded px-1.5 py-0.5 text-[10px] font-medium ${getRecoveryOutcomeBadgeClass(
                             outcome,

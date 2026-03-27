@@ -648,6 +648,11 @@ recovery-specific mini report. Recovery summary cards should prefer concise
 counts, bars, and badge-backed coverage cues over tall explanatory copy blocks
 so the protected-item table takes over the page at roughly the same visual
 density as the infrastructure and workloads monitoring surfaces.
+That same inventory surface should also follow the established monitoring-table
+scan pattern in its first column. Protected-item rows should lead with a clear
+status cue, the primary item name, and compact badge-backed item/platform
+context instead of relying on recovery-only rails or plain-text metadata lines
+that make the table read like a report instead of an operational grid.
 That shared unified-resource dependency now also includes policy-governed
 resource metadata on the frontend decode path: storage and recovery surfaces
 that route through `frontend-modern/src/hooks/useUnifiedResources.ts` must

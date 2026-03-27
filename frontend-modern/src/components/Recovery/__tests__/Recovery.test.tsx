@@ -214,6 +214,10 @@ describe('Recovery', () => {
     expect(within(inventoryTable).getByText('Item Type')).toBeInTheDocument();
     expect(within(inventoryTable).getByText('Platform')).toBeInTheDocument();
     expect(within(inventoryTable).getAllByText('VM').length).toBeGreaterThan(0);
+    const vmRow = screen.getByText('VM 123').closest('tr');
+    expect(vmRow).not.toBeNull();
+    expect(within(vmRow!).getByLabelText('Healthy')).toBeInTheDocument();
+    expect(within(vmRow!).getAllByText('PVE').length).toBeGreaterThan(0);
     expect(screen.queryByText('Backups By Date')).not.toBeInTheDocument();
 
     fireEvent.click(await screen.findByText('VM 123'));
