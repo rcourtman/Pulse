@@ -142,9 +142,12 @@ describe('shell view', function() {
     expect(html).toContain('Add workspace');
     expect(html).toContain('Manage billing');
     expect(html).toContain('Manage team');
+    expect(html).toContain('Hosted posture');
+    expect(html).toContain('Start here to judge fleet posture');
     expect(html).toContain('Next move');
     expect(html).toContain('Start in Workspaces');
     expect(html).toContain('Hosted posture needs review');
+    expect(html).toContain('Fleet posture');
     expect(html).toContain('Use this console to run client workspaces, account billing, and operator access from one place.');
     expect(html).toContain('Open workspaces');
     expect(html).toContain('Review team access');

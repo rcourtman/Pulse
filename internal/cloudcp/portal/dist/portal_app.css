@@ -275,8 +275,8 @@ header .logout-btn:hover,
   align-items: start;
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
-  background: #e9eef3;
-  box-shadow: 0 22px 48px rgba(10, 25, 41, 0.08);
+  background: #ffffff;
+  box-shadow: 0 24px 52px rgba(10, 25, 41, 0.08);
   overflow: hidden;
 }
 .portal-shell-nav {
@@ -381,8 +381,8 @@ header .logout-btn:hover,
 .portal-shell-main {
   min-width: 0;
   min-height: 820px;
-  padding: 0 0 24px;
-  background: #f3f6fa;
+  padding: 0 0 28px;
+  background: #f7f9fb;
 }
 .portal-shell-main > .portal-content-panel {
   display: none !important;
@@ -392,9 +392,9 @@ header .logout-btn:hover,
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 18px;
   align-items: center;
-  padding: 18px 22px 16px;
+  padding: 16px 24px 14px;
   border-bottom: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.84);
+  background: rgba(255, 255, 255, 0.98);
 }
 .portal-account-bar-copy {
   display: flex;
@@ -471,7 +471,7 @@ header .logout-btn:hover,
   gap: 26px;
 }
 .portal-content-panel {
-  padding: 16px 22px 0;
+  padding: 18px 24px 0;
 }
 .portal-top-section,
 .service-section {
@@ -560,11 +560,11 @@ header .logout-btn:hover,
 .account-content-panel-overview,
 .account-content-panel-workspaces,
 .account-content-panel-team {
-  padding: 16px;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  background: #edf2f6;
-  box-shadow: 0 10px 22px rgba(10, 25, 41, 0.04);
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 .account-command-deck,
 .account-overview-card,
@@ -619,12 +619,12 @@ header .logout-btn:hover,
 .account-command-deck {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 12px;
+  gap: 14px;
   align-items: stretch;
-  padding: 14px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.72);
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
 }
 .account-overview-card {
   display: grid;
@@ -834,8 +834,24 @@ header .logout-btn:hover,
   color: var(--ink-soft);
 }
 .account-stage-header {
-  padding: 0 0 14px;
-  border-bottom: 1px solid var(--line);
+  padding: 0 2px 12px;
+  border-bottom: none;
+  margin-bottom: 0;
+}
+.account-stage-header h3 {
+  margin: 8px 0 0;
+  font-size: 24px;
+  line-height: 1.02;
+  letter-spacing: -0.05em;
+}
+.account-stage-header p {
+  margin: 10px 0 0;
+  max-width: 820px;
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--ink-soft);
+}
+.account-stage-header-overview {
   margin-bottom: 14px;
 }
 .workspace-list-wrap {
@@ -846,6 +862,7 @@ header .logout-btn:hover,
   border: 1px solid var(--line);
   border-radius: 14px;
   background: #fff;
+  box-shadow: var(--shadow-sm);
 }
 .workspace-list-toolbar {
   display: flex;
@@ -998,12 +1015,12 @@ header .logout-btn:hover,
 .workspace-operations-shell {
   display: grid;
   grid-template-columns: minmax(0, 1.42fr) minmax(360px, 1fr);
-  gap: 14px;
+  gap: 16px;
   align-items: start;
-  padding: 14px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.68);
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
 }
 .workspace-operations-main,
 .workspace-operations-detail {
@@ -1011,6 +1028,7 @@ header .logout-btn:hover,
 }
 .workspace-management-panel {
   min-height: 100%;
+  box-shadow: var(--shadow-sm);
 }
 .workspace-management-panel.visible,
 .team-section.visible .team-management-panel {
@@ -1240,6 +1258,9 @@ header .logout-btn:hover,
   grid-template-columns: minmax(0, 1.65fr) minmax(320px, 0.92fr);
   gap: 14px;
   align-items: start;
+}
+.team-management-panel {
+  box-shadow: var(--shadow-sm);
 }
 .team-side-column {
   display: flex;

@@ -416,10 +416,17 @@ function renderAccountOverviewSection(account: PortalAccountSummary): string {
 
   return (
     '<section class="account-content-panel account-content-panel-overview">' +
+      '<div class="account-stage-header account-stage-header-overview">' +
+        '<div>' +
+          '<div class="account-panel-kicker">Overview</div>' +
+          '<h3>Hosted posture</h3>' +
+          '<p>Start here to judge fleet posture, pick the next operator action, and keep commercial account work separate from hosted operations.</p>' +
+        '</div>' +
+      '</div>' +
       '<div class="account-command-deck">' +
         '<div class="account-overview-card">' +
           '<div class="account-overview-lead">' +
-            '<div class="account-panel-kicker">Hosted posture</div>' +
+            '<div class="account-panel-kicker">Fleet posture</div>' +
             '<h3>' + escapeHTML(postureTitle) + '</h3>' +
             '<p>' + escapeHTML(postureCopy) + '</p>' +
             '<div class="account-overview-callout">' + escapeHTML(account.kind === 'msp'
