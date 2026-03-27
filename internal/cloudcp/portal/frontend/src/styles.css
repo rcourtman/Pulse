@@ -662,6 +662,66 @@ header .logout-btn:hover,
   padding: 2px 4px 0;
 }
 
+.workspace-list-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.workspace-list-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 4px 4px 10px;
+}
+
+.workspace-list-summary {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ink-soft);
+  max-width: 720px;
+}
+
+.workspace-list-stats {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.workspace-list-stat {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: var(--panel-muted);
+  color: var(--ink-soft);
+  font-size: 12px;
+}
+
+.workspace-list-stat strong {
+  margin-right: 5px;
+  color: var(--ink);
+}
+
+.workspace-list-stat-attention strong {
+  color: var(--danger);
+}
+
+.workspace-list-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) 120px 120px 180px;
+  gap: 14px;
+  padding: 0 16px 6px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
 .workspace-list {
   display: flex;
   flex-direction: column;
@@ -896,6 +956,18 @@ header .logout-btn:hover,
   gap: 10px;
 }
 
+.team-roster-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 120px auto;
+  gap: 16px;
+  padding: 0 8px 2px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
 .team-member-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 120px auto;
@@ -931,6 +1003,7 @@ header .logout-btn:hover,
   justify-content: end;
   gap: 10px;
   flex-wrap: wrap;
+  min-width: 0;
 }
 
 .team-member-role-summary {
@@ -990,29 +1063,51 @@ header .logout-btn:hover,
   gap: 12px;
 }
 
-.service-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 12px;
-}
-
-.service-card {
+.service-action-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 16px;
+  gap: 10px;
 }
 
-.service-card-button {
-  width: 100%;
-  text-align: left;
-  cursor: pointer;
+.service-action-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: center;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--panel);
 }
 
-.service-card:hover,
-.service-card-button:hover {
-  border-color: var(--accent);
-  box-shadow: var(--shadow-sm);
+.service-action-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.service-action-copy h3 {
+  margin: 0;
+  font-size: 19px;
+  line-height: 1.08;
+  letter-spacing: -0.03em;
+}
+
+.service-action-copy p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--ink-soft);
+  max-width: 760px;
+}
+
+.service-action-cta {
+  display: flex;
+  align-items: center;
+}
+
+.service-action-button {
+  min-width: 92px;
 }
 
 .service-panel {
@@ -1227,6 +1322,10 @@ header .logout-btn:hover,
   .workspace-management-content {
     grid-template-columns: 1fr;
   }
+
+  .workspace-list-head {
+    display: none;
+  }
 }
 
 @media (max-width: 920px) {
@@ -1239,13 +1338,13 @@ header .logout-btn:hover,
     grid-template-columns: 1fr;
   }
 
-  .workspace-list,
-  .service-grid {
+  .workspace-row,
+  .workspace-row-main {
     grid-template-columns: 1fr;
   }
 
-  .workspace-row,
-  .workspace-row-main {
+  .workspace-list-toolbar,
+  .service-action-row {
     grid-template-columns: 1fr;
   }
 }
@@ -1295,6 +1394,7 @@ header .logout-btn:hover,
   }
 
   .team-member-row,
+  .team-roster-head,
   .team-member-controls {
     grid-template-columns: 1fr;
     align-items: stretch;

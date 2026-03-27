@@ -18,6 +18,8 @@ function roleLabel(role: string): string {
       return 'Tech';
     case 'read_only':
       return 'Read-only';
+    case 'member':
+      return 'Member';
     default:
       return role || 'Member';
   }
@@ -215,6 +217,18 @@ function renderTeamMemberRow(accountID: string, member: PortalTeamMember, isOwne
   return row;
 }
 
+function ensureRosterHead(container: HTMLElement): void {
+  var existing = container.querySelector('.team-roster-head');
+  if (existing) return;
+  var head = document.createElement('div');
+  head.className = 'team-roster-head';
+  head.innerHTML =
+    '<span>Operator</span>' +
+    '<span>Access</span>' +
+    '<span>Controls</span>';
+  container.appendChild(head);
+}
+
 export function renderAddWorkspaceSection(accountID: string, entry: PortalAccountUIEntry): void {
   var form = getElement<HTMLElement>('add-ws-form-' + accountID);
   var spinner = getElement<HTMLElement>('ws-spinner-' + accountID);
@@ -252,6 +266,7 @@ export function renderTeamSection(accountID: string, entry: PortalAccountUIEntry
   }
 
   roster.textContent = '';
+  ensureRosterHead(roster);
   for (var i = 0; i < entry.teamQuery.data.length; i += 1) {
     var member = entry.teamQuery.data[i];
     roster.appendChild(renderTeamMemberRow(accountID, member, isOwner));

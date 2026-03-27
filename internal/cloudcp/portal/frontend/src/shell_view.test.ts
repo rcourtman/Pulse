@@ -162,7 +162,8 @@ describe('shell view', function() {
     expect(html).toContain('Invite someone new');
     expect(html).toContain('People on this account');
     expect(html).toContain('data-action="workspace-action"');
-    expect(html).toContain('service-card-button');
+    expect(html).toContain('service-action-row');
+    expect(html).toContain('service-action-button');
     expect(html).toContain('id="open-retrieve-service"');
     expect(html).toContain('id="data-service-panel"');
   });

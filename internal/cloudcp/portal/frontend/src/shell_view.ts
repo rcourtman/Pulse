@@ -102,6 +102,28 @@ function healthBadgeHTML(workspace: PortalWorkspaceSummary): string {
   return '<span class="badge badge-checking">Checking</span>';
 }
 
+function renderServiceActionRow(
+  id: string,
+  kicker: string,
+  title: string,
+  description: string,
+  panelID: string,
+  focusID: string
+): string {
+  return (
+    '<div class="service-action-row">' +
+      '<div class="service-action-copy">' +
+        '<span class="service-card-kicker">' + kicker + '</span>' +
+        '<h3>' + title + '</h3>' +
+        '<p>' + description + '</p>' +
+      '</div>' +
+      '<div class="service-action-cta">' +
+        '<button class="btn-secondary service-action-button" type="button" id="' + id + '" data-account-service-action="open-service-panel" data-account-service-panel="' + panelID + '" data-account-service-focus="' + focusID + '" data-shell-target="services">Open</button>' +
+      '</div>' +
+    '</div>'
+  );
+}
+
 function workspaceStatusCopy(workspace: PortalWorkspaceSummary): string {
   var status = workspaceHealthState(workspace);
   if (status === 'healthy') return 'Live updates and health checks are currently good.';
@@ -342,6 +364,9 @@ function renderAccountOverviewSection(account: PortalAccountSummary): string {
 
 function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPIBasePath: string): string {
   var workspaces = Array.isArray(account.workspaces) ? account.workspaces : [];
+  var healthyCount = countWorkspacesByHealth(workspaces, 'healthy');
+  var checkingCount = countWorkspacesByHealth(workspaces, 'checking');
+  var unhealthyCount = countWorkspacesByHealth(workspaces, 'unhealthy');
   var workspaceManagement = '';
   if (account.can_manage) {
     workspaceManagement =
@@ -388,9 +413,26 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
   }
 
   var workspaceHTML = workspaces.length
-    ? '<div class="workspace-list">' + workspaces.map(function(workspace) {
+    ? '<div class="workspace-list-wrap">' +
+        '<div class="workspace-list-toolbar">' +
+          '<div class="workspace-list-summary">Review the hosted fleet, open a workspace, and keep lifecycle actions explicit.</div>' +
+          '<div class="workspace-list-stats">' +
+            '<span class="workspace-list-stat"><strong>' + String(workspaces.length) + '</strong> total</span>' +
+            '<span class="workspace-list-stat"><strong>' + String(healthyCount) + '</strong> healthy</span>' +
+            '<span class="workspace-list-stat"><strong>' + String(checkingCount) + '</strong> checking</span>' +
+            '<span class="workspace-list-stat workspace-list-stat-attention"><strong>' + String(unhealthyCount) + '</strong> needs attention</span>' +
+          '</div>' +
+        '</div>' +
+        '<div class="workspace-list-head">' +
+          '<span>Workspace</span>' +
+          '<span>Health</span>' +
+          '<span>Lifecycle</span>' +
+          '<span>Actions</span>' +
+        '</div>' +
+        '<div class="workspace-list">' + workspaces.map(function(workspace) {
         return renderWorkspaceCard(account, workspace, accountAPIBasePath);
-      }).join('') + '</div>'
+      }).join('') + '</div>' +
+      '</div>'
     : '<div class="empty-state"><p>No hosted workspaces yet. Create one to get started.</p></div>';
 
   return (
@@ -398,8 +440,8 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
       '<div class="account-stage-header">' +
         '<div>' +
           '<div class="account-panel-kicker">Workspace fleet</div>' +
-          '<h3>Open hosted Pulse workspaces</h3>' +
-          '<p>Review fleet health, move into a workspace, and keep lifecycle actions explicit.</p>' +
+          '<h3>Hosted fleet</h3>' +
+          '<p>Use the fleet view to open workspaces, watch health posture, and keep management actions explicit.</p>' +
         '</div>' +
       '</div>' +
       workspaceHTML +
@@ -562,7 +604,7 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
           '<section class="portal-content-panel portal-content-panel-overview">' +
             '<div class="portal-top-section-header">' +
               '<div class="account-panel-kicker">' + (hosted ? 'Hosted operations' : 'Hosted access') + '</div>' +
-              '<h2>' + (hosted ? 'Run hosted accounts from one place' : 'No hosted workspaces are attached yet') + '</h2>' +
+              '<h2>' + (hosted ? 'Hosted operations' : 'No hosted workspaces are attached yet') + '</h2>' +
               '<p>' + (hosted
                 ? 'Use this area for workspace access, fleet operations, hosted billing, and team management.'
                 : 'This account does not currently have hosted workspace access. If that is unexpected, contact support while using the commercial tools below.') + '</p>' +
@@ -577,27 +619,11 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
               '</div>' +
               '<div class="service-note">' + serviceNote + '</div>' +
             '</div>' +
-            '<div class="service-grid">' +
-              '<button class="service-card service-card-button" type="button" id="open-manage-service" data-account-service-action="open-service-panel" data-account-service-panel="manage-service-panel" data-account-service-focus="manage-inline-email" data-shell-target="services">' +
-                '<span class="service-card-kicker">Billing</span>' +
-                '<h3>Manage subscriptions</h3>' +
-                '<p>Open Stripe billing access for existing self-hosted subscriptions without leaving the Pulse Account shell.</p>' +
-              '</button>' +
-              '<button class="service-card service-card-button" type="button" id="open-retrieve-service" data-account-service-action="open-service-panel" data-account-service-panel="retrieve-service-panel" data-account-service-focus="retrieve-inline-email" data-shell-target="services">' +
-                '<span class="service-card-kicker">Licenses</span>' +
-                '<h3>Retrieve licenses</h3>' +
-                '<p>Recover the latest active self-hosted license and invoice link for a commercial email address.</p>' +
-              '</button>' +
-              '<button class="service-card service-card-button" type="button" id="open-refund-service" data-account-service-action="open-service-panel" data-account-service-panel="refund-service-panel" data-account-service-focus="refund-inline-email" data-shell-target="services">' +
-                '<span class="service-card-kicker">Refunds</span>' +
-                '<h3>Refund requests</h3>' +
-                '<p>Request an immediate self-serve refund for eligible self-hosted purchases with explicit revocation confirmation.</p>' +
-              '</button>' +
-              '<button class="service-card service-card-button" type="button" id="open-data-service" data-account-service-action="open-service-panel" data-account-service-panel="data-service-panel" data-account-service-focus="data-export-email" data-shell-target="services">' +
-                '<span class="service-card-kicker">Privacy</span>' +
-                '<h3>Data and privacy</h3>' +
-                '<p>Request commercial data export or deletion without leaving the account shell.</p>' +
-              '</button>' +
+            '<div class="service-action-list">' +
+              renderServiceActionRow('open-manage-service', 'Billing', 'Manage subscriptions', 'Open Stripe billing access for existing self-hosted subscriptions without leaving the Pulse Account shell.', 'manage-service-panel', 'manage-inline-email') +
+              renderServiceActionRow('open-retrieve-service', 'Licenses', 'Retrieve licenses', 'Recover the latest active self-hosted license and invoice link for a commercial email address.', 'retrieve-service-panel', 'retrieve-inline-email') +
+              renderServiceActionRow('open-refund-service', 'Refunds', 'Refund requests', 'Request an immediate self-serve refund for eligible self-hosted purchases with explicit revocation confirmation.', 'refund-service-panel', 'refund-inline-email') +
+              renderServiceActionRow('open-data-service', 'Privacy', 'Data and privacy', 'Request commercial data export or deletion without leaving the account shell.', 'data-service-panel', 'data-export-email') +
             '</div>' +
             '<div class="service-panel" id="manage-service-panel"><div id="manage-service-root"></div></div>' +
             '<div class="service-panel" id="retrieve-service-panel"><div id="retrieve-service-root"></div></div>' +
