@@ -267,7 +267,9 @@ Every substantial task must finish by checking these questions:
     For important customer-facing UI, code-level proof is not enough by
     itself. If the surface is meant to be trusted or used normally, exercise
     it in-browser and judge whether it actually deserves more iteration in its
-    current shape.
+    current shape. If the slice changed frontend code, inspect the changed
+    surface in Playwright after the current build before treating the work as
+    progress, improvement, or done.
     They are not the work item by themselves unless the remaining gap is
     explicitly governance-only.
     For ordinary lane work, identify the runtime, product, ownership, or

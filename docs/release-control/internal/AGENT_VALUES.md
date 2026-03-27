@@ -105,7 +105,8 @@ that already belong to the canonical system.
 18. Treat browser truth as product truth for customer surfaces.
    Code-level proof matters, but customer-facing surfaces are not acceptable
    until real in-browser behavior and interaction quality are good enough to
-   deserve normal use.
+   deserve normal use. When a slice changes frontend code, inspect the changed
+   surface in Playwright before calling that slice progress or done.
 
 ## Delegation Rule
 

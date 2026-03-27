@@ -146,6 +146,12 @@ model that active and future release profiles reuse.
    untrustworthy in real browser use, the control plane should steer the
    agent toward redesigning the owning model or boundary instead of
    continuing narrow same-shape iteration on that weak baseline.
+21. Frontend slices require browser proof at the browser layer.
+   For frontend or UI changes, a build and code-level tests are not enough to
+   call the slice progress. The changed surface must be exercised in
+   Playwright after the current build, and that browser inspection should
+   inform whether the slice is acceptable, still prototype-grade, or needs a
+   deeper redesign.
 
 ## Canonical Files
 
