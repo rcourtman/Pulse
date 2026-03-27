@@ -209,6 +209,13 @@ Own canonical runtime payload shapes between backend and frontend.
     flow must expose direct navigation into `/dashboard` and
     `/settings/infrastructure/operations` rather than leaving the operator on a
     transport-only status readout.
+19. Keep the shared first-host detection contract explicit on `/api/state` as
+    used by
+    `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx`:
+    the canonical `connectedInfrastructure` projection must stay suitable for
+    detecting the first active reporting system during install so brand-new
+    operators can receive the first success handoff without typing a hostname
+    or agent ID.
 
 ## Current State
 

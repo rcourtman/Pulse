@@ -162,7 +162,11 @@ management, and fleet control surfaces.
    When the first host reports successfully, the install workflow must treat
    that as a completion handoff with direct navigation into `/dashboard` and
    `/settings/infrastructure/operations` instead of leaving operators on a
-   generic lookup result.
+   generic lookup result. When the workspace starts from zero active connected
+   infrastructure and install commands are available, the same lifecycle path
+   must auto-watch the canonical `/api/state` projection for the first
+   reporting host rather than requiring a brand-new operator to know and type
+   a hostname or agent ID just to see the first success handoff.
 9. Keep `frontend-modern/src/components/SetupWizard/SetupCompletionPanel.tsx`
    ordered around the actual first-run operator sequence: credentials that must
    be saved now should be visible before the operator leaves the screen, and

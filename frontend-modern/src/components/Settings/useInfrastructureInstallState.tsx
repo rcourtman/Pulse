@@ -1,9 +1,9 @@
-import { createEffect, createMemo, createSignal, onMount } from 'solid-js';
+import { createEffect, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
 import { useNavigate } from '@solidjs/router';
 import { MonitoringAPI } from '@/api/monitoring';
 import { SecurityAPI, type APITokenRecord } from '@/api/security';
 import { notificationStore } from '@/stores/notifications';
-import { type AgentLookupResponse } from '@/types/api';
+import type { AgentLookupResponse, ConnectedInfrastructureItem } from '@/types/api';
 import type { SecurityStatus } from '@/types/config';
 import {
   AGENT_CONFIG_READ_SCOPE,
@@ -43,6 +43,35 @@ export interface InfrastructureInstallStateOptions {
   embedded?: boolean;
 }
 
+const FIRST_HOST_AUTODETECT_POLL_MS = 3000;
+
+const isActiveInfrastructureItem = (item: ConnectedInfrastructureItem) => item.status === 'active';
+
+const pickMostRecentInfrastructureItem = (
+  items: ConnectedInfrastructureItem[],
+): ConnectedInfrastructureItem | null => {
+  if (items.length === 0) {
+    return null;
+  }
+
+  return [...items].sort((left, right) => (right.lastSeen || 0) - (left.lastSeen || 0))[0];
+};
+
+const toLookupResponseFromInfrastructureItem = (
+  item: ConnectedInfrastructureItem,
+): AgentLookupResponse => ({
+  success: true,
+  agent: {
+    id: item.scopeAgentId?.trim() || item.uninstallAgentId?.trim() || item.id,
+    hostname: item.hostname?.trim() || item.displayName?.trim() || item.name.trim() || item.id,
+    displayName: item.displayName?.trim() || item.name.trim() || undefined,
+    status: item.healthStatus?.trim() || item.status,
+    connected: true,
+    lastSeen: item.lastSeen || Date.now(),
+    agentVersion: item.version?.trim() || undefined,
+  },
+});
+
 export const useInfrastructureInstallState = (
   options: InfrastructureInstallStateOptions = {},
 ) => {
@@ -60,6 +89,8 @@ export const useInfrastructureInstallState = (
   const [lookupResult, setLookupResult] = createSignal<AgentLookupResponse | null>(null);
   const [lookupError, setLookupError] = createSignal<string | null>(null);
   const [lookupLoading, setLookupLoading] = createSignal(false);
+  const [autoLookupActive, setAutoLookupActive] = createSignal(false);
+  const [lookupWasAutoDetected, setLookupWasAutoDetected] = createSignal(false);
   const [insecureMode, setInsecureMode] = createSignal(false);
   const [enableCommands, setEnableCommands] = createSignal(false);
   const [installProfile, setInstallProfile] = createSignal<InstallProfile>('auto');
@@ -236,9 +267,77 @@ Generate a scoped install token below before copying Unified Agent install comma
     return currentToken();
   };
 
+  createEffect(() => {
+    const shouldAutoDetectFirstHost =
+      commandsUnlocked() && !lookupValue().trim() && !lookupResult()?.agent?.connected;
+
+    if (!shouldAutoDetectFirstHost) {
+      setAutoLookupActive(false);
+      return;
+    }
+
+    let baselineActiveCount: number | null = null;
+    let pollInterval: number | undefined;
+    let cancelled = false;
+
+    const pollForFirstHost = async () => {
+      try {
+        const state = await MonitoringAPI.getState();
+        if (cancelled) {
+          return;
+        }
+
+        const activeItems = (state.connectedInfrastructure || []).filter(isActiveInfrastructureItem);
+        if (baselineActiveCount === null) {
+          baselineActiveCount = activeItems.length;
+        }
+
+        const shouldKeepWatching = baselineActiveCount === 0 && activeItems.length === 0;
+        setAutoLookupActive(shouldKeepWatching);
+
+        if (baselineActiveCount !== 0 || activeItems.length === 0) {
+          return;
+        }
+
+        const detectedItem = pickMostRecentInfrastructureItem(activeItems);
+        if (!detectedItem) {
+          return;
+        }
+
+        const detectedLookup = toLookupResponseFromInfrastructureItem(detectedItem);
+        setLookupResult(detectedLookup);
+        setLookupError(null);
+        setLookupWasAutoDetected(true);
+        setLookupValue(detectedLookup.agent?.hostname || detectedLookup.agent?.id || '');
+        setAutoLookupActive(false);
+
+        if (pollInterval) {
+          window.clearInterval(pollInterval);
+          pollInterval = undefined;
+        }
+      } catch (err) {
+        if (!cancelled) {
+          logger.warn('Failed to auto-detect first connected host', err);
+        }
+      }
+    };
+
+    void pollForFirstHost();
+    pollInterval = window.setInterval(pollForFirstHost, FIRST_HOST_AUTODETECT_POLL_MS);
+
+    onCleanup(() => {
+      cancelled = true;
+      setAutoLookupActive(false);
+      if (pollInterval) {
+        window.clearInterval(pollInterval);
+      }
+    });
+  });
+
   const handleLookup = async () => {
     const query = lookupValue().trim();
     setLookupError(null);
+    setLookupWasAutoDetected(false);
 
     if (!query) {
       setLookupResult(null);
@@ -268,6 +367,7 @@ Generate a scoped install token below before copying Unified Agent install comma
   const clearLookupState = () => {
     setLookupError(null);
     setLookupResult(null);
+    setLookupWasAutoDetected(false);
   };
 
   const selectedCustomCaPath = () => customCaPath().trim();
@@ -344,6 +444,7 @@ Generate a scoped install token below before copying Unified Agent install comma
   return {
     acknowledgeNoToken,
     agentUrl,
+    autoLookupActive,
     clearLookupState,
     clearSetupHandoff,
     commandSections,
@@ -370,6 +471,7 @@ Generate a scoped install token below before copying Unified Agent install comma
     lookupLoading,
     lookupResult,
     lookupValue,
+    lookupWasAutoDetected,
     openDashboard,
     openDirectProxmoxSetup,
     openInfrastructureInventory,

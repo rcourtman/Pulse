@@ -520,8 +520,9 @@ export const InfrastructureInstallerSection: Component = () => {
                 </button>
               </div>
               <p class="text-xs text-blue-800 dark:text-blue-200">
-                Enter the hostname (or agent ID) from the machine you just installed. Pulse returns
-                the latest status instantly.
+                {state.autoLookupActive()
+                  ? 'Pulse is watching for the first reporting host automatically. Enter a hostname or agent ID only if you want to check a specific machine right now.'
+                  : 'Enter the hostname (or agent ID) from the machine you just installed. Pulse returns the latest status instantly.'}
               </p>
               <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
                 <input
@@ -572,7 +573,9 @@ export const InfrastructureInstallerSection: Component = () => {
                             }`}
                           >
                             {isConnected()
-                              ? `${agent().displayName || agent().hostname} is reporting live telemetry to Pulse. Open the dashboard to verify your first overview, or continue in Reporting & control to inspect this host and add more infrastructure.`
+                              ? state.lookupWasAutoDetected()
+                                ? `${agent().displayName || agent().hostname} started reporting and Pulse detected it automatically. Open the dashboard to verify your first overview, or continue in Reporting & control to inspect this host and add more infrastructure.`
+                                : `${agent().displayName || agent().hostname} is reporting live telemetry to Pulse. Open the dashboard to verify your first overview, or continue in Reporting & control to inspect this host and add more infrastructure.`
                               : `${agent().displayName || agent().hostname} has been found, but Pulse is not receiving a live check-in yet. Keep the installer running on that machine and check again.`}
                           </p>
                         </div>

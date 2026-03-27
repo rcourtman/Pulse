@@ -45,6 +45,7 @@ let mockWsStore: {
 };
 
 const lookupMock = vi.fn();
+const getStateMock = vi.fn();
 const createTokenMock = vi.fn();
 const deleteAgentMock = vi.fn();
 const allowHostAgentReenrollMock = vi.fn();
@@ -98,6 +99,7 @@ describe('InfrastructureOperationsController ownership guardrails', () => {
     expect(infrastructureOperationsStateSource).not.toContain('renderInventorySection');
     expect(infrastructureOperationsStateSource).not.toContain('renderStopMonitoringDialog');
     expect(infrastructureInstallStateSource).toContain('export const useInfrastructureInstallState');
+    expect(infrastructureInstallStateSource).toContain('MonitoringAPI.getState()');
     expect(infrastructureReportingStateSource).toContain(
       'export const useInfrastructureReportingState',
     );
@@ -134,6 +136,7 @@ vi.mock('@/App', () => ({
 
 vi.mock('@/api/monitoring', () => ({
   MonitoringAPI: {
+    getState: (...args: unknown[]) => getStateMock(...args),
     lookupAgent: (...args: unknown[]) => lookupMock(...args),
     deleteAgent: (...args: unknown[]) => deleteAgentMock(...args),
     allowHostAgentReenroll: (...args: unknown[]) => allowHostAgentReenrollMock(...args),
@@ -463,6 +466,20 @@ const buildConnectedInfrastructureFromFixtures = ({
   return [...items, ...ignoredItems];
 };
 
+const buildMonitoringState = (
+  connectedInfrastructure: ConnectedInfrastructureItem[] = [],
+): State => ({
+  connectedInfrastructure,
+  metrics: [],
+  performance: {} as State['performance'],
+  connectionHealth: {},
+  stats: {} as State['stats'],
+  activeAlerts: [],
+  recentlyResolved: [],
+  lastUpdate: Date.now(),
+  resources: [],
+});
+
 const createIgnoredHostItem = (
   overrides?: Partial<ConnectedInfrastructureItem>,
 ): ConnectedInfrastructureItem => ({
@@ -609,6 +626,7 @@ beforeEach(() => {
   securityStatusResponse = { requiresAuth: true, apiTokenConfigured: false };
   navigateMock.mockReset();
   lookupMock.mockReset();
+  getStateMock.mockReset();
   createTokenMock.mockReset();
   deleteAgentMock.mockReset();
   allowHostAgentReenrollMock.mockReset();
@@ -627,6 +645,7 @@ beforeEach(() => {
   trackAgentInstallProfileSelectedMock.mockReset();
   refetchResourcesMock.mockReset();
   refetchResourcesMock.mockResolvedValue(mockResources());
+  getStateMock.mockResolvedValue(buildMonitoringState());
   clipboardSpy.mockReset().mockResolvedValue(undefined);
   fetchMock.mockReset();
   fetchMock.mockResolvedValue(
@@ -644,6 +663,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 
@@ -724,6 +744,50 @@ describe('InfrastructureOperationsController token generation', () => {
 });
 
 describe('InfrastructureOperationsController agent lookup', () => {
+  it('auto-detects the first connected host when install starts from zero active systems', async () => {
+    vi.useFakeTimers();
+    createTokenMock.mockResolvedValue({
+      token: 'token-auto',
+      record: {
+        id: 'token-record-auto',
+        name: 'Auto Token',
+        prefix: 'auto',
+        suffix: '1234',
+        createdAt: new Date().toISOString(),
+      },
+    });
+
+    const host = createAgent({ hostname: 'first-host.local', displayName: 'First Host' });
+    getStateMock
+      .mockResolvedValueOnce(buildMonitoringState())
+      .mockResolvedValue(buildMonitoringState(buildConnectedInfrastructureFromFixtures({ hosts: [host] })));
+
+    setupComponent();
+
+    fireEvent.click(screen.getByRole('button', { name: /Generate token/i }));
+    await waitFor(() => expect(createTokenMock).toHaveBeenCalled(), { interval: 0 });
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(/Pulse is watching for the first reporting host automatically\./i),
+      ).toBeInTheDocument();
+    });
+
+    await vi.advanceTimersByTimeAsync(3000);
+
+    await waitFor(() => expect(screen.getByText('First host connected')).toBeInTheDocument(), {
+      interval: 0,
+    });
+    expect(
+      screen.getByText(
+        'First Host started reporting and Pulse detected it automatically. Open the dashboard to verify your first overview, or continue in Reporting & control to inspect this host and add more infrastructure.',
+      ),
+    ).toBeInTheDocument();
+    expect((screen.getByPlaceholderText('Hostname or agent ID') as HTMLInputElement).value).toBe(
+      'first-host.local',
+    );
+  });
+
   it('performs agent lookup and displays results', async () => {
     createTokenMock.mockResolvedValue({
       token: 'token-123',
