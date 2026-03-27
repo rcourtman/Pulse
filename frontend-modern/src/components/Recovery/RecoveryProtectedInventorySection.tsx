@@ -177,23 +177,6 @@ export const RecoveryProtectedInventorySection: Component<
     Math.min(protectedPage() * PROTECTED_ITEMS_PAGE_SIZE, sortedRollups().length),
   );
 
-  const protectedSortLabel = createMemo(() => {
-    switch (protectedSortCol()) {
-      case 'item':
-        return 'Item';
-      case 'type':
-        return 'Item Type';
-      case 'platform':
-        return 'Platform';
-      case 'lastBackup':
-        return 'Latest Point';
-      case 'outcome':
-        return 'Outcome';
-      default:
-        return 'Latest Point';
-    }
-  });
-
   createEffect(() => {
     props.queryFilter();
     props.platformFilter();
@@ -220,12 +203,7 @@ export const RecoveryProtectedInventorySection: Component<
     >
       <div class="border-b border-border-subtle/80 bg-surface px-4 py-3">
         <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div class="flex flex-wrap items-center gap-2">
-            <div class="text-sm font-semibold text-base-content">Protected inventory</div>
-            <div class="text-xs text-muted">
-              Item class and latest-point posture stay visible in the primary grid.
-            </div>
-          </div>
+          <div class="text-sm font-semibold text-base-content">Protected inventory</div>
           <div class="flex flex-wrap items-center gap-2 text-xs">
             <span class="rounded-full border border-border-subtle bg-surface-hover/70 px-2.5 py-1 text-base-content">
               {sortedRollups().length} of {props.rollups().length} items shown
@@ -346,27 +324,6 @@ export const RecoveryProtectedInventorySection: Component<
               Stale only
             </button>
           </PageControls>
-        </div>
-      </Show>
-
-      <Show when={sortedRollups().length > 0}>
-        <div class="border-b border-border-subtle/80 bg-surface-alt/20 px-4 py-3">
-          <div class="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-            <div class="flex flex-wrap items-center gap-2 text-xs">
-              <span class="rounded-full border border-border-subtle bg-surface px-2.5 py-1 text-base-content">
-                Showing {pageStart()} - {pageEnd()}
-              </span>
-              <span class="rounded-full border border-border-subtle bg-surface px-2.5 py-1 text-base-content">
-                Page {protectedPage()} / {protectedTotalPages()}
-              </span>
-              <span class="rounded-full border border-border-subtle bg-surface px-2.5 py-1 text-base-content">
-                Sorted by {protectedSortLabel()}
-              </span>
-            </div>
-            <div class="text-xs text-muted">
-              Open any item to drill directly into its recovery events.
-            </div>
-          </div>
         </div>
       </Show>
 
@@ -514,11 +471,7 @@ export const RecoveryProtectedInventorySection: Component<
                           when={itemTypePresentation}
                           fallback={<span class="text-muted">—</span>}
                         >
-                          <span
-                            class={`inline-flex min-w-[4.75rem] justify-center rounded-full border px-2 py-1 text-[10px] font-medium ${
-                              itemTypePresentation?.badgeClasses || 'bg-surface-alt text-base-content'
-                            }`}
-                          >
+                          <span class={itemTypePresentation?.badgeClasses || 'inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-surface-alt text-base-content'}>
                             {itemTypePresentation?.label}
                           </span>
                         </Show>

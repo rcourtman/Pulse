@@ -41,7 +41,8 @@ describe('recoveryItemTypePresentation', () => {
 
   it('falls back cleanly for unknown item types', () => {
     expect(getRecoveryItemTypeLabel('custom-thing')).toBe('Custom Thing');
-    expect(getRecoveryItemTypeBadgeClass('custom-thing')).toBe('bg-surface-alt text-base-content');
+    expect(getRecoveryItemTypeBadgeClass('custom-thing')).toContain('bg-surface-alt text-base-content');
+    expect(getRecoveryItemTypeBadgeClass('custom-thing')).toContain('inline-flex items-center');
   });
 
   it('derives canonical item type keys from recovery rollups and points', () => {

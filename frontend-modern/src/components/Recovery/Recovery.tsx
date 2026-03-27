@@ -485,58 +485,40 @@ const Recovery: Component = () => {
       />
 
       <div ref={historySectionRef} class="flex flex-col gap-4">
-        <Card
-          padding="none"
-          tone="card"
-          class="overflow-hidden border-border-subtle bg-surface"
-        >
-          <div class="border-b border-border-subtle/80 bg-surface px-4 py-2.5">
-            <div class="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-              <div class="flex flex-wrap items-center gap-2">
-                <div class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                  Recovery Workspace
-                </div>
-                <span class="text-xs text-muted">
-                  Inventory first, event drill-in second, with shared item-first filters.
-                </span>
-              </div>
-              <Show when={rollupId().trim().length > 0}>
-                <span class="inline-flex w-fit items-center rounded-full border border-amber-500/25 bg-amber-500/10 px-2.5 py-1 text-xs text-amber-200">
-                  Focused drill-in
-                </span>
-              </Show>
-            </div>
-          </div>
-          <div class="bg-surface-alt/25 px-4 py-1.5">
-            <Subtabs
-              value={workspaceView()}
-              onChange={(value) => setWorkspaceView(value as RecoveryWorkspaceView)}
-              ariaLabel="Recovery data view"
-              listClass="flex flex-wrap items-center gap-3"
-              tabClass="min-h-9 px-2 py-2 text-sm"
-              tabs={[
-                {
-                  value: 'inventory',
-                  label: (
-                    <span class="inline-flex items-center gap-2">
-                      <span>Protected items</span>
-                      <span class="text-xs text-muted">{filteredRollups().length}</span>
-                    </span>
-                  ),
-                },
-                {
-                  value: 'events',
-                  label: (
-                    <span class="inline-flex items-center gap-2">
-                      <span>Recovery events</span>
-                      <span class="text-xs text-muted">{recoveryPoints.meta().total}</span>
-                    </span>
-                  ),
-                },
-              ]}
-            />
-          </div>
-        </Card>
+        <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <Subtabs
+            value={workspaceView()}
+            onChange={(value) => setWorkspaceView(value as RecoveryWorkspaceView)}
+            ariaLabel="Recovery data view"
+            listClass="flex flex-wrap items-center gap-3"
+            tabClass="min-h-9 px-2 py-2 text-sm"
+            tabs={[
+              {
+                value: 'inventory',
+                label: (
+                  <span class="inline-flex items-center gap-2">
+                    <span>Protected items</span>
+                    <span class="text-xs text-muted">{filteredRollups().length}</span>
+                  </span>
+                ),
+              },
+              {
+                value: 'events',
+                label: (
+                  <span class="inline-flex items-center gap-2">
+                    <span>Recovery events</span>
+                    <span class="text-xs text-muted">{recoveryPoints.meta().total}</span>
+                  </span>
+                ),
+              },
+            ]}
+          />
+          <Show when={rollupId().trim().length > 0}>
+            <span class="inline-flex w-fit items-center rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-300">
+              Focused drill-in
+            </span>
+          </Show>
+        </div>
 
         <Show when={workspaceView() === 'inventory'}>
           <RecoveryProtectedInventorySection

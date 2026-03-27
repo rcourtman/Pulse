@@ -9,7 +9,10 @@ export interface RecoveryItemTypePresentation {
   badgeClasses: string;
 }
 
-const DEFAULT_BADGE_CLASSES = 'bg-surface-alt text-base-content';
+const BADGE_BASE_CLASSES =
+  'inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap';
+const DEFAULT_BADGE_TONE_CLASSES = 'bg-surface-alt text-base-content';
+const DEFAULT_BADGE_CLASSES = `${BADGE_BASE_CLASSES} ${DEFAULT_BADGE_TONE_CLASSES}`;
 
 interface RecoveryItemTypeLike {
   display?: {
@@ -87,33 +90,53 @@ export const getRecoveryItemTypePresentation = (
   switch (key) {
     case 'vm': {
       const presentation = getWorkloadTypePresentation('vm');
-      return { key, label: presentation.label, badgeClasses: presentation.className };
+      return {
+        key,
+        label: presentation.label,
+        badgeClasses: `${BADGE_BASE_CLASSES} ${presentation.className}`,
+      };
     }
     case 'system-container': {
       const presentation = getWorkloadTypePresentation('system-container');
-      return { key, label: presentation.label, badgeClasses: presentation.className };
+      return {
+        key,
+        label: presentation.label,
+        badgeClasses: `${BADGE_BASE_CLASSES} ${presentation.className}`,
+      };
     }
     case 'app-container': {
       const presentation = getWorkloadTypePresentation('app-container', {
         label: 'App Container',
         title: 'Application Container',
       });
-      return { key, label: presentation.label, badgeClasses: presentation.className };
+      return {
+        key,
+        label: presentation.label,
+        badgeClasses: `${BADGE_BASE_CLASSES} ${presentation.className}`,
+      };
     }
     case 'oci-container': {
       const presentation = getWorkloadTypePresentation('oci-container');
-      return { key, label: presentation.label, badgeClasses: presentation.className };
+      return {
+        key,
+        label: presentation.label,
+        badgeClasses: `${BADGE_BASE_CLASSES} ${presentation.className}`,
+      };
     }
     case 'pod': {
       const presentation = getWorkloadTypePresentation('pod');
-      return { key, label: presentation.label, badgeClasses: presentation.className };
+      return {
+        key,
+        label: presentation.label,
+        badgeClasses: `${BADGE_BASE_CLASSES} ${presentation.className}`,
+      };
     }
     case 'pvc': {
       const presentation = getResourceTypePresentation('k8s-pvc');
       return {
         key,
         label: presentation?.label || 'PVC',
-        badgeClasses: presentation?.badgeClasses || DEFAULT_BADGE_CLASSES,
+        badgeClasses: `${BADGE_BASE_CLASSES} ${presentation?.badgeClasses || DEFAULT_BADGE_TONE_CLASSES}`,
       };
     }
     default: {
@@ -129,7 +152,7 @@ export const getRecoveryItemTypePresentation = (
         return {
           key,
           label,
-          badgeClasses: presentation.badgeClasses,
+          badgeClasses: `${BADGE_BASE_CLASSES} ${presentation.badgeClasses}`,
         };
       }
       return {

@@ -636,6 +636,13 @@ surface before it drops into `RecoveryActivitySection`, so operators reach the
 main control surface ahead of trend telemetry. The activity timeline remains
 required even when point-history loading fails, but it is secondary to the
 workspace rather than a competing top-of-page peer.
+That same recovery product surface must also stay stylistically aligned with
+established Pulse monitoring surfaces once shared primitives already exist.
+`frontend-modern/src/components/Recovery/RecoverySummary.tsx` should compose
+the shared `SummaryPanel` and `SummaryMetricCard` primitives the way
+infrastructure and workloads do, and recovery item-type labels should render
+through canonical workload/resource badge classes instead of adding
+recovery-only wrapper chrome around VM, container, or other resource badges.
 That shared unified-resource dependency now also includes policy-governed
 resource metadata on the frontend decode path: storage and recovery surfaces
 that route through `frontend-modern/src/hooks/useUnifiedResources.ts` must

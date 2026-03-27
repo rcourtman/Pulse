@@ -746,10 +746,6 @@ describe('Recovery', () => {
 
     expect(await screen.findByText('Showing 1 - 24 of 26 protected items')).toBeInTheDocument();
     expect(screen.getAllByText('Page 1 / 2').length).toBeGreaterThan(0);
-    expect(screen.getByText('Sorted by Latest Point')).toBeInTheDocument();
-    expect(
-      screen.getByText('Open any item to drill directly into its recovery events.'),
-    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Next' }));
 
