@@ -226,6 +226,7 @@ describe('Recovery', () => {
     expect(vmRow).not.toBeNull();
     expect(within(vmRow!).getByLabelText('Healthy')).toBeInTheDocument();
     expect(within(vmRow!).getAllByText('PVE').length).toBeGreaterThan(0);
+    expect(within(vmRow!).getAllByText('VM').length).toBeGreaterThan(0);
     expect(screen.queryByText('Backups By Date')).not.toBeInTheDocument();
 
     fireEvent.click(await screen.findByText('VM 123'));

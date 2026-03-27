@@ -662,6 +662,10 @@ scan pattern in its first column. Protected-item rows should lead with a clear
 status cue, the primary item name, and compact badge-backed item/platform
 context instead of relying on recovery-only rails or plain-text metadata lines
 that make the table read like a report instead of an operational grid.
+That same row contract should avoid duplicating context that already has a
+dedicated column. When `Item Type` and `Platform` columns are visible, the
+primary item cell should not restate those same badges on desktop; duplicate
+context belongs only as a small-screen fallback when those columns collapse.
 That same inventory surface should use structural grouping to surface posture,
 not just local row styling. When the protected-item page mixes healthy and
 problematic coverage, the table body should section attention items ahead of
