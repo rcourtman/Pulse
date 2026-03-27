@@ -42,15 +42,7 @@ body {
     BlinkMacSystemFont,
     "Helvetica Neue",
     sans-serif;
-  background:
-    radial-gradient(
-      circle at top left,
-      rgba(11, 106, 114, 0.045),
-      transparent 28%),
-    linear-gradient(
-      180deg,
-      #f7f8fa 0%,
-      #f1f3f6 100%);
+  background: #f3f4f6;
   color: var(--ink);
 }
 a {
@@ -171,15 +163,7 @@ header .logout-btn:hover,
   padding: 30px;
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
-  background:
-    linear-gradient(
-      135deg,
-      rgba(11, 106, 114, 0.035),
-      rgba(255, 255, 255, 0) 38%),
-    linear-gradient(
-      180deg,
-      rgba(255, 255, 255, 0.98),
-      rgba(248, 250, 252, 0.98));
+  background: rgba(255, 255, 255, 0.98);
   box-shadow: var(--shadow-md);
 }
 .portal-hero-copy {
@@ -509,11 +493,7 @@ header .logout-btn:hover,
   display: flex;
   flex-direction: column;
   gap: 16px;
-  background:
-    linear-gradient(
-      180deg,
-      var(--panel),
-      var(--panel-strong));
+  background: var(--panel);
   grid-column: 1;
 }
 .add-workspace-form {
@@ -604,11 +584,7 @@ header .logout-btn:hover,
   box-shadow: var(--shadow-md);
 }
 .workspace-management-panel {
-  background:
-    linear-gradient(
-      180deg,
-      rgba(255, 253, 248, 0.98),
-      rgba(245, 238, 226, 0.98));
+  background: var(--panel);
 }
 .workspace-management-content {
   display: grid;
