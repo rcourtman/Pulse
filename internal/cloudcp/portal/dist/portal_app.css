@@ -1101,10 +1101,21 @@ header .logout-btn:hover,
   grid-template-columns: minmax(0, 1.65fr) minmax(320px, 0.92fr);
   gap: 14px;
 }
+.team-side-column {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
 .team-roster,
 .team-invite-panel {
   background: #fff;
   border-color: var(--line);
+}
+.team-policy-panel {
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
 }
 .team-panel-heading {
   margin-bottom: 12px;
@@ -1232,27 +1243,32 @@ header .logout-btn:hover,
   flex-direction: column;
   gap: 12px;
 }
-.team-invite-guide {
+.team-policy-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 10px 12px;
+  gap: 0;
   border: 1px solid var(--line);
   border-radius: 10px;
-  background: #fff;
+  background: var(--panel-muted);
+  overflow: hidden;
 }
-.team-invite-guide-row {
+.team-policy-row {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
+  padding: 12px 14px;
+  border-top: 1px solid var(--line);
 }
-.team-invite-guide-row strong {
+.team-policy-row:first-child {
+  border-top: none;
+}
+.team-policy-row strong {
   font-size: 12px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--ink-muted);
 }
-.team-invite-guide-row span {
+.team-policy-row span {
   font-size: 12px;
   line-height: 1.4;
   color: var(--ink-soft);

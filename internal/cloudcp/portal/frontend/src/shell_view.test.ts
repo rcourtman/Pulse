@@ -169,6 +169,8 @@ describe('shell view', function() {
     expect(html).toContain('data-action="clear-workspace-selection"');
     expect(html).toContain('Team management');
     expect(html).toContain('Invite someone new');
+    expect(html).toContain('Access model');
+    expect(html).toContain('Workspace operations without billing ownership.');
     expect(html).toContain('People on this account');
     expect(html).toContain('data-action="workspace-action"');
     expect(html).toContain('service-action-row');

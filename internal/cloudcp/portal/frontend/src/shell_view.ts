@@ -579,6 +579,20 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
 }
 
 function renderAccountTeamSection(account: PortalAccountSummary): string {
+  var accessPolicy =
+    '<div class="team-policy-panel">' +
+      '<div class="team-panel-heading">' +
+        '<h4>Access model</h4>' +
+        '<p>Assign the smallest role that still lets someone do the work they own on this account.</p>' +
+      '</div>' +
+      '<div class="team-policy-list">' +
+        '<div class="team-policy-row"><strong>Owner</strong><span>Billing, team access, and full hosted control.</span></div>' +
+        '<div class="team-policy-row"><strong>Admin</strong><span>Hosted operations plus billing for the account.</span></div>' +
+        '<div class="team-policy-row"><strong>Tech</strong><span>Workspace operations without billing ownership.</span></div>' +
+        '<div class="team-policy-row"><strong>Read-only</strong><span>State review and verification without control-plane changes.</span></div>' +
+      '</div>' +
+    '</div>';
+
   return (
     '<section class="account-content-panel account-content-panel-team">' +
       '<section class="team-management-panel team-section team-section-shell" id="team-section-' +
@@ -609,31 +623,29 @@ function renderAccountTeamSection(account: PortalAccountSummary): string {
               '<div class="team-list-message">Loading…</div>' +
             '</div>' +
           '</div>' +
-          '<div class="team-invite-panel">' +
-            '<div class="team-panel-heading">' +
-              '<h4>Invite someone new</h4>' +
-              '<p>Add another operator with the minimum role they need for this account.</p>' +
-            '</div>' +
-            '<div class="team-invite">' +
-              '<div><label for="invite-email-' +
-              escapeAttr(account.id) +
-              '">Email</label><input type="email" id="invite-email-' +
-              escapeAttr(account.id) +
-              '" placeholder="user@example.com" autocomplete="off"></div>' +
-              '<div><label for="invite-role-' +
-              escapeAttr(account.id) +
-              '">Role</label><select id="invite-role-' +
-              escapeAttr(account.id) +
-              '"><option value="admin">Admin</option><option value="tech">Tech</option><option value="read_only">Read-only</option></select></div>' +
-              '<div class="team-invite-guide">' +
-                '<div class="team-invite-guide-row"><strong>Admin</strong><span>Billing and hosted operations.</span></div>' +
-                '<div class="team-invite-guide-row"><strong>Tech</strong><span>Operational access without billing control.</span></div>' +
-                '<div class="team-invite-guide-row"><strong>Read-only</strong><span>Review hosted state without making changes.</span></div>' +
+          '<div class="team-side-column">' +
+            '<div class="team-invite-panel">' +
+              '<div class="team-panel-heading">' +
+                '<h4>Invite someone new</h4>' +
+                '<p>Add another operator with the minimum role they need for this account.</p>' +
               '</div>' +
-              '<button type="button" class="btn-primary btn-compact" data-action="invite-member" data-account-id="' +
-              escapeAttr(account.id) +
-              '">Invite</button>' +
+              '<div class="team-invite">' +
+                '<div><label for="invite-email-' +
+                escapeAttr(account.id) +
+                '">Email</label><input type="email" id="invite-email-' +
+                escapeAttr(account.id) +
+                '" placeholder="user@example.com" autocomplete="off"></div>' +
+                '<div><label for="invite-role-' +
+                escapeAttr(account.id) +
+                '">Role</label><select id="invite-role-' +
+                escapeAttr(account.id) +
+                '"><option value="admin">Admin</option><option value="tech">Tech</option><option value="read_only">Read-only</option></select></div>' +
+                '<button type="button" class="btn-primary btn-compact" data-action="invite-member" data-account-id="' +
+                escapeAttr(account.id) +
+                '">Invite</button>' +
+              '</div>' +
             '</div>' +
+            accessPolicy +
           '</div>' +
         '</div>' +
       '</section>' +
