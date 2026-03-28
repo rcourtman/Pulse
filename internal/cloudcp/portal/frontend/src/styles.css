@@ -2201,11 +2201,19 @@ header .logout-btn:hover,
   color: var(--ink-soft);
 }
 
-.service-empty-stack {
+.service-empty-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1.08fr) minmax(260px, 0.92fr);
+  gap: 12px;
+  margin-top: 12px;
+  align-items: start;
+}
+
+.service-empty-primary,
+.service-empty-side {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  margin-top: 12px;
 }
 
 .service-empty-section {
@@ -2216,6 +2224,10 @@ header .logout-btn:hover,
   border: 1px solid var(--line);
   border-radius: 12px;
   background: #fbfcfd;
+}
+
+.service-empty-section-compact {
+  gap: 8px;
 }
 
 .service-empty-column-title {
@@ -2373,7 +2385,7 @@ header .logout-btn:hover,
 .service-empty-checklist {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 0;
 }
 
 .service-empty-check {
@@ -2625,6 +2637,7 @@ header .logout-btn:hover,
   .account-overview-card,
   .service-shell,
   .service-action-list,
+  .service-empty-shell,
   .service-empty-points,
   .workspace-operations-shell {
     grid-template-columns: 1fr;
@@ -2772,6 +2785,7 @@ header .logout-btn:hover,
 
   .service-action-row,
   .service-shell,
+  .service-empty-shell,
   .workspace-operations-shell,
   .account-overview-card,
   .account-overview-secondary,

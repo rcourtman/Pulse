@@ -973,35 +973,39 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
                 '<div class="service-detail-shell">' +
                   '<div class="service-panel service-panel-empty visible" id="service-panel-empty">' +
                     '<div class="account-panel-kicker">Active service desk</div>' +
-                    '<h3>Choose a commercial desk</h3>' +
+                    '<h3>Choose a desk</h3>' +
                     '<p>Open one commercial request from the navigator and keep it in this desk until it is finished.</p>' +
-                    '<div class="service-empty-stack">' +
-                      '<div class="service-empty-section">' +
-                        '<div class="service-empty-column-title">Request rules</div>' +
-                        '<div class="service-empty-points service-empty-points-stack">' +
-                          '<div class="service-empty-point"><strong>Verify first</strong><span>Each desk confirms the commercial email before opening sensitive actions.</span></div>' +
-                          '<div class="service-empty-point"><strong>Stay focused</strong><span>Keep one commercial request in flight instead of bouncing between desks.</span></div>' +
+                    '<div class="service-empty-shell">' +
+                      '<div class="service-empty-primary">' +
+                        '<div class="service-empty-section service-empty-section-compact">' +
+                          '<div class="service-empty-column-title">Desk coverage</div>' +
+                          '<div class="service-empty-flow-list">' +
+                            '<div class="service-empty-flow"><strong>Billing desk</strong><span>Stripe customer portal access for invoices, payment methods, and plan changes.</span></div>' +
+                            '<div class="service-empty-flow"><strong>License desk</strong><span>Recover the latest active self-hosted license and the matching invoice link.</span></div>' +
+                            '<div class="service-empty-flow"><strong>Refund desk</strong><span>Check eligibility before revoking active commercial access.</span></div>' +
+                            '<div class="service-empty-flow"><strong>Privacy desk</strong><span>Request export or deletion without leaving Pulse Account.</span></div>' +
+                          '</div>' +
+                        '</div>' +
+                        '<div class="service-empty-section service-empty-section-compact">' +
+                          '<div class="service-empty-column-title">Desk rules</div>' +
+                          '<div class="service-empty-points service-empty-points-stack">' +
+                            '<div class="service-empty-point"><strong>Verify first</strong><span>Each desk confirms the commercial email before opening sensitive actions.</span></div>' +
+                            '<div class="service-empty-point"><strong>Stay focused</strong><span>Keep one commercial request in flight instead of bouncing between desks.</span></div>' +
+                          '</div>' +
                         '</div>' +
                       '</div>' +
-                      '<div class="service-empty-section">' +
-                        '<div class="service-empty-column-title">Desk coverage</div>' +
-                        '<div class="service-empty-flow-list">' +
-                          '<div class="service-empty-flow"><strong>Billing desk</strong><span>Stripe customer portal access for invoices, payment methods, and plan changes.</span></div>' +
-                          '<div class="service-empty-flow"><strong>License desk</strong><span>Recover the latest active self-hosted license and the matching invoice link.</span></div>' +
-                          '<div class="service-empty-flow"><strong>Refund desk</strong><span>Check eligibility before revoking active commercial access.</span></div>' +
-                          '<div class="service-empty-flow"><strong>Privacy desk</strong><span>Request export or deletion without leaving Pulse Account.</span></div>' +
+                      '<div class="service-empty-side">' +
+                        '<div class="service-empty-section service-empty-section-support">' +
+                          '<div class="service-empty-column-title">Escalation</div>' +
+                          '<div class="service-empty-checklist">' +
+                            '<div class="service-empty-check"><strong>Escalate quickly</strong><span>If billing, license, refund, or privacy work does not behave as expected, escalate from this desk.</span></div>' +
+                          '</div>' +
+                          '<div class="service-empty-support">Need help with billing, refund, privacy, or license requests? <a class="portal-support-link" href="mailto:' +
+                          escapeAttr(context.bootstrap.support_email || '') +
+                          '">' +
+                          escapeHTML(context.bootstrap.support_email || '') +
+                          '</a></div>' +
                         '</div>' +
-                      '</div>' +
-                      '<div class="service-empty-section service-empty-section-support">' +
-                        '<div class="service-empty-column-title">Escalation</div>' +
-                        '<div class="service-empty-checklist">' +
-                          '<div class="service-empty-check"><strong>Escalate quickly</strong><span>If billing, license, refund, or privacy work does not behave as expected, escalate from this desk.</span></div>' +
-                        '</div>' +
-                        '<div class="service-empty-support">Need help with billing, refund, privacy, or license requests? <a class="portal-support-link" href="mailto:' +
-                        escapeAttr(context.bootstrap.support_email || '') +
-                        '">' +
-                        escapeHTML(context.bootstrap.support_email || '') +
-                        '</a></div>' +
                       '</div>' +
                     '</div>' +
                   '</div>' +

@@ -201,7 +201,7 @@ describe('shell view', function() {
     expect(html).toContain('service-action-row');
     expect(html).toContain('service-action-button');
     expect(html).toContain('id="service-panel-empty"');
-    expect(html).toContain('Choose a commercial desk');
+    expect(html).toContain('Choose a desk');
     expect(html).toContain('Active service desk');
     expect(html).toContain('Self-hosted only');
     expect(html).toContain('Desk coverage');
