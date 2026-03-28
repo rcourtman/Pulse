@@ -207,7 +207,6 @@ export const RecoveryProtectedInventorySection: Component<
                 value={props.queryFilter}
                 onChange={(value) => props.setQueryFilter(value)}
                 placeholder={getRecoveryProtectedSearchPlaceholder()}
-                class="min-w-[16rem] flex-1 !w-auto"
                 inputClass="py-1.5 text-sm"
                 clearOnEscape
                 history={{
@@ -222,7 +221,6 @@ export const RecoveryProtectedInventorySection: Component<
               count: protectedActiveFilterCount(),
             }}
             showFilters={!props.isMobile || protectedFiltersOpen()}
-            searchRowClass="flex w-full flex-wrap items-center gap-3 sm:grid sm:grid-cols-[auto,minmax(16rem,1fr)] sm:items-center"
             toolbarClass="gap-3 lg:flex-nowrap"
           >
             <LabeledFilterSelect

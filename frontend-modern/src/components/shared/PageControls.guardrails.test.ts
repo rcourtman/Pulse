@@ -100,6 +100,10 @@ describe('page controls guardrails', () => {
     expect(pageControlsSource).toContain('{...divProps}');
     expect(recoveryProtectedInventorySectionSource).not.toContain('<FilterHeader');
     expect(recoveryHistorySectionSource).not.toContain('<FilterHeader');
+    expect(recoveryProtectedInventorySectionSource).not.toContain('searchRowClass=');
+    expect(recoveryHistorySectionSource).not.toContain('searchRowClass=');
+    expect(recoveryProtectedInventorySectionSource).not.toContain('!w-auto');
+    expect(recoveryHistorySectionSource).not.toContain('!w-auto');
   });
 
   it('keeps embedded workspace tabs on the canonical shared subtabs class pattern', () => {

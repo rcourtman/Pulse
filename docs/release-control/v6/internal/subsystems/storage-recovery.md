@@ -773,6 +773,11 @@ storage surface does.
 That same canonical-row rule also means the subtabs row should stand on its own
 full-width shell instead of sharing a flex line with recovery-only chips or
 adjacent badges that break the storage-style border and spacing treatment.
+That same shared page-controls contract applies to recovery search width too.
+The protected-items and recovery-events workspaces should keep the search field
+on the standard full-width shared search row, and any counts or utility cues
+should live in the toolbar actions instead of narrowing the search row through
+recovery-local grid overrides or width hacks.
 That same handoff should keep recovery on the standard Pulse summary density.
 `RecoverySummary.tsx` should use the shared default `SummaryPanel` /
 `SummaryMetricCard` rhythm that infrastructure and workloads use, instead of

@@ -134,16 +134,6 @@ export const RecoveryHistorySection: Component<RecoveryHistorySectionProps> = (p
           <PageControls
             role="group"
             aria-label="Recovery events controls"
-            searchLeading={
-              props.groupedByDay().length > 0 ? (
-                <div class="flex min-w-0 flex-wrap items-center gap-2 text-[11px] text-muted">
-                  <span>
-                    {props.groupedByDay().length} day group
-                    {props.groupedByDay().length === 1 ? '' : 's'}
-                  </span>
-                </div>
-              ) : undefined
-            }
             search={
               <SearchInput
                 value={props.queryFilter}
@@ -152,7 +142,6 @@ export const RecoveryHistorySection: Component<RecoveryHistorySectionProps> = (p
                   props.setCurrentPage(1);
                 }}
                 placeholder={getRecoveryHistorySearchPlaceholder()}
-                class="min-w-[16rem] flex-1 !w-auto"
                 inputClass="py-2 text-sm"
                 clearOnEscape
                 history={{
@@ -168,6 +157,14 @@ export const RecoveryHistorySection: Component<RecoveryHistorySectionProps> = (p
             }}
             utilityActions={
               <div class="ml-auto flex items-center gap-2">
+                <Show when={props.groupedByDay().length > 0}>
+                  <div class="flex min-w-0 flex-wrap items-center gap-2 text-[11px] text-muted">
+                    <span>
+                      {props.groupedByDay().length} day group
+                      {props.groupedByDay().length === 1 ? '' : 's'}
+                    </span>
+                  </div>
+                </Show>
                 <div class="relative">
                   <FilterActionButton
                     ref={advancedFiltersButtonRef}
@@ -354,7 +351,6 @@ export const RecoveryHistorySection: Component<RecoveryHistorySectionProps> = (p
               label: 'Reset all',
             }}
             showFilters={!props.isMobile || historyFiltersOpen()}
-            searchRowClass="flex w-full flex-wrap items-center gap-3 sm:grid sm:grid-cols-[auto,minmax(16rem,1fr)] sm:items-center"
             toolbarClass="lg:flex-nowrap"
           >
             <LabeledFilterSelect

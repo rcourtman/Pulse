@@ -209,9 +209,9 @@ describe('Recovery', () => {
     expect(screen.queryByText('Focused drill-in')).not.toBeInTheDocument();
     await screen.findByText('VM 123');
     const inventoryControls = screen.getByRole('group', { name: /protected items controls/i });
-    expect(
-      within(inventoryControls).getByPlaceholderText('Search protected items...'),
-    ).toBeInTheDocument();
+    const protectedSearch = within(inventoryControls).getByPlaceholderText('Search protected items...');
+    expect(protectedSearch).toBeInTheDocument();
+    expect(protectedSearch.closest('div.relative')?.className).toContain('w-full');
     expect(within(inventoryControls).queryByText(/^\d+ stale$/i)).not.toBeInTheDocument();
     expect(within(inventoryControls).queryByText(/never succeeded/i)).not.toBeInTheDocument();
     expect(
@@ -284,9 +284,9 @@ describe('Recovery', () => {
     expect(
       historyControls.compareDocumentPosition(historyTable) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).not.toBe(0);
-    expect(
-      within(historyControls).getByPlaceholderText('Search recovery history...'),
-    ).toBeInTheDocument();
+    const historySearch = within(historyControls).getByPlaceholderText('Search recovery history...');
+    expect(historySearch).toBeInTheDocument();
+    expect(historySearch.closest('div.relative')?.className).toContain('w-full');
     expect(within(historyTablist).getByRole('tab', { name: /protected items 2/i })).toBeInTheDocument();
     expect(within(historyTablist).getByRole('tab', { name: /recovery events 1/i })).toBeInTheDocument();
     expect(within(historyControls).getByText(/^1 day group$/i)).toBeInTheDocument();
