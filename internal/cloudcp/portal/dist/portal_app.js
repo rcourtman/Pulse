@@ -99,6 +99,8 @@
   }
   function renderWorkspaceManagement(account, entry) {
     var panel = getElement("workspace-management-" + account.id);
+    var shell = getElement("workspace-operations-shell-" + account.id);
+    var detail = getElement("workspace-operations-detail-" + account.id);
     if (!panel) return;
     var empty = getElement("workspace-management-empty-" + account.id);
     var content = getElement("workspace-management-content-" + account.id);
@@ -118,6 +120,16 @@
     for (var i = 0; i < rows.length; i += 1) {
       rows[i].classList.toggle("selected", !!workspace && rows[i].getAttribute("data-workspace-row") === workspace.id);
     }
+    if (shell) {
+      shell.classList.toggle("workspace-operations-shell-selected", hasSelection);
+      shell.classList.toggle("workspace-operations-shell-idle", !hasSelection);
+    }
+    if (detail) {
+      detail.classList.toggle("workspace-operations-detail-selected", hasSelection);
+      detail.classList.toggle("workspace-operations-detail-idle", !hasSelection);
+    }
+    panel.classList.toggle("workspace-management-panel-selected", hasSelection);
+    panel.classList.toggle("workspace-management-panel-idle", !hasSelection);
     panel.classList.add("visible");
     empty.hidden = hasSelection;
     content.hidden = !hasSelection;
@@ -1916,7 +1928,7 @@
       String(workspaces.length) + " total",
       String(readyCount) + " ready",
       String(suspendedCount) + " suspended"
-    ]) + '</div><div class="account-stage-header-actions">' + workspaceHeaderActions + '</div></div></div><div class="workspace-operations-shell"><div class="workspace-operations-main">' + workspaceHTML + '</div><div class="workspace-operations-detail">' + workspaceManagement + "</div></div></section>";
+    ]) + '</div><div class="account-stage-header-actions">' + workspaceHeaderActions + '</div></div></div><div class="workspace-operations-shell workspace-operations-shell-idle" id="workspace-operations-shell-' + escapeAttr(account.id) + '"><div class="workspace-operations-main">' + workspaceHTML + '</div><div class="workspace-operations-detail" id="workspace-operations-detail-' + escapeAttr(account.id) + '">' + workspaceManagement + "</div></div></section>";
   }
   function renderAccountTeamSection(account) {
     var accessPolicy = '<div class="team-policy-panel"><div class="team-panel-heading"><h4>Access model</h4><p>Assign the smallest role that still lets someone do the work they own on this account.</p></div><div class="team-policy-list"><div class="team-policy-row"><strong>Owner</strong><span>Billing, team access, and full hosted control.</span></div><div class="team-policy-row"><strong>Admin</strong><span>Hosted operations plus billing for the account.</span></div><div class="team-policy-row"><strong>Tech</strong><span>Workspace operations without billing ownership.</span></div><div class="team-policy-row"><strong>Read-only</strong><span>State review and verification without control-plane changes.</span></div></div></div>';

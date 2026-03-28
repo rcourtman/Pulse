@@ -120,6 +120,8 @@ function findWorkspace(account: PortalAccountSummary, workspaceID: string): Port
 
 export function renderWorkspaceManagement(account: PortalAccountSummary, entry: PortalAccountUIEntry): void {
   var panel = getElement<HTMLElement>('workspace-management-' + account.id);
+  var shell = getElement<HTMLElement>('workspace-operations-shell-' + account.id);
+  var detail = getElement<HTMLElement>('workspace-operations-detail-' + account.id);
   if (!panel) return;
   var empty = getElement<HTMLElement>('workspace-management-empty-' + account.id);
   var content = getElement<HTMLElement>('workspace-management-content-' + account.id);
@@ -140,6 +142,16 @@ export function renderWorkspaceManagement(account: PortalAccountSummary, entry: 
   for (var i = 0; i < rows.length; i += 1) {
     rows[i].classList.toggle('selected', !!workspace && rows[i].getAttribute('data-workspace-row') === workspace.id);
   }
+  if (shell) {
+    shell.classList.toggle('workspace-operations-shell-selected', hasSelection);
+    shell.classList.toggle('workspace-operations-shell-idle', !hasSelection);
+  }
+  if (detail) {
+    detail.classList.toggle('workspace-operations-detail-selected', hasSelection);
+    detail.classList.toggle('workspace-operations-detail-idle', !hasSelection);
+  }
+  panel.classList.toggle('workspace-management-panel-selected', hasSelection);
+  panel.classList.toggle('workspace-management-panel-idle', !hasSelection);
   panel.classList.add('visible');
   empty.hidden = hasSelection;
   content.hidden = !hasSelection;

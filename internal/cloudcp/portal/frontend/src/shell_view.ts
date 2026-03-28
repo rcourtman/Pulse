@@ -685,11 +685,15 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
           '<div class="account-stage-header-actions">' + workspaceHeaderActions + '</div>' +
         '</div>' +
       '</div>' +
-      '<div class="workspace-operations-shell">' +
+      '<div class="workspace-operations-shell workspace-operations-shell-idle" id="workspace-operations-shell-' +
+        escapeAttr(account.id) +
+        '">' +
         '<div class="workspace-operations-main">' +
           workspaceHTML +
         '</div>' +
-        '<div class="workspace-operations-detail">' +
+        '<div class="workspace-operations-detail" id="workspace-operations-detail-' +
+          escapeAttr(account.id) +
+          '">' +
           workspaceManagement +
         '</div>' +
       '</div>' +

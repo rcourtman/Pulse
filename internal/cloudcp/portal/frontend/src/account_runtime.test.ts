@@ -132,6 +132,8 @@ describe('account runtime', function() {
     });
 
     document.body.innerHTML =
+      '<div id="workspace-operations-shell-acct_1" class="workspace-operations-shell workspace-operations-shell-idle">' +
+      '<div id="workspace-operations-detail-acct_1" class="workspace-operations-detail workspace-operations-detail-idle">' +
       '<div id="workspace-management-acct_1" class="workspace-management-panel">' +
       '<button id="workspace-management-close-acct_1"></button>' +
       '<div id="workspace-management-empty-acct_1"></div>' +
@@ -144,6 +146,8 @@ describe('account runtime', function() {
       '<div id="workspace-management-created-acct_1"></div>' +
       '<div id="workspace-management-guidance-acct_1"></div>' +
       '<button id="workspace-management-action-acct_1"></button>' +
+      '</div>' +
+      '</div>' +
       '</div>' +
       '</div>';
 
@@ -164,6 +168,7 @@ describe('account runtime', function() {
     expect(deps.store.getAccountState().byAccountID.acct_1.selectedWorkspaceID).toBe('ws_2');
     expect(deps.store.getAccountState().byAccountID.acct_1.teamVisible).toBe(false);
     expect(deps.store.getAccountState().byAccountID.acct_1.addWorkspaceOpen).toBe(false);
+    expect(document.getElementById('workspace-operations-shell-acct_1')?.classList.contains('workspace-operations-shell-selected')).toBe(true);
     expect(document.getElementById('workspace-management-title-acct_1')?.textContent).toContain('Alpha Workspace');
     expect(document.getElementById('workspace-management-action-acct_1')?.textContent).toContain('Suspend workspace');
 

@@ -145,6 +145,8 @@ describe('account view', function() {
 
   it('renders workspace management selection from account UI state', function() {
     document.body.innerHTML =
+      '<div id="workspace-operations-shell-acct_1" class="workspace-operations-shell workspace-operations-shell-idle">' +
+      '<div id="workspace-operations-detail-acct_1" class="workspace-operations-detail workspace-operations-detail-idle">' +
       '<div id="workspace-management-acct_1" class="workspace-management-panel">' +
       '<button id="workspace-management-close-acct_1"></button>' +
       '<div id="workspace-management-empty-acct_1"></div>' +
@@ -158,10 +160,14 @@ describe('account view', function() {
       '<div id="workspace-management-guidance-acct_1"></div>' +
       '<button id="workspace-management-action-acct_1"></button>' +
       '</div>' +
+      '</div>' +
+      '</div>' +
       '</div>';
 
     renderWorkspaceManagement(createAccount(), createEntry({ selectedWorkspaceID: 'ws_1' }));
     expect(document.getElementById('workspace-management-acct_1')?.classList.contains('visible')).toBe(true);
+    expect(document.getElementById('workspace-operations-shell-acct_1')?.classList.contains('workspace-operations-shell-selected')).toBe(true);
+    expect(document.getElementById('workspace-operations-shell-acct_1')?.classList.contains('workspace-operations-shell-idle')).toBe(false);
     expect((document.getElementById('workspace-management-empty-acct_1') as HTMLElement).hidden).toBe(true);
     expect((document.getElementById('workspace-management-content-acct_1') as HTMLElement).hidden).toBe(false);
     expect(document.getElementById('workspace-management-title-acct_1')?.textContent).toContain('Alpha Workspace');
@@ -213,6 +219,7 @@ describe('account view', function() {
 
     expect(document.getElementById('add-ws-form-acct_1')?.classList.contains('visible')).toBe(true);
     expect(document.getElementById('add-ws-form-acct_2')?.classList.contains('visible')).toBe(false);
+    expect(document.getElementById('workspace-management-acct_1')?.classList.contains('workspace-management-panel-idle')).toBe(true);
     expect(document.getElementById('team-list-acct_2')?.textContent).toContain('tech@example.com');
     expect(document.getElementById('workspace-management-title-acct_2')?.textContent).toContain('Beta Workspace');
   });

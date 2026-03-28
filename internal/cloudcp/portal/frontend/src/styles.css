@@ -1375,6 +1375,20 @@ header .logout-btn:hover,
   top: 14px;
 }
 
+.workspace-operations-shell-idle {
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.workspace-operations-shell-idle .workspace-operations-main {
+  order: 1;
+}
+
+.workspace-operations-shell-idle .workspace-operations-detail {
+  order: 2;
+  position: static;
+}
+
 .workspace-management-panel { box-shadow: var(--shadow-sm); }
 
 .workspace-management-panel.visible,
@@ -1384,6 +1398,17 @@ header .logout-btn:hover,
 
 .workspace-management-panel {
   background: #fff;
+}
+
+.workspace-management-panel-idle {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fbfcfd;
+  box-shadow: none;
+}
+
+.workspace-management-panel-idle.visible {
+  box-shadow: none;
 }
 
 .workspace-management-content {
@@ -1424,6 +1449,12 @@ header .logout-btn:hover,
   gap: 10px;
 }
 
+.workspace-operations-shell-idle .workspace-management-empty-shell {
+  grid-template-columns: minmax(0, 0.96fr) minmax(0, 1.04fr);
+  gap: 14px;
+  align-items: start;
+}
+
 .workspace-management-empty-actions-card {
   display: flex;
   flex-direction: column;
@@ -1458,7 +1489,10 @@ header .logout-btn:hover,
   display: flex;
   flex-direction: column;
   gap: 0;
-  padding: 0 2px;
+  padding: 12px 14px 2px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
 }
 
 .workspace-management-empty-rule {
@@ -2526,6 +2560,10 @@ header .logout-btn:hover,
   }
 
   .workspace-management-facts {
+    grid-template-columns: 1fr;
+  }
+
+  .workspace-operations-shell-idle .workspace-management-empty-shell {
     grid-template-columns: 1fr;
   }
 
