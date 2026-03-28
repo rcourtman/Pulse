@@ -1721,6 +1721,16 @@
   function hasHostedAccounts(accounts) {
     return accounts.length > 0;
   }
+  function collectWorkspaces(accounts) {
+    var results = [];
+    for (var i = 0; i < accounts.length; i += 1) {
+      var workspaces = Array.isArray(accounts[i].workspaces) ? accounts[i].workspaces : [];
+      for (var j = 0; j < workspaces.length; j += 1) {
+        results.push(workspaces[j]);
+      }
+    }
+    return results;
+  }
   function countWorkspacesByState(workspaces, state) {
     var count = 0;
     for (var i = 0; i < workspaces.length; i += 1) {
@@ -1805,12 +1815,23 @@
     var workspaceLabel = workspaceCountLabel((account.workspaces || []).length);
     return '<section class="portal-account-context"><div class="portal-account-context-copy"><div class="portal-account-context-meta"><span class="account-eyebrow">' + escapeHTML(accountKindLabel(account)) + '</span><span class="portal-account-context-separator">/</span><span class="portal-account-context-access">' + escapeHTML(titleCase(account.role)) + ' access</span></div><div class="portal-account-context-row"><h2>' + escapeHTML(account.name) + '</h2><div class="portal-account-context-chips"><span class="account-context-chip">' + escapeHTML(account.kind_label) + '</span><span class="account-context-chip">' + escapeHTML(titleCase(account.role)) + '</span><span class="account-context-chip">' + escapeHTML(workspaceLabel) + "</span></div></div><p>" + escapeHTML(account.kind === "msp" ? "Operator workspace account" : "Hosted account operations") + "</p></div></section>";
   }
-  function shellSectionButton(section, activeSection, title, copy) {
-    return '<button class="portal-shell-nav-link' + (activeSection === section ? " active" : "") + '" type="button" data-shell-action="activate-section" data-shell-section="' + section + '"><span class="portal-shell-nav-label">' + title + '</span><span class="portal-shell-nav-copy">' + copy + "</span></button>";
+  function shellSectionButton(section, activeSection, title, copy, badge) {
+    var badgeHTML = badge ? '<span class="portal-shell-nav-badge">' + escapeHTML(badge) + "</span>" : "";
+    return '<button class="portal-shell-nav-link' + (activeSection === section ? " active" : "") + '" type="button" data-shell-action="activate-section" data-shell-section="' + section + '"><span class="portal-shell-nav-row"><span class="portal-shell-nav-label">' + title + "</span>" + badgeHTML + '</span><span class="portal-shell-nav-copy">' + copy + "</span></button>";
   }
   function renderShellNavigation(accounts, supportEmail, activeSection) {
     var hosted = hasHostedAccounts(accounts);
-    return '<aside class="portal-shell-nav" aria-label="Pulse Account sections"><div class="portal-shell-nav-header"><div class="portal-shell-nav-eyebrow">Pulse Account</div><div class="portal-shell-nav-title">' + (hosted ? "Operator console" : "Account console") + '</div><div class="portal-shell-nav-support">' + (hosted ? "Hosted operations and account services" : "Commercial account services and support") + '</div></div><div class="portal-shell-nav-group">' + shellSectionButton("overview", activeSection, "Overview", hosted ? "Posture, accounts, and quick actions" : "Account summary and access state") + shellSectionButton("workspaces", activeSection, hosted ? "Workspaces" : "Hosted access", hosted ? "Hosted fleet and lifecycle actions" : "No hosted workspaces are attached yet") + shellSectionButton("team", activeSection, "Team", hosted ? "Access and operator roster" : "Account membership") + shellSectionButton("services", activeSection, "Account services", "Licenses, billing, refunds, and privacy") + shellSectionButton("support", activeSection, "Support", hosted ? "Escalation and account support" : supportEmail || "Support contact") + "</div></aside>";
+    var workspaces = collectWorkspaces(accounts);
+    var totalWorkspaces = workspaces.length;
+    var readyWorkspaces = countReadyWorkspaces(workspaces);
+    var canManage = false;
+    for (var i = 0; i < accounts.length; i += 1) {
+      if (accounts[i].can_manage) {
+        canManage = true;
+        break;
+      }
+    }
+    return '<aside class="portal-shell-nav" aria-label="Pulse Account sections"><div class="portal-shell-nav-header"><div class="portal-shell-nav-eyebrow">Pulse Account</div><div class="portal-shell-nav-title">' + (hosted ? "Operator console" : "Account console") + '</div><div class="portal-shell-nav-support">' + (hosted ? "Hosted operations and account services" : "Commercial account services and support") + '</div></div><div class="portal-shell-nav-group">' + shellSectionButton("overview", activeSection, "Overview", hosted ? "Posture, accounts, and quick actions" : "Account summary and access state", hosted ? String(totalWorkspaces) + " total" : "Summary") + shellSectionButton("workspaces", activeSection, hosted ? "Workspaces" : "Hosted access", hosted ? "Hosted fleet and lifecycle actions" : "No hosted workspaces are attached yet", hosted ? String(readyWorkspaces) + " ready" : "None") + shellSectionButton("team", activeSection, "Team", hosted ? "Access and operator roster" : "Account membership", canManage ? "Manage" : "View") + shellSectionButton("services", activeSection, "Account services", "Licenses, billing, refunds, and privacy", "4 desks") + shellSectionButton("support", activeSection, "Support", hosted ? "Escalation and account support" : supportEmail || "Support contact", supportEmail ? "Email" : "Help") + "</div></aside>";
   }
   function renderWorkspaceCard(account, workspace, accountAPIBasePath) {
     var status = workspaceHealthState(workspace);

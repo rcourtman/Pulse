@@ -127,9 +127,13 @@ describe('shell view', function() {
 
     expect(html).toContain('portal-shell-nav');
     expect(html).toContain('Overview');
+    expect(html).toContain('3 total');
     expect(html).toContain('Workspaces');
+    expect(html).toContain('1 ready');
     expect(html).toContain('Account services');
+    expect(html).toContain('4 desks');
     expect(html).toContain('Support');
+    expect(html).toContain('Manage');
     expect(html).toContain('id="account-services-section"');
     expect(html).toContain('Self-hosted licenses and billing');
     expect(html).toContain('portal-account-context');
@@ -215,6 +219,8 @@ describe('shell view', function() {
 
     expect(html).toContain('Pulse Account');
     expect(html).toContain('Account console');
+    expect(html).toContain('Summary');
+    expect(html).toContain('None');
     expect(html).toContain('Use these account tools for self-hosted licenses, billing, refunds, and privacy actions.');
     expect(html).toContain('Choose one billing, license, refund, or privacy request and keep it contained here.');
     expect(html).toContain('Account services');

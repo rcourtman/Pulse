@@ -268,7 +268,7 @@ header .logout-btn:hover,
 }
 .portal-shell-layout {
   display: grid;
-  grid-template-columns: 188px minmax(0, 1fr);
+  grid-template-columns: 224px minmax(0, 1fr);
   gap: 0;
   align-items: start;
   border: 1px solid var(--line);
@@ -290,8 +290,8 @@ header .logout-btn:hover,
 .portal-shell-nav-header {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 12px 12px 10px;
+  gap: 5px;
+  padding: 14px 14px 12px;
   border-bottom: 1px solid var(--nav-line);
 }
 .portal-shell-nav-eyebrow {
@@ -302,31 +302,31 @@ header .logout-btn:hover,
   color: #78b6c0;
 }
 .portal-shell-nav-title {
-  font-size: 16px;
+  font-size: 18px;
   line-height: 1.02;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.04em;
   font-weight: 800;
   color: var(--nav-ink);
 }
 .portal-shell-nav-support {
-  font-size: 10px;
-  line-height: 1.4;
+  font-size: 11px;
+  line-height: 1.45;
   color: var(--nav-copy);
 }
 .portal-shell-nav-group {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 8px;
+  gap: 6px;
+  padding: 10px;
 }
 .portal-shell-nav-link {
   display: flex;
   flex-direction: column;
-  gap: 0;
+  gap: 5px;
   width: 100%;
-  padding: 9px 12px;
+  padding: 10px 12px;
   border: none;
-  border-radius: 10px;
+  border-radius: 12px;
   background: transparent;
   text-align: left;
   cursor: pointer;
@@ -339,21 +339,47 @@ header .logout-btn:hover,
   background: rgba(255, 255, 255, 0.05);
 }
 .portal-shell-nav-link.active {
-  background: rgba(120, 182, 192, 0.14);
+  background: rgba(120, 182, 192, 0.16);
   box-shadow: inset 2px 0 0 #78b6c0;
+}
+.portal-shell-nav-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 .portal-shell-nav-label {
   display: block;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
-  letter-spacing: 0.01em;
+  letter-spacing: -0.01em;
   color: var(--nav-ink);
 }
+.portal-shell-nav-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 0 7px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(225, 232, 240, 0.92);
+  white-space: nowrap;
+}
 .portal-shell-nav-copy {
-  display: none;
-  font-size: 12px;
-  line-height: 1.45;
+  display: block;
+  font-size: 11px;
+  line-height: 1.4;
   color: var(--nav-copy);
+}
+.portal-shell-nav-link.active .portal-shell-nav-badge {
+  border-color: rgba(120, 182, 192, 0.28);
+  background: rgba(120, 182, 192, 0.16);
+  color: #dff6fa;
 }
 .portal-shell-main {
   min-width: 0;

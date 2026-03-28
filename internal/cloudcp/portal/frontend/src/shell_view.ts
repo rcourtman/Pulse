@@ -75,6 +75,17 @@ function countWorkspaces(accounts: PortalAccountSummary[]): number {
   return total;
 }
 
+function collectWorkspaces(accounts: PortalAccountSummary[]): PortalWorkspaceSummary[] {
+  var results: PortalWorkspaceSummary[] = [];
+  for (var i = 0; i < accounts.length; i += 1) {
+    var workspaces = Array.isArray(accounts[i].workspaces) ? accounts[i].workspaces : [];
+    for (var j = 0; j < workspaces.length; j += 1) {
+      results.push(workspaces[j]);
+    }
+  }
+  return results;
+}
+
 function countWorkspacesByState(workspaces: PortalWorkspaceSummary[], state: string): number {
   var count = 0;
   for (var i = 0; i < workspaces.length; i += 1) {
@@ -247,10 +258,16 @@ function renderAccountContextStrip(account: PortalAccountSummary): string {
   );
 }
 
-function shellSectionButton(section: PortalShellSection, activeSection: PortalShellSection, title: string, copy: string): string {
+function shellSectionButton(section: PortalShellSection, activeSection: PortalShellSection, title: string, copy: string, badge?: string): string {
+  var badgeHTML = badge
+    ? '<span class="portal-shell-nav-badge">' + escapeHTML(badge) + '</span>'
+    : '';
   return (
     '<button class="portal-shell-nav-link' + (activeSection === section ? ' active' : '') + '" type="button" data-shell-action="activate-section" data-shell-section="' + section + '">' +
-      '<span class="portal-shell-nav-label">' + title + '</span>' +
+      '<span class="portal-shell-nav-row">' +
+        '<span class="portal-shell-nav-label">' + title + '</span>' +
+        badgeHTML +
+      '</span>' +
       '<span class="portal-shell-nav-copy">' + copy + '</span>' +
     '</button>'
   );
@@ -258,6 +275,16 @@ function shellSectionButton(section: PortalShellSection, activeSection: PortalSh
 
 function renderShellNavigation(accounts: PortalAccountSummary[], supportEmail: string, activeSection: PortalShellSection): string {
   var hosted = hasHostedAccounts(accounts);
+  var workspaces = collectWorkspaces(accounts);
+  var totalWorkspaces = workspaces.length;
+  var readyWorkspaces = countReadyWorkspaces(workspaces);
+  var canManage = false;
+  for (var i = 0; i < accounts.length; i += 1) {
+    if (accounts[i].can_manage) {
+      canManage = true;
+      break;
+    }
+  }
   return (
     '<aside class="portal-shell-nav" aria-label="Pulse Account sections">' +
       '<div class="portal-shell-nav-header">' +
@@ -266,11 +293,11 @@ function renderShellNavigation(accounts: PortalAccountSummary[], supportEmail: s
         '<div class="portal-shell-nav-support">' + (hosted ? 'Hosted operations and account services' : 'Commercial account services and support') + '</div>' +
       '</div>' +
       '<div class="portal-shell-nav-group">' +
-        shellSectionButton('overview', activeSection, 'Overview', hosted ? 'Posture, accounts, and quick actions' : 'Account summary and access state') +
-        shellSectionButton('workspaces', activeSection, hosted ? 'Workspaces' : 'Hosted access', hosted ? 'Hosted fleet and lifecycle actions' : 'No hosted workspaces are attached yet') +
-        shellSectionButton('team', activeSection, 'Team', hosted ? 'Access and operator roster' : 'Account membership') +
-        shellSectionButton('services', activeSection, 'Account services', 'Licenses, billing, refunds, and privacy') +
-        shellSectionButton('support', activeSection, 'Support', hosted ? 'Escalation and account support' : (supportEmail || 'Support contact')) +
+        shellSectionButton('overview', activeSection, 'Overview', hosted ? 'Posture, accounts, and quick actions' : 'Account summary and access state', hosted ? String(totalWorkspaces) + ' total' : 'Summary') +
+        shellSectionButton('workspaces', activeSection, hosted ? 'Workspaces' : 'Hosted access', hosted ? 'Hosted fleet and lifecycle actions' : 'No hosted workspaces are attached yet', hosted ? String(readyWorkspaces) + ' ready' : 'None') +
+        shellSectionButton('team', activeSection, 'Team', hosted ? 'Access and operator roster' : 'Account membership', canManage ? 'Manage' : 'View') +
+        shellSectionButton('services', activeSection, 'Account services', 'Licenses, billing, refunds, and privacy', '4 desks') +
+        shellSectionButton('support', activeSection, 'Support', hosted ? 'Escalation and account support' : (supportEmail || 'Support contact'), supportEmail ? 'Email' : 'Help') +
       '</div>' +
     '</aside>'
   );
