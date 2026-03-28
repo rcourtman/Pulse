@@ -34,12 +34,15 @@ import {
 } from '@/utils/recoveryRecordPresentation';
 import { getRecoveryPointPlatform } from '@/utils/recoveryPlatformModel';
 import {
+  getRecoveryItemTypePresentation,
+  getRecoveryPointItemTypeKey,
+} from '@/utils/recoveryItemTypePresentation';
+import {
   getRecoveryArtifactColumnHeaderClass,
   getRecoveryArtifactMetadataTextClass,
   getRecoveryArtifactOutcomeTextClass,
   getRecoveryArtifactRowClass,
   getRecoveryEventTimeTextClass,
-  getRecoveryPointItemTypeLabel,
   RECOVERY_GROUP_HEADER_ROW_CLASS,
   RECOVERY_GROUP_HEADER_TEXT_CLASS,
 } from '@/utils/recoveryTablePresentation';
@@ -166,7 +169,8 @@ export const RecoveryHistoryTable: Component<RecoveryHistoryTableProps> = (props
                       point.completedAt && Number.isFinite(tsMs)
                         ? formatRecoveryTimeOnly(tsMs)
                         : '—';
-                    const itemType = getRecoveryPointItemTypeLabel(point);
+                    const itemTypePresentation =
+                      getRecoveryItemTypePresentation(getRecoveryPointItemTypeKey(point));
                     const platform = normalizeSourcePlatformQueryValue(getRecoveryPointPlatform(point));
                     const mode =
                       normalizeRecoveryModeQueryValue(String(point.mode || '').toLowerCase()) ||
@@ -223,9 +227,12 @@ export const RecoveryHistoryTable: Component<RecoveryHistoryTableProps> = (props
                                 case 'type':
                                   return (
                                     <TableCell class="whitespace-nowrap px-3 py-1 text-center">
-                                      <Show when={itemType} fallback={<span class="text-muted">—</span>}>
-                                        <span class={getRecoveryArtifactMetadataTextClass()}>
-                                          {itemType}
+                                      <Show
+                                        when={itemTypePresentation}
+                                        fallback={<span class="text-muted">—</span>}
+                                      >
+                                        <span class={itemTypePresentation?.badgeClasses}>
+                                          {itemTypePresentation?.label}
                                         </span>
                                       </Show>
                                     </TableCell>
