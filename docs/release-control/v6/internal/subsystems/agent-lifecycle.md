@@ -124,6 +124,7 @@ management, and fleet control surfaces.
 7. Preserve canonical token-lifecycle reads in shared `internal/api/` auth/security helpers so lifecycle-adjacent setup and install flows do not revoke a displayed relay pairing token after `lastUsedAt` proves that an already paired device is actively depending on that credential.
 8. Preserve backend-owned Pulse Mobile relay runtime credential minting in those same shared `internal/api/` auth/security helpers so lifecycle-adjacent setup and install flows reuse the canonical mobile token route instead of reintroducing wildcard or browser-authored runtime token bundles.
 9. Preserve the dedicated backend-owned `relay:mobile:access` capability and its governed backward-compatible route inventory plus the shared helper call sites around it, so lifecycle-adjacent setup and install flows do not widen the mobile device credential back into general AI chat/execute scope ownership.
+10. Preserve shipped security-doc guidance in shared lifecycle setup helpers so `internal/api/config_setup_handlers.go` and adjacent install/setup runtime paths point operators at the running build's local security documentation route rather than GitHub `main` links.
 
 ## Forbidden Paths
 
@@ -1417,6 +1418,11 @@ Proxmox install commands in `internal/api/config_setup_handlers.go` and
 configured, the canonical agent-install-command API must return tokenless
 install transport and must not persist a new API token record just because an
 operator opened a backend-driven install surface.
+That same backend-owned setup/install boundary also owns shipped security-doc
+guidance in runtime responses and logs: `internal/api/config_setup_handlers.go`
+and adjacent lifecycle setup helpers must not point operators at GitHub
+`main` for security instructions that the running build already serves
+locally, and should use the shipped `/docs/SECURITY.md` path instead.
 The same optional-auth continuity must hold after install as well: Unified Agent
 runtime startup may not reject a blank token unless enrollment is explicitly
 enabled, agent report transport must omit auth headers when no token is

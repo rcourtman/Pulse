@@ -77,6 +77,7 @@ querying, and the operator-facing storage health presentation layer.
 16. Preserve optional-auth tokenless behavior in those same shared backend install-command helpers so adjacent transport surfaces do not implicitly persist API tokens and flip auth-configured state when an operator only requested a Proxmox install command on a token-optional Pulse instance.
 17. Preserve backend-owned Pulse Mobile relay runtime credential minting in those same shared `internal/api/` auth/security helpers so storage- and recovery-adjacent transport surfaces do not inherit browser-authored wildcard token bundles when they depend on the canonical security helper layer.
 18. Preserve the dedicated backend-owned `relay:mobile:access` capability and its governed backward-compatible route inventory plus the shared helper call sites around it, so storage- and recovery-adjacent transport surfaces do not treat the mobile relay credential as a general AI scope bundle.
+19. Preserve shipped local security-doc guidance in shared `internal/api/` config/setup helpers so storage- and recovery-adjacent transport surfaces do not reintroduce GitHub `main` security links when the running build already serves its own local security documentation route.
 
 ## Forbidden Paths
 

@@ -152,7 +152,7 @@ func (h *ConfigHandlers) handleVerifyTemperatureSSH(w http.ResponseWriter, r *ht
 			response.WriteString(fmt.Sprintf("  • %s\n", node))
 		}
 		response.WriteString("\n")
-		response.WriteString("See: https://github.com/rcourtman/Pulse/blob/main/SECURITY.md for detailed SSH configuration options.\n")
+		response.WriteString("See: " + shippedSecurityDocPath + " for detailed SSH configuration options.\n")
 	}
 
 	w.Header().Set("Content-Type", "text/plain")

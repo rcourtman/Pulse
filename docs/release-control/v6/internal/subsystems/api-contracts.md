@@ -184,6 +184,7 @@ Own canonical runtime payload shapes between backend and frontend.
 17. Governed frontend API clients open-coding `if (!response.ok) { if (isAPIResponseStatus(...)) throw new Error(...) }` status-to-user-message branches instead of using canonical shared custom-status error helpers
 18. Monitoring command-trigger clients open-coding `parseOptionalAPIResponse(response, { success: true }, ...)` success-envelope fallbacks instead of using a canonical shared success-envelope helper
 19. Governed frontend API clients open-coding `try/catch` wrappers around `apiFetchJSON(...)` just to map `402` or `404` into `[]`, `{ plans: [] }`, or `null` instead of using canonical shared API-error-status fallback helpers
+20. Backend config/settings handlers pointing operator guidance at GitHub `main` docs when the running build already ships that guidance locally under `/docs/`
 
 ## Completion Obligations
 

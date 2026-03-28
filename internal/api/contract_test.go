@@ -5708,6 +5708,15 @@ func TestContract_EmbeddedFrontendWarningUsesCanonicalDevEntrypoints(t *testing.
 	}
 }
 
+func TestContract_ShippedSecurityDocReferencesStayLocal(t *testing.T) {
+	if shippedSecurityDocPath != "/docs/SECURITY.md" {
+		t.Fatalf("expected shipped security doc path, got %q", shippedSecurityDocPath)
+	}
+	if shippedSecurityContainerNoticeDocAnchor != "/docs/SECURITY.md#critical-security-notice-for-container-deployments" {
+		t.Fatalf("expected shipped security container notice path, got %q", shippedSecurityContainerNoticeDocAnchor)
+	}
+}
+
 func mustStreamEvent(t *testing.T, eventType string, data interface{}) chat.StreamEvent {
 	t.Helper()
 

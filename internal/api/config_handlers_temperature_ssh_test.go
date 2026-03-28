@@ -87,5 +87,11 @@ func TestHandleVerifyTemperatureSSH(t *testing.T) {
 		if !bytes.Contains(rec.Body.Bytes(), []byte("invalid-host-name-for-test")) {
 			t.Error("expected affected node in failure list")
 		}
+		if !bytes.Contains(rec.Body.Bytes(), []byte("/docs/SECURITY.md")) {
+			t.Error("expected shipped security doc reference in failure guidance")
+		}
+		if bytes.Contains(rec.Body.Bytes(), []byte("github.com/rcourtman/Pulse/blob/main/SECURITY.md")) {
+			t.Error("expected failure guidance to avoid GitHub main security doc links")
+		}
 	})
 }
