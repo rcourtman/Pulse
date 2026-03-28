@@ -199,40 +199,20 @@ function renderAttentionPanel(workspaces: PortalWorkspaceSummary[]): string {
   );
 }
 
-function renderPrimaryAccountBar(account: PortalAccountSummary): string {
+function renderAccountContextStrip(account: PortalAccountSummary): string {
   var workspaceLabel = workspaceCountLabel((account.workspaces || []).length);
-  var actionHTML = '';
-
-  if (account.kind === 'msp' && account.can_manage) {
-    actionHTML +=
-      '<button type="button" class="btn-secondary btn-compact" data-action="toggle-add-workspace" data-account-id="' +
-      escapeAttr(account.id) +
-      '" data-shell-target="workspaces">Add workspace</button>';
-  }
-  if (account.has_billing && account.can_manage) {
-    actionHTML +=
-      '<button type="button" class="btn-secondary btn-compact" data-action="open-billing" data-account-id="' +
-      escapeAttr(account.id) +
-      '">Manage billing</button>';
-  }
-  if (account.can_manage) {
-    actionHTML +=
-      '<button type="button" class="btn-secondary btn-compact" data-action="toggle-team" data-account-id="' +
-      escapeAttr(account.id) +
-      '" data-shell-target="team">Manage team</button>';
-  }
 
   return (
-    '<section class="portal-account-bar">' +
-      '<div class="portal-account-bar-copy">' +
-        '<div class="portal-account-bar-meta">' +
+    '<section class="portal-account-context">' +
+      '<div class="portal-account-context-copy">' +
+        '<div class="portal-account-context-meta">' +
           '<span class="account-eyebrow">' + escapeHTML(accountKindLabel(account)) + '</span>' +
-          '<span class="portal-account-bar-separator">/</span>' +
-          '<span class="portal-account-bar-access">' + escapeHTML(titleCase(account.role)) + ' access</span>' +
+          '<span class="portal-account-context-separator">/</span>' +
+          '<span class="portal-account-context-access">' + escapeHTML(titleCase(account.role)) + ' access</span>' +
         '</div>' +
-        '<div class="portal-account-bar-row">' +
+        '<div class="portal-account-context-row">' +
           '<h2>' + escapeHTML(account.name) + '</h2>' +
-          '<div class="portal-account-bar-chips">' +
+          '<div class="portal-account-context-chips">' +
             '<span class="account-context-chip">' + escapeHTML(account.kind_label) + '</span>' +
             '<span class="account-context-chip">' + escapeHTML(titleCase(account.role)) + '</span>' +
             '<span class="account-context-chip">' + escapeHTML(workspaceLabel) + '</span>' +
@@ -240,7 +220,6 @@ function renderPrimaryAccountBar(account: PortalAccountSummary): string {
         '</div>' +
         '<p>' + escapeHTML(account.kind === 'msp' ? 'Operator workspace account' : 'Hosted account operations') + '</p>' +
       '</div>' +
-      '<div class="portal-account-bar-actions">' + actionHTML + '</div>' +
     '</section>'
   );
 }
@@ -449,7 +428,25 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
   var unhealthyCount = countWorkspacesByHealth(workspaces, 'unhealthy');
   var workspaceManagement = '';
   var addWorkspaceForm = '';
+  var workspaceHeaderActions = '';
   if (account.can_manage) {
+    if (account.kind === 'msp') {
+      workspaceHeaderActions +=
+        '<button type="button" class="btn-secondary btn-compact" data-action="toggle-add-workspace" data-account-id="' +
+        escapeAttr(account.id) +
+        '">Add workspace</button>';
+    }
+    if (account.has_billing) {
+      workspaceHeaderActions +=
+        '<button type="button" class="btn-secondary btn-compact" data-action="open-billing" data-account-id="' +
+        escapeAttr(account.id) +
+        '">Manage billing</button>';
+    }
+    workspaceHeaderActions +=
+      '<button type="button" class="btn-secondary btn-compact" data-action="toggle-team" data-account-id="' +
+      escapeAttr(account.id) +
+      '" data-shell-target="team">Manage team</button>';
+
     var workspaceDeskActions = '';
     if (account.kind === 'msp') {
       workspaceDeskActions +=
@@ -595,10 +592,13 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
   return (
     '<section class="account-content-panel account-content-panel-workspaces">' +
       '<div class="account-stage-header">' +
-        '<div>' +
-          '<div class="account-panel-kicker">Workspace fleet</div>' +
-          '<h3>Hosted fleet</h3>' +
-          '<p>Use the fleet view to open workspaces, watch health posture, and keep management actions explicit.</p>' +
+        '<div class="account-stage-header-row">' +
+          '<div>' +
+            '<div class="account-panel-kicker">Workspace fleet</div>' +
+            '<h3>Hosted fleet</h3>' +
+            '<p>Use the fleet view to open workspaces, watch health posture, and keep management actions explicit.</p>' +
+          '</div>' +
+          '<div class="account-stage-header-actions">' + workspaceHeaderActions + '</div>' +
         '</div>' +
       '</div>' +
       '<div class="workspace-operations-shell">' +
@@ -776,7 +776,7 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
       '<div class="portal-shell-layout">' +
         renderShellNavigation(accounts, context.bootstrap.support_email || '', activeSection) +
         '<div class="portal-shell-main">' +
-          (accounts.length === 1 ? renderPrimaryAccountBar(accounts[0]) : '') +
+          (accounts.length === 1 ? renderAccountContextStrip(accounts[0]) : '') +
           '<section class="portal-content-panel portal-content-panel-overview">' +
             '<div id="accounts-root">' + hostedContent + '</div>' +
           '</section>' +

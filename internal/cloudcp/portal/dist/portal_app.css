@@ -394,53 +394,47 @@ header .logout-btn:hover,
 .portal-shell-main > .portal-content-panel {
   display: none !important;
 }
-.portal-account-bar {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 18px;
-  align-items: center;
-  padding: 16px 24px 14px;
+.portal-account-context {
+  padding: 14px 24px 12px;
   border-bottom: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.98);
+  background: rgba(250, 252, 253, 0.98);
 }
-.portal-account-bar-copy {
+.portal-account-context-copy {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
-.portal-account-bar-meta {
+.portal-account-context-meta {
   display: flex;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
 }
-.portal-account-bar-separator,
-.portal-account-bar-access {
+.portal-account-context-separator,
+.portal-account-context-access {
   font-size: 12px;
   font-weight: 700;
   color: var(--ink-muted);
 }
-.portal-account-bar-row {
+.portal-account-context-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
+  gap: 14px;
   flex-wrap: wrap;
 }
-.portal-account-bar-row h2 {
+.portal-account-context-row h2 {
   margin: 0;
-  font-size: 32px;
-  line-height: 0.96;
-  letter-spacing: -0.06em;
+  font-size: 30px;
+  line-height: 0.98;
+  letter-spacing: -0.05em;
 }
-.portal-account-bar-copy p {
+.portal-account-context-copy p {
   margin: 0;
   font-size: 13px;
   line-height: 1.5;
   color: var(--ink-soft);
 }
-.portal-account-bar-chips,
-.portal-account-bar-actions {
+.portal-account-context-chips {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -896,6 +890,21 @@ header .logout-btn:hover,
   padding: 0 2px 12px;
   border-bottom: none;
   margin-bottom: 0;
+}
+.account-stage-header-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+.account-stage-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  flex: 0 0 auto;
+  padding-top: 2px;
 }
 .account-stage-header h3 {
   margin: 8px 0 0;
@@ -2026,12 +2035,10 @@ header .logout-btn:hover,
   .portal-shell-head-row {
     grid-template-columns: 1fr;
   }
-  .portal-account-bar {
-    grid-template-columns: 1fr;
+  .portal-account-context-row,
+  .account-stage-header-row {
     align-items: start;
-  }
-  .portal-account-bar-row {
-    align-items: start;
+    flex-direction: column;
   }
   .workspace-row {
     grid-template-columns: 1fr;
@@ -2060,12 +2067,11 @@ header .logout-btn:hover,
     padding: 18px;
   }
   .portal-shell-head,
-  .portal-account-bar,
+  .portal-account-context,
   .portal-content-panel {
     padding-left: 16px;
     padding-right: 16px;
   }
-  .portal-account-bar-row,
   .workspace-management-header,
   .team-management-header,
   .service-header,

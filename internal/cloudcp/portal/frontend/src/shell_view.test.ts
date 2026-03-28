@@ -132,7 +132,7 @@ describe('shell view', function() {
     expect(html).toContain('Support');
     expect(html).toContain('id="account-services-section"');
     expect(html).toContain('Self-hosted licenses and billing');
-    expect(html).toContain('portal-account-bar');
+    expect(html).toContain('portal-account-context');
     expect(html).toContain('Owner access');
     expect(html).toContain('id="accounts-root"');
     expect(html).toContain('MSP account');
@@ -153,6 +153,7 @@ describe('shell view', function() {
     expect(html).toContain('Review team access');
     expect(html).toContain('Needs review');
     expect(html).toContain('Workspace fleet');
+    expect(html).toContain('account-stage-header-actions');
     expect(html).toContain('Alpha Workspace');
     expect(html).toContain('Beta Workspace');
     expect(html).toContain('Gamma Workspace');
