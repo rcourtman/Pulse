@@ -428,7 +428,11 @@ header .logout-btn:hover,
 }
 
 .portal-account-context {
-  padding: 8px 14px 7px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: start;
+  padding: 12px 14px 12px;
   border-bottom: 1px solid var(--line);
   background: #fff;
 }
@@ -437,6 +441,7 @@ header .logout-btn:hover,
   display: flex;
   flex-direction: column;
   gap: 6px;
+  min-width: 0;
 }
 
 .portal-account-context-meta {
@@ -468,7 +473,12 @@ header .logout-btn:hover,
 }
 
 .portal-account-context-copy p {
-  display: none;
+  display: block;
+  margin: 0;
+  max-width: 720px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ink-soft);
 }
 
 .portal-account-context-chips {
@@ -476,6 +486,37 @@ header .logout-btn:hover,
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.portal-account-context-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(108px, auto));
+  gap: 8px;
+}
+
+.portal-account-context-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fbfcfd;
+}
+
+.portal-account-context-stat span {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+.portal-account-context-stat strong {
+  font-size: 13px;
+  line-height: 1.2;
+  color: var(--ink);
 }
 
 .portal-shell[data-shell-section="overview"] .portal-content-panel-overview,
@@ -2481,6 +2522,14 @@ header .logout-btn:hover,
 
 @media (max-width: 920px) {
   .portal-shell-head-row {
+    grid-template-columns: 1fr;
+  }
+
+  .portal-account-context {
+    grid-template-columns: 1fr;
+  }
+
+  .portal-account-context-summary {
     grid-template-columns: 1fr;
   }
 

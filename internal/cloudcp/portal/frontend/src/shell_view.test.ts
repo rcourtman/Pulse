@@ -138,6 +138,8 @@ describe('shell view', function() {
     expect(html).toContain('Self-hosted licenses and billing');
     expect(html).toContain('portal-account-context');
     expect(html).toContain('Owner access');
+    expect(html).toContain('portal-account-context-summary');
+    expect(html).toContain('Billing enabled');
     expect(html).toContain('id="accounts-root"');
     expect(html).toContain('MSP account');
     expect(html).toContain('Acme MSP');

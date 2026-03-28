@@ -242,6 +242,7 @@ function renderAttentionPanel(workspaces: PortalWorkspaceSummary[]): string {
 
 function renderAccountContextStrip(account: PortalAccountSummary): string {
   var workspaceLabel = workspaceCountLabel((account.workspaces || []).length);
+  var billingLabel = account.has_billing ? 'Billing enabled' : 'Billing offline';
 
   return (
     '<section class="portal-account-context">' +
@@ -259,7 +260,21 @@ function renderAccountContextStrip(account: PortalAccountSummary): string {
             '<span class="account-context-chip">' + escapeHTML(workspaceLabel) + '</span>' +
           '</div>' +
         '</div>' +
-        '<p>' + escapeHTML(account.kind === 'msp' ? 'Operator workspace account' : 'Hosted account operations') + '</p>' +
+        '<p>' + escapeHTML(account.kind === 'msp' ? 'Operator workspace account for hosted fleet, team control, and account billing.' : 'Hosted account operations for workspace access, team control, and billing.') + '</p>' +
+      '</div>' +
+      '<div class="portal-account-context-summary">' +
+        '<div class="portal-account-context-stat">' +
+          '<span>Role</span>' +
+          '<strong>' + escapeHTML(titleCase(account.role)) + '</strong>' +
+        '</div>' +
+        '<div class="portal-account-context-stat">' +
+          '<span>Hosted fleet</span>' +
+          '<strong>' + escapeHTML(workspaceLabel) + '</strong>' +
+        '</div>' +
+        '<div class="portal-account-context-stat">' +
+          '<span>Commercial</span>' +
+          '<strong>' + escapeHTML(billingLabel) + '</strong>' +
+        '</div>' +
       '</div>' +
     '</section>'
   );
