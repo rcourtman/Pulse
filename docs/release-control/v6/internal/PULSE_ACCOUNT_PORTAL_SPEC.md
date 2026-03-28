@@ -176,7 +176,9 @@ Core rules:
     not badge or describe unavailable hosted tasks as though they are live.
 18. `Access` must stay action-first: roster, invite, role change, and remove
     access are the job; view-only users may review the roster but must never
-    see live controls that imply they can mutate it.
+    see live controls that imply they can mutate it. The view-only roster must
+    stay a review surface, not a per-row action table with fake disabled
+    action state.
 19. `Billing` must present one obvious billing path at a time, with hosted
     billing first when applicable and self-hosted licenses, refunds, or
     privacy as secondary job-specific paths rather than a billing essay.

@@ -259,7 +259,12 @@ describe('account view', function() {
     expect(document.querySelector('[data-action="change-role"]')).toBeNull();
     expect(document.querySelector('[data-action="remove-member"]')).toBeNull();
     expect(document.querySelector('.access-role-select')).toBeNull();
-    expect(document.getElementById('access-list-acct_1')?.textContent).toContain('View only');
+    expect(document.getElementById('access-list-acct_1')?.textContent).toContain('Operator');
+    expect(document.getElementById('access-list-acct_1')?.textContent).toContain('Role');
+    expect(document.getElementById('access-list-acct_1')?.textContent).not.toContain('Action');
+    expect(document.getElementById('access-list-acct_1')?.textContent).not.toContain('View only');
+    expect(document.querySelector('.access-roster-head')?.classList.contains('access-roster-head-readonly')).toBe(true);
+    expect(document.querySelector('.access-member-row')?.classList.contains('access-member-row-readonly')).toBe(true);
     expect(document.getElementById('access-stats-acct_1')?.textContent).toContain('Members');
   });
 

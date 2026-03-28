@@ -263,11 +263,7 @@
   function renderAccessMemberAction(accountID, member, isOwner, canManage, activeJob) {
     var group = createAccessControlCell("access-control-cell-access");
     if (!canManage) {
-      var readonlyText = document.createElement("span");
-      readonlyText.className = "access-control-locked";
-      readonlyText.textContent = "View only";
-      group.appendChild(readonlyText);
-      return group;
+      return null;
     }
     if (activeJob !== "remove") {
       var idleText = document.createElement("span");
@@ -296,7 +292,7 @@
   }
   function renderAccessMemberRow(accountID, member, isOwner, canManage, activeJob) {
     var row = document.createElement("div");
-    row.className = "access-member-row";
+    row.className = "access-member-row" + (canManage ? "" : " access-member-row-readonly");
     var identity = document.createElement("div");
     identity.className = "access-member-identity";
     var topline = document.createElement("div");
@@ -316,13 +312,16 @@
     identity.appendChild(caption);
     row.appendChild(identity);
     row.appendChild(renderAccessRoleControl(accountID, member, isOwner, canManage, activeJob));
-    row.appendChild(renderAccessMemberAction(accountID, member, isOwner, canManage, activeJob) || createAccessControlCell("access-control-cell-access"));
+    var actionCell = renderAccessMemberAction(accountID, member, isOwner, canManage, activeJob);
+    if (actionCell) {
+      row.appendChild(actionCell);
+    }
     return row;
   }
-  function renderAccessRosterHead(container, activeJob) {
+  function renderAccessRosterHead(container, activeJob, canManage) {
     var head = document.createElement("div");
-    head.className = "access-roster-head";
-    head.innerHTML = "<span>Operator</span><span>" + (activeJob === "change_role" ? "New role" : "Role") + "</span><span>" + (activeJob === "remove" ? "Remove" : "Action") + "</span>";
+    head.className = "access-roster-head" + (canManage ? "" : " access-roster-head-readonly");
+    head.innerHTML = canManage ? "<span>Operator</span><span>" + (activeJob === "change_role" ? "New role" : "Role") + "</span><span>" + (activeJob === "remove" ? "Remove" : "Action") + "</span>" : "<span>Operator</span><span>Role</span>";
     container.appendChild(head);
   }
   function renderAddWorkspaceSection(accountID, entry) {
@@ -400,7 +399,7 @@
     roster.textContent = "";
     roster.classList.remove("state-only");
     if (rosterPanel) rosterPanel.classList.remove("state-only");
-    renderAccessRosterHead(roster, activeJob);
+    renderAccessRosterHead(roster, activeJob, canManage);
     for (var i = 0; i < entry.accessQuery.data.length; i += 1) {
       var member = entry.accessQuery.data[i];
       roster.appendChild(renderAccessMemberRow(accountID, member, isOwner, canManage, activeJob));

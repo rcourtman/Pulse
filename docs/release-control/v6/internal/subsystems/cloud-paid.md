@@ -857,7 +857,9 @@ workspace list plus the real task entry points rather than an idle lifecycle
 essay; the lifecycle rail should appear only when a lifecycle or
 create-workspace job is active. `Access` follows the same rule: the hosted
 roster must be the default state, while invite, role-change, and remove
-controls appear only when that exact access job is active. `Billing` follows
+controls appear only when that exact access job is active, and a hosted
+view-only roster must stay a review surface instead of a row-by-row action
+table with fake disabled action state. `Billing` follows
 the same task-first rule: hosted billing leads when present, the self-hosted
 billing, license, refund, and privacy paths reduce to explicit job pickers,
 and the active self-hosted billing panel must stay hidden until that exact job

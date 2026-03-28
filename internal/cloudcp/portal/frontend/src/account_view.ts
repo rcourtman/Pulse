@@ -306,11 +306,7 @@ function renderAccessRoleControl(accountID: string, member: PortalAccessMember, 
 function renderAccessMemberAction(accountID: string, member: PortalAccessMember, isOwner: boolean, canManage: boolean, activeJob: PortalAccessJob): HTMLElement | null {
   var group = createAccessControlCell('access-control-cell-access');
   if (!canManage) {
-    var readonlyText = document.createElement('span');
-    readonlyText.className = 'access-control-locked';
-    readonlyText.textContent = 'View only';
-    group.appendChild(readonlyText);
-    return group;
+    return null;
   }
   if (activeJob !== 'remove') {
     var idleText = document.createElement('span');
@@ -341,7 +337,7 @@ function renderAccessMemberAction(accountID: string, member: PortalAccessMember,
 
 function renderAccessMemberRow(accountID: string, member: PortalAccessMember, isOwner: boolean, canManage: boolean, activeJob: PortalAccessJob): HTMLElement {
   var row = document.createElement('div');
-  row.className = 'access-member-row';
+  row.className = 'access-member-row' + (canManage ? '' : ' access-member-row-readonly');
 
   var identity = document.createElement('div');
   identity.className = 'access-member-identity';
@@ -368,17 +364,26 @@ function renderAccessMemberRow(accountID: string, member: PortalAccessMember, is
 
   row.appendChild(identity);
   row.appendChild(renderAccessRoleControl(accountID, member, isOwner, canManage, activeJob));
-  row.appendChild(renderAccessMemberAction(accountID, member, isOwner, canManage, activeJob) || createAccessControlCell('access-control-cell-access'));
+  var actionCell = renderAccessMemberAction(accountID, member, isOwner, canManage, activeJob);
+  if (actionCell) {
+    row.appendChild(actionCell);
+  }
   return row;
 }
 
-function renderAccessRosterHead(container: HTMLElement, activeJob: PortalAccessJob): void {
+function renderAccessRosterHead(container: HTMLElement, activeJob: PortalAccessJob, canManage: boolean): void {
   var head = document.createElement('div');
-  head.className = 'access-roster-head';
-  head.innerHTML =
-    '<span>Operator</span>' +
-    '<span>' + (activeJob === 'change_role' ? 'New role' : 'Role') + '</span>' +
-    '<span>' + (activeJob === 'remove' ? 'Remove' : 'Action') + '</span>';
+  head.className = 'access-roster-head' + (canManage ? '' : ' access-roster-head-readonly');
+  head.innerHTML = canManage
+    ? (
+      '<span>Operator</span>' +
+      '<span>' + (activeJob === 'change_role' ? 'New role' : 'Role') + '</span>' +
+      '<span>' + (activeJob === 'remove' ? 'Remove' : 'Action') + '</span>'
+    )
+    : (
+      '<span>Operator</span>' +
+      '<span>Role</span>'
+    );
   container.appendChild(head);
 }
 
@@ -463,7 +468,7 @@ export function renderAccessSection(accountID: string, entry: PortalAccountUIEnt
   roster.textContent = '';
   roster.classList.remove('state-only');
   if (rosterPanel) rosterPanel.classList.remove('state-only');
-  renderAccessRosterHead(roster, activeJob);
+  renderAccessRosterHead(roster, activeJob, canManage);
   for (var i = 0; i < entry.accessQuery.data.length; i += 1) {
     var member = entry.accessQuery.data[i];
     roster.appendChild(renderAccessMemberRow(accountID, member, isOwner, canManage, activeJob));

@@ -2247,6 +2247,11 @@ header .logout-btn:hover,
   background: #fff;
 }
 
+.access-roster-head-readonly,
+.access-member-row-readonly {
+  grid-template-columns: minmax(0, 1fr) 142px;
+}
+
 .access-member-row:first-of-type {
   border-top: none;
 }
