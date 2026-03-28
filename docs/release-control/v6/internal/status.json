@@ -1982,11 +1982,15 @@
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
-        "summary": "Relay infrastructure is at the RC floor, while broader hardening and non-blocking resilience work stay bounded to later promotion work.",
+        "summary": "Relay infrastructure is at the RC floor; the remaining residual is explicitly limited to the backend-owned mobile relay capability boundary and the later public rollout posture required for GA promotion.",
         "tracking": [
           {
             "kind": "lane-followup",
-            "id": "relay-post-rc-hardening"
+            "id": "relay-mobile-capability-boundary"
+          },
+          {
+            "kind": "lane-followup",
+            "id": "relay-public-rollout-posture"
           }
         ]
       },
@@ -3112,19 +3116,6 @@
       ]
     },
     {
-      "id": "relay-post-rc-hardening",
-      "summary": "Track broader relay hardening and non-blocking resilience work that remains outside the current RC floor, including any future narrowing of the dedicated backend-owned mobile relay capability beyond the current runtime route set.",
-      "owner": "project-owner",
-      "status": "planned",
-      "recorded_at": "2026-03-13",
-      "lane_ids": [
-        "L7"
-      ],
-      "subsystem_ids": [
-        "relay-runtime"
-      ]
-    },
-    {
       "id": "self-hosted-ga-promotion-package",
       "summary": "Track the lane-local self-hosted GA promotion package: stable candidate inputs, rollback clarity, and dry-run capture once GA promotion is actually being executed.",
       "owner": "project-owner",
@@ -3151,6 +3142,32 @@
         "storage-recovery"
       ],
       "cross_repo": false
+    },
+    {
+      "id": "relay-mobile-capability-boundary",
+      "summary": "Narrow the dedicated backend-owned mobile relay capability to the minimum supported runtime route set and require any future route expansion to land as explicit governed relay surface work rather than incidental backend reach-through.",
+      "owner": "project-owner",
+      "status": "planned",
+      "recorded_at": "2026-03-28",
+      "lane_ids": [
+        "L7"
+      ],
+      "subsystem_ids": [
+        "relay-runtime"
+      ]
+    },
+    {
+      "id": "relay-public-rollout-posture",
+      "summary": "Replace the current early-access and coming-soon relay public posture with an explicit public rollout decision only after mobile availability, onboarding language, and support expectations are intentionally promoted for normal use.",
+      "owner": "project-owner",
+      "status": "planned",
+      "recorded_at": "2026-03-28",
+      "lane_ids": [
+        "L7"
+      ],
+      "subsystem_ids": [
+        "relay-runtime"
+      ]
     }
   ],
   "coverage_gaps": [
