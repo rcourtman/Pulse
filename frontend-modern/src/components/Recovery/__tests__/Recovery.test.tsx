@@ -294,6 +294,10 @@ describe('Recovery', () => {
     ).not.toBe(0);
     const activityHeading = screen.getByText('Recovery Activity');
     expect(activityBars.parentElement?.className).toContain('h-24');
+    expect(
+      screen.queryByText('Daily recovery points across the selected history window.'),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Range$/)).not.toBeInTheDocument();
     expect(eventsWorkspaceCard).toContainElement(activityHeading);
     expect(eventsWorkspaceCard).toContainElement(historyControls);
     expect(eventsWorkspaceCard).toContainElement(historyTable);

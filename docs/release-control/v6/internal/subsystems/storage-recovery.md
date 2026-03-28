@@ -819,7 +819,10 @@ becoming a second dashboard header. `RecoveryActivitySection.tsx` should keep a
 single slim telemetry header, compact active-filter chips, a shorter chart
 frame, reduced vertical insets, and a smaller legend footprint so the events
 workspace hands off quickly from activity context to the history table instead
-of spending a disproportionate slice of the screen on chart chrome.
+of spending a disproportionate slice of the screen on chart chrome. The range
+picker and legend should share one compact control row, and the activity strip
+should not burn a separate descriptive subtitle row once the headline metrics
+already explain the chart context.
 That same events-table contract should also keep the default column set on a
 monitoring-style scan path rather than a report-export path. Recovery events
 should default to the concise columns operators need to triage quickly, while
