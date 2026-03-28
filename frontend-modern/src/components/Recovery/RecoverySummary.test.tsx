@@ -1,6 +1,7 @@
 import { render, screen } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RecoverySummary } from './RecoverySummary';
+import recoverySummarySource from './RecoverySummary.tsx?raw';
 
 describe('RecoverySummary', () => {
   afterEach(() => {
@@ -69,5 +70,10 @@ describe('RecoverySummary', () => {
     expect(screen.getByText('need attention')).toBeInTheDocument();
     expect(screen.getByText('stale items')).toBeInTheDocument();
     expect(screen.queryByText('protected items')).not.toBeInTheDocument();
+  });
+
+  it('uses the shared compact summary density mode rather than local card padding forks', () => {
+    expect(recoverySummarySource).toContain('density="compact"');
+    expect(recoverySummarySource).not.toContain('!p-1.5 sm:!p-2');
   });
 });

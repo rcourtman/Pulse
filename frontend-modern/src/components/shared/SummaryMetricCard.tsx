@@ -15,13 +15,20 @@ export interface SummaryMetricCardProps {
   emptyMessage?: string;
   /** Chart or visualization content. */
   children: JSX.Element;
+  /** Optional shared density override for compact monitoring surfaces. */
+  density?: 'default' | 'compact';
 }
 
 export function SummaryMetricCard(props: SummaryMetricCardProps) {
+  const isCompact = () => props.density === 'compact';
+
   return (
-    <Card padding="sm" class="h-full">
+    <Card
+      padding="sm"
+      class={`h-full ${isCompact() ? '!p-1.5 sm:!p-2' : ''}`.trim()}
+    >
       <div class="flex flex-col h-full">
-        <div class="flex items-center mb-1.5 min-w-0">
+        <div class={`flex min-w-0 items-center ${isCompact() ? 'mb-1' : 'mb-1.5'}`}>
           <span class="text-xs font-medium text-muted uppercase tracking-wide shrink-0">
             {props.label}
           </span>

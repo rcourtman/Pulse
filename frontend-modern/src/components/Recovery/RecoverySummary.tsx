@@ -98,9 +98,10 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
         timeRanges={RECOVERY_SUMMARY_TIME_RANGES}
         timeRangeLabels={RECOVERY_SUMMARY_TIME_RANGE_LABELS}
         testId="recovery-summary"
-        class="overflow-hidden !p-1.5 sm:!p-2.5"
+        class="overflow-hidden"
+        density="compact"
       >
-        <SummaryMetricCard label="Recovery Posture" loaded={true} hasData={hasRollups()}>
+        <SummaryMetricCard label="Recovery Posture" loaded={true} hasData={hasRollups()} density="compact">
           <div class="flex h-full flex-col gap-2">
             <div>
               <div class={`text-xl font-semibold tabular-nums ${primaryPostureMetric().valueClass}`}>
@@ -141,7 +142,7 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
           </div>
         </SummaryMetricCard>
 
-        <SummaryMetricCard label="Freshness" loaded={true} hasData={hasRollups()}>
+        <SummaryMetricCard label="Freshness" loaded={true} hasData={hasRollups()} density="compact">
           <div class="flex h-full flex-col gap-2">
             <div class="flex items-end justify-between gap-3">
               <div>
@@ -176,7 +177,7 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
           </div>
         </SummaryMetricCard>
 
-        <SummaryMetricCard label="Protected Footprint" loaded={true} hasData={hasRollups()}>
+        <SummaryMetricCard label="Protected Footprint" loaded={true} hasData={hasRollups()} density="compact">
           <div class="flex h-full flex-col gap-2">
             <div class="grid grid-cols-2 gap-3">
               <div>
@@ -215,6 +216,7 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
           loaded={props.seriesLoaded()}
           hasData={activity().hasData}
           emptyMessage={props.seriesFailed?.() ? 'Trend data unavailable' : 'No recovery activity yet'}
+          density="compact"
         >
           <div class="flex h-full flex-col gap-2">
             <div>

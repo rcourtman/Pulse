@@ -667,6 +667,14 @@ product copy, or external links back into the shared shell. Internal product
 navigation from that shell should still route through canonical shared helpers
 such as `frontend-modern/src/routing/resourceLinks.ts` rather than freezing raw
 `/recovery?...` route strings into the modal itself.
+The shared summary strip primitives now follow that same owner split.
+`frontend-modern/src/components/shared/SummaryPanel.tsx` and
+`frontend-modern/src/components/shared/SummaryMetricCard.tsx` stay the render
+shells for summary-frame spacing and card density, while monitoring surfaces
+such as recovery, infrastructure, workloads, and storage only choose from the
+owned shared density modes instead of forking summary spacing with feature-
+local padding hacks. Future summary-density work should extend those shared
+primitives rather than hard-coding compact card chrome inside one surface.
 The shared tooltip now follows that same owner split.
 `frontend-modern/src/components/shared/Tooltip.tsx` stays the render shell and
 singleton API boundary, `frontend-modern/src/components/shared/useTooltipState.ts`

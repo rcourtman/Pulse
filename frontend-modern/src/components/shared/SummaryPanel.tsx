@@ -22,19 +22,30 @@ export interface SummaryPanelProps {
   testId?: string;
   /** Extra CSS classes on the outer container. */
   class?: string;
+  /** Optional shared density override for compact monitoring surfaces. */
+  density?: 'default' | 'compact';
 }
 
 export function SummaryPanel(props: SummaryPanelProps) {
   const ranges = () => (props.timeRanges ?? SUMMARY_TIME_RANGES) as readonly string[];
   const labels = () =>
     props.timeRangeLabels ?? (SUMMARY_TIME_RANGE_LABEL as Record<string, string>);
+  const isCompact = () => props.density === 'compact';
 
   return (
     <div
       data-testid={props.testId}
-      class={`rounded-md border border-border bg-surface p-2 shadow-sm sm:p-3 ${props.class ?? ''}`}
+      class={`rounded-md border border-border bg-surface shadow-sm ${
+        isCompact() ? 'p-1.5 sm:p-2.5' : 'p-2 sm:p-3'
+      } ${props.class ?? ''}`}
     >
-      <div class="mb-2 flex flex-wrap items-center justify-between gap-2 border-b border-border-subtle px-1 pb-2 text-[11px]">
+      <div
+        class={`flex flex-wrap items-center justify-between border-b border-border-subtle text-[11px] ${
+          isCompact()
+            ? 'mb-1.5 gap-1.5 px-0.5 pb-1.5'
+            : 'mb-2 gap-2 px-1 pb-2'
+        }`}
+      >
         <div class="flex items-center gap-3">{props.headerLeft}</div>
         <Show when={props.onTimeRangeChange}>
           <div class="inline-flex shrink-0 rounded border border-border bg-surface p-0.5 text-xs">
@@ -57,7 +68,9 @@ export function SummaryPanel(props: SummaryPanelProps) {
         </Show>
       </div>
 
-      <div class="grid gap-2 sm:gap-3 grid-cols-2 lg:grid-cols-4">{props.children}</div>
+      <div class={`grid grid-cols-2 lg:grid-cols-4 ${isCompact() ? 'gap-2' : 'gap-2 sm:gap-3'}`}>
+        {props.children}
+      </div>
     </div>
   );
 }

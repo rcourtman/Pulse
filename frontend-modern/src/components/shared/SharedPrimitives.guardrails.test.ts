@@ -63,6 +63,8 @@ import monitoredSystemLimitWarningBannerSource from '@/components/shared/Monitor
 import monitoredSystemLimitWarningBannerModelSource from '@/components/shared/monitoredSystemLimitWarningBannerModel.ts?raw';
 import selectionCardGroupSource from '@/components/shared/SelectionCardGroup.tsx?raw';
 import selectionCardGroupModelSource from '@/components/shared/selectionCardGroupModel.ts?raw';
+import summaryMetricCardSource from '@/components/shared/SummaryMetricCard.tsx?raw';
+import summaryPanelSource from '@/components/shared/SummaryPanel.tsx?raw';
 import tagBadgesSource from '@/components/shared/TagBadges.tsx?raw';
 import commandPaletteStateSource from '@/components/shared/useCommandPaletteState.ts?raw';
 import activeUseTrialNudgeStateSource from '@/components/shared/useActiveUseTrialNudgeState.ts?raw';
@@ -215,7 +217,7 @@ describe('shared primitive guardrails', () => {
     expect(activeUseTrialNudgeStateSource).toContain('createMemo');
     expect(activeUseTrialNudgeStateSource).toContain('window.localStorage');
     expect(activeUseTrialNudgeStateSource).toContain('setInterval');
-    expect(activeUseTrialNudgeStateSource).toContain('startProTrial');
+    expect(activeUseTrialNudgeStateSource).toContain('runStartProTrialAction');
     expect(activeUseTrialNudgeStateSource).toContain('snoozeUpsell');
 
     expect(activeUseTrialNudgeModelSource).toContain('ACTIVE_USE_TRIAL_NUDGE_SNOOZE_KEY');
@@ -818,6 +820,20 @@ describe('shared primitive guardrails', () => {
     expect(whatsNewModalModelSource).toContain('WHATS_NEW_PRIVACY_URL');
     expect(whatsNewModalModelSource).toContain('WHATS_NEW_DOCS_LABEL');
     expect(whatsNewModalModelSource).toContain("title: 'Infrastructure'");
+  });
+
+  it('keeps summary density control inside the shared summary primitives', () => {
+    expect(summaryPanelSource).toContain("density?: 'default' | 'compact'");
+    expect(summaryPanelSource).toContain("props.density === 'compact'");
+    expect(summaryPanelSource).toContain('grid-cols-2 lg:grid-cols-4');
+    expect(summaryPanelSource).not.toContain('Recovery Posture');
+    expect(summaryPanelSource).not.toContain('stale items');
+
+    expect(summaryMetricCardSource).toContain("density?: 'default' | 'compact'");
+    expect(summaryMetricCardSource).toContain("props.density === 'compact'");
+    expect(summaryMetricCardSource).toContain("!p-1.5 sm:!p-2");
+    expect(summaryMetricCardSource).not.toContain('Recovery Posture');
+    expect(summaryMetricCardSource).not.toContain('Freshness');
   });
 
   it('keeps tooltip on shell, runtime, and model owners', () => {
