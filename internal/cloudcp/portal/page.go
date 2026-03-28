@@ -46,7 +46,7 @@ type portalPageData struct {
 const (
 	defaultPublicSiteURL        = "https://pulserelay.pro"
 	defaultSupportEmail         = "support@pulserelay.pro"
-	defaultCommercialAPIBaseURL = "https://license.pulserelay.pro"
+	defaultCommercialAPIBaseURL = "/api/portal/commercial"
 	defaultPortalPath           = PortalPagePath
 	defaultLogoutPath           = PortalLogoutPath
 	defaultAccountAPIBasePath   = PortalAccountAPIBasePath

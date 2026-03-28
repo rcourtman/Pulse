@@ -234,6 +234,9 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 		ReturnURL:    buildCPURL(deps.Config.BaseURL, portal.PortalPagePath, nil),
 	}
 	mux.Handle(portal.PortalBillingPath, portalAPILimiter.Middleware(accountSessionAuth(accountIDFromPortalRequest, portal.HandleBillingPortalRedirect(deps.Registry, billingCfg))))
+	mux.Handle(portal.PortalCommercialProxyPath, portalAPILimiter.Middleware(sessionAuth(portal.HandleCommercialProxy(portal.CommercialProxyConfig{
+		BaseURL: deps.Config.LicenseServerURL,
+	}))))
 
 	// MSP/Cloud portal HTML page — self-authenticating (shows login form if no session)
 	portalPageLimiter := NewCPRateLimiter(60, time.Minute)

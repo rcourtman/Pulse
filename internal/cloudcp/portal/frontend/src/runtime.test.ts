@@ -7,7 +7,7 @@ describe('portal runtime', function() {
     var defaults = createBootstrapDefaults({
       public_site_url: 'https://cloud.pulserelay.pro',
       support_email: 'help@pulserelay.pro',
-      commercial_api_base_url: 'https://license.pulserelay.pro',
+      commercial_api_base_url: '/api/portal/commercial',
       portal_path: '/account',
       bootstrap_path: '/api/account/bootstrap',
       magic_link_request_path: '/api/public/account/magic-link/request',
@@ -28,12 +28,12 @@ describe('portal runtime', function() {
       authenticated: true,
       email: 'owner@example.com',
       accounts: [],
-      commercial_api_base_url: 'https://license.pulserelay.pro',
+      commercial_api_base_url: '/api/portal/commercial',
     });
 
     expect(runtime.store.getBootstrap().authenticated).toBe(true);
     expect(runtime.store.getBootstrap().email).toBe('owner@example.com');
-    expect(runtime.bootstrapDefaults.commercial_api_base_url).toBe('https://license.pulserelay.pro');
+    expect(runtime.bootstrapDefaults.commercial_api_base_url).toBe('/api/portal/commercial');
   });
 
   it('derives canonical email and service handoff from the portal URL', function() {

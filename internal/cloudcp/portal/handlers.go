@@ -1,9 +1,12 @@
 package portal
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -339,6 +342,102 @@ func (h *billingPortalHandler) serveHTTP(w http.ResponseWriter, r *http.Request)
 
 func defaultCreateBillingPortalSession(params *stripe.BillingPortalSessionParams) (*stripe.BillingPortalSession, error) {
 	return billingportalsession.New(params)
+}
+
+type CommercialProxyConfig struct {
+	BaseURL string
+}
+
+type commercialProxyHandler struct {
+	baseURL string
+	client  *http.Client
+}
+
+func HandleCommercialProxy(cfg CommercialProxyConfig) http.HandlerFunc {
+	h := &commercialProxyHandler{
+		baseURL: strings.TrimRight(strings.TrimSpace(cfg.BaseURL), "/"),
+		client:  &http.Client{Timeout: 20 * time.Second},
+	}
+	return h.serveHTTP
+}
+
+func (h *commercialProxyHandler) serveHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if h.baseURL == "" {
+		http.Error(w, "commercial proxy not configured", http.StatusServiceUnavailable)
+		return
+	}
+
+	routePath := strings.TrimPrefix(r.URL.Path, PortalCommercialProxyPath)
+	routePath = strings.TrimSpace(routePath)
+	if !allowCommercialProxyPath(routePath) {
+		http.Error(w, "unsupported commercial route", http.StatusNotFound)
+		return
+	}
+
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 1<<20))
+	if err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+	targetURL := h.baseURL + "/" + routePath
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodPost, targetURL, bytes.NewReader(body))
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := h.client.Do(req)
+	if err != nil {
+		log.Error().Err(err).Str("target_url", redactCommercialTargetURL(targetURL)).Msg("cloudcp.portal: commercial proxy request failed")
+		http.Error(w, "commercial service unavailable", http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+
+	for k, values := range resp.Header {
+		if strings.EqualFold(k, "Content-Length") {
+			continue
+		}
+		for _, value := range values {
+			w.Header().Add(k, value)
+		}
+	}
+	w.WriteHeader(resp.StatusCode)
+	if _, err := io.Copy(w, resp.Body); err != nil {
+		log.Error().Err(err).Str("target_url", redactCommercialTargetURL(targetURL)).Msg("cloudcp.portal: commercial proxy response copy failed")
+	}
+}
+
+func allowCommercialProxyPath(path string) bool {
+	switch strings.TrimSpace(path) {
+	case "v1/manage/request",
+		"v1/manage",
+		"v1/retrieve-license/request",
+		"v1/retrieve-license",
+		"v1/gdpr/request-export",
+		"v1/gdpr/export",
+		"v1/gdpr/request-delete",
+		"v1/gdpr/confirm-delete",
+		"v1/self-refund":
+		return true
+	default:
+		return false
+	}
+}
+
+func redactCommercialTargetURL(raw string) string {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil {
+		return ""
+	}
+	u.RawQuery = ""
+	return u.String()
 }
 
 func encodeJSON(w http.ResponseWriter, payload any) {

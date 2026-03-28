@@ -6,6 +6,7 @@ const (
 	PortalDashboardPath        = "/api/portal/dashboard"
 	PortalWorkspacePath        = "/api/portal/workspaces/{tenant_id}"
 	PortalBillingPath          = "/api/portal/billing"
+	PortalCommercialProxyPath  = "/api/portal/commercial/"
 	PortalLogoutPath           = "/auth/logout"
 	PortalMagicLinkRequestPath = "/api/public/magic-link/request"
 	PortalSignupPath           = "/signup"

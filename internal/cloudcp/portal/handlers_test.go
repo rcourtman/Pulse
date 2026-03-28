@@ -786,7 +786,7 @@ func TestPortalPageTemplate_AccountServicesRendered(t *testing.T) {
 		`id="portal-app-root"`,
 		`id="pulse-account-bootstrap"`,
 		`"authenticated":true`,
-		`"commercial_api_base_url":"https://license.pulserelay.pro"`,
+		`"commercial_api_base_url":"/api/portal/commercial"`,
 		fmt.Sprintf(`"portal_path":"%s"`, PortalPagePath),
 		fmt.Sprintf(`"bootstrap_path":"%s"`, PortalBootstrapPath),
 		fmt.Sprintf(`"magic_link_request_path":"%s"`, PortalMagicLinkRequestPath),
@@ -866,7 +866,7 @@ func TestBuildPortalBootstrapJSON_Contract(t *testing.T) {
 	if got := payload["email"]; got != "owner@example.com" {
 		t.Fatalf("email = %#v, want owner@example.com", got)
 	}
-	if got := payload["commercial_api_base_url"]; got != "https://license.pulserelay.pro" {
+	if got := payload["commercial_api_base_url"]; got != "/api/portal/commercial" {
 		t.Fatalf("commercial_api_base_url = %#v", got)
 	}
 	if got := payload["portal_path"]; got != PortalPagePath {
@@ -1138,5 +1138,74 @@ func TestBillingPortalRedirect_NoReturnURL(t *testing.T) {
 	}
 	if capturedParams.ReturnURL != nil {
 		t.Fatalf("ReturnURL = %q, want nil (no return URL configured)", stripe.StringValue(capturedParams.ReturnURL))
+	}
+}
+
+func TestCommercialProxy_Success(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("method = %s, want POST", r.Method)
+		}
+		if r.URL.Path != "/v1/manage/request" {
+			t.Fatalf("path = %q", r.URL.Path)
+		}
+		if got := r.Header.Get("Content-Type"); got != "application/json" {
+			t.Fatalf("content-type = %q", got)
+		}
+		var payload map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		if got := payload["email"]; got != "owner@example.com" {
+			t.Fatalf("email = %#v", got)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer upstream.Close()
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, PortalCommercialProxyPath+"v1/manage/request", strings.NewReader(`{"email":"owner@example.com"}`))
+	req.Header.Set("Content-Type", "application/json")
+
+	HandleCommercialProxy(CommercialProxyConfig{BaseURL: upstream.URL})(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d (body=%q)", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	if got := strings.TrimSpace(rec.Body.String()); got != `{"ok":true}` {
+		t.Fatalf("body = %q", got)
+	}
+}
+
+func TestCommercialProxy_RejectsUnsupportedRoute(t *testing.T) {
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, PortalCommercialProxyPath+"v1/not-allowed", strings.NewReader(`{}`))
+
+	HandleCommercialProxy(CommercialProxyConfig{BaseURL: "https://license.pulserelay.pro"})(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusNotFound)
+	}
+}
+
+func TestCommercialProxy_UpstreamFailureReturnsBadGateway(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadGateway)
+		_, _ = w.Write([]byte(`{"error":"upstream unavailable"}`))
+	}))
+	defer upstream.Close()
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, PortalCommercialProxyPath+"v1/manage/request", strings.NewReader(`{"email":"owner@example.com"}`))
+
+	HandleCommercialProxy(CommercialProxyConfig{BaseURL: upstream.URL})(rec, req)
+
+	if rec.Code != http.StatusBadGateway {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadGateway)
+	}
+	if got := strings.TrimSpace(rec.Body.String()); got != `{"error":"upstream unavailable"}` {
+		t.Fatalf("body = %q", got)
 	}
 }
