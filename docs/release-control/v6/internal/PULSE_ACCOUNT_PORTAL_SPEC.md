@@ -178,6 +178,9 @@ Core rules:
 23. On phone-width layouts, opening a lower workspace job such as
     `Lifecycle` or `Create workspace` must reveal that job surface instead of
     leaving the user at the top of the workspace list.
+24. `Workspaces` must default to the workspace list and task entry points, not
+    an idle lifecycle explainer. The lifecycle rail should appear only when a
+    lifecycle or create-workspace job is actually active.
 
 ## Screen Model
 

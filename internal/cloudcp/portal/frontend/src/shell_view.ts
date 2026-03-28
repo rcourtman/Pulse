@@ -743,15 +743,10 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
       workspaceHeaderActions +=
         '<button type="button" class="btn-secondary btn-compact" data-action="toggle-add-workspace" data-account-id="' +
         escapeAttr(account.id) +
-        '">Add workspace</button>';
+        '">Create workspace</button>';
     }
 
-    var workspaceDeskActions = '';
     if (account.kind === 'msp') {
-      workspaceDeskActions +=
-        '<button type="button" class="btn-secondary btn-compact" data-action="toggle-add-workspace" data-account-id="' +
-        escapeAttr(account.id) +
-        '">Add workspace</button>';
       addWorkspaceForm =
         '<div class="add-workspace-form" id="add-ws-form-' +
         escapeAttr(account.id) +
@@ -776,14 +771,14 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
         '</div>';
     }
     workspaceManagement =
-      '<section class="workspace-management-panel" id="workspace-management-' +
+      '<section class="workspace-management-panel workspace-management-panel-idle" id="workspace-management-' +
       escapeAttr(account.id) +
-      '">' +
+      '" hidden>' +
         '<div class="workspace-management-header">' +
           '<div>' +
-            '<div class="account-panel-kicker">Workspace management</div>' +
-            '<h3>Lifecycle</h3>' +
-            '<p>Inspect one workspace at a time and keep account-level actions separate.</p>' +
+            '<div class="account-panel-kicker">Workspace task</div>' +
+            '<h3>Work on one workspace</h3>' +
+            '<p>Open lifecycle for one workspace, or create a new one. Keep access and billing separate.</p>' +
           '</div>' +
           '<button type="button" class="btn-secondary btn-compact" id="workspace-management-close-' +
           escapeAttr(account.id) +
@@ -794,22 +789,16 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
         '<div class="workspace-management-empty" id="workspace-management-empty-' +
         escapeAttr(account.id) +
         '">' +
-          '<div class="workspace-management-empty-copy">Pick one workspace for lifecycle review. Keep access and billing changes in their own sections.</div>' +
           '<div class="workspace-management-empty-shell">' +
             '<div class="workspace-management-empty-actions-card">' +
               '<div class="workspace-management-empty-actions-copy">' +
-                '<div class="account-panel-kicker">Workspace tasks</div>' +
-                '<h4>Keep this section workspace-only</h4>' +
-                '<p>Create a workspace here when you need one. Access changes belong in Access, and billing changes belong in Billing.</p>' +
+                '<div class="account-panel-kicker">Create workspace</div>' +
+                '<h4>Open a new hosted workspace</h4>' +
+                '<p>Create one workspace here when you need a new customer or operating boundary.</p>' +
               '</div>' +
-              '<div class="workspace-management-empty-actions">' + workspaceDeskActions + '</div>' +
               addWorkspaceForm +
             '</div>' +
-            '<div class="workspace-management-empty-rules">' +
-              '<div class="workspace-management-empty-rule"><strong>Inspect status</strong><span>Open the workspace first and confirm whether it is routine work, review work, or a parked suspended system.</span></div>' +
-              '<div class="workspace-management-empty-rule"><strong>Confirm lifecycle</strong><span>Check active, checking, failed, or suspended state before you take the next step.</span></div>' +
-              '<div class="workspace-management-empty-rule"><strong>Stay deliberate</strong><span>Review one workspace at a time instead of mixing fleet and account actions together.</span></div>' +
-            '</div>' +
+            '<div class="workspace-management-empty-note">Access changes stay in Access. Billing changes stay in Billing.</div>' +
           '</div>' +
         '</div>' +
         '<div class="workspace-management-content" id="workspace-management-content-' +
@@ -895,7 +884,7 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
         '</div>' +
         '<div class="workspace-operations-detail" id="workspace-operations-detail-' +
           escapeAttr(account.id) +
-          '">' +
+          '" hidden>' +
           workspaceManagement +
         '</div>' +
       '</div>' +

@@ -138,23 +138,26 @@ export function renderWorkspaceManagement(account: PortalAccountSummary, entry: 
 
   var workspace = entry.selectedWorkspaceID ? findWorkspace(account, entry.selectedWorkspaceID) : null;
   var hasSelection = !!workspace;
+  var showDetail = hasSelection || entry.addWorkspaceOpen;
   var rows = document.querySelectorAll<HTMLElement>('[data-workspace-row]');
   for (var i = 0; i < rows.length; i += 1) {
     rows[i].classList.toggle('selected', !!workspace && rows[i].getAttribute('data-workspace-row') === workspace.id);
   }
   if (shell) {
     shell.classList.toggle('workspace-operations-shell-selected', hasSelection);
-    shell.classList.toggle('workspace-operations-shell-idle', !hasSelection);
+    shell.classList.toggle('workspace-operations-shell-idle', !showDetail);
     shell.classList.toggle('workspace-operations-shell-form-open', entry.addWorkspaceOpen);
   }
   if (detail) {
     detail.classList.toggle('workspace-operations-detail-selected', hasSelection);
-    detail.classList.toggle('workspace-operations-detail-idle', !hasSelection);
+    detail.classList.toggle('workspace-operations-detail-idle', !showDetail);
+    detail.hidden = !showDetail;
   }
   panel.classList.toggle('workspace-management-panel-selected', hasSelection);
   panel.classList.toggle('workspace-management-panel-idle', !hasSelection);
-  panel.classList.add('visible');
-  empty.hidden = hasSelection;
+  panel.classList.toggle('visible', showDetail);
+  panel.hidden = !showDetail;
+  empty.hidden = hasSelection || !showDetail;
   content.hidden = !hasSelection;
 
   if (!workspace) {

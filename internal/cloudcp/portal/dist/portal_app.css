@@ -1746,21 +1746,10 @@ header .logout-btn:hover,
   background: transparent;
   color: var(--ink-soft);
 }
-.workspace-management-empty-copy {
-  font-size: 13px;
-  line-height: 1.45;
-  color: var(--ink);
-  max-width: 520px;
-}
 .workspace-management-empty-shell {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 10px;
-}
-.workspace-operations-shell-idle .workspace-management-empty-shell {
-  grid-template-columns: minmax(0, 0.96fr) minmax(0, 1.04fr);
-  gap: 14px;
-  align-items: start;
 }
 .workspace-management-empty-actions-card {
   display: flex;
@@ -1788,41 +1777,11 @@ header .logout-btn:hover,
   line-height: 1.45;
   color: var(--ink-soft);
 }
-.workspace-management-empty-rules {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  padding: 12px 14px 2px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: #fff;
-}
-.workspace-management-empty-rule {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 10px 0 10px 12px;
-  border-top: 1px solid var(--line);
-  border-left: 3px solid rgba(11, 106, 114, 0.14);
-}
-.workspace-management-empty-rule:first-child {
-  padding-top: 0;
-  border-top: none;
-}
-.workspace-management-empty-rule strong {
-  font-size: 13px;
-  line-height: 1.3;
-  color: var(--ink);
-}
-.workspace-management-empty-rule span {
+.workspace-management-empty-note {
+  padding: 0 2px;
   font-size: 12px;
-  line-height: 1.4;
+  line-height: 1.5;
   color: var(--ink-soft);
-}
-.workspace-management-empty-actions {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
 }
 .workspace-management-content {
   margin-top: 16px;
@@ -2836,9 +2795,6 @@ header .logout-btn:hover,
   }
   .access-side-column {
     position: static;
-  }
-  .workspace-operations-shell-idle .workspace-management-empty-shell {
-    grid-template-columns: 1fr;
   }
   .workspace-list-head {
     display: none;

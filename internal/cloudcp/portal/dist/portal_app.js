@@ -116,23 +116,26 @@
     if (!empty || !content || !title || !meta || !summary || !health || !lifecycle || !created || !guidance || !actionButton || !closeButton) return;
     var workspace = entry.selectedWorkspaceID ? findWorkspace(account, entry.selectedWorkspaceID) : null;
     var hasSelection = !!workspace;
+    var showDetail = hasSelection || entry.addWorkspaceOpen;
     var rows = document.querySelectorAll("[data-workspace-row]");
     for (var i = 0; i < rows.length; i += 1) {
       rows[i].classList.toggle("selected", !!workspace && rows[i].getAttribute("data-workspace-row") === workspace.id);
     }
     if (shell) {
       shell.classList.toggle("workspace-operations-shell-selected", hasSelection);
-      shell.classList.toggle("workspace-operations-shell-idle", !hasSelection);
+      shell.classList.toggle("workspace-operations-shell-idle", !showDetail);
       shell.classList.toggle("workspace-operations-shell-form-open", entry.addWorkspaceOpen);
     }
     if (detail) {
       detail.classList.toggle("workspace-operations-detail-selected", hasSelection);
-      detail.classList.toggle("workspace-operations-detail-idle", !hasSelection);
+      detail.classList.toggle("workspace-operations-detail-idle", !showDetail);
+      detail.hidden = !showDetail;
     }
     panel.classList.toggle("workspace-management-panel-selected", hasSelection);
     panel.classList.toggle("workspace-management-panel-idle", !hasSelection);
-    panel.classList.add("visible");
-    empty.hidden = hasSelection;
+    panel.classList.toggle("visible", showDetail);
+    panel.hidden = !showDetail;
+    empty.hidden = hasSelection || !showDetail;
     content.hidden = !hasSelection;
     if (!workspace) {
       actionButton.disabled = false;
@@ -2064,14 +2067,12 @@
     var workspaceHeaderActions = "";
     if (account.can_manage) {
       if (account.kind === "msp") {
-        workspaceHeaderActions += '<button type="button" class="btn-secondary btn-compact" data-action="toggle-add-workspace" data-account-id="' + escapeAttr(account.id) + '">Add workspace</button>';
+        workspaceHeaderActions += '<button type="button" class="btn-secondary btn-compact" data-action="toggle-add-workspace" data-account-id="' + escapeAttr(account.id) + '">Create workspace</button>';
       }
-      var workspaceDeskActions = "";
       if (account.kind === "msp") {
-        workspaceDeskActions += '<button type="button" class="btn-secondary btn-compact" data-action="toggle-add-workspace" data-account-id="' + escapeAttr(account.id) + '">Add workspace</button>';
         addWorkspaceForm = '<div class="add-workspace-form" id="add-ws-form-' + escapeAttr(account.id) + '"><label for="ws-name-' + escapeAttr(account.id) + '">Workspace name (for example, a client name)</label><input type="text" id="ws-name-' + escapeAttr(account.id) + '" placeholder="Acme Corp" maxlength="80" autocomplete="off"><div class="form-actions"><button type="button" class="btn-primary" data-action="create-workspace" data-account-id="' + escapeAttr(account.id) + '">Create workspace</button><button type="button" class="btn-secondary" data-action="toggle-add-workspace" data-account-id="' + escapeAttr(account.id) + '">Cancel</button><div class="spinner" id="ws-spinner-' + escapeAttr(account.id) + '" hidden></div></div></div>';
       }
-      workspaceManagement = '<section class="workspace-management-panel" id="workspace-management-' + escapeAttr(account.id) + '"><div class="workspace-management-header"><div><div class="account-panel-kicker">Workspace management</div><h3>Lifecycle</h3><p>Inspect one workspace at a time and keep account-level actions separate.</p></div><button type="button" class="btn-secondary btn-compact" id="workspace-management-close-' + escapeAttr(account.id) + '" data-action="clear-workspace-selection" data-account-id="' + escapeAttr(account.id) + '">Close panel</button></div><div class="workspace-management-empty" id="workspace-management-empty-' + escapeAttr(account.id) + '"><div class="workspace-management-empty-copy">Pick one workspace for lifecycle review. Keep access and billing changes in their own sections.</div><div class="workspace-management-empty-shell"><div class="workspace-management-empty-actions-card"><div class="workspace-management-empty-actions-copy"><div class="account-panel-kicker">Workspace tasks</div><h4>Keep this section workspace-only</h4><p>Create a workspace here when you need one. Access changes belong in Access, and billing changes belong in Billing.</p></div><div class="workspace-management-empty-actions">' + workspaceDeskActions + "</div>" + addWorkspaceForm + '</div><div class="workspace-management-empty-rules"><div class="workspace-management-empty-rule"><strong>Inspect status</strong><span>Open the workspace first and confirm whether it is routine work, review work, or a parked suspended system.</span></div><div class="workspace-management-empty-rule"><strong>Confirm lifecycle</strong><span>Check active, checking, failed, or suspended state before you take the next step.</span></div><div class="workspace-management-empty-rule"><strong>Stay deliberate</strong><span>Review one workspace at a time instead of mixing fleet and account actions together.</span></div></div></div></div><div class="workspace-management-content" id="workspace-management-content-' + escapeAttr(account.id) + '" hidden><div class="workspace-management-meta" id="workspace-management-meta-' + escapeAttr(account.id) + '"></div><h4 id="workspace-management-title-' + escapeAttr(account.id) + '"></h4><p class="workspace-management-summary" id="workspace-management-summary-' + escapeAttr(account.id) + '"></p><div class="workspace-management-facts"><div class="workspace-management-fact"><span>Health</span><strong id="workspace-management-health-' + escapeAttr(account.id) + '"></strong></div><div class="workspace-management-fact"><span>Lifecycle</span><strong id="workspace-management-lifecycle-' + escapeAttr(account.id) + '"></strong></div><div class="workspace-management-fact"><span>Created</span><strong id="workspace-management-created-' + escapeAttr(account.id) + '"></strong></div></div><div class="workspace-management-guidance" id="workspace-management-guidance-' + escapeAttr(account.id) + '"></div><div class="workspace-management-actions"><button type="button" class="btn-danger" id="workspace-management-action-' + escapeAttr(account.id) + '" data-action="workspace-action" data-account-id="' + escapeAttr(account.id) + '">Manage workspace</button></div></div></section>';
+      workspaceManagement = '<section class="workspace-management-panel workspace-management-panel-idle" id="workspace-management-' + escapeAttr(account.id) + '" hidden><div class="workspace-management-header"><div><div class="account-panel-kicker">Workspace task</div><h3>Work on one workspace</h3><p>Open lifecycle for one workspace, or create a new one. Keep access and billing separate.</p></div><button type="button" class="btn-secondary btn-compact" id="workspace-management-close-' + escapeAttr(account.id) + '" data-action="clear-workspace-selection" data-account-id="' + escapeAttr(account.id) + '">Close panel</button></div><div class="workspace-management-empty" id="workspace-management-empty-' + escapeAttr(account.id) + '"><div class="workspace-management-empty-shell"><div class="workspace-management-empty-actions-card"><div class="workspace-management-empty-actions-copy"><div class="account-panel-kicker">Create workspace</div><h4>Open a new hosted workspace</h4><p>Create one workspace here when you need a new customer or operating boundary.</p></div>' + addWorkspaceForm + '</div><div class="workspace-management-empty-note">Access changes stay in Access. Billing changes stay in Billing.</div></div></div><div class="workspace-management-content" id="workspace-management-content-' + escapeAttr(account.id) + '" hidden><div class="workspace-management-meta" id="workspace-management-meta-' + escapeAttr(account.id) + '"></div><h4 id="workspace-management-title-' + escapeAttr(account.id) + '"></h4><p class="workspace-management-summary" id="workspace-management-summary-' + escapeAttr(account.id) + '"></p><div class="workspace-management-facts"><div class="workspace-management-fact"><span>Health</span><strong id="workspace-management-health-' + escapeAttr(account.id) + '"></strong></div><div class="workspace-management-fact"><span>Lifecycle</span><strong id="workspace-management-lifecycle-' + escapeAttr(account.id) + '"></strong></div><div class="workspace-management-fact"><span>Created</span><strong id="workspace-management-created-' + escapeAttr(account.id) + '"></strong></div></div><div class="workspace-management-guidance" id="workspace-management-guidance-' + escapeAttr(account.id) + '"></div><div class="workspace-management-actions"><button type="button" class="btn-danger" id="workspace-management-action-' + escapeAttr(account.id) + '" data-action="workspace-action" data-account-id="' + escapeAttr(account.id) + '">Manage workspace</button></div></div></section>';
     }
     var workspaceHTML = workspaces.length ? '<div class="workspace-list-wrap"><div class="workspace-list-toolbar"><div class="workspace-list-summary">Open a workspace to work in it. Use the lifecycle view only when you are reviewing state or making account-level changes.</div></div><div class="workspace-list-head"><span>Workspace</span><span>Health</span><span>Lifecycle</span><span>Actions</span></div><div class="workspace-list">' + workspaces.map(function(workspace) {
       return renderWorkspaceCard(account, workspace, accountAPIBasePath);
@@ -2080,7 +2081,7 @@
       String(workspaces.length) + " total",
       String(readyCount) + " ready",
       String(suspendedCount) + " suspended"
-    ]) + '</div><div class="account-stage-header-actions">' + workspaceHeaderActions + '</div></div></div><div class="workspace-operations-shell workspace-operations-shell-idle" id="workspace-operations-shell-' + escapeAttr(account.id) + '"><div class="workspace-operations-main">' + workspaceHTML + '</div><div class="workspace-operations-detail" id="workspace-operations-detail-' + escapeAttr(account.id) + '">' + workspaceManagement + "</div></div></section>";
+    ]) + '</div><div class="account-stage-header-actions">' + workspaceHeaderActions + '</div></div></div><div class="workspace-operations-shell workspace-operations-shell-idle" id="workspace-operations-shell-' + escapeAttr(account.id) + '"><div class="workspace-operations-main">' + workspaceHTML + '</div><div class="workspace-operations-detail" id="workspace-operations-detail-' + escapeAttr(account.id) + '" hidden>' + workspaceManagement + "</div></div></section>";
   }
   function renderAccountAccessSection(account) {
     var accessHeaderTitle = account.can_manage ? "Manage access" : "Review access";

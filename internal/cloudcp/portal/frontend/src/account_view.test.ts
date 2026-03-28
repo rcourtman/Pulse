@@ -53,6 +53,35 @@ describe('account view', function() {
     };
   }
 
+  function createWorkspaceManagementDOM(accountID: string): string {
+    return (
+      '<div id="workspace-operations-shell-' +
+      accountID +
+      '" class="workspace-operations-shell workspace-operations-shell-idle">' +
+        '<div id="workspace-operations-detail-' +
+        accountID +
+        '" class="workspace-operations-detail workspace-operations-detail-idle" hidden>' +
+          '<div id="workspace-management-' +
+          accountID +
+          '" class="workspace-management-panel" hidden>' +
+            '<button id="workspace-management-close-' + accountID + '"></button>' +
+            '<div id="workspace-management-empty-' + accountID + '"></div>' +
+            '<div id="workspace-management-content-' + accountID + '" hidden>' +
+              '<div id="workspace-management-meta-' + accountID + '"></div>' +
+              '<h4 id="workspace-management-title-' + accountID + '"></h4>' +
+              '<p id="workspace-management-summary-' + accountID + '"></p>' +
+              '<div id="workspace-management-health-' + accountID + '"></div>' +
+              '<div id="workspace-management-lifecycle-' + accountID + '"></div>' +
+              '<div id="workspace-management-created-' + accountID + '"></div>' +
+              '<div id="workspace-management-guidance-' + accountID + '"></div>' +
+              '<button id="workspace-management-action-' + accountID + '"></button>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>'
+    );
+  }
+
   it('renders add-workspace visibility from account UI state', function() {
     document.body.innerHTML =
       '<div id="add-ws-form-acct_1" class="add-workspace-form"></div>' +
@@ -173,29 +202,22 @@ describe('account view', function() {
     expect(document.getElementById('access-stats-acct_1')?.textContent).toContain('Members');
   });
 
+  it('hides workspace management when no workspace task is active', function() {
+    document.body.innerHTML = createWorkspaceManagementDOM('acct_1');
+
+    renderWorkspaceManagement(createAccount(), createEntry());
+    expect(document.getElementById('workspace-management-acct_1')?.hidden).toBe(true);
+    expect(document.getElementById('workspace-operations-detail-acct_1')?.hidden).toBe(true);
+    expect(document.getElementById('workspace-operations-shell-acct_1')?.classList.contains('workspace-operations-shell-idle')).toBe(true);
+  });
+
   it('renders workspace management selection from account UI state', function() {
-    document.body.innerHTML =
-      '<div id="workspace-operations-shell-acct_1" class="workspace-operations-shell workspace-operations-shell-idle">' +
-      '<div id="workspace-operations-detail-acct_1" class="workspace-operations-detail workspace-operations-detail-idle">' +
-      '<div id="workspace-management-acct_1" class="workspace-management-panel">' +
-      '<button id="workspace-management-close-acct_1"></button>' +
-      '<div id="workspace-management-empty-acct_1"></div>' +
-      '<div id="workspace-management-content-acct_1" hidden>' +
-      '<div id="workspace-management-meta-acct_1"></div>' +
-      '<h4 id="workspace-management-title-acct_1"></h4>' +
-      '<p id="workspace-management-summary-acct_1"></p>' +
-      '<div id="workspace-management-health-acct_1"></div>' +
-      '<div id="workspace-management-lifecycle-acct_1"></div>' +
-      '<div id="workspace-management-created-acct_1"></div>' +
-      '<div id="workspace-management-guidance-acct_1"></div>' +
-      '<button id="workspace-management-action-acct_1"></button>' +
-      '</div>' +
-      '</div>' +
-      '</div>' +
-      '</div>';
+    document.body.innerHTML = createWorkspaceManagementDOM('acct_1');
 
     renderWorkspaceManagement(createAccount(), createEntry({ selectedWorkspaceID: 'ws_1' }));
     expect(document.getElementById('workspace-management-acct_1')?.classList.contains('visible')).toBe(true);
+    expect(document.getElementById('workspace-management-acct_1')?.hidden).toBe(false);
+    expect(document.getElementById('workspace-operations-detail-acct_1')?.hidden).toBe(false);
     expect(document.getElementById('workspace-operations-shell-acct_1')?.classList.contains('workspace-operations-shell-selected')).toBe(true);
     expect(document.getElementById('workspace-operations-shell-acct_1')?.classList.contains('workspace-operations-shell-idle')).toBe(false);
     expect((document.getElementById('workspace-management-empty-acct_1') as HTMLElement).hidden).toBe(true);
@@ -208,10 +230,10 @@ describe('account view', function() {
   it('renders account UI for every tracked account entry', function() {
     document.body.innerHTML =
       '<div id="add-ws-form-acct_1" class="add-workspace-form"></div><div id="ws-spinner-acct_1"></div>' +
-      '<div id="workspace-management-acct_1" class="workspace-management-panel"><button id="workspace-management-close-acct_1"></button><div id="workspace-management-empty-acct_1"></div><div id="workspace-management-content-acct_1" hidden><div id="workspace-management-meta-acct_1"></div><h4 id="workspace-management-title-acct_1"></h4><p id="workspace-management-summary-acct_1"></p><div id="workspace-management-health-acct_1"></div><div id="workspace-management-lifecycle-acct_1"></div><div id="workspace-management-created-acct_1"></div><div id="workspace-management-guidance-acct_1"></div><button id="workspace-management-action-acct_1"></button></div></div>' +
+      createWorkspaceManagementDOM('acct_1') +
       '<div id="access-section-acct_1" class="access-section" data-actor-role="admin" data-can-manage="true"><div id="access-stats-acct_1"></div><table><tbody id="access-list-acct_1"></tbody></table></div>' +
       '<div id="add-ws-form-acct_2" class="add-workspace-form"></div><div id="ws-spinner-acct_2"></div>' +
-      '<div id="workspace-management-acct_2" class="workspace-management-panel"><button id="workspace-management-close-acct_2"></button><div id="workspace-management-empty-acct_2"></div><div id="workspace-management-content-acct_2" hidden><div id="workspace-management-meta-acct_2"></div><h4 id="workspace-management-title-acct_2"></h4><p id="workspace-management-summary-acct_2"></p><div id="workspace-management-health-acct_2"></div><div id="workspace-management-lifecycle-acct_2"></div><div id="workspace-management-created-acct_2"></div><div id="workspace-management-guidance-acct_2"></div><button id="workspace-management-action-acct_2"></button></div></div>' +
+      createWorkspaceManagementDOM('acct_2') +
       '<div id="access-section-acct_2" class="access-section" data-actor-role="owner" data-can-manage="true"><div id="access-stats-acct_2"></div><table><tbody id="access-list-acct_2"></tbody></table></div>';
 
     var state: PortalAccountState = {
@@ -248,9 +270,12 @@ describe('account view', function() {
     ]);
 
     expect(document.getElementById('add-ws-form-acct_1')?.classList.contains('visible')).toBe(true);
-    expect(document.getElementById('add-ws-form-acct_2')?.classList.contains('visible')).toBe(false);
+    expect(document.getElementById('workspace-management-acct_1')?.hidden).toBe(false);
+    expect(document.getElementById('workspace-operations-shell-acct_1')?.classList.contains('workspace-operations-shell-idle')).toBe(false);
+    expect(document.getElementById('workspace-operations-shell-acct_1')?.classList.contains('workspace-operations-shell-form-open')).toBe(true);
     expect(document.getElementById('workspace-management-acct_1')?.classList.contains('workspace-management-panel-idle')).toBe(true);
     expect(document.getElementById('access-list-acct_2')?.textContent).toContain('tech@example.com');
+    expect(document.getElementById('workspace-management-acct_2')?.hidden).toBe(false);
     expect(document.getElementById('workspace-management-title-acct_2')?.textContent).toContain('Beta Workspace');
   });
 });

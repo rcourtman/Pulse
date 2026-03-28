@@ -277,7 +277,10 @@ mobile summary strip rather than introducing a second narrow-screen
 account-context payload or task-specific DOM contract. When that shared shell
 opens a lower workspace job surface such as lifecycle review or the
 create-workspace form, the runtime must reveal the opened surface instead of
-leaving the user at the top of the list.
+leaving the user at the top of the list. The same shared runtime contract must
+also keep the workspace detail rail absent until a lifecycle or
+create-workspace job is active, rather than rendering a default idle
+lifecycle explainer before the user has picked a task.
 plus a package-local `tsc --noEmit` gate, so future account-shell work should
 extend the typed source boundary instead of reviving opaque global runtime
 objects, document-wide render events, or untyped embedded asset edits.
