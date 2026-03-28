@@ -191,16 +191,16 @@ describe('shell view', function() {
     expect(html).toContain('service-action-row');
     expect(html).toContain('service-action-button');
     expect(html).toContain('id="service-panel-empty"');
-    expect(html).toContain('Choose the next commercial action');
-    expect(html).toContain('Task desk');
-    expect(html).toContain('Available flows');
+    expect(html).toContain('Open one commercial flow at a time');
+    expect(html).toContain('Active service desk');
+    expect(html).toContain('Available desks');
     expect(html).toContain('Escalate quickly');
     expect(html).toContain('id="open-retrieve-service"');
     expect(html).toContain('id="data-service-panel"');
-    expect(html).toContain('Open billing');
-    expect(html).toContain('Open license recovery');
-    expect(html).toContain('Open refunds');
-    expect(html).toContain('Open privacy tools');
+    expect(html).toContain('Billing desk');
+    expect(html).toContain('License desk');
+    expect(html).toContain('Refund desk');
+    expect(html).toContain('Privacy desk');
   });
 
   it('renders self-hosted overview copy when no hosted accounts are attached', function() {
@@ -215,7 +215,7 @@ describe('shell view', function() {
     expect(html).toContain('Pulse Account');
     expect(html).toContain('Account console');
     expect(html).toContain('Use these account tools for self-hosted licenses, billing, refunds, and privacy actions.');
-    expect(html).toContain('Keep self-hosted commercial work here.');
+    expect(html).toContain('Use this desk for self-hosted commercial work only.');
     expect(html).toContain('Account services');
     expect(html).not.toContain('Self-hosted licenses and billing');
   });

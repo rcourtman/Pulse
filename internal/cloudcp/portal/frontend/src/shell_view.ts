@@ -856,23 +856,23 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
             '<div class="service-shell">' +
               '<aside class="service-shell-sidebar">' +
                 '<div class="service-shell-sidebar-head">' +
-                  '<div class="account-panel-kicker">Commercial actions</div>' +
-                  '<h3>Billing, licenses, refunds, and privacy</h3>' +
-                  '<p>Keep self-hosted commercial work here. Hosted workspace operations stay in Workspaces and Team.</p>' +
+                  '<div class="account-panel-kicker">Service navigator</div>' +
+                  '<h3>Self-hosted billing, recovery, and privacy</h3>' +
+                  '<p>Use this desk for self-hosted commercial work only. Hosted workspace operations stay in Workspaces and Team.</p>' +
                 '</div>' +
                 '<div class="service-action-list">' +
-                  renderServiceActionRow('open-manage-service', 'Billing', 'Manage subscriptions', 'Open billing', 'Open Stripe billing access for existing self-hosted subscriptions without leaving the Pulse Account shell.', 'manage-service-panel', 'manage-inline-email', ['Invoices and plan changes', 'Subscription self-service']) +
-                  renderServiceActionRow('open-retrieve-service', 'Licenses', 'Retrieve licenses', 'Open license recovery', 'Recover the latest active self-hosted license and invoice link for a commercial email address.', 'retrieve-service-panel', 'retrieve-inline-email', ['Latest active license', 'Invoice lookup']) +
-                  renderServiceActionRow('open-refund-service', 'Refunds', 'Refund requests', 'Open refunds', 'Request an immediate self-serve refund for eligible self-hosted purchases with explicit revocation confirmation.', 'refund-service-panel', 'refund-inline-email', ['Eligibility check', 'Explicit revocation']) +
-                  renderServiceActionRow('open-data-service', 'Privacy', 'Data and privacy', 'Open privacy tools', 'Request commercial data export or deletion without leaving the account shell.', 'data-service-panel', 'data-export-email', ['Export or deletion', 'Support escalation path']) +
+                  renderServiceActionRow('open-manage-service', 'Billing', 'Manage subscriptions', 'Billing desk', 'Open Stripe billing access for existing self-hosted subscriptions without leaving the Pulse Account shell.', 'manage-service-panel', 'manage-inline-email', ['Invoices and plan changes', 'Subscription self-service']) +
+                  renderServiceActionRow('open-retrieve-service', 'Licenses', 'Retrieve licenses', 'License desk', 'Recover the latest active self-hosted license and invoice link for a commercial email address.', 'retrieve-service-panel', 'retrieve-inline-email', ['Latest active license', 'Invoice lookup']) +
+                  renderServiceActionRow('open-refund-service', 'Refunds', 'Refund requests', 'Refund desk', 'Request an immediate self-serve refund for eligible self-hosted purchases with explicit revocation confirmation.', 'refund-service-panel', 'refund-inline-email', ['Eligibility check', 'Explicit revocation']) +
+                  renderServiceActionRow('open-data-service', 'Privacy', 'Data and privacy', 'Privacy desk', 'Request commercial data export or deletion without leaving the account shell.', 'data-service-panel', 'data-export-email', ['Export or deletion', 'Support escalation path']) +
                 '</div>' +
               '</aside>' +
               '<div class="service-shell-main">' +
                 '<div class="service-detail-shell">' +
                   '<div class="service-panel service-panel-empty visible" id="service-panel-empty">' +
-                    '<div class="account-panel-kicker">Task desk</div>' +
-                    '<h3>Choose the next commercial action</h3>' +
-                    '<p>Open a billing, license, refund, or privacy flow from the service navigator. The active request stays here so this area behaves like one commercial operating desk.</p>' +
+                    '<div class="account-panel-kicker">Active service desk</div>' +
+                    '<h3>Open one commercial flow at a time</h3>' +
+                    '<p>Pick a billing, license, refund, or privacy flow from the navigator. The active request stays here so this area behaves like one self-hosted service desk.</p>' +
                     '<div class="service-empty-command-grid">' +
                       '<div class="service-empty-command-card">' +
                         '<div class="service-empty-column-title">Start here</div>' +
@@ -882,7 +882,7 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
                         '</div>' +
                       '</div>' +
                       '<div class="service-empty-command-card service-empty-command-card-wide">' +
-                        '<div class="service-empty-column-title">Available flows</div>' +
+                        '<div class="service-empty-column-title">Available desks</div>' +
                         '<div class="service-empty-flow-list">' +
                           '<div class="service-empty-flow"><strong>Billing</strong><span>Stripe customer portal access after verification.</span></div>' +
                           '<div class="service-empty-flow"><strong>Licenses</strong><span>Recover the latest active self-hosted license and invoice link.</span></div>' +
