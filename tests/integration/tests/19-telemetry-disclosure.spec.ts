@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { test as base, expect } from '@playwright/test';
+import { test as base, expect, type Locator, type Page } from '@playwright/test';
 import { createAuthenticatedStorageState } from './helpers';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -33,6 +33,23 @@ const test = base.extend<{}, WorkerFixtures>({
   }, { scope: 'worker' }],
 });
 
+async function expectPopupDoc(
+  page: Page,
+  link: Locator,
+  pathname: string,
+  expectedText: string,
+) {
+  const [popup] = await Promise.all([
+    page.waitForEvent('popup'),
+    link.click(),
+  ]);
+
+  await popup.waitForLoadState('domcontentloaded');
+  expect(new URL(popup.url()).pathname).toBe(pathname);
+  await expect(popup.locator('body')).toContainText(expectedText);
+  await popup.close();
+}
+
 test.describe('Telemetry disclosure', () => {
   test.setTimeout(180_000);
 
@@ -44,15 +61,42 @@ test.describe('Telemetry disclosure', () => {
 
     const disclosureLink = page.getByRole('link', { name: 'Full details' }).first();
     await expect(disclosureLink).toHaveAttribute('href', '/docs/PRIVACY.md');
+    await expectPopupDoc(
+      page,
+      disclosureLink,
+      '/docs/PRIVACY.md',
+      'Pulse includes anonymous telemetry',
+    );
+  });
 
-    const [popup] = await Promise.all([
-      page.waitForEvent('popup'),
-      disclosureLink.click(),
-    ]);
+  test('whats-new modal opens shipped privacy and documentation pages', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop-only telemetry disclosure coverage');
 
-    await popup.waitForLoadState('domcontentloaded');
-    expect(new URL(popup.url()).pathname).toBe('/docs/PRIVACY.md');
-    await expect(popup.locator('body')).toContainText('Pulse includes anonymous telemetry');
-    await expect(popup.locator('body')).toContainText('What is NOT sent');
+    await page.addInitScript(() => {
+      localStorage.removeItem('pulse_whats_new_v2_shown');
+    });
+
+    await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
+
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByText('Welcome to the New Navigation!')).toBeVisible();
+
+    const privacyLink = dialog.getByRole('link', { name: 'Full details' });
+    await expect(privacyLink).toHaveAttribute('href', '/docs/PRIVACY.md');
+    await expectPopupDoc(
+      page,
+      privacyLink,
+      '/docs/PRIVACY.md',
+      'Pulse includes anonymous telemetry',
+    );
+
+    const docsLink = dialog.getByRole('link', { name: 'Documentation' });
+    await expect(docsLink).toHaveAttribute('href', '/docs/README.md');
+    await expectPopupDoc(
+      page,
+      docsLink,
+      '/docs/README.md',
+      'Welcome to the Pulse documentation portal.',
+    );
   });
 });
