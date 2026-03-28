@@ -37,8 +37,8 @@ Every field is listed below — nothing else leaves your server:
 | Relay enabled | `true`/`false` | Whether remote access is enabled |
 | SSO enabled | `true`/`false` | Whether OIDC/SSO is configured |
 | Multi-tenant | `true`/`false` | Whether multi-tenant mode is on |
-| License tier | `free`, `pro`, etc. | Current license tier |
-| API tokens | `3` | Number of API tokens configured |
+| Paid license | `true`/`false` | Whether a paid license is active |
+| Has API tokens | `true`/`false` | Whether any API tokens are configured |
 
 ### What is NOT sent
 

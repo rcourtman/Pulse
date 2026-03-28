@@ -125,6 +125,12 @@ owner for privacy-document URLs, while `frontend-modern/public/docs/PRIVACY.md`
 is the version-matched asset served by the running build. Privacy disclosures
 must not drift back to GitHub `main` links that can describe a different
 revision than the installed runtime.
+That same disclosure boundary now also fixes the telemetry payload floor:
+commercial and auth-adjacent telemetry may report only coarse posture signals
+such as whether a paid license is active or whether any API tokens exist.
+Exact license tiers and exact API-token counts are not part of the canonical
+anonymous telemetry contract and may not be reintroduced without updating this
+trust boundary and the governed privacy disclosure together.
 That same rule also applies inside shipped security guidance itself:
 `SECURITY.md` and the synced `frontend-modern/public/docs/SECURITY.md` copy may
 not bounce the operator back to GitHub `main` for section references that the

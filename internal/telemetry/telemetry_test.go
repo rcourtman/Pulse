@@ -92,8 +92,9 @@ func TestApplySnapshot(t *testing.T) {
 			VMs:          10,
 			Containers:   5,
 			AIEnabled:    true,
-			LicenseTier:  "pro",
 			ActiveAlerts: 2,
+			PaidLicense:  true,
+			HasAPITokens: true,
 		}
 	}
 
@@ -111,8 +112,11 @@ func TestApplySnapshot(t *testing.T) {
 	if !ping.AIEnabled {
 		t.Fatal("AIEnabled should be true")
 	}
-	if ping.LicenseTier != "pro" {
-		t.Fatalf("LicenseTier = %q, want %q", ping.LicenseTier, "pro")
+	if !ping.PaidLicense {
+		t.Fatal("PaidLicense should be true")
+	}
+	if !ping.HasAPITokens {
+		t.Fatal("HasAPITokens should be true")
 	}
 }
 
@@ -168,6 +172,51 @@ func TestSend_Success(t *testing.T) {
 	}
 	if lastPing.Version != "6.0.0" {
 		t.Errorf("version = %q, want %q", lastPing.Version, "6.0.0")
+	}
+}
+
+func TestSend_UsesReducedCommercialSignals(t *testing.T) {
+	var rawBody []byte
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rawBody, _ = io.ReadAll(r.Body)
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer ts.Close()
+
+	origEndpoint := pingEndpoint
+	pingEndpoint = ts.URL
+	defer func() { pingEndpoint = origEndpoint }()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	send(ctx, Ping{
+		InstallID:    "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+		Version:      "6.0.0",
+		Event:        "heartbeat",
+		Platform:     "binary",
+		OS:           "linux",
+		Arch:         "amd64",
+		PaidLicense:  true,
+		HasAPITokens: true,
+	})
+
+	var payload map[string]any
+	if err := json.Unmarshal(rawBody, &payload); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if _, ok := payload["license_tier"]; ok {
+		t.Fatal("legacy license_tier field should not be sent")
+	}
+	if _, ok := payload["api_tokens"]; ok {
+		t.Fatal("legacy api_tokens field should not be sent")
+	}
+	if got, ok := payload["paid_license"].(bool); !ok || !got {
+		t.Fatalf("paid_license = %#v, want true", payload["paid_license"])
+	}
+	if got, ok := payload["has_api_tokens"].(bool); !ok || !got {
+		t.Fatalf("has_api_tokens = %#v, want true", payload["has_api_tokens"])
 	}
 }
 

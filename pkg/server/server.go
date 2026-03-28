@@ -446,9 +446,8 @@ func Run(ctx context.Context, version string) error {
 			}
 
 			snap := telemetry.Snapshot{
-				MultiTenant: currentCfg.MultiTenantEnabled,
-				APITokens:   len(currentCfg.APITokens),
-				LicenseTier: "free",
+				MultiTenant:  currentCfg.MultiTenantEnabled,
+				HasAPITokens: currentCfg.HasAPITokens(),
 			}
 
 			// Resource counts come from the tenant-aware monitor aggregate, not the
@@ -476,11 +475,11 @@ func Run(ctx context.Context, version string) error {
 				snap.SSOEnabled = ssoCfg.HasEnabledProviders()
 			}
 
-			// License tier.
+			// Coarse commercial posture only; telemetry does not send exact tiers.
 			if router != nil && router.GetLicenseHandlers() != nil {
 				if svc := router.GetLicenseHandlers().Service(context.Background()); svc != nil {
 					if lic := svc.Current(); lic != nil {
-						snap.LicenseTier = string(lic.Claims.Tier)
+						snap.PaidLicense = lic.Claims.Tier != pkglicensing.TierFree
 					}
 				}
 			}

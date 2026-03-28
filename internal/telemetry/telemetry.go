@@ -23,8 +23,8 @@
 //   - Whether relay/remote access is enabled
 //   - Whether SSO/OIDC is configured
 //   - Whether multi-tenant mode is enabled
-//   - License tier (free/pro/etc.)
-//   - Number of API tokens configured
+//   - Whether a paid license is active
+//   - Whether any API tokens are configured
 //
 // # What is NOT sent
 //
@@ -101,13 +101,13 @@ type Ping struct {
 	KubernetesClusters int `json:"kubernetes_clusters"`
 
 	// Feature usage (booleans and counts — no content)
-	AIEnabled    bool   `json:"ai_enabled"`
-	ActiveAlerts int    `json:"active_alerts"`
-	RelayEnabled bool   `json:"relay_enabled"`
-	SSOEnabled   bool   `json:"sso_enabled"`
-	MultiTenant  bool   `json:"multi_tenant"`
-	LicenseTier  string `json:"license_tier"` // "free", "pro", "pro_annual", "lifetime", etc.
-	APITokens    int    `json:"api_tokens"`
+	AIEnabled    bool `json:"ai_enabled"`
+	ActiveAlerts int  `json:"active_alerts"`
+	RelayEnabled bool `json:"relay_enabled"`
+	SSOEnabled   bool `json:"sso_enabled"`
+	MultiTenant  bool `json:"multi_tenant"`
+	PaidLicense  bool `json:"paid_license"`
+	HasAPITokens bool `json:"has_api_tokens"`
 }
 
 // Snapshot holds the dynamic state gathered at ping time.
@@ -126,8 +126,8 @@ type Snapshot struct {
 	RelayEnabled       bool
 	SSOEnabled         bool
 	MultiTenant        bool
-	LicenseTier        string
-	APITokens          int
+	PaidLicense        bool
+	HasAPITokens       bool
 }
 
 // SnapshotFunc returns the current state snapshot for telemetry.
@@ -287,8 +287,8 @@ func applySnapshot(base Ping, fn SnapshotFunc) Ping {
 	ping.RelayEnabled = s.RelayEnabled
 	ping.SSOEnabled = s.SSOEnabled
 	ping.MultiTenant = s.MultiTenant
-	ping.LicenseTier = s.LicenseTier
-	ping.APITokens = s.APITokens
+	ping.PaidLicense = s.PaidLicense
+	ping.HasAPITokens = s.HasAPITokens
 	return ping
 }
 
