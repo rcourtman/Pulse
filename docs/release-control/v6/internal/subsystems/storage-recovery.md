@@ -746,10 +746,11 @@ rows. Recovery inventory and event tables should use the same restrained
 title-case header typography, compact control heights, and thin row density as
 the established Pulse monitoring tables instead of drifting into report-style
 uppercase headers or oversized filter chrome.
-That same protected-items table contract should avoid visible horizontal row
-rules when they read as white underlines through workload names. The protected
-inventory scan should rely on spacing, zebra contrast, and hover state instead
-of explicit horizontal separators between every row.
+That same protected-items table contract should stay on the canonical shared
+table separator treatment used by the rest of Pulse. Recovery inventory should
+use the standard shared header/body dividers and avoid both local suppression
+of those separators and local duplicate row or header borders that make the
+lines read heavier than other monitoring tables.
 That same workspace-shell rule should also avoid a dedicated recovery-only
 status strip above the control bar. Recovery should use the same handoff shape
 as storage: one canonical `Subtabs.tsx` row first, then one shared page-controls

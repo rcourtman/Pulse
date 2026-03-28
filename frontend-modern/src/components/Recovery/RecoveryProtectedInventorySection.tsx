@@ -338,7 +338,7 @@ export const RecoveryProtectedInventorySection: Component<
               class="w-full border-collapse whitespace-nowrap"
               style={{ 'table-layout': 'fixed', 'min-width': props.isMobile ? '100%' : '640px' }}
             >
-            <TableHeader class="border-b-0">
+            <TableHeader>
               <TableRow class="bg-surface-alt/95 text-muted">
                 {(
                   [
@@ -379,7 +379,7 @@ export const RecoveryProtectedInventorySection: Component<
                 ))}
               </TableRow>
             </TableHeader>
-            <TableBody class="divide-y-0">
+            <TableBody>
               <For each={visibleRollups()}>
                 {(rollup) => {
                   const resourceIndex = props.resourcesById();
