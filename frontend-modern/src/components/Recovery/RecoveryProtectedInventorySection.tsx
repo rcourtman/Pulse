@@ -212,16 +212,6 @@ export const RecoveryProtectedInventorySection: Component<
                 <Show when={props.workspaceControls}>
                   <div class="shrink-0">{props.workspaceControls}</div>
                 </Show>
-                <Show when={props.rollupsSummary().stale > 0}>
-                  <span class={`${getRecoveryRollupStatusPillClass('stale')} px-2 py-0.5`}>
-                    {props.rollupsSummary().stale} stale
-                  </span>
-                </Show>
-                <Show when={props.rollupsSummary().neverSucceeded > 0}>
-                  <span class={`${getRecoveryRollupStatusPillClass('never-succeeded')} px-2 py-0.5`}>
-                    {props.rollupsSummary().neverSucceeded} never succeeded
-                  </span>
-                </Show>
               </div>
             }
             search={

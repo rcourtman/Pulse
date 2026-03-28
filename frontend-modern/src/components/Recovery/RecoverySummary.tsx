@@ -100,6 +100,9 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
       (freshnessBuckets().find((bucket) => bucket.key === 'under1h')?.count ?? 0) +
       (freshnessBuckets().find((bucket) => bucket.key === 'under24h')?.count ?? 0),
   );
+  const freshWithin1hCount = createMemo(
+    () => freshnessBuckets().find((bucket) => bucket.key === 'under1h')?.count ?? 0,
+  );
 
   const MetricRows = (rowProps: {
     rows: Array<{ label: string; value: string | number; valueClass?: string }>;
@@ -133,17 +136,11 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
       >
         <SummaryMetricCard label="Recovery Posture" loaded={true} hasData={hasRollups()}>
           <div class="flex h-full flex-col gap-2">
-            <div class="flex items-end justify-between gap-3">
-              <div>
-                <div class={`text-xl font-semibold tabular-nums ${primaryPostureMetric().valueClass}`}>
-                  {primaryPostureMetric().value}
-                </div>
-                <div class="text-[11px] text-muted">{primaryPostureMetric().label}</div>
+            <div>
+              <div class={`text-xl font-semibold tabular-nums ${primaryPostureMetric().valueClass}`}>
+                {primaryPostureMetric().value}
               </div>
-              <div class="text-right text-[11px]">
-                <div class="font-semibold tabular-nums text-base-content">{summary().total}</div>
-                <div class="text-muted">protected</div>
-              </div>
+              <div class="text-[11px] text-muted">{primaryPostureMetric().label}</div>
             </div>
             <div class="border-t border-border-subtle pt-1.5">
               <MetricRows rows={postureRows()} />
@@ -153,22 +150,19 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
 
         <SummaryMetricCard label="Freshness" loaded={true} hasData={hasRollups()}>
           <div class="flex h-full flex-col gap-2">
-            <div class="flex items-end justify-between gap-3">
-              <div>
-                <div class="text-xl font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">
-                  {freshWithin24hCount()}
-                </div>
-                <div class="text-[11px] text-muted">fresh in 24h</div>
+            <div>
+              <div class="text-xl font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">
+                {freshWithin24hCount()}
               </div>
-              <div class="text-right text-[11px]">
-                <div class="font-semibold tabular-nums text-amber-600 dark:text-amber-400">
-                  {summary().stale}
-                </div>
-                <div class="text-muted">stale items</div>
-              </div>
+              <div class="text-[11px] text-muted">fresh in 24h</div>
             </div>
             <div class="border-t border-border-subtle pt-1.5">
-              <MetricRows rows={freshnessRows()} />
+              <MetricRows
+                rows={[
+                  { label: '<1h', value: freshWithin1hCount() },
+                  ...freshnessRows(),
+                ]}
+              />
             </div>
           </div>
         </SummaryMetricCard>
@@ -223,24 +217,17 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
           emptyMessage={props.seriesFailed?.() ? 'Trend data unavailable' : 'No recovery activity yet'}
         >
           <div class="flex h-full flex-col gap-2">
-            <div class="flex items-end justify-between gap-3">
-              <div>
-                <div class="text-xl font-semibold tabular-nums text-base-content">
-                  {activity().totalEvents}
-                </div>
-                <div class="text-[11px] text-muted">recovery points</div>
+            <div>
+              <div class="text-xl font-semibold tabular-nums text-base-content">
+                {activity().totalEvents}
               </div>
-              <div class="text-right text-[11px]">
-                <div class="font-semibold tabular-nums text-base-content">
-                  {activity().averagePerDay.toFixed(1)}
-                </div>
-                <div class="text-muted">Avg / Day</div>
-              </div>
+              <div class="text-[11px] text-muted">recovery points</div>
             </div>
             <div class="border-t border-border-subtle pt-1.5">
               <MetricRows
                 rows={[
                   { label: 'Days Active', value: activity().activeDays },
+                  { label: 'Avg / Day', value: activity().averagePerDay.toFixed(1) },
                   { label: 'Peak Day', value: activity().busiestLabel ?? 'n/a' },
                   { label: 'Latest Activity', value: activity().latestLabel ?? 'n/a' },
                 ]}

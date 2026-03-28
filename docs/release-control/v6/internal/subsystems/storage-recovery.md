@@ -701,8 +701,9 @@ freshness card should emphasize recent successful coverage such as fresh-in-24h
 reach, while posture owns the attention-state headline.
 That same density rule should route through the shared summary primitives
 instead of feature-local spacing overrides. Recovery may select the shared
-compact `SummaryPanel` / `SummaryMetricCard` density mode, but it should not
-reintroduce one-off padding hacks inside `RecoverySummary.tsx`.
+default `SummaryPanel` / `SummaryMetricCard` density mode, and it should not
+reintroduce one-off padding hacks or right-side duplicate KPI blocks inside
+`RecoverySummary.tsx`.
 That same scan-first rule applies to the workspace strip. Recovery should not
 show tab labels and then repeat the same workspace count as standalone text in
 the same strip; the workspace tabs should carry their own counts, while the
@@ -746,6 +747,10 @@ status strip above the control bar. Protected-items and recovery-events should
 surface their tabs, counts, and issue cues through the shared page-controls
 search row so the page hands from summary directly into one canonical control
 surface, the same way other Pulse monitoring pages do.
+That same strip should not repeat the broad stale or never-succeeded posture
+counts once the summary already owns those signals. The protected-items control
+row should stay focused on workspace navigation, drill-in context, and active
+filters instead of echoing page-wide posture pills above the same table.
 That same workspace handoff should stay on shared primitive styling too. When
 recovery embeds its workspace tabs inside the page-controls row, the switcher
 should use the shared `Subtabs.tsx` control-surface variant instead of stacking

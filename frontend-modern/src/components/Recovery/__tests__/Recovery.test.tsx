@@ -221,6 +221,8 @@ describe('Recovery', () => {
     expect(
       within(inventoryControls).getByRole('tab', { name: /recovery events 0/i }),
     ).toBeInTheDocument();
+    expect(within(inventoryControls).queryByText(/^\d+ stale$/i)).not.toBeInTheDocument();
+    expect(within(inventoryControls).queryByText(/never succeeded/i)).not.toBeInTheDocument();
     expect(
       within(inventoryControls)
         .getByRole('tab', { name: /protected items 2/i })
