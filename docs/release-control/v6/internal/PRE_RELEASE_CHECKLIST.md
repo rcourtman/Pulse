@@ -238,7 +238,7 @@ If mobile is in scope, also run:
 cd /Volumes/Development/pulse/repos/pulse-mobile
 git status --porcelain
 npm test -- --runTestsByPath src/utils/__tests__/secureStorage.test.ts src/stores/__tests__/instanceStore.test.ts src/stores/__tests__/authStore.test.ts
-npm test -- --runTestsByPath src/relay/__tests__/client.test.ts src/relay/__tests__/client-hardening.test.ts
+npx jest --runInBand --runTestsByPath src/relay/__tests__/client.test.ts src/relay/__tests__/client-hardening.test.ts
 npm test -- --runTestsByPath src/stores/__tests__/approvalStore.test.ts
 ```
 

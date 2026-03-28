@@ -109,9 +109,10 @@ def build_command_specs(args: argparse.Namespace) -> list[CommandSpec]:
             name="relay-mobile-client",
             cwd=str(pulse_mobile_dir),
             command=[
-                "npm",
-                "test",
-                "--",
+                "npx",
+                "jest",
+                "--runInBand",
+                "--detectOpenHandles",
                 "--runTestsByPath",
                 "src/relay/__tests__/client.test.ts",
                 "src/relay/__tests__/client-hardening.test.ts",

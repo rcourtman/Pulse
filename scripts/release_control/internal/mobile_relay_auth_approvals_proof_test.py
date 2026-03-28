@@ -36,6 +36,10 @@ class MobileRelayAuthApprovalsProofTest(unittest.TestCase):
         )
         self.assertTrue(any(Path(spec.cwd) == proof.default_pulse_enterprise_dir() for spec in specs))
         self.assertTrue(any(Path(spec.cwd) == proof.default_pulse_mobile_dir() for spec in specs))
+        mobile_specs = [spec for spec in specs if Path(spec.cwd) == proof.default_pulse_mobile_dir()]
+        self.assertTrue(
+            all(spec.command[:4] == ["npx", "jest", "--runInBand", "--detectOpenHandles"] for spec in mobile_specs)
+        )
 
 
 if __name__ == "__main__":

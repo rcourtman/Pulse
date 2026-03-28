@@ -31,6 +31,11 @@ class RelayRegistrationReconnectDrainProofTest(unittest.TestCase):
         self.assertTrue(any(Path(spec.cwd) == proof.default_pulse_dir() / "frontend-modern" for spec in specs))
         self.assertTrue(any(Path(spec.cwd) == proof.default_pulse_mobile_dir() for spec in specs))
         self.assertTrue(any(Path(spec.cwd) == proof.default_pulse_dir() for spec in specs))
+        mobile_spec = next(spec for spec in specs if spec.name == "relay-mobile-client")
+        self.assertEqual(
+            mobile_spec.command[:4],
+            ["npx", "jest", "--runInBand", "--detectOpenHandles"],
+        )
 
 
 if __name__ == "__main__":
