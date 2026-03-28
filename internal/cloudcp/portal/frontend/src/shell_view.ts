@@ -296,7 +296,7 @@ function renderAccountContextStrip(account: PortalAccountSummary): string {
             '<span class="account-context-chip">' + escapeHTML(workspaceLabel) + '</span>' +
           '</div>' +
         '</div>' +
-        '<p>' + escapeHTML(account.kind === 'msp' ? 'Hosted workspace account for fleet access, team control, and account billing.' : 'Hosted account access for workspaces, team control, and billing.') + '</p>' +
+        '<p>' + escapeHTML(account.kind === 'msp' ? 'Hosted workspace account for workspace access, team control, and billing.' : 'Hosted account for workspace access, team control, and billing.') + '</p>' +
       '</div>' +
       '<div class="portal-account-context-summary">' +
         '<div class="portal-account-context-stat">' +
@@ -354,8 +354,8 @@ function renderShellNavigation(accounts: PortalAccountSummary[], supportEmail: s
         '<div class="portal-shell-nav-support">' + (hosted ? 'Hosted workspaces, account access, and commercial services' : 'Commercial account services and support') + '</div>' +
       '</div>' +
       '<div class="portal-shell-nav-group">' +
-        shellSectionButton('overview', activeSection, '01', 'Overview', hosted ? 'Status, account health, and next actions' : 'Account summary and access state', hosted ? String(totalWorkspaces) + ' total' : 'Summary') +
-        shellSectionButton('workspaces', activeSection, '02', hosted ? 'Workspaces' : 'Hosted access', hosted ? 'Hosted fleet and lifecycle actions' : 'No hosted workspaces are attached yet', hosted ? String(readyWorkspaces) + ' ready' : 'None') +
+        shellSectionButton('overview', activeSection, '01', 'Overview', hosted ? 'Status, priorities, and next actions' : 'Account summary and access state', hosted ? String(totalWorkspaces) + ' total' : 'Summary') +
+        shellSectionButton('workspaces', activeSection, '02', hosted ? 'Workspaces' : 'Hosted access', hosted ? 'Hosted workspaces and lifecycle actions' : 'No hosted workspaces are attached yet', hosted ? String(readyWorkspaces) + ' ready' : 'None') +
         shellSectionButton('team', activeSection, '03', 'Team', hosted ? 'Access and team roster' : 'Account membership', canManage ? 'Manage' : 'View') +
         shellSectionButton('services', activeSection, '04', 'Account services', 'Licenses, billing, refunds, and privacy', '4 tools') +
         shellSectionButton('support', activeSection, '05', 'Support', hosted ? 'Escalation and account support' : (supportEmail || 'Support contact'), supportEmail ? 'Email' : 'Help') +
@@ -454,7 +454,7 @@ function renderAccountOverviewSection(account: PortalAccountSummary): string {
       ? 'The fleet is mostly healthy, but there are still workspaces waiting on a completed health check.'
       : suspendedCount > 0
         ? 'Active hosted workspaces look stable. Resume a suspended workspace only when you are ready to bring it back into regular use.'
-        : 'Hosted status looks stable. Move into Team or Account services only if you need to change access or billing.';
+        : 'Everything looks stable. Move into Team or Account services only if you need to change access or billing.';
   var nextStepChecklist = unhealthyCount > 0
     ? (
       '<div class="overview-next-checklist">' +
@@ -484,12 +484,12 @@ function renderAccountOverviewSection(account: PortalAccountSummary): string {
       '<button class="btn-secondary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="' + (account.can_manage ? 'team' : 'services') + '">' + (account.can_manage ? 'Review team access' : 'Open account services') + '</button>' +
     '</div>';
   var accountScopeCopy = account.kind === 'msp'
-    ? 'Run client workspaces, account billing, and team access from one place.'
-    : 'Run hosted workspaces, account billing, and team access from one place.';
+    ? 'Manage client workspaces, billing, and team access from one place.'
+    : 'Manage hosted workspaces, billing, and team access from one place.';
   var overviewBriefStrip =
     '<div class="account-overview-brief-strip">' +
       '<div class="account-overview-brief-point account-overview-brief-point-wide">' +
-        '<strong>Account role</strong>' +
+        '<strong>Account scope</strong>' +
         '<span>' + escapeHTML(accountScopeCopy) + '</span>' +
       '</div>' +
       '<div class="account-overview-brief-point">' +
@@ -877,7 +877,7 @@ function renderSupportSection(context: ShellViewContext): string {
         '<div class="portal-support-route-grid">' +
           '<div class="portal-support-route-card">' +
             '<div class="account-panel-kicker">Hosted account</div>' +
-            '<h3>Account support</h3>' +
+            '<h3>Hosted support</h3>' +
             '<p>Use this route when tenant handoff, workspace access, team control, or hosted billing looks wrong.</p>' +
             '<div class="portal-support-points">' +
               '<div class="portal-support-point"><strong>Route here for hosted issues</strong><span>Access, handoff, team, and hosted billing all belong on the hosted account path.</span></div>' +
@@ -889,7 +889,7 @@ function renderSupportSection(context: ShellViewContext): string {
           '</div>' +
           '<div class="portal-support-route-card">' +
             '<div class="account-panel-kicker">Commercial</div>' +
-            '<h3>Commercial services</h3>' +
+            '<h3>Commercial requests</h3>' +
             '<p>Self-hosted subscriptions, license recovery, refunds, and privacy requests all route through Account services first.</p>' +
             '<div class="portal-support-points">' +
               '<div class="portal-support-point"><strong>Start in Account services</strong><span>Use Billing, Licenses, Refunds, or Privacy before escalating a commercial issue.</span></div>' +
@@ -902,7 +902,7 @@ function renderSupportSection(context: ShellViewContext): string {
         '</div>' +
         '<div class="portal-support-runbook">' +
           '<div class="account-panel-kicker">Escalation guide</div>' +
-          '<h3>Route the issue cleanly</h3>' +
+          '<h3>Choose the right path</h3>' +
           '<p>Keep hosted workspace issues, commercial requests, and pure support escalation on their own paths so the next person does not have to reconstruct the account state.</p>' +
           '<div class="portal-support-runbook-brief">' +
             '<div class="portal-support-runbook-brief-card"><strong>Confirm scope</strong><span>Decide first whether the issue is a hosted workspace problem, a commercial self-service request, or direct support escalation.</span></div>' +

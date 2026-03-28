@@ -155,8 +155,8 @@ describe('shell view', function() {
     expect(html).toContain('Start in workspaces');
     expect(html).toContain('Needs review');
     expect(html).toContain('Fleet status');
-    expect(html).toContain('Account role');
-    expect(html).toContain('Run client workspaces, account billing, and team access from one place.');
+    expect(html).toContain('Account scope');
+    expect(html).toContain('Manage client workspaces, billing, and team access from one place.');
     expect(html).toContain('Hosted path');
     expect(html).toContain('Commercial path');
     expect(html).toContain('Open workspaces');
@@ -221,7 +221,7 @@ describe('shell view', function() {
     expect(html).toContain('>Licenses<');
     expect(html).toContain('>Refunds<');
     expect(html).toContain('>Privacy<');
-    expect(html).toContain('Route the issue cleanly');
+    expect(html).toContain('Choose the right path');
     expect(html).toContain('Hosted path');
     expect(html).toContain('Commercial path');
     expect(html).toContain('Route checklist');
