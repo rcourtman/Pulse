@@ -157,7 +157,7 @@ describe('shell view', function() {
     expect(html).toContain('Workspace summary');
     expect(html).toContain('Account scope');
     expect(html).toContain('Manage client workspaces, billing, and team access from one place.');
-    expect(html).toContain('Hosted path');
+    expect(html).toContain('Workspace path');
     expect(html).toContain('Commercial path');
     expect(html).toContain('Open workspaces');
     expect(html).toContain('Review team access');
@@ -192,7 +192,7 @@ describe('shell view', function() {
     expect(html).toContain('data-action="clear-workspace-selection"');
     expect(html).toContain('Team management');
     expect(html).toContain('Least privilege');
-    expect(html).toContain('Hosted access');
+    expect(html).toContain('Workspace access');
     expect(html).toContain('Invite someone new');
     expect(html).toContain('Access model');
     expect(html).toContain('Access review');
@@ -245,7 +245,7 @@ describe('shell view', function() {
     expect(html).toContain('Summary');
     expect(html).toContain('None');
     expect(html).toContain('Use these account tools for self-hosted licenses, billing, refunds, and privacy actions.');
-    expect(html).toContain('Pick one commercial request and keep it separate from hosted workspaces and team changes.');
+    expect(html).toContain('Pick one commercial request and keep it separate from workspace and team changes.');
     expect(html).toContain('Account services');
     expect(html).not.toContain('Self-hosted commercial services');
   });
@@ -317,8 +317,8 @@ describe('shell view', function() {
     expect(html).toContain('No active blockers');
     expect(html).toContain('Active workspaces are healthy while suspended workspaces stay parked until you resume them.');
     expect(html).toContain('Next step');
-    expect(html).toContain('Active hosted workspaces look stable. Resume a suspended workspace only when you are ready to bring it back into regular use.');
-    expect(html).toContain('Active hosted workspaces are healthy. Suspended workspaces stay parked until you resume them.');
+    expect(html).toContain('Active workspaces look stable. Resume a suspended workspace only when you are ready to bring it back into regular use.');
+    expect(html).toContain('Active workspaces are healthy. Suspended workspaces stay parked until you resume them.');
     expect(html).toContain('Suspended stays parked');
   });
 });

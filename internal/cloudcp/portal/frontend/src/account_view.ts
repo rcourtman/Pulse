@@ -33,13 +33,13 @@ function roleLabel(role: string): string {
 function roleCapabilityCopy(role: string): string {
   switch (normalizedTeamRole(role)) {
     case 'owner':
-      return 'Full account control, including billing, team access, and hosted workspace control.';
+      return 'Full account control, including billing, team access, and workspace control.';
     case 'admin':
-      return 'Can manage hosted workspaces and billing for this account.';
+      return 'Can manage workspaces and billing for this account.';
     case 'tech':
-      return 'Can manage hosted workspaces without billing ownership.';
+      return 'Can manage workspaces without billing ownership.';
     case 'read_only':
-      return 'Can review hosted state without making control-plane changes.';
+      return 'Can review workspace status without making control-plane changes.';
     case 'member':
       return 'Has access through the account roster.';
     default:
@@ -88,10 +88,10 @@ function workspaceGuidance(workspace: PortalWorkspaceSummary): string {
     return 'This workspace looks ready for normal use. Use the fleet table to open it, or suspend it here if you are intentionally taking it out of service.';
   }
   if (workspace.state === 'active' && workspace.health_status === 'checking') {
-    return 'This workspace is active but still waiting on a completed health check. Review it before you treat the hosted posture as settled.';
+    return 'This workspace is active but still waiting on a completed health check. Review it before you treat the account status as settled.';
   }
   if (workspace.health_status === 'unhealthy') {
-    return 'This workspace needs review before it is treated as trustworthy. Use the management action only when you intend to suspend or remove it from the hosted fleet.';
+    return 'This workspace needs review before it is treated as trustworthy. Use the management action only when you intend to suspend or remove it from the workspace list.';
   }
   if (workspace.state === 'suspended') {
     return 'This workspace is already suspended. The remaining lifecycle action here is deletion, so treat it as a deliberate irreversible step.';
@@ -369,7 +369,7 @@ export function renderTeamSection(accountID: string, entry: PortalAccountUIEntry
   }
   if (!entry.teamQuery.data.length) {
     if (rosterPanel) rosterPanel.classList.add('state-only');
-    setContainerMessage(roster, 'No one added yet', 'Invite someone new when this hosted account needs shared access.', false);
+    setContainerMessage(roster, 'No one added yet', 'Invite someone new when this account needs shared access.', false);
     return;
   }
 
