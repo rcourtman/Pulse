@@ -261,17 +261,10 @@ header .logout-btn:hover,
 .account-surface,
 .empty-state {
   border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(12px);
-  box-shadow: var(--shadow-sm);
-  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  border-radius: var(--radius-lg);
-}
-.portal-command-strip:hover,
-.intro-card:hover,
-.service-panel:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
+  background: #fff;
+  box-shadow: none;
+  transition: border-color 140ms ease, background 140ms ease;
+  border-radius: 14px;
 }
 .portal-shell-layout {
   display: grid;
@@ -279,9 +272,9 @@ header .logout-btn:hover,
   gap: 0;
   align-items: start;
   border: 1px solid var(--line);
-  border-radius: var(--radius-lg);
+  border-radius: 14px;
   background: #fff;
-  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.05);
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.04);
   overflow: hidden;
 }
 .portal-shell-nav {
@@ -362,15 +355,15 @@ header .logout-btn:hover,
 .portal-shell-main {
   min-width: 0;
   padding: 0 0 24px;
-  background: #f6f8fb;
+  background: #f8fafc;
 }
 .portal-shell-main > .portal-content-panel {
   display: none !important;
 }
 .portal-account-context {
-  padding: 12px 18px 10px;
+  padding: 10px 16px 8px;
   border-bottom: 1px solid var(--line);
-  background: #fbfcfd;
+  background: #fff;
 }
 .portal-account-context-copy {
   display: flex;
@@ -397,7 +390,7 @@ header .logout-btn:hover,
 }
 .portal-account-context-row h2 {
   margin: 0;
-  font-size: 26px;
+  font-size: 24px;
   line-height: 0.98;
   letter-spacing: -0.05em;
 }
@@ -442,13 +435,13 @@ header .logout-btn:hover,
   gap: 18px;
 }
 .portal-content-panel {
-  padding: 12px 14px 0;
+  padding: 10px 12px 0;
 }
 .portal-top-section,
 .service-section {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
 }
 .portal-top-section-header h2,
 .service-header h2 {
@@ -459,9 +452,9 @@ header .logout-btn:hover,
 }
 .portal-top-section-header p,
 .service-note {
-  margin: 10px 0 0;
-  font-size: 15px;
-  line-height: 1.65;
+  margin: 8px 0 0;
+  font-size: 14px;
+  line-height: 1.55;
   color: var(--ink-soft);
   max-width: 800px;
 }
