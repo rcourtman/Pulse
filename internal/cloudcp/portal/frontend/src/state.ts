@@ -79,6 +79,7 @@ export function ensurePortalAccountUIEntry(accountState: PortalAccountState, acc
       selectedWorkspaceID: '',
       manageWorkspace: createMutationState(),
       accessVisible: false,
+      activeAccessJob: '',
       accessQuery: createQueryState<PortalAccessMember[]>([]),
     };
   }

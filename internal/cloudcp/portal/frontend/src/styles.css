@@ -2041,11 +2041,54 @@ header .logout-btn:hover,
   font-size: 22px;
 }
 
-.access-management-grid {
+.access-task-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.access-task-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--ink-muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.access-task-button.is-active {
+  border-color: rgba(15, 109, 115, 0.22);
+  background: rgba(15, 109, 115, 0.08);
+  color: var(--accent-strong);
+}
+
+.access-shell {
   display: grid;
   grid-template-columns: minmax(0, 1.82fr) minmax(292px, 0.84fr);
   gap: 14px;
   align-items: start;
+}
+
+.access-shell-main,
+.access-shell-detail {
+  min-width: 0;
+}
+
+.access-shell-detail {
+  position: sticky;
+  top: 14px;
+}
+
+.access-shell-idle {
+  grid-template-columns: 1fr;
 }
 
 .access-roster-column {
@@ -2059,17 +2102,10 @@ header .logout-btn:hover,
   box-shadow: var(--shadow-sm);
 }
 
-.access-side-column {
-  display: flex;
-  flex-direction: column;
-  align-self: start;
-  position: sticky;
-  top: 14px;
-}
-
 .access-roster,
 .access-invite-panel,
-.access-operations-panel {
+.access-task-panel,
+.access-job-note-panel {
   background: #fff;
   border-color: var(--line);
 }
@@ -2088,7 +2124,8 @@ header .logout-btn:hover,
   padding: 0;
 }
 
-.access-operations-panel {
+.access-task-panel,
+.access-job-note-panel {
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -2097,10 +2134,15 @@ header .logout-btn:hover,
   border-radius: 12px;
 }
 
-.access-operations-grid {
+.access-task-header,
+.access-task-body {
   display: flex;
   flex-direction: column;
   gap: 14px;
+}
+
+.access-task-header {
+  gap: 12px;
 }
 
 .access-policy-panel {
@@ -2410,6 +2452,32 @@ header .logout-btn:hover,
 .access-policy-row span {
   font-size: 12px;
   line-height: 1.4;
+  color: var(--ink-soft);
+}
+
+.access-remove-points {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.access-remove-point {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-left: 12px;
+  border-left: 3px solid rgba(11, 106, 114, 0.14);
+}
+
+.access-remove-point strong {
+  font-size: 13px;
+  line-height: 1.3;
+  color: var(--ink);
+}
+
+.access-remove-point span {
+  font-size: 12px;
+  line-height: 1.45;
   color: var(--ink-soft);
 }
 
@@ -3015,7 +3083,7 @@ header .logout-btn:hover,
 
 @media (max-width: 1180px) {
   .account-management-grid,
-  .access-management-grid,
+  .access-shell,
   .access-review-grid,
   .account-overview-secondary,
   .overview-task-grid,
@@ -3057,10 +3125,6 @@ header .logout-btn:hover,
 
   .workspace-management-facts {
     grid-template-columns: 1fr;
-  }
-
-  .access-side-column {
-    position: static;
   }
 
   .workspace-list-head {
@@ -3280,6 +3344,14 @@ header .logout-btn:hover,
     order: 2;
   }
 
+  .access-shell-job-open .access-shell-detail {
+    order: 1;
+  }
+
+  .access-shell-job-open .access-shell-main {
+    order: 2;
+  }
+
   .workspace-management-header,
   .access-management-header,
   .billing-header,
@@ -3318,6 +3390,7 @@ header .logout-btn:hover,
   .billing-shell,
   .billing-empty-shell,
   .billing-empty-intro,
+  .access-shell,
   .workspace-operations-shell,
   .overview-task-grid,
   .account-overview-card,

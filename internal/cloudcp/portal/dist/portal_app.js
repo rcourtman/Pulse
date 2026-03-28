@@ -180,6 +180,30 @@
     }
     return count;
   }
+  function accessJobTitle(job) {
+    switch (job) {
+      case "invite":
+        return "Invite people";
+      case "change_role":
+        return "Change roles";
+      case "remove":
+        return "Remove access";
+      default:
+        return "";
+    }
+  }
+  function accessJobCopy(job) {
+    switch (job) {
+      case "invite":
+        return "Add one person with the minimum role they need on this account.";
+      case "change_role":
+        return "Use the roster to change one person at a time and keep each person on the smallest role they need.";
+      case "remove":
+        return "Use removal only when this person should no longer be on this hosted account.";
+      default:
+        return "";
+    }
+  }
   function renderAccessStats(accountID, entry, canManage) {
     var stats = getElement("access-stats-" + accountID);
     if (!stats) return;
@@ -203,10 +227,10 @@
     cell.className = "access-control-cell " + className;
     return cell;
   }
-  function renderAccessRoleControl(accountID, member, isOwner, canManage) {
+  function renderAccessRoleControl(accountID, member, isOwner, canManage, activeJob) {
     var currentRole = normalizedAccessRole(member.role);
     var group = createAccessControlCell("access-control-cell-role");
-    if (!canManage) {
+    if (!canManage || activeJob !== "change_role") {
       var badge = document.createElement("span");
       badge.className = "access-role-badge";
       badge.textContent = roleLabel(currentRole);
@@ -236,22 +260,28 @@
     group.appendChild(sel);
     return group;
   }
-  function renderAccessMemberAction(accountID, member, isOwner, canManage) {
+  function renderAccessMemberAction(accountID, member, isOwner, canManage, activeJob) {
+    var group = createAccessControlCell("access-control-cell-access");
     if (!canManage) {
-      var readonly = createAccessControlCell("access-control-cell-access");
       var readonlyText = document.createElement("span");
       readonlyText.className = "access-control-locked";
       readonlyText.textContent = "View only";
-      readonly.appendChild(readonlyText);
-      return readonly;
+      group.appendChild(readonlyText);
+      return group;
+    }
+    if (activeJob !== "remove") {
+      var idleText = document.createElement("span");
+      idleText.className = "access-control-locked";
+      idleText.textContent = activeJob === "change_role" ? "Role change" : "Review only";
+      group.appendChild(idleText);
+      return group;
     }
     if (normalizedAccessRole(member.role) === "owner" && !isOwner) {
-      var locked = createAccessControlCell("access-control-cell-access");
       var lockedText = document.createElement("span");
       lockedText.className = "access-control-locked";
       lockedText.textContent = "Locked";
-      locked.appendChild(lockedText);
-      return locked;
+      group.appendChild(lockedText);
+      return group;
     }
     var btn = document.createElement("button");
     btn.type = "button";
@@ -261,11 +291,10 @@
     btn.setAttribute("data-account-id", accountID);
     btn.setAttribute("data-user-id", member.user_id);
     btn.setAttribute("data-member-email", member.email);
-    var group = createAccessControlCell("access-control-cell-access");
     group.appendChild(btn);
     return group;
   }
-  function renderAccessMemberRow(accountID, member, isOwner, canManage) {
+  function renderAccessMemberRow(accountID, member, isOwner, canManage, activeJob) {
     var row = document.createElement("div");
     row.className = "access-member-row";
     var identity = document.createElement("div");
@@ -286,16 +315,14 @@
     caption.textContent = roleCapabilityCopy(member.role);
     identity.appendChild(caption);
     row.appendChild(identity);
-    row.appendChild(renderAccessRoleControl(accountID, member, isOwner, canManage));
-    row.appendChild(renderAccessMemberAction(accountID, member, isOwner, canManage) || createAccessControlCell("access-control-cell-access"));
+    row.appendChild(renderAccessRoleControl(accountID, member, isOwner, canManage, activeJob));
+    row.appendChild(renderAccessMemberAction(accountID, member, isOwner, canManage, activeJob) || createAccessControlCell("access-control-cell-access"));
     return row;
   }
-  function ensureAccessRosterHead(container) {
-    var existing = container.querySelector(".access-roster-head");
-    if (existing) return;
+  function renderAccessRosterHead(container, activeJob) {
     var head = document.createElement("div");
     head.className = "access-roster-head";
-    head.innerHTML = "<span>Operator</span><span>Role</span><span>Access</span>";
+    head.innerHTML = "<span>Operator</span><span>" + (activeJob === "change_role" ? "New role" : "Role") + "</span><span>" + (activeJob === "remove" ? "Remove" : "Action") + "</span>";
     container.appendChild(head);
   }
   function renderAddWorkspaceSection(accountID, entry) {
@@ -312,11 +339,41 @@
     var roster = getElement("access-list-" + accountID);
     if (!section || !roster) return;
     var rosterPanel = roster.closest(".access-roster");
+    var shell = getElement("access-shell-" + accountID);
+    var detail = getElement("access-detail-" + accountID);
+    var taskPanel = getElement("access-task-panel-" + accountID);
+    var taskTitle = getElement("access-task-title-" + accountID);
+    var taskCopy = getElement("access-task-copy-" + accountID);
+    var taskButtons = {
+      invite: getElement("access-task-invite-" + accountID),
+      change_role: getElement("access-task-change_role-" + accountID),
+      remove: getElement("access-task-remove-" + accountID)
+    };
+    var taskBodies = {
+      invite: getElement("access-task-body-invite-" + accountID),
+      change_role: getElement("access-task-body-change_role-" + accountID),
+      remove: getElement("access-task-body-remove-" + accountID)
+    };
     var actorRole = section.getAttribute("data-actor-role") || "";
     var isOwner = actorRole === "owner";
     var canManage = section.getAttribute("data-can-manage") === "true";
+    var activeJob = canManage ? entry.activeAccessJob : "";
     section.classList.toggle("visible", entry.accessVisible);
     renderAccessStats(accountID, entry, canManage);
+    if (shell) {
+      shell.classList.toggle("access-shell-job-open", !!activeJob);
+      shell.classList.toggle("access-shell-idle", !activeJob);
+    }
+    if (detail) detail.hidden = !activeJob;
+    if (taskPanel) taskPanel.hidden = !activeJob;
+    if (taskTitle) taskTitle.textContent = accessJobTitle(activeJob);
+    if (taskCopy) taskCopy.textContent = accessJobCopy(activeJob);
+    taskButtons.invite?.classList.toggle("is-active", activeJob === "invite");
+    taskButtons.change_role?.classList.toggle("is-active", activeJob === "change_role");
+    taskButtons.remove?.classList.toggle("is-active", activeJob === "remove");
+    if (taskBodies.invite) taskBodies.invite.hidden = activeJob !== "invite";
+    if (taskBodies.change_role) taskBodies.change_role.hidden = activeJob !== "change_role";
+    if (taskBodies.remove) taskBodies.remove.hidden = activeJob !== "remove";
     if (!entry.accessVisible) {
       return;
     }
@@ -343,10 +400,10 @@
     roster.textContent = "";
     roster.classList.remove("state-only");
     if (rosterPanel) rosterPanel.classList.remove("state-only");
-    ensureAccessRosterHead(roster);
+    renderAccessRosterHead(roster, activeJob);
     for (var i = 0; i < entry.accessQuery.data.length; i += 1) {
       var member = entry.accessQuery.data[i];
-      roster.appendChild(renderAccessMemberRow(accountID, member, isOwner, canManage));
+      roster.appendChild(renderAccessMemberRow(accountID, member, isOwner, canManage, activeJob));
     }
   }
   function renderAccountUI(accountState, accounts) {
@@ -390,6 +447,16 @@
           event.preventDefault();
           deps.setShellSection("access");
           deps.runtime.ensureAccessVisible(accountID);
+          return;
+        case "set-access-job":
+          event.preventDefault();
+          deps.setShellSection("access");
+          void deps.runtime.setAccessJob(accountID, actionEl.getAttribute("data-access-job") || "");
+          return;
+        case "clear-access-job":
+          event.preventDefault();
+          deps.setShellSection("access");
+          deps.runtime.clearAccessJob(accountID);
           return;
         case "invite-member":
           event.preventDefault();
@@ -683,6 +750,7 @@
         selectedWorkspaceID: "",
         manageWorkspace: createMutationState(),
         accessVisible: false,
+        activeAccessJob: "",
         accessQuery: createQueryState([])
       };
     }
@@ -863,6 +931,7 @@
         entry.addWorkspaceOpen = !entry.addWorkspaceOpen;
         if (entry.addWorkspaceOpen) {
           entry.accessVisible = false;
+          entry.activeAccessJob = "";
           entry.selectedWorkspaceID = "";
         }
         shouldFocus = entry.addWorkspaceOpen;
@@ -880,6 +949,7 @@
         entry.selectedWorkspaceID = entry.selectedWorkspaceID === workspaceID ? "" : workspaceID;
         if (entry.selectedWorkspaceID) {
           entry.accessVisible = false;
+          entry.activeAccessJob = "";
           entry.addWorkspaceOpen = false;
         }
         selectedWorkspaceID = entry.selectedWorkspaceID;
@@ -977,35 +1047,49 @@
         deps.showToast(error instanceof Error ? error.message : "Failed to open billing portal.", true);
       }
     };
-    var toggleAccess = function(accountID) {
-      var nextVisible = false;
-      deps.store.updateAccountState(function(accountState) {
-        var entry = ensurePortalAccountUIEntry(accountState, accountID);
-        entry.accessVisible = !entry.accessVisible;
-        if (entry.accessVisible) {
-          entry.selectedWorkspaceID = "";
-          entry.addWorkspaceOpen = false;
-        }
-        nextVisible = entry.accessVisible;
-      });
-      if (nextVisible) {
-        void loadAccessRoster(accountID);
-      }
-    };
     var ensureAccessVisible = function(accountID) {
       var shouldLoad = false;
       deps.store.updateAccountState(function(accountState) {
         var entry = ensurePortalAccountUIEntry(accountState, accountID);
         if (!entry.accessVisible) {
           entry.accessVisible = true;
-          entry.selectedWorkspaceID = "";
-          entry.addWorkspaceOpen = false;
         }
+        entry.selectedWorkspaceID = "";
+        entry.addWorkspaceOpen = false;
         shouldLoad = entry.accessQuery.status === "idle" || entry.accessQuery.status === "error";
       });
       if (shouldLoad) {
         void loadAccessRoster(accountID);
       }
+    };
+    var setAccessJob = async function(accountID, job) {
+      var nextJob = "";
+      var shouldLoad = false;
+      deps.store.updateAccountState(function(accountState) {
+        var entry = ensurePortalAccountUIEntry(accountState, accountID);
+        entry.accessVisible = true;
+        entry.selectedWorkspaceID = "";
+        entry.addWorkspaceOpen = false;
+        entry.activeAccessJob = entry.activeAccessJob === job ? "" : job;
+        nextJob = entry.activeAccessJob;
+        shouldLoad = entry.accessQuery.status === "idle" || entry.accessQuery.status === "error";
+      });
+      if (shouldLoad) {
+        await loadAccessRoster(accountID);
+      }
+      if (nextJob) {
+        revealElementWhenReady("access-detail-" + accountID, function() {
+          if (nextJob === "invite") {
+            focusElement("invite-email-" + accountID);
+          }
+        });
+      }
+    };
+    var clearAccessJob = function(accountID) {
+      deps.store.updateAccountState(function(accountState) {
+        var entry = ensurePortalAccountUIEntry(accountState, accountID);
+        entry.activeAccessJob = "";
+      });
     };
     var inviteMember = async function(accountID) {
       var emailEl = getElement("invite-email-" + accountID);
@@ -1071,8 +1155,9 @@
       selectWorkspace,
       clearWorkspaceSelection,
       openBilling,
-      toggleAccess,
       ensureAccessVisible,
+      setAccessJob,
+      clearAccessJob,
       inviteMember,
       createWorkspace,
       manageWorkspaceAction,
@@ -2085,11 +2170,13 @@
   }
   function renderAccountAccessSection(account) {
     var accessHeaderTitle = account.can_manage ? "Manage access" : "Review access";
-    var accessHeaderCopy = account.can_manage ? "Invite people, change roles, and remove stale access from one hosted roster." : "Review who already has access to this hosted account. An owner or admin must make changes.";
-    var accessContextChips = account.can_manage ? ["Invite people", "Change roles", "Remove access"] : ["View roster", "Owner or admin required"];
-    var accessPolicy = '<div class="access-policy-panel"><div class="access-panel-heading"><h4>' + (account.can_manage ? "Choose the smallest role" : "Role meanings") + "</h4><p>" + (account.can_manage ? "Match each person to the narrowest role that still lets them do the job they own." : "Use these role meanings to understand what each person on this roster can do.") + '</p></div><div class="access-policy-list"><div class="access-policy-row"><strong>Owner</strong><span>Full account, billing, and access control.</span></div><div class="access-policy-row"><strong>Admin</strong><span>Workspace control, billing, and roster management.</span></div><div class="access-policy-row"><strong>Tech</strong><span>Workspace control without billing or roster ownership.</span></div><div class="access-policy-row"><strong>Read-only</strong><span>Review access without control-plane changes.</span></div></div></div>';
-    var accessActions = account.can_manage ? '<div class="access-invite-panel"><div class="access-panel-heading"><h4>Invite people</h4><p>Add one person with the minimum role they need on this account.</p></div><div class="access-invite"><div><label for="invite-email-' + escapeAttr(account.id) + '">Email</label><input type="email" id="invite-email-' + escapeAttr(account.id) + '" placeholder="user@example.com" autocomplete="off"></div><div><label for="invite-role-' + escapeAttr(account.id) + '">Role</label><select id="invite-role-' + escapeAttr(account.id) + '"><option value="admin">Admin</option><option value="tech">Tech</option><option value="read_only">Read-only</option></select></div><button type="button" class="btn-primary btn-compact" data-action="invite-member" data-account-id="' + escapeAttr(account.id) + '">Invite</button></div></div>' : '<div class="access-invite-panel"><div class="access-panel-heading"><h4>Need an access change?</h4><p>An owner or admin on this account must invite people, change roles, or remove access.</p></div></div>';
-    return '<section class="account-content-panel account-content-panel-access"><section class="access-management-panel access-section access-section-shell" id="access-section-' + escapeAttr(account.id) + '" data-actor-role="' + escapeAttr(account.role) + '" data-can-manage="' + escapeAttr(account.can_manage ? "true" : "false") + '"><div class="access-management-header"><div><div class="account-panel-kicker">Access</div><h3>' + accessHeaderTitle + "</h3><p>" + accessHeaderCopy + "</p>" + renderSectionContextChips(accessContextChips) + '</div><button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="workspaces">Back to workspaces</button></div><div class="access-management-stats" id="access-stats-' + escapeAttr(account.id) + '"></div><div class="access-management-grid"><div class="access-roster-column"><div class="access-roster"><div class="access-panel-heading"><h4>People on this account</h4><p>Review the hosted roster here before you open, change, or remove access.</p></div><div class="access-roster-list" id="access-list-' + escapeAttr(account.id) + '"><div class="access-list-message">Loading\u2026</div></div></div></div><div class="access-side-column"><div class="access-operations-panel"><div class="access-panel-heading access-panel-heading-tight"><div class="account-panel-kicker">Next action</div><h4>' + (account.can_manage ? "Pick the access job" : "This account is view-only for you") + "</h4><p>" + (account.can_manage ? "Use this column to invite people, tighten roles, or remove access that no longer belongs here." : "You can review the roster here, but access changes must be done by an owner or admin.") + '</p></div><div class="access-operations-grid">' + accessActions + accessPolicy + "</div></div></div></div></section></section>";
+    var accessHeaderCopy = account.can_manage ? "Review the hosted roster, then open one access job at a time." : "Review who already has access to this hosted account. An owner or admin must make changes.";
+    var accessTaskStrip = account.can_manage ? '<div class="access-task-strip"><button type="button" class="access-task-button" id="access-task-invite-' + escapeAttr(account.id) + '" data-action="set-access-job" data-account-id="' + escapeAttr(account.id) + '" data-access-job="invite">Invite people</button><button type="button" class="access-task-button" id="access-task-change_role-' + escapeAttr(account.id) + '" data-action="set-access-job" data-account-id="' + escapeAttr(account.id) + '" data-access-job="change_role">Change roles</button><button type="button" class="access-task-button" id="access-task-remove-' + escapeAttr(account.id) + '" data-action="set-access-job" data-account-id="' + escapeAttr(account.id) + '" data-access-job="remove">Remove access</button></div>' : renderSectionContextChips(["View roster", "Owner or admin required"]);
+    var accessRoleGuide = '<div class="access-policy-panel"><div class="access-panel-heading"><h4>' + (account.can_manage ? "Choose the smallest role" : "Role meanings") + "</h4><p>" + (account.can_manage ? "Match each person to the narrowest role that still lets them do the job they own." : "Use these role meanings to understand what each person on this roster can do.") + '</p></div><div class="access-policy-list"><div class="access-policy-row"><strong>Owner</strong><span>Full account, billing, and access control.</span></div><div class="access-policy-row"><strong>Admin</strong><span>Workspace control, billing, and roster management.</span></div><div class="access-policy-row"><strong>Tech</strong><span>Workspace control without billing or roster ownership.</span></div><div class="access-policy-row"><strong>Read-only</strong><span>Review access without control-plane changes.</span></div></div></div>';
+    var accessInvitePanel = account.can_manage ? '<div class="access-invite-panel"><div class="access-panel-heading"><h4>Invite people</h4><p>Add one person with the minimum role they need on this account.</p></div><div class="access-invite"><div><label for="invite-email-' + escapeAttr(account.id) + '">Email</label><input type="email" id="invite-email-' + escapeAttr(account.id) + '" placeholder="user@example.com" autocomplete="off"></div><div><label for="invite-role-' + escapeAttr(account.id) + '">Role</label><select id="invite-role-' + escapeAttr(account.id) + '"><option value="admin">Admin</option><option value="tech">Tech</option><option value="read_only">Read-only</option></select></div><button type="button" class="btn-primary btn-compact" data-action="invite-member" data-account-id="' + escapeAttr(account.id) + '">Invite</button></div></div>' : "";
+    var accessChangeRolePanel = '<div class="access-job-note-panel"><div class="access-panel-heading"><h4>Change roles on the roster</h4><p>Use the role column in the roster to change one person at a time. Keep each person on the smallest role they need.</p></div></div>' + accessRoleGuide;
+    var accessRemovePanel = '<div class="access-job-note-panel"><div class="access-panel-heading"><h4>Remove stale access</h4><p>Use removal only when this person should no longer be on this hosted account. Owners may still be protected when they are the last owner.</p></div><div class="access-remove-points"><div class="access-remove-point"><strong>Pick the exact person</strong><span>Use the roster to remove one account member at a time.</span></div><div class="access-remove-point"><strong>Keep current owners safe</strong><span>The last owner cannot be removed until another owner exists.</span></div></div></div>';
+    return '<section class="account-content-panel account-content-panel-access"><section class="access-management-panel access-section access-section-shell" id="access-section-' + escapeAttr(account.id) + '" data-actor-role="' + escapeAttr(account.role) + '" data-can-manage="' + escapeAttr(account.can_manage ? "true" : "false") + '"><div class="access-management-header"><div><div class="account-panel-kicker">Access</div><h3>' + accessHeaderTitle + "</h3><p>" + accessHeaderCopy + "</p>" + accessTaskStrip + '</div></div><div class="access-management-stats" id="access-stats-' + escapeAttr(account.id) + '"></div><div class="access-shell access-shell-idle" id="access-shell-' + escapeAttr(account.id) + '"><div class="access-shell-main"><div class="access-roster-column"><div class="access-roster"><div class="access-panel-heading"><h4>People on this account</h4><p>' + (account.can_manage ? "Review the hosted roster here, then open the exact access job you need." : "Review the hosted roster here. An owner or admin must make changes.") + '</p></div><div class="access-roster-list" id="access-list-' + escapeAttr(account.id) + '"><div class="access-list-message">Loading\u2026</div></div></div></div></div>' + (account.can_manage ? '<div class="access-shell-detail" id="access-detail-' + escapeAttr(account.id) + '" hidden><div class="access-task-panel" id="access-task-panel-' + escapeAttr(account.id) + '" hidden><div class="access-task-header"><div><div class="account-panel-kicker">Access task</div><h4 id="access-task-title-' + escapeAttr(account.id) + '">Invite people</h4><p id="access-task-copy-' + escapeAttr(account.id) + '"></p></div><button type="button" class="btn-secondary btn-compact" data-action="clear-access-job" data-account-id="' + escapeAttr(account.id) + '">Close panel</button></div><div class="access-task-body" id="access-task-body-invite-' + escapeAttr(account.id) + '" hidden>' + accessInvitePanel + accessRoleGuide + '</div><div class="access-task-body" id="access-task-body-change_role-' + escapeAttr(account.id) + '" hidden>' + accessChangeRolePanel + '</div><div class="access-task-body" id="access-task-body-remove-' + escapeAttr(account.id) + '" hidden>' + accessRemovePanel + "</div></div></div>" : "") + "</div></section></section>";
   }
   function renderHostedBillingCards(accounts) {
     var hostedBillingAccounts = accounts.filter(function(account) {

@@ -158,15 +158,18 @@ describe('account runtime', function() {
         selectedWorkspaceID: '',
         manageWorkspace: { pending: false, error: '' },
         accessVisible: true,
+        activeAccessJob: 'invite',
         accessQuery: { status: 'idle', error: '', data: [] },
       });
       entry.addWorkspaceOpen = true;
       entry.accessVisible = true;
+      entry.activeAccessJob = 'invite';
     }, { notify: false });
 
     runtime.selectWorkspace('acct_1', 'ws_2');
     expect(deps.store.getAccountState().byAccountID.acct_1.selectedWorkspaceID).toBe('ws_2');
     expect(deps.store.getAccountState().byAccountID.acct_1.accessVisible).toBe(false);
+    expect(deps.store.getAccountState().byAccountID.acct_1.activeAccessJob).toBe('');
     expect(deps.store.getAccountState().byAccountID.acct_1.addWorkspaceOpen).toBe(false);
     expect(document.getElementById('workspace-operations-shell-acct_1')?.classList.contains('workspace-operations-shell-selected')).toBe(true);
     expect(document.getElementById('workspace-management-title-acct_1')?.textContent).toContain('Alpha Workspace');
@@ -326,6 +329,77 @@ describe('account runtime', function() {
     expect(deps.store.getAccountState().byAccountID.acct_1.addWorkspaceOpen).toBe(true);
   });
 
+  it('reveals the invite panel when an access job opens below the viewport', async function() {
+    deps.store.updateAccountState(function(accountState) {
+      accountState.byAccountID.acct_1 = {
+        addWorkspaceOpen: false,
+        createWorkspace: { pending: false, error: '' },
+        selectedWorkspaceID: '',
+        manageWorkspace: { pending: false, error: '' },
+        accessVisible: true,
+        activeAccessJob: '',
+        accessQuery: {
+          status: 'ready',
+          error: '',
+          data: [{ email: 'owner@example.com', role: 'owner', user_id: 'u1' }],
+        },
+      };
+    }, { notify: false });
+
+    document.body.innerHTML =
+      '<div id="access-section-acct_1" class="access-section" data-actor-role="owner" data-can-manage="true">' +
+      '<div id="access-shell-acct_1"></div>' +
+      '<div id="access-detail-acct_1" hidden></div>' +
+      '<div id="access-task-panel-acct_1" hidden></div>' +
+      '<div id="access-task-title-acct_1"></div>' +
+      '<div id="access-task-copy-acct_1"></div>' +
+      '<button id="access-task-invite-acct_1"></button>' +
+      '<button id="access-task-change_role-acct_1"></button>' +
+      '<button id="access-task-remove-acct_1"></button>' +
+      '<div id="access-task-body-invite-acct_1"></div>' +
+      '<div id="access-task-body-change_role-acct_1"></div>' +
+      '<div id="access-task-body-remove-acct_1"></div>' +
+      '<div id="access-stats-acct_1"></div>' +
+      '<div id="access-list-acct_1"></div>' +
+      '<input id="invite-email-acct_1" value="">' +
+      '</div>';
+
+    var detail = document.getElementById('access-detail-acct_1') as HTMLElement | null;
+    expect(detail).not.toBeNull();
+    if (!detail) return;
+    var scrollIntoView = vi.fn();
+    var requestAnimationFrame = vi.fn(function(callback: FrameRequestCallback) {
+      callback(0);
+      return 1;
+    });
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 664 });
+    Object.defineProperty(window, 'requestAnimationFrame', { configurable: true, value: requestAnimationFrame });
+    Object.defineProperty(detail, 'scrollIntoView', { configurable: true, value: scrollIntoView });
+    Object.defineProperty(detail, 'getBoundingClientRect', {
+      configurable: true,
+      value: function() {
+        return {
+          top: 924,
+          bottom: 1410,
+          left: 0,
+          right: 320,
+          width: 320,
+          height: 486,
+          x: 0,
+          y: 924,
+          toJSON: function() { return {}; },
+        };
+      },
+    });
+
+    await runtime.setAccessJob('acct_1', 'invite');
+
+    expect(requestAnimationFrame).toHaveBeenCalledTimes(1);
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: 'start', inline: 'nearest' });
+    expect(deps.store.getAccountState().byAccountID.acct_1.activeAccessJob).toBe('invite');
+    expect(document.activeElement?.id).toBe('invite-email-acct_1');
+  });
+
   it('loads and updates team membership from runtime actions', async function() {
     vi.stubGlobal(
       'fetch',
@@ -338,6 +412,17 @@ describe('account runtime', function() {
     document.body.innerHTML =
       '<div id="workspace-management-acct_1" class="workspace-management-panel"><button id="workspace-management-close-acct_1"></button><div id="workspace-management-empty-acct_1"></div><div id="workspace-management-content-acct_1" hidden><div id="workspace-management-meta-acct_1"></div><h4 id="workspace-management-title-acct_1"></h4><p id="workspace-management-summary-acct_1"></p><div id="workspace-management-health-acct_1"></div><div id="workspace-management-lifecycle-acct_1"></div><div id="workspace-management-created-acct_1"></div><div id="workspace-management-guidance-acct_1"></div><button id="workspace-management-action-acct_1"></button></div></div>' +
       '<div id="access-section-acct_1" class="access-section" data-actor-role="owner" data-can-manage="true">' +
+      '<div id="access-shell-acct_1"></div>' +
+      '<div id="access-detail-acct_1"></div>' +
+      '<div id="access-task-panel-acct_1"></div>' +
+      '<div id="access-task-title-acct_1"></div>' +
+      '<div id="access-task-copy-acct_1"></div>' +
+      '<button id="access-task-invite-acct_1"></button>' +
+      '<button id="access-task-change_role-acct_1"></button>' +
+      '<button id="access-task-remove-acct_1"></button>' +
+      '<div id="access-task-body-invite-acct_1"></div>' +
+      '<div id="access-task-body-change_role-acct_1"></div>' +
+      '<div id="access-task-body-remove-acct_1"></div>' +
       '<div id="access-stats-acct_1"></div>' +
       '<table><tbody id="access-list-acct_1"></tbody></table>' +
       '<input id="invite-email-acct_1">' +
@@ -351,18 +436,20 @@ describe('account runtime', function() {
         selectedWorkspaceID: 'ws_1',
         manageWorkspace: { pending: false, error: '' },
         accessVisible: false,
+        activeAccessJob: '',
         accessQuery: { status: 'idle', error: '', data: [] },
       });
       entry.addWorkspaceOpen = true;
       entry.selectedWorkspaceID = 'ws_1';
     }, { notify: false });
 
-    runtime.toggleAccess('acct_1');
+    await runtime.setAccessJob('acct_1', 'change_role');
     await flushAsync();
 
     expect(deps.store.getAccountState().byAccountID.acct_1.accessVisible).toBe(true);
     expect(deps.store.getAccountState().byAccountID.acct_1.selectedWorkspaceID).toBe('');
     expect(deps.store.getAccountState().byAccountID.acct_1.addWorkspaceOpen).toBe(false);
+    expect(deps.store.getAccountState().byAccountID.acct_1.activeAccessJob).toBe('change_role');
     expect(deps.store.getAccountState().byAccountID.acct_1.accessQuery.status).toBe('ready');
     expect(deps.store.getAccountState().byAccountID.acct_1.accessQuery.data).toHaveLength(1);
     expect(document.getElementById('access-stats-acct_1')?.textContent).toContain('Members');

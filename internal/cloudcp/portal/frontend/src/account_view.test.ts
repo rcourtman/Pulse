@@ -16,6 +16,7 @@ function createEntry(overrides: Partial<PortalAccountUIEntry> = {}): PortalAccou
       error: '',
     },
     accessVisible: false,
+    activeAccessJob: '',
     accessQuery: {
       status: 'idle',
       error: '',
@@ -138,10 +139,69 @@ describe('account view', function() {
         },
       })
     );
-    expect(document.querySelector('[data-action="change-role"]')).not.toBeNull();
-    expect(document.querySelector('[data-action="remove-member"]')).not.toBeNull();
+    expect(document.querySelector('[data-action="change-role"]')).toBeNull();
+    expect(document.querySelector('[data-action="remove-member"]')).toBeNull();
+    expect(document.getElementById('access-list-acct_1')?.textContent).toContain('Review only');
     expect(document.getElementById('access-stats-acct_1')?.textContent).toContain('Members');
     expect(document.getElementById('access-stats-acct_1')?.textContent).toContain('2');
+  });
+
+  it('renders access controls only for the active access job', function() {
+    document.body.innerHTML =
+      '<div id="access-section-acct_1" class="access-section" data-actor-role="owner" data-can-manage="true">' +
+      '<div id="access-shell-acct_1"></div>' +
+      '<div id="access-detail-acct_1"></div>' +
+      '<div id="access-task-panel-acct_1"></div>' +
+      '<div id="access-task-title-acct_1"></div>' +
+      '<div id="access-task-copy-acct_1"></div>' +
+      '<button id="access-task-invite-acct_1"></button>' +
+      '<button id="access-task-change_role-acct_1"></button>' +
+      '<button id="access-task-remove-acct_1"></button>' +
+      '<div id="access-task-body-invite-acct_1"></div>' +
+      '<div id="access-task-body-change_role-acct_1"></div>' +
+      '<div id="access-task-body-remove-acct_1"></div>' +
+      '<div id="access-stats-acct_1"></div>' +
+      '<div id="access-list-acct_1"></div>' +
+      '</div>';
+
+    renderAccessSection(
+      'acct_1',
+      createEntry({
+        accessVisible: true,
+        activeAccessJob: 'change_role',
+        accessQuery: {
+          status: 'ready',
+          error: '',
+          data: [
+            { email: 'owner@example.com', role: 'owner', user_id: 'u1' },
+          ],
+        },
+      })
+    );
+
+    expect(document.querySelector('[data-action="change-role"]')).not.toBeNull();
+    expect(document.querySelector('[data-action="remove-member"]')).toBeNull();
+    expect(document.getElementById('access-task-title-acct_1')?.textContent).toContain('Change roles');
+    expect(document.getElementById('access-detail-acct_1')?.hidden).toBe(false);
+
+    renderAccessSection(
+      'acct_1',
+      createEntry({
+        accessVisible: true,
+        activeAccessJob: 'remove',
+        accessQuery: {
+          status: 'ready',
+          error: '',
+          data: [
+            { email: 'owner@example.com', role: 'owner', user_id: 'u1' },
+          ],
+        },
+      })
+    );
+
+    expect(document.querySelector('[data-action="change-role"]')).toBeNull();
+    expect(document.querySelector('[data-action="remove-member"]')).not.toBeNull();
+    expect(document.getElementById('access-task-title-acct_1')?.textContent).toContain('Remove access');
   });
 
   it('normalizes legacy member roles into the current read-only operator model', function() {
@@ -155,6 +215,7 @@ describe('account view', function() {
       'acct_1',
       createEntry({
         accessVisible: true,
+        activeAccessJob: 'change_role',
         accessQuery: {
           status: 'ready',
           error: '',

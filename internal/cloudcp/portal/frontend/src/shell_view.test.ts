@@ -191,7 +191,10 @@ describe('shell view', function() {
     expect(html).toContain('Invite people');
     expect(html).toContain('Change roles');
     expect(html).toContain('Remove access');
-    expect(html).toContain('Pick the access job');
+    expect(html).toContain('Review the hosted roster, then open one access job at a time.');
+    expect(html).toContain('data-action="set-access-job"');
+    expect(html).toContain('Access task');
+    expect(html).toContain('id="access-detail-acct_1" hidden');
     expect(html).toContain('Choose the smallest role');
     expect(html).toContain('Full account, billing, and access control.');
     expect(html).toContain('Workspace control, billing, and roster management.');
@@ -199,6 +202,7 @@ describe('shell view', function() {
     expect(html).toContain('Review access without control-plane changes.');
     expect(html).toContain('People on this account');
     expect(html).toContain('data-can-manage="true"');
+    expect(html).toContain('Remove stale access');
     expect(html).toContain('data-action="workspace-action"');
     expect(html).toContain('billing-action-row');
     expect(html).toContain('billing-action-button');
@@ -335,10 +339,11 @@ describe('shell view', function() {
 
     expect(html).toContain('Review access');
     expect(html).toContain('Owner or admin required');
-    expect(html).toContain('This account is view-only for you');
-    expect(html).toContain('Need an access change?');
+    expect(html).toContain('Review who already has access to this hosted account. An owner or admin must make changes.');
+    expect(html).toContain('Review the hosted roster here. An owner or admin must make changes.');
     expect(html).toContain('data-can-manage="false"');
     expect(html).not.toContain('data-action="invite-member"');
+    expect(html).not.toContain('data-action="set-access-job"');
   });
 
   it('renders self-hosted overview copy when no hosted accounts are attached', function() {

@@ -895,12 +895,18 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
 function renderAccountAccessSection(account: PortalAccountSummary): string {
   var accessHeaderTitle = account.can_manage ? 'Manage access' : 'Review access';
   var accessHeaderCopy = account.can_manage
-    ? 'Invite people, change roles, and remove stale access from one hosted roster.'
+    ? 'Review the hosted roster, then open one access job at a time.'
     : 'Review who already has access to this hosted account. An owner or admin must make changes.';
-  var accessContextChips = account.can_manage
-    ? ['Invite people', 'Change roles', 'Remove access']
-    : ['View roster', 'Owner or admin required'];
-  var accessPolicy =
+  var accessTaskStrip = account.can_manage
+    ? (
+      '<div class="access-task-strip">' +
+        '<button type="button" class="access-task-button" id="access-task-invite-' + escapeAttr(account.id) + '" data-action="set-access-job" data-account-id="' + escapeAttr(account.id) + '" data-access-job="invite">Invite people</button>' +
+        '<button type="button" class="access-task-button" id="access-task-change_role-' + escapeAttr(account.id) + '" data-action="set-access-job" data-account-id="' + escapeAttr(account.id) + '" data-access-job="change_role">Change roles</button>' +
+        '<button type="button" class="access-task-button" id="access-task-remove-' + escapeAttr(account.id) + '" data-action="set-access-job" data-account-id="' + escapeAttr(account.id) + '" data-access-job="remove">Remove access</button>' +
+      '</div>'
+    )
+    : renderSectionContextChips(['View roster', 'Owner or admin required']);
+  var accessRoleGuide =
     '<div class="access-policy-panel">' +
       '<div class="access-panel-heading">' +
         '<h4>' + (account.can_manage ? 'Choose the smallest role' : 'Role meanings') + '</h4>' +
@@ -915,7 +921,7 @@ function renderAccountAccessSection(account: PortalAccountSummary): string {
         '<div class="access-policy-row"><strong>Read-only</strong><span>Review access without control-plane changes.</span></div>' +
       '</div>' +
     '</div>';
-  var accessActions = account.can_manage
+  var accessInvitePanel = account.can_manage
     ? (
       '<div class="access-invite-panel">' +
         '<div class="access-panel-heading">' +
@@ -939,14 +945,26 @@ function renderAccountAccessSection(account: PortalAccountSummary): string {
         '</div>' +
       '</div>'
     )
-    : (
-      '<div class="access-invite-panel">' +
-        '<div class="access-panel-heading">' +
-          '<h4>Need an access change?</h4>' +
-          '<p>An owner or admin on this account must invite people, change roles, or remove access.</p>' +
-        '</div>' +
-      '</div>'
-    );
+    : '';
+  var accessChangeRolePanel =
+    '<div class="access-job-note-panel">' +
+      '<div class="access-panel-heading">' +
+        '<h4>Change roles on the roster</h4>' +
+        '<p>Use the role column in the roster to change one person at a time. Keep each person on the smallest role they need.</p>' +
+      '</div>' +
+    '</div>' +
+    accessRoleGuide;
+  var accessRemovePanel =
+    '<div class="access-job-note-panel">' +
+      '<div class="access-panel-heading">' +
+        '<h4>Remove stale access</h4>' +
+        '<p>Use removal only when this person should no longer be on this hosted account. Owners may still be protected when they are the last owner.</p>' +
+      '</div>' +
+      '<div class="access-remove-points">' +
+        '<div class="access-remove-point"><strong>Pick the exact person</strong><span>Use the roster to remove one account member at a time.</span></div>' +
+        '<div class="access-remove-point"><strong>Keep current owners safe</strong><span>The last owner cannot be removed until another owner exists.</span></div>' +
+      '</div>' +
+    '</div>';
 
   return (
     '<section class="account-content-panel account-content-panel-access">' +
@@ -962,42 +980,56 @@ function renderAccountAccessSection(account: PortalAccountSummary): string {
             '<div class="account-panel-kicker">Access</div>' +
             '<h3>' + accessHeaderTitle + '</h3>' +
             '<p>' + accessHeaderCopy + '</p>' +
-            renderSectionContextChips(accessContextChips) +
+            accessTaskStrip +
           '</div>' +
-          '<button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="workspaces">Back to workspaces</button>' +
         '</div>' +
         '<div class="access-management-stats" id="access-stats-' +
         escapeAttr(account.id) +
         '"></div>' +
-        '<div class="access-management-grid">' +
-          '<div class="access-roster-column">' +
-            '<div class="access-roster">' +
-              '<div class="access-panel-heading">' +
-                '<h4>People on this account</h4>' +
-                '<p>Review the hosted roster here before you open, change, or remove access.</p>' +
-              '</div>' +
-              '<div class="access-roster-list" id="access-list-' +
-              escapeAttr(account.id) +
-              '">' +
-                '<div class="access-list-message">Loading…</div>' +
-              '</div>' +
-            '</div>' +
-          '</div>' +
-          '<div class="access-side-column">' +
-            '<div class="access-operations-panel">' +
-              '<div class="access-panel-heading access-panel-heading-tight">' +
-                '<div class="account-panel-kicker">Next action</div>' +
-                '<h4>' + (account.can_manage ? 'Pick the access job' : 'This account is view-only for you') + '</h4>' +
-                '<p>' + (account.can_manage
-                  ? 'Use this column to invite people, tighten roles, or remove access that no longer belongs here.'
-                  : 'You can review the roster here, but access changes must be done by an owner or admin.') + '</p>' +
-              '</div>' +
-              '<div class="access-operations-grid">' +
-                accessActions +
-                accessPolicy +
+        '<div class="access-shell access-shell-idle" id="access-shell-' + escapeAttr(account.id) + '">' +
+          '<div class="access-shell-main">' +
+            '<div class="access-roster-column">' +
+              '<div class="access-roster">' +
+                '<div class="access-panel-heading">' +
+                  '<h4>People on this account</h4>' +
+                  '<p>' + (account.can_manage
+                    ? 'Review the hosted roster here, then open the exact access job you need.'
+                    : 'Review the hosted roster here. An owner or admin must make changes.') + '</p>' +
+                '</div>' +
+                '<div class="access-roster-list" id="access-list-' +
+                escapeAttr(account.id) +
+                '">' +
+                  '<div class="access-list-message">Loading…</div>' +
+                '</div>' +
               '</div>' +
             '</div>' +
           '</div>' +
+          (account.can_manage
+            ? (
+              '<div class="access-shell-detail" id="access-detail-' + escapeAttr(account.id) + '" hidden>' +
+                '<div class="access-task-panel" id="access-task-panel-' + escapeAttr(account.id) + '" hidden>' +
+                  '<div class="access-task-header">' +
+                    '<div>' +
+                      '<div class="account-panel-kicker">Access task</div>' +
+                      '<h4 id="access-task-title-' + escapeAttr(account.id) + '">Invite people</h4>' +
+                      '<p id="access-task-copy-' + escapeAttr(account.id) + '"></p>' +
+                    '</div>' +
+                    '<button type="button" class="btn-secondary btn-compact" data-action="clear-access-job" data-account-id="' + escapeAttr(account.id) + '">Close panel</button>' +
+                  '</div>' +
+                  '<div class="access-task-body" id="access-task-body-invite-' + escapeAttr(account.id) + '" hidden>' +
+                    accessInvitePanel +
+                    accessRoleGuide +
+                  '</div>' +
+                  '<div class="access-task-body" id="access-task-body-change_role-' + escapeAttr(account.id) + '" hidden>' +
+                    accessChangeRolePanel +
+                  '</div>' +
+                  '<div class="access-task-body" id="access-task-body-remove-' + escapeAttr(account.id) + '" hidden>' +
+                    accessRemovePanel +
+                  '</div>' +
+                '</div>' +
+              '</div>'
+            )
+            : '') +
         '</div>' +
       '</section>' +
     '</section>'

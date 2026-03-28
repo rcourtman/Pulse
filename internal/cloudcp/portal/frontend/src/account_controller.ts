@@ -30,6 +30,16 @@ export function installAccountController(deps: AccountControllerDeps): void {
         deps.setShellSection('access');
         deps.runtime.ensureAccessVisible(accountID);
         return;
+      case 'set-access-job':
+        event.preventDefault();
+        deps.setShellSection('access');
+        void deps.runtime.setAccessJob(accountID, (actionEl.getAttribute('data-access-job') || '') as 'invite' | 'change_role' | 'remove');
+        return;
+      case 'clear-access-job':
+        event.preventDefault();
+        deps.setShellSection('access');
+        deps.runtime.clearAccessJob(accountID);
+        return;
       case 'invite-member':
         event.preventDefault();
         void deps.runtime.inviteMember(accountID);

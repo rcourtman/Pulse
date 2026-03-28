@@ -61,12 +61,15 @@ export interface PortalMutationState {
   error: string;
 }
 
+export type PortalAccessJob = '' | 'invite' | 'change_role' | 'remove';
+
 export interface PortalAccountUIEntry {
   addWorkspaceOpen: boolean;
   createWorkspace: PortalMutationState;
   selectedWorkspaceID: string;
   manageWorkspace: PortalMutationState;
   accessVisible: boolean;
+  activeAccessJob: PortalAccessJob;
   accessQuery: PortalQueryState<PortalAccessMember[]>;
 }
 

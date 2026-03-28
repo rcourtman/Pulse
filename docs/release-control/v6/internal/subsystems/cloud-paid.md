@@ -835,6 +835,9 @@ workspace job surfaces such as lifecycle review or create-workspace forms must
 be revealed when the user opens them. `Workspaces` must also default to the
 workspace list plus the real task entry points rather than an idle lifecycle
 essay; the lifecycle rail should appear only when a lifecycle or
-create-workspace job is active. Until that candidate lane lands, new
+create-workspace job is active. `Access` follows the same rule: the hosted
+roster must be the default state, while invite, role-change, and remove
+controls appear only when that exact access job is active. Until that
+candidate lane lands, new
 commercial account work must extend the governed Pulse account shape rather
 than spawning additional one-off recovery or billing pages.

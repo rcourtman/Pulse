@@ -4,7 +4,7 @@ import type { PortalAPI } from './api';
 import { focusElement, getElement, renderAccountUI as renderAccountUIState } from './account_view';
 import { ensurePortalAccountUIEntry } from './state';
 import type { PortalStore } from './store';
-import type { PortalAccessMember } from './types';
+import type { PortalAccessJob, PortalAccessMember } from './types';
 
 export interface AccountRuntimeDeps {
   api: PortalAPI;
@@ -18,8 +18,9 @@ export interface AccountRuntime {
   selectWorkspace(accountID: string, workspaceID: string): void;
   clearWorkspaceSelection(accountID: string): void;
   openBilling(accountID: string): Promise<void>;
-  toggleAccess(accountID: string): void;
   ensureAccessVisible(accountID: string): void;
+  setAccessJob(accountID: string, job: PortalAccessJob): Promise<void>;
+  clearAccessJob(accountID: string): void;
   inviteMember(accountID: string): Promise<void>;
   createWorkspace(accountID: string): Promise<void>;
   manageWorkspaceAction(accountID: string, tenantID: string, action: string, name: string): Promise<void>;
@@ -114,6 +115,7 @@ export function installAccountRuntime(deps: AccountRuntimeDeps): AccountRuntime 
       entry.addWorkspaceOpen = !entry.addWorkspaceOpen;
       if (entry.addWorkspaceOpen) {
         entry.accessVisible = false;
+        entry.activeAccessJob = '';
         entry.selectedWorkspaceID = '';
       }
       shouldFocus = entry.addWorkspaceOpen;
@@ -132,6 +134,7 @@ export function installAccountRuntime(deps: AccountRuntimeDeps): AccountRuntime 
       entry.selectedWorkspaceID = entry.selectedWorkspaceID === workspaceID ? '' : workspaceID;
       if (entry.selectedWorkspaceID) {
         entry.accessVisible = false;
+        entry.activeAccessJob = '';
         entry.addWorkspaceOpen = false;
       }
       selectedWorkspaceID = entry.selectedWorkspaceID;
@@ -234,36 +237,51 @@ export function installAccountRuntime(deps: AccountRuntimeDeps): AccountRuntime 
     }
   };
 
-  var toggleAccess = function(accountID: string): void {
-    var nextVisible = false;
-    deps.store.updateAccountState(function(accountState) {
-      var entry = ensurePortalAccountUIEntry(accountState, accountID);
-      entry.accessVisible = !entry.accessVisible;
-      if (entry.accessVisible) {
-        entry.selectedWorkspaceID = '';
-        entry.addWorkspaceOpen = false;
-      }
-      nextVisible = entry.accessVisible;
-    });
-    if (nextVisible) {
-      void loadAccessRoster(accountID);
-    }
-  };
-
   var ensureAccessVisible = function(accountID: string): void {
     var shouldLoad = false;
     deps.store.updateAccountState(function(accountState) {
       var entry = ensurePortalAccountUIEntry(accountState, accountID);
       if (!entry.accessVisible) {
         entry.accessVisible = true;
-        entry.selectedWorkspaceID = '';
-        entry.addWorkspaceOpen = false;
       }
+      entry.selectedWorkspaceID = '';
+      entry.addWorkspaceOpen = false;
       shouldLoad = entry.accessQuery.status === 'idle' || entry.accessQuery.status === 'error';
     });
     if (shouldLoad) {
       void loadAccessRoster(accountID);
     }
+  };
+
+  var setAccessJob = async function(accountID: string, job: PortalAccessJob): Promise<void> {
+    var nextJob = '' as PortalAccessJob;
+    var shouldLoad = false;
+    deps.store.updateAccountState(function(accountState) {
+      var entry = ensurePortalAccountUIEntry(accountState, accountID);
+      entry.accessVisible = true;
+      entry.selectedWorkspaceID = '';
+      entry.addWorkspaceOpen = false;
+      entry.activeAccessJob = entry.activeAccessJob === job ? '' : job;
+      nextJob = entry.activeAccessJob;
+      shouldLoad = entry.accessQuery.status === 'idle' || entry.accessQuery.status === 'error';
+    });
+    if (shouldLoad) {
+      await loadAccessRoster(accountID);
+    }
+    if (nextJob) {
+      revealElementWhenReady('access-detail-' + accountID, function() {
+        if (nextJob === 'invite') {
+          focusElement('invite-email-' + accountID);
+        }
+      });
+    }
+  };
+
+  var clearAccessJob = function(accountID: string): void {
+    deps.store.updateAccountState(function(accountState) {
+      var entry = ensurePortalAccountUIEntry(accountState, accountID);
+      entry.activeAccessJob = '';
+    });
   };
 
   var inviteMember = async function(accountID: string): Promise<void> {
@@ -334,8 +352,9 @@ export function installAccountRuntime(deps: AccountRuntimeDeps): AccountRuntime 
     selectWorkspace: selectWorkspace,
     clearWorkspaceSelection: clearWorkspaceSelection,
     openBilling: openBilling,
-    toggleAccess: toggleAccess,
     ensureAccessVisible: ensureAccessVisible,
+    setAccessJob: setAccessJob,
+    clearAccessJob: clearAccessJob,
     inviteMember: inviteMember,
     createWorkspace: createWorkspace,
     manageWorkspaceAction: manageWorkspaceAction,

@@ -181,6 +181,9 @@ Core rules:
 24. `Workspaces` must default to the workspace list and task entry points, not
     an idle lifecycle explainer. The lifecycle rail should appear only when a
     lifecycle or create-workspace job is actually active.
+25. `Access` must default to the hosted roster plus explicit job entry points,
+    not a permanently open mutation rail. Invite, role-change, and remove
+    controls should appear only when that exact access job is active.
 
 ## Screen Model
 
