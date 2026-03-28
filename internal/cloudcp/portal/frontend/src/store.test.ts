@@ -78,21 +78,21 @@ describe('portal store', function() {
   it('keeps login and service state in the same owned store with selective notifications', function() {
     var store = createPortalStore(bootstrapDefaults, null);
     var loginListener = vi.fn();
-    var serviceListener = vi.fn();
+    var billingListener = vi.fn();
 
     store.subscribeLogin(loginListener);
-    store.subscribeServices(serviceListener);
+    store.subscribeBilling(billingListener);
 
     store.updateLoginState(function(loginState) {
       loginState.emailValue = 'typed@example.com';
     }, { notify: false });
-    store.updateServiceState(function(serviceState) {
-      serviceState.openPanelID = 'retrieve-service-panel';
+    store.updateBillingState(function(billingState) {
+      billingState.openBillingPanelID = 'retrieve-billing-panel';
     });
 
     expect(store.getLoginState().emailValue).toBe('typed@example.com');
-    expect(store.getServiceState().openPanelID).toBe('retrieve-service-panel');
+    expect(store.getBillingState().openBillingPanelID).toBe('retrieve-billing-panel');
     expect(loginListener).not.toHaveBeenCalled();
-    expect(serviceListener).toHaveBeenCalledTimes(1);
+    expect(billingListener).toHaveBeenCalledTimes(1);
   });
 });

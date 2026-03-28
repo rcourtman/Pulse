@@ -1,8 +1,8 @@
-import { asHTMLElement } from './services_view';
+import { asHTMLElement } from './billing_view';
 
-export interface ServicesControllerDeps {
+export interface BillingControllerDeps {
   setShellSection: (section: 'overview' | 'workspaces' | 'access' | 'billing' | 'support') => void;
-  toggleServicePanel: (panelID: string) => void;
+  toggleBillingPanel: (panelID: string) => void;
   focusElement: (id: string) => void;
   requestVerificationCode: (flowID: 'manage' | 'retrieve' | 'export' | 'delete') => void;
   resendVerificationCode: (flowID: 'manage' | 'export' | 'delete', event?: Event) => void;
@@ -13,19 +13,19 @@ export interface ServicesControllerDeps {
   updateDeleteConfirmation: (checked: boolean) => void;
 }
 
-export function installServicesController(deps: ServicesControllerDeps): void {
+export function installBillingController(deps: BillingControllerDeps): void {
   document.addEventListener('click', function(event) {
-    var target = asHTMLElement(event.target)?.closest('[data-account-service-action]');
+    var target = asHTMLElement(event.target)?.closest('[data-account-billing-action]');
     if (!target) return;
-    var action = target.getAttribute('data-account-service-action') || '';
-    var panelID = target.getAttribute('data-account-service-panel') || '';
-    var focusID = target.getAttribute('data-account-service-focus') || '';
+    var action = target.getAttribute('data-account-billing-action') || '';
+    var panelID = target.getAttribute('data-account-billing-panel') || '';
+    var focusID = target.getAttribute('data-account-billing-focus') || '';
 
     switch (action) {
-      case 'open-service-panel':
+      case 'open-billing-panel':
         event.preventDefault();
         deps.setShellSection('billing');
-        deps.toggleServicePanel(panelID);
+        deps.toggleBillingPanel(panelID);
         deps.focusElement(focusID);
         return;
       case 'manage-inline-request':
@@ -85,7 +85,7 @@ export function installServicesController(deps: ServicesControllerDeps): void {
   document.addEventListener('input', function(event) {
     var target = asHTMLElement(event.target) as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement | null;
     if (!target) return;
-    var inputKind = target.getAttribute('data-account-service-input') || '';
+    var inputKind = target.getAttribute('data-account-billing-input') || '';
     if (!inputKind) return;
     deps.updateInputValue(inputKind, target.value);
   });

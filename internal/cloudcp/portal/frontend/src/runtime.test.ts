@@ -36,14 +36,14 @@ describe('portal runtime', function() {
     expect(runtime.bootstrapDefaults.commercial_api_base_url).toBe('/api/portal/commercial');
   });
 
-  it('derives canonical email and service handoff from the portal URL', function() {
+  it('derives canonical email and billing handoff from the portal URL', function() {
     var handoff = readPortalRuntimeHandoff('https://cloud.pulserelay.pro/portal?email=buyer%40example.com&service=retrieve');
 
     expect(handoff.email).toBe('buyer@example.com');
-    expect(handoff.openPanelID).toBe('retrieve-service-panel');
+    expect(handoff.openBillingPanelID).toBe('retrieve-billing-panel');
   });
 
-  it('applies email and service handoff to the initial portal store', function() {
+  it('applies email and billing handoff to the initial portal store', function() {
     var runtime = createPortalRuntime(
       {
         authenticated: false,
@@ -52,13 +52,13 @@ describe('portal runtime', function() {
       },
       {
         email: 'buyer@example.com',
-        openPanelID: 'refund-service-panel',
+        openBillingPanelID: 'refund-billing-panel',
       }
     );
 
     expect(runtime.handoff.email).toBe('buyer@example.com');
     expect(runtime.store.getLoginState().emailValue).toBe('buyer@example.com');
-    expect(runtime.store.getServiceState().refund.emailValue).toBe('buyer@example.com');
-    expect(runtime.store.getServiceState().openPanelID).toBe('refund-service-panel');
+    expect(runtime.store.getBillingState().refund.emailValue).toBe('buyer@example.com');
+    expect(runtime.store.getBillingState().openBillingPanelID).toBe('refund-billing-panel');
   });
 });

@@ -4,16 +4,16 @@ import type {
   PortalAccountUIEntry,
   PortalLoginState,
   PortalShellState,
-  PortalServiceFlowID,
-  PortalServiceState,
+  PortalBillingFlowID,
+  PortalBillingState,
   PortalQueryState,
   RefundState,
-  ServiceStatus,
-  PortalTeamMember,
+  BillingStatus,
+  PortalAccessMember,
   VerificationFlowState,
 } from './types';
 
-export function emptyStatus(): ServiceStatus {
+export function emptyStatus(): BillingStatus {
   return {
     visible: false,
     message: '',
@@ -78,16 +78,16 @@ export function ensurePortalAccountUIEntry(accountState: PortalAccountState, acc
       createWorkspace: createMutationState(),
       selectedWorkspaceID: '',
       manageWorkspace: createMutationState(),
-      teamVisible: false,
-      teamQuery: createQueryState<PortalTeamMember[]>([]),
+      accessVisible: false,
+      accessQuery: createQueryState<PortalAccessMember[]>([]),
     };
   }
   return accountState.byAccountID[accountID];
 }
 
-export function createPortalServiceState(): PortalServiceState {
+export function createPortalBillingState(): PortalBillingState {
   return {
-    openPanelID: '',
+    openBillingPanelID: '',
     flows: {
       manage: newVerificationFlowState(),
       retrieve: newVerificationFlowState(),
@@ -109,81 +109,81 @@ export function syncLoginStateBootstrapEmail(loginState: PortalLoginState, email
   }
 }
 
-export function syncServiceStateBootstrapEmail(serviceState: PortalServiceState, email: string): void {
-  if (!serviceState.flows.manage.emailValue) serviceState.flows.manage.emailValue = email || '';
-  if (!serviceState.flows.retrieve.emailValue) serviceState.flows.retrieve.emailValue = email || '';
-  if (!serviceState.flows.export.emailValue) serviceState.flows.export.emailValue = email || '';
-  if (!serviceState.flows.delete.emailValue) serviceState.flows.delete.emailValue = email || '';
-  if (!serviceState.refund.emailValue) serviceState.refund.emailValue = email || '';
+export function syncBillingStateBootstrapEmail(billingState: PortalBillingState, email: string): void {
+  if (!billingState.flows.manage.emailValue) billingState.flows.manage.emailValue = email || '';
+  if (!billingState.flows.retrieve.emailValue) billingState.flows.retrieve.emailValue = email || '';
+  if (!billingState.flows.export.emailValue) billingState.flows.export.emailValue = email || '';
+  if (!billingState.flows.delete.emailValue) billingState.flows.delete.emailValue = email || '';
+  if (!billingState.refund.emailValue) billingState.refund.emailValue = email || '';
 }
 
-export function setFlowStatus(serviceState: PortalServiceState, flowID: PortalServiceFlowID, message: string, isError: boolean): void {
-  serviceState.flows[flowID].status = {
+export function setFlowStatus(billingState: PortalBillingState, flowID: PortalBillingFlowID, message: string, isError: boolean): void {
+  billingState.flows[flowID].status = {
     visible: true,
     message,
     error: !!isError,
   };
 }
 
-export function clearFlowStatus(serviceState: PortalServiceState, flowID: PortalServiceFlowID): void {
-  serviceState.flows[flowID].status = emptyStatus();
+export function clearFlowStatus(billingState: PortalBillingState, flowID: PortalBillingFlowID): void {
+  billingState.flows[flowID].status = emptyStatus();
 }
 
-export function setRefundStatus(serviceState: PortalServiceState, message: string, isError: boolean): void {
-  serviceState.refund.status = {
+export function setRefundStatus(billingState: PortalBillingState, message: string, isError: boolean): void {
+  billingState.refund.status = {
     visible: true,
     message,
     error: !!isError,
   };
 }
 
-export function toggleServicePanelState(serviceState: PortalServiceState, panelID: string): void {
-  serviceState.openPanelID = serviceState.openPanelID === panelID ? '' : panelID;
+export function toggleBillingPanelState(billingState: PortalBillingState, panelID: string): void {
+  billingState.openBillingPanelID = billingState.openBillingPanelID === panelID ? '' : panelID;
 }
 
-export function resetVerificationFlowState(serviceState: PortalServiceState, flowID: PortalServiceFlowID): void {
-  var previous = serviceState.flows[flowID];
-  serviceState.flows[flowID] = newVerificationFlowState();
-  serviceState.flows[flowID].emailValue = previous.emailValue;
+export function resetVerificationFlowState(billingState: PortalBillingState, flowID: PortalBillingFlowID): void {
+  var previous = billingState.flows[flowID];
+  billingState.flows[flowID] = newVerificationFlowState();
+  billingState.flows[flowID].emailValue = previous.emailValue;
 }
 
-export function updateServiceInputValue(serviceState: PortalServiceState, inputKind: string, value: string): void {
+export function updateBillingInputValue(billingState: PortalBillingState, inputKind: string, value: string): void {
   switch (inputKind) {
     case 'manage-email':
-      serviceState.flows.manage.emailValue = value;
+      billingState.flows.manage.emailValue = value;
       return;
     case 'manage-code':
-      serviceState.flows.manage.codeValue = value;
+      billingState.flows.manage.codeValue = value;
       return;
     case 'retrieve-email':
-      serviceState.flows.retrieve.emailValue = value;
+      billingState.flows.retrieve.emailValue = value;
       return;
     case 'retrieve-code':
-      serviceState.flows.retrieve.codeValue = value;
+      billingState.flows.retrieve.codeValue = value;
       return;
     case 'refund-email':
-      serviceState.refund.emailValue = value;
+      billingState.refund.emailValue = value;
       return;
     case 'refund-token':
-      serviceState.refund.tokenValue = value;
+      billingState.refund.tokenValue = value;
       return;
     case 'data-export-email':
-      serviceState.flows.export.emailValue = value;
+      billingState.flows.export.emailValue = value;
       return;
     case 'data-export-code':
-      serviceState.flows.export.codeValue = value;
+      billingState.flows.export.codeValue = value;
       return;
     case 'data-delete-email':
-      serviceState.flows.delete.emailValue = value;
+      billingState.flows.delete.emailValue = value;
       return;
     case 'data-delete-code':
-      serviceState.flows.delete.codeValue = value;
+      billingState.flows.delete.codeValue = value;
       return;
     default:
       return;
   }
 }
 
-export function updateDeleteConfirmation(serviceState: PortalServiceState, checked: boolean): void {
-  serviceState.flows.delete.checkboxChecked = checked;
+export function updateDeleteConfirmation(billingState: PortalBillingState, checked: boolean): void {
+  billingState.flows.delete.checkboxChecked = checked;
 }

@@ -1,16 +1,16 @@
 import { beginMutationState, failMutationState, succeedMutationState } from './async_state';
 import type { PortalAPI } from './api';
-import { installServicesController } from './services_controller';
+import { installBillingController } from './billing_controller';
 import {
   clearFlowStatus,
-  createPortalServiceState,
+  createPortalBillingState,
   emptyStatus,
   resetVerificationFlowState,
   setFlowStatus,
   setRefundStatus,
-  toggleServicePanelState,
+  toggleBillingPanelState,
   updateDeleteConfirmation,
-  updateServiceInputValue,
+  updateBillingInputValue,
 } from './state';
 import type { PortalStore } from './store';
 import {
@@ -22,14 +22,14 @@ import {
   renderExportPanel,
   renderExportResult,
   renderManagePanel,
-  renderOpenPanels,
+  renderOpenBillingPanels,
   renderRefundPanel,
   renderRetrievePanel,
-  renderStatus,
+  renderBillingStatus,
   setValue,
   setVisible,
-} from './services_view';
-import type { PortalServiceFlowID, PortalServiceState, VerificationFlowState } from './types';
+} from './billing_view';
+import type { PortalBillingFlowID, PortalBillingState, VerificationFlowState } from './types';
 
 interface VerificationFlowDefinition {
   requestPath: string;
@@ -53,54 +53,54 @@ interface VerificationFlowDefinition {
   readCodeValue?: () => string;
   onRequestStart?: () => void;
   beforeConfirm?: () => boolean;
-  applyConfirmSuccessState?: (serviceState: PortalServiceState, data: any, email?: string) => void;
+  applyConfirmSuccessState?: (billingState: PortalBillingState, data: any, email?: string) => void;
   afterConfirmSuccess?: (data: any, email?: string) => void;
   renderPanel: (flowState: VerificationFlowState) => void;
   renderResult?: (result: unknown) => void;
 }
 
-export interface ServicesRuntimeDeps {
+export interface BillingRuntimeDeps {
   api: PortalAPI;
   store: PortalStore;
 }
 
-export function installServicesRuntime(deps: ServicesRuntimeDeps): void {
+export function installBillingRuntime(deps: BillingRuntimeDeps): void {
   var api = deps.api;
   var store = deps.store;
 
-  store.updateServiceState(function(serviceState) {
-    if (!serviceState.flows) {
-      var nextState = createPortalServiceState();
-      serviceState.openPanelID = nextState.openPanelID;
-      serviceState.flows = nextState.flows;
-      serviceState.refund = nextState.refund;
+  store.updateBillingState(function(billingState) {
+    if (!billingState.flows) {
+      var nextState = createPortalBillingState();
+      billingState.openBillingPanelID = nextState.openBillingPanelID;
+      billingState.flows = nextState.flows;
+      billingState.refund = nextState.refund;
     }
   }, { notify: false });
 
-  function getServiceState() {
-    return store.getServiceState();
+  function getBillingState() {
+    return store.getBillingState();
   }
 
-  function updateServiceState(mutator, notify = true) {
-    return store.updateServiceState(mutator, { notify: notify });
+  function updateBillingState(mutator, notify = true) {
+    return store.updateBillingState(mutator, { notify: notify });
   }
 
-  function toggleServicePanel(panelID) {
-    updateServiceState(function(serviceState) {
-      toggleServicePanelState(serviceState, panelID);
+  function toggleBillingPanel(panelID) {
+    updateBillingState(function(billingState) {
+      toggleBillingPanelState(billingState, panelID);
     });
   }
 
-  function renderFlow(flowID: PortalServiceFlowID) {
+  function renderFlow(flowID: PortalBillingFlowID) {
     var flow = verificationFlows[flowID];
     if (!flow) return;
-    var flowState = getServiceState().flows[flowID];
+    var flowState = getBillingState().flows[flowID];
     if (flow.renderPanel) {
       flow.renderPanel(flowState);
     }
     renderButton(flow.requestButtonID, flowState.request.pending, flowState.request.pending ? flow.requestPendingLabel : flow.requestLabel);
     renderButton(flow.confirmButtonID, flowState.confirm.pending, flowState.confirm.pending ? flow.confirmPendingLabel : flow.confirmLabel);
-    renderStatus(flow.statusID, flowState.status);
+    renderBillingStatus(flow.statusID, flowState.status);
     if (flow.step2ID) {
       setVisible(flow.step2ID, flowState.step2Visible);
     }
@@ -118,28 +118,28 @@ export function installServicesRuntime(deps: ServicesRuntimeDeps): void {
   }
 
   function renderRefund() {
-    var refundState = getServiceState().refund;
+    var refundState = getBillingState().refund;
     renderRefundPanel(refundState, store.getBootstrap());
     renderButton('refund-inline-submit', refundState.submit.pending, refundState.submit.pending ? 'Processing...' : 'Process Refund');
-    renderStatus('refund-inline-status', refundState.status);
+    renderBillingStatus('refund-inline-status', refundState.status);
   }
 
-  function resetVerificationFlow(flowID: PortalServiceFlowID) {
+  function resetVerificationFlow(flowID: PortalBillingFlowID) {
     var flow = verificationFlows[flowID];
     if (!flow) return;
-    updateServiceState(function(serviceState) {
-      resetVerificationFlowState(serviceState, flowID);
+    updateBillingState(function(billingState) {
+      resetVerificationFlowState(billingState, flowID);
     }, false);
     if (flow.codeInputID) {
       setValue(flow.codeInputID, '');
     }
   }
 
-  var verificationFlows: Record<PortalServiceFlowID, VerificationFlowDefinition> = {
+  var verificationFlows: Record<PortalBillingFlowID, VerificationFlowDefinition> = {
     manage: {
       requestPath: '/v1/manage/request',
       confirmPath: '/v1/manage',
-      panelID: 'manage-service-panel',
+      panelID: 'manage-billing-panel',
       emailInputID: 'manage-inline-email',
       codeInputID: 'manage-inline-code',
       requestButtonID: 'manage-inline-request',
@@ -155,10 +155,10 @@ export function installServicesRuntime(deps: ServicesRuntimeDeps): void {
       requestErrorMessage: 'Failed to send verification code',
       confirmErrorMessage: 'Failed to open customer portal',
       readEmailValue: function() {
-        return getServiceState().flows.manage.emailValue;
+        return getBillingState().flows.manage.emailValue;
       },
       readCodeValue: function() {
-        return getServiceState().flows.manage.codeValue;
+        return getBillingState().flows.manage.codeValue;
       },
       onRequestStart: function() {},
       afterConfirmSuccess: function(data) {
@@ -169,7 +169,7 @@ export function installServicesRuntime(deps: ServicesRuntimeDeps): void {
     retrieve: {
       requestPath: '/v1/retrieve-license/request',
       confirmPath: '/v1/retrieve-license',
-      panelID: 'retrieve-service-panel',
+      panelID: 'retrieve-billing-panel',
       emailInputID: 'retrieve-inline-email',
       codeInputID: 'retrieve-inline-code',
       requestButtonID: 'retrieve-inline-request',
@@ -185,27 +185,27 @@ export function installServicesRuntime(deps: ServicesRuntimeDeps): void {
       requestErrorMessage: 'Failed to send verification code',
       confirmErrorMessage: 'Failed to retrieve license',
       readEmailValue: function() {
-        return getServiceState().flows.retrieve.emailValue;
+        return getBillingState().flows.retrieve.emailValue;
       },
       readCodeValue: function() {
-        return getServiceState().flows.retrieve.codeValue;
+        return getBillingState().flows.retrieve.codeValue;
       },
       onRequestStart: function() {
-        updateServiceState(function(serviceState) {
-          serviceState.flows.retrieve.result = null;
+        updateBillingState(function(billingState) {
+          billingState.flows.retrieve.result = null;
         }, false);
       },
-      applyConfirmSuccessState: function(serviceState, data) {
-        serviceState.flows.retrieve.result = data.license;
-        serviceState.flows.retrieve.codeValue = '';
-        setFlowStatus(serviceState, 'retrieve', 'License retrieved successfully.', false);
+      applyConfirmSuccessState: function(billingState, data) {
+        billingState.flows.retrieve.result = data.license;
+        billingState.flows.retrieve.codeValue = '';
+        setFlowStatus(billingState, 'retrieve', 'License retrieved successfully.', false);
       },
       renderPanel: renderRetrievePanel,
     },
     export: {
       requestPath: '/v1/gdpr/request-export',
       confirmPath: '/v1/gdpr/export',
-      panelID: 'data-service-panel',
+      panelID: 'data-billing-panel',
       emailInputID: 'data-export-email',
       codeInputID: 'data-export-code',
       requestButtonID: 'data-export-request',
@@ -221,22 +221,22 @@ export function installServicesRuntime(deps: ServicesRuntimeDeps): void {
       requestErrorMessage: 'Request failed',
       confirmErrorMessage: 'Export failed',
       readEmailValue: function() {
-        return getServiceState().flows.export.emailValue;
+        return getBillingState().flows.export.emailValue;
       },
       readCodeValue: function() {
-        return getServiceState().flows.export.codeValue;
+        return getBillingState().flows.export.codeValue;
       },
       onRequestStart: function() {
-        updateServiceState(function(serviceState) {
-          serviceState.flows.export.result = null;
+        updateBillingState(function(billingState) {
+          billingState.flows.export.result = null;
         }, false);
       },
-      applyConfirmSuccessState: function(serviceState, data) {
-        var emailValue = serviceState.flows.export.emailValue;
-        resetVerificationFlowState(serviceState, 'export');
-        serviceState.flows.export.emailValue = emailValue;
-        serviceState.flows.export.result = data;
-        setFlowStatus(serviceState, 'export', 'Data export retrieved successfully.', false);
+      applyConfirmSuccessState: function(billingState, data) {
+        var emailValue = billingState.flows.export.emailValue;
+        resetVerificationFlowState(billingState, 'export');
+        billingState.flows.export.emailValue = emailValue;
+        billingState.flows.export.result = data;
+        setFlowStatus(billingState, 'export', 'Data export retrieved successfully.', false);
       },
       renderPanel: renderExportPanel,
       renderResult: renderExportResult,
@@ -244,7 +244,7 @@ export function installServicesRuntime(deps: ServicesRuntimeDeps): void {
     delete: {
       requestPath: '/v1/gdpr/request-delete',
       confirmPath: '/v1/gdpr/confirm-delete',
-      panelID: 'data-service-panel',
+      panelID: 'data-billing-panel',
       emailInputID: 'data-delete-email',
       codeInputID: 'data-delete-code',
       requestButtonID: 'data-delete-request',
@@ -260,26 +260,26 @@ export function installServicesRuntime(deps: ServicesRuntimeDeps): void {
       requestErrorMessage: 'Request failed',
       confirmErrorMessage: 'Deletion failed',
       readEmailValue: function() {
-        return getServiceState().flows.delete.emailValue;
+        return getBillingState().flows.delete.emailValue;
       },
       readCodeValue: function() {
-        return getServiceState().flows.delete.codeValue;
+        return getBillingState().flows.delete.codeValue;
       },
       beforeConfirm: function() {
         if (!getElement<HTMLInputElement>('data-delete-confirm-check')?.checked) {
-          updateServiceState(function(serviceState) {
-            setFlowStatus(serviceState, 'delete', 'You must confirm that you understand this action is permanent.', true);
+          updateBillingState(function(billingState) {
+            setFlowStatus(billingState, 'delete', 'You must confirm that you understand this action is permanent.', true);
           });
           return false;
         }
         return true;
       },
-      applyConfirmSuccessState: function(serviceState, data) {
-        var emailValue = serviceState.flows.delete.emailValue;
-        resetVerificationFlowState(serviceState, 'delete');
-        serviceState.flows.delete.emailValue = emailValue;
+      applyConfirmSuccessState: function(billingState, data) {
+        var emailValue = billingState.flows.delete.emailValue;
+        resetVerificationFlowState(billingState, 'delete');
+        billingState.flows.delete.emailValue = emailValue;
         setFlowStatus(
-          serviceState,
+          billingState,
           'delete',
           data.deleted_count > 0 && data.stripe_reminder ? data.message + ' ' + data.stripe_reminder : data.message,
           false
@@ -295,7 +295,7 @@ export function installServicesRuntime(deps: ServicesRuntimeDeps): void {
     },
   };
 
-  async function requestVerificationCode(flowID: PortalServiceFlowID) {
+  async function requestVerificationCode(flowID: PortalBillingFlowID) {
     var flow = verificationFlows[flowID];
     if (!flow) return;
     var email = flow.readEmailValue ? flow.readEmailValue() : readValue(flow.emailInputID);
@@ -306,63 +306,63 @@ export function installServicesRuntime(deps: ServicesRuntimeDeps): void {
     if (flow.onRequestStart) {
       flow.onRequestStart();
     }
-    updateServiceState(function(serviceState) {
-      beginMutationState(serviceState.flows[flowID].request);
-      clearFlowStatus(serviceState, flowID);
+    updateBillingState(function(billingState) {
+      beginMutationState(billingState.flows[flowID].request);
+      clearFlowStatus(billingState, flowID);
     });
     try {
       await api.postCommercialJSON(flow.requestPath, { email: email });
-      updateServiceState(function(serviceState) {
-        serviceState.flows[flowID].pendingEmail = email;
-        serviceState.flows[flowID].step2Visible = !!flow.step2ID;
-        succeedMutationState(serviceState.flows[flowID].request);
-        setFlowStatus(serviceState, flowID, flow.requestSuccessMessage, false);
+      updateBillingState(function(billingState) {
+        billingState.flows[flowID].pendingEmail = email;
+        billingState.flows[flowID].step2Visible = !!flow.step2ID;
+        succeedMutationState(billingState.flows[flowID].request);
+        setFlowStatus(billingState, flowID, flow.requestSuccessMessage, false);
       });
     } catch (err) {
       var message = err instanceof Error ? err.message : flow.requestErrorMessage;
-      updateServiceState(function(serviceState) {
-        failMutationState(serviceState.flows[flowID].request, message);
-        setFlowStatus(serviceState, flowID, message, true);
+      updateBillingState(function(billingState) {
+        failMutationState(billingState.flows[flowID].request, message);
+        setFlowStatus(billingState, flowID, message, true);
       });
     }
   }
 
-  async function resendVerificationCode(flowID: PortalServiceFlowID, event?: Event) {
+  async function resendVerificationCode(flowID: PortalBillingFlowID, event?: Event) {
     if (event) event.preventDefault();
     var flow = verificationFlows[flowID];
     if (!flow) return;
-    var email = getServiceState().flows[flowID].pendingEmail;
+    var email = getBillingState().flows[flowID].pendingEmail;
     if (!email) return;
     try {
       await api.postCommercialJSON(flow.requestPath, { email: email });
-      updateServiceState(function(serviceState) {
-        setFlowStatus(serviceState, flowID, flow.resendSuccessMessage, false);
+      updateBillingState(function(billingState) {
+        setFlowStatus(billingState, flowID, flow.resendSuccessMessage, false);
       });
     } catch (err) {
-      updateServiceState(function(serviceState) {
-        setFlowStatus(serviceState, flowID, err instanceof Error ? err.message : flow.requestErrorMessage, true);
+      updateBillingState(function(billingState) {
+        setFlowStatus(billingState, flowID, err instanceof Error ? err.message : flow.requestErrorMessage, true);
       });
     }
   }
 
-  async function confirmVerificationCode(flowID: PortalServiceFlowID) {
+  async function confirmVerificationCode(flowID: PortalBillingFlowID) {
     var flow = verificationFlows[flowID];
     if (!flow) return;
-    var email = getServiceState().flows[flowID].pendingEmail;
+    var email = getBillingState().flows[flowID].pendingEmail;
     var code = flow.readCodeValue ? flow.readCodeValue() : readValue(flow.codeInputID);
     if (!email || !code) return;
     if (flow.beforeConfirm && flow.beforeConfirm() === false) {
       return;
     }
-    updateServiceState(function(serviceState) {
-      beginMutationState(serviceState.flows[flowID].confirm);
+    updateBillingState(function(billingState) {
+      beginMutationState(billingState.flows[flowID].confirm);
     });
     try {
       var data = await api.postCommercialJSON(flow.confirmPath, { email: email, code: code });
-      updateServiceState(function(serviceState) {
-        succeedMutationState(serviceState.flows[flowID].confirm);
+      updateBillingState(function(billingState) {
+        succeedMutationState(billingState.flows[flowID].confirm);
         if (flow.applyConfirmSuccessState) {
-          flow.applyConfirmSuccessState(serviceState, data, email);
+          flow.applyConfirmSuccessState(billingState, data, email);
         }
       });
       if (flow.afterConfirmSuccess) {
@@ -370,68 +370,68 @@ export function installServicesRuntime(deps: ServicesRuntimeDeps): void {
       }
     } catch (err) {
       var message = err instanceof Error ? err.message : flow.confirmErrorMessage;
-      updateServiceState(function(serviceState) {
-        failMutationState(serviceState.flows[flowID].confirm, message);
-        setFlowStatus(serviceState, flowID, message, true);
+      updateBillingState(function(billingState) {
+        failMutationState(billingState.flows[flowID].confirm, message);
+        setFlowStatus(billingState, flowID, message, true);
       });
     }
   }
 
   async function copyRetrievedLicense() {
-    var result = getServiceState().flows.retrieve.result as { token?: string } | null;
+    var result = getBillingState().flows.retrieve.result as { token?: string } | null;
     var token = result && result.token ? result.token : '';
     if (!token) return;
     try {
       await navigator.clipboard.writeText(token);
-      updateServiceState(function(serviceState) {
-        setFlowStatus(serviceState, 'retrieve', 'License key copied to clipboard.', false);
+      updateBillingState(function(billingState) {
+        setFlowStatus(billingState, 'retrieve', 'License key copied to clipboard.', false);
       });
     } catch (_) {
-      updateServiceState(function(serviceState) {
-        setFlowStatus(serviceState, 'retrieve', 'Failed to copy automatically. Please copy the key manually.', true);
+      updateBillingState(function(billingState) {
+        setFlowStatus(billingState, 'retrieve', 'Failed to copy automatically. Please copy the key manually.', true);
       });
     }
   }
 
   async function submitRefund() {
-    var email = getServiceState().refund.emailValue;
-    var token = getServiceState().refund.tokenValue;
+    var email = getBillingState().refund.emailValue;
+    var token = getBillingState().refund.tokenValue;
     if (!email || !token) return;
     if (!confirm('Are you sure? This will immediately revoke the license and request the refund.')) return;
-    updateServiceState(function(serviceState) {
-      beginMutationState(serviceState.refund.submit);
-      serviceState.refund.status = emptyStatus();
+    updateBillingState(function(billingState) {
+      beginMutationState(billingState.refund.submit);
+      billingState.refund.status = emptyStatus();
     });
     try {
       await api.postCommercialJSON('/v1/self-refund', { email: email, token: token });
-      updateServiceState(function(serviceState) {
-        serviceState.refund.tokenValue = '';
-        succeedMutationState(serviceState.refund.submit);
-        setRefundStatus(serviceState, 'Success! Your refund has been processed. Stripe will follow up by email.', false);
+      updateBillingState(function(billingState) {
+        billingState.refund.tokenValue = '';
+        succeedMutationState(billingState.refund.submit);
+        setRefundStatus(billingState, 'Success! Your refund has been processed. Stripe will follow up by email.', false);
       });
     } catch (err) {
       var message = err instanceof Error ? err.message : 'Refund failed';
-      updateServiceState(function(serviceState) {
-        failMutationState(serviceState.refund.submit, message);
-        setRefundStatus(serviceState, message, true);
+      updateBillingState(function(billingState) {
+        failMutationState(billingState.refund.submit, message);
+        setRefundStatus(billingState, message, true);
       });
     }
   }
 
-  function renderServiceRuntime() {
-    renderOpenPanels(getServiceState().openPanelID);
+  function renderBillingRuntime() {
+    renderOpenBillingPanels(getBillingState().openBillingPanelID);
     renderAllFlows();
   }
 
-  renderServiceRuntime();
-  store.subscribeBootstrap(renderServiceRuntime);
-  store.subscribeServices(renderServiceRuntime);
+  renderBillingRuntime();
+  store.subscribeBootstrap(renderBillingRuntime);
+  store.subscribeBilling(renderBillingRuntime);
 
-  installServicesController({
+  installBillingController({
     setShellSection: function(section) {
       store.setActiveShellSection(section);
     },
-    toggleServicePanel,
+    toggleBillingPanel,
     focusElement,
     requestVerificationCode: function(flowID) {
       void requestVerificationCode(flowID);
@@ -449,13 +449,13 @@ export function installServicesRuntime(deps: ServicesRuntimeDeps): void {
       void submitRefund();
     },
     updateInputValue: function(inputKind, value) {
-      updateServiceState(function(serviceState) {
-        updateServiceInputValue(serviceState, inputKind, value);
+      updateBillingState(function(billingState) {
+        updateBillingInputValue(billingState, inputKind, value);
       }, false);
     },
     updateDeleteConfirmation: function(checked) {
-      updateServiceState(function(serviceState) {
-        updateDeleteConfirmation(serviceState, checked);
+      updateBillingState(function(billingState) {
+        updateDeleteConfirmation(billingState, checked);
       }, false);
     },
   });

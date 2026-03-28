@@ -5,12 +5,12 @@ import {
   renderExportPanel,
   renderExportResult,
   renderManagePanel,
-  renderOpenPanels,
+  renderOpenBillingPanels,
   renderRefundPanel,
   renderRetrievePanel,
-  renderStatus,
-} from './services_view';
-import type { PortalBootstrapData, RefundState, ServiceStatus, VerificationFlowState } from './types';
+  renderBillingStatus,
+} from './billing_view';
+import type { PortalBootstrapData, RefundState, BillingStatus, VerificationFlowState } from './types';
 
 function createBootstrap(overrides: Partial<PortalBootstrapData> = {}): PortalBootstrapData {
   return {
@@ -80,25 +80,25 @@ describe('services view', function() {
 
   it('toggles the visible service panel by id', function() {
     document.body.innerHTML =
-      '<div id="service-panel-empty" class="service-panel visible"></div>' +
-      '<article class="service-action-row"><button data-account-service-action="open-service-panel" data-account-service-panel="manage-service-panel"></button></article>' +
-      '<article class="service-action-row"><button data-account-service-action="open-service-panel" data-account-service-panel="retrieve-service-panel"></button></article>' +
-      '<div id="manage-service-panel" class="service-panel"></div>' +
-      '<div id="retrieve-service-panel" class="service-panel"></div>' +
-      '<div id="refund-service-panel" class="service-panel"></div>' +
-      '<div id="data-service-panel" class="service-panel"></div>';
+      '<div id="billing-panel-empty" class="billing-panel visible"></div>' +
+      '<article class="billing-action-row"><button data-account-billing-action="open-billing-panel" data-account-billing-panel="manage-billing-panel"></button></article>' +
+      '<article class="billing-action-row"><button data-account-billing-action="open-billing-panel" data-account-billing-panel="retrieve-billing-panel"></button></article>' +
+      '<div id="manage-billing-panel" class="billing-panel"></div>' +
+      '<div id="retrieve-billing-panel" class="billing-panel"></div>' +
+      '<div id="refund-billing-panel" class="billing-panel"></div>' +
+      '<div id="data-billing-panel" class="billing-panel"></div>';
 
-    renderOpenPanels('retrieve-service-panel');
+    renderOpenBillingPanels('retrieve-billing-panel');
 
-    expect(document.getElementById('retrieve-service-panel')?.classList.contains('visible')).toBe(true);
-    expect(document.getElementById('manage-service-panel')?.classList.contains('visible')).toBe(false);
-    expect(document.getElementById('refund-service-panel')?.classList.contains('visible')).toBe(false);
-    expect(document.getElementById('service-panel-empty')?.classList.contains('visible')).toBe(false);
-    expect(document.querySelectorAll('.service-action-row.active')).toHaveLength(1);
+    expect(document.getElementById('retrieve-billing-panel')?.classList.contains('visible')).toBe(true);
+    expect(document.getElementById('manage-billing-panel')?.classList.contains('visible')).toBe(false);
+    expect(document.getElementById('refund-billing-panel')?.classList.contains('visible')).toBe(false);
+    expect(document.getElementById('billing-panel-empty')?.classList.contains('visible')).toBe(false);
+    expect(document.querySelectorAll('.billing-action-row.active')).toHaveLength(1);
   });
 
   it('renders retrieve panel result state with invoice and token metadata', function() {
-    document.body.innerHTML = '<div id="retrieve-service-root"></div>';
+    document.body.innerHTML = '<div id="retrieve-billing-root"></div>';
 
     renderRetrievePanel(
       createFlowState({
@@ -130,7 +130,7 @@ describe('services view', function() {
 
   it('renders refund and delete panels from owned state', function() {
     document.body.innerHTML =
-      '<div id="refund-service-root"></div>' +
+      '<div id="refund-billing-root"></div>' +
       '<div id="data-delete-root"></div>';
 
     renderRefundPanel(
@@ -155,7 +155,7 @@ describe('services view', function() {
 
     expect(refundEmail.value).toBe('owner@example.com');
     expect(refundToken.value).toBe('pulse_token');
-    expect(document.getElementById('refund-service-root')?.innerHTML).toContain('/refund.html?email=owner%40example.com');
+    expect(document.getElementById('refund-billing-root')?.innerHTML).toContain('/refund.html?email=owner%40example.com');
     expect(deleteCheck.checked).toBe(true);
     expect((document.getElementById('data-delete-step2') as HTMLElement).hidden).toBe(false);
   });
@@ -189,8 +189,8 @@ describe('services view', function() {
 
   it('renders manage panel and status classes from service state', function() {
     document.body.innerHTML =
-      '<div id="manage-service-root"></div>' +
-      '<div id="manage-inline-status" class="service-status"></div>';
+      '<div id="manage-billing-root"></div>' +
+      '<div id="manage-inline-status" class="billing-status"></div>';
 
     renderManagePanel(
       createFlowState({
@@ -199,11 +199,11 @@ describe('services view', function() {
         step2Visible: true,
       })
     );
-    renderStatus('manage-inline-status', {
+    renderBillingStatus('manage-inline-status', {
       visible: true,
       message: 'Code sent.',
       error: false,
-    } satisfies ServiceStatus);
+    } satisfies BillingStatus);
 
     expect((document.getElementById('manage-inline-email') as HTMLInputElement).value).toBe('owner@example.com');
     expect((document.getElementById('manage-inline-code') as HTMLInputElement).value).toBe('123456');

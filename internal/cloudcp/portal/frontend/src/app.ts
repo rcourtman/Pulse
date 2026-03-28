@@ -2,7 +2,7 @@ import { installAccountController } from './account_controller';
 import { installAccountRuntime } from './account_runtime';
 import { createPortalAPI, PortalAPIError } from './api';
 import { installAuthController } from './auth_controller';
-import { installServicesRuntime } from './services';
+import { installBillingRuntime } from './billing';
 import { installShell } from './shell';
 import { createAnonymousBootstrap } from './store';
 import { createPortalRuntime } from './runtime';
@@ -74,13 +74,13 @@ export function installPortalApp(deps: PortalAppDeps): PortalApp {
       if (section === 'access') {
         var accounts = deps.store.getBootstrap().accounts || [];
         for (var i = 0; i < accounts.length; i += 1) {
-          accountRuntime.ensureTeamVisible(accounts[i].id);
+          accountRuntime.ensureAccessVisible(accounts[i].id);
         }
       }
     },
   });
 
-  installServicesRuntime({
+  installBillingRuntime({
     api: api,
     store: deps.store,
   });

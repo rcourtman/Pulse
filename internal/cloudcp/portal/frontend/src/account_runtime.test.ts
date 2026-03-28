@@ -157,16 +157,16 @@ describe('account runtime', function() {
         createWorkspace: { pending: false, error: '' },
         selectedWorkspaceID: '',
         manageWorkspace: { pending: false, error: '' },
-        teamVisible: true,
-        teamQuery: { status: 'idle', error: '', data: [] },
+        accessVisible: true,
+        accessQuery: { status: 'idle', error: '', data: [] },
       });
       entry.addWorkspaceOpen = true;
-      entry.teamVisible = true;
+      entry.accessVisible = true;
     }, { notify: false });
 
     runtime.selectWorkspace('acct_1', 'ws_2');
     expect(deps.store.getAccountState().byAccountID.acct_1.selectedWorkspaceID).toBe('ws_2');
-    expect(deps.store.getAccountState().byAccountID.acct_1.teamVisible).toBe(false);
+    expect(deps.store.getAccountState().byAccountID.acct_1.accessVisible).toBe(false);
     expect(deps.store.getAccountState().byAccountID.acct_1.addWorkspaceOpen).toBe(false);
     expect(document.getElementById('workspace-operations-shell-acct_1')?.classList.contains('workspace-operations-shell-selected')).toBe(true);
     expect(document.getElementById('workspace-management-title-acct_1')?.textContent).toContain('Alpha Workspace');
@@ -199,9 +199,9 @@ describe('account runtime', function() {
 
     document.body.innerHTML =
       '<div id="workspace-management-acct_1" class="workspace-management-panel"><button id="workspace-management-close-acct_1"></button><div id="workspace-management-empty-acct_1"></div><div id="workspace-management-content-acct_1" hidden><div id="workspace-management-meta-acct_1"></div><h4 id="workspace-management-title-acct_1"></h4><p id="workspace-management-summary-acct_1"></p><div id="workspace-management-health-acct_1"></div><div id="workspace-management-lifecycle-acct_1"></div><div id="workspace-management-created-acct_1"></div><div id="workspace-management-guidance-acct_1"></div><button id="workspace-management-action-acct_1"></button></div></div>' +
-      '<div id="team-section-acct_1" class="team-section" data-actor-role="owner">' +
-      '<div id="team-stats-acct_1"></div>' +
-      '<table><tbody id="team-list-acct_1"></tbody></table>' +
+      '<div id="access-section-acct_1" class="access-section" data-actor-role="owner">' +
+      '<div id="access-stats-acct_1"></div>' +
+      '<table><tbody id="access-list-acct_1"></tbody></table>' +
       '<input id="invite-email-acct_1">' +
       '<select id="invite-role-acct_1"><option value="admin">Admin</option></select>' +
       '</div>';
@@ -212,22 +212,22 @@ describe('account runtime', function() {
         createWorkspace: { pending: false, error: '' },
         selectedWorkspaceID: 'ws_1',
         manageWorkspace: { pending: false, error: '' },
-        teamVisible: false,
-        teamQuery: { status: 'idle', error: '', data: [] },
+        accessVisible: false,
+        accessQuery: { status: 'idle', error: '', data: [] },
       });
       entry.addWorkspaceOpen = true;
       entry.selectedWorkspaceID = 'ws_1';
     }, { notify: false });
 
-    runtime.toggleTeam('acct_1');
+    runtime.toggleAccess('acct_1');
     await flushAsync();
 
-    expect(deps.store.getAccountState().byAccountID.acct_1.teamVisible).toBe(true);
+    expect(deps.store.getAccountState().byAccountID.acct_1.accessVisible).toBe(true);
     expect(deps.store.getAccountState().byAccountID.acct_1.selectedWorkspaceID).toBe('');
     expect(deps.store.getAccountState().byAccountID.acct_1.addWorkspaceOpen).toBe(false);
-    expect(deps.store.getAccountState().byAccountID.acct_1.teamQuery.status).toBe('ready');
-    expect(deps.store.getAccountState().byAccountID.acct_1.teamQuery.data).toHaveLength(1);
-    expect(document.getElementById('team-stats-acct_1')?.textContent).toContain('Members');
+    expect(deps.store.getAccountState().byAccountID.acct_1.accessQuery.status).toBe('ready');
+    expect(deps.store.getAccountState().byAccountID.acct_1.accessQuery.data).toHaveLength(1);
+    expect(document.getElementById('access-stats-acct_1')?.textContent).toContain('Members');
     var roleSelect = document.querySelector('[data-action="change-role"]') as HTMLSelectElement | null;
     expect(roleSelect).not.toBeNull();
     expect(roleSelect?.value).toBe('owner');

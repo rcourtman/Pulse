@@ -4,7 +4,7 @@ import type { PortalAPI } from './api';
 import { focusElement, getElement, renderAccountUI as renderAccountUIState } from './account_view';
 import { ensurePortalAccountUIEntry } from './state';
 import type { PortalStore } from './store';
-import type { PortalTeamMember } from './types';
+import type { PortalAccessMember } from './types';
 
 export interface AccountRuntimeDeps {
   api: PortalAPI;
@@ -18,8 +18,8 @@ export interface AccountRuntime {
   selectWorkspace(accountID: string, workspaceID: string): void;
   clearWorkspaceSelection(accountID: string): void;
   openBilling(accountID: string): Promise<void>;
-  toggleTeam(accountID: string): void;
-  ensureTeamVisible(accountID: string): void;
+  toggleAccess(accountID: string): void;
+  ensureAccessVisible(accountID: string): void;
   inviteMember(accountID: string): Promise<void>;
   createWorkspace(accountID: string): Promise<void>;
   manageWorkspaceAction(accountID: string, tenantID: string, action: string, name: string): Promise<void>;
@@ -44,41 +44,41 @@ export function installAccountRuntime(deps: AccountRuntimeDeps): AccountRuntime 
     renderAccountUIState(deps.store.getAccountState(), deps.store.getBootstrap().accounts || []);
   };
 
-  var loadTeam = async function(accountID: string): Promise<void> {
-    var section = getElement<HTMLElement>('team-section-' + accountID);
+  var loadAccessRoster = async function(accountID: string): Promise<void> {
+    var section = getElement<HTMLElement>('access-section-' + accountID);
     if (!section) return;
     deps.store.updateAccountState(function(accountState) {
       var entry = ensurePortalAccountUIEntry(accountState, accountID);
-      entry.teamVisible = true;
-      beginQueryState(entry.teamQuery, []);
+      entry.accessVisible = true;
+      beginQueryState(entry.accessQuery, []);
     });
     try {
-      var members = await deps.api.listMembers(accountID) as PortalTeamMember[];
+      var members = await deps.api.listMembers(accountID) as PortalAccessMember[];
       deps.store.updateAccountState(function(accountState) {
         var entry = ensurePortalAccountUIEntry(accountState, accountID);
-        resolveQueryState(entry.teamQuery, Array.isArray(members) ? members : []);
+        resolveQueryState(entry.accessQuery, Array.isArray(members) ? members : []);
       });
     } catch (error) {
       deps.store.updateAccountState(function(accountState) {
         var entry = ensurePortalAccountUIEntry(accountState, accountID);
-        failQueryState(entry.teamQuery, [], error instanceof Error ? error.message : 'Network error.');
+        failQueryState(entry.accessQuery, [], error instanceof Error ? error.message : 'Network error.');
       });
     }
   };
 
-  var refreshAccountTeamSection = async function(accountID: string): Promise<boolean> {
+  var refreshAccountAccessSection = async function(accountID: string): Promise<boolean> {
     if (!await refreshOrRedirect()) {
       return false;
     }
-    var section = getElement<HTMLElement>('team-section-' + accountID);
+    var section = getElement<HTMLElement>('access-section-' + accountID);
     if (!section) {
       return true;
     }
     deps.store.updateAccountState(function(accountState) {
       var entry = ensurePortalAccountUIEntry(accountState, accountID);
-      entry.teamVisible = true;
+      entry.accessVisible = true;
     });
-    await loadTeam(accountID);
+    await loadAccessRoster(accountID);
     return true;
   };
 
@@ -88,7 +88,7 @@ export function installAccountRuntime(deps: AccountRuntimeDeps): AccountRuntime 
       var entry = ensurePortalAccountUIEntry(accountState, accountID);
       entry.addWorkspaceOpen = !entry.addWorkspaceOpen;
       if (entry.addWorkspaceOpen) {
-        entry.teamVisible = false;
+        entry.accessVisible = false;
         entry.selectedWorkspaceID = '';
       }
       shouldFocus = entry.addWorkspaceOpen;
@@ -103,7 +103,7 @@ export function installAccountRuntime(deps: AccountRuntimeDeps): AccountRuntime 
       var entry = ensurePortalAccountUIEntry(accountState, accountID);
       entry.selectedWorkspaceID = entry.selectedWorkspaceID === workspaceID ? '' : workspaceID;
       if (entry.selectedWorkspaceID) {
-        entry.teamVisible = false;
+        entry.accessVisible = false;
         entry.addWorkspaceOpen = false;
       }
     });
@@ -202,35 +202,35 @@ export function installAccountRuntime(deps: AccountRuntimeDeps): AccountRuntime 
     }
   };
 
-  var toggleTeam = function(accountID: string): void {
+  var toggleAccess = function(accountID: string): void {
     var nextVisible = false;
     deps.store.updateAccountState(function(accountState) {
       var entry = ensurePortalAccountUIEntry(accountState, accountID);
-      entry.teamVisible = !entry.teamVisible;
-      if (entry.teamVisible) {
+      entry.accessVisible = !entry.accessVisible;
+      if (entry.accessVisible) {
         entry.selectedWorkspaceID = '';
         entry.addWorkspaceOpen = false;
       }
-      nextVisible = entry.teamVisible;
+      nextVisible = entry.accessVisible;
     });
     if (nextVisible) {
-      void loadTeam(accountID);
+      void loadAccessRoster(accountID);
     }
   };
 
-  var ensureTeamVisible = function(accountID: string): void {
+  var ensureAccessVisible = function(accountID: string): void {
     var shouldLoad = false;
     deps.store.updateAccountState(function(accountState) {
       var entry = ensurePortalAccountUIEntry(accountState, accountID);
-      if (!entry.teamVisible) {
-        entry.teamVisible = true;
+      if (!entry.accessVisible) {
+        entry.accessVisible = true;
         entry.selectedWorkspaceID = '';
         entry.addWorkspaceOpen = false;
       }
-      shouldLoad = entry.teamQuery.status === 'idle' || entry.teamQuery.status === 'error';
+      shouldLoad = entry.accessQuery.status === 'idle' || entry.accessQuery.status === 'error';
     });
     if (shouldLoad) {
-      void loadTeam(accountID);
+      void loadAccessRoster(accountID);
     }
   };
 
@@ -246,7 +246,7 @@ export function installAccountRuntime(deps: AccountRuntimeDeps): AccountRuntime 
     try {
       await deps.api.inviteMember(accountID, { email: email, role: roleEl.value });
       emailEl.value = '';
-      if (!await refreshAccountTeamSection(accountID)) {
+      if (!await refreshAccountAccessSection(accountID)) {
         return;
       }
       deps.showToast('Member invited!');
@@ -262,18 +262,18 @@ export function installAccountRuntime(deps: AccountRuntimeDeps): AccountRuntime 
   var changeRole = async function(accountID: string, userID: string, newRole: string): Promise<void> {
     try {
       await deps.api.updateMemberRole(accountID, userID, { role: newRole });
-      if (!await refreshAccountTeamSection(accountID)) {
+      if (!await refreshAccountAccessSection(accountID)) {
         return;
       }
       deps.showToast('Role updated.');
     } catch (error) {
       if (error instanceof PortalAPIError && error.status === 409) {
         deps.showToast('Cannot demote last owner.', true);
-        await loadTeam(accountID);
+        await loadAccessRoster(accountID);
         return;
       }
       deps.showToast(error instanceof Error ? error.message : 'Failed to update role.', true);
-      await loadTeam(accountID);
+      await loadAccessRoster(accountID);
     }
   };
 
@@ -281,7 +281,7 @@ export function installAccountRuntime(deps: AccountRuntimeDeps): AccountRuntime 
     if (!window.confirm('Remove ' + email + ' from this account?')) return;
     try {
       await deps.api.removeMember(accountID, userID);
-      if (!await refreshAccountTeamSection(accountID)) {
+      if (!await refreshAccountAccessSection(accountID)) {
         return;
       }
       deps.showToast('Member removed.');
@@ -302,8 +302,8 @@ export function installAccountRuntime(deps: AccountRuntimeDeps): AccountRuntime 
     selectWorkspace: selectWorkspace,
     clearWorkspaceSelection: clearWorkspaceSelection,
     openBilling: openBilling,
-    toggleTeam: toggleTeam,
-    ensureTeamVisible: ensureTeamVisible,
+    toggleAccess: toggleAccess,
+    ensureAccessVisible: ensureAccessVisible,
     inviteMember: inviteMember,
     createWorkspace: createWorkspace,
     manageWorkspaceAction: manageWorkspaceAction,

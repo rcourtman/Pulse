@@ -1,4 +1,4 @@
-import type { PortalBootstrapData, PortalTeamMember } from './types';
+import type { PortalBootstrapData, PortalAccessMember } from './types';
 
 interface PortalAPIContext {
   getBootstrap(): PortalBootstrapData;
@@ -46,7 +46,7 @@ export interface PortalAPI {
   suspendWorkspace(accountID: string, tenantID: string): Promise<void>;
   deleteWorkspace(accountID: string, tenantID: string): Promise<void>;
   openBilling(accountID: string): Promise<PortalBillingResponse>;
-  listMembers(accountID: string): Promise<PortalTeamMember[]>;
+  listMembers(accountID: string): Promise<PortalAccessMember[]>;
   inviteMember(accountID: string, body: PortalMemberInviteRequest): Promise<void>;
   updateMemberRole(accountID: string, userID: string, body: PortalMemberRoleRequest): Promise<void>;
   removeMember(accountID: string, userID: string): Promise<void>;
@@ -172,7 +172,7 @@ export function createPortalAPI(context: PortalAPIContext): PortalAPI {
       }, 'Failed to open billing portal.');
     },
     listMembers: function(accountID: string) {
-      return request<PortalTeamMember[]>(accountURL(accountID, '/members'), {}, 'Failed to load team.');
+      return request<PortalAccessMember[]>(accountURL(accountID, '/members'), {}, 'Failed to load access roster.');
     },
     inviteMember: function(accountID: string, body: PortalMemberInviteRequest) {
       return request<void>(accountURL(accountID, '/members'), {

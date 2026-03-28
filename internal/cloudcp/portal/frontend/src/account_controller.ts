@@ -25,10 +25,10 @@ export function installAccountController(deps: AccountControllerDeps): void {
         event.preventDefault();
         void deps.runtime.openBilling(accountID);
         return;
-      case 'toggle-team':
+      case 'show-access':
         event.preventDefault();
         deps.setShellSection('access');
-        deps.runtime.ensureTeamVisible(accountID);
+        deps.runtime.ensureAccessVisible(accountID);
         return;
       case 'invite-member':
         event.preventDefault();

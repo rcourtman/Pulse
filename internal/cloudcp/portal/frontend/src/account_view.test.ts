@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { renderAccountUI, renderAddWorkspaceSection, renderTeamSection, renderWorkspaceManagement } from './account_view';
+import { renderAccountUI, renderAddWorkspaceSection, renderAccessSection, renderWorkspaceManagement } from './account_view';
 import type { PortalAccountState, PortalAccountSummary, PortalAccountUIEntry } from './types';
 
 function createEntry(overrides: Partial<PortalAccountUIEntry> = {}): PortalAccountUIEntry {
@@ -15,8 +15,8 @@ function createEntry(overrides: Partial<PortalAccountUIEntry> = {}): PortalAccou
       pending: false,
       error: '',
     },
-    teamVisible: false,
-    teamQuery: {
+    accessVisible: false,
+    accessQuery: {
       status: 'idle',
       error: '',
       data: [],
@@ -74,31 +74,31 @@ describe('account view', function() {
 
   it('renders team loading, error, and populated member states', function() {
     document.body.innerHTML =
-      '<div id="team-section-acct_1" class="team-section" data-actor-role="owner">' +
-      '<div id="team-stats-acct_1"></div>' +
-      '<table><tbody id="team-list-acct_1"></tbody></table>' +
+      '<div id="access-section-acct_1" class="access-section" data-actor-role="owner">' +
+      '<div id="access-stats-acct_1"></div>' +
+      '<table><tbody id="access-list-acct_1"></tbody></table>' +
       '</div>';
 
-    renderTeamSection('acct_1', createEntry({
-      teamVisible: true,
-      teamQuery: { status: 'loading', error: '', data: [] },
+    renderAccessSection('acct_1', createEntry({
+      accessVisible: true,
+      accessQuery: { status: 'loading', error: '', data: [] },
     }));
-    expect(document.getElementById('team-list-acct_1')?.textContent).toContain('Loading roster');
-    expect(document.getElementById('team-stats-acct_1')?.textContent).toContain('Invites');
+    expect(document.getElementById('access-list-acct_1')?.textContent).toContain('Loading roster');
+    expect(document.getElementById('access-stats-acct_1')?.textContent).toContain('Invites');
 
-    renderTeamSection('acct_1', createEntry({
-      teamVisible: true,
-      teamQuery: { status: 'error', error: 'Failed to load team.', data: [] },
+    renderAccessSection('acct_1', createEntry({
+      accessVisible: true,
+      accessQuery: { status: 'error', error: 'Failed to load access roster.', data: [] },
     }));
-    expect(document.getElementById('team-list-acct_1')?.textContent).toContain('Roster needs attention');
-    expect(document.getElementById('team-list-acct_1')?.textContent).toContain('Failed to load team.');
-    expect(document.getElementById('team-stats-acct_1')?.textContent).toContain('Invite only');
+    expect(document.getElementById('access-list-acct_1')?.textContent).toContain('Roster needs attention');
+    expect(document.getElementById('access-list-acct_1')?.textContent).toContain('Failed to load access roster.');
+    expect(document.getElementById('access-stats-acct_1')?.textContent).toContain('Invite only');
 
-    renderTeamSection(
+    renderAccessSection(
       'acct_1',
       createEntry({
-        teamVisible: true,
-        teamQuery: {
+        accessVisible: true,
+        accessQuery: {
           status: 'ready',
           error: '',
           data: [
@@ -110,22 +110,22 @@ describe('account view', function() {
     );
     expect(document.querySelector('[data-action="change-role"]')).not.toBeNull();
     expect(document.querySelector('[data-action="remove-member"]')).not.toBeNull();
-    expect(document.getElementById('team-stats-acct_1')?.textContent).toContain('Members');
-    expect(document.getElementById('team-stats-acct_1')?.textContent).toContain('2');
+    expect(document.getElementById('access-stats-acct_1')?.textContent).toContain('Members');
+    expect(document.getElementById('access-stats-acct_1')?.textContent).toContain('2');
   });
 
   it('normalizes legacy member roles into the current read-only operator model', function() {
     document.body.innerHTML =
-      '<div id="team-section-acct_1" class="team-section" data-actor-role="owner">' +
-      '<div id="team-stats-acct_1"></div>' +
-      '<div id="team-list-acct_1"></div>' +
+      '<div id="access-section-acct_1" class="access-section" data-actor-role="owner">' +
+      '<div id="access-stats-acct_1"></div>' +
+      '<div id="access-list-acct_1"></div>' +
       '</div>';
 
-    renderTeamSection(
+    renderAccessSection(
       'acct_1',
       createEntry({
-        teamVisible: true,
-        teamQuery: {
+        accessVisible: true,
+        accessQuery: {
           status: 'ready',
           error: '',
           data: [
@@ -135,12 +135,12 @@ describe('account view', function() {
       })
     );
 
-    var roleSelect = document.querySelector('.team-role-select') as HTMLSelectElement;
-    expect(document.getElementById('team-list-acct_1')?.textContent).toContain('Read-only');
-    expect(document.getElementById('team-list-acct_1')?.textContent).toContain('Role');
+    var roleSelect = document.querySelector('.access-role-select') as HTMLSelectElement;
+    expect(document.getElementById('access-list-acct_1')?.textContent).toContain('Read-only');
+    expect(document.getElementById('access-list-acct_1')?.textContent).toContain('Role');
     expect(roleSelect.value).toBe('read_only');
-    expect(document.getElementById('team-stats-acct_1')?.textContent).toContain('Operators');
-    expect(document.getElementById('team-stats-acct_1')?.textContent).toContain('1');
+    expect(document.getElementById('access-stats-acct_1')?.textContent).toContain('Operators');
+    expect(document.getElementById('access-stats-acct_1')?.textContent).toContain('1');
   });
 
   it('renders workspace management selection from account UI state', function() {
@@ -179,19 +179,19 @@ describe('account view', function() {
     document.body.innerHTML =
       '<div id="add-ws-form-acct_1" class="add-workspace-form"></div><div id="ws-spinner-acct_1"></div>' +
       '<div id="workspace-management-acct_1" class="workspace-management-panel"><button id="workspace-management-close-acct_1"></button><div id="workspace-management-empty-acct_1"></div><div id="workspace-management-content-acct_1" hidden><div id="workspace-management-meta-acct_1"></div><h4 id="workspace-management-title-acct_1"></h4><p id="workspace-management-summary-acct_1"></p><div id="workspace-management-health-acct_1"></div><div id="workspace-management-lifecycle-acct_1"></div><div id="workspace-management-created-acct_1"></div><div id="workspace-management-guidance-acct_1"></div><button id="workspace-management-action-acct_1"></button></div></div>' +
-      '<div id="team-section-acct_1" class="team-section" data-actor-role="admin"><div id="team-stats-acct_1"></div><table><tbody id="team-list-acct_1"></tbody></table></div>' +
+      '<div id="access-section-acct_1" class="access-section" data-actor-role="admin"><div id="access-stats-acct_1"></div><table><tbody id="access-list-acct_1"></tbody></table></div>' +
       '<div id="add-ws-form-acct_2" class="add-workspace-form"></div><div id="ws-spinner-acct_2"></div>' +
       '<div id="workspace-management-acct_2" class="workspace-management-panel"><button id="workspace-management-close-acct_2"></button><div id="workspace-management-empty-acct_2"></div><div id="workspace-management-content-acct_2" hidden><div id="workspace-management-meta-acct_2"></div><h4 id="workspace-management-title-acct_2"></h4><p id="workspace-management-summary-acct_2"></p><div id="workspace-management-health-acct_2"></div><div id="workspace-management-lifecycle-acct_2"></div><div id="workspace-management-created-acct_2"></div><div id="workspace-management-guidance-acct_2"></div><button id="workspace-management-action-acct_2"></button></div></div>' +
-      '<div id="team-section-acct_2" class="team-section" data-actor-role="owner"><div id="team-stats-acct_2"></div><table><tbody id="team-list-acct_2"></tbody></table></div>';
+      '<div id="access-section-acct_2" class="access-section" data-actor-role="owner"><div id="access-stats-acct_2"></div><table><tbody id="access-list-acct_2"></tbody></table></div>';
 
     var state: PortalAccountState = {
       byAccountID: {
-        acct_1: createEntry({ addWorkspaceOpen: true, teamVisible: true }),
+        acct_1: createEntry({ addWorkspaceOpen: true, accessVisible: true }),
         acct_2: createEntry({
           addWorkspaceOpen: false,
           selectedWorkspaceID: 'ws_2',
-          teamVisible: true,
-          teamQuery: {
+          accessVisible: true,
+          accessQuery: {
             status: 'ready',
             error: '',
             data: [{ email: 'tech@example.com', role: 'tech', user_id: 'u2' }],
@@ -220,7 +220,7 @@ describe('account view', function() {
     expect(document.getElementById('add-ws-form-acct_1')?.classList.contains('visible')).toBe(true);
     expect(document.getElementById('add-ws-form-acct_2')?.classList.contains('visible')).toBe(false);
     expect(document.getElementById('workspace-management-acct_1')?.classList.contains('workspace-management-panel-idle')).toBe(true);
-    expect(document.getElementById('team-list-acct_2')?.textContent).toContain('tech@example.com');
+    expect(document.getElementById('access-list-acct_2')?.textContent).toContain('tech@example.com');
     expect(document.getElementById('workspace-management-title-acct_2')?.textContent).toContain('Beta Workspace');
   });
 });

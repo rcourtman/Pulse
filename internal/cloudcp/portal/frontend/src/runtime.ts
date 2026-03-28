@@ -4,7 +4,7 @@ import type { PortalBootstrapData } from './types';
 
 export interface PortalRuntimeHandoff {
   email: string;
-  openPanelID: string;
+  openBillingPanelID: string;
 }
 
 export interface PortalRuntime {
@@ -30,16 +30,16 @@ function normalizeHandoffEmail(value: string | null): string {
   return String(value || '').trim();
 }
 
-function normalizeHandoffService(value: string | null): string {
+function normalizeHandoffBillingPanel(value: string | null): string {
   switch (String(value || '').trim()) {
     case 'manage':
-      return 'manage-service-panel';
+      return 'manage-billing-panel';
     case 'retrieve':
-      return 'retrieve-service-panel';
+      return 'retrieve-billing-panel';
     case 'refund':
-      return 'refund-service-panel';
+      return 'refund-billing-panel';
     case 'data':
-      return 'data-service-panel';
+      return 'data-billing-panel';
     default:
       return '';
   }
@@ -50,12 +50,12 @@ export function readPortalRuntimeHandoff(locationHref: string | undefined = wind
     var params = new URL(locationHref).searchParams;
     return {
       email: normalizeHandoffEmail(params.get('email')),
-      openPanelID: normalizeHandoffService(params.get('service')),
+      openBillingPanelID: normalizeHandoffBillingPanel(params.get('service')),
     };
   } catch {
     return {
       email: '',
-      openPanelID: '',
+      openBillingPanelID: '',
     };
   }
 }
@@ -87,17 +87,17 @@ export function createPortalRuntime(
     store.updateLoginState(function(loginState) {
       loginState.emailValue = handoff.email;
     }, { notify: false });
-    store.updateServiceState(function(serviceState) {
-      serviceState.flows.manage.emailValue = handoff.email;
-      serviceState.flows.retrieve.emailValue = handoff.email;
-      serviceState.flows.export.emailValue = handoff.email;
-      serviceState.flows.delete.emailValue = handoff.email;
-      serviceState.refund.emailValue = handoff.email;
+    store.updateBillingState(function(billingState) {
+      billingState.flows.manage.emailValue = handoff.email;
+      billingState.flows.retrieve.emailValue = handoff.email;
+      billingState.flows.export.emailValue = handoff.email;
+      billingState.flows.delete.emailValue = handoff.email;
+      billingState.refund.emailValue = handoff.email;
     }, { notify: false });
   }
-  if (handoff.openPanelID) {
-    store.updateServiceState(function(serviceState) {
-      serviceState.openPanelID = handoff.openPanelID;
+  if (handoff.openBillingPanelID) {
+    store.updateBillingState(function(billingState) {
+      billingState.openBillingPanelID = handoff.openBillingPanelID;
     }, { notify: false });
   }
   return {

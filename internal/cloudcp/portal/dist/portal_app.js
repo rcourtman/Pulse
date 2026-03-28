@@ -1,11 +1,11 @@
 (() => {
   // src/account_view.ts
-  function normalizedTeamRole(role) {
+  function normalizedAccessRole(role) {
     if (role === "member") return "read_only";
     return role || "read_only";
   }
   function roleLabel(role) {
-    switch (normalizedTeamRole(role)) {
+    switch (normalizedAccessRole(role)) {
       case "owner":
         return "Owner";
       case "admin":
@@ -21,7 +21,7 @@
     }
   }
   function roleCapabilityCopy(role) {
-    switch (normalizedTeamRole(role)) {
+    switch (normalizedAccessRole(role)) {
       case "owner":
         return "Full account control, including billing, access control, and workspace control.";
       case "admin":
@@ -158,12 +158,12 @@
     container.textContent = "";
     container.classList.add("state-only");
     var message = document.createElement("div");
-    message.className = "team-list-message" + (isError ? " error" : "");
+    message.className = "access-list-message" + (isError ? " error" : "");
     var heading = document.createElement("strong");
-    heading.className = "team-list-message-title";
+    heading.className = "access-list-message-title";
     heading.textContent = title;
     var copy = document.createElement("span");
-    copy.className = "team-list-message-copy";
+    copy.className = "access-list-message-copy";
     copy.textContent = msg;
     message.appendChild(heading);
     message.appendChild(copy);
@@ -172,45 +172,45 @@
   function countMembersByRole(members, role) {
     var count = 0;
     for (var i = 0; i < members.length; i += 1) {
-      if (normalizedTeamRole(members[i].role) === role) count += 1;
+      if (normalizedAccessRole(members[i].role) === role) count += 1;
     }
     return count;
   }
-  function renderTeamStats(accountID, entry) {
-    var stats = getElement("team-stats-" + accountID);
+  function renderAccessStats(accountID, entry) {
+    var stats = getElement("access-stats-" + accountID);
     if (!stats) return;
-    if (!entry.teamVisible) {
+    if (!entry.accessVisible) {
       stats.innerHTML = "";
       return;
     }
-    if (entry.teamQuery.status === "loading") {
-      stats.innerHTML = '<div class="team-stat-card"><span class="team-stat-label">Roster</span><span class="team-stat-value">Loading\u2026</span></div><div class="team-stat-card"><span class="team-stat-label">Invites</span><span class="team-stat-value">Ready</span></div>';
+    if (entry.accessQuery.status === "loading") {
+      stats.innerHTML = '<div class="access-stat-card"><span class="access-stat-label">Roster</span><span class="access-stat-value">Loading\u2026</span></div><div class="access-stat-card"><span class="access-stat-label">Invites</span><span class="access-stat-value">Ready</span></div>';
       return;
     }
-    if (entry.teamQuery.status === "error") {
-      stats.innerHTML = '<div class="team-stat-card"><span class="team-stat-label">Roster</span><span class="team-stat-value team-stat-error">Needs attention</span></div><div class="team-stat-card"><span class="team-stat-label">Fallback</span><span class="team-stat-value">Invite only</span></div>';
+    if (entry.accessQuery.status === "error") {
+      stats.innerHTML = '<div class="access-stat-card"><span class="access-stat-label">Roster</span><span class="access-stat-value access-stat-error">Needs attention</span></div><div class="access-stat-card"><span class="access-stat-label">Fallback</span><span class="access-stat-value">Invite only</span></div>';
       return;
     }
-    var members = entry.teamQuery.data;
-    stats.innerHTML = '<div class="team-stat-card"><span class="team-stat-label">Members</span><span class="team-stat-value">' + String(members.length) + '</span></div><div class="team-stat-card"><span class="team-stat-label">Owners</span><span class="team-stat-value">' + String(countMembersByRole(members, "owner")) + '</span></div><div class="team-stat-card"><span class="team-stat-label">Admins</span><span class="team-stat-value">' + String(countMembersByRole(members, "admin")) + '</span></div><div class="team-stat-card"><span class="team-stat-label">Operators</span><span class="team-stat-value">' + String(countMembersByRole(members, "tech") + countMembersByRole(members, "read_only")) + "</span></div>";
+    var members = entry.accessQuery.data;
+    stats.innerHTML = '<div class="access-stat-card"><span class="access-stat-label">Members</span><span class="access-stat-value">' + String(members.length) + '</span></div><div class="access-stat-card"><span class="access-stat-label">Owners</span><span class="access-stat-value">' + String(countMembersByRole(members, "owner")) + '</span></div><div class="access-stat-card"><span class="access-stat-label">Admins</span><span class="access-stat-value">' + String(countMembersByRole(members, "admin")) + '</span></div><div class="access-stat-card"><span class="access-stat-label">Operators</span><span class="access-stat-value">' + String(countMembersByRole(members, "tech") + countMembersByRole(members, "read_only")) + "</span></div>";
   }
-  function createTeamControlCell(className) {
+  function createAccessControlCell(className) {
     var cell = document.createElement("div");
-    cell.className = "team-control-cell " + className;
+    cell.className = "access-control-cell " + className;
     return cell;
   }
-  function renderTeamRoleControl(accountID, member, isOwner) {
-    var currentRole = normalizedTeamRole(member.role);
-    var group = createTeamControlCell("team-control-cell-role");
+  function renderAccessRoleControl(accountID, member, isOwner) {
+    var currentRole = normalizedAccessRole(member.role);
+    var group = createAccessControlCell("access-control-cell-role");
     if (currentRole === "owner" && !isOwner) {
       var locked = document.createElement("span");
-      locked.className = "team-role-badge";
+      locked.className = "access-role-badge";
       locked.textContent = roleLabel(currentRole);
       group.appendChild(locked);
       return group;
     }
     var sel = document.createElement("select");
-    sel.className = "team-role-select";
+    sel.className = "access-role-select";
     var roles = isOwner ? ["owner", "admin", "tech", "read_only"] : ["admin", "tech", "read_only"];
     for (var j = 0; j < roles.length; j += 1) {
       var opt = document.createElement("option");
@@ -225,11 +225,11 @@
     group.appendChild(sel);
     return group;
   }
-  function renderTeamMemberAction(accountID, member, isOwner) {
-    if (normalizedTeamRole(member.role) === "owner" && !isOwner) {
-      var locked = createTeamControlCell("team-control-cell-access");
+  function renderAccessMemberAction(accountID, member, isOwner) {
+    if (normalizedAccessRole(member.role) === "owner" && !isOwner) {
+      var locked = createAccessControlCell("access-control-cell-access");
       var lockedText = document.createElement("span");
-      lockedText.className = "team-control-locked";
+      lockedText.className = "access-control-locked";
       lockedText.textContent = "Locked";
       locked.appendChild(lockedText);
       return locked;
@@ -242,40 +242,40 @@
     btn.setAttribute("data-account-id", accountID);
     btn.setAttribute("data-user-id", member.user_id);
     btn.setAttribute("data-member-email", member.email);
-    var group = createTeamControlCell("team-control-cell-access");
+    var group = createAccessControlCell("access-control-cell-access");
     group.appendChild(btn);
     return group;
   }
-  function renderTeamMemberRow(accountID, member, isOwner) {
+  function renderAccessMemberRow(accountID, member, isOwner) {
     var row = document.createElement("div");
-    row.className = "team-member-row";
+    row.className = "access-member-row";
     var identity = document.createElement("div");
-    identity.className = "team-member-identity";
+    identity.className = "access-member-identity";
     var topline = document.createElement("div");
-    topline.className = "team-member-topline";
+    topline.className = "access-member-topline";
     var email = document.createElement("div");
-    email.className = "team-member-email";
+    email.className = "access-member-email";
     email.textContent = member.email;
     topline.appendChild(email);
     var roleBadge = document.createElement("span");
-    roleBadge.className = "team-inline-role-badge";
+    roleBadge.className = "access-inline-role-badge";
     roleBadge.textContent = roleLabel(member.role);
     topline.appendChild(roleBadge);
     identity.appendChild(topline);
     var caption = document.createElement("div");
-    caption.className = "team-member-caption";
+    caption.className = "access-member-caption";
     caption.textContent = roleCapabilityCopy(member.role);
     identity.appendChild(caption);
     row.appendChild(identity);
-    row.appendChild(renderTeamRoleControl(accountID, member, isOwner));
-    row.appendChild(renderTeamMemberAction(accountID, member, isOwner) || createTeamControlCell("team-control-cell-access"));
+    row.appendChild(renderAccessRoleControl(accountID, member, isOwner));
+    row.appendChild(renderAccessMemberAction(accountID, member, isOwner) || createAccessControlCell("access-control-cell-access"));
     return row;
   }
-  function ensureRosterHead(container) {
-    var existing = container.querySelector(".team-roster-head");
+  function ensureAccessRosterHead(container) {
+    var existing = container.querySelector(".access-roster-head");
     if (existing) return;
     var head = document.createElement("div");
-    head.className = "team-roster-head";
+    head.className = "access-roster-head";
     head.innerHTML = "<span>Operator</span><span>Role</span><span>Access</span>";
     container.appendChild(head);
   }
@@ -288,29 +288,29 @@
       spinner.hidden = !entry.createWorkspace.pending;
     }
   }
-  function renderTeamSection(accountID, entry) {
-    var section = getElement("team-section-" + accountID);
-    var roster = getElement("team-list-" + accountID);
+  function renderAccessSection(accountID, entry) {
+    var section = getElement("access-section-" + accountID);
+    var roster = getElement("access-list-" + accountID);
     if (!section || !roster) return;
-    var rosterPanel = roster.closest(".team-roster");
+    var rosterPanel = roster.closest(".access-roster");
     var actorRole = section.getAttribute("data-actor-role") || "";
     var isOwner = actorRole === "owner";
-    section.classList.toggle("visible", entry.teamVisible);
-    renderTeamStats(accountID, entry);
-    if (!entry.teamVisible) {
+    section.classList.toggle("visible", entry.accessVisible);
+    renderAccessStats(accountID, entry);
+    if (!entry.accessVisible) {
       return;
     }
-    if (entry.teamQuery.status === "loading") {
+    if (entry.accessQuery.status === "loading") {
       if (rosterPanel) rosterPanel.classList.add("state-only");
       setContainerMessage(roster, "Loading roster", "Checking who currently has access to this account.", false);
       return;
     }
-    if (entry.teamQuery.status === "error") {
+    if (entry.accessQuery.status === "error") {
       if (rosterPanel) rosterPanel.classList.add("state-only");
-      setContainerMessage(roster, "Roster needs attention", entry.teamQuery.error, true);
+      setContainerMessage(roster, "Roster needs attention", entry.accessQuery.error, true);
       return;
     }
-    if (!entry.teamQuery.data.length) {
+    if (!entry.accessQuery.data.length) {
       if (rosterPanel) rosterPanel.classList.add("state-only");
       setContainerMessage(roster, "No one added yet", "Invite someone new when this account needs shared access.", false);
       return;
@@ -318,10 +318,10 @@
     roster.textContent = "";
     roster.classList.remove("state-only");
     if (rosterPanel) rosterPanel.classList.remove("state-only");
-    ensureRosterHead(roster);
-    for (var i = 0; i < entry.teamQuery.data.length; i += 1) {
-      var member = entry.teamQuery.data[i];
-      roster.appendChild(renderTeamMemberRow(accountID, member, isOwner));
+    ensureAccessRosterHead(roster);
+    for (var i = 0; i < entry.accessQuery.data.length; i += 1) {
+      var member = entry.accessQuery.data[i];
+      roster.appendChild(renderAccessMemberRow(accountID, member, isOwner));
     }
   }
   function renderAccountUI(accountState, accounts) {
@@ -338,7 +338,7 @@
       }
       renderAddWorkspaceSection(accountID, entry);
       if (account) renderWorkspaceManagement(account, entry);
-      renderTeamSection(accountID, entry);
+      renderAccessSection(accountID, entry);
     }
   }
 
@@ -361,10 +361,10 @@
           event.preventDefault();
           void deps.runtime.openBilling(accountID);
           return;
-        case "toggle-team":
+        case "show-access":
           event.preventDefault();
           deps.setShellSection("access");
-          deps.runtime.ensureTeamVisible(accountID);
+          deps.runtime.ensureAccessVisible(accountID);
           return;
         case "invite-member":
           event.preventDefault();
@@ -574,7 +574,7 @@
         }, "Failed to open billing portal.");
       },
       listMembers: function(accountID) {
-        return request(accountURL(accountID, "/members"), {}, "Failed to load team.");
+        return request(accountURL(accountID, "/members"), {}, "Failed to load access roster.");
       },
       inviteMember: function(accountID, body) {
         return request(accountURL(accountID, "/members"), {
@@ -657,15 +657,15 @@
         createWorkspace: createMutationState(),
         selectedWorkspaceID: "",
         manageWorkspace: createMutationState(),
-        teamVisible: false,
-        teamQuery: createQueryState([])
+        accessVisible: false,
+        accessQuery: createQueryState([])
       };
     }
     return accountState.byAccountID[accountID];
   }
-  function createPortalServiceState() {
+  function createPortalBillingState() {
     return {
-      openPanelID: "",
+      openBillingPanelID: "",
       flows: {
         manage: newVerificationFlowState(),
         retrieve: newVerificationFlowState(),
@@ -685,76 +685,76 @@
       loginState.emailValue = email || "";
     }
   }
-  function syncServiceStateBootstrapEmail(serviceState, email) {
-    if (!serviceState.flows.manage.emailValue) serviceState.flows.manage.emailValue = email || "";
-    if (!serviceState.flows.retrieve.emailValue) serviceState.flows.retrieve.emailValue = email || "";
-    if (!serviceState.flows.export.emailValue) serviceState.flows.export.emailValue = email || "";
-    if (!serviceState.flows.delete.emailValue) serviceState.flows.delete.emailValue = email || "";
-    if (!serviceState.refund.emailValue) serviceState.refund.emailValue = email || "";
+  function syncBillingStateBootstrapEmail(billingState, email) {
+    if (!billingState.flows.manage.emailValue) billingState.flows.manage.emailValue = email || "";
+    if (!billingState.flows.retrieve.emailValue) billingState.flows.retrieve.emailValue = email || "";
+    if (!billingState.flows.export.emailValue) billingState.flows.export.emailValue = email || "";
+    if (!billingState.flows.delete.emailValue) billingState.flows.delete.emailValue = email || "";
+    if (!billingState.refund.emailValue) billingState.refund.emailValue = email || "";
   }
-  function setFlowStatus(serviceState, flowID, message, isError) {
-    serviceState.flows[flowID].status = {
+  function setFlowStatus(billingState, flowID, message, isError) {
+    billingState.flows[flowID].status = {
       visible: true,
       message,
       error: !!isError
     };
   }
-  function clearFlowStatus(serviceState, flowID) {
-    serviceState.flows[flowID].status = emptyStatus();
+  function clearFlowStatus(billingState, flowID) {
+    billingState.flows[flowID].status = emptyStatus();
   }
-  function setRefundStatus(serviceState, message, isError) {
-    serviceState.refund.status = {
+  function setRefundStatus(billingState, message, isError) {
+    billingState.refund.status = {
       visible: true,
       message,
       error: !!isError
     };
   }
-  function toggleServicePanelState(serviceState, panelID) {
-    serviceState.openPanelID = serviceState.openPanelID === panelID ? "" : panelID;
+  function toggleBillingPanelState(billingState, panelID) {
+    billingState.openBillingPanelID = billingState.openBillingPanelID === panelID ? "" : panelID;
   }
-  function resetVerificationFlowState(serviceState, flowID) {
-    var previous = serviceState.flows[flowID];
-    serviceState.flows[flowID] = newVerificationFlowState();
-    serviceState.flows[flowID].emailValue = previous.emailValue;
+  function resetVerificationFlowState(billingState, flowID) {
+    var previous = billingState.flows[flowID];
+    billingState.flows[flowID] = newVerificationFlowState();
+    billingState.flows[flowID].emailValue = previous.emailValue;
   }
-  function updateServiceInputValue(serviceState, inputKind, value) {
+  function updateBillingInputValue(billingState, inputKind, value) {
     switch (inputKind) {
       case "manage-email":
-        serviceState.flows.manage.emailValue = value;
+        billingState.flows.manage.emailValue = value;
         return;
       case "manage-code":
-        serviceState.flows.manage.codeValue = value;
+        billingState.flows.manage.codeValue = value;
         return;
       case "retrieve-email":
-        serviceState.flows.retrieve.emailValue = value;
+        billingState.flows.retrieve.emailValue = value;
         return;
       case "retrieve-code":
-        serviceState.flows.retrieve.codeValue = value;
+        billingState.flows.retrieve.codeValue = value;
         return;
       case "refund-email":
-        serviceState.refund.emailValue = value;
+        billingState.refund.emailValue = value;
         return;
       case "refund-token":
-        serviceState.refund.tokenValue = value;
+        billingState.refund.tokenValue = value;
         return;
       case "data-export-email":
-        serviceState.flows.export.emailValue = value;
+        billingState.flows.export.emailValue = value;
         return;
       case "data-export-code":
-        serviceState.flows.export.codeValue = value;
+        billingState.flows.export.codeValue = value;
         return;
       case "data-delete-email":
-        serviceState.flows.delete.emailValue = value;
+        billingState.flows.delete.emailValue = value;
         return;
       case "data-delete-code":
-        serviceState.flows.delete.codeValue = value;
+        billingState.flows.delete.codeValue = value;
         return;
       default:
         return;
     }
   }
-  function updateDeleteConfirmation(serviceState, checked) {
-    serviceState.flows.delete.checkboxChecked = checked;
+  function updateDeleteConfirmation(billingState, checked) {
+    billingState.flows.delete.checkboxChecked = checked;
   }
 
   // src/account_runtime.ts
@@ -772,40 +772,40 @@
     var renderAccountRuntime = function() {
       renderAccountUI(deps.store.getAccountState(), deps.store.getBootstrap().accounts || []);
     };
-    var loadTeam = async function(accountID) {
-      var section = getElement("team-section-" + accountID);
+    var loadAccessRoster = async function(accountID) {
+      var section = getElement("access-section-" + accountID);
       if (!section) return;
       deps.store.updateAccountState(function(accountState) {
         var entry = ensurePortalAccountUIEntry(accountState, accountID);
-        entry.teamVisible = true;
-        beginQueryState(entry.teamQuery, []);
+        entry.accessVisible = true;
+        beginQueryState(entry.accessQuery, []);
       });
       try {
         var members = await deps.api.listMembers(accountID);
         deps.store.updateAccountState(function(accountState) {
           var entry = ensurePortalAccountUIEntry(accountState, accountID);
-          resolveQueryState(entry.teamQuery, Array.isArray(members) ? members : []);
+          resolveQueryState(entry.accessQuery, Array.isArray(members) ? members : []);
         });
       } catch (error) {
         deps.store.updateAccountState(function(accountState) {
           var entry = ensurePortalAccountUIEntry(accountState, accountID);
-          failQueryState(entry.teamQuery, [], error instanceof Error ? error.message : "Network error.");
+          failQueryState(entry.accessQuery, [], error instanceof Error ? error.message : "Network error.");
         });
       }
     };
-    var refreshAccountTeamSection = async function(accountID) {
+    var refreshAccountAccessSection = async function(accountID) {
       if (!await refreshOrRedirect()) {
         return false;
       }
-      var section = getElement("team-section-" + accountID);
+      var section = getElement("access-section-" + accountID);
       if (!section) {
         return true;
       }
       deps.store.updateAccountState(function(accountState) {
         var entry = ensurePortalAccountUIEntry(accountState, accountID);
-        entry.teamVisible = true;
+        entry.accessVisible = true;
       });
-      await loadTeam(accountID);
+      await loadAccessRoster(accountID);
       return true;
     };
     var toggleAddWorkspace = function(accountID) {
@@ -814,7 +814,7 @@
         var entry = ensurePortalAccountUIEntry(accountState, accountID);
         entry.addWorkspaceOpen = !entry.addWorkspaceOpen;
         if (entry.addWorkspaceOpen) {
-          entry.teamVisible = false;
+          entry.accessVisible = false;
           entry.selectedWorkspaceID = "";
         }
         shouldFocus = entry.addWorkspaceOpen;
@@ -828,7 +828,7 @@
         var entry = ensurePortalAccountUIEntry(accountState, accountID);
         entry.selectedWorkspaceID = entry.selectedWorkspaceID === workspaceID ? "" : workspaceID;
         if (entry.selectedWorkspaceID) {
-          entry.teamVisible = false;
+          entry.accessVisible = false;
           entry.addWorkspaceOpen = false;
         }
       });
@@ -922,34 +922,34 @@
         deps.showToast(error instanceof Error ? error.message : "Failed to open billing portal.", true);
       }
     };
-    var toggleTeam = function(accountID) {
+    var toggleAccess = function(accountID) {
       var nextVisible = false;
       deps.store.updateAccountState(function(accountState) {
         var entry = ensurePortalAccountUIEntry(accountState, accountID);
-        entry.teamVisible = !entry.teamVisible;
-        if (entry.teamVisible) {
+        entry.accessVisible = !entry.accessVisible;
+        if (entry.accessVisible) {
           entry.selectedWorkspaceID = "";
           entry.addWorkspaceOpen = false;
         }
-        nextVisible = entry.teamVisible;
+        nextVisible = entry.accessVisible;
       });
       if (nextVisible) {
-        void loadTeam(accountID);
+        void loadAccessRoster(accountID);
       }
     };
-    var ensureTeamVisible = function(accountID) {
+    var ensureAccessVisible = function(accountID) {
       var shouldLoad = false;
       deps.store.updateAccountState(function(accountState) {
         var entry = ensurePortalAccountUIEntry(accountState, accountID);
-        if (!entry.teamVisible) {
-          entry.teamVisible = true;
+        if (!entry.accessVisible) {
+          entry.accessVisible = true;
           entry.selectedWorkspaceID = "";
           entry.addWorkspaceOpen = false;
         }
-        shouldLoad = entry.teamQuery.status === "idle" || entry.teamQuery.status === "error";
+        shouldLoad = entry.accessQuery.status === "idle" || entry.accessQuery.status === "error";
       });
       if (shouldLoad) {
-        void loadTeam(accountID);
+        void loadAccessRoster(accountID);
       }
     };
     var inviteMember = async function(accountID) {
@@ -964,7 +964,7 @@
       try {
         await deps.api.inviteMember(accountID, { email, role: roleEl.value });
         emailEl.value = "";
-        if (!await refreshAccountTeamSection(accountID)) {
+        if (!await refreshAccountAccessSection(accountID)) {
           return;
         }
         deps.showToast("Member invited!");
@@ -979,25 +979,25 @@
     var changeRole = async function(accountID, userID, newRole) {
       try {
         await deps.api.updateMemberRole(accountID, userID, { role: newRole });
-        if (!await refreshAccountTeamSection(accountID)) {
+        if (!await refreshAccountAccessSection(accountID)) {
           return;
         }
         deps.showToast("Role updated.");
       } catch (error) {
         if (error instanceof PortalAPIError && error.status === 409) {
           deps.showToast("Cannot demote last owner.", true);
-          await loadTeam(accountID);
+          await loadAccessRoster(accountID);
           return;
         }
         deps.showToast(error instanceof Error ? error.message : "Failed to update role.", true);
-        await loadTeam(accountID);
+        await loadAccessRoster(accountID);
       }
     };
     var removeMember = async function(accountID, userID, email) {
       if (!window.confirm("Remove " + email + " from this account?")) return;
       try {
         await deps.api.removeMember(accountID, userID);
-        if (!await refreshAccountTeamSection(accountID)) {
+        if (!await refreshAccountAccessSection(accountID)) {
           return;
         }
         deps.showToast("Member removed.");
@@ -1016,8 +1016,8 @@
       selectWorkspace,
       clearWorkspaceSelection,
       openBilling,
-      toggleTeam,
-      ensureTeamVisible,
+      toggleAccess,
+      ensureAccessVisible,
       inviteMember,
       createWorkspace,
       manageWorkspaceAction,
@@ -1129,7 +1129,7 @@
     };
   }
 
-  // src/services_view.ts
+  // src/billing_view.ts
   function getElement3(id) {
     return document.getElementById(id);
   }
@@ -1162,16 +1162,16 @@
       el.value = value;
     }
   }
-  function renderStatus(id, status) {
+  function renderBillingStatus(id, status) {
     var el = getElement3(id);
     if (!el) return;
     if (!status.visible) {
       el.textContent = "";
-      el.className = "service-status";
+      el.className = "billing-status";
       return;
     }
     el.textContent = status.message;
-    el.className = "service-status visible" + (status.error ? " error" : " success");
+    el.className = "billing-status visible" + (status.error ? " error" : " success");
   }
   function renderButton(id, disabled, label) {
     if (!id || !label) return;
@@ -1180,47 +1180,47 @@
     button.disabled = disabled;
     button.textContent = label;
   }
-  function renderOpenPanels(openPanelID) {
-    var panels = ["manage-service-panel", "retrieve-service-panel", "refund-service-panel", "data-service-panel"];
-    var emptyPanel = getElement3("service-panel-empty");
+  function renderOpenBillingPanels(openBillingPanelID) {
+    var panels = ["manage-billing-panel", "retrieve-billing-panel", "refund-billing-panel", "data-billing-panel"];
+    var emptyPanel = getElement3("billing-panel-empty");
     if (emptyPanel) {
-      emptyPanel.classList.toggle("visible", !openPanelID);
+      emptyPanel.classList.toggle("visible", !openBillingPanelID);
     }
     for (var i = 0; i < panels.length; i++) {
       var panel = getElement3(panels[i]);
       if (!panel) continue;
-      panel.classList.toggle("visible", panels[i] === openPanelID);
+      panel.classList.toggle("visible", panels[i] === openBillingPanelID);
     }
-    var serviceButtons = document.querySelectorAll('[data-account-service-action="open-service-panel"]');
-    for (var j = 0; j < serviceButtons.length; j += 1) {
-      var button = serviceButtons[j];
-      var row = button.closest(".service-action-row");
+    var billingButtons = document.querySelectorAll('[data-account-billing-action="open-billing-panel"]');
+    for (var j = 0; j < billingButtons.length; j += 1) {
+      var button = billingButtons[j];
+      var row = button.closest(".billing-action-row");
       if (!row) continue;
-      row.classList.toggle("active", button.getAttribute("data-account-service-panel") === openPanelID);
+      row.classList.toggle("active", button.getAttribute("data-account-billing-panel") === openBillingPanelID);
     }
   }
   function renderRefundPanel(refundState, bootstrap) {
-    var root = getElement3("refund-service-root");
+    var root = getElement3("refund-billing-root");
     if (!root) return;
     var refundSupportURL = (bootstrap.public_site_url || "") + "/refund.html?email=" + encodeURIComponent(refundState.emailValue || "");
-    root.innerHTML = '<h3>Refund requests</h3><p>Process an eligible self-serve refund for a self-hosted purchase. This revokes the associated license immediately.</p><div class="warning"><strong>Warning:</strong> completing a refund immediately revokes the affected license. This should only be used when the refund window and commercial contract allow it.</div><div class="form-group"><label for="refund-inline-email">Email address</label><input type="email" id="refund-inline-email" value="' + escapeAttribute(refundState.emailValue || "") + '" autocomplete="email" data-account-service-input="refund-email"></div><div class="form-group"><label for="refund-inline-token">License key</label><input type="text" id="refund-inline-token" value="' + escapeAttribute(refundState.tokenValue || "") + '" placeholder="pulse_xxxxx" data-account-service-input="refund-token"></div><div class="form-actions"><button class="btn-danger" type="button" id="refund-inline-submit" data-account-service-action="refund-inline-submit">Process Refund</button></div><div class="helper-text">If this purchase is not eligible for self-serve refund, use the public support path instead: <a href="' + escapeAttribute(refundSupportURL) + '">open refund support page</a>.</div><div class="service-status" id="refund-inline-status"></div>';
+    root.innerHTML = '<h3>Refund requests</h3><p>Process an eligible self-serve refund for a self-hosted purchase. This revokes the associated license immediately.</p><div class="warning"><strong>Warning:</strong> completing a refund immediately revokes the affected license. This should only be used when the refund window and commercial contract allow it.</div><div class="form-group"><label for="refund-inline-email">Email address</label><input type="email" id="refund-inline-email" value="' + escapeAttribute(refundState.emailValue || "") + '" autocomplete="email" data-account-billing-input="refund-email"></div><div class="form-group"><label for="refund-inline-token">License key</label><input type="text" id="refund-inline-token" value="' + escapeAttribute(refundState.tokenValue || "") + '" placeholder="pulse_xxxxx" data-account-billing-input="refund-token"></div><div class="form-actions"><button class="btn-danger" type="button" id="refund-inline-submit" data-account-billing-action="refund-inline-submit">Process Refund</button></div><div class="helper-text">If this purchase is not eligible for self-serve refund, use the public support path instead: <a href="' + escapeAttribute(refundSupportURL) + '">open refund support page</a>.</div><div class="billing-status" id="refund-inline-status"></div>';
   }
   function renderManagePanel(flowState) {
-    var root = getElement3("manage-service-root");
+    var root = getElement3("manage-billing-root");
     if (!root) return;
-    root.innerHTML = '<h3>Manage subscriptions</h3><p>Request a verification code for the commercial email, then open the Stripe customer portal for billing changes, invoices, and subscription actions.</p><div id="manage-inline-step1"><div class="form-group"><label for="manage-inline-email">Email address</label><input type="email" id="manage-inline-email" value="' + escapeAttribute(flowState.emailValue || "") + '" autocomplete="email" data-account-service-input="manage-email"></div><div class="form-actions"><button class="btn-primary" type="button" id="manage-inline-request" data-account-service-action="manage-inline-request">Send Verification Code</button></div></div><div id="manage-inline-step2"' + (flowState.step2Visible ? "" : " hidden") + '><div class="form-group"><label for="manage-inline-code">Verification code</label><input type="text" id="manage-inline-code" value="' + escapeAttribute(flowState.codeValue || "") + '" inputmode="numeric" pattern="[0-9]{6}" placeholder="123456" data-account-service-input="manage-code"></div><div class="form-actions"><button class="btn-primary" type="button" id="manage-inline-confirm" data-account-service-action="manage-inline-confirm">Open Customer Portal</button></div><div class="helper-text">Need a new code? <a href="#" id="manage-inline-resend" data-account-service-action="manage-inline-resend">Send again</a></div></div><div class="service-status" id="manage-inline-status"></div>';
+    root.innerHTML = '<h3>Manage subscriptions</h3><p>Request a verification code for the commercial email, then open the Stripe customer portal for billing changes, invoices, and subscription actions.</p><div id="manage-inline-step1"><div class="form-group"><label for="manage-inline-email">Email address</label><input type="email" id="manage-inline-email" value="' + escapeAttribute(flowState.emailValue || "") + '" autocomplete="email" data-account-billing-input="manage-email"></div><div class="form-actions"><button class="btn-primary" type="button" id="manage-inline-request" data-account-billing-action="manage-inline-request">Send Verification Code</button></div></div><div id="manage-inline-step2"' + (flowState.step2Visible ? "" : " hidden") + '><div class="form-group"><label for="manage-inline-code">Verification code</label><input type="text" id="manage-inline-code" value="' + escapeAttribute(flowState.codeValue || "") + '" inputmode="numeric" pattern="[0-9]{6}" placeholder="123456" data-account-billing-input="manage-code"></div><div class="form-actions"><button class="btn-primary" type="button" id="manage-inline-confirm" data-account-billing-action="manage-inline-confirm">Open Customer Portal</button></div><div class="helper-text">Need a new code? <a href="#" id="manage-inline-resend" data-account-billing-action="manage-inline-resend">Send again</a></div></div><div class="billing-status" id="manage-inline-status"></div>';
   }
   function renderRetrievePanel(flowState) {
-    var root = getElement3("retrieve-service-root");
+    var root = getElement3("retrieve-billing-root");
     if (!root) return;
     var result = flowState.result;
     var invoiceURL = result && result.invoice_url ? result.invoice_url : "#";
-    root.innerHTML = '<h3>Retrieve licenses</h3><p>Request a verification code for the commercial email, then reveal the current active self-hosted license without leaving Pulse Account.</p><div id="retrieve-inline-step1"><div class="form-group"><label for="retrieve-inline-email">Email address</label><input type="email" id="retrieve-inline-email" value="' + escapeAttribute(flowState.emailValue || "") + '" autocomplete="email" data-account-service-input="retrieve-email"></div><div class="form-actions"><button class="btn-primary" type="button" id="retrieve-inline-request" data-account-service-action="retrieve-inline-request">Send Verification Code</button></div></div><div id="retrieve-inline-step2"' + (flowState.step2Visible ? "" : " hidden") + '><div class="form-group"><label for="retrieve-inline-code">Verification code</label><input type="text" id="retrieve-inline-code" value="' + escapeAttribute(flowState.codeValue || "") + '" inputmode="numeric" pattern="[0-9]{6}" placeholder="123456" data-account-service-input="retrieve-code"></div><div class="form-actions"><button class="btn-primary" type="button" id="retrieve-inline-confirm" data-account-service-action="retrieve-inline-confirm">Show License</button><button class="btn-secondary" type="button" id="retrieve-inline-copy" data-account-service-action="retrieve-inline-copy"' + (result ? "" : " hidden") + '>Copy License Key</button><a class="btn-secondary" id="retrieve-inline-invoice" href="' + escapeAttribute(invoiceURL) + '" target="_blank" rel="noopener"' + (result && result.invoice_url ? "" : " hidden") + '>View Invoice</a></div><div class="helper-text">Use the latest active self-hosted license for this commercial email.</div></div><div class="service-status" id="retrieve-inline-status"></div><div id="retrieve-inline-result" class="service-result"' + (result ? "" : " hidden") + '><label for="retrieve-inline-token">License key</label><textarea id="retrieve-inline-token" readonly>' + escapeText(result ? result.token : "") + '</textarea><div class="result-grid"><div><div class="result-meta-label">Plan</div><div class="result-meta-value" id="retrieve-inline-tier">' + escapeText(result ? result.tier : "") + '</div></div><div><div class="result-meta-label">Issued</div><div class="result-meta-value" id="retrieve-inline-issued">' + escapeText(result ? new Date(result.issued_at).toLocaleString() : "") + '</div></div><div><div class="result-meta-label">Expires</div><div class="result-meta-value" id="retrieve-inline-expires">' + escapeText(result ? result.expires_at ? new Date(result.expires_at).toLocaleString() : "Does not expire" : "") + '</div></div><div><div class="result-meta-label">Purchase Email</div><div class="result-meta-value" id="retrieve-inline-email-value">' + escapeText(result ? result.email : "") + "</div></div></div></div>";
+    root.innerHTML = '<h3>Retrieve licenses</h3><p>Request a verification code for the commercial email, then reveal the current active self-hosted license without leaving Pulse Account.</p><div id="retrieve-inline-step1"><div class="form-group"><label for="retrieve-inline-email">Email address</label><input type="email" id="retrieve-inline-email" value="' + escapeAttribute(flowState.emailValue || "") + '" autocomplete="email" data-account-billing-input="retrieve-email"></div><div class="form-actions"><button class="btn-primary" type="button" id="retrieve-inline-request" data-account-billing-action="retrieve-inline-request">Send Verification Code</button></div></div><div id="retrieve-inline-step2"' + (flowState.step2Visible ? "" : " hidden") + '><div class="form-group"><label for="retrieve-inline-code">Verification code</label><input type="text" id="retrieve-inline-code" value="' + escapeAttribute(flowState.codeValue || "") + '" inputmode="numeric" pattern="[0-9]{6}" placeholder="123456" data-account-billing-input="retrieve-code"></div><div class="form-actions"><button class="btn-primary" type="button" id="retrieve-inline-confirm" data-account-billing-action="retrieve-inline-confirm">Show License</button><button class="btn-secondary" type="button" id="retrieve-inline-copy" data-account-billing-action="retrieve-inline-copy"' + (result ? "" : " hidden") + '>Copy License Key</button><a class="btn-secondary" id="retrieve-inline-invoice" href="' + escapeAttribute(invoiceURL) + '" target="_blank" rel="noopener"' + (result && result.invoice_url ? "" : " hidden") + '>View Invoice</a></div><div class="helper-text">Use the latest active self-hosted license for this commercial email.</div></div><div class="billing-status" id="retrieve-inline-status"></div><div id="retrieve-inline-result" class="billing-result"' + (result ? "" : " hidden") + '><label for="retrieve-inline-token">License key</label><textarea id="retrieve-inline-token" readonly>' + escapeText(result ? result.token : "") + '</textarea><div class="result-grid"><div><div class="result-meta-label">Plan</div><div class="result-meta-value" id="retrieve-inline-tier">' + escapeText(result ? result.tier : "") + '</div></div><div><div class="result-meta-label">Issued</div><div class="result-meta-value" id="retrieve-inline-issued">' + escapeText(result ? new Date(result.issued_at).toLocaleString() : "") + '</div></div><div><div class="result-meta-label">Expires</div><div class="result-meta-value" id="retrieve-inline-expires">' + escapeText(result ? result.expires_at ? new Date(result.expires_at).toLocaleString() : "Does not expire" : "") + '</div></div><div><div class="result-meta-label">Purchase Email</div><div class="result-meta-value" id="retrieve-inline-email-value">' + escapeText(result ? result.email : "") + "</div></div></div></div>";
   }
   function renderExportPanel(flowState) {
     var root = getElement3("data-export-root");
     if (!root) return;
-    root.innerHTML = '<h4>Export My Data</h4><div id="data-export-step1"><div class="form-group"><label for="data-export-email">Email address</label><input type="email" id="data-export-email" value="' + escapeAttribute(flowState.emailValue || "") + '" autocomplete="email" data-account-service-input="data-export-email"></div><div class="form-actions"><button class="btn-primary" type="button" id="data-export-request" data-account-service-action="data-export-request">Send Verification Code</button></div></div><div id="data-export-step2"' + (flowState.step2Visible ? "" : " hidden") + '><div class="form-group"><label for="data-export-code">Verification code</label><input type="text" id="data-export-code" value="' + escapeAttribute(flowState.codeValue || "") + '" inputmode="numeric" pattern="[0-9]{6}" placeholder="123456" data-account-service-input="data-export-code"></div><div class="form-actions"><button class="btn-primary" type="button" id="data-export-confirm" data-account-service-action="data-export-confirm">Export My Data</button></div><div class="helper-text">Need a new code? <a href="#" id="data-export-resend" data-account-service-action="data-export-resend">Send again</a></div></div><div class="service-status" id="data-export-status"></div><div id="data-export-result" class="service-result"' + (flowState.result ? "" : " hidden") + '><label for="data-export-payload">Export payload</label><textarea id="data-export-payload" readonly>' + escapeText(flowState.result ? JSON.stringify(flowState.result, null, 2) : "") + "</textarea></div>";
+    root.innerHTML = '<h4>Export My Data</h4><div id="data-export-step1"><div class="form-group"><label for="data-export-email">Email address</label><input type="email" id="data-export-email" value="' + escapeAttribute(flowState.emailValue || "") + '" autocomplete="email" data-account-billing-input="data-export-email"></div><div class="form-actions"><button class="btn-primary" type="button" id="data-export-request" data-account-billing-action="data-export-request">Send Verification Code</button></div></div><div id="data-export-step2"' + (flowState.step2Visible ? "" : " hidden") + '><div class="form-group"><label for="data-export-code">Verification code</label><input type="text" id="data-export-code" value="' + escapeAttribute(flowState.codeValue || "") + '" inputmode="numeric" pattern="[0-9]{6}" placeholder="123456" data-account-billing-input="data-export-code"></div><div class="form-actions"><button class="btn-primary" type="button" id="data-export-confirm" data-account-billing-action="data-export-confirm">Export My Data</button></div><div class="helper-text">Need a new code? <a href="#" id="data-export-resend" data-account-billing-action="data-export-resend">Send again</a></div></div><div class="billing-status" id="data-export-status"></div><div id="data-export-result" class="billing-result"' + (flowState.result ? "" : " hidden") + '><label for="data-export-payload">Export payload</label><textarea id="data-export-payload" readonly>' + escapeText(flowState.result ? JSON.stringify(flowState.result, null, 2) : "") + "</textarea></div>";
   }
   function renderExportResult(result) {
     setVisible("data-export-result", !!result);
@@ -1229,22 +1229,22 @@
   function renderDeletePanel(flowState) {
     var root = getElement3("data-delete-root");
     if (!root) return;
-    root.innerHTML = '<h4>Delete My Data</h4><div class="warning"><strong>Warning:</strong> deleting commercial data also revokes license records and cannot be undone.</div><div id="data-delete-step1"><div class="form-group"><label for="data-delete-email">Email address</label><input type="email" id="data-delete-email" value="' + escapeAttribute(flowState.emailValue || "") + '" autocomplete="email" data-account-service-input="data-delete-email"></div><div class="form-actions"><button class="btn-danger" type="button" id="data-delete-request" data-account-service-action="data-delete-request">Send Verification Code</button></div></div><div id="data-delete-step2"' + (flowState.step2Visible ? "" : " hidden") + '><div class="form-group"><label for="data-delete-code">Verification code</label><input type="text" id="data-delete-code" value="' + escapeAttribute(flowState.codeValue || "") + '" inputmode="numeric" pattern="[0-9]{6}" placeholder="123456" data-account-service-input="data-delete-code"></div><div class="checkbox-row"><input type="checkbox" id="data-delete-confirm-check"' + (flowState.checkboxChecked ? " checked" : "") + '><span>I understand this permanently deletes my commercial data and revokes associated licenses.</span></div><div class="form-actions"><button class="btn-danger" type="button" id="data-delete-confirm" data-account-service-action="data-delete-confirm">Delete My Data</button></div><div class="helper-text">Need a new code? <a href="#" id="data-delete-resend" data-account-service-action="data-delete-resend">Send again</a></div></div><div class="service-status" id="data-delete-status"></div>';
+    root.innerHTML = '<h4>Delete My Data</h4><div class="warning"><strong>Warning:</strong> deleting commercial data also revokes license records and cannot be undone.</div><div id="data-delete-step1"><div class="form-group"><label for="data-delete-email">Email address</label><input type="email" id="data-delete-email" value="' + escapeAttribute(flowState.emailValue || "") + '" autocomplete="email" data-account-billing-input="data-delete-email"></div><div class="form-actions"><button class="btn-danger" type="button" id="data-delete-request" data-account-billing-action="data-delete-request">Send Verification Code</button></div></div><div id="data-delete-step2"' + (flowState.step2Visible ? "" : " hidden") + '><div class="form-group"><label for="data-delete-code">Verification code</label><input type="text" id="data-delete-code" value="' + escapeAttribute(flowState.codeValue || "") + '" inputmode="numeric" pattern="[0-9]{6}" placeholder="123456" data-account-billing-input="data-delete-code"></div><div class="checkbox-row"><input type="checkbox" id="data-delete-confirm-check"' + (flowState.checkboxChecked ? " checked" : "") + '><span>I understand this permanently deletes my commercial data and revokes associated licenses.</span></div><div class="form-actions"><button class="btn-danger" type="button" id="data-delete-confirm" data-account-billing-action="data-delete-confirm">Delete My Data</button></div><div class="helper-text">Need a new code? <a href="#" id="data-delete-resend" data-account-billing-action="data-delete-resend">Send again</a></div></div><div class="billing-status" id="data-delete-status"></div>';
   }
 
-  // src/services_controller.ts
-  function installServicesController(deps) {
+  // src/billing_controller.ts
+  function installBillingController(deps) {
     document.addEventListener("click", function(event) {
-      var target = asHTMLElement3(event.target)?.closest("[data-account-service-action]");
+      var target = asHTMLElement3(event.target)?.closest("[data-account-billing-action]");
       if (!target) return;
-      var action = target.getAttribute("data-account-service-action") || "";
-      var panelID = target.getAttribute("data-account-service-panel") || "";
-      var focusID = target.getAttribute("data-account-service-focus") || "";
+      var action = target.getAttribute("data-account-billing-action") || "";
+      var panelID = target.getAttribute("data-account-billing-panel") || "";
+      var focusID = target.getAttribute("data-account-billing-focus") || "";
       switch (action) {
-        case "open-service-panel":
+        case "open-billing-panel":
           event.preventDefault();
           deps.setShellSection("billing");
-          deps.toggleServicePanel(panelID);
+          deps.toggleBillingPanel(panelID);
           deps.focusElement(focusID);
           return;
         case "manage-inline-request":
@@ -1303,7 +1303,7 @@
     document.addEventListener("input", function(event) {
       var target = asHTMLElement3(event.target);
       if (!target) return;
-      var inputKind = target.getAttribute("data-account-service-input") || "";
+      var inputKind = target.getAttribute("data-account-billing-input") || "";
       if (!inputKind) return;
       deps.updateInputValue(inputKind, target.value);
     });
@@ -1314,39 +1314,39 @@
     });
   }
 
-  // src/services.ts
-  function installServicesRuntime(deps) {
+  // src/billing.ts
+  function installBillingRuntime(deps) {
     var api = deps.api;
     var store = deps.store;
-    store.updateServiceState(function(serviceState) {
-      if (!serviceState.flows) {
-        var nextState = createPortalServiceState();
-        serviceState.openPanelID = nextState.openPanelID;
-        serviceState.flows = nextState.flows;
-        serviceState.refund = nextState.refund;
+    store.updateBillingState(function(billingState) {
+      if (!billingState.flows) {
+        var nextState = createPortalBillingState();
+        billingState.openBillingPanelID = nextState.openBillingPanelID;
+        billingState.flows = nextState.flows;
+        billingState.refund = nextState.refund;
       }
     }, { notify: false });
-    function getServiceState() {
-      return store.getServiceState();
+    function getBillingState() {
+      return store.getBillingState();
     }
-    function updateServiceState(mutator, notify = true) {
-      return store.updateServiceState(mutator, { notify });
+    function updateBillingState(mutator, notify = true) {
+      return store.updateBillingState(mutator, { notify });
     }
-    function toggleServicePanel(panelID) {
-      updateServiceState(function(serviceState) {
-        toggleServicePanelState(serviceState, panelID);
+    function toggleBillingPanel(panelID) {
+      updateBillingState(function(billingState) {
+        toggleBillingPanelState(billingState, panelID);
       });
     }
     function renderFlow(flowID) {
       var flow = verificationFlows[flowID];
       if (!flow) return;
-      var flowState = getServiceState().flows[flowID];
+      var flowState = getBillingState().flows[flowID];
       if (flow.renderPanel) {
         flow.renderPanel(flowState);
       }
       renderButton(flow.requestButtonID, flowState.request.pending, flowState.request.pending ? flow.requestPendingLabel : flow.requestLabel);
       renderButton(flow.confirmButtonID, flowState.confirm.pending, flowState.confirm.pending ? flow.confirmPendingLabel : flow.confirmLabel);
-      renderStatus(flow.statusID, flowState.status);
+      renderBillingStatus(flow.statusID, flowState.status);
       if (flow.step2ID) {
         setVisible(flow.step2ID, flowState.step2Visible);
       }
@@ -1362,16 +1362,16 @@
       renderRefund();
     }
     function renderRefund() {
-      var refundState = getServiceState().refund;
+      var refundState = getBillingState().refund;
       renderRefundPanel(refundState, store.getBootstrap());
       renderButton("refund-inline-submit", refundState.submit.pending, refundState.submit.pending ? "Processing..." : "Process Refund");
-      renderStatus("refund-inline-status", refundState.status);
+      renderBillingStatus("refund-inline-status", refundState.status);
     }
     function resetVerificationFlow(flowID) {
       var flow = verificationFlows[flowID];
       if (!flow) return;
-      updateServiceState(function(serviceState) {
-        resetVerificationFlowState(serviceState, flowID);
+      updateBillingState(function(billingState) {
+        resetVerificationFlowState(billingState, flowID);
       }, false);
       if (flow.codeInputID) {
         setValue(flow.codeInputID, "");
@@ -1381,7 +1381,7 @@
       manage: {
         requestPath: "/v1/manage/request",
         confirmPath: "/v1/manage",
-        panelID: "manage-service-panel",
+        panelID: "manage-billing-panel",
         emailInputID: "manage-inline-email",
         codeInputID: "manage-inline-code",
         requestButtonID: "manage-inline-request",
@@ -1397,10 +1397,10 @@
         requestErrorMessage: "Failed to send verification code",
         confirmErrorMessage: "Failed to open customer portal",
         readEmailValue: function() {
-          return getServiceState().flows.manage.emailValue;
+          return getBillingState().flows.manage.emailValue;
         },
         readCodeValue: function() {
-          return getServiceState().flows.manage.codeValue;
+          return getBillingState().flows.manage.codeValue;
         },
         onRequestStart: function() {
         },
@@ -1412,7 +1412,7 @@
       retrieve: {
         requestPath: "/v1/retrieve-license/request",
         confirmPath: "/v1/retrieve-license",
-        panelID: "retrieve-service-panel",
+        panelID: "retrieve-billing-panel",
         emailInputID: "retrieve-inline-email",
         codeInputID: "retrieve-inline-code",
         requestButtonID: "retrieve-inline-request",
@@ -1428,27 +1428,27 @@
         requestErrorMessage: "Failed to send verification code",
         confirmErrorMessage: "Failed to retrieve license",
         readEmailValue: function() {
-          return getServiceState().flows.retrieve.emailValue;
+          return getBillingState().flows.retrieve.emailValue;
         },
         readCodeValue: function() {
-          return getServiceState().flows.retrieve.codeValue;
+          return getBillingState().flows.retrieve.codeValue;
         },
         onRequestStart: function() {
-          updateServiceState(function(serviceState) {
-            serviceState.flows.retrieve.result = null;
+          updateBillingState(function(billingState) {
+            billingState.flows.retrieve.result = null;
           }, false);
         },
-        applyConfirmSuccessState: function(serviceState, data) {
-          serviceState.flows.retrieve.result = data.license;
-          serviceState.flows.retrieve.codeValue = "";
-          setFlowStatus(serviceState, "retrieve", "License retrieved successfully.", false);
+        applyConfirmSuccessState: function(billingState, data) {
+          billingState.flows.retrieve.result = data.license;
+          billingState.flows.retrieve.codeValue = "";
+          setFlowStatus(billingState, "retrieve", "License retrieved successfully.", false);
         },
         renderPanel: renderRetrievePanel
       },
       export: {
         requestPath: "/v1/gdpr/request-export",
         confirmPath: "/v1/gdpr/export",
-        panelID: "data-service-panel",
+        panelID: "data-billing-panel",
         emailInputID: "data-export-email",
         codeInputID: "data-export-code",
         requestButtonID: "data-export-request",
@@ -1464,22 +1464,22 @@
         requestErrorMessage: "Request failed",
         confirmErrorMessage: "Export failed",
         readEmailValue: function() {
-          return getServiceState().flows.export.emailValue;
+          return getBillingState().flows.export.emailValue;
         },
         readCodeValue: function() {
-          return getServiceState().flows.export.codeValue;
+          return getBillingState().flows.export.codeValue;
         },
         onRequestStart: function() {
-          updateServiceState(function(serviceState) {
-            serviceState.flows.export.result = null;
+          updateBillingState(function(billingState) {
+            billingState.flows.export.result = null;
           }, false);
         },
-        applyConfirmSuccessState: function(serviceState, data) {
-          var emailValue = serviceState.flows.export.emailValue;
-          resetVerificationFlowState(serviceState, "export");
-          serviceState.flows.export.emailValue = emailValue;
-          serviceState.flows.export.result = data;
-          setFlowStatus(serviceState, "export", "Data export retrieved successfully.", false);
+        applyConfirmSuccessState: function(billingState, data) {
+          var emailValue = billingState.flows.export.emailValue;
+          resetVerificationFlowState(billingState, "export");
+          billingState.flows.export.emailValue = emailValue;
+          billingState.flows.export.result = data;
+          setFlowStatus(billingState, "export", "Data export retrieved successfully.", false);
         },
         renderPanel: renderExportPanel,
         renderResult: renderExportResult
@@ -1487,7 +1487,7 @@
       delete: {
         requestPath: "/v1/gdpr/request-delete",
         confirmPath: "/v1/gdpr/confirm-delete",
-        panelID: "data-service-panel",
+        panelID: "data-billing-panel",
         emailInputID: "data-delete-email",
         codeInputID: "data-delete-code",
         requestButtonID: "data-delete-request",
@@ -1503,26 +1503,26 @@
         requestErrorMessage: "Request failed",
         confirmErrorMessage: "Deletion failed",
         readEmailValue: function() {
-          return getServiceState().flows.delete.emailValue;
+          return getBillingState().flows.delete.emailValue;
         },
         readCodeValue: function() {
-          return getServiceState().flows.delete.codeValue;
+          return getBillingState().flows.delete.codeValue;
         },
         beforeConfirm: function() {
           if (!getElement3("data-delete-confirm-check")?.checked) {
-            updateServiceState(function(serviceState) {
-              setFlowStatus(serviceState, "delete", "You must confirm that you understand this action is permanent.", true);
+            updateBillingState(function(billingState) {
+              setFlowStatus(billingState, "delete", "You must confirm that you understand this action is permanent.", true);
             });
             return false;
           }
           return true;
         },
-        applyConfirmSuccessState: function(serviceState, data) {
-          var emailValue = serviceState.flows.delete.emailValue;
-          resetVerificationFlowState(serviceState, "delete");
-          serviceState.flows.delete.emailValue = emailValue;
+        applyConfirmSuccessState: function(billingState, data) {
+          var emailValue = billingState.flows.delete.emailValue;
+          resetVerificationFlowState(billingState, "delete");
+          billingState.flows.delete.emailValue = emailValue;
           setFlowStatus(
-            serviceState,
+            billingState,
             "delete",
             data.deleted_count > 0 && data.stripe_reminder ? data.message + " " + data.stripe_reminder : data.message,
             false
@@ -1548,23 +1548,23 @@
       if (flow.onRequestStart) {
         flow.onRequestStart();
       }
-      updateServiceState(function(serviceState) {
-        beginMutationState(serviceState.flows[flowID].request);
-        clearFlowStatus(serviceState, flowID);
+      updateBillingState(function(billingState) {
+        beginMutationState(billingState.flows[flowID].request);
+        clearFlowStatus(billingState, flowID);
       });
       try {
         await api.postCommercialJSON(flow.requestPath, { email });
-        updateServiceState(function(serviceState) {
-          serviceState.flows[flowID].pendingEmail = email;
-          serviceState.flows[flowID].step2Visible = !!flow.step2ID;
-          succeedMutationState(serviceState.flows[flowID].request);
-          setFlowStatus(serviceState, flowID, flow.requestSuccessMessage, false);
+        updateBillingState(function(billingState) {
+          billingState.flows[flowID].pendingEmail = email;
+          billingState.flows[flowID].step2Visible = !!flow.step2ID;
+          succeedMutationState(billingState.flows[flowID].request);
+          setFlowStatus(billingState, flowID, flow.requestSuccessMessage, false);
         });
       } catch (err) {
         var message = err instanceof Error ? err.message : flow.requestErrorMessage;
-        updateServiceState(function(serviceState) {
-          failMutationState(serviceState.flows[flowID].request, message);
-          setFlowStatus(serviceState, flowID, message, true);
+        updateBillingState(function(billingState) {
+          failMutationState(billingState.flows[flowID].request, message);
+          setFlowStatus(billingState, flowID, message, true);
         });
       }
     }
@@ -1572,37 +1572,37 @@
       if (event) event.preventDefault();
       var flow = verificationFlows[flowID];
       if (!flow) return;
-      var email = getServiceState().flows[flowID].pendingEmail;
+      var email = getBillingState().flows[flowID].pendingEmail;
       if (!email) return;
       try {
         await api.postCommercialJSON(flow.requestPath, { email });
-        updateServiceState(function(serviceState) {
-          setFlowStatus(serviceState, flowID, flow.resendSuccessMessage, false);
+        updateBillingState(function(billingState) {
+          setFlowStatus(billingState, flowID, flow.resendSuccessMessage, false);
         });
       } catch (err) {
-        updateServiceState(function(serviceState) {
-          setFlowStatus(serviceState, flowID, err instanceof Error ? err.message : flow.requestErrorMessage, true);
+        updateBillingState(function(billingState) {
+          setFlowStatus(billingState, flowID, err instanceof Error ? err.message : flow.requestErrorMessage, true);
         });
       }
     }
     async function confirmVerificationCode(flowID) {
       var flow = verificationFlows[flowID];
       if (!flow) return;
-      var email = getServiceState().flows[flowID].pendingEmail;
+      var email = getBillingState().flows[flowID].pendingEmail;
       var code = flow.readCodeValue ? flow.readCodeValue() : readValue(flow.codeInputID);
       if (!email || !code) return;
       if (flow.beforeConfirm && flow.beforeConfirm() === false) {
         return;
       }
-      updateServiceState(function(serviceState) {
-        beginMutationState(serviceState.flows[flowID].confirm);
+      updateBillingState(function(billingState) {
+        beginMutationState(billingState.flows[flowID].confirm);
       });
       try {
         var data = await api.postCommercialJSON(flow.confirmPath, { email, code });
-        updateServiceState(function(serviceState) {
-          succeedMutationState(serviceState.flows[flowID].confirm);
+        updateBillingState(function(billingState) {
+          succeedMutationState(billingState.flows[flowID].confirm);
           if (flow.applyConfirmSuccessState) {
-            flow.applyConfirmSuccessState(serviceState, data, email);
+            flow.applyConfirmSuccessState(billingState, data, email);
           }
         });
         if (flow.afterConfirmSuccess) {
@@ -1610,63 +1610,63 @@
         }
       } catch (err) {
         var message = err instanceof Error ? err.message : flow.confirmErrorMessage;
-        updateServiceState(function(serviceState) {
-          failMutationState(serviceState.flows[flowID].confirm, message);
-          setFlowStatus(serviceState, flowID, message, true);
+        updateBillingState(function(billingState) {
+          failMutationState(billingState.flows[flowID].confirm, message);
+          setFlowStatus(billingState, flowID, message, true);
         });
       }
     }
     async function copyRetrievedLicense() {
-      var result = getServiceState().flows.retrieve.result;
+      var result = getBillingState().flows.retrieve.result;
       var token = result && result.token ? result.token : "";
       if (!token) return;
       try {
         await navigator.clipboard.writeText(token);
-        updateServiceState(function(serviceState) {
-          setFlowStatus(serviceState, "retrieve", "License key copied to clipboard.", false);
+        updateBillingState(function(billingState) {
+          setFlowStatus(billingState, "retrieve", "License key copied to clipboard.", false);
         });
       } catch (_) {
-        updateServiceState(function(serviceState) {
-          setFlowStatus(serviceState, "retrieve", "Failed to copy automatically. Please copy the key manually.", true);
+        updateBillingState(function(billingState) {
+          setFlowStatus(billingState, "retrieve", "Failed to copy automatically. Please copy the key manually.", true);
         });
       }
     }
     async function submitRefund() {
-      var email = getServiceState().refund.emailValue;
-      var token = getServiceState().refund.tokenValue;
+      var email = getBillingState().refund.emailValue;
+      var token = getBillingState().refund.tokenValue;
       if (!email || !token) return;
       if (!confirm("Are you sure? This will immediately revoke the license and request the refund.")) return;
-      updateServiceState(function(serviceState) {
-        beginMutationState(serviceState.refund.submit);
-        serviceState.refund.status = emptyStatus();
+      updateBillingState(function(billingState) {
+        beginMutationState(billingState.refund.submit);
+        billingState.refund.status = emptyStatus();
       });
       try {
         await api.postCommercialJSON("/v1/self-refund", { email, token });
-        updateServiceState(function(serviceState) {
-          serviceState.refund.tokenValue = "";
-          succeedMutationState(serviceState.refund.submit);
-          setRefundStatus(serviceState, "Success! Your refund has been processed. Stripe will follow up by email.", false);
+        updateBillingState(function(billingState) {
+          billingState.refund.tokenValue = "";
+          succeedMutationState(billingState.refund.submit);
+          setRefundStatus(billingState, "Success! Your refund has been processed. Stripe will follow up by email.", false);
         });
       } catch (err) {
         var message = err instanceof Error ? err.message : "Refund failed";
-        updateServiceState(function(serviceState) {
-          failMutationState(serviceState.refund.submit, message);
-          setRefundStatus(serviceState, message, true);
+        updateBillingState(function(billingState) {
+          failMutationState(billingState.refund.submit, message);
+          setRefundStatus(billingState, message, true);
         });
       }
     }
-    function renderServiceRuntime() {
-      renderOpenPanels(getServiceState().openPanelID);
+    function renderBillingRuntime() {
+      renderOpenBillingPanels(getBillingState().openBillingPanelID);
       renderAllFlows();
     }
-    renderServiceRuntime();
-    store.subscribeBootstrap(renderServiceRuntime);
-    store.subscribeServices(renderServiceRuntime);
-    installServicesController({
+    renderBillingRuntime();
+    store.subscribeBootstrap(renderBillingRuntime);
+    store.subscribeBilling(renderBillingRuntime);
+    installBillingController({
       setShellSection: function(section) {
         store.setActiveShellSection(section);
       },
-      toggleServicePanel,
+      toggleBillingPanel,
       focusElement: focusElement2,
       requestVerificationCode: function(flowID) {
         void requestVerificationCode(flowID);
@@ -1684,13 +1684,13 @@
         void submitRefund();
       },
       updateInputValue: function(inputKind, value) {
-        updateServiceState(function(serviceState) {
-          updateServiceInputValue(serviceState, inputKind, value);
+        updateBillingState(function(billingState) {
+          updateBillingInputValue(billingState, inputKind, value);
         }, false);
       },
       updateDeleteConfirmation: function(checked) {
-        updateServiceState(function(serviceState) {
-          updateDeleteConfirmation(serviceState, checked);
+        updateBillingState(function(billingState) {
+          updateDeleteConfirmation(billingState, checked);
         }, false);
       }
     });
@@ -1776,9 +1776,9 @@
     }
     return '<span class="badge badge-checking">Checking</span>';
   }
-  function renderServiceActionRow(id, kicker, title, actionLabel, description, panelID, focusID, highlights) {
+  function renderBillingActionRow(id, kicker, title, actionLabel, description, panelID, focusID, highlights) {
     var meta = highlights.join(" \u2022 ");
-    return '<article class="service-action-row"><div class="service-action-main"><div class="service-action-tags service-action-tags-tight"><span class="service-card-kicker">' + kicker + '</span><span class="service-action-meta-chip">' + escapeHTML(meta) + '</span></div><div class="service-action-copy"><h3>' + title + "</h3><p>" + description + '</p></div></div><div class="service-action-cta"><button class="btn-secondary service-action-button" type="button" id="' + id + '" data-account-service-action="open-service-panel" data-account-service-panel="' + panelID + '" data-account-service-focus="' + focusID + '" data-shell-target="billing">' + escapeHTML(actionLabel) + "</button></div></article>";
+    return '<article class="billing-action-row"><div class="billing-action-main"><div class="billing-action-tags billing-action-tags-tight"><span class="billing-card-kicker">' + kicker + '</span><span class="billing-action-meta-chip">' + escapeHTML(meta) + '</span></div><div class="billing-action-copy"><h3>' + title + "</h3><p>" + description + '</p></div></div><div class="billing-action-cta"><button class="btn-secondary billing-action-button" type="button" id="' + id + '" data-account-billing-action="open-billing-panel" data-account-billing-panel="' + panelID + '" data-account-billing-focus="' + focusID + '" data-shell-target="billing">' + escapeHTML(actionLabel) + "</button></div></article>";
   }
   function renderSectionContextChips(chips) {
     if (!chips.length) return "";
@@ -1973,14 +1973,14 @@
     ]) + '</div><div class="account-stage-header-actions">' + workspaceHeaderActions + '</div></div></div><div class="workspace-operations-shell workspace-operations-shell-idle" id="workspace-operations-shell-' + escapeAttr(account.id) + '"><div class="workspace-operations-main">' + workspaceHTML + '</div><div class="workspace-operations-detail" id="workspace-operations-detail-' + escapeAttr(account.id) + '">' + workspaceManagement + "</div></div></section>";
   }
   function renderAccountAccessSection(account) {
-    var accessPolicy = '<div class="team-policy-panel"><div class="team-panel-heading"><h4>Role rules</h4><p>Invite the smallest role that still lets someone do the work they actually own on this account.</p></div><div class="team-policy-list"><div class="team-policy-row"><strong>Owner</strong><span>Billing, access control, and full account control.</span></div><div class="team-policy-row"><strong>Admin</strong><span>Workspace control plus billing for the account.</span></div><div class="team-policy-row"><strong>Tech</strong><span>Workspace control without billing ownership.</span></div><div class="team-policy-row"><strong>Read-only</strong><span>Workspace review and verification without control-plane changes.</span></div></div></div>';
-    var reviewDesk = '<div class="team-review-shell"><div class="team-review-strip"><div class="team-panel-heading team-panel-heading-tight"><div class="account-panel-kicker">Access review</div><h4>Keep access explicit</h4><p>Use the roster as a controlled access list, not a vague shared bucket.</p></div><div class="team-review-grid"><div class="team-review-card"><strong>Owners stay rare</strong><span>Reserve Owner for billing, access control, and full account control. Default to Admin, Tech, or Read-only first.</span></div><div class="team-review-card"><strong>Keep access narrow</strong><span>Use Tech for workspace control and Read-only for verification instead of handing out broader access.</span></div><div class="team-review-card"><strong>Remove stale access fast</strong><span>If someone no longer owns the work, remove them instead of leaving dormant access attached to the account.</span></div></div></div></div>';
-    return '<section class="account-content-panel account-content-panel-access"><section class="team-management-panel team-section team-section-shell" id="team-section-' + escapeAttr(account.id) + '" data-actor-role="' + escapeAttr(account.role) + '"><div class="team-management-header"><div><div class="account-panel-kicker">Access</div><h3>People and roles</h3><p>Invite people, change roles, and remove stale access without mixing that work into workspace operations.</p>' + renderSectionContextChips([
+    var accessPolicy = '<div class="access-policy-panel"><div class="access-panel-heading"><h4>Role rules</h4><p>Invite the smallest role that still lets someone do the work they actually own on this account.</p></div><div class="access-policy-list"><div class="access-policy-row"><strong>Owner</strong><span>Billing, access control, and full account control.</span></div><div class="access-policy-row"><strong>Admin</strong><span>Workspace control plus billing for the account.</span></div><div class="access-policy-row"><strong>Tech</strong><span>Workspace control without billing ownership.</span></div><div class="access-policy-row"><strong>Read-only</strong><span>Workspace review and verification without control-plane changes.</span></div></div></div>';
+    var reviewDesk = '<div class="access-review-shell"><div class="access-review-strip"><div class="access-panel-heading access-panel-heading-tight"><div class="account-panel-kicker">Access review</div><h4>Keep access explicit</h4><p>Use the roster as a controlled access list, not a vague shared bucket.</p></div><div class="access-review-grid"><div class="access-review-card"><strong>Owners stay rare</strong><span>Reserve Owner for billing, access control, and full account control. Default to Admin, Tech, or Read-only first.</span></div><div class="access-review-card"><strong>Keep access narrow</strong><span>Use Tech for workspace control and Read-only for verification instead of handing out broader access.</span></div><div class="access-review-card"><strong>Remove stale access fast</strong><span>If someone no longer owns the work, remove them instead of leaving dormant access attached to the account.</span></div></div></div></div>';
+    return '<section class="account-content-panel account-content-panel-access"><section class="access-management-panel access-section access-section-shell" id="access-section-' + escapeAttr(account.id) + '" data-actor-role="' + escapeAttr(account.role) + '"><div class="access-management-header"><div><div class="account-panel-kicker">Access</div><h3>People and roles</h3><p>Invite people, change roles, and remove stale access without mixing that work into workspace operations.</p>' + renderSectionContextChips([
       account.can_manage ? "Managed roster" : "View only",
       "Invite",
       "Roles",
       "Remove access"
-    ]) + '</div><button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="workspaces">Back to workspaces</button></div><div class="team-management-stats" id="team-stats-' + escapeAttr(account.id) + '"></div><div class="team-management-grid"><div class="team-roster-column"><div class="team-roster"><div class="team-panel-heading"><h4>People on this account</h4><p>Every person here can reach this hosted account. Keep the list small and the role choice explicit.</p></div><div class="team-roster-list" id="team-list-' + escapeAttr(account.id) + '"><div class="team-list-message">Loading\u2026</div></div></div>' + reviewDesk + '</div><div class="team-side-column"><div class="team-operations-panel"><div class="team-panel-heading team-panel-heading-tight"><div class="account-panel-kicker">Access controls</div><h4>Invite, role, remove</h4><p>Use this column when you need to add someone, tighten a role, or remove access that no longer belongs here.</p></div><div class="team-operations-grid"><div class="team-invite-panel"><div class="team-panel-heading"><h4>Invite someone new</h4><p>Add a person with the minimum role they need for this account.</p></div><div class="team-invite"><div><label for="invite-email-' + escapeAttr(account.id) + '">Email</label><input type="email" id="invite-email-' + escapeAttr(account.id) + '" placeholder="user@example.com" autocomplete="off"></div><div><label for="invite-role-' + escapeAttr(account.id) + '">Role</label><select id="invite-role-' + escapeAttr(account.id) + '"><option value="admin">Admin</option><option value="tech">Tech</option><option value="read_only">Read-only</option></select></div><button type="button" class="btn-primary btn-compact" data-action="invite-member" data-account-id="' + escapeAttr(account.id) + '">Invite</button></div></div>' + accessPolicy + "</div></div></div></div></section></section>";
+    ]) + '</div><button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="workspaces">Back to workspaces</button></div><div class="access-management-stats" id="access-stats-' + escapeAttr(account.id) + '"></div><div class="access-management-grid"><div class="access-roster-column"><div class="access-roster"><div class="access-panel-heading"><h4>People on this account</h4><p>Every person here can reach this hosted account. Keep the list small and the role choice explicit.</p></div><div class="access-roster-list" id="access-list-' + escapeAttr(account.id) + '"><div class="access-list-message">Loading\u2026</div></div></div>' + reviewDesk + '</div><div class="access-side-column"><div class="access-operations-panel"><div class="access-panel-heading access-panel-heading-tight"><div class="account-panel-kicker">Access controls</div><h4>Invite, role, remove</h4><p>Use this column when you need to add someone, tighten a role, or remove access that no longer belongs here.</p></div><div class="access-operations-grid"><div class="access-invite-panel"><div class="access-panel-heading"><h4>Invite someone new</h4><p>Add a person with the minimum role they need for this account.</p></div><div class="access-invite"><div><label for="invite-email-' + escapeAttr(account.id) + '">Email</label><input type="email" id="invite-email-' + escapeAttr(account.id) + '" placeholder="user@example.com" autocomplete="off"></div><div><label for="invite-role-' + escapeAttr(account.id) + '">Role</label><select id="invite-role-' + escapeAttr(account.id) + '"><option value="admin">Admin</option><option value="tech">Tech</option><option value="read_only">Read-only</option></select></div><button type="button" class="btn-primary btn-compact" data-action="invite-member" data-account-id="' + escapeAttr(account.id) + '">Invite</button></div></div>' + accessPolicy + "</div></div></div></div></section></section>";
   }
   function renderHostedBillingCards(accounts) {
     var hostedBillingAccounts = accounts.filter(function(account) {
@@ -2014,20 +2014,20 @@
     var hostedContent = accounts.map(function(account) {
       return '<section class="account-surface"><div class="account-surface-body">' + renderAccountOverviewSection(account, context.accountAPIBasePath) + renderAccountWorkspaceSection(account, context.accountAPIBasePath) + renderAccountAccessSection(account) + "</div></section>";
     }).join("");
-    return '<div class="portal-shell" data-shell-section="' + activeSection + '"><div class="portal-shell-layout">' + renderShellNavigation(accounts, context.bootstrap.support_email || "", activeSection) + '<div class="portal-shell-main">' + (accounts.length === 1 ? renderAccountContextStrip(accounts[0]) : "") + '<section class="portal-content-panel portal-content-panel-overview"><div id="accounts-root">' + hostedContent + '</div></section><section class="portal-content-panel portal-content-panel-billing service-section" id="billing-section"><div class="service-header billing-header"><div><div class="account-panel-kicker">Billing</div><h2>Billing</h2>' + renderSectionContextChips([
+    return '<div class="portal-shell" data-shell-section="' + activeSection + '"><div class="portal-shell-layout">' + renderShellNavigation(accounts, context.bootstrap.support_email || "", activeSection) + '<div class="portal-shell-main">' + (accounts.length === 1 ? renderAccountContextStrip(accounts[0]) : "") + '<section class="portal-content-panel portal-content-panel-overview"><div id="accounts-root">' + hostedContent + '</div></section><section class="portal-content-panel portal-content-panel-billing billing-section" id="billing-section"><div class="billing-header"><div><div class="account-panel-kicker">Billing</div><h2>Billing</h2>' + renderSectionContextChips([
       hostedBillingCount > 0 ? "Hosted billing" : "No hosted billing",
       "Self-hosted tools"
-    ]) + '</div><div class="service-note">' + billingNote + '</div></div><div class="billing-overview-grid">' + renderHostedBillingCards(accounts) + '</div><div class="service-shell"><aside class="service-shell-sidebar"><div class="service-shell-sidebar-head"><div class="account-panel-kicker">Self-hosted billing</div><h3>Self-hosted tools</h3><p>Use these only when the job is a self-hosted purchase, license, refund, or privacy request.</p></div><div class="service-action-list">' + renderServiceActionRow("open-manage-service", "Self-hosted billing", "Manage subscriptions", "Billing", "Open Stripe for self-hosted plan, invoice, and payment changes.", "manage-service-panel", "manage-inline-email", ["Plan changes", "Invoices"]) + renderServiceActionRow("open-retrieve-service", "Licenses", "Retrieve licenses", "Licenses", "Recover the latest active self-hosted license and invoice link.", "retrieve-service-panel", "retrieve-inline-email", ["Latest active license", "Invoice lookup"]) + renderServiceActionRow("open-refund-service", "Refunds", "Refund requests", "Refunds", "Request a self-serve refund when the purchase is still eligible.", "refund-service-panel", "refund-inline-email", ["Eligibility check", "Revocation"]) + renderServiceActionRow("open-data-service", "Privacy", "Data and privacy", "Privacy", "Request export or deletion for commercial account data.", "data-service-panel", "data-export-email", ["Export", "Deletion"]) + '</div><div class="service-inline-support"><div class="account-panel-kicker">Escalation</div><h4>Keep the billing request contained</h4><p>Use Support only when a hosted billing or self-hosted billing request cannot complete cleanly from this section.</p><div class="service-inline-support-points"><div class="service-inline-support-point"><strong>Hosted billing first when present</strong><span>Use the hosted billing cards above before you touch the self-hosted tools.</span></div><div class="service-inline-support-point"><strong>Escalate with context</strong><span>Bring the billing tool or hosted billing action and the exact failed step if you need support.</span></div></div><div class="service-inline-support-actions"><button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="support">Open support</button></div></div></aside><div class="service-shell-main"><div class="service-detail-shell"><div class="service-panel service-panel-empty visible" id="service-panel-empty"><div class="account-panel-kicker">Billing brief</div><h3>Choose the billing task</h3><p>Pick one self-hosted billing request at a time. Verification happens first so billing, license, refund, or privacy work stays contained.</p><div class="service-empty-shell"><div class="service-empty-primary"><div class="service-empty-section service-empty-section-compact"><div class="service-empty-column-title">What each tool does</div><div class="service-empty-flow-list"><div class="service-empty-flow"><strong>Billing</strong><span>Stripe customer portal access for self-hosted invoices, payment methods, and plan changes.</span></div><div class="service-empty-flow"><strong>Licenses</strong><span>Recover the latest active self-hosted license and the matching invoice link.</span></div><div class="service-empty-flow"><strong>Refunds</strong><span>Check eligibility before revoking active commercial access.</span></div><div class="service-empty-flow"><strong>Privacy</strong><span>Request export or deletion without leaving Pulse Account.</span></div></div></div><div class="service-empty-section service-empty-section-compact"><div class="service-empty-column-title">Before you start</div><div class="service-empty-points service-empty-points-stack"><div class="service-empty-point"><strong>One request</strong><span>Keep a single billing request active instead of bouncing across sections.</span></div><div class="service-empty-point"><strong>Identity first</strong><span>Verification happens before any sensitive account action opens.</span></div><div class="service-empty-point"><strong>Stay focused</strong><span>Use the hosted billing cards above when the request is tied to a hosted workspace account.</span></div></div></div></div><div class="service-empty-side"><div class="service-empty-section service-empty-section-support"><div class="service-empty-column-title">Escalation</div><div class="service-empty-checklist"><div class="service-empty-check"><strong>Escalate quickly</strong><span>If hosted billing or the self-hosted tools do not behave as expected, escalate from this section.</span></div><div class="service-empty-check"><strong>Billing packet</strong><span>Bring the billing tool, commercial email, and the exact failed action so support starts with the same request state.</span></div></div><div class="service-empty-support">Need help with billing, refund, privacy, or license requests? <a class="portal-support-link" href="mailto:' + escapeAttr(context.bootstrap.support_email || "") + '">' + escapeHTML(context.bootstrap.support_email || "") + '</a></div><div class="service-empty-actions"><button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="support">Open support</button></div></div></div></div></div><div class="service-panel" id="manage-service-panel"><div id="manage-service-root"></div></div><div class="service-panel" id="retrieve-service-panel"><div id="retrieve-service-root"></div></div><div class="service-panel" id="refund-service-panel"><div id="refund-service-root"></div></div><div class="service-panel" id="data-service-panel"><h3>Data and privacy</h3><p>Request export or deletion of the commercial data tied to an email address. Payment data held directly by Stripe still requires support handling.</p><div class="subsection"><div id="data-export-root"></div></div><div class="subsection"><div id="data-delete-root"></div></div><div class="helper-text">Payment-card data stays with Stripe. For Stripe deletion support, contact <a href="mailto:' + escapeAttr(context.bootstrap.support_email || "") + '">' + escapeHTML(context.bootstrap.support_email || "") + '</a>.</div></div></div></div></div></section><section class="portal-content-panel portal-content-panel-support">' + renderSupportSection(context) + "</section></div></div></div>";
+    ]) + '</div><div class="billing-note">' + billingNote + '</div></div><div class="billing-overview-grid">' + renderHostedBillingCards(accounts) + '</div><div class="billing-shell"><aside class="billing-shell-sidebar"><div class="billing-shell-sidebar-head"><div class="account-panel-kicker">Self-hosted billing</div><h3>Self-hosted tools</h3><p>Use these only when the job is a self-hosted purchase, license, refund, or privacy request.</p></div><div class="billing-action-list">' + renderBillingActionRow("open-manage-billing", "Self-hosted billing", "Manage subscriptions", "Billing", "Open Stripe for self-hosted plan, invoice, and payment changes.", "manage-billing-panel", "manage-inline-email", ["Plan changes", "Invoices"]) + renderBillingActionRow("open-retrieve-billing", "Licenses", "Retrieve licenses", "Licenses", "Recover the latest active self-hosted license and invoice link.", "retrieve-billing-panel", "retrieve-inline-email", ["Latest active license", "Invoice lookup"]) + renderBillingActionRow("open-refund-billing", "Refunds", "Refund requests", "Refunds", "Request a self-serve refund when the purchase is still eligible.", "refund-billing-panel", "refund-inline-email", ["Eligibility check", "Revocation"]) + renderBillingActionRow("open-data-billing", "Privacy", "Data and privacy", "Privacy", "Request export or deletion for commercial account data.", "data-billing-panel", "data-export-email", ["Export", "Deletion"]) + '</div><div class="billing-inline-support"><div class="account-panel-kicker">Escalation</div><h4>Keep the billing request contained</h4><p>Use Support only when a hosted billing or self-hosted billing request cannot complete cleanly from this section.</p><div class="billing-inline-support-points"><div class="billing-inline-support-point"><strong>Hosted billing first when present</strong><span>Use the hosted billing cards above before you touch the self-hosted tools.</span></div><div class="billing-inline-support-point"><strong>Escalate with context</strong><span>Bring the billing tool or hosted billing action and the exact failed step if you need support.</span></div></div><div class="billing-inline-support-actions"><button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="support">Open support</button></div></div></aside><div class="billing-shell-main"><div class="billing-detail-shell"><div class="billing-panel billing-panel-empty visible" id="billing-panel-empty"><div class="account-panel-kicker">Billing brief</div><h3>Choose the billing task</h3><p>Pick one self-hosted billing request at a time. Verification happens first so billing, license, refund, or privacy work stays contained.</p><div class="billing-empty-shell"><div class="billing-empty-primary"><div class="billing-empty-section billing-empty-section-compact"><div class="billing-empty-column-title">What each tool does</div><div class="billing-empty-flow-list"><div class="billing-empty-flow"><strong>Billing</strong><span>Stripe customer portal access for self-hosted invoices, payment methods, and plan changes.</span></div><div class="billing-empty-flow"><strong>Licenses</strong><span>Recover the latest active self-hosted license and the matching invoice link.</span></div><div class="billing-empty-flow"><strong>Refunds</strong><span>Check eligibility before revoking active commercial access.</span></div><div class="billing-empty-flow"><strong>Privacy</strong><span>Request export or deletion without leaving Pulse Account.</span></div></div></div><div class="billing-empty-section billing-empty-section-compact"><div class="billing-empty-column-title">Before you start</div><div class="billing-empty-points billing-empty-points-stack"><div class="billing-empty-point"><strong>One request</strong><span>Keep a single billing request active instead of bouncing across sections.</span></div><div class="billing-empty-point"><strong>Identity first</strong><span>Verification happens before any sensitive account action opens.</span></div><div class="billing-empty-point"><strong>Stay focused</strong><span>Use the hosted billing cards above when the request is tied to a hosted workspace account.</span></div></div></div></div><div class="billing-empty-side"><div class="billing-empty-section billing-empty-section-support"><div class="billing-empty-column-title">Escalation</div><div class="billing-empty-checklist"><div class="billing-empty-check"><strong>Escalate quickly</strong><span>If hosted billing or the self-hosted tools do not behave as expected, escalate from this section.</span></div><div class="billing-empty-check"><strong>Billing packet</strong><span>Bring the billing tool, commercial email, and the exact failed action so support starts with the same request state.</span></div></div><div class="billing-empty-support">Need help with billing, refund, privacy, or license requests? <a class="portal-support-link" href="mailto:' + escapeAttr(context.bootstrap.support_email || "") + '">' + escapeHTML(context.bootstrap.support_email || "") + '</a></div><div class="billing-empty-actions"><button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="support">Open support</button></div></div></div></div></div><div class="billing-panel" id="manage-billing-panel"><div id="manage-billing-root"></div></div><div class="billing-panel" id="retrieve-billing-panel"><div id="retrieve-billing-root"></div></div><div class="billing-panel" id="refund-billing-panel"><div id="refund-billing-root"></div></div><div class="billing-panel" id="data-billing-panel"><h3>Data and privacy</h3><p>Request export or deletion of the commercial data tied to an email address. Payment data held directly by Stripe still requires support handling.</p><div class="subsection"><div id="data-export-root"></div></div><div class="subsection"><div id="data-delete-root"></div></div><div class="helper-text">Payment-card data stays with Stripe. For Stripe deletion support, contact <a href="mailto:' + escapeAttr(context.bootstrap.support_email || "") + '">' + escapeHTML(context.bootstrap.support_email || "") + '</a>.</div></div></div></div></div></section><section class="portal-content-panel portal-content-panel-support">' + renderSupportSection(context) + "</section></div></div></div>";
   }
   function renderSignedOutPortalHTML(context) {
     var statusHTML = "";
     if (context.loginState.request.error) {
-      statusHTML = '<div class="service-status visible error">' + escapeHTML(context.loginState.request.error) + "</div>";
+      statusHTML = '<div class="billing-status visible error">' + escapeHTML(context.loginState.request.error) + "</div>";
     } else if (context.loginState.success) {
       var successMessage = context.loginState.successMessage || "If that email is registered, a magic link is on the way.";
-      statusHTML = '<div class="service-status visible success">' + escapeHTML(successMessage) + `<br><br><strong>Don't see it?</strong> <a href="#" data-portal-action="resend-magic-link">Send a new link</a>.</div>`;
+      statusHTML = '<div class="billing-status visible success">' + escapeHTML(successMessage) + `<br><br><strong>Don't see it?</strong> <a href="#" data-portal-action="resend-magic-link">Send a new link</a>.</div>`;
     }
-    return '<section class="intro-card"><div class="account-panel-kicker">Pulse Account</div><h1>Sign in to Pulse Account</h1><p>Use one commercial email address to get into workspaces, MSP access, billing, license recovery, refunds, and privacy actions.</p></section><section class="service-section service-section-auth"><div class="service-panel visible auth-panel"><h3>Sign in</h3><p>Enter the commercial email address for your Pulse account. I will send a magic link so you can open Pulse Account without managing a password.</p><div class="form-group"><label for="portal-login-email">Email address</label><input id="portal-login-email" type="email" autocomplete="email" placeholder="you@example.com" value="' + escapeAttr(context.loginState.emailValue || "") + '" data-portal-input="login-email"></div><div class="form-actions"><button class="btn-primary" id="portal-login-send" type="button" data-portal-action="send-magic-link">' + (context.loginState.request.pending ? "Sending\u2026" : "Send magic link") + '</button><a class="btn-secondary link-button" href="' + escapeAttr(context.signupPath) + '">Create an account</a></div>' + statusHTML + "</div></section>";
+    return '<section class="intro-card"><div class="account-panel-kicker">Pulse Account</div><h1>Sign in to Pulse Account</h1><p>Use one commercial email address to get into workspaces, MSP access, billing, license recovery, refunds, and privacy actions.</p></section><section class="billing-section billing-section-auth"><div class="billing-panel visible auth-panel"><h3>Sign in</h3><p>Enter the commercial email address for your Pulse account. I will send a magic link so you can open Pulse Account without managing a password.</p><div class="form-group"><label for="portal-login-email">Email address</label><input id="portal-login-email" type="email" autocomplete="email" placeholder="you@example.com" value="' + escapeAttr(context.loginState.emailValue || "") + '" data-portal-input="login-email"></div><div class="form-actions"><button class="btn-primary" id="portal-login-send" type="button" data-portal-action="send-magic-link">' + (context.loginState.request.pending ? "Sending\u2026" : "Send magic link") + '</button><a class="btn-secondary link-button" href="' + escapeAttr(context.signupPath) + '">Create an account</a></div>' + statusHTML + "</div></section>";
   }
 
   // src/shell.ts
@@ -2110,14 +2110,14 @@
     var accountState = createPortalAccountState();
     var loginState = createPortalLoginState();
     var shellState = createPortalShellState();
-    var serviceState = createPortalServiceState();
+    var billingState = createPortalBillingState();
     syncLoginStateBootstrapEmail(loginState, bootstrapState.email || "");
-    syncServiceStateBootstrapEmail(serviceState, bootstrapState.email || "");
+    syncBillingStateBootstrapEmail(billingState, bootstrapState.email || "");
     var accountSubscribers = /* @__PURE__ */ new Set();
     var bootstrapSubscribers = /* @__PURE__ */ new Set();
     var loginSubscribers = /* @__PURE__ */ new Set();
     var shellSubscribers = /* @__PURE__ */ new Set();
-    var serviceSubscribers = /* @__PURE__ */ new Set();
+    var billingSubscribers = /* @__PURE__ */ new Set();
     function notify(subscribers) {
       subscribers.forEach(function(listener) {
         listener();
@@ -2136,13 +2136,13 @@
       getShellState: function() {
         return shellState;
       },
-      getServiceState: function() {
-        return serviceState;
+      getBillingState: function() {
+        return billingState;
       },
       setBootstrap: function(nextBootstrap) {
         bootstrapState = normalizeBootstrap(bootstrapDefaults, nextBootstrap);
         syncLoginStateBootstrapEmail(loginState, bootstrapState.email || "");
-        syncServiceStateBootstrapEmail(serviceState, bootstrapState.email || "");
+        syncBillingStateBootstrapEmail(billingState, bootstrapState.email || "");
         notify(bootstrapSubscribers);
         return bootstrapState;
       },
@@ -2165,12 +2165,12 @@
         notify(shellSubscribers);
         return shellState;
       },
-      updateServiceState: function(mutator, options) {
-        mutator(serviceState);
+      updateBillingState: function(mutator, options) {
+        mutator(billingState);
         if (!options || options.notify !== false) {
-          notify(serviceSubscribers);
+          notify(billingSubscribers);
         }
-        return serviceState;
+        return billingState;
       },
       subscribeBootstrap: function(listener) {
         bootstrapSubscribers.add(listener);
@@ -2196,10 +2196,10 @@
           shellSubscribers.delete(listener);
         };
       },
-      subscribeServices: function(listener) {
-        serviceSubscribers.add(listener);
+      subscribeBilling: function(listener) {
+        billingSubscribers.add(listener);
         return function() {
-          serviceSubscribers.delete(listener);
+          billingSubscribers.delete(listener);
         };
       }
     };
@@ -2223,16 +2223,16 @@
   function normalizeHandoffEmail(value) {
     return String(value || "").trim();
   }
-  function normalizeHandoffService(value) {
+  function normalizeHandoffBillingPanel(value) {
     switch (String(value || "").trim()) {
       case "manage":
-        return "manage-service-panel";
+        return "manage-billing-panel";
       case "retrieve":
-        return "retrieve-service-panel";
+        return "retrieve-billing-panel";
       case "refund":
-        return "refund-service-panel";
+        return "refund-billing-panel";
       case "data":
-        return "data-service-panel";
+        return "data-billing-panel";
       default:
         return "";
     }
@@ -2242,12 +2242,12 @@
       var params = new URL(locationHref).searchParams;
       return {
         email: normalizeHandoffEmail(params.get("email")),
-        openPanelID: normalizeHandoffService(params.get("service"))
+        openBillingPanelID: normalizeHandoffBillingPanel(params.get("service"))
       };
     } catch {
       return {
         email: "",
-        openPanelID: ""
+        openBillingPanelID: ""
       };
     }
   }
@@ -2272,17 +2272,17 @@
       store.updateLoginState(function(loginState) {
         loginState.emailValue = handoff.email;
       }, { notify: false });
-      store.updateServiceState(function(serviceState) {
-        serviceState.flows.manage.emailValue = handoff.email;
-        serviceState.flows.retrieve.emailValue = handoff.email;
-        serviceState.flows.export.emailValue = handoff.email;
-        serviceState.flows.delete.emailValue = handoff.email;
-        serviceState.refund.emailValue = handoff.email;
+      store.updateBillingState(function(billingState) {
+        billingState.flows.manage.emailValue = handoff.email;
+        billingState.flows.retrieve.emailValue = handoff.email;
+        billingState.flows.export.emailValue = handoff.email;
+        billingState.flows.delete.emailValue = handoff.email;
+        billingState.refund.emailValue = handoff.email;
       }, { notify: false });
     }
-    if (handoff.openPanelID) {
-      store.updateServiceState(function(serviceState) {
-        serviceState.openPanelID = handoff.openPanelID;
+    if (handoff.openBillingPanelID) {
+      store.updateBillingState(function(billingState) {
+        billingState.openBillingPanelID = handoff.openBillingPanelID;
       }, { notify: false });
     }
     return {
@@ -2340,12 +2340,12 @@
         if (section === "access") {
           var accounts = deps.store.getBootstrap().accounts || [];
           for (var i = 0; i < accounts.length; i += 1) {
-            accountRuntime.ensureTeamVisible(accounts[i].id);
+            accountRuntime.ensureAccessVisible(accounts[i].id);
           }
         }
       }
     });
-    installServicesRuntime({
+    installBillingRuntime({
       api,
       store: deps.store
     });

@@ -2,19 +2,19 @@ import type {
   PortalAccountState,
   PortalAccountSummary,
   PortalAccountUIEntry,
-  PortalTeamMember,
+  PortalAccessMember,
   PortalWorkspaceSummary,
 } from './types';
 
 type FormValueElement = HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
 
-function normalizedTeamRole(role: string): string {
+function normalizedAccessRole(role: string): string {
   if (role === 'member') return 'read_only';
   return role || 'read_only';
 }
 
 function roleLabel(role: string): string {
-  switch (normalizedTeamRole(role)) {
+  switch (normalizedAccessRole(role)) {
     case 'owner':
       return 'Owner';
     case 'admin':
@@ -31,7 +31,7 @@ function roleLabel(role: string): string {
 }
 
 function roleCapabilityCopy(role: string): string {
-  switch (normalizedTeamRole(role)) {
+  switch (normalizedAccessRole(role)) {
     case 'owner':
       return 'Full account control, including billing, access control, and workspace control.';
     case 'admin':
@@ -183,73 +183,73 @@ function setContainerMessage(container: HTMLElement, title: string, msg: string,
   container.textContent = '';
   container.classList.add('state-only');
   var message = document.createElement('div');
-  message.className = 'team-list-message' + (isError ? ' error' : '');
+  message.className = 'access-list-message' + (isError ? ' error' : '');
   var heading = document.createElement('strong');
-  heading.className = 'team-list-message-title';
+  heading.className = 'access-list-message-title';
   heading.textContent = title;
   var copy = document.createElement('span');
-  copy.className = 'team-list-message-copy';
+  copy.className = 'access-list-message-copy';
   copy.textContent = msg;
   message.appendChild(heading);
   message.appendChild(copy);
   container.appendChild(message);
 }
 
-function countMembersByRole(members: PortalTeamMember[], role: string): number {
+function countMembersByRole(members: PortalAccessMember[], role: string): number {
   var count = 0;
   for (var i = 0; i < members.length; i += 1) {
-    if (normalizedTeamRole(members[i].role) === role) count += 1;
+    if (normalizedAccessRole(members[i].role) === role) count += 1;
   }
   return count;
 }
 
-function renderTeamStats(accountID: string, entry: PortalAccountUIEntry): void {
-  var stats = getElement<HTMLElement>('team-stats-' + accountID);
+function renderAccessStats(accountID: string, entry: PortalAccountUIEntry): void {
+  var stats = getElement<HTMLElement>('access-stats-' + accountID);
   if (!stats) return;
-  if (!entry.teamVisible) {
+  if (!entry.accessVisible) {
     stats.innerHTML = '';
     return;
   }
-  if (entry.teamQuery.status === 'loading') {
+  if (entry.accessQuery.status === 'loading') {
     stats.innerHTML =
-      '<div class="team-stat-card"><span class="team-stat-label">Roster</span><span class="team-stat-value">Loading…</span></div>' +
-      '<div class="team-stat-card"><span class="team-stat-label">Invites</span><span class="team-stat-value">Ready</span></div>';
+      '<div class="access-stat-card"><span class="access-stat-label">Roster</span><span class="access-stat-value">Loading…</span></div>' +
+      '<div class="access-stat-card"><span class="access-stat-label">Invites</span><span class="access-stat-value">Ready</span></div>';
     return;
   }
-  if (entry.teamQuery.status === 'error') {
+  if (entry.accessQuery.status === 'error') {
     stats.innerHTML =
-      '<div class="team-stat-card"><span class="team-stat-label">Roster</span><span class="team-stat-value team-stat-error">Needs attention</span></div>' +
-      '<div class="team-stat-card"><span class="team-stat-label">Fallback</span><span class="team-stat-value">Invite only</span></div>';
+      '<div class="access-stat-card"><span class="access-stat-label">Roster</span><span class="access-stat-value access-stat-error">Needs attention</span></div>' +
+      '<div class="access-stat-card"><span class="access-stat-label">Fallback</span><span class="access-stat-value">Invite only</span></div>';
     return;
   }
 
-  var members = entry.teamQuery.data;
+  var members = entry.accessQuery.data;
   stats.innerHTML =
-    '<div class="team-stat-card"><span class="team-stat-label">Members</span><span class="team-stat-value">' + String(members.length) + '</span></div>' +
-    '<div class="team-stat-card"><span class="team-stat-label">Owners</span><span class="team-stat-value">' + String(countMembersByRole(members, 'owner')) + '</span></div>' +
-    '<div class="team-stat-card"><span class="team-stat-label">Admins</span><span class="team-stat-value">' + String(countMembersByRole(members, 'admin')) + '</span></div>' +
-    '<div class="team-stat-card"><span class="team-stat-label">Operators</span><span class="team-stat-value">' + String(countMembersByRole(members, 'tech') + countMembersByRole(members, 'read_only')) + '</span></div>';
+    '<div class="access-stat-card"><span class="access-stat-label">Members</span><span class="access-stat-value">' + String(members.length) + '</span></div>' +
+    '<div class="access-stat-card"><span class="access-stat-label">Owners</span><span class="access-stat-value">' + String(countMembersByRole(members, 'owner')) + '</span></div>' +
+    '<div class="access-stat-card"><span class="access-stat-label">Admins</span><span class="access-stat-value">' + String(countMembersByRole(members, 'admin')) + '</span></div>' +
+    '<div class="access-stat-card"><span class="access-stat-label">Operators</span><span class="access-stat-value">' + String(countMembersByRole(members, 'tech') + countMembersByRole(members, 'read_only')) + '</span></div>';
 }
 
-function createTeamControlCell(className: string): HTMLDivElement {
+function createAccessControlCell(className: string): HTMLDivElement {
   var cell = document.createElement('div');
-  cell.className = 'team-control-cell ' + className;
+  cell.className = 'access-control-cell ' + className;
   return cell;
 }
 
-function renderTeamRoleControl(accountID: string, member: PortalTeamMember, isOwner: boolean): HTMLElement {
-  var currentRole = normalizedTeamRole(member.role);
-  var group = createTeamControlCell('team-control-cell-role');
+function renderAccessRoleControl(accountID: string, member: PortalAccessMember, isOwner: boolean): HTMLElement {
+  var currentRole = normalizedAccessRole(member.role);
+  var group = createAccessControlCell('access-control-cell-role');
   if (currentRole === 'owner' && !isOwner) {
     var locked = document.createElement('span');
-    locked.className = 'team-role-badge';
+    locked.className = 'access-role-badge';
     locked.textContent = roleLabel(currentRole);
     group.appendChild(locked);
     return group;
   }
 
   var sel = document.createElement('select');
-  sel.className = 'team-role-select';
+  sel.className = 'access-role-select';
   var roles = isOwner ? ['owner', 'admin', 'tech', 'read_only'] : ['admin', 'tech', 'read_only'];
   for (var j = 0; j < roles.length; j += 1) {
     var opt = document.createElement('option');
@@ -265,11 +265,11 @@ function renderTeamRoleControl(accountID: string, member: PortalTeamMember, isOw
   return group;
 }
 
-function renderTeamMemberAction(accountID: string, member: PortalTeamMember, isOwner: boolean): HTMLElement | null {
-  if (normalizedTeamRole(member.role) === 'owner' && !isOwner) {
-    var locked = createTeamControlCell('team-control-cell-access');
+function renderAccessMemberAction(accountID: string, member: PortalAccessMember, isOwner: boolean): HTMLElement | null {
+  if (normalizedAccessRole(member.role) === 'owner' && !isOwner) {
+    var locked = createAccessControlCell('access-control-cell-access');
     var lockedText = document.createElement('span');
-    lockedText.className = 'team-control-locked';
+    lockedText.className = 'access-control-locked';
     lockedText.textContent = 'Locked';
     locked.appendChild(lockedText);
     return locked;
@@ -283,49 +283,49 @@ function renderTeamMemberAction(accountID: string, member: PortalTeamMember, isO
   btn.setAttribute('data-account-id', accountID);
   btn.setAttribute('data-user-id', member.user_id);
   btn.setAttribute('data-member-email', member.email);
-  var group = createTeamControlCell('team-control-cell-access');
+  var group = createAccessControlCell('access-control-cell-access');
   group.appendChild(btn);
   return group;
 }
 
-function renderTeamMemberRow(accountID: string, member: PortalTeamMember, isOwner: boolean): HTMLElement {
+function renderAccessMemberRow(accountID: string, member: PortalAccessMember, isOwner: boolean): HTMLElement {
   var row = document.createElement('div');
-  row.className = 'team-member-row';
+  row.className = 'access-member-row';
 
   var identity = document.createElement('div');
-  identity.className = 'team-member-identity';
+  identity.className = 'access-member-identity';
 
   var topline = document.createElement('div');
-  topline.className = 'team-member-topline';
+  topline.className = 'access-member-topline';
 
   var email = document.createElement('div');
-  email.className = 'team-member-email';
+  email.className = 'access-member-email';
   email.textContent = member.email;
   topline.appendChild(email);
 
   var roleBadge = document.createElement('span');
-  roleBadge.className = 'team-inline-role-badge';
+  roleBadge.className = 'access-inline-role-badge';
   roleBadge.textContent = roleLabel(member.role);
   topline.appendChild(roleBadge);
 
   identity.appendChild(topline);
 
   var caption = document.createElement('div');
-  caption.className = 'team-member-caption';
+  caption.className = 'access-member-caption';
   caption.textContent = roleCapabilityCopy(member.role);
   identity.appendChild(caption);
 
   row.appendChild(identity);
-  row.appendChild(renderTeamRoleControl(accountID, member, isOwner));
-  row.appendChild(renderTeamMemberAction(accountID, member, isOwner) || createTeamControlCell('team-control-cell-access'));
+  row.appendChild(renderAccessRoleControl(accountID, member, isOwner));
+  row.appendChild(renderAccessMemberAction(accountID, member, isOwner) || createAccessControlCell('access-control-cell-access'));
   return row;
 }
 
-function ensureRosterHead(container: HTMLElement): void {
-  var existing = container.querySelector('.team-roster-head');
+function ensureAccessRosterHead(container: HTMLElement): void {
+  var existing = container.querySelector('.access-roster-head');
   if (existing) return;
   var head = document.createElement('div');
-  head.className = 'team-roster-head';
+  head.className = 'access-roster-head';
   head.innerHTML =
     '<span>Operator</span>' +
     '<span>Role</span>' +
@@ -343,31 +343,31 @@ export function renderAddWorkspaceSection(accountID: string, entry: PortalAccoun
   }
 }
 
-export function renderTeamSection(accountID: string, entry: PortalAccountUIEntry): void {
-  var section = getElement<HTMLElement>('team-section-' + accountID);
-  var roster = getElement<HTMLElement>('team-list-' + accountID);
+export function renderAccessSection(accountID: string, entry: PortalAccountUIEntry): void {
+  var section = getElement<HTMLElement>('access-section-' + accountID);
+  var roster = getElement<HTMLElement>('access-list-' + accountID);
   if (!section || !roster) return;
-  var rosterPanel = roster.closest('.team-roster') as HTMLElement | null;
+  var rosterPanel = roster.closest('.access-roster') as HTMLElement | null;
 
   var actorRole = section.getAttribute('data-actor-role') || '';
   var isOwner = actorRole === 'owner';
-  section.classList.toggle('visible', entry.teamVisible);
-  renderTeamStats(accountID, entry);
+  section.classList.toggle('visible', entry.accessVisible);
+  renderAccessStats(accountID, entry);
 
-  if (!entry.teamVisible) {
+  if (!entry.accessVisible) {
     return;
   }
-  if (entry.teamQuery.status === 'loading') {
+  if (entry.accessQuery.status === 'loading') {
     if (rosterPanel) rosterPanel.classList.add('state-only');
     setContainerMessage(roster, 'Loading roster', 'Checking who currently has access to this account.', false);
     return;
   }
-  if (entry.teamQuery.status === 'error') {
+  if (entry.accessQuery.status === 'error') {
     if (rosterPanel) rosterPanel.classList.add('state-only');
-    setContainerMessage(roster, 'Roster needs attention', entry.teamQuery.error, true);
+    setContainerMessage(roster, 'Roster needs attention', entry.accessQuery.error, true);
     return;
   }
-  if (!entry.teamQuery.data.length) {
+  if (!entry.accessQuery.data.length) {
     if (rosterPanel) rosterPanel.classList.add('state-only');
     setContainerMessage(roster, 'No one added yet', 'Invite someone new when this account needs shared access.', false);
     return;
@@ -376,10 +376,10 @@ export function renderTeamSection(accountID: string, entry: PortalAccountUIEntry
   roster.textContent = '';
   roster.classList.remove('state-only');
   if (rosterPanel) rosterPanel.classList.remove('state-only');
-  ensureRosterHead(roster);
-  for (var i = 0; i < entry.teamQuery.data.length; i += 1) {
-    var member = entry.teamQuery.data[i];
-    roster.appendChild(renderTeamMemberRow(accountID, member, isOwner));
+  ensureAccessRosterHead(roster);
+  for (var i = 0; i < entry.accessQuery.data.length; i += 1) {
+    var member = entry.accessQuery.data[i];
+    roster.appendChild(renderAccessMemberRow(accountID, member, isOwner));
   }
 }
 
@@ -397,6 +397,6 @@ export function renderAccountUI(accountState: PortalAccountState, accounts: Port
     }
     renderAddWorkspaceSection(accountID, entry);
     if (account) renderWorkspaceManagement(account, entry);
-    renderTeamSection(accountID, entry);
+    renderAccessSection(accountID, entry);
   }
 }

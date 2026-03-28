@@ -668,7 +668,7 @@ func TestPortalPageTemplate_AccessManagementRendered(t *testing.T) {
 		`id="portal-app-root"`,
 		`if (account.can_manage) {`,
 		`data-actor-role="`,
-		`id="team-list-`,
+		`id="access-list-`,
 		`data-shell-section="access"`,
 		`data-action="invite-member"`,
 	}

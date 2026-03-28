@@ -147,7 +147,7 @@ describe('portal app', function() {
       },
       {
         email: 'buyer@example.com',
-        openPanelID: 'retrieve-service-panel',
+        openBillingPanelID: 'retrieve-billing-panel',
       }
     );
 
@@ -175,9 +175,9 @@ describe('portal app', function() {
       ],
     });
 
-    expect(document.getElementById('retrieve-service-panel')?.classList.contains('visible')).toBe(true);
+    expect(document.getElementById('retrieve-billing-panel')?.classList.contains('visible')).toBe(true);
     expect((document.getElementById('retrieve-inline-email') as HTMLInputElement | null)?.value).toBe('buyer@example.com');
-    expect(runtime.store.getServiceState().openPanelID).toBe('retrieve-service-panel');
+    expect(runtime.store.getBillingState().openBillingPanelID).toBe('retrieve-billing-panel');
   });
 
   it('completes the signed-out magic-link flow through the real shell and auth runtime', async function() {
@@ -263,8 +263,8 @@ describe('portal app', function() {
     });
     await app.startupRefresh;
 
-    document.getElementById('open-retrieve-service')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    var retrievePanel = document.getElementById('retrieve-service-panel');
+    document.getElementById('open-retrieve-billing')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    var retrievePanel = document.getElementById('retrieve-billing-panel');
     expect(retrievePanel?.classList.contains('visible')).toBe(true);
 
     var emailInput = document.getElementById('retrieve-inline-email') as HTMLInputElement | null;
@@ -294,7 +294,7 @@ describe('portal app', function() {
         body: JSON.stringify({ email: 'owner@example.com', code: '123456' }),
       }),
     ]);
-    expect((store.getServiceState().flows.retrieve.result as { token?: string } | null)?.token).toBe('pulse_token_123');
+    expect((store.getBillingState().flows.retrieve.result as { token?: string } | null)?.token).toBe('pulse_token_123');
     expect((document.getElementById('retrieve-inline-result') as HTMLElement | null)?.hidden).toBe(false);
     expect((document.getElementById('retrieve-inline-copy') as HTMLButtonElement | null)?.hidden).toBe(false);
     expect(document.getElementById('retrieve-inline-status')?.textContent).toContain('License retrieved successfully.');
@@ -339,7 +339,7 @@ describe('portal app', function() {
     await flushAsync();
 
     expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/accounts/acct_1/members');
-    expect(document.getElementById('team-section-acct_1')?.classList.contains('visible')).toBe(true);
-    expect(document.getElementById('team-list-acct_1')?.textContent).toContain('owner@example.com');
+    expect(document.getElementById('access-section-acct_1')?.classList.contains('visible')).toBe(true);
+    expect(document.getElementById('access-list-acct_1')?.textContent).toContain('owner@example.com');
   });
 });

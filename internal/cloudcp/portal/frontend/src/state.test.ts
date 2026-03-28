@@ -3,14 +3,14 @@ import { describe, expect, it } from 'vitest';
 import {
   clearFlowStatus,
   createPortalLoginState,
-  createPortalServiceState,
+  createPortalBillingState,
   resetVerificationFlowState,
   setFlowStatus,
   syncLoginStateBootstrapEmail,
-  syncServiceStateBootstrapEmail,
-  toggleServicePanelState,
+  syncBillingStateBootstrapEmail,
+  toggleBillingPanelState,
   updateDeleteConfirmation,
-  updateServiceInputValue,
+  updateBillingInputValue,
 } from './state';
 
 describe('portal state', function() {
@@ -25,63 +25,63 @@ describe('portal state', function() {
   });
 
   it('creates service state with independent flows and bootstrap email defaults', function() {
-    var serviceState = createPortalServiceState();
-    syncServiceStateBootstrapEmail(serviceState, 'owner@example.com');
+    var billingState = createPortalBillingState();
+    syncBillingStateBootstrapEmail(billingState, 'owner@example.com');
 
-    expect(serviceState.flows.manage.emailValue).toBe('owner@example.com');
-    expect(serviceState.flows.retrieve.emailValue).toBe('owner@example.com');
-    expect(serviceState.refund.emailValue).toBe('owner@example.com');
-    expect(serviceState.flows.manage.request.pending).toBe(false);
-    expect(serviceState.flows.manage.confirm.pending).toBe(false);
-    expect(serviceState.refund.submit.pending).toBe(false);
+    expect(billingState.flows.manage.emailValue).toBe('owner@example.com');
+    expect(billingState.flows.retrieve.emailValue).toBe('owner@example.com');
+    expect(billingState.refund.emailValue).toBe('owner@example.com');
+    expect(billingState.flows.manage.request.pending).toBe(false);
+    expect(billingState.flows.manage.confirm.pending).toBe(false);
+    expect(billingState.refund.submit.pending).toBe(false);
 
-    serviceState.flows.manage.emailValue = 'override@example.com';
-    syncServiceStateBootstrapEmail(serviceState, 'owner@example.com');
-    expect(serviceState.flows.manage.emailValue).toBe('override@example.com');
+    billingState.flows.manage.emailValue = 'override@example.com';
+    syncBillingStateBootstrapEmail(billingState, 'owner@example.com');
+    expect(billingState.flows.manage.emailValue).toBe('override@example.com');
   });
 
   it('toggles service panels and routes input updates by field kind', function() {
-    var serviceState = createPortalServiceState();
+    var billingState = createPortalBillingState();
 
-    toggleServicePanelState(serviceState, 'manage-service-panel');
-    expect(serviceState.openPanelID).toBe('manage-service-panel');
-    toggleServicePanelState(serviceState, 'manage-service-panel');
-    expect(serviceState.openPanelID).toBe('');
+    toggleBillingPanelState(billingState, 'manage-billing-panel');
+    expect(billingState.openBillingPanelID).toBe('manage-billing-panel');
+    toggleBillingPanelState(billingState, 'manage-billing-panel');
+    expect(billingState.openBillingPanelID).toBe('');
 
-    updateServiceInputValue(serviceState, 'retrieve-email', 'buyer@example.com');
-    updateServiceInputValue(serviceState, 'retrieve-code', '123456');
-    updateServiceInputValue(serviceState, 'refund-token', 'pulse_token');
-    updateDeleteConfirmation(serviceState, true);
+    updateBillingInputValue(billingState, 'retrieve-email', 'buyer@example.com');
+    updateBillingInputValue(billingState, 'retrieve-code', '123456');
+    updateBillingInputValue(billingState, 'refund-token', 'pulse_token');
+    updateDeleteConfirmation(billingState, true);
 
-    expect(serviceState.flows.retrieve.emailValue).toBe('buyer@example.com');
-    expect(serviceState.flows.retrieve.codeValue).toBe('123456');
-    expect(serviceState.refund.tokenValue).toBe('pulse_token');
-    expect(serviceState.flows.delete.checkboxChecked).toBe(true);
+    expect(billingState.flows.retrieve.emailValue).toBe('buyer@example.com');
+    expect(billingState.flows.retrieve.codeValue).toBe('123456');
+    expect(billingState.refund.tokenValue).toBe('pulse_token');
+    expect(billingState.flows.delete.checkboxChecked).toBe(true);
   });
 
   it('preserves email while resetting verification flow state', function() {
-    var serviceState = createPortalServiceState();
-    serviceState.flows.export.emailValue = 'buyer@example.com';
-    serviceState.flows.export.codeValue = '999999';
-    serviceState.flows.export.pendingEmail = 'buyer@example.com';
-    serviceState.flows.export.result = { ok: true };
-    serviceState.flows.export.request.pending = true;
-    serviceState.flows.export.confirm.pending = true;
-    setFlowStatus(serviceState, 'export', 'done', false);
+    var billingState = createPortalBillingState();
+    billingState.flows.export.emailValue = 'buyer@example.com';
+    billingState.flows.export.codeValue = '999999';
+    billingState.flows.export.pendingEmail = 'buyer@example.com';
+    billingState.flows.export.result = { ok: true };
+    billingState.flows.export.request.pending = true;
+    billingState.flows.export.confirm.pending = true;
+    setFlowStatus(billingState, 'export', 'done', false);
 
-    resetVerificationFlowState(serviceState, 'export');
+    resetVerificationFlowState(billingState, 'export');
 
-    expect(serviceState.flows.export.emailValue).toBe('buyer@example.com');
-    expect(serviceState.flows.export.codeValue).toBe('');
-    expect(serviceState.flows.export.pendingEmail).toBe('');
-    expect(serviceState.flows.export.result).toBeNull();
-    expect(serviceState.flows.export.request.pending).toBe(false);
-    expect(serviceState.flows.export.confirm.pending).toBe(false);
-    expect(serviceState.flows.export.status.visible).toBe(false);
+    expect(billingState.flows.export.emailValue).toBe('buyer@example.com');
+    expect(billingState.flows.export.codeValue).toBe('');
+    expect(billingState.flows.export.pendingEmail).toBe('');
+    expect(billingState.flows.export.result).toBeNull();
+    expect(billingState.flows.export.request.pending).toBe(false);
+    expect(billingState.flows.export.confirm.pending).toBe(false);
+    expect(billingState.flows.export.status.visible).toBe(false);
 
-    setFlowStatus(serviceState, 'export', 'broken', true);
-    expect(serviceState.flows.export.status.message).toBe('broken');
-    clearFlowStatus(serviceState, 'export');
-    expect(serviceState.flows.export.status.visible).toBe(false);
+    setFlowStatus(billingState, 'export', 'broken', true);
+    expect(billingState.flows.export.status.message).toBe('broken');
+    clearFlowStatus(billingState, 'export');
+    expect(billingState.flows.export.status.visible).toBe(false);
   });
 });

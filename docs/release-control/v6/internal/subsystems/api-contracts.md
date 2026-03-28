@@ -65,7 +65,7 @@ Own canonical runtime payload shapes between backend and frontend.
 42. `internal/cloudcp/portal/page_templates.go`
 43. `internal/cloudcp/portal/frontend/src/index.ts`
 44. `internal/cloudcp/portal/frontend/src/shell.ts`
-45. `internal/cloudcp/portal/frontend/src/services.ts`
+45. `internal/cloudcp/portal/frontend/src/billing.ts`
 46. `internal/cloudcp/portal/frontend/src/runtime.ts`
 47. `internal/cloudcp/portal/frontend/src/types.ts`
 48. `internal/cloudcp/portal/frontend/src/styles.css`

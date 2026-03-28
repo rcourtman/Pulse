@@ -14,8 +14,8 @@ describe('account controller', function() {
       selectWorkspace: vi.fn(),
       clearWorkspaceSelection: vi.fn(),
       openBilling: vi.fn(),
-      toggleTeam: vi.fn(),
-      ensureTeamVisible: vi.fn(),
+      toggleAccess: vi.fn(),
+      ensureAccessVisible: vi.fn(),
       inviteMember: vi.fn(),
       createWorkspace: vi.fn(),
       manageWorkspaceAction: vi.fn(),
@@ -30,7 +30,7 @@ describe('account controller', function() {
     document.body.innerHTML =
       '<button id="toggle" data-action="toggle-add-workspace" data-account-id="acct_1">Toggle</button>' +
       '<button id="billing" data-action="open-billing" data-account-id="acct_1">Billing</button>' +
-      '<button id="team" data-action="toggle-team" data-account-id="acct_1">Team</button>' +
+      '<button id="team" data-action="show-access" data-account-id="acct_1">Team</button>' +
       '<button id="invite" data-action="invite-member" data-account-id="acct_1">Invite</button>' +
       '<button id="create" data-action="create-workspace" data-account-id="acct_1">Create</button>' +
       '<button id="select" data-action="select-workspace" data-account-id="acct_1" data-workspace-id="ws_1">Manage</button>' +
@@ -48,7 +48,7 @@ describe('account controller', function() {
 
     document.getElementById('team')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     expect(setShellSection).toHaveBeenCalledWith('access');
-    expect(runtime.ensureTeamVisible).toHaveBeenCalledWith('acct_1');
+    expect(runtime.ensureAccessVisible).toHaveBeenCalledWith('acct_1');
 
     document.getElementById('invite')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     expect(runtime.inviteMember).toHaveBeenCalledWith('acct_1');

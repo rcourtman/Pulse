@@ -199,9 +199,9 @@ describe('shell view', function() {
     expect(html).toContain('Workspace review and verification without control-plane changes.');
     expect(html).toContain('People on this account');
     expect(html).toContain('data-action="workspace-action"');
-    expect(html).toContain('service-action-row');
-    expect(html).toContain('service-action-button');
-    expect(html).toContain('id="service-panel-empty"');
+    expect(html).toContain('billing-action-row');
+    expect(html).toContain('billing-action-button');
+    expect(html).toContain('id="billing-panel-empty"');
     expect(html).toContain('Choose the billing task');
     expect(html).toContain('Billing brief');
     expect(html).toContain('Hosted billing');
@@ -214,8 +214,8 @@ describe('shell view', function() {
     expect(html).toContain('Before you start');
     expect(html).toContain('Escalate quickly');
     expect(html).toContain('Identity first');
-    expect(html).toContain('id="open-retrieve-service"');
-    expect(html).toContain('id="data-service-panel"');
+    expect(html).toContain('id="open-retrieve-billing"');
+    expect(html).toContain('id="data-billing-panel"');
     expect(html).toContain('>Billing<');
     expect(html).toContain('>Licenses<');
     expect(html).toContain('>Refunds<');

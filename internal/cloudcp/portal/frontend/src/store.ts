@@ -2,11 +2,11 @@ import {
   createPortalAccountState,
   createPortalLoginState,
   createPortalShellState,
-  createPortalServiceState,
+  createPortalBillingState,
   syncLoginStateBootstrapEmail,
-  syncServiceStateBootstrapEmail,
+  syncBillingStateBootstrapEmail,
 } from './state';
-import type { PortalAccountState, PortalBootstrapData, PortalLoginState, PortalServiceState, PortalShellSection, PortalShellState } from './types';
+import type { PortalAccountState, PortalBootstrapData, PortalLoginState, PortalBillingState, PortalShellSection, PortalShellState } from './types';
 
 interface MutationOptions {
   notify?: boolean;
@@ -17,17 +17,17 @@ export interface PortalStore {
   getAccountState(): PortalAccountState;
   getLoginState(): PortalLoginState;
   getShellState(): PortalShellState;
-  getServiceState(): PortalServiceState;
+  getBillingState(): PortalBillingState;
   setBootstrap(nextBootstrap: Partial<PortalBootstrapData> | PortalBootstrapData): PortalBootstrapData;
   updateAccountState(mutator: (state: PortalAccountState) => void, options?: MutationOptions): PortalAccountState;
   updateLoginState(mutator: (state: PortalLoginState) => void, options?: MutationOptions): PortalLoginState;
   setActiveShellSection(section: PortalShellSection): PortalShellState;
-  updateServiceState(mutator: (state: PortalServiceState) => void, options?: MutationOptions): PortalServiceState;
+  updateBillingState(mutator: (state: PortalBillingState) => void, options?: MutationOptions): PortalBillingState;
   subscribeAccount(listener: () => void): () => void;
   subscribeBootstrap(listener: () => void): () => void;
   subscribeLogin(listener: () => void): () => void;
   subscribeShell(listener: () => void): () => void;
-  subscribeServices(listener: () => void): () => void;
+  subscribeBilling(listener: () => void): () => void;
 }
 
 export function createAnonymousBootstrap(
@@ -58,14 +58,14 @@ export function createPortalStore(
   var accountState = createPortalAccountState();
   var loginState = createPortalLoginState();
   var shellState = createPortalShellState();
-  var serviceState = createPortalServiceState();
+  var billingState = createPortalBillingState();
   syncLoginStateBootstrapEmail(loginState, bootstrapState.email || '');
-  syncServiceStateBootstrapEmail(serviceState, bootstrapState.email || '');
+  syncBillingStateBootstrapEmail(billingState, bootstrapState.email || '');
   var accountSubscribers = new Set<() => void>();
   var bootstrapSubscribers = new Set<() => void>();
   var loginSubscribers = new Set<() => void>();
   var shellSubscribers = new Set<() => void>();
-  var serviceSubscribers = new Set<() => void>();
+  var billingSubscribers = new Set<() => void>();
 
   function notify(subscribers: Set<() => void>) {
     subscribers.forEach(function(listener) {
@@ -86,13 +86,13 @@ export function createPortalStore(
     getShellState: function() {
       return shellState;
     },
-    getServiceState: function() {
-      return serviceState;
+    getBillingState: function() {
+      return billingState;
     },
     setBootstrap: function(nextBootstrap) {
       bootstrapState = normalizeBootstrap(bootstrapDefaults, nextBootstrap);
       syncLoginStateBootstrapEmail(loginState, bootstrapState.email || '');
-      syncServiceStateBootstrapEmail(serviceState, bootstrapState.email || '');
+      syncBillingStateBootstrapEmail(billingState, bootstrapState.email || '');
       notify(bootstrapSubscribers);
       return bootstrapState;
     },
@@ -115,12 +115,12 @@ export function createPortalStore(
       notify(shellSubscribers);
       return shellState;
     },
-    updateServiceState: function(mutator, options) {
-      mutator(serviceState);
+    updateBillingState: function(mutator, options) {
+      mutator(billingState);
       if (!options || options.notify !== false) {
-        notify(serviceSubscribers);
+        notify(billingSubscribers);
       }
-      return serviceState;
+      return billingState;
     },
     subscribeBootstrap: function(listener) {
       bootstrapSubscribers.add(listener);
@@ -146,10 +146,10 @@ export function createPortalStore(
         shellSubscribers.delete(listener);
       };
     },
-    subscribeServices: function(listener) {
-      serviceSubscribers.add(listener);
+    subscribeBilling: function(listener) {
+      billingSubscribers.add(listener);
       return function() {
-        serviceSubscribers.delete(listener);
+        billingSubscribers.delete(listener);
       };
     },
   };

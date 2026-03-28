@@ -42,7 +42,7 @@ export interface PortalLoginState {
   successMessage: string;
 }
 
-export interface PortalTeamMember {
+export interface PortalAccessMember {
   email: string;
   role: string;
   user_id: string;
@@ -66,8 +66,8 @@ export interface PortalAccountUIEntry {
   createWorkspace: PortalMutationState;
   selectedWorkspaceID: string;
   manageWorkspace: PortalMutationState;
-  teamVisible: boolean;
-  teamQuery: PortalQueryState<PortalTeamMember[]>;
+  accessVisible: boolean;
+  accessQuery: PortalQueryState<PortalAccessMember[]>;
 }
 
 export interface PortalAccountState {
@@ -80,9 +80,9 @@ export interface PortalShellState {
   activeSection: PortalShellSection;
 }
 
-export type PortalServiceFlowID = 'manage' | 'retrieve' | 'export' | 'delete';
+export type PortalBillingFlowID = 'manage' | 'retrieve' | 'export' | 'delete';
 
-export interface ServiceStatus {
+export interface BillingStatus {
   visible: boolean;
   message: string;
   error: boolean;
@@ -93,7 +93,7 @@ export interface VerificationFlowState {
   request: PortalMutationState;
   confirm: PortalMutationState;
   step2Visible: boolean;
-  status: ServiceStatus;
+  status: BillingStatus;
   result: unknown;
   emailValue: string;
   codeValue: string;
@@ -104,11 +104,11 @@ export interface RefundState {
   emailValue: string;
   tokenValue: string;
   submit: PortalMutationState;
-  status: ServiceStatus;
+  status: BillingStatus;
 }
 
-export interface PortalServiceState {
-  openPanelID: string;
-  flows: Record<PortalServiceFlowID, VerificationFlowState>;
+export interface PortalBillingState {
+  openBillingPanelID: string;
+  flows: Record<PortalBillingFlowID, VerificationFlowState>;
   refund: RefundState;
 }
