@@ -647,11 +647,11 @@ search-row, filter-row, and inline-leading-slot layout surface. Monitoring
 pages that need workspace tabs or count chips next to search should route that
 through the shared `searchLeading` slot instead of recreating a second local
 header strip above the control bar.
-When those workspace tabs need a denser embedded control-bar treatment, that
-presentation should live on the shared
-`frontend-modern/src/components/shared/Subtabs.tsx` owner as an explicit
-variant instead of each page layering local shell, list, and button class
-stacks onto the primitive.
+When those workspace tabs need an embedded control-bar treatment, they should
+still stay on the one canonical `frontend-modern/src/components/shared/Subtabs.tsx`
+primitive and reuse the established shell, list, and button class pattern
+already proven on owning surfaces like operations rather than introducing new
+variant APIs on the primitive.
 The search-input enhancement surfaces now follow that same owner split.
 `frontend-modern/src/components/shared/SearchInputEnhancements.tsx` stays the
 render shell, `frontend-modern/src/components/shared/useSearchInputEnhancements.ts`
@@ -771,8 +771,9 @@ protected-items versus recovery-events workspace switch. The recovery lane may
 own the active view and route-state semantics, but the top-level tab framing
 must stay on the canonical shared subtabs control instead of reviving a
 recovery-local switcher pattern. When recovery embeds that switcher inside the
-page-controls row, the contained styling should come from the shared subtabs
-variant boundary rather than from recovery-only class overrides.
+page-controls row, the contained styling should come from the same canonical
+subtabs shell, list, and button class treatment already used by established
+Pulse surfaces rather than from a recovery-only variant boundary.
 That same shared-boundary rule applies to summary density. The shared compact
 mode on `SummaryPanel.tsx` and `SummaryMetricCard.tsx` exists for genuinely
 dense monitoring surfaces, but pages that are trying to align with the normal

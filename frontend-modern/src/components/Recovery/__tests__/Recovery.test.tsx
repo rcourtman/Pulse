@@ -227,7 +227,7 @@ describe('Recovery', () => {
       within(inventoryControls)
         .getByRole('tab', { name: /protected items 2/i })
         .className,
-    ).not.toContain('border-b-2');
+    ).toContain('border-b-2');
     expect(
       within(inventoryControls)
         .getByRole('tab', { name: /protected items 2/i })

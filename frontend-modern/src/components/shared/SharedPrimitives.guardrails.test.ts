@@ -228,12 +228,12 @@ describe('shared primitive guardrails', () => {
     expect(activeUseTrialNudgeModelSource).toContain('ACTIVE_USE_TRIAL_NUDGE_TITLE');
   });
 
-  it('keeps shared subtabs variant-driven instead of page-local class stacks', () => {
-    expect(subtabsSource).toContain("variant?: 'default' | 'control'");
-    expect(subtabsSource).toContain('subtabsControlShellClass');
-    expect(subtabsSource).toContain('subtabsControlListClass');
-    expect(subtabsSource).toContain('subtabControlButtonClass');
-    expect(subtabsSource).toContain("local.variant === 'control'");
+  it('keeps shared subtabs as one primitive and leaves shell styling to owning surfaces', () => {
+    expect(subtabsSource).not.toContain("variant?: 'default' | 'control'");
+    expect(subtabsSource).not.toContain('subtabsControlShellClass');
+    expect(subtabsSource).toContain('subtabsShellClass');
+    expect(subtabsSource).toContain('subtabsListClass');
+    expect(subtabsSource).toContain('subtabButtonClass');
   });
 
   it('keeps trial banner on shell, runtime, and model owners', () => {

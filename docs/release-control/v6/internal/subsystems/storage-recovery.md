@@ -758,8 +758,9 @@ row should stay focused on workspace navigation, drill-in context, and active
 filters instead of echoing page-wide posture pills above the same table.
 That same workspace handoff should stay on shared primitive styling too. When
 recovery embeds its workspace tabs inside the page-controls row, the switcher
-should use the shared `Subtabs.tsx` control-surface variant instead of stacking
-recovery-only shell, list, and button classes on top of the primitive.
+should use the same canonical shared `Subtabs.tsx` shell, list, and button
+class pattern already used by established Pulse tab surfaces instead of
+inventing a recovery-only variant or recovery-only class stack.
 That same workspace rule also means the protected-items versus recovery-events
 switcher should live inside the shared controls card rather than a recovery-only
 band or a table-card header strip, so the page hands off from summary into one

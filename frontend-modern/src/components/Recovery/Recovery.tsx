@@ -492,8 +492,9 @@ const Recovery: Component = () => {
                 value={workspaceView()}
                 onChange={(value) => setWorkspaceView(value as RecoveryWorkspaceView)}
                 ariaLabel="Recovery data view"
-                variant="control"
-                class="sm:w-max"
+                class="rounded-md border border-border bg-surface-alt p-1.5 sm:w-max"
+                listClass="gap-2 overflow-x-auto scrollbar-hide"
+                tabClass="min-h-10 whitespace-nowrap rounded-md border border-transparent px-4 py-2 text-sm"
                 tabs={[
                   {
                     value: 'inventory',
