@@ -1941,6 +1941,13 @@
     var accounts = Array.isArray(bootstrap.accounts) ? bootstrap.accounts : [];
     return bootstrap.has_self_hosted_commercial === true || !hasHostedAccounts(accounts);
   }
+  function countWorkspaces(accounts) {
+    var total = 0;
+    for (var i = 0; i < accounts.length; i += 1) {
+      total += Array.isArray(accounts[i].workspaces) ? accounts[i].workspaces.length : 0;
+    }
+    return total;
+  }
   function collectWorkspaces(accounts) {
     var results = [];
     for (var i = 0; i < accounts.length; i += 1) {
@@ -2234,13 +2241,14 @@
       return '<div class="overview-task-item overview-task-item-action"><div class="overview-task-copy"><strong>' + escapeHTML(entry.workspace.display_name) + "</strong><span>" + escapeHTML(overviewWorkspaceContext(entry, includeAccountName, workspaceRowNote(entry.workspace))) + "</span></div>" + renderWorkspaceHandoffForm(entry.account.id, entry.workspace.id, accountAPIBasePath, "Open workspace") + "</div>";
     }).join("") + "</div></article>";
   }
-  function renderOverviewNextActionCard(accounts, entries, accountAPIBasePath) {
+  function renderOverviewNextActionCard(accounts, entries, accountAPIBasePath, showSelfHostedCommercial) {
     var attention = attentionOverviewEntries(entries);
     var ready = readyOverviewEntries(entries);
     var primaryAction = "";
     var secondaryAction = "";
     var title = "";
     var description = "";
+    var totalWorkspaces = countWorkspaces(accounts);
     var creatableAccount = accounts.find(function(account) {
       return account.kind === "msp" && account.can_manage;
     }) || null;
@@ -2250,6 +2258,7 @@
     var accessAccount = accounts.find(function(account) {
       return account.can_manage;
     }) || null;
+    var hostedViewOnly = accounts.length > 0 && !accessAccount;
     if (attention.length) {
       title = "Review workspace health";
       description = attention.length > 1 ? "Open Workspaces and resolve the pending health or lifecycle questions before you do anything else." : "Start in Workspaces with " + attention[0].workspace.display_name + " before you do anything else.";
@@ -2274,6 +2283,18 @@
       title = "Open billing";
       description = "No hosted workspace is attached, so the next obvious action is Billing for self-hosted subscriptions, licenses, refunds, or privacy requests.";
       primaryAction = '<button class="btn-primary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="billing">Open billing</button>';
+    } else if (hostedViewOnly) {
+      if (totalWorkspaces > 0) {
+        title = "Review workspace state";
+        description = "No workspace is ready right now. Open Workspaces to review current state, then hand off any lifecycle or billing change to an owner or admin.";
+        primaryAction = '<button class="btn-primary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="workspaces">Review workspaces</button>';
+        secondaryAction = '<button class="btn-secondary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="access">Review access</button>';
+      } else {
+        title = "Review who can act";
+        description = showSelfHostedCommercial ? "No hosted workspace is attached yet. Review Access to see who can manage this hosted account, or use Billing only when the task is self-hosted." : "No hosted workspace is attached yet. Review Access to see who can create or manage the first workspace on this account.";
+        primaryAction = '<button class="btn-primary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="access">Review access</button>';
+        secondaryAction = showSelfHostedCommercial ? '<button class="btn-secondary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="billing">Open billing</button>' : "";
+      }
     } else if (accessAccount) {
       title = "Handle access in its own place";
       description = "If the next task is people or roles, keep it in Access instead of mixing it into routine workspace work.";
@@ -2302,7 +2323,7 @@
       attentionCount > 0 ? String(attentionCount) + " attention" : "Nothing urgent",
       suspendedCount > 0 ? String(suspendedCount) + " suspended" : "No suspended"
     ] : ["No hosted account", "Billing available", "Support only on escalation"];
-    return '<section class="account-content-panel account-content-panel-overview"><div class="account-stage-header account-stage-header-overview overview-stage-header"><div><div class="account-panel-kicker">Overview</div><h3>Account triage</h3><p>Only three questions matter here.</p>' + renderSectionContextChips(chips) + '</div></div><div class="overview-task-grid">' + renderOverviewAttentionCard(accounts, entries, showSelfHostedCommercial) + renderOverviewReadyCard(accounts, entries, context.accountAPIBasePath) + renderOverviewNextActionCard(accounts, entries, context.accountAPIBasePath) + "</div></section>";
+    return '<section class="account-content-panel account-content-panel-overview"><div class="account-stage-header account-stage-header-overview overview-stage-header"><div><div class="account-panel-kicker">Overview</div><h3>Account triage</h3><p>Only three questions matter here.</p>' + renderSectionContextChips(chips) + '</div></div><div class="overview-task-grid">' + renderOverviewAttentionCard(accounts, entries, showSelfHostedCommercial) + renderOverviewReadyCard(accounts, entries, context.accountAPIBasePath) + renderOverviewNextActionCard(accounts, entries, context.accountAPIBasePath, showSelfHostedCommercial) + "</div></section>";
   }
   function renderNoHostedWorkspacesSection() {
     return '<section class="account-content-panel account-content-panel-workspaces"><div class="account-stage-header"><div><div class="account-panel-kicker">Workspaces</div><h3>Workspaces</h3><p>No hosted workspace is attached to this account.</p>' + renderSectionContextChips(["None attached", "Billing instead"]) + '</div></div><div class="empty-state empty-state-spaced"><p>There is nothing to open or manage here yet.</p><p class="support-copy">Use Billing for self-hosted subscriptions, licenses, refunds, or privacy requests.</p></div></section>';

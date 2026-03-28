@@ -236,6 +236,10 @@ Core rules:
     describe account role as `Owner`, `Admin`, `Tech`, or `Read-only`, but it
     must not leak internal identifiers such as `read_only` or legacy aliases
     such as `member`.
+34. `Overview` must also keep `Next action` permission-honest for hosted
+    view-only accounts. When no workspace is ready, the primary route must
+    stay on reviewable `Workspaces` or `Access` surfaces before any blocked
+    hosted billing or owner/admin-only mutation path.
 
 ## Screen Model
 

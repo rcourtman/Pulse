@@ -451,6 +451,68 @@ describe('shell view', function() {
     expect(html).not.toContain('READ_ONLY');
   });
 
+  it('keeps next action permission-honest for hosted view-only accounts with no workspace ready', function() {
+    var html = renderAuthenticatedPortalHTML(
+      createContext({
+        bootstrap: createBootstrap({
+          accounts: [
+            {
+              id: 'acct_view_empty',
+              name: 'Empty Hosted Account',
+              kind: 'cloud',
+              kind_label: 'Cloud',
+              role: 'read_only',
+              can_manage: false,
+              has_billing: true,
+              workspaces: [],
+            },
+          ],
+        }),
+      })
+    );
+
+    expect(html).toContain('Review who can act');
+    expect(html).toContain('Review Access to see who can create or manage the first workspace on this account.');
+    expect(html).toContain('Review access');
+    expect(html).not.toContain('Choose the right task path');
+    expect(html).not.toContain('If this is an access change, go to Access. If it is a billing or license issue, go to Billing. Support is only for escalation.');
+  });
+
+  it('keeps next action on review surfaces for suspended hosted view-only accounts', function() {
+    var html = renderAuthenticatedPortalHTML(
+      createContext({
+        bootstrap: createBootstrap({
+          accounts: [
+            {
+              id: 'acct_view_suspended',
+              name: 'Suspended Hosted Account',
+              kind: 'cloud',
+              kind_label: 'Cloud',
+              role: 'read_only',
+              can_manage: false,
+              has_billing: true,
+              workspaces: [
+                {
+                  id: 'ws_view_suspended',
+                  display_name: 'Paused Workspace',
+                  state: 'suspended',
+                  healthy: true,
+                  health_status: 'healthy',
+                },
+              ],
+            },
+          ],
+        }),
+      })
+    );
+
+    expect(html).toContain('Review workspace state');
+    expect(html).toContain('Open Workspaces to review current state, then hand off any lifecycle or billing change to an owner or admin.');
+    expect(html).toContain('Review workspaces');
+    expect(html).toContain('Review access');
+    expect(html).not.toContain('Choose the right task path');
+  });
+
   it('renders self-hosted overview copy when no hosted accounts are attached', function() {
     var html = renderAuthenticatedPortalHTML(
       createContext({

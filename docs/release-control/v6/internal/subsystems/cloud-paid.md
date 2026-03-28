@@ -890,6 +890,10 @@ That same owned shell must also keep role labels on product vocabulary:
 customer-facing copy may say `Owner`, `Admin`, `Tech`, or `Read-only`, but it
 must not leak internal identifiers such as `read_only` or legacy aliases such
 as `member`.
+That same owned `Overview` surface must also keep `Next action`
+permission-honest for hosted view-only users: when no workspace is ready, the
+primary route must stay on reviewable `Workspaces` or `Access` surfaces before
+any blocked hosted billing or owner/admin-only mutation path.
 That same canonical shell/runtime boundary now also owns the bootstrap truth
 for when self-hosted commercial history is relevant. Hosted-only accounts must
 not render self-hosted license, refund, privacy, or support-escalation copy

@@ -713,13 +713,19 @@ function renderOverviewReadyCard(
   );
 }
 
-function renderOverviewNextActionCard(accounts: PortalAccountSummary[], entries: OverviewWorkspaceEntry[], accountAPIBasePath: string): string {
+function renderOverviewNextActionCard(
+  accounts: PortalAccountSummary[],
+  entries: OverviewWorkspaceEntry[],
+  accountAPIBasePath: string,
+  showSelfHostedCommercial: boolean
+): string {
   var attention = attentionOverviewEntries(entries);
   var ready = readyOverviewEntries(entries);
   var primaryAction = '';
   var secondaryAction = '';
   var title = '';
   var description = '';
+  var totalWorkspaces = countWorkspaces(accounts);
   var creatableAccount = accounts.find(function(account) {
     return account.kind === 'msp' && account.can_manage;
   }) || null;
@@ -729,6 +735,7 @@ function renderOverviewNextActionCard(accounts: PortalAccountSummary[], entries:
   var accessAccount = accounts.find(function(account) {
     return account.can_manage;
   }) || null;
+  var hostedViewOnly = accounts.length > 0 && !accessAccount;
 
   if (attention.length) {
     title = 'Review workspace health';
@@ -764,6 +771,22 @@ function renderOverviewNextActionCard(accounts: PortalAccountSummary[], entries:
     title = 'Open billing';
     description = 'No hosted workspace is attached, so the next obvious action is Billing for self-hosted subscriptions, licenses, refunds, or privacy requests.';
     primaryAction = '<button class="btn-primary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="billing">Open billing</button>';
+  } else if (hostedViewOnly) {
+    if (totalWorkspaces > 0) {
+      title = 'Review workspace state';
+      description = 'No workspace is ready right now. Open Workspaces to review current state, then hand off any lifecycle or billing change to an owner or admin.';
+      primaryAction = '<button class="btn-primary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="workspaces">Review workspaces</button>';
+      secondaryAction = '<button class="btn-secondary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="access">Review access</button>';
+    } else {
+      title = 'Review who can act';
+      description = showSelfHostedCommercial
+        ? 'No hosted workspace is attached yet. Review Access to see who can manage this hosted account, or use Billing only when the task is self-hosted.'
+        : 'No hosted workspace is attached yet. Review Access to see who can create or manage the first workspace on this account.';
+      primaryAction = '<button class="btn-primary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="access">Review access</button>';
+      secondaryAction = showSelfHostedCommercial
+        ? '<button class="btn-secondary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="billing">Open billing</button>'
+        : '';
+    }
   } else if (accessAccount) {
     title = 'Handle access in its own place';
     description = 'If the next task is people or roles, keep it in Access instead of mixing it into routine workspace work.';
@@ -820,7 +843,7 @@ function renderShellOverviewSection(context: ShellViewContext): string {
       '<div class="overview-task-grid">' +
         renderOverviewAttentionCard(accounts, entries, showSelfHostedCommercial) +
         renderOverviewReadyCard(accounts, entries, context.accountAPIBasePath) +
-        renderOverviewNextActionCard(accounts, entries, context.accountAPIBasePath) +
+        renderOverviewNextActionCard(accounts, entries, context.accountAPIBasePath, showSelfHostedCommercial) +
       '</div>' +
     '</section>'
   );

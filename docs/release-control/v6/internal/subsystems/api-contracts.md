@@ -329,6 +329,10 @@ That same typed runtime contract must also normalize account-role labels before
 render: customer-facing copy may say `Owner`, `Admin`, `Tech`, or `Read-only`,
 but it must not surface raw runtime identifiers such as `read_only` or legacy
 aliases such as `member`.
+That same runtime contract must also keep `Overview` next-action routing
+permission-honest for hosted view-only accounts: when no ready workspace
+exists, the primary route must stay on reviewable `Workspaces` or `Access`
+surfaces before any blocked hosted billing or owner/admin-only mutation path.
 plus a package-local `tsc --noEmit` gate, so future account-shell work should
 extend the typed source boundary instead of reviving opaque global runtime
 objects, document-wide render events, or untyped embedded asset edits.
