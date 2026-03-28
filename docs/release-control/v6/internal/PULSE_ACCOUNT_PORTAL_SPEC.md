@@ -159,7 +159,8 @@ Core rules:
     current account set, not a repeated per-account dashboard.
 17. When `Workspaces` or `Access` are unavailable, the tab must show an
     explicit unavailable state that points to the right live task instead of
-    rendering blank space.
+    rendering blank space. The shell navigation must stay honest too: it must
+    not badge or describe unavailable hosted tasks as though they are live.
 18. `Access` must stay action-first: roster, invite, role change, and remove
     access are the job; view-only users may review the roster but must never
     see live controls that imply they can mutate it.

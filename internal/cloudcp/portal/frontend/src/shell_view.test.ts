@@ -397,6 +397,11 @@ describe('shell view', function() {
     expect(html).toContain('Account tasks');
     expect(html).toContain('Self-hosted');
     expect(html).toContain('Account triage');
+    expect(html).toMatch(/Workspaces[\s\S]*Unavailable on this account\. Hosted workspaces are not attached here\./);
+    expect(html).toContain('Unavailable on this account. Hosted workspaces are not attached here.');
+    expect(html).toMatch(/Access[\s\S]*Unavailable on this account\. Hosted roster and role controls live only on hosted workspace accounts\./);
+    expect(html).toContain('Unavailable on this account. Hosted roster and role controls live only on hosted workspace accounts.');
+    expect(html).toMatch(/Support[\s\S]*Escalation only after the billing path is exhausted\./);
     expect(html).toContain('No hosted account');
     expect(html).toContain('Billing tools are ready');
     expect(html).toContain('There is nothing to open or manage here yet.');

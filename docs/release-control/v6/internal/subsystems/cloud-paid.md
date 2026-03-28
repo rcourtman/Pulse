@@ -827,7 +827,9 @@ standalone Relay portal. That shell now also owns two product rules
 explicitly: `Overview` is one shell-level triage surface across the current
 account set rather than a repeated per-account dashboard, and unavailable
 top-level `Workspaces` or `Access` tasks must render an explicit unavailable
-state instead of blank space. The same shell also owns action-first task
+state instead of blank space. The shell navigation must stay honest to that
+same account shape rather than labelling unavailable hosted tasks as though
+they are still live. The same shell also owns action-first task
 surfaces for `Access`, `Billing`, and `Support`: access mutations must be
 permission-honest and roster-led, billing must reduce to one obvious job at a
 time with hosted billing first when relevant, support must stay a failed-path
