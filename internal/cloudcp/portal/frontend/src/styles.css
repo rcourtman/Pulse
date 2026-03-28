@@ -293,9 +293,11 @@ header .logout-btn:hover,
   gap: 0;
   align-items: start;
   border: 1px solid var(--line);
-  border-radius: 14px;
-  background: linear-gradient(180deg, rgba(248, 251, 253, 0.96), rgba(242, 246, 250, 0.96));
-  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.055);
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(251, 253, 255, 0.98), rgba(242, 246, 250, 0.98)),
+    radial-gradient(circle at top right, rgba(15, 118, 110, 0.08), transparent 34%);
+  box-shadow: 0 18px 38px rgba(15, 23, 42, 0.065);
   overflow: hidden;
 }
 
@@ -345,8 +347,8 @@ header .logout-btn:hover,
 .portal-shell-nav-group {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 10px;
+  gap: 6px;
+  padding: 12px 10px;
 }
 
 .portal-shell-nav-link {
@@ -354,13 +356,13 @@ header .logout-btn:hover,
   flex-direction: column;
   gap: 4px;
   width: 100%;
-  padding: 11px 12px 10px;
+  padding: 12px 12px 11px;
   border: 1px solid transparent;
   border-radius: 12px;
   background: transparent;
   text-align: left;
   cursor: pointer;
-  transition: background 140ms ease, color 140ms ease, border-color 140ms ease;
+  transition: background 140ms ease, color 140ms ease, border-color 140ms ease, transform 140ms ease, box-shadow 140ms ease;
 }
 
 .portal-shell-nav-link + .portal-shell-nav-link {
@@ -368,14 +370,18 @@ header .logout-btn:hover,
 }
 
 .portal-shell-nav-link:hover {
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(143, 184, 191, 0.12);
+  transform: translateX(1px);
 }
 
 .portal-shell-nav-link.active {
-  background: linear-gradient(180deg, rgba(120, 182, 192, 0.18), rgba(120, 182, 192, 0.12));
-  border-color: rgba(120, 182, 192, 0.24);
-  box-shadow: inset 2px 0 0 #78b6c0;
+  background:
+    linear-gradient(180deg, rgba(120, 182, 192, 0.22), rgba(120, 182, 192, 0.12)),
+    rgba(255, 255, 255, 0.02);
+  border-color: rgba(120, 182, 192, 0.28);
+  box-shadow: inset 3px 0 0 #78b6c0, 0 8px 18px rgba(3, 8, 18, 0.14);
+  transform: translateX(2px);
 }
 
 .portal-shell-nav-row {
@@ -432,7 +438,7 @@ header .logout-btn:hover,
 
 .portal-shell-nav-copy {
   display: block;
-  font-size: 11px;
+  font-size: 10.5px;
   line-height: 1.4;
   color: var(--nav-copy);
 }
@@ -451,7 +457,9 @@ header .logout-btn:hover,
 .portal-shell-main {
   min-width: 0;
   padding: 0 0 24px;
-  background: linear-gradient(180deg, #f8fbfd 0%, #f4f7fa 100%);
+  background:
+    linear-gradient(180deg, #fafcfe 0%, #f3f7fa 44%, #f6f9fb 100%),
+    radial-gradient(circle at top right, rgba(15, 118, 110, 0.06), transparent 32%);
 }
 
 .portal-shell-main > .portal-content-panel {
@@ -463,9 +471,11 @@ header .logout-btn:hover,
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 16px;
   align-items: start;
-  padding: 12px 14px 12px;
+  padding: 16px 18px 15px;
   border-bottom: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.78);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(248, 251, 253, 0.88)),
+    radial-gradient(circle at top right, rgba(15, 118, 110, 0.08), transparent 32%);
   backdrop-filter: blur(8px);
 }
 
@@ -525,8 +535,13 @@ header .logout-btn:hover,
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 10px;
+  gap: 0;
   flex-wrap: wrap;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.74);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
 }
 
 .portal-account-context-stat {
@@ -535,10 +550,14 @@ header .logout-btn:hover,
   align-items: flex-start;
   gap: 3px;
   min-width: 0;
-  padding: 8px 10px;
-  border: 1px solid var(--line);
+  padding: 8px 12px;
+  border: none;
   border-radius: 10px;
-  background: #fbfcfd;
+  background: transparent;
+}
+
+.portal-account-context-stat + .portal-account-context-stat {
+  border-left: 1px solid var(--line);
 }
 
 .portal-account-context-stat span {
@@ -592,7 +611,7 @@ header .logout-btn:hover,
 }
 
 .portal-content-panel {
-  padding: 8px 10px 0;
+  padding: 12px 14px 0;
 }
 
 .portal-top-section,
@@ -1208,9 +1227,9 @@ header .logout-btn:hover,
 }
 
 .account-stage-header {
-  padding: 0 2px 8px;
-  border-bottom: none;
-  margin-bottom: 0;
+  padding: 0 2px 12px;
+  border-bottom: 1px solid rgba(193, 205, 218, 0.86);
+  margin-bottom: 12px;
 }
 
 .account-stage-header-row {
