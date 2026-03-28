@@ -801,16 +801,43 @@ function renderSupportSection(context: ShellViewContext): string {
       '<div class="account-panel-kicker">Support</div>' +
       '<h2>Support and escalation</h2>' +
       '<p>Use support when hosted access looks wrong, billing does not behave as expected, or you need help with commercial licensing and privacy actions.</p>' +
-      '<div class="portal-support-card-grid">' +
-        '<div class="portal-support-card">' +
-          '<h3>Account support</h3>' +
-          '<p>For access, tenant handoff, team, and billing issues, contact the hosted operations desk.</p>' +
-          '<a class="portal-support-link" href="mailto:' + escapeAttr(context.bootstrap.support_email || '') + '">' + escapeHTML(context.bootstrap.support_email || '') + '</a>' +
+      renderSectionContextChips(['Hosted issues', 'Commercial requests', context.bootstrap.support_email ? 'Email' : 'Support']) +
+      '<div class="portal-support-layout">' +
+        '<div class="portal-support-card-grid">' +
+          '<div class="portal-support-card">' +
+            '<div class="account-panel-kicker">Hosted account</div>' +
+            '<h3>Account support</h3>' +
+            '<p>Use this route when tenant handoff, workspace access, team control, or hosted billing looks wrong.</p>' +
+            '<div class="portal-support-points">' +
+              '<div class="portal-support-point"><strong>Route here for hosted issues</strong><span>Access, handoff, team, and hosted billing all belong on the hosted account path.</span></div>' +
+              '<div class="portal-support-point"><strong>Keep the account context intact</strong><span>Include the account, workspace, and action that failed so support can pick up the same operator path quickly.</span></div>' +
+            '</div>' +
+            '<div class="portal-support-actions">' +
+              '<a class="portal-support-link" href="mailto:' + escapeAttr(context.bootstrap.support_email || '') + '">' + escapeHTML(context.bootstrap.support_email || '') + '</a>' +
+            '</div>' +
+          '</div>' +
+          '<div class="portal-support-card">' +
+            '<div class="account-panel-kicker">Commercial</div>' +
+            '<h3>Commercial services</h3>' +
+            '<p>Self-hosted subscriptions, license recovery, refunds, and privacy requests all route through the account services desk first.</p>' +
+            '<div class="portal-support-points">' +
+              '<div class="portal-support-point"><strong>Start in Account services</strong><span>Use the billing, license, refund, or privacy desk before escalating a commercial issue.</span></div>' +
+              '<div class="portal-support-point"><strong>Escalate from the same desk</strong><span>Keep the request in one place instead of splitting it between billing and operator surfaces.</span></div>' +
+            '</div>' +
+            '<div class="portal-support-actions">' +
+              '<button type="button" class="btn-secondary" data-shell-action="activate-section" data-shell-section="services">Open account services</button>' +
+            '</div>' +
+          '</div>' +
         '</div>' +
-        '<div class="portal-support-card">' +
-          '<h3>Commercial services</h3>' +
-          '<p>Self-hosted subscriptions, license recovery, refunds, and privacy requests all route through the same account surface.</p>' +
-          '<button type="button" class="btn-secondary" data-shell-action="activate-section" data-shell-section="services">Open account services</button>' +
+        '<div class="portal-support-runbook">' +
+          '<div class="account-panel-kicker">Escalation desk</div>' +
+          '<h3>Route the issue cleanly</h3>' +
+          '<p>Keep hosted operations, commercial requests, and pure support escalation on their own paths so the next person does not have to reconstruct the account state.</p>' +
+          '<div class="portal-support-runbook-list">' +
+            '<div class="portal-support-runbook-step"><strong>1. Confirm the scope</strong><span>Decide whether the problem is hosted operations, commercial self-service, or direct support escalation.</span></div>' +
+            '<div class="portal-support-runbook-step"><strong>2. Keep hosted and commercial separate</strong><span>Workspace and team problems stay in their own desks. Billing, license, refund, and privacy work stay in Account services.</span></div>' +
+            '<div class="portal-support-runbook-step"><strong>3. Escalate with context</strong><span>Include the account, workspace, and exact failed action so the escalation path starts with the same facts you saw.</span></div>' +
+          '</div>' +
         '</div>' +
       '</div>' +
     '</section>'

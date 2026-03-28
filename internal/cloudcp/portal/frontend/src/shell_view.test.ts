@@ -211,6 +211,8 @@ describe('shell view', function() {
     expect(html).toContain('License desk');
     expect(html).toContain('Refund desk');
     expect(html).toContain('Privacy desk');
+    expect(html).toContain('Route the issue cleanly');
+    expect(html).toContain('Open account services');
   });
 
   it('renders self-hosted overview copy when no hosted accounts are attached', function() {
