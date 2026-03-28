@@ -170,12 +170,13 @@ describe('shell view', function() {
     expect(html).toContain('Open workspace');
     expect(html).toContain('data-action="select-workspace"');
     expect(html).toContain('Workspace management');
-    expect(html).toContain('Workspace desk');
-    expect(html).toContain('Pick a workspace from the fleet, or use the account actions here.');
-    expect(html).toContain('Account-wide actions stay here');
+    expect(html).toContain('Lifecycle desk');
+    expect(html).toContain('Choose a workspace for lifecycle review, or use the account desk for hosted billing, team, and create actions.');
+    expect(html).toContain('Account desk');
     expect(html).toContain('Before you act');
     expect(html).toContain('Inspect posture');
     expect(html).toContain('Stay deliberate');
+    expect(html).toContain('Lifecycle desk');
     expect(html.indexOf('id="add-ws-form-acct_1"')).toBeGreaterThan(html.indexOf('Workspace management'));
     expect(html.indexOf('id="add-ws-form-acct_1"')).toBeGreaterThan(html.indexOf('Keep account-wide actions separate'));
     expect(html).toContain('data-action="clear-workspace-selection"');

@@ -182,18 +182,14 @@
     var members = entry.teamQuery.data;
     stats.innerHTML = '<div class="team-stat-card"><span class="team-stat-label">Members</span><span class="team-stat-value">' + String(members.length) + '</span></div><div class="team-stat-card"><span class="team-stat-label">Owners</span><span class="team-stat-value">' + String(countMembersByRole(members, "owner")) + '</span></div><div class="team-stat-card"><span class="team-stat-label">Admins</span><span class="team-stat-value">' + String(countMembersByRole(members, "admin")) + '</span></div><div class="team-stat-card"><span class="team-stat-label">Operators</span><span class="team-stat-value">' + String(countMembersByRole(members, "tech") + countMembersByRole(members, "read_only")) + "</span></div>";
   }
-  function createTeamControlGroup(labelText) {
-    var group = document.createElement("div");
-    group.className = "team-control-group";
-    var label = document.createElement("span");
-    label.className = "team-control-label";
-    label.textContent = labelText;
-    group.appendChild(label);
-    return group;
+  function createTeamControlCell(className) {
+    var cell = document.createElement("div");
+    cell.className = "team-control-cell " + className;
+    return cell;
   }
   function renderTeamRoleControl(accountID, member, isOwner) {
     var currentRole = normalizedTeamRole(member.role);
-    var group = createTeamControlGroup("Role");
+    var group = createTeamControlCell("team-control-cell-role");
     if (currentRole === "owner" && !isOwner) {
       var locked = document.createElement("span");
       locked.className = "team-role-badge";
@@ -219,7 +215,12 @@
   }
   function renderTeamMemberAction(accountID, member, isOwner) {
     if (normalizedTeamRole(member.role) === "owner" && !isOwner) {
-      return null;
+      var locked = createTeamControlCell("team-control-cell-access");
+      var lockedText = document.createElement("span");
+      lockedText.className = "team-control-locked";
+      lockedText.textContent = "Locked";
+      locked.appendChild(lockedText);
+      return locked;
     }
     var btn = document.createElement("button");
     btn.type = "button";
@@ -229,8 +230,7 @@
     btn.setAttribute("data-account-id", accountID);
     btn.setAttribute("data-user-id", member.user_id);
     btn.setAttribute("data-member-email", member.email);
-    var group = createTeamControlGroup("Access");
-    group.classList.add("team-control-group-danger");
+    var group = createTeamControlCell("team-control-cell-access");
     group.appendChild(btn);
     return group;
   }
@@ -254,13 +254,9 @@
     caption.className = "team-member-caption";
     caption.textContent = roleCapabilityCopy(member.role);
     identity.appendChild(caption);
-    var controls = document.createElement("div");
-    controls.className = "team-member-controls";
-    controls.appendChild(renderTeamRoleControl(accountID, member, isOwner));
-    var action = renderTeamMemberAction(accountID, member, isOwner);
-    if (action) controls.appendChild(action);
     row.appendChild(identity);
-    row.appendChild(controls);
+    row.appendChild(renderTeamRoleControl(accountID, member, isOwner));
+    row.appendChild(renderTeamMemberAction(accountID, member, isOwner) || createTeamControlCell("team-control-cell-access"));
     return row;
   }
   function ensureRosterHead(container) {
@@ -268,7 +264,7 @@
     if (existing) return;
     var head = document.createElement("div");
     head.className = "team-roster-head";
-    head.innerHTML = "<span>Operator</span><span>Controls</span>";
+    head.innerHTML = "<span>Operator</span><span>Role</span><span>Access</span>";
     container.appendChild(head);
   }
   function renderAddWorkspaceSection(accountID, entry) {
@@ -1832,12 +1828,10 @@
     var openAction = "";
     if (state === "active") {
       openAction = '<form method="POST" action="' + escapeAttr(accountAPIBasePath + "/" + account.id + "/tenants/" + workspace.id + "/handoff") + '"><button type="submit" class="btn-primary">Open workspace</button></form>';
-    } else {
-      openAction = '<span class="workspace-state-label">' + escapeHTML(titleCase(state || "Unknown")) + "</span>";
     }
     var manageAction = "";
     if (account.can_manage && (state === "active" || state === "suspended" || state === "failed")) {
-      manageAction = '<button type="button" class="btn-secondary btn-workspace-manage" data-action="select-workspace" data-account-id="' + escapeAttr(account.id) + '" data-workspace-id="' + escapeAttr(workspace.id) + '">Open desk</button>';
+      manageAction = '<button type="button" class="btn-secondary btn-workspace-manage" data-action="select-workspace" data-account-id="' + escapeAttr(account.id) + '" data-workspace-id="' + escapeAttr(workspace.id) + '">Lifecycle desk</button>';
     }
     return '<article class="workspace-row workspace-row-health-' + escapeAttr(status) + " workspace-row-state-" + escapeAttr(state || "unknown") + '" data-workspace-row="' + escapeAttr(workspace.id) + '"><div class="workspace-row-primary"><div class="workspace-row-heading"><h4 class="workspace-name">' + escapeHTML(workspace.display_name) + '</h4><div class="workspace-meta">' + metaParts.join("") + '</div></div><div class="workspace-row-note">' + escapeHTML(workspaceRowNote(workspace)) + '</div></div><div class="workspace-row-status-cell workspace-row-status-cell-badge">' + healthBadgeHTML(workspace) + '</div><div class="workspace-row-status-cell workspace-row-status-cell-badge"><span class="badge badge-' + escapeHTML(state || "unknown") + '">' + escapeHTML(titleCase(state || "Unknown")) + '</span></div><div class="workspace-actions">' + openAction + manageAction + "</div></article>";
   }
@@ -1885,9 +1879,9 @@
         workspaceDeskActions += '<button type="button" class="btn-secondary btn-compact" data-action="open-billing" data-account-id="' + escapeAttr(account.id) + '">Manage billing</button>';
       }
       workspaceDeskActions += '<button type="button" class="btn-secondary btn-compact" data-action="toggle-team" data-account-id="' + escapeAttr(account.id) + '" data-shell-target="team">Manage team</button>';
-      workspaceManagement = '<section class="workspace-management-panel" id="workspace-management-' + escapeAttr(account.id) + '"><div class="workspace-management-header"><div><div class="account-panel-kicker">Workspace management</div><h3>Workspace desk</h3><p>Inspect one workspace at a time and keep account-level actions separate.</p></div><button type="button" class="btn-secondary btn-compact" id="workspace-management-close-' + escapeAttr(account.id) + '" data-action="clear-workspace-selection" data-account-id="' + escapeAttr(account.id) + '">Close desk</button></div><div class="workspace-management-empty" id="workspace-management-empty-' + escapeAttr(account.id) + '"><div class="workspace-management-empty-copy">Pick a workspace from the fleet, or use the account actions here.</div><div class="workspace-management-empty-grid"><div class="workspace-management-empty-card"><div class="account-panel-kicker">Account actions</div><h4>Account-wide actions stay here</h4><p>Create workspaces, manage billing, and change team access outside the row flow.</p><div class="workspace-management-empty-actions">' + workspaceDeskActions + "</div>" + addWorkspaceForm + '</div><div class="workspace-management-empty-card workspace-management-empty-card-muted"><div class="account-panel-kicker">Before you act</div><div class="workspace-management-empty-checklist"><div class="workspace-management-empty-check"><strong>Inspect posture</strong><span>Open the workspace first and confirm whether it is routine work, review work, or a parked suspended system.</span></div><div class="workspace-management-empty-check"><strong>Confirm lifecycle</strong><span>Check active, checking, failed, or suspended state before you take the next step.</span></div><div class="workspace-management-empty-check"><strong>Stay deliberate</strong><span>Use the desk for one workspace at a time instead of mixing fleet and account actions together.</span></div></div></div></div></div><div class="workspace-management-content" id="workspace-management-content-' + escapeAttr(account.id) + '" hidden><div class="workspace-management-meta" id="workspace-management-meta-' + escapeAttr(account.id) + '"></div><h4 id="workspace-management-title-' + escapeAttr(account.id) + '"></h4><p class="workspace-management-summary" id="workspace-management-summary-' + escapeAttr(account.id) + '"></p><div class="workspace-management-facts"><div class="workspace-management-fact"><span>Health</span><strong id="workspace-management-health-' + escapeAttr(account.id) + '"></strong></div><div class="workspace-management-fact"><span>Lifecycle</span><strong id="workspace-management-lifecycle-' + escapeAttr(account.id) + '"></strong></div><div class="workspace-management-fact"><span>Created</span><strong id="workspace-management-created-' + escapeAttr(account.id) + '"></strong></div></div><div class="workspace-management-guidance" id="workspace-management-guidance-' + escapeAttr(account.id) + '"></div><div class="workspace-management-actions"><button type="button" class="btn-danger" id="workspace-management-action-' + escapeAttr(account.id) + '" data-action="workspace-action" data-account-id="' + escapeAttr(account.id) + '">Manage workspace</button></div></div></section>';
+      workspaceManagement = '<section class="workspace-management-panel" id="workspace-management-' + escapeAttr(account.id) + '"><div class="workspace-management-header"><div><div class="account-panel-kicker">Workspace management</div><h3>Lifecycle desk</h3><p>Inspect one workspace at a time and keep account-level actions separate.</p></div><button type="button" class="btn-secondary btn-compact" id="workspace-management-close-' + escapeAttr(account.id) + '" data-action="clear-workspace-selection" data-account-id="' + escapeAttr(account.id) + '">Close desk</button></div><div class="workspace-management-empty" id="workspace-management-empty-' + escapeAttr(account.id) + '"><div class="workspace-management-empty-copy">Choose a workspace for lifecycle review, or use the account desk for hosted billing, team, and create actions.</div><div class="workspace-management-empty-grid"><div class="workspace-management-empty-card"><div class="account-panel-kicker">Account actions</div><h4>Account desk</h4><p>Create workspaces, manage billing, and change team access here instead of mixing them into row actions.</p><div class="workspace-management-empty-actions">' + workspaceDeskActions + "</div>" + addWorkspaceForm + '</div><div class="workspace-management-empty-card workspace-management-empty-card-muted"><div class="account-panel-kicker">Before you act</div><div class="workspace-management-empty-checklist"><div class="workspace-management-empty-check"><strong>Inspect posture</strong><span>Open the workspace first and confirm whether it is routine work, review work, or a parked suspended system.</span></div><div class="workspace-management-empty-check"><strong>Confirm lifecycle</strong><span>Check active, checking, failed, or suspended state before you take the next step.</span></div><div class="workspace-management-empty-check"><strong>Stay deliberate</strong><span>Use the desk for one workspace at a time instead of mixing fleet and account actions together.</span></div></div></div></div></div><div class="workspace-management-content" id="workspace-management-content-' + escapeAttr(account.id) + '" hidden><div class="workspace-management-meta" id="workspace-management-meta-' + escapeAttr(account.id) + '"></div><h4 id="workspace-management-title-' + escapeAttr(account.id) + '"></h4><p class="workspace-management-summary" id="workspace-management-summary-' + escapeAttr(account.id) + '"></p><div class="workspace-management-facts"><div class="workspace-management-fact"><span>Health</span><strong id="workspace-management-health-' + escapeAttr(account.id) + '"></strong></div><div class="workspace-management-fact"><span>Lifecycle</span><strong id="workspace-management-lifecycle-' + escapeAttr(account.id) + '"></strong></div><div class="workspace-management-fact"><span>Created</span><strong id="workspace-management-created-' + escapeAttr(account.id) + '"></strong></div></div><div class="workspace-management-guidance" id="workspace-management-guidance-' + escapeAttr(account.id) + '"></div><div class="workspace-management-actions"><button type="button" class="btn-danger" id="workspace-management-action-' + escapeAttr(account.id) + '" data-action="workspace-action" data-account-id="' + escapeAttr(account.id) + '">Manage workspace</button></div></div></section>';
     }
-    var workspaceHTML = workspaces.length ? '<div class="workspace-list-wrap"><div class="workspace-list-toolbar"><div class="workspace-list-summary">Open a workspace for operator work, or use the desk for account-level actions.</div><div class="workspace-list-stats"><span class="workspace-list-stat"><strong>' + String(workspaces.length) + '</strong> total</span><span class="workspace-list-stat"><strong>' + String(readyCount) + '</strong> ready</span><span class="workspace-list-stat"><strong>' + String(checkingCount) + '</strong> checking</span><span class="workspace-list-stat workspace-list-stat-attention"><strong>' + String(unhealthyCount) + '</strong> needs attention</span><span class="workspace-list-stat"><strong>' + String(suspendedCount) + '</strong> suspended</span></div></div><div class="workspace-list-head"><span>Workspace</span><span>Health</span><span>Lifecycle</span><span>Actions</span></div><div class="workspace-list">' + workspaces.map(function(workspace) {
+    var workspaceHTML = workspaces.length ? '<div class="workspace-list-wrap"><div class="workspace-list-toolbar"><div class="workspace-list-summary">Open a workspace for operator work. Use the lifecycle desk only when you are reviewing state or making account-level changes.</div><div class="workspace-list-stats"><span class="workspace-list-stat"><strong>' + String(workspaces.length) + '</strong> total</span><span class="workspace-list-stat"><strong>' + String(readyCount) + '</strong> ready</span><span class="workspace-list-stat"><strong>' + String(checkingCount) + '</strong> checking</span><span class="workspace-list-stat workspace-list-stat-attention"><strong>' + String(unhealthyCount) + '</strong> needs attention</span><span class="workspace-list-stat"><strong>' + String(suspendedCount) + '</strong> suspended</span></div></div><div class="workspace-list-head"><span>Workspace</span><span>Health</span><span>Lifecycle</span><span>Actions</span></div><div class="workspace-list">' + workspaces.map(function(workspace) {
       return renderWorkspaceCard(account, workspace, accountAPIBasePath);
     }).join("") + "</div></div>" : '<div class="empty-state"><p>No hosted workspaces yet. Create one to get started.</p></div>';
     return '<section class="account-content-panel account-content-panel-workspaces"><div class="account-stage-header"><div class="account-stage-header-row"><div><div class="account-panel-kicker">Workspace fleet</div><h3>Hosted fleet</h3><p>Open workspaces, review posture, and keep lifecycle actions explicit.</p></div><div class="account-stage-header-actions">' + workspaceHeaderActions + '</div></div></div><div class="workspace-operations-shell"><div class="workspace-operations-main">' + workspaceHTML + '</div><div class="workspace-operations-detail">' + workspaceManagement + "</div></div></section>";

@@ -219,19 +219,15 @@ function renderTeamStats(accountID: string, entry: PortalAccountUIEntry): void {
     '<div class="team-stat-card"><span class="team-stat-label">Operators</span><span class="team-stat-value">' + String(countMembersByRole(members, 'tech') + countMembersByRole(members, 'read_only')) + '</span></div>';
 }
 
-function createTeamControlGroup(labelText: string): HTMLDivElement {
-  var group = document.createElement('div');
-  group.className = 'team-control-group';
-  var label = document.createElement('span');
-  label.className = 'team-control-label';
-  label.textContent = labelText;
-  group.appendChild(label);
-  return group;
+function createTeamControlCell(className: string): HTMLDivElement {
+  var cell = document.createElement('div');
+  cell.className = 'team-control-cell ' + className;
+  return cell;
 }
 
 function renderTeamRoleControl(accountID: string, member: PortalTeamMember, isOwner: boolean): HTMLElement {
   var currentRole = normalizedTeamRole(member.role);
-  var group = createTeamControlGroup('Role');
+  var group = createTeamControlCell('team-control-cell-role');
   if (currentRole === 'owner' && !isOwner) {
     var locked = document.createElement('span');
     locked.className = 'team-role-badge';
@@ -259,7 +255,12 @@ function renderTeamRoleControl(accountID: string, member: PortalTeamMember, isOw
 
 function renderTeamMemberAction(accountID: string, member: PortalTeamMember, isOwner: boolean): HTMLElement | null {
   if (normalizedTeamRole(member.role) === 'owner' && !isOwner) {
-    return null;
+    var locked = createTeamControlCell('team-control-cell-access');
+    var lockedText = document.createElement('span');
+    lockedText.className = 'team-control-locked';
+    lockedText.textContent = 'Locked';
+    locked.appendChild(lockedText);
+    return locked;
   }
 
   var btn = document.createElement('button');
@@ -270,8 +271,7 @@ function renderTeamMemberAction(accountID: string, member: PortalTeamMember, isO
   btn.setAttribute('data-account-id', accountID);
   btn.setAttribute('data-user-id', member.user_id);
   btn.setAttribute('data-member-email', member.email);
-  var group = createTeamControlGroup('Access');
-  group.classList.add('team-control-group-danger');
+  var group = createTeamControlCell('team-control-cell-access');
   group.appendChild(btn);
   return group;
 }
@@ -303,14 +303,9 @@ function renderTeamMemberRow(accountID: string, member: PortalTeamMember, isOwne
   caption.textContent = roleCapabilityCopy(member.role);
   identity.appendChild(caption);
 
-  var controls = document.createElement('div');
-  controls.className = 'team-member-controls';
-  controls.appendChild(renderTeamRoleControl(accountID, member, isOwner));
-  var action = renderTeamMemberAction(accountID, member, isOwner);
-  if (action) controls.appendChild(action);
-
   row.appendChild(identity);
-  row.appendChild(controls);
+  row.appendChild(renderTeamRoleControl(accountID, member, isOwner));
+  row.appendChild(renderTeamMemberAction(accountID, member, isOwner) || createTeamControlCell('team-control-cell-access'));
   return row;
 }
 
@@ -321,7 +316,8 @@ function ensureRosterHead(container: HTMLElement): void {
   head.className = 'team-roster-head';
   head.innerHTML =
     '<span>Operator</span>' +
-    '<span>Controls</span>';
+    '<span>Role</span>' +
+    '<span>Access</span>';
   container.appendChild(head);
 }
 

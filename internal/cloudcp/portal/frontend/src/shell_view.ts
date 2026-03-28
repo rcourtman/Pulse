@@ -298,8 +298,6 @@ function renderWorkspaceCard(account: PortalAccountSummary, workspace: PortalWor
       '">' +
       '<button type="submit" class="btn-primary">Open workspace</button>' +
       '</form>';
-  } else {
-    openAction = '<span class="workspace-state-label">' + escapeHTML(titleCase(state || 'Unknown')) + '</span>';
   }
 
   var manageAction = '';
@@ -309,7 +307,7 @@ function renderWorkspaceCard(account: PortalAccountSummary, workspace: PortalWor
       escapeAttr(account.id) +
       '" data-workspace-id="' +
       escapeAttr(workspace.id) +
-      '">Open desk</button>';
+      '">Lifecycle desk</button>';
   }
 
   return (
@@ -532,7 +530,7 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
         '<div class="workspace-management-header">' +
           '<div>' +
             '<div class="account-panel-kicker">Workspace management</div>' +
-            '<h3>Workspace desk</h3>' +
+            '<h3>Lifecycle desk</h3>' +
             '<p>Inspect one workspace at a time and keep account-level actions separate.</p>' +
           '</div>' +
           '<button type="button" class="btn-secondary btn-compact" id="workspace-management-close-' +
@@ -544,12 +542,12 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
         '<div class="workspace-management-empty" id="workspace-management-empty-' +
         escapeAttr(account.id) +
         '">' +
-          '<div class="workspace-management-empty-copy">Pick a workspace from the fleet, or use the account actions here.</div>' +
+          '<div class="workspace-management-empty-copy">Choose a workspace for lifecycle review, or use the account desk for hosted billing, team, and create actions.</div>' +
           '<div class="workspace-management-empty-grid">' +
             '<div class="workspace-management-empty-card">' +
               '<div class="account-panel-kicker">Account actions</div>' +
-              '<h4>Account-wide actions stay here</h4>' +
-              '<p>Create workspaces, manage billing, and change team access outside the row flow.</p>' +
+              '<h4>Account desk</h4>' +
+              '<p>Create workspaces, manage billing, and change team access here instead of mixing them into row actions.</p>' +
               '<div class="workspace-management-empty-actions">' + workspaceDeskActions + '</div>' +
               addWorkspaceForm +
             '</div>' +
@@ -606,8 +604,8 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
 
   var workspaceHTML = workspaces.length
     ? '<div class="workspace-list-wrap">' +
-        '<div class="workspace-list-toolbar">' +
-          '<div class="workspace-list-summary">Open a workspace for operator work, or use the desk for account-level actions.</div>' +
+          '<div class="workspace-list-toolbar">' +
+            '<div class="workspace-list-summary">Open a workspace for operator work. Use the lifecycle desk only when you are reviewing state or making account-level changes.</div>' +
           '<div class="workspace-list-stats">' +
             '<span class="workspace-list-stat"><strong>' + String(workspaces.length) + '</strong> total</span>' +
             '<span class="workspace-list-stat"><strong>' + String(readyCount) + '</strong> ready</span>' +
