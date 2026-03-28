@@ -31,7 +31,8 @@ truth for live infrastructure data.
 7. `internal/unifiedresources/monitor_adapter.go`
 8. `internal/unifiedresources/views.go`
 9. `internal/monitoring/connected_infrastructure.go`
-10. `docker-entrypoint.sh`
+10. `internal/monitoring/reload.go`
+11. `docker-entrypoint.sh`
 
 ## Shared Boundaries
 
@@ -87,6 +88,10 @@ The registry proof map now treats provider discovery and metrics history as
 their own governed runtime surfaces instead of leaving them folded into a
 generic monitoring catch-all. Changes to provider wiring, discovery helpers,
 or metrics history retention must stay attached to those explicit proof routes.
+Install-wide telemetry counts are also monitoring-owned now. Any telemetry or
+reporting surface that claims installation totals must aggregate across the
+provisioned tenant set through the reloadable multi-tenant monitor boundary,
+not by reading `GetMonitor()`'s default-org compatibility shim.
 
 Consumer packages already use `ReadState`, but the monitoring core still has
 dual truth between unified resources and `StateSnapshot`. This is the main

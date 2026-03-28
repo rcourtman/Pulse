@@ -10,6 +10,8 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
@@ -204,5 +206,53 @@ func TestAlertLifecycleCanonicalChangesRemainWritable(t *testing.T) {
 	}
 	if len(timeline.Events) != 1 || timeline.Events[0].Type != memory.IncidentEventAlertFired {
 		t.Fatalf("expected projected alert-fired event, got %#v", timeline.Events)
+	}
+}
+
+func TestTelemetrySnapshotAggregationUsesProvisionedTenantSet(t *testing.T) {
+	baseDir := t.TempDir()
+	persistence := config.NewMultiTenantPersistence(baseDir)
+	for _, orgID := range []string{"default", "org-a"} {
+		if _, err := persistence.GetPersistence(orgID); err != nil {
+			t.Fatalf("GetPersistence(%s): %v", orgID, err)
+		}
+	}
+
+	rm, err := NewReloadableMonitor(&config.Config{DataPath: baseDir}, persistence, nil)
+	if err != nil {
+		t.Fatalf("NewReloadableMonitor: %v", err)
+	}
+
+	mtm := rm.GetMultiTenantMonitor()
+	if mtm == nil {
+		t.Fatal("expected multi-tenant monitor")
+	}
+	mtm.monitors["default"] = testTelemetryMonitor(
+		nil,
+		[]models.VM{{ID: "vm-default", VMID: 101, Name: "vm-default", Instance: "pve-default"}},
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		1,
+	)
+	mtm.monitors["org-a"] = testTelemetryMonitor(
+		nil,
+		[]models.VM{{ID: "vm-a", VMID: 201, Name: "vm-a", Instance: "pve-a"}},
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		2,
+	)
+
+	counts := rm.AggregateInstallSnapshotCounts()
+	if counts.VMs != 2 {
+		t.Fatalf("VMs = %d, want 2 across provisioned tenants", counts.VMs)
+	}
+	if counts.ActiveAlerts != 3 {
+		t.Fatalf("ActiveAlerts = %d, want 3 across provisioned tenants", counts.ActiveAlerts)
 	}
 }

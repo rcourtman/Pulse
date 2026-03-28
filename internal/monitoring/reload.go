@@ -3,6 +3,7 @@ package monitoring
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -10,6 +11,19 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	"github.com/rs/zerolog/log"
 )
+
+// InstallSnapshotCounts holds install-wide resource and alert counts aggregated
+// across tenant monitors.
+type InstallSnapshotCounts struct {
+	PVENodes           int
+	PBSInstances       int
+	PMGInstances       int
+	VMs                int
+	Containers         int
+	DockerHosts        int
+	KubernetesClusters int
+	ActiveAlerts       int
+}
 
 // ReloadableMonitor wraps a Monitor with reload capability
 type ReloadableMonitor struct {
@@ -174,6 +188,76 @@ func (rm *ReloadableMonitor) ReadSnapshot(orgID string) interface{} {
 		return nil
 	}
 	return monitor.ReadSnapshot()
+}
+
+// AggregateInstallSnapshotCounts returns install-wide resource and alert counts
+// across all provisioned organizations.
+func (rm *ReloadableMonitor) AggregateInstallSnapshotCounts() InstallSnapshotCounts {
+	rm.mu.RLock()
+	mtMonitor := rm.mtMonitor
+	persistence := rm.persistence
+	rm.mu.RUnlock()
+
+	if mtMonitor == nil {
+		return InstallSnapshotCounts{}
+	}
+
+	orgIDs := []string{"default"}
+	if persistence != nil {
+		orgs, err := persistence.ListOrganizations()
+		if err != nil {
+			log.Warn().Err(err).Msg("Telemetry snapshot falling back to default organization after tenant listing failed")
+		} else {
+			seen := make(map[string]struct{}, len(orgs))
+			orgIDs = orgIDs[:0]
+			for _, org := range orgs {
+				if org == nil {
+					continue
+				}
+				orgID := strings.TrimSpace(org.ID)
+				if orgID == "" {
+					continue
+				}
+				if _, exists := seen[orgID]; exists {
+					continue
+				}
+				seen[orgID] = struct{}{}
+				orgIDs = append(orgIDs, orgID)
+			}
+			if len(orgIDs) == 0 {
+				orgIDs = []string{"default"}
+			}
+		}
+	}
+
+	var counts InstallSnapshotCounts
+	for _, orgID := range orgIDs {
+		monitor, err := mtMonitor.GetMonitor(orgID)
+		if err != nil || monitor == nil {
+			log.Debug().Err(err).Str("org_id", orgID).Msg("Telemetry snapshot could not load tenant monitor")
+			continue
+		}
+		accumulateInstallSnapshotCounts(&counts, monitor)
+	}
+	return counts
+}
+
+func accumulateInstallSnapshotCounts(counts *InstallSnapshotCounts, monitor *Monitor) {
+	if counts == nil || monitor == nil {
+		return
+	}
+
+	readState := monitor.GetUnifiedReadStateOrSnapshot()
+	if readState != nil {
+		counts.PVENodes += len(readState.Nodes())
+		counts.PBSInstances += len(readState.PBSInstances())
+		counts.PMGInstances += len(readState.PMGInstances())
+		counts.VMs += len(readState.VMs())
+		counts.Containers += len(readState.Containers())
+		counts.DockerHosts += len(readState.DockerHosts())
+		counts.KubernetesClusters += len(readState.K8sClusters())
+	}
+	counts.ActiveAlerts += len(monitor.ActiveAlertsSnapshot())
 }
 
 // Stop stops the monitor

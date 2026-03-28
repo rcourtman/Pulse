@@ -451,20 +451,17 @@ func Run(ctx context.Context, version string) error {
 				LicenseTier: "free",
 			}
 
-			// Resource counts from monitor state.
-			if mon := reloadableMonitor.GetMonitor(); mon != nil {
-				readState := mon.GetUnifiedReadStateOrSnapshot()
-				if readState != nil {
-					snap.PVENodes = len(readState.Nodes())
-					snap.PBSInstances = len(readState.PBSInstances())
-					snap.PMGInstances = len(readState.PMGInstances())
-					snap.VMs = len(readState.VMs())
-					snap.Containers = len(readState.Containers())
-					snap.DockerHosts = len(readState.DockerHosts())
-					snap.KubernetesClusters = len(readState.K8sClusters())
-				}
-				snap.ActiveAlerts = len(mon.ActiveAlertsSnapshot())
-			}
+			// Resource counts come from the tenant-aware monitor aggregate, not the
+			// default-org compatibility shim.
+			counts := reloadableMonitor.AggregateInstallSnapshotCounts()
+			snap.PVENodes = counts.PVENodes
+			snap.PBSInstances = counts.PBSInstances
+			snap.PMGInstances = counts.PMGInstances
+			snap.VMs = counts.VMs
+			snap.Containers = counts.Containers
+			snap.DockerHosts = counts.DockerHosts
+			snap.KubernetesClusters = counts.KubernetesClusters
+			snap.ActiveAlerts = counts.ActiveAlerts
 
 			// Feature flags from persisted config (using pre-created persistence).
 			if aiCfg, err := telemetryPersistence.LoadAIConfig(); err == nil && aiCfg != nil {
