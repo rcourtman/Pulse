@@ -204,6 +204,10 @@ describe('shell view', function() {
     expect(html).toContain('Choose a desk to begin');
     expect(html).toContain('Desk brief');
     expect(html).toContain('Self-hosted only');
+    expect(html).toContain('Commercial routing');
+    expect(html).toContain('Keep this desk isolated');
+    expect(html).toContain('Hosted stays hosted');
+    expect(html).toContain('Open support desk');
     expect(html).toContain('Workflow map');
     expect(html).toContain('Before you start');
     expect(html).toContain('Escalate quickly');

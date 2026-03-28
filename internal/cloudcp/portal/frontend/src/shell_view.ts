@@ -986,6 +986,18 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
                   renderServiceActionRow('open-refund-service', 'Refunds', 'Refund requests', 'Refund desk', 'Request a self-serve refund when the purchase is still eligible.', 'refund-service-panel', 'refund-inline-email', ['Eligibility check', 'Revocation']) +
                   renderServiceActionRow('open-data-service', 'Privacy', 'Data and privacy', 'Privacy desk', 'Request export or deletion for commercial account data.', 'data-service-panel', 'data-export-email', ['Export', 'Deletion']) +
                 '</div>' +
+                '<div class="service-inline-support">' +
+                  '<div class="account-panel-kicker">Commercial routing</div>' +
+                  '<h4>Keep this desk isolated</h4>' +
+                  '<p>Hosted workspace work stays in Workspaces and Team. Use Support only when a self-hosted billing, license, refund, or privacy desk cannot complete the request cleanly.</p>' +
+                  '<div class="service-inline-support-points">' +
+                    '<div class="service-inline-support-point"><strong>Hosted stays hosted</strong><span>Tenant handoff, team access, and hosted billing do not belong in this commercial desk.</span></div>' +
+                    '<div class="service-inline-support-point"><strong>Escalate with context</strong><span>Bring the desk name and exact failed action if a commercial request needs support.</span></div>' +
+                  '</div>' +
+                  '<div class="service-inline-support-actions">' +
+                    '<button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="support">Open support desk</button>' +
+                  '</div>' +
+                '</div>' +
               '</aside>' +
               '<div class="service-shell-main">' +
                 '<div class="service-detail-shell">' +
