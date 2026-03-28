@@ -312,7 +312,7 @@ function renderWorkspaceCard(account: PortalAccountSummary, workspace: PortalWor
       escapeAttr(account.id) +
       '" data-workspace-id="' +
       escapeAttr(workspace.id) +
-      '">Manage</button>';
+      '">Open desk</button>';
   }
 
   return (
@@ -542,7 +542,7 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
           escapeAttr(account.id) +
           '" data-action="clear-workspace-selection" data-account-id="' +
           escapeAttr(account.id) +
-          '">Done</button>' +
+          '">Close desk</button>' +
         '</div>' +
         '<div class="workspace-management-empty" id="workspace-management-empty-' +
         escapeAttr(account.id) +
@@ -683,7 +683,7 @@ function renderAccountTeamSection(account: PortalAccountSummary): string {
             '<h3>Control who can operate this account</h3>' +
             '<p>Owners manage billing and access. Admins and techs keep the hosted fleet running day to day.</p>' +
           '</div>' +
-          '<button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="workspaces">Done</button>' +
+          '<button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="workspaces">Close team desk</button>' +
         '</div>' +
         '<div class="team-management-stats" id="team-stats-' +
         escapeAttr(account.id) +
