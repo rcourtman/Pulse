@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import pageControlsSource from '@/components/shared/PageControls.tsx?raw';
 import dashboardFilterSource from '@/components/Dashboard/DashboardFilter.tsx?raw';
+import recoveryPageSource from '@/components/Recovery/Recovery.tsx?raw';
 import recoveryHistorySectionSource from '@/components/Recovery/RecoveryHistorySection.tsx?raw';
 import recoveryProtectedInventorySectionSource from '@/components/Recovery/RecoveryProtectedInventorySection.tsx?raw';
 import infrastructurePageSurfaceSource from '@/features/infrastructure/InfrastructurePageSurface.tsx?raw';
+import subtabsSource from '@/components/shared/Subtabs.tsx?raw';
 
 const tsxSources = import.meta.glob('../../**/*.tsx', {
   query: '?raw',
@@ -98,5 +100,16 @@ describe('page controls guardrails', () => {
     expect(pageControlsSource).toContain('{...divProps}');
     expect(recoveryProtectedInventorySectionSource).not.toContain('<FilterHeader');
     expect(recoveryHistorySectionSource).not.toContain('<FilterHeader');
+  });
+
+  it('keeps embedded workspace tabs on the shared subtabs control variant', () => {
+    expect(subtabsSource).toContain("variant?: 'default' | 'control'");
+    expect(subtabsSource).toContain('subtabsControlShellClass');
+    expect(subtabsSource).toContain('subtabsControlListClass');
+    expect(recoveryPageSource).toContain('variant="control"');
+    expect(recoveryPageSource).not.toContain('listClass="gap-1 overflow-x-auto scrollbar-hide"');
+    expect(recoveryPageSource).not.toContain(
+      'tabClass="min-h-8 whitespace-nowrap rounded-md border border-transparent px-3 py-1.5 text-xs"',
+    );
   });
 });

@@ -221,6 +221,16 @@ describe('Recovery', () => {
     expect(
       within(inventoryControls).getByRole('tab', { name: /recovery events 0/i }),
     ).toBeInTheDocument();
+    expect(
+      within(inventoryControls)
+        .getByRole('tab', { name: /protected items 2/i })
+        .className,
+    ).not.toContain('border-b-2');
+    expect(
+      within(inventoryControls)
+        .getByRole('tab', { name: /protected items 2/i })
+        .className,
+    ).toContain('rounded-md');
     expect(screen.queryByText('Protected inventory')).not.toBeInTheDocument();
     expect(screen.queryByText('Needs Attention')).not.toBeInTheDocument();
     expect(screen.getAllByText(/Page 1 \/ 1/i).length).toBeGreaterThan(0);

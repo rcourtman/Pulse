@@ -44,6 +44,7 @@ import scrollToTopButtonSource from '@/components/shared/ScrollToTopButton.tsx?r
 import scrollToTopButtonModelSource from '@/components/shared/scrollToTopButtonModel.ts?raw';
 import statusBadgeSource from '@/components/shared/StatusBadge.tsx?raw';
 import statusBadgeModelSource from '@/components/shared/statusBadgeModel.ts?raw';
+import subtabsSource from '@/components/shared/Subtabs.tsx?raw';
 import toggleSource from '@/components/shared/Toggle.tsx?raw';
 import toggleModelSource from '@/components/shared/toggleModel.ts?raw';
 import searchTipsPopoverSource from '@/components/shared/SearchTipsPopover.tsx?raw';
@@ -225,6 +226,14 @@ describe('shared primitive guardrails', () => {
     expect(activeUseTrialNudgeModelSource).toContain('isActiveUseTrialNudgeEligible');
     expect(activeUseTrialNudgeModelSource).toContain('isActiveUseTrialNudgeOldEnough');
     expect(activeUseTrialNudgeModelSource).toContain('ACTIVE_USE_TRIAL_NUDGE_TITLE');
+  });
+
+  it('keeps shared subtabs variant-driven instead of page-local class stacks', () => {
+    expect(subtabsSource).toContain("variant?: 'default' | 'control'");
+    expect(subtabsSource).toContain('subtabsControlShellClass');
+    expect(subtabsSource).toContain('subtabsControlListClass');
+    expect(subtabsSource).toContain('subtabControlButtonClass');
+    expect(subtabsSource).toContain("local.variant === 'control'");
   });
 
   it('keeps trial banner on shell, runtime, and model owners', () => {

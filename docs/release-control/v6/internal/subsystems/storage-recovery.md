@@ -743,6 +743,10 @@ status strip above the control bar. Protected-items and recovery-events should
 surface their tabs, counts, and issue cues through the shared page-controls
 search row so the page hands from summary directly into one canonical control
 surface, the same way other Pulse monitoring pages do.
+That same workspace handoff should stay on shared primitive styling too. When
+recovery embeds its workspace tabs inside the page-controls row, the switcher
+should use the shared `Subtabs.tsx` control-surface variant instead of stacking
+recovery-only shell, list, and button classes on top of the primitive.
 That same workspace rule also means the protected-items versus recovery-events
 switcher should live inside the active workspace header strip, not in its own
 separate band above the cards, so the page hands off from summary directly into
