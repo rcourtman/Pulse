@@ -67,15 +67,17 @@ describe('RecoverySummary', () => {
     expect(screen.getByText('Healthy')).toBeInTheDocument();
     expect(screen.getByText('Failed')).toBeInTheDocument();
     expect(screen.getByText('<24h')).toBeInTheDocument();
-    expect(screen.getByText('<7d')).toBeInTheDocument();
+    expect(screen.getByText('>7d')).toBeInTheDocument();
     expect(screen.getByText('fresh in 24h')).toBeInTheDocument();
     expect(screen.getByText('stale items')).toBeInTheDocument();
-    expect(screen.getByText('Peak Throughput')).toBeInTheDocument();
     expect(screen.getByText('Latest Activity')).toBeInTheDocument();
     expect(screen.getByText('2 protected')).toBeInTheDocument();
     expect(screen.getAllByText(/Never Succeeded/i).length).toBeGreaterThan(0);
     expect(screen.getByText('need attention')).toBeInTheDocument();
     expect(screen.queryByText('protected items')).not.toBeInTheDocument();
+    expect(screen.queryByText('Running')).not.toBeInTheDocument();
+    expect(screen.queryByText('<7d')).not.toBeInTheDocument();
+    expect(screen.queryByText('Peak Throughput')).not.toBeInTheDocument();
   });
 
   it('uses the shared default summary density rather than a recovery-only compact override', () => {

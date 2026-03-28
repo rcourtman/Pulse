@@ -78,23 +78,11 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
       value: postureSummary().failed + postureSummary().neverSucceeded,
       valueClass: 'text-rose-600 dark:text-rose-400',
     },
-    {
-      label: 'Running',
-      value: postureSummary().running,
-      valueClass: 'text-blue-600 dark:text-blue-400',
-    },
   ]);
   const freshnessRows = createMemo(() => [
     {
       label: '<24h',
       value: freshnessBuckets().find((bucket) => bucket.key === 'under24h')?.count ?? 0,
-    },
-    {
-      label: '<7d',
-      value:
-        (freshnessBuckets().find((bucket) => bucket.key === 'under1h')?.count ?? 0) +
-        (freshnessBuckets().find((bucket) => bucket.key === 'under24h')?.count ?? 0) +
-        (freshnessBuckets().find((bucket) => bucket.key === 'under7d')?.count ?? 0),
     },
     {
       label: '>7d',
@@ -254,7 +242,6 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
                 rows={[
                   { label: 'Days Active', value: activity().activeDays },
                   { label: 'Peak Day', value: activity().busiestLabel ?? 'n/a' },
-                  { label: 'Peak Throughput', value: activity().busiestCount },
                   { label: 'Latest Activity', value: activity().latestLabel ?? 'n/a' },
                 ]}
               />
