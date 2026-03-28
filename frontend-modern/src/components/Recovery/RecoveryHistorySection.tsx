@@ -140,10 +140,6 @@ export const RecoveryHistorySection: Component<RecoveryHistorySectionProps> = (p
                 <Show when={props.workspaceControls}>
                   <div class="shrink-0">{props.workspaceControls}</div>
                 </Show>
-                <span class="font-medium text-base-content">
-                  {props.recoveryPoints.meta().total} event
-                  {props.recoveryPoints.meta().total === 1 ? '' : 's'}
-                </span>
                 <Show when={props.groupedByDay().length > 0}>
                   <span>
                     {props.groupedByDay().length} day group

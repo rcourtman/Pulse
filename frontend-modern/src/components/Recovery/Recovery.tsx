@@ -495,8 +495,14 @@ const Recovery: Component = () => {
                 listClass="flex flex-wrap items-center gap-1"
                 tabClass="min-h-6 px-2 py-1 text-xs"
                 tabs={[
-                  { value: 'inventory', label: 'Protected items' },
-                  { value: 'events', label: 'Recovery events' },
+                  {
+                    value: 'inventory',
+                    label: `Protected items ${filteredRollups().length}`,
+                  },
+                  {
+                    value: 'events',
+                    label: `Recovery events ${recoveryPoints.meta().total}`,
+                  },
                 ]}
               />
               <Show when={rollupId().trim().length > 0}>

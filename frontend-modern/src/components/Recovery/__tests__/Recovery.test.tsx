@@ -215,11 +215,16 @@ describe('Recovery', () => {
     expect(
       within(inventoryControls).getByRole('tab', { name: /recovery events/i }),
     ).toBeInTheDocument();
-    expect(within(inventoryControls).getByText(/^2 protected items$/i)).toBeInTheDocument();
+    expect(
+      within(inventoryControls).getByRole('tab', { name: /protected items 2/i }),
+    ).toBeInTheDocument();
+    expect(
+      within(inventoryControls).getByRole('tab', { name: /recovery events 0/i }),
+    ).toBeInTheDocument();
     expect(screen.queryByText('Protected inventory')).not.toBeInTheDocument();
     expect(screen.queryByText('Needs Attention')).not.toBeInTheDocument();
     expect(screen.getAllByText(/Page 1 \/ 1/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/^2 protected items$/i)).toHaveLength(1);
+    expect(screen.queryByText(/^2 protected items$/i)).not.toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /recovery events/i })).toHaveAttribute(
       'aria-selected',
       'false',
@@ -269,9 +274,14 @@ describe('Recovery', () => {
     expect(
       within(historyControls).getByRole('tab', { name: /recovery events/i }),
     ).toBeInTheDocument();
-    expect(within(historyControls).getByText(/1 event/i)).toBeInTheDocument();
+    expect(
+      within(historyControls).getByRole('tab', { name: /protected items 2/i }),
+    ).toBeInTheDocument();
+    expect(
+      within(historyControls).getByRole('tab', { name: /recovery events 1/i }),
+    ).toBeInTheDocument();
     expect(within(historyControls).getByText(/^1 day group$/i)).toBeInTheDocument();
-    expect(screen.getAllByText(/1 event/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/^1 event$/i)).toHaveLength(1);
     expect(screen.getAllByText(/^1 day group$/i)).toHaveLength(1);
     expect(within(historyTable).getByText('Item Type')).toBeInTheDocument();
     expect(within(historyTable).getByText('Item')).toBeInTheDocument();

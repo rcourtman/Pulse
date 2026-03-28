@@ -697,6 +697,10 @@ That same density rule should route through the shared summary primitives
 instead of feature-local spacing overrides. Recovery may select the shared
 compact `SummaryPanel` / `SummaryMetricCard` density mode, but it should not
 reintroduce one-off padding hacks inside `RecoverySummary.tsx`.
+That same scan-first rule applies to the workspace strip. Recovery should not
+show tab labels and then repeat the same workspace count as standalone text in
+the same strip; the workspace tabs should carry their own counts, while the
+remaining strip cues focus on issues or drill-in context.
 That same inventory surface should also follow the established monitoring-table
 scan pattern in its first column. Protected-item rows should lead with a clear
 status cue, the primary item name, and compact badge-backed item/platform

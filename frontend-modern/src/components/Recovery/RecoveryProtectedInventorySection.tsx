@@ -212,10 +212,6 @@ export const RecoveryProtectedInventorySection: Component<
                 <Show when={props.workspaceControls}>
                   <div class="shrink-0">{props.workspaceControls}</div>
                 </Show>
-                <span class="font-medium text-base-content">
-                  {sortedRollups().length}{' '}
-                  {sortedRollups().length === 1 ? 'protected item' : 'protected items'}
-                </span>
                 <Show when={props.rollupsSummary().stale > 0}>
                   <span class={`${getRecoveryRollupStatusPillClass('stale')} px-2 py-0.5`}>
                     {props.rollupsSummary().stale} stale
