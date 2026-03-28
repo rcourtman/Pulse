@@ -134,26 +134,7 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
     <Show when={hasRollups()}>
       <SummaryPanel
         headerLeft={
-          <>
-            <span class="font-medium text-base-content">
-              {summary().total} protected
-            </span>
-            <Show when={attentionCount() > 0}>
-              <span class="text-amber-600 dark:text-amber-400">
-                {attentionCount()} attention
-              </span>
-            </Show>
-            <Show when={attentionCount() === 0}>
-              <span class="text-emerald-600 dark:text-emerald-400">
-                {healthyCount()} healthy
-              </span>
-            </Show>
-            <Show when={postureSummary().running > 0}>
-              <span class="text-blue-600 dark:text-blue-400">
-                {postureSummary().running} running
-              </span>
-            </Show>
-          </>
+          <span class="font-medium text-base-content">{summary().total} protected</span>
         }
         timeRange={props.timeRange()}
         onTimeRangeChange={props.onTimeRangeChange ? handleTimeRangeChange : undefined}

@@ -661,6 +661,9 @@ That same summary rule also applies to the panel header: the top-line summary
 count strip should stay terse and avoid repeating the full posture telemetry
 already rendered inside the cards, so the header acts as orientation rather
 than a second miniature dashboard row.
+That same header rule should default to the protected-item total only rather
+than carrying separate attention, healthy, or running counters; those signals
+belong in the cards themselves.
 That same summary layout should also stay on the shared monitoring rhythm:
 recovery should use the standard four-card `SummaryPanel` grid without letting
 one oversized posture card dominate the full strip, so operators can scan
