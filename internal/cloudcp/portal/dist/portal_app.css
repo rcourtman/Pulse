@@ -2298,34 +2298,37 @@ header .logout-btn:hover,
 }
 .billing-shell {
   display: grid;
-  grid-template-columns: minmax(280px, 0.82fr) minmax(0, 1.18fr);
-  gap: 12px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
   align-items: start;
   padding: 12px;
   border: 1px solid var(--line);
   border-radius: 12px;
   background: #fff;
 }
+.billing-shell-job-open {
+  grid-template-columns: minmax(280px, 0.82fr) minmax(0, 1.18fr);
+}
 .billing-shell-main,
-.billing-shell-sidebar {
+.billing-shell-detail {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
-.billing-shell-sidebar-head,
+.billing-shell-main-head,
 .billing-inline-support {
   padding: 11px 12px;
   border: 1px solid var(--line);
   border-radius: 12px;
   background: var(--panel-strong);
 }
-.billing-shell-sidebar-head h3 {
+.billing-shell-main-head h3 {
   margin: 4px 0 0;
   font-size: 16px;
   line-height: 1.08;
   letter-spacing: -0.03em;
 }
-.billing-shell-sidebar-head p,
+.billing-shell-main-head p,
 .billing-inline-support p {
   margin: 5px 0 0;
   font-size: 11px;
@@ -2380,6 +2383,33 @@ header .logout-btn:hover,
   background: #fff;
   box-shadow: none;
   overflow: hidden;
+}
+.billing-task-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+.billing-task-header h3 {
+  margin: 4px 0 0;
+  font-size: 18px;
+  line-height: 1.04;
+  letter-spacing: -0.03em;
+}
+.billing-task-header p {
+  margin: 8px 0 0;
+  max-width: 560px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ink-soft);
+}
+.billing-task-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 14px;
 }
 .billing-brief-card {
   padding: 16px;
@@ -2552,12 +2582,6 @@ header .logout-btn:hover,
   background: #fff;
 }
 .billing-panel.visible.auth-panel {
-  display: block;
-}
-.billing-panel-empty {
-  display: none;
-}
-.billing-panel-empty.visible {
   display: block;
 }
 .billing-empty-points {
@@ -3036,7 +3060,8 @@ header .logout-btn:hover,
   .workspace-management-header,
   .access-management-header,
   .billing-header,
-  .billing-action-tags {
+  .billing-action-tags,
+  .billing-task-header {
     flex-direction: column;
     align-items: flex-start;
   }

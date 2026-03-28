@@ -91,6 +91,12 @@ export function installBillingRuntime(deps: BillingRuntimeDeps): void {
     });
   }
 
+  function clearBillingPanel() {
+    updateBillingState(function(billingState) {
+      billingState.openBillingPanelID = '';
+    });
+  }
+
   function renderFlow(flowID: PortalBillingFlowID) {
     var flow = verificationFlows[flowID];
     if (!flow) return;
@@ -432,6 +438,7 @@ export function installBillingRuntime(deps: BillingRuntimeDeps): void {
       store.setActiveShellSection(section);
     },
     toggleBillingPanel,
+    clearBillingPanel,
     focusElement,
     requestVerificationCode: function(flowID) {
       void requestVerificationCode(flowID);

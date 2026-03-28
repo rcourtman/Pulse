@@ -184,6 +184,11 @@ Core rules:
 25. `Access` must default to the hosted roster plus explicit job entry points,
     not a permanently open mutation rail. Invite, role-change, and remove
     controls should appear only when that exact access job is active.
+26. `Billing` must default to hosted billing plus explicit self-hosted job
+    entry points, not an always-open billing dashboard. Self-hosted billing,
+    license, refund, and privacy panels should appear only when that exact
+    billing job is active, and opening one on phone widths must reveal the
+    active panel in-frame.
 
 ## Screen Model
 
@@ -218,7 +223,8 @@ Each signed-in state should render:
 5. an explicit `Billing` area that leads with hosted billing when applicable
    and nests self-hosted commercial utilities only when relevant
    `Billing` should default to a single obvious task picker, not a broad
-   dashboard of overlapping billing explanations.
+   dashboard of overlapping billing explanations, and the active self-hosted
+   task panel should stay hidden until the user opens that exact billing job.
 6. a `Support` area that is present only as an escalation path
    `Support` should collapse to failed-path routing plus the minimum escalation
    packet needed for handoff.

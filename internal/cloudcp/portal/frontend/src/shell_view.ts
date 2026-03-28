@@ -1069,6 +1069,22 @@ function renderHostedBillingCards(accounts: PortalAccountSummary[]): string {
   }).join('');
 }
 
+function renderBillingTaskPanel(title: string, copy: string, panelID: string, bodyHTML: string): string {
+  return (
+    '<section class="billing-panel" id="' + escapeAttr(panelID) + '" hidden>' +
+      '<div class="billing-task-header">' +
+        '<div>' +
+          '<div class="account-panel-kicker">Billing task</div>' +
+          '<h3>' + escapeHTML(title) + '</h3>' +
+          '<p>' + escapeHTML(copy) + '</p>' +
+        '</div>' +
+        '<button type="button" class="btn-secondary btn-compact" data-account-billing-action="clear-billing-panel">Close panel</button>' +
+      '</div>' +
+      '<div class="billing-task-body">' + bodyHTML + '</div>' +
+    '</section>'
+  );
+}
+
 function renderSupportSection(context: ShellViewContext): string {
   return (
     '<section class="portal-support-panel">' +
@@ -1183,12 +1199,12 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
               '<div class="billing-note">' + billingNote + '</div>' +
             '</div>' +
             '<div class="billing-overview-grid">' + renderHostedBillingCards(accounts) + '</div>' +
-            '<div class="billing-shell">' +
-              '<aside class="billing-shell-sidebar">' +
-                '<div class="billing-shell-sidebar-head">' +
+            '<div class="billing-shell billing-shell-idle">' +
+              '<div class="billing-shell-main">' +
+                '<div class="billing-shell-main-head">' +
                   '<div class="account-panel-kicker">Self-hosted billing</div>' +
                   '<h3>Pick the self-hosted job</h3>' +
-                  '<p>Use one path at a time for self-hosted billing, licenses, refunds, or privacy.</p>' +
+                  '<p>Use self-hosted billing only for self-hosted purchases. Open one path at a time when hosted billing does not apply.</p>' +
                 '</div>' +
                 '<div class="billing-action-list">' +
                   renderBillingActionRow('open-manage-billing', 'Self-hosted billing', 'Manage subscriptions', 'Billing', 'Open Stripe for self-hosted plan, invoice, and payment changes.', 'manage-billing-panel', 'manage-inline-email', ['Plan changes', 'Invoices']) +
@@ -1209,59 +1225,38 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
                     '</a>' +
                   '</div>' +
                 '</div>' +
-              '</aside>' +
-              '<div class="billing-shell-main">' +
-                '<div class="billing-detail-shell">' +
-                  '<div class="billing-panel billing-panel-empty visible" id="billing-panel-empty">' +
-                    '<div class="account-panel-kicker">Next action</div>' +
-                    '<h3>Choose one billing path</h3>' +
-                    '<p>Open the job you need. Use hosted billing above when it applies, and use these self-hosted paths only for self-hosted purchases.</p>' +
-                    '<div class="billing-empty-shell">' +
-                      '<div class="billing-empty-primary">' +
-                        '<div class="billing-empty-section billing-empty-section-compact">' +
-                          '<div class="billing-empty-column-title">Available now</div>' +
-                          '<div class="billing-empty-flow-list">' +
-                            '<div class="billing-empty-flow"><strong>Billing</strong><span>Manage self-hosted plans, invoices, and payment methods.</span></div>' +
-                            '<div class="billing-empty-flow"><strong>Licenses</strong><span>Recover the latest active self-hosted license and invoice link.</span></div>' +
-                            '<div class="billing-empty-flow"><strong>Refunds</strong><span>Check eligibility before revoking active self-hosted access.</span></div>' +
-                            '<div class="billing-empty-flow"><strong>Privacy</strong><span>Request export or deletion for commercial account data.</span></div>' +
-                          '</div>' +
-                        '</div>' +
-                      '</div>' +
-                      '<div class="billing-empty-side">' +
-                        '<div class="billing-empty-section billing-empty-section-support">' +
-                          '<div class="billing-empty-column-title">Escalation</div>' +
-                          '<div class="billing-empty-checklist">' +
-                            '<div class="billing-empty-check"><strong>Use support last</strong><span>Only after hosted billing or one self-hosted path fails.</span></div>' +
-                            '<div class="billing-empty-check"><strong>Send the same request</strong><span>Include the billing path, account or commercial email, and the failed step.</span></div>' +
-                          '</div>' +
-                          '<div class="billing-empty-support">Need escalation for billing, refund, privacy, or license work? <a class="portal-support-link" href="mailto:' +
-                          escapeAttr(context.bootstrap.support_email || '') +
-                          '">' +
-                          escapeHTML(context.bootstrap.support_email || '') +
-                          '</a></div>' +
-                          '<div class="billing-empty-actions">' +
-                            '<button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="support">Open support</button>' +
-                          '</div>' +
-                        '</div>' +
-                      '</div>' +
-                    '</div>' +
-                  '</div>' +
-                  '<div class="billing-panel" id="manage-billing-panel"><div id="manage-billing-root"></div></div>' +
-                  '<div class="billing-panel" id="retrieve-billing-panel"><div id="retrieve-billing-root"></div></div>' +
-                  '<div class="billing-panel" id="refund-billing-panel"><div id="refund-billing-root"></div></div>' +
-                  '<div class="billing-panel" id="data-billing-panel">' +
-                    '<h3>Data and privacy</h3>' +
-                    '<p>Request export or deletion of the commercial data tied to an email address. Payment data held directly by Stripe still requires support handling.</p>' +
-                    '<div class="subsection"><div id="data-export-root"></div></div>' +
-                    '<div class="subsection"><div id="data-delete-root"></div></div>' +
-                    '<div class="helper-text">Payment-card data stays with Stripe. For Stripe deletion support, contact <a href="mailto:' +
-                    escapeAttr(context.bootstrap.support_email || '') +
-                    '">' +
-                    escapeHTML(context.bootstrap.support_email || '') +
-                    '</a>.</div>' +
-                  '</div>' +
-                '</div>' +
+              '</div>' +
+              '<div class="billing-shell-detail" id="billing-detail-shell" hidden>' +
+                renderBillingTaskPanel(
+                  'Manage subscriptions',
+                  'Open Stripe for self-hosted plan, invoice, and payment changes.',
+                  'manage-billing-panel',
+                  '<div id="manage-billing-root"></div>'
+                ) +
+                renderBillingTaskPanel(
+                  'Retrieve licenses',
+                  'Recover the latest active self-hosted license and invoice link.',
+                  'retrieve-billing-panel',
+                  '<div id="retrieve-billing-root"></div>'
+                ) +
+                renderBillingTaskPanel(
+                  'Refund requests',
+                  'Request a self-serve refund when the purchase is still eligible.',
+                  'refund-billing-panel',
+                  '<div id="refund-billing-root"></div>'
+                ) +
+                renderBillingTaskPanel(
+                  'Data and privacy',
+                  'Request export or deletion for commercial account data.',
+                  'data-billing-panel',
+                  '<div class="subsection"><div id="data-export-root"></div></div>' +
+                  '<div class="subsection"><div id="data-delete-root"></div></div>' +
+                  '<div class="helper-text">Payment-card data stays with Stripe. For Stripe deletion support, contact <a href="mailto:' +
+                  escapeAttr(context.bootstrap.support_email || '') +
+                  '">' +
+                  escapeHTML(context.bootstrap.support_email || '') +
+                  '</a>.</div>'
+                ) +
               '</div>' +
             '</div>' +
           '</section>' +

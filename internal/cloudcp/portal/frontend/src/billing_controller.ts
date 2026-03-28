@@ -3,6 +3,7 @@ import { asHTMLElement } from './billing_view';
 export interface BillingControllerDeps {
   setShellSection: (section: 'overview' | 'workspaces' | 'access' | 'billing' | 'support') => void;
   toggleBillingPanel: (panelID: string) => void;
+  clearBillingPanel: () => void;
   focusElement: (id: string) => void;
   requestVerificationCode: (flowID: 'manage' | 'retrieve' | 'export' | 'delete') => void;
   resendVerificationCode: (flowID: 'manage' | 'export' | 'delete', event?: Event) => void;
@@ -14,6 +15,21 @@ export interface BillingControllerDeps {
 }
 
 export function installBillingController(deps: BillingControllerDeps): void {
+  function revealBillingPanelWhenReady(panelID: string): void {
+    var reveal = function(): void {
+      var panel = document.getElementById(panelID) as HTMLElement | null;
+      if (!panel || panel.hidden || typeof panel.scrollIntoView !== 'function') return;
+      panel.scrollIntoView({ block: 'start', inline: 'nearest' });
+    };
+    if (typeof window.requestAnimationFrame === 'function') {
+      window.requestAnimationFrame(function() {
+        window.requestAnimationFrame(reveal);
+      });
+      return;
+    }
+    reveal();
+  }
+
   document.addEventListener('click', function(event) {
     var target = asHTMLElement(event.target)?.closest('[data-account-billing-action]');
     if (!target) return;
@@ -26,7 +42,19 @@ export function installBillingController(deps: BillingControllerDeps): void {
         event.preventDefault();
         deps.setShellSection('billing');
         deps.toggleBillingPanel(panelID);
+        var targetElement = target as HTMLElement;
+        if (typeof targetElement.blur === 'function') {
+          targetElement.blur();
+        }
         deps.focusElement(focusID);
+        if (panelID) {
+          revealBillingPanelWhenReady(panelID);
+        }
+        return;
+      case 'clear-billing-panel':
+        event.preventDefault();
+        deps.setShellSection('billing');
+        deps.clearBillingPanel();
         return;
       case 'manage-inline-request':
         event.preventDefault();

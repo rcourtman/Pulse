@@ -80,21 +80,29 @@ describe('services view', function() {
 
   it('toggles the visible service panel by id', function() {
     document.body.innerHTML =
-      '<div id="billing-panel-empty" class="billing-panel visible"></div>' +
+      '<div class="billing-shell billing-shell-idle">' +
+      '<div id="billing-detail-shell" hidden></div>' +
       '<article class="billing-action-row"><button data-account-billing-action="open-billing-panel" data-account-billing-panel="manage-billing-panel"></button></article>' +
       '<article class="billing-action-row"><button data-account-billing-action="open-billing-panel" data-account-billing-panel="retrieve-billing-panel"></button></article>' +
-      '<div id="manage-billing-panel" class="billing-panel"></div>' +
-      '<div id="retrieve-billing-panel" class="billing-panel"></div>' +
-      '<div id="refund-billing-panel" class="billing-panel"></div>' +
-      '<div id="data-billing-panel" class="billing-panel"></div>';
+      '<div id="manage-billing-panel" class="billing-panel" hidden></div>' +
+      '<div id="retrieve-billing-panel" class="billing-panel" hidden></div>' +
+      '<div id="refund-billing-panel" class="billing-panel" hidden></div>' +
+      '<div id="data-billing-panel" class="billing-panel" hidden></div>' +
+      '</div>';
 
     renderOpenBillingPanels('retrieve-billing-panel');
 
+    expect(document.querySelector('.billing-shell')?.classList.contains('billing-shell-job-open')).toBe(true);
+    expect((document.getElementById('billing-detail-shell') as HTMLElement).hidden).toBe(false);
     expect(document.getElementById('retrieve-billing-panel')?.classList.contains('visible')).toBe(true);
+    expect((document.getElementById('retrieve-billing-panel') as HTMLElement).hidden).toBe(false);
     expect(document.getElementById('manage-billing-panel')?.classList.contains('visible')).toBe(false);
     expect(document.getElementById('refund-billing-panel')?.classList.contains('visible')).toBe(false);
-    expect(document.getElementById('billing-panel-empty')?.classList.contains('visible')).toBe(false);
     expect(document.querySelectorAll('.billing-action-row.active')).toHaveLength(1);
+
+    renderOpenBillingPanels('');
+    expect(document.querySelector('.billing-shell')?.classList.contains('billing-shell-idle')).toBe(true);
+    expect((document.getElementById('billing-detail-shell') as HTMLElement).hidden).toBe(true);
   });
 
   it('renders retrieve panel result state with invoice and token metadata', function() {

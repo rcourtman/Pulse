@@ -9,9 +9,14 @@ describe('services controller', function() {
   });
 
   it('routes service actions to the matching handlers', function() {
+    vi.stubGlobal('requestAnimationFrame', function(callback: FrameRequestCallback) {
+      callback(0);
+      return 1;
+    });
     var deps = {
       setShellSection: vi.fn(),
       toggleBillingPanel: vi.fn(),
+      clearBillingPanel: vi.fn(),
       focusElement: vi.fn(),
       requestVerificationCode: vi.fn(),
       resendVerificationCode: vi.fn(),
@@ -26,16 +31,28 @@ describe('services controller', function() {
 
     document.body.innerHTML =
       '<button id="open" data-account-billing-action="open-billing-panel" data-account-billing-panel="retrieve-billing-panel" data-account-billing-focus="retrieve-inline-email">Open</button>' +
+      '<button id="close" data-account-billing-action="clear-billing-panel">Close</button>' +
       '<button id="request" data-account-billing-action="manage-inline-request">Request</button>' +
       '<button id="resend" data-account-billing-action="data-delete-resend">Resend</button>' +
       '<button id="confirm" data-account-billing-action="retrieve-inline-confirm">Confirm</button>' +
       '<button id="copy" data-account-billing-action="retrieve-inline-copy">Copy</button>' +
-      '<button id="refund" data-account-billing-action="refund-inline-submit">Refund</button>';
+      '<button id="refund" data-account-billing-action="refund-inline-submit">Refund</button>' +
+      '<div id="retrieve-billing-panel"></div>';
+
+    var scrollIntoView = vi.fn();
+    Object.defineProperty(document.getElementById('retrieve-billing-panel') as HTMLElement, 'scrollIntoView', {
+      value: scrollIntoView,
+      configurable: true,
+    });
 
     document.getElementById('open')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     expect(deps.setShellSection).toHaveBeenCalledWith('billing');
     expect(deps.toggleBillingPanel).toHaveBeenCalledWith('retrieve-billing-panel');
     expect(deps.focusElement).toHaveBeenCalledWith('retrieve-inline-email');
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: 'start', inline: 'nearest' });
+
+    document.getElementById('close')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(deps.clearBillingPanel).toHaveBeenCalled();
 
     document.getElementById('request')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     expect(deps.requestVerificationCode).toHaveBeenCalledWith('manage');
@@ -57,6 +74,7 @@ describe('services controller', function() {
     var deps = {
       setShellSection: vi.fn(),
       toggleBillingPanel: vi.fn(),
+      clearBillingPanel: vi.fn(),
       focusElement: vi.fn(),
       requestVerificationCode: vi.fn(),
       resendVerificationCode: vi.fn(),

@@ -1288,7 +1288,15 @@
   }
   function focusElement2(id) {
     var el = getElement3(id);
-    if (el) el.focus();
+    if (!el) return;
+    if (typeof el.focus === "function") {
+      try {
+        el.focus({ preventScroll: true });
+        return;
+      } catch (_) {
+        el.focus();
+      }
+    }
   }
   function setVisible(id, visible) {
     var el = getElement3(id);
@@ -1321,15 +1329,23 @@
     button.textContent = label;
   }
   function renderOpenBillingPanels(openBillingPanelID) {
+    var shell = document.querySelector(".billing-shell");
+    var detailShell = getElement3("billing-detail-shell");
     var panels = ["manage-billing-panel", "retrieve-billing-panel", "refund-billing-panel", "data-billing-panel"];
-    var emptyPanel = getElement3("billing-panel-empty");
-    if (emptyPanel) {
-      emptyPanel.classList.toggle("visible", !openBillingPanelID);
+    var hasOpenPanel = !!openBillingPanelID;
+    if (shell) {
+      shell.classList.toggle("billing-shell-job-open", hasOpenPanel);
+      shell.classList.toggle("billing-shell-idle", !hasOpenPanel);
+    }
+    if (detailShell) {
+      detailShell.hidden = !hasOpenPanel;
     }
     for (var i = 0; i < panels.length; i++) {
       var panel = getElement3(panels[i]);
       if (!panel) continue;
-      panel.classList.toggle("visible", panels[i] === openBillingPanelID);
+      var isActive = panels[i] === openBillingPanelID;
+      panel.hidden = !isActive;
+      panel.classList.toggle("visible", isActive);
     }
     var billingButtons = document.querySelectorAll('[data-account-billing-action="open-billing-panel"]');
     for (var j = 0; j < billingButtons.length; j += 1) {
@@ -1338,24 +1354,39 @@
       if (!row) continue;
       row.classList.toggle("active", button.getAttribute("data-account-billing-panel") === openBillingPanelID);
     }
+    if (hasOpenPanel && detailShell) {
+      var reveal = function() {
+        if (typeof detailShell.scrollIntoView !== "function") return;
+        var rect = detailShell.getBoundingClientRect();
+        if (rect.top >= 0 && rect.top <= window.innerHeight - 72 && rect.bottom > 0) {
+          return;
+        }
+        detailShell.scrollIntoView({ block: "start", inline: "nearest" });
+      };
+      if (typeof window.requestAnimationFrame === "function") {
+        window.requestAnimationFrame(reveal);
+        return;
+      }
+      reveal();
+    }
   }
   function renderRefundPanel(refundState, bootstrap) {
     var root = getElement3("refund-billing-root");
     if (!root) return;
     var refundSupportURL = (bootstrap.public_site_url || "") + "/refund.html?email=" + encodeURIComponent(refundState.emailValue || "");
-    root.innerHTML = '<h3>Refund requests</h3><p>Process an eligible self-serve refund for a self-hosted purchase. This revokes the associated license immediately.</p><div class="warning"><strong>Warning:</strong> completing a refund immediately revokes the affected license. This should only be used when the refund window and commercial contract allow it.</div><div class="form-group"><label for="refund-inline-email">Email address</label><input type="email" id="refund-inline-email" value="' + escapeAttribute(refundState.emailValue || "") + '" autocomplete="email" data-account-billing-input="refund-email"></div><div class="form-group"><label for="refund-inline-token">License key</label><input type="text" id="refund-inline-token" value="' + escapeAttribute(refundState.tokenValue || "") + '" placeholder="pulse_xxxxx" data-account-billing-input="refund-token"></div><div class="form-actions"><button class="btn-danger" type="button" id="refund-inline-submit" data-account-billing-action="refund-inline-submit">Process Refund</button></div><div class="helper-text">If this purchase is not eligible for self-serve refund, use the public support path instead: <a href="' + escapeAttribute(refundSupportURL) + '">open refund support page</a>.</div><div class="billing-status" id="refund-inline-status"></div>';
+    root.innerHTML = '<p>Process an eligible self-serve refund for a self-hosted purchase. This revokes the associated license immediately.</p><div class="warning"><strong>Warning:</strong> completing a refund immediately revokes the affected license. This should only be used when the refund window and commercial contract allow it.</div><div class="form-group"><label for="refund-inline-email">Email address</label><input type="email" id="refund-inline-email" value="' + escapeAttribute(refundState.emailValue || "") + '" autocomplete="email" data-account-billing-input="refund-email"></div><div class="form-group"><label for="refund-inline-token">License key</label><input type="text" id="refund-inline-token" value="' + escapeAttribute(refundState.tokenValue || "") + '" placeholder="pulse_xxxxx" data-account-billing-input="refund-token"></div><div class="form-actions"><button class="btn-danger" type="button" id="refund-inline-submit" data-account-billing-action="refund-inline-submit">Process Refund</button></div><div class="helper-text">If this purchase is not eligible for self-serve refund, use the public support path instead: <a href="' + escapeAttribute(refundSupportURL) + '">open refund support page</a>.</div><div class="billing-status" id="refund-inline-status"></div>';
   }
   function renderManagePanel(flowState) {
     var root = getElement3("manage-billing-root");
     if (!root) return;
-    root.innerHTML = '<h3>Manage subscriptions</h3><p>Request a verification code for the commercial email, then open the Stripe customer portal for billing changes, invoices, and subscription actions.</p><div id="manage-inline-step1"><div class="form-group"><label for="manage-inline-email">Email address</label><input type="email" id="manage-inline-email" value="' + escapeAttribute(flowState.emailValue || "") + '" autocomplete="email" data-account-billing-input="manage-email"></div><div class="form-actions"><button class="btn-primary" type="button" id="manage-inline-request" data-account-billing-action="manage-inline-request">Send Verification Code</button></div></div><div id="manage-inline-step2"' + (flowState.step2Visible ? "" : " hidden") + '><div class="form-group"><label for="manage-inline-code">Verification code</label><input type="text" id="manage-inline-code" value="' + escapeAttribute(flowState.codeValue || "") + '" inputmode="numeric" pattern="[0-9]{6}" placeholder="123456" data-account-billing-input="manage-code"></div><div class="form-actions"><button class="btn-primary" type="button" id="manage-inline-confirm" data-account-billing-action="manage-inline-confirm">Open Customer Portal</button></div><div class="helper-text">Need a new code? <a href="#" id="manage-inline-resend" data-account-billing-action="manage-inline-resend">Send again</a></div></div><div class="billing-status" id="manage-inline-status"></div>';
+    root.innerHTML = '<p>Request a verification code for the commercial email, then open the Stripe customer portal for billing changes, invoices, and subscription actions.</p><div id="manage-inline-step1"><div class="form-group"><label for="manage-inline-email">Email address</label><input type="email" id="manage-inline-email" value="' + escapeAttribute(flowState.emailValue || "") + '" autocomplete="email" data-account-billing-input="manage-email"></div><div class="form-actions"><button class="btn-primary" type="button" id="manage-inline-request" data-account-billing-action="manage-inline-request">Send Verification Code</button></div></div><div id="manage-inline-step2"' + (flowState.step2Visible ? "" : " hidden") + '><div class="form-group"><label for="manage-inline-code">Verification code</label><input type="text" id="manage-inline-code" value="' + escapeAttribute(flowState.codeValue || "") + '" inputmode="numeric" pattern="[0-9]{6}" placeholder="123456" data-account-billing-input="manage-code"></div><div class="form-actions"><button class="btn-primary" type="button" id="manage-inline-confirm" data-account-billing-action="manage-inline-confirm">Open Customer Portal</button></div><div class="helper-text">Need a new code? <a href="#" id="manage-inline-resend" data-account-billing-action="manage-inline-resend">Send again</a></div></div><div class="billing-status" id="manage-inline-status"></div>';
   }
   function renderRetrievePanel(flowState) {
     var root = getElement3("retrieve-billing-root");
     if (!root) return;
     var result = flowState.result;
     var invoiceURL = result && result.invoice_url ? result.invoice_url : "#";
-    root.innerHTML = '<h3>Retrieve licenses</h3><p>Request a verification code for the commercial email, then reveal the current active self-hosted license without leaving Pulse Account.</p><div id="retrieve-inline-step1"><div class="form-group"><label for="retrieve-inline-email">Email address</label><input type="email" id="retrieve-inline-email" value="' + escapeAttribute(flowState.emailValue || "") + '" autocomplete="email" data-account-billing-input="retrieve-email"></div><div class="form-actions"><button class="btn-primary" type="button" id="retrieve-inline-request" data-account-billing-action="retrieve-inline-request">Send Verification Code</button></div></div><div id="retrieve-inline-step2"' + (flowState.step2Visible ? "" : " hidden") + '><div class="form-group"><label for="retrieve-inline-code">Verification code</label><input type="text" id="retrieve-inline-code" value="' + escapeAttribute(flowState.codeValue || "") + '" inputmode="numeric" pattern="[0-9]{6}" placeholder="123456" data-account-billing-input="retrieve-code"></div><div class="form-actions"><button class="btn-primary" type="button" id="retrieve-inline-confirm" data-account-billing-action="retrieve-inline-confirm">Show License</button><button class="btn-secondary" type="button" id="retrieve-inline-copy" data-account-billing-action="retrieve-inline-copy"' + (result ? "" : " hidden") + '>Copy License Key</button><a class="btn-secondary" id="retrieve-inline-invoice" href="' + escapeAttribute(invoiceURL) + '" target="_blank" rel="noopener"' + (result && result.invoice_url ? "" : " hidden") + '>View Invoice</a></div><div class="helper-text">Use the latest active self-hosted license for this commercial email.</div></div><div class="billing-status" id="retrieve-inline-status"></div><div id="retrieve-inline-result" class="billing-result"' + (result ? "" : " hidden") + '><label for="retrieve-inline-token">License key</label><textarea id="retrieve-inline-token" readonly>' + escapeText(result ? result.token : "") + '</textarea><div class="result-grid"><div><div class="result-meta-label">Plan</div><div class="result-meta-value" id="retrieve-inline-tier">' + escapeText(result ? result.tier : "") + '</div></div><div><div class="result-meta-label">Issued</div><div class="result-meta-value" id="retrieve-inline-issued">' + escapeText(result ? new Date(result.issued_at).toLocaleString() : "") + '</div></div><div><div class="result-meta-label">Expires</div><div class="result-meta-value" id="retrieve-inline-expires">' + escapeText(result ? result.expires_at ? new Date(result.expires_at).toLocaleString() : "Does not expire" : "") + '</div></div><div><div class="result-meta-label">Purchase Email</div><div class="result-meta-value" id="retrieve-inline-email-value">' + escapeText(result ? result.email : "") + "</div></div></div></div>";
+    root.innerHTML = '<p>Request a verification code for the commercial email, then reveal the current active self-hosted license without leaving Pulse Account.</p><div id="retrieve-inline-step1"><div class="form-group"><label for="retrieve-inline-email">Email address</label><input type="email" id="retrieve-inline-email" value="' + escapeAttribute(flowState.emailValue || "") + '" autocomplete="email" data-account-billing-input="retrieve-email"></div><div class="form-actions"><button class="btn-primary" type="button" id="retrieve-inline-request" data-account-billing-action="retrieve-inline-request">Send Verification Code</button></div></div><div id="retrieve-inline-step2"' + (flowState.step2Visible ? "" : " hidden") + '><div class="form-group"><label for="retrieve-inline-code">Verification code</label><input type="text" id="retrieve-inline-code" value="' + escapeAttribute(flowState.codeValue || "") + '" inputmode="numeric" pattern="[0-9]{6}" placeholder="123456" data-account-billing-input="retrieve-code"></div><div class="form-actions"><button class="btn-primary" type="button" id="retrieve-inline-confirm" data-account-billing-action="retrieve-inline-confirm">Show License</button><button class="btn-secondary" type="button" id="retrieve-inline-copy" data-account-billing-action="retrieve-inline-copy"' + (result ? "" : " hidden") + '>Copy License Key</button><a class="btn-secondary" id="retrieve-inline-invoice" href="' + escapeAttribute(invoiceURL) + '" target="_blank" rel="noopener"' + (result && result.invoice_url ? "" : " hidden") + '>View Invoice</a></div><div class="helper-text">Use the latest active self-hosted license for this commercial email.</div></div><div class="billing-status" id="retrieve-inline-status"></div><div id="retrieve-inline-result" class="billing-result"' + (result ? "" : " hidden") + '><label for="retrieve-inline-token">License key</label><textarea id="retrieve-inline-token" readonly>' + escapeText(result ? result.token : "") + '</textarea><div class="result-grid"><div><div class="result-meta-label">Plan</div><div class="result-meta-value" id="retrieve-inline-tier">' + escapeText(result ? result.tier : "") + '</div></div><div><div class="result-meta-label">Issued</div><div class="result-meta-value" id="retrieve-inline-issued">' + escapeText(result ? new Date(result.issued_at).toLocaleString() : "") + '</div></div><div><div class="result-meta-label">Expires</div><div class="result-meta-value" id="retrieve-inline-expires">' + escapeText(result ? result.expires_at ? new Date(result.expires_at).toLocaleString() : "Does not expire" : "") + '</div></div><div><div class="result-meta-label">Purchase Email</div><div class="result-meta-value" id="retrieve-inline-email-value">' + escapeText(result ? result.email : "") + "</div></div></div></div>";
   }
   function renderExportPanel(flowState) {
     var root = getElement3("data-export-root");
@@ -1374,6 +1405,20 @@
 
   // src/billing_controller.ts
   function installBillingController(deps) {
+    function revealBillingPanelWhenReady(panelID) {
+      var reveal = function() {
+        var panel = document.getElementById(panelID);
+        if (!panel || panel.hidden || typeof panel.scrollIntoView !== "function") return;
+        panel.scrollIntoView({ block: "start", inline: "nearest" });
+      };
+      if (typeof window.requestAnimationFrame === "function") {
+        window.requestAnimationFrame(function() {
+          window.requestAnimationFrame(reveal);
+        });
+        return;
+      }
+      reveal();
+    }
     document.addEventListener("click", function(event) {
       var target = asHTMLElement3(event.target)?.closest("[data-account-billing-action]");
       if (!target) return;
@@ -1385,7 +1430,18 @@
           event.preventDefault();
           deps.setShellSection("billing");
           deps.toggleBillingPanel(panelID);
+          if (typeof target.blur === "function") {
+            target.blur();
+          }
           deps.focusElement(focusID);
+          if (panelID) {
+            revealBillingPanelWhenReady(panelID);
+          }
+          return;
+        case "clear-billing-panel":
+          event.preventDefault();
+          deps.setShellSection("billing");
+          deps.clearBillingPanel();
           return;
         case "manage-inline-request":
           event.preventDefault();
@@ -1475,6 +1531,11 @@
     function toggleBillingPanel(panelID) {
       updateBillingState(function(billingState) {
         toggleBillingPanelState(billingState, panelID);
+      });
+    }
+    function clearBillingPanel() {
+      updateBillingState(function(billingState) {
+        billingState.openBillingPanelID = "";
       });
     }
     function renderFlow(flowID) {
@@ -1807,6 +1868,7 @@
         store.setActiveShellSection(section);
       },
       toggleBillingPanel,
+      clearBillingPanel,
       focusElement: focusElement2,
       requestVerificationCode: function(flowID) {
         void requestVerificationCode(flowID);
@@ -2190,6 +2252,9 @@
       return '<article class="billing-task-card"><div class="account-panel-kicker">Hosted billing</div><h3>' + escapeHTML(account.name) + '</h3><p>Invoices, payment methods, and hosted subscription changes for this account live here.</p><div class="billing-task-points"><div class="billing-task-point"><strong>Use when hosted billing is the job</strong><span>Keep workspace lifecycle work in Workspaces and access changes in Access.</span></div><div class="billing-task-point"><strong>Stay account-specific</strong><span>Open billing from the exact hosted account you want to change.</span></div></div><div class="billing-task-actions">' + actionHTML + "</div></article>";
     }).join("");
   }
+  function renderBillingTaskPanel(title, copy, panelID, bodyHTML) {
+    return '<section class="billing-panel" id="' + escapeAttr(panelID) + '" hidden><div class="billing-task-header"><div><div class="account-panel-kicker">Billing task</div><h3>' + escapeHTML(title) + "</h3><p>" + escapeHTML(copy) + '</p></div><button type="button" class="btn-secondary btn-compact" data-account-billing-action="clear-billing-panel">Close panel</button></div><div class="billing-task-body">' + bodyHTML + "</div></section>";
+  }
   function renderSupportSection(context) {
     return '<section class="portal-support-panel"><div class="account-panel-kicker">Support</div><h2>Escalation only</h2><p>Use support only when the Workspaces, Access, or Billing path has already stopped you.</p>' + renderSectionContextChips(["Escalation only", "Bring context", context.bootstrap.support_email ? "Email" : "Support"]) + '<div class="portal-support-layout"><div class="portal-support-route-grid"><div class="portal-support-route-card"><div class="account-panel-kicker">Hosted path</div><h3>Workspace or access path failed</h3><p>Go back to the hosted task first. Escalate only when the same workspace or access path still cannot finish the job.</p><div class="portal-support-points"><div class="portal-support-point"><strong>Start from the same task</strong><span>Use Workspaces for lifecycle issues and Access for roster issues before you escalate.</span></div><div class="portal-support-point"><strong>Keep the hosted context intact</strong><span>Include the account, workspace, and failed action so support inherits the same request.</span></div></div><div class="portal-support-actions"><button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="workspaces">Open workspaces</button><button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="access">Open access</button><a class="portal-support-link" href="mailto:' + escapeAttr(context.bootstrap.support_email || "") + '">' + escapeHTML(context.bootstrap.support_email || "") + '</a></div></div><div class="portal-support-route-card"><div class="account-panel-kicker">Billing path</div><h3>Billing path failed</h3><p>Use this route only after hosted billing or one self-hosted billing job has failed to complete cleanly.</p><div class="portal-support-points"><div class="portal-support-point"><strong>Name the billing job</strong><span>Say whether the failed path was hosted billing, licenses, refunds, or privacy.</span></div><div class="portal-support-point"><strong>Keep the request intact</strong><span>Bring the same account or billing email and the failed action instead of reopening the story.</span></div></div><div class="portal-support-actions"><button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="billing">Open billing</button><a class="portal-support-link" href="mailto:' + escapeAttr(context.bootstrap.support_email || "") + '">' + escapeHTML(context.bootstrap.support_email || "") + '</a></div></div></div><div class="portal-support-runbook"><div class="account-panel-kicker">What to send</div><h3>Keep the escalation short</h3><p>Support should inherit the same request, not reconstruct it from scratch.</p><div class="portal-support-runbook-list"><div class="portal-support-runbook-step"><strong>1. Failed path</strong><span>Say whether the blocked path was Workspaces, Access, hosted billing, licenses, refunds, or privacy.</span></div><div class="portal-support-runbook-step"><strong>2. Account or email</strong><span>Include the hosted account and workspace when relevant, or the commercial billing email for self-hosted work.</span></div><div class="portal-support-runbook-step"><strong>3. Failed action</strong><span>Name the exact button, form, or billing step that failed and what happened next.</span></div></div></div></div></section>';
   }
@@ -2213,7 +2278,27 @@
     return '<div class="portal-shell" data-shell-section="' + activeSection + '"><div class="portal-shell-layout">' + renderShellNavigation(accounts, context.bootstrap.support_email || "", activeSection) + '<div class="portal-shell-main">' + (accounts.length === 1 ? renderAccountContextStrip(accounts[0]) : "") + '<section class="portal-content-panel portal-content-panel-overview">' + renderShellOverviewSection(context) + '<div id="accounts-root">' + hostedContent + '</div></section><section class="portal-content-panel portal-content-panel-billing billing-section" id="billing-section"><div class="billing-header"><div><div class="account-panel-kicker">Billing</div><h2>Billing</h2>' + renderSectionContextChips([
       hostedBillingCount > 0 ? "Hosted billing" : "No hosted billing",
       "Self-hosted tools"
-    ]) + '</div><div class="billing-note">' + billingNote + '</div></div><div class="billing-overview-grid">' + renderHostedBillingCards(accounts) + '</div><div class="billing-shell"><aside class="billing-shell-sidebar"><div class="billing-shell-sidebar-head"><div class="account-panel-kicker">Self-hosted billing</div><h3>Pick the self-hosted job</h3><p>Use one path at a time for self-hosted billing, licenses, refunds, or privacy.</p></div><div class="billing-action-list">' + renderBillingActionRow("open-manage-billing", "Self-hosted billing", "Manage subscriptions", "Billing", "Open Stripe for self-hosted plan, invoice, and payment changes.", "manage-billing-panel", "manage-inline-email", ["Plan changes", "Invoices"]) + renderBillingActionRow("open-retrieve-billing", "Licenses", "Retrieve licenses", "Licenses", "Recover the latest active self-hosted license and invoice link.", "retrieve-billing-panel", "retrieve-inline-email", ["Latest active license", "Invoice lookup"]) + renderBillingActionRow("open-refund-billing", "Refunds", "Refund requests", "Refunds", "Request a self-serve refund when the purchase is still eligible.", "refund-billing-panel", "refund-inline-email", ["Eligibility check", "Revocation"]) + renderBillingActionRow("open-data-billing", "Privacy", "Data and privacy", "Privacy", "Request export or deletion for commercial account data.", "data-billing-panel", "data-export-email", ["Export", "Deletion"]) + '</div><div class="billing-inline-support"><div class="account-panel-kicker">Escalation only</div><h4>Use Support only after Billing fails</h4><p>Escalate with the same hosted billing action or self-hosted path and the exact failed step.</p><div class="billing-inline-support-actions"><button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="support">Open support</button><a class="portal-support-link" href="mailto:' + escapeAttr(context.bootstrap.support_email || "") + '">' + escapeHTML(context.bootstrap.support_email || "") + '</a></div></div></aside><div class="billing-shell-main"><div class="billing-detail-shell"><div class="billing-panel billing-panel-empty visible" id="billing-panel-empty"><div class="account-panel-kicker">Next action</div><h3>Choose one billing path</h3><p>Open the job you need. Use hosted billing above when it applies, and use these self-hosted paths only for self-hosted purchases.</p><div class="billing-empty-shell"><div class="billing-empty-primary"><div class="billing-empty-section billing-empty-section-compact"><div class="billing-empty-column-title">Available now</div><div class="billing-empty-flow-list"><div class="billing-empty-flow"><strong>Billing</strong><span>Manage self-hosted plans, invoices, and payment methods.</span></div><div class="billing-empty-flow"><strong>Licenses</strong><span>Recover the latest active self-hosted license and invoice link.</span></div><div class="billing-empty-flow"><strong>Refunds</strong><span>Check eligibility before revoking active self-hosted access.</span></div><div class="billing-empty-flow"><strong>Privacy</strong><span>Request export or deletion for commercial account data.</span></div></div></div></div><div class="billing-empty-side"><div class="billing-empty-section billing-empty-section-support"><div class="billing-empty-column-title">Escalation</div><div class="billing-empty-checklist"><div class="billing-empty-check"><strong>Use support last</strong><span>Only after hosted billing or one self-hosted path fails.</span></div><div class="billing-empty-check"><strong>Send the same request</strong><span>Include the billing path, account or commercial email, and the failed step.</span></div></div><div class="billing-empty-support">Need escalation for billing, refund, privacy, or license work? <a class="portal-support-link" href="mailto:' + escapeAttr(context.bootstrap.support_email || "") + '">' + escapeHTML(context.bootstrap.support_email || "") + '</a></div><div class="billing-empty-actions"><button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="support">Open support</button></div></div></div></div></div><div class="billing-panel" id="manage-billing-panel"><div id="manage-billing-root"></div></div><div class="billing-panel" id="retrieve-billing-panel"><div id="retrieve-billing-root"></div></div><div class="billing-panel" id="refund-billing-panel"><div id="refund-billing-root"></div></div><div class="billing-panel" id="data-billing-panel"><h3>Data and privacy</h3><p>Request export or deletion of the commercial data tied to an email address. Payment data held directly by Stripe still requires support handling.</p><div class="subsection"><div id="data-export-root"></div></div><div class="subsection"><div id="data-delete-root"></div></div><div class="helper-text">Payment-card data stays with Stripe. For Stripe deletion support, contact <a href="mailto:' + escapeAttr(context.bootstrap.support_email || "") + '">' + escapeHTML(context.bootstrap.support_email || "") + '</a>.</div></div></div></div></div></section><section class="portal-content-panel portal-content-panel-support">' + renderSupportSection(context) + "</section></div></div></div>";
+    ]) + '</div><div class="billing-note">' + billingNote + '</div></div><div class="billing-overview-grid">' + renderHostedBillingCards(accounts) + '</div><div class="billing-shell billing-shell-idle"><div class="billing-shell-main"><div class="billing-shell-main-head"><div class="account-panel-kicker">Self-hosted billing</div><h3>Pick the self-hosted job</h3><p>Use self-hosted billing only for self-hosted purchases. Open one path at a time when hosted billing does not apply.</p></div><div class="billing-action-list">' + renderBillingActionRow("open-manage-billing", "Self-hosted billing", "Manage subscriptions", "Billing", "Open Stripe for self-hosted plan, invoice, and payment changes.", "manage-billing-panel", "manage-inline-email", ["Plan changes", "Invoices"]) + renderBillingActionRow("open-retrieve-billing", "Licenses", "Retrieve licenses", "Licenses", "Recover the latest active self-hosted license and invoice link.", "retrieve-billing-panel", "retrieve-inline-email", ["Latest active license", "Invoice lookup"]) + renderBillingActionRow("open-refund-billing", "Refunds", "Refund requests", "Refunds", "Request a self-serve refund when the purchase is still eligible.", "refund-billing-panel", "refund-inline-email", ["Eligibility check", "Revocation"]) + renderBillingActionRow("open-data-billing", "Privacy", "Data and privacy", "Privacy", "Request export or deletion for commercial account data.", "data-billing-panel", "data-export-email", ["Export", "Deletion"]) + '</div><div class="billing-inline-support"><div class="account-panel-kicker">Escalation only</div><h4>Use Support only after Billing fails</h4><p>Escalate with the same hosted billing action or self-hosted path and the exact failed step.</p><div class="billing-inline-support-actions"><button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="support">Open support</button><a class="portal-support-link" href="mailto:' + escapeAttr(context.bootstrap.support_email || "") + '">' + escapeHTML(context.bootstrap.support_email || "") + '</a></div></div></div><div class="billing-shell-detail" id="billing-detail-shell" hidden>' + renderBillingTaskPanel(
+      "Manage subscriptions",
+      "Open Stripe for self-hosted plan, invoice, and payment changes.",
+      "manage-billing-panel",
+      '<div id="manage-billing-root"></div>'
+    ) + renderBillingTaskPanel(
+      "Retrieve licenses",
+      "Recover the latest active self-hosted license and invoice link.",
+      "retrieve-billing-panel",
+      '<div id="retrieve-billing-root"></div>'
+    ) + renderBillingTaskPanel(
+      "Refund requests",
+      "Request a self-serve refund when the purchase is still eligible.",
+      "refund-billing-panel",
+      '<div id="refund-billing-root"></div>'
+    ) + renderBillingTaskPanel(
+      "Data and privacy",
+      "Request export or deletion for commercial account data.",
+      "data-billing-panel",
+      '<div class="subsection"><div id="data-export-root"></div></div><div class="subsection"><div id="data-delete-root"></div></div><div class="helper-text">Payment-card data stays with Stripe. For Stripe deletion support, contact <a href="mailto:' + escapeAttr(context.bootstrap.support_email || "") + '">' + escapeHTML(context.bootstrap.support_email || "") + "</a>.</div>"
+    ) + '</div></div></section><section class="portal-content-panel portal-content-panel-support">' + renderSupportSection(context) + "</section></div></div></div>";
   }
   function renderSignedOutPortalHTML(context) {
     var statusHTML = "";

@@ -30,7 +30,15 @@ export function readValue(id: string): string {
 
 export function focusElement(id: string): void {
   var el = getElement<FormValueElement>(id);
-  if (el) el.focus();
+  if (!el) return;
+  if (typeof el.focus === 'function') {
+    try {
+      el.focus({ preventScroll: true });
+      return;
+    } catch (_) {
+      el.focus();
+    }
+  }
 }
 
 export function setVisible(id: string, visible: boolean): void {
@@ -68,15 +76,23 @@ export function renderButton(id: string | undefined, disabled: boolean, label: s
 }
 
 export function renderOpenBillingPanels(openBillingPanelID: string): void {
+  var shell = document.querySelector('.billing-shell') as HTMLElement | null;
+  var detailShell = getElement('billing-detail-shell');
   var panels = ['manage-billing-panel', 'retrieve-billing-panel', 'refund-billing-panel', 'data-billing-panel'];
-  var emptyPanel = getElement('billing-panel-empty');
-  if (emptyPanel) {
-    emptyPanel.classList.toggle('visible', !openBillingPanelID);
+  var hasOpenPanel = !!openBillingPanelID;
+  if (shell) {
+    shell.classList.toggle('billing-shell-job-open', hasOpenPanel);
+    shell.classList.toggle('billing-shell-idle', !hasOpenPanel);
+  }
+  if (detailShell) {
+    detailShell.hidden = !hasOpenPanel;
   }
   for (var i = 0; i < panels.length; i++) {
     var panel = getElement(panels[i]);
     if (!panel) continue;
-    panel.classList.toggle('visible', panels[i] === openBillingPanelID);
+    var isActive = panels[i] === openBillingPanelID;
+    panel.hidden = !isActive;
+    panel.classList.toggle('visible', isActive);
   }
   var billingButtons = document.querySelectorAll<HTMLElement>('[data-account-billing-action="open-billing-panel"]');
   for (var j = 0; j < billingButtons.length; j += 1) {
@@ -85,6 +101,21 @@ export function renderOpenBillingPanels(openBillingPanelID: string): void {
     if (!row) continue;
     row.classList.toggle('active', button.getAttribute('data-account-billing-panel') === openBillingPanelID);
   }
+  if (hasOpenPanel && detailShell) {
+    var reveal = function(): void {
+      if (typeof detailShell.scrollIntoView !== 'function') return;
+      var rect = detailShell.getBoundingClientRect();
+      if (rect.top >= 0 && rect.top <= window.innerHeight - 72 && rect.bottom > 0) {
+        return;
+      }
+      detailShell.scrollIntoView({ block: 'start', inline: 'nearest' });
+    };
+    if (typeof window.requestAnimationFrame === 'function') {
+      window.requestAnimationFrame(reveal);
+      return;
+    }
+    reveal();
+  }
 }
 
 export function renderRefundPanel(refundState: RefundState, bootstrap: PortalBootstrapData): void {
@@ -92,7 +123,6 @@ export function renderRefundPanel(refundState: RefundState, bootstrap: PortalBoo
   if (!root) return;
   var refundSupportURL = (bootstrap.public_site_url || '') + '/refund.html?email=' + encodeURIComponent(refundState.emailValue || '');
   root.innerHTML = '' +
-    '<h3>Refund requests</h3>' +
     '<p>Process an eligible self-serve refund for a self-hosted purchase. This revokes the associated license immediately.</p>' +
     '<div class="warning"><strong>Warning:</strong> completing a refund immediately revokes the affected license. This should only be used when the refund window and commercial contract allow it.</div>' +
     '<div class="form-group">' +
@@ -114,7 +144,6 @@ export function renderManagePanel(flowState: VerificationFlowState): void {
   var root = getElement('manage-billing-root');
   if (!root) return;
   root.innerHTML = '' +
-    '<h3>Manage subscriptions</h3>' +
     '<p>Request a verification code for the commercial email, then open the Stripe customer portal for billing changes, invoices, and subscription actions.</p>' +
     '<div id="manage-inline-step1">' +
       '<div class="form-group">' +
@@ -151,7 +180,6 @@ export function renderRetrievePanel(flowState: VerificationFlowState): void {
   } | null;
   var invoiceURL = result && result.invoice_url ? result.invoice_url : '#';
   root.innerHTML = '' +
-    '<h3>Retrieve licenses</h3>' +
     '<p>Request a verification code for the commercial email, then reveal the current active self-hosted license without leaving Pulse Account.</p>' +
     '<div id="retrieve-inline-step1">' +
       '<div class="form-group">' +

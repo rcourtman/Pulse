@@ -283,7 +283,10 @@ create-workspace job is active, rather than rendering a default idle
 lifecycle explainer before the user has picked a task. The same task-first
 runtime rule now also applies to `Access`: the hosted roster is the default
 surface, and invite, role-change, or remove controls only appear when the
-matching access job is active.
+matching access job is active. `Billing` follows the same shared runtime
+contract: hosted billing remains the default primary path, self-hosted billing
+jobs open one panel at a time, and the runtime must reveal the active billing
+panel on phone-width layouts instead of leaving it offscreen.
 plus a package-local `tsc --noEmit` gate, so future account-shell work should
 extend the typed source boundary instead of reviving opaque global runtime
 objects, document-wide render events, or untyped embedded asset edits.

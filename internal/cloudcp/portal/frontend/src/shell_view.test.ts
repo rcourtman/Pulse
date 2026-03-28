@@ -206,8 +206,6 @@ describe('shell view', function() {
     expect(html).toContain('data-action="workspace-action"');
     expect(html).toContain('billing-action-row');
     expect(html).toContain('billing-action-button');
-    expect(html).toContain('id="billing-panel-empty"');
-    expect(html).toContain('Choose one billing path');
     expect(html).toContain('Hosted billing');
     expect(html).toContain('Self-hosted tools');
     expect(html).toContain('Self-hosted billing');
@@ -215,10 +213,10 @@ describe('shell view', function() {
     expect(html).toContain('Use Support only after Billing fails');
     expect(html).toContain('Use hosted billing first when the request belongs to a hosted workspace account.');
     expect(html).toContain('Open support');
-    expect(html).toContain('Available now');
-    expect(html).toContain('Use support last');
-    expect(html).toContain('Send the same request');
+    expect(html).toContain('Use self-hosted billing only for self-hosted purchases.');
     expect(html).toContain('id="open-retrieve-billing"');
+    expect(html).toContain('id="billing-detail-shell" hidden');
+    expect(html).toContain('data-account-billing-action="clear-billing-panel"');
     expect(html).toContain('id="data-billing-panel"');
     expect(html).toContain('>Billing<');
     expect(html).toContain('>Licenses<');
