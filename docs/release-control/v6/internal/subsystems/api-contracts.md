@@ -333,6 +333,10 @@ That same runtime contract must also keep `Overview` next-action routing
 permission-honest for hosted view-only accounts: when no ready workspace
 exists, the primary route must stay on reviewable `Workspaces` or `Access`
 surfaces before any blocked hosted billing or owner/admin-only mutation path.
+That same shared request/runtime boundary must also preserve task-specific
+failure copy on transport errors: portal job surfaces may not leak raw strings
+such as `Network error.`, and must instead surface the owned fallback for the
+exact action that failed.
 plus a package-local `tsc --noEmit` gate, so future account-shell work should
 extend the typed source boundary instead of reviving opaque global runtime
 objects, document-wide render events, or untyped embedded asset edits.

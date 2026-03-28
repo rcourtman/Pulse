@@ -71,6 +71,22 @@ describe('portal api', function() {
     });
   });
 
+  it('keeps task-specific fallback copy on network failures', async function() {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('socket hang up')));
+
+    var api = createPortalAPI({
+      getBootstrap: function() {
+        return bootstrap;
+      },
+    });
+
+    await expect(api.listMembers('acct_1')).rejects.toMatchObject({
+      name: 'PortalAPIError',
+      status: 0,
+      message: 'Failed to load access roster.',
+    });
+  });
+
   it('sends portal-targeted magic-link requests and returns the server message', async function() {
     var fetchMock = vi.fn().mockResolvedValue({
       ok: true,

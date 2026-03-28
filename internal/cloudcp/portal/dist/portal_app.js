@@ -606,7 +606,7 @@
           response = await fetch(input);
         }
       } catch {
-        throw new PortalAPIError("Network error.", 0, null);
+        throw new PortalAPIError(fallbackMessage, 0, null);
       }
       var payload = await readPayload(response);
       if (!response.ok) {

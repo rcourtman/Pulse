@@ -894,6 +894,10 @@ That same owned `Overview` surface must also keep `Next action`
 permission-honest for hosted view-only users: when no workspace is ready, the
 primary route must stay on reviewable `Workspaces` or `Access` surfaces before
 any blocked hosted billing or owner/admin-only mutation path.
+That same owned task surface must also keep failure copy on the user job
+instead of leaking raw transport wording: `Access`, `Workspaces`, and
+`Billing` failures must render the task-specific action that could not
+complete, not generic copy such as `Network error.`.
 That same canonical shell/runtime boundary now also owns the bootstrap truth
 for when self-hosted commercial history is relevant. Hosted-only accounts must
 not render self-hosted license, refund, privacy, or support-escalation copy

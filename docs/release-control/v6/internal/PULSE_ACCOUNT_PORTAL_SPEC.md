@@ -240,6 +240,10 @@ Core rules:
     view-only accounts. When no workspace is ready, the primary route must
     stay on reviewable `Workspaces` or `Access` surfaces before any blocked
     hosted billing or owner/admin-only mutation path.
+35. Task surfaces must keep failure copy on owned user jobs. The portal may
+    not leak raw transport strings such as `Network error.` into `Access`,
+    `Workspaces`, or `Billing`; each failure must stay on the task-specific
+    action the user was trying to complete.
 
 ## Screen Model
 
