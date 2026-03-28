@@ -148,15 +148,15 @@ describe('shell view', function() {
     expect(html).toContain('Add workspace');
     expect(html).toContain('Manage billing');
     expect(html).toContain('Manage team');
-    expect(html).toContain('Hosted posture');
-    expect(html).toContain('Review hosted posture first');
+    expect(html).toContain('Hosted status');
+    expect(html).toContain('Review hosted status first');
     expect(html).toContain('section-context-strip');
     expect(html).toContain('Next move');
     expect(html).toContain('Start in workspaces');
     expect(html).toContain('Needs review');
-    expect(html).toContain('Fleet posture');
-    expect(html).toContain('Console role');
-    expect(html).toContain('Run client workspaces, account billing, and operator access from one place.');
+    expect(html).toContain('Fleet status');
+    expect(html).toContain('Account role');
+    expect(html).toContain('Run client workspaces, account billing, and team access from one place.');
     expect(html).toContain('Hosted path');
     expect(html).toContain('Commercial path');
     expect(html).toContain('Open workspaces');
@@ -174,7 +174,7 @@ describe('shell view', function() {
     expect(html).toContain('ready</span>');
     expect(html).toContain('Needs attention</span>');
     expect(html).toContain('Checking</span>');
-    expect(html).toContain('Ready for operator work');
+    expect(html).toContain('Ready to use');
     expect(html).toContain('This workspace needs attention before it is trustworthy.');
     expect(html).toContain('This workspace is still waiting on a completed health check.');
     expect(html).toContain('/api/accounts/acct_1/tenants/ws_active/handoff');
@@ -184,7 +184,7 @@ describe('shell view', function() {
     expect(html).toContain('Lifecycle');
     expect(html).toContain('Pick one workspace for lifecycle review. Keep hosted billing, team changes, and new workspace creation in account actions.');
     expect(html).toContain('Keep account-wide actions separate');
-    expect(html).toContain('Inspect posture');
+    expect(html).toContain('Inspect status');
     expect(html).toContain('Stay deliberate');
     expect(html).toContain('Close panel');
     expect(html.indexOf('id="add-ws-form-acct_1"')).toBeGreaterThan(html.indexOf('Workspace management'));
@@ -241,7 +241,7 @@ describe('shell view', function() {
     );
 
     expect(html).toContain('Pulse Account');
-    expect(html).toContain('Account console');
+    expect(html).toContain('Account center');
     expect(html).toContain('Summary');
     expect(html).toContain('None');
     expect(html).toContain('Use these account tools for self-hosted licenses, billing, refunds, and privacy actions.');
@@ -316,8 +316,8 @@ describe('shell view', function() {
     expect(html).toContain('Suspended until you resume it');
     expect(html).toContain('No active blockers');
     expect(html).toContain('Active hosted workspaces are healthy while suspended workspaces stay parked until you resume them.');
-    expect(html).toContain('Next operator step');
-    expect(html).toContain('Active hosted workspaces look stable. Resume a suspended workspace only when you are ready to bring it back into the operator path.');
+    expect(html).toContain('Next step');
+    expect(html).toContain('Active hosted workspaces look stable. Resume a suspended workspace only when you are ready to bring it back into the active workflow.');
     expect(html).toContain('Active hosted workspaces are healthy. Suspended workspaces stay parked until you resume them.');
     expect(html).toContain('Suspended stays parked');
   });

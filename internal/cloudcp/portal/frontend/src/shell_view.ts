@@ -175,7 +175,7 @@ function workspaceRowNote(workspace: PortalWorkspaceSummary): string {
   var state = String(workspace.state || '');
   if (state === 'suspended') return 'Suspended until you resume it';
   if (state === 'failed') return 'Review this workspace before treating it as stable';
-  if (status === 'healthy') return 'Ready for operator work';
+  if (status === 'healthy') return 'Ready to use';
   if (status === 'unhealthy') return 'Review this workspace before treating it as stable';
   return 'Awaiting a completed health check';
 }
@@ -201,15 +201,15 @@ function renderAttentionPanel(workspaces: PortalWorkspaceSummary[]): string {
         '<h4>' + escapeHTML(suspendedCount > 0 ? 'No active blockers' : 'Fleet is clear') + '</h4>' +
         '<p>' + escapeHTML(suspendedCount > 0
           ? 'Active hosted workspaces are healthy. Suspended workspaces stay parked until you resume them.'
-          : 'Every active hosted workspace currently reports a healthy posture.'
+          : 'Every active hosted workspace currently reports a healthy status.'
         ) + '</p>' +
         '<div class="overview-stable-list">' +
           '<div class="overview-stable-item"><strong>Healthy now</strong><span>' + escapeHTML(suspendedCount > 0
-            ? 'Active hosted workspaces are clear for routine operator work.'
-            : 'All active hosted workspaces are clear for routine operator work.'
+            ? 'Active hosted workspaces are clear for routine use.'
+            : 'All active hosted workspaces are clear for routine use.'
           ) + '</span></div>' +
           (suspendedCount > 0
-            ? '<div class="overview-stable-item"><strong>Suspended stays parked</strong><span>' + escapeHTML(String(suspendedCount) + ' workspace' + (suspendedCount === 1 ? ' is' : 's are') + ' suspended and intentionally out of the day-to-day operator path.') + '</span></div>'
+            ? '<div class="overview-stable-item"><strong>Suspended stays parked</strong><span>' + escapeHTML(String(suspendedCount) + ' workspace' + (suspendedCount === 1 ? ' is' : 's are') + ' suspended and intentionally out of the day-to-day workflow.') + '</span></div>'
             : '') +
           '<div class="overview-stable-item"><strong>Use Team only for change</strong><span>Keep roster edits explicit instead of mixing them into normal workspace work.</span></div>' +
           '<div class="overview-stable-item"><strong>Keep billing separate</strong><span>Use account services only when the task is commercial, not operational.</span></div>' +
@@ -249,7 +249,7 @@ function renderOverviewMetricStrip(
 ): string {
   return (
     '<div class="account-overview-metrics account-overview-metrics-header">' +
-      '<div class="account-panel-kicker">Live posture</div>' +
+      '<div class="account-panel-kicker">Live status</div>' +
       '<div class="account-metric-strip">' +
         '<div class="account-stat-card account-stat-card-inline">' +
           '<span class="account-stat-label">Total</span>' +
@@ -350,13 +350,13 @@ function renderShellNavigation(accounts: PortalAccountSummary[], supportEmail: s
     '<aside class="portal-shell-nav" aria-label="Pulse Account sections">' +
       '<div class="portal-shell-nav-header">' +
         '<div class="portal-shell-nav-eyebrow">Pulse Account</div>' +
-        '<div class="portal-shell-nav-title">' + (hosted ? 'Operator console' : 'Account console') + '</div>' +
+        '<div class="portal-shell-nav-title">Account center</div>' +
         '<div class="portal-shell-nav-support">' + (hosted ? 'Hosted operations, account access, and commercial services' : 'Commercial account services and support') + '</div>' +
       '</div>' +
       '<div class="portal-shell-nav-group">' +
-        shellSectionButton('overview', activeSection, '01', 'Overview', hosted ? 'Posture, account status, and next actions' : 'Account summary and access state', hosted ? String(totalWorkspaces) + ' total' : 'Summary') +
+        shellSectionButton('overview', activeSection, '01', 'Overview', hosted ? 'Status, account health, and next actions' : 'Account summary and access state', hosted ? String(totalWorkspaces) + ' total' : 'Summary') +
         shellSectionButton('workspaces', activeSection, '02', hosted ? 'Workspaces' : 'Hosted access', hosted ? 'Hosted fleet and lifecycle actions' : 'No hosted workspaces are attached yet', hosted ? String(readyWorkspaces) + ' ready' : 'None') +
-        shellSectionButton('team', activeSection, '03', 'Team', hosted ? 'Access and operator roster' : 'Account membership', canManage ? 'Manage' : 'View') +
+        shellSectionButton('team', activeSection, '03', 'Team', hosted ? 'Access and team roster' : 'Account membership', canManage ? 'Manage' : 'View') +
         shellSectionButton('services', activeSection, '04', 'Account services', 'Licenses, billing, refunds, and privacy', '4 tools') +
         shellSectionButton('support', activeSection, '05', 'Support', hosted ? 'Escalation and account support' : (supportEmail || 'Support contact'), supportEmail ? 'Email' : 'Help') +
       '</div>' +
@@ -440,26 +440,26 @@ function renderAccountOverviewSection(account: PortalAccountSummary): string {
       ? 'The hosted fleet is mostly healthy, but some workspaces are still waiting on a completed health check.'
       : suspendedCount > 0
         ? 'Active hosted workspaces are healthy while suspended workspaces stay parked until you resume them.'
-        : 'The hosted fleet is healthy and ready for routine operator work.';
+        : 'The hosted fleet is healthy and ready for routine use.';
   var nextStepTitle = unhealthyCount > 0
     ? 'Start in workspaces'
     : checkingCount > 0
       ? 'Review pending checks'
       : suspendedCount > 0
-        ? 'Next operator step'
-        : 'Next operator step';
+        ? 'Next step'
+        : 'Next step';
   var nextStepCopy = unhealthyCount > 0
     ? 'One or more workspaces need review before you treat the hosted fleet as trustworthy.'
     : checkingCount > 0
       ? 'The fleet is mostly healthy, but there are still workspaces waiting on a completed health check.'
       : suspendedCount > 0
-        ? 'Active hosted workspaces look stable. Resume a suspended workspace only when you are ready to bring it back into the operator path.'
-        : 'Hosted posture looks stable. Move into team or account services only if you need to change access or billing.';
+        ? 'Active hosted workspaces look stable. Resume a suspended workspace only when you are ready to bring it back into the active workflow.'
+        : 'Hosted status looks stable. Move into Team or Account services only if you need to change access or billing.';
   var nextStepChecklist = unhealthyCount > 0
     ? (
       '<div class="overview-next-checklist">' +
         '<div class="overview-next-check"><strong>1. Review attention items</strong><span>Open the fleet and inspect any workspace marked as checking or needs attention.</span></div>' +
-        '<div class="overview-next-check"><strong>2. Resolve operator blockers</strong><span>Use Team if the right people are not already attached to the hosted account.</span></div>' +
+        '<div class="overview-next-check"><strong>2. Resolve access blockers</strong><span>Use Team if the right people are not already attached to the hosted account.</span></div>' +
         '<div class="overview-next-check"><strong>3. Escalate billing separately</strong><span>Keep account billing or self-hosted license work out of the workspace review flow.</span></div>' +
       '</div>'
     )
@@ -467,7 +467,7 @@ function renderAccountOverviewSection(account: PortalAccountSummary): string {
       ? (
         '<div class="overview-next-checklist">' +
           '<div class="overview-next-check"><strong>1. Verify pending checks</strong><span>Open the workspaces still settling and confirm they are safe to operate.</span></div>' +
-          '<div class="overview-next-check"><strong>2. Keep access deliberate</strong><span>Change Team only if a pending workspace needs a different operator mix.</span></div>' +
+          '<div class="overview-next-check"><strong>2. Keep access deliberate</strong><span>Change Team only if a pending workspace needs a different mix of access.</span></div>' +
           '<div class="overview-next-check"><strong>3. Keep commercial work separate</strong><span>Use account services or billing only when the hosted fleet is already understood.</span></div>' +
         '</div>'
       )
@@ -484,17 +484,17 @@ function renderAccountOverviewSection(account: PortalAccountSummary): string {
       '<button class="btn-secondary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="' + (account.can_manage ? 'team' : 'services') + '">' + (account.can_manage ? 'Review team access' : 'Open account services') + '</button>' +
     '</div>';
   var consoleScopeCopy = account.kind === 'msp'
-    ? 'Run client workspaces, account billing, and operator access from one place.'
-    : 'Run hosted workspaces, account billing, and operator access from one place.';
+    ? 'Run client workspaces, account billing, and team access from one place.'
+    : 'Run hosted workspaces, account billing, and team access from one place.';
   var overviewBriefStrip =
     '<div class="account-overview-brief-strip">' +
       '<div class="account-overview-brief-point account-overview-brief-point-wide">' +
-        '<strong>Console role</strong>' +
+        '<strong>Account role</strong>' +
         '<span>' + escapeHTML(consoleScopeCopy) + '</span>' +
       '</div>' +
       '<div class="account-overview-brief-point">' +
         '<strong>Hosted path</strong>' +
-        '<span>Use Workspaces for tenant operations and Team only when the operator roster needs to change.</span>' +
+        '<span>Use Workspaces for tenant operations and Team only when access needs to change.</span>' +
       '</div>' +
       '<div class="account-overview-brief-point">' +
         '<strong>Commercial path</strong>' +
@@ -507,8 +507,8 @@ function renderAccountOverviewSection(account: PortalAccountSummary): string {
       '<div class="account-stage-header account-stage-header-overview">' +
         '<div>' +
           '<div class="account-panel-kicker">Overview</div>' +
-          '<h3>Hosted posture</h3>' +
-          '<p>Review hosted posture first, then move into the next section.</p>' +
+          '<h3>Hosted status</h3>' +
+          '<p>Review hosted status first, then move into the next section.</p>' +
           renderSectionContextChips([
             String(totalCount) + ' total',
             String(readyCount) + ' ready',
@@ -521,7 +521,7 @@ function renderAccountOverviewSection(account: PortalAccountSummary): string {
         '<div class="account-overview-main-column">' +
           '<div class="account-overview-card account-overview-briefing-card">' +
             '<div class="account-overview-lead">' +
-              '<div class="account-panel-kicker">Fleet posture</div>' +
+              '<div class="account-panel-kicker">Fleet status</div>' +
               '<h3>' + escapeHTML(postureTitle) + '</h3>' +
               '<p>' + escapeHTML(postureCopy) + '</p>' +
               overviewBriefStrip +
@@ -639,7 +639,7 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
               addWorkspaceForm +
             '</div>' +
             '<div class="workspace-management-empty-rules">' +
-              '<div class="workspace-management-empty-rule"><strong>Inspect posture</strong><span>Open the workspace first and confirm whether it is routine work, review work, or a parked suspended system.</span></div>' +
+              '<div class="workspace-management-empty-rule"><strong>Inspect status</strong><span>Open the workspace first and confirm whether it is routine work, review work, or a parked suspended system.</span></div>' +
               '<div class="workspace-management-empty-rule"><strong>Confirm lifecycle</strong><span>Check active, checking, failed, or suspended state before you take the next step.</span></div>' +
               '<div class="workspace-management-empty-rule"><strong>Stay deliberate</strong><span>Review one workspace at a time instead of mixing fleet and account actions together.</span></div>' +
             '</div>' +
@@ -689,7 +689,7 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
   var workspaceHTML = workspaces.length
     ? '<div class="workspace-list-wrap">' +
           '<div class="workspace-list-toolbar">' +
-            '<div class="workspace-list-summary">Open a workspace for operator work. Use the lifecycle view only when you are reviewing state or making account-level changes.</div>' +
+            '<div class="workspace-list-summary">Open a workspace to work in it. Use the lifecycle view only when you are reviewing state or making account-level changes.</div>' +
         '</div>' +
         '<div class="workspace-list-head">' +
           '<span>Workspace</span>' +
@@ -710,7 +710,7 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
           '<div>' +
             '<div class="account-panel-kicker">Workspace fleet</div>' +
             '<h3>Hosted fleet</h3>' +
-            '<p>Open workspaces, review posture, and keep lifecycle actions explicit.</p>' +
+            '<p>Open workspaces, review status, and keep lifecycle actions explicit.</p>' +
             renderSectionContextChips([
               String(workspaces.length) + ' total',
               String(readyCount) + ' ready',
@@ -756,7 +756,7 @@ function renderAccountTeamSection(account: PortalAccountSummary): string {
         '<div class="team-panel-heading team-panel-heading-tight">' +
           '<div class="account-panel-kicker">Access review</div>' +
           '<h4>Keep access disciplined</h4>' +
-          '<p>Use the roster as a controlled operator surface, not a dumping ground for vague shared access.</p>' +
+          '<p>Use the roster as a controlled access surface, not a dumping ground for vague shared access.</p>' +
         '</div>' +
         '<div class="team-review-grid">' +
           '<div class="team-review-card">' +
@@ -764,7 +764,7 @@ function renderAccountTeamSection(account: PortalAccountSummary): string {
             '<span>Reserve Owner for billing, team, and full hosted control. Default to Admin, Tech, or Read-only first.</span>' +
           '</div>' +
           '<div class="team-review-card">' +
-            '<strong>Keep operators narrow</strong>' +
+            '<strong>Keep access narrow</strong>' +
             '<span>Use Tech for workspace operations and Read-only for verification instead of handing out broader access.</span>' +
           '</div>' +
           '<div class="team-review-card">' +
@@ -824,7 +824,7 @@ function renderAccountTeamSection(account: PortalAccountSummary): string {
                 '<div class="team-invite-panel">' +
                   '<div class="team-panel-heading">' +
                     '<h4>Invite someone new</h4>' +
-                    '<p>Add another operator with the minimum role they need for this account.</p>' +
+                    '<p>Add another person with the minimum role they need for this account.</p>' +
                   '</div>' +
                   '<div class="team-invite">' +
                     '<div><label for="invite-email-' +
@@ -881,7 +881,7 @@ function renderSupportSection(context: ShellViewContext): string {
             '<p>Use this route when tenant handoff, workspace access, team control, or hosted billing looks wrong.</p>' +
             '<div class="portal-support-points">' +
               '<div class="portal-support-point"><strong>Route here for hosted issues</strong><span>Access, handoff, team, and hosted billing all belong on the hosted account path.</span></div>' +
-              '<div class="portal-support-point"><strong>Keep the account context intact</strong><span>Include the account, workspace, and action that failed so support can pick up the same operator path quickly.</span></div>' +
+              '<div class="portal-support-point"><strong>Keep the account context intact</strong><span>Include the account, workspace, and action that failed so support can pick up the same workflow quickly.</span></div>' +
             '</div>' +
             '<div class="portal-support-actions">' +
               '<a class="portal-support-link" href="mailto:' + escapeAttr(context.bootstrap.support_email || '') + '">' + escapeHTML(context.bootstrap.support_email || '') + '</a>' +
@@ -893,7 +893,7 @@ function renderSupportSection(context: ShellViewContext): string {
             '<p>Self-hosted subscriptions, license recovery, refunds, and privacy requests all route through Account services first.</p>' +
             '<div class="portal-support-points">' +
               '<div class="portal-support-point"><strong>Start in Account services</strong><span>Use Billing, Licenses, Refunds, or Privacy before escalating a commercial issue.</span></div>' +
-              '<div class="portal-support-point"><strong>Escalate from the same path</strong><span>Keep the request in one place instead of splitting it between billing and operator surfaces.</span></div>' +
+              '<div class="portal-support-point"><strong>Escalate from the same path</strong><span>Keep the request in one place instead of splitting it between billing and account surfaces.</span></div>' +
             '</div>' +
             '<div class="portal-support-actions">' +
               '<button type="button" class="btn-secondary" data-shell-action="activate-section" data-shell-section="services">Open account services</button>' +
