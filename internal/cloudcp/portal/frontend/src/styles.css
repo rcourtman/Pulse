@@ -56,14 +56,14 @@ header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  padding: 12px 22px;
+  gap: 12px;
+  padding: 8px 16px;
   border-bottom: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.96);
+  background: rgba(255, 255, 255, 0.98);
 }
 
 header .brand {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 700;
   letter-spacing: -0.02em;
 }
@@ -71,15 +71,15 @@ header .brand {
 .header-account-chip {
   display: inline-flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   border: 1px solid var(--line);
   background: #fff;
   border-radius: 999px;
-  padding: 4px 8px 4px 12px;
+  padding: 3px 6px 3px 10px;
 }
 
 .header-account-email {
-  font-size: 13px;
+  font-size: 12px;
   color: var(--ink-soft);
 }
 
@@ -102,7 +102,7 @@ header .logout-btn,
   background: #fff;
   color: var(--ink);
   border-radius: 8px;
-  padding: 9px 14px;
+  padding: 8px 12px;
   cursor: pointer;
   transition: border-color 140ms ease, background 140ms ease, box-shadow 140ms ease;
 }
@@ -154,7 +154,7 @@ header .logout-btn:hover,
 .main {
   max-width: 1480px;
   margin: 0 auto;
-  padding: 18px 22px 44px;
+  padding: 12px 16px 36px;
 }
 
 .portal-shell {
@@ -288,7 +288,7 @@ header .logout-btn:hover,
 
 .portal-shell-layout {
   display: grid;
-  grid-template-columns: 204px minmax(0, 1fr);
+  grid-template-columns: 188px minmax(0, 1fr);
   gap: 0;
   align-items: start;
   border: 1px solid var(--line);
@@ -312,8 +312,8 @@ header .logout-btn:hover,
 .portal-shell-nav-header {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 16px 16px 14px;
+  gap: 5px;
+  padding: 14px 14px 12px;
   border-bottom: 1px solid var(--nav-line);
 }
 
@@ -326,7 +326,7 @@ header .logout-btn:hover,
 }
 
 .portal-shell-nav-title {
-  font-size: 18px;
+  font-size: 17px;
   line-height: 1.02;
   letter-spacing: -0.03em;
   font-weight: 800;
@@ -334,7 +334,7 @@ header .logout-btn:hover,
 }
 
 .portal-shell-nav-support {
-  font-size: 11px;
+  font-size: 10px;
   line-height: 1.4;
   color: var(--nav-copy);
 }
@@ -350,7 +350,7 @@ header .logout-btn:hover,
   flex-direction: column;
   gap: 0;
   width: 100%;
-  padding: 12px 16px;
+  padding: 10px 14px;
   border: none;
   background: transparent;
   text-align: left;
@@ -373,7 +373,7 @@ header .logout-btn:hover,
 
 .portal-shell-nav-label {
   display: block;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
   color: var(--nav-ink);
 }
@@ -396,7 +396,7 @@ header .logout-btn:hover,
 }
 
 .portal-account-context {
-  padding: 10px 16px 8px;
+  padding: 8px 14px 7px;
   border-bottom: 1px solid var(--line);
   background: #fff;
 }
@@ -410,7 +410,7 @@ header .logout-btn:hover,
 .portal-account-context-meta {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
 }
 
@@ -424,13 +424,13 @@ header .logout-btn:hover,
 .portal-account-context-row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   flex-wrap: wrap;
 }
 
 .portal-account-context-row h2 {
   margin: 0;
-  font-size: 24px;
+  font-size: 22px;
   line-height: 0.98;
   letter-spacing: -0.05em;
 }
@@ -442,7 +442,7 @@ header .logout-btn:hover,
 .portal-account-context-chips {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
@@ -483,7 +483,7 @@ header .logout-btn:hover,
 }
 
 .portal-content-panel {
-  padding: 10px 12px 0;
+  padding: 8px 10px 0;
 }
 
 .portal-top-section,
