@@ -3211,6 +3211,8 @@ header .logout-btn:hover,
     padding: 10px 12px 12px;
     overflow-x: auto;
     overscroll-behavior-x: contain;
+    scroll-padding-inline: 12px;
+    scroll-snap-type: x proximity;
     scrollbar-width: none;
   }
 
@@ -3222,6 +3224,7 @@ header .logout-btn:hover,
     flex: 0 0 auto;
     min-width: 118px;
     padding: 10px 10px;
+    scroll-snap-align: start;
   }
 
   .portal-shell-nav-row {
@@ -3252,6 +3255,71 @@ header .logout-btn:hover,
   .portal-content-panel {
     padding-left: 16px;
     padding-right: 16px;
+  }
+
+  .portal-account-context {
+    gap: 10px;
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+
+  .portal-account-context-copy {
+    gap: 4px;
+  }
+
+  .portal-account-context-meta,
+  .portal-account-context-copy p {
+    display: none;
+  }
+
+  .portal-account-context-row {
+    gap: 6px;
+  }
+
+  .portal-account-context-row h2 {
+    font-size: 18px;
+    line-height: 1.02;
+  }
+
+  .portal-account-context-chips {
+    gap: 6px;
+  }
+
+  .account-context-chip {
+    min-height: 20px;
+    padding: 0 7px;
+    font-size: 10px;
+  }
+
+  .portal-account-context-summary {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    width: 100%;
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .portal-account-context-stat {
+    gap: 2px;
+    padding: 8px 0 0;
+    border-top: 1px solid var(--line);
+    border-radius: 0;
+  }
+
+  .portal-account-context-stat + .portal-account-context-stat {
+    border-left: none;
+  }
+
+  .portal-account-context-stat span {
+    font-size: 9px;
+  }
+
+  .portal-account-context-stat strong {
+    font-size: 11px;
   }
 
   .workspace-management-header,

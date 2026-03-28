@@ -270,6 +270,41 @@ describe('shell view', function() {
     expect(html).not.toContain('Services');
   });
 
+  it('renders one compact account context strip with three summary facts', function() {
+    var html = renderAuthenticatedPortalHTML(
+      createContext({
+        bootstrap: createBootstrap({
+          accounts: [
+            {
+              id: 'acct_context',
+              name: 'Context Account',
+              kind: 'cloud',
+              kind_label: 'Cloud',
+              role: 'admin',
+              can_manage: true,
+              has_billing: true,
+              workspaces: [
+                {
+                  id: 'ws_context',
+                  display_name: 'Context Workspace',
+                  state: 'active',
+                  healthy: true,
+                  health_status: 'healthy',
+                },
+              ],
+            },
+          ],
+        }),
+      })
+    );
+
+    expect((html.match(/portal-account-context\"/g) || []).length).toBe(1);
+    expect((html.match(/portal-account-context-stat/g) || []).length).toBe(3);
+    expect((html.match(/account-context-chip\"/g) || []).length).toBe(3);
+    expect(html).toContain('Admin access');
+    expect(html).toContain('Billing enabled');
+  });
+
   it('renders a view-only access surface when the account cannot manage access', function() {
     var html = renderAuthenticatedPortalHTML(
       createContext({

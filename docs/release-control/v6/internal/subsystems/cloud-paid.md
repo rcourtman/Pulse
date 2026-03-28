@@ -828,6 +828,9 @@ permission-honest and roster-led, billing must reduce to one obvious job at a
 time with hosted billing first when relevant, support must stay a failed-path
 handoff rather than a peer workflow, and phone-width layouts must collapse the
 desktop task sidebar into a compact task strip so the active job remains
-primary. Until that candidate lane lands, new commercial account work must
-extend the governed Pulse account shape rather than spawning additional one-off
-recovery or billing pages.
+primary and visibly in-frame when the strip scrolls. The same narrow-screen
+shell must also compress account identity into a compact summary strip instead
+of repeating a desktop-sized intro block ahead of every task. Until that
+candidate lane lands, new commercial account work must extend the governed
+Pulse account shape rather than spawning additional one-off recovery or billing
+pages.

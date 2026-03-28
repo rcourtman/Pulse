@@ -12,17 +12,32 @@ export interface ShellDeps {
 }
 
 export function installShell(deps: ShellDeps): void {
+  function revealActiveNavLink(activeLink: HTMLElement | null) {
+    if (!activeLink) return;
+    var group = activeLink.closest('.portal-shell-nav-group') as HTMLElement | null;
+    if (!group || group.scrollWidth <= group.clientWidth) return;
+    if (typeof activeLink.scrollIntoView === 'function') {
+      activeLink.scrollIntoView({ block: 'nearest', inline: 'center' });
+    }
+  }
+
   function syncShellSection() {
     var root = document.querySelector('.portal-shell') as HTMLElement | null;
     var activeSection = deps.store.getShellState().activeSection;
+    var activeLink: HTMLElement | null = null;
     if (root) {
       root.setAttribute('data-shell-section', activeSection);
     }
     var links = document.querySelectorAll('[data-shell-action="activate-section"]');
     links.forEach(function(node) {
       var button = node as HTMLElement;
-      button.classList.toggle('active', button.getAttribute('data-shell-section') === activeSection);
+      var isActive = button.getAttribute('data-shell-section') === activeSection;
+      button.classList.toggle('active', isActive);
+      if (isActive && button.classList.contains('portal-shell-nav-link')) {
+        activeLink = button;
+      }
     });
+    revealActiveNavLink(activeLink);
   }
 
   function renderHeader() {

@@ -2109,17 +2109,31 @@
 
   // src/shell.ts
   function installShell(deps) {
+    function revealActiveNavLink(activeLink) {
+      if (!activeLink) return;
+      var group = activeLink.closest(".portal-shell-nav-group");
+      if (!group || group.scrollWidth <= group.clientWidth) return;
+      if (typeof activeLink.scrollIntoView === "function") {
+        activeLink.scrollIntoView({ block: "nearest", inline: "center" });
+      }
+    }
     function syncShellSection() {
       var root = document.querySelector(".portal-shell");
       var activeSection = deps.store.getShellState().activeSection;
+      var activeLink = null;
       if (root) {
         root.setAttribute("data-shell-section", activeSection);
       }
       var links = document.querySelectorAll('[data-shell-action="activate-section"]');
       links.forEach(function(node) {
         var button = node;
-        button.classList.toggle("active", button.getAttribute("data-shell-section") === activeSection);
+        var isActive = button.getAttribute("data-shell-section") === activeSection;
+        button.classList.toggle("active", isActive);
+        if (isActive && button.classList.contains("portal-shell-nav-link")) {
+          activeLink = button;
+        }
       });
+      revealActiveNavLink(activeLink);
     }
     function renderHeader() {
       var userInfo = document.getElementById("portal-user-info");

@@ -169,7 +169,11 @@ Core rules:
     as a handoff path, not a competing task surface.
 21. On phone-width layouts, top-level task navigation must collapse into a
     compact task strip so the active job stays above the fold instead of being
-    buried below a desktop-style sidebar.
+    buried below a desktop-style sidebar, and the strip must auto-reveal the
+    active task when the user changes jobs.
+22. On phone-width layouts, account identity context must collapse into a
+    compact summary strip ahead of the active task instead of repeating a
+    large desktop intro block before every section.
 
 ## Screen Model
 
@@ -212,7 +216,11 @@ Each signed-in state should render:
 8. explicit unavailable-state panels for top-level tasks that are not active
    for the current account shape
 9. a compact narrow-screen task switcher that preserves task-first navigation
-   without letting navigation chrome dominate the page before the active task
+   without letting navigation chrome dominate the page before the active task,
+   while keeping the active task visibly in-frame when the strip scrolls
+10. a compact narrow-screen account context strip that keeps account identity,
+    role, workspace count, and billing state visible without pushing the live
+    task below the fold
 
 ## Product-Specific Boundaries
 

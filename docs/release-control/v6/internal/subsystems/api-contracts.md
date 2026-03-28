@@ -270,7 +270,11 @@ sources and the committed embedded bundle cannot drift silently. The maintained
 portal source tree now also owns explicit runtime/bootstrap type definitions
 and one task-first shell model across desktop and phone widths: narrow-screen
 navigation must collapse the same bootstrap-driven task shell into a compact
-task strip, not a second mobile-only route or DOM contract.
+task strip, not a second mobile-only route or DOM contract, and the runtime
+must keep the active task visibly in-frame when that strip scrolls. That same
+shared bootstrap shell must also compress account identity into a compact
+mobile summary strip rather than introducing a second narrow-screen
+account-context payload or task-specific DOM contract.
 plus a package-local `tsc --noEmit` gate, so future account-shell work should
 extend the typed source boundary instead of reviving opaque global runtime
 objects, document-wide render events, or untyped embedded asset edits.
