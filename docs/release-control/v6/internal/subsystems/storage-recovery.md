@@ -794,10 +794,11 @@ pattern as the protected inventory surface, not a separate large titled header
 bar plus another full toolbar slab. Event filter labels should also stay on the
 canonical short Pulse vocabulary like `Platform` and `Status` instead of
 recovery-only variants such as `History platform` or `History status`.
-That same events-workspace rule should keep the handoff data-first. The events
-workspace should move from tabs to shared controls to the recovery history
-table before showing the activity/timeline card, so the analytics surface
-stays secondary to the working table instead of interrupting the operator path.
+That same events-workspace rule should keep the activity strip as orientation
+for the event list rather than burying it at the bottom. The events workspace
+should move from tabs to `RecoveryActivitySection.tsx`, then shared controls,
+then the recovery history table, so the timeline frames the event list without
+turning the page back into stacked primary tables.
 That same events-shell contract should avoid repeating page-state bookkeeping
 ahead of the history grid. Recovery events should keep the toolbar utility area
 focused on actual controls like advanced filters and column visibility instead

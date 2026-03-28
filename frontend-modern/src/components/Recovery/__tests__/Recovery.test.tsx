@@ -283,12 +283,12 @@ describe('Recovery', () => {
     expect(
       historyTablist.compareDocumentPosition(historyControls) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).not.toBe(0);
-    expect(
-      historyControls.compareDocumentPosition(historyTable) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).not.toBe(0);
     const activityHeading = screen.getByText('Recovery Activity');
     expect(
-      historyTable.compareDocumentPosition(activityHeading) & Node.DOCUMENT_POSITION_FOLLOWING,
+      activityHeading.compareDocumentPosition(historyControls) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).not.toBe(0);
+    expect(
+      historyControls.compareDocumentPosition(historyTable) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).not.toBe(0);
     const historySearch = within(historyControls).getByPlaceholderText('Search recovery history...');
     expect(historySearch).toBeInTheDocument();
