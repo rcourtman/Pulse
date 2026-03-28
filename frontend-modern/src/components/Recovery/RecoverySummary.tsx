@@ -81,10 +81,6 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
   ]);
   const freshnessRows = createMemo(() => [
     {
-      label: '<24h',
-      value: freshnessBuckets().find((bucket) => bucket.key === 'under24h')?.count ?? 0,
-    },
-    {
       label: '>7d',
       value: freshnessBuckets().find((bucket) => bucket.key === 'over7d')?.count ?? 0,
     },
@@ -178,7 +174,6 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
                 rows={[
                   { label: 'Platforms', value: platformCoverage().platformCount },
                   { label: 'Primary Item', value: itemCoverage().primaryItemLabel ?? 'n/a' },
-                  { label: 'Primary Platform', value: platformCoverage().primaryPlatformLabel ?? 'n/a' },
                 ]}
               />
             </div>
@@ -202,7 +197,6 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
               <MetricRows
                 rows={[
                   { label: 'Days Active', value: activity().activeDays },
-                  { label: 'Avg / Day', value: activity().averagePerDay.toFixed(1) },
                   { label: 'Peak Day', value: activity().busiestLabel ?? 'n/a' },
                   { label: 'Latest Activity', value: activity().latestLabel ?? 'n/a' },
                 ]}

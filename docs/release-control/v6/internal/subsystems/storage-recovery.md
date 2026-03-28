@@ -689,6 +689,12 @@ instead of behaving like a recovery-only executive summary.
 That support band should stay genuinely short, usually two or three compact
 rows rather than four-item micro reports, so the operator can scan the summary
 as orientation instead of reading each card like a dense checklist.
+That same summary-scan rule should also trim derivative rows that restate the
+headline instead of adding a new operator question. `Freshness` should not add
+an extra `<24h` row under a `fresh in 24h` headline, `Protected Footprint`
+should not spend a row repeating a primary-platform label when platform count
+already frames the footprint, and `Recent History` should stay on a short
+activity readout rather than carrying a four-line micro report.
 That same summary-card rule should also avoid inline distribution bars or
 dashboard-style subvisualizations inside the cards when the same signal can be
 expressed as short metric rows. Recovery summary cards should stay on the

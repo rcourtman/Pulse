@@ -417,8 +417,8 @@ describe('Recovery', () => {
     const summary = await screen.findByTestId('recovery-summary');
     expect(within(summary).getByText('Protected Footprint')).toBeInTheDocument();
     expect(within(summary).getByText('Primary Item')).toBeInTheDocument();
-    expect(within(summary).getByText('Primary Platform')).toBeInTheDocument();
     expect(within(summary).getAllByText(/platforms/i).length).toBeGreaterThan(0);
+    expect(within(summary).queryByText('Primary Platform')).not.toBeInTheDocument();
   });
 
   it('normalizes legacy provider-shaped recovery payloads before rendering', async () => {
