@@ -442,6 +442,14 @@
       ]
     },
     {
+      "path": "internal/api/relay_mobile_capability.go",
+      "rationale": "the backend-owned Pulse Mobile relay capability inventory is both a relay runtime boundary and a canonical API payload contract surface",
+      "subsystems": [
+        "api-contracts",
+        "relay-runtime"
+      ]
+    },
+    {
       "path": "internal/api/resources.go",
       "rationale": "the unified resource endpoint is both a backend payload contract surface and a unified-resource runtime boundary",
       "subsystems": [
@@ -3562,12 +3570,14 @@
         "pulse-mobile:src/relay/"
       ],
       "owned_files": [
+        "internal/api/relay_mobile_capability.go",
         "internal/config/persistence_relay.go"
       ],
       "verification": {
         "allow_same_subsystem_tests": true,
         "test_prefixes": [],
         "exact_files": [
+          "internal/api/relay_mobile_capability_test.go",
           "internal/config/persistence_relay_test.go",
           "internal/relay/client_test.go",
           "pulse-mobile:src/relay/__tests__/channel.test.ts",
@@ -3605,6 +3615,19 @@
             "test_prefixes": [],
             "exact_files": [
               "internal/config/persistence_relay_test.go"
+            ]
+          },
+          {
+            "id": "relay-mobile-capability-boundary",
+            "label": "relay mobile capability boundary proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/api/relay_mobile_capability.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/api/relay_mobile_capability_test.go"
             ]
           },
           {

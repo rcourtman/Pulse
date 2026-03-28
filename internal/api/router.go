@@ -660,12 +660,12 @@ func (r *Router) routeAISessions(w http.ResponseWriter, req *http.Request) {
 	if len(parts) > 1 {
 		switch parts[1] {
 		case "messages":
-			if !ensureAnyScope(w, req, relayMobileChatCompatibleScopes...) {
+			if !ensureRelayMobileRuntimeRoute(w, req, relayMobileRouteSessionMessages) {
 				return
 			}
 			r.aiHandler.HandleMessages(w, req, sessionID)
 		case "abort":
-			if !ensureAnyScope(w, req, relayMobileChatCompatibleScopes...) {
+			if !ensureRelayMobileRuntimeRoute(w, req, relayMobileRouteSessionAbort) {
 				return
 			}
 			r.aiHandler.HandleAbort(w, req, sessionID)
@@ -706,7 +706,7 @@ func (r *Router) routeAISessions(w http.ResponseWriter, req *http.Request) {
 	// Handle session-level operations
 	switch req.Method {
 	case http.MethodDelete:
-		if !ensureAnyScope(w, req, relayMobileChatCompatibleScopes...) {
+		if !ensureRelayMobileRuntimeRoute(w, req, relayMobileRouteSessionDelete) {
 			return
 		}
 		r.aiHandler.HandleDeleteSession(w, req, sessionID)
@@ -719,16 +719,21 @@ func (r *Router) routeAISessions(w http.ResponseWriter, req *http.Request) {
 }
 
 func (r *Router) routeAISessionsCollection(w http.ResponseWriter, req *http.Request) {
-	if !ensureAnyScope(w, req, relayMobileChatCompatibleScopes...) {
-		return
-	}
-
 	switch req.Method {
 	case http.MethodGet:
+		if !ensureRelayMobileRuntimeRoute(w, req, relayMobileRouteSessionsList) {
+			return
+		}
 		r.aiHandler.HandleSessions(w, req)
 	case http.MethodPost:
+		if !ensureRelayMobileRuntimeRoute(w, req, relayMobileRouteSessionCreate) {
+			return
+		}
 		r.aiHandler.HandleCreateSession(w, req)
 	default:
+		if !ensureScope(w, req, config.ScopeAIChat) {
+			return
+		}
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
 }
@@ -736,7 +741,7 @@ func (r *Router) routeAISessionsCollection(w http.ResponseWriter, req *http.Requ
 func (r *Router) routeAIPatrolFindings(w http.ResponseWriter, req *http.Request) {
 	switch req.Method {
 	case http.MethodGet:
-		if !ensureAnyScope(w, req, relayMobileExecuteCompatibleScopes...) {
+		if !ensureRelayMobileRuntimeRoute(w, req, relayMobileRoutePatrolFindingsList) {
 			return
 		}
 		r.aiSettingsHandler.HandleGetPatrolFindings(w, req)
@@ -758,12 +763,12 @@ func (r *Router) routeAIFindings(w http.ResponseWriter, req *http.Request) {
 	path := req.URL.Path
 	switch {
 	case strings.HasSuffix(path, "/investigation/messages"):
-		if !ensureAnyScope(w, req, relayMobileExecuteCompatibleScopes...) {
+		if !ensureRelayMobileRuntimeRoute(w, req, relayMobileRouteFindingInvestigationMessages) {
 			return
 		}
 		r.aiSettingsHandler.HandleGetInvestigationMessages(w, req)
 	case strings.HasSuffix(path, "/investigation"):
-		if !ensureAnyScope(w, req, relayMobileExecuteCompatibleScopes...) {
+		if !ensureRelayMobileRuntimeRoute(w, req, relayMobileRouteFindingInvestigation) {
 			return
 		}
 		r.aiSettingsHandler.HandleGetInvestigation(w, req)
@@ -800,10 +805,19 @@ func (r *Router) routeApprovals(w http.ResponseWriter, req *http.Request) {
 	if len(parts) > 1 {
 		switch parts[1] {
 		case "approve":
+			if !ensureRelayMobileRuntimeRoute(w, req, relayMobileRouteApprovalApprove) {
+				return
+			}
 			r.aiSettingsHandler.HandleApproveCommand(w, req)
 		case "deny":
+			if !ensureRelayMobileRuntimeRoute(w, req, relayMobileRouteApprovalDeny) {
+				return
+			}
 			r.aiSettingsHandler.HandleDenyCommand(w, req)
 		default:
+			if !ensureScope(w, req, config.ScopeAIExecute) {
+				return
+			}
 			http.Error(w, "Not found", http.StatusNotFound)
 		}
 		return
@@ -812,8 +826,14 @@ func (r *Router) routeApprovals(w http.ResponseWriter, req *http.Request) {
 	// Handle approval-level operations (GET specific approval)
 	switch req.Method {
 	case http.MethodGet:
+		if !ensureScope(w, req, config.ScopeAIExecute) {
+			return
+		}
 		r.aiSettingsHandler.HandleGetApproval(w, req)
 	default:
+		if !ensureScope(w, req, config.ScopeAIExecute) {
+			return
+		}
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
 }

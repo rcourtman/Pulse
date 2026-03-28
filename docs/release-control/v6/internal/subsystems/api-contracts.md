@@ -114,10 +114,11 @@ Own canonical runtime payload shapes between backend and frontend.
 26. `internal/api/notifications.go` shared with `notifications`: notification handlers are both a notification delivery control surface and a canonical API payload contract boundary.
 27. `internal/api/payments_webhook_handlers.go` shared with `cloud-paid`: commercial payment webhook handlers carry both API payload contract and cloud-paid billing boundary ownership.
 28. `internal/api/public_signup_handlers.go` shared with `cloud-paid`: hosted signup handlers carry both API payload contract and cloud-paid hosted provisioning boundary ownership.
-29. `internal/api/resources.go` shared with `unified-resources`: the unified resource endpoint is both a backend payload contract surface and a unified-resource runtime boundary.
-30. `internal/api/security.go` shared with `security-privacy`: the security handlers are both a security/privacy control surface and a canonical API payload contract boundary.
-31. `internal/api/security_tokens.go` shared with `security-privacy`: the security token handlers are both a security/privacy control surface and a canonical API payload contract boundary.
-32. `internal/api/slo.go` shared with `performance-and-scalability`: the SLO endpoint is both an API contract surface and a protected performance hot-path boundary.
+29. `internal/api/relay_mobile_capability.go` shared with `relay-runtime`: the backend-owned Pulse Mobile relay capability inventory is both a relay runtime boundary and a canonical API payload contract surface.
+30. `internal/api/resources.go` shared with `unified-resources`: the unified resource endpoint is both a backend payload contract surface and a unified-resource runtime boundary.
+31. `internal/api/security.go` shared with `security-privacy`: the security handlers are both a security/privacy control surface and a canonical API payload contract boundary.
+32. `internal/api/security_tokens.go` shared with `security-privacy`: the security token handlers are both a security/privacy control surface and a canonical API payload contract boundary.
+33. `internal/api/slo.go` shared with `performance-and-scalability`: the SLO endpoint is both an API contract surface and a protected performance hot-path boundary.
 33. `internal/api/system_settings.go` shared with `security-privacy`: the system settings telemetry and auth controls are both a security/privacy control surface and a canonical API payload contract boundary.
 34. `internal/api/unified_agent.go` shared with `agent-lifecycle`: unified agent download and installer handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.
 35. `internal/api/updates.go` shared with `deployment-installability`: update handlers are both a deployment-installability control surface and a canonical API payload contract boundary.
@@ -155,7 +156,7 @@ Own canonical runtime payload shapes between backend and frontend.
 13. Keep Patrol status transport semantics explicit in that same AI handler layer: the Patrol status endpoint must carry machine-readable runtime availability such as blocked, running, disabled, active, or unavailable rather than asking frontend consumers to infer operator state from stale summaries or run history.
 14. Keep Patrol quickstart transport semantics explicit as well: zero remaining quickstart credits are inventory data, not a standalone runtime-state override, so frontend consumers may only present the exhausted quickstart warning when the payload still reports `using_quickstart` or a runtime state that is blocked by quickstart exhaustion.
 15. Keep Patrol intelligence summary transport semantics single-voiced: the canonical overall-health payload and Patrol run-history payload together must support one primary assessment plus one explicit verification explanation, and frontend consumers must not need to derive a second compact assessment or verification verdict row from the same payloads beneath the primary summary card.
-16. Keep Pulse Mobile relay credential minting and permission ownership on backend ownership: `internal/api/router_routes_auth_security.go`, `internal/api/security_tokens.go`, `internal/api/auth.go`, `internal/api/router_routes_ai_relay.go`, and `frontend-modern/src/api/security.ts` may expose the canonical mobile runtime token creator and governed route gates, but browser callers must only consume that route and must not define the mobile runtime scope, compatibility gate list, or token-purpose metadata locally.
+16. Keep Pulse Mobile relay credential minting and permission ownership on backend ownership: `internal/api/router_routes_auth_security.go`, `internal/api/security_tokens.go`, `internal/api/auth.go`, `internal/api/relay_mobile_capability.go`, `internal/api/router_routes_ai_relay.go`, and `frontend-modern/src/api/security.ts` may expose the canonical mobile runtime token creator and governed route gates, but browser callers must only consume that route and must not define the mobile runtime scope, compatibility gate list, route inventory, or token-purpose metadata locally.
 17. Keep hosted tenant browser-session precedence on the shared auth boundary: `internal/api/auth.go`, `internal/api/contract_test.go`, and hosted tenant callers must treat a valid `pulse_session` as authoritative before any API-only token fallback or no-local-auth anonymous fallback, so cloud handoff can continue into protected hosted routes without flattening the operator back to `anonymous` or forcing a browser session through bearer-token-only mode after the tenant has minted API tokens.
 18. Keep tenant settings-scope authorization aligned with org management: `internal/api/security_setup_fix.go`, `internal/api/contract_test.go`, and settings-bound hosted callers must allow the current non-default org owner/admin membership to exercise privileged tenant routes, rather than requiring a separate configured local admin identity after hosted handoff.
 19. Keep mobile onboarding payload reads aligned with the server-owned relay-mobile credential: `internal/api/router_routes_ai_relay.go`, `internal/api/onboarding_handlers.go`, and `internal/api/contract_test.go` must allow the dedicated `relay:mobile:access` scope to reach the governed QR, deep-link, and connection-validation payloads without reintroducing a broader `settings:read` requirement for token-authenticated pairing clients.
@@ -1732,14 +1733,6 @@ both sides instead of relying only on broad settings-surface coverage on the
 security side: token settings changes must continue to carry the direct
 `api-token-management-surface` API-contract proof together with the
 security-side surface proof.
-That same governed token-settings boundary also owns its operator-facing scope
-reference path. `frontend-modern/src/components/Settings/apiTokenManagerModel.ts`
-may expose the scope-reference URL consumed by the API token settings shell,
-but that URL must resolve through the shared shipped-doc owner in
-`frontend-modern/src/utils/docsLinks.ts` and the local
-`/docs/CONFIGURATION.md` asset instead of hardcoding a GitHub `main` document
-that can drift from the payload contract actually shipped with the running
-build.
 That same shared commercial API boundary now also owns the local trial-start
 transport contract. `/api/license/trial/start` may allow a short human-scale
 burst of retries while the hosted redirect handoff remains canonical, but once
@@ -1851,7 +1844,8 @@ request is scoped to a non-default org, `internal/api/security_setup_fix.go`
 must honor the org's owner/admin membership model for settings-bound routes
 such as relay-mobile token minting, instead of requiring a separate configured
 local admin username that hosted tenants do not carry.
-The same onboarding boundary in `internal/api/router_routes_ai_relay.go` must
+The same onboarding boundary in `internal/api/router_routes_ai_relay.go` and
+`internal/api/relay_mobile_capability.go` must
 also accept the dedicated `relay:mobile:access` scope for
 `/api/onboarding/qr`, `/api/onboarding/validate`, and
 `/api/onboarding/deep-link`, because those payloads are the canonical
@@ -1866,10 +1860,13 @@ consume that same contract when deciding whether a displayed QR token can be
 revoked or must be preserved as an already-used device credential. That same
 contract now also owns backend-minted Pulse Mobile relay access tokens: the
 server route, not the browser, defines the canonical dedicated
-`relay:mobile:access` runtime scope, its backward-compatible server-side route
-gates alongside legacy `ai:chat` and `ai:execute` mobile tokens, and the
-token-purpose metadata. The pairing UI only consumes that server-owned
-credential when requesting the onboarding payload.
+`relay:mobile:access` runtime scope, the explicit route inventory in
+`internal/api/relay_mobile_capability.go`, its backward-compatible
+server-side route gates alongside legacy `ai:chat` and `ai:execute` mobile
+tokens, and the token-purpose metadata. Route expansion for Pulse Mobile must
+land by editing that backend-owned inventory plus its proofs, rather than by
+sprinkling ad hoc compatibility checks across handlers. The pairing UI only
+consumes that server-owned credential when requesting the onboarding payload.
 That same shared backend API contract now also owns hosted relay bootstrap
 reads. `internal/api/router.go`, `internal/api/onboarding_handlers.go`, and
 `internal/api/relay_hosted_runtime.go` must derive `/api/settings/relay` and

@@ -6379,7 +6379,7 @@ func (h *AISettingsHandler) HandleApproveCommand(w http.ResponseWriter, r *http.
 	// SECURITY: Approval execution accepts the dedicated mobile relay capability
 	// for new pairings while remaining backward-compatible with older mobile
 	// tokens that still carry ai:execute.
-	if !ensureAnyScope(w, r, relayMobileExecuteCompatibleScopes...) {
+	if !ensureRelayMobileRuntimeRoute(w, r, relayMobileRouteApprovalApprove) {
 		return
 	}
 
@@ -6486,6 +6486,9 @@ func (h *AISettingsHandler) updateFindingOutcome(ctx context.Context, orgID, fin
 func (h *AISettingsHandler) HandleDenyCommand(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if !ensureRelayMobileRuntimeRoute(w, r, relayMobileRouteApprovalDeny) {
 		return
 	}
 

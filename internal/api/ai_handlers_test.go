@@ -2005,6 +2005,46 @@ func TestAISettingsHandler_Approvals(t *testing.T) {
 		assert.Equal(t, approval.StatusDenied, app.Status)
 		assert.Equal(t, "too dangerous", app.DenyReason)
 	})
+
+	t.Run("HandleApproveCommand_AcceptsRelayMobileScope", func(t *testing.T) {
+		appID3 := "app-789"
+		_ = approvalStore.CreateApproval(&approval.ApprovalRequest{
+			ID:      appID3,
+			Command: "pwd",
+			Status:  approval.StatusPending,
+		})
+
+		req := httptest.NewRequest(http.MethodPost, "/api/ai/approvals/"+appID3+"/approve", nil)
+		record := config.APITokenRecord{ID: "relay-mobile-approve", Scopes: []string{config.ScopeRelayMobileAccess}}
+		attachAPITokenRecord(req, &record)
+		rec := httptest.NewRecorder()
+		handler.HandleApproveCommand(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		app, _ := approvalStore.GetApproval(appID3)
+		assert.Equal(t, approval.StatusApproved, app.Status)
+	})
+
+	t.Run("HandleDenyCommand_AcceptsRelayMobileScope", func(t *testing.T) {
+		appID4 := "app-999"
+		_ = approvalStore.CreateApproval(&approval.ApprovalRequest{
+			ID:      appID4,
+			Command: "rm -rf /tmp",
+			Status:  approval.StatusPending,
+		})
+
+		body, _ := json.Marshal(map[string]string{"reason": "not now"})
+		req := httptest.NewRequest(http.MethodPost, "/api/ai/approvals/"+appID4+"/deny", bytes.NewReader(body))
+		record := config.APITokenRecord{ID: "relay-mobile-deny", Scopes: []string{config.ScopeRelayMobileAccess}}
+		attachAPITokenRecord(req, &record)
+		rec := httptest.NewRecorder()
+		handler.HandleDenyCommand(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		app, _ := approvalStore.GetApproval(appID4)
+		assert.Equal(t, approval.StatusDenied, app.Status)
+		assert.Equal(t, "not now", app.DenyReason)
+	})
 }
 
 func TestAISettingsHandler_Approvals_RejectCrossOrgAccess(t *testing.T) {

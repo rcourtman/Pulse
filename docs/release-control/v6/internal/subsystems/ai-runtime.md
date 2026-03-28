@@ -125,11 +125,13 @@ it. `frontend-modern/src/api/ai.ts`,
 the AI product while also remaining canonical payload contract boundaries.
 That same AI transport boundary now also defines the narrow Pulse Mobile
 runtime compatibility rule: mobile relay credentials are minted with the
-dedicated backend-owned `relay:mobile:access` scope, and only the governed
-mobile runtime routes may accept that scope as a compatibility alias alongside
-legacy `ai:chat` or `ai:execute` mobile tokens. Broader AI runtime surfaces
-must stay on their canonical AI scopes instead of treating the mobile relay
-capability as a general-purpose AI permission.
+dedicated backend-owned `relay:mobile:access` scope, and only the explicit
+route inventory in `internal/api/relay_mobile_capability.go` may accept that
+scope as a compatibility alias alongside legacy `ai:chat` or `ai:execute`
+mobile tokens. Broader AI runtime surfaces must stay on their canonical AI
+scopes instead of treating the mobile relay capability as a general-purpose
+AI permission, and any new mobile-compatible AI route must land by extending
+that governed backend inventory and proof set in the same slice.
 That same shared AI transport boundary now also owns hosted AI bootstrap.
 When Pulse Cloud runs in hosted mode and no explicit `ai.enc` exists yet,
 `internal/api/ai_hosted_runtime.go`, `internal/api/ai_handler.go`, and

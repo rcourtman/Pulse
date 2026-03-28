@@ -1979,16 +1979,11 @@
       "name": "Relay infrastructure readiness",
       "target_score": 9,
       "current_score": 9,
-      "status": "partial",
+      "status": "target-met",
       "completion": {
-        "state": "bounded-residual",
-        "summary": "Relay infrastructure is at the RC floor; the remaining residual is limited to the backend-owned mobile relay capability boundary.",
-        "tracking": [
-          {
-            "kind": "lane-followup",
-            "id": "relay-mobile-capability-boundary"
-          }
-        ]
+        "state": "complete",
+        "summary": "Relay infrastructure now carries an explicit backend-owned mobile capability boundary: the dedicated Pulse Mobile relay credential is limited to the governed runtime route inventory instead of depending on scattered compatibility gates.",
+        "tracking": []
       },
       "blockers": [],
       "subsystems": [
@@ -1998,6 +1993,11 @@
         {
           "repo": "pulse",
           "path": "docs/RELAY.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/relay_mobile_capability.go",
           "kind": "file"
         },
         {
@@ -3138,19 +3138,6 @@
         "storage-recovery"
       ],
       "cross_repo": false
-    },
-    {
-      "id": "relay-mobile-capability-boundary",
-      "summary": "Narrow the dedicated backend-owned mobile relay capability to the minimum supported runtime route set and require any future route expansion to land as explicit governed relay surface work rather than incidental backend reach-through.",
-      "owner": "project-owner",
-      "status": "planned",
-      "recorded_at": "2026-03-28",
-      "lane_ids": [
-        "L7"
-      ],
-      "subsystem_ids": [
-        "relay-runtime"
-      ]
     }
   ],
   "coverage_gaps": [
@@ -3421,7 +3408,21 @@
       ]
     }
   ],
-  "work_claims": [],
+  "work_claims": [
+    {
+      "id": "codex-portal-lane-l3",
+      "agent_id": "codex-portal",
+      "summary": "Continue Playwright-driven portal redesign from built review",
+      "target_id": "v6-rc-stabilization",
+      "claimed_at": "2026-03-28T19:12:30Z",
+      "heartbeat_at": "2026-03-28T19:12:30Z",
+      "expires_at": "2026-03-28T21:12:30Z",
+      "work_item": {
+        "kind": "lane",
+        "id": "L3"
+      }
+    }
+  ],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [

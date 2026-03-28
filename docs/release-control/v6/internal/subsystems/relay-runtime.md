@@ -16,30 +16,33 @@
 ## Purpose
 
 Own the desktop and mobile relay runtimes, their persisted relay state
-boundaries, and the canonical reconnect, encryption, protocol, proxy, and
-relay-trust behavior for Pulse instance bridging.
+boundaries, the server-owned mobile relay capability boundary, and the
+canonical reconnect, encryption, protocol, proxy, and relay-trust behavior
+for Pulse instance bridging.
 
 ## Canonical Files
 
 1. `internal/relay/client.go`
 2. `internal/relay/protocol.go`
 3. `internal/config/persistence_relay.go`
-4. `pulse-mobile:src/relay/client.ts`
-5. `pulse-mobile:src/relay/protocol.ts`
-6. `pulse-mobile:src/relay/proxy.ts`
-7. `pulse-mobile:src/relay/encryption.ts`
+4. `internal/api/relay_mobile_capability.go`
+5. `pulse-mobile:src/relay/client.ts`
+6. `pulse-mobile:src/relay/protocol.ts`
+7. `pulse-mobile:src/relay/proxy.ts`
+8. `pulse-mobile:src/relay/encryption.ts`
 
 ## Shared Boundaries
 
-1. None.
+1. `internal/api/relay_mobile_capability.go` shared with `api-contracts`: the backend-owned Pulse Mobile relay capability inventory is both a relay runtime boundary and a canonical API payload contract surface.
 
 ## Extension Points
 
 1. Add or change desktop relay reconnect, registration, drain, proxy-stream, or encrypted channel behavior through `internal/relay/`
 2. Add or change relay control payload schemas, including mobile-visible push notification metadata, through `internal/relay/protocol.go`
 3. Add or change persisted relay enablement, server URL, or reconnect-safe default loading through `internal/config/persistence_relay.go`
-4. Add or change mobile relay reconnect, drain, channel, encryption, proxy, or identity behavior through `pulse-mobile:src/relay/`
-5. Keep desktop and mobile relay changes aligned with the governed server relay surfaces represented by the L7 lane evidence
+4. Add or change the backend-owned mobile relay capability inventory and compatibility scope mapping through `internal/api/relay_mobile_capability.go`
+5. Add or change mobile relay reconnect, drain, channel, encryption, proxy, or identity behavior through `pulse-mobile:src/relay/`
+6. Keep desktop and mobile relay changes aligned with the governed server relay surfaces represented by the L7 lane evidence
 
 ## Forbidden Paths
 
@@ -52,7 +55,8 @@ relay-trust behavior for Pulse instance bridging.
 1. Update this contract when new desktop relay runtime or persistence entry points become canonical
 2. Keep relay client changes tied to explicit runtime proof in `internal/relay/client_test.go`
 3. Keep persisted relay config loading tied to explicit proof in `internal/config/persistence_relay_test.go`
-4. Keep mobile relay runtime changes tied to explicit proof in `pulse-mobile:src/relay/__tests__/`
+4. Keep backend-owned mobile capability inventory changes tied to explicit proof in `internal/api/relay_mobile_capability_test.go`
+5. Keep mobile relay runtime changes tied to explicit proof in `pulse-mobile:src/relay/__tests__/`
 
 ## Current State
 
@@ -97,3 +101,8 @@ The mobile relay runtime is part of the same owned surface: reconnect drain
 failover hints are one-shot recovery instructions, not permanent relay URL
 overrides, so a successful failover reconnect must return future reconnects to
 the instance's canonical relay URL unless the server sends a fresh drain hint.
+The server-owned mobile relay capability boundary is part of that same owned
+surface too. The dedicated `relay:mobile:access` credential may only reach the
+explicit runtime route inventory in `internal/api/relay_mobile_capability.go`,
+and expanding that inventory is governed L7 work rather than a router-local
+compatibility tweak.

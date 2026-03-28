@@ -1634,6 +1634,25 @@ func TestContract_RelayMobileScopeCanReadOnboardingDeepLink(t *testing.T) {
 	}
 }
 
+func TestContract_RelayMobileScopeCannotReadApprovalDetail(t *testing.T) {
+	rawToken := "relay-mobile-approval-detail-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeRelayMobileAccess}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/approvals/approval-1", nil)
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("relay mobile scope should not satisfy approval detail gating, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), config.ScopeAIExecute) {
+		t.Fatalf("relay mobile approval detail rejection should mention %q, got %s", config.ScopeAIExecute, rec.Body.String())
+	}
+}
+
 func TestContract_UnifiedAgentReportResponseJSONSnapshot(t *testing.T) {
 	payload := map[string]any{
 		"success":   true,

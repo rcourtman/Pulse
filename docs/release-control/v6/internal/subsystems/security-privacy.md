@@ -125,14 +125,6 @@ owner for privacy-document URLs, while `frontend-modern/public/docs/PRIVACY.md`
 is the version-matched asset served by the running build. Privacy disclosures
 must not drift back to GitHub `main` links that can describe a different
 revision than the installed runtime.
-That same shipped-doc boundary now also governs the rest of the operator
-security trust surface: API token scope reference links, proxy-auth guidance,
-and the runtime security warning must open the local
-`/docs/CONFIGURATION.md`, `/docs/PROXY_AUTH.md`, and `/docs/SECURITY.md`
-assets instead of version-drifting GitHub URLs, and
-`frontend-modern/src/components/SecurityWarning.tsx` must stay reactive after
-its async status fetch so low-security installs actually surface that governed
-security guidance in the running UI.
 That same governed settings trust boundary now also includes
 `frontend-modern/src/components/Settings/QuickSecuritySetup.tsx`,
 `frontend-modern/src/components/Settings/SecurityPostureSummary.tsx`,
@@ -170,9 +162,11 @@ That same token-scope boundary now also governs Pulse Mobile relay runtime
 credentials: `internal/api/security_tokens.go` must mint only the dedicated
 backend-owned `relay:mobile:access` scope for new mobile relay tokens, and the
 shared auth/router helpers may expose backward-compatible gates for older
-mobile tokens only on the governed mobile runtime routes. Browser callers and
-route-local handlers must not recreate wildcard or broad AI-scoped mobile
-credentials.
+mobile tokens only on the governed mobile runtime routes enumerated in
+`internal/api/relay_mobile_capability.go`. Browser callers and route-local
+handlers must not recreate wildcard or broad AI-scoped mobile credentials, and
+future route expansion must update that backend-owned inventory explicitly
+rather than widening compatibility through ad hoc handler checks.
 That same trust rule also applies to AI-owned persisted state under
 `internal/config/persistence.go`: findings, usage history, patrol run history,
 and chat sessions may use plaintext files only as migration input. Once those
