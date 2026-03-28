@@ -716,6 +716,10 @@ instead of behaving like a recovery-only executive summary.
 That support band should stay genuinely short, usually two or three compact
 rows rather than four-item micro reports, so the operator can scan the summary
 as orientation instead of reading each card like a dense checklist.
+Those support rows should also stay signal-driven. Recovery summary cards
+should omit zero-value or low-value support rows like `Primary Item` or `Peak
+Day` when they do not materially improve operator triage, so the top strip
+stays closer to storage's orientation-first rhythm.
 That same summary-scan rule should also trim derivative rows that restate the
 headline instead of adding a new operator question. `Freshness` should not add
 an extra `<24h` row under a `fresh in 24h` headline, `Protected Footprint`

@@ -62,33 +62,44 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
   });
   const handleTimeRangeChange = (range: string) =>
     props.onTimeRangeChange?.(range as RecoverySummaryTimeRange);
-  const postureRows = createMemo(() => [
-    {
-      label: 'Healthy',
-      value: healthyCount(),
-      valueClass: 'text-emerald-600 dark:text-emerald-400',
-    },
-    {
-      label: 'Stale',
-      value: postureSummary().stale,
-      valueClass: 'text-amber-600 dark:text-amber-400',
-    },
-    {
-      label: 'Failed',
-      value: postureSummary().failed + postureSummary().neverSucceeded,
-      valueClass: 'text-rose-600 dark:text-rose-400',
-    },
-  ]);
-  const freshnessRows = createMemo(() => [
-    {
-      label: '>7d',
-      value: freshnessBuckets().find((bucket) => bucket.key === 'over7d')?.count ?? 0,
-    },
-    {
-      label: 'Never Succeeded',
-      value: summary().neverSucceeded,
-    },
-  ]);
+  const postureRows = createMemo(
+    () =>
+      [
+      {
+        label: 'Healthy',
+        value: healthyCount(),
+        valueClass: 'text-emerald-600 dark:text-emerald-400',
+      },
+      postureSummary().failed + postureSummary().neverSucceeded > 0
+        ? {
+            label: 'Failed',
+            value: postureSummary().failed + postureSummary().neverSucceeded,
+            valueClass: 'text-rose-600 dark:text-rose-400',
+          }
+        : null,
+      postureSummary().stale > 0
+        ? {
+            label: 'Stale',
+            value: postureSummary().stale,
+            valueClass: 'text-amber-600 dark:text-amber-400',
+          }
+        : null,
+      postureSummary().warning > 0
+        ? {
+            label: 'Warning',
+            value: postureSummary().warning,
+            valueClass: 'text-amber-600 dark:text-amber-400',
+          }
+        : null,
+      postureSummary().running > 0
+        ? {
+            label: 'Running',
+            value: postureSummary().running,
+            valueClass: 'text-blue-600 dark:text-blue-400',
+          }
+        : null,
+      ].filter(Boolean) as Array<{ label: string; value: string | number; valueClass?: string }>,
+  );
   const freshWithin24hCount = createMemo(
     () =>
       (freshnessBuckets().find((bucket) => bucket.key === 'under1h')?.count ?? 0) +
@@ -96,6 +107,25 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
   );
   const freshWithin1hCount = createMemo(
     () => freshnessBuckets().find((bucket) => bucket.key === 'under1h')?.count ?? 0,
+  );
+  const freshnessRows = createMemo(
+    () =>
+      [
+        {
+          label: '<1h',
+          value: freshWithin1hCount(),
+        },
+        {
+          label: '>7d',
+          value: freshnessBuckets().find((bucket) => bucket.key === 'over7d')?.count ?? 0,
+        },
+        summary().neverSucceeded > 0
+          ? {
+              label: 'Never Succeeded',
+              value: summary().neverSucceeded,
+            }
+          : null,
+      ].filter(Boolean) as Array<{ label: string; value: string | number; valueClass?: string }>,
   );
 
   const MetricRows = (rowProps: {
@@ -151,12 +181,7 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
               <div class="text-[11px] text-muted">fresh in 24h</div>
             </div>
             <div class="border-t border-border-subtle pt-1.5">
-              <MetricRows
-                rows={[
-                  { label: '<1h', value: freshWithin1hCount() },
-                  ...freshnessRows(),
-                ]}
-              />
+              <MetricRows rows={freshnessRows()} />
             </div>
           </div>
         </SummaryMetricCard>
@@ -173,7 +198,6 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
               <MetricRows
                 rows={[
                   { label: 'Platforms', value: platformCoverage().platformCount },
-                  { label: 'Primary Item', value: itemCoverage().primaryItemLabel ?? 'n/a' },
                 ]}
               />
             </div>
@@ -197,7 +221,6 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
               <MetricRows
                 rows={[
                   { label: 'Days Active', value: activity().activeDays },
-                  { label: 'Peak Day', value: activity().busiestLabel ?? 'n/a' },
                   { label: 'Latest Activity', value: activity().latestLabel ?? 'n/a' },
                 ]}
               />

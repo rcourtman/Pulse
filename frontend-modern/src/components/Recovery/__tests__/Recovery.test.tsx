@@ -448,7 +448,8 @@ describe('Recovery', () => {
 
     const summary = await screen.findByTestId('recovery-summary');
     expect(within(summary).getByText('Protected Footprint')).toBeInTheDocument();
-    expect(within(summary).getByText('Primary Item')).toBeInTheDocument();
+    expect(within(summary).queryByText('Primary Item')).not.toBeInTheDocument();
+    expect(within(summary).getByText(/item types/i)).toBeInTheDocument();
     expect(within(summary).getAllByText(/platforms/i).length).toBeGreaterThan(0);
     expect(within(summary).queryByText('Primary Platform')).not.toBeInTheDocument();
   });
