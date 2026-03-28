@@ -19,7 +19,7 @@ Every field is listed below — nothing else leaves your server:
 
 | Field | Example | Purpose |
 |-------|---------|---------|
-| Install ID | `a1b2c3d4-...` | Random UUID generated locally, not tied to any account |
+| Install ID | `a1b2c3d4-...` | Rotating UUID generated locally, not tied to any account |
 | Version | `6.0.0` | Pulse version |
 | Platform | `docker` or `binary` | Deployment method |
 | OS | `linux` | Operating system |
@@ -47,6 +47,12 @@ Every field is listed below — nothing else leaves your server:
 - No Proxmox credentials, API tokens, or passwords
 - No alert content, AI prompts, or chat messages
 - No personally identifiable information of any kind
+
+### Install ID rotation
+
+The telemetry install ID is pseudonymous and rotates automatically every 30 days.
+Pulse keeps it only to avoid treating every startup ping as a brand-new install
+while still limiting long-term linkage from one heartbeat window to the next.
 
 ### Source code
 

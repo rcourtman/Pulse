@@ -131,6 +131,11 @@ such as whether a paid license is active or whether any API tokens exist.
 Exact license tiers and exact API-token counts are not part of the canonical
 anonymous telemetry contract and may not be reintroduced without updating this
 trust boundary and the governed privacy disclosure together.
+That same anonymous telemetry contract also treats `install_id` as a rotating
+pseudonymous identifier, not a lifetime install handle. The runtime may keep a
+local rotating UUID so startup and heartbeat pings can still represent an
+active installation window, but it may not preserve one stable install
+identifier indefinitely or echo that identifier back into routine logs.
 That same rule also applies inside shipped security guidance itself:
 `SECURITY.md` and the synced `frontend-modern/public/docs/SECURITY.md` copy may
 not bounce the operator back to GitHub `main` for section references that the

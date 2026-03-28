@@ -7,7 +7,7 @@
 // # What is sent (the full list — nothing else)
 //
 // Identity:
-//   - A random install ID (UUID, generated locally, not tied to any account)
+//   - A rotating install ID (UUID, generated locally and rotated periodically, not tied to any account)
 //   - Pulse version
 //   - Platform: "docker" or "binary"
 //   - OS and architecture (e.g. "linux/amd64")
@@ -78,13 +78,22 @@ const (
 
 	// installIDFile is the filename persisted in the data directory.
 	installIDFile = ".install_id"
+
+	// installIDRotationWindow limits how long the same pseudonymous identifier
+	// can be reused before it is rotated locally.
+	installIDRotationWindow = 30 * 24 * time.Hour
 )
+
+type installIDRecord struct {
+	InstallID string    `json:"install_id"`
+	IssuedAt  time.Time `json:"issued_at"`
+}
 
 // Ping is the payload sent to the telemetry endpoint.
 // Every field is documented here so users can audit exactly what leaves their server.
 type Ping struct {
 	// Identity
-	InstallID string `json:"install_id"` // Random UUID, not tied to any account
+	InstallID string `json:"install_id"` // Rotating UUID, not tied to any account
 	Version   string `json:"version"`    // Pulse version (e.g. "6.0.0")
 	Platform  string `json:"platform"`   // "docker" or "binary"
 	OS        string `json:"os"`         // runtime.GOOS (e.g. "linux")
@@ -155,7 +164,7 @@ var (
 )
 
 // Start begins anonymous telemetry if enabled.
-// It reads or creates a stable install ID in dataDir, waits for the monitor
+// It reads or creates a rotating install ID in dataDir, waits for the monitor
 // to populate state, sends a startup ping, and schedules a daily heartbeat.
 // Call Stop() on shutdown.
 //
@@ -195,15 +204,9 @@ func Start(ctx context.Context, cfg Config) {
 	current = r
 	mu.Unlock()
 
-	// Log only the first 8 chars of the install ID to avoid a stable pseudonymous identifier in logs.
-	idPrefix := installID
-	if len(idPrefix) > 8 {
-		idPrefix = idPrefix[:8] + "…"
-	}
 	log.Info().
-		Str("install_id", idPrefix).
 		Str("platform", platform).
-		Msg("Anonymous telemetry enabled — sends install ID, version, platform, OS/arch, resource counts, and feature flags (nothing else)")
+		Msg("Anonymous telemetry enabled — sends a rotating install ID, version, platform, OS/arch, resource counts, and feature flags (nothing else)")
 
 	r.wg.Add(1)
 	go func() {
@@ -292,25 +295,72 @@ func applySnapshot(base Ping, fn SnapshotFunc) Ping {
 	return ping
 }
 
-// getOrCreateInstallID reads or generates a random install ID in dataDir.
+// getOrCreateInstallID reads or generates a rotating install ID in dataDir.
 func getOrCreateInstallID(dataDir string) string {
+	return getOrCreateInstallIDAt(dataDir, time.Now().UTC())
+}
+
+func getOrCreateInstallIDAt(dataDir string, now time.Time) string {
 	p := filepath.Join(dataDir, installIDFile)
+	now = now.UTC()
 
 	data, err := os.ReadFile(p)
 	if err == nil {
-		id := string(bytes.TrimSpace(data))
-		if _, err := uuid.Parse(id); err == nil {
-			return id
+		record, ok := parseInstallIDRecord(data)
+		if ok && shouldKeepInstallIDRecord(record, now) {
+			return record.InstallID
 		}
-		// Invalid content — regenerate.
 	}
 
-	id := uuid.New().String()
-	if err := os.WriteFile(p, []byte(id+"\n"), 0600); err != nil {
+	record := installIDRecord{
+		InstallID: uuid.New().String(),
+		IssuedAt:  now,
+	}
+	encoded, err := json.Marshal(record)
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to encode rotating install ID")
+		return record.InstallID
+	}
+	if err := os.WriteFile(p, append(encoded, '\n'), 0600); err != nil {
 		log.Warn().Err(err).Str("path", p).Msg("Failed to persist install ID")
 		// Still use the generated ID for this session.
 	}
-	return id
+	return record.InstallID
+}
+
+func parseInstallIDRecord(data []byte) (installIDRecord, bool) {
+	trimmed := bytes.TrimSpace(data)
+	if len(trimmed) == 0 {
+		return installIDRecord{}, false
+	}
+
+	var record installIDRecord
+	if err := json.Unmarshal(trimmed, &record); err == nil {
+		record.InstallID = string(bytes.TrimSpace([]byte(record.InstallID)))
+		if _, err := uuid.Parse(record.InstallID); err == nil && !record.IssuedAt.IsZero() {
+			return record, true
+		}
+		return installIDRecord{}, false
+	}
+
+	legacyID := string(trimmed)
+	if _, err := uuid.Parse(legacyID); err == nil {
+		// Legacy plaintext IDs are accepted as migration input only. Rotate to a
+		// new record immediately instead of preserving an unbounded stable ID.
+		return installIDRecord{}, false
+	}
+	return installIDRecord{}, false
+}
+
+func shouldKeepInstallIDRecord(record installIDRecord, now time.Time) bool {
+	if _, err := uuid.Parse(record.InstallID); err != nil {
+		return false
+	}
+	issuedAt := record.IssuedAt.UTC()
+	if issuedAt.IsZero() || issuedAt.After(now) {
+		return false
+	}
+	return now.Sub(issuedAt) < installIDRotationWindow
 }
 
 // send posts a ping to the telemetry endpoint. Failures are silently ignored

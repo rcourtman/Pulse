@@ -12,11 +12,14 @@ import (
 	"time"
 
 	"context"
+
+	"github.com/google/uuid"
 )
 
 func TestGetOrCreateInstallID_CreatesNew(t *testing.T) {
 	dir := t.TempDir()
-	id := getOrCreateInstallID(dir)
+	now := time.Date(2026, 3, 28, 12, 0, 0, 0, time.UTC)
+	id := getOrCreateInstallIDAt(dir, now)
 	if id == "" {
 		t.Fatal("expected non-empty install ID")
 	}
@@ -26,19 +29,24 @@ func TestGetOrCreateInstallID_CreatesNew(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := string(data); got != id+"\n" {
-		t.Fatalf("file content %q does not match returned ID %q", got, id)
+	record := decodeInstallIDRecord(t, data)
+	if record.InstallID != id {
+		t.Fatalf("persisted install ID = %q, want %q", record.InstallID, id)
+	}
+	if !record.IssuedAt.Equal(now) {
+		t.Fatalf("persisted issued_at = %v, want %v", record.IssuedAt, now)
 	}
 }
 
 func TestGetOrCreateInstallID_ReusesExisting(t *testing.T) {
 	dir := t.TempDir()
+	now := time.Date(2026, 3, 28, 12, 0, 0, 0, time.UTC)
 
 	// Create first ID.
-	id1 := getOrCreateInstallID(dir)
+	id1 := getOrCreateInstallIDAt(dir, now)
 
 	// Second call should return the same ID.
-	id2 := getOrCreateInstallID(dir)
+	id2 := getOrCreateInstallIDAt(dir, now.Add(7*24*time.Hour))
 	if id1 != id2 {
 		t.Fatalf("expected same ID across calls, got %q and %q", id1, id2)
 	}
@@ -49,9 +57,39 @@ func TestGetOrCreateInstallID_RegeneratesInvalid(t *testing.T) {
 	// Write garbage.
 	os.WriteFile(filepath.Join(dir, installIDFile), []byte("not-a-uuid\n"), 0600)
 
-	id := getOrCreateInstallID(dir)
+	id := getOrCreateInstallIDAt(dir, time.Date(2026, 3, 28, 12, 0, 0, 0, time.UTC))
 	if id == "" || id == "not-a-uuid" {
 		t.Fatalf("expected new valid UUID, got %q", id)
+	}
+}
+
+func TestGetOrCreateInstallID_RotatesExpiredRecord(t *testing.T) {
+	dir := t.TempDir()
+	start := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+
+	first := getOrCreateInstallIDAt(dir, start)
+	second := getOrCreateInstallIDAt(dir, start.Add(installIDRotationWindow+time.Hour))
+	if first == second {
+		t.Fatalf("expected install ID rotation after %v, got same value %q", installIDRotationWindow, first)
+	}
+}
+
+func TestGetOrCreateInstallID_RotatesLegacyPlaintextID(t *testing.T) {
+	dir := t.TempDir()
+	legacyID := uuid.New().String()
+	if err := os.WriteFile(filepath.Join(dir, installIDFile), []byte(legacyID+"\n"), 0600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	now := time.Date(2026, 3, 28, 12, 0, 0, 0, time.UTC)
+	rotated := getOrCreateInstallIDAt(dir, now)
+	if rotated == legacyID {
+		t.Fatalf("expected legacy plaintext install ID to rotate, got same value %q", rotated)
+	}
+
+	record := decodeInstallIDRecordFile(t, filepath.Join(dir, installIDFile))
+	if record.InstallID != rotated {
+		t.Fatalf("persisted install ID = %q, want %q", record.InstallID, rotated)
 	}
 }
 
@@ -252,4 +290,22 @@ func TestStartStop_DisabledByDefault(t *testing.T) {
 
 	// Stop should also be safe when nothing was started.
 	Stop()
+}
+
+func decodeInstallIDRecordFile(t *testing.T, path string) installIDRecord {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile(%s): %v", path, err)
+	}
+	return decodeInstallIDRecord(t, data)
+}
+
+func decodeInstallIDRecord(t *testing.T, data []byte) installIDRecord {
+	t.Helper()
+	var record installIDRecord
+	if err := json.Unmarshal(data, &record); err != nil {
+		t.Fatalf("Unmarshal install ID record: %v", err)
+	}
+	return record
 }
