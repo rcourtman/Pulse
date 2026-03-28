@@ -66,7 +66,7 @@ describe('RecoverySummary', () => {
     expect(screen.getByText('Platform Mix')).toBeInTheDocument();
     expect(screen.getByText('Avg / Day')).toBeInTheDocument();
     expect(screen.getByText('2 protected')).toBeInTheDocument();
-    expect(screen.getByText('1 healthy')).toBeInTheDocument();
+    expect(screen.getByText('1 attention')).toBeInTheDocument();
     expect(screen.getAllByText('Never succeeded').length).toBeGreaterThan(0);
   });
 });

@@ -654,6 +654,10 @@ recovery-specific mini report. Recovery summary cards should prefer concise
 counts, bars, and badge-backed coverage cues over tall explanatory copy blocks
 so the protected-item table takes over the page at roughly the same visual
 density as the infrastructure and workloads monitoring surfaces.
+That same summary rule also applies to the panel header: the top-line summary
+count strip should stay terse and avoid repeating the full posture telemetry
+already rendered inside the cards, so the header acts as orientation rather
+than a second miniature dashboard row.
 That same summary layout should also stay on the shared monitoring rhythm:
 recovery should use the standard four-card `SummaryPanel` grid without letting
 one oversized posture card dominate the full strip, so operators can scan

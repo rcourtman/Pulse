@@ -83,12 +83,14 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
             <span class="font-medium text-base-content">
               {summary().total} protected
             </span>
-            <span class="text-emerald-600 dark:text-emerald-400">
-              {healthyCount()} healthy
-            </span>
             <Show when={attentionCount() > 0}>
               <span class="text-amber-600 dark:text-amber-400">
                 {attentionCount()} attention
+              </span>
+            </Show>
+            <Show when={attentionCount() === 0}>
+              <span class="text-emerald-600 dark:text-emerald-400">
+                {healthyCount()} healthy
               </span>
             </Show>
             <Show when={postureSummary().running > 0}>
@@ -106,23 +108,23 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
         class="overflow-hidden"
       >
         <SummaryMetricCard label="Recovery Posture" loaded={true} hasData={hasRollups()}>
-          <div class="flex h-full flex-col gap-2.5">
-            <div class="grid grid-cols-3 gap-2 text-sm">
-              <div>
-                <div class="text-[11px] uppercase tracking-wide text-muted">Healthy</div>
-                <div class="mt-1 text-lg font-semibold text-emerald-600 dark:text-emerald-400">
+          <div class="flex h-full flex-col gap-2">
+            <div class="grid grid-cols-3 gap-2 text-[11px]">
+              <div class="rounded-md border border-border-subtle bg-surface-alt/25 px-2 py-1.5">
+                <div class="uppercase tracking-wide text-muted">Healthy</div>
+                <div class="mt-1 font-semibold text-emerald-600 dark:text-emerald-400">
                   {healthyCount()}
                 </div>
               </div>
-              <div>
-                <div class="text-[11px] uppercase tracking-wide text-muted">Attention</div>
-                <div class="mt-1 text-lg font-semibold text-amber-600 dark:text-amber-400">
+              <div class="rounded-md border border-border-subtle bg-surface-alt/25 px-2 py-1.5">
+                <div class="uppercase tracking-wide text-muted">Attention</div>
+                <div class="mt-1 font-semibold text-amber-600 dark:text-amber-400">
                   {attentionCount()}
                 </div>
               </div>
-              <div>
-                <div class="text-[11px] uppercase tracking-wide text-muted">Protected</div>
-                <div class="mt-1 text-lg font-semibold text-base-content">{summary().total}</div>
+              <div class="rounded-md border border-border-subtle bg-surface-alt/25 px-2 py-1.5">
+                <div class="uppercase tracking-wide text-muted">Protected</div>
+                <div class="mt-1 font-semibold text-base-content">{summary().total}</div>
               </div>
             </div>
 
@@ -160,31 +162,31 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
         </SummaryMetricCard>
 
         <SummaryMetricCard label="Freshness" loaded={true} hasData={hasRollups()}>
-          <div class="flex h-full flex-col gap-2.5">
-            <div class="grid grid-cols-2 gap-2">
-              <div class="rounded-md border border-border-subtle bg-surface-alt/35 px-2.5 py-2">
-                <div class="text-[10px] uppercase tracking-wide text-muted">Stale</div>
-                <div class="mt-1 text-lg font-semibold text-amber-600 dark:text-amber-400">
+          <div class="flex h-full flex-col gap-2">
+            <div class="grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs">
+              <div class="flex items-center justify-between gap-2 border-b border-border-subtle pb-1.5">
+                <span class="uppercase tracking-wide text-muted">Stale</span>
+                <span class="font-semibold text-amber-600 dark:text-amber-400">
                   {summary().stale}
-                </div>
+                </span>
               </div>
-              <div class="rounded-md border border-border-subtle bg-surface-alt/35 px-2.5 py-2">
-                <div class="text-[10px] uppercase tracking-wide text-muted">Never succeeded</div>
-                <div class="mt-1 text-lg font-semibold text-rose-600 dark:text-rose-400">
+              <div class="flex items-center justify-between gap-2 border-b border-border-subtle pb-1.5">
+                <span class="uppercase tracking-wide text-muted">Never succeeded</span>
+                <span class="font-semibold text-rose-600 dark:text-rose-400">
                   {summary().neverSucceeded}
-                </div>
+                </span>
               </div>
-              <div class="rounded-md border border-border-subtle bg-surface-alt/35 px-2.5 py-2">
-                <div class="text-[10px] uppercase tracking-wide text-muted">Running</div>
-                <div class="mt-1 text-lg font-semibold text-blue-600 dark:text-blue-400">
+              <div class="flex items-center justify-between gap-2">
+                <span class="uppercase tracking-wide text-muted">Running</span>
+                <span class="font-semibold text-blue-600 dark:text-blue-400">
                   {postureSummary().running}
-                </div>
+                </span>
               </div>
-              <div class="rounded-md border border-border-subtle bg-surface-alt/35 px-2.5 py-2">
-                <div class="text-[10px] uppercase tracking-wide text-muted">Attention</div>
-                <div class="mt-1 text-lg font-semibold text-amber-600 dark:text-amber-400">
+              <div class="flex items-center justify-between gap-2">
+                <span class="uppercase tracking-wide text-muted">Attention</span>
+                <span class="font-semibold text-amber-600 dark:text-amber-400">
                   {attentionCount()}
-                </div>
+                </span>
               </div>
             </div>
 
