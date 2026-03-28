@@ -449,7 +449,14 @@ export const RecoveryProtectedInventorySection: Component<
                               title={getRecoveryOutcomeLabel(outcome)}
                               ariaLabel={getRecoveryOutcomeLabel(outcome)}
                             />
-                            <span class="truncate text-[13px] font-medium">{label}</span>
+                            <div class="flex min-w-0 items-baseline gap-1.5">
+                              <span class="truncate text-[13px] font-medium">{label}</span>
+                              <Show when={secondaryLabel}>
+                                <span class="shrink-0 text-[10px] font-mono tabular-nums text-muted">
+                                  {secondaryLabel}
+                                </span>
+                              </Show>
+                            </div>
                             <Show when={neverSucceeded}>
                               <span class={getRecoveryRollupStatusPillClass('never-succeeded')}>
                                 {getRecoveryRollupStatusPillLabel('never-succeeded')}
@@ -461,11 +468,6 @@ export const RecoveryProtectedInventorySection: Component<
                               </span>
                             </Show>
                           </div>
-                          <Show when={secondaryLabel}>
-                            <div class="pl-4 text-[10px] font-mono tabular-nums text-muted">
-                              {secondaryLabel}
-                            </div>
-                          </Show>
                           <div class="flex flex-wrap items-center gap-1.5 text-[10px] md:hidden">
                             <Show when={itemTypePresentation?.label}>
                               <span class={itemTypePresentation?.badgeClasses || 'inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-surface-alt text-base-content'}>

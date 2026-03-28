@@ -265,6 +265,9 @@ describe('Recovery', () => {
     expect(within(vmRow!).getAllByText('PVE').length).toBeGreaterThan(0);
     expect(within(vmRow!).getAllByText('VM').length).toBeGreaterThan(0);
     expect(within(vmRow!).getByText('VMID 123')).toBeInTheDocument();
+    expect(within(vmRow!).getByText('VMID 123').parentElement?.className).toContain(
+      'items-baseline',
+    );
     expect(screen.queryByText('Backups By Date')).not.toBeInTheDocument();
     expect(screen.queryByText('Recovery Activity')).not.toBeInTheDocument();
 
@@ -339,6 +342,9 @@ describe('Recovery', () => {
     expect(historyRow).not.toBeNull();
     expect(within(historyRow!).getByLabelText('Healthy')).toBeInTheDocument();
     expect(within(historyRow!).getByText('VMID 123')).toBeInTheDocument();
+    expect(within(historyRow!).getByText('VMID 123').parentElement?.className).toContain(
+      'items-baseline',
+    );
     expect(activityHeading).toBeInTheDocument();
   });
 

@@ -243,24 +243,24 @@ export const RecoveryHistoryTable: Component<RecoveryHistoryTableProps> = (props
                                       class="max-w-[420px] whitespace-nowrap px-3 py-1 text-base-content"
                                       title={item}
                                     >
-                                      <div class="flex min-w-0 max-w-full flex-col gap-0.5">
-                                        <div class="flex min-w-0 max-w-full items-center gap-2">
-                                          <StatusDot
-                                            variant={outcomeVariant}
-                                            size="xs"
-                                            pulse={outcome === 'running'}
-                                            title={getRecoveryOutcomeLabel(outcome)}
-                                            ariaLabel={getRecoveryOutcomeLabel(outcome)}
-                                          />
-                                          <span class="min-w-0 flex-1 truncate text-[12px] font-medium">
+                                      <div class="flex min-w-0 max-w-full items-center gap-2">
+                                        <StatusDot
+                                          variant={outcomeVariant}
+                                          size="xs"
+                                          pulse={outcome === 'running'}
+                                          title={getRecoveryOutcomeLabel(outcome)}
+                                          ariaLabel={getRecoveryOutcomeLabel(outcome)}
+                                        />
+                                        <div class="flex min-w-0 flex-1 items-baseline gap-1.5">
+                                          <span class="min-w-0 truncate text-[12px] font-medium">
                                             {item}
                                           </span>
+                                          <Show when={itemSecondary}>
+                                            <span class="shrink-0 text-[10px] font-mono tabular-nums text-muted">
+                                              {itemSecondary}
+                                            </span>
+                                          </Show>
                                         </div>
-                                        <Show when={itemSecondary}>
-                                          <span class="pl-4 text-[10px] font-mono tabular-nums text-muted">
-                                            {itemSecondary}
-                                          </span>
-                                        </Show>
                                       </div>
                                     </TableCell>
                                   );
