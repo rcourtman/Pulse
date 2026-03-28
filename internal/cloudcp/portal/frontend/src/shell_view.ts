@@ -147,6 +147,9 @@ function renderServiceActionRow(
 
 function workspaceStatusCopy(workspace: PortalWorkspaceSummary): string {
   var status = workspaceHealthState(workspace);
+  var state = String(workspace.state || '');
+  if (state === 'suspended') return 'This workspace is suspended and will stay closed until you resume it.';
+  if (state === 'failed') return 'This workspace needs attention before it is trustworthy.';
   if (status === 'healthy') return 'Live updates and health checks are currently good.';
   if (status === 'unhealthy') return 'This workspace needs attention before it is trustworthy.';
   return 'This workspace is still waiting on a completed health check.';
@@ -154,6 +157,9 @@ function workspaceStatusCopy(workspace: PortalWorkspaceSummary): string {
 
 function workspaceRowNote(workspace: PortalWorkspaceSummary): string {
   var status = workspaceHealthState(workspace);
+  var state = String(workspace.state || '');
+  if (state === 'suspended') return 'Suspended until you resume it';
+  if (state === 'failed') return 'Review this workspace before treating it as stable';
   if (status === 'healthy') return 'Ready for operator work';
   if (status === 'unhealthy') return 'Review this workspace before treating it as stable';
   return 'Awaiting a completed health check';
@@ -172,14 +178,24 @@ function attentionWorkspaces(workspaces: PortalWorkspaceSummary[]): PortalWorksp
 
 function renderAttentionPanel(workspaces: PortalWorkspaceSummary[]): string {
   var attention = attentionWorkspaces(workspaces);
+  var suspendedCount = countWorkspacesByState(workspaces, 'suspended');
   if (!attention.length) {
     return (
       '<div class="overview-side-card overview-side-card-stable">' +
         '<div class="account-panel-kicker">Attention</div>' +
-        '<h4>Fleet is stable</h4>' +
-        '<p>Every visible hosted workspace currently reports a healthy posture.</p>' +
+        '<h4>' + escapeHTML(suspendedCount > 0 ? 'Active fleet is stable' : 'Fleet is stable') + '</h4>' +
+        '<p>' + escapeHTML(suspendedCount > 0
+          ? 'Active hosted workspaces are healthy. Suspended workspaces stay parked until you resume them.'
+          : 'Every active hosted workspace currently reports a healthy posture.'
+        ) + '</p>' +
         '<div class="overview-stable-list">' +
-          '<div class="overview-stable-item"><strong>Healthy now</strong><span>All visible hosted workspaces are clear for routine operator work.</span></div>' +
+          '<div class="overview-stable-item"><strong>Healthy now</strong><span>' + escapeHTML(suspendedCount > 0
+            ? 'Active hosted workspaces are clear for routine operator work.'
+            : 'All active hosted workspaces are clear for routine operator work.'
+          ) + '</span></div>' +
+          (suspendedCount > 0
+            ? '<div class="overview-stable-item"><strong>Suspended stays parked</strong><span>' + escapeHTML(String(suspendedCount) + ' workspace' + (suspendedCount === 1 ? ' is' : 's are') + ' suspended and intentionally out of the day-to-day operator path.') + '</span></div>'
+            : '') +
           '<div class="overview-stable-item"><strong>Use Team only for change</strong><span>Keep roster edits explicit instead of mixing them into normal workspace work.</span></div>' +
           '<div class="overview-stable-item"><strong>Keep billing separate</strong><span>Use account services only when the task is commercial, not operational.</span></div>' +
         '</div>' +

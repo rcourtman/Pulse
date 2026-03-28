@@ -250,4 +250,40 @@ describe('shell view', function() {
     expect(successHTML).toContain('If that email is registered, a magic link is on the way.');
     expect(successHTML).toContain('data-portal-action="resend-magic-link"');
   });
+
+  it('treats suspended workspaces as parked rather than ready', function() {
+    var html = renderAuthenticatedPortalHTML(
+      createContext({
+        bootstrap: createBootstrap({
+          accounts: [
+            {
+              id: 'acct_suspend',
+              name: 'Suspended MSP',
+              kind: 'msp',
+              kind_label: 'MSP',
+              role: 'owner',
+              can_manage: true,
+              has_billing: true,
+              workspaces: [
+                {
+                  id: 'ws_suspended',
+                  display_name: 'Paused Workspace',
+                  state: 'suspended',
+                  healthy: true,
+                  health_status: 'healthy',
+                  last_health_check: '2026-03-26T10:10:00Z',
+                  created_at: '2026-03-26T10:00:00Z',
+                },
+              ],
+            },
+          ],
+        }),
+      })
+    );
+
+    expect(html).toContain('Suspended until you resume it');
+    expect(html).toContain('Active fleet is stable');
+    expect(html).toContain('Active hosted workspaces are healthy. Suspended workspaces stay parked until you resume them.');
+    expect(html).toContain('Suspended stays parked');
+  });
 });
