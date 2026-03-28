@@ -198,7 +198,7 @@ describe('shell view', function() {
     expect(html).toContain('Access review');
     expect(html).toContain('Keep access disciplined');
     expect(html).toContain('Owners stay rare');
-    expect(html).toContain('Workspace operations without billing ownership.');
+    expect(html).toContain('Workspace control without billing ownership.');
     expect(html).toContain('People on this account');
     expect(html).toContain('data-action="workspace-action"');
     expect(html).toContain('service-action-row');
@@ -208,10 +208,10 @@ describe('shell view', function() {
     expect(html).toContain('Service brief');
     expect(html).toContain('Self-hosted only');
     expect(html).toContain('Commercial routing');
-    expect(html).toContain('Keep this workflow isolated');
+    expect(html).toContain('Keep this request separate');
     expect(html).toContain('Hosted stays hosted');
     expect(html).toContain('Open support');
-    expect(html).toContain('Workflow map');
+    expect(html).toContain('What each tool does');
     expect(html).toContain('Before you start');
     expect(html).toContain('Escalate quickly');
     expect(html).toContain('Identity first');
@@ -245,7 +245,7 @@ describe('shell view', function() {
     expect(html).toContain('Summary');
     expect(html).toContain('None');
     expect(html).toContain('Use these account tools for self-hosted licenses, billing, refunds, and privacy actions.');
-    expect(html).toContain('Pick one commercial workflow and keep it isolated from hosted workspace and team operations.');
+    expect(html).toContain('Pick one commercial request and keep it separate from hosted workspaces and team changes.');
     expect(html).toContain('Account services');
     expect(html).not.toContain('Self-hosted commercial services');
   });
@@ -317,7 +317,7 @@ describe('shell view', function() {
     expect(html).toContain('No active blockers');
     expect(html).toContain('Active hosted workspaces are healthy while suspended workspaces stay parked until you resume them.');
     expect(html).toContain('Next step');
-    expect(html).toContain('Active hosted workspaces look stable. Resume a suspended workspace only when you are ready to bring it back into the active workflow.');
+    expect(html).toContain('Active hosted workspaces look stable. Resume a suspended workspace only when you are ready to bring it back into regular use.');
     expect(html).toContain('Active hosted workspaces are healthy. Suspended workspaces stay parked until you resume them.');
     expect(html).toContain('Suspended stays parked');
   });

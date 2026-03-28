@@ -209,7 +209,7 @@ function renderAttentionPanel(workspaces: PortalWorkspaceSummary[]): string {
             : 'All active hosted workspaces are clear for routine use.'
           ) + '</span></div>' +
           (suspendedCount > 0
-            ? '<div class="overview-stable-item"><strong>Suspended stays parked</strong><span>' + escapeHTML(String(suspendedCount) + ' workspace' + (suspendedCount === 1 ? ' is' : 's are') + ' suspended and intentionally out of the day-to-day workflow.') + '</span></div>'
+            ? '<div class="overview-stable-item"><strong>Suspended stays parked</strong><span>' + escapeHTML(String(suspendedCount) + ' workspace' + (suspendedCount === 1 ? ' is' : 's are') + ' suspended and intentionally out of day-to-day use.') + '</span></div>'
             : '') +
           '<div class="overview-stable-item"><strong>Use Team only for change</strong><span>Keep roster edits explicit instead of mixing them into normal workspace work.</span></div>' +
           '<div class="overview-stable-item"><strong>Keep billing separate</strong><span>Use account services only when the task is commercial, not operational.</span></div>' +
@@ -351,7 +351,7 @@ function renderShellNavigation(accounts: PortalAccountSummary[], supportEmail: s
       '<div class="portal-shell-nav-header">' +
         '<div class="portal-shell-nav-eyebrow">Pulse Account</div>' +
         '<div class="portal-shell-nav-title">Account center</div>' +
-        '<div class="portal-shell-nav-support">' + (hosted ? 'Hosted operations, account access, and commercial services' : 'Commercial account services and support') + '</div>' +
+        '<div class="portal-shell-nav-support">' + (hosted ? 'Hosted workspaces, account access, and commercial services' : 'Commercial account services and support') + '</div>' +
       '</div>' +
       '<div class="portal-shell-nav-group">' +
         shellSectionButton('overview', activeSection, '01', 'Overview', hosted ? 'Status, account health, and next actions' : 'Account summary and access state', hosted ? String(totalWorkspaces) + ' total' : 'Summary') +
@@ -453,7 +453,7 @@ function renderAccountOverviewSection(account: PortalAccountSummary): string {
     : checkingCount > 0
       ? 'The fleet is mostly healthy, but there are still workspaces waiting on a completed health check.'
       : suspendedCount > 0
-        ? 'Active hosted workspaces look stable. Resume a suspended workspace only when you are ready to bring it back into the active workflow.'
+        ? 'Active hosted workspaces look stable. Resume a suspended workspace only when you are ready to bring it back into regular use.'
         : 'Hosted status looks stable. Move into Team or Account services only if you need to change access or billing.';
   var nextStepChecklist = unhealthyCount > 0
     ? (
@@ -483,18 +483,18 @@ function renderAccountOverviewSection(account: PortalAccountSummary): string {
       '<button class="btn-primary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="workspaces">Open workspaces</button>' +
       '<button class="btn-secondary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="' + (account.can_manage ? 'team' : 'services') + '">' + (account.can_manage ? 'Review team access' : 'Open account services') + '</button>' +
     '</div>';
-  var consoleScopeCopy = account.kind === 'msp'
+  var accountScopeCopy = account.kind === 'msp'
     ? 'Run client workspaces, account billing, and team access from one place.'
     : 'Run hosted workspaces, account billing, and team access from one place.';
   var overviewBriefStrip =
     '<div class="account-overview-brief-strip">' +
       '<div class="account-overview-brief-point account-overview-brief-point-wide">' +
         '<strong>Account role</strong>' +
-        '<span>' + escapeHTML(consoleScopeCopy) + '</span>' +
+        '<span>' + escapeHTML(accountScopeCopy) + '</span>' +
       '</div>' +
       '<div class="account-overview-brief-point">' +
         '<strong>Hosted path</strong>' +
-        '<span>Use Workspaces for tenant operations and Team only when access needs to change.</span>' +
+        '<span>Use Workspaces for tenant access and lifecycle changes, and Team only when access needs to change.</span>' +
       '</div>' +
       '<div class="account-overview-brief-point">' +
         '<strong>Commercial path</strong>' +
@@ -745,8 +745,8 @@ function renderAccountTeamSection(account: PortalAccountSummary): string {
       '</div>' +
       '<div class="team-policy-list">' +
         '<div class="team-policy-row"><strong>Owner</strong><span>Billing, team access, and full hosted control.</span></div>' +
-        '<div class="team-policy-row"><strong>Admin</strong><span>Hosted operations plus billing for the account.</span></div>' +
-        '<div class="team-policy-row"><strong>Tech</strong><span>Workspace operations without billing ownership.</span></div>' +
+        '<div class="team-policy-row"><strong>Admin</strong><span>Hosted workspace control plus billing for the account.</span></div>' +
+        '<div class="team-policy-row"><strong>Tech</strong><span>Workspace control without billing ownership.</span></div>' +
         '<div class="team-policy-row"><strong>Read-only</strong><span>State review and verification without control-plane changes.</span></div>' +
       '</div>' +
     '</div>';
@@ -756,7 +756,7 @@ function renderAccountTeamSection(account: PortalAccountSummary): string {
         '<div class="team-panel-heading team-panel-heading-tight">' +
           '<div class="account-panel-kicker">Access review</div>' +
           '<h4>Keep access disciplined</h4>' +
-          '<p>Use the roster as a controlled access surface, not a dumping ground for vague shared access.</p>' +
+          '<p>Use the roster as a controlled access list, not a dumping ground for vague shared access.</p>' +
         '</div>' +
         '<div class="team-review-grid">' +
           '<div class="team-review-card">' +
@@ -765,7 +765,7 @@ function renderAccountTeamSection(account: PortalAccountSummary): string {
           '</div>' +
           '<div class="team-review-card">' +
             '<strong>Keep access narrow</strong>' +
-            '<span>Use Tech for workspace operations and Read-only for verification instead of handing out broader access.</span>' +
+            '<span>Use Tech for workspace control and Read-only for verification instead of handing out broader access.</span>' +
           '</div>' +
           '<div class="team-review-card">' +
             '<strong>Remove stale access fast</strong>' +
@@ -881,7 +881,7 @@ function renderSupportSection(context: ShellViewContext): string {
             '<p>Use this route when tenant handoff, workspace access, team control, or hosted billing looks wrong.</p>' +
             '<div class="portal-support-points">' +
               '<div class="portal-support-point"><strong>Route here for hosted issues</strong><span>Access, handoff, team, and hosted billing all belong on the hosted account path.</span></div>' +
-              '<div class="portal-support-point"><strong>Keep the account context intact</strong><span>Include the account, workspace, and action that failed so support can pick up the same workflow quickly.</span></div>' +
+              '<div class="portal-support-point"><strong>Keep the account context intact</strong><span>Include the account, workspace, and action that failed so support can pick up the same issue quickly.</span></div>' +
             '</div>' +
             '<div class="portal-support-actions">' +
               '<a class="portal-support-link" href="mailto:' + escapeAttr(context.bootstrap.support_email || '') + '">' + escapeHTML(context.bootstrap.support_email || '') + '</a>' +
@@ -893,7 +893,7 @@ function renderSupportSection(context: ShellViewContext): string {
             '<p>Self-hosted subscriptions, license recovery, refunds, and privacy requests all route through Account services first.</p>' +
             '<div class="portal-support-points">' +
               '<div class="portal-support-point"><strong>Start in Account services</strong><span>Use Billing, Licenses, Refunds, or Privacy before escalating a commercial issue.</span></div>' +
-              '<div class="portal-support-point"><strong>Escalate from the same path</strong><span>Keep the request in one place instead of splitting it between billing and account surfaces.</span></div>' +
+              '<div class="portal-support-point"><strong>Escalate from the same path</strong><span>Keep the request in one place instead of splitting it between billing and account sections.</span></div>' +
             '</div>' +
             '<div class="portal-support-actions">' +
               '<button type="button" class="btn-secondary" data-shell-action="activate-section" data-shell-section="services">Open account services</button>' +
@@ -903,9 +903,9 @@ function renderSupportSection(context: ShellViewContext): string {
         '<div class="portal-support-runbook">' +
           '<div class="account-panel-kicker">Escalation guide</div>' +
           '<h3>Route the issue cleanly</h3>' +
-          '<p>Keep hosted operations, commercial requests, and pure support escalation on their own paths so the next person does not have to reconstruct the account state.</p>' +
+          '<p>Keep hosted workspace issues, commercial requests, and pure support escalation on their own paths so the next person does not have to reconstruct the account state.</p>' +
           '<div class="portal-support-runbook-brief">' +
-            '<div class="portal-support-runbook-brief-card"><strong>Confirm scope</strong><span>Decide first whether the issue is hosted operations, commercial self-service, or direct support escalation.</span></div>' +
+            '<div class="portal-support-runbook-brief-card"><strong>Confirm scope</strong><span>Decide first whether the issue is a hosted workspace problem, a commercial self-service request, or direct support escalation.</span></div>' +
             '<div class="portal-support-runbook-brief-card"><strong>Keep paths separate</strong><span>Workspace and team problems stay out of billing, refund, privacy, and license work.</span></div>' +
             '<div class="portal-support-runbook-brief-card"><strong>Escalate with facts</strong><span>Bring the exact account, workspace, section, and failed action so support starts with the same state you saw.</span></div>' +
           '</div>' +
@@ -913,7 +913,7 @@ function renderSupportSection(context: ShellViewContext): string {
             '<div class="portal-support-runbook-section">' +
               '<div class="portal-support-runbook-section-title">Route checklist</div>' +
               '<div class="portal-support-runbook-list">' +
-                '<div class="portal-support-runbook-step"><strong>1. Confirm the scope</strong><span>Decide whether the problem is hosted operations, commercial self-service, or direct support escalation.</span></div>' +
+                '<div class="portal-support-runbook-step"><strong>1. Confirm the scope</strong><span>Decide whether the problem is a hosted workspace issue, a commercial self-service request, or direct support escalation.</span></div>' +
                 '<div class="portal-support-runbook-step"><strong>2. Keep hosted and commercial separate</strong><span>Workspace and team problems stay in their own sections. Billing, license, refund, and privacy work stay in Account services.</span></div>' +
                 '<div class="portal-support-runbook-step"><strong>3. Escalate with context</strong><span>Include the account, workspace, and exact failed action so the escalation path starts with the same facts you saw.</span></div>' +
               '</div>' +
@@ -970,7 +970,7 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
   var activeSection = context.activeSection || 'overview';
   var serviceHeading = hosted ? 'Self-hosted commercial services' : 'Account services';
   var serviceNote = hosted
-    ? 'Hosted operations stay in Workspaces and Team. Use this area only for self-hosted commercial requests.'
+    ? 'Hosted workspace changes stay in Workspaces and Team. Use this area only for self-hosted commercial requests.'
     : 'Use these account tools for self-hosted licenses, billing, refunds, and privacy actions.';
   var hostedContent = accounts.map(function(account) {
     return (
@@ -1010,7 +1010,7 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
                 '<div class="service-shell-sidebar-head">' +
                   '<div class="account-panel-kicker">Service navigator</div>' +
                   '<h3>Self-hosted tools</h3>' +
-                  '<p>Pick one commercial workflow and keep it isolated from hosted workspace and team operations.</p>' +
+                  '<p>Pick one commercial request and keep it separate from hosted workspaces and team changes.</p>' +
                 '</div>' +
                 '<div class="service-action-list">' +
                   renderServiceActionRow('open-manage-service', 'Billing', 'Manage subscriptions', 'Billing', 'Open Stripe for self-hosted plan, invoice, and payment changes.', 'manage-service-panel', 'manage-inline-email', ['Plan changes', 'Invoices']) +
@@ -1020,8 +1020,8 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
                 '</div>' +
                 '<div class="service-inline-support">' +
                   '<div class="account-panel-kicker">Commercial routing</div>' +
-                  '<h4>Keep this workflow isolated</h4>' +
-                  '<p>Hosted workspace work stays in Workspaces and Team. Use Support only when a self-hosted billing, license, refund, or privacy workflow cannot complete the request cleanly.</p>' +
+                  '<h4>Keep this request separate</h4>' +
+                  '<p>Hosted workspace work stays in Workspaces and Team. Use Support only when a self-hosted billing, license, refund, or privacy request cannot complete cleanly.</p>' +
                   '<div class="service-inline-support-points">' +
                     '<div class="service-inline-support-point"><strong>Hosted stays hosted</strong><span>Tenant handoff, team access, and hosted billing do not belong in this commercial section.</span></div>' +
                     '<div class="service-inline-support-point"><strong>Escalate with context</strong><span>Bring the service name and exact failed action if a commercial request needs support.</span></div>' +
@@ -1036,11 +1036,11 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
                   '<div class="service-panel service-panel-empty visible" id="service-panel-empty">' +
                     '<div class="account-panel-kicker">Service brief</div>' +
                     '<h3>Choose a service to begin</h3>' +
-                    '<p>Use one self-hosted workflow at a time. Each service verifies commercial identity first, then keeps billing, license, refund, or privacy work contained in one place.</p>' +
+                    '<p>Use one self-hosted request at a time. Each service verifies commercial identity first, then keeps billing, license, refund, or privacy work contained in one place.</p>' +
                     '<div class="service-empty-shell">' +
                       '<div class="service-empty-primary">' +
                         '<div class="service-empty-section service-empty-section-compact">' +
-                          '<div class="service-empty-column-title">Workflow map</div>' +
+                          '<div class="service-empty-column-title">What each tool does</div>' +
                           '<div class="service-empty-flow-list">' +
                             '<div class="service-empty-flow"><strong>Billing</strong><span>Stripe customer portal access for invoices, payment methods, and plan changes.</span></div>' +
                             '<div class="service-empty-flow"><strong>Licenses</strong><span>Recover the latest active self-hosted license and the matching invoice link.</span></div>' +
@@ -1118,7 +1118,7 @@ export function renderSignedOutPortalHTML(context: ShellViewContext): string {
   return (
     '<section class="intro-card">' +
       '<div class="account-panel-kicker">Pulse Account</div>' +
-      '<h1>Sign in to the account surface</h1>' +
+      '<h1>Sign in to Pulse Account</h1>' +
       '<p>Use one commercial email address to get into hosted workspaces, MSP access, billing, license recovery, refunds, and privacy actions.</p>' +
     '</section>' +
     '<section class="service-section service-section-auth">' +

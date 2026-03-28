@@ -33,11 +33,11 @@ function roleLabel(role: string): string {
 function roleCapabilityCopy(role: string): string {
   switch (normalizedTeamRole(role)) {
     case 'owner':
-      return 'Full account control, including billing, team access, and hosted operations.';
+      return 'Full account control, including billing, team access, and hosted workspace control.';
     case 'admin':
-      return 'Can manage hosted operations and billing for this account.';
+      return 'Can manage hosted workspaces and billing for this account.';
     case 'tech':
-      return 'Can operate hosted workspaces without billing ownership.';
+      return 'Can manage hosted workspaces without billing ownership.';
     case 'read_only':
       return 'Can review hosted state without making control-plane changes.';
     case 'member':
