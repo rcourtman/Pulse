@@ -167,6 +167,9 @@ Core rules:
     privacy as secondary job-specific paths rather than a billing essay.
 20. `Support` must explain only when to escalate and what to send so it reads
     as a handoff path, not a competing task surface.
+21. On phone-width layouts, top-level task navigation must collapse into a
+    compact task strip so the active job stays above the fold instead of being
+    buried below a desktop-style sidebar.
 
 ## Screen Model
 
@@ -208,6 +211,8 @@ Each signed-in state should render:
 7. explicit action groups, not anonymous menu affordances
 8. explicit unavailable-state panels for top-level tasks that are not active
    for the current account shape
+9. a compact narrow-screen task switcher that preserves task-first navigation
+   without letting navigation chrome dominate the page before the active task
 
 ## Product-Specific Boundaries
 

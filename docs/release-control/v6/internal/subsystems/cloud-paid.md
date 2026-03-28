@@ -825,7 +825,9 @@ top-level `Workspaces` or `Access` tasks must render an explicit unavailable
 state instead of blank space. The same shell also owns action-first task
 surfaces for `Access`, `Billing`, and `Support`: access mutations must be
 permission-honest and roster-led, billing must reduce to one obvious job at a
-time with hosted billing first when relevant, and support must stay a failed
-path handoff rather than a peer workflow. Until that candidate lane lands, new
-commercial account work must extend the governed Pulse account shape rather
-than spawning additional one-off recovery or billing pages.
+time with hosted billing first when relevant, support must stay a failed-path
+handoff rather than a peer workflow, and phone-width layouts must collapse the
+desktop task sidebar into a compact task strip so the active job remains
+primary. Until that candidate lane lands, new commercial account work must
+extend the governed Pulse account shape rather than spawning additional one-off
+recovery or billing pages.

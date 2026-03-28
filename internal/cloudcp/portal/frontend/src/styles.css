@@ -3177,14 +3177,69 @@ header .logout-btn:hover,
   .portal-shell-layout,
   .portal-support-brief-strip,
   .portal-support-runbook-brief,
-  .portal-support-route-grid,
-  .portal-shell-nav-group {
+  .portal-support-route-grid {
     grid-template-columns: 1fr;
   }
 
   .portal-support-layout,
   .portal-support-runbook-grid {
     grid-template-columns: 1fr;
+  }
+
+  .portal-shell-nav {
+    min-height: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--nav-line);
+  }
+
+  .portal-shell-nav-header {
+    padding: 12px 14px 8px;
+  }
+
+  .portal-shell-nav-title {
+    font-size: 16px;
+  }
+
+  .portal-shell-nav-support {
+    display: none;
+  }
+
+  .portal-shell-nav-group {
+    display: flex;
+    flex-direction: row;
+    gap: 8px;
+    padding: 10px 12px 12px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+  }
+
+  .portal-shell-nav-group::-webkit-scrollbar {
+    display: none;
+  }
+
+  .portal-shell-nav-link {
+    flex: 0 0 auto;
+    min-width: 118px;
+    padding: 10px 10px;
+  }
+
+  .portal-shell-nav-row {
+    align-items: flex-start;
+  }
+
+  .portal-shell-nav-index,
+  .portal-shell-nav-copy {
+    display: none;
+  }
+
+  .portal-shell-nav-link:hover,
+  .portal-shell-nav-link.active {
+    transform: none;
+  }
+
+  .portal-shell-nav-link.active {
+    box-shadow: inset 0 -2px 0 #78b6c0, 0 8px 18px rgba(3, 8, 18, 0.14);
   }
 
   .intro-card,

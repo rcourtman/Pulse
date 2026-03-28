@@ -268,6 +268,9 @@ under `internal/cloudcp/portal/frontend/`, is embedded from
 `internal/cloudcp/portal/frontend_sync_test.go`, so the maintained frontend
 sources and the committed embedded bundle cannot drift silently. The maintained
 portal source tree now also owns explicit runtime/bootstrap type definitions
+and one task-first shell model across desktop and phone widths: narrow-screen
+navigation must collapse the same bootstrap-driven task shell into a compact
+task strip, not a second mobile-only route or DOM contract.
 plus a package-local `tsc --noEmit` gate, so future account-shell work should
 extend the typed source boundary instead of reviving opaque global runtime
 objects, document-wide render events, or untyped embedded asset edits.

@@ -228,6 +228,48 @@ describe('shell view', function() {
     expect(html).toContain('Open billing');
   });
 
+  it('keeps top-level task navigation in the canonical section order', function() {
+    var html = renderAuthenticatedPortalHTML(
+      createContext({
+        bootstrap: createBootstrap({
+          accounts: [
+            {
+              id: 'acct_nav',
+              name: 'Navigation Account',
+              kind: 'cloud',
+              kind_label: 'Cloud',
+              role: 'owner',
+              can_manage: true,
+              has_billing: true,
+              workspaces: [
+                {
+                  id: 'ws_nav',
+                  display_name: 'Navigation Workspace',
+                  state: 'active',
+                  healthy: true,
+                  health_status: 'healthy',
+                },
+              ],
+            },
+          ],
+        }),
+      })
+    );
+
+    var overviewIndex = html.indexOf('data-shell-section="overview"');
+    var workspacesIndex = html.indexOf('data-shell-section="workspaces"');
+    var accessIndex = html.indexOf('data-shell-section="access"');
+    var billingIndex = html.indexOf('data-shell-section="billing"');
+    var supportIndex = html.indexOf('data-shell-section="support"');
+
+    expect(overviewIndex).toBeGreaterThan(-1);
+    expect(workspacesIndex).toBeGreaterThan(overviewIndex);
+    expect(accessIndex).toBeGreaterThan(workspacesIndex);
+    expect(billingIndex).toBeGreaterThan(accessIndex);
+    expect(supportIndex).toBeGreaterThan(billingIndex);
+    expect(html).not.toContain('Services');
+  });
+
   it('renders a view-only access surface when the account cannot manage access', function() {
     var html = renderAuthenticatedPortalHTML(
       createContext({
