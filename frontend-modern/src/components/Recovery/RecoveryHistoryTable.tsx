@@ -16,13 +16,11 @@ import {
 import type { ColumnDef } from '@/hooks/useColumnVisibility';
 import { formatBytes } from '@/utils/format';
 import { getRecoveryDrawerCloseButtonClass, getRecoveryEmptyStateActionClass } from '@/utils/recoveryActionPresentation';
-import { getRecoveryArtifactModePresentation, type RecoveryArtifactMode } from '@/utils/recoveryArtifactModePresentation';
 import {
   getRecoveryHistoryEmptyState,
   getRecoveryPointsLoadingState,
 } from '@/utils/recoveryEmptyStatePresentation';
 import {
-  getRecoveryOutcomeBadgeClass,
   getRecoveryOutcomeLabel,
 } from '@/utils/recoveryOutcomePresentation';
 import {
@@ -37,9 +35,10 @@ import {
 import { getRecoveryPointPlatform } from '@/utils/recoveryPlatformModel';
 import {
   getRecoveryArtifactColumnHeaderClass,
+  getRecoveryArtifactMetadataTextClass,
+  getRecoveryArtifactOutcomeTextClass,
   getRecoveryArtifactRowClass,
   getRecoveryEventTimeTextClass,
-  getRecoveryPointItemTypeBadgeClass,
   getRecoveryPointItemTypeLabel,
   RECOVERY_GROUP_HEADER_ROW_CLASS,
   RECOVERY_GROUP_HEADER_TEXT_CLASS,
@@ -49,8 +48,6 @@ import { titleCaseDelimitedLabel } from '@/utils/textPresentation';
 import type { RecoveryOutcome, RecoveryPoint } from '@/types/recovery';
 import type { Resource } from '@/types/resource';
 import { formatRecoveryTimeOnly } from '@/utils/recoveryDatePresentation';
-
-type ArtifactMode = RecoveryArtifactMode;
 
 export interface RecoveryPointGroup {
   key: string;
@@ -227,11 +224,7 @@ export const RecoveryHistoryTable: Component<RecoveryHistoryTableProps> = (props
                                   return (
                                     <TableCell class="whitespace-nowrap px-3 py-1 text-center">
                                       <Show when={itemType} fallback={<span class="text-muted">—</span>}>
-                                        <span
-                                          class={`inline-flex min-w-[2.9rem] justify-center rounded px-1.5 py-px text-[10px] font-medium leading-none ${getRecoveryPointItemTypeBadgeClass(
-                                            point,
-                                          )}`}
-                                        >
+                                        <span class={getRecoveryArtifactMetadataTextClass()}>
                                           {itemType}
                                         </span>
                                       </Show>
@@ -359,11 +352,7 @@ export const RecoveryHistoryTable: Component<RecoveryHistoryTableProps> = (props
                                 case 'method':
                                   return (
                                     <TableCell class="whitespace-nowrap px-3 py-1 text-center">
-                                      <span
-                                        class={`inline-flex min-w-[3.25rem] justify-center rounded px-1.5 py-px text-[9px] font-medium ${getRecoveryArtifactModePresentation(
-                                          mode as ArtifactMode,
-                                        ).badgeClassName}`}
-                                      >
+                                      <span class={getRecoveryArtifactMetadataTextClass()}>
                                         {getRecoveryPointModeLabel(point.mode)}
                                       </span>
                                     </TableCell>
@@ -390,9 +379,8 @@ export const RecoveryHistoryTable: Component<RecoveryHistoryTableProps> = (props
                                   return (
                                     <TableCell class="whitespace-nowrap px-3 py-1 text-center">
                                       <span
-                                        class={`inline-flex min-w-[4.5rem] justify-center rounded px-1.5 py-px text-[9px] font-medium ${getRecoveryOutcomeBadgeClass(
-                                          outcome,
-                                        )}`}
+                                        class={getRecoveryArtifactOutcomeTextClass(outcome)}
+                                        title={getRecoveryOutcomeLabel(outcome)}
                                       >
                                         {titleCaseDelimitedLabel(outcome)}
                                       </span>

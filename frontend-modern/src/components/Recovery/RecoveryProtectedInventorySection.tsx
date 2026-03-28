@@ -31,13 +31,14 @@ import {
 } from '@/utils/recoveryItemTypePresentation';
 import {
   getRecoveryArtifactColumnLabel,
+  getRecoveryArtifactMetadataTextClass,
   getRecoveryRollupAgeTextClass,
   getRecoveryProtectedSearchPlaceholder,
   getRecoverySearchHistoryEmptyMessage,
   isRecoveryRollupStale,
 } from '@/utils/recoveryTablePresentation';
 import {
-  getRecoveryOutcomeBadgeClass,
+  getRecoveryOutcomeTextClass,
   getRecoveryOutcomeLabel,
   normalizeRecoveryOutcome,
 } from '@/utils/recoveryOutcomePresentation';
@@ -470,7 +471,7 @@ export const RecoveryProtectedInventorySection: Component<
                           </div>
                           <div class="flex flex-wrap items-center gap-1.5 text-[10px] md:hidden">
                             <Show when={itemTypePresentation?.label}>
-                              <span class={itemTypePresentation?.badgeClasses || 'inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-surface-alt text-base-content'}>
+                              <span class={getRecoveryArtifactMetadataTextClass('muted')}>
                                 {itemTypePresentation?.label}
                               </span>
                             </Show>
@@ -495,7 +496,7 @@ export const RecoveryProtectedInventorySection: Component<
                           when={itemTypePresentation}
                           fallback={<span class="text-muted">—</span>}
                         >
-                          <span class={itemTypePresentation?.badgeClasses || 'inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-surface-alt text-base-content'}>
+                          <span class={getRecoveryArtifactMetadataTextClass()}>
                             {itemTypePresentation?.label}
                           </span>
                         </Show>
@@ -539,11 +540,7 @@ export const RecoveryProtectedInventorySection: Component<
                       </TableCell>
 
                       <TableCell class="whitespace-nowrap px-3 py-1.5">
-                        <span
-                          class={`inline-flex rounded px-1.5 py-0.5 text-[10px] font-medium ${getRecoveryOutcomeBadgeClass(
-                            outcome,
-                          )}`}
-                        >
+                        <span class={`text-[11px] font-medium ${getRecoveryOutcomeTextClass(outcome)}`}>
                           {titleCaseDelimitedLabel(outcome)}
                         </span>
                       </TableCell>

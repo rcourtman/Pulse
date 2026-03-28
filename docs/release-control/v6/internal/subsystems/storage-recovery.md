@@ -754,6 +754,11 @@ That same row contract should avoid duplicating context that already has a
 dedicated column. When `Item Type` and `Platform` columns are visible, the
 primary item cell should not restate those same badges on desktop; duplicate
 context belongs only as a small-screen fallback when those columns collapse.
+That same scan rule applies to the supporting columns themselves. Recovery
+tables should keep one dominant identity cue and one canonical platform cue,
+while `Item Type`, `Method`, and similar supporting fields stay on restrained
+metadata text instead of turning every adjacent column into another colored
+badge.
 That same item-identity contract also applies to synthetic Proxmox task
 recovery points. When the persisted subject label is just a raw
 `pve-task:*`/`UPID:*` identifier or `vmid=0`, the canonical recovery index

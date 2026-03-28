@@ -5,7 +5,10 @@ import {
   getRecoveryPointItemTypeKey,
 } from '@/utils/recoveryItemTypePresentation';
 import { getRecoveryLocationFacetLabel } from '@/utils/recoveryLocationPresentation';
-import { normalizeRecoveryOutcome } from '@/utils/recoveryOutcomePresentation';
+import {
+  getRecoveryOutcomeTextClass,
+  normalizeRecoveryOutcome,
+} from '@/utils/recoveryOutcomePresentation';
 import type { RecoveryIssueTone } from '@/utils/recoveryIssuePresentation';
 
 export const STALE_ISSUE_THRESHOLD_MS = 7 * 24 * 60 * 60 * 1000;
@@ -21,6 +24,8 @@ export const RECOVERY_GROUP_NO_TIMESTAMP_LABEL = 'No Timestamp';
 export const RECOVERY_PROTECTED_SEARCH_PLACEHOLDER = 'Search protected items...';
 export const RECOVERY_HISTORY_SEARCH_PLACEHOLDER = 'Search recovery history...';
 export const RECOVERY_SEARCH_HISTORY_EMPTY_MESSAGE = 'Recent searches appear here.';
+export const RECOVERY_ARTIFACT_METADATA_TEXT_CLASS =
+  'text-[11px] font-medium text-base-content/80';
 export const RECOVERY_ARTIFACT_COLUMN_LABELS: Record<string, string> = {
   cluster: getRecoveryLocationFacetLabel('cluster'),
   nodeAgent: getRecoveryLocationFacetLabel('node'),
@@ -85,6 +90,18 @@ export function getRecoveryPointItemTypeBadgeClass(point: RecoveryPoint): string
 
 export function getRecoveryPointItemTypeLabel(point: RecoveryPoint): string {
   return getRecoveryItemTypeLabel(getRecoveryPointItemTypeKey(point));
+}
+
+export function getRecoveryArtifactMetadataTextClass(
+  tone: 'default' | 'muted' = 'default',
+): string {
+  return tone === 'muted'
+    ? `${RECOVERY_ARTIFACT_METADATA_TEXT_CLASS} text-muted`
+    : RECOVERY_ARTIFACT_METADATA_TEXT_CLASS;
+}
+
+export function getRecoveryArtifactOutcomeTextClass(outcome: RecoveryOutcome): string {
+  return `text-[11px] font-medium ${getRecoveryOutcomeTextClass(outcome)}`;
 }
 
 export function getRecoverySubjectTypeBadgeClass(point: RecoveryPoint): string {

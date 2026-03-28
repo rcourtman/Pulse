@@ -268,6 +268,8 @@ describe('Recovery', () => {
     expect(within(vmRow!).getByText('VMID 123').parentElement?.className).toContain(
       'items-baseline',
     );
+    expect(within(vmRow!).getAllByText('VM')[0].className).not.toContain('bg-');
+    expect(within(vmRow!).getByText('Success').className).not.toContain('rounded');
     expect(screen.queryByText('Backups By Date')).not.toBeInTheDocument();
     expect(screen.queryByText('Recovery Activity')).not.toBeInTheDocument();
 
@@ -345,6 +347,9 @@ describe('Recovery', () => {
     expect(within(historyRow!).getByText('VMID 123').parentElement?.className).toContain(
       'items-baseline',
     );
+    expect(within(historyRow!).getByText('VM').className).not.toContain('bg-');
+    expect(within(historyRow!).getByText('Local Copy').className).not.toContain('rounded');
+    expect(within(historyRow!).getByText('Success').className).not.toContain('rounded');
     expect(activityHeading).toBeInTheDocument();
   });
 
