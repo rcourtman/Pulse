@@ -751,25 +751,25 @@ function renderAccountTeamSection(account: PortalAccountSummary): string {
               '">' +
                 '<div class="team-list-message">Loading…</div>' +
               '</div>' +
-            '</div>' +
-            '<div class="team-review-desk">' +
-              '<div class="team-panel-heading team-panel-heading-tight">' +
-                '<div class="account-panel-kicker">Review desk</div>' +
-                '<h4>Keep access disciplined</h4>' +
-                '<p>Use the roster as a controlled operator surface, not a dumping ground for vague shared access.</p>' +
-              '</div>' +
-              '<div class="team-review-grid">' +
-                '<div class="team-review-card">' +
-                  '<strong>Owners stay rare</strong>' +
-                  '<span>Reserve Owner for billing, team, and full hosted control. Default to Admin, Tech, or Read-only first.</span>' +
+              '<div class="team-review-strip">' +
+                '<div class="team-panel-heading team-panel-heading-tight">' +
+                  '<div class="account-panel-kicker">Review desk</div>' +
+                  '<h4>Keep access disciplined</h4>' +
+                  '<p>Use the roster as a controlled operator surface, not a dumping ground for vague shared access.</p>' +
                 '</div>' +
-                '<div class="team-review-card">' +
-                  '<strong>Keep operators narrow</strong>' +
-                  '<span>Use Tech for workspace operations and Read-only for verification instead of handing out broader access.</span>' +
-                '</div>' +
-                '<div class="team-review-card">' +
-                  '<strong>Remove stale access fast</strong>' +
-                  '<span>If someone no longer owns the work, remove them instead of leaving dormant access attached to the account.</span>' +
+                '<div class="team-review-grid">' +
+                  '<div class="team-review-card">' +
+                    '<strong>Owners stay rare</strong>' +
+                    '<span>Reserve Owner for billing, team, and full hosted control. Default to Admin, Tech, or Read-only first.</span>' +
+                  '</div>' +
+                  '<div class="team-review-card">' +
+                    '<strong>Keep operators narrow</strong>' +
+                    '<span>Use Tech for workspace operations and Read-only for verification instead of handing out broader access.</span>' +
+                  '</div>' +
+                  '<div class="team-review-card">' +
+                    '<strong>Remove stale access fast</strong>' +
+                    '<span>If someone no longer owns the work, remove them instead of leaving dormant access attached to the account.</span>' +
+                  '</div>' +
                 '</div>' +
               '</div>' +
             '</div>' +

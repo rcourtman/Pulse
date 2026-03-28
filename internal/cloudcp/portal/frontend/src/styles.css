@@ -1644,31 +1644,33 @@ header .logout-btn:hover,
 }
 
 .team-stat-card {
-  min-width: 140px;
-  padding: 12px 14px;
+  min-width: 0;
+  padding: 10px 12px;
   border-radius: var(--radius-sm);
   background: var(--panel-muted);
 }
 
 .team-management-stats {
-  margin: 16px 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 12px 0;
 }
 
 .team-stat-card {
-  padding: 12px 14px;
   border: 1px solid var(--line);
   border-radius: 10px;
   background: #fbfcfd;
 }
 
 .team-stat-value {
-  margin-top: 8px;
-  font-size: 24px;
+  margin-top: 6px;
+  font-size: 22px;
 }
 
 .team-management-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.65fr) minmax(320px, 0.92fr);
+  grid-template-columns: minmax(0, 1.82fr) minmax(292px, 0.84fr);
   gap: 14px;
   align-items: start;
 }
@@ -1688,6 +1690,8 @@ header .logout-btn:hover,
   display: flex;
   flex-direction: column;
   align-self: start;
+  position: sticky;
+  top: 14px;
 }
 
 .team-roster,
@@ -1699,6 +1703,9 @@ header .logout-btn:hover,
 
 .team-roster {
   align-self: start;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .team-roster.state-only {
@@ -1711,8 +1718,8 @@ header .logout-btn:hover,
 .team-operations-panel {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 16px;
+  gap: 12px;
+  padding: 14px;
   border: 1px solid var(--line);
   border-radius: 12px;
 }
@@ -1730,29 +1737,26 @@ header .logout-btn:hover,
   padding: 14px;
 }
 
-.team-review-desk {
+.team-review-strip {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 16px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: #fff;
+  gap: 10px;
+  padding-top: 2px;
 }
 
 .team-review-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
+  gap: 10px;
 }
 
 .team-review-card {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 14px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid #dde5ef;
+  border-radius: 10px;
   background: var(--panel-muted);
 }
 
@@ -1769,7 +1773,7 @@ header .logout-btn:hover,
 }
 
 .team-panel-heading {
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 
 .team-panel-heading-tight {
@@ -1799,9 +1803,9 @@ header .logout-btn:hover,
 
 .team-roster-head {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 156px 136px;
-  gap: 16px;
-  padding: 0 14px 8px;
+  grid-template-columns: minmax(0, 1fr) 142px 122px;
+  gap: 14px;
+  padding: 0 12px 8px;
   border-bottom: 1px solid var(--line);
   font-size: 11px;
   font-weight: 800;
@@ -1812,10 +1816,10 @@ header .logout-btn:hover,
 
 .team-member-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 156px 136px;
+  grid-template-columns: minmax(0, 1fr) 142px 122px;
   align-items: center;
-  gap: 12px;
-  padding: 12px 14px 11px;
+  gap: 10px;
+  padding: 10px 12px;
   border: none;
   border-top: 1px solid var(--line);
   background: #fff;
@@ -1832,7 +1836,7 @@ header .logout-btn:hover,
 .team-member-identity {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
   min-width: 0;
 }
 
@@ -1851,8 +1855,8 @@ header .logout-btn:hover,
 }
 
 .team-member-caption {
-  font-size: 11px;
-  line-height: 1.45;
+  font-size: 10px;
+  line-height: 1.4;
   color: var(--ink-soft);
 }
 
@@ -1904,8 +1908,8 @@ header .logout-btn:hover,
 .team-role-select {
   width: 100%;
   min-width: 0;
-  min-height: 34px;
-  padding-inline: 10px 28px;
+  min-height: 32px;
+  padding-inline: 9px 26px;
   border-radius: 8px;
   border: 1px solid var(--line-strong);
   background: #fff;
@@ -2561,6 +2565,10 @@ header .logout-btn:hover,
 
   .workspace-management-facts {
     grid-template-columns: 1fr;
+  }
+
+  .team-side-column {
+    position: static;
   }
 
   .workspace-operations-shell-idle .workspace-management-empty-shell {
