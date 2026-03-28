@@ -717,6 +717,16 @@ pattern as the protected inventory surface, not a separate large titled header
 bar plus another full toolbar slab. Event filter labels should also stay on the
 canonical short Pulse vocabulary like `Platform` and `Status` instead of
 recovery-only variants such as `History platform` or `History status`.
+That same events-shell contract should avoid repeating page-state bookkeeping
+ahead of the history grid. Recovery events should surface workspace context,
+event count, and day grouping in the status row, while current page and other
+table bookkeeping stay in the table footer instead of competing with the scan
+path above the filters.
+That same activity panel should stay compact and analytical rather than
+becoming a second dashboard header. `RecoveryActivitySection.tsx` should keep a
+single slim telemetry header, compact active-filter chips, and a shorter chart
+frame so the events workspace hands off quickly from activity context to the
+history table.
 That same events-table contract should also keep the default column set on a
 monitoring-style scan path rather than a report-export path. Recovery events
 should default to the concise columns operators need to triage quickly, while

@@ -130,7 +130,7 @@ export const RecoveryHistorySection: Component<RecoveryHistorySectionProps> = (p
 
   return (
     <Card padding="none" tone="card" class="overflow-hidden border-border-subtle bg-surface">
-      <div class="border-b border-border-subtle/80 bg-surface px-4 py-2.5">
+      <div class="border-b border-border-subtle/80 bg-surface px-4 py-2">
         <div class="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
           <div class="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
             <Show when={props.workspaceControls}>
@@ -140,9 +140,6 @@ export const RecoveryHistorySection: Component<RecoveryHistorySectionProps> = (p
               <span class="font-medium text-base-content">
                 {props.recoveryPoints.meta().total} event
                 {props.recoveryPoints.meta().total === 1 ? '' : 's'}
-              </span>
-              <span>
-                {props.currentPage()} / {props.totalPages()}
               </span>
               <Show when={props.groupedByDay().length > 0}>
                 <span>
@@ -155,7 +152,7 @@ export const RecoveryHistorySection: Component<RecoveryHistorySectionProps> = (p
         </div>
       </div>
       <Show when={!props.kioskMode}>
-        <div class="border-b border-border-subtle/80 bg-surface px-4 py-3">
+        <div class="border-b border-border-subtle/80 bg-surface px-4 py-2.5">
           <PageControls
             search={
               <SearchInput

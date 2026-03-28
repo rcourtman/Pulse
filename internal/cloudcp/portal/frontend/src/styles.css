@@ -389,34 +389,6 @@ header .logout-btn:hover,
   box-shadow: inset 3px 0 0 #78b6c0;
 }
 
-.portal-shell-nav-footer {
-  margin-top: auto;
-  padding: 16px 18px 18px;
-  border-top: 1px solid var(--nav-line);
-  background: rgba(255, 255, 255, 0.03);
-}
-
-.portal-shell-nav-footer-label {
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: #78b6c0;
-}
-
-.portal-shell-nav-footer-link {
-  display: inline-block;
-  margin-top: 8px;
-  font-size: 12px;
-  line-height: 1.5;
-  color: #d9f4fb;
-  text-decoration: none;
-}
-
-.portal-shell-nav-footer-link:hover {
-  text-decoration: underline;
-}
-
 .portal-shell-nav-label {
   display: block;
   font-size: 14px;

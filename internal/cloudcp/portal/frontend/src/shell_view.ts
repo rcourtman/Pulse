@@ -268,11 +268,7 @@ function renderShellNavigation(accounts: PortalAccountSummary[], supportEmail: s
         shellSectionButton('workspaces', activeSection, hosted ? 'Workspaces' : 'Hosted access', hosted ? 'Hosted fleet and lifecycle actions' : 'No hosted workspaces are attached yet') +
         shellSectionButton('team', activeSection, 'Team', hosted ? 'Access and operator roster' : 'Account membership') +
         shellSectionButton('services', activeSection, 'Account services', 'Licenses, billing, refunds, and privacy') +
-        shellSectionButton('support', activeSection, 'Support', supportEmail || 'Support contact') +
-      '</div>' +
-      '<div class="portal-shell-nav-footer">' +
-        '<div class="portal-shell-nav-footer-label">Need help?</div>' +
-        '<a class="portal-shell-nav-footer-link" href="mailto:' + escapeAttr(supportEmail || 'support@pulserelay.pro') + '">' + escapeHTML(supportEmail || 'support@pulserelay.pro') + '</a>' +
+        shellSectionButton('support', activeSection, 'Support', hosted ? 'Escalation and account support' : (supportEmail || 'Support contact')) +
       '</div>' +
     '</aside>'
   );
