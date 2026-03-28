@@ -295,9 +295,8 @@ describe('Recovery', () => {
     expect(historySearch.closest('div.relative')?.className).toContain('w-full');
     expect(within(historyTablist).getByRole('tab', { name: 'Protected items' })).toBeInTheDocument();
     expect(within(historyTablist).getByRole('tab', { name: 'Recovery events' })).toBeInTheDocument();
-    expect(within(historyControls).getByText(/^1 day group$/i)).toBeInTheDocument();
     expect(screen.getAllByText(/^1 event$/i)).toHaveLength(1);
-    expect(screen.getAllByText(/^1 day group$/i)).toHaveLength(1);
+    expect(within(historyControls).queryByText(/day group/i)).not.toBeInTheDocument();
     expect(within(historyTable).getByText('Item Type')).toBeInTheDocument();
     expect(within(historyTable).getByText('Item')).toBeInTheDocument();
     expect(within(historyTable).getByText('Platform')).toBeInTheDocument();

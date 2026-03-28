@@ -157,14 +157,6 @@ export const RecoveryHistorySection: Component<RecoveryHistorySectionProps> = (p
             }}
             utilityActions={
               <div class="ml-auto flex items-center gap-2">
-                <Show when={props.groupedByDay().length > 0}>
-                  <div class="flex min-w-0 flex-wrap items-center gap-2 text-[11px] text-muted">
-                    <span>
-                      {props.groupedByDay().length} day group
-                      {props.groupedByDay().length === 1 ? '' : 's'}
-                    </span>
-                  </div>
-                </Show>
                 <div class="relative">
                   <FilterActionButton
                     ref={advancedFiltersButtonRef}

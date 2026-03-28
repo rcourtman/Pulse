@@ -799,10 +799,11 @@ workspace should move from tabs to shared controls to the recovery history
 table before showing the activity/timeline card, so the analytics surface
 stays secondary to the working table instead of interrupting the operator path.
 That same events-shell contract should avoid repeating page-state bookkeeping
-ahead of the history grid. Recovery events should surface workspace context,
-event count, and day grouping in the status row, while current page and other
-table bookkeeping stay in the table footer instead of competing with the scan
-path above the filters.
+ahead of the history grid. Recovery events should keep the toolbar utility area
+focused on actual controls like advanced filters and column visibility instead
+of passive `day groups` narration; day grouping should stay legible through the
+history surface itself, while current page and other table bookkeeping remain
+in the table footer instead of competing with the scan path above the filters.
 That same activity panel should stay compact and analytical rather than
 becoming a second dashboard header. `RecoveryActivitySection.tsx` should keep a
 single slim telemetry header, compact active-filter chips, and a shorter chart
