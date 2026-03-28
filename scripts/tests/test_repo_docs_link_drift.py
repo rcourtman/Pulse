@@ -3,19 +3,17 @@
 
 from __future__ import annotations
 
+import re
 import unittest
 from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
-FORBIDDEN_SNIPPETS = (
-    "https://github.com/rcourtman/Pulse/blob/main/",
-    "https://github.com/rcourtman/Pulse/blob/master/",
-    "https://github.com/rcourtman/Pulse/tree/main/docs/",
-    "https://github.com/rcourtman/Pulse/tree/master/docs/",
-    "https://raw.githubusercontent.com/rcourtman/Pulse/main/docs/",
-    "https://raw.githubusercontent.com/rcourtman/Pulse/master/docs/",
+FORBIDDEN_PATTERNS = (
+    re.compile(r"https://github\.com/[^/\s\"')]+/[^/\s\"')]+/blob/(?:main|master)/"),
+    re.compile(r"https://github\.com/[^/\s\"')]+/[^/\s\"')]+/tree/(?:main|master)/docs/"),
+    re.compile(r"https://raw\.githubusercontent\.com/[^/\s\"')]+/[^/\s\"')]+/(?:main|master)/docs/"),
 )
 
 SKIP_DIR_NAMES = {
@@ -81,9 +79,10 @@ class RepoDocsLinkDriftTest(unittest.TestCase):
             except UnicodeDecodeError:
                 continue
 
-            for snippet in FORBIDDEN_SNIPPETS:
-                if snippet in content:
-                    offenders.append(f"{rel_path}: {snippet}")
+            for pattern in FORBIDDEN_PATTERNS:
+                match = pattern.search(content)
+                if match:
+                    offenders.append(f"{rel_path}: {match.group(0)}")
 
         self.assertEqual(
             offenders,
