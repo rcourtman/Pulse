@@ -391,10 +391,10 @@ header .logout-btn:hover,
 }
 .portal-account-context {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 16px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
   align-items: start;
-  padding: 12px 14px 12px;
+  padding: 12px 14px 10px;
   border-bottom: 1px solid var(--line);
   background: #fff;
 }
@@ -418,7 +418,7 @@ header .logout-btn:hover,
 }
 .portal-account-context-row {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   gap: 10px;
   flex-wrap: wrap;
 }
@@ -443,19 +443,20 @@ header .logout-btn:hover,
   flex-wrap: wrap;
 }
 .portal-account-context-summary {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(108px, auto));
-  gap: 8px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
 }
 .portal-account-context-stat {
   display: flex;
-  flex-direction: column;
-  gap: 5px;
+  align-items: baseline;
+  gap: 7px;
   min-width: 0;
-  padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: #fbfcfd;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
 }
 .portal-account-context-stat span {
   font-size: 10px;
@@ -465,7 +466,7 @@ header .logout-btn:hover,
   color: var(--ink-muted);
 }
 .portal-account-context-stat strong {
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1.2;
   color: var(--ink);
 }
