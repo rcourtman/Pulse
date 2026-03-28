@@ -312,8 +312,8 @@ header .logout-btn:hover,
 .portal-shell-nav-header {
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  padding: 14px 14px 12px;
+  gap: 4px;
+  padding: 12px 12px 10px;
   border-bottom: 1px solid var(--nav-line);
 }
 
@@ -326,7 +326,7 @@ header .logout-btn:hover,
 }
 
 .portal-shell-nav-title {
-  font-size: 17px;
+  font-size: 16px;
   line-height: 1.02;
   letter-spacing: -0.03em;
   font-weight: 800;
@@ -342,7 +342,8 @@ header .logout-btn:hover,
 .portal-shell-nav-group {
   display: flex;
   flex-direction: column;
-  padding: 6px 0;
+  gap: 4px;
+  padding: 8px;
 }
 
 .portal-shell-nav-link {
@@ -350,8 +351,9 @@ header .logout-btn:hover,
   flex-direction: column;
   gap: 0;
   width: 100%;
-  padding: 10px 14px;
+  padding: 9px 12px;
   border: none;
+  border-radius: 10px;
   background: transparent;
   text-align: left;
   cursor: pointer;
@@ -359,22 +361,23 @@ header .logout-btn:hover,
 }
 
 .portal-shell-nav-link + .portal-shell-nav-link {
-  border-top: 1px solid rgba(255, 255, 255, 0.04);
+  border-top: none;
 }
 
 .portal-shell-nav-link:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .portal-shell-nav-link.active {
-  background: rgba(120, 182, 192, 0.12);
-  box-shadow: inset 3px 0 0 #78b6c0;
+  background: rgba(120, 182, 192, 0.14);
+  box-shadow: inset 2px 0 0 #78b6c0;
 }
 
 .portal-shell-nav-label {
   display: block;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
+  letter-spacing: 0.01em;
   color: var(--nav-ink);
 }
 
@@ -495,17 +498,17 @@ header .logout-btn:hover,
 
 .portal-top-section-header h2,
 .service-header h2 {
-  margin: 6px 0 0;
-  font-size: clamp(1.55rem, 2vw, 2.15rem);
+  margin: 4px 0 0;
+  font-size: clamp(1.42rem, 1.8vw, 1.9rem);
   line-height: 1.02;
-  letter-spacing: -0.05em;
+  letter-spacing: -0.045em;
 }
 
 .portal-top-section-header p,
 .service-note {
-  margin: 8px 0 0;
-  font-size: 14px;
-  line-height: 1.55;
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 1.45;
   color: var(--ink-soft);
   max-width: 800px;
 }
@@ -639,7 +642,7 @@ header .logout-btn:hover,
 .service-panel h3,
 .service-panel .subsection h4 {
   margin: 8px 0 0;
-  font-size: 20px;
+  font-size: 18px;
   line-height: 1.08;
   letter-spacing: -0.03em;
 }
@@ -653,8 +656,8 @@ header .logout-btn:hover,
 .service-panel p,
 .service-panel .helper-text {
   margin: 10px 0 0;
-  font-size: 14px;
-  line-height: 1.65;
+  font-size: 13px;
+  line-height: 1.55;
   color: var(--ink-soft);
 }
 
@@ -724,16 +727,10 @@ header .logout-btn:hover,
   justify-content: space-between;
   gap: 18px;
   grid-column: 1 / -1;
-  padding: 16px;
+  padding: 14px;
   background: var(--panel);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-sm);
-  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.account-action-strip:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
+  box-shadow: none;
 }
 
 .account-action-copy {
