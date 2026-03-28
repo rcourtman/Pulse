@@ -1,10 +1,10 @@
 /* src/styles.css */
 :root {
   color-scheme: light;
-  --bg: #f4f7f9;
+  --bg: #eef2f6;
   --panel: #ffffff;
-  --panel-strong: #fafcff;
-  --panel-muted: #f1f5f9;
+  --panel-strong: #f8fafc;
+  --panel-muted: #f2f5f8;
   --ink: #0f172a;
   --ink-soft: #475569;
   --ink-muted: #64748b;
@@ -23,13 +23,13 @@
   --nav-line: #1e293b;
   --nav-copy: #94a3b8;
   --nav-ink: #f8fafc;
-  --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.05), 0 1px 2px rgba(15, 23, 42, 0.03);
-  --shadow-md: 0 10px 25px rgba(15, 23, 42, 0.04), 0 4px 10px rgba(15, 23, 42, 0.02);
-  --shadow-lg: 0 20px 40px rgba(15, 23, 42, 0.06), 0 8px 16px rgba(15, 23, 42, 0.03);
-  --shadow-hover: 0 12px 28px rgba(15, 23, 42, 0.06), 0 4px 12px rgba(15, 23, 42, 0.03);
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-md: 0 10px 24px rgba(15, 23, 42, 0.05);
+  --shadow-lg: 0 18px 40px rgba(15, 23, 42, 0.06);
+  --shadow-hover: 0 12px 24px rgba(15, 23, 42, 0.06);
   --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 20px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
 }
 * {
   box-sizing: border-box;
@@ -41,22 +41,13 @@ body {
   margin: 0;
   min-height: 100vh;
   font-family:
-    "Inter",
-    "Outfit",
     -apple-system,
     BlinkMacSystemFont,
     "Segoe UI",
-    Roboto,
-    "Helvetica Neue",
+    Helvetica,
     Arial,
     sans-serif;
   background: var(--bg);
-  background-image:
-    radial-gradient(
-      circle at 50% 0%,
-      #ffffff 0%,
-      transparent 80%);
-  background-attachment: fixed;
   color: var(--ink);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -72,10 +63,9 @@ header {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 14px 24px;
-  border-bottom: 1px solid rgba(197, 208, 218, 0.75);
-  background: rgba(247, 249, 252, 0.94);
-  backdrop-filter: blur(14px);
+  padding: 12px 22px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.96);
 }
 header .brand {
   font-size: 18px;
@@ -87,7 +77,7 @@ header .brand {
   align-items: center;
   gap: 12px;
   border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.96);
+  background: #fff;
   border-radius: 999px;
   padding: 4px 8px 4px 12px;
 }
@@ -110,45 +100,36 @@ header .logout-btn,
 .btn-secondary,
 .link-button {
   border: 1px solid var(--line-strong);
-  background: rgba(255, 255, 255, 0.8);
-  backdrop-filter: blur(8px);
+  background: #fff;
   color: var(--ink);
   border-radius: 8px;
   padding: 9px 14px;
   cursor: pointer;
-  transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  transition:
+    border-color 140ms ease,
+    background 140ms ease,
+    box-shadow 140ms ease;
 }
 header .logout-btn:hover,
 .btn-secondary:hover,
 .link-button:hover {
   border-color: var(--line-strong);
   background: #ffffff;
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-hover);
+  box-shadow: var(--shadow-sm);
 }
 .btn-primary {
   border-radius: 8px;
   padding: 10px 15px;
-  background:
-    linear-gradient(
-      180deg,
-      var(--accent) 0%,
-      var(--accent-strong) 100%);
+  background: var(--accent);
   color: #fff;
   font-weight: 600;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), var(--shadow-sm);
+  box-shadow: var(--shadow-sm);
   cursor: pointer;
-  transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  transition: background 140ms ease, box-shadow 140ms ease;
 }
 .btn-primary:hover {
-  background:
-    linear-gradient(
-      180deg,
-      #138980 0%,
-      var(--accent) 100%);
-  transform: translateY(-2px);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), var(--shadow-hover);
+  background: var(--accent-strong);
+  box-shadow: var(--shadow-md);
 }
 .btn-danger {
   border-radius: 8px;
@@ -157,11 +138,10 @@ header .logout-btn:hover,
   color: var(--danger);
   font-weight: 600;
   cursor: pointer;
-  transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  transition: background 140ms ease, box-shadow 140ms ease;
 }
 .btn-danger:hover {
   background: #fecaca;
-  transform: translateY(-2px);
   box-shadow: var(--shadow-sm);
 }
 .btn-compact {
@@ -171,7 +151,7 @@ header .logout-btn:hover,
 .main {
   max-width: 1480px;
   margin: 0 auto;
-  padding: 22px 24px 56px;
+  padding: 18px 22px 44px;
 }
 .portal-shell {
   display: block;
@@ -295,14 +275,13 @@ header .logout-btn:hover,
 }
 .portal-shell-layout {
   display: grid;
-  grid-template-columns: 224px minmax(0, 1fr);
+  grid-template-columns: 204px minmax(0, 1fr);
   gap: 0;
   align-items: start;
-  border: 1px solid rgba(255, 255, 255, 0.5);
+  border: 1px solid var(--line);
   border-radius: var(--radius-lg);
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(20px);
-  box-shadow: 0 32px 64px rgba(15, 23, 42, 0.08), 0 2px 12px rgba(15, 23, 42, 0.04);
+  background: #fff;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.05);
   overflow: hidden;
 }
 .portal-shell-nav {
@@ -312,19 +291,14 @@ header .logout-btn:hover,
   border-right: 1px solid var(--nav-line);
   border-radius: 0;
   background: var(--nav-bg);
-  background:
-    linear-gradient(
-      175deg,
-      var(--nav-bg) 0%,
-      #030712 100%);
-  box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.05);
+  box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.04);
   overflow: hidden;
 }
 .portal-shell-nav-header {
   display: flex;
   flex-direction: column;
-  gap: 7px;
-  padding: 18px 18px 16px;
+  gap: 6px;
+  padding: 16px 16px 14px;
   border-bottom: 1px solid var(--nav-line);
 }
 .portal-shell-nav-eyebrow {
@@ -335,28 +309,28 @@ header .logout-btn:hover,
   color: #78b6c0;
 }
 .portal-shell-nav-title {
-  font-size: 19px;
+  font-size: 18px;
   line-height: 1.02;
   letter-spacing: -0.03em;
   font-weight: 800;
   color: var(--nav-ink);
 }
 .portal-shell-nav-support {
-  font-size: 12px;
-  line-height: 1.45;
+  font-size: 11px;
+  line-height: 1.4;
   color: var(--nav-copy);
 }
 .portal-shell-nav-group {
   display: flex;
   flex-direction: column;
-  padding: 10px 0;
+  padding: 6px 0;
 }
 .portal-shell-nav-link {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 0;
   width: 100%;
-  padding: 14px 18px;
+  padding: 12px 16px;
   border: none;
   background: transparent;
   text-align: left;
@@ -375,28 +349,28 @@ header .logout-btn:hover,
 }
 .portal-shell-nav-label {
   display: block;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
   color: var(--nav-ink);
 }
 .portal-shell-nav-copy {
-  display: block;
+  display: none;
   font-size: 12px;
   line-height: 1.45;
   color: var(--nav-copy);
 }
 .portal-shell-main {
   min-width: 0;
-  padding: 0 0 28px;
-  background: #f7f9fb;
+  padding: 0 0 24px;
+  background: #f6f8fb;
 }
 .portal-shell-main > .portal-content-panel {
   display: none !important;
 }
 .portal-account-context {
-  padding: 14px 24px 12px;
+  padding: 12px 18px 10px;
   border-bottom: 1px solid var(--line);
-  background: rgba(250, 252, 253, 0.98);
+  background: #fbfcfd;
 }
 .portal-account-context-copy {
   display: flex;
@@ -418,20 +392,17 @@ header .logout-btn:hover,
 .portal-account-context-row {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
   flex-wrap: wrap;
 }
 .portal-account-context-row h2 {
   margin: 0;
-  font-size: 30px;
+  font-size: 26px;
   line-height: 0.98;
   letter-spacing: -0.05em;
 }
 .portal-account-context-copy p {
-  margin: 0;
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--ink-soft);
+  display: none;
 }
 .portal-account-context-chips {
   display: flex;
@@ -468,10 +439,10 @@ header .logout-btn:hover,
 .portal-stage {
   display: flex;
   flex-direction: column;
-  gap: 26px;
+  gap: 18px;
 }
 .portal-content-panel {
-  padding: 14px 18px 0;
+  padding: 12px 14px 0;
 }
 .portal-top-section,
 .service-section {
