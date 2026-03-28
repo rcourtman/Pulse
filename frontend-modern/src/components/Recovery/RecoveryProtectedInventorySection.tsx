@@ -197,13 +197,9 @@ export const RecoveryProtectedInventorySection: Component<
   });
 
   return (
-    <Card
-      padding="none"
-      tone="card"
-      class="overflow-hidden border-border-subtle bg-surface"
-    >
+    <div class="flex flex-col gap-3">
       <Show when={!props.kioskMode}>
-        <div class="border-b border-border-subtle/80 bg-surface px-4 py-2">
+        <Card padding="sm" tone="card" class="border-border-subtle bg-surface">
           <PageControls
             role="group"
             aria-label="Protected items controls"
@@ -313,38 +309,43 @@ export const RecoveryProtectedInventorySection: Component<
               Stale only
             </button>
           </PageControls>
-        </div>
+        </Card>
       </Show>
 
-      <Show when={props.loading() && props.filteredRollups().length === 0}>
-        <div class="px-6 py-6 text-sm text-muted">
-          {getRecoveryProtectedItemsLoadingState().text}
-        </div>
-      </Show>
-
-      <Show when={!props.loading() && props.error()}>
-        <div class="p-6">
-          <EmptyState
-            title={getRecoveryProtectedItemsFailureState().title}
-            description={String((props.error() as Error)?.message || props.error())}
-          />
-        </div>
-      </Show>
-
-      <Show
-        when={!props.loading() && !props.error() && props.filteredRollups().length === 0}
+      <Card
+        padding="none"
+        tone="card"
+        class="overflow-hidden border-border-subtle bg-surface"
       >
-        <div class="p-6">
-          <EmptyState {...getRecoveryProtectedItemsEmptyState()} />
-        </div>
-      </Show>
+        <Show when={props.loading() && props.filteredRollups().length === 0}>
+          <div class="px-6 py-6 text-sm text-muted">
+            {getRecoveryProtectedItemsLoadingState().text}
+          </div>
+        </Show>
 
-      <Show when={props.filteredRollups().length > 0}>
-        <div class="overflow-x-auto bg-surface">
-          <Table
-            class="w-full border-collapse whitespace-nowrap"
-            style={{ 'table-layout': 'fixed', 'min-width': props.isMobile ? '100%' : '640px' }}
-          >
+        <Show when={!props.loading() && props.error()}>
+          <div class="p-6">
+            <EmptyState
+              title={getRecoveryProtectedItemsFailureState().title}
+              description={String((props.error() as Error)?.message || props.error())}
+            />
+          </div>
+        </Show>
+
+        <Show
+          when={!props.loading() && !props.error() && props.filteredRollups().length === 0}
+        >
+          <div class="p-6">
+            <EmptyState {...getRecoveryProtectedItemsEmptyState()} />
+          </div>
+        </Show>
+
+        <Show when={props.filteredRollups().length > 0}>
+          <div class="overflow-x-auto bg-surface">
+            <Table
+              class="w-full border-collapse whitespace-nowrap"
+              style={{ 'table-layout': 'fixed', 'min-width': props.isMobile ? '100%' : '640px' }}
+            >
             <TableHeader>
               <TableRow class="border-b border-border bg-surface-alt/95 text-muted">
                 {(
@@ -535,42 +536,45 @@ export const RecoveryProtectedInventorySection: Component<
                 }}
               </For>
             </TableBody>
-          </Table>
-        </div>
-        <div class="flex items-center justify-between gap-2 border-t border-border bg-surface px-4 py-3 text-xs text-muted">
-          <div>
-            <Show
-              when={sortedRollups().length > 0}
-              fallback={<span>Showing 0 of 0 protected items</span>}
-            >
+            </Table>
+          </div>
+          <div class="flex items-center justify-between gap-2 border-t border-border bg-surface px-4 py-3 text-xs text-muted">
+            <div>
+              <Show
+                when={sortedRollups().length > 0}
+                fallback={<span>Showing 0 of 0 protected items</span>}
+              >
+                <span>
+                  Showing {pageStart()} - {pageEnd()} of {sortedRollups().length} protected items
+                </span>
+              </Show>
+            </div>
+            <div class="flex items-center gap-2">
+              <button
+                type="button"
+                disabled={protectedPage() <= 1}
+                onClick={() => setProtectedPage(Math.max(1, protectedPage() - 1))}
+                class="rounded-md border border-border bg-surface px-2 py-1 text-xs font-medium text-base-content disabled:opacity-50"
+              >
+                Prev
+              </button>
               <span>
-                Showing {pageStart()} - {pageEnd()} of {sortedRollups().length} protected items
+                Page {protectedPage()} / {protectedTotalPages()}
               </span>
-            </Show>
+              <button
+                type="button"
+                disabled={protectedPage() >= protectedTotalPages()}
+                onClick={() =>
+                  setProtectedPage(Math.min(protectedTotalPages(), protectedPage() + 1))
+                }
+                class="rounded-md border border-border bg-surface px-2 py-1 text-xs font-medium text-base-content disabled:opacity-50"
+              >
+                Next
+              </button>
+            </div>
           </div>
-          <div class="flex items-center gap-2">
-            <button
-              type="button"
-              disabled={protectedPage() <= 1}
-              onClick={() => setProtectedPage(Math.max(1, protectedPage() - 1))}
-              class="rounded-md border border-border bg-surface px-2 py-1 text-xs font-medium text-base-content disabled:opacity-50"
-            >
-              Prev
-            </button>
-            <span>
-              Page {protectedPage()} / {protectedTotalPages()}
-            </span>
-            <button
-              type="button"
-              disabled={protectedPage() >= protectedTotalPages()}
-              onClick={() => setProtectedPage(Math.min(protectedTotalPages(), protectedPage() + 1))}
-              class="rounded-md border border-border bg-surface px-2 py-1 text-xs font-medium text-base-content disabled:opacity-50"
-            >
-              Next
-            </button>
-          </div>
-        </div>
-      </Show>
-    </Card>
+        </Show>
+      </Card>
+    </div>
   );
 };

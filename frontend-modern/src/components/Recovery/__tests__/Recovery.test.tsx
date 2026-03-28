@@ -245,6 +245,9 @@ describe('Recovery', () => {
       expect(screen.getAllByRole('table')).toHaveLength(1);
     });
     const inventoryTable = screen.getAllByRole('table')[0];
+    expect(
+      inventoryControls.compareDocumentPosition(inventoryTable) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).not.toBe(0);
     expect(within(inventoryTable).getByText('Item')).toBeInTheDocument();
     expect(within(inventoryTable).getByText('Item Type')).toBeInTheDocument();
     expect(within(inventoryTable).getByText('Platform')).toBeInTheDocument();
@@ -277,6 +280,9 @@ describe('Recovery', () => {
     });
     const historyTable = screen.getAllByRole('table')[0];
     const historyControls = screen.getByRole('group', { name: /recovery events controls/i });
+    expect(
+      historyControls.compareDocumentPosition(historyTable) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).not.toBe(0);
     expect(
       within(historyControls).getByPlaceholderText('Search recovery history...'),
     ).toBeInTheDocument();

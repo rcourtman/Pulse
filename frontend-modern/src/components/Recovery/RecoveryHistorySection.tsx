@@ -129,9 +129,9 @@ export const RecoveryHistorySection: Component<RecoveryHistorySectionProps> = (p
   });
 
   return (
-    <Card padding="none" tone="card" class="overflow-hidden border-border-subtle bg-surface">
+    <div class="flex flex-col gap-3">
       <Show when={!props.kioskMode}>
-        <div class="border-b border-border-subtle/80 bg-surface px-4 py-2.5">
+        <Card padding="sm" tone="card" class="border-border-subtle bg-surface">
           <PageControls
             role="group"
             aria-label="Recovery events controls"
@@ -426,24 +426,26 @@ export const RecoveryHistorySection: Component<RecoveryHistorySectionProps> = (p
               </For>
             </LabeledFilterSelect>
           </PageControls>
-        </div>
+        </Card>
       </Show>
-      <RecoveryHistoryTable
-        clearSelectedPoint={clearSelectedPoint}
-        currentPage={props.currentPage}
-        groupedByDay={props.groupedByDay}
-        hasActiveArtifactFilters={props.hasActiveArtifactFilters}
-        mobileVisibleArtifactColumns={props.mobileVisibleArtifactColumns}
-        recoveryPoints={props.recoveryPoints}
-        resetAllArtifactFilters={props.resetAllArtifactFilters}
-        resourcesById={props.resourcesById}
-        selectedPoint={selectedPoint}
-        setCurrentPage={props.setCurrentPage}
-        tableColumnCount={props.tableColumnCount}
-        tableMinWidth={props.tableMinWidth}
-        toggleSelectedPoint={toggleSelectedPoint}
-        totalPages={props.totalPages}
-      />
-    </Card>
+      <Card padding="none" tone="card" class="overflow-hidden border-border-subtle bg-surface">
+        <RecoveryHistoryTable
+          clearSelectedPoint={clearSelectedPoint}
+          currentPage={props.currentPage}
+          groupedByDay={props.groupedByDay}
+          hasActiveArtifactFilters={props.hasActiveArtifactFilters}
+          mobileVisibleArtifactColumns={props.mobileVisibleArtifactColumns}
+          recoveryPoints={props.recoveryPoints}
+          resetAllArtifactFilters={props.resetAllArtifactFilters}
+          resourcesById={props.resourcesById}
+          selectedPoint={selectedPoint}
+          setCurrentPage={props.setCurrentPage}
+          tableColumnCount={props.tableColumnCount}
+          tableMinWidth={props.tableMinWidth}
+          toggleSelectedPoint={toggleSelectedPoint}
+          totalPages={props.totalPages}
+        />
+      </Card>
+    </div>
   );
 };
