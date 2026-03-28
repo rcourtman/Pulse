@@ -148,6 +148,7 @@ describe('shell view', function() {
     expect(html).toContain('Manage team');
     expect(html).toContain('Hosted posture');
     expect(html).toContain('Review hosted posture first');
+    expect(html).toContain('section-context-strip');
     expect(html).toContain('Next move');
     expect(html).toContain('Start in workspaces');
     expect(html).toContain('Needs review');
@@ -158,6 +159,7 @@ describe('shell view', function() {
     expect(html).toContain('Needs review');
     expect(html).toContain('Workspace fleet');
     expect(html).toContain('account-stage-header-actions');
+    expect(html).toContain('0 suspended');
     expect(html).toContain('Alpha Workspace');
     expect(html).toContain('Beta Workspace');
     expect(html).toContain('Gamma Workspace');
@@ -185,6 +187,8 @@ describe('shell view', function() {
     expect(html.indexOf('id="add-ws-form-acct_1"')).toBeGreaterThan(html.indexOf('Keep account-wide actions separate'));
     expect(html).toContain('data-action="clear-workspace-selection"');
     expect(html).toContain('Team management');
+    expect(html).toContain('Least privilege');
+    expect(html).toContain('Hosted access');
     expect(html).toContain('Invite someone new');
     expect(html).toContain('Access model');
     expect(html).toContain('Review desk');
@@ -198,6 +202,7 @@ describe('shell view', function() {
     expect(html).toContain('id="service-panel-empty"');
     expect(html).toContain('Choose a commercial desk');
     expect(html).toContain('Active service desk');
+    expect(html).toContain('Self-hosted only');
     expect(html).toContain('Desk coverage');
     expect(html).toContain('Escalate quickly');
     expect(html).toContain('id="open-retrieve-service"');

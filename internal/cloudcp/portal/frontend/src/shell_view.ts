@@ -153,6 +153,13 @@ function renderServiceActionRow(
   );
 }
 
+function renderSectionContextChips(chips: string[]): string {
+  if (!chips.length) return '';
+  return '<div class="section-context-strip">' + chips.map(function(chip) {
+    return '<span class="section-context-chip">' + escapeHTML(chip) + '</span>';
+  }).join('') + '</div>';
+}
+
 function workspaceStatusCopy(workspace: PortalWorkspaceSummary): string {
   var status = workspaceHealthState(workspace);
   var state = String(workspace.state || '');
@@ -430,6 +437,11 @@ function renderAccountOverviewSection(account: PortalAccountSummary): string {
           '<div class="account-panel-kicker">Overview</div>' +
           '<h3>Hosted posture</h3>' +
           '<p>Review hosted posture first, then move into the next operator desk.</p>' +
+          renderSectionContextChips([
+            String(totalCount) + ' total',
+            String(readyCount) + ' ready',
+            suspendedCount > 0 ? String(suspendedCount) + ' suspended' : 'Active fleet',
+          ]) +
         '</div>' +
       '</div>' +
       '<div class="account-command-deck">' +
@@ -484,8 +496,6 @@ function renderAccountOverviewSection(account: PortalAccountSummary): string {
 function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPIBasePath: string): string {
   var workspaces = Array.isArray(account.workspaces) ? account.workspaces : [];
   var readyCount = countReadyWorkspaces(workspaces);
-  var checkingCount = countWorkspacesByHealth(workspaces, 'checking');
-  var unhealthyCount = countWorkspacesByHealth(workspaces, 'unhealthy');
   var suspendedCount = countWorkspacesByState(workspaces, 'suspended');
   var workspaceManagement = '';
   var addWorkspaceForm = '';
@@ -631,13 +641,6 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
     ? '<div class="workspace-list-wrap">' +
           '<div class="workspace-list-toolbar">' +
             '<div class="workspace-list-summary">Open a workspace for operator work. Use the lifecycle desk only when you are reviewing state or making account-level changes.</div>' +
-          '<div class="workspace-list-stats">' +
-            '<span class="workspace-list-stat"><strong>' + String(workspaces.length) + '</strong> total</span>' +
-            '<span class="workspace-list-stat"><strong>' + String(readyCount) + '</strong> ready</span>' +
-            '<span class="workspace-list-stat"><strong>' + String(checkingCount) + '</strong> checking</span>' +
-            '<span class="workspace-list-stat workspace-list-stat-attention"><strong>' + String(unhealthyCount) + '</strong> needs attention</span>' +
-            '<span class="workspace-list-stat"><strong>' + String(suspendedCount) + '</strong> suspended</span>' +
-          '</div>' +
         '</div>' +
         '<div class="workspace-list-head">' +
           '<span>Workspace</span>' +
@@ -659,6 +662,11 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
             '<div class="account-panel-kicker">Workspace fleet</div>' +
             '<h3>Hosted fleet</h3>' +
             '<p>Open workspaces, review posture, and keep lifecycle actions explicit.</p>' +
+            renderSectionContextChips([
+              String(workspaces.length) + ' total',
+              String(readyCount) + ' ready',
+              String(suspendedCount) + ' suspended',
+            ]) +
           '</div>' +
           '<div class="account-stage-header-actions">' + workspaceHeaderActions + '</div>' +
         '</div>' +
@@ -702,6 +710,11 @@ function renderAccountTeamSection(account: PortalAccountSummary): string {
             '<div class="account-panel-kicker">Team management</div>' +
             '<h3>Control who can operate this account</h3>' +
             '<p>Owners manage billing and access. Admins and techs keep the hosted fleet running day to day.</p>' +
+            renderSectionContextChips([
+              account.can_manage ? 'Managed roster' : 'View only',
+              'Least privilege',
+              'Hosted access',
+            ]) +
           '</div>' +
           '<button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="workspaces">Close team desk</button>' +
         '</div>' +
@@ -870,6 +883,10 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
               '<div>' +
                 '<div class="account-panel-kicker">Account services</div>' +
                 '<h2>' + serviceHeading + '</h2>' +
+                renderSectionContextChips([
+                  hosted ? 'Self-hosted only' : 'Commercial',
+                  '4 desks',
+                ]) +
               '</div>' +
               '<div class="service-note">' + serviceNote + '</div>' +
             '</div>' +
