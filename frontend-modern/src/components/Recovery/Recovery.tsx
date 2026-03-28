@@ -544,7 +544,7 @@ const Recovery: Component = () => {
   );
 
   return (
-    <div data-testid="recovery-page" class="flex flex-col gap-3">
+    <div data-testid="recovery-page" class="flex flex-col gap-2">
       <RecoverySummary
         rollups={rollups}
         series={() => recoverySeries.series() || []}
@@ -554,7 +554,7 @@ const Recovery: Component = () => {
         timeRange={summaryRange}
       />
 
-      <div ref={historySectionRef} class="flex flex-col gap-3">
+      <div ref={historySectionRef} class="flex flex-col">
         {(() => {
           return (
             <>

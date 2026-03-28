@@ -202,6 +202,8 @@ describe('Recovery', () => {
   it('shows one primary recovery table at a time with unified recovery labels', async () => {
     render(() => <Recovery />);
 
+    expect(screen.getByTestId('recovery-page').className).toContain('gap-2');
+    expect(screen.getByTestId('recovery-page').className).not.toContain('gap-3');
     expect(await screen.findByTestId('recovery-summary')).toBeInTheDocument();
     expect(screen.getByText('Recovery Posture')).toBeInTheDocument();
     const workspaceTablist = await screen.findByRole('tablist', { name: /recovery data view/i });

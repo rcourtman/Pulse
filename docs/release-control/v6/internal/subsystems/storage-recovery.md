@@ -710,6 +710,10 @@ That same summary rule also applies within individual cards: recovery posture,
 freshness, attention, footprint, and history cards should favor compact rows
 and metric lists over stacked prose callouts so the summary strip reads like
 Pulse monitoring telemetry rather than a page-local narrative panel.
+That same orientation-first rule also applies at the page-shell boundary:
+recovery should hand straight from the summary strip into the active workspace
+card without an extra page-local spacer band that makes the shell feel softer
+than storage or workloads.
 That same card-level scan rule should prefer one dominant metric per card with
 short supporting readouts, the same quick-scan rhythm operators already get on
 infrastructure and workloads, instead of nested sub-cards that turn recovery
