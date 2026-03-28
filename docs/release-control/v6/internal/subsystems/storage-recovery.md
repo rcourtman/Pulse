@@ -789,6 +789,10 @@ pattern as the protected inventory surface, not a separate large titled header
 bar plus another full toolbar slab. Event filter labels should also stay on the
 canonical short Pulse vocabulary like `Platform` and `Status` instead of
 recovery-only variants such as `History platform` or `History status`.
+That same events-workspace rule should keep the handoff data-first. The events
+workspace should move from tabs to shared controls to the recovery history
+table before showing the activity/timeline card, so the analytics surface
+stays secondary to the working table instead of interrupting the operator path.
 That same events-shell contract should avoid repeating page-state bookkeeping
 ahead of the history grid. Recovery events should surface workspace context,
 event count, and day grouping in the status row, while current page and other

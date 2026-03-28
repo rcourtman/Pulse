@@ -284,6 +284,10 @@ describe('Recovery', () => {
     expect(
       historyControls.compareDocumentPosition(historyTable) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).not.toBe(0);
+    const activityHeading = screen.getByText('Recovery Activity');
+    expect(
+      historyTable.compareDocumentPosition(activityHeading) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).not.toBe(0);
     const historySearch = within(historyControls).getByPlaceholderText('Search recovery history...');
     expect(historySearch).toBeInTheDocument();
     expect(historySearch.closest('div.relative')?.className).toContain('w-full');
@@ -302,7 +306,7 @@ describe('Recovery', () => {
     const historyRow = within(historyTable).getByLabelText('Healthy').closest('tr');
     expect(historyRow).not.toBeNull();
     expect(within(historyRow!).getByLabelText('Healthy')).toBeInTheDocument();
-    expect(screen.getByText('Recovery Activity')).toBeInTheDocument();
+    expect(activityHeading).toBeInTheDocument();
   });
 
   it('persists the selected recovery workspace view in the route when explicitly changed', async () => {

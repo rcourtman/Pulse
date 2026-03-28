@@ -533,54 +533,6 @@ const Recovery: Component = () => {
               </Show>
 
               <Show when={workspaceView() === 'events'}>
-                <RecoveryActivitySection
-                  activitySummary={activitySummary}
-                  activeClusterLabel={activeClusterLabel}
-                  activeItemTypeLabel={activeItemTypeLabel}
-                  activeNamespaceLabel={activeNamespaceLabel}
-                  activeNodeLabel={activeNodeLabel}
-                  chartRangeDays={chartRangeDays}
-                  clearClusterFilter={() => {
-                    setClusterFilter('all');
-                    setCurrentPage(1);
-                  }}
-                  clearFocusedRollup={() => setRollupId('')}
-                  clearItemTypeFilter={() => {
-                    setItemTypeFilter('all');
-                    setCurrentPage(1);
-                  }}
-                  clearNamespaceFilter={() => {
-                    setNamespaceFilter('all');
-                    setCurrentPage(1);
-                  }}
-                  clearNodeFilter={() => {
-                    setNodeFilter('all');
-                    setCurrentPage(1);
-                  }}
-                  clearSelectedDate={() => {
-                    setSelectedDateKey(null);
-                    setCurrentPage(1);
-                  }}
-                  hasFocusedRollup={() => rollupId().trim().length > 0}
-                  isMobile={isMobile()}
-                  loading={() => recoverySeries.response.loading}
-                  overallRollupsSummary={overallRollupsSummary}
-                  selectedDateKey={selectedDateKey}
-                  selectedDateLabel={selectedDateLabel}
-                  selectedHistoryItemLabel={selectedHistoryItemLabel}
-                  setChartRangeDays={(range) => {
-                    setChartRangeDays(range);
-                    setSelectedDateKey(null);
-                    setCurrentPage(1);
-                  }}
-                  timeline={timeline}
-                  toggleSelectedDate={(key) => {
-                    setWorkspaceView('events');
-                    setSelectedDateKey((previous) => (previous === key ? null : key));
-                    setCurrentPage(1);
-                  }}
-                />
-
                 <Show when={!recoveryPoints.response.loading && recoveryPoints.response.error}>
                   <Card padding="sm">
                     <EmptyState
@@ -642,6 +594,54 @@ const Recovery: Component = () => {
                     verificationFilter={verificationFilter}
                   />
                 </Show>
+
+                <RecoveryActivitySection
+                  activitySummary={activitySummary}
+                  activeClusterLabel={activeClusterLabel}
+                  activeItemTypeLabel={activeItemTypeLabel}
+                  activeNamespaceLabel={activeNamespaceLabel}
+                  activeNodeLabel={activeNodeLabel}
+                  chartRangeDays={chartRangeDays}
+                  clearClusterFilter={() => {
+                    setClusterFilter('all');
+                    setCurrentPage(1);
+                  }}
+                  clearFocusedRollup={() => setRollupId('')}
+                  clearItemTypeFilter={() => {
+                    setItemTypeFilter('all');
+                    setCurrentPage(1);
+                  }}
+                  clearNamespaceFilter={() => {
+                    setNamespaceFilter('all');
+                    setCurrentPage(1);
+                  }}
+                  clearNodeFilter={() => {
+                    setNodeFilter('all');
+                    setCurrentPage(1);
+                  }}
+                  clearSelectedDate={() => {
+                    setSelectedDateKey(null);
+                    setCurrentPage(1);
+                  }}
+                  hasFocusedRollup={() => rollupId().trim().length > 0}
+                  isMobile={isMobile()}
+                  loading={() => recoverySeries.response.loading}
+                  overallRollupsSummary={overallRollupsSummary}
+                  selectedDateKey={selectedDateKey}
+                  selectedDateLabel={selectedDateLabel}
+                  selectedHistoryItemLabel={selectedHistoryItemLabel}
+                  setChartRangeDays={(range) => {
+                    setChartRangeDays(range);
+                    setSelectedDateKey(null);
+                    setCurrentPage(1);
+                  }}
+                  timeline={timeline}
+                  toggleSelectedDate={(key) => {
+                    setWorkspaceView('events');
+                    setSelectedDateKey((previous) => (previous === key ? null : key));
+                    setCurrentPage(1);
+                  }}
+                />
               </Show>
             </>
           );
